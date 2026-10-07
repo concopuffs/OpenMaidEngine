@@ -1,0 +1,936 @@
+oms 1
+// Himegari ADV prelude (spec §11.2): the scene library every ADV scene links, the dialogue line template and the
+// speaker table. Drafted 2026-10-07 from the decompiled library of $1$SC1260 (the copies in 300+ scenes are
+// identical) and CNINIT's speaker names; maintained by hand since.
+module himegari.adv
+use himegari.globals
+use himegari.scripts
+
+// Speaker ids: the index into unit_story_display_names (CNINIT). Names that are not identifiers (？？？？) and
+// repeated names carry their id.
+enum speaker {
+    エミリオ = 0x1
+    シルフィーヌ = 0x5
+    サスーヌ = 0x6
+    ヴィダル = 0x7
+    ブリジット = 0x8
+    オクタヴィア = 0x9
+    コレット = 0xa
+    ディアドラ = 0xb
+    エステル = 0xc
+    ティオファニア = 0xd
+    ネリー = 0xe
+    ファム = 0xf
+    speaker_0x10 = 0x10  // ？？？？
+    魔王 = 0x11
+    speaker_0x12 = 0x12  // ？？？？
+    使い魔 = 0x13
+    speaker_0x14 = 0x14  // ？？？？
+    シルフィーヌ_0x15 = 0x15  // シルフィーヌ
+    サスーヌ_0x16 = 0x16  // サスーヌ
+    ヴィダル_0x17 = 0x17  // ヴィダル
+    エステル_0x18 = 0x18  // エステル
+    ティオファニア_0x19 = 0x19  // ティオファニア
+    ネリー_0x1a = 0x1a  // ネリー
+    ファム_0x1b = 0x1b  // ファム
+    speaker_0x1c = 0x1c  // ？？？？
+    speaker_0x1d = 0x1d  // ？？？？
+    speaker_0x1e = 0x1e  // ？？？？
+    speaker_0x1f = 0x1f  // ？？？？
+    speaker_0x20 = 0x20  // ？？？？
+    speaker_0x21 = 0x21  // ？？？？
+    speaker_0x22 = 0x22  // ？？？？
+    speaker_0x23 = 0x23  // ？？？？
+    speaker_0x24 = 0x24  // ？？？？
+    speaker_0x25 = 0x25  // ？？？？
+    speaker_0x26 = 0x26  // ？？？？
+    竜の子 = 0x27
+    竜の子_0x28 = 0x28  // 竜の子
+    エウシュリーちゃん = 0x29
+    ブラックエウシュリーちゃん = 0x2a
+    アナスタシア = 0x2b
+    エウクレイアさん = 0x2c
+    speaker_0x2d = 0x2d  // ？？？？
+    使い魔_0x2e = 0x2e  // 使い魔
+    speaker_0x2f = 0x2f  // ？？？？
+    使い魔_0x30 = 0x30  // 使い魔
+    speaker_0x31 = 0x31  // ？？？？
+    ヒューリー = 0x33
+    オーク兵 = 0x34
+    アセンブリア = 0x36
+    ヴェアヴォルフ = 0x37
+    アマゾネス = 0x38
+    アースマン = 0x39
+    ストーンゴーレム = 0x3a
+    水精 = 0x3b
+    リザードモール = 0x3c
+    ファラム = 0x3d
+    ラミア = 0x3e
+    ケルベロス = 0x3f
+    ハルピュア = 0x40
+    ユイチリ = 0x41
+    アプサエル = 0x42
+    ヘルテ = 0x43
+    漂着した異界の姫 = 0x44
+    マーテル = 0x45
+    グレーターデーモン = 0x46
+    ラウマカール = 0x47
+    プローヴァ = 0x48
+    ガーゴイル = 0x49
+    魔神ラテンニール = 0x4a
+    魔神ハルファス = 0x4b
+    魔王モーヌ = 0x4c
+    フィファ = 0x4d
+    玉座斬りの亡霊 = 0x4e
+    使徒の死王 = 0x4f
+    神官 = 0x50
+    修道女 = 0x5a
+    元気な子供 = 0x5b
+    冷静な子供 = 0x5c
+    大人しい子供 = 0x5d
+    男勝りな子供 = 0x5e
+    竜の子_0x5f = 0x5f  // 竜の子
+    エステル_0x65 = 0x65  // エステル
+    エステル_0x66 = 0x66  // エステル
+    エステル_0x67 = 0x67  // エステル
+    エステル_0x68 = 0x68  // エステル
+    エステル_0x69 = 0x69  // エステル
+    エステル_0x6a = 0x6a  // エステル
+    ネリー_0x6c = 0x6c  // ネリー
+    ティオファニア_0x6d = 0x6d  // ティオファニア
+    ブリジット_0x6e = 0x6e  // ブリジット
+    ブリジット_0x6f = 0x6f  // ブリジット
+    ブリジット_0x70 = 0x70  // ブリジット
+    ブリジット_0x72 = 0x72  // ブリジット
+    オクタヴィア_0x73 = 0x73  // オクタヴィア
+    オクタヴィア_0x74 = 0x74  // オクタヴィア
+    オクタヴィア_0x75 = 0x75  // オクタヴィア
+    オクタヴィア_0x77 = 0x77  // オクタヴィア
+    ディアドラ_0x78 = 0x78  // ディアドラ
+    ディアドラ_0x79 = 0x79  // ディアドラ
+    ディアドラ_0x7a = 0x7a  // ディアドラ
+    ディアドラ_0x7b = 0x7b  // ディアドラ
+    ディアドラ_0x7c = 0x7c  // ディアドラ
+    サスーヌ_0x7d = 0x7d  // サスーヌ
+    サスーヌ_0x7e = 0x7e  // サスーヌ
+    サスーヌ_0x7f = 0x7f  // サスーヌ
+    ヴィダル_0x80 = 0x80  // ヴィダル
+    ヴィダル_0x81 = 0x81  // ヴィダル
+    ヴィダル_0x82 = 0x82  // ヴィダル
+    シルフィーヌ_0x83 = 0x83  // シルフィーヌ
+    シルフィーヌ_0x84 = 0x84  // シルフィーヌ
+    シルフィーヌ_0x85 = 0x85  // シルフィーヌ
+    ファム_0x87 = 0x87  // ファム
+    コレット_0x88 = 0x88  // コレット
+    シルフィーヌ_0x89 = 0x89  // シルフィーヌ
+    サスーヌ_0x8a = 0x8a  // サスーヌ
+    ヴィダル_0x8b = 0x8b  // ヴィダル
+    サスーヌ_0x8c = 0x8c  // サスーヌ
+    ヴィダル_0x8d = 0x8d  // ヴィダル
+    ブリジット_0x8e = 0x8e  // ブリジット
+    オクタヴィア_0x8f = 0x8f  // オクタヴィア
+    使い魔の影 = 0x95
+    使い魔の影_0x96 = 0x96  // 使い魔の影
+    使い魔の影_0x97 = 0x97  // 使い魔の影
+    緑プテテット = 0xc8
+    赤プテテット = 0xc9
+    黒プテテット = 0xca
+    財宝プテテット = 0xcb
+    オーク兵_0xcd = 0xcd  // オーク兵
+    オーク兵_0xce = 0xce  // オーク兵
+    オーク兵_0xcf = 0xcf  // オーク兵
+    兵士 = 0xd7
+    兵士長 = 0xd8
+    近衛騎士団長 = 0xd9
+    兵士長_0xda = 0xda  // 兵士長
+    近衛騎士団長_0xdb = 0xdb  // 近衛騎士団長
+    弓兵 = 0xdc
+    ワイバーン = 0xe1
+    地の飛竜 = 0xe2
+    水の飛竜 = 0xe3
+    火の飛竜 = 0xe4
+    雷の飛竜 = 0xe5
+    キマイラ = 0xe6
+    ラーグスネール = 0xeb
+    アセンブリア_0xf0 = 0xf0  // アセンブリア
+    ワーム = 0xfa
+    ヴェアヴォルフ_0xff = 0xff  // ヴェアヴォルフ
+    アマゾネス_0x104 = 0x104  // アマゾネス
+    アースマン_0x109 = 0x109  // アースマン
+    ストーンゴーレム_0x10e = 0x10e  // ストーンゴーレム
+    ストーンゴーレム_0x10f = 0x10f  // ストーンゴーレム
+    漆黒の石巨人 = 0x110
+    地竜バマス = 0x113
+    水精_0x12c = 0x12c  // 水精
+    ヴュリテュン = 0x12d
+    サーペント = 0x131
+    サーペント_0x132 = 0x132  // サーペント
+    リザードモール_0x136 = 0x136  // リザードモール
+    水竜フリーシス = 0x13b
+    アンキロセラス = 0x140
+    アンキロセラス_0x141 = 0x141  // アンキロセラス
+    圧縮水弾 = 0x145
+    ファラム_0x15e = 0x15e  // ファラム
+    フレイムヒドラ = 0x163
+    フレイムヒドラ_0x164 = 0x164  // フレイムヒドラ
+    ラミア_0x168 = 0x168  // ラミア
+    火竜ウェルシュ = 0x16d
+    牙コウモリ = 0x190
+    闇コウモリ = 0x191
+    ハルピュア_0x195 = 0x195  // ハルピュア
+    ハルピュア_0x196 = 0x196  // ハルピュア
+    雷竜トゥオーノ = 0x19a
+    ユイチリ_0x19f = 0x19f  // ユイチリ
+    神官_0x1c2 = 0x1c2  // 神官
+    アプサエル_0x1c7 = 0x1c7  // アプサエル
+    ヘルテ_0x1c8 = 0x1c8  // ヘルテ
+    ヘルテ_0x1c9 = 0x1c9  // ヘルテ
+    創造竜アルシエル = 0x1cc
+    漂着した異界の姫_0x1d1 = 0x1d1  // 漂着した異界の姫
+    マーテル_0x1f4 = 0x1f4  // マーテル
+    マーテル_0x1f5 = 0x1f5  // マーテル
+    グレーターデーモン_0x1f9 = 0x1f9  // グレーターデーモン
+    グレーターデーモン_0x1fb = 0x1fb  // グレーターデーモン
+    コゴナウア = 0x1fa
+    コゴナウア_0x1fc = 0x1fc  // コゴナウア
+    ラウマカール_0x1fe = 0x1fe  // ラウマカール
+    ラウマカール_0x1ff = 0x1ff  // ラウマカール
+    プローヴァ_0x203 = 0x203  // プローヴァ
+    ガーゴイル_0x208 = 0x208  // ガーゴイル
+    はぐれガーゴイル = 0x209
+    岩石 = 0x20d
+    魔神ラテンニール_0x258 = 0x258  // 魔神ラテンニール
+    魔神ハルファス_0x25d = 0x25d  // 魔神ハルファス
+    魔王モーヌ_0x262 = 0x262  // 魔王モーヌ
+    フィファ_0x267 = 0x267  // フィファ
+    女神ティアマト = 0x26c
+    吸魂霊 = 0x28a
+    魂の狩人 = 0x28f
+    魂の狩人_0x290 = 0x290  // 魂の狩人
+    死魂霊 = 0x299
+    死魂霊_0x29a = 0x29a  // 死魂霊
+    戦士の死魂霊 = 0x29e
+    戦士の死魂霊_0x29f = 0x29f  // 戦士の死魂霊
+    戦士の死魂霊_0x2a0 = 0x2a0  // 戦士の死魂霊
+    戦士の死魂霊_0x2a1 = 0x2a1  // 戦士の死魂霊
+    玉座斬りの亡霊_0x2a8 = 0x2a8  // 玉座斬りの亡霊
+    ドラゴンゾンビ = 0x2bc
+    腐敗した兵士 = 0x2c1
+    腐敗した地虫 = 0x2c6
+    腐敗した人狼 = 0x2cb
+    腐敗した魔獣 = 0x2d0
+    腐敗した牙コウモリ = 0x2d5
+    腐敗した上級悪魔 = 0x2da
+    腐敗した飛天魔 = 0x2df
+    虚ろなる黎明の魔王 = 0x2ee
+    魂の座する器 = 0x2f3
+    肉体を司るもの = 0x2f4
+    魔力を司るもの = 0x2f5
+    知識を司るもの = 0x2f6
+    ハルピュア_0x32a = 0x32a  // ハルピュア
+    グレーターデーモン_0x32b = 0x32b  // グレーターデーモン
+    ヴェアヴォルフ_0x32c = 0x32c  // ヴェアヴォルフ
+    ワイバーン_0x32d = 0x32d  // ワイバーン
+    キマイラ_0x32e = 0x32e  // キマイラ
+    腐敗した上級悪魔_0x32f = 0x32f  // 腐敗した上級悪魔
+    戦士の死魂霊_0x330 = 0x330  // 戦士の死魂霊
+    腐敗した地虫_0x331 = 0x331  // 腐敗した地虫
+    フレイムヒドラ_0x332 = 0x332  // フレイムヒドラ
+    ワーム_0x333 = 0x333  // ワーム
+    腐敗した牙コウモリ_0x334 = 0x334  // 腐敗した牙コウモリ
+    腐敗した人狼_0x335 = 0x335  // 腐敗した人狼
+    ラウマカール_0x336 = 0x336  // ラウマカール
+    アプサエル_0x337 = 0x337  // アプサエル
+    マーテル_0x338 = 0x338  // マーテル
+    ラミア_0x339 = 0x339  // ラミア
+    ストーンゴーレム_0x33a = 0x33a  // ストーンゴーレム
+    ファラム_0x33b = 0x33b  // ファラム
+    アマゾネス_0x33c = 0x33c  // アマゾネス
+    ガーゴイル_0x33d = 0x33d  // ガーゴイル
+    ユイチリ_0x33e = 0x33e  // ユイチリ
+    神官_0x33f = 0x33f  // 神官
+    水精_0x340 = 0x340  // 水精
+    アースマン_0x341 = 0x341  // アースマン
+    サーペント_0x342 = 0x342  // サーペント
+    アンキロセラス_0x343 = 0x343  // アンキロセラス
+    試練の液体 = 0x352
+    試練の石像兵 = 0x353
+    試練の戦士 = 0x354
+    試練の水 = 0x355
+    試練の霊魂 = 0x356
+    試練の蛇 = 0x357
+    試練の火蜥蜴 = 0x358
+    試練の娘 = 0x359
+    試練の巨人 = 0x35a
+    試練の狼 = 0x35b
+    試練の泥 = 0x35c
+    試練の虫 = 0x35d
+    試練の大女 = 0x35e
+    試練の天女 = 0x35f
+    試練の腐虫 = 0x360
+    試練の亡霊 = 0x361
+    試練の樹木 = 0x362
+    試練の蛇女 = 0x363
+    試練の合成獣 = 0x364
+    試練の飛天魔 = 0x365
+    アセンブリア_0x320 = 0x320  // アセンブリア
+    地竜バマス_0x321 = 0x321  // 地竜バマス
+    水竜フリーシス_0x322 = 0x322  // 水竜フリーシス
+    火竜ウェルシュ_0x323 = 0x323  // 火竜ウェルシュ
+    雷竜トゥオーノ_0x324 = 0x324  // 雷竜トゥオーノ
+    創造竜アルシエル_0x325 = 0x325  // 創造竜アルシエル
+    漂着した異界の姫_0x326 = 0x326  // 漂着した異界の姫
+    魔神ラテンニール_0x327 = 0x327  // 魔神ラテンニール
+    魔神ハルファス_0x328 = 0x328  // 魔神ハルファス
+    魔王モーヌ_0x329 = 0x329  // 魔王モーヌ
+}
+
+// One ADV page (spec §11.2). G[0x3233]: the page has text; G[0x2e47]: keep the previous voice once;
+// G[0x3232]: the current speaker (-1 for narration).
+@dialogue inline line(text: text, speaker: speaker = none, voice: const = none) {
+    reset_adv_text_layout(0x1)
+    G[0x3233] = 0x1
+    atomic {
+        if G[0x2e47] == 0x0 {
+            reset_message_voice_state()
+        }
+        G[0x2e47] = 0x0
+        set_tick_presentation(0x1)
+    }
+    static if speaker == none {
+        atomic {
+            clear_speaker()
+            arm_voice_duck_release()
+        }
+    } else {
+        atomic {
+            append_text_history_metadata(0x2, speaker)
+            G[0x3232] = speaker
+            if unit_story_speaker_seen_flags[G[0x3232]] == 0x0 {
+                unit_story_speaker_seen_flags[G[0x3232]] = 0x1
+                store_shared_profile_int(unit_story_speaker_seen_flags[G[0x3232]])
+            }
+            create_texture(0xd, 0x190, 0x1e, 0x0)
+            draw_string(0xd, 0x1, 0x1, unit_story_display_names[G[0x3232]])
+            draw_texture(0xe678, 0xd, 0x0, 0x0, 0x190, 0x1e, 0x4a, 0x1bc)
+            set_adv_text_cursor(0x1, 0x64 - 0x19, 0x2f)
+        }
+        static if voice != none {
+            if G[0x3232] < 0x0 {
+                mute_next_voice()
+            } else if character_voice_suppressed[unit_voice_suppression_flag_ids[unit_voice_family_unit_ids[G[0x3232]]]] {
+                mute_next_voice()
+            }
+            play_voice(voice)
+        }
+    }
+    show_text(0x0, text)
+    end_text_line(0x0)
+    wait_for_input(0x0)
+    end_text_line(0x0)
+}
+
+// The scene header's hotspot handlers: placed where each scene registers them, so the sidecar records their place.
+sub register_adv_hotspots {
+    atomic {
+        if adv_chrome_enabled {
+            register_hotspot_callbacks(0x2ac, 0x23c, 0x14, 0x14, history_button_enter, history_button_leave, history_button_click)
+            register_hotspot_callbacks(0x2c2, 0x23c, 0x14, 0x14, auto_button_enter, auto_button_leave, auto_button_click)
+            register_hotspot_callbacks(0x2d8, 0x23c, 0x14, 0x14, skip_button_enter, skip_button_leave, skip_button_click)
+            register_hotspot_callbacks(0x2ee, 0x23c, 0x14, 0x14, read_skip_button_enter, read_skip_button_leave, read_skip_button_click)
+            register_hotspot_callbacks(0x304, 0x23c, 0x14, 0x14, hide_button_enter, hide_button_leave, hide_button_click)
+        }
+        register_hotspot_callbacks(-(0x3e8), -(0x3e8), 0x1, 0x1, -1, -1, history_hotkey)
+        register_hotspot_callbacks(-(0x3e8), -(0x3f0), 0x1, 0x1, -1, -1, history_hotkey)
+        bind_hotspot_key(-(0x3e8), -(0x3e8), 0x1, 0x1, 0x0)
+        bind_hotspot_key(-(0x3e8), -(0x3f0), 0x1, 0x1, 0x8)
+        if G[0x62426] == 0x0 && G[0x624bd] == 0x0 {
+            register_hotspot_callbacks(-(0x3e8), -(0x3ef), 0x1, 0x1, -1, -1, menu_hotkey)
+            bind_hotspot_key(-(0x3e8), -(0x3ef), 0x1, 0x1, 0x7)
+        }
+        arm_hotspot_wait()
+    }
+    return
+}
+sub history_button_enter {
+    atomic {
+        adv_hover_history = 0x1
+        draw_message_window()
+    }
+    return
+}
+sub history_button_leave {
+    atomic {
+        adv_hover_history = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub history_button_click {
+    atomic {
+        adv_hover_history = 0x0
+        draw_message_window()
+    }
+    cancel_hotspot_wait()
+    G[0x62428] = 0x1
+    run HISTORY
+    coroutine_save_yield_handlers(adv_hide_window_handler, adv_show_window_handler)
+    register_adv_hotspots()
+    atomic {
+        G[0x62428] = 0x0
+        if G[0x62429] {
+            draw_message_window()
+            draw_nameplate()
+            present_frame()
+            G[0x62429] = 0x0
+        }
+    }
+    mark_save_resume_frame()
+    return
+}
+sub auto_button_enter {
+    atomic {
+        adv_hover_auto_message = 0x1
+        draw_message_window()
+    }
+    return
+}
+sub auto_button_leave {
+    atomic {
+        adv_hover_auto_message = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub auto_button_click {
+    atomic {
+        G[0x6c5] = get_auto_message()
+        G[0x6c5] += 0x1
+        G[0x6c5] %= 0x2
+        set_auto_message(G[0x6c5])
+        draw_message_window()
+        sleep(0x64)
+        get_cursor_virtual(out G[0x6c7], out G[0x6c8])
+        set_cursor_virtual(G[0x6c7], G[0x6c8] + G[0x6c6] * 0x2 - 0x1)
+        G[0x6c6] = 0x1 - G[0x6c6]
+        reset_message_skip_input()
+    }
+    return
+}
+sub skip_button_enter {
+    atomic {
+        adv_hover_message_skip = 0x1
+        draw_message_window()
+    }
+    return
+}
+sub skip_button_leave {
+    atomic {
+        adv_hover_message_skip = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub skip_button_click {
+    atomic {
+        adv_hover_message_skip = 0x0
+        set_message_skip(0x1)
+        draw_message_window()
+        sleep(0x64)
+        get_cursor_virtual(out G[0x6c7], out G[0x6c8])
+        set_cursor_virtual(G[0x6c7], G[0x6c8] + G[0x6c6] * 0x2 - 0x1)
+        G[0x6c6] = 0x1 - G[0x6c6]
+        reset_message_skip_input()
+    }
+    return
+}
+sub read_skip_button_enter {
+    atomic {
+        adv_hover_read_message_skip = 0x1
+        draw_message_window()
+    }
+    return
+}
+sub read_skip_button_leave {
+    atomic {
+        adv_hover_read_message_skip = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub read_skip_button_click {
+    atomic {
+        adv_hover_read_message_skip = 0x0
+        G[0x62420] = get_read_message_skip()
+        G[0x62420] = 0x1 - G[0x62420]
+        set_read_message_skip(G[0x62420])
+        draw_message_window()
+        sleep(0x64)
+        get_cursor_virtual(out G[0x6c7], out G[0x6c8])
+        set_cursor_virtual(G[0x6c7], G[0x6c8] + G[0x6c6] * 0x2 - 0x1)
+        G[0x6c6] = 0x1 - G[0x6c6]
+        reset_message_skip_input()
+    }
+    return
+}
+sub hide_button_enter {
+    atomic {
+        adv_hover_hide_window = 0x1
+        draw_message_window()
+    }
+    return
+}
+sub hide_button_leave {
+    atomic {
+        adv_hover_hide_window = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub hide_button_click {
+    atomic {
+        adv_hover_hide_window = 0x0
+        draw_message_window()
+        yield_adv_coroutine()
+        sleep(0x64)
+        get_cursor_virtual(out G[0x6c7], out G[0x6c8])
+        set_cursor_virtual(G[0x6c7], G[0x6c8] + G[0x6c6] * 0x2 - 0x1)
+        G[0x6c6] = 0x1 - G[0x6c6]
+        reset_message_skip_input()
+    }
+    return
+}
+sub history_hotkey {
+    atomic {
+        adv_hover_history = 0x0
+        adv_hover_auto_message = 0x0
+        adv_hover_message_skip = 0x0
+        adv_hover_read_message_skip = 0x0
+        adv_hover_hide_window = 0x0
+    }
+    cancel_hotspot_wait()
+    G[0x62428] = 0x1
+    run HISTORY
+    coroutine_save_yield_handlers(adv_hide_window_handler, adv_show_window_handler)
+    register_adv_hotspots()
+    atomic {
+        G[0x62428] = 0x0
+        if G[0x62429] {
+            draw_message_window()
+            draw_nameplate()
+            present_frame()
+            G[0x62429] = 0x0
+        }
+    }
+    mark_save_resume_frame()
+    return
+}
+sub menu_hotkey {
+    atomic {
+        adv_hover_history = 0x0
+        adv_hover_auto_message = 0x0
+        adv_hover_message_skip = 0x0
+        adv_hover_read_message_skip = 0x0
+        adv_hover_hide_window = 0x0
+    }
+    cancel_hotspot_wait()
+    G[0x62428] = 0x1
+    run MENU
+    coroutine_save_yield_handlers(adv_hide_window_handler, adv_show_window_handler)
+    register_adv_hotspots()
+    atomic {
+        G[0x62428] = 0x0
+        if G[0x62429] {
+            draw_message_window()
+            draw_nameplate()
+            present_frame()
+            G[0x62429] = 0x0
+        }
+    }
+    mark_save_resume_frame()
+    return
+}
+coroutine adv_hide_window_handler {
+    begin_window_transition()
+    G[0x6bf] = 0x1
+    draw_message_window()
+    G[0x6bf] = 0x0
+    G[0x624a0] = 0x1f4
+    fade_message_window()
+    G[0x624a1] = 0x1
+    present_window_transition()
+    if adv_hide_window_enabled {
+        cancel_hotspot_wait()
+        G[0x62428] = 0x1
+        run HIDEWIN
+        coroutine_save_yield_handlers(adv_hide_window_handler, adv_show_window_handler)
+        register_adv_hotspots()
+        atomic {
+            G[0x62428] = 0x0
+            if G[0x62429] {
+                draw_message_window()
+                draw_nameplate()
+                present_frame()
+                G[0x62429] = 0x0
+            }
+        }
+        mark_save_resume_frame()
+        yield_adv_coroutine()
+    }
+    resume
+}
+coroutine adv_show_window_handler {
+    begin_window_transition()
+    G[0x6bf] = 0x1
+    draw_message_window()
+    G[0x6bf] = 0x1
+    G[0x624a0] = 0x1f4
+    fade_message_window()
+    G[0x624a1] = 0x1
+    G[0x3233] = 0x1
+    present_window_transition()
+    resume
+}
+
+// Library functions: linked after the scene behind an exit guard, breadth first in order of first reference.
+@guard sub draw_message_window {
+    gfx_elem_erase(0xd2f0, 0x7)
+    if G[0x6bf] {
+        draw_texture(0xd2f0, 0x11, 0x0, 0x0, 0x320, 0xe3, 0x0, 0x175)
+        G[0x6c3] = get_message_window_alpha()
+        gfx_draw_color(0xd2f0, 0x0, 0x10 - G[0x6c3] << 0x4, G[0x69d])
+        if adv_chrome_enabled {
+            draw_texture(0xd2f0 + 0x1, 0x11, 0x0, 0xfe, 0x72, 0x19, 0x2a9, 0x23a)
+            G[0x6c5] = get_auto_message()
+            if G[0x6c5] {
+                draw_texture(0xd2f0 + 0x4, 0x11, 0x9a, 0xfe, 0x14, 0x14, 0x2c2, 0x23c)
+            }
+            G[0x6241f] = op_0x19a()
+            if G[0x6241f] {
+                draw_texture(0xd2f0 + 0x2, 0x11, 0xae, 0xfe, 0x14, 0x14, 0x2d8, 0x23c)
+            }
+            G[0x62420] = get_read_message_skip()
+            if G[0x62420] {
+                draw_texture(0xd2f0 + 0x3, 0x11, 0xc2, 0xfe, 0x14, 0x14, 0x2ee, 0x23c)
+            }
+            if adv_hover_history {
+                draw_texture(0xd2f0 + 0x5, 0x11, 0x18c, 0xe3, 0x84, 0x1b, 0x223, 0x239)
+                draw_texture(0xd2f0 + 0x6, 0x11, 0x72, 0xfe, 0x14, 0x14, 0x2ac, 0x23c)
+                gfx_draw_color(0xd2f0 + 0x6, 0x1, 0x80, 0xffffff)
+                goto draw_message_window_done
+            }
+            if adv_hover_auto_message {
+                draw_texture(0xd2f0 + 0x5, 0x11, 0x108, 0xe3, 0x84, 0x1b, 0x223, 0x239)
+                draw_texture(0xd2f0 + 0x6, 0x11, 0x72, 0xfe, 0x14, 0x14, 0x2c2, 0x23c)
+                gfx_draw_color(0xd2f0 + 0x6, 0x1, 0x80, 0xffffff)
+                goto draw_message_window_done
+            }
+            if adv_hover_message_skip {
+                draw_texture(0xd2f0 + 0x5, 0x11, 0x0, 0xe3, 0x84, 0x1b, 0x223, 0x239)
+                draw_texture(0xd2f0 + 0x6, 0x11, 0x72, 0xfe, 0x14, 0x14, 0x2d8, 0x23c)
+                gfx_draw_color(0xd2f0 + 0x6, 0x1, 0x80, 0xffffff)
+                goto draw_message_window_done
+            }
+            if adv_hover_read_message_skip {
+                draw_texture(0xd2f0 + 0x5, 0x11, 0x84, 0xe3, 0x84, 0x1b, 0x223, 0x239)
+                draw_texture(0xd2f0 + 0x6, 0x11, 0x72, 0xfe, 0x14, 0x14, 0x2ee, 0x23c)
+                gfx_draw_color(0xd2f0 + 0x6, 0x1, 0x80, 0xffffff)
+                goto draw_message_window_done
+            }
+            if adv_hover_hide_window {
+                draw_texture(0xd2f0 + 0x5, 0x11, 0x210, 0xe3, 0x84, 0x1b, 0x223, 0x239)
+                draw_texture(0xd2f0 + 0x6, 0x11, 0x72, 0xfe, 0x14, 0x14, 0x304, 0x23c)
+                gfx_draw_color(0xd2f0 + 0x6, 0x1, 0x80, 0xffffff)
+            }
+        }
+    }
+draw_message_window_done:
+    return
+}
+@guard sub draw_nameplate {
+    gfx_elem_erase(0xd6d8, 0x1f4)
+    gfx_elem_erase(0xe678, 0x1)
+    if G[0x6bf] & G[0x3233] {
+        publish_adv_text_layout(0x1)
+        if G[0x3232] >= 0x0 {
+            draw_texture(0xe678, 0xd, 0x0, 0x0, 0x190, 0x1e, 0x4a, 0x1bc)
+        }
+    }
+    return
+}
+@guard sub begin_window_transition {
+    atomic {
+        G[0x62428] = 0x1
+        return
+        exit
+    fade_message_window:
+        if G[0x6bf] {
+            G[0x6c3] = get_message_window_alpha()
+            gfx_blit_color(0xd2f0, 0x0, G[0x624a0], 0x10 - G[0x6c3] << 0x4, G[0x69d])
+            gfx_draw_color(0xd2f0, 0x0, 0x0, G[0x69d])
+            for G[0x62451] = 0xd2f0 + 0x1; G[0x62451] <= 0xd2f0 + 0x5; G[0x62451] += 0x1 {
+                adv_gfx_surface_slot_work = op_0x215(G[0x62451])
+                if adv_gfx_surface_slot_work >= 0x0 {
+                    gfx_blit_color(G[0x62451], 0x0, G[0x624a0], 0xff, 0xffffff)
+                    gfx_draw_color(G[0x62451], 0x0, 0x0, 0xffffff)
+                }
+            }
+            gfx_blit_color(G[0x62451], 0x0, G[0x624a0], 0x80, 0xffffff)
+            gfx_draw_color(G[0x62451], 0x1, 0x0, 0xffffff)
+            goto fade_message_window_done
+        }
+        gfx_blit_color(0xd2f0, 0x0, G[0x624a0], 0x0, G[0x69d])
+        for G[0x62451] = 0xd2f0 + 0x1; G[0x62451] <= 0xd2f0 + 0x6; G[0x62451] += 0x1 {
+            adv_gfx_surface_slot_work = op_0x215(G[0x62451])
+            if adv_gfx_surface_slot_work >= 0x0 {
+                gfx_blit_color(G[0x62451], 0x0, G[0x624a0], 0x0, 0xffffff)
+            }
+        }
+    fade_message_window_done:
+        gfx_elem_erase(0xd674, 0x1)
+        clear_message_text()
+        return
+        exit
+    present_window_transition:
+        set_tick_presentation(0x1)
+        if G[0x624a1] {
+            G[0x624a1] = 0x0
+            if G[0x624ba] {
+                G[0x624bb] = 0x0
+                for adv_gfx_layer_index = 0x0; adv_gfx_layer_index <= 0x7; adv_gfx_layer_index += 0x1 {
+                    if G[0x624bb] < G[0x32b2][adv_gfx_layer_index] {
+                        G[0x624bb] = G[0x32b2][adv_gfx_layer_index]
+                    }
+                }
+                if G[0x624bb] {
+                    set_anim_clock(G[0x624bb])
+                }
+                G[0x624ba] = 0x0
+            }
+            G[0x6241f] = op_0x1c7()
+            G[0x62420] = get_adv_read_skip_state()
+            if G[0x6241f] | G[0x62420] {
+                reset_anim_clock()
+                present_frame()
+            } else {
+                mark_frame_yield()
+            }
+            clear_gfx_command_queue()
+            for adv_gfx_layer_index = 0x0; adv_gfx_layer_index <= 0x7; adv_gfx_layer_index += 0x1 {
+                if adv_gfx_object_handles[adv_gfx_layer_index] {
+                    adv_gfx_surface_slot_work = op_0x215(adv_gfx_object_handles[adv_gfx_layer_index] + 0x1)
+                    if adv_gfx_surface_slot_work >= 0x0 {
+                        gfx_elem_erase(adv_gfx_object_handles[adv_gfx_layer_index] + 0x1, 0x1)
+                        gfx_elem_release(adv_gfx_surface_slot_work)
+                    }
+                    adv_gfx_surface_slot_work = op_0x215(adv_gfx_object_handles[adv_gfx_layer_index] + 0x2)
+                    if adv_gfx_surface_slot_work >= 0x0 {
+                        gfx_draw_color(adv_gfx_object_handles[adv_gfx_layer_index], 0x0, -(0x1), -(0x1))
+                        gfx_elem_erase(adv_gfx_object_handles[adv_gfx_layer_index] + 0x2, 0x1)
+                        gfx_elem_release(adv_gfx_surface_slot_work)
+                    }
+                }
+            }
+            if G[0x624a2] & 0x1 {
+                gfx_elem_erase(0xd28c, 0x2)
+                gfx_elem_release(0x1)
+                gfx_elem_release(0x3b)
+            }
+            if G[0x624a2] & 0x2 {
+                gfx_elem_erase(0xcf08 + 0x1, 0x1)
+                gfx_elem_release(0x3c)
+                if G[0x624ab] == 0x1 {
+                    gfx_draw_color(0xcf08, G[0x32ee], 0x0, -(0x1))
+                }
+            }
+            if G[0x624a2] & 0x4 {
+                for adv_gfx_layer_index = 0x0; adv_gfx_layer_index <= 0x7; adv_gfx_layer_index += 0x1 {
+                    if adv_gfx_object_handles[adv_gfx_layer_index] {
+                        gfx_elem_erase(adv_gfx_object_handles[adv_gfx_layer_index] + 0x1, 0x1)
+                        gfx_elem_release(adv_layer_surface_slots[adv_gfx_layer_index].transition_surface_slot)
+                        if G[0x624a3][adv_gfx_layer_index] == 0x1 {
+                            gfx_draw_color(adv_gfx_object_handles[adv_gfx_layer_index], 0x0, 0x0, -(0x1))
+                        }
+                    }
+                }
+            }
+            G[0x624a2] = 0x0
+            zero_int_range(G[0x624a3], 0x14)
+            if G[0x624b7] {
+                G[0x624b7] = 0x0
+                set_gfx_range_transform(0x0, 0x0, 0x0, 0x0, 0x0)
+            }
+            draw_nameplate()
+        }
+        zero_int_range(G[0x32b2], 0x14)
+        atomic {
+            G[0x62428] = 0x0
+            if G[0x62429] {
+                draw_message_window()
+                draw_nameplate()
+                present_frame()
+                G[0x62429] = 0x0
+            }
+        }
+    }
+    return
+}
+@guard sub init_adv_layer_slots {
+    adv_layer_surface_slots = 0x4
+    G[0x323a] = 0x2b
+    G[0x323b] = 0x33
+    G[0x323c] = 0x5
+    G[0x323d] = 0x2c
+    G[0x323e] = 0x34
+    G[0x323f] = 0x6
+    G[0x3240] = 0x2d
+    G[0x3241] = 0x35
+    G[0x3242] = 0x7
+    G[0x3243] = 0x2e
+    G[0x3244] = 0x36
+    G[0x3245] = 0x8
+    G[0x3246] = 0x2f
+    G[0x3247] = 0x37
+    G[0x3248] = 0x9
+    G[0x3249] = 0x30
+    G[0x324a] = 0x38
+    G[0x324b] = 0xa
+    G[0x324c] = 0x31
+    G[0x324d] = 0x39
+    G[0x324e] = 0xb
+    G[0x324f] = 0x32
+    G[0x3250] = 0x3a
+    return
+}
+@guard sub clear_message_text {
+    gfx_elem_erase(0xd6d8, 0x1f4)
+    gfx_elem_erase(0xe678, 0x1)
+    G[0x3233] = 0x0
+    reset_message_voice_state()
+    return
+}
+@guard sub show_layer_graphic {
+    op_0x21a(adv_gfx_object_handles[adv_gfx_layer_index], out G[0x62498], out G[0x62499], out G[0x6249a])
+    op_0x218(adv_gfx_object_handles[adv_gfx_layer_index], out G[0x6249b], out G[0x6249c], out G[0x6249d])
+    adv_gfx_surface_slot_work = op_0x215(adv_gfx_object_handles[adv_gfx_layer_index])
+    if adv_gfx_surface_slot_work < 0x0 {
+        adv_gfx_surface_slot_work = adv_layer_surface_slots[adv_gfx_layer_index].primary_surface_slot
+        G[0x6249b] = G[0x62469][adv_gfx_layer_index]
+        G[0x6249c] = G[0x6247d][adv_gfx_layer_index]
+        set_gfx_geom3(adv_gfx_object_handles[adv_gfx_layer_index], G[0x6249b], G[0x6249c], G[0x6249d])
+    } else {
+        get_texture_size(adv_gfx_surface_slot_work, out G[0x62453], out G[0x62454])
+        G[0x6249b] = G[0x62498] + G[0x62453] / 0x2
+        G[0x6249c] = G[0x62499] + G[0x62454]
+    }
+    set_texture(adv_gfx_resource_id, adv_gfx_surface_slot_work, -(0x1))
+    get_texture_size(adv_gfx_surface_slot_work, out G[0x62453], out G[0x62454])
+    G[0x62498] = G[0x6249b] - G[0x62453] / 0x2
+    G[0x62499] = G[0x6249c] - G[0x62454]
+    draw_texture(adv_gfx_object_handles[adv_gfx_layer_index], adv_gfx_surface_slot_work, 0x0, 0x0, G[0x62453], G[0x62454], G[0x62498], G[0x62499])
+    set_object_animation_detached(adv_gfx_object_handles[adv_gfx_layer_index], 0x0)
+    G[0x3276][adv_gfx_layer_index] = 0x0
+    G[0x328a][adv_gfx_layer_index] = 0x0
+    G[0x32b2][adv_gfx_layer_index] = 0x0
+    return
+}
+@guard sub transition_background_and_show_window {
+    begin_window_transition()
+    if 0x0 {
+        gfx_blit_color(0xcf08, 0x0, 0x4b0, -(0x1), -(0x1))
+        gfx_draw_color(0xcf08, G[0x32ee], 0x0, -(0x1))
+    } else {
+        gfx_blit_color(0xcf08, 0x0, 0x4b0, 0x0, -(0x1))
+    }
+    G[0x624a1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    G[0x6bf] = 0x1
+    draw_message_window()
+    G[0x6bf] = 0x1
+    G[0x624a0] = 0x1f4
+    fade_message_window()
+    G[0x624a1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub clear_speaker {
+    G[0x3232] = -(0x1)
+    gfx_elem_erase(0xe678, 0x1)
+    gfx_elem_release(0xd)
+    return
+}
+@guard sub hide_message_window {
+    begin_window_transition()
+    G[0x6bf] = 0x1
+    draw_message_window()
+    G[0x6bf] = 0x0
+    G[0x624a0] = 0x96
+    fade_message_window()
+    G[0x624a1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub show_message_window {
+    begin_window_transition()
+    G[0x6bf] = 0x1
+    draw_message_window()
+    G[0x6bf] = 0x1
+    G[0x624a0] = 0x96
+    fade_message_window()
+    G[0x624a1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub crossfade_layer_graphic {
+    adv_gfx_surface_slot_work = op_0x215(adv_gfx_object_handles[adv_gfx_layer_index])
+    if adv_gfx_surface_slot_work < 0x0 {
+        show_layer_graphic()
+        gfx_blit_color(adv_gfx_object_handles[adv_gfx_layer_index], G[0x6249f], G[0x624a0], 0xff, 0xffffff)
+        gfx_draw_color(adv_gfx_object_handles[adv_gfx_layer_index], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_draw_color(adv_gfx_object_handles[adv_gfx_layer_index], 0x2, -(0x1), -(0x1))
+        clone_gfx_object(adv_gfx_object_handles[adv_gfx_layer_index], adv_gfx_object_handles[adv_gfx_layer_index] + 0x1)
+        op_0x21a(adv_gfx_object_handles[adv_gfx_layer_index], out G[0x62498], out G[0x62499], out G[0x6249a])
+        get_texture_size(adv_gfx_surface_slot_work, out G[0x62453], out G[0x62454])
+        G[0x6249b] = G[0x62498] + G[0x62453] / 0x2
+        G[0x6249c] = G[0x62499] + G[0x62454]
+        if adv_gfx_surface_slot_work == adv_layer_surface_slots[adv_gfx_layer_index].primary_surface_slot {
+            adv_gfx_surface_slot_work = adv_layer_surface_slots[adv_gfx_layer_index].alternate_surface_slot
+        } else {
+            adv_gfx_surface_slot_work = adv_layer_surface_slots[adv_gfx_layer_index].primary_surface_slot
+        }
+        set_texture(adv_gfx_resource_id, adv_gfx_surface_slot_work, -(0x1))
+        get_texture_size(adv_gfx_surface_slot_work, out G[0x62453], out G[0x62454])
+        G[0x62498] = G[0x6249b] - G[0x62453] / 0x2
+        G[0x62499] = G[0x6249c] - G[0x62454]
+        draw_texture(adv_gfx_object_handles[adv_gfx_layer_index], adv_gfx_surface_slot_work, 0x0, 0x0, G[0x62453], G[0x62454], G[0x62498], G[0x62499])
+        gfx_elem_release(adv_layer_surface_slots[adv_gfx_layer_index].transition_surface_slot)
+        queue_surface_alpha_transition(adv_gfx_object_handles[adv_gfx_layer_index] + 0x2, adv_layer_surface_slots[adv_gfx_layer_index].transition_surface_slot, adv_gfx_object_handles[adv_gfx_layer_index] + 0x1, 0x1, adv_gfx_object_handles[adv_gfx_layer_index], 0x1, G[0x6249f], G[0x624a0])
+        draw_texture(adv_gfx_object_handles[adv_gfx_layer_index] + 0x2, adv_layer_surface_slots[adv_gfx_layer_index].transition_surface_slot, 0x0, 0x0, 0x320, 0x258, 0x0, 0x0)
+    }
+    return
+}
+@guard sub hide_window_and_fade_to_black {
+    begin_window_transition()
+    G[0x6bf] = 0x1
+    draw_message_window()
+    G[0x6bf] = 0x0
+    G[0x624a0] = 0x1f4
+    fade_message_window()
+    G[0x624a1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    draw_texture(0xcf08, 0x3, 0x0, 0x0, 0x320, 0x258, 0x0, 0x0)
+    gfx_draw_color(0xcf08, 0x0, 0xff, 0x0)
+    G[0x32ee] = 0x0
+    if 0x1 {
+        gfx_blit_color(0xcf08, 0x0, 0x4b0, -(0x1), -(0x1))
+        gfx_draw_color(0xcf08, G[0x32ee], 0x0, -(0x1))
+    } else {
+        gfx_blit_color(0xcf08, 0x0, 0x4b0, 0x0, -(0x1))
+    }
+    G[0x624a1] = 0x1
+    present_window_transition()
+    return
+}

@@ -14,10 +14,12 @@ public sealed record GlobalSymbol(string Name, int Type, uint Address, IReadOnly
 }
 
 /// <summary>
-/// A generated game module (spec §3.2). <c>&lt;profile&gt;.globals</c> holds every named global of the profile's
+/// A module (spec §3.2). Generated modules: <c>&lt;profile&gt;.globals</c> holds every named global of the profile's
 /// registry (<c>vm-map/globals*.toml</c>, generated to <c>build/games/&lt;profile&gt;/globals.json</c>); integer and
 /// string globals are separate banks, so symbols are keyed by bank and address. <c>&lt;profile&gt;.scripts</c> holds
-/// every catalog script by name, with the packed id <c>run</c> passes to call-script.
+/// every catalog script by name, with the packed id <c>run</c> passes to call-script. A source module
+/// (<c>module himegari.adv</c>, <see cref="FromSource"/>) is a hand-written unit of declarations, templates and library
+/// subroutines; its global declarations are also exposed as symbols.
 /// </summary>
 public sealed class GameModule
 {
@@ -31,9 +33,14 @@ public sealed class GameModule
 
     public string Name { get; }
 
-    public GameModule(string name, IEnumerable<GlobalSymbol> symbols, IEnumerable<(string Name, uint Id)>? scripts = null)
+    /// <summary>The parsed unit of a source module; null for a generated one.</summary>
+    public ScriptUnit? Source { get; }
+
+    public GameModule(string name, IEnumerable<GlobalSymbol> symbols, IEnumerable<(string Name, uint Id)>? scripts = null,
+                      ScriptUnit? source = null)
     {
         Name = name;
+        Source = source;
         foreach (GlobalSymbol symbol in symbols)
         {
             if (!_byName.TryAdd(symbol.Name, symbol))
@@ -48,6 +55,35 @@ public sealed class GameModule
     public static GameModule Scripts(string profileId, IEnumerable<(string FileName, long PackedId)> scripts)
         => new($"{profileId}.scripts", [],
             scripts.Select(entry => (Path.GetFileNameWithoutExtension(entry.FileName), (uint)entry.PackedId)));
+
+    /// <summary>A source module: its pinned <c>global</c> declarations become symbols; the compiler reads the rest of
+    /// the unit (constants, templates, library subroutines).</summary>
+    public static GameModule FromSource(ScriptUnit unit)
+    {
+        if (!unit.IsModule) throw new InvalidDataException($"'{unit.Name}' is a script, not a module");
+        var symbols = new List<GlobalSymbol>();
+        foreach (Statement statement in unit.Body)
+            if (statement is StorageDeclaration { Local: false, Address: uint address } declaration)
+                symbols.Add(new GlobalSymbol(declaration.Name, declaration.Type switch { "str" => 0x5, "float" => 0x4, _ => 0x3 },
+                    address, declaration.Dimensions, declaration.Columns));
+        return new GameModule(unit.Name, symbols, source: unit);
+    }
+
+    /// <summary>Every source module in a directory (<c>oms/&lt;profile&gt;/*.oms</c>), in file-name order; each must
+    /// declare <c>module &lt;profile&gt;.&lt;name&gt;</c>.</summary>
+    public static List<GameModule> LoadSources(string directory, string profileId)
+    {
+        var modules = new List<GameModule>();
+        if (!Directory.Exists(directory)) return modules;
+        foreach (string path in Directory.GetFiles(directory, "*.oms").Order(StringComparer.Ordinal))
+        {
+            ScriptUnit unit = Parser.ParseScript(File.ReadAllText(path), path);
+            if (!unit.IsModule || !unit.Name.StartsWith(profileId + ".", StringComparison.Ordinal))
+                throw new InvalidDataException($"{path}: expected 'module {profileId}.<name>'");
+            modules.Add(FromSource(unit));
+        }
+        return modules;
+    }
 
     public bool TryGetScript(string name, out uint id) => _scriptIds.TryGetValue(name, out id);
 

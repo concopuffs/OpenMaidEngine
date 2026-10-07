@@ -1,7 +1,9 @@
 namespace Age.Script.Syntax;
 
-/// <summary>A parsed script unit (spec §3.1).</summary>
-public sealed record ScriptUnit(SourceSpan Span, int Version, string Name, string? Abi, IReadOnlyList<Statement> Body);
+/// <summary>A parsed unit (spec §3.1): a script (<c>script "X.BIN"</c>) or, when <see cref="IsModule"/>, a module
+/// (<c>module himegari.adv</c>) holding declarations, templates and library subroutines.</summary>
+public sealed record ScriptUnit(SourceSpan Span, int Version, string Name, string? Abi, IReadOnlyList<Statement> Body,
+                                bool IsModule = false);
 
 public abstract record Statement(SourceSpan Span);
 
@@ -63,7 +65,7 @@ public sealed record ElementExpr(SourceSpan Span, RawStorage Base, RawOperand? S
 public sealed record AssignStatement(SourceSpan Span, Expr Target, Expr Value, string? CompoundOp = null) : Statement(Span);
 
 /// <summary>An intrinsic argument; <see cref="Out"/> marks an operand the intrinsic writes (spec §6.3).</summary>
-public sealed record CallArgument(Expr Value, bool Out);
+public sealed record CallArgument(Expr Value, bool Out, string? Name = null);
 
 /// <summary><c>name(args)</c>: an intrinsic, or a local subroutine/label called with no arguments.</summary>
 public sealed record CallStatement(SourceSpan Span, string Name, IReadOnlyList<CallArgument> Arguments) : Statement(Span);
@@ -127,9 +129,39 @@ public sealed record SubParameter(SourceSpan Span, string Name, RawStorage Cell)
 
 /// <summary><c>sub name(params) -> result { … }</c> or <c>coroutine name { … }</c>: a placed local subroutine
 /// (spec §6.3). Control may not fall into it; a sub that can fall off its end returns implicitly, and a coroutine
-/// must end with <c>resume</c>.</summary>
+/// must end with <c>resume</c>. <c>@guard sub</c> is placed behind an <c>exit</c> guard instead, as the original
+/// compiler placed library functions.</summary>
 public sealed record SubStatement(SourceSpan Span, string Name, IReadOnlyList<SubParameter> Parameters,
-                                  RawStorage? Result, IReadOnlyList<Statement> Body, bool Coroutine) : Statement(Span);
+                                  RawStorage? Result, IReadOnlyList<Statement> Body, bool Coroutine,
+                                  bool Guarded = false) : Statement(Span);
+
+/// <summary>A template parameter (spec §6.3, §11.1): <c>name: kind [= default]</c>. Kinds: <c>const</c> (an integer
+/// constant, which <c>static if</c> can test), <c>text</c> (a string literal), <c>expr</c> (any expression) and
+/// <c>cell</c> (an assignable cell or element).</summary>
+public sealed record TemplateParameter(SourceSpan Span, string Name, string Kind, Expr? Default);
+
+/// <summary><c>inline name(params) { … }</c>: a template, expanded at each use; <c>@dialogue</c> marks the one that
+/// dialogue statements expand through (spec §11.2).</summary>
+public sealed record TemplateStatement(SourceSpan Span, string Name, IReadOnlyList<TemplateParameter> Parameters,
+                                       IReadOnlyList<Statement> Body, bool Dialogue) : Statement(Span);
+
+/// <summary><c>static if c { … } else { … }</c>: chosen at template expansion from constant parameters.</summary>
+public sealed record StaticIfStatement(SourceSpan Span, Expr Condition, IReadOnlyList<Statement> Then,
+                                       IReadOnlyList<Statement>? Else) : Statement(Span);
+
+/// <summary>A dialogue line (spec §11.2): <c>"text"</c> or <c>speaker "text" (voice: 0x34e)</c>.</summary>
+public sealed record DialogueStatement(SourceSpan Span, string? Speaker, string Text, IReadOnlyList<CallArgument> Arguments)
+    : Statement(Span);
+
+/// <summary>One member of an <c>enum</c>: a constant.</summary>
+public sealed record EnumMember(SourceSpan Span, string Name, uint Value);
+
+/// <summary><c>enum speaker { エミリオ = 0x1, … }</c>: named constants that a template parameter can take as its kind,
+/// so decompiled arguments print by member name (spec §11 step 6).</summary>
+public sealed record EnumStatement(SourceSpan Span, string Name, IReadOnlyList<EnumMember> Members) : Statement(Span);
+
+/// <summary><c>none</c>: the absent value of an optional constant parameter.</summary>
+public sealed record NoneExpr(SourceSpan Span) : Expr(Span);
 
 /// <summary><c>resume</c>: the coroutine resume point, op 0x7c.</summary>
 public sealed record ResumeStatement(SourceSpan Span) : Statement(Span);

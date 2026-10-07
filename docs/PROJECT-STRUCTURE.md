@@ -111,6 +111,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── globals-kamidori.toml               ★ CANONICAL Kamidori global registry (same schema; addresses are per game)
     │   └── opcode-leads.json, small-script-listings.md
     │
+    ├── oms/<profile>/*.oms                   hand-written Open Maid Script source modules (preludes): `module
+    │   │                                       <profile>.<name>` units of declarations, templates and library
+    │   │                                       subs that the compiler links and the idiomatic decompiler lifts
+    │   └── himegari/adv.oms                    Himegari ADV prelude: scene library, `@dialogue line`, speaker enum
+    │
     ├── docs/                                 all documentation
     │   ├── PROJECT-STRUCTURE.md                this file (where things live)
     │   ├── tools-reference.md                  every tool: purpose, usage, I/O (operational companion)
@@ -174,9 +179,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── Age.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
     │                                       open-maid-script-design.md): operand contracts, intrinsics (Abi/), intermediate
     │                                       form and byte-exact decoder/encoder (Ir/), lexer/parser/AST (Syntax/),
-    │                                       compiler, expression lowering, temporary allocator and canonical
+    │                                       compiler, template expander, expression lowering, temporary allocator and canonical
     │                                       layout rules (Compile/), layout sidecar
-    │                                       (Layout/), generated game modules (Modules/), raw and core decompilers (Text/); referenced by Age.Cli and the tests,
+    │                                       (Layout/), generated and source modules (Modules/), raw, core and idiomatic decompilers
+    │                                       with library/template patterns (Text/); referenced by Age.Cli and the tests,
     │                                       not by the Godot runtime
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
@@ -206,7 +212,9 @@ boundary, not just a naming convention; tools resolve it from the selected immut
 `engine/Age.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
 `engine/Age.Cli` exposes it as `catalog-scan` for validation and diagnostic reports, and exposes the
 `Age.Script` round trips as `oms-roundtrip` (with `oms-residue` for its literal leftovers and `oms-temps` for its
-temporary-allocator residue) and decompiled source as `oms-decompile`.
+temporary-allocator residue) and decompiled source as `oms-decompile`. The source modules in `oms/<profile>/` are
+authored, like `vm-map/`, not derived: the compiler links them, and `--level idiomatic` lifts their library subs
+and templates.
 
 The Godot deliverable includes `OME.sln` because Godot's .NET exporter requires a solution,
 `export_presets.cfg` for Linux and Windows x86_64, and `build/.gdignore` so disposable capture frames below

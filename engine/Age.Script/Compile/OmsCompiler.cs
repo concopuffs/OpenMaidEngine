@@ -49,11 +49,47 @@ public static class OmsCompiler
                                    ICollection<OmsWarning>? warnings = null)
     {
         ArgumentNullException.ThrowIfNull(unit);
-        var generator = new CodeGenerator(table, intrinsics, layout, modules, warnings);
+        var generator = new CodeGenerator(table, intrinsics, layout, modules, warnings, null, false);
         generator.EmitAll(unit.Body);
         generator.ResolveLabels();
         return generator.Build(unit.Name, abiId);
     }
+
+    /// <summary>Compiles a unit and reports where every label and linked library sub landed, for building decompiler
+    /// patterns (spec §11 steps 4 and 5). <paramref name="linkAll"/> links every library sub of the used modules,
+    /// referenced or not.</summary>
+    public static OmsImage CompileImage(ScriptUnit unit, string abiId, OpcodeTable? table, OmsLayout? layout,
+                                        IntrinsicCatalog? intrinsics, Func<string, GameModule?>? modules, bool linkAll)
+    {
+        ArgumentNullException.ThrowIfNull(unit);
+        var generator = new CodeGenerator(table, intrinsics, layout, modules, null, null, linkAll);
+        generator.EmitAll(unit.Body);
+        generator.ResolveLabels();
+        IrScript script = generator.Build(unit.Name, abiId);
+        return new OmsImage(script, generator.Labels, generator.Linked);
+    }
+
+    /// <summary>
+    /// Compiles source decompiled from <paramref name="reference"/> with every statement's temporaries pinned to the
+    /// slots the reference uses there (the layout's own temporary pins are ignored). The pins that differ from the
+    /// canonical plan come back in <paramref name="temps"/>, ready for the sidecar. A statement whose instructions
+    /// differ from the reference other than in temporary slots is an error; the caller compares the whole result.
+    /// </summary>
+    public static IrScript Fit(ScriptUnit unit, string abiId, OpcodeTable? table, OmsLayout? layout,
+                               IntrinsicCatalog? intrinsics, Func<string, GameModule?>? modules, IrScript reference,
+                               out SortedDictionary<int, OmsTempOverride> temps)
+    {
+        ArgumentNullException.ThrowIfNull(unit);
+        ArgumentNullException.ThrowIfNull(reference);
+        var generator = new CodeGenerator(table, intrinsics, layout, modules, null, reference, false);
+        generator.EmitAll(unit.Body);
+        generator.ResolveLabels();
+        temps = generator.Fitted;
+        return generator.Build(unit.Name, abiId);
+    }
+
+    /// <summary>First slot of the probe range <see cref="Fit"/> and pattern builders use for temporaries.</summary>
+    public const uint TempProbe = 0x40000000;
 
     private sealed record Occurrence(IrDataItem Item, SourceSpan Span);
 
@@ -66,8 +102,11 @@ public static class OmsCompiler
         [("int", true)] = "L", [("float", true)] = "LF", [("str", true)] = "LS",
     };
 
+    private sealed record LibrarySub(SubStatement Sub, string Module, IReadOnlyList<string> Labels);
+
     private sealed class CodeGenerator(OpcodeTable? table, IntrinsicCatalog? intrinsics, OmsLayout? layout,
-                                       Func<string, GameModule?>? modules, ICollection<OmsWarning>? warnings)
+                                       Func<string, GameModule?>? modules, ICollection<OmsWarning>? warnings,
+                                       IrScript? reference, bool linkAll)
     {
         private string? _currentSub;
         private readonly HashSet<int> _warnedOpcodes = new();
@@ -97,6 +136,28 @@ public static class OmsCompiler
         private readonly Dictionary<string, SubStatement> _subs = new(StringComparer.Ordinal);
         private Dictionary<string, RawStorage>? _parameters;
         private readonly HashSet<string> _referenced = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, TemplateStatement> _templates = new(StringComparer.Ordinal);
+        /// <summary>Library subroutines of the used source modules, in declaration order.</summary>
+        private readonly List<LibrarySub> _library = new();
+        private readonly List<OmsLinkedSub> _linkedRanges = new();
+        /// <summary>Label keys in order of first reference (code order), for the library link order.</summary>
+        private readonly List<string> _referenceOrder = new();
+        private readonly HashSet<string> _enums = new(StringComparer.Ordinal);
+
+        /// <summary>Temporary pins <see cref="OmsCompiler.Fit"/> derived, by statement site.</summary>
+        public SortedDictionary<int, OmsTempOverride> Fitted { get; } = new();
+
+        /// <summary>Instruction index of every user, module and sub label (after <see cref="ResolveLabels"/>).</summary>
+        public IReadOnlyDictionary<string, int> Labels
+            => _labels.Where(pair => !pair.Key.Contains('#')).ToDictionary(pair => pair.Key, pair => pair.Value);
+
+        public IReadOnlyList<OmsLinkedSub> Linked => _linkedRanges;
+        private readonly HashSet<string> _linked = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _placed = new(StringComparer.Ordinal);
+        /// <summary>Names a used source module declares, with the module; a script may not redeclare them.</summary>
+        private readonly Dictionary<string, string> _moduleNames = new(StringComparer.Ordinal);
+        private readonly Stack<string> _expanding = new();
+        private int _expansions;
 
         /// <summary>Whether control can arrive at <paramref name="position"/> through a label: a user label, or an
         /// internal label its construct has already jumped to.</summary>
@@ -114,20 +175,33 @@ public static class OmsCompiler
         public void EmitAll(IReadOnlyList<Statement> statements)
         {
             CollectUserLabels(statements);
+            List<Statement> declarations = DeclarationsIn(statements);
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            foreach (UseStatement use in declarations.OfType<UseStatement>()) Use(use, visited);
+            // Locals a used module names count as named slots in every script that uses it.
             var highest = new Dictionary<string, long>(StringComparer.Ordinal);
-            foreach (RawOperand operand in OperandsOf(statements))
+            IEnumerable<Statement> scanned = statements.Concat(_library.Select(library => library.Sub))
+                .Concat(_templates.Values.Where(template => _moduleNames.ContainsKey(template.Name)));
+            foreach (RawOperand operand in OperandsOf(scanned))
                 if (operand is RawStorage { Bank: "L" or "LF" or "LS" } local)
                     highest[local.Bank] = Math.Max(highest.GetValueOrDefault(local.Bank, -1), local.Index);
-            Declare(statements, highest);
+            Declare(declarations, highest);
             foreach (var (bank, slot) in highest) _declaredLocals[StorageBanks.TypeByBank[bank]] = slot;
             _tempBase = layout?.TempBase ?? (uint)(highest.GetValueOrDefault("L", -1) + 1);
-            foreach (Statement statement in statements) Emit(statement);
+            foreach (Statement statement in statements)
+            {
+                PlaceLibrary();
+                Emit(statement);
+            }
+            PlaceLibrary();
+            LinkLibrary();
+            if (layout?.Library?.Keys.FirstOrDefault(name => !_placed.Contains(name)) is { } unplaced)
+                throw new OmsCompileException(default, $"the sidecar places library sub '{unplaced}', which is not linked at that index");
         }
 
-        /// <summary>Collects <c>use</c>, <c>const</c>, <c>global</c> and <c>local</c> declarations (spec §5.2). Pinned
-        /// locals count as named slots; unpinned locals take slots above every local the source names, so the
-        /// temporary pool stays above them.</summary>
-        private void Declare(IReadOnlyList<Statement> statements, Dictionary<string, long> highest)
+        /// <summary>Declarations anywhere outside templates: <c>use</c>, <c>const</c>, <c>global</c>, <c>local</c> and
+        /// the script's own <c>inline</c> templates.</summary>
+        private static List<Statement> DeclarationsIn(IReadOnlyList<Statement> statements)
         {
             var declarations = new List<Statement>();
             var pending = new Stack<IReadOnlyList<Statement>>();
@@ -136,36 +210,187 @@ public static class OmsCompiler
                 foreach (Statement statement in pending.Pop())
                     switch (statement)
                     {
-                        case UseStatement or ConstStatement or StorageDeclaration: declarations.Add(statement); break;
+                        case UseStatement or ConstStatement or StorageDeclaration or TemplateStatement or EnumStatement:
+                            declarations.Add(statement);
+                            break;
                         case SubStatement sub: pending.Push(sub.Body); break;
                         case AtomicStatement atomic: pending.Push(atomic.Body); break;
                     }
-            foreach (Statement statement in declarations)
-                if (statement is UseStatement use)
+            return declarations;
+        }
+
+        /// <summary>Imports a module (spec §3.2): its global names and, for a source module, its constants, templates
+        /// and library subroutines; modules it uses are imported first.</summary>
+        private void Use(UseStatement use, HashSet<string> visited)
+        {
+            if (!visited.Add(use.Module)) return;
+            GameModule module = modules?.Invoke(use.Module)
+                ?? throw new OmsCompileException(use.Span, $"unknown module '{use.Module}'");
+            ScriptUnit? unit = module.Source;
+            foreach (UseStatement inner in unit?.Body.OfType<UseStatement>() ?? []) Use(inner, visited);
+            _used.Add(module);
+            foreach (GlobalSymbol symbol in module.Symbols)
+            {
+                _names[symbol.Name] = new Declared(
+                    new RawStorage(use.Span, StorageBanks.BankByType[symbol.Type], symbol.Address),
+                    symbol.Dimensions, symbol.Columns);
+                if (unit != null) Shared(symbol.Name, use.Span, unit.Name);
+            }
+            if (unit == null) return;
+            foreach (Statement statement in unit.Body)
+                switch (statement)
                 {
-                    GameModule module = modules?.Invoke(use.Module)
-                        ?? throw new OmsCompileException(use.Span, $"unknown module '{use.Module}'");
-                    _used.Add(module);
-                    foreach (GlobalSymbol symbol in module.Symbols)
-                        _names[symbol.Name] = new Declared(
-                            new RawStorage(use.Span, StorageBanks.BankByType[symbol.Type], symbol.Address),
-                            symbol.Dimensions, symbol.Columns);
+                    case UseStatement or StorageDeclaration { Local: false, Address: not null }:
+                        break;
+                    case ConstStatement constant:
+                        Shared(constant.Name, constant.Span, unit.Name);
+                        _constants[constant.Name] = constant.Value;
+                        _names.Remove(constant.Name);
+                        break;
+                    case EnumStatement enumeration:
+                        Shared(enumeration.Name, enumeration.Span, unit.Name);
+                        _enums.Add(enumeration.Name);
+                        foreach (EnumMember member in enumeration.Members)
+                        {
+                            Shared(member.Name, member.Span, unit.Name);
+                            _constants[member.Name] = member.Value;
+                            _names.Remove(member.Name);
+                        }
+                        break;
+                    case TemplateStatement template:
+                        Shared(template.Name, template.Span, unit.Name);
+                        _templates[template.Name] = template;
+                        break;
+                    case SubStatement sub:
+                    {
+                        // A library sub's labels are module names: other subs may call into them (a sub with several
+                        // entry points), and a script may not reuse them.
+                        string[] labels = [sub.Name, .. TemplateExpander.DefinedLabels(sub.Body)];
+                        foreach (string label in labels)
+                        {
+                            Shared(label, sub.Span, unit.Name);
+                            if (_userLabels.Contains(label))
+                                throw new OmsCompileException(sub.Span, $"'{label}' is defined by the script and by module {unit.Name}");
+                        }
+                        if (!_subs.TryAdd(sub.Name, sub))
+                            throw new OmsCompileException(sub.Span, $"'{sub.Name}' is defined by the script and by module {unit.Name}");
+                        foreach (string label in labels) _userLabels.Add(label);
+                        _library.Add(new LibrarySub(sub, unit.Name, labels));
+                        break;
+                    }
+                    default:
+                        throw new OmsCompileException(statement.Span,
+                            $"module {unit.Name} may hold only use, const, enum, pinned global, inline and sub declarations");
                 }
+        }
+
+        /// <summary>Records a name a source module declares; two modules may not declare the same name.</summary>
+        private void Shared(string name, SourceSpan span, string module)
+        {
+            if (_moduleNames.TryGetValue(name, out string? other) && other != module)
+                throw new OmsCompileException(span, $"'{name}' is declared by modules {other} and {module}");
+            _moduleNames[name] = module;
+        }
+
+        /// <summary>Links library subs the sidecar places at the current instruction index.</summary>
+        private void PlaceLibrary()
+        {
+            if (layout?.Library == null) return;
+            for (bool placed = true; placed;)
+            {
+                placed = false;
+                foreach (LibrarySub library in _library)
+                    if (!_linked.Contains(library.Sub.Name) && layout.Library.TryGetValue(library.Sub.Name, out int index)
+                        && index == _code.Count)
+                    {
+                        _placed.Add(library.Sub.Name);
+                        Link(library);
+                        placed = true;
+                        break;
+                    }
+            }
+        }
+
+        /// <summary>Links the library subs the code needs after the script (spec §6.3), breadth first in order of first
+        /// reference: the subs the code references, in code order, then the subs each linked sub references in turn.
+        /// This is the original compiler's order for its library functions.</summary>
+        private void LinkLibrary()
+        {
+            if (_library.All(library => _linked.Contains(library.Sub.Name))) return;
+            if (linkAll)
+            {
+                foreach (LibrarySub library in _library.Where(library => !_linked.Contains(library.Sub.Name)).ToList())
+                    Link(library);
+                return;
+            }
+            var owner = new Dictionary<string, LibrarySub>(StringComparer.Ordinal);
+            foreach (LibrarySub library in _library)
+                foreach (string label in library.Labels) owner[label] = library;
+            var queue = new List<LibrarySub>();
+            var queued = new HashSet<string>(_linked, StringComparer.Ordinal);
+            int scanned = 0;
+            void Scan()
+            {
+                for (; scanned < _referenceOrder.Count; scanned++)
+                    if (owner.TryGetValue(_referenceOrder[scanned], out LibrarySub? library) && queued.Add(library.Sub.Name))
+                        queue.Add(library);
+            }
+            Scan();
+            for (int i = 0; i < queue.Count; i++)
+            {
+                Link(queue[i]);
+                Scan();
+            }
+        }
+
+        private void Link(LibrarySub library)
+        {
+            _linked.Add(library.Sub.Name);
+            int start = _code.Count;
+            EmitSub(library.Sub);
+            _linkedRanges.Add(new OmsLinkedSub(library.Sub.Name, library.Module, start, _code.Count, library.Labels,
+                library.Sub.Coroutine));
+        }
+
+        /// <summary>Collects <c>const</c>, <c>global</c>, <c>local</c> and <c>inline</c> declarations (spec §5.2). Pinned
+        /// locals count as named slots; unpinned locals take slots above every local the source names, so the
+        /// temporary pool stays above them.</summary>
+        private void Declare(List<Statement> declarations, Dictionary<string, long> highest)
+        {
             var user = new HashSet<string>(StringComparer.Ordinal);
+            void Claim(string name, SourceSpan span)
+            {
+                if (_moduleNames.TryGetValue(name, out string? module))
+                    throw new OmsCompileException(span, $"'{name}' is already declared by module {module}");
+                if (!user.Add(name) || _userLabels.Contains(name))
+                    throw new OmsCompileException(span, $"'{name}' is declared twice");
+            }
             foreach (Statement statement in declarations)
             {
                 switch (statement)
                 {
+                    case TemplateStatement template:
+                        Claim(template.Name, template.Span);
+                        _templates[template.Name] = template;
+                        break;
+                    case EnumStatement enumeration:
+                        Claim(enumeration.Name, enumeration.Span);
+                        _enums.Add(enumeration.Name);
+                        foreach (EnumMember member in enumeration.Members)
+                        {
+                            Claim(member.Name, member.Span);
+                            _constants[member.Name] = member.Value;
+                            _names.Remove(member.Name);
+                        }
+                        break;
                     case ConstStatement constant:
-                        if (!user.Add(constant.Name) || _userLabels.Contains(constant.Name))
-                            throw new OmsCompileException(constant.Span, $"'{constant.Name}' is declared twice");
+                        Claim(constant.Name, constant.Span);
                         _constants[constant.Name] = constant.Value;
                         _names.Remove(constant.Name);
                         break;
                     case StorageDeclaration declaration:
                     {
-                        if (!user.Add(declaration.Name) || _userLabels.Contains(declaration.Name))
-                            throw new OmsCompileException(declaration.Span, $"'{declaration.Name}' is declared twice");
+                        Claim(declaration.Name, declaration.Span);
                         string bank = BankOfDeclaration[(declaration.Type, declaration.Local)];
                         long size = declaration.Dimensions.Aggregate(1L, (product, dimension) => product * dimension);
                         uint index;
@@ -253,6 +478,12 @@ public static class OmsCompiler
                         if (sub.Result != null) pending.Push(sub.Result);
                         foreach (Statement inner in sub.Body) pending.Push(inner);
                         break;
+                    case TemplateStatement template: foreach (Statement inner in template.Body) pending.Push(inner); break;
+                    case StaticIfStatement branch:
+                        foreach (Statement inner in branch.Then) pending.Push(inner);
+                        if (branch.Else != null) foreach (Statement inner in branch.Else) pending.Push(inner);
+                        break;
+                    case DialogueStatement line: foreach (CallArgument argument in line.Arguments) pending.Push(argument.Value); break;
                 }
             }
         }
@@ -392,7 +623,12 @@ public static class OmsCompiler
                 case ResumeStatement:
                     Add(Resume, []);
                     break;
-                case UseStatement or ConstStatement or StorageDeclaration:
+                case DialogueStatement line:
+                    EmitDialogue(line);
+                    break;
+                case StaticIfStatement branch:
+                    throw new OmsCompileException(branch.Span, "static if belongs in a template body");
+                case UseStatement or ConstStatement or StorageDeclaration or TemplateStatement or EnumStatement:
                     break;
                 default:
                     throw new OmsCompileException(statement.Span, $"{statement.GetType().Name} is not supported yet");
@@ -470,9 +706,70 @@ public static class OmsCompiler
 
         /// <summary>Lowers one statement with the canonical temporary plan, or the sidecar's override for the
         /// statement starting at this instruction.</summary>
+        private static readonly uint[] Probes = Enumerable.Range(0, 0x400).Select(k => TempProbe + (uint)k).ToArray();
+
+        private static bool IsReferenceType(int type) => type is 0xC or 0xD or 0xE;
+
+        /// <summary>Fit mode: lowers the statement with probe slots, reads each temporary's slot off the reference at
+        /// the same instructions, and emits it with those slots, recording them where they are not canonical.</summary>
+        private void LowerFitted(LStatement statement, SourceSpan span, int site)
+        {
+            bool swap = layout?.RefSwap == true;
+            var probe = new CanonicalTemps(statement, _tempBase, swap, Probes, Probes);
+            var probed = new List<IrInstruction>();
+            var plan = new CanonicalTemps(statement, _tempBase, swap);
+            var canonical = new List<IrInstruction>();
+            try
+            {
+                ExpressionLowering.Lower(statement, probe.Allocate, probed.Add);
+                ExpressionLowering.Lower(statement, plan.Allocate, canonical.Add);
+            }
+            catch (InvalidDataException error)
+            {
+                throw new OmsCompileException(span, error.Message);
+            }
+            var ints = new uint?[probe.IntCount];
+            var refs = new uint?[probe.RefCount];
+            var canonicalInts = new uint[probe.IntCount];
+            var canonicalRefs = new uint[probe.RefCount];
+            for (int i = 0; i < probed.Count; i++)
+            {
+                IrInstruction mine = probed[i];
+                IrInstruction? original = site + i < reference!.Code.Count ? reference.Code[site + i] : null;
+                if (original == null || original.Opcode != mine.Opcode || original.Operands.Count != mine.Operands.Count)
+                    throw new OmsCompileException(span, $"the statement at instruction {site} does not fit the original");
+                for (int p = 0; p < mine.Operands.Count; p++)
+                {
+                    IrOperand m = mine.Operands[p], o = original.Operands[p];
+                    bool probeSlot = m.Kind == IrOperandKind.Literal && m.Value - TempProbe < (uint)Probes.Length;
+                    if (probeSlot && m.Type == 0x9 || probeSlot && IsReferenceType(m.Type))
+                    {
+                        int k = (int)(m.Value - TempProbe);
+                        uint?[] slots = m.Type == 0x9 ? ints : refs;
+                        if (o.Kind != IrOperandKind.Literal || o.Type != m.Type || slots[k] is uint seen && seen != o.Value)
+                            throw new OmsCompileException(span, $"the temporaries at instruction {site + i} do not fit the original");
+                        slots[k] = o.Value;
+                        (m.Type == 0x9 ? canonicalInts : canonicalRefs)[k] = canonical[i].Operands[p].Value;
+                    }
+                    else if (m.Kind == IrOperandKind.Literal && m != o)
+                        throw new OmsCompileException(span, $"operand {p + 1} at instruction {site + i} does not fit the original");
+                }
+            }
+            uint[] fittedInts = ints.Select(slot => slot ?? 0).ToArray(), fittedRefs = refs.Select(slot => slot ?? 0).ToArray();
+            uint[]? intPins = fittedInts.SequenceEqual(canonicalInts) ? null : fittedInts;
+            uint[]? refPins = fittedRefs.SequenceEqual(canonicalRefs) ? null : fittedRefs;
+            if (intPins != null || refPins != null) Fitted[site] = new OmsTempOverride { Ints = intPins, Refs = refPins };
+            ExpressionLowering.Lower(statement, new CanonicalTemps(statement, _tempBase, swap, intPins, refPins).Allocate, _code.Add);
+        }
+
         private void Lower(LStatement statement, SourceSpan span)
         {
             int site = _code.Count;
+            if (reference != null)
+            {
+                LowerFitted(statement, span, site);
+                return;
+            }
             OmsTempOverride? entry = null;
             layout?.Temps?.TryGetValue(site, out entry);
             var temps = new CanonicalTemps(statement, _tempBase, layout?.RefSwap == true, entry?.Ints, entry?.Refs);
@@ -532,6 +829,8 @@ public static class OmsCompiler
                     return new LBinary(0x5A, ToL(not.Operand), Zero);
                 case UnaryExpr { Op: "~" } complement:
                     return new LBinary(0x51, new LLeaf(IrOperand.Literal(0, NoTarget)), ToL(complement.Operand));
+                case NoneExpr:
+                    throw new OmsCompileException(expression.Span, "'none' has no value here; test for it with static if");
                 default:
                     throw new OmsCompileException(expression.Span, $"unsupported expression {expression.GetType().Name}");
             }
@@ -599,7 +898,9 @@ public static class OmsCompiler
         /// inside the body, and break/continue cannot leave it.</summary>
         private void EmitSub(SubStatement sub)
         {
-            if (_code.Count > 0 && (!IsTerminator(_code[^1].Opcode) || LabelAt(_code.Count)))
+            if (sub.Guarded)
+                Add(Exit, []);
+            else if (_code.Count > 0 && (!IsTerminator(_code[^1].Opcode) || LabelAt(_code.Count)))
                 throw new OmsCompileException(sub.Span,
                     $"control falls into {(sub.Coroutine ? "coroutine" : "sub")} '{sub.Name}'; end the code before it with goto, return or exit");
             var parameters = new Dictionary<string, RawStorage>(StringComparer.Ordinal);
@@ -647,11 +948,67 @@ public static class OmsCompiler
             Add(Call, [LabelOperand(sub.Name, call.Span)]);
         }
 
+        /// <summary>Expands a template use (spec §6.3) and emits the result in place. The expansion's labels are its
+        /// own, and break/continue inside it cannot leave it.</summary>
+        private void EmitTemplate(TemplateStatement template, IReadOnlyList<CallArgument> arguments, SourceSpan span)
+        {
+            if (_expanding.Contains(template.Name))
+                throw new OmsCompileException(span, $"template '{template.Name}' expands itself");
+            foreach (TemplateParameter parameter in template.Parameters)
+                if (parameter.Kind is not ("const" or "text" or "expr" or "cell") && !_enums.Contains(parameter.Kind))
+                    throw new OmsCompileException(parameter.Span,
+                        $"parameter '{parameter.Name}' of '{template.Name}' has unknown kind '{parameter.Kind}'");
+            IReadOnlyList<Statement> body = TemplateExpander.Expand(template, arguments, span, ConstantOf,
+                $"#{template.Name}{_expansions++}");
+            CollectUserLabels(body);
+            var outerLoops = _loops.ToArray();
+            _loops.Clear();
+            _expanding.Push(template.Name);
+            foreach (Statement statement in body) Emit(statement);
+            _expanding.Pop();
+            foreach (var loop in outerLoops.Reverse()) _loops.Push(loop);
+        }
+
+        /// <summary>A dialogue line (spec §11.2) expands through the one <c>@dialogue</c> template of the used modules:
+        /// the text binds its <c>text</c> parameter, the speaker (a constant) its <c>speaker</c> parameter.</summary>
+        private void EmitDialogue(DialogueStatement line)
+        {
+            TemplateStatement[] candidates = _templates.Values.Where(template => template.Dialogue).ToArray();
+            if (candidates.Length != 1)
+                throw new OmsCompileException(line.Span, candidates.Length == 0
+                    ? "a dialogue line needs an @dialogue template; use the game's dialogue module"
+                    : $"dialogue lines are ambiguous between templates {string.Join(", ", candidates.Select(t => t.Name))}");
+            var arguments = new List<CallArgument>
+            {
+                new(new OperandExpr(line.Span, new RawString(line.Span, line.Text)), false, "text"),
+            };
+            if (line.Speaker != null)
+            {
+                if (!_constants.ContainsKey(line.Speaker))
+                    throw new OmsCompileException(line.Span, $"unknown speaker '{line.Speaker}'");
+                arguments.Add(new CallArgument(new OperandExpr(line.Span, new RawLabelRef(line.Span, line.Speaker)), false, "speaker"));
+            }
+            arguments.AddRange(line.Arguments);
+            EmitTemplate(candidates[0], arguments, line.Span);
+        }
+
+        /// <summary>The value of a <c>const</c> template argument: an integer, a constant, or null for <c>none</c>.</summary>
+        private long? ConstantOf(Expr expression) => expression switch
+        {
+            NoneExpr => null,
+            OperandExpr { Operand: RawInteger integer } => unchecked((int)integer.Value),
+            OperandExpr { Operand: RawLabelRef name } when _constants.TryGetValue(name.Name, out uint value) => unchecked((int)value),
+            UnaryExpr { Op: "-" } negation when ConstantOf(negation.Operand) is long value => -value,
+            _ => throw new OmsCompileException(expression.Span, "a const argument must be an integer, a constant or none"),
+        };
+
         /// <summary><c>x = f(args)</c>: a sub's result cell copied after the call, or an intrinsic whose only written
         /// operand is operand 1.</summary>
         private void EmitCallAssign(CallAssignStatement assign)
         {
             CallStatement call = assign.Call;
+            if (_templates.ContainsKey(call.Name))
+                throw new OmsCompileException(call.Span, $"template '{call.Name}' has no result");
             if (_subs.TryGetValue(call.Name, out SubStatement? sub))
             {
                 if (sub.Result == null)
@@ -673,6 +1030,11 @@ public static class OmsCompiler
 
         private void EmitCall(CallStatement call)
         {
+            if (_templates.TryGetValue(call.Name, out TemplateStatement? template))
+            {
+                EmitTemplate(template, call.Arguments, call.Span);
+                return;
+            }
             if (_subs.TryGetValue(call.Name, out SubStatement? sub))
             {
                 EmitSubCall(sub, call);
@@ -737,7 +1099,7 @@ public static class OmsCompiler
         private IrOperand LabelOperand(string key, SourceSpan span)
         {
             _pendingLabels.Add((key, span));
-            _referenced.Add(key);
+            if (_referenced.Add(key)) _referenceOrder.Add(key);
             return new IrOperand(0, IrOperandKind.CodeLabel, PendingTag | (uint)(_pendingLabels.Count - 1));
         }
 
@@ -901,3 +1263,10 @@ public static class OmsCompiler
         }
     }
 }
+
+/// <summary>A library sub as linked into a compiled unit: its instruction range and the labels it exports (its name
+/// first, then its inner entry points).</summary>
+public sealed record OmsLinkedSub(string Name, string Module, int Start, int End, IReadOnlyList<string> Labels, bool Coroutine);
+
+/// <summary>A compiled unit with the instruction index of every named label and each linked library sub.</summary>
+public sealed record OmsImage(IrScript Script, IReadOnlyDictionary<string, int> Labels, IReadOnlyList<OmsLinkedSub> Library);

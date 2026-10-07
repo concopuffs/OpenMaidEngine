@@ -121,7 +121,13 @@ A unit imports modules with `use`. Three kinds of module exist:
   - `<profile>.scripts` maps each catalog script's file stem to its packed id: `run RECOVER`, or
     `run "$1$SC2600"` when the stem is not an identifier.
 - **Prelude and library modules** (`himegari.adv`, `kamidori.adv`, shared libraries): hand-written OMS shipped
-  in the per-game base mod (roadmap §3.8).
+  in the per-game base mod (roadmap §3.8). Their source lives in `oms/<profile>/<name>.oms`, and the tools load
+  every module there.
+  - A source module may hold `use`, `const`, `enum`, pinned `global` declarations, templates (`inline`) and
+    library subroutines (`sub`, `@guard sub`, `coroutine`). It has no code of its own.
+  - Every name it declares is visible to the units that use it, and a unit may not redeclare one. That includes
+    each library sub's name and every label inside its body: a library sub may have several entry points, as the
+    original scene library does.
 
 ### 3.3 Targets
 
@@ -181,6 +187,7 @@ global int scratch                         // linker-allocated, need not persist
 local int i                                // frame slot chosen by the canonical allocator
 local int buf[8]                           // local array
 local int pinned @ 0x1                     // explicit slot, used by decompiled code in preserve mode
+enum speaker { エミリオ = 0x1, 魔王 = 0x11 } // named constants a template parameter can take as its kind
 ```
 
 **Constants are substituted.** `const` values are substituted and never folded (§7.4), because the original
@@ -200,6 +207,8 @@ compiler performs no constant folding.
   where the original frame put the temporary pool or the spare slot. Without these declarations a sidecar-free
   rebuild would put temporaries over array tails (33 such scripts across both games).
 - Names resolve in the order: sub parameters, `const`, declared or imported names, then labels.
+- An `enum` declares its members as constants. Its name can be a template parameter's kind (§6.3); the decompiler
+  then prints a lifted argument by member name. Members are separated by commas or newlines.
 
 **Decompiled names.** Decompiled code names unnamed storage `G[0x1234]`, `GS[0x315]`, `L[0x5]` and so on, and
 names registry globals by their registry names. An element is named only when the declared shape lowers to the
@@ -319,6 +328,33 @@ because decompiled code keeps labels for entries that cannot be blocks (shared o
 **Code addresses as values.** `&name`, where `name` is a label, `sub` or coroutine, is an `int` expression holding
 that code offset. The encoder relocates it like any code target. `call *expr` is an indirect local call through an
 integer value.
+
+**Templates** (`inline name(params) { … }`) expand in place at each use, written like a call: `twice(2, L[0])`.
+
+- **Parameter kinds:**
+  - `const`: an integer constant;
+  - an enum name: a constant of that enum;
+  - `text`: a string literal;
+  - `expr`: any expression;
+  - `cell`: an assignable cell or element.
+- **Arguments:** a parameter may have a default (`voice: const = none`). Arguments bind by position or by name
+  (`line("…", voice: 0x34e)`).
+- **`static if`:** `static if c { … } else { … }` picks a branch at expansion from constant parameters, integers
+  and `none`, the absent value of an optional constant.
+- **Hygiene:**
+  - labels a template defines are renamed per expansion;
+  - `break` and `continue` cannot leave the expansion;
+  - a template that expands itself is an error.
+
+**Library subroutines** are the `sub`s of a used source module. The compiler links the ones the code needs after
+the script, breadth first in order of first reference. That means the subs the code references, in code order,
+then the subs each linked sub references in turn. The same order holds in all 326 Himegari scripts that link the
+original scene library (`docs/sys4-format-notes.md`, "Where subroutine bodies sit").
+
+- `@guard sub name { … }` places the sub behind an `exit` guard, as the original compiler placed its library
+  functions. Control may then fall onto the guard.
+- A decompiled script whose library subs sit elsewhere records each such sub's instruction index in the sidecar
+  (`library`). The compiler links the sub there instead.
 
 ## 7. Canonical lowering
 
@@ -520,6 +556,26 @@ The pipeline runs in eight steps:
 8. **Write the sidecar**: original sites, data order, unreferenced dwords, slot pins, library placement, and raw
    CP932 bytes wherever decode-then-encode differs.
 
+The idiomatic level (`Age.Cli oms-decompile --level idiomatic`) implements steps 4 and 5 as follows.
+
+- **Patterns.** `OmsIdioms` compiles every library sub of the source modules once, and every template once per
+  combination of its optional constant parameters.
+  - Temporaries use a probe slot range.
+  - Arguments are placeholder integers, cells and strings.
+  - A variant in which a passed parameter leaves no trace is dropped, because nothing could recover it.
+- **Matching.** Code matches a pattern when opcodes and operands agree, with these exceptions:
+  - temporaries match any slot of their bank;
+  - internal labels match by offset;
+  - references to library labels match by name.
+- **Library recognition.** A carved sub is a library sub when its code matches a pattern, from its `exit` guard
+  when the sub is `@guard`. Code outside it may enter it only at the module's labels. Matches whose references to
+  other library labels do not land on the matching names are dropped until the set is consistent.
+- **Template lifting.** A template use is lifted at a node when its longest matching variant ends on a node
+  boundary, is entered only at its start, and calls only recognized library labels.
+- **Verification.** The lifted source is compiled in fit mode against the original, which re-derives every
+  statement's temporary pins from the original instructions. It is kept only if the result is byte-identical.
+  Otherwise the core source is written, with the reason.
+
 ### 11.1 Template rules that keep lifting certifiable
 
 - A template parameter of kind `text`, `const` or storage must appear in the expansion in a recoverable position.
@@ -538,8 +594,9 @@ arguments.
 mao "「まおーさま、だいじょうぶ？」" (voice: 0x34e)
 ```
 
-A prelude marks one template `@dialogue`, for example `inline line(speaker: const = none, voice: const = none,
-text: text)`. The speaker identifier resolves to a prelude constant.
+A prelude marks one template `@dialogue`, for example `@dialogue inline line(text: text, speaker: speaker = none,
+voice: const = none)`. A dialogue line binds its text to the template's `text` parameter and its speaker, a
+prelude constant, to `speaker`. Other arguments bind by name.
 
 The Himegari prelude's `line` template is to reproduce the decoded ADV line expansion:
 
@@ -550,6 +607,16 @@ The Himegari prelude's `line` template is to reproduce the decoded ADV line expa
 - `reset_adv_text_layout`.
 
 Decompiling `SC0000` with that prelude should then yield lines like those above.
+
+`oms/himegari/adv.oms` implements this. Its `enum speaker` holds CNINIT's names for `unit_story_display_names`;
+names that are not identifiers, or that repeat, carry their id. The template has three traceable variants:
+
+- narration;
+- speaker;
+- speaker with voice.
+
+Pages that interpolate a string cell, carry furigana, span several rows, or skip the prologue stay core
+statements for now.
 
 ## 12. Validation gates
 
@@ -577,12 +644,12 @@ port's VM tests and native traces.
 | Question | Blocks | Plan |
 |---|---|---|
 | Allocator state carried across statements | the gate 2 temporary residue (§16) | the labelling rule and the per-script reference order are recorded (format notes); the remaining overrides show references held through `if` bodies and LP0/LP1 order flips, to be modelled if the residue matters |
-| Library placement policy (where shared library helpers sit physically) | canonical rebuild layout | subs are placed where declared (§6.3); still open: where a library module's helpers land when linked into a script |
+| Library placement policy (where shared library helpers sit physically) | resolved 2026-10-07 | the compiler links library subs after the script, breadth first in order of first reference, `@guard` subs behind an `exit` (§6.3); subs a script keeps elsewhere (Himegari's scene-header hotspot handlers) are placed by the sidecar |
 | Free global cells inside the saved prefix | native `saved global` | array extents from registry/INIT data plus runtime write captures; base mod publishes free ranges |
 | Native acceptance of generated append catalogs, and save behavior with them | §9.3 | gate 6 experiment |
 | Meaning of the 0x90-byte SYS4INI block | none known | revisit only if a consumer appears |
 | Extended mod-state model and its save interplay | `extended` globals | OMP / `maid.state` design (roadmap §3.8) |
-| Code-address immediates outside code-target positions | relocation of decompiled code edited at core level | only `&label` and template parameters of code kind relocate; a decompiled `mov G[0x6c3] 0x45e` stays a number until the scene prologue template lifts it, so edits that move code before it belong at the idiomatic level |
+| Code-address immediates outside code-target positions | relocation of decompiled code edited at core level, and sidecar-free idiomatic rebuilds of ADV scenes | only `&label` and template parameters of code kind relocate; a decompiled `mov G[0x6c3] 0x45e` stays a number until the scene prologue template lifts it, so edits that move code before it belong at the idiomatic level. An idiomatic rebuild without its sidecar links the scene-header handlers after the script, which moves the code that immediate names: such rebuilds are byte-stable (gate 4) but not yet semantically valid for ADV scenes |
 | Concrete surface syntax details (this draft's spelling) | none: semantics are fixed above | settle in review before the parser is written |
 
 ## 14. Language evolution
@@ -624,6 +691,7 @@ contracts.
 | 2. Core level, stage C1 (structure) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: 520/520 and 732/732 byte-identical with **0** raw `@op` statements; workspace tests `OmsCoreTests.Installed*CorpusRoundTripsThroughCoreSource` |
 | 3. Canonical rebuild | **passed 2026-10-07** | `Age.Cli oms-rebuild` (also a `validate.py --level workspace` gate): every catalog script rebuilt from core source without its sidecar (441 / 568 change bytes); all 297 / 279 SC/SP scenes, walked page by page and also from the data-table boot, execute the same instruction sequence (27.6M / 38.1M steps) with the same text, halts and final state on a simulated clock |
 | 4. Fixed point | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core --fixed-point`: decompiling each canonical rebuild and recompiling it is byte-identical for 520/520 and 732/732; 506 / 713 of them need no sidecar at all, and the rest need only temporary pins (named locals interleaved with the original's temporaries); workspace tests `OmsCoreTests.Installed*CanonicalRebuildIsAFixedPoint` |
+| 5. Idiomatic level (Himegari prelude) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level idiomatic`: 520/520 byte-identical with `oms/himegari/adv.oms` and 0 abandoned lifts. 9,256 library subs are recognized (the 32 scene-library subs), and 24,297 of 26,667 ADV pages lift to dialogue lines. Lift coverage is 998,654 instructions, **65.6%** of the corpus. Source shrinks from 44.7 MB (core) to 18.8 MB. With `--fixed-point`, idiomatic rebuilds are still 520/520 identical and 506 need no sidecar. The 307 scene sidecars that keep the header handlers' place hold `library` entries. Workspace tests `OmsCoreTests.InstalledHimegari*Idiomatic*`. Kamidori has no prelude yet |
 | 2. Core level, stage C4 (declarations and registry naming) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical with `<profile>.globals` and `<profile>.scripts` applied; `use`, `const`, `global` and `local` declarations, named elements and `run` names covered by `OmsCoreTests` |
 | 2. Core level, stage C3 (`sub`, `coroutine`, bound parameters) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical; 10,914 / 12,287 subs and 614 / 644 coroutines recovered; the compiler's falls-into, implicit-return, coroutine-ending and code-reference-kind checks are covered by `OmsCoreTests`; warnings (§8.2, including recursion with bound parameters) await a warning channel |
 | 2. Core level, stage C2 (expressions, `for`, `while`) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: still 520/520 and 732/732 byte-identical, with 331,075 / 330,708 instructions folded into expressions; temporary overrides in 6,548 / 8,332 statements (2.9% / 4.4% of folded statements); `Age.Cli oms-temps` ranks the residue |

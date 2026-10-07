@@ -24,7 +24,7 @@ public sealed class IntrinsicCatalog
         "if", "else", "loop", "while", "do", "for", "switch", "case", "default", "atomic", "goto", "break",
         "continue", "return", "exit", "run", "note", "out", "script", "oms", "abi", "const", "global", "local",
         "saved", "ref", "sub", "coroutine", "inline", "library", "use", "module", "patch", "resume", "type",
-        "data", "float", "int", "str", "true", "false", "call",
+        "data", "float", "int", "str", "true", "false", "call", "none", "static", "enum",
     };
 
     private readonly Dictionary<string, Intrinsic> _byName = new(StringComparer.Ordinal);

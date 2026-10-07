@@ -735,6 +735,21 @@ The registry records each code-target opcode's kind as `code_target_kind` in `vm
 The Open Maid Script core level turns 5,640 of 6,512 / 7,059 of 8,527 directly called labels into placed `sub`
 blocks (spec §6.3). The rest stay labels.
 
+**The scene library.** About 300 Himegari scenes carry byte-identical copies of the same 32 ADV subroutines (window
+and nameplate drawing, window transitions, the hotspot handlers and the two per-frame coroutines). Each copy uses
+its script's own temporary pool (`L[0x0]` in 309 scenes, `L[0x13e3d]` in `FIELD`). They come in two groups:
+
+- **Scene header (20 bodies, no guards):** the hotspot callbacks and the two yield coroutines sit right after the
+  scene prologue's `goto`, where each scene registers them.
+- **Library functions (12 bodies):** linked at the end of the script. Each is preceded by an `exit` guard, so the
+  last body of a script ends with its `ret`, not an `exit`. Every script links only the functions it uses
+  (149–321 scripts each), breadth first in order of first reference: the functions the code references, in code
+  order, then the functions each linked function references in turn. All 326 scripts with two or more agree.
+  Declaration order does not fit; 113 pairs of functions appear in both orders.
+
+`oms/himegari/adv.oms` declares both groups. The compiler links library subs in this order and models the guard as
+`@guard sub` (spec §6.3).
+
 **Constants are never folded.**
 
 - **No negative immediates.** No negative number is ever encoded as an immediate; the only `0xffffffff`

@@ -28,14 +28,57 @@ public static class OmsCoreDecompiler
 
     /// <param name="modules">Game modules whose names replace registry cells and script ids (decompiler step 6);
     /// the source begins with <c>use</c> of each module it relies on.</param>
+    /// <param name="idioms">Idiomatic level (spec §11 steps 4 and 5): library subs and template uses of the source
+    /// modules are recognized and lifted. The result is kept only if it compiles back to the original, with the
+    /// temporary pins re-derived for the lifted code; otherwise the core source comes back with the reason.</param>
     public static OmsDecompilation Decompile(IrScript script, string abiId, IntrinsicCatalog intrinsics, bool fold = true,
                                              Action<OmsFoldRecord>? observe = null, StringBuilder? dump = null,
-                                             IReadOnlyList<GameModule>? modules = null)
+                                             IReadOnlyList<GameModule>? modules = null, OmsIdioms? idioms = null)
     {
         ArgumentNullException.ThrowIfNull(script);
+        if (idioms == null || idioms.IsEmpty) return DecompileAt(script, abiId, intrinsics, fold, observe, dump, modules, null);
+        OmsDecompilation lifted = DecompileAt(script, abiId, intrinsics, fold, observe, dump, modules, idioms);
+        if (lifted.LibrarySubs + lifted.TemplateLifts == 0) return lifted;
+        string? failure = Verify(lifted, script, abiId, intrinsics, modules ?? [], out SortedDictionary<int, OmsTempOverride>? temps);
+        if (failure == null)
+        {
+            lifted.Layout.Temps = temps!.Count > 0 ? temps : null;
+            return lifted;
+        }
+        return DecompileAt(script, abiId, intrinsics, fold, null, null, modules, null) with { LiftFailure = failure };
+    }
+
+    /// <summary>Compiles lifted source in fit mode against the original: null when it reproduces the original exactly,
+    /// otherwise why not.</summary>
+    private static string? Verify(OmsDecompilation lifted, IrScript script, string abiId, IntrinsicCatalog intrinsics,
+                                  IReadOnlyList<GameModule> modules, out SortedDictionary<int, OmsTempOverride>? temps)
+    {
+        temps = null;
+        try
+        {
+            OmsLayout layout = OmsLayout.FromJson(lifted.Layout.ToJson());
+            layout.Temps = null;
+            IrScript fitted = OmsCompiler.Fit(Parser.ParseScript(lifted.Source, script.Name), abiId, null, layout, intrinsics,
+                name => modules.FirstOrDefault(module => module.Name == name), script, out SortedDictionary<int, OmsTempOverride> pins);
+            if (!IrEncoder.Encode(fitted).AsSpan().SequenceEqual(IrEncoder.Encode(script)))
+                return "the lifted source compiles to different bytes";
+            temps = pins;
+            return null;
+        }
+        catch (Exception error) when (error is OmsCompileException or OmsSyntaxException or InvalidDataException)
+        {
+            return error.Message;
+        }
+    }
+
+    private static OmsDecompilation DecompileAt(IrScript script, string abiId, IntrinsicCatalog intrinsics, bool fold,
+                                                Action<OmsFoldRecord>? observe, StringBuilder? dump,
+                                                IReadOnlyList<GameModule>? modules, OmsIdioms? idioms)
+    {
         var folding = new Folding(script.Code, intrinsics, fold, observe);
-        var context = new Context(script, intrinsics, folding, modules ?? []);
+        var context = new Context(script, intrinsics, folding, modules ?? [], idioms);
         List<Node> top = context.CarveSubs(context.Structure(0, script.Code.Count, null));
+        context.RecognizeLibrary(top);
         var body = new StringBuilder();
         context.CollectLabels(top, null);
         context.DeclareLocalArrays();
@@ -60,7 +103,10 @@ public static class OmsCoreDecompiler
             ? null : script.LocalCounts.ToArray();
         if (folding.RefSwap) layout.RefSwap = true;
         if (folding.Overrides.Count > 0) layout.Temps = folding.Overrides;
-        return new OmsDecompilation(text.ToString(), layout, folding.FoldedInstructions, folding.Rejections);
+        if (context.LibrarySubs > 0)
+            layout.Library = context.LibraryPlacement();
+        return new OmsDecompilation(text.ToString(), layout, folding.FoldedInstructions, folding.Rejections,
+            context.LibrarySubs, context.TemplateLifts, LiftedInstructions: context.Lifted);
     }
 
     // ============================================================================================== folding
@@ -626,7 +672,8 @@ public static class OmsCoreDecompiler
     /// <summary>A loop's break and continue destinations (instruction indices).</summary>
     private sealed record Loop(int Break, int Continue, Loop? Outer);
 
-    private sealed class Context(IrScript script, IntrinsicCatalog intrinsics, Folding folding, IReadOnlyList<GameModule> modules)
+    private sealed class Context(IrScript script, IntrinsicCatalog intrinsics, Folding folding, IReadOnlyList<GameModule> modules,
+                                 OmsIdioms? idioms)
     {
         private readonly List<IrInstruction> _code = script.Code;
         private readonly HashSet<int> _labels = new();
@@ -661,8 +708,237 @@ public static class OmsCoreDecompiler
             return incoming;
         }
 
-        private string LabelName(int index) => index >= _code.Count
-            ? "label_end" : $"label_{_code[index].OriginalOffset ?? _offsets[index]:x}";
+        private string LabelName(int index) => _libraryNames.TryGetValue(index, out string? library) ? library
+            : index >= _code.Count ? "label_end" : $"label_{_code[index].OriginalOffset ?? _offsets[index]:x}";
+
+        // ------------------------------------------------------------------------------------------ idioms
+
+        private readonly Dictionary<int, (OmsLibraryPattern Pattern, int End)> _libraryAt = new();
+        private readonly Dictionary<int, string> _libraryNames = new();
+        private static readonly Dictionary<int, string> NoEntries = new();
+
+        public int LibrarySubs => _libraryAt.Count;
+        public int TemplateLifts { get; private set; }
+        /// <summary>Instructions inside accepted library and template lifts, by module.</summary>
+        public Dictionary<string, int> Lifted { get; } = new(StringComparer.Ordinal);
+
+        private void CountLift(GameModule module, int instructions)
+            => Lifted[module.Name] = Lifted.GetValueOrDefault(module.Name) + instructions;
+
+        /// <summary>Matches a fragment against the code at <paramref name="at"/>: same opcodes and operands, except
+        /// that temporaries match any slot of their bank, internal labels match by offset, references to library labels
+        /// bind script indices to names (<paramref name="references"/>), and placeholders bind arguments.</summary>
+        private bool Match(int at, OmsFragment fragment, Dictionary<int, string> references, Dictionary<int, IrOperand>? arguments)
+        {
+            if (at + fragment.Length > _code.Count) return false;
+            for (int k = 0; k < fragment.Length; k++)
+            {
+                IrInstruction mine = _code[at + k], theirs = fragment.Image.Code[fragment.Start + k];
+                if (mine.Opcode != theirs.Opcode || mine.Operands.Count != theirs.Operands.Count) return false;
+                for (int p = 0; p < theirs.Operands.Count; p++)
+                {
+                    IrOperand t = theirs.Operands[p], m = mine.Operands[p];
+                    if (arguments != null && OmsIdioms.ProbeOf(t, fragment.Image) is int parameter)
+                    {
+                        bool fits = t.Kind == IrOperandKind.DataRef
+                            ? m.Kind == IrOperandKind.DataRef && script.Data[(int)m.Value].Text != null
+                            : t.Type == 0x3 && t.Value >= OmsIdioms.CellProbe
+                                ? m is { Kind: IrOperandKind.Literal, Type: 0x3 or 0x4 or 0x5 or 0x9 or 0xA or 0xB }
+                                : t.Value >= OmsIdioms.ExprProbe ? m.Kind != IrOperandKind.CodeLabel
+                                : m is { Kind: IrOperandKind.Literal, Type: 0 };
+                        if (!fits || arguments.TryGetValue(parameter, out IrOperand bound) && bound != m) return false;
+                        arguments[parameter] = m;
+                        continue;
+                    }
+                    switch (t.Kind)
+                    {
+                        case IrOperandKind.CodeLabel:
+                        {
+                            if (m.Kind != IrOperandKind.CodeLabel || m.Type != t.Type) return false;
+                            // Internal: inside the fragment, or its end unless a library label sits there.
+                            int relative = (int)t.Value - fragment.Start;
+                            if (relative >= 0 && relative < fragment.Length
+                                || relative == fragment.Length && !fragment.Names.ContainsKey((int)t.Value))
+                            {
+                                if ((int)m.Value - at != relative) return false;
+                            }
+                            else if (fragment.Names.TryGetValue((int)t.Value, out string? name))
+                            {
+                                if (references.TryGetValue((int)m.Value, out string? seen) && seen != name) return false;
+                                references[(int)m.Value] = name;
+                            }
+                            else return false;
+                            break;
+                        }
+                        case IrOperandKind.DataRef:
+                            if (m.Kind != IrOperandKind.DataRef || m.Type != t.Type
+                                || !script.Data[(int)m.Value].Dwords.SequenceEqual(fragment.Image.Data[(int)t.Value].Dwords))
+                                return false;
+                            break;
+                        default:
+                            bool temporary = t.Type == 0x9 && t.Value - OmsCompiler.TempProbe < 0x400 || t.Type is 0xC or 0xD or 0xE;
+                            if (temporary ? m.Kind != IrOperandKind.Literal || m.Type != t.Type : m != t) return false;
+                            break;
+                    }
+                }
+            }
+            return true;
+        }
+
+        /// <summary>Whether code outside [start, end) enters it only at its start or at the given exported offsets.</summary>
+        private bool EntriesOnly(int start, int end, IReadOnlyDictionary<int, string> entries)
+        {
+            for (int q = start + 1; q < end; q++)
+                if (_references.TryGetValue(q, out List<int>? sources) && sources.Any(source => source < start || source >= end)
+                    && !entries.ContainsKey(q - start))
+                    return false;
+            return true;
+        }
+
+        /// <summary>Recognizes library subs among the carved subs (spec §11 step 4). A match may run past the carved sub
+        /// over following top-level nodes (a library function's trailing <c>exit</c>) but must end on a node boundary;
+        /// matches whose references to other library labels do not land on the matching names are dropped until the
+        /// set is consistent.</summary>
+        public void RecognizeLibrary(List<Node> top)
+        {
+            if (idioms == null || idioms.Library.Count == 0) return;
+            var boundaries = new HashSet<int>(top.Select(node => node.Start)) { _code.Count };
+            var matches = new Dictionary<int, (OmsLibraryPattern Pattern, int End, Dictionary<int, string> References)>();
+            var taken = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SubNode sub in top.OfType<SubNode>())
+                foreach (OmsLibraryPattern pattern in idioms.Library)
+                {
+                    // A guarded sub's match starts at its exit guard, the top-level node before the carved sub.
+                    int start = sub.Entry - pattern.Entries.First(pair => pair.Value == pattern.Name).Key;
+                    int end = start + pattern.Code.Length;
+                    if (taken.Contains(pattern.Name) || start < 0 || !boundaries.Contains(start) || end < sub.End
+                        || !boundaries.Contains(end) || pattern.Code.FirstOpcode != _code[start].Opcode
+                        || start < sub.Entry && _references.ContainsKey(start))
+                        continue;
+                    var references = new Dictionary<int, string>();
+                    if (!Match(start, pattern.Code, references, null) || !EntriesOnly(start, end, pattern.Entries)) continue;
+                    matches[start] = (pattern, end, references);
+                    taken.Add(pattern.Name);
+                    break;
+                }
+            for (bool changed = true; changed;)
+            {
+                changed = false;
+                var names = new Dictionary<int, string>();
+                foreach (var (entry, match) in matches)
+                    foreach (var (offset, label) in match.Pattern.Entries) names[entry + offset] = label;
+                foreach (var (entry, match) in matches.ToList())
+                    if (match.References.Any(pair => !names.TryGetValue(pair.Key, out string? name) || name != pair.Value))
+                    {
+                        matches.Remove(entry);
+                        changed = true;
+                    }
+            }
+            foreach (var (entry, match) in matches)
+            {
+                _libraryAt[entry] = (match.Pattern, match.End);
+                foreach (var (offset, label) in match.Pattern.Entries) _libraryNames[entry + offset] = label;
+                UsedModules.Add(match.Pattern.Module);
+                CountLift(match.Pattern.Module, match.End - entry);
+            }
+        }
+
+        /// <summary>Where the recognized library subs the compiler would not link there sit, for the sidecar (spec §6.3).
+        /// The compiler links the subs the sidecar does not place after the script, breadth first in order of first
+        /// reference; the longest tail of the script that is exactly that needs no placement.</summary>
+        public SortedDictionary<string, int>? LibraryPlacement()
+        {
+            var ranges = _libraryAt.OrderBy(pair => pair.Key).ToList();
+            var owner = new Dictionary<int, string>();
+            foreach (var (entry, library) in ranges)
+                foreach (int offset in library.Pattern.Entries.Keys) owner[entry + offset] = library.Pattern.Name;
+            IEnumerable<string> References(int from, int to)
+            {
+                for (int k = from; k < to; k++)
+                    foreach (IrOperand operand in _code[k].Operands)
+                        if (operand.Kind == IrOperandKind.CodeLabel && owner.TryGetValue((int)operand.Value, out string? name))
+                            yield return name;
+            }
+            int tail = ranges.Count;
+            for (int expected = _code.Count; tail > 0 && ranges[tail - 1].Value.End == expected; tail--)
+                expected = ranges[tail - 1].Key;
+            for (; ; tail++)
+            {
+                int body = tail < ranges.Count ? ranges[tail].Key : _code.Count;
+                var queued = ranges.Take(tail).Select(range => range.Value.Pattern.Name).ToHashSet(StringComparer.Ordinal);
+                var queue = References(0, body).Where(queued.Add).ToList();
+                for (int i = 0; i < queue.Count; i++)
+                {
+                    var (start, (_, end)) = ranges.First(range => range.Value.Pattern.Name == queue[i]);
+                    queue.AddRange(References(start, end).Where(queued.Add));
+                }
+                if (queue.SequenceEqual(ranges.Skip(tail).Select(range => range.Value.Pattern.Name)))
+                    return tail == 0 ? null
+                        : new SortedDictionary<string, int>(ranges.Take(tail)
+                            .ToDictionary(range => range.Value.Pattern.Name, range => range.Key), StringComparer.Ordinal);
+            }
+        }
+
+        /// <summary>Lifts a template use starting at node <paramref name="n"/> (spec §11 step 5): the longest variant
+        /// whose code matches and ends on a node boundary, enters only at its start, and calls only recognized
+        /// library labels.</summary>
+        private (string Text, int Last)? Lift(List<Node> nodes, int n, int end)
+        {
+            if (idioms == null || nodes[n] is SubNode) return null;
+            int start = nodes[n].Start;
+            foreach (OmsTemplatePattern pattern in idioms.Templates)
+            {
+                if (pattern.Code.FirstOpcode != _code[start].Opcode) continue;
+                int stop = start + pattern.Code.Length, last = n;
+                while (last + 1 < nodes.Count && nodes[last + 1].Start < stop && nodes[last + 1] is not SubNode) last++;
+                if ((last + 1 < nodes.Count ? nodes[last + 1].Start : end) != stop) continue;
+                var references = new Dictionary<int, string>();
+                var arguments = new Dictionary<int, IrOperand>();
+                if (!Match(start, pattern.Code, references, arguments)) continue;
+                if (references.Any(pair => !_libraryNames.TryGetValue(pair.Key, out string? name) || name != pair.Value)) continue;
+                if (!EntriesOnly(start, stop, NoEntries)) continue;
+                TemplateLifts++;
+                UsedModules.Add(pattern.Module);
+                CountLift(pattern.Module, pattern.Code.Length);
+                return (TemplateUse(pattern, arguments), last);
+            }
+            return null;
+        }
+
+        /// <summary>A lifted use: a dialogue line when the template is <c>@dialogue</c> and its speaker (if passed) has an
+        /// enum name, otherwise a call with the leading required arguments positional and the rest named.</summary>
+        private string TemplateUse(OmsTemplatePattern pattern, Dictionary<int, IrOperand> arguments)
+        {
+            TemplateStatement template = pattern.Template;
+            string? Member(int k)
+                => idioms!.Enums.TryGetValue(template.Parameters[k].Kind, out var members)
+                   && arguments[k] is { Kind: IrOperandKind.Literal, Type: 0 } operand
+                   && members.TryGetValue(operand.Value, out string? member) ? member : null;
+            string Value(int k) => Member(k) ?? Atom(arguments[k]);
+            int text = template.Parameters.ToList().FindIndex(parameter => parameter.Name == "text");
+            int speaker = template.Parameters.ToList().FindIndex(parameter => parameter.Name == "speaker");
+            if (template.Dialogue && text >= 0 && (speaker < 0 || pattern.Absent[speaker] || Member(speaker) != null))
+            {
+                var named = new List<string>();
+                for (int k = 0; k < template.Parameters.Count; k++)
+                    if (k != text && k != speaker && !pattern.Absent[k]) named.Add($"{template.Parameters[k].Name}: {Value(k)}");
+                string who = speaker >= 0 && !pattern.Absent[speaker] ? Value(speaker) + " " : "";
+                return who + Value(text) + (named.Count > 0 ? $" ({string.Join(", ", named)})" : "");
+            }
+            var parts = new List<string>();
+            bool positional = true;
+            for (int k = 0; k < template.Parameters.Count; k++)
+            {
+                if (pattern.Absent[k])
+                {
+                    positional = false;
+                    continue;
+                }
+                positional &= template.Parameters[k].Default == null;
+                parts.Add(positional ? Value(k) : $"{template.Parameters[k].Name}: {Value(k)}");
+            }
+            return $"{template.Name}({string.Join(", ", parts)})";
+        }
 
         private static bool IsTransfer(IrInstruction instruction)
             => instruction.Opcode is OmsCompiler.Jmp or OmsCompiler.Jcc or 0xA2 or 0xA3;
@@ -732,7 +1008,8 @@ public static class OmsCoreDecompiler
                            && CanChain(plan[^1].Skip, plan[^1].End, out int nextSkip, out int nextEnd))
                         plan.Add((plan[^1].Skip, folding.RootOf[plan[^1].Skip], nextSkip, nextEnd));
                     int chainEnd = end;
-                    int armJumps = plan.Count(arm => arm.End > arm.Skip);
+                    // The join's own arrivals: each arm's jmp end, and the last arm's false branch when it has no else.
+                    int armJumps = plan.Count(arm => arm.End > arm.Skip) + (plan.Count > 1 && plan[^1].End == plan[^1].Skip ? 1 : 0);
                     // Only forward jumps compete for the join; a backward jump to it belongs to a loop starting there.
                     bool privateJoin = end == skip
                         || (_incoming.TryGetValue(chainEnd, out List<int>? joins)
@@ -1118,11 +1395,24 @@ public static class OmsCoreDecompiler
         public void Print(StringBuilder text, List<Node> nodes, int end, bool ownsEnd, int depth, Loop? loop, int skipLabel)
         {
             string pad = new(' ', depth * 4);
-            foreach (Node node in nodes)
+            for (int n = 0; n < nodes.Count; n++)
             {
+                Node node = nodes[n];
+                if (_libraryAt.TryGetValue(node.Start, out var library))
+                {
+                    // A linked library sub: its code comes from the module.
+                    while (n + 1 < nodes.Count && nodes[n + 1].Start < library.End) n++;
+                    continue;
+                }
                 if (_labels.Contains(node.Start) && node.Start != skipLabel && node is not SubNode)
                     PrintLabel(text, node.Start, depth);
                 skipLabel = -1;
+                if (Lift(nodes, n, end) is var (use, last))
+                {
+                    text.Append(pad).Append(use).Append('\n');
+                    n = last;
+                    continue;
+                }
                 switch (node)
                 {
                     case SimpleNode simple:

@@ -55,8 +55,9 @@ if (args.Contains("oms-residue"))
     return 0;
 }
 
-// The profile's generated OMS modules: <profile>.globals (globals_build.py --build; absent until generated) and
-// <profile>.scripts (the mounted catalog). --no-names decompiles without them.
+// The profile's OMS modules: generated <profile>.globals (globals_build.py --build; absent until generated) and
+// <profile>.scripts (the mounted catalog), then the hand-written source modules in oms/<profile>/*.oms (spec §3.2),
+// whose library subs and templates the idiomatic level lifts. --no-names decompiles without any of them.
 List<Age.Script.Modules.GameModule> OmsModules()
 {
     var omsModules = new List<Age.Script.Modules.GameModule>();
@@ -66,6 +67,7 @@ List<Age.Script.Modules.GameModule> OmsModules()
         omsModules.Add(Age.Script.Modules.GameModule.LoadGlobals(profileId, Paths.GlobalsJson(profileId)));
     omsModules.Add(Age.Script.Modules.GameModule.Scripts(profileId,
         catalog.EnumerateScripts().Select(packed => (packed.Asset.Name, packed.PackedId))));
+    omsModules.AddRange(Age.Script.Modules.GameModule.LoadSources(Paths.OmsModules(profileId), profileId));
     return omsModules;
 }
 
@@ -164,6 +166,10 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
             folded_instructions = source.FoldedInstructions,
             fold_rejections = source.FoldRejections,
             temp_overrides = source.TempOverrides,
+            library_subs = source.LibrarySubs,
+            template_lifts = source.TemplateLifts,
+            lifted_instructions = source.LiftedInstructions,
+            lift_failures = source.LiftFailures,
             failures = source.Failures,
         }, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
     }
@@ -174,9 +180,15 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
         + $"sidecar-fields={string.Join(",", source.SidecarFieldUse.Select(pair => $"{pair.Key}:{pair.Value}"))} "
         + $"source-bytes={source.SourceBytes} instructions={source.Instructions} raw-statements={source.RawStatements} "
         + $"folded={source.FoldedInstructions} fold-rejections={source.FoldRejections} temp-overrides={source.TempOverrides} "
+        + (source.Level == Age.Script.OmsSourceRoundTrip.IdiomaticLevel
+            ? $"library-subs={source.LibrarySubs} template-lifts={source.TemplateLifts} "
+              + $"lift-coverage={string.Join(",", (source.LiftedInstructions ?? new Dictionary<string, long>()).Select(pair => $"{pair.Key}:{pair.Value}({100.0 * pair.Value / Math.Max(1, source.Instructions):0.0}%)"))} "
+              + $"lift-failures={source.LiftFailures?.Count ?? 0} " : "")
         + $"failures={source.Failures.Count}");
     foreach (Age.Script.Ir.IrRoundTripFailure failure in source.Failures.Take(20))
         Console.Error.WriteLine($"  0x{failure.PackedId:x8} {failure.Name}: {failure.Error}");
+    foreach (Age.Script.Ir.IrRoundTripFailure failure in (source.LiftFailures ?? []).Take(20))
+        Console.Error.WriteLine($"  lift abandoned 0x{failure.PackedId:x8} {failure.Name}: {failure.Error}");
     return source.Passed ? 0 : 1;
 }
 
@@ -186,17 +198,24 @@ if (args.Contains("oms-decompile"))
     var omsContracts = Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
     var omsIntrinsics = new Age.Script.Abi.IntrinsicCatalog(table, omsContracts);
     var omsModules = OmsModules();
+    // --level idiomatic lifts the source modules' library subs and templates (spec §11 steps 4 and 5).
+    Age.Script.Text.OmsIdioms? omsIdioms = OptionValue("--level") is "idiomatic"
+        ? Age.Script.Text.OmsIdioms.Build(omsModules, table.AbiId, omsIntrinsics) : null;
     Age.Script.Text.OmsDecompilation DecompileEntry(PackedAssetEntry packed)
     {
         byte[] scriptBytes = assetStore.ReadAll(packed.Asset);
         // --fixed-point decompiles the canonical rebuild (gate 4's compiler-generated input) instead of the original.
         if (args.Contains("--fixed-point"))
             scriptBytes = Age.Script.OmsSourceRoundTrip.CanonicalRebuild(scriptBytes, packed.Asset.Name, table, omsContracts,
-                omsIntrinsics, omsModules);
+                omsIntrinsics, omsModules, omsIdioms);
         var decoded = Age.Script.Ir.IrDecoder.Decode(scriptBytes, table, omsContracts, packed.Asset.Name);
-        return OptionValue("--level") is "raw"
+        Age.Script.Text.OmsDecompilation result = OptionValue("--level") is "raw"
             ? Age.Script.Text.OmsRawDecompiler.Decompile(decoded, table.AbiId)
-            : Age.Script.Text.OmsCoreDecompiler.Decompile(decoded, table.AbiId, omsIntrinsics, modules: omsModules);
+            : Age.Script.Text.OmsCoreDecompiler.Decompile(decoded, table.AbiId, omsIntrinsics, modules: omsModules,
+                idioms: omsIdioms);
+        if (result.LiftFailure != null)
+            Console.Error.WriteLine($"{packed.Asset.Name}: lifting abandoned, core source written: {result.LiftFailure}");
+        return result;
     }
     void WriteDecompilation(Age.Script.Text.OmsDecompilation decompiled, string path)
     {

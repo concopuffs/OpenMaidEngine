@@ -55,11 +55,14 @@ public sealed class OmsLayout
     /// <summary>Temporary slots of statements whose original allocation differs from the canonical plan, keyed by the
     /// index of the statement's first instruction.</summary>
     [JsonPropertyName("temps")] public SortedDictionary<int, OmsTempOverride>? Temps { get; set; }
+    /// <summary>Where linked library subroutines sit, by name and first instruction index, when they are not all at the
+    /// end in canonical link order (spec §6.3).</summary>
+    [JsonPropertyName("library")] public SortedDictionary<string, int>? Library { get; set; }
 
     [JsonIgnore]
     public bool IsEmpty => Magic == null && Field6 == null && LocalCounts == null && Data == null
                            && ItemDwords == null && Tables == null && TempBase == null && RefSwap == null
-                           && Temps == null;
+                           && Temps == null && Library == null;
 
     private static readonly JsonSerializerOptions Options = new()
     {

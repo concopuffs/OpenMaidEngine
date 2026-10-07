@@ -67,9 +67,62 @@ public class OmsCoreTests
     private static readonly GameModule Scripts = GameModule.Scripts("test",
         [("RECOVER.BIN", 0x329d), ("$1$SC2600.BIN", 0x01000005)]);
 
+    /// <summary>A hand-written source module: constants, a pinned global, a dialogue template with optional
+    /// constant parameters, a template with a label of its own, and library subs (one calling another, one unused).</summary>
+    private static readonly GameModule Adv = GameModule.FromSource(Parser.ParseScript("""
+        module test.adv
+        use test.globals
+        enum speaker {
+            HERO = 7
+        }
+        global int voice_pending @ 0x2e47
+        @dialogue inline line(text: text, speaker: speaker = none, voice: const = none) {
+            static if speaker == none {
+                prologue()
+            } else {
+                G[0x10] = speaker
+                static if voice != none {
+                    play(voice)
+                }
+            }
+            show_text(0, text)
+        }
+        inline twice(value: expr, target: cell) {
+            target = value
+        again:
+            target += value
+            if target < 10 goto again
+        }
+        sub prologue {
+            voice_pending = 0
+        }
+        sub play(v: G[0x20]) {
+            G[0x21] = v
+            helper()
+        }
+        sub helper {
+            G[0x22] = flow_request
+        }
+        sub unused {
+            G[0x23] = 1
+        }
+        """, "adv.oms"));
+
+    private static GameModule? Module(string name)
+        => name == Globals.Name ? Globals : name == Scripts.Name ? Scripts : name == Adv.Name ? Adv : null;
+
+    private static readonly OmsIdioms Idioms = OmsIdioms.Build([Globals, Scripts, Adv], Abi, Intrinsics);
+
+    private static (byte[] Second, OmsDecompilation Decompiled) IdiomaticRoundTrip(byte[] first)
+    {
+        byte[] second = OmsSourceRoundTrip.RoundTrip(first, "T.BIN", Table, Contracts, Intrinsics,
+            OmsSourceRoundTrip.IdiomaticLevel, out OmsDecompilation decompiled, out _, [Globals, Scripts, Adv], Idioms);
+        return (second, decompiled);
+    }
+
     private static IrScript Compile(string body, OmsLayout? layout = null)
         => OmsCompiler.Compile(Parser.ParseScript("script \"T.BIN\"\n" + body, "t.oms"), Abi, Table, layout, Intrinsics,
-            module => module == Globals.Name ? Globals : module == Scripts.Name ? Scripts : null);
+            Module);
 
     private static string Shape(IrScript script)
         => string.Join(" ", script.Code.Select(i => i.Opcode.ToString("x") + "("
@@ -575,6 +628,174 @@ public class OmsCoreTests
         Assert.Contains(expected, error.Message);
     }
 
+    // ------------------------------------------------------------------------------------------- gate 5
+
+    [Fact]
+    public void TemplatesDialogueAndLibrarySubsCompileToTheirHandExpandedForm()
+    {
+        IrScript expanded = Compile("""
+            use test.adv
+            "Narration."
+            HERO "Hello." (voice: 0x34e)
+            HERO "Quiet."
+            twice(G[1] + 1, G[2])
+            twice(2, L[0])
+            exit
+            """);
+        // Each expansion gets its own label; referenced library subs link after the script in link order (play
+        // pulls in helper during the same pass); the unused sub is left out.
+        IrScript byHand = Compile("""
+            prologue()
+            show_text(0, "Narration.")
+            G[0x10] = 7
+            play(0x34e)
+            show_text(0, "Hello.")
+            G[0x10] = 7
+            show_text(0, "Quiet.")
+            G[2] = G[1] + 1
+            again1:
+            G[2] += G[1] + 1
+            if G[2] < 10 goto again1
+            L[0] = 2
+            again2:
+            L[0] += 2
+            if L[0] < 10 goto again2
+            exit
+            sub prologue {
+                G[0x2e47] = 0
+            }
+            sub play(v: G[0x20]) {
+                G[0x21] = v
+                helper()
+            }
+            sub helper {
+                G[0x22] = G[0x0]
+            }
+            """);
+        Assert.Equal(Shape(byHand), Shape(expanded));
+        Assert.Equal(IrEncoder.Encode(byHand), IrEncoder.Encode(expanded));
+    }
+
+    [Fact]
+    public void TheSidecarPlacesLibrarySubsWhereTheOriginalPutThem()
+    {
+        const string body = """
+            use test.adv
+            prologue()
+            exit
+            G[5] = 1
+            exit
+            """;
+        Assert.Equal("8f(@4) 2() 55(3:5,0:1) 2() 55(3:2e47,0:0) 5()", Shape(Compile(body)));
+        var layout = new OmsLayout { Library = new SortedDictionary<string, int> { ["prologue"] = 2 } };
+        Assert.Equal("8f(@2) 2() 55(3:2e47,0:0) 5() 55(3:5,0:1) 2()", Shape(Compile(body, layout)));
+        layout.Library["prologue"] = 99;
+        Assert.Contains("not linked at that index", Assert.Throws<OmsCompileException>(() => Compile(body, layout)).Message);
+    }
+
+    [Fact]
+    public void TemplatePatternsCoverEveryTraceableStaticIfVariant()
+    {
+        // line: narration, speaker, speaker with voice (a voice without a speaker leaves no trace); twice: one.
+        Assert.Equal(["line:2", "line:2", "line:4", "twice:4"],
+            Idioms.Templates.Select(pattern => $"{pattern.Template.Name}:{pattern.Code.Length}").OrderBy(text => text));
+        Assert.Equal(["helper", "play", "prologue", "unused"], Idioms.Library.Select(pattern => pattern.Name).Order());
+    }
+
+    [Fact]
+    public void LibrarySubsAndTemplateUsesDecompileBackToIdiomaticSource()
+    {
+        byte[] first = IrEncoder.Encode(Compile("""
+            use test.adv
+            "Narration."
+            HERO "Hello." (voice: 0x34e)
+            HERO "Quiet."
+            twice(2, L[0])
+            G[3] = 1
+            exit
+            """));
+        var (second, decompiled) = IdiomaticRoundTrip(first);
+        Assert.Equal(first, second);
+        Assert.Null(decompiled.LiftFailure);
+        Assert.Equal(3, decompiled.LibrarySubs);
+        Assert.Equal(4, decompiled.TemplateLifts);
+        Assert.Contains("\nuse test.adv\n", decompiled.Source);
+        Assert.EndsWith("""
+
+                "Narration."
+                HERO "Hello." (voice: 0x34e)
+                HERO "Quiet."
+                twice(0x2, L[0x0])
+                G[0x3] = 0x1
+                exit
+
+            """.Replace("\r\n", "\n"), decompiled.Source);
+        // The library subs sit at the end in link order, so a canonical compile reproduces them: no sidecar at all.
+        Assert.True(decompiled.Layout.IsEmpty, decompiled.Layout.ToJson());
+    }
+
+    [Fact]
+    public void LibrarySubsOutOfLinkOrderKeepTheirPlaceInTheSidecar()
+    {
+        var layout = new OmsLayout { Library = new SortedDictionary<string, int> { ["prologue"] = 2 } };
+        byte[] first = IrEncoder.Encode(Compile("use test.adv\nprologue()\nexit\nG[5] = 1\nexit\n", layout));
+        var (second, decompiled) = IdiomaticRoundTrip(first);
+        Assert.Equal(first, second);
+        Assert.Equal(1, decompiled.LibrarySubs);
+        Assert.Equal(new SortedDictionary<string, int> { ["prologue"] = 2 }, decompiled.Layout.Library);
+        Assert.Contains("    prologue()\n    exit\n    G[0x5] = 0x1\n    exit\n", decompiled.Source);
+        Assert.DoesNotContain("sub ", decompiled.Source);
+    }
+
+    [Fact]
+    public void LibraryCopiesAreRecognizedInScriptsCompiledWithoutTheModule()
+    {
+        // The first sub is a byte-identical copy of test.adv's prologue; the second differs in one operand.
+        byte[] first = IrEncoder.Encode(Compile("""
+            copy()
+            other()
+            exit
+            sub copy {
+                G[0x2e47] = 0
+            }
+            sub other {
+                G[0x2e47] = 5
+            }
+            """));
+        var (second, decompiled) = IdiomaticRoundTrip(first);
+        Assert.Equal(first, second);
+        Assert.Equal(1, decompiled.LibrarySubs);
+        Assert.Contains("    prologue()\n    label_", decompiled.Source);
+        Assert.Contains("\nsub label_", decompiled.Source);
+        Assert.Contains("    voice_pending = 0x5\n", decompiled.Source);   // the module also names its globals
+        Assert.Contains("\nuse test.adv\n", decompiled.Source);
+    }
+
+    [Theory]
+    [InlineData("\"Hi\"\n", "needs an @dialogue template")]
+    [InlineData("use test.adv\nVILLAIN \"Hi\"\n", "unknown speaker 'VILLAIN'")]
+    [InlineData("use test.adv\ntwice(1)\n", "'twice' needs argument 'target'")]
+    [InlineData("use test.adv\ntwice(1, 2)\n", "argument 'target' of 'twice' must be a cell or element")]
+    [InlineData("use test.adv\ntwice(1, G[1], 3)\n", "template 'twice' takes 2 arguments")]
+    [InlineData("use test.adv\nline(\"a\", bogus: 1)\n", "template 'line' has no parameter 'bogus'")]
+    [InlineData("use test.adv\nline(\"a\", text: \"b\")\n", "argument 'text' of 'line' is given twice")]
+    [InlineData("use test.adv\nline(\"a\", voice: G[1])\n", "a const argument must be an integer, a constant or none")]
+    [InlineData("use test.adv\nline(G[1])\n", "argument 'text' of 'line' must be a string literal")]
+    [InlineData("use test.adv\nconst HERO = 1\n", "'HERO' is already declared by module test.adv")]
+    [InlineData("use test.adv\nG[1] = twice(1, G[2])\n", "template 'twice' has no result")]
+    [InlineData("use test.adv\nexit\nsub prologue {\n return\n}\n", "'prologue' is defined by the script and by module test.adv")]
+    [InlineData("use test.adv\nprologue()\n", "control falls into sub 'prologue'")]
+    [InlineData("static if 1 {\n exit\n}\n", "static if belongs in a template body")]
+    [InlineData("inline again() {\n again()\n}\nagain()\n", "template 'again' expands itself")]
+    [InlineData("inline bad(v: const = none) {\n G[1] = v\n}\nbad()\n", "'none' has no value here")]
+    [InlineData("inline bad(v: const) {\n static if v == G[1] {\n exit\n }\n}\nbad(1)\n", "static if condition may use only")]
+    [InlineData("loop {\n leave()\n}\ninline leave() {\n break\n}\n", "'break' outside a loop")]
+    public void TemplateErrorsNameTheProblem(string body, string expected)
+    {
+        var error = Assert.Throws<OmsCompileException>(() => Compile(body));
+        Assert.Contains(expected, error.Message);
+    }
+
     [Fact]
     public void IndexAddressedLocalArraysAreDeclaredToKeepTheirFrame()
     {
@@ -611,6 +832,18 @@ public class OmsCoreTests
         => AssertCorpus("Himegari_Game", "SYS4422", fixedPoint: true);
 
     [Trait("Category", "Workspace")]
+    [Trait("Profile", "himegari")]
+    [Fact]
+    public void InstalledHimegariCorpusRoundTripsThroughIdiomaticSource()
+        => AssertCorpus("Himegari_Game", "SYS4422", level: OmsSourceRoundTrip.IdiomaticLevel);
+
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "himegari")]
+    [Fact]
+    public void InstalledHimegariIdiomaticRebuildIsAFixedPoint()
+        => AssertCorpus("Himegari_Game", "SYS4422", fixedPoint: true, level: OmsSourceRoundTrip.IdiomaticLevel);
+
+    [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]
     [Fact]
     public void InstalledKamidoriCanonicalRebuildIsAFixedPoint()
@@ -622,7 +855,8 @@ public class OmsCoreTests
     public void InstalledKamidoriCorpusRoundTripsThroughCoreSource()
         => AssertCorpus("Kamidori", "SYS4433");
 
-    private static void AssertCorpus(string directory, string abiId, bool fixedPoint = false)
+    private static void AssertCorpus(string directory, string abiId, bool fixedPoint = false,
+                                     string level = OmsSourceRoundTrip.CoreLevel)
     {
         string gameRoot = Environment.GetEnvironmentVariable("AGE_GAME_ROOT") ?? Path.Combine(Paths.Workspace, directory);
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
@@ -631,17 +865,27 @@ public class OmsCoreTests
         var store = new Sys4AssetStore(catalog, gameRoot, gameRoot);
         string profile = abiId == "SYS4422" ? "himegari" : "kamidori";
         Assert.True(File.Exists(Paths.GlobalsJson(profile)), $"run globals_build.py --build for {profile}");
+        List<GameModule> modules =
+        [
+            GameModule.LoadGlobals(profile, Paths.GlobalsJson(profile)),
+            GameModule.Scripts(profile, catalog.EnumerateScripts().Select(packed => (packed.Asset.Name, packed.PackedId))),
+        ];
+        if (level == OmsSourceRoundTrip.IdiomaticLevel) modules.AddRange(GameModule.LoadSources(Paths.OmsModules(profile), profile));
         OmsSourceRoundTripReport report = OmsSourceRoundTrip.Run(
             catalog.EnumerateScripts().Select(packed =>
                 (packed.Asset.Name, packed.PackedId, (Func<byte[]>)(() => store.ReadAll(packed.Asset)))),
-            OpcodeTableJson.Load(Paths.OpcodesJson, abiId), OpcodeContracts.Load(Paths.OpcodesJson),
-            OmsSourceRoundTrip.CoreLevel,
-            [GameModule.LoadGlobals(profile, Paths.GlobalsJson(profile)),
-             GameModule.Scripts(profile, catalog.EnumerateScripts().Select(packed => (packed.Asset.Name, packed.PackedId)))],
+            OpcodeTableJson.Load(Paths.OpcodesJson, abiId), OpcodeContracts.Load(Paths.OpcodesJson), level, modules,
             fixedPoint);
         Assert.Empty(report.Failures);
         Assert.Equal(report.Scripts, report.Identical);
         Assert.Equal(0, report.RawStatements);
+        if (level == OmsSourceRoundTrip.IdiomaticLevel)
+        {
+            // Gate 5: the scene library and the dialogue template lift everywhere they occur, and no lift is abandoned.
+            Assert.Empty(report.LiftFailures ?? []);
+            Assert.True(report.LibrarySubs > report.Scripts * 10, $"library subs {report.LibrarySubs}");
+            Assert.True(report.TemplateLifts > 20000, $"template lifts {report.TemplateLifts}");
+        }
         if (fixedPoint)
         {
             // Gate 4: compiler-generated code recompiles exactly, almost always without any sidecar.

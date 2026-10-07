@@ -22,26 +22,37 @@ public sealed record OmsSourceRoundTripReport(
     IReadOnlyList<IrRoundTripFailure> Failures,
     long FoldedInstructions = 0,
     long FoldRejections = 0,
-    long TempOverrides = 0)
+    long TempOverrides = 0,
+    long LibrarySubs = 0,
+    long TemplateLifts = 0,
+    IReadOnlyList<IrRoundTripFailure>? LiftFailures = null,
+    IReadOnlyDictionary<string, long>? LiftedInstructions = null)
 {
     public bool Passed => Failures.Count == 0 && Identical == Scripts;
 }
 
 public static class OmsSourceRoundTrip
 {
-    public const string RawLevel = "raw", CoreLevel = "core";
+    public const string RawLevel = "raw", CoreLevel = "core", IdiomaticLevel = "idiomatic";
 
+    /// <param name="level"><c>raw</c>, <c>core</c>, or <c>idiomatic</c> (core plus the library subs and templates of
+    /// the source modules among <paramref name="modules"/>).</param>
     public static OmsSourceRoundTripReport Run(
         IEnumerable<(string Name, long PackedId, Func<byte[]> Read)> scripts,
         OpcodeTable table, OpcodeContracts contracts, string level = RawLevel, IReadOnlyList<GameModule>? modules = null,
         bool fixedPoint = false)
     {
-        if (level is not (RawLevel or CoreLevel)) throw new ArgumentException($"unknown level {level}", nameof(level));
+        if (level is not (RawLevel or CoreLevel or IdiomaticLevel))
+            throw new ArgumentException($"unknown level {level}", nameof(level));
         var intrinsics = new IntrinsicCatalog(table, contracts);
+        OmsIdioms? idioms = level == IdiomaticLevel ? OmsIdioms.Build(modules ?? [], table.AbiId, intrinsics) : null;
         int count = 0, identical = 0, empty = 0;
         long sourceBytes = 0, instructions = 0, rawStatements = 0, folded = 0, rejected = 0, overrides = 0;
+        long librarySubs = 0, templateLifts = 0;
+        var lifted = new SortedDictionary<string, long>(StringComparer.Ordinal);
         var fieldUse = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var failures = new List<IrRoundTripFailure>();
+        var liftFailures = new List<IrRoundTripFailure>();
         foreach (var (name, packedId, read) in scripts)
         {
             count++;
@@ -49,9 +60,14 @@ public static class OmsSourceRoundTrip
             {
                 byte[] original = read();
                 // Gate 4 (spec §12): start from compiler-generated code, the canonical rebuild without a sidecar.
-                if (fixedPoint) original = CanonicalRebuild(original, name, table, contracts, intrinsics, modules);
+                if (fixedPoint) original = CanonicalRebuild(original, name, table, contracts, intrinsics, modules, idioms);
                 byte[] rebuilt = RoundTrip(original, name, table, contracts, intrinsics, level, out OmsDecompilation decompiled,
-                                           out int instructionCount, modules);
+                                           out int instructionCount, modules, idioms);
+                librarySubs += decompiled.LibrarySubs;
+                templateLifts += decompiled.TemplateLifts;
+                foreach (var (module, liftedCount) in decompiled.LiftedInstructions ?? new Dictionary<string, int>())
+                    lifted[module] = lifted.GetValueOrDefault(module) + liftedCount;
+                if (decompiled.LiftFailure != null) liftFailures.Add(new IrRoundTripFailure(name, packedId, decompiled.LiftFailure));
                 instructions += instructionCount;
                 rawStatements += CountRawStatements(decompiled.Source);
                 folded += decompiled.FoldedInstructions;
@@ -70,6 +86,7 @@ public static class OmsSourceRoundTrip
                 Note("temp_base", layout.TempBase != null);
                 Note("ref_swap", layout.RefSwap != null);
                 Note("temps", layout.Temps != null);
+                Note("library", layout.Library != null);
                 if (rebuilt.AsSpan().SequenceEqual(original)) identical++;
                 else failures.Add(new IrRoundTripFailure(name, packedId, FirstDifference(original, rebuilt)));
             }
@@ -80,7 +97,7 @@ public static class OmsSourceRoundTrip
             }
         }
         return new OmsSourceRoundTripReport(level, count, identical, empty, fieldUse, sourceBytes, instructions,
-            rawStatements, failures, folded, rejected, overrides);
+            rawStatements, failures, folded, rejected, overrides, librarySubs, templateLifts, liftFailures, lifted);
     }
 
     /// <summary>The raw-level round trip for one script.</summary>
@@ -89,12 +106,14 @@ public static class OmsSourceRoundTrip
         => RoundTrip(original, name, table, contracts, new IntrinsicCatalog(table, contracts), RawLevel,
                      out decompiled, out _);
 
-    /// <summary>Gate 3's canonical rebuild of one script: core source compiled without its sidecar.</summary>
+    /// <summary>Gate 3's canonical rebuild of one script: core source (idiomatic source when
+    /// <paramref name="idioms"/> is given) compiled without its sidecar.</summary>
     public static byte[] CanonicalRebuild(byte[] original, string name, OpcodeTable table, OpcodeContracts contracts,
-                                          IntrinsicCatalog intrinsics, IReadOnlyList<GameModule>? modules = null)
+                                          IntrinsicCatalog intrinsics, IReadOnlyList<GameModule>? modules = null,
+                                          OmsIdioms? idioms = null)
     {
         IrScript ir = IrDecoder.Decode(original, table, contracts, name);
-        OmsDecompilation source = OmsCoreDecompiler.Decompile(ir, table.AbiId, intrinsics, modules: modules);
+        OmsDecompilation source = OmsCoreDecompiler.Decompile(ir, table.AbiId, intrinsics, modules: modules, idioms: idioms);
         IrScript compiled = OmsCompiler.Compile(Parser.ParseScript(source.Source, name), table.AbiId, table, layout: null,
             intrinsics, module => modules?.FirstOrDefault(candidate => candidate.Name == module));
         return IrEncoder.Encode(compiled);
@@ -103,13 +122,17 @@ public static class OmsSourceRoundTrip
     /// <summary>One script through a source level: decode, decompile, serialize the sidecar, parse, compile, encode.</summary>
     public static byte[] RoundTrip(byte[] original, string name, OpcodeTable table, OpcodeContracts contracts,
                                    IntrinsicCatalog intrinsics, string level, out OmsDecompilation decompiled,
-                                   out int instructions, IReadOnlyList<GameModule>? modules = null)
+                                   out int instructions, IReadOnlyList<GameModule>? modules = null, OmsIdioms? idioms = null)
     {
         IrScript ir = IrDecoder.Decode(original, table, contracts, name);
         instructions = ir.Code.Count;
-        decompiled = level == CoreLevel
-            ? OmsCoreDecompiler.Decompile(ir, table.AbiId, intrinsics, modules: modules)
-            : OmsRawDecompiler.Decompile(ir, table.AbiId);
+        decompiled = level switch
+        {
+            CoreLevel => OmsCoreDecompiler.Decompile(ir, table.AbiId, intrinsics, modules: modules),
+            IdiomaticLevel => OmsCoreDecompiler.Decompile(ir, table.AbiId, intrinsics, modules: modules,
+                idioms: idioms ?? OmsIdioms.Build(modules ?? [], table.AbiId, intrinsics)),
+            _ => OmsRawDecompiler.Decompile(ir, table.AbiId),
+        };
         OmsLayout layout = OmsLayout.FromJson(decompiled.Layout.ToJson());
         ScriptUnit unit = Parser.ParseScript(decompiled.Source, name);
         IrScript compiled = OmsCompiler.Compile(unit, table.AbiId, table, layout, intrinsics,

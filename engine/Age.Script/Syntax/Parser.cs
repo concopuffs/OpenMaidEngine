@@ -56,8 +56,9 @@ public sealed class Parser
             if (version != 1) throw new OmsSyntaxException(Peek().Span, $"unsupported language version {version}");
             EndStatement();
         }
-        Token head = Expect(TokenKind.Identifier, "script");
-        string name = Expect(TokenKind.String).Text;
+        bool module = Peek().Is(TokenKind.Identifier, "module");
+        Token head = Expect(TokenKind.Identifier, module ? "module" : "script");
+        string name = module ? ParseDottedName() : Expect(TokenKind.String).Text;
         string? abi = null;
         if (Accept(TokenKind.Identifier, "abi")) abi = Expect(TokenKind.Identifier).Text;
         EndStatement();
@@ -66,7 +67,14 @@ public sealed class Parser
         {
             body.Add(ParseStatement());
         }
-        return new ScriptUnit(head.Span, version, name, abi, body);
+        return new ScriptUnit(head.Span, version, name, abi, body, module);
+    }
+
+    private string ParseDottedName()
+    {
+        var path = new List<string> { Expect(TokenKind.Identifier).Text };
+        while (Accept(TokenKind.Punct, ".")) path.Add(Expect(TokenKind.Identifier).Text);
+        return string.Join(".", path);
     }
 
     private Statement ParseStatement()
@@ -83,6 +91,28 @@ public sealed class Parser
             Statement raw = ParseRawOp();
             EndStatement();
             return raw;
+        }
+        if (token.Is(TokenKind.Punct, "@") && Peek(1).Is(TokenKind.Identifier, "guard"))
+        {
+            _position += 2;
+            SkipNewlines();
+            Token keyword = Expect(TokenKind.Identifier, "sub");
+            return Finish(((SubStatement)ParseSub(keyword, coroutine: false)) with { Guarded = true });
+        }
+        if (token.Is(TokenKind.Punct, "@") && Peek(1).Is(TokenKind.Identifier, "dialogue"))
+        {
+            _position += 2;
+            SkipNewlines();
+            Token inline = Expect(TokenKind.Identifier, "inline");
+            return Finish(ParseTemplate(inline, dialogue: true));
+        }
+        if (token.Kind == TokenKind.String)
+            return ParseDialogue(token, null);
+        if (token.Kind == TokenKind.Identifier && Peek(1).Kind == TokenKind.String
+            && !Abi.IntrinsicCatalog.Keywords.Contains(token.Text))
+        {
+            Next();
+            return ParseDialogue(token, token.Text);
         }
         Statement statement = token.Kind == TokenKind.Identifier ? ParseKeywordOrSimple(token) : null!;
         if (statement == null) throw new OmsSyntaxException(token.Span, $"unexpected {token}");
@@ -120,12 +150,14 @@ public sealed class Parser
                 Next();
                 return Finish(new ResumeStatement(token.Span));
             case "use":
-            {
                 Next();
-                var path = new List<string> { Expect(TokenKind.Identifier).Text };
-                while (Accept(TokenKind.Punct, ".")) path.Add(Expect(TokenKind.Identifier).Text);
-                return Finish(new UseStatement(token.Span, string.Join(".", path)));
-            }
+                return Finish(new UseStatement(token.Span, ParseDottedName()));
+            case "inline" when Peek(1).Kind == TokenKind.Identifier:
+                Next();
+                return Finish(ParseTemplate(token, dialogue: false));
+            case "static" when Peek(1).Is(TokenKind.Identifier, "if"):
+                _position += 2;
+                return Finish(ParseStaticIf(token));
             case "const":
             {
                 Next();
@@ -133,6 +165,9 @@ public sealed class Parser
                 Expect(TokenKind.Punct, "=");
                 return Finish(new ConstStatement(token.Span, name, ParseSignedInteger()));
             }
+            case "enum" when Peek(1).Kind == TokenKind.Identifier:
+                Next();
+                return Finish(ParseEnum(token));
             case "global" or "local" when Peek(1).Kind == TokenKind.Identifier:
                 Next();
                 return Finish(ParseDeclaration(token));
@@ -196,6 +231,83 @@ public sealed class Parser
             if (Accept(TokenKind.Punct, "->")) result = ParseCell();
         }
         return new SubStatement(keyword.Span, name.Text, parameters, result, ParseBlock(), coroutine);
+    }
+
+    /// <summary><c>enum name { member = value, … }</c> after <c>enum</c>; members are separated by commas or
+    /// newlines.</summary>
+    private Statement ParseEnum(Token keyword)
+    {
+        string name = Expect(TokenKind.Identifier).Text;
+        Expect(TokenKind.Punct, "{");
+        var members = new List<EnumMember>();
+        while (true)
+        {
+            while (Peek().Kind == TokenKind.Newline || Peek().Is(TokenKind.Punct, ",")) _position++;
+            if (Accept(TokenKind.Punct, "}")) break;
+            Token member = Expect(TokenKind.Identifier);
+            Expect(TokenKind.Punct, "=");
+            members.Add(new EnumMember(member.Span, member.Text, ParseSignedInteger()));
+        }
+        return new EnumStatement(keyword.Span, name, members);
+    }
+
+    /// <summary><c>inline name(p: kind [= default], …) { … }</c> after <c>inline</c>; the kind is const, text, expr,
+    /// cell or an enum name.</summary>
+    private Statement ParseTemplate(Token keyword, bool dialogue)
+    {
+        string name = Expect(TokenKind.Identifier).Text;
+        var parameters = new List<TemplateParameter>();
+        Expect(TokenKind.Punct, "(");
+        if (!Peek().Is(TokenKind.Punct, ")"))
+            do
+            {
+                Token parameter = Expect(TokenKind.Identifier);
+                Expect(TokenKind.Punct, ":");
+                Token kind = Expect(TokenKind.Identifier);
+                Expr? fallback = Accept(TokenKind.Punct, "=") ? ParseExpression() : null;
+                parameters.Add(new TemplateParameter(parameter.Span, parameter.Text, kind.Text, fallback));
+            } while (Accept(TokenKind.Punct, ","));
+        Expect(TokenKind.Punct, ")");
+        return new TemplateStatement(keyword.Span, name, parameters, ParseBlock(), dialogue);
+    }
+
+    /// <summary><c>static if c { … } [else { … } | else static if …]</c> after <c>static if</c>.</summary>
+    private Statement ParseStaticIf(Token keyword)
+    {
+        Expr condition = ParseExpression();
+        IReadOnlyList<Statement> then = ParseBlock();
+        int mark = _position;
+        while (Peek().Kind == TokenKind.Newline) _position++;
+        if (!Accept(TokenKind.Identifier, "else"))
+        {
+            _position = mark;
+            return new StaticIfStatement(keyword.Span, condition, then, null);
+        }
+        if (Peek().Is(TokenKind.Identifier, "static") && Peek(1).Is(TokenKind.Identifier, "if"))
+        {
+            Token nested = Next();
+            Next();
+            return new StaticIfStatement(keyword.Span, condition, then, [ParseStaticIf(nested)]);
+        }
+        return new StaticIfStatement(keyword.Span, condition, then, ParseBlock());
+    }
+
+    /// <summary><c>"text" [(name: value, …)]</c> with an optional speaker name already consumed.</summary>
+    private Statement ParseDialogue(Token start, string? speaker)
+    {
+        string text = Expect(TokenKind.String).Text;
+        var arguments = new List<CallArgument>();
+        if (Accept(TokenKind.Punct, "("))
+        {
+            do
+            {
+                Token name = Expect(TokenKind.Identifier);
+                Expect(TokenKind.Punct, ":");
+                arguments.Add(new CallArgument(ParseExpression(), false, name.Text));
+            } while (Accept(TokenKind.Punct, ","));
+            Expect(TokenKind.Punct, ")");
+        }
+        return Finish(new DialogueStatement(start.Span, speaker, text, arguments));
     }
 
     /// <summary><c>type name[dims] [@ address] [{ column: index, … }]</c> after <c>global</c> or <c>local</c>.</summary>
@@ -286,10 +398,16 @@ public sealed class Parser
             if (!Peek().Is(TokenKind.Punct, ")"))
                 do
                 {
+                    string? argumentName = null;
+                    if (Peek().Kind == TokenKind.Identifier && Peek(1).Is(TokenKind.Punct, ":"))
+                    {
+                        argumentName = Next().Text;
+                        Next();
+                    }
                     bool isOut = Peek().Is(TokenKind.Identifier, "out") && !Peek(1).Is(TokenKind.Punct, ",")
                                  && !Peek(1).Is(TokenKind.Punct, ")");
                     if (isOut) Next();
-                    arguments.Add(new CallArgument(ParseExpression(), isOut));
+                    arguments.Add(new CallArgument(ParseExpression(), isOut, argumentName));
                 } while (Accept(TokenKind.Punct, ","));
             Expect(TokenKind.Punct, ")");
             return new CallStatement(token.Span, token.Text, arguments);
@@ -422,6 +540,11 @@ public sealed class Parser
         if (token.Kind == TokenKind.Identifier && StorageBanks.TypeByBank.ContainsKey(token.Text)
             && Peek(1).Is(TokenKind.Punct, "["))
             return ParseStorageOrElement();
+        if (token.Is(TokenKind.Identifier, "none"))
+        {
+            Next();
+            return new NoneExpr(token.Span);
+        }
         if (StartsNamed()) return ParseNamed();
         if (token.Is(TokenKind.Punct, "&") && Peek(1).Kind == TokenKind.Identifier)
         {

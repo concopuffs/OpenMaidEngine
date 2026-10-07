@@ -10,7 +10,13 @@ namespace Age.Script.Text;
 /// <summary>Source text plus the layout sidecar needed to recompile it to the original bytes. At the core level,
 /// <see cref="FoldedInstructions"/> counts instructions folded into expressions and <see cref="FoldRejections"/> the
 /// folds that lowering did not reproduce.</summary>
-public sealed record OmsDecompilation(string Source, OmsLayout Layout, int FoldedInstructions = 0, int FoldRejections = 0);
+/// <summary>Decompiled source and its sidecar. At the idiomatic level <see cref="LibrarySubs"/> counts recognized
+/// library subs, <see cref="TemplateLifts"/> lifted template uses and <see cref="LiftedInstructions"/> the instructions
+/// inside either, by module (spec §12 gate 5); <see cref="LiftFailure"/> says why lifting was abandoned for core
+/// source, when it was.</summary>
+public sealed record OmsDecompilation(string Source, OmsLayout Layout, int FoldedInstructions = 0, int FoldRejections = 0,
+                                      int LibrarySubs = 0, int TemplateLifts = 0, string? LiftFailure = null,
+                                      IReadOnlyDictionary<string, int>? LiftedInstructions = null);
 
 /// <summary>
 /// Raw-level decompiler (spec §11, level <c>raw</c>): every instruction becomes an <c>@op</c> statement with
