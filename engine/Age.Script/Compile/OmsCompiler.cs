@@ -12,6 +12,12 @@ public sealed class OmsCompileException(SourceSpan span, string message) : Excep
     public SourceSpan Span { get; } = span;
 }
 
+/// <summary>A compiler warning (spec §8.2): the code compiles, but probably not as meant.</summary>
+public sealed record OmsWarning(SourceSpan Span, string Message)
+{
+    public override string ToString() => $"{Span}: warning: {Message}";
+}
+
 /// <summary>
 /// Compiles a parsed script unit to the intermediate form using the canonical lowerings of spec §7. Expressions
 /// lower through <see cref="ExpressionLowering"/> with the canonical temporary plan: integer temporaries from the
@@ -36,11 +42,14 @@ public static class OmsCompiler
     private const uint NoTarget = 0xFFFFFFFF;
 
     /// <param name="modules">Resolves <c>use</c> module names, such as <c>himegari.globals</c>.</param>
+    /// <param name="warnings">Receives §8.2 warnings: recursion with bound parameters, division by a constant zero,
+    /// and opcodes no game corpus of the ABI executes.</param>
     public static IrScript Compile(ScriptUnit unit, string abiId, OpcodeTable? table = null, OmsLayout? layout = null,
-                                   IntrinsicCatalog? intrinsics = null, Func<string, GameModule?>? modules = null)
+                                   IntrinsicCatalog? intrinsics = null, Func<string, GameModule?>? modules = null,
+                                   ICollection<OmsWarning>? warnings = null)
     {
         ArgumentNullException.ThrowIfNull(unit);
-        var generator = new CodeGenerator(table, intrinsics, layout, modules);
+        var generator = new CodeGenerator(table, intrinsics, layout, modules, warnings);
         generator.EmitAll(unit.Body);
         generator.ResolveLabels();
         return generator.Build(unit.Name, abiId);
@@ -58,11 +67,24 @@ public static class OmsCompiler
     };
 
     private sealed class CodeGenerator(OpcodeTable? table, IntrinsicCatalog? intrinsics, OmsLayout? layout,
-                                       Func<string, GameModule?>? modules)
+                                       Func<string, GameModule?>? modules, ICollection<OmsWarning>? warnings)
     {
+        private string? _currentSub;
+        private readonly HashSet<int> _warnedOpcodes = new();
+
+        private void Warn(SourceSpan span, string message) => warnings?.Add(new OmsWarning(span, message));
+
+        /// <summary>Warns once per opcode that no game corpus of the target ABI executes.</summary>
+        private void CheckObserved(int opcode, SourceSpan span)
+        {
+            if (intrinsics == null || intrinsics.Contracts.IsObserved(opcode, intrinsics.AbiId) || !_warnedOpcodes.Add(opcode))
+                return;
+            Warn(span, $"opcode 0x{opcode:x} is installed in {intrinsics.AbiId} but no game corpus executes it");
+        }
         private readonly Dictionary<string, Declared> _names = new(StringComparer.Ordinal);
         private readonly Dictionary<string, uint> _constants = new(StringComparer.Ordinal);
         private readonly List<GameModule> _used = new();
+        private readonly Dictionary<int, long> _declaredLocals = new();
         private readonly List<IrInstruction> _code = new();
         private readonly List<Occurrence> _occurrences = new();
         private readonly Dictionary<string, int> _labels = new(StringComparer.Ordinal);
@@ -97,6 +119,7 @@ public static class OmsCompiler
                 if (operand is RawStorage { Bank: "L" or "LF" or "LS" } local)
                     highest[local.Bank] = Math.Max(highest.GetValueOrDefault(local.Bank, -1), local.Index);
             Declare(statements, highest);
+            foreach (var (bank, slot) in highest) _declaredLocals[StorageBanks.TypeByBank[bank]] = slot;
             _tempBase = layout?.TempBase ?? (uint)(highest.GetValueOrDefault("L", -1) + 1);
             foreach (Statement statement in statements) Emit(statement);
         }
@@ -272,6 +295,7 @@ public static class OmsCompiler
                     break;
                 case RawOpStatement raw:
                     CheckArgc(raw.Opcode, raw.Operands.Count, raw.Span);
+                    CheckObserved(raw.Opcode, raw.Span);
                     Add(raw.Opcode, raw.Operands.Select(o => Operand(o)).ToArray());
                     break;
                 case AssignStatement assign:
@@ -439,6 +463,8 @@ public static class OmsCompiler
             }
             if (!BinaryOpcodes.TryGetValue(assign.CompoundOp, out int opcode))
                 throw new OmsCompileException(assign.Span, $"unsupported compound assignment {assign.CompoundOp}=");
+            if (assign.CompoundOp is "/" or "%" && assign.Value is OperandExpr { Operand: RawInteger { Value: 0 } })
+                Warn(assign.Span, $"'{assign.CompoundOp}=' by a constant zero (the VM does not guard it)");
             Lower(new LAssign(target, new LBinary(opcode, LValue(assign.Target), ToL(assign.Value)), true), assign.Span);
         }
 
@@ -497,6 +523,8 @@ public static class OmsCompiler
                     return new LBinary(0x51, new LBinary(0x57, ToL(xor.Left), ToL(xor.Right)),
                         new LBinary(0x56, ToL(xor.Left), ToL(xor.Right)));
                 case BinaryExpr binary when BinaryOpcodes.TryGetValue(binary.Op, out int opcode):
+                    if (binary.Op is "/" or "%" && binary.Right is OperandExpr { Operand: RawInteger { Value: 0 } })
+                        Warn(binary.Span, $"'{binary.Op}' by a constant zero (the VM does not guard it)");
                     return new LBinary(opcode, ToL(binary.Left), ToL(binary.Right));
                 case UnaryExpr { Op: "-" } negation:
                     return new LBinary(0x51, Zero, ToL(negation.Operand));
@@ -583,9 +611,12 @@ public static class OmsCompiler
             var outerLoops = _loops.ToArray();
             _loops.Clear();
             Dictionary<string, RawStorage>? outerParameters = _parameters;
+            string? outerSub = _currentSub;
             _parameters = parameters;
+            _currentSub = sub.Name;
             foreach (Statement inner in sub.Body) Emit(inner);
             _parameters = outerParameters;
+            _currentSub = outerSub;
             foreach (var loop in outerLoops.Reverse()) _loops.Push(loop);
             bool fallsOff = _code.Count == start || !IsTerminator(_code[^1].Opcode) || LabelAt(_code.Count);
             if (sub.Coroutine)
@@ -605,6 +636,8 @@ public static class OmsCompiler
             if (call.Arguments.Count != sub.Parameters.Count)
                 throw new OmsCompileException(call.Span,
                     $"{sub.Name} takes {sub.Parameters.Count} arguments, not {call.Arguments.Count}");
+            if (sub.Name == _currentSub && sub.Parameters.Count > 0)
+                Warn(call.Span, $"the recursive call to '{sub.Name}' overwrites its own bound parameters");
             for (int k = 0; k < sub.Parameters.Count; k++)
             {
                 if (call.Arguments[k].Out)
@@ -668,6 +701,7 @@ public static class OmsCompiler
                 CheckCodeReference(intrinsic, k + 1, argument.Value, call.Name);
                 operands[k] = argument.Out ? LValue(argument.Value) : ToL(argument.Value);
             }
+            CheckObserved(intrinsic.Opcode, call.Span);
             Lower(new LInstruction(intrinsic.Opcode, operands), call.Span);
         }
 
@@ -846,7 +880,7 @@ public static class OmsCompiler
                 Name = name,
                 Magic = layout?.Magic != null
                     ? System.Text.Encoding.ASCII.GetBytes(layout.Magic) : OmsCanonical.MagicFor(abiId),
-                LocalCounts = layout?.LocalCounts ?? OmsCanonical.LocalCounts(_code),
+                LocalCounts = layout?.LocalCounts ?? OmsCanonical.LocalCounts(_code, _declaredLocals),
                 Field6 = layout?.Field6 ?? OmsCanonical.Field6,
                 Code = _code,
                 Data = data,

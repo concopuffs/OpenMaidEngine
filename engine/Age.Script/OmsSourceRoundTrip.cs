@@ -33,7 +33,8 @@ public static class OmsSourceRoundTrip
 
     public static OmsSourceRoundTripReport Run(
         IEnumerable<(string Name, long PackedId, Func<byte[]> Read)> scripts,
-        OpcodeTable table, OpcodeContracts contracts, string level = RawLevel, IReadOnlyList<GameModule>? modules = null)
+        OpcodeTable table, OpcodeContracts contracts, string level = RawLevel, IReadOnlyList<GameModule>? modules = null,
+        bool fixedPoint = false)
     {
         if (level is not (RawLevel or CoreLevel)) throw new ArgumentException($"unknown level {level}", nameof(level));
         var intrinsics = new IntrinsicCatalog(table, contracts);
@@ -47,6 +48,8 @@ public static class OmsSourceRoundTrip
             try
             {
                 byte[] original = read();
+                // Gate 4 (spec §12): start from compiler-generated code, the canonical rebuild without a sidecar.
+                if (fixedPoint) original = CanonicalRebuild(original, name, table, contracts, intrinsics, modules);
                 byte[] rebuilt = RoundTrip(original, name, table, contracts, intrinsics, level, out OmsDecompilation decompiled,
                                            out int instructionCount, modules);
                 instructions += instructionCount;
@@ -85,6 +88,17 @@ public static class OmsSourceRoundTrip
                                    out OmsDecompilation decompiled)
         => RoundTrip(original, name, table, contracts, new IntrinsicCatalog(table, contracts), RawLevel,
                      out decompiled, out _);
+
+    /// <summary>Gate 3's canonical rebuild of one script: core source compiled without its sidecar.</summary>
+    public static byte[] CanonicalRebuild(byte[] original, string name, OpcodeTable table, OpcodeContracts contracts,
+                                          IntrinsicCatalog intrinsics, IReadOnlyList<GameModule>? modules = null)
+    {
+        IrScript ir = IrDecoder.Decode(original, table, contracts, name);
+        OmsDecompilation source = OmsCoreDecompiler.Decompile(ir, table.AbiId, intrinsics, modules: modules);
+        IrScript compiled = OmsCompiler.Compile(Parser.ParseScript(source.Source, name), table.AbiId, table, layout: null,
+            intrinsics, module => modules?.FirstOrDefault(candidate => candidate.Name == module));
+        return IrEncoder.Encode(compiled);
+    }
 
     /// <summary>One script through a source level: decode, decompile, serialize the sidecar, parse, compile, encode.</summary>
     public static byte[] RoundTrip(byte[] original, string name, OpcodeTable table, OpcodeContracts contracts,

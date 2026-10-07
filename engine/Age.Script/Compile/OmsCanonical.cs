@@ -15,11 +15,16 @@ public static class OmsCanonical
         return System.Text.Encoding.ASCII.GetBytes(text);
     }
 
-    /// <summary>Header F0..F5: highest slot used + 2 per local bank, or 1 when the bank is unused.</summary>
-    public static int[] LocalCounts(IEnumerable<IrInstruction> code)
+    /// <summary>Header F0..F5: highest slot used + 2 per local bank, or 1 when the bank is unused. Declared local
+    /// arrays count to their last element (<paramref name="declared"/>: bank operand type → highest declared slot),
+    /// because their upper elements are reached only by computed index.</summary>
+    public static int[] LocalCounts(IEnumerable<IrInstruction> code, IReadOnlyDictionary<int, long>? declared = null)
     {
         var highest = new long[StorageBanks.LocalBankTypes.Length];
         Array.Fill(highest, -1);
+        if (declared != null)
+            for (int bank = 0; bank < highest.Length; bank++)
+                highest[bank] = Math.Max(highest[bank], declared.GetValueOrDefault(StorageBanks.LocalBankTypes[bank], -1));
         foreach (IrInstruction instruction in code)
             foreach (IrOperand operand in instruction.Operands)
             {

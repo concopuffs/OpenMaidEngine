@@ -500,6 +500,40 @@ public class OmsCoreTests
         Assert.Contains("unknown script \"NOPE\"", error.Message);
     }
 
+    [Fact]
+    public void WarningsFlagRecursionZeroDivisorsAndUnobservedOpcodes()
+    {
+        // Registry observations: only exit, mov, div and call were ever executed under this ABI.
+        const string registry = """
+            {"opcodes": [
+              {"op": "0x2", "observed_revisions": ["SYS4422"]}, {"op": "0x55", "observed_revisions": ["SYS4422"]},
+              {"op": "0x53", "observed_revisions": ["SYS4422"]}, {"op": "0x8f", "observed_revisions": ["SYS4422"]},
+              {"op": "0x5", "observed_revisions": ["SYS4422"]},
+              {"op": "0x249", "observed_revisions": ["SYS4433"], "semantics": {"name": "u00422EB0"}}
+            ]}
+            """;
+        var contracts = OpcodeContracts.Load(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(registry)));
+        var warnings = new List<OmsWarning>();
+        OmsCompiler.Compile(Parser.ParseScript("""
+            script "T.BIN"
+            G[1] = G[2] / 0
+            G[3] %= 0
+            op_0x249(1, 2, 3)
+            @op(0x249, 1, 2, 3)
+            walk(1)
+            exit
+            sub walk(steps: G[4]) {
+                walk(steps - 1)
+            }
+            """, "t.oms"), Abi, Table, null, new IntrinsicCatalog(Table, contracts), warnings: warnings);
+        string[] messages = warnings.Select(warning => warning.Message).ToArray();
+        Assert.Equal(4, messages.Length);
+        Assert.Contains("'/' by a constant zero (the VM does not guard it)", messages);
+        Assert.Contains("'%=' by a constant zero (the VM does not guard it)", messages);
+        Assert.Contains("opcode 0x249 is installed in SYS4422 but no game corpus executes it", messages);   // once
+        Assert.Contains("the recursive call to 'walk' overwrites its own bound parameters", messages);
+    }
+
     [Theory]
     [InlineData("use nowhere.globals\nexit\n", "unknown module 'nowhere.globals'")]
     [InlineData("L[1] = missing[2]\n", "'missing' is not a declared array")]
@@ -541,6 +575,29 @@ public class OmsCoreTests
         Assert.Contains(expected, error.Message);
     }
 
+    [Fact]
+    public void IndexAddressedLocalArraysAreDeclaredToKeepTheirFrame()
+    {
+        // L[3] is an array whose upper elements only a computed index reaches; the original pool started at L[8].
+        IrScript compiled = Compile("""
+            local int scratch[5] @ 3
+            L[1] = scratch[L[2]] + 1
+            G[1] = L[1] * 2 + G[2]
+            exit
+            """);
+        Assert.Equal([10, 1, 1, 2, 1, 1], compiled.LocalCounts);   // L[8] (temporary) + 2
+        Assert.Equal("61(c:0,9:3,9:2) 50(9:1,c:0,0:1) 52(9:8,9:1,0:2) 50(3:1,9:8,3:2) 2()", Shape(compiled));
+        var (first, second, decompiled) = RoundTrip(IrEncoder.Encode(compiled));
+        Assert.Equal(first, second);
+        Assert.Contains("\nlocal int array_3[0x5] @ 0x3\n", decompiled.Source);
+        Assert.Contains("L[0x1] = array_3[L[0x2]] + 0x1", decompiled.Source);
+        Assert.Null(decompiled.Layout.TempBase);
+        Assert.Null(decompiled.Layout.LocalCounts);
+        // Without the sidecar the declaration alone keeps temporaries above the array.
+        Assert.Equal(first, IrEncoder.Encode(OmsCompiler.Compile(Parser.ParseScript(decompiled.Source, "t.oms"), Abi, Table,
+            null, Intrinsics)));
+    }
+
     [Trait("Category", "Workspace")]
     [Trait("Profile", "himegari")]
     [Fact]
@@ -548,12 +605,24 @@ public class OmsCoreTests
         => AssertCorpus("Himegari_Game", "SYS4422");
 
     [Trait("Category", "Workspace")]
+    [Trait("Profile", "himegari")]
+    [Fact]
+    public void InstalledHimegariCanonicalRebuildIsAFixedPoint()
+        => AssertCorpus("Himegari_Game", "SYS4422", fixedPoint: true);
+
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    [Fact]
+    public void InstalledKamidoriCanonicalRebuildIsAFixedPoint()
+        => AssertCorpus("Kamidori", "SYS4433", fixedPoint: true);
+
+    [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]
     [Fact]
     public void InstalledKamidoriCorpusRoundTripsThroughCoreSource()
         => AssertCorpus("Kamidori", "SYS4433");
 
-    private static void AssertCorpus(string directory, string abiId)
+    private static void AssertCorpus(string directory, string abiId, bool fixedPoint = false)
     {
         string gameRoot = Environment.GetEnvironmentVariable("AGE_GAME_ROOT") ?? Path.Combine(Paths.Workspace, directory);
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
@@ -568,10 +637,17 @@ public class OmsCoreTests
             OpcodeTableJson.Load(Paths.OpcodesJson, abiId), OpcodeContracts.Load(Paths.OpcodesJson),
             OmsSourceRoundTrip.CoreLevel,
             [GameModule.LoadGlobals(profile, Paths.GlobalsJson(profile)),
-             GameModule.Scripts(profile, catalog.EnumerateScripts().Select(packed => (packed.Asset.Name, packed.PackedId)))]);
+             GameModule.Scripts(profile, catalog.EnumerateScripts().Select(packed => (packed.Asset.Name, packed.PackedId)))],
+            fixedPoint);
         Assert.Empty(report.Failures);
         Assert.Equal(report.Scripts, report.Identical);
         Assert.Equal(0, report.RawStatements);
+        if (fixedPoint)
+        {
+            // Gate 4: compiler-generated code recompiles exactly, almost always without any sidecar.
+            Assert.True(report.EmptySidecars >= report.Scripts * 95 / 100, $"empty sidecars {report.EmptySidecars}");
+            return;
+        }
         // Stage C2: most compiler temporaries fold back into expressions, and the canonical allocator reproduces
         // all but a small residue of statements (the rest carry sidecar slot overrides).
         Assert.True(report.FoldedInstructions > report.Instructions / 8, $"folded {report.FoldedInstructions}");

@@ -194,6 +194,11 @@ compiler performs no constant folding.
   an unnamed column.
 - A local with `@` is pinned to its slot. A local without `@` takes the next slots above every local the source
   names (including pinned ones), and the temporary pool starts above those.
+- Declared local arrays also count in the header's local bank sizes, because their upper elements are reached only
+  by computed index. The decompiler therefore declares every index-addressed local array, for example
+  `local int array_17[0x6978] @ 0x17`. Each array runs to the next named cell of its bank, and the topmost runs to
+  where the original frame put the temporary pool or the spare slot. Without these declarations a sidecar-free
+  rebuild would put temporaries over array tails (33 such scripts across both games).
 - Names resolve in the order: sub parameters, `const`, declared or imported names, then labels.
 
 **Decompiled names.** Decompiled code names unnamed storage `G[0x1234]`, `GS[0x315]`, `L[0x5]` and so on, and
@@ -434,6 +439,8 @@ Each argument is checked against the access kind of its operand position under t
 - an opcode never observed in the game's corpus;
 - an `atomic` body containing a wait.
 
+The compiler reports the middle three so far (`OmsWarning`, printed by `Age.Cli oms-compile`). The type-dependent
+string↔number warning and the `atomic`-wait warning wait for the checker.
 ## 9. Linking and identity
 
 ### 9.1 Scripts
@@ -590,8 +597,9 @@ port's VM tests and native traces.
 
 ## 15. Implementation outline
 
-The implementation is a C# library (`Age.Script`) beside `Sys4Loader`, exposed as `Age.Cli oms compile |
-decompile | roundtrip`, so the engine can compile fragments at mod-load time. Its stages:
+The implementation is a C# library (`Age.Script`) beside `Sys4Loader`, exposed as `Age.Cli oms-compile`,
+`oms-decompile`, `oms-roundtrip` and `oms-rebuild`, so the engine can compile fragments at mod-load time. Its
+stages:
 
 - lexer, parser and syntax tree;
 - binder over the generated modules;
@@ -614,6 +622,8 @@ contracts.
 | 1. Encoder/decoder | **passed 2026-10-06** | `Age.Cli oms-roundtrip`: 520/520 Himegari and 732/732 Kamidori catalog scripts byte-identical; tables always derived; workspace tests `OmsIrCodecTests.Installed*CorpusRoundTripsByteIdentically` |
 | 2. Raw level (`BIN → OMS(raw) + sidecar → BIN`) | **passed 2026-10-06** | `Age.Cli oms-roundtrip --level raw`: 520/520 and 732/732 byte-identical; workspace tests `OmsSourceTests.Installed*CorpusRoundTripsThroughRawSource` |
 | 2. Core level, stage C1 (structure) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: 520/520 and 732/732 byte-identical with **0** raw `@op` statements; workspace tests `OmsCoreTests.Installed*CorpusRoundTripsThroughCoreSource` |
+| 3. Canonical rebuild | **passed 2026-10-07** | `Age.Cli oms-rebuild` (also a `validate.py --level workspace` gate): every catalog script rebuilt from core source without its sidecar (441 / 568 change bytes); all 297 / 279 SC/SP scenes, walked page by page and also from the data-table boot, execute the same instruction sequence (27.6M / 38.1M steps) with the same text, halts and final state on a simulated clock |
+| 4. Fixed point | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core --fixed-point`: decompiling each canonical rebuild and recompiling it is byte-identical for 520/520 and 732/732; 506 / 713 of them need no sidecar at all, and the rest need only temporary pins (named locals interleaved with the original's temporaries); workspace tests `OmsCoreTests.Installed*CanonicalRebuildIsAFixedPoint` |
 | 2. Core level, stage C4 (declarations and registry naming) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical with `<profile>.globals` and `<profile>.scripts` applied; `use`, `const`, `global` and `local` declarations, named elements and `run` names covered by `OmsCoreTests` |
 | 2. Core level, stage C3 (`sub`, `coroutine`, bound parameters) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical; 10,914 / 12,287 subs and 614 / 644 coroutines recovered; the compiler's falls-into, implicit-return, coroutine-ending and code-reference-kind checks are covered by `OmsCoreTests`; warnings (§8.2, including recursion with bound parameters) await a warning channel |
 | 2. Core level, stage C2 (expressions, `for`, `while`) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: still 520/520 and 732/732 byte-identical, with 331,075 / 330,708 instructions folded into expressions; temporary overrides in 6,548 / 8,332 statements (2.9% / 4.4% of folded statements); `Age.Cli oms-temps` ranks the residue |

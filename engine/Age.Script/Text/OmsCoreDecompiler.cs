@@ -38,6 +38,7 @@ public static class OmsCoreDecompiler
         List<Node> top = context.CarveSubs(context.Structure(0, script.Code.Count, null));
         var body = new StringBuilder();
         context.CollectLabels(top, null);
+        context.DeclareLocalArrays();
         context.Print(body, top, script.Code.Count, ownsEnd: true, depth: 1, null, skipLabel: -1);
         if (dump != null) context.Dump(dump, top, "");
         var text = new StringBuilder();
@@ -45,10 +46,18 @@ public static class OmsCoreDecompiler
         text.Append("script ").Append(OmsRawDecompiler.Quote(script.Name)).Append('\n');
         foreach (GameModule module in modules ?? [])
             if (context.UsedModules.Contains(module)) text.Append("use ").Append(module.Name).Append('\n');
+        foreach (LocalArray array in context.LocalArrays)
+            text.Append($"local {array.TypeName} {array.Name}[0x{array.Length:x}] @ 0x{array.Base:x}\n");
         if (script.Code.Count > 0) text.Append('\n');
         text.Append(body);
         OmsLayout layout = OmsRawDecompiler.BuildLayout(script, abiId);
-        if (folding.UsesIntTemps && context.MaxExplicitLocal + 1 != folding.PoolBase) layout.TempBase = folding.PoolBase;
+        // The compiler derives the pool base and header counts from the named cells and the declared arrays.
+        var declared = context.LocalArrays.GroupBy(array => array.Type)
+            .ToDictionary(group => group.Key, group => group.Max(array => (long)array.Base + array.Length - 1));
+        long derivedBase = Math.Max(context.MaxExplicitLocal, declared.GetValueOrDefault(0x9, -1)) + 1;
+        if (folding.UsesIntTemps && derivedBase != folding.PoolBase) layout.TempBase = folding.PoolBase;
+        layout.LocalCounts = script.LocalCounts.SequenceEqual(OmsCanonical.LocalCounts(script.Code, declared))
+            ? null : script.LocalCounts.ToArray();
         if (folding.RefSwap) layout.RefSwap = true;
         if (folding.Overrides.Count > 0) layout.Temps = folding.Overrides;
         return new OmsDecompilation(text.ToString(), layout, folding.FoldedInstructions, folding.Rejections);
@@ -80,7 +89,8 @@ public static class OmsCoreDecompiler
         public readonly int[] RootOf;
         public readonly int[] UnitStart;
         public readonly LStatement?[] Statements;
-        public uint PoolBase { get; }
+        public uint PoolBase { get; private set; }
+        public bool IsPoolSlot(uint slot) => _intTemps.Contains(slot);
         public bool UsesIntTemps { get; private set; }
         public int FoldedInstructions { get; private set; }
         public int Rejections { get; private set; }
@@ -125,7 +135,7 @@ public static class OmsCoreDecompiler
 
         /// <summary>Native access of a one-based operand. The language-level opcodes are fixed by the VM; intrinsics
         /// come from the registry contracts.</summary>
-        private IReadOnlyList<string>? Access(int opcode, int operand) => opcode switch
+        public IReadOnlyList<string>? Access(int opcode, int operand) => opcode switch
         {
             >= 0x50 and <= 0x5F => operand == 1 ? Write : Read,
             ExpressionLowering.LookupArray or ExpressionLowering.LookupArray2D =>
@@ -179,10 +189,17 @@ public static class OmsCoreDecompiler
                     if (operand.Kind == IrOperandKind.Literal && (operand.Type == 0x9 || IsPointer(operand.Type)))
                         candidates.Add((operand.Type, operand.Value));
             var notTemp = new HashSet<(int, uint)>();
-            var defined = new HashSet<(int, uint)>();
+            // Uses since each cell's last in-block definition: a compiler temporary is read exactly once.
+            var uses = new Dictionary<(int, uint), int>();
+            void Settle()
+            {
+                foreach (var (key, count) in uses)
+                    if (count != 1 && key.Item1 == 0x9) notTemp.Add(key);
+                uses.Clear();
+            }
             for (int k = 0; k < _code.Count; k++)
             {
-                if (_leader[k]) defined.Clear();
+                if (_leader[k]) Settle();
                 IReadOnlyList<IrOperand> operands = _code[k].Operands;
                 var defs = new List<(int, uint)>();
                 for (int p = 0; p < operands.Count; p++)
@@ -191,11 +208,24 @@ public static class OmsCoreDecompiler
                     if (operand.Kind != IrOperandKind.Literal || !(operand.Type == 0x9 || IsPointer(operand.Type))) continue;
                     var key = (operand.Type, operand.Value);
                     Touch touch = Classify(_code[k].Opcode, p + 1, operand.Type);
-                    if (touch == Touch.Def) defs.Add(key);
-                    else if (touch == Touch.Other || !defined.Contains(key)) notTemp.Add(key);
+                    if (touch == Touch.Def)
+                    {
+                        defs.Add(key);
+                        // Integer temporaries are only ever results of binary operations; a cell set by mov or by an
+                        // intrinsic is a named local.
+                        if (operand.Type == 0x9 && !(_code[k].Opcode is >= 0x50 and <= 0x5F and not OmsCompiler.Mov))
+                            notTemp.Add(key);
+                    }
+                    else if (touch == Touch.Other || !uses.ContainsKey(key)) notTemp.Add(key);
+                    else uses[key]++;
                 }
-                foreach (var key in defs) defined.Add(key);
+                foreach (var key in defs)
+                {
+                    if (uses.TryGetValue(key, out int count) && count != 1 && key.Item1 == 0x9) notTemp.Add(key);
+                    uses[key] = 0;
+                }
             }
+            Settle();
             foreach (var key in candidates)
                 if (!notTemp.Contains(key) && IsPointer(key.Type)) _refTemps.Add(key);
             var ints = candidates.Where(key => key.Type == 0x9).Select(key => key.Slot).ToHashSet();
@@ -357,6 +387,26 @@ public static class OmsCoreDecompiler
             _ => false,
         };
 
+        private static IEnumerable<IrOperand> Leaves(LStatement statement)
+        {
+            var pending = new Stack<LExpr>(statement switch
+            {
+                LAssign assign => [assign.Target, assign.Value],
+                LInstruction instruction => instruction.Operands,
+                _ => [],
+            });
+            while (pending.Count > 0)
+                switch (pending.Pop())
+                {
+                    case LLeaf leaf: yield return leaf.Operand; break;
+                    case LBinary binary: pending.Push(binary.Left); pending.Push(binary.Right); break;
+                    case LElement element:
+                        yield return element.Base;
+                        foreach (LExpr index in element.Indices) pending.Push(index);
+                        break;
+                }
+        }
+
         private static void Origins(LExpr expression, List<int> origins)
         {
             switch (expression)
@@ -439,16 +489,36 @@ public static class OmsCoreDecompiler
         public bool RefSwap { get; private set; }
 
         private bool Canonical(int start, int root, LStatement statement, bool swap)
-            => Reproduces(ExpressionLowering.Instructions(statement, new CanonicalTemps(statement, PoolBase, swap).Allocate),
+            => Canonical(start, root, statement, PoolBase, swap);
+
+        private bool Canonical(int start, int root, LStatement statement, uint poolBase, bool swap)
+            => Reproduces(ExpressionLowering.Instructions(statement, new CanonicalTemps(statement, poolBase, swap).Allocate),
                 start, root);
 
         /// <summary>Chooses the script's reference order by which fits more statements, then records the original
         /// slots of every statement the canonical plan does not reproduce.</summary>
         private void PlanTemporaries()
         {
-            int plain = _accepted.Count(a => Canonical(a.Start, a.Root, a.Statement, false));
-            int swapped = _accepted.Count(a => Canonical(a.Start, a.Root, a.Statement, true));
-            RefSwap = swapped > plain;
+            // The numbering base is the pool's first slot as the compiler derives it (just above the named locals) or the
+            // lowest temporary actually used (canonical numbering can skip a label that went to a reference); keep
+            // whichever, with the reference order, reproduces the most statements, preferring the derived base.
+            uint derived = (uint)(_code.SelectMany(instruction => instruction.Operands)
+                .Where(operand => operand is { Kind: IrOperandKind.Literal, Type: 0x9 } && !_intTemps.Contains(operand.Value))
+                .Select(operand => (long)operand.Value).DefaultIfEmpty(-1).Max() + 1);
+            // The base the compiler will derive from the printed source: above every local integer left explicit.
+            uint printed = (uint)(Enumerable.Range(0, _code.Count).Where(root => Statements[root] != null)
+                .SelectMany(root => Leaves(Statements[root]!))
+                .Where(leaf => leaf is { Kind: IrOperandKind.Literal, Type: 0x9 })
+                .Select(leaf => (long)leaf.Value).DefaultIfEmpty(-1).Max() + 1);
+            var best = (Base: derived, Swap: false, Fits: -1);
+            foreach (uint poolBase in new[] { derived, printed, PoolBase }.Distinct())
+                foreach (bool swap in new[] { false, true })
+                {
+                    int fits = _accepted.Count(a => Canonical(a.Start, a.Root, a.Statement, poolBase, swap));
+                    if (fits > best.Fits) best = (poolBase, swap, fits);
+                }
+            PoolBase = best.Base;
+            RefSwap = best.Swap;
             foreach (var (start, root, statement, slots) in _accepted)
             {
                 bool canonical = Canonical(start, root, statement, RefSwap);
@@ -545,6 +615,13 @@ public static class OmsCoreDecompiler
     /// are kept so the loop can print in its plain form when its step needs a label.</summary>
     private sealed record ForNode(int Start, SimpleNode? Init, SimpleNode Jump, SimpleNode Step, SimpleNode Test,
                                   List<Node> Body, LoopNode Original) : Node(Start);
+
+    /// <summary>An index-addressed local array the decompiler declares (bank operand type, first slot, length).</summary>
+    private sealed record LocalArray(int Type, uint Base, uint Length)
+    {
+        public string Name => Type switch { 0xA => "float_array_", 0xB => "str_array_", _ => "array_" } + Base.ToString("x");
+        public string TypeName => Type switch { 0xA => "float", 0xB => "str", _ => "int" };
+    }
 
     /// <summary>A loop's break and continue destinations (instruction indices).</summary>
     private sealed record Loop(int Break, int Continue, Loop? Outer);
@@ -1118,11 +1195,49 @@ public static class OmsCoreDecompiler
             if (ownsEnd && _labels.Contains(end)) PrintLabel(text, end, depth);
         }
 
+        /// <summary>Index-addressed local arrays, declared so the compiler keeps their slots. Each array runs to the
+        /// next named cell of its bank; the topmost runs to where the original frame put the temporary pool (or the
+        /// spare top slot), because its upper elements are reached only by computed index.</summary>
+        public List<LocalArray> LocalArrays { get; } = new();
+        private readonly Dictionary<(int Type, uint Slot), LocalArray> _arrayAt = new();
+
+        public void DeclareLocalArrays()
+        {
+            var used = new Dictionary<int, SortedSet<uint>>();
+            var bases = new Dictionary<int, SortedSet<uint>>();
+            for (int k = 0; k < _code.Count; k++)
+                for (int p = 0; p < _code[k].Operands.Count; p++)
+                {
+                    IrOperand operand = _code[k].Operands[p];
+                    if (operand.Kind != IrOperandKind.Literal || operand.Type is not (0x9 or 0xA or 0xB)) continue;
+                    if (operand.Type == 0x9 && folding.IsPoolSlot(operand.Value)) continue;
+                    (used.TryGetValue(operand.Type, out var set) ? set : used[operand.Type] = new SortedSet<uint>()).Add(operand.Value);
+                    if (folding.Access(_code[k].Opcode, p + 1) is { } kinds && kinds.Contains("address"))
+                        (bases.TryGetValue(operand.Type, out var b) ? b : bases[operand.Type] = new SortedSet<uint>()).Add(operand.Value);
+                }
+            foreach (var (type, arrayBases) in bases)
+            {
+                int bank = Array.IndexOf(StorageBanks.LocalBankTypes, type);
+                long top = type == 0x9 && folding.UsesIntTemps ? folding.PoolBase : script.LocalCounts[bank] - 1;
+                foreach (uint start in arrayBases)
+                {
+                    uint? next = used[type].GetViewBetween(start + 1, uint.MaxValue).Cast<uint?>().FirstOrDefault();
+                    long end = next ?? Math.Max(top, start + 1);
+                    if (end <= start) continue;
+                    var array = new LocalArray(type, start, (uint)(end - start));
+                    LocalArrays.Add(array);
+                    _arrayAt[(type, start)] = array;
+                }
+            }
+        }
+
         /// <summary>The modules whose names were printed (the source then needs their <c>use</c>).</summary>
         public HashSet<GameModule> UsedModules { get; } = new();
 
         private string Atom(IrOperand operand)
-            => Named(operand) is { } symbol ? symbol.Name : RawAtom(operand);
+            => Named(operand) is { } symbol ? symbol.Name
+                : operand.Kind == IrOperandKind.Literal && _arrayAt.TryGetValue((operand.Type, operand.Value), out LocalArray? array)
+                    ? array.Name : RawAtom(operand);
 
         /// <summary>The registry name of a global cell; marks its module used.</summary>
         private GlobalSymbol? Named(IrOperand operand)
@@ -1257,6 +1372,9 @@ public static class OmsCoreDecompiler
 
         private string? NamedElementOf(LElement element)
         {
+            if (element.Base.Kind == IrOperandKind.Literal && element.Indices.Count == 1
+                && _arrayAt.TryGetValue((element.Base.Type, element.Base.Value), out LocalArray? local))
+                return $"{local.Name}[{Expression(element.Indices[0], 0)}]";
             if (element.Base.Kind != IrOperandKind.Literal || element.Base.Type is not (0x3 or 0x4 or 0x5)) return null;
             foreach (GameModule module in modules)
                 if (module.TryGet(element.Base.Type, element.Base.Value, out GlobalSymbol symbol))

@@ -69,6 +69,62 @@ List<Age.Script.Modules.GameModule> OmsModules()
     return omsModules;
 }
 
+if (args.Contains("oms-compile"))
+{
+    // Compile one OMS source file to a SYS4 script. A sidecar next to the source (<file>.omslayout.json) is applied
+    // unless --no-layout asks for the canonical layout; warnings go to stderr.
+    string sourcePath = OptionValue("--source") ?? throw new ArgumentException("--source FILE.oms is required");
+    string layoutPath = OptionValue("--layout") ?? Path.ChangeExtension(sourcePath, ".omslayout.json");
+    string binaryPath = OptionValue("--output") ?? Path.ChangeExtension(sourcePath, ".BIN");
+    Age.Script.Layout.OmsLayout? sidecar = !args.Contains("--no-layout") && File.Exists(layoutPath)
+        ? Age.Script.Layout.OmsLayout.FromJson(File.ReadAllText(layoutPath)) : null;
+    var compileModules = OmsModules();
+    var warnings = new List<Age.Script.Compile.OmsWarning>();
+    try
+    {
+        var unit = Age.Script.Syntax.Parser.ParseScript(File.ReadAllText(sourcePath), sourcePath);
+        var compiled = Age.Script.Compile.OmsCompiler.Compile(unit, table.AbiId, table, sidecar,
+            new Age.Script.Abi.IntrinsicCatalog(table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson)),
+            name => compileModules.FirstOrDefault(module => module.Name == name), warnings);
+        byte[] bytes = Age.Script.Ir.IrEncoder.Encode(compiled);
+        File.WriteAllBytes(binaryPath, bytes);
+        foreach (var warning in warnings) Console.Error.WriteLine(warning);
+        Console.WriteLine($"oms-compile: {sourcePath} -> {binaryPath} ({bytes.Length} bytes, {compiled.Code.Count} instructions"
+                          + $"{(sidecar != null ? ", with sidecar" : "")}, {warnings.Count} warnings)");
+        return 0;
+    }
+    catch (Exception error) when (error is Age.Script.Syntax.OmsSyntaxException or Age.Script.Compile.OmsCompileException
+                                      or InvalidDataException)
+    {
+        foreach (var warning in warnings) Console.Error.WriteLine(warning);
+        Console.Error.WriteLine($"error: {error.Message}");
+        return 1;
+    }
+}
+
+if (args.Contains("oms-rebuild"))
+{
+    // Open Maid Script gate 3: canonical rebuild (no sidecar) must be VM-trace-equivalent on the scenes.
+    // Scenes default to every SC/SP scene, walked page by page (--halt-at-wait stops at the first prompt);
+    // --boot starts them from the profile's data-table bootstrap, itself run on both catalogs.
+    var rebuildScenes = OptionValue("--scene") is { } onlyScene
+        ? new List<string> { onlyScene }
+        : provider.ScriptNames.Where(n => Regex.IsMatch(n, @"^S[CP]\d{4}\.BIN$")).OrderBy(n => n, StringComparer.Ordinal).ToList();
+    IReadOnlyList<string> bootScripts = [];
+    if (args.Contains("--boot"))
+    {
+        if (selectedProfile.Profile.DirectSceneDiagnostics is not { } bootPolicy)
+        {
+            Console.Error.WriteLine($"profile '{selectedProfile.Profile.Id}' has no proven data-table boot policy");
+            return 2;
+        }
+        bootScripts = bootPolicy.DataTableBootstrapScripts;
+    }
+    return OmsRebuildCheck.Run(catalog, assetStore, table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson),
+        OmsModules(), rebuildScenes, bootScripts, new VmOptions(HaltAtWaitForInput: args.Contains("--halt-at-wait")),
+        int.TryParse(OptionValue("--limit"), out int rebuildLimit) ? rebuildLimit : 30);
+}
+
 if (args.Contains("oms-temps"))
 {
     OmsInspect.TemporaryResidue(
@@ -86,7 +142,8 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
     Age.Script.OmsSourceRoundTripReport source = Age.Script.OmsSourceRoundTrip.Run(
         catalog.EnumerateScripts().Select(packed => (
             packed.Asset.Name, packed.PackedId, (Func<byte[]>)(() => assetStore.ReadAll(packed.Asset)))),
-        table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), sourceLevel, OmsModules());
+        table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), sourceLevel, OmsModules(),
+        fixedPoint: args.Contains("--fixed-point"));
     if (OptionValue("--output") is { } sourceOutput)
     {
         string? directory = Path.GetDirectoryName(Path.GetFullPath(sourceOutput));
@@ -111,7 +168,8 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
         }, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
     }
     Console.WriteLine(
-        $"oms-roundtrip: profile={selectedProfile.Profile.Id} abi={table.AbiId} level={source.Level} "
+        $"oms-roundtrip: profile={selectedProfile.Profile.Id} abi={table.AbiId} level={source.Level}"
+        + (args.Contains("--fixed-point") ? " fixed-point" : "") + " "
         + $"scripts={source.Scripts} identical={source.Identical} empty-sidecars={source.EmptySidecars} "
         + $"sidecar-fields={string.Join(",", source.SidecarFieldUse.Select(pair => $"{pair.Key}:{pair.Value}"))} "
         + $"source-bytes={source.SourceBytes} instructions={source.Instructions} raw-statements={source.RawStatements} "
@@ -130,7 +188,12 @@ if (args.Contains("oms-decompile"))
     var omsModules = OmsModules();
     Age.Script.Text.OmsDecompilation DecompileEntry(PackedAssetEntry packed)
     {
-        var decoded = Age.Script.Ir.IrDecoder.Decode(assetStore.ReadAll(packed.Asset), table, omsContracts, packed.Asset.Name);
+        byte[] scriptBytes = assetStore.ReadAll(packed.Asset);
+        // --fixed-point decompiles the canonical rebuild (gate 4's compiler-generated input) instead of the original.
+        if (args.Contains("--fixed-point"))
+            scriptBytes = Age.Script.OmsSourceRoundTrip.CanonicalRebuild(scriptBytes, packed.Asset.Name, table, omsContracts,
+                omsIntrinsics, omsModules);
+        var decoded = Age.Script.Ir.IrDecoder.Decode(scriptBytes, table, omsContracts, packed.Asset.Name);
         return OptionValue("--level") is "raw"
             ? Age.Script.Text.OmsRawDecompiler.Decompile(decoded, table.AbiId)
             : Age.Script.Text.OmsCoreDecompiler.Decompile(decoded, table.AbiId, omsIntrinsics, modules: omsModules);

@@ -14,6 +14,7 @@ public sealed class OpcodeContracts
     private readonly Dictionary<(int Opcode, int Operand), OperandAccess> _access;
     private readonly Dictionary<int, string> _semanticNames;
     private readonly Dictionary<int, string> _codeTargetKinds;
+    private readonly Dictionary<int, HashSet<string>> _observedRevisions = new();
 
     private OpcodeContracts(
         Dictionary<int, HashSet<int>> codeTargets,
@@ -48,6 +49,7 @@ public sealed class OpcodeContracts
         var access = new Dictionary<(int, int), OperandAccess>();
         var names = new Dictionary<int, string>();
         var kinds = new Dictionary<int, string>();
+        var observed = new Dictionary<int, HashSet<string>>();
         foreach (JsonElement entry in doc.RootElement.GetProperty("opcodes").EnumerateArray())
         {
             int op = Convert.ToInt32(entry.GetProperty("op").GetString(), 16);
@@ -58,6 +60,8 @@ public sealed class OpcodeContracts
                 codeTargets[op] = targets.EnumerateArray().Select(value => value.GetInt32()).ToHashSet();
             if (entry.TryGetProperty("code_target_kind", out JsonElement kind) && kind.GetString() is { Length: > 0 } k)
                 kinds[op] = k;
+            if (entry.TryGetProperty("observed_revisions", out JsonElement revisions))
+                observed[op] = revisions.EnumerateArray().Select(value => value.GetString() ?? "").ToHashSet(StringComparer.Ordinal);
             if (!entry.TryGetProperty("semantics", out JsonElement semantics)
                 || semantics.ValueKind != JsonValueKind.Object
                 || !semantics.TryGetProperty("args", out JsonElement args))
@@ -79,7 +83,9 @@ public sealed class OpcodeContracts
                     access[(op, index.GetInt32())] = new OperandAccess(common, byAbi);
             }
         }
-        return new OpcodeContracts(codeTargets, access, names, kinds);
+        var contracts = new OpcodeContracts(codeTargets, access, names, kinds);
+        foreach (var (op, revisions) in observed) contracts._observedRevisions[op] = revisions;
+        return contracts;
     }
 
     /// <summary>Contracts with code targets, access lists and semantic names (for tests).</summary>
@@ -100,6 +106,12 @@ public sealed class OpcodeContracts
     /// <summary>What the opcode's code-target operands point at: <c>transfer</c>, <c>call</c>, <c>callback</c> or
     /// <c>coroutine</c> (registry <c>code_target_kind</c>).</summary>
     public string? CodeTargetKind(int opcode) => _codeTargetKinds.GetValueOrDefault(opcode);
+
+    /// <summary>Whether a game corpus of this engine ABI ever executes the opcode (registry observations). Contracts
+    /// built without observation data report every opcode as observed.</summary>
+    public bool IsObserved(int opcode, string abiId)
+        => _observedRevisions.Count == 0
+           || _observedRevisions.TryGetValue(opcode, out HashSet<string>? revisions) && revisions.Contains(abiId);
 
     /// <summary>The native access kinds of a one-based operand under an engine ABI, if recorded.</summary>
     public IReadOnlyList<string>? Access(int opcode, int operand, string abiId)

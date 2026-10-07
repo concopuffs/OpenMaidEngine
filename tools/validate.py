@@ -235,6 +235,17 @@ def build_gate_plan(
             low_memory_profile_environment,
         ))
         gates.append(Gate(
+            "oms-canonical-rebuild",
+            f"Open Maid Script canonical rebuild, VM-trace-equivalent scenes ({context.profile_id})",
+            (
+                "dotnet", "run", "--project", "engine/Age.Cli/Age.Cli.csproj",
+                "--no-build", "--", "oms-rebuild", "--profile", context.profile_id,
+                "--game-root", str(game_root or context.game_root),
+            ),
+            900,
+            profile_environment,
+        ))
+        gates.append(Gate(
             "catalog-corpus-scan",
             f"Catalog/store corpus decode ({context.profile_id})",
             (
