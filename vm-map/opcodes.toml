@@ -1499,6 +1499,7 @@ op = 0x7b
 label = "u0041ADB0"
 argc = 2
 code_target_args = [1, 2]
+code_target_kind = "coroutine"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1686,6 +1687,7 @@ op = 0x8c
 label = "jmp"
 argc = 1
 code_target_args = [1]
+code_target_kind = "transfer"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1709,6 +1711,7 @@ op = 0x8f
 label = "call"
 argc = 1
 code_target_args = [1]
+code_target_kind = "call"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1733,6 +1736,7 @@ op = 0x90
 label = "u0041BEB0"
 argc = 7
 code_target_args = [5, 6, 7]
+code_target_kind = "callback"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1891,6 +1895,7 @@ op = 0xa0
 label = "jcc"
 argc = 3
 code_target_args = [2, 3]
+code_target_kind = "transfer"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1942,6 +1947,7 @@ op = 0xa2
 label = "add-value-switch-case"
 argc = 2
 code_target_args = [2]
+code_target_kind = "transfer"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1971,6 +1977,7 @@ op = 0xa3
 label = "value-switch-jump"
 argc = 2
 code_target_args = [2]
+code_target_kind = "transfer"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -2379,6 +2386,7 @@ op = 0xcc
 label = "mouse_callback"
 argc = 2
 code_target_args = [2]
+code_target_kind = "callback"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -2462,6 +2470,7 @@ op = 0xd4
 label = "u004266F0"
 argc = 4
 code_target_args = [3, 4]
+code_target_kind = "callback"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -2503,6 +2512,7 @@ op = 0xd5
 label = "u004262C0"
 argc = 1
 code_target_args = [1]
+code_target_kind = "transfer"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -2543,6 +2553,7 @@ op = 0xfb
 label = "joy_callback"
 argc = 2
 code_target_args = [2]
+code_target_kind = "callback"
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]

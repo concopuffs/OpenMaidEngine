@@ -31,7 +31,7 @@ public static class OmsCoreDecompiler
         ArgumentNullException.ThrowIfNull(script);
         var folding = new Folding(script.Code, intrinsics, fold, observe);
         var context = new Context(script, intrinsics, folding);
-        List<Node> top = context.Structure(0, script.Code.Count, null);
+        List<Node> top = context.CarveSubs(context.Structure(0, script.Code.Count, null));
         var text = new StringBuilder();
         text.Append("oms 1\n");
         text.Append("script ").Append(OmsRawDecompiler.Quote(script.Name)).Append('\n');
@@ -526,6 +526,10 @@ public static class OmsCoreDecompiler
     private sealed record DoWhileNode(int Head, List<Node> Body, int TestStart, int Test, Loop Loop) : Node(Head);
     private sealed record AtomicNode(int Begin, List<Node> Body, int End) : Node(Begin);
 
+    /// <summary>A placed <c>sub</c> or <c>coroutine</c>: top-level code entered only by calls, callbacks or coroutine
+    /// registrations, closed under its own jumps, and not reachable by falling through.</summary>
+    private sealed record SubNode(int Entry, List<Node> Body, int End, bool Coroutine) : Node(Entry);
+
     /// <summary><c>while c { … }</c>: a loop whose head unit is <c>if !c break</c>.</summary>
     private sealed record WhileNode(int Head, int Test, List<Node> Body, int BackJump, Loop Loop) : Node(Head);
 
@@ -683,6 +687,97 @@ public static class OmsCoreDecompiler
             return nodes;
         }
 
+        // ------------------------------------------------------------------------------------------ subs
+
+        /// <summary>Whether control can leave the node by falling off its end.</summary>
+        private bool FallsThrough(Node node) => node switch
+        {
+            SimpleNode simple => !OmsCompiler.IsTerminator(_code[simple.Root].Opcode),
+            SubNode => false,
+            LoopNode => false,      // its only exit is a jump to the instruction after it
+            _ => true,
+        };
+
+        /// <summary>How an instruction index is entered from elsewhere: <c>sub</c> (calls and callbacks),
+        /// <c>coroutine</c> (coroutine registrations only), or null (unreferenced, jumped to, or mixed).</summary>
+        private string? EntryKind(int index)
+        {
+            if (!_references.TryGetValue(index, out List<int>? sources)) return null;
+            bool sub = false, coroutine = false;
+            foreach (int source in sources)
+            {
+                int opcode = _code[source].Opcode;
+                string? kind = opcode == OmsCompiler.Call ? "call"
+                    : IsTransfer(_code[source]) ? "transfer" : intrinsics.Contracts.CodeTargetKind(opcode);
+                switch (kind)
+                {
+                    case "call" or "callback": sub = true; break;
+                    case "coroutine": coroutine = true; break;
+                    default: return null;
+                }
+            }
+            return sub == coroutine ? null : sub ? "sub" : "coroutine";
+        }
+
+        private bool IsTransferOperand(int index, IrOperand operand)
+            => operand.Kind == IrOperandKind.CodeLabel
+               && (IsTransfer(_code[index]) || intrinsics.Contracts.CodeTargetKind(_code[index].Opcode) == "transfer");
+
+        /// <summary>Carves placed subs and coroutines out of the top-level nodes: an entry node after a node that does
+        /// not fall through, extended to the first node boundary where no jump crosses in or out and the last
+        /// instruction ends control flow (a coroutine's must be <c>resume</c>).</summary>
+        public List<Node> CarveSubs(List<Node> nodes)
+        {
+            var result = new List<Node>();
+            int i = 0;
+            while (i < nodes.Count)
+            {
+                if (i > 0 && !FallsThrough(nodes[i - 1]) && EntryKind(nodes[i].Start) is { } kind
+                    && Region(nodes, i, kind == "coroutine") is int last and >= 0)
+                {
+                    int end = last + 1 < nodes.Count ? nodes[last + 1].Start : _code.Count;
+                    result.Add(new SubNode(nodes[i].Start, nodes.GetRange(i, last - i + 1), end, kind == "coroutine"));
+                    i = last + 1;
+                    continue;
+                }
+                result.Add(nodes[i]);
+                i++;
+            }
+            return result;
+        }
+
+        private int Region(List<Node> nodes, int first, bool coroutine)
+        {
+            int entry = nodes[first].Start;
+            int lowTarget = int.MaxValue, highTarget = -1, lowSource = int.MaxValue, highSource = -1;
+            for (int j = first; j < nodes.Count; j++)
+            {
+                int from = nodes[j].Start, to = j + 1 < nodes.Count ? nodes[j + 1].Start : _code.Count;
+                for (int k = from; k < to; k++)
+                {
+                    foreach (IrOperand operand in _code[k].Operands)
+                        if (IsTransferOperand(k, operand))
+                        {
+                            lowTarget = Math.Min(lowTarget, (int)operand.Value);
+                            highTarget = Math.Max(highTarget, (int)operand.Value);
+                        }
+                    if (k > entry && _incoming.TryGetValue(k, out List<int>? sources))
+                        foreach (int source in sources)
+                        {
+                            lowSource = Math.Min(lowSource, source);
+                            highSource = Math.Max(highSource, source);
+                        }
+                }
+                if (FallsThrough(nodes[j])) continue;
+                bool closed = (highTarget < 0 || lowTarget >= entry && highTarget < to)
+                              && (highSource < 0 || lowSource >= entry && highSource < to);
+                if (!closed) continue;
+                if (coroutine && _code[to - 1].Opcode != OmsCompiler.Resume) return -1;
+                return j;
+            }
+            return -1;
+        }
+
         /// <summary>Recasts plain loops as <c>while</c> and <c>for</c> where their layout is exactly that lowering.</summary>
         private void RecognizeLoops(List<Node> nodes)
         {
@@ -821,6 +916,9 @@ public static class OmsCoreDecompiler
                     case AtomicNode atomic:
                         Dump(output, atomic.Body, $"{path}/atomic{atomic.Begin}");
                         break;
+                    case SubNode sub:
+                        Dump(output, sub.Body, $"{path}/sub{sub.Entry}");
+                        break;
                     case WhileNode whileNode:
                         DumpStatement(output, whileNode.Test, $"{path}/loop{whileNode.Head}");
                         Dump(output, whileNode.Body, $"{path}/loop{whileNode.Head}");
@@ -886,6 +984,9 @@ public static class OmsCoreDecompiler
                     case WhileNode whileNode:
                         CollectLabels(whileNode.Body, whileNode.Loop);
                         break;
+                    case SubNode sub:
+                        CollectLabels(sub.Body, null);
+                        break;
                     case ForNode forNode:
                         if (forNode.Init != null) CollectSimple(_code[forNode.Init.Root], loop);
                         CollectSimple(_code[forNode.Step.Root], forNode.Original.Loop);
@@ -934,7 +1035,8 @@ public static class OmsCoreDecompiler
             string pad = new(' ', depth * 4);
             foreach (Node node in nodes)
             {
-                if (_labels.Contains(node.Start) && node.Start != skipLabel) PrintLabel(text, node.Start, depth);
+                if (_labels.Contains(node.Start) && node.Start != skipLabel && node is not SubNode)
+                    PrintLabel(text, node.Start, depth);
                 skipLabel = -1;
                 switch (node)
                 {
@@ -971,6 +1073,12 @@ public static class OmsCoreDecompiler
                         text.Append(pad).Append("atomic {\n");
                         Print(text, atomic.Body, atomic.End, ownsEnd: true, depth + 1, loop, -1);
                         text.Append(pad).Append("}\n");
+                        break;
+                    case SubNode sub:
+                        text.Append(new string(' ', (depth - 1) * 4)).Append(sub.Coroutine ? "coroutine " : "sub ")
+                            .Append(LabelName(sub.Entry)).Append(" {\n");
+                        Print(text, sub.Body, sub.End, ownsEnd: false, depth, null, sub.Entry);
+                        text.Append(new string(' ', (depth - 1) * 4)).Append("}\n");
                         break;
                     case WhileNode whileNode:
                         text.Append(pad).Append("while ").Append(Condition(whileNode.Test)).Append(" {\n");
@@ -1043,6 +1151,8 @@ public static class OmsCoreDecompiler
                     return "return";
                 case OmsCompiler.Exit when operands.Count == 0:
                     return "exit";
+                case OmsCompiler.Resume when operands.Count == 0:
+                    return "resume";
             }
             if (lowered is LAssign assign)
             {
@@ -1066,6 +1176,12 @@ public static class OmsCoreDecompiler
                 && intrinsics.TryGet(instruction.Opcode, out Intrinsic intrinsic) && intrinsic.Argc == operands.Count
                 && !IntrinsicCatalog.Keywords.Contains(intrinsic.Name))
             {
+                // x = f(args) when the only written operand is operand 1 (spec §6.3).
+                if (intrinsic.HasContract && intrinsic.OutOperands.Count == 1 && intrinsic.OutOperands.Contains(1)
+                    && (arguments[0] is LElement || arguments[0] is LLeaf { Operand.Kind: IrOperandKind.Literal } first
+                        && StorageBanks.BankByType.ContainsKey(first.Operand.Type)))
+                    return $"{Expression(arguments[0], 0)} = {intrinsic.Name}("
+                           + string.Join(", ", arguments.Skip(1).Select(argument => Expression(argument, 0))) + ")";
                 var text = arguments.Select((argument, k) =>
                     (intrinsic.HasContract && intrinsic.OutOperands.Contains(k + 1) ? "out " : "") + Expression(argument, 0));
                 return $"{intrinsic.Name}({string.Join(", ", text)})";

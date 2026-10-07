@@ -28,7 +28,10 @@ public static class OmsCompiler
     };
 
     public const int Mov = 0x55, Jmp = 0x8C, Jcc = 0xA0, Call = 0x8F, Ret = 0x05, Exit = 0x02, CallScript = 0x03;
-    public const int BlockBegin = 0x1F4, BlockEnd = 0x1F5, Comment = 0x1A7;
+    public const int BlockBegin = 0x1F4, BlockEnd = 0x1F5, Comment = 0x1A7, Resume = 0x7C, ThrowExit = 0x01;
+
+    /// <summary>Instructions after which control cannot fall through.</summary>
+    public static bool IsTerminator(int opcode) => opcode is Ret or Exit or Jmp or Resume or ThrowExit;
     private const uint NoTarget = 0xFFFFFFFF;
 
     public static IrScript Compile(ScriptUnit unit, string abiId, OpcodeTable? table = null, OmsLayout? layout = null,
@@ -54,6 +57,14 @@ public static class OmsCompiler
         private readonly Stack<(string Break, string Continue)> _loops = new();
         private int _internal;
         private uint _tempBase;
+        private readonly Dictionary<string, SubStatement> _subs = new(StringComparer.Ordinal);
+        private Dictionary<string, RawStorage>? _parameters;
+        private readonly HashSet<string> _referenced = new(StringComparer.Ordinal);
+
+        /// <summary>Whether control can arrive at <paramref name="position"/> through a label: a user label, or an
+        /// internal label its construct has already jumped to.</summary>
+        private bool LabelAt(int position)
+            => _labels.Any(pair => pair.Value == position && (_userLabels.Contains(pair.Key) || _referenced.Contains(pair.Key)));
 
         private string NewLabel() => $"#{_internal++}";
 
@@ -121,6 +132,15 @@ public static class OmsCompiler
                     case RunStatement run: pending.Push(run.Script); break;
                     case NoteStatement note: pending.Push(note.Value); break;
                     case IndirectCallStatement call: pending.Push(call.Target); break;
+                    case CallAssignStatement call:
+                        pending.Push(call.Target);
+                        pending.Push(call.Call);
+                        break;
+                    case SubStatement sub:
+                        foreach (SubParameter parameter in sub.Parameters) pending.Push(parameter.Cell);
+                        if (sub.Result != null) pending.Push(sub.Result);
+                        foreach (Statement inner in sub.Body) pending.Push(inner);
+                        break;
                 }
             }
         }
@@ -131,6 +151,11 @@ public static class OmsCompiler
                 switch (statement)
                 {
                     case LabelStatement label: _userLabels.Add(label.Name); break;
+                    case SubStatement sub:
+                        if (!_userLabels.Add(sub.Name) || !_subs.TryAdd(sub.Name, sub))
+                            throw new OmsCompileException(sub.Span, $"'{sub.Name}' is defined twice");
+                        CollectUserLabels(sub.Body);
+                        break;
                     case IfStatement s:
                         IfStatement? arm = s;
                         while (arm != null)
@@ -244,6 +269,15 @@ public static class OmsCompiler
                     break;
                 case IndirectCallStatement call:
                     Lower(new LInstruction(Call, [ToL(call.Target)]), call.Span);
+                    break;
+                case CallAssignStatement call:
+                    EmitCallAssign(call);
+                    break;
+                case SubStatement sub:
+                    EmitSub(sub);
+                    break;
+                case ResumeStatement:
+                    Add(Resume, []);
                     break;
                 default:
                     throw new OmsCompileException(statement.Span, $"{statement.GetType().Name} is not supported yet");
@@ -392,11 +426,89 @@ public static class OmsCompiler
         /// <summary>An assignable operand: a storage cell or an element.</summary>
         private LExpr LValue(Expr expression)
             => expression is OperandExpr { Operand: RawStorage } or ElementExpr
+               || expression is OperandExpr { Operand: RawLabelRef name } && _parameters?.ContainsKey(name.Name) == true
                 ? ToL(expression)
-                : throw new OmsCompileException(expression.Span, "only a storage cell or an element can be assigned");
+                : throw new OmsCompileException(expression.Span, "only a storage cell, a parameter or an element can be assigned");
+
+        /// <summary>A placed sub or coroutine (spec §6.3): control may not fall into it; a sub that can fall off its
+        /// end returns implicitly, and a coroutine must end with <c>resume</c>. Parameter names stand for their cells
+        /// inside the body, and break/continue cannot leave it.</summary>
+        private void EmitSub(SubStatement sub)
+        {
+            if (_code.Count > 0 && (!IsTerminator(_code[^1].Opcode) || LabelAt(_code.Count)))
+                throw new OmsCompileException(sub.Span,
+                    $"control falls into {(sub.Coroutine ? "coroutine" : "sub")} '{sub.Name}'; end the code before it with goto, return or exit");
+            var parameters = new Dictionary<string, RawStorage>(StringComparer.Ordinal);
+            foreach (SubParameter parameter in sub.Parameters)
+                if (!parameters.TryAdd(parameter.Name, parameter.Cell) || _userLabels.Contains(parameter.Name))
+                    throw new OmsCompileException(parameter.Span, $"parameter '{parameter.Name}' clashes with another name");
+            int start = _code.Count;
+            Define(sub.Name, sub.Span);
+            var outerLoops = _loops.ToArray();
+            _loops.Clear();
+            Dictionary<string, RawStorage>? outerParameters = _parameters;
+            _parameters = parameters;
+            foreach (Statement inner in sub.Body) Emit(inner);
+            _parameters = outerParameters;
+            foreach (var loop in outerLoops.Reverse()) _loops.Push(loop);
+            bool fallsOff = _code.Count == start || !IsTerminator(_code[^1].Opcode) || LabelAt(_code.Count);
+            if (sub.Coroutine)
+            {
+                if (fallsOff || _code[^1].Opcode != Resume)
+                    throw new OmsCompileException(sub.Span, $"coroutine '{sub.Name}' must end with resume");
+            }
+            else if (fallsOff)
+                Add(Ret, []);
+        }
+
+        /// <summary>Calls a sub with bound parameters: each argument is assigned to its cell, then <c>call</c>.</summary>
+        private void EmitSubCall(SubStatement sub, CallStatement call)
+        {
+            if (sub.Coroutine)
+                throw new OmsCompileException(call.Span, $"coroutine '{sub.Name}' cannot be called; register it as a handler");
+            if (call.Arguments.Count != sub.Parameters.Count)
+                throw new OmsCompileException(call.Span,
+                    $"{sub.Name} takes {sub.Parameters.Count} arguments, not {call.Arguments.Count}");
+            for (int k = 0; k < sub.Parameters.Count; k++)
+            {
+                if (call.Arguments[k].Out)
+                    throw new OmsCompileException(call.Arguments[k].Value.Span, "sub arguments are assigned to their cells; remove 'out'");
+                Lower(new LAssign(new LLeaf(Operand(sub.Parameters[k].Cell)), ToL(call.Arguments[k].Value), false), call.Span);
+            }
+            Add(Call, [LabelOperand(sub.Name, call.Span)]);
+        }
+
+        /// <summary><c>x = f(args)</c>: a sub's result cell copied after the call, or an intrinsic whose only written
+        /// operand is operand 1.</summary>
+        private void EmitCallAssign(CallAssignStatement assign)
+        {
+            CallStatement call = assign.Call;
+            if (_subs.TryGetValue(call.Name, out SubStatement? sub))
+            {
+                if (sub.Result == null)
+                    throw new OmsCompileException(call.Span, $"sub '{sub.Name}' has no result cell (-> cell)");
+                LExpr target = LValue(assign.Target);
+                EmitSubCall(sub, call);
+                Lower(new LAssign(target, new LLeaf(Operand(sub.Result)), false), assign.Span);
+                return;
+            }
+            if (intrinsics == null || !intrinsics.TryGet(call.Name, out Intrinsic intrinsic))
+                throw new OmsCompileException(call.Span, $"unknown sub or intrinsic '{call.Name}'");
+            if (!intrinsic.HasContract || intrinsic.OutOperands.Count != 1 || !intrinsic.OutOperands.Contains(1))
+                throw new OmsCompileException(call.Span,
+                    $"{call.Name} does not write exactly operand 1; pass its written operands with 'out'");
+            var arguments = new List<CallArgument> { new(assign.Target, true) };
+            arguments.AddRange(call.Arguments);
+            EmitCall(call with { Arguments = arguments });
+        }
 
         private void EmitCall(CallStatement call)
         {
+            if (_subs.TryGetValue(call.Name, out SubStatement? sub))
+            {
+                EmitSubCall(sub, call);
+                return;
+            }
             if (_userLabels.Contains(call.Name))
             {
                 if (call.Arguments.Count != 0)
@@ -417,9 +529,24 @@ public static class OmsCompiler
                     throw new OmsCompileException(argument.Value.Span, argument.Out
                         ? $"operand {k + 1} of {call.Name} is not written; remove 'out'"
                         : $"operand {k + 1} of {call.Name} is written; mark it 'out'");
+                CheckCodeReference(intrinsic, k + 1, argument.Value, call.Name);
                 operands[k] = argument.Out ? LValue(argument.Value) : ToL(argument.Value);
             }
             Lower(new LInstruction(intrinsic.Opcode, operands), call.Span);
+        }
+
+        /// <summary>Code-target operands take a sub, coroutine or label of the kind the registry names
+        /// (<c>code_target_kind</c>): coroutine handlers need a coroutine, callbacks and calls a sub.</summary>
+        private void CheckCodeReference(Intrinsic intrinsic, int operand, Expr argument, string name)
+        {
+            if (intrinsics == null || !intrinsics.Contracts.IsCodeTarget(intrinsic.Opcode, operand)) return;
+            if (argument is not OperandExpr { Operand: RawLabelRef label } || !_subs.TryGetValue(label.Name, out SubStatement? sub))
+                return;
+            string? kind = intrinsics.Contracts.CodeTargetKind(intrinsic.Opcode);
+            if (kind == "coroutine" && !sub.Coroutine)
+                throw new OmsCompileException(argument.Span, $"operand {operand} of {name} takes a coroutine; '{sub.Name}' is a sub");
+            if (kind != "coroutine" && sub.Coroutine)
+                throw new OmsCompileException(argument.Span, $"operand {operand} of {name} takes a {kind ?? "code"} target; '{sub.Name}' is a coroutine");
         }
 
         private IrOperand Atom(Expr expression, string what)
@@ -440,6 +567,7 @@ public static class OmsCompiler
         private IrOperand LabelOperand(string key, SourceSpan span)
         {
             _pendingLabels.Add((key, span));
+            _referenced.Add(key);
             return new IrOperand(0, IrOperandKind.CodeLabel, PendingTag | (uint)(_pendingLabels.Count - 1));
         }
 
@@ -465,6 +593,8 @@ public static class OmsCompiler
                     return IrOperand.Literal(1, BitConverter.SingleToUInt32Bits(number.Value));
                 case RawStorage storage:
                     return IrOperand.Literal(StorageBanks.TypeByBank[storage.Bank], storage.Index);
+                case RawLabelRef label when _parameters != null && _parameters.TryGetValue(label.Name, out RawStorage? cell):
+                    return Operand(cell);
                 case RawLabelRef label:
                     return LabelOperand(label.Name, label.Span);
                 case RawString text:

@@ -113,6 +113,12 @@ public sealed class Parser
                 Expect(TokenKind.Identifier, "while");
                 return Finish(new DoWhileStatement(token.Span, body, ParseExpression()));
             }
+            case "sub" or "coroutine" when Peek(1).Kind == TokenKind.Identifier:
+                Next();
+                return Finish(ParseSub(token, token.Text == "coroutine"));
+            case "resume":
+                Next();
+                return Finish(new ResumeStatement(token.Span));
             case "for":
             {
                 Next();
@@ -154,16 +160,48 @@ public sealed class Parser
         return Finish(ParseSimple());
     }
 
+    /// <summary><c>sub name(p: cell, …) -> cell { … }</c> or <c>coroutine name { … }</c>, after the keyword.</summary>
+    private Statement ParseSub(Token keyword, bool coroutine)
+    {
+        Token name = Expect(TokenKind.Identifier);
+        var parameters = new List<SubParameter>();
+        RawStorage? result = null;
+        if (!coroutine && Accept(TokenKind.Punct, "("))
+        {
+            if (!Peek().Is(TokenKind.Punct, ")"))
+                do
+                {
+                    Token parameter = Expect(TokenKind.Identifier);
+                    Expect(TokenKind.Punct, ":");
+                    parameters.Add(new SubParameter(parameter.Span, parameter.Text, ParseCell()));
+                } while (Accept(TokenKind.Punct, ","));
+            Expect(TokenKind.Punct, ")");
+            if (Accept(TokenKind.Punct, "->")) result = ParseCell();
+        }
+        return new SubStatement(keyword.Span, name.Text, parameters, result, ParseBlock(), coroutine);
+    }
+
+    private RawStorage ParseCell()
+        => ParseRawOperand() as RawStorage ?? throw new OmsSyntaxException(Peek().Span, "expected a storage cell");
+
     /// <summary>An assignment or a call, without its terminator (also the init and step clauses of <c>for</c>).</summary>
     private Statement ParseSimple()
     {
         Token token = Peek();
-        if (StorageBanks.TypeByBank.ContainsKey(token.Text) && Peek(1).Is(TokenKind.Punct, "["))
+        bool storage = StorageBanks.TypeByBank.ContainsKey(token.Text) && Peek(1).Is(TokenKind.Punct, "[");
+        bool named = token.Kind == TokenKind.Identifier && !storage && Peek(1).Kind == TokenKind.Punct
+                     && (Peek(1).Text == "=" || CompoundOperators.Contains(Peek(1).Text));
+        if (storage || named)
         {
-            Expr target = ParseStorageOrElement();
+            Expr target = storage ? ParseStorageOrElement() : new OperandExpr(token.Span, new RawLabelRef(token.Span, Next().Text));
             Token op = Next();
             if (op.Is(TokenKind.Punct, "="))
+            {
+                if (Peek().Kind == TokenKind.Identifier && Peek(1).Is(TokenKind.Punct, "(")
+                    && !StorageBanks.TypeByBank.ContainsKey(Peek().Text) && Peek().Text is not ("type" or "data"))
+                    return new CallAssignStatement(token.Span, target, (CallStatement)ParseSimple());
                 return new AssignStatement(token.Span, target, ParseExpression());
+            }
             if (op.Kind == TokenKind.Punct && CompoundOperators.Contains(op.Text))
                 return new AssignStatement(token.Span, target, ParseExpression(), op.Text[..^1]);
             throw new OmsSyntaxException(op.Span, $"expected = or a compound assignment, found {op}");
@@ -312,6 +350,12 @@ public sealed class Parser
         if (token.Kind == TokenKind.Identifier && StorageBanks.TypeByBank.ContainsKey(token.Text)
             && Peek(1).Is(TokenKind.Punct, "["))
             return ParseStorageOrElement();
+        if (token.Is(TokenKind.Punct, "&") && Peek(1).Kind == TokenKind.Identifier)
+        {
+            Next();
+            Token name = Next();
+            return new OperandExpr(token.Span, new RawLabelRef(name.Span, name.Text));
+        }
         return new OperandExpr(token.Span, ParseRawOperand());
     }
 

@@ -354,7 +354,8 @@ def emit_json(model: M.Model, runtime_implemented: frozenset[int] = frozenset())
              "observed_revisions": sorted(oc.observed_revisions),
              "runtime_implemented": op in runtime_implemented,
              "semantic_status": _semantic_status(oc),
-             "code_target_args": oc.code_target_args, "abi_source": oc.abi_source,
+             "code_target_args": oc.code_target_args, "code_target_kind": oc.code_target_kind,
+             "abi_source": oc.abi_source,
              "abi_applicability": {
                  "catalog_scope": "upstream AGE catalog; revision applicability unspecified",
                  "proven_by_observation": sorted(oc.observed_revisions),
@@ -388,7 +389,7 @@ def _operand_access_md(oc: M.Opcode) -> str:
             kinds = "+".join(arg["access"])
         else:
             continue
-        target = " (code target)" if arg.get("i") in oc.code_target_args else ""
+        target = f" ({oc.code_target_kind} target)" if arg.get("i") in oc.code_target_args else ""
         parts.append(f"`{arg.get('i')}` {kinds}{target}")
     return " · ".join(parts)
 

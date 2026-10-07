@@ -17,6 +17,10 @@ EVIDENCE_METHODS = {
 # Operand access contracts, derived from native handlers by tools/operand_access.py. Every operand of
 # an observed opcode records one access list per observed engine ABI, either as `access` (identical
 # in every ABI) or `access_by_abi`. "ignored" is registry-only: the handler is proven not to touch it.
+# What a code-target operand's label means (spec §8.1): a jump destination, a local-call subroutine, a callback the
+# engine enters by pushing the waiting PC (ends in `ret`), or a coroutine handler (ends in op 0x7c).
+CODE_TARGET_KINDS = ("transfer", "call", "callback", "coroutine")
+
 ACCESS_KINDS = (
     "read",            # value read (immediates, variables and reference targets)
     "read-float",      # value read as a float (integer forms are converted)
@@ -103,6 +107,7 @@ class Opcode:
     observed_revisions: frozenset[str] = frozenset()
     legacy_observation_field: bool = False
     code_target_args: list[int] = field(default_factory=list)
+    code_target_kind: str = ""
     abi_source: str = "kelebek+decode-validated"
     abi_note: str = ""
     semantics: Semantics | None = None
@@ -221,6 +226,7 @@ def load(path) -> Model:
             observed_revisions=frozenset(observed_revisions.get(op, ())),
             legacy_observation_field="observed_in_himegari" in e,
             code_target_args=[int(x) for x in e.get("code_target_args", [])],
+            code_target_kind=e.get("code_target_kind", ""),
             abi_source=e.get("abi_source", "kelebek+decode-validated"),
             abi_note=e.get("abi_note", ""), semantics=sem,
         )
@@ -338,6 +344,10 @@ def lint(model: Model) -> tuple[list[str], list[str]]:
     for op, oc in sorted(ops.items()):
         if oc.legacy_observation_field:
             errors.append(f"0x{op:x}: observed_in_himegari is obsolete; use [[observation]]")
+        if oc.code_target_args and oc.code_target_kind not in CODE_TARGET_KINDS:
+            errors.append(f"0x{op:x}: code_target_kind must be one of {list(CODE_TARGET_KINDS)}")
+        if oc.code_target_kind and not oc.code_target_args:
+            errors.append(f"0x{op:x}: code_target_kind without code_target_args")
         s = oc.semantics
         if not s:
             continue

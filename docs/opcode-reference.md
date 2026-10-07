@@ -1235,7 +1235,7 @@ Implemented as a whole-stack root-reload boundary in the persistent VM. A reques
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x7b` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x7b` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** (handler1_pc)(handler2_pc) — scene-coroutine: save the two per-frame yield/resume handler PCs. Native writes op1→ctx[0x6da88+idx*4], op2→ctx[0x6db28+idx*4] (idx=ctx[0x53d14] script-context index); its generic handler prologue records the 5-dword instruction length. SC0000 0x79: `0x7b label_3c9 label_41e` registers the ADV per-frame render→poll→yield handlers. Part of the scene-coroutine framework (see engine-re.md §Scene-coroutine framework); pairs with 0x7c (resume) + 0x140 (loop iterator).
-- **operand access:** `1` read (code target) · `2` read (code target)
+- **operand access:** `1` read (coroutine target) · `2` read (coroutine target)
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x7b`; scope=Himegari SYS4422. Ghidra: handler FUN_0041ebf0 (dispatch ctx[0x26c93+0x7b]) = {frame_instruction_word_count[idx]=5; ctx[0x6da88+idx*4]=op1; ctx[0x6db28+idx*4]=op2}. Both operands are code PCs (handler labels).
 
@@ -1256,7 +1256,7 @@ Implemented as a whole-stack root-reload boundary in the persistent VM. A reques
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x8f` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x8f` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** intra-script subroutine call (local JSR): PC = frame.codebase + operand*4; pushes a return address on the per-frame return stack. NOT cross-script (that is call-script 0x03).
-- **operand access:** `1` read (code target)
+- **operand access:** `1` read (call target)
 - **grounding:** source=investigation, confidence=high
 - **depended on by:** 0x5
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x8f`; scope=Himegari SYS4422. native-RE (Ghidra): handler FUN_0041fba0 (= ctx[0x26c93+0x8f]) sets [frame PC @+0x53d2c] = [frame codebase @+0x53d28] + operand*4 and pushes ((pc-base)>>2)+3 onto the per-frame return stack ([ctx+0x552e8]/[ctx+0x55248]). Target is a code OFFSET within the current script (matches header table T3 tag 0x8F = local call targets), confirming it is a local JSR, not a script load.
@@ -1278,7 +1278,7 @@ Implemented as a whole-stack root-reload boundary in the persistent VM. A reques
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xa2` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0xa2` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** (case_value)(target_pc) - format the VM value as a dispatch key and add its branch target to the current switch table.
-- **operand access:** `1` read-string · `2` read (code target)
+- **operand access:** `1` read-string · `2` read (transfer target)
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xa2`; scope=Himegari SYS4422. Ghidra /v2: op_0xa2_handler@0x42d310 formats operand 1 through vm_value_format_string@0x418860 and inserts operand 2 into value_dispatch_insert_case@0x42cf70. HISTORY.BIN maps action values 0,3,4,5,6 to callback branches; it is generic switch/case dispatch, not menu registration.
 
@@ -1289,7 +1289,7 @@ Implemented as a whole-stack root-reload boundary in the persistent VM. A reques
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xa3` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0xa3` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** (selector)(default_target) - jump to the target registered for selector, or to the supplied default target when no case matches.
-- **operand access:** `1` read-string · `2` read (code target)
+- **operand access:** `1` read-string · `2` read (transfer target)
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xa3`; scope=Himegari SYS4422. Ghidra /v2: op_0xa3_handler@0x420060 formats operand 1, queries value_dispatch_lookup@0x419290, writes the matched or operand-2 default PC into the current frame, and clears the command type. Corpus pairs it with 0xa1/0xa2 in 12 generic switch sequences.
 
@@ -1346,7 +1346,7 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xd4` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0xd4` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** Append repeated relative deadlines and their on-time/catch-up local callback targets to the current frame's timed sequence.
-- **operand access:** `1` read · `2` read · `3` read (code target) · `4` read (code target)
+- **operand access:** `1` read · `2` read · `3` read (callback target) · `4` read (callback target)
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xd4`; scope=Himegari SYS4422. Ghidra /v2: op_0xd4_handler@0x428890 loops operand 2 times, accumulates operand 1 onto the preceding deadline, stores operand 3 at entry+8 and operand 4 at entry+0xc, and appends each 16-byte entry. HISTORY.BIN@0xbfa/0xc03/0xc0c produces deadlines 10,20,30,40,50,51,52 ms.
 
@@ -1357,7 +1357,7 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xd5` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0xd5` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** Start or service the frame-local timed sequence, dispatching scheduled local callbacks through the penultimate entry and selecting the catch-up target when the following deadline is already late.
-- **operand access:** `1` read (code target)
+- **operand access:** `1` read (transfer target)
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xd5`; scope=Himegari SYS4422. Ghidra /v2: op_0xd5_handler@0x421090 retains the current script resource, starts the ctx+0x5f3ac timer, sorts the schedule, and keeps run-state bit 0x40 active only while cursor < last_index, making the final entry a non-dispatched look-ahead sentinel. timed_callback_sequence_tick@0x408170 waits to each deadline, compares the following entry deadline with elapsed time to select entry+8 versus entry+0xc, redirects the frame PC, and advances ctx+0x5f6a8. engine_main_tick_with_exception_policy@0x411840 bypasses its ordinary gfx_render_frame path while only run-state bit 0x40 owns the wait. Operand 1 is an optional abort/fallback PC; HISTORY and BUNKIMOVE pass 0xffffffff.
 
@@ -2724,7 +2724,7 @@ Operand 1 selects one of eleven style records. Operands 2..6 match opcode 0x13a:
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x90` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x90` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** (x)(y)(w)(h)(on_enter_pc)(on_leave_pc)(on_activate_pc) - append an inclusive cursor rectangle and three callback PCs to the current script frame's native input registry. This opcode only registers; the ADV input service dispatches callbacks later.
-- **operand access:** `1` read · `2` read · `3` read · `4` read · `5` read (code target) · `6` read (code target) · `7` read (code target)
+- **operand access:** `1` read · `2` read · `3` read · `4` read · `5` read (callback target) · `6` read (callback target) · `7` read (callback target)
 - **grounding:** source=investigation, confidence=high, noop_headless=True
 - **depended on by:** 0x97
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x90`; scope=Himegari SYS4422. Ghidra /v2: op_0x90_handler@0x41fc80 fetches x/y/w/h, forms x+w/y+h, fetches operands 5/6/7, and calls input_hotspot_register_rect_callbacks@0x403d70 on the current frame registry. The worker appends rect + callbacks to arrays and returns without changing PC. input_hotspot_poll_hover_callback@0x4040b0 returns operand 5 on entry and operand 6 on exit; input_hotspot_take_click_callback@0x404330 resets the registry and returns operand 7 on activation. All 301 ADV scripts contain the identical five control-strip records plus three keyed records.
@@ -2788,7 +2788,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xcc` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0xcc` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** (poll_interval_ms)(target_pc) - register a timed per-frame mouse callback in the current script.
-- **operand access:** `1` read · `2` read (code target)
+- **operand access:** `1` read · `2` read (callback target)
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xcc`; scope=Himegari SYS4422. Ghidra /v2: op_0xcc_register_mouse_callback@0x420f70 stores operand 2 as the callback PC and the current frame_script_resource_id as its owner, then arms operand 1 as the poll interval. HIDEWIN.BIN and HISTORY.BIN both register a 0x10-ms callback. Op 0xcd performs the timed dispatch.
 
@@ -2809,7 +2809,7 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xfb` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0xfb` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** (input_index)(target_pc) - register one of 32 per-frame joy/input callback targets.
-- **operand access:** `1` read · `2` read (code target)
+- **operand access:** `1` read · `2` read (callback target)
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xfb`; scope=Himegari SYS4422. Ghidra /v2: op_0xfb_register_joy_callback@0x421270 bounds-checks operand 1 to 0..31 and stores operand 2 in the current script frame's 33-entry callback table. Ops 0xff/0x100 poll and dispatch this table; HISTORY.BIN and HIDEWIN.BIN register indices 0..10.
 
@@ -3804,7 +3804,7 @@ Port status (2026-10-06): stepped as a no-op; see op 0x1f4.
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x8c` (compatibility-reuse-unconfirmed-for-revision); `SYS4433` -> `age-vm-switch/0x8c` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** —
-- **operand access:** `1` read (code target)
+- **operand access:** `1` read (transfer target)
 - **grounding:** source=kelebek, confidence=med
 
 ### 0x8d `u0041BCE0` (u0041BCE0, argc 2)
@@ -3868,7 +3868,7 @@ Port status (2026-10-06): stepped as a no-op; see op 0x1f4.
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xa0` (compatibility-reuse-unconfirmed-for-revision); `SYS4433` -> `age-vm-switch/0xa0` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** —
-- **operand access:** `1` read · `2` read (code target) · `3` read (code target)
+- **operand access:** `1` read · `2` read (transfer target) · `3` read (transfer target)
 - **grounding:** source=kelebek, confidence=med
 
 ### 0xaa `u0041C270` (u0041C270, argc 2)

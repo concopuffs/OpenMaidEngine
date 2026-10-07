@@ -719,6 +719,22 @@ callbacks (`docs/engine-re.md`, "VM value, array and call semantics"):
   operands).
 - **Value-switch targets** (`0xa2`) are ordinary labels inside the enclosing flow.
 
+The registry records each code-target opcode's kind as `code_target_kind` in `vm-map/opcodes.toml`: `transfer`
+(`0x8c`, `0xa0`, `0xa2`, `0xa3`, and `0xd5`'s abort PC), `call` (`0x8f`), `callback` (`0x90`, `0xcc`, `0xd4`,
+`0xfb`) or `coroutine` (`0x7b`).
+
+**Where subroutine bodies sit.** Counts are distinct call targets per script, Himegari / Kamidori:
+
+- **After the main code's `exit`** (5,262 / 7,273) **or another body's `ret`** (692 / 619): most bodies follow
+  the code that uses them.
+- **Mid-code** (311 / 338): the preceding code jumps over the body, as in `ATSEEK`, so subroutines were also
+  defined between statements.
+- **Fallen into** (151 / 293): the preceding code falls into the entry. Callback entries can also share one body,
+  as in `STAGECLEAR`'s timed callbacks, where one entry falls into the next.
+
+The Open Maid Script core level turns 5,640 of 6,512 / 7,059 of 8,527 directly called labels into placed `sub`
+blocks (spec §6.3). The rest stay labels.
+
 **Constants are never folded.**
 
 - **No negative immediates.** No negative number is ever encoded as an immediate; the only `0xffffffff`

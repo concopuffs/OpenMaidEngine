@@ -116,3 +116,20 @@ public sealed record NoteStatement(SourceSpan Span, Expr Value) : Statement(Span
 
 /// <summary><c>call *v</c>: an indirect local call through an integer value (spec §6.3).</summary>
 public sealed record IndirectCallStatement(SourceSpan Span, Expr Target) : Statement(Span);
+
+/// <summary><c>target = name(args)</c>: a sub with a result cell, or an intrinsic whose only written operand is
+/// operand 1 (spec §6.3).</summary>
+public sealed record CallAssignStatement(SourceSpan Span, Expr Target, CallStatement Call) : Statement(Span);
+
+/// <summary>A bound parameter: <paramref name="Name"/> stands for <paramref name="Cell"/> inside the sub, and a
+/// call assigns the argument to the cell before calling.</summary>
+public sealed record SubParameter(SourceSpan Span, string Name, RawStorage Cell);
+
+/// <summary><c>sub name(params) -> result { … }</c> or <c>coroutine name { … }</c>: a placed local subroutine
+/// (spec §6.3). Control may not fall into it; a sub that can fall off its end returns implicitly, and a coroutine
+/// must end with <c>resume</c>.</summary>
+public sealed record SubStatement(SourceSpan Span, string Name, IReadOnlyList<SubParameter> Parameters,
+                                  RawStorage? Result, IReadOnlyList<Statement> Body, bool Coroutine) : Statement(Span);
+
+/// <summary><c>resume</c>: the coroutine resume point, op 0x7c.</summary>
+public sealed record ResumeStatement(SourceSpan Span) : Statement(Span);

@@ -255,17 +255,29 @@ The escape represents every instruction the VM accepts, including unknown opcode
 Operands the intrinsic writes are passed as lvalues with `out`: `get_cursor_virtual(out x, out y)`. When an
 intrinsic has exactly one write-class operand and it is operand 1, `x = f(args)` is accepted sugar.
 
-**Local subroutines** (`sub name { … }`) have no native parameters. OMS supports *bound parameters*, which
-reproduce the original idiom of assigning agreed cells before a call:
+**Local subroutines** (`sub name { … }`) are placed blocks. A sub is emitted where it is declared, with no hidden
+jump around it, which matches the original compiler: most bodies follow the main code's `exit`, and some sit
+mid-code behind an explicit jump (`docs/sys4-format-notes.md`, "Where subroutine bodies sit"). The block rules
+are:
+
+- control may not fall into a sub: the code before it must end in `goto`, `return`, `exit` or `resume`, with no
+  reachable label at the sub's start (a compile error otherwise);
+- a sub that can fall off its end gets an implicit `return`;
+- `break` and `continue` cannot leave a sub.
+
+Subs have no native parameters. OMS supports *bound parameters*, which reproduce the original idiom of assigning
+agreed cells before a call:
 
 ```
 sub adv_load_layer(layer: adv_gfx_layer_index, resource: adv_gfx_resource_id) { … }
 adv_load_layer(1, 0x23)        // lowers to: mov layer 1; mov resource 0x23; call adv_load_layer
 ```
 
-A parameter is bound to a declared storage cell, global or local, so recursion overwrites it. The compiler warns
-when a recursive call passes bound parameters. A result can be bound the same way:
-`sub f(x: a) -> result_cell`, and `y = f(3)` then adds a copy of `result_cell` into `y` after the call.
+A parameter is bound to a declared storage cell, global or local, so recursion overwrites it. Inside the body the
+parameter name stands for its cell. Each argument is assigned to its cell as an ordinary assignment, so
+`f(a + b)` computes straight into the cell. The compiler warns when a recursive call passes bound parameters. A
+result can be bound the same way: `sub f(x: a) -> result_cell`, and `y = f(3)` then adds a copy of `result_cell`
+into `y` after the call.
 
 **Cross-script calls.** `run` uses the same binding. A game module declares
 `extern script ADDEXP(unit: current_unit_id)`, and `run ADDEXP(5)` assigns the parameter and emits `call-script`.
@@ -276,6 +288,10 @@ when a recursive call passes bound parameters. A result can be bound the same wa
 - operands that take callbacks require a `sub`;
 - operands that take coroutine handlers require a `coroutine name { … }` body, which must end in `resume`
   (op `0x7c`).
+
+The kind of each code-target operand comes from the registry (`code_target_kind` in `vm-map/opcodes.toml`).
+Passing a coroutine where a callback is expected, or the reverse, is an error. A plain label is accepted anywhere,
+because decompiled code keeps labels for entries that cannot be blocks (shared or fallen-into bodies).
 
 **Code addresses as values.** `&name`, where `name` is a label, `sub` or coroutine, is an `int` expression holding
 that code offset. The encoder relocates it like any code target. `call *expr` is an indirect local call through an
@@ -375,7 +391,7 @@ Each argument is checked against the access kind of its operand position under t
 | `cell` | a global int lvalue or `ref int` |
 | `string-cell` | a global str lvalue or `ref str`; local strings are rejected, matching the native throw |
 | `ref-slot` | a `ref` variable (global or local integer reference) |
-| code target | a `sub`, `coroutine`, label or `-1` as the contract requires |
+| code target | a `sub`, `coroutine`, label or `-1` as the registry's `code_target_kind` requires |
 | `ignored` | any operand; only `note` uses it |
 
 ### 8.2 Other errors and warnings
@@ -536,7 +552,7 @@ port's VM tests and native traces.
 | Question | Blocks | Plan |
 |---|---|---|
 | Allocator state carried across statements | the gate 2 temporary residue (§16) | the labelling rule and the per-script reference order are recorded (format notes); the remaining overrides show references held through `if` bodies and LP0/LP1 order flips, to be modelled if the residue matters |
-| Library placement policy (where helpers sit physically) | canonical rebuild layout | census of helper offsets relative to script end and first use |
+| Library placement policy (where shared library helpers sit physically) | canonical rebuild layout | subs are placed where declared (§6.3); still open: where a library module's helpers land when linked into a script |
 | Free global cells inside the saved prefix | native `saved global` | array extents from registry/INIT data plus runtime write captures; base mod publishes free ranges |
 | Native acceptance of generated append catalogs, and save behavior with them | §9.3 | gate 6 experiment |
 | Meaning of the 0x90-byte SYS4INI block | none known | revisit only if a consumer appears |
@@ -580,6 +596,7 @@ contracts.
 | 1. Encoder/decoder | **passed 2026-10-06** | `Age.Cli oms-roundtrip`: 520/520 Himegari and 732/732 Kamidori catalog scripts byte-identical; tables always derived; workspace tests `OmsIrCodecTests.Installed*CorpusRoundTripsByteIdentically` |
 | 2. Raw level (`BIN → OMS(raw) + sidecar → BIN`) | **passed 2026-10-06** | `Age.Cli oms-roundtrip --level raw`: 520/520 and 732/732 byte-identical; workspace tests `OmsSourceTests.Installed*CorpusRoundTripsThroughRawSource` |
 | 2. Core level, stage C1 (structure) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: 520/520 and 732/732 byte-identical with **0** raw `@op` statements; workspace tests `OmsCoreTests.Installed*CorpusRoundTripsThroughCoreSource` |
+| 2. Core level, stage C3 (`sub`, `coroutine`, bound parameters) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical; 10,914 / 12,287 subs and 614 / 644 coroutines recovered; the compiler's falls-into, implicit-return, coroutine-ending and code-reference-kind checks are covered by `OmsCoreTests`; warnings (§8.2, including recursion with bound parameters) await a warning channel |
 | 2. Core level, stage C2 (expressions, `for`, `while`) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: still 520/520 and 732/732 byte-identical, with 331,075 / 330,708 instructions folded into expressions; temporary overrides in 6,548 / 8,332 statements (2.9% / 4.4% of folded statements); `Age.Cli oms-temps` ranks the residue |
 
 Gate-1 residue, reported by `Age.Cli oms-residue`:
@@ -617,6 +634,15 @@ Core stage C2 folds compiler temporaries back into expressions and recovers loop
 - **Rejected folds:** 211 / 219 statements whose lowering order differs from the canonical one keep their
   temporaries explicit.
 - **Source size:** core source shrinks from 53.1 MB to 41.6 MB (Himegari) and from 70.3 MB to 59.0 MB (Kamidori).
+
+Core stage C3 carves top-level code into placed `sub` and `coroutine` blocks. An entry becomes a block when:
+
+- only calls, callbacks or coroutine registrations reach it;
+- the code before it does not fall through;
+- it extends to the first boundary where no jump crosses in or out and control cannot fall off;
+- for a coroutine, that boundary follows a `resume`.
+
+Intrinsics whose only written operand is operand 1 print as `x = f(args)`.
 
 Core-level sidecar use:
 

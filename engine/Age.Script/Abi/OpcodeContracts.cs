@@ -13,15 +13,18 @@ public sealed class OpcodeContracts
     private readonly Dictionary<int, HashSet<int>> _codeTargets;
     private readonly Dictionary<(int Opcode, int Operand), OperandAccess> _access;
     private readonly Dictionary<int, string> _semanticNames;
+    private readonly Dictionary<int, string> _codeTargetKinds;
 
     private OpcodeContracts(
         Dictionary<int, HashSet<int>> codeTargets,
         Dictionary<(int, int), OperandAccess> access,
-        Dictionary<int, string>? semanticNames = null)
+        Dictionary<int, string>? semanticNames = null,
+        Dictionary<int, string>? codeTargetKinds = null)
     {
         _codeTargets = codeTargets;
         _access = access;
         _semanticNames = semanticNames ?? new Dictionary<int, string>();
+        _codeTargetKinds = codeTargetKinds ?? new Dictionary<int, string>();
     }
 
     /// <summary>Registry semantic names (e.g. "show-text"), keyed by opcode.</summary>
@@ -44,6 +47,7 @@ public sealed class OpcodeContracts
         var codeTargets = new Dictionary<int, HashSet<int>>();
         var access = new Dictionary<(int, int), OperandAccess>();
         var names = new Dictionary<int, string>();
+        var kinds = new Dictionary<int, string>();
         foreach (JsonElement entry in doc.RootElement.GetProperty("opcodes").EnumerateArray())
         {
             int op = Convert.ToInt32(entry.GetProperty("op").GetString(), 16);
@@ -52,6 +56,8 @@ public sealed class OpcodeContracts
                 names[op] = text;
             if (entry.TryGetProperty("code_target_args", out JsonElement targets))
                 codeTargets[op] = targets.EnumerateArray().Select(value => value.GetInt32()).ToHashSet();
+            if (entry.TryGetProperty("code_target_kind", out JsonElement kind) && kind.GetString() is { Length: > 0 } k)
+                kinds[op] = k;
             if (!entry.TryGetProperty("semantics", out JsonElement semantics)
                 || semantics.ValueKind != JsonValueKind.Object
                 || !semantics.TryGetProperty("args", out JsonElement args))
@@ -73,21 +79,27 @@ public sealed class OpcodeContracts
                     access[(op, index.GetInt32())] = new OperandAccess(common, byAbi);
             }
         }
-        return new OpcodeContracts(codeTargets, access, names);
+        return new OpcodeContracts(codeTargets, access, names, kinds);
     }
 
     /// <summary>Contracts with code targets, access lists and semantic names (for tests).</summary>
     public static OpcodeContracts FromParts(
         IReadOnlyDictionary<int, int[]> codeTargets,
         IReadOnlyDictionary<(int Opcode, int Operand), string[]> access,
-        IReadOnlyDictionary<int, string> semanticNames)
+        IReadOnlyDictionary<int, string> semanticNames,
+        IReadOnlyDictionary<int, string>? codeTargetKinds = null)
         => new(codeTargets.ToDictionary(pair => pair.Key, pair => pair.Value.ToHashSet()),
                access.ToDictionary(pair => (pair.Key.Opcode, pair.Key.Operand), pair => new OperandAccess(pair.Value, null)),
-               semanticNames.ToDictionary(pair => pair.Key, pair => pair.Value));
+               semanticNames.ToDictionary(pair => pair.Key, pair => pair.Value),
+               codeTargetKinds?.ToDictionary(pair => pair.Key, pair => pair.Value));
 
     /// <summary>Whether the one-based operand position holds a code offset.</summary>
     public bool IsCodeTarget(int opcode, int operand)
         => _codeTargets.TryGetValue(opcode, out HashSet<int>? positions) && positions.Contains(operand);
+
+    /// <summary>What the opcode's code-target operands point at: <c>transfer</c>, <c>call</c>, <c>callback</c> or
+    /// <c>coroutine</c> (registry <c>code_target_kind</c>).</summary>
+    public string? CodeTargetKind(int opcode) => _codeTargetKinds.GetValueOrDefault(opcode);
 
     /// <summary>The native access kinds of a one-based operand under an engine ABI, if recorded.</summary>
     public IReadOnlyList<string>? Access(int opcode, int operand, string abiId)

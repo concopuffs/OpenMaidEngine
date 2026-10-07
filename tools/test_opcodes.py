@@ -46,6 +46,7 @@ op = 0x90
 label = "u0041BEB0"
 argc = 7
 code_target_args = [5, 6, 7]
+code_target_kind = "callback"
 [opcode.semantics]
 name = "hotspot-branch"
 category = "input"
@@ -100,6 +101,7 @@ def test_load():
     o = m.opcodes[0x90]
     check(o.argc == 7, "0x90 argc == 7")
     check(o.code_target_args == [5, 6, 7], "0x90 code_target_args parsed")
+    check(o.code_target_kind == "callback", "0x90 code_target_kind parsed")
     check(o.semantics.name == "hotspot-branch", "0x90 semantics.name")
     check(o.semantics.depends_on == [0x1f4], "depends_on parsed as int list")
     check(o.semantics.args[0]["role"] == "x", "arg role parsed")
@@ -198,6 +200,9 @@ def test_lint():
     check(any("category" in m for m in e), "unknown category is an error")
     e, w = M.lint(M.load(write_tmp(FIXTURE)))
     check(e == [], "clean fixture has no lint errors")
+    no_kind = FIXTURE.replace('code_target_kind = "callback"\n', "", 1)
+    e, _ = M.lint(M.load(write_tmp(no_kind)))
+    check(any("code_target_kind" in x for x in e), "code targets without a kind are a lint error")
     e, w = M.lint(M.load(write_tmp(BAD_PROVENANCE)))
     check(any("bad method" in message for message in e), "evidence method is linted")
     check(any("unknown profiles" in message for message in e), "evidence profile ids are linted")

@@ -22,25 +22,32 @@ public class OmsCoreTests
         [0x02] = ("exit", 0), [0x03] = ("call-script", 1), [0x05] = ("ret", 0), [0x50] = ("add", 3),
         [0x51] = ("sub", 3), [0x52] = ("mul", 3), [0x55] = ("mov", 2), [0x56] = ("and", 3), [0x57] = ("or", 3),
         [0x5a] = ("eq", 3), [0x5b] = ("ne", 3), [0x5c] = ("lt", 3), [0x5e] = ("gt", 3), [0x61] = ("lookup-array", 3),
-        [0x6e] = ("show-text", 2), [0x8c] = ("jmp", 1), [0x8f] = ("call", 1), [0xa0] = ("jcc", 3),
+        [0x6e] = ("show-text", 2), [0x7b] = ("coroutine-save-yield-handlers", 2), [0x7c] = ("coroutine-resume", 0),
+        [0x8c] = ("jmp", 1), [0x8f] = ("call", 1), [0xa0] = ("jcc", 3), [0xcc] = ("mouse-callback", 2),
         [0x12c] = ("lookup-array-2d", 5), [0x1a2] = ("store-shared-profile-int", 1),
         [0x1a3] = ("load-shared-profile-int", 1), [0x1a7] = ("comment", 1), [0x1f4] = ("stmt-begin", 0),
         [0x1f5] = ("stmt-end", 0), [0x249] = ("u00422EB0", 3),
     }, Abi);
 
     private static readonly OpcodeContracts Contracts = OpcodeContracts.FromParts(
-        new Dictionary<int, int[]> { [0x8c] = [1], [0x8f] = [1], [0xa0] = [2, 3] },
+        new Dictionary<int, int[]> { [0x7b] = [1, 2], [0x8c] = [1], [0x8f] = [1], [0xa0] = [2, 3], [0xcc] = [2] },
         new Dictionary<(int, int), string[]>
         {
             [(0x61, 1)] = ["bind"], [(0x61, 2)] = ["address"], [(0x61, 3)] = ["read"],
             [(0x6e, 1)] = ["read"], [(0x6e, 2)] = ["read-string"],
             [(0x1a2, 1)] = ["read", "cell"], [(0x1a3, 1)] = ["write", "cell"],
+            [(0x7b, 1)] = ["read"], [(0x7b, 2)] = ["read"], [(0xcc, 1)] = ["read"], [(0xcc, 2)] = ["read"],
         },
         new Dictionary<int, string>
         {
             [0x61] = "lookup-array", [0x6e] = "show-text", [0x1a2] = "store-shared-profile-int",
             [0x1a3] = "load-shared-profile-int", [0x1a7] = "comment", [0x1f4] = "stmt-begin", [0x1f5] = "stmt-end",
-            [0x249] = "u00422EB0",
+            [0x249] = "u00422EB0", [0x7b] = "coroutine-save-yield-handlers", [0x7c] = "coroutine-resume",
+            [0xcc] = "register-mouse-callback",
+        },
+        new Dictionary<int, string>
+        {
+            [0x7b] = "coroutine", [0x8c] = "transfer", [0x8f] = "call", [0xa0] = "transfer", [0xcc] = "callback",
         });
 
     private static readonly IntrinsicCatalog Intrinsics = new(Table, Contracts);
@@ -329,13 +336,91 @@ public class OmsCoreTests
         Assert.Null(decompiled.Layout.Temps);
     }
 
+    [Fact]
+    public void SubsArePlacedBlocksWithBoundParametersAndResults()
+    {
+        IrScript script = Compile("""
+            G[9] = scale(2, L[1] + 1)
+            register_mouse_callback(0x32, on_tick)
+            coroutine_save_yield_handlers(handler, handler)
+            L[1] = load_shared_profile_int()
+            G[8] = &on_tick
+            exit
+            sub scale(factor: G[1], value: L[2]) -> G[3] {
+                G[3] = factor * value
+            }
+            sub on_tick {
+                if G[4] { return }
+                G[5] += 1
+            }
+            coroutine handler {
+                G[6] = 0
+                resume
+            }
+            """);
+        // Arguments bind to the parameter cells (the second straight into L[2]); the result cell is copied out.
+        // Parameter names stand for their cells; each sub ends with an implicit ret; the coroutine at its resume.
+        Assert.Equal("55(3:1,0:2) 50(9:2,9:1,0:1) 8f(@9) 55(3:9,3:3) cc(0:32,@11) 7b(@15,@15) 1a3(9:1) "
+                     + "55(3:8,@11) 2() "
+                     + "52(3:3,3:1,9:2) 5() "
+                     + "a0(3:4,-1,@13) 5() 50(3:5,3:5,0:1) 5() "
+                     + "55(3:6,0:0) 7c()", Shape(script));
+    }
+
+    [Fact]
+    public void DecompiledSubsAndCoroutinesRecompileIdentically()
+    {
+        var (first, second, decompiled) = SourceRoundTrip("""
+            register_mouse_callback(0x32, tick)
+            coroutine_save_yield_handlers(on_yield, on_yield)
+            helper()
+            G[1] = load_shared_profile_int()
+            exit
+            sub helper {
+                for L[0] = 0; L[0] < 3; L[0] += 1 {
+                    if G[2][L[0]] == 0 { return }
+                }
+                return
+            }
+            sub tick {
+                G[3] += 1
+                return
+            }
+            coroutine on_yield {
+                G[4] = 1
+                resume
+            }
+            """);
+        Assert.Equal(first, second);
+        Assert.Contains("\nsub label_", decompiled);
+        Assert.Contains("\ncoroutine label_", decompiled);
+        Assert.Contains("    resume\n}", decompiled);
+        Assert.Contains("G[0x1] = load_shared_profile_int()", decompiled);
+        Assert.DoesNotContain("@op(", decompiled);
+    }
+
+    [Theory]
+    [InlineData("G[1] = 1\nsub f {\n return\n}\nexit\n", "control falls into sub 'f'")]
+    [InlineData("exit\ncoroutine c {\n G[1] = 1\n}\n", "coroutine 'c' must end with resume")]
+    [InlineData("coroutine_save_yield_handlers(f, f)\nexit\nsub f {\n return\n}\n", "takes a coroutine; 'f' is a sub")]
+    [InlineData("register_mouse_callback(1, c)\nexit\ncoroutine c {\n resume\n}\n", "'c' is a coroutine")]
+    [InlineData("c()\nexit\ncoroutine c {\n resume\n}\n", "coroutine 'c' cannot be called")]
+    [InlineData("f(1)\nexit\nsub f(a: G[1], b: G[2]) {\n return\n}\n", "f takes 2 arguments, not 1")]
+    [InlineData("G[1] = f()\nexit\nsub f {\n return\n}\n", "has no result cell")]
+    [InlineData("G[1] = show_text(1)\n", "does not write exactly operand 1")]
+    public void SubErrorsNameTheProblem(string body, string expected)
+    {
+        var error = Assert.Throws<OmsCompileException>(() => Compile(body));
+        Assert.Contains(expected, error.Message);
+    }
+
     [Theory]
     [InlineData("lookup_array(LP[1], G[1], G[2])\n", "is written; mark it 'out'")]
     [InlineData("show_text(out L[1], \"x\")\n", "is not written; remove 'out'")]
     [InlineData("break\n", "outside a loop")]
     [InlineData("nothing_here(1)\n", "unknown intrinsic or label")]
     [InlineData("L[1] = GP[2][L[3]]\n", "element access needs an integer, float or string cell")]
-    [InlineData("load_shared_profile_int(out L[1] + 1)\n", "only a storage cell or an element can be assigned")]
+    [InlineData("load_shared_profile_int(out L[1] + 1)\n", "only a storage cell, a parameter or an element")]
     public void CoreCompileErrorsNameTheProblem(string body, string expected)
     {
         var error = Assert.Throws<OmsCompileException>(() => Compile(body));
