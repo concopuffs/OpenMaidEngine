@@ -805,7 +805,7 @@ stubbed. The real video-service timing remains intentionally unmodeled.
 
 **The terminal is the scene loop head (2026-10-07).** The terminal immediate is the code offset of the scene loop head:
 the `call` (SCJUMP dispatch) and `exit` pair that the entry gate jumps over. That holds in all 144 Himegari and 269
-Kamidori scenes; 32 Kamidori scenes spell the service `"ABEL",""`, which the port does not model yet. The host model
+Kamidori scenes. The host model
 now finds the loop head itself, as the nearest `call` followed by `exit` before the yield, and returns that. The
 script's immediate must name the same instruction; otherwise the VM halts with `coroutine-yield-terminal@…`. Echoing
 the immediate would hide a script whose code moved without relocating it, which native AGE would not survive. The Open
@@ -816,8 +816,29 @@ The same relocation work exposed a port bug in the setup's `call *G[0x6be]`. The
 cell number (`0x6be`) as the target instead of reading the cell. That was a silent no-op wherever `0x6be` is not an
 instruction offset, and a jump into unrelated code wherever it is. `call *v` now calls the offset the variable holds.
 A value that is no instruction's offset calls nothing and pushes no return address. The first labeled-yield visit
-returns -1, so the setup's indirect call stays the no-op the validated model relied on. Native AGERC's first return
-value remains unknown.
+returns -1, so the setup's indirect call stays the no-op the validated model relied on.
+
+**AGERC command 8 is a developer jump picker (2026-10-07).** `agerc_label_dialog_proc@0x10002270` (AGERC.DLL, created
+and annotated in `/support/AGERC.DLL`) runs modal dialog resource 8. It does not compute a PC.
+
+- **`"LABEL"` (exact string compare):** label mode. The second string pre-fills a prefix filter (`"J"`), and the list
+  holds the script's labels from the engine service (`IAGEService` vtable `+0x60`/`+0x64`). OK resolves the chosen
+  name through `+0x5c` and ends the dialog with that value; Cancel ends it with 0.
+- **Any other name:** entry mode. The list holds service entries (`+0x94`/`+0x98`) whose last three characters equal
+  the name, filtered by the second string with `?` wildcards; OK resolves through `+0x90`. Kamidori TITLE's
+  `"BIN","SC????.BIN"` is this scene-script picker.
+
+So a scene's labeled-yield loop is the developer path "start a scene, then pick a label to jump to"; the returned PC
+is what `call *G[0x6be]` runs. It only runs when the scene-entry gate is set. Kamidori TITLE sets
+`G[0x1372d9] = 1` only in case 0 of its developer menu (アドベンチャー, 全体マップ, 迷宮, 戦闘, …), right before the
+script picker; retail play never sets it, so scenes skip the loop, natively and in the port. The port's Himegari
+gate synthesis is the same developer entry, used for direct single-scene launches.
+
+The Kamidori English fan translation's 32 replacement append scenes (`$1$SC2600` … `$3$SC6920`) dropped the first
+character of every string the translators did not rewrite: `"LABEL","J"` became `"ABEL",""`, and choice text such
+as `"シーン回想終了"` became `"ーン回想終了"`. In retail play that only shows as broken choice text. Through the
+developer entry, native AGE would open the entry picker (no `ABEL` entries), while the port stubs the call and loops
+until its step limit. Neither path is reachable without the developer menu.
 
 **Magic-circle retention fixed in the host model (2026-07-09).** The effect is `AE001H.AGF`
 (resource `0x37`). SC0000 already contains the correct teardown, but the port's wrong `0x215` query
