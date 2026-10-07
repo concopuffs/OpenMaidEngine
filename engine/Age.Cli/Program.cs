@@ -133,6 +133,10 @@ if (args.Contains("catalog-scan"))
         distinct_opcode_count = scan.OpcodeOccurrences.Count,
         opcode_occurrences = scan.OpcodeOccurrences.ToDictionary(
             pair => $"0x{pair.Key:x}", pair => pair.Value),
+        operand_type_occurrences = scan.OperandTypeOccurrences.ToDictionary(
+            pair => $"0x{pair.Key:x}",
+            pair => pair.Value.Select(position => position.ToDictionary(
+                type => $"0x{type.Key:x}", type => type.Value)).ToArray()),
         unsupported_runtime_opcodes = unsupported,
         failures = scan.Failures,
     };

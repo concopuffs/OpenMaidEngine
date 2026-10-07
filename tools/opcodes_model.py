@@ -14,6 +14,33 @@ EVIDENCE_METHODS = {
     "catalog-corpus", "upstream-catalog", "native-re", "frida", "harness",
     "inference", "unicorn",
 }
+# Operand access contracts, derived from native handlers by tools/operand_access.py. Every operand of
+# an observed opcode records one access list per observed engine ABI, either as `access` (identical
+# in every ABI) or `access_by_abi`. "ignored" is registry-only: the handler is proven not to touch it.
+ACCESS_KINDS = (
+    "read",            # value read (immediates, variables and reference targets)
+    "read-float",      # value read as a float (integer forms are converted)
+    "read-string",     # value read as text (integer forms are formatted)
+    "write",           # integer store
+    "write-string",    # string store
+    "write-float",     # float store (integer destinations are converted)
+    "bind",            # reference variable rebound to a computed target
+    "address",         # backing-storage address of a variable (array base / span / in place)
+    "string-cell",     # global string cell index of a string variable or string reference (locals throw)
+    "ref-slot",        # address of a reference variable's own slot
+    "cell",            # global integer cell index of a variable or reference target
+    "ignored",         # registry-only: the handler never touches this operand
+)
+
+
+def arg_access(arg: dict, abi: str) -> tuple[str, ...] | None:
+    """The recorded access kinds of one operand entry under one engine ABI, if any."""
+    by_abi = arg.get("access_by_abi")
+    if by_abi is not None:
+        value = by_abi.get(abi)
+    else:
+        value = arg.get("access")
+    return tuple(value) if value is not None else None
 
 
 @dataclass(frozen=True)
@@ -340,6 +367,7 @@ def lint(model: Model) -> tuple[list[str], list[str]]:
                 errors.append(
                     f"{evidence_tag}: unknown revisions {sorted(unknown_revisions)}"
                 )
+        errors.extend(_operand_access_errors(model, oc, tag))
         for dep in s.depends_on:
             if dep not in ops:
                 errors.append(f"{tag}: depends_on missing opcode 0x{dep:x}")
@@ -351,6 +379,45 @@ def lint(model: Model) -> tuple[list[str], list[str]]:
             if dep_confs and CONFIDENCE[s.confidence] > min(dep_confs):
                 warnings.append(f"{tag}: confidence {s.confidence!r} exceeds dependency ceiling")
     return errors, warnings
+
+def _operand_access_errors(model: Model, oc: Opcode, tag: str) -> list[str]:
+    """Validate operand entries and require an access contract for every observed ABI."""
+    errors: list[str] = []
+    by_index: dict[int, dict] = {}
+    for arg in oc.semantics.args:
+        index = arg.get("i")
+        arg_tag = f"{tag}: operand {index}"
+        if not isinstance(index, int) or not 1 <= index <= oc.argc:
+            errors.append(f"{arg_tag}: index outside argc {oc.argc}")
+            continue
+        if index in by_index:
+            errors.append(f"{arg_tag}: duplicate operand entry")
+        by_index[index] = arg
+        if "access" in arg and "access_by_abi" in arg:
+            errors.append(f"{arg_tag}: use access or access_by_abi, not both")
+        lists = [("access", arg["access"])] if "access" in arg else []
+        for abi, kinds in arg.get("access_by_abi", {}).items():
+            if abi not in model.abi_layers:
+                errors.append(f"{arg_tag}: access_by_abi names unknown ABI {abi!r}")
+            lists.append((f"access_by_abi.{abi}", kinds))
+        for name, kinds in lists:
+            if not isinstance(kinds, list) or not kinds:
+                errors.append(f"{arg_tag}: {name} must be a non-empty list")
+            elif set(kinds) - set(ACCESS_KINDS):
+                errors.append(f"{arg_tag}: {name} has unknown kinds {sorted(set(kinds) - set(ACCESS_KINDS))}")
+    observed_abis = sorted(
+        model.observations[profile].engine_abi_id
+        for profile in oc.observed_by if profile in model.observations
+    )
+    for abi in observed_abis:
+        for index in range(1, oc.argc + 1):
+            kinds = arg_access(by_index.get(index, {}), abi)
+            if kinds is None:
+                errors.append(f"{tag}: operand {index} has no {abi} access contract")
+            elif index in oc.code_target_args and "read" not in kinds:
+                errors.append(f"{tag}: code-target operand {index} is not read under {abi}")
+    return errors
+
 
 def dependents(model: Model) -> dict[int, list[int]]:
     """Reverse of depends_on: op -> [ops whose semantics depend on it]."""

@@ -253,6 +253,7 @@ This also names the whole call graph statically (build/callscript-names.json).
 i = 1
 role = "script id = raw SYS4INI file index"
 observed_types = ["imm", "g-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x5
@@ -262,13 +263,13 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "ret"
-category = "unknown"
-summary = ""
+category = "control"
+summary = "() - pop the current frame's local return stack and resume at the popped code offset unless it is -1; when a run-state snapshot is pending on ctx+0x5f2f4/+0x5f2f8 it is restored. Local calls (op 0x8f) and every native callback dispatch push the return entry, so callback bodies are local subroutines that return to the waiting opcode."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x8f]
+evidence = "Ghidra /v2: op_0x5_handler@0x417ad0 decrements ret_stack_a[cur] and redirects frame_pc to codebase + ret_stack_b[...]*4 when that entry is not 0xffffffff, then pops the saved run-state stack if non-empty. vm_return_stack_push_pc@0x405330 is called by timed_callback_sequence_tick, adv_input_dispatch_callbacks, adv_interpreter_tick, adv_input_service_poll and two helpers before redirecting to a callback. Corpus: every hotspot/mouse/joy/timed callback target (0x90 operands 5-7, 0xcc 2, 0xfb 2, 0xd4 3-4) and 72,792 of 72,794 local-call targets reach ret; coroutine handlers registered by 0x7b end at 0x7c instead."
 
 [[opcode]]
 op = 0x6
@@ -291,11 +292,13 @@ details = "Implemented as persistent VM-owned preloaded slots containing the res
 i = 1
 role = "script_id"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "frame_slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x8
@@ -318,6 +321,7 @@ details = "Implemented by recursively executing the reusable preloaded ExecFrame
 i = 1
 role = "frame_slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x9
@@ -357,11 +361,13 @@ evidence = "Ghidra /v2: dispatch slot 0x21 resolves to op_0x21_fade_surface_in_f
 i = 1
 role = "captured full-frame surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "transition timer interval / accelerated duration argument"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x22
@@ -384,11 +390,13 @@ evidence = "Ghidra /v2: dispatch slot 0x22 resolves to op_0x22_fade_surface_out_
 i = 1
 role = "captured full-frame surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "transition timer interval / accelerated duration argument"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x25
@@ -411,16 +419,19 @@ evidence = "Ghidra /v2: dispatch handler op_0x25_handler@0x41ce00 checks ADV fas
 i = 1
 role = "captured source surface"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "captured target surface"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "transition timer interval / accelerated duration argument"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x50
@@ -442,16 +453,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x51
@@ -473,16 +487,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x52
@@ -504,16 +521,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x53
@@ -535,16 +555,19 @@ evidence = "Ghidra /v2: op_0x53_handler@0x4265c0 reads operands 2 and 3, CDQ+IDI
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x54
@@ -566,16 +589,19 @@ evidence = "Ghidra /v2: op_0x54_handler@0x426600 reads operands 2 and 3, CDQ+IDI
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x55
@@ -597,11 +623,13 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x56
@@ -623,16 +651,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x57
@@ -654,16 +685,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x58
@@ -685,16 +719,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x59
@@ -716,16 +753,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x5a
@@ -747,16 +787,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x5b
@@ -778,16 +821,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x5c
@@ -809,16 +855,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x5d
@@ -840,16 +889,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x5e
@@ -871,16 +923,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x5f
@@ -902,16 +957,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x60
@@ -933,11 +991,13 @@ evidence = "Ghidra /v2: op_0x60_handler@0x426970 calls imported CRT rand(), fetc
 i = 1
 role = "random remainder destination"
 observed_types = ["l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "exclusive modulus bound"
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x61
@@ -960,16 +1020,19 @@ details = "Operand 2 names the base cell itself: a global-bank operand produces 
 i = 1
 role = ""
 observed_types = ["l-ptr", "l-str-ptr"]
+access = ["bind"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "g-str", "l-int", "l-str"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x63
@@ -991,11 +1054,13 @@ evidence = "Ghidra /v2 op_0x63_take_address@0x426ac0 calls vm_operand_resolve_ad
 i = 1
 role = "destination pointer"
 observed_types = ["l-ptr"]
+access = ["bind"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "source addressable cell or pointer target"
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["address"]
 
 [[opcode]]
 op = 0x64
@@ -1017,11 +1082,13 @@ evidence = "Ghidra /v2: op_0x64_handler@0x426b00 resolves operand 1 as a writabl
 i = 1
 role = "destination first integer"
 observed_types = ["g-int", "l-int"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "inline blob dword offset"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x6c
@@ -1043,11 +1110,13 @@ evidence = "Ghidra /v2: op_0x6c_handler@0x426d90 resolves operand 1 as a writabl
 i = 1
 role = "first integer destination"
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "consecutive cell count"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x6e
@@ -1070,11 +1139,13 @@ evidence = "Native op 0x6e enters adv_text_build_glyph_records@0x4576c0, which s
 i = 1
 role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "text source"
 observed_types = ["string", "g-str"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x6f
@@ -1096,6 +1167,7 @@ evidence = "Ghidra /v2 newline paths at 0x456fd0/0x452970 reset x to the layout'
 i = 1
 role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x70
@@ -1117,26 +1189,31 @@ evidence = "Ghidra /v2: op_0x70_handler@0x41e4e0 forwards the five operands and 
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "width"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "height"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "origin x"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "origin y"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x71
@@ -1159,6 +1236,7 @@ evidence = "Corpus: T1 targets op-0x71 records, but the operand is a layout slot
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x72
@@ -1181,6 +1259,7 @@ evidence = "Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x73
@@ -1202,51 +1281,61 @@ evidence = "Ghidra /v2: op_0x73_configure_wait_indicator@0x41e900 passes operand
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "destination x, layout-relative"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "destination y, layout-relative"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "source surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "source x"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "source y"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "cell width"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "cell height"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 9
 role = "exclusive terminal frame / sheet column count"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 10
 role = "frame period (milliseconds)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x75
@@ -1268,6 +1357,7 @@ evidence = "Ghidra /v2: op_0x75_set_font_size@0x41ea10 calls text_set_primary_fo
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x76
@@ -1289,6 +1379,7 @@ evidence = "Ghidra /v2: op_0x76_handler@0x41ea50 byte-swaps operand RGB into tex
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x77
@@ -1310,6 +1401,7 @@ evidence = "Ghidra /v2: op_0x77_handler@0x41eab0 byte-swaps operand RGB into tex
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x78
@@ -1332,6 +1424,7 @@ evidence = "Ghidra /v2: op_0x78_set_text_render_mode@0x41eb10 writes operand 1 t
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x79
@@ -1353,16 +1446,19 @@ evidence = "Ghidra /v2: op_0x79_set_adv_text_reset_cursor@0x41eb50 reads three o
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "reset cursor x"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "reset cursor y"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x7a
@@ -1384,16 +1480,19 @@ evidence = "Ghidra /v2: op_0x7a_handler@0x41eba0 fetches operands 3,2,1 and call
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "cursor x"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "cursor y"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x7b
@@ -1416,11 +1515,13 @@ evidence = "Ghidra: handler FUN_0041ebf0 (dispatch ctx[0x26c93+0x7b]) = {frame_i
 i = 1
 role = "yield handler-1 PC"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "yield handler-2 PC"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x7c
@@ -1458,6 +1559,7 @@ evidence = "Complete corpus consistency across all 7 uses in 5 scripts: MAMES, I
 i = 1
 role = "output: current per-glyph reveal delay in milliseconds"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x80
@@ -1479,6 +1581,7 @@ evidence = "Ghidra /v2: op_0x80_set_default_gfx_object_slot@0x41ed40 writes oper
 i = 1
 role = "default retained graphics-object slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x85
@@ -1516,6 +1619,7 @@ evidence = "Ghidra /v2: op_0x86_set_cursor_resource@0x41f0a0 opens operand 1 thr
 i = 1
 role = "cursor resource id"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x87
@@ -1553,6 +1657,7 @@ evidence = "Ghidra /v2: op_0x88_set_message_skip@0x41f130 writes operand 1 to ct
 i = 1
 role = "enabled"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x8b
@@ -1574,6 +1679,7 @@ evidence = "Ghidra /v2: op_0x8b_set_text_line_spacing@0x41f270 stores operand 1 
 i = 1
 role = "extra line spacing in pixels"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x8c
@@ -1596,6 +1702,7 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x8f
@@ -1619,6 +1726,7 @@ confirm_by = ""
 i = 1
 role = "local code target (word offset within current script)"
 observed_types = ["imm", "g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x90
@@ -1662,36 +1770,43 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 i = 1
 role = "rectangle left x"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "rectangle top y"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "rectangle width added to x for inclusive right bound"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "rectangle height added to y for inclusive bottom bound"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "target:pointer enter"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "target:pointer leave"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "target:activate/click"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x93
@@ -1745,26 +1860,31 @@ evidence = "Ghidra /v2: op_0x97_bind_hotspot_key@0x41ff30 builds the same inclus
 i = 1
 role = "rectangle left x"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "rectangle top y"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "rectangle width"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "rectangle height"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "logical action index"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xa0
@@ -1787,16 +1907,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xa1
@@ -1818,6 +1941,7 @@ evidence = "Ghidra /v2: op_0xa1_handler@0x42bd60 resets the engine's open-addres
 op = 0xa2
 label = "add-value-switch-case"
 argc = 2
+code_target_args = [2]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1834,16 +1958,19 @@ evidence = "Ghidra /v2: op_0xa2_handler@0x42d310 formats operand 1 through vm_va
 i = 1
 role = "case value"
 observed_types = ["imm", "l-int"]
+access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "target PC dword offset"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xa3
 label = "value-switch-jump"
 argc = 2
+code_target_args = [2]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -1860,11 +1987,13 @@ evidence = "Ghidra /v2: op_0xa3_handler@0x420060 formats operand 1, queries valu
 i = 1
 role = "selector value"
 observed_types = ["g-int", "l-int"]
+access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "default target PC dword offset"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xae
@@ -1903,11 +2032,13 @@ evidence = "Ghidra /v2: op_0xb4_sfx_load@0x4201d0 -> sfx_channel_load@0x482500 -
 i = 1
 role = "packed raw resource id"
 observed_types = ["imm", "g-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "channel"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0xb5
@@ -1929,6 +2060,7 @@ evidence = "Ghidra op 0xb5 handler 0x420210 passes mode 0 to sfx_channel_start@0
 i = 1
 role = "channel"
 observed_types = ["imm", "g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0xb6
@@ -1950,6 +2082,7 @@ evidence = "Ghidra op 0xb6 handler 0x420250 -> sfx_channel_release@0x482600 -> s
 i = 1
 role = "channel"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xb7
@@ -1972,6 +2105,7 @@ details = "Implemented: the VM resolves zero through its retained current track 
 i = 1
 role = "track_or_zero"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xb8
@@ -2011,6 +2145,7 @@ details = "Implemented: the VM shares op 0xb7's retained-track/zero handling but
 i = 1
 role = "track_or_zero"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xba
@@ -2032,6 +2167,7 @@ evidence = "Ghidra /v2: op_0xba_sfx_start_loop@0x420290 records a 3-dword instru
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xbf
@@ -2053,6 +2189,7 @@ evidence = "By-ear confirmed (2026-07-06): SC0000 real game plays BGM005 for pla
 i = 1
 role = "bgm id (direct file-name number: BGM{id:03d}.OGG)"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0xc0
@@ -2074,6 +2211,7 @@ evidence = "Ghidra /v2 op_0xc0_get_current_bgm_track@0x428440 writes EngineCtx.c
 i = 1
 role = "current BGM track id output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0xc2
@@ -2096,11 +2234,13 @@ details = "Implemented through the blocking host fade clock. VM dispatch substit
 i = 1
 role = "target_percent"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "duration_ms"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xc4
@@ -2122,6 +2262,7 @@ evidence = "By-ear confirmed (2026-07-06): SC0000 prologue voices play on their 
 i = 1
 role = "universal packed SYS4INI/AAI voice id"
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0xc5
@@ -2144,11 +2285,13 @@ details = "Port status (2026-07-29): implemented against the profile-lifetime Au
 i = 1
 role = "category: 0=master, 1=music, 2=SFX, 3=voice, 4=movie"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "out volume basis points"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0xc6
@@ -2171,11 +2314,13 @@ details = "Port status (2026-07-29): implemented with native SYS4REG.INI [sound]
 i = 1
 role = "category: 0=master, 1=music, 2=SFX, 3=voice, 4=movie"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "volume basis points"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0xc7
@@ -2198,11 +2343,13 @@ details = "Port status (2026-07-29): implemented as the read half of the shared 
 i = 1
 role = "category: 1=music, 2=SFX, 3=voice, 4=movie"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "out enabled"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0xc8
@@ -2225,6 +2372,7 @@ evidence = "Ghidra: dispatch ctx[0x26c93+0xc8]=0x420ec0; sleep_op_0xc8 + sleep_t
 i = 1
 role = "duration_ms"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xcc
@@ -2247,11 +2395,13 @@ evidence = "Ghidra /v2: op_0xcc_register_mouse_callback@0x420f70 stores operand 
 i = 1
 role = "poll interval (ms)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "callback code target"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xcd
@@ -2289,6 +2439,7 @@ evidence = "Ghidra /v2: op_0xd0_handler@0x428860 calls imp_winmm_timeGetTime and
 i = 1
 role = "out_time_ms"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0xd3
@@ -2327,26 +2478,31 @@ evidence = "Ghidra /v2: op_0xd4_handler@0x428890 loops operand 2 times, accumula
 i = 1
 role = "relative interval (ms)"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "repeat count"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "on-time local callback code target"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "catch-up local callback code target"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xd5
 label = "u004262C0"
 argc = 1
+code_target_args = [1]
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
@@ -2364,6 +2520,7 @@ evidence = "Ghidra /v2: op_0xd5_handler@0x421090 retains the current script reso
 i = 1
 role = "abort/fallback local code target (-1 disables)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xd9
@@ -2402,11 +2559,13 @@ evidence = "Ghidra /v2: op_0xfb_register_joy_callback@0x421270 bounds-checks ope
 i = 1
 role = "input index"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "callback code target"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xfe
@@ -2428,6 +2587,7 @@ evidence = "Ghidra /v2: op_0xfe_set_input_action_count@0x421390 accepts unsigned
 i = 1
 role = "logical action count"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0xff
@@ -2497,11 +2657,13 @@ evidence = "Ghidra /v2: op_0x107_map_joystick_button@0x421550 writes operand 2 t
 i = 1
 role = "logical button slot (action minus 4)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "physical joystick button number"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x108
@@ -2523,6 +2685,7 @@ evidence = "Ghidra /v2: op_0x108_get_mouse_button_state@0x428b60 fills a local t
 i = 1
 role = "mouse button bitmask out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x109
@@ -2544,11 +2707,13 @@ evidence = "Ghidra /v2: op_0x109_get_cursor_virtual@0x428bb0 calls the cursor-po
 i = 1
 role = "output virtual x"
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "output virtual y"
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x10a
@@ -2570,11 +2735,13 @@ evidence = "Ghidra /v2: op_0x10a_set_cursor_virtual@0x421590 maps virtual coordi
 i = 1
 role = "virtual x"
 observed_types = ["g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "virtual y"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x10b
@@ -2596,11 +2763,13 @@ evidence = "Ghidra /v2: op_0x10b_map_mouse_button@0x4216f0 writes operand 1 to E
 i = 1
 role = "logical button slot (action minus 4)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "physical mouse button index"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x10c
@@ -2622,11 +2791,13 @@ evidence = "Ghidra /v2: op_0x10c_map_keyboard_scancode@0x421730 requires unsigne
 i = 1
 role = "logical input action"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "DirectInput DIK scan code"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x10d
@@ -2648,6 +2819,7 @@ evidence = "Ghidra /v2: op_0x10d_consume_mouse_wheel_delta@0x428cf0 copies ctx+0
 i = 1
 role = "accumulated signed delta out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x12c
@@ -2657,38 +2829,43 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "lookup-array-2d"
-category = "unknown"
-summary = ""
+category = "compute"
+summary = "(dst_ref)(base)(row)(stride)(column) - bind reference dst_ref to base[row*stride + column] (integer cells of 4 bytes, string records of 0x1c); no bounds check."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x12c_handler@0x428d70 computes fetch(5) + fetch(4) * fetch(3), resolves operand 2 with vm_operand_resolve_address and binds operand 1 through vm_pointer_operand_bind_element. Corpus row tables use it directly, for example ADDEXP lookup-array-2d (local-ptr 2) unit_current_stats current_unit_id 0xe 0 (14 stat columns)."
 
 [[opcode.semantics.args]]
 i = 1
 role = ""
 observed_types = ["l-ptr", "l-str-ptr"]
+access = ["bind"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "g-str", "l-int", "l-str"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x12e
@@ -2710,41 +2887,49 @@ evidence = "Ghidra /v2: op_0x12e_find_hit_rectangle@0x428ff0 resolves the refere
 i = 1
 role = "previous/matched index inout"
 observed_types = ["l-int"]
+access = ["read", "write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "reference rectangle pointer"
 observed_types = ["l-int"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "pointer x"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "pointer y"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "candidate rectangle array"
 observed_types = ["l-int"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "per-entry x offset array"
 observed_types = ["l-int"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "per-entry y offset array"
 observed_types = ["l-int"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "candidate count/end index"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x12f
@@ -2767,21 +2952,25 @@ details = "Implemented with domain-preserving addressed-array access, native sig
 i = 1
 role = "out_index_permutation"
 observed_types = ["l-int"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "primary_key_array"
 observed_types = ["g-int", "l-int"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "secondary_key_array"
 observed_types = ["l-int"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "count"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x130
@@ -2804,6 +2993,7 @@ details = "Implemented as process-lifecycle state owned by the persistent VM: it
 i = 1
 role = "out_initial_root_run"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x131
@@ -2825,6 +3015,7 @@ evidence = "Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with
 i = 1
 role = "alpha setting out"
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x132
@@ -2847,6 +3038,7 @@ details = "Implemented as 11 safe logical queue slots so the handler-admitted 0.
 i = 1
 role = "queue_id"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x133
@@ -2869,11 +3061,13 @@ details = "Implemented with signed 32-bit value normalization into the selected 
 i = 1
 role = "queue_id"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "value"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x134
@@ -2896,16 +3090,19 @@ details = "Implemented as FIFO TryDequeue: nonempty writes success=1 plus the si
 i = 1
 role = "queue_id"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "out_success"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "out_value"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x135
@@ -2927,11 +3124,13 @@ evidence = "Ghidra /v2: op_0x135_handler@0x4296c0 fetches operand 2 as an unsign
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read", "write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x136
@@ -2953,11 +3152,13 @@ evidence = "Ghidra /v2: op_0x136_handler@0x429730 fetches operand 2 as an unsign
 i = 1
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read", "write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x137
@@ -2980,6 +3181,7 @@ evidence = "Ghidra /v2: op_0x137_reset_int_stack@0x421940 destroys the pointer a
 i = 1
 role = "stack_id"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x13a
@@ -3005,31 +3207,37 @@ evidence_records = [
 i = 1
 role = "style_index"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "surface_slot"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "atlas_x"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "atlas_y"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "digit_width"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "digit_height"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x13f
@@ -3051,16 +3259,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x140
@@ -3082,21 +3293,25 @@ evidence = "Ghidra: handler 0x4299c0 (dispatch ctx[0x9b74c]=0x4299c0; created+ty
 i = 1
 role = "out: returned label/resume PC (SC0000 G[0x6be])"
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "label name string (e.g. \"LABEL\")"
 observed_types = ["string"]
+access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "sub-label string (e.g. \"J\")"
 observed_types = ["string"]
+access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "in: current label/resume PC fed back (SC0000 G[0x6be])"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x141
@@ -3118,6 +3333,7 @@ evidence = "CONFIG.BIN is a complete paired getter/setter proof: reset-defaults 
 i = 1
 role = "alpha setting value"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x142
@@ -3140,6 +3356,7 @@ evidence = "Ghidra /v2: op_0x142_set_system_menu_actions_enabled@0x421fe0 direct
 i = 1
 role = "native system-menu actions enabled (zero disables; nonzero enables)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x143
@@ -3203,11 +3420,13 @@ or cancel. Accept replaces operand 1 and cancel leaves it untouched; operand 2 i
 i = 1
 role = "result/inout string"
 observed_types = ["l-str"]
+access = ["read-string", "write-string"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "initial edit text"
 observed_types = ["l-str"]
+access = ["read-string", "write-string"]
 
 [[opcode]]
 op = 0x149
@@ -3230,6 +3449,7 @@ evidence = "Ghidra /v2: op_0x149_set_system_menu_show_delay@0x422050 directly st
 i = 1
 role = "unsigned top-edge system-menu dwell threshold in milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x191
@@ -3251,11 +3471,13 @@ evidence = "Ghidra /v2: op_0x191_handler@0x426de0 computes (value ^ (value >> 31
 i = 1
 role = "out_absolute_value"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "value"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x192
@@ -3277,11 +3499,13 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["g-str", "l-str", "l-str-ptr"]
+access = ["write-string"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["string", "g-int", "g-str", "l-str", "l-str-ptr"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x193
@@ -3303,16 +3527,19 @@ evidence = "Kelebek identifies param1 = param2.concat(param3). Corpus ordering c
 i = 1
 role = "destination"
 observed_types = ["g-str", "l-str"]
+access = ["write-string"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "left"
 observed_types = ["string", "g-str", "l-str", "l-str-ptr"]
+access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "right"
 observed_types = ["string", "g-str", "l-str", "l-ptr", "l-str-ptr"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x194
@@ -3334,16 +3561,19 @@ evidence = "Ghidra /v2 op_0x194_string_equals@0x426e20 fetches operands 2 and 3 
 i = 1
 role = "out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "left"
 observed_types = ["g-str", "l-str", "l-str-ptr"]
+access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "right"
 observed_types = ["string", "l-str", "l-str-ptr"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x195
@@ -3366,16 +3596,19 @@ details = "This is the logical inverse of op 0x194 string-equals. Skipping it is
 i = 1
 role = "out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "left"
 observed_types = ["g-str", "l-str", "l-str-ptr"]
+access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "right"
 observed_types = ["string", "g-str"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x196
@@ -3397,16 +3630,19 @@ evidence = ""
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["string"]
+access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["string"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x197
@@ -3428,6 +3664,7 @@ evidence = "Ghidra /v2: op_0x197_handler@0x41f3b0 calls the parallel secondary-f
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x198
@@ -3449,16 +3686,19 @@ evidence = "Ghidra /v2: op_0x198_handler@0x41f3f0 passes all three operands to a
 i = 1
 role = "layout slot"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "origin x"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "origin y"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x199
@@ -3496,6 +3736,7 @@ evidence = "Ghidra /v2: op_0x19a_get_message_skip@0x4271b0 writes ctx+0x550fc to
 i = 1
 role = "output enabled"
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x19b
@@ -3551,11 +3792,13 @@ evidence = "Ghidra /v2: op_0x19d_handler@0x427810 fetches operand 2, rejects pac
 i = 1
 role = "out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "packed_resource_id"
 observed_types = ["imm", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x19e
@@ -3578,11 +3821,13 @@ evidence = "Ghidra /v2: op_0x19e_save_numbered_slot@0x4278b0 formats SAVE%2.2d.D
 i = 1
 role = "status output"
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "numbered slot"
 observed_types = ["g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x19f
@@ -3632,46 +3877,55 @@ evidence = "Ghidra /v2: op_0x1a0_query_numbered_save_metadata@0x427ba0 calls sav
 i = 1
 role = "status output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "numbered slot"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "year output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "month output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "day output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "hour output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "minute output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "second output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 9
 role = "accumulated playtime seconds output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x1a1
@@ -3694,11 +3948,13 @@ evidence = "Ghidra /v2: op_0x1a1_load_numbered_slot_and_resume@0x427d30 calls sa
 i = 1
 role = "status output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "numbered slot"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1a2
@@ -3721,6 +3977,7 @@ evidence = "Ghidra /v2: op_0x1a2_store_shared_profile_int@0x42d360 reads operand
 i = 1
 role = "global integer cell to snapshot"
 observed_types = ["g-int", "l-ptr"]
+access = ["read", "cell"]
 
 [[opcode]]
 op = 0x1a3
@@ -3743,6 +4000,7 @@ evidence = "Ghidra /v2: op_0x1a3_load_shared_profile_int@0x427e90 resolves opera
 i = 1
 role = "global integer cell to restore"
 observed_types = ["g-int", "l-ptr"]
+access = ["write", "cell"]
 
 [[opcode]]
 op = 0x1a4
@@ -3764,11 +4022,13 @@ evidence = "Ghidra /v2: op_0x1a4_set_text_effect_offset@0x41f440 writes operands
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1a5
@@ -3791,6 +4051,7 @@ evidence = "Ghidra /v2: op_0x1a5_set_font_face@0x42bbf0 resolves operand 1 and c
 i = 1
 role = "CP932 GDI face name"
 observed_types = ["string"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x1a6
@@ -3813,11 +4074,13 @@ evidence = "Ghidra /v2: op_0x1a6_half_byte_strlen@0x427020 resolves operand 2, s
 i = 1
 role = "destination"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "string"
 observed_types = ["l-str", "l-str-ptr"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x1a7
@@ -3827,18 +4090,19 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "comment"
-category = "unknown"
-summary = ""
-noop_headless = false
-source = "kelebek"
-confidence = "med"
+category = "marker"
+summary = "(text) - source comment compiled into the bytecode; the handler only advances past the instruction and never reads its operand."
+noop_headless = true
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = ""
+evidence = "Static RE: SYS4422 handler 0x416630 and SYS4433 handler 0x416db0 only store the three-dword instruction length; no operand accessor is reachable. Corpus operands are mostly inline strings (2,086 Himegari / 3,672 Kamidori), the editor annotations such as LABEL and loop-start notes; the rare variable operands are likewise ignored."
 
 [[opcode.semantics.args]]
 i = 1
 role = ""
 observed_types = ["string", "g-int", "l-int", "l-ptr"]
+access = ["ignored"]
 
 [[opcode]]
 op = 0x1a8
@@ -3877,6 +4141,7 @@ evidence = "Ghidra /v2: op_0x1a9_store_shared_profile_string@0x42d3e0 fetches op
 i = 1
 role = "global string cell to snapshot"
 observed_types = ["g-str", "l-str-ptr"]
+access = ["read-string", "string-cell"]
 
 [[opcode]]
 op = 0x1aa
@@ -3899,6 +4164,7 @@ evidence = "Ghidra /v2: op_0x1aa_load_shared_profile_string@0x42bd90 resolves op
 i = 1
 role = "global string cell to restore"
 observed_types = ["g-str", "l-str-ptr"]
+access = ["write-string", "string-cell"]
 
 [[opcode]]
 op = 0x1ab
@@ -3921,11 +4187,13 @@ evidence = "Ghidra /v2: op_0x1ab_delete_numbered_save@0x427ed0 formats and calls
 i = 1
 role = "status output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "numbered slot"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1ac
@@ -3948,16 +4216,19 @@ evidence = "Ghidra /v2: op_0x1ac_copy_numbered_save@0x427fb0 formats source/dest
 i = 1
 role = "status output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "source numbered slot"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "destination numbered slot"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1ad
@@ -3997,16 +4268,19 @@ evidence = "Ghidra /v2: op_0x1ae_write_numbered_save_thumbnail@0x428100 creates 
 i = 1
 role = "status output"
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "numbered slot"
 observed_types = ["g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "source surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1af
@@ -4029,16 +4303,19 @@ evidence = "Ghidra /v2: op_0x1af_load_numbered_save_thumbnail@0x428240 opens SAV
 i = 1
 role = "status output"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "numbered slot"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "destination surface slot"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1b0
@@ -4060,16 +4337,19 @@ evidence = "Ghidra /v2 op_0x1b0_copy_dwords@0x427060 fetches operand 3, resolves
 i = 1
 role = "source"
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "destination"
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "count"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1b2
@@ -4092,6 +4372,7 @@ evidence = "The real /v2 dispatch slot ctx+0x9b914 registers op_0x1b2_append_dia
 i = 1
 role = "value to format and append"
 observed_types = ["string", "g-int"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x1b3
@@ -4147,6 +4428,7 @@ evidence = "Complete corpus consistency across all 11 uses in 5 scripts: CONFIG 
 i = 1
 role = "per-glyph reveal delay in milliseconds"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1b6
@@ -4168,6 +4450,7 @@ evidence = "Ghidra /v2: op_0x1b6_get_auto_message@0x4271e0 writes `(ctx+0x55104 
 i = 1
 role = "output enabled"
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x1b7
@@ -4189,6 +4472,7 @@ evidence = "Ghidra /v2: op_0x1b7_set_auto_message@0x41f560 stores `(operand1 != 
 i = 1
 role = "enabled"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1b8
@@ -4210,11 +4494,13 @@ evidence = "Ghidra /v2: op_0x1b8_handler@0x427210 dispatches selector 0 to confi
 i = 1
 role = "timer selector: 0=post-voice Time0, 1=unvoiced Time1"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "output milliseconds"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x1b9
@@ -4236,11 +4522,13 @@ evidence = "Ghidra /v2: op_0x1b9_handler@0x41f5a0 dispatches selector 0/1 to con
 i = 1
 role = "timer selector: 0=post-voice Time0, 1=unvoiced Time1"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "milliseconds"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1ba
@@ -4263,11 +4551,13 @@ details = "Port status (2026-07-29): implemented with native SYS4REG.INI route p
 i = 1
 role = "category: 1=music, 2=SFX, 3=voice, 4=movie"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "enabled"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1bb
@@ -4289,6 +4579,7 @@ evidence = "Ghidra /v2: op_0x1bb_handler@0x41f650 writes 0x80000000 to ctx+0x551
 i = 1
 role = "enabled (0 or 1)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1bc
@@ -4326,6 +4617,7 @@ evidence = "Ghidra /v2: op_0x1bd_play_history_voice@0x420920 stops/replaces the 
 i = 1
 role = "voice id"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1bf
@@ -4334,14 +4626,15 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "call-end"
-category = "marker"
-summary = "zero-arg; call->0x1bf->stmt-end — end-of-call-statement marker"
+name = "arm-voice-duck-release"
+category = "audio"
+summary = "() - advance the one-shot stage of voice_bgm_duck_control_flags (clear the mask when bit 0x10000 is set) and, unless bit 0 suppresses voice ducking, arm voice_bgm_duck_release_armed so the outer tick restores ducked BGM once the voice ends."
 noop_headless = true
-source = "inference"
-confidence = "med"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x1cf]
+evidence = "Ghidra /v2: op_0x1bf_arm_voice_duck_release@0x416c70 clears ctx+0x6dbf0 when bit 0x10000 is set and stores 1 at ctx+0x6dbec unless bit 0 is set, exactly mirroring engine_main_tick_with_exception_policy's post-delayed-voice code (0x411aae). The tick consumes ctx+0x6dbec when the ducked voice ends (run-state 0x4000 -> 0x200 fade); voice_bgm_duck_begin clears it and op 0xbf skips re-applying the duck volume while it is set. Corpus: follows the ADV line template's speaker subroutine call inside a statement block (8,752 Himegari / 18,043 Kamidori sites). The historical name call-end was a structural guess."
+details = "Port status (2026-10-06): stepped as a no-op."
 
 [[opcode]]
 op = 0x1c1
@@ -4363,16 +4656,19 @@ evidence = "Ghidra /v2: op_0x1c1_set_adv_text_bounds@0x41f6c0 reads three operan
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "right overflow boundary"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "bottom overflow boundary"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1c7
@@ -4394,6 +4690,7 @@ evidence = "Ghidra /v2: handler 0x4272b0 reads ctx+0xa0ce4 bit 0x08000000 and vm
 i = 1
 role = ""
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x1c8
@@ -4415,11 +4712,13 @@ evidence = "Kelebek identifies integer-to-string conversion. All five corpus sit
 i = 1
 role = "destination"
 observed_types = ["l-str"]
+access = ["write-string"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "signed_integer"
 observed_types = ["g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1ca
@@ -4442,6 +4741,7 @@ evidence = "Ghidra /v2: op_0x1ca_set_read_message_skip@0x41f880 calls the engine
 i = 1
 role = "enabled"
 observed_types = ["imm", "g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1cb
@@ -4464,6 +4764,7 @@ evidence = "Ghidra /v2: op_0x1cb_get_read_message_skip@0x4272f0 calls the engine
 i = 1
 role = "output enabled"
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x1cc
@@ -4486,6 +4787,7 @@ evidence = "Ghidra handler 0x427330 calls vm_operand_write(1, ctx+0x6dbd4). adv_
 i = 1
 role = ""
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x1ce
@@ -4507,6 +4809,7 @@ evidence = "Ghidra op_0x1ce_set_adv_wait_indicator_enabled@0x41f8c0 writes enabl
 i = 1
 role = "enabled"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1cf
@@ -4528,6 +4831,7 @@ evidence = "Ghidra /v2: op_0x1cf_set_voice_bgm_duck_control@0x4209f0 fetches ope
 i = 1
 role = "control flags (bit 0 = suppress voice-triggered BGM duck)"
 observed_types = ["imm", "g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1d0
@@ -4549,16 +4853,19 @@ evidence = "Ghidra /v2: op_0x1d0_step_text_history@0x427360 calls text_history_s
 i = 1
 role = "layout slot out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "first history record index out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "group delta"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1d1
@@ -4580,26 +4887,31 @@ evidence = "Ghidra /v2: op_0x1d1_render_text_history@0x41f950 forwards all five 
 i = 1
 role = "layout slot"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "history record index"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1d2
@@ -4621,11 +4933,13 @@ evidence = "Ghidra /v2: op_0x1d2_append_text_history_metadata@0x41f9c0 tests ctx
 i = 1
 role = "metadata type"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "metadata value"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1d3
@@ -4647,26 +4961,31 @@ evidence = "Ghidra /v2: op_0x1d3_find_text_history_value@0x4273c0 calls text_his
 i = 1
 role = "found out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "value out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "reserved (ignored by native helper)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "history record index"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "metadata type"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1d4
@@ -4688,21 +5007,25 @@ evidence = "Ghidra /v2: op_0x1d4_find_text_history_pair@0x427430 calls text_hist
 i = 1
 role = "first value out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "second value out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "reserved (ignored by native helper)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "history record index"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1d5
@@ -4711,14 +5034,15 @@ argc = 0
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "cond-block"
-category = "marker"
-summary = "zero-arg; ALWAYS follows jcc — marks conditional body entry"
+name = "mute-next-voice"
+category = "audio"
+summary = "() - play the next voice silently: op 0xc4 then starts it on channel 12 at volume 0 (preserving voice-completion timing for Auto), and the following voice or op 0x1bc clears the request."
 noop_headless = true
-source = "inference"
+source = "investigation"
 confidence = "high"
-depends_on = []
-evidence = ""
+depends_on = [0xc4]
+evidence = "Ghidra /v2: op_0x1d5_mute_next_voice@0x416cb0 sets voice_mute_next_flags (ctx+0x1493c, voice facade +0x434) to 1. op_0xc4_handler promotes bit 0 to 0x10001 and clears an already-promoted value; voice_play_indexed_asset@0x4883a0 tests bit 0, sets channel-12 volume 0 and marks the playback muted. voice_tick_delayed_playback, op 0x1bd and op 0x1bc clear it. Corpus: emitted only in the ADV template's speaker<0 / character-voice-suppressed (G[0x2e49]) branches immediately before play-voice. The historical name cond-block was a structural guess."
+details = "Port status (2026-10-06): stepped as a no-op, so voices the player disabled per character remain audible in the port."
 
 [[opcode]]
 op = 0x1f4
@@ -4728,13 +5052,14 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "stmt-begin"
-category = "marker"
-summary = "zero-arg; opens scripts, pairs with stmt-end 0x1f5"
+category = "structural"
+summary = "() - open an atomic statement block. The outermost open sets statement_block_active and restarts the presentation-timer baseline; a nested open only increments statement_block_depth. While a block is open the outer tick defers delayed SFX/voice/movie service and forced redraw, and queued script launches wait for the outermost op 0x1f5."
 noop_headless = true
 source = "investigation"
 confidence = "high"
-depends_on = []
-evidence = ""
+depends_on = [0x1f5]
+evidence = "Ghidra-free static RE of /v2 (tools/operand_access.py image walk): handler 0x417390 sets ctx+0x5f2fc and moves frame_timer_current (ctx+0x51b64) to its predecessor slot before storing timeGetTime, or increments ctx+0x5f300 when already active. engine_main_tick_with_exception_policy@0x411840 skips sfx service 0x4827e0, voice_tick_delayed_playback@0x4884d0, movie_start_pending_after_sync_delay@0x4633b0 over ctx+0x52bd4[0..999], and the forced-redraw check at ctx+0x51b6c while ctx+0x5f2fc is set unless run_state_flags bit 0x400 is set (sites 0x411a42, 0x411b05, 0x411cb3). script_launch_queue_dispatch_next@0x40f6e0 returns immediately while it is set. Corpus: balanced in all 481 Himegari base scripts, nesting at most two, and no jmp/jcc/switch/coroutine/timer edge crosses a block boundary (0 of ~160k); blocks wrap ADV line-template expansions. Headless no-op is safe only because no corpus path queues a launch inside a block."
+details = "Port status (2026-10-06): VirtualMachine still steps 0x1f4/0x1f5 as no-ops, so delayed audio/movie starts and queued launches can begin mid-command. See docs/engine-re.md 'Statement blocks'."
 
 [[opcode]]
 op = 0x1f5
@@ -4744,13 +5069,14 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "stmt-end"
-category = "marker"
-summary = "zero-arg; precedes exit/next-stmt, pairs with 0x1f4"
+category = "structural"
+summary = "() - close a statement block opened by op 0x1f4. A nested close decrements statement_block_depth; the outermost close clears statement_block_active and, unless script_launch_dispatch_active is set, dispatches the next queued script launch."
 noop_headless = true
 source = "investigation"
 confidence = "high"
-depends_on = []
-evidence = ""
+depends_on = [0x1f4]
+evidence = "Static RE of /v2: handler 0x4173e0 decrements ctx+0x5f300 when positive; otherwise, when ctx+0x5f2fc is set, it clears it and, if ctx+0x6f8b8 is zero, tail-jumps to script_launch_queue_dispatch_next@0x40f6e0. See op 0x1f4 for the deferred tick services and corpus structure."
+details = "Port status (2026-10-06): stepped as a no-op; see op 0x1f4."
 
 [[opcode]]
 op = 0x1f6
@@ -4789,11 +5115,13 @@ evidence = "Ghidra handler 0x422270; gfx_object_erase_range@0x47d8b0 loops gfx_o
 i = 1
 role = ""
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1f8
@@ -4815,21 +5143,25 @@ evidence = "SC0000 CG/UI-draw path disasm; slot/w/h roles read off the operands 
 i = 1
 role = "texture slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "width"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "height"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "flag"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1f9
@@ -4851,16 +5183,19 @@ evidence = "Ghidra /v2 gfx_op_0x1f9_load_surface@0x422360 fetches operand 1 and 
 i = 1
 role = "universal packed SYS4INI/AAI texture id"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "texture slot"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "flag (typically -1 / 0xffffffff)"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1fa
@@ -4882,6 +5217,7 @@ evidence = "Ghidra handler 0x4224a0 (dispatch ctx[0x26c93+0x1fa]); frees ctx+0x5
 i = 1
 role = "surface slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1fb
@@ -4903,41 +5239,49 @@ evidence = "SC0000 CG-load subroutine label_12649: `draw-texture (ptr) (slot) 0 
 i = 1
 role = "handle/source ref"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "texture slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "src x"
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "src y"
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "width"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "height"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "dst x"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "dst y"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1fd
@@ -4959,21 +5303,25 @@ evidence = "Ghidra /v2: handler gfx_op_0x1fd_set_vec_scaled@0x422650 fetches ope
 i = 1
 role = "retained object handle"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "current X scale percent"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "current Y scale percent"
 observed_types = ["imm", "g-int", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "current Z scale percent"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x1fe
@@ -4995,26 +5343,31 @@ evidence = "Ghidra /v2: op_0x1fe_set_rotation_current@0x422700 converts operands
 i = 1
 role = "object handle"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "rotation axis X"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "rotation axis Y"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "rotation axis Z"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "angle degrees"
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x1ff
@@ -5036,21 +5389,25 @@ evidence = "Ghidra /v2: handler gfx_op_0x1ff_set_geom3@0x4227b0 converts operand
 i = 1
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x202
@@ -5072,26 +5429,31 @@ evidence = "Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00
 i = 1
 role = "retained object handle"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "delay in frame-clock milliseconds"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "duration in frame-clock milliseconds"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "target tint-strength/ARGB high byte; negative preserves current"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "target RGB; negative preserves current"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x203
@@ -5113,21 +5475,25 @@ evidence = "Ghidra handler 0x4229a0; negative operands read current obj+0x60, th
 i = 1
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x204
@@ -5149,21 +5515,25 @@ evidence = "Ghidra /v2: op_0x204_handler@0x422a60 resolves operand 4 as a string
 i = 1
 role = "destination surface slot"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "x"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "y"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "CP932 string"
 observed_types = ["string", "g-str", "l-str", "l-str-ptr"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x205
@@ -5186,31 +5556,37 @@ details = "The field width includes an optional sign. Bit 0 zero-pads; bit 1 cen
 i = 1
 role = "destination surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "x"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "y"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "value"
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "field width (characters, including sign)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "format/alignment flags"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x207
@@ -5233,41 +5609,49 @@ evidence = "Ghidra /v2: op_0x207_handler@0x422b50 constructs source [x,y,x+w,y+h
 i = 1
 role = "source_surface"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "destination_surface"
 observed_types = ["imm", "g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "source_x"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "source_y"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "width"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "height"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "destination_x"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "destination_y"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x208
@@ -5289,16 +5673,19 @@ evidence = "SC0000 label_12649: set-texture(resId,slot) then 0x208(slot)->w,h fe
 i = 1
 role = "slot"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "out_width"
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "out_height"
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x20a
@@ -5321,6 +5708,7 @@ evidence = "Ghidra op_0x20a_publish_adv_text_layout@0x422ce0 passes the requeste
 i = 1
 role = "layout_slot (0 = current)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x20b
@@ -5342,36 +5730,43 @@ evidence = "Ghidra /v2: op_0x20b_handler@0x422d50 converts x/y/width/height to a
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x20c
@@ -5411,6 +5806,7 @@ evidence = "Ghidra /v2: op_0x20d_select_render_target@0x422e10 passes operand 1 
 i = 1
 role = "surface slot; >=1000 selects the backbuffer"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x20e
@@ -5450,16 +5846,19 @@ details = "Implemented through IHost.PlayModalMovieToSurface. Its operand uses t
 i = 1
 role = "packed_resource_id"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "surface_slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "movie_flags"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x212
@@ -5481,11 +5880,13 @@ evidence = "Ghidra /v2: handler 0x4230c0 indexes ctx+0x14d54, which is text-mana
 i = 1
 role = "ADV layout slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "retained wait-indicator object handle"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x213
@@ -5507,16 +5908,19 @@ evidence = "Ghidra /v2: handler 0x423110 indexes the ADV layout pointer table at
 i = 1
 role = "ADV layout slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "first retained glyph handle"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "retained glyph capacity"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x215
@@ -5538,11 +5942,13 @@ evidence = "Ghidra: handler 0x42a0b0 passes ECX=ctx+0x46614 to 0x47f280, which s
 i = 1
 role = "out_slot_status"
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "handle_id"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x216
@@ -5564,11 +5970,13 @@ evidence = "SYS4422 handler 0x42a0f0 reads EngineCtx+0x46d14 + slot*0x14; SYS443
 i = 1
 role = "out"
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x217
@@ -5590,21 +5998,25 @@ evidence = "Ghidra handler 0x4231b0 (dispatch ctx[0x26c93+0x217]); FUN_0047e960(
 i = 1
 role = "handle"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "a"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "b"
 observed_types = ["imm", "g-int", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "c"
 observed_types = ["imm", "g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x218
@@ -5626,21 +6038,25 @@ evidence = "Ghidra handler 0x42a130; FUN_0047f360(obj op1) + 3x FUN_00550850→F
 i = 1
 role = ""
 observed_types = ["g-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode]]
 op = 0x219
@@ -5662,21 +6078,25 @@ evidence = "Ghidra handler 0x423240 (was unanalyzed; function created this sessi
 i = 1
 role = ""
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x21a
@@ -5698,21 +6118,25 @@ evidence = "Ghidra handler 0x42a1b0; FUN_0047f2e0(obj op1) + 3x→FUN_00425fb0(2
 i = 1
 role = ""
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["g-int", "l-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["g-int", "l-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode]]
 op = 0x21b
@@ -5721,19 +6145,21 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "line-id?"
-category = "marker"
-summary = "1 imm; mov->0x21b->stmt-end; near save/load-messkip — likely line/stmt id, verify not msg-control"
+name = "set-tick-presentation"
+category = "draw"
+summary = "(enabled) - store enabled != 0 in tick_presentation_enabled. Under draw mode 1 the outer tick advances the presentation frame timer and may render only while it is set or run-state bits 0x2400 are active; op 0x247 queries it."
 noop_headless = true
-source = "harness"
+source = "investigation"
 confidence = "med"
 depends_on = []
-evidence = ""
+evidence = "Ghidra /v2: op_0x21b_set_tick_presentation@0x4232d0 stores (fetch(1) != 0) at ctx+0x99294; engine_main_tick_with_exception_policy (0x411c61) requires it or run-state 0x2400 before moving frame_timer_current and calling gfx_render_frame under gfx_draw_mode 1; op_0x247_handler@0x42a5a0 writes it back to operand 1. Corpus: value 1 in every ADV line-template voice-reset block (26,856 Himegari sites), 0 at 150 sites. The historical name line-id? was a guess; the exact visible consequence of value 0 is not yet traced."
+details = "Port status (2026-10-06): stepped as a no-op."
 
 [[opcode.semantics.args]]
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x21c
@@ -5772,11 +6198,13 @@ evidence = "Ghidra handler 0x423310 -> gfx_object_clone@0x47e4f0. Worker require
 i = 1
 role = ""
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x21e
@@ -5798,31 +6226,37 @@ evidence = "Ghidra 0x47eaa0 calls matrix builder 0x48af1d for target obj+0xac. C
 i = 1
 role = ""
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = ""
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x21f
@@ -5844,36 +6278,43 @@ evidence = "Ghidra handler 0x423410 -> gfx_object_set_rotation_channel@0x47eb70;
 i = 1
 role = "object handle"
 observed_types = ["imm", "g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "delay milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "duration milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "rotation axis X"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "rotation axis Y"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = "rotation axis Z"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 7
 role = "target angle degrees"
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x220
@@ -5895,31 +6336,37 @@ evidence = "Ghidra 0x47ecc0 calls matrix builder 0x48afb1 for target obj+0x1ac. 
 i = 1
 role = ""
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = ""
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x222
@@ -5941,11 +6388,13 @@ evidence = "Ghidra /v2: op_0x222_handler@0x4235e0 calls gfx_present_object_range
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x223
@@ -5967,41 +6416,49 @@ evidence = "Ghidra handler 0x423620 -> gfx_queue_surface_alpha_transition@0x47f4
 i = 1
 role = "command record key"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "target surface slot"
 observed_types = ["imm", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "first object range start handle"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "first object range count"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "second object range start handle"
 observed_types = ["imm", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "second object range count"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "delay milliseconds"
 observed_types = ["imm", "g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "duration milliseconds"
 observed_types = ["imm", "g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x224
@@ -6040,26 +6497,31 @@ details = "Implemented by querying TranslationCurrent while preserving the missi
 i = 1
 role = ""
 observed_types = ["g-int", "l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "g-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["g-int", "l-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["g-int", "l-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["g-int", "l-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode]]
 op = 0x229
@@ -6081,26 +6543,31 @@ evidence = "Ghidra /v2: op_0x229_set_gfx_range_transform@0x423700 first calls gf
 i = 1
 role = "first affected object handle"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "affected handle count; zero disables"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "range-transform anchor X"
 observed_types = ["imm", "g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "range-transform anchor Y"
 observed_types = ["imm", "g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "range-transform anchor Z"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x22a
@@ -6122,16 +6589,19 @@ evidence = "Ghidra /v2: op_0x22a_set_gfx_range_scale_current@0x4237b0 divides al
 i = 1
 role = "X scale percent"
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 2
 role = "Y scale percent"
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "Z scale percent"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x22c
@@ -6153,16 +6623,19 @@ evidence = "Ghidra /v2: op_0x22c_set_gfx_range_translation_current@0x423900 pass
 i = 1
 role = "translation X"
 observed_types = ["l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 2
 role = "translation Y"
 observed_types = ["l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "translation Z"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x22d
@@ -6184,26 +6657,31 @@ evidence = "Ghidra /v2: op_0x22d_set_gfx_range_scale_target@0x423990 divides ope
 i = 1
 role = "delay milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "duration milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "target X scale percent"
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target Y scale percent"
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target Z scale percent"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x22f
@@ -6225,26 +6703,31 @@ evidence = "Ghidra /v2 assembly: op_0x22f_set_gfx_range_translation_target@0x423
 i = 1
 role = "delay milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "duration milliseconds"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "target translation X"
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target translation Y"
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target translation Z"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x230
@@ -6267,6 +6750,7 @@ evidence = "Ghidra /v2: op_0x230_reset_gfx_cyclic_animations@0x423ba0 fetches th
 i = 1
 role = "retained gfx object handle"
 observed_types = ["g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x231
@@ -6288,21 +6772,25 @@ evidence = "Native /v2 decompile: worker stores/reset start at obj+0x21c, period
 i = 1
 role = ""
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x232
@@ -6324,21 +6812,25 @@ evidence = "Ghidra /v2: gfx_op_0x232_anim_color@0x423c30 resolves sentinels then
 i = 1
 role = ""
 observed_types = ["g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x233
@@ -6361,26 +6853,31 @@ details = "Port status (2026-07-28): implemented as an independent retained-obje
 i = 1
 role = "retained object handle"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "period milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "target scale X percent"
 observed_types = ["l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target scale Y percent"
 observed_types = ["l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target scale Z percent"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x234
@@ -6402,26 +6899,31 @@ evidence = "Ghidra handler 0x423da0 converts axis ints to floats -> worker 0x47f
 i = 1
 role = ""
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x236
@@ -6444,21 +6946,25 @@ details = "The handler requires an existing destination texture, allocates/reuse
 i = 1
 role = "resource_id"
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "movie_flags"
 observed_types = ["imm", "g-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "start_delay_ms"
 observed_types = ["imm", "l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x238
@@ -6480,6 +6986,7 @@ evidence = "Ghidra /v2: op_0x238_handler@0x4240e0 zeros retained-gfx manager+0xb
 i = 1
 role = ""
 observed_types = ["imm", "g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x239
@@ -6501,31 +7008,37 @@ evidence = "Native /v2 worker and gfx_object_apply_transform_channels decompile.
 i = 1
 role = ""
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = ""
 observed_types = ["imm", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["imm", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x23a
@@ -6547,11 +7060,13 @@ evidence = "Ghidra /v2: op_0x23a_handler@0x42a440 indexes the surface table by o
 i = 1
 role = "out_active"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "surface_slot"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x23b
@@ -6577,36 +7092,43 @@ evidence_records = [
 i = 1
 role = "base_handle"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "style_index"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "value"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "destination_x"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "destination_y"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "digit_capacity"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "flags"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x23c
@@ -6662,11 +7184,13 @@ evidence = "Ghidra /v2: op_0x23f_query_surface_stop_time_ms@0x42a520 indexes Eng
 i = 1
 role = "out_stop_time_ms"
 observed_types = ["l-int", "l-ptr"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x241
@@ -6689,26 +7213,31 @@ evidence = "Ghidra /v2: op_0x241_play_movie_to_surface_at_position@0x4247e0 uses
 i = 1
 role = "universal packed movie resource id"
 observed_types = ["l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "surface slot"
 observed_types = ["l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "movie flags and sound-route policy"
 observed_types = ["l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "start delay ms"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "initial playback position ms"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x242
@@ -6731,11 +7260,13 @@ evidence = "Ghidra /v2: op_0x242_set_object_animation_detached@0x4249d0 calls gf
 i = 1
 role = "handle_id"
 observed_types = ["l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "animation control flags; bit 0 = detached/nonblocking"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x243
@@ -6774,6 +7305,7 @@ evidence = "Ghidra /v2: op_0x248_set_tiled_surface_edge_length@0x424af0 directly
 i = 1
 role = "tile edge length in pixels"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x249
@@ -6795,16 +7327,19 @@ evidence = "Ghidra /v2: op_0x249_load_raw_texture_surface@0x424b20 is instructio
 i = 1
 role = "universal packed SYS4INI/AAI catalog id"
 observed_types = ["imm", "l-int", "l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "surface slot"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "RGB888 colorkey; negative disables colorkey"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x24d
@@ -6827,61 +7362,73 @@ evidence = "Ghidra /v2: op_0x24d_play_movie_mask_transition@0x424db0 opens opera
 i = 1
 role = "new retained-command range key"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "scratch movie surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "old/source retained-object range start"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "old/source retained-object range count"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "mask destination x"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "mask destination y"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "mask width"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "mask height"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 9
 role = "mask direction/mode"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 10
 role = "universal packed movie resource id"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 11
 role = "movie start delay in milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 12
 role = "total transition duration in milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x24e
@@ -6904,6 +7451,7 @@ evidence = "Ghidra /v2: op_0x24e_handler@0x425070 writes operand 1 directly to E
 i = 1
 role = "flags"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x258
@@ -6926,11 +7474,13 @@ evidence = "Ghidra /v2: op_0x258_set_surface_persistence_flags@0x4250a0 reads th
 i = 1
 role = "surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "persistence flags"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x259
@@ -6968,6 +7518,7 @@ evidence = "Ghidra /v2: op_0x2bd_set_font_bold@0x4251c0 writes enabled?700:0 to 
 i = 1
 role = ""
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2bf
@@ -6989,16 +7540,19 @@ evidence = "Ghidra /v2: op_0x2bf_schedule_sfx_start@0x425240 calls sfx_set_delay
 i = 1
 role = "sound channel (0..9)"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "start mode forwarded to SFX start worker"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "delay in milliseconds"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2c0
@@ -7021,16 +7575,19 @@ evidence = "Ghidra /v2: op_0x2c0_schedule_voice_playback@0x425290 forwards three
 i = 1
 role = "voice_id"
 observed_types = ["l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "playback_variant"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "delay_ms"
 observed_types = ["l-ptr"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2c5
@@ -7053,11 +7610,13 @@ details = "This is raw strlen(bytes), not a .NET UTF-16 character count. BUNKI c
 i = 1
 role = "destination"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "string"
 observed_types = ["g-str", "l-str", "l-str-ptr"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x2c6
@@ -7080,11 +7639,13 @@ details = "This is character count rather than .NET UTF-16 length or raw CP932 b
 i = 1
 role = "character count out"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "source string"
 observed_types = ["l-str"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x2c8
@@ -7107,21 +7668,25 @@ details = "The release call uses nonnegative in-range indices and count 1. Port 
 i = 1
 role = "substring out"
 observed_types = ["l-str-ptr"]
+access = ["write-string"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "source string"
 observed_types = ["l-str"]
+access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "start character index"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "character count"
 observed_types = ["imm"]
+access = ["read"]
 [[opcode]]
 op = 0x4
 label = "u00417E30"
@@ -7481,11 +8046,13 @@ text = "SYS4422 handler @0x41cd40 and SYS4433 handler @0x41ad80 both arm the blo
 i = 1
 role = "captured full-frame surface slot"
 observed_types = []
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "transition timer interval / accelerated duration argument"
 observed_types = []
+access = ["read"]
 
 [[opcode]]
 op = 0x26
@@ -7526,21 +8093,25 @@ evidence = [
 i = 1
 role = "target captured surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "transition tick interval in milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "equal strip count"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "pattern selector mapped to native mode selector+4"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x28
@@ -7565,21 +8136,25 @@ evidence = [
 i = 1
 role = "target captured surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "transition tick interval in milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "equal strip count"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "pattern selector mapped to native mode selector+8"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2a
@@ -7732,51 +8307,61 @@ evidence = [
 i = 1
 role = "source surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "destination surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "source x"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "source y"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "source width"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "source height"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "destination x"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "destination y"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 9
 role = "destination width"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 10
 role = "destination height"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x33
@@ -7881,14 +8466,14 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041A360"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "lookup-array-negative"
+category = "compute"
+summary = "(dst_ref)(base)(index) - bind reference dst_ref to base[-index]; the negated-index twin of lookup-array 0x61. Installed in SYS4422 but unused by the recorded corpora."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra /v2: op_0x62_handler@0x426a70 negates fetch(3), resolves operand 2 with vm_operand_resolve_address and binds operand 1 through vm_pointer_operand_bind_element, otherwise identical to op_0x61_handler@0x426a20."
 
 [[opcode]]
 op = 0x65
@@ -8105,26 +8690,31 @@ evidence = [
 i = 1
 role = "target ADV layout/surface slot"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "first retained text record index"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "render flags"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "temporary primary text color"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "temporary text effect color"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x83
@@ -8150,16 +8740,19 @@ evidence = [
 i = 1
 role = "output redraw direction/state (-1, 0, or 1)"
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "output retained entry layout slot"
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "output retained entry first-record index"
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x84
@@ -8859,6 +9452,7 @@ evidence = [
 i = 1
 role = "physical joystick button count output"
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x10e
@@ -9086,31 +9680,37 @@ evidence = [
 i = 1
 role = "inside result output (0 or 1)"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "point x"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "point y"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "pointer to vertex x coordinates"
 observed_types = ["l-ptr"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "pointer to vertex y coordinates"
 observed_types = ["l-ptr"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "vertex count"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x148
@@ -9235,6 +9835,7 @@ evidence = [
 i = 1
 role = "follow final retained glyph (boolean)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1be
@@ -9258,11 +9859,13 @@ evidence = [
 i = 1
 role = "out boolean"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "native sound channel (0..12)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x1c0
@@ -9591,11 +10194,13 @@ evidence = [
 i = 1
 role = "first retained gfx object handle"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "second retained gfx object handle"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x221
@@ -9668,31 +10273,37 @@ evidence = [
 i = 1
 role = "out: failure flag (0 found, 1 missing)"
 observed_types = ["g-int"]
+access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "retained gfx object handle"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "out: current rotation axis X"
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "out: current rotation axis Y"
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "out: current rotation axis Z"
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = "out: current rotation angle in degrees"
 observed_types = ["g-int"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
 
 [[opcode]]
 op = 0x22b
@@ -9733,31 +10344,37 @@ evidence = [
 i = 1
 role = "delay milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "duration milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "target rotation axis X"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target rotation axis Y"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target rotation axis Z"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = "target rotation angle in degrees"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x235
@@ -9782,26 +10399,31 @@ evidence = [
 i = 1
 role = "retained object handle"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "period milliseconds"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "target translation X"
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target translation Y"
 observed_types = ["imm", "l-int"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target translation Z"
 observed_types = ["imm"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
 
 [[opcode]]
 op = 0x237
@@ -9906,11 +10528,13 @@ evidence = [
 i = 1
 role = "movie surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "playback rate percent"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x247
@@ -9919,14 +10543,14 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00416390"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "query-tick-presentation"
+category = "draw"
+summary = "(out) - write 1 when tick_presentation_enabled (set by op 0x21b) is nonzero, otherwise 0. Installed in SYS4422 but unused by the recorded corpora."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
-depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+source = "investigation"
+confidence = "med"
+depends_on = [0x21b]
+evidence = "Ghidra /v2: op_0x247_handler@0x42a5a0 calls vm_operand_write(1, ctx+0x99294 != 0)."
 
 [[opcode]]
 op = 0x24a
@@ -9967,51 +10591,61 @@ evidence = [
 i = 1
 role = "command object handle and command-map key"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "target surface slot"
 observed_types = ["l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "range A start handle"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "range A count"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "range B start handle"
 observed_types = ["l-ptr"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "range B count"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "wipe/strip mode 0..11"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "pattern thickness in pixels"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 9
 role = "start delay in milliseconds"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 10
 role = "duration in milliseconds"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x250
@@ -10036,51 +10670,61 @@ evidence = [
 i = 1
 role = "command_handle"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "target_surface"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "range_start"
 observed_types = ["g-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "range_count"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "start_length"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "start_angle_degrees"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "end_length"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "end_angle_degrees"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 9
 role = "delay_ms"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 10
 role = "duration_ms"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x251
@@ -10105,61 +10749,73 @@ evidence = [
 i = 1
 role = "command_handle"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "target_surface"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "range_start"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "range_count"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "start_length"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "start_center_x"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "start_center_y"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "end_length"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 9
 role = "end_center_x"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 10
 role = "end_center_y"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 11
 role = "delay_ms"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 12
 role = "duration_ms"
 observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x252
@@ -10259,6 +10915,12 @@ evidence = "Ghidra matching handlers: SYS4422 op_0x25a_set_display_background_co
 evidence_records = [
   { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "matching handlers, display background workers, and Kamidori natural startup", profile_ids = ["himegari", "kamidori"], engine_revisions = ["SYS4422", "SYS4433"], confidence = "high", text = "SYS4422 handler @0x4253a0 and SYS4433 handler @0x423120 store mode 1 plus the RGB operand and recreate a logical-canvas-sized surface filled with that color at alpha 255. Kamidori SYSTEM4.BIN@0x1f3 supplies zero." }
 ]
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x25b
@@ -10442,56 +11104,67 @@ evidence = [
 i = 1
 role = "ADV layout slot (zero selects current)"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "layout-relative destination x"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "layout-relative destination y"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "source surface slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "source x"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "source y"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "cell width"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "cell height"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 9
 role = "atlas columns"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 10
 role = "exclusive terminal frame"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 11
 role = "frame period"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2be
@@ -10788,16 +11461,19 @@ evidence = [
 i = 1
 role = "destination integer-cell span"
 observed_types = ["g-int", "l-int", "l-ptr"]
+access = ["address"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "signed dword fill value"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "cell count"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2d9
@@ -10838,41 +11514,49 @@ evidence = [
 i = 1
 role = "style_index"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "surface_slot"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
 role = "atlas_x"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
 role = "atlas_y"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
 role = "digit_width"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 6
 role = "digit_height"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 7
 role = "source_cell_spacing"
 observed_types = ["imm"]
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 8
 role = "destination_cell_spacing"
 observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2db
@@ -10891,6 +11575,12 @@ depends_on = []
 evidence = [
   { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, text resource rebuild, glyph measurement, and natural startup", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x2db_set_text_aspect_mode@0x4235c0 stores the operand at text-manager+0x313d0 and rebuilds font resources. Modes 0/1/2 alter glyph metric and ordinary/vertical-font selection; SYSTEM4.BIN@0xbd supplies mode 1. Live ADV worker adv_text_append_horizontal_glyph_records@0x45b710 uses MS Gothic reference CP932 0x8c83 gmCellIncX/Y at text-manager+0x313e8/+0x313ea for nonzero-mode overflow and horizontal advance: single-byte codes use half X, double-byte codes full X. Record bottom uses requested font size plus effect Y for nonzero render mode, independently of the overflow metric. SYS4422 has no installed handler in this slot." }
 ]
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2dc
@@ -10915,6 +11605,7 @@ evidence = [
 i = 1
 role = "out: installed font-family count, or -1 when empty"
 observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x2dd
@@ -10939,11 +11630,13 @@ evidence = [
 i = 1
 role = "out: installed font-family face name, or empty when invalid"
 observed_types = ["g-str", "l-str"]
+access = ["write-string"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "zero-based installed font-family index"
 observed_types = ["l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2de
@@ -10962,6 +11655,18 @@ depends_on = []
 evidence = [
   { method = "native-re", artifact = "Kamidori SYS4433 Ghidra /kamidori/SYS4433", scope = "SYS4433 handler, operand conversion, font-family cache lookup, and natural startup", profile_ids = ["kamidori"], engine_revisions = ["SYS4433"], confidence = "high", text = "op_0x2de_find_font_family_index@0x42bac0 reads operand 2 as a string, calls text_find_font_family_index@0x423a50, and writes its zero-based index or -1 result to operand 1. The lookup ignores one leading '@'. Natural boot reaches CHECKCONFIG.BIN@0x0; SYS4422 has no handler in this slot." }
 ]
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-str"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x2df

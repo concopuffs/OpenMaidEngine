@@ -4639,6 +4639,193 @@ Manual DEBUGMAP acceptance confirms that reachable-tile overlays and movement no
 route and that player combat is reachable. Any remaining work at this frontier should start from the
 concrete combat discrepancies observed in that run rather than from movement search or dispatch.
 
+### VM operand accessors and per-opcode operand access (2026-10-06)
+
+Handlers never read operand dwords directly. Each asks one of a small accessor family for "operand N"
+of the current instruction. The family reads `frame_pc` (SYS4422 `ctx+0x53d2c`, SYS4433 `ctx+0x57fb8`)
+and indexes the instruction's `(type, value)` pairs by its operand-index argument. Every accessor below is
+named and plate-commented in both `/v2` and `/kamidori/SYS4433`:
+
+| Access kind | SYS4422 | SYS4433 | Index arg | Behavior |
+|---|---|---|---|---|
+| read | `vm_operand_fetch@0x41b940` | `0x4198d0` | 1 | int32 value of any operand form (see value semantics below) |
+| read-float | — | `vm_operand_fetch_float@0x419c30` | 1 | float value; integer forms convert and strings use `atof` |
+| read-string | `vm_operand_read_string_buffer@0x418860`, `vm_operand_read_std_string@0x41b480`, `vm_operand_format_as_string@0x41af90` | `0x418ff0`, `0x425750`, `0x419360` | 1 (`std_string`: 2, after the hidden return) | text; numbers become full-width CP932 digits |
+| write | `vm_operand_write@0x425fb0` | `0x426750` | 1 | int32 store |
+| write-string | `vm_operand_write_string@0x42b5b0` | `0x42c600` | 1 | string store (types 5/8/0xb/0xe) |
+| write-float | — | `vm_operand_write_float@0x426ca0` | 1 | float store, converted for integer destinations |
+| bind | `vm_pointer_operand_bind_element@0x416180`, `vm_pointer_operand_write@0x416090` | `0x416900`, `0x416810` | 1 | rebinds a reference variable (types 6/8/0xc/0xe) |
+| address | `vm_operand_resolve_address@0x425a50` | `0x4261a0` | 1 | backing-cell address; a reference yields its target |
+| string-cell | `vm_operand_global_string_cell@0x415fe0` | `0x416760` | 1 | global string cell index of a global string or string reference; local strings throw |
+| ref-slot | `vm_pointer_operand_slot@0x415eb0` | `0x416630` | 1 | address of a reference variable's own slot (types 6/0xc only) |
+| cell | `vm_operand_lvalue@0x415f30` | `0x4166b0` | 1 | global-integer cell index (types 3/6/0xc) |
+
+`tools/operand_access.py` derives every opcode's operand contract from this family without Ghidra. It reads
+the dispatch table from the constructor's immediate stores. For SYS4422 this reproduces `build/op-handler-map.json`
+exactly, 420 of 420 handlers; SYS4433 has 437. The tool then walks each handler and two callee levels, and records
+every accessor call with its constant operand index. MSVC hoists argument pushes above conditional branches, so the
+backward argument scan follows branch predecessors. SYS4433's accessors were mapped by aligning same-opcode
+handlers with SYS4422; every alignment was unanimous (808/808 `fetch` calls, for example). Decompiling both images
+then confirmed each classification; it corrected one early guess, `0x415fe0`, from a string storage address to a
+global string cell index (the string twin of `vm_operand_lvalue`, used by `0x1a9`/`0x1aa`).
+
+Results, recorded in `vm-map/opcodes.toml` as `access`/`access_by_abi`:
+
+- **677 operand contracts for 234 observed opcodes.**
+- **No literal store operands:** no immediate or inline string ever occupies a write, bind, address, or cell
+  position in either corpus.
+- **One operand without native access:** `0x1a7` (`comment`). Its handlers (SYS4422 `op_0x1a7_comment@0x416630`,
+  SYS4433 `0x416db0`) only set the instruction length. The operand is an editor comment compiled into the bytecode
+  (2,086 Himegari and 3,672 Kamidori string-literal uses).
+- **Value-dependent calls:** three fetches use a value-dependent index. In `0xc6` and `0x1ba`, operand 1 is compared
+  with 2 and that value is then passed as the index. Unobserved `0x14c` reads operand 3 although the Kelebek argc is
+  2, so its upstream framing is suspect.
+- **One revision difference, value type only.** Every operand has the same direction (read, write, bind, address) in
+  both revisions. SYS4433 reads and writes floats for 67 operands of the transform family (`0x1fd`–`0x1ff`,
+  `0x217`–`0x21a`, `0x21e`–`0x220`, `0x227`–`0x22f`, `0x233`–`0x235`), where SYS4422 uses integers.
+- **Missing code targets.** Three code-target operands were absent from the upstream code-target table:
+  - value-switch case and default targets (`0xa2` operand 2, `0xa3` operand 2), which left 80+12 Himegari and 95+11
+    Kamidori targets unlabeled and unrelocatable;
+  - the timed-callback abort PC (`0xd5` operand 1). `timed_callback_sequence_tick` jumps to `codebase + abort_pc*4`,
+    but every corpus site passes the `-1` sentinel.
+
+  A scan of all read operands for values that always land on instruction starts found no other missing targets.
+
+### Statement blocks -- opcodes `0x1f4` / `0x1f5` (2026-10-06)
+
+`op_0x1f4_statement_block_begin@0x417390` opens an atomic statement block. The outermost open sets
+`statement_block_active` (`ctx+0x5f2fc`). It also restarts the presentation-timer baseline:
+`frame_timer_current` moves to `frame_timer_previous` and receives a fresh `timeGetTime`. A nested open only
+increments `statement_block_depth` (`ctx+0x5f300`).
+
+`op_0x1f5_statement_block_end@0x4173e0` decrements the depth first. The outermost close clears the flag and,
+unless `script_launch_dispatch_active` is set, tail-calls `script_launch_queue_dispatch_next@0x40f6e0`. That function
+itself returns immediately while a block is open.
+
+While a block is open, `engine_main_tick_with_exception_policy@0x411840` withholds presentation and every deferred
+start. Run-state bit `0x400` (parked on an animation/surface transition) is the only override. The withheld
+services are:
+
+- `sfx_tick_delayed_starts@0x4827e0` on the sound facade at `ctx+0x14024`
+- `voice_tick_delayed_playback@0x4884d0`
+- pending per-surface movie starts (`movie_start_pending_after_sync_delay@0x4633b0`, over `ctx+0x52bd4[0..999]`)
+- `gfx_render_frame`, including the forced-redraw path at `ctx+0x51b6c`
+- run-state `0x1000`/`0x800` wait progression
+- the run-state `0x2000` modal service at `ctx+0x52bd0`
+
+A block therefore makes one compiled command atomic. Nothing it draws is presented, and none of its audio, movie or
+queued-script starts take effect, until the outermost block closes.
+
+The corpus structure confirms that these are compiler-emitted brackets:
+
+- **Balanced:** blocks are balanced in all 481 base scripts and nest at most two deep.
+- **Never crossed by a jump:** no `jmp`, `jcc`, switch, coroutine or timer edge crosses a block boundary (0 of
+  roughly 160,000 edges). Only `call` targets and callback registrations, which are code references rather than
+  transfers, point across.
+- **They wrap macro expansions.** Almost all blocks are parts of the ADV line template:
+  - the 5-instruction voice-state reset
+  - the 15-instruction speaker nameplate (`0x1d2`, nameplate draw, `0x7a`)
+  - the 2-instruction `call` + `0x1bf`
+
+Three neighbors inside that template are ordinary audio/presentation operations, not compiler markers. Their
+historical labels were structural guesses:
+
+- `op_0x1bf_arm_voice_duck_release@0x416c70` (formerly "call-end") advances the one-shot stage of
+  `voice_bgm_duck_control_flags`. Unless bit 0 suppresses ducking, it arms `voice_bgm_duck_release_armed`
+  (`ctx+0x6dbec`), so the tick restores ducked BGM once the voice ends. It mirrors the tick's own post-delayed-voice
+  code.
+- `op_0x1d5_mute_next_voice@0x416cb0` (formerly "cond-block") sets `voice_mute_next_flags` (`ctx+0x1493c`, voice
+  facade `+0x434`).
+  - The next `0xc4` promotes the flag to `0x10001`, and `voice_play_indexed_asset@0x4883a0` plays that voice on
+    channel 12 at volume 0. The muted voice keeps its timing for Auto.
+  - The following voice clears the flag.
+  - The template emits it only when there is no speaker or the character's voice is disabled (`G[0x2e49]`).
+- `op_0x21b_set_tick_presentation@0x4232d0` (formerly "line-id?") stores `operand != 0` in
+  `tick_presentation_enabled` (`ctx+0x99294`). Under draw mode 1, the tick advances the presentation timer and may
+  render only while it is set or run-state `0x2400` is active. Op `0x247` queries it.
+
+**Port status:** `VirtualMachine` still steps all five as no-ops.
+
+- Statement-block deferral is a runtime-fidelity gap: presentation, delayed audio and movie starts, and queued
+  launches can occur mid-command.
+- The `0x1d5` gap is audible: voices the player disabled per character still play in the port.
+
+### VM value, array and call semantics relevant to compilation (2026-10-06)
+
+These facts define the core of a language that compiles to AGE bytecode (roadmap §3.3, "Decided language
+architecture"). They come from the `/v2` decompilation; the SYS4433 float accessors above are the only observed
+departure.
+
+**Values.**
+
+- **Generic reads.** `vm_operand_fetch` always yields an int32. Float forms (types 1/4/0xa) truncate toward zero
+  (`__ftol2_sse`). Inline and variable strings (types 2/5/0xb) parse with `atol`. String references (8, 0xe), float
+  references (0xd) and type 7 throw.
+- **Generic writes.** `vm_operand_write` stores int32 into integer cells and integer references, and `(float)value`
+  into float cells. String destinations throw.
+- **Strings.** Numbers read as strings become full-width CP932 digits (`ascii_to_fullwidth_cp932_inplace`). The
+  only string operations are `set-string`, `concat` and string (in)equality (`0x192`–`0x195`).
+- **SYS5-style vector types.** The types `0x8003`/`0x8009`/`0x8005`/`0x800b` are handled by the accessors but
+  never occur in either corpus.
+
+**Operators.**
+
+- **Arithmetic:** `add`, `sub` and `mul` wrap at 32 bits. `div` and `mod` truncate toward zero with no zero-divisor
+  guard.
+- **Bitwise and shifts:** `and` and `or` are bitwise. `sar` and `shl` shift by `n & 31`.
+- **Comparisons:** `eq`, `ne`, `lt`, `lte`, `gr` and `gre` are signed and produce 0 or 1.
+- **No other operators.** There is no xor, not, negate or short-circuit operator; compiled code synthesizes them.
+- **Negative constants are never encoded as immediates.** The original compiler emits `sub tmp 0 n`: 19,899
+  Himegari and 36,623 Kamidori sites, mostly `-1` and `-1000`. The only negative immediates are `0xd5`'s `-1`
+  abort sentinel.
+
+**References and arrays.**
+
+- `lookup-array` (`0x61`) binds `dst_ref` to `base[index]`.
+- `lookup-array-negative` (`0x62`, installed but unused) binds `dst_ref` to `base[-index]`.
+- `lookup-array-2d` (`0x12c`) binds `dst_ref` to `base[row*stride + column]`, with operands
+  `(dst_ref)(base)(row)(stride)(column)`.
+- Elements are 4-byte cells, or 0x1c-byte string records. No bounds are checked.
+- `take-address` (`0x63`) aliases a reference to a variable's storage, or to another reference's target.
+
+**Control and calls.**
+
+- `jcc` (`0xa0`) transfers to operand 2 when the condition is non-zero and to operand 3 when it is zero; `-1`
+  falls through.
+- `call` (`0x8f`) pushes the return offset on the frame's 256-entry local return stack and jumps. `call -1` is a
+  no-op.
+- `ret` (`0x5`) pops that stack and resumes there unless the entry is `-1`. It also restores a pending run-state
+  snapshot from `ctx+0x5f2f4`/`0x5f2f8`.
+- **Callback bodies are local subroutines.** Every native callback dispatcher calls `vm_return_stack_push_pc@0x405330`
+  before redirecting `frame_pc`: the timed scheduler, `adv_input_dispatch_callbacks`, `adv_interpreter_tick`,
+  `adv_input_service_poll`, and two helpers. The callback's `ret` therefore resumes the waiting opcode. The corpus
+  agrees: every hotspot, mouse, joystick and timed callback target reaches `ret`, as do 72,792 of 72,794 local-call
+  targets.
+- **Coroutine handlers are the exception.** Handlers registered by `0x7b` instead end at `coroutine-resume` (`0x7c`)
+  in all 1,924 Himegari registrations.
+
+**Persistent global state.**
+
+- **Only a prefix of each bank is saved.** Numbered saves serialize a mutable prefix of each global bank (Himegari:
+  402,459 integer cells, i.e. below `0x6241b`, and 789 strings; Kamidori: 1,037,327 and 802). Initialization tables
+  above the prefix are rebuilt at boot and never saved.
+- **Consequence for native mods.** State that must survive a save under native AGE therefore has to occupy unused
+  cells inside the prefix.
+- **Size source still unknown.** The port carries these sizes as validated per-profile `bankDimensions`. The native
+  source of the sizes (`ctx+0xa0ccc`…`0xa0ce0` for the full banks and `ctx+0xa0ca8`… for the saved prefix) is not
+  yet traced. It is neither a SYS4INI settings key nor the 0x90-byte VM metadata block. That block is a small
+  sequential table (Himegari `0, 34, 1…28, 1×5, 29`) whose meaning is also open.
+
+**New scripts under native AGE.** Mounted `*.AAI` append catalogs (see "S4AC append catalogs") already provide the
+mechanism:
+
+- a catalog with an unused selector addresses its scripts as `selector << 24 | index`;
+- loose basenames take precedence over the archive;
+- op `0x143` runs each mounted catalog's record 0 during INIT2.
+
+Generating such a catalog is the native route for mod-added scripts. It has not yet been exercised with a synthetic
+catalog.
+
 ---
 
 ## Native walls backlog (targets for this loop)

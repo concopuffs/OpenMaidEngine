@@ -378,6 +378,20 @@ def emit_json(model: M.Model, runtime_implemented: frozenset[int] = frozenset())
         out["opcodes"].append(e)
     return json.dumps(out, ensure_ascii=False, indent=2) + "\n"
 
+def _operand_access_md(oc: M.Opcode) -> str:
+    """`1` read · `2` read (SYS4422) / read-float (SYS4433), code targets marked."""
+    parts = []
+    for arg in sorted(oc.semantics.args, key=lambda a: a.get("i", 0)):
+        if "access_by_abi" in arg:
+            kinds = " / ".join(f"{'+'.join(v)} ({abi})" for abi, v in sorted(arg["access_by_abi"].items()))
+        elif "access" in arg:
+            kinds = "+".join(arg["access"])
+        else:
+            continue
+        target = " (code target)" if arg.get("i") in oc.code_target_args else ""
+        parts.append(f"`{arg.get('i')}` {kinds}{target}")
+    return " · ".join(parts)
+
 def emit_reference_md(
     model: M.Model, runtime_implemented: frozenset[int] = frozenset()
 ) -> str:
@@ -442,6 +456,9 @@ def emit_reference_md(
                 L.append(f"- **handler bindings:** {bindings}")
             if s:
                 L.append(f"- **summary:** {s.summary}" if s.summary else "- **summary:** —")
+                operands = _operand_access_md(oc)
+                if operands:
+                    L.append(f"- **operand access:** {operands}")
                 L.append(f"- **grounding:** source={s.source}, confidence={s.confidence}"
                          + (f", noop_headless={s.noop_headless}" if s.noop_headless else ""))
                 if s.depends_on:

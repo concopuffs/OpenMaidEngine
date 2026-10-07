@@ -155,9 +155,48 @@ No single language should serve every layer:
 Lua and Open Maid Script solve different problems. Lua would run **alongside** the AGE VM and talk to a
 controlled engine API; it would not need to compile into AGE bytecode. Open Maid Script, if justified
 later, should be a narrow content language for scenes, dialogue, choices and common presentation rather
-than an attempt to replace Lua as a general-purpose language. Its compatibility backend should compile
-to AGE bytecode; extended-only constructs could later target an engine-owned representation or generated
-Lua coroutines. Defer the exact language boundary until the ADV and hook APIs expose stable abstractions.
+than an attempt to replace Lua as a general-purpose language. It compiles to AGE bytecode.
+
+#### Decided language architecture (2026-10-06)
+
+The following principles, decided on 2026-10-06, supersede the earlier plan to design the idiomatic surface
+last. The complete language spec is written next, under `docs/superpowers/specs/`, before any compiler code.
+
+1. **Open Maid Script means exactly what the AGE VM means.** The core covers the following and nothing else:
+   - typed globals and per-script locals, with compiler temporaries
+   - references (array lookup, address-of)
+   - side-effect-free expressions
+   - structured control flow and value switches
+   - local subroutines, cross-script calls and exit
+   - code references for callbacks and coroutines
+   - inline strings and integer arrays
+   - atomic statement blocks
+   - compiled comments
+   - a raw-instruction escape
+
+   The core grammar is complete once it covers this model. Anything the VM cannot do is an engine capability or
+   Lua, never new grammar.
+2. **The language grows only along four planned axes, none of them grammar:**
+   - **Intrinsics:** generated per engine ABI from `vm-map/opcodes.toml`, including its operand access
+     contracts.
+   - **Symbols:** generated from the per-game global registries and the script catalog.
+   - **Libraries:** inline templates and statically linked subroutines, written in the language itself.
+     Each game's dialogue, choice and presentation constructs live in its prelude, shipped with its
+     per-game base mod (§3.8).
+   - **Targets:** `native` permits only installed original opcodes. `extended` adds opcodes in a reserved
+     range that only Open Maid Engine implements, which keeps one VM and one backend.
+3. **Compiler and decompiler are one two-way system.**
+   - Every construct defines its canonical lowering, and the lowering matches Eushully's compiler.
+   - Library templates, compiled with placeholder parameters, become the decompiler's patterns. A lift is
+     accepted only when recompiling it reproduces the consumed instructions.
+   - The three representations below are therefore levels of one language: assembly is a debug dump of the
+     compiler's intermediate form, lowered OMS has no templates, and idiomatic OMS uses library templates.
+   - Byte-exact layout belongs in a sidecar written by the decompiler, not in the source.
+4. **Fragment compilation is designed in from the start.** A fragment compiles against a decompiled base
+   script's locals, labels and site identities. This serves the patch operations in §3.6.
+
+The bytecode evidence behind these choices is recorded in `docs/sys4-format-notes.md` ("Compiler-emitted
+structure") and `docs/engine-re.md` ("VM operand accessors", "Statement blocks").
 
 AGE assembly remains important. It is the most exact route for changing original logic and the only
 route likely to preserve native-engine compatibility, but it should not be the normal requirement for
@@ -533,7 +572,8 @@ When Phase C/D actually begins, proceed incrementally:
 9. Add namespaced saved state, virtual assets/scripts and controlled UI/audio services.
 10. Integrate AGE assembly/reassembly, lossless lowered-OMS decompilation and instruction-level
     transforms; establish byte-identical corpus round trips before readable lifting.
-11. Design the idiomatic Open Maid Script surface only after the stable ADV/event vocabulary is known.
+11. Grow idiomatic Open Maid Script as per-game prelude libraries. The language itself is specified up front
+    (see "Decided language architecture" in §3.3); the ADV/event vocabulary lands in preludes as it stabilizes.
 
 This ordering avoids baking Lua or a speculative DSL into the VM core. It also leaves room for another
 runtime later while making the selectors, event contracts and mod packages language-independent.

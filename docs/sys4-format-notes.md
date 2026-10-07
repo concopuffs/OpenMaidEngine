@@ -649,6 +649,64 @@ inside the opcode handler. That transformation is not part of the on-disk format
 must copy the footer's plain dwords, including two's-complement negative values, without applying the native
 memory-cookie transform.
 
+## Compiler-emitted structure and layout regularities (2026-10-06)
+
+Eushully's original compiler left a consistent fingerprint. These facts constrain any tool that reassembles or
+compiles scripts. Counts cover the 481 Himegari base scripts and the 732 Kamidori catalog scripts (base + appends).
+
+**Tables.** T1, T2 and T3 can always be derived from the code: every `0x71`, `0x03` and `0x8f` instruction, in
+code order. They match in 481/481 and 732/732 scripts, so a compiler can generate them rather than carry them.
+
+**Inline data.**
+
+- **No string sharing.** No string is shared between references: each type-2 operand points at its own copy, and
+  180 Himegari and 331 Kamidori scripts store identical text more than once.
+- **Usually first-use order.** Strings and op-`0x64` blobs normally follow the order of their first reference.
+  The exceptions are 36 Himegari and 42 Kamidori scripts.
+- **Unreferenced data.** 91 Himegari and 263 Kamidori scripts carry dwords in the data area that no operand
+  references, for example a lone empty string in `FIELD.BIN`.
+- **Consequence for reassembly.** Byte-exact reassembly must preserve order and unreferenced data. A canonical
+  rebuild does not need them.
+
+**Code targets.** The code-target operand positions are:
+
+- `0x7b` 1 and 2; `0x8c` 1; `0x8f` 1; `0x90` 5–7
+- `0xa0` 2 and 3; `0xa2` 2; `0xa3` 2
+- `0xcc` 2; `0xd4` 3 and 4; `0xd5` 1; `0xfb` 2
+
+`0xffffffff` means "no target / fall through". The value-switch pair `0xa2`/`0xa3` and the timed-callback abort PC
+(`0xd5` 1, always `-1` in the corpora) were missing from the upstream table until 2026-10-06 (`docs/engine-re.md`,
+"VM operand accessors").
+
+**What each kind of code reference points at.** These follow from the corpus and from how the engine dispatches
+callbacks (`docs/engine-re.md`, "VM value, array and call semantics"):
+
+- **Local-call targets** (`0x8f`) are subroutine bodies that reach `ret`.
+- **Callback targets** are subroutine bodies that reach `ret`. This covers hotspot (`0x90` 5–7), mouse (`0xcc`),
+  joystick (`0xfb`) and timed (`0xd4`) callbacks.
+- **Coroutine handlers** registered by `0x7b` end at `coroutine-resume` (`0x7c`).
+- **Value-switch targets** (`0xa2`) are ordinary labels inside the enclosing flow.
+
+**Negative constants.** No negative number is ever encoded as an immediate. The compiler materializes it with
+`sub tmp 0 n` (19,899 Himegari and 36,623 Kamidori sites), so a byte-faithful compiler must do the same.
+
+**Control-flow shapes.** Of the 117,540 Himegari `jcc` instructions, 114,722 are "jump forward when false" with no
+true target, the canonical `if`/`while` lowering. 2,578 jump forward when true. The remaining 240 carry both targets
+or jump backward; Kamidori has the same profile. Loops branch back with `jmp`.
+
+**Statement blocks.** Statement blocks (`0x1f4`/`0x1f5`) are balanced in every script, nest at most two deep, and
+are never crossed by a branch. They wrap macro expansions, chiefly the ADV line template. Their runtime effect is
+atomic deferral (`docs/engine-re.md`, "Statement blocks").
+
+**Comments.** Op `0x1a7` is a compiled source comment that the engine ignores.
+
+**Shared helper subroutines.** Identical local subroutine bodies recur across scripts, which means the original
+source included shared routines into each script that used them:
+
+- Himegari has 219 bodies shared by more than one script; 18 of them appear in 50 or more scripts, and the largest
+  are 110 instructions. 329 of 481 scripts contain at least one.
+- Kamidori has 414 shared bodies; 363 of 732 scripts contain at least one.
+
 ## Patch-override caveat (re-confirmed)
 
 49 loose script `.BIN` files in the game root shadow DATA1 copies at runtime and differ slightly in size;

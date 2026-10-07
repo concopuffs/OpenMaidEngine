@@ -72,6 +72,11 @@ name = "sfx_channel_resource_ids"
 type = "int"
 note = "base of ten packed resource ids retained by the sound-effect facade; op 0xb4 loads a channel, op 0xb6 clears it, and numbered-save layouts restore then reopen every positive id"
 [[field]]
+offset = 0x1493c
+name = "voice_mute_next_flags"
+type = "uint"
+note = "voice-facade +0x434: op 0x1d5 sets 1; op 0xc4 promotes it to 0x10001 so voice_play_indexed_asset plays that voice at volume 0, and the following voice (or op 0x1bc) clears it"
+[[field]]
 offset = 0x14d54
 name = "adv_text_layout_ptr_table"
 type = "void*"
@@ -347,6 +352,16 @@ name = "ret_stack_b"
 type = "void*"
 note = "per-frame return stack (companion)"
 [[field]]
+offset = 0x5f2fc
+name = "statement_block_active"
+type = "int"
+note = "set by the outermost op 0x1f4 and cleared by its matching op 0x1f5; while set the outer tick defers delayed SFX/voice/movie service and forced redraw (unless run_state_flags bit 0x400) and script_launch_queue_dispatch_next refuses to dispatch"
+[[field]]
+offset = 0x5f300
+name = "statement_block_depth"
+type = "int"
+note = "nested op 0x1f4 count beyond the outermost block; op 0x1f5 decrements it before clearing statement_block_active"
+[[field]]
 offset = 0x5f304
 name = "sleep_timer"
 type = "int"
@@ -487,6 +502,11 @@ name = "voice_bgm_duck_saved_volume"
 type = "int"
 note = "BGM volume saved by the voice-start duck helper before applying MusicFadeOnVoicePlayingVol"
 [[field]]
+offset = 0x6dbec
+name = "voice_bgm_duck_release_armed"
+type = "int"
+note = "armed by op 0x1bf and the tick's post-delayed-voice path unless voice_bgm_duck_control_flags bit 0 suppresses ducking; cleared by voice_bgm_duck_begin. The tick restores ducked BGM after the voice when set; op 0xbf skips re-applying the duck volume while set"
+[[field]]
 offset = 0x6dbf0
 name = "voice_bgm_duck_control_flags"
 type = "uint"
@@ -566,6 +586,11 @@ offset = 0x99290
 name = "gfx_draw_mode"
 type = "int"
 note = "loaded from set:DrawMode during runtime initialization; Himegari uses mode 1, selecting the cached GetGlyphOutline text path"
+[[field]]
+offset = 0x99294
+name = "tick_presentation_enabled"
+type = "int"
+note = "op 0x21b stores (operand != 0); under gfx_draw_mode 1 the outer tick advances frame_timer_current and may render only when set or run-state 0x2400 is active; op 0x247 queries it"
 [[field]]
 offset = 0x9b24c
 name = "dispatch_table"

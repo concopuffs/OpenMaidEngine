@@ -44,6 +44,14 @@ public class Sys4CorpusScannerTests
         Assert.Equal(
             observation.Opcodes.Order(),
             scan.OpcodeOccurrences.Keys.Order());
+        Assert.Equal(scan.OpcodeOccurrences.Keys.Order(), scan.OperandTypeOccurrences.Keys.Order());
+        foreach ((int opcode, IReadOnlyList<IReadOnlyDictionary<int, long>> positions)
+                 in scan.OperandTypeOccurrences)
+        {
+            Assert.Equal(table.Argc(opcode), positions.Count);
+            foreach (IReadOnlyDictionary<int, long> position in positions)
+                Assert.Equal(scan.OpcodeOccurrences[opcode], position.Values.Sum());
+        }
         if (profileId == "kamidori")
         {
             Assert.True(scan.AppendScriptCount > 0);

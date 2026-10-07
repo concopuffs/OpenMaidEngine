@@ -46,6 +46,7 @@ CORE_TESTS = (
     "test_init_table_profile.py",
     "test_locate_page.py",
     "test_opcodes.py",
+    "test_operand_access.py",
     "test_paths.py",
     "test_sys4load.py",
     "frida/test_dump_engine.py",

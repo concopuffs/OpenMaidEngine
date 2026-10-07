@@ -22,6 +22,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x4d7c` | `shared_profile_state` | `void*` | embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata |
 | `0x5190` | `shared_profile_int_table` | `int` | open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it |
 | `0x144e0` | `sfx_channel_resource_ids` | `int` | base of ten packed resource ids retained by the sound-effect facade; op 0xb4 loads a channel, op 0xb6 clears it, and numbered-save layouts restore then reopen every positive id |
+| `0x1493c` | `voice_mute_next_flags` | `uint` | voice-facade +0x434: op 0x1d5 sets 1; op 0xc4 promotes it to 0x10001 so voice_play_indexed_asset plays that voice at volume 0, and the following voice (or op 0x1bc) clears it |
 | `0x14d54` | `adv_text_layout_ptr_table` | `void*` | text_manager at ctx+0x14940 plus layout pointer table +0x414; ops 0x212/0x213 configure each layout's wait-indicator handle and retained glyph-object range at layout+0x64/+0x68/+0x6c |
 | `0x14e08` | `gfx_default_object_slot` | `int` | op 0x80 selected slot; op 0x1d9 substitutes it when its explicit object-slot operand is zero |
 | `0x14e0c` | `text_primary_font_height` | `int` | primary LOGFONTA.lfHeight at text-manager+0x4cc; stored as a negative pixel height and updated by op 0x75 |
@@ -75,6 +76,8 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x55180` | `numeric_glyph_styles` | `int` | base of ten 20-byte decimal-glyph atlas records used by ops 0x13a/0x23b; opcode validation also admits one out-of-range record |
 | `0x55248` | `ret_stack_a` | `void*` | per-frame return stack (op 0x8f call pushes) |
 | `0x552e8` | `ret_stack_b` | `void*` | per-frame return stack (companion) |
+| `0x5f2fc` | `statement_block_active` | `int` | set by the outermost op 0x1f4 and cleared by its matching op 0x1f5; while set the outer tick defers delayed SFX/voice/movie service and forced redraw (unless run_state_flags bit 0x400) and script_launch_queue_dispatch_next refuses to dispatch |
+| `0x5f300` | `statement_block_depth` | `int` | nested op 0x1f4 count beyond the outermost block; op 0x1f5 decrements it before clearing statement_block_active |
 | `0x5f304` | `sleep_timer` | `int` | sleep timer object (op 0xc8; +8 active, +0x14 start-ms, +0x18 duration) |
 | `0x5f3ac` | `timed_callback_timer` | `int` | elapsed timer object armed by op 0xd5 and sampled by the timed callback scheduler |
 | `0x5f64c` | `adv_wait_indicator_timer` | `int` | elapsed timer started by op 0x1ce and ADV wait setup to select the animated input-wait indicator frame |
@@ -103,6 +106,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x6dbd4` | `adv_read_skip_state` | `int` | current ADV read/click-skip service state; queried by op 0x1cc, maintained from ReadTextSkip + per-PC read history |
 | `0x6dbe4` | `adv_auto_voice_pending` | `int` | set by play-voice ops when voice service exists; Auto waits for voice completion then arms AutoMessageTime0; op 0x1bc resets |
 | `0x6dbe8` | `voice_bgm_duck_saved_volume` | `int` | BGM volume saved by the voice-start duck helper before applying MusicFadeOnVoicePlayingVol |
+| `0x6dbec` | `voice_bgm_duck_release_armed` | `int` | armed by op 0x1bf and the tick's post-delayed-voice path unless voice_bgm_duck_control_flags bit 0 suppresses ducking; cleared by voice_bgm_duck_begin. The tick restores ducked BGM after the voice when set; op 0xbf skips re-applying the duck volume while set |
 | `0x6dbf0` | `voice_bgm_duck_control_flags` | `uint` | transient mask replaced by op 0x1cf; bit 0 suppresses automatic voice-triggered BGM attenuation |
 | `0x6dbf4` | `message_skip_queued_voice_id` | `int` | latest voice resource deferred by op 0xc4 while run_state_flags message-skip bit is active |
 | `0x6dbf8` | `message_skip_queued_voice_arg` | `int` | second argument retained with message_skip_queued_voice_id; Himegari op 0xc4 stores zero |
@@ -119,6 +123,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x6f8b8` | `script_launch_dispatch_active` | `int` | suppresses immediate dispatch while op 0x143 batches mounted append record-zero ids and while a queued script is active |
 | `0x9928c` | `save_frame_boundary_index` | `int` | highest script-frame index included by numbered-save layouts 2/3; -1 falls back to cur_ctx_index; op 0x1ad marks current frame and op 0x2 clears after unwinding below it |
 | `0x99290` | `gfx_draw_mode` | `int` | loaded from set:DrawMode during runtime initialization; Himegari uses mode 1, selecting the cached GetGlyphOutline text path |
+| `0x99294` | `tick_presentation_enabled` | `int` | op 0x21b stores (operand != 0); under gfx_draw_mode 1 the outer tick advances frame_timer_current and may render only when set or run-state 0x2400 is active; op 0x247 queries it |
 | `0x9b24c` | `dispatch_table` | `void*` | opcode->handler table base [0x400]; handler(op) = *(0x9b24c + op*4) |
 | `0x9c658` | `sys4ini_count` | `int` | SYS4INI record count at embedded FileDB+0x40c |
 | `0x9c65c` | `archive_name_table` | `void*` | archive-name table base at embedded FileDB+0x410; arc_id*0x100 indexes it |

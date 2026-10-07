@@ -59,6 +59,25 @@ evidence = "301/301 uniform"
 i = 1
 role = "x"
 observed_types = ["imm"]
+access = ["read"]
+[[opcode.semantics.args]]
+i = 2
+access = ["read"]
+[[opcode.semantics.args]]
+i = 3
+access = ["read"]
+[[opcode.semantics.args]]
+i = 4
+access = ["read"]
+[[opcode.semantics.args]]
+i = 5
+access = ["read"]
+[[opcode.semantics.args]]
+i = 6
+access = ["read"]
+[[opcode.semantics.args]]
+i = 7
+access = ["read"]
 [[opcode]]
 op = 0x1f4
 label = "u004160D0"
@@ -188,6 +207,36 @@ def test_lint():
     e, w = M.lint(M.load(write_tmp(cycle)))
     check(any("composition cycle" in message for message in e), "ABI layer cycles are linted")
 
+def _with_access(index, replacement):
+    """FIXTURE with operand `index` of 0x90 carrying `replacement` lines instead of its access."""
+    original = 'i = %d\naccess = ["read"]\n' % index
+    assert original in FIXTURE
+    return FIXTURE.replace(original, 'i = %d\n' % index + replacement, 1)
+
+def test_operand_access_lint():
+    clean = M.load(write_tmp(FIXTURE))
+    check(M.arg_access(clean.opcodes[0x90].semantics.args[0], "SYS4422") == ("read",),
+          "arg_access resolves a revision-neutral access list")
+    e, w = M.lint(M.load(write_tmp(_with_access(7, ""))))
+    check(any("operand 7 has no SYS4422 access contract" in m for m in e),
+          "an observed operand without an access contract is an error")
+    by_abi = M.load(write_tmp(_with_access(4, 'access_by_abi = { SYS4422 = ["read-float"] }\n')))
+    check(M.lint(by_abi)[0] == [], "access_by_abi satisfies the observed ABI")
+    check(M.arg_access(by_abi.opcodes[0x90].semantics.args[3], "SYS4422") == ("read-float",),
+          "arg_access prefers the ABI-specific list")
+    e, w = M.lint(M.load(write_tmp(_with_access(4, 'access_by_abi = { SYS9999 = ["read"] }\n'))))
+    check(any("unknown ABI 'SYS9999'" in m for m in e), "access_by_abi ABI ids are linted")
+    e, w = M.lint(M.load(write_tmp(_with_access(2, 'access = ["peek"]\n'))))
+    check(any("unknown kinds ['peek']" in m for m in e), "access kinds are linted")
+    e, w = M.lint(M.load(write_tmp(_with_access(
+        3, 'access = ["read"]\naccess_by_abi = { SYS4422 = ["read"] }\n'))))
+    check(any("not both" in m for m in e), "access and access_by_abi are exclusive")
+    e, w = M.lint(M.load(write_tmp(_with_access(5, 'access = ["write"]\n'))))
+    check(any("code-target operand 5 is not read" in m for m in e), "code targets must be read")
+    e, w = M.lint(M.load(write_tmp(_with_access(
+        7, 'access = ["read"]\n[[opcode.semantics.args]]\ni = 8\naccess = ["read"]\n'))))
+    check(any("operand 8: index outside argc 7" in m for m in e), "operand indices stay within argc")
+
 def test_bootstrap():
     import opcodes_build as B
     from pathlib import Path
@@ -292,6 +341,7 @@ def test_emit_views():
 def main():
     test_load()
     test_lint()
+    test_operand_access_lint()
     test_bootstrap()
     test_emit_semantics()
     test_emit_runtime()

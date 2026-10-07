@@ -47,7 +47,7 @@ def packages():
 NOISE = {"mov", "add", "sub", "mul", "div", "mod", "and", "or", "sar", "shl", "xor",
          "eq", "ne", "lt", "lte", "gr", "gre", "jcc", "jmp", "set-string",
          "show-text", "end-text-line", "wait-for-input", "stmt-begin", "stmt-end",
-         "block-mark", "cond-block", "label-def", "line-id?", "comment", "set-font",
+         "block-mark", "mute-next-voice", "label-def", "set-tick-presentation", "comment", "set-font",
          "lookup-array", "lookup-array-2d", "stmt-desc?", "bit-set", "bit-reset",
          "check-bit", "text-param?", "gfx-geom?", "count?", "resolve-handle?",
          "create-texture", "draw-texture", "draw-string", "draw?", "draw-blit?"}

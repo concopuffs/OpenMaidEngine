@@ -584,8 +584,11 @@ CODE_TARGET_ARGS: dict[int, frozenset[int]] = {
     0x008f: frozenset((1,)),
     0x0090: frozenset((5, 6, 7)),
     0x00a0: frozenset((2, 3)),
+    0x00a2: frozenset((2,)),
+    0x00a3: frozenset((2,)),
     0x00cc: frozenset((2,)),
     0x00d4: frozenset((3, 4)),
+    0x00d5: frozenset((1,)),
     0x00fb: frozenset((2,)),
 }
 CONTROL_FLOW = frozenset(CODE_TARGET_ARGS)
