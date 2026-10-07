@@ -172,9 +172,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       profile-owned state, identity, and serialized bank dimensions
     │   ├── Age.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
-    │                                       open-maid-script-design.md): operand contracts from opcodes.json and
-    │                                       the intermediate form with its byte-exact decoder/encoder (gate 1);
-    │                                       referenced by Age.Cli and the tests, not by the Godot runtime
+    │                                       open-maid-script-design.md): operand contracts (Abi/), intermediate
+    │                                       form and byte-exact decoder/encoder (Ir/), lexer/parser/AST (Syntax/),
+    │                                       compiler and canonical layout rules (Compile/), layout sidecar
+    │                                       (Layout/), decompilers (Text/); referenced by Age.Cli and the tests,
+    │                                       not by the Godot runtime
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, and WAV sanitization

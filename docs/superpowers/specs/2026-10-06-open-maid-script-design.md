@@ -145,7 +145,7 @@ that needs `extended` is a compile error under `native`.
 - **Literals.**
   - integers: decimal, `0x` hex or `0b` binary, with an optional leading `-`;
   - floats such as `1.5`;
-  - strings in `"…"` with `\"`, `\\` and `\n` escapes;
+  - strings in `"…"` with `\"`, `\\`, `\n`, `\t` and `\uXXXX` escapes;
   - integer arrays `[a, b, …]`, allowed only where an inline array is legal.
 - **Statement termination.** A newline ends a statement unless the line ends inside brackets or with a binary
   operator. `;` may also separate statements.
@@ -238,7 +238,8 @@ or `exit` inside one, except in decompiled raw code.
 - literals, `float 1.5` and `"text"`;
 - `G[a]`, `GF[a]`, `GS[a]`, `GP[a]`, `GSP[a]` for global cells;
 - `L[a]`, `LF[a]`, `LS[a]`, `LP[a]`, `LFP[a]`, `LSP[a]` for local cells;
-- `type(0x800b, v)` for any other type tag.
+- `type(0x800b, v)` for any other type tag, wrapping an integer, label or data operand;
+- `data(0x…, …)` for a referenced data item with no string or array shape, stored exactly.
 
 The escape represents every instruction the VM accepts, including unknown opcodes.
 
@@ -552,6 +553,8 @@ contracts.
 | Gate | Status | Evidence |
 |---|---|---|
 | 1. Encoder/decoder | **passed 2026-10-06** | `Age.Cli oms-roundtrip`: 520/520 Himegari and 732/732 Kamidori catalog scripts byte-identical; tables always derived; workspace tests `OmsIrCodecTests.Installed*CorpusRoundTripsByteIdentically` |
+| 2. Raw level (`BIN → OMS(raw) + sidecar → BIN`) | **passed 2026-10-06** | `Age.Cli oms-roundtrip --level raw`: 520/520 and 732/732 byte-identical; workspace tests `OmsSourceTests.Installed*CorpusRoundTripsThroughRawSource` |
+| 2. Core level | not started | structured lifting with per-statement recompile verification, raw `@op` fallback |
 
 Gate-1 residue, reported by `Age.Cli oms-residue`:
 
@@ -564,3 +567,10 @@ Gate-1 residue, reported by `Age.Cli oms-residue`:
     text at runtime.
   - Both decoders now accept the single-byte katakana range 0xA1–0xDF.
 - **Unreferenced data:** 660 / 3,492 dwords are preserved as raw items.
+
+Raw-level sidecar use:
+
+- 383 of 520 Himegari and 389 of 732 Kamidori scripts need an empty sidecar.
+- Data order or unreferenced data needs one in 132 / 332 scripts.
+- Local counts need one in 5 / 16 scripts, and magic in 5 / 0 (Himegari's `SYS4424` scripts).
+- No string needed exact bytes: every decoded string re-encodes canonically.
