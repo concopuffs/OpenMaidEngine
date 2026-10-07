@@ -761,8 +761,43 @@ results feed a `jcc` directly). Nested `if`s that share an end label produce exa
 - **The top integer slot is never used.** Slot `F0−1` is unused in all 449 / 594 scripts that use integer locals.
 - **Temporary pool.** Compiler temporaries form a pool just below that slot, reused statement by statement.
   Named locals and local arrays sit at the bottom of the bank. The `jcc` condition temporary is usually the pool's
-  base: Himegari puts it at `F0−5` in 260 scripts, Kamidori at `F0−7` in 294. The pool size therefore varies by
-  compiler revision and script, and the exact rule belongs to the encoder's round-trip work.
+  base: Himegari puts it at `F0−5` in 260 scripts, Kamidori at `F0−7` in 294. The pool size varies by script.
+- **Temporaries never outlive their statement.** An integer temporary is a pool cell, and a reference temporary
+  (`LP`/`LSP`) any reference cell, that is never live on entry to a basic block. Each is written once and read
+  once, by a later instruction of the same statement. Element reads and writes always go through a reference
+  temporary bound by `lookup-array`/`lookup-array-2d` (`0x61`/`0x12c`).
+
+**How statements are lowered** (measured by the Open Maid Script core round trip, 2026-10-07; the decompiler
+folds 331,075 / 330,708 instructions back into expressions and recompiles both corpora byte-identically):
+
+- **Evaluation order.** A binary operation computes its binary operands first, in order, and binds its element
+  operands last, just before the instruction that consumes them. So `t < L2 + L4` with `t` an element emits the
+  `add`, then the `lookup`, then the `lt`. An element computes its indices before its lookup, so nested elements
+  bind innermost first.
+- **Assignment forms.**
+  - `x = a op b` writes straight into `x`: the operands first, then the lookup of an element target.
+  - `x op= b` looks the element target up first and then looks it up again as the left operand.
+  - `x = y` evaluates `y`, then the target, then `mov`.
+  - Call arguments are evaluated one at a time, in order.
+  - An `int x = e` style initialization occasionally lowers through a temporary plus `mov` (about 100 Himegari
+    sites).
+- **Temporary numbering.** The slots come from a labelling pass separate from emission, with one counter per
+  statement shared by integer and reference temporaries:
+  - operands are labelled in operand order; an assignment labels its value before its target, and a compound
+    assignment its target first;
+  - a binary node labels its binary operands (post-order), then itself, then its element operands;
+  - an element labels itself, then its indices.
+
+  Label `k` is integer slot `pool base + k` or reference slot `k`. In 191 / 53 scripts the first two integer
+  reference registers come in the order `LP1`, `LP0` instead.
+- **Residue.** The labelling rule reproduces 221,708 of 228,256 Himegari statements with temporaries and 182,964 of
+  191,296 Kamidori. The rest show allocator state carried across statements:
+  - the swapped `LP0`/`LP1` order flips for single statements;
+  - an `if` condition's references stay bound through its body (for example `ADDRANDOMITEM`'s body lookup at
+    `LP2`);
+  - `SCJUMP`'s long guard chains use high reference slots.
+
+  OMS records these as per-statement sidecar overrides (spec §7.2).
 
 **Statement blocks.** Statement blocks (`0x1f4`/`0x1f5`) are balanced in every script and nest at most two deep.
 No control transfer (`jmp`, `jcc`, switch case or jump) crosses a block boundary: 0 of 156,275 / 221,359 edges.

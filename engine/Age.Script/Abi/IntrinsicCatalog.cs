@@ -32,9 +32,13 @@ public sealed class IntrinsicCatalog
 
     public string AbiId { get; }
 
+    /// <summary>The contracts the catalog was built from (operand access for the decompiler's folding).</summary>
+    public OpcodeContracts Contracts { get; }
+
     public IntrinsicCatalog(OpcodeTable table, OpcodeContracts contracts)
     {
         AbiId = table.AbiId;
+        Contracts = contracts;
         var nameCounts = table.Entries
             .Select(entry => SnakeName(contracts.SemanticNames.GetValueOrDefault(entry.Opcode)))
             .Where(name => name != null)

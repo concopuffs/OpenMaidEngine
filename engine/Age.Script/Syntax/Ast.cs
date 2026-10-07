@@ -51,10 +51,16 @@ public sealed record BinaryExpr(SourceSpan Span, string Op, Expr Left, Expr Righ
 /// <summary><c>op operand</c> with <c>-</c>, <c>!</c> or <c>~</c>.</summary>
 public sealed record UnaryExpr(SourceSpan Span, string Op, Expr Operand) : Expr(Span);
 
+/// <summary>Element access: <c>base[index]</c>, or <c>base:stride[row][col]</c> written <c>G[0x341ab:0x35][r][c]</c>
+/// (spec §6.1). It lowers to a lookup into a reference temporary.</summary>
+public sealed record ElementExpr(SourceSpan Span, RawStorage Base, RawOperand? Stride, IReadOnlyList<Expr> Indices)
+    : Expr(Span);
+
 // ---------------------------------------------------------------------------------------------- statements
 
-/// <summary><c>target = value</c>; the target is a storage operand.</summary>
-public sealed record AssignStatement(SourceSpan Span, RawOperand Target, Expr Value) : Statement(Span);
+/// <summary><c>target = value</c>, or <c>target op= value</c> when <see cref="CompoundOp"/> is set; the target is a
+/// storage cell or an element.</summary>
+public sealed record AssignStatement(SourceSpan Span, Expr Target, Expr Value, string? CompoundOp = null) : Statement(Span);
 
 /// <summary>An intrinsic argument; <see cref="Out"/> marks an operand the intrinsic writes (spec §6.3).</summary>
 public sealed record CallArgument(Expr Value, bool Out);
@@ -91,6 +97,10 @@ public sealed record LoopStatement(SourceSpan Span, IReadOnlyList<Statement> Bod
 public sealed record WhileStatement(SourceSpan Span, Expr Condition, IReadOnlyList<Statement> Body) : Statement(Span);
 
 public sealed record DoWhileStatement(SourceSpan Span, IReadOnlyList<Statement> Body, Expr Condition) : Statement(Span);
+
+/// <summary><c>for init; condition; step { … }</c> (spec §7.1); each clause may be empty.</summary>
+public sealed record ForStatement(SourceSpan Span, Statement? Init, Expr? Condition, Statement? Step,
+                                  IReadOnlyList<Statement> Body) : Statement(Span);
 
 public sealed record AtomicStatement(SourceSpan Span, IReadOnlyList<Statement> Body) : Statement(Span);
 

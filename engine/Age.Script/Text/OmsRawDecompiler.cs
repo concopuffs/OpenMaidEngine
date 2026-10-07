@@ -7,8 +7,10 @@ using Age.Script.Syntax;
 
 namespace Age.Script.Text;
 
-/// <summary>Source text plus the layout sidecar needed to recompile it to the original bytes.</summary>
-public sealed record OmsDecompilation(string Source, OmsLayout Layout);
+/// <summary>Source text plus the layout sidecar needed to recompile it to the original bytes. At the core level,
+/// <see cref="FoldedInstructions"/> counts instructions folded into expressions and <see cref="FoldRejections"/> the
+/// folds that lowering did not reproduce.</summary>
+public sealed record OmsDecompilation(string Source, OmsLayout Layout, int FoldedInstructions = 0, int FoldRejections = 0);
 
 /// <summary>
 /// Raw-level decompiler (spec §11, level <c>raw</c>): every instruction becomes an <c>@op</c> statement with

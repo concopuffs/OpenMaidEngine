@@ -194,14 +194,18 @@ names registry globals by their registry names.
 - **Unary:** `-` and `~`.
 - **Operands:** element access `a[i]` and `a[r][c]`, column access `t[i].col`, and intrinsic calls with one
   output (§6.3).
+- **Raw element access.** An undeclared cell is indexed directly: `G[0x3306][i]` binds an element of the array that
+  starts at `G[0x3306]`. Two-dimensional access names the row stride inside the cell's brackets:
+  `G[0x341ab:0x35][row][col]` is element `row * 0x35 + col` (op `0x12c`). The base bank chooses the reference
+  type: integer cells bind `LP`, string cells `LSP`, float cells `LFP`.
 
 Three rules govern evaluation:
 
 - **No side effects.** Expressions have none, because the VM has no value-returning calls. Evaluation order is
   therefore unobservable.
 - **`&&`/`||` evaluate both sides.** They produce 0/1 from `and`/`or` of normalized booleans, which is what the
-  original code does. Use nested `if`s when the second operand must be guarded, for example against division by
-  zero.
+  original code does. Comparisons and logical operators are already 0/1; any other operand is normalized with
+  `!= 0` first. Use nested `if`s when the second operand must be guarded, for example against division by zero.
 - **Synthesized operators.** `~`, `^`, unary `-` and `!` have no native opcode. They are synthesized
   (`sub 0 x`, `eq x 0`, and so on) and documented as such.
 
@@ -310,15 +314,29 @@ the statement's first temporary.
 
 ### 7.2 Expressions and temporaries
 
-- **Three-address code.** An assignment whose right-hand side is one operation writes straight to its
-  destination (`x = a + b` → `add x a b`). Deeper expressions go through temporaries.
-- **Temporary pools.** Integer temporaries come from a pool just below the spare top slot of the integer bank,
-  reused statement by statement. Reference temporaries come from the local reference bank; their placement is
-  not yet measured.
-- **The canonical allocator** must reproduce the original's choices. Himegari's condition temporary is usually
-  `F0−5` and Kamidori's `F0−7`, so the allocator is fixed per ABI revision by round-trip measurement (§12, gate 2).
-- **Element access** lowers to `lookup-array` or `lookup-array-2d` into a reference temporary, which is then used
-  as the operand. Assigning through an element binds the reference, then `mov`s through it.
+The original compiler's expression lowering was measured on both corpora; `docs/sys4-format-notes.md` ("How
+statements are lowered") records the facts. OMS lowers the same way, through one shared component
+(`Compile/ExpressionLowering.cs`) that both the compiler and the decompiler's fold check use.
+
+- **Three-address code.** An assignment whose value is an operation writes straight to its destination
+  (`x = a + b * c` → `mul t b c; add x a t`). Deeper operations go through temporaries.
+- **Evaluation order.** A binary operation computes its binary operands, then binds its element operands just
+  before its own instruction. `x = y` evaluates `y` before the target; `x op= y` binds an element target first and
+  binds it again as the left operand. Call operands are evaluated one at a time.
+- **Element access** lowers to `lookup-array` or `lookup-array-2d` into a reference temporary that is then used as
+  the operand, read or written.
+- **Temporary pool.** Integer temporaries come from the pool above the highest local integer the source names
+  (so they never collide with named cells). Reference temporaries start at slot 0 of their bank.
+- **Canonical numbering.** One counter per statement labels the temporaries in the original compiler's order. An
+  assignment labels its value, then its target; a binary node labels its binary operands, then itself, then its
+  element operands; an element labels itself, then its indices. Label `k` is pool slot `k` or reference slot `k`.
+- **Sidecar residue.** The decompiler keeps a fold only when lowering the folded statement reproduces its
+  instructions. Where the original slots differ from the canonical plan, the sidecar records them:
+  - `temp_base`: the pool's first slot, when it differs from the highest named local integer plus one;
+  - `ref_swap`: the script starts its integer-reference registers as `LP1`, `LP0`;
+  - `temps`: the exact slots of individual statements, keyed by the index of the statement's first instruction.
+
+  The residue is published in §16.
 
 ### 7.3 Header local counts
 
@@ -328,7 +346,9 @@ few dozen script/bank pairs, which are covered by the sidecar.
 ### 7.4 Constants
 
 - No folding. `const` names and literal arithmetic compile literally: `100 - 25` emits `sub t 100 25`.
-- A negative literal `-n` emits `sub t 0 n`.
+- A negative integer literal such as `-1` is an immediate, which the VM accepts as is. Unary minus on anything else,
+  including a parenthesized literal `-(1)`, emits `sub t 0 x`, which is how the original compiler built negative
+  values (`docs/sys4-format-notes.md`); decompiled code therefore prints it as `-(0x1)`.
 - An optional `--fold` flag (rebuild mode only) may fold, but never in preserve mode or canonical output.
 
 ### 7.5 Data and tables
@@ -515,7 +535,7 @@ port's VM tests and native traces.
 
 | Question | Blocks | Plan |
 |---|---|---|
-| Exact temporary-allocation rule per ABI | gate 2 residue | measure during gate 2; record the rule in the format notes |
+| Allocator state carried across statements | the gate 2 temporary residue (§16) | the labelling rule and the per-script reference order are recorded (format notes); the remaining overrides show references held through `if` bodies and LP0/LP1 order flips, to be modelled if the residue matters |
 | Library placement policy (where helpers sit physically) | canonical rebuild layout | census of helper offsets relative to script end and first use |
 | Free global cells inside the saved prefix | native `saved global` | array extents from registry/INIT data plus runtime write captures; base mod publishes free ranges |
 | Native acceptance of generated append catalogs, and save behavior with them | §9.3 | gate 6 experiment |
@@ -560,7 +580,7 @@ contracts.
 | 1. Encoder/decoder | **passed 2026-10-06** | `Age.Cli oms-roundtrip`: 520/520 Himegari and 732/732 Kamidori catalog scripts byte-identical; tables always derived; workspace tests `OmsIrCodecTests.Installed*CorpusRoundTripsByteIdentically` |
 | 2. Raw level (`BIN → OMS(raw) + sidecar → BIN`) | **passed 2026-10-06** | `Age.Cli oms-roundtrip --level raw`: 520/520 and 732/732 byte-identical; workspace tests `OmsSourceTests.Installed*CorpusRoundTripsThroughRawSource` |
 | 2. Core level, stage C1 (structure) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: 520/520 and 732/732 byte-identical with **0** raw `@op` statements; workspace tests `OmsCoreTests.Installed*CorpusRoundTripsThroughCoreSource` |
-| 2. Core level, stage C2 (expressions) | not started | fold temporaries into expressions only where recompiling reproduces the original allocator's choices (§7.2) |
+| 2. Core level, stage C2 (expressions, `for`, `while`) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: still 520/520 and 732/732 byte-identical, with 331,075 / 330,708 instructions folded into expressions; temporary overrides in 6,548 / 8,332 statements (2.9% / 4.4% of folded statements); `Age.Cli oms-temps` ranks the residue |
 
 Gate-1 residue, reported by `Age.Cli oms-residue`:
 
@@ -586,6 +606,22 @@ round trip exact:
   was.
 - **Iterative chains.** `else if` chains are parsed, lowered and printed iteratively, because the corpus has
   chains thousands of arms deep.
+
+Core stage C2 folds compiler temporaries back into expressions and recovers loops:
+
+- **Expressions:** operators with C precedence, `&&`/`||` over comparisons, unary minus, element access
+  (`G[0x3306][i]`, `G[0x341ab:0x35][r][c]`), and compound assignment (`+=` and the others).
+- **Loops:** `for init; c; step { … }` where the layout is `init; jmp cond; inc: step; cond: test`, and
+  `while c { … }` where a loop opens with its exit test. Himegari recovers 2,472 `for` and 62 `while` loops; 303
+  plain `loop`s remain.
+- **Rejected folds:** 211 / 219 statements whose lowering order differs from the canonical one keep their
+  temporaries explicit.
+- **Source size:** core source shrinks from 53.1 MB to 41.6 MB (Himegari) and from 70.3 MB to 59.0 MB (Kamidori).
+
+Core-level sidecar use:
+
+- Empty in 71 / 156 scripts.
+- `ref_swap` in 191 / 53 scripts, `temp_base` in 88 / 305, and `temps` in 376 / 497.
 
 Raw-level sidecar use:
 

@@ -113,6 +113,16 @@ public sealed class Parser
                 Expect(TokenKind.Identifier, "while");
                 return Finish(new DoWhileStatement(token.Span, body, ParseExpression()));
             }
+            case "for":
+            {
+                Next();
+                Statement? init = Peek().Is(TokenKind.Punct, ";") ? null : ParseSimple();
+                Expect(TokenKind.Punct, ";");
+                Expr? condition = Peek().Is(TokenKind.Punct, ";") ? null : ParseExpression();
+                Expect(TokenKind.Punct, ";");
+                Statement? step = Peek().Is(TokenKind.Punct, "{") ? null : ParseSimple();
+                return Finish(new ForStatement(token.Span, init, condition, step, ParseBlock()));
+            }
             case "atomic":
                 Next();
                 return Finish(new AtomicStatement(token.Span, ParseBlock()));
@@ -141,13 +151,24 @@ public sealed class Parser
                 _position += 2;
                 return Finish(new IndirectCallStatement(token.Span, ParseUnary()));
         }
+        return Finish(ParseSimple());
+    }
+
+    /// <summary>An assignment or a call, without its terminator (also the init and step clauses of <c>for</c>).</summary>
+    private Statement ParseSimple()
+    {
+        Token token = Peek();
         if (StorageBanks.TypeByBank.ContainsKey(token.Text) && Peek(1).Is(TokenKind.Punct, "["))
         {
-            RawOperand target = ParseRawOperand();
-            Expect(TokenKind.Punct, "=");
-            return Finish(new AssignStatement(token.Span, target, ParseExpression()));
+            Expr target = ParseStorageOrElement();
+            Token op = Next();
+            if (op.Is(TokenKind.Punct, "="))
+                return new AssignStatement(token.Span, target, ParseExpression());
+            if (op.Kind == TokenKind.Punct && CompoundOperators.Contains(op.Text))
+                return new AssignStatement(token.Span, target, ParseExpression(), op.Text[..^1]);
+            throw new OmsSyntaxException(op.Span, $"expected = or a compound assignment, found {op}");
         }
-        if (Peek(1).Is(TokenKind.Punct, "("))
+        if (token.Kind == TokenKind.Identifier && Peek(1).Is(TokenKind.Punct, "("))
         {
             Next();
             Next();
@@ -161,9 +182,9 @@ public sealed class Parser
                     arguments.Add(new CallArgument(ParseExpression(), isOut));
                 } while (Accept(TokenKind.Punct, ","));
             Expect(TokenKind.Punct, ")");
-            return Finish(new CallStatement(token.Span, token.Text, arguments));
+            return new CallStatement(token.Span, token.Text, arguments);
         }
-        throw new OmsSyntaxException(token.Span, $"unexpected {token}");
+        throw new OmsSyntaxException(token.Span, $"expected an assignment or a call, found {token}");
     }
 
     private Statement Finish(Statement statement)
@@ -249,6 +270,11 @@ public sealed class Parser
         ["*", "/", "%"],
     ];
 
+    private static readonly HashSet<string> CompoundOperators = new(StringComparer.Ordinal)
+    {
+        "+=", "-=", "*=", "/=", "%=", "&=", "|=", "<<=", ">>=",
+    };
+
     public Expr ParseExpression() => ParseBinary(0);
 
     private Expr ParseBinary(int level)
@@ -283,7 +309,37 @@ public sealed class Parser
             Expect(TokenKind.Punct, ")");
             return inner;
         }
+        if (token.Kind == TokenKind.Identifier && StorageBanks.TypeByBank.ContainsKey(token.Text)
+            && Peek(1).Is(TokenKind.Punct, "["))
+            return ParseStorageOrElement();
         return new OperandExpr(token.Span, ParseRawOperand());
+    }
+
+    /// <summary>A storage cell, optionally with a row stride (<c>G[0x341ab:0x35]</c>) and element indices.</summary>
+    private Expr ParseStorageOrElement()
+    {
+        Token bank = Expect(TokenKind.Identifier);
+        Expect(TokenKind.Punct, "[");
+        uint index = Expect(TokenKind.Integer).Integer;
+        RawOperand? stride = Accept(TokenKind.Punct, ":") ? ParseRawOperand() : null;
+        Expect(TokenKind.Punct, "]");
+        var cell = new RawStorage(bank.Span, bank.Text, index);
+        var indices = new List<Expr>();
+        while (Accept(TokenKind.Punct, "["))
+        {
+            indices.Add(ParseExpression());
+            Expect(TokenKind.Punct, "]");
+        }
+        if (indices.Count == 0)
+        {
+            if (stride != null) throw new OmsSyntaxException(bank.Span, "a row stride needs [row][col] indices");
+            return new OperandExpr(bank.Span, cell);
+        }
+        if (indices.Count != (stride == null ? 1 : 2))
+            throw new OmsSyntaxException(bank.Span, stride == null
+                ? "two-dimensional access needs a row stride: base:stride[row][col]"
+                : "a row stride takes exactly [row][col]");
+        return new ElementExpr(bank.Span, cell, stride, indices);
     }
 
     private RawOpStatement ParseRawOp()

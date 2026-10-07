@@ -55,6 +55,17 @@ if (args.Contains("oms-residue"))
     return 0;
 }
 
+if (args.Contains("oms-temps"))
+{
+    OmsInspect.TemporaryResidue(
+        catalog.EnumerateScripts().Select(packed => (
+            packed.Asset.Name, packed.PackedId, (Func<byte[]>)(() => assetStore.ReadAll(packed.Asset)))),
+        table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson),
+        int.TryParse(OptionValue("--limit"), out int tempLimit) ? tempLimit : 25, OptionValue("--match"),
+        OptionValue("--dump"));
+    return 0;
+}
+
 if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
 {
     // Open Maid Script gate 2 at the raw level: bytes -> OMS source + sidecar -> bytes.
@@ -79,6 +90,9 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
             source_bytes = source.SourceBytes,
             instructions = source.Instructions,
             raw_statements = source.RawStatements,
+            folded_instructions = source.FoldedInstructions,
+            fold_rejections = source.FoldRejections,
+            temp_overrides = source.TempOverrides,
             failures = source.Failures,
         }, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
     }
@@ -87,6 +101,7 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
         + $"scripts={source.Scripts} identical={source.Identical} empty-sidecars={source.EmptySidecars} "
         + $"sidecar-fields={string.Join(",", source.SidecarFieldUse.Select(pair => $"{pair.Key}:{pair.Value}"))} "
         + $"source-bytes={source.SourceBytes} instructions={source.Instructions} raw-statements={source.RawStatements} "
+        + $"folded={source.FoldedInstructions} fold-rejections={source.FoldRejections} temp-overrides={source.TempOverrides} "
         + $"failures={source.Failures.Count}");
     foreach (Age.Script.Ir.IrRoundTripFailure failure in source.Failures.Take(20))
         Console.Error.WriteLine($"  0x{failure.PackedId:x8} {failure.Name}: {failure.Error}");
@@ -95,23 +110,42 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
 
 if (args.Contains("oms-decompile"))
 {
-    // Print one catalog script as OMS source (and its sidecar when non-empty).
-    string scriptName = OptionValue("--script") ?? throw new ArgumentException("--script NAME is required");
+    // Print one catalog script as OMS source (and its sidecar when non-empty), or write every script to a directory.
+    var omsContracts = Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
+    var omsIntrinsics = new Age.Script.Abi.IntrinsicCatalog(table, omsContracts);
+    Age.Script.Text.OmsDecompilation DecompileEntry(PackedAssetEntry packed)
+    {
+        var decoded = Age.Script.Ir.IrDecoder.Decode(assetStore.ReadAll(packed.Asset), table, omsContracts, packed.Asset.Name);
+        return OptionValue("--level") is "raw"
+            ? Age.Script.Text.OmsRawDecompiler.Decompile(decoded, table.AbiId)
+            : Age.Script.Text.OmsCoreDecompiler.Decompile(decoded, table.AbiId, omsIntrinsics);
+    }
+    void WriteDecompilation(Age.Script.Text.OmsDecompilation decompiled, string path)
+    {
+        File.WriteAllText(path, decompiled.Source);
+        if (!decompiled.Layout.IsEmpty)
+            File.WriteAllText(Path.ChangeExtension(path, ".omslayout.json"), decompiled.Layout.ToJson());
+    }
+    if (OptionValue("--output-dir") is { } decompileDirectory)
+    {
+        Directory.CreateDirectory(decompileDirectory);
+        int written = 0;
+        foreach (PackedAssetEntry packed in catalog.EnumerateScripts())
+        {
+            WriteDecompilation(DecompileEntry(packed),
+                Path.Combine(decompileDirectory, Path.ChangeExtension(packed.Asset.Name, ".oms")));
+            written++;
+        }
+        Console.WriteLine($"oms-decompile: profile={selectedProfile.Profile.Id} scripts={written} output={decompileDirectory}");
+        return 0;
+    }
+    string scriptName = OptionValue("--script") ?? throw new ArgumentException("--script NAME or --output-dir DIR is required");
     PackedAssetEntry entry = catalog.EnumerateScripts().FirstOrDefault(packed =>
         string.Equals(packed.Asset.Name, scriptName, StringComparison.OrdinalIgnoreCase))
         ?? throw new ArgumentException($"no catalog script named {scriptName}");
-    var omsContracts = Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
-    var decodedScript = Age.Script.Ir.IrDecoder.Decode(assetStore.ReadAll(entry.Asset), table, omsContracts, entry.Asset.Name);
-    var decompiledScript = OptionValue("--level") is "raw"
-        ? Age.Script.Text.OmsRawDecompiler.Decompile(decodedScript, table.AbiId)
-        : Age.Script.Text.OmsCoreDecompiler.Decompile(decodedScript, table.AbiId,
-            new Age.Script.Abi.IntrinsicCatalog(table, omsContracts));
+    var decompiledScript = DecompileEntry(entry);
     if (OptionValue("--output") is { } decompileOutput)
-    {
-        File.WriteAllText(decompileOutput, decompiledScript.Source);
-        if (!decompiledScript.Layout.IsEmpty)
-            File.WriteAllText(Path.ChangeExtension(decompileOutput, ".omslayout.json"), decompiledScript.Layout.ToJson());
-    }
+        WriteDecompilation(decompiledScript, decompileOutput);
     else
     {
         Console.Write(decompiledScript.Source);
