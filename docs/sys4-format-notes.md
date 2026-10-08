@@ -379,6 +379,16 @@ The T1/T2/T3 indices refer to the three footer tables in the saved SYS4 script. 
 message boundary, T2 restores the inter-script call site, and T3 entries restore local returns as
 `T3[index] + 3`.
 
+A numbered save therefore records table positions, not code offsets. Relayout that keeps every table entry
+at its index leaves saves valid; inserting entries shifts every later index. Native evidence (2026-10-08,
+Kamidori): a sidecar-free rebuild of the translated SC0000 with three narration pages inserted before its
+first page adds six T1 entries there (F7 `0x816` → `0x81c`). A save made on the first inserted page and loaded
+against the unedited scene resumed on that scene's first page, the entry with the same index. Neither consumer
+depends on table order: `script_frame_restore_saved_layout@0x40f2d0` reads `table[index]` directly, and
+`read_text_db_find_message_index@0x468f50` searches T1 linearly for an equal offset. A compiler could keep
+existing entries at their indices and append new ones at the end, so that old saves and read flags stay
+aligned. This has not been tested natively.
+
 The variable section starts with six DWORD counts in this order:
 
 1. integer globals;

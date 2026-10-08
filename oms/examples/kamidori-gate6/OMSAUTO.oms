@@ -1,0 +1,15 @@
+oms 1
+// Gate 6 (spec §12), Kamidori: record 0 of a generated append catalog (selector 4; the install mounts 1..3).
+// Native op 0x143 runs it at INIT2, during boot. It leaves a message in a string cell no shipped script uses; the
+// edited SC0000 shows it.
+script "$4$OMSAUTO.BIN"
+
+    GS[0x9000] = set_string("[OMS] The append catalog's autorun script ran at boot.")
+
+    // It also edits an existing unit, 緑プテテット (EBINIT unit 761), which spawns in the first stage
+    // (一陣の訓練地). The table cells sit above the saved bank prefix, so boot rebuilds them and the edit holds
+    // after a load (docs/kamidori-data-tables.md, "Unit definitions").
+    G[0x2c1524] = 0x96     // max HP, stats row 0x2beb7c + id*14, column 10: 12 → 150
+    G[0x2c9285] = 0x3e7    // exp reward 0x2c8f8c + id: 10 → 999
+    G[0x2cb9c1] = 0x64     // drop chance 0x2caae4 + id*5, slot 0 (緑の液): 30% → 100%
+    exit
