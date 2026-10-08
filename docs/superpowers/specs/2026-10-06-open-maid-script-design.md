@@ -585,14 +585,18 @@ The idiomatic level (`Age.Cli oms-decompile --level idiomatic`) implements steps
   combination of its optional constant parameters.
   - Temporaries use a probe slot range.
   - Arguments are placeholder integers, cells and strings.
-  - A variant in which a passed parameter leaves no trace is dropped, because nothing could recover it.
+  - A variant in which a passed parameter leaves no trace is dropped, because nothing could recover it. A
+    parameter with a default other than `none` may leave no trace; a lifted use then omits it. A lifted use
+    also omits an argument equal to its default.
 - **Matching.** Code matches a pattern when opcodes and operands agree, with these exceptions:
   - temporaries match any slot of their bank;
   - internal labels match by offset;
   - references to library labels match by name.
 - **Library recognition.** A carved sub is a library sub when its code matches a pattern, from its `exit` guard
   when the sub is `@guard`. Code outside it may enter it only at the module's labels. Matches whose references to
-  other library labels do not land on the matching names are dropped until the set is consistent.
+  other library labels do not land on the matching names are dropped until the set is consistent. When several
+  carved subs match one library sub, the last takes the name: a scene may keep its own copy of a library function,
+  and the linked one follows the scene's code.
 - **Template lifting.** A template use is lifted at a node when its longest matching variant ends on a node
   boundary, is entered only at its start, and calls only recognized library labels.
 - **Verification.** The lifted source is compiled in fit mode against the original, which re-derives every
@@ -640,6 +644,11 @@ names that are not identifiers, or that repeat, carry their id. The template has
 
 Pages that interpolate a string cell, carry furigana, span several rows, or skip the prologue stay core
 statements for now.
+
+`oms/kamidori/adv.oms` is the Kamidori counterpart, drafted the same way from SC0010 and the init image's
+`unit_speaker_names`. Its line template has a fourth parameter, `form: name_form = 0x0`. It selects the
+name-plate column (`G[0x306f]`): name, alternate name, descriptor (for example `女剣士` before an introduction), or
+`？？？？`. A line reads `水那 "「…………」" (voice: 0x1be, form: form_descriptor)`; the default form is omitted.
 
 ## 12. Validation gates
 
@@ -715,6 +724,7 @@ contracts.
 | 3. Canonical rebuild | **passed 2026-10-07** | `Age.Cli oms-rebuild` (also a `validate.py --level workspace` gate): every catalog script rebuilt from core source without its sidecar (441 / 568 change bytes); all 297 / 279 SC/SP scenes, walked page by page and also from the data-table boot, execute the same instruction sequence (27.7M / 38.1M steps) with the same text, halts and final state on a simulated clock. Scenes run with the profile's VM compatibility facts, as the runtime runs them, so the ADV scene-entry coroutine (op 0x140) executes. `--level idiomatic` checks sidecar-free idiomatic rebuilds the same way, comparing positions by relocation key; it passes on all 297 / 279 scenes. A negative control (decoder code-value pass disabled) diverges at SC0000's labeled yield |
 | 4. Fixed point | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core --fixed-point`: decompiling each canonical rebuild and recompiling it is byte-identical for 520/520 and 732/732; 506 / 713 of them need no sidecar at all, and the rest need only temporary pins (named locals interleaved with the original's temporaries); workspace tests `OmsCoreTests.Installed*CanonicalRebuildIsAFixedPoint` |
 | 6. Native AGE (Himegari) | **passed 2026-10-07** | In a scratch copy built by `tools/native_scratch.py` (archives hard-linked, every other file copied; the pristine install verified unchanged afterwards), native `AGE.EXE` ran: SC0000 decompiled to idiomatic source, given three new pages and compiled without its sidecar, as a loose-file override; and a generated `APPEND02` catalog (`oms-append`, selector 2) whose record 0 ran at boot through op 0x143 and whose record 1 the edited scene called by packed id. The three new pages showed with the scene's CG and music, and play continued normally through the original opening to the first MPEG movie. The port shows the same lines (`Age.Cli play INIT2.BIN SC0000.BIN --show N` against the scratch copy). Sources: `oms/examples/himegari-gate6/` |
+| 5. Idiomatic level (Kamidori prelude) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level idiomatic`: 732/732 byte-identical with `oms/kamidori/adv.oms` and 0 abandoned lifts. 11,488 library subs are recognized (19 header subs, 25 library functions) and 41,506 template uses lift. Lift coverage is 1,208,598 instructions, **56.8%** of the corpus. Source shrinks from 60.2 MB (core) to 32.0 MB. With `--fixed-point` still 732/732, with 713 needing no sidecar. `oms-rebuild --level idiomatic`: all 279 scenes equivalent. One library function names `L[0x0]`, so 394 sidecars record the original pool base. Workspace tests `OmsCoreTests.InstalledKamidori*Idiomatic*` |
 | 5. Idiomatic level (Himegari prelude) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level idiomatic`: 520/520 byte-identical with `oms/himegari/adv.oms` and 0 abandoned lifts. 9,256 library subs are recognized (the 32 scene-library subs), and 24,297 of 26,667 ADV pages lift to dialogue lines. Lift coverage is 998,654 instructions, **65.6%** of the corpus. Source shrinks from 44.7 MB (core) to 18.8 MB. With `--fixed-point`, idiomatic rebuilds are still 520/520 identical and 506 need no sidecar. The 307 scene sidecars that keep the header handlers' place hold `library` entries. Workspace tests `OmsCoreTests.InstalledHimegari*Idiomatic*`. Kamidori has no prelude yet |
 | 2. Core level, stage C4 (declarations and registry naming) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical with `<profile>.globals` and `<profile>.scripts` applied; `use`, `const`, `global` and `local` declarations, named elements and `run` names covered by `OmsCoreTests` |
 | 2. Core level, stage C3 (`sub`, `coroutine`, bound parameters) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical; 10,914 / 12,287 subs and 614 / 644 coroutines recovered; the compiler's falls-into, implicit-return, coroutine-ending and code-reference-kind checks are covered by `OmsCoreTests`; warnings (§8.2, including recursion with bound parameters) await a warning channel |

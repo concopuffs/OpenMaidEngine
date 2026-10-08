@@ -141,7 +141,7 @@ class GatePlanTests(unittest.TestCase):
             )
         keys = {gate.key for gate in plan}
         self.assertIn("catalog-corpus-scan", keys)
-        self.assertNotIn("oms-idiomatic-rebuild", keys)   # no Kamidori prelude yet
+        self.assertIn("oms-idiomatic-rebuild", keys)   # oms/kamidori/adv.oms
         self.assertNotIn("globals-build", keys)
         self.assertNotIn("python-test_extract_init", keys)
         self.assertNotIn("vm0-recover", keys)

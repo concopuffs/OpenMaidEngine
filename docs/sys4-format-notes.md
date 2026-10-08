@@ -750,6 +750,12 @@ its script's own temporary pool (`L[0x0]` in 309 scenes, `L[0x13e3d]` in `FIELD`
 `oms/himegari/adv.oms` declares both groups. The compiler links library subs in this order and models the guard as
 `@guard sub` (spec §6.3).
 
+Kamidori's scenes carry the same two-part library: 19 unguarded header subs, shared by 322 scenes, and guarded
+library functions linked breadth first in order of first reference (all 342 scripts that link two or more agree).
+Some scenes keep their own byte-identical copy of a library function as well (SC6750 has two of
+`hide_message_window`). Two of the library functions are byte-identical to each other under different names.
+`oms/kamidori/adv.oms` declares them.
+
 **Code positions held as numbers.** Besides code-target operands, one idiom stores a code offset as an ordinary
 immediate. Every ADV scene's loop compares op 0x140's returned PC with a constant:
 `mov G[0x6c3], 0x45e; eq t, G[0x6c3], G[0x6be]`. The constant is always the offset of the scene loop head, a `call`

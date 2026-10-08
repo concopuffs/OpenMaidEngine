@@ -139,14 +139,17 @@ public sealed class OmsIdioms
         return names;
     }
 
-    /// <summary>Whether every parameter passed in this variant shows up in the expansion, so lifting can recover it.</summary>
+    /// <summary>Whether every parameter passed in this variant shows up in the expansion, so lifting can recover it. A
+    /// parameter with a default other than <c>none</c> may leave no trace: a lifted use then leaves it out and gets the
+    /// default. (A <c>none</c> default marks an optional parameter, whose absent variant is enumerated already.)</summary>
     private static bool Traced(IrScript image, int length, TemplateStatement template, bool[] absent)
     {
         var seen = new HashSet<int>();
         for (int i = 0; i < length; i++)
             foreach (IrOperand operand in image.Code[i].Operands)
                 if (ProbeOf(operand, image) is int k) seen.Add(k);
-        return Enumerable.Range(0, template.Parameters.Count).All(k => absent[k] || seen.Contains(k));
+        return Enumerable.Range(0, template.Parameters.Count)
+            .All(k => absent[k] || seen.Contains(k) || template.Parameters[k].Default is not (null or NoneExpr));
     }
 
     /// <summary>The parameter a placeholder operand stands for, if it is one.</summary>

@@ -76,11 +76,12 @@ public class OmsCoreTests
             HERO = 7
         }
         global int voice_pending @ 0x2e47
-        @dialogue inline line(text: text, speaker: speaker = none, voice: const = none) {
+        @dialogue inline line(text: text, speaker: speaker = none, voice: const = none, form: const = 0x0) {
             static if speaker == none {
                 prologue()
             } else {
                 G[0x10] = speaker
+                G[0x11] = form
                 static if voice != none {
                     play(voice)
                 }
@@ -648,9 +649,11 @@ public class OmsCoreTests
             prologue()
             show_text(0, "Narration.")
             G[0x10] = 7
+            G[0x11] = 0
             play(0x34e)
             show_text(0, "Hello.")
             G[0x10] = 7
+            G[0x11] = 0
             show_text(0, "Quiet.")
             G[2] = G[1] + 1
             again1:
@@ -696,8 +699,9 @@ public class OmsCoreTests
     [Fact]
     public void TemplatePatternsCoverEveryTraceableStaticIfVariant()
     {
-        // line: narration, speaker, speaker with voice (a voice without a speaker leaves no trace); twice: one.
-        Assert.Equal(["line:2", "line:2", "line:4", "twice:4"],
+        // line: narration, speaker, speaker with voice (a voice without a speaker leaves no trace; form, which has a
+        // default, may: narration never uses it); twice: one.
+        Assert.Equal(["line:2", "line:3", "line:5", "twice:4"],
             Idioms.Templates.Select(pattern => $"{pattern.Template.Name}:{pattern.Code.Length}").OrderBy(text => text));
         Assert.Equal(["helper", "play", "prologue", "unused"], Idioms.Library.Select(pattern => pattern.Name).Order());
     }
@@ -710,6 +714,7 @@ public class OmsCoreTests
             "Narration."
             HERO "Hello." (voice: 0x34e)
             HERO "Quiet."
+            HERO "Formal." (form: 2)
             twice(2, L[0])
             G[3] = 1
             exit
@@ -718,13 +723,14 @@ public class OmsCoreTests
         Assert.Equal(first, second);
         Assert.Null(decompiled.LiftFailure);
         Assert.Equal(3, decompiled.LibrarySubs);
-        Assert.Equal(4, decompiled.TemplateLifts);
+        Assert.Equal(5, decompiled.TemplateLifts);
         Assert.Contains("\nuse test.adv\n", decompiled.Source);
         Assert.EndsWith("""
 
                 "Narration."
                 HERO "Hello." (voice: 0x34e)
                 HERO "Quiet."
+                HERO "Formal." (form: 0x2)
                 twice(0x2, L[0x0])
                 G[0x3] = 0x1
                 exit
@@ -895,6 +901,18 @@ public class OmsCoreTests
     [Fact]
     public void InstalledHimegariIdiomaticRebuildIsAFixedPoint()
         => AssertCorpus("Himegari_Game", "SYS4422", fixedPoint: true, level: OmsSourceRoundTrip.IdiomaticLevel);
+
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    [Fact]
+    public void InstalledKamidoriCorpusRoundTripsThroughIdiomaticSource()
+        => AssertCorpus("Kamidori", "SYS4433", level: OmsSourceRoundTrip.IdiomaticLevel);
+
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    [Fact]
+    public void InstalledKamidoriIdiomaticRebuildIsAFixedPoint()
+        => AssertCorpus("Kamidori", "SYS4433", fixedPoint: true, level: OmsSourceRoundTrip.IdiomaticLevel);
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]

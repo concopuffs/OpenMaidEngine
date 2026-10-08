@@ -16,7 +16,7 @@ namespace Age.Script.Text;
 /// source, when it was.</summary>
 public sealed record OmsDecompilation(string Source, OmsLayout Layout, int FoldedInstructions = 0, int FoldRejections = 0,
                                       int LibrarySubs = 0, int TemplateLifts = 0, string? LiftFailure = null,
-                                      IReadOnlyDictionary<string, int>? LiftedInstructions = null);
+                                      IReadOnlyDictionary<string, int>? LiftedInstructions = null, uint? PoolBase = null);
 
 /// <summary>
 /// Raw-level decompiler (spec §11, level <c>raw</c>): every instruction becomes an <c>@op</c> statement with

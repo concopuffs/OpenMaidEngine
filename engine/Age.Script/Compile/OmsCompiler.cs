@@ -75,9 +75,10 @@ public static class OmsCompiler
     /// canonical plan come back in <paramref name="temps"/>, ready for the sidecar. A statement whose instructions
     /// differ from the reference other than in temporary slots is an error; the caller compares the whole result.
     /// </summary>
+    /// <param name="derivedTempBase">The integer pool base the source implies without a sidecar.</param>
     public static IrScript Fit(ScriptUnit unit, string abiId, OpcodeTable? table, OmsLayout? layout,
                                IntrinsicCatalog? intrinsics, Func<string, GameModule?>? modules, IrScript reference,
-                               out SortedDictionary<int, OmsTempOverride> temps)
+                               out SortedDictionary<int, OmsTempOverride> temps, out uint derivedTempBase)
     {
         ArgumentNullException.ThrowIfNull(unit);
         ArgumentNullException.ThrowIfNull(reference);
@@ -85,6 +86,7 @@ public static class OmsCompiler
         generator.EmitAll(unit.Body);
         generator.ResolveLabels();
         temps = generator.Fitted;
+        derivedTempBase = generator.DerivedTempBase;
         return generator.Build(unit.Name, abiId);
     }
 
@@ -144,6 +146,9 @@ public static class OmsCompiler
         private readonly List<string> _referenceOrder = new();
         private readonly HashSet<string> _enums = new(StringComparer.Ordinal);
 
+        /// <summary>The integer pool base the source itself implies (above every local it or its modules name).</summary>
+        public uint DerivedTempBase { get; private set; }
+
         /// <summary>Temporary pins <see cref="OmsCompiler.Fit"/> derived, by statement site.</summary>
         public SortedDictionary<int, OmsTempOverride> Fitted { get; } = new();
 
@@ -187,7 +192,8 @@ public static class OmsCompiler
                     highest[local.Bank] = Math.Max(highest.GetValueOrDefault(local.Bank, -1), local.Index);
             Declare(declarations, highest);
             foreach (var (bank, slot) in highest) _declaredLocals[StorageBanks.TypeByBank[bank]] = slot;
-            _tempBase = layout?.TempBase ?? (uint)(highest.GetValueOrDefault("L", -1) + 1);
+            DerivedTempBase = (uint)(highest.GetValueOrDefault("L", -1) + 1);
+            _tempBase = layout?.TempBase ?? DerivedTempBase;
             foreach (Statement statement in statements)
             {
                 PlaceLibrary();

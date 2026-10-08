@@ -116,6 +116,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       <profile>.<name>` units of declarations, templates and library
     │   │                                       subs that the compiler links and the idiomatic decompiler lifts
     │   ├── himegari/adv.oms                    Himegari ADV prelude: scene library, `@dialogue line`, speaker enum
+    │   ├── kamidori/adv.oms                    Kamidori ADV prelude (same parts, plus the name_form enum)
     │   └── examples/                           example scripts, not modules (gate 6: himegari-gate6/)
     │
     ├── docs/                                 all documentation

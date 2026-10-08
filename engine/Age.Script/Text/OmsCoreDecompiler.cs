@@ -39,10 +39,12 @@ public static class OmsCoreDecompiler
         if (idioms == null || idioms.IsEmpty) return DecompileAt(script, abiId, intrinsics, fold, observe, dump, modules, null);
         OmsDecompilation lifted = DecompileAt(script, abiId, intrinsics, fold, observe, dump, modules, idioms);
         if (lifted.LibrarySubs + lifted.TemplateLifts == 0) return lifted;
-        string? failure = Verify(lifted, script, abiId, intrinsics, modules ?? [], out SortedDictionary<int, OmsTempOverride>? temps);
+        string? failure = Verify(lifted, script, abiId, intrinsics, modules ?? [], out SortedDictionary<int, OmsTempOverride>? temps,
+            out uint? tempBase);
         if (failure == null)
         {
             lifted.Layout.Temps = temps!.Count > 0 ? temps : null;
+            lifted.Layout.TempBase = tempBase;
             return lifted;
         }
         return DecompileAt(script, abiId, intrinsics, fold, null, null, modules, null) with { LiftFailure = failure };
@@ -50,18 +52,25 @@ public static class OmsCoreDecompiler
 
     /// <summary>Compiles lifted source in fit mode against the original: null when it reproduces the original exactly,
     /// otherwise why not.</summary>
+    /// <summary>The pool base is pinned to the original's for the fit; the sidecar keeps it only when the lifted source
+    /// would derive another (library subs and templates may name locals the core source did not).</summary>
     private static string? Verify(OmsDecompilation lifted, IrScript script, string abiId, IntrinsicCatalog intrinsics,
-                                  IReadOnlyList<GameModule> modules, out SortedDictionary<int, OmsTempOverride>? temps)
+                                  IReadOnlyList<GameModule> modules, out SortedDictionary<int, OmsTempOverride>? temps,
+                                  out uint? tempBase)
     {
         temps = null;
+        tempBase = lifted.PoolBase;
         try
         {
             OmsLayout layout = OmsLayout.FromJson(lifted.Layout.ToJson());
             layout.Temps = null;
+            layout.TempBase = lifted.PoolBase;
             IrScript fitted = OmsCompiler.Fit(Parser.ParseScript(lifted.Source, script.Name), abiId, null, layout, intrinsics,
-                name => modules.FirstOrDefault(module => module.Name == name), script, out SortedDictionary<int, OmsTempOverride> pins);
+                name => modules.FirstOrDefault(module => module.Name == name), script, out SortedDictionary<int, OmsTempOverride> pins,
+                out uint derived);
             if (!IrEncoder.Encode(fitted).AsSpan().SequenceEqual(IrEncoder.Encode(script)))
                 return "the lifted source compiles to different bytes";
+            if (tempBase == derived) tempBase = null;
             temps = pins;
             return null;
         }
@@ -106,7 +115,8 @@ public static class OmsCoreDecompiler
         if (context.LibrarySubs > 0)
             layout.Library = context.LibraryPlacement();
         return new OmsDecompilation(text.ToString(), layout, folding.FoldedInstructions, folding.Rejections,
-            context.LibrarySubs, context.TemplateLifts, LiftedInstructions: context.Lifted);
+            context.LibrarySubs, context.TemplateLifts, LiftedInstructions: context.Lifted,
+            PoolBase: folding.UsesIntTemps ? folding.PoolBase : null);
     }
 
     // ============================================================================================== folding
@@ -805,7 +815,9 @@ public static class OmsCoreDecompiler
             var boundaries = new HashSet<int>(top.Select(node => node.Start)) { _code.Count };
             var matches = new Dictionary<int, (OmsLibraryPattern Pattern, int End, Dictionary<int, string> References)>();
             var taken = new HashSet<string>(StringComparer.Ordinal);
-            foreach (SubNode sub in top.OfType<SubNode>())
+            // A script may keep its own copy of a library function; the linked one follows the script code, so the last
+            // matching copy takes the library name.
+            foreach (SubNode sub in top.OfType<SubNode>().Reverse())
                 foreach (OmsLibraryPattern pattern in idioms.Library)
                 {
                     // A guarded sub's match starts at its exit guard, the top-level node before the carved sub.
@@ -915,13 +927,18 @@ public static class OmsCoreDecompiler
                    && arguments[k] is { Kind: IrOperandKind.Literal, Type: 0 } operand
                    && members.TryGetValue(operand.Value, out string? member) ? member : null;
             string Value(int k) => Member(k) ?? Atom(arguments[k]);
+            // A parameter is left out when the variant passed none, it left no trace, or it holds its default.
+            bool Omitted(int k)
+                => pattern.Absent[k] || !arguments.ContainsKey(k)
+                   || template.Parameters[k].Default is OperandExpr { Operand: RawInteger fallback }
+                      && arguments[k] is { Kind: IrOperandKind.Literal, Type: 0 } bound && bound.Value == fallback.Value;
             int text = template.Parameters.ToList().FindIndex(parameter => parameter.Name == "text");
             int speaker = template.Parameters.ToList().FindIndex(parameter => parameter.Name == "speaker");
             if (template.Dialogue && text >= 0 && (speaker < 0 || pattern.Absent[speaker] || Member(speaker) != null))
             {
                 var named = new List<string>();
                 for (int k = 0; k < template.Parameters.Count; k++)
-                    if (k != text && k != speaker && !pattern.Absent[k]) named.Add($"{template.Parameters[k].Name}: {Value(k)}");
+                    if (k != text && k != speaker && !Omitted(k)) named.Add($"{template.Parameters[k].Name}: {Value(k)}");
                 string who = speaker >= 0 && !pattern.Absent[speaker] ? Value(speaker) + " " : "";
                 return who + Value(text) + (named.Count > 0 ? $" ({string.Join(", ", named)})" : "");
             }
@@ -929,7 +946,7 @@ public static class OmsCoreDecompiler
             bool positional = true;
             for (int k = 0; k < template.Parameters.Count; k++)
             {
-                if (pattern.Absent[k])
+                if (Omitted(k))
                 {
                     positional = false;
                     continue;
