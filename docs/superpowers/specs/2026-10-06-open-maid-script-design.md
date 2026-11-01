@@ -107,7 +107,7 @@ These kinds are the type system's ground truth.
 |---|---|---|
 | Script | one `.oms` file beginning `script <name>` | one SYS4 script (`.BIN`) plus an optional layout sidecar |
 | Module | one `.oms` file beginning `module <path>` | no bytecode of its own: declarations, templates, library subroutines |
-| Fragment | one `.oms` file beginning `patch <script>` | a transform plan against a fingerprinted base script (§10) |
+| Fragment | one `.oms` file beginning `patch "<script>" fingerprint "sha256:…"` | a transform plan against a fingerprinted base script (§10) |
 
 ### 3.2 Modules and generated symbols
 
@@ -616,24 +616,128 @@ plain numbers:
 
 ## 10. Fragments and patches
 
+A fragment changes an original script without replacing it. It compiles against one fingerprinted base script
+into a transform plan. A loader applies the plans of every installed mod to the pristine base, in load order, and
+links the result once (roadmap §3.5). Two mods that patch different places in one script compose. Two whole-script
+replacements of that script cannot.
+
+### 10.1 The unit and its sites
+
 ```
-patch ADDEXP fingerprint "sha256:…" {
-    after site himegari.experience.after_calculation {
-        exp_gain *= 2
-    }
-    replace operand site 0x4f1 #2 with 10
+oms 1
+patch "ADDEXP.BIN" fingerprint "sha256:9f2c…"
+use himegari.globals
+
+local int bonus
+
+after site 0x4f1 {
+    bonus = exp_gain / 2
+    exp_gain += bonus
+}
+replace site 0x512 operand 2 with 10
+replace site label_530 through 0x548 {
+    note "the original level-gap penalty is removed"
 }
 ```
 
-How a fragment compiles:
+- **Header.** `patch "<script>" fingerprint "sha256:<hex>"` names a catalog script and the SHA-256 of its bytes
+  as the catalog serves them. A scene that a translation overrides (Kamidori's `patch/SC0000.bin`) is a different
+  base and needs its own fragment. A fingerprint mismatch is an error at compile time and at load time, and the
+  error prints the base's actual fingerprint.
+- **Body.** A fragment holds declarations (`use`, `const`, `enum`, `global`, `local`, `table`, `inline`), subs and
+  coroutines, and site operations. Any other statement at the top level is an error: code goes inside an
+  operation.
+- **Sites.** A site names one instruction of the base by its original dword offset. That is the coordinate used
+  by labels (`label_2a91`), by the page locator (`wait SC0000@0x2a91`) and by site identity (§9.5). A site is
+  written as:
+  - an integer, as in `site 0x2a91`;
+  - a label or sub name of the decompiled base, as in `site label_2a91` or `site adv_wait_page`. `label_<hex>`
+    always names the instruction at that offset, even where the decompiled source prints no label.
+- An offset that is not an instruction start is an error. Named patch points, such as
+  `site himegari.experience.after_calculation` (roadmap §3.4), need a registry of their own (§13).
 
-- **Environment.** It compiles against the decompiled base. Base locals, labels and globals are visible by their
-  decompiled or registry names. New locals are appended (the bank counts grow), and temporaries follow the base
-  pool rules.
-- **Output.** The result is a transform plan made of insertions and operand or region replacements, anchored to
-  original sites. It contains no byte offsets.
-- **Application.** The OMP loader applies plans and detects conflicts (roadmap §3.5–3.6). The compiler only
-  guarantees that each plan is valid against the fingerprinted base.
+### 10.2 Operations
+
+| Operation | Effect |
+|---|---|
+| `before site S { … }` | The body runs every time control reaches S, whether it falls through or arrives by a transfer. Jumps, calls and code positions (`&label`) that name S now land on the body. |
+| `after site S { … }` | The body runs every time S completes and falls through: after a call returns, or on a conditional jump's not-taken path. A transfer to the instruction after S skips the body. S must be able to fall through, so `goto`, `return`, `exit`, `resume` and throw-exit are rejected. |
+| `replace site S [through E] { … }` | The base instructions from S to E inclusive are removed, and the body takes their place. An empty body deletes them. A transfer to S lands on the body. A transfer from outside the region to any later instruction in it is an error, because its target disappears. |
+| `replace site S operand N with V` | Operand N of the instruction at S becomes V. N counts from 1, as in the registry. V is one value: a constant, a cell, a string or `&label`. A code-target operand takes a label, and an operand the instruction writes takes a cell. |
+
+A body is ordinary code, and it falls through to whatever follows its site. Names in a body resolve as follows:
+
+- **Base labels and subs.** Labels and sub names of the decompiled base can be targets of `goto`, `call` and
+  `&label`. A label the fragment declares may not repeat a base label.
+- **Library subs.** When the base already links a library sub of a used module, calls go to that copy. A
+  library sub the base lacks is linked into the fragment's appended code.
+- **Fragment subs.** Subs and coroutines declared in the fragment are appended after the base code.
+- **Storage.**
+  - A pinned local (`local int exp @ 0x3`) names a base cell.
+  - Unpinned locals and every temporary, integer and reference alike, are allocated above every slot the base
+    uses in their bank, as given by its header counts. A body may therefore sit between two instructions of
+    one base statement without clobbering that statement's temporaries.
+  - The header counts grow to cover the new slots.
+
+### 10.3 Transform plans
+
+The compiler validates the fragment against its base and writes a transform plan (`<name>.omspatch.json`). The
+plan is the payload of an OMP's `patches/` directory (roadmap §3.6). It records:
+
+- the script name, the base fingerprint and the ABI;
+- the minimum header local counts the plan needs;
+- its operations, in source order, each with its site as an original offset and, where it has one, its block
+  of code;
+- the appended code and the plan's data items.
+
+Plan instructions carry four kinds of operand:
+
+- a literal;
+- one of the plan's data items;
+- a label inside one of the plan's blocks, where the block's length means "after this block";
+- a base site, by original offset.
+
+A plan holds no offset of the output, so it applies to the pristine base wherever other plans insert code.
+
+### 10.4 Application
+
+To apply plans P1 … Pn, in load order, to base B:
+
+1. **Check identity.** Every plan must name B and carry B's fingerprint.
+2. **Decode B.** Every instruction keeps its original offset.
+3. **Validate.** Each plan is checked against B again, because plans are untrusted input, and then against the
+   other plans:
+   - **hard conflicts**, which stop the load:
+     - two replacements of one operand;
+     - overlapping regions;
+     - an insertion, an operand replacement or a site reference inside another plan's replaced region;
+   - **ordered interactions**, which are reported with their order: several plans inserting at one site.
+4. **Lay out the code.** Each base instruction, in order, is preceded by its `before` bodies in load order. It
+   is then emitted itself, with any replaced operands, or as its region's replacement. Its `after` bodies
+   follow, in load order. Each plan's appended code follows the base code.
+5. **Resolve targets.**
+   - A base transfer or code position that named instruction S lands on the first `before` body at S, or on S
+     itself when it has none.
+   - Plan labels resolve inside their blocks.
+   - Base sites named by plans resolve as base transfers do.
+6. **Lay out data and header counts.** Data is B's items in order, then each plan's items. Each header count
+   is the largest of B's and the plans'.
+7. **Keep the tables stable.**
+   - T1, T2 and T3 keep every base entry at its index, pointing at its instruction's new offset.
+   - Entries for inserted instructions follow, in code order.
+   - A base entry whose instruction a region removed keeps its slot and points at the replacement.
+   - When the result equals the derived tables, the layout stays derived, so an inert plan reproduces B byte for
+     byte.
+
+Saves store T1/T2/T3 indices, and `RT.DAT` stores read flags by T1 index (sys4-format-notes, "Numbered
+`SAVE%02d.DAT`"). Both native consumers are independent of table order: `0x40f2d0` reads `table[index]` and
+`0x468f50` searches T1 linearly. The port's VM behaves the same way. Stable tables therefore keep old saves and
+read flags aligned when a patch adds pages. The exceptions are a save standing on a removed message and a save
+inside a removed call: both resume at the replacement. Native acceptance of reordered tables is part of gate 7.
+
+The fragment compiler (`Age.Cli oms-patch`) writes the plan and can apply a set of plans to produce patched
+scripts as loose overrides, for the port and for native AGE. The engine will apply plans at mod-load time through
+the OMP loader.
 
 ## 11. Decompilation (the reverse direction)
 
@@ -773,6 +877,13 @@ Each gate must pass on the complete Himegari and Kamidori corpora before the nex
    - an edited scene runs as a loose-file override;
    - a new script runs from a generated append catalog;
    - both are tested in a hard-linked scratch copy of the install, never the pristine game directory.
+7. **Fragments (§10):**
+   - an empty plan reproduces every base script byte for byte;
+   - probe plans insert inert notes before and after sites throughout every script. Once the inserted steps
+     are filtered out, every scene stays VM-trace-equivalent (`oms-rebuild --patch-probe`);
+   - a fragment runs in native AGE as a loose-file override;
+   - after a fragment inserts pages early in a scene, a save made later in the unpatched scene still loads on
+     the same page.
 
 Byte identity proves the encoding, not the semantics. Semantic trust still comes from the operand contracts, the
 port's VM tests and native traces.
@@ -791,6 +902,9 @@ port's VM tests and native traces.
 | Concrete surface syntax details (this draft's spelling) | none: semantics are fixed above | settle in review before the parser is written |
 | Record keys and field values by name (`unit[緑プテテット]`, `.drop_item[0] = 緑の液`) | readable table indices and id-valued fields (§5.3) | generate enums such as `unit_id` and `item_id` from the init image; a table declares its key kind and each field its value kind, as template parameters do. Needs naming rules for names that are not identifiers or repeat (`牙コウモリ（牙蝙蝠/ニュクテリス）`), a way to qualify members of different enums that share a name, and a policy for translations that rename entries |
 | Overlapping registry arrays | correct element names (§11.3) | `globals_build.py --lint` reports 39 Kamidori and 2 Himegari pairs of overlapping arrays; classify each pair as a deliberate sub-view or a size error |
+| Named patch points (`site himegari.experience.after_calculation`) | readable, revision-proof sites (§10.1) | a per-profile registry maps each name to its script, supported fingerprints and offset, as roadmap §3.4 describes; fragments then name the point instead of the offset |
+| Patches against code another mod inserted | layered mods (roadmap §3.6) | mod-owned site identities exported by the inserting mod and a declared dependency; plans now target base sites only |
+| Applying plans at load time | OMP mods in the port | the OMP loader applies plans in load order and caches the linked scripts (roadmap §3.6); `oms-patch` produces loose overrides until then |
 
 ## 14. Language evolution
 
@@ -807,7 +921,8 @@ port's VM tests and native traces.
 ## 15. Implementation outline
 
 The implementation is a C# library (`Age.Script`) beside `Sys4Loader`, exposed as `Age.Cli oms-compile`,
-`oms-decompile`, `oms-roundtrip` and `oms-rebuild`, so the engine can compile fragments at mod-load time. Its
+`oms-decompile`, `oms-roundtrip`, `oms-rebuild` and `oms-patch`, so the engine can compile fragments at mod-load
+time. Its
 stages:
 
 - lexer, parser and syntax tree;
