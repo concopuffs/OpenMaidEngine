@@ -203,6 +203,18 @@ def test_lint_catches_bad_vocab():
     check(any("column index" in e for e in errors), "lint flags nonnumeric column indices")
     check(any("negative column" in e for e in errors), "lint flags negative column indices")
 
+def test_lint_warns_on_overlapping_arrays():
+    base = {"category": "data-table", "source": "inference", "confidence": "med"}
+    entries = {("G", 0x10): {**base, "_addr": 0x10, "name": "a", "type": "int[4][3]"},     # [0x10, 0x1c)
+               ("G", 0x1b): {**base, "_addr": 0x1b, "name": "b", "type": "int[2]"},        # overlaps a
+               ("G", 0x1d): {**base, "_addr": 0x1d, "name": "c", "type": "int[2]"},        # touches nothing
+               ("GS", 0x11): {**base, "_addr": 0x11, "name": "s", "type": "string[2]"},    # other bank
+               ("G", 0x12): {**base, "_addr": 0x12, "name": "open", "type": "int[][27]"}}  # no known end
+    errors, warnings = G.lint(entries, {0x10, 0x11, 0x12, 0x1b, 0x1d})
+    check(errors == [], f"overlap fixture lints without errors ({errors})")
+    check(len(warnings) == 1 and "array a" in warnings[0] and "overlaps b" in warnings[0],
+          f"lint warns once, for a and b ({warnings})")
+
 def test_adv_layer_surface_slot_evidence():
     scene = sys4load.load(paths.scripts()["SC0000.BIN"])
     expected = {
@@ -681,6 +693,7 @@ def test_bootstrap_is_additive_and_idempotent():
 if __name__ == "__main__":
     test_load_and_lint()
     test_lint_catches_bad_vocab()
+    test_lint_warns_on_overlapping_arrays()
     test_adv_layer_surface_slot_evidence()
     test_selected_movement_route_grid_evidence()
     test_battle_triggered_passive_skill_flags_evidence()

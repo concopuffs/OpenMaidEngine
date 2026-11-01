@@ -95,6 +95,51 @@ public sealed class GameModule
 
     public bool TryGet(int type, uint address, out GlobalSymbol symbol) => _byCell.TryGetValue((type, address), out symbol!);
 
+    private Dictionary<int, (uint[] Starts, GlobalSymbol?[] Owners)>? _segments;
+
+    /// <summary>The smallest fully sized array of the bank that contains the cell, and the cell's offset in it (spec
+    /// §11.3). Arrays with an open leading dimension have no known end and contain nothing here.</summary>
+    public bool TryGetContaining(int type, uint address, out GlobalSymbol symbol, out uint offset)
+    {
+        _segments ??= BuildSegments();
+        symbol = null!;
+        offset = 0;
+        if (!_segments.TryGetValue(type, out var map)) return false;
+        int k = Array.BinarySearch(map.Starts, address);
+        if (k < 0) k = ~k - 1;
+        if (k < 0 || map.Owners[k] is not { } owner) return false;
+        symbol = owner;
+        offset = address - owner.Address;
+        return true;
+    }
+
+    /// <summary>Cuts each bank at every array boundary; each segment belongs to the smallest array covering it.</summary>
+    private Dictionary<int, (uint[] Starts, GlobalSymbol?[] Owners)> BuildSegments()
+    {
+        var maps = new Dictionary<int, (uint[], GlobalSymbol?[])>();
+        foreach (var bank in _byName.Values.Where(Sized).GroupBy(symbol => symbol.Type))
+        {
+            var arrays = bank.ToList();
+            var cuts = new SortedSet<uint>();
+            foreach (GlobalSymbol array in arrays)
+            {
+                cuts.Add(array.Address);
+                cuts.Add((uint)Math.Min(uint.MaxValue, array.Address + Extent(array)));
+            }
+            uint[] starts = cuts.ToArray();
+            var owners = new GlobalSymbol?[starts.Length];
+            for (int s = 0; s < starts.Length; s++)
+                owners[s] = arrays.Where(array => array.Address <= starts[s] && starts[s] < array.Address + Extent(array))
+                    .OrderBy(Extent).ThenBy(array => array.Address).FirstOrDefault();
+            maps[bank.Key] = (starts, owners);
+        }
+        return maps;
+    }
+
+    private static bool Sized(GlobalSymbol symbol) => symbol.Dimensions.Count > 0 && !symbol.Dimensions.Contains(0);
+
+    private static long Extent(GlobalSymbol symbol) => symbol.Dimensions.Aggregate(1L, (product, dimension) => product * dimension);
+
     /// <summary>Loads <c>&lt;profile&gt;.globals</c> from a generated registry view. Entries without a usable name or
     /// with an unknown shape are skipped, as are names that would read as a keyword or a storage bank.</summary>
     public static GameModule LoadGlobals(string profileId, string globalsJsonPath)

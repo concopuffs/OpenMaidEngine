@@ -504,12 +504,13 @@ public class OmsCoreTests
             label = chapter_titles[i]
             exit
             """);
-        // pinned is L[3], so i takes L[4] and buf L[5..6]; the temporary pool starts at L[7].
+        // pinned is L[3], so i takes L[4] and buf L[5..6]; the temporary pool starts at L[7]. buf[1] has a constant
+        // index, so it is the cell L[6] itself (spec §7.6).
         Assert.Equal("55(9:4,0:63) "
                      + "61(c:0,3:6930,9:4) 55(c:0,3:500) "
                      + "12c(c:0,3:6f70,9:4,0:e,0:d) 12c(c:1,3:6f70,9:4,0:e,0:d) 50(c:0,c:1,0:1) "
                      + "12c(c:0,3:6f70,9:4,0:e,0:2) 12c(c:1,3:900,9:4,0:8,9:3) 50(3:500,c:0,c:1) "
-                     + "61(c:0,9:5,0:1) 55(c:0,3:0) "
+                     + "55(9:6,3:0) "
                      + "61(e:0,5:0,9:4) 55(5:12,e:0) 2()", Shape(script));
     }
 
@@ -528,9 +529,76 @@ public class OmsCoreTests
         string source = decompiled.Source;
         Assert.Contains("\nuse test.globals\n", source);
         Assert.Contains("flow_request = unit_level[L[0x1]] + unit_stats[L[0x1]].max_fs + unit_stats[L[0x2]][0x3]", source);
-        Assert.Contains("GS[0x5] = chapter_titles[L[0x1]]", source);
+        // A plain cell inside a declared array prints as its element (spec §11.3).
+        Assert.Contains("chapter_titles[0x5] = chapter_titles[L[0x1]]", source);
         // Shapes the declaration cannot express stay raw: another row width, or a 2-D view of a 1-D array.
-        Assert.Contains("G[0x6935] = range_grid[L[0x1]][L[0x2]] + G[0x6f70:0x7][L[0x1]][L[0x2]] + G[0x6930:0x2][L[0x1]][L[0x2]]", source);
+        Assert.Contains("unit_level[0x5] = range_grid[L[0x1]][L[0x2]] + G[0x6f70:0x7][L[0x1]][L[0x2]] + G[0x6930:0x2][L[0x1]][L[0x2]]", source);
+    }
+
+    [Fact]
+    public void ElementsWithConstantIndicesAreTheirCells()
+    {
+        IrScript script = Compile("""
+            use test.globals
+            const ROW = 2
+            unit_level[3] = 1
+            unit_stats[ROW].max_fs = 2
+            unit_stats[1][2] = 3
+            G[0x100][5] = 4
+            G[0x200:0x4][2][3] = 5
+            range_grid[5000][1] = 6
+            L[1] = unit_level[2 + 1]
+            note unit_level[4]
+            exit
+            """);
+        // Constant elements are plain cells; a computed index keeps its lookup (spec §7.6).
+        Assert.Equal("55(3:6933,0:1) 55(3:6f99,0:2) 55(3:6f80,0:3) 55(3:105,0:4) 55(3:20b,0:5) "
+                     + "55(3:d9cdf,0:6) 50(9:3,0:2,0:1) 61(c:0,3:6930,9:3) 55(9:1,c:0) 1a7(3:6934) 2()", Shape(script));
+    }
+
+    [Theory]
+    [InlineData("use test.globals\nunit_level[445] = 1\n", "index 445 is outside 'unit_level'")]
+    [InlineData("use test.globals\nunit_stats[100].hp = 1\n", "index 100 is outside 'unit_stats'")]
+    [InlineData("use test.globals\nrange_grid[1][27] = 1\n", "index 27 is outside 'range_grid'")]
+    public void ConstantIndicesOutsideANamedArrayAreErrors(string body, string expected)
+    {
+        var error = Assert.Throws<OmsCompileException>(() => Compile(body));
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Fact]
+    public void CellsInsideDeclaredArraysDecompileAsElementsAndRecompileIdentically()
+    {
+        IrScript compiled = Compile("""
+            G[0x6933] = 1
+            G[0x6f99] = G[0x6f80] + G[0x6930]
+            GS[0x5] = GS[0xd2]
+            G[0x6930:0x2][L[1]][L[2]] = 3
+            exit
+            """);
+        var (first, second, decompiled) = RoundTrip(IrEncoder.Encode(compiled), Globals);
+        Assert.Equal(first, second);
+        string source = decompiled.Source;
+        Assert.Contains("unit_level[0x3] = 0x1", source);
+        // The cell at an array's own address keeps the bare name; a cell past the end of every array stays raw.
+        Assert.Contains("unit_stats[0x2].max_fs = unit_stats[0x1][0x2] + unit_level", source);
+        Assert.Contains("chapter_titles[0x5] = GS[0xd2]", source);
+        Assert.Contains("G[0x6930:0x2][L[0x1]][L[0x2]] = 0x3", source);
+    }
+
+    [Fact]
+    public void LookupsWithConstantIndicesStayExplicitInstructions()
+    {
+        // No original compiler output has one, but the VM accepts it; folded, it would read back as a plain cell.
+        IrScript compiled = Compile("""
+            lookup_array(out LP[0], G[0x100], 5)
+            LP[0] = 7
+            exit
+            """);
+        Assert.Equal("61(c:0,3:100,0:5) 55(c:0,0:7) 2()", Shape(compiled));
+        var (first, second, decompiled) = RoundTrip(IrEncoder.Encode(compiled));
+        Assert.Equal(first, second);
+        Assert.DoesNotContain("G[0x100][0x5]", decompiled.Source);
     }
 
     [Fact]

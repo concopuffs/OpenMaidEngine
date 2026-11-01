@@ -8,7 +8,7 @@ vm-map/globals-<profile>.toml -> docs/global-reference-<profile>.md.
   --lint    run the linter, print errors/warnings, exit nonzero on errors
 See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md."""
 from __future__ import annotations
-import os, sys, json, argparse, collections, tomllib
+import os, re, sys, json, math, argparse, collections, tomllib
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
@@ -79,7 +79,7 @@ def load_toml(path) -> tuple[Registry, dict]:
 
 
 def lint(entries: dict[int, dict], all_addrs: set[int]) -> tuple[list[str], list[str]]:
-    """Errors: bad vocabulary, auto-shape@high, dangling depends_on. Warnings: (reserved)."""
+    """Errors: bad vocabulary, auto-shape@high, dangling depends_on. Warnings: overlapping arrays."""
     errors: list[str] = []
     warnings: list[str] = []
     all_addrs = {key[1] if isinstance(key, tuple) else key for key in all_addrs}
@@ -114,7 +114,40 @@ def lint(entries: dict[int, dict], all_addrs: set[int]) -> tuple[list[str], list
         for dep in e.get("depends_on", []):
             if _parse_addr(dep) not in all_addrs:
                 errors.append(f"{tag}: depends_on missing address {dep}")
+    warnings.extend(overlap_warnings(entries))
     return errors, warnings
+
+
+def extent_of(type_: str | None) -> int | None:
+    """Cells a fully sized array covers (`int[1000][14]` -> 14000); None for a scalar, an open leading
+    dimension (`int[][27]`) or a shape the OMS module loader would not read."""
+    m = re.fullmatch(r"(?:int|string|float)((?:\[\d*\])+)", type_ or "")
+    if not m:
+        return None
+    dims = re.findall(r"\[(\d*)\]", m.group(1))
+    if "" in dims:
+        return None
+    return math.prod(int(d) for d in dims)
+
+
+def overlap_warnings(entries: dict) -> list[str]:
+    """Fully sized arrays of one bank whose cells overlap. The OMS decompiler names a cell by the smallest
+    array containing it (spec §11.3), so a size error here misnames cells, though it never changes bytes."""
+    spans = collections.defaultdict(list)
+    for key, e in entries.items():
+        bank, addr = key if isinstance(key, tuple) else (bank_of(e.get("type")), key)
+        if (extent := extent_of(e.get("type"))) is not None:
+            spans[bank].append((addr, addr + extent, e.get("name") or "?"))
+    warnings = []
+    for bank, arrays in sorted(spans.items()):
+        arrays.sort()
+        for i, (start, end, name) in enumerate(arrays):
+            for other_start, other_end, other in arrays[i + 1:]:
+                if other_start >= end:
+                    break
+                warnings.append(f"{cell_key(bank, start)}: array {name} [0x{start:x}, 0x{end:x}) overlaps "
+                                f"{other} [0x{other_start:x}, 0x{other_end:x})")
+    return warnings
 
 
 GEN_JSON_META = {"generated_from": f"vm-map/{TOML_DEFAULT.name}",

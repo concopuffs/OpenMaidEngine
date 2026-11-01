@@ -318,7 +318,11 @@ public static class OmsCoreDecompiler
                 && instruction.Operands.Count == (instruction.Opcode == ExpressionLowering.LookupArray ? 3 : 5))
             {
                 IrOperand @base = instruction.Operands[1];
-                return _refTemps.Contains((dst.Type, dst.Value)) && @base.Kind == IrOperandKind.Literal
+                // A lookup whose indices are all immediates would read back as a plain cell (spec §7.6), so it stays an
+                // explicit instruction. Neither corpus has one.
+                bool constant = IsImmediate(instruction.Operands[2])
+                                && (instruction.Opcode == ExpressionLowering.LookupArray || IsImmediate(instruction.Operands[4]));
+                return !constant && _refTemps.Contains((dst.Type, dst.Value)) && @base.Kind == IrOperandKind.Literal
                        && PointerTypeFor(@base.Type) == dst.Type;
             }
             return false;
@@ -326,6 +330,8 @@ public static class OmsCoreDecompiler
 
         private static bool IsStorage(IrOperand operand)
             => operand.Kind == IrOperandKind.Literal && StorageBanks.BankByType.ContainsKey(operand.Type);
+
+        private static bool IsImmediate(IrOperand operand) => operand is { Kind: IrOperandKind.Literal, Type: 0 };
 
         /// <summary>Whether a folded expression may stand at a 0-based operand position of the instruction.</summary>
         private bool CanFoldInto(int index, int position, bool pointer)
@@ -1541,10 +1547,35 @@ public static class OmsCoreDecompiler
         /// <summary>The modules whose names were printed (the source then needs their <c>use</c>).</summary>
         public HashSet<GameModule> UsedModules { get; } = new();
 
-        private string Atom(IrOperand operand)
+        /// <param name="elements">Whether a cell inside a declared array may print as its element; raw <c>@op</c>
+        /// operands may not.</param>
+        private string Atom(IrOperand operand, bool elements = true)
             => Named(operand) is { } symbol ? symbol.Name
                 : operand.Kind == IrOperandKind.Literal && _arrayAt.TryGetValue((operand.Type, operand.Value), out LocalArray? array)
-                    ? array.Name : RawAtom(operand);
+                    ? array.Name
+                : elements && ContainedElement(operand) is { } element ? element
+                : RawAtom(operand);
+
+        /// <summary>A global cell inside a declared array, printed as that array's element (spec §11.3). The element
+        /// compiles back to the same cell (§7.6).</summary>
+        private string? ContainedElement(IrOperand operand)
+        {
+            if (operand.Kind != IrOperandKind.Literal || operand.Type is not (0x3 or 0x4 or 0x5)) return null;
+            foreach (GameModule module in modules)
+                if (module.TryGetContaining(operand.Type, operand.Value, out GlobalSymbol symbol, out uint offset))
+                {
+                    if (symbol.Dimensions.Count > 2) return null;
+                    UsedModules.Add(module);
+                    if (symbol.Dimensions.Count == 1) return $"{symbol.Name}[{Literal(offset)}]";
+                    uint width = (uint)symbol.Dimensions[1], row = offset / width, column = offset % width;
+                    return symbol.ColumnName((int)column) is { } columnName
+                        ? $"{symbol.Name}[{Literal(row)}].{columnName}"
+                        : $"{symbol.Name}[{Literal(row)}][{Literal(column)}]";
+                }
+            return null;
+        }
+
+        private string Literal(uint value) => RawAtom(IrOperand.Literal(0, value));
 
         /// <summary>The registry name of a global cell; marks its module used.</summary>
         private GlobalSymbol? Named(IrOperand operand)
@@ -1655,7 +1686,7 @@ public static class OmsCoreDecompiler
                     (intrinsic.HasContract && intrinsic.OutOperands.Contains(k + 1) ? "out " : "") + Argument(argument, k));
                 return $"{intrinsic.Name}({string.Join(", ", text)})";
             }
-            return "@op(0x" + instruction.Opcode.ToString("x") + string.Concat(operands.Select(o => ", " + Atom(o))) + ")";
+            return "@op(0x" + instruction.Opcode.ToString("x") + string.Concat(operands.Select(o => ", " + Atom(o, elements: false))) + ")";
         }
 
         /// <summary>Compound spelling: always for an element target (its order differs from plain assignment, and

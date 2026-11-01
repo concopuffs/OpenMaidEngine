@@ -818,7 +818,7 @@ public static class OmsCompiler
                     LExpr[] indices = element.Stride == null
                         ? [ToL(element.Indices[0])]
                         : [ToL(element.Indices[0]), new LLeaf(Operand(element.Stride)), ToL(element.Indices[1])];
-                    return new LElement(cell, indices, pointer);
+                    return ConstantCell(new LElement(cell, indices, pointer));
                 }
                 case BinaryExpr { Op: "&&" or "||" } logical:
                     return new LBinary(logical.Op == "&&" ? 0x56 : 0x57, Boolean(logical.Left), Boolean(logical.Right));
@@ -859,8 +859,52 @@ public static class OmsCompiler
             return null;
         }
 
+        /// <summary>An element whose indices are all integer constants is the cell itself (spec §7.6): the original
+        /// compiler addressed constant elements directly and never emitted a lookup with immediate indices.</summary>
+        private static LExpr ConstantCell(LElement element)
+        {
+            static bool Constant(LExpr index, out uint value)
+            {
+                value = index is LLeaf { Operand: { Kind: IrOperandKind.Literal, Type: 0 } literal } ? literal.Value : 0;
+                return index is LLeaf { Operand: { Kind: IrOperandKind.Literal, Type: 0 } };
+            }
+            uint offset;
+            if (element.Indices.Count == 1)
+            {
+                if (!Constant(element.Indices[0], out offset)) return element;
+            }
+            else if (Constant(element.Indices[0], out uint row) && Constant(element.Indices[1], out uint stride)
+                     && Constant(element.Indices[2], out uint column))
+                offset = unchecked(row * stride + column);
+            else
+                return element;
+            return new LLeaf(IrOperand.Literal(element.Base.Type, unchecked(element.Base.Value + offset)));
+        }
+
+        /// <summary>A constant index must lie inside a named array's declared dimension (an open one is unchecked).</summary>
+        private static void CheckBounds(NamedElementExpr named, LExpr index, int dimension)
+        {
+            if (dimension > 0 && index is LLeaf { Operand: { Kind: IrOperandKind.Literal, Type: 0, Value: var value } }
+                && value >= (uint)dimension)
+                throw new OmsCompileException(named.Span,
+                    $"index {unchecked((int)value)} is outside '{named.Name}', which has {dimension} entries in that dimension");
+        }
+
         /// <summary><c>name[i]</c>, <c>name[r][c]</c> or <c>name[r].column</c> against the name's declared shape.</summary>
         private LExpr NamedElement(NamedElementExpr named)
+        {
+            LExpr element = NamedLookup(named);
+            if (element is LElement lookup)
+            {
+                IReadOnlyList<int> shape = Name(named.Name)!.Dimensions;
+                CheckBounds(named, lookup.Indices[0], shape[0]);
+                if (lookup.Indices.Count == 3) CheckBounds(named, lookup.Indices[2], shape[1]);
+                return ConstantCell(lookup);
+            }
+            return element;
+        }
+
+        private LExpr NamedLookup(NamedElementExpr named)
         {
             Declared declared = Name(named.Name)
                 ?? throw new OmsCompileException(named.Span, $"'{named.Name}' is not a declared array");
@@ -1088,10 +1132,9 @@ public static class OmsCompiler
         }
 
         private IrOperand Atom(Expr expression, string what)
-            => expression is OperandExpr atom
-                ? Operand(atom.Operand)
-                : throw new OmsCompileException(expression.Span,
-                    $"{what} must be a single operand at this stage");
+            => expression is OperandExpr atom ? Operand(atom.Operand)
+                : expression is NamedElementExpr or ElementExpr && ToL(expression) is LLeaf cell ? cell.Operand
+                : throw new OmsCompileException(expression.Span, $"{what} must be a single operand at this stage");
 
         private string Resolve(JumpTarget target, SourceSpan span)
         {
