@@ -4289,33 +4289,6 @@ poll/dispatch ops `0xff` and `0x100`. These calls are effectful engine configura
 `input_poll_joystick_action_bits@0x460380`. The first three logical actions are therefore not a generic
 Godot UI ordering; they are the native engine ABI established by the input manager and refined by scripts.
 
-**Where native input comes from (2026-11-01).** Found while driving native AGE from a script (gate 7):
-
-- **Buttons and keys** are read with `GetAsyncKeyState`, which reports the global hardware state.
-- **The cursor** comes from `input_poll_cursor_client@0x4602a0`: `GetCursorPos`, then `ScreenToClient`. Menus and
-  hotspots follow the real cursor, not the `WM_MOUSEMOVE` lParam.
-- **The polling gate** is `+0x1820`, set by `input_set_polling_enabled@0x460180`. On `WM_ACTIVATE`,
-  `age_main_window_proc` disables polling only in fullscreen (`+0x9a298`). A windowed AGE in the background
-  therefore still reacts to clicks and keys made in other applications.
-- **The click latch.** `WM_LBUTTONDOWN`/`WM_RBUTTONDOWN` also set a click latch (`+0x13e0` bit 0/1, via
-  `FUN_00485e20`), unless `+0x1c30` suppresses it. The opening movie's skip consumes the latch, while menus
-  consume the polled state.
-- **ESC.** `WM_KEYDOWN` with ESC posts `WM_CLOSE`.
-
-A script can therefore drive AGE without touching the desktop's input:
-- replace `GetAsyncKeyState` and `GetCursorPos` inside the process (Frida);
-- post the button messages for the latch;
-- capture the client area with `PrintWindow`.
-
-The gate 7 native run was driven this way.
-
-**The "data is corrupted" box is a registration check (2026-11-01).** `engine_main_tick_with_exception_policy`
-(`0x4119ca`..`0x411a1d`) checks whether `set:IsReggist` exists and is 0. If so, every 60–180 s
-(60 s plus `rand() % 120` s) it shows "データが壊れています．再インストールしてください．" through
-`engine_host_show_message` as a Yes/No box: Yes continues, and No throws the exit exception. Nothing is
-corrupted. The box appears when AGE runs from a `native_scratch.py` copy, and it blocks the main loop while it is
-open, so no clicks reach the game until it is answered.
-
 The same mask is also consumed directly by `adv_interpreter_tick@0x410fb0`. Logical action 6 is bit
 `0x40`, the exact bit used by the transient ADV fast-forward/run-state path. There is no Ctrl-specific
 branch: SYSTEM4's C and LeftCtrl mappings, the retained native Backspace default, and any joystick mapping
@@ -4336,6 +4309,104 @@ dispatch on every tick and testing bit `0x40` without consulting `adv_skip_servi
 persistent/read-driven active Skip but cannot release a physically held key. The transient physical channel
 remains separate from persistent op-`0x88` Skip, so releasing the key cannot clear the user's toggle. Both
 channels share text completion, wait advance, and voice deferral.
+
+### Driving native AGE (2026-11-01)
+
+These were found while driving native AGE from a script for gate 7, and they are built into `tools/native_drive.py`
+(`tools-reference.md`, "Native AGE driver").
+
+**Where native input comes from.**
+
+- **Buttons and keys** are read with `GetAsyncKeyState`, which reports the global hardware state. The joystick goes
+  through winmm `joyGetPosEx`/`joyGetDevCapsA` (`input_poll_joystick_action_bits@0x460380`). On Windows 10,
+  `joyGetNumDevs` is the constant `push 0x10; pop eax; ret` (16 slots, not devices).
+- **The cursor** comes from `input_poll_cursor_client@0x4602a0`: `GetCursorPos`, then `ScreenToClient`. Menus and
+  hotspots follow the real cursor, not the `WM_MOUSEMOVE` lParam.
+- **Cursor warps.** AGE also calls `SetCursorPos`: a confirmation such as セーブしますか？ glides the cursor onto its
+  default button (はい) in about 20 steps.
+- **The top edge.** A `WM_MOUSEMOVE` with y < 2 starts the system-menu dwell timer for the top-edge strip.
+- **The polling gate** is `+0x1820`, set by `input_set_polling_enabled@0x460180`. On `WM_ACTIVATE`,
+  `age_main_window_proc` disables polling only in fullscreen (`+0x9a298`). A windowed AGE in the background
+  therefore still reacts to clicks and keys made in other applications.
+- **The click latch.** `WM_LBUTTONDOWN`/`WM_RBUTTONDOWN` set a click latch (`+0x13e0` bit 0/1, via
+  `FUN_00485e20`), unless `+0x1c30` suppresses it. With `DAT_005c6030` set, the latch is set on `WM_LBUTTONUP`/
+  `WM_RBUTTONUP` instead; Himegari's SYS4INI has `CLICKONUP=1`. The opening movie's skip consumes the latch, while
+  menus consume the polled state.
+- **Keys.** A non-repeat `WM_KEYDOWN` also reaches `FUN_00485e50`, the key latch. ESC posts `WM_CLOSE`. F1 calls
+  `engine_save_screenshot_bmp@0x407ce0`, unless `ctx+0x6da7c` bit 0 is set.
+
+A driver can therefore play AGE without touching the desktop's input:
+- replace those user32/winmm calls inside the process;
+- post the button and key messages for the latches;
+- capture the client area with `PrintWindow`.
+
+**The engine context pointer.** `g_pEngineCtx@0x5c6020` holds the live `EngineCtx*`. `age_main_window_proc` reads
+every ctx field through it, and the host-callback thunks at `0x45f780`.. load `ECX` from it.
+
+The VM position is a frame stack:
+- `cur_ctx_index` (`+0x53d14`) selects the running record;
+- each 0x78-byte record has `frame_codebase` (`+0x53d28`), `frame_pc` (`+0x53d2c`) and `frame_script_resource_id`
+  (`+0x53d64`);
+- the instruction offset is `(pc − codebase) >> 2`, the same formula `age_show_message_box@0x409370` uses for its
+  FILE/ADDRESS diagnostics;
+- `asset_catalog_get_entry_name@0x44ea40` names the resource id: a zero high byte indexes the SYS4INI table, and a
+  nonzero one selects an append mount.
+
+At a text wait the frame pc has already moved **past** the wait instruction. On native SC0000 page 3 the frame reads
+`SC0000@0x8a9`; the port's page map has that page waiting at `0x8a6`, and `0x8a9` is where page 4 starts. Pages 1, 2, 3
+and 5 all follow this rule (page 5 reads `0x913`; its port wait is `0x910`).
+
+While the right-click menu is open the stack reads `SYSTEM4@0x477 > SC0000@0x3a2 > MENU@… > CHMENU@…`. Once the menu
+closes, the SC0000 frame is back on the page offset.
+
+**Per-user folders.** AGE loads `SHGetFolderPathA` from `Shell32.dll` at each use. Every caller:
+
+| Caller | CSIDL | Used for |
+|---|---|---|
+| `save_root_resolve@0x40b880` | `0x801c` LocalAppData | the save root |
+| `FUN_0040bd80` | `0x801c` | same shape as `save_root_resolve` |
+| `engine_resolve_sys4reg_ini_path@0x46b150` | `0x801c` | `SYS4REG.INI` |
+| `engine_save_screenshot_bmp@0x407ce0` | `0x8010` Desktop | F1 screenshots `CG%06d.BMP`, when `system:SaveBMPPath` is empty |
+| `engine_write_debug_report@0x42d4d0` | `0x8010` Desktop | debug report (below) |
+
+The debug report writes `REPORT\NN\` with surface BMPs and names `VARIABLES0INT.TXT`, `VARIABLES2STRING.TXT` and
+`FILES.TXT`. It is reached only from the host-callback thunk at `0x45f7a0`. `WM_USER+1` (0x401) goes to
+`wm_user1_hook_stub_true@0x42d4c0`, which returns 1 and does nothing. The variable dump is a lead for native global
+observation (`global-memory-re.md`).
+
+Redirecting `SHGetFolderPathA` therefore moves saves, settings, screenshots and reports together. A driven run that
+quits rewrites the shared profile even without a save: `WM_CLOSE` calls `shared_profile_save`, which writes
+`SYS4REG.INI`, `SAVE.DAT` and `RT.DAT`/`RT.BAK`. The attach test showed exactly those four files changed.
+
+**A new profile starts fullscreen.** Without `SYS4REG.INI`, AGE writes its native defaults, including
+`display:ScreenMode=0` (fullscreen; windowed is 1), `sound:Volume0..4=-1`, `MessageSpeed=5` and
+`EffectSkipOnClick=0`. Fullscreen takes over the display, and `PrintWindow` then captures black, so a sandboxed run
+must write `ScreenMode=1` first.
+
+**Message boxes.** `age_show_message_box@0x409370` formats the text and calls `MessageBoxA` through a packer import
+thunk. Mode 5 is style `0x14` (`MB_YESNO | MB_ICONHAND`) with the caption エラーが発生しました. Returning `IDYES`
+from a `MessageBoxA` replacement continues exactly as pressing the button does.
+
+**The "data is corrupted" box is a registration check.** `engine_main_tick_with_exception_policy`
+(`0x4119ca`..`0x411a1d`) checks whether `set:IsReggist` exists and is 0. If so, every 60–180 s (60 s plus
+`rand() % 120` s) it shows a mode-5 box. Its full text:
+
+```text
+データが壊れています．
+再インストールしてください．
+
+
+
+プログラムを続行しますか？
+
+はい：このままプログラムを続行します．
+      (ただし正常に動作しない場合があります)
+いいえ：プログラムを終了します．
+```
+
+Yes continues; No throws the exit exception. Nothing is corrupted. The box appears when AGE runs from a
+`native_scratch.py` copy, and while it is open it blocks the main loop, so no clicks reach the game until it is
+answered.
 
 ### ADV right-click/X system-menu path (2026-07-21)
 

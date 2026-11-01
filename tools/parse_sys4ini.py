@@ -27,8 +27,9 @@ control bits LSB->MSB, 1=literal, 0=two-byte back-reference: offset=(hi&0xf0)<<4
       uint32 size } x file_count          (80 bytes each)
 
 The directory is followed by VM-bank metadata and a per-game engine-settings
-trailer. This tool currently emits only the asset directory; see
-docs/sys4-format-notes.md for the trailer finding.
+trailer (docs/sys4-format-notes.md). This tool emits only the asset directory;
+`read_settings()` returns the trailer's ordered pairs for other tools (the native
+driver derives the save root from USEAPPDATAFOLDER/REGFILEPATH).
 
 Entries whose name is "@" are placeholders and skipped (matches GARbro/exs4alf).
 
@@ -88,19 +89,60 @@ def _cstr(buf: bytes) -> str:
     return buf.split(b"\x00", 1)[0].decode("cp932", errors="replace")
 
 
-def parse(path: Path) -> dict:
+def _decompressed(path: Path) -> tuple[bytes, bytes, int]:
+    """(raw file, decompressed stream, packed size) of an S4IC-family catalog."""
     raw = path.read_bytes()
     sig4 = raw[:4]
     if sig4 not in DATA_OFFSETS:
         raise SystemExit(f"{path.name}: unknown signature {raw[:8]!r}")
-    magic = _cstr(raw[:8])
     doff = DATA_OFFSETS[sig4]
     packed_size = struct.unpack_from("<I", raw, doff)[0]
     stream = raw[doff + 4: doff + 4 + packed_size]
     if len(stream) != packed_size:
         raise SystemExit(f"{path.name}: packed stream truncated "
                          f"({len(stream)} of {packed_size} bytes)")
-    blob = lzss_decompress(stream)
+    return raw, lzss_decompress(stream), packed_size
+
+
+def directory_end(blob: bytes) -> int:
+    """Offset just past the archive-name list and the 80-byte file records."""
+    (arc_count,) = struct.unpack_from("<I", blob, 0)
+    p = 4 + arc_count * ARC_NAME_LEN
+    (file_count,) = struct.unpack_from("<I", blob, p)
+    return p + 4 + file_count * FILE_ENTRY_LEN
+
+
+def settings_trailer(blob: bytes, offset: int) -> list[tuple[str, str]]:
+    """Ordered (key, value) pairs after the directory: vm_metadata_bytes:u32, the metadata,
+    settings_string_bytes:u32, pair_count:u32, then NUL-terminated key/value strings (keys ASCII,
+    values cp932). Returns [] when the stream ends at the directory (append S4AC catalogs)."""
+    if offset + 4 > len(blob):
+        return []
+    (metadata_bytes,) = struct.unpack_from("<I", blob, offset)
+    p = offset + 4 + metadata_bytes
+    if p + 8 > len(blob):
+        raise ValueError(f"settings trailer truncated at {p:#x}")
+    string_bytes, count = struct.unpack_from("<II", blob, p)
+    p += 8
+    strings = blob[p:p + string_bytes]
+    if len(strings) != string_bytes:
+        raise ValueError(f"settings strings truncated ({len(strings)} of {string_bytes} bytes)")
+    fields = strings.split(b"\x00")
+    if len(fields) < 2 * count + 1 or fields[2 * count:] != [b""]:
+        raise ValueError(f"settings trailer holds {len(fields) - 1} strings, expected {2 * count}")
+    return [(fields[2 * k].decode("ascii"), fields[2 * k + 1].decode("cp932"))
+            for k in range(count)]
+
+
+def read_settings(path: Path) -> list[tuple[str, str]]:
+    """The per-game engine-settings pairs of a base SYS4INI.BIN, in file order."""
+    _, blob, _ = _decompressed(path)
+    return settings_trailer(blob, directory_end(blob))
+
+
+def parse(path: Path) -> dict:
+    raw, blob, packed_size = _decompressed(path)
+    magic = _cstr(raw[:8])
 
     p = 0
     (arc_count,) = struct.unpack_from("<I", blob, p); p += 4

@@ -153,7 +153,7 @@ Everything else is generated from those owners.
 | `global_map.py` | Build the partial global-variable name map from static evidence. | `global_map.py` | corpus + `build/data/` → `build/global-var-map.{json,md}` |
 | `init_kamidori.py` + `init_kamidori_{characters,items,alchemy,maps,progression}.py` | Kamidori (SYS4433) table specializations for `extract_init.py`: `specializations()` returns `{forced_modes, extractors}` keyed by `(mode, TABLE)`. Every extractor decodes a fixed absolute layout (destination minus array base = record id, `divmod` by stride for row tables), so the same function reads the base table and each `--append N` layer without rebasing. Domain modules: **characters** — CCINIT (class-change rule blocks, `rules`), CNINIT, CIINIT (+ CIMES join), CVINIT; **items** — ITINIT/SKINIT (fixed-layout, + ITMES/SKMES joins), ILINIT, AFINIT (one record per tuning sub-table), RTINIT, BTANINIT, BTANINIT2; **alchemy** — ALINIT, BUINIT, IMINIT, SHINIT, HAINIT, CSINIT, SIINIT (town sites); **maps** — MPINIT (doubled-coordinate floor grids; `render_ascii()` debug view), STINIT, STINIT2, LAINIT, OBINIT, COINIT, AMINIT, AMINIT2, DIINIT, ARINIT; **progression** — QUINIT, FAINIT, VIINIT (+ VIMES join), CGINIT, SPINIT, CDINIT, CDINIT2, SCINIT (joined to the SCJUMP contexts of every non-stub layer), EVINIT, EUINIT. Shared static-write walkers live in `init_kamidori_common.py`. Decoded values use semantic keys (`attributes`, not raw hex `fields`), so `field_semantics` and `init_table_profile.py` have no raw columns to profile for these tables; EBINIT and the INIT/INITCONFIG drivers stay on the shared shape modes. Table layouts are documented in [kamidori-data-tables.md](kamidori-data-tables.md). Himegari's address-bound specializations stay in `extract_init.py` and apply only to the Himegari profile. | *Imported by `extract_init.py`.* | `<TABLE>.BIN` or `$N$<TABLE>.BIN`; CCINIT also reads EBINIT/SKINIT names, CDINIT reads CDINIT2 names, SCINIT reads SCJUMP (each across base + non-stub `<extracted>/APPENDnn/` layers) |
 | `init_image.py` | **Runtime data-table oracle.** Derives the native boot order (INIT2's `*INIT` calls, then each mounted append catalog's AUTORUN `*INIT` calls in ascending selector order) and runs it through `Age.Cli init-image`, recording every script's global-bank delta. For profiles with untrusted root `$n$` files it runs against `<extracted>/pristine-root/`, a hard-link view of the install without them. `load()`, `table_layers(TABLE)` and `merged(TABLE)` give other tools a table's per-layer and final cells. Deltas omit writes that store a cell's existing value. `--project TABLE` fills a name-mode table's static base layout (name/description bases, parallel field bases, row-table columns from `<TABLE>.json`) from the executed image, producing one effective table across every layer; each record carries `origin` (the layer that first wrote its name) and `layers` (every layer that wrote one of its cells). It needs a generic name-mode base extraction, so it applies to tables without a profile specialization (for Kamidori, EBINIT); specialized tables already emit fixed-layout records for every layer. | `init_image.py --profile kamidori` · `--summary` · `--project EBINIT` | catalog via `Age.Cli`, `build/callscript-names.json`, `paths.scripts()` → ⚙ `build/games/<profile>/init-image.json`; `--project` → ⚙ `build/games/<profile>/data/MERGED-<TABLE>.json` |
-| `native_scratch.py` | Gate-6 scratch install for native AGE experiments: hard-links the selected install's `*.ALF` archives and copies every other file into `build/games/<profile>/native-scratch/`, then copies `--overlay` files (loose scripts, generated `APPENDnn.AAI`/`.ALF`) into its root. It records a manifest of the pristine install; `--check` verifies the install is unchanged after a native run. Native saves live under `%LOCALAPPDATA%`, shared with the real install, so back them up first. | `native_scratch.py --profile himegari --replace --overlay F …` · `--check` | install → ⚙ `build/games/<profile>/native-scratch/` + `native-scratch-manifest.json` |
+| `native_scratch.py` | Gate-6 scratch install for native AGE experiments: hard-links the selected install's `*.ALF` archives and copies every other file into `build/games/<profile>/native-scratch/`, then copies `--overlay` files (loose scripts, generated `APPENDnn.AAI`/`.ALF`) into its root. It records a manifest of the pristine install; `--check` verifies the install is unchanged after a native run. Native saves live under `%LOCALAPPDATA%`, shared with the real install: drive the copy with `native_drive.py`, which sandboxes them, or back them up first. | `native_scratch.py --profile himegari --replace --overlay F …` · `--check` | install → ⚙ `build/games/<profile>/native-scratch/` + `native-scratch-manifest.json` |
 | `test_init_image.py` | Pure boot-order, layer-merge, and merged-projection regressions over synthetic images. | `test_init_image.py` | — |
 | `test_init_kamidori.py` | Pure Kamidori specialization regressions over synthetic stand-in scripts (no game content): MPINIT doubled-grid decoding with a `-1` labyrinth from a local `sub`, STINIT2 base/stride keying independent of write order, ITINIT fixed-layout `divmod` keying on an append-range id, CCINIT rule-block parsing, QUINIT description-line rows and rewards, and forced-mode/extractor registration. Part of `validate.py` core tests. | `test_init_kamidori.py` | — |
 
@@ -745,10 +745,80 @@ branching/state can shift page ordinals between runs. Resolve a reported page wi
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
 | `tools/frida/capture_native_transforms.py` | Capture native `0x21f`/`0x223`/`0x234` worker operands, corrected integer base/anchor coordinates, all one-shot/cyclic retained fields, the one-shot 4×4 matrix, and the final post-cyclic 4×4 matrix. Optional handle filter; read-only. | `py -3.11 -u -X utf8 tools/frida/capture_native_transforms.py [secs] [pid|AGE.EXE] [--handle 0xHANDLE]` | running game → `build/native-transform-trace.jsonl` |
-| `parse_sys4ini.py` | Parse the selected profile's `SYS4INI.BIN` into a diagnostic JSON asset-index mirror — name ↔ archive ↔ offset ↔ size for base and append catalogs. Each real entry carries universal `raw_index`; the runtime parses SYS4INI itself, while these files remain tooling/test oracles. Also emits the `call-script <id> → name` annotation map, including every mounted `*.AAI` append record under its packed id (`selector << 24 | raw_index`; a later catalog with the same selector wins), so append calls such as `call-script 0x3000232` disassemble as `=$3$EBINIT.BIN`. | `parse_sys4ini.py [--check] [--profile ID] [--game-root PATH] [--extracted-root PATH]` (`--check` validates against extracted files and archive sizes) | selected `SYS4INI.BIN` → selected `build/asset-index.json` + `build/callscript-names.json` |
+| `parse_sys4ini.py` | Parse the selected profile's `SYS4INI.BIN` into a diagnostic JSON asset-index mirror — name ↔ archive ↔ offset ↔ size for base and append catalogs. Each real entry carries universal `raw_index`; the runtime parses SYS4INI itself, while these files remain tooling/test oracles. Also emits the `call-script <id> → name` annotation map, including every mounted `*.AAI` append record under its packed id (`selector << 24 | raw_index`; a later catalog with the same selector wins), so append calls such as `call-script 0x3000232` disassemble as `=$3$EBINIT.BIN`. `read_settings()` returns the base catalog's ordered settings trailer for other tools (`native_drive.py` derives the save root from it). | `parse_sys4ini.py [--check] [--profile ID] [--game-root PATH] [--extracted-root PATH]` (`--check` validates against extracted files and archive sizes) | selected `SYS4INI.BIN` → selected `build/asset-index.json` + `build/callscript-names.json` |
 | `resolve_asset.py` | **Historical scene-group correlation diagnostic, not a runtime resolver.** Builds/queries the strong `file_number ≈ position − group_start` relationship that helped classify SYS4INI ordering. Native RE proves bytecode resources are already universal packed ids, so do not feed this tool's scene-relative result to runtime lookup. | `resolve_asset.py --build` · `resolve_asset.py <SCENE> [resId]` | `build/asset-index.json` → `build/asset-sections.json`; inspects inferred groups |
 | `resolve_frida_reads.py` | Rescue noisy Frida archive-read offsets → asset names via the index (per-archive range search; drops 0x20000 paging reads); recovers the per-scene asset load order. | `resolve_frida_reads.py [reads.log] [-o out.json]` | `build/frida-reads.log` + `build/asset-index.json` → `build/frida-asset-loads.json` |
 | `convert_agf.py` | Convert AGF stills to BMP via `AGF2BMP2AGF.exe` (searches all `extracted/DATA*`). `--scene` batch-converts a scene's whole SYS4INI manifest. Since VFS-C, output is a diagnostic pixel-parity oracle; the runtime decodes AGF bytes directly. | `convert_agf.py EV052CA.AGF …` · `convert_agf.py --scene SC0000` | `extracted/DATA*/*.AGF` → `build/textures/*.BMP` |
+
+## Native AGE driver
+
+Use this to play native AGE from the shell: native gates, save tests, and checking what the original does on a page. It
+needs Windows, Frida and Pillow.
+
+| Tool | Purpose | Run | Reads → Writes |
+|---|---|---|---|
+| `native_drive.py` | Drives native AGE: clicks, keys, screenshots, the VM's script@offset, sandboxed saves. **`start` spawns AGE suspended** under Frida and loads `tools/native-drive/agent.js` before AGE runs. It returns when the window is up and leaves a detached daemon holding the session. AGE runs in a kill-on-close job owned by that daemon, so AGE never keeps running without the hooks. `do`/`run` send steps; `stop` closes AGE the way its own quit does. `--attach [PID]` hooks an AGE you started yourself; its saves stay live. `backup`/`restore` copy the live save folder. | `native_drive.py [--profile ID] start [--exe PATH] [--sandbox NAME \| --live-saves] [--seed live\|DIR] [--sound] [--attach [PID]] [--foreground]` · `do STEP…` · `run FILE.steps` · `status` · `stop` · `steps` · `backup` · `restore DIR` | the `native_scratch.py` copy (default exe) + `tools/native-drive/<profile>.toml` + `vm-map/engine-ctx.toml` + `build/games/<profile>/callscript-names.json` → `build/games/<profile>/native-drive/{session.json, serve.log, events.jsonl, last-session.json, shots/, sandbox/, backups/}` |
+| `test_native_drive.py` | Platform-independent tests: step parsing and refusals, locations and frame decoding, the settle rule, INI updates, save-root/backup logic, the Himegari profile, the SYS4INI settings trailer, and every committed scenario. | `test_native_drive.py` | — |
+
+**What the hooks do inside AGE.**
+- `GetAsyncKeyState` reports only the keys and buttons the driver holds.
+- `GetCursorPos` reports the driver's client point.
+- `SetCursorPos` moves only that point. AGE glides the cursor onto a confirmation's default button; the step result
+  shows where, as `age_moved_cursor`.
+- `joyGetPos[Ex]`/`joyGetDevCapsA` report no joystick.
+
+So your own mouse, keyboard and gamepad cannot disturb a run, and AGE cannot move your cursor.
+
+Clicks set the polled button *and* post the button messages, because the movie skip and `CLICKONUP` use the message
+latch. Keys likewise post `WM_KEYDOWN`/`WM_KEYUP`. ESC is refused (it posts `WM_CLOSE`). F1 is refused too: it saves
+a BMP through `engine_save_screenshot_bmp`.
+
+**Dialogs.** `MessageBoxA` answers the boxes the profile's `[[dialog]]` policy names without showing them. Himegari's
+registration box on copied installs gets **Yes**. Other boxes are shown and reported (`dialogs`), and `answer BUTTON`
+presses one.
+
+**Saves.** `SHGetFolderPathA` points LocalAppData, AppData, Desktop, Documents and ProgramData into
+`sandbox/<name>/`. That covers the save root, `SYS4REG.INI`, F1 screenshots and the debug report.
+- The default sandbox `fresh` is emptied at every start; `--sandbox NAME` persists across sessions.
+- `--seed live|DIR` fills a new sandbox from the live folder or a backup.
+- Before launch the driver writes the profile's `[sandbox.settings]` into the sandbox `SYS4REG.INI`. For Himegari that
+  is windowed `display.ScreenMode=1`: a fresh profile starts fullscreen, which takes over the display and captures
+  black.
+- It also writes `[sandbox.quiet]` (master volume 0, so the audio paths still run) unless you pass `--sound`.
+- At the end the daemon checks that the live save folder is unchanged and logs `live-saves-unchanged` or what changed.
+- `--live-saves` and `--attach` use the real folder after an automatic backup to `backups/<stamp>/`. That backup is
+  skipped when it would equal the newest one. Even an unsaved session changes the real folder: quitting rewrites
+  `SYS4REG.INI`, `SAVE.DAT` and `RT.DAT`.
+
+**VM position.** `state` reads the frame stack through `g_pEngineCtx@0x5c6020` and the `engine-ctx.toml` frame fields.
+Each frame reads as `SCRIPT@offset`, with `offset = (pc − codebase) >> 2`, the dword offset of the disassembly and the
+page locator. At a text wait the native pc is already **past** the wait instruction, so a page reads as the port page
+map's *next* `page_start_offset`. Example: SC0000 page 3 waits at `0x8a6` and the native position is `0x8a9`.
+
+**Steps.** One per line in a `.steps` file, with `#` comments; `native_drive.py steps` lists them with the profile's
+points. Points are named coordinates from `[points]` in the profile, or `X Y`.
+
+| Step | Effect |
+|---|---|
+| `move X Y\|POINT` | park the cursor (hover) |
+| `click X Y\|POINT [hold=MS]`, `rclick …` | left/right click; right click opens the ADV menu |
+| `key NAME\|0xVK [hold=MS]` | press a key (`enter`, `space`, `ctrl`, arrows, `f2`…, letters) |
+| `wheel up\|down [N]` | wheel notches at the cursor |
+| `wait SECONDS` | sleep |
+| `settle [timeout=S] [quiet=S] [threshold=F]` | wait until the frame stays within `threshold` (default 0.4 % of pixels) of one reference for `quiet` seconds (0.7). Typing adds up and resets the wait; the ADV wait indicator stays below the threshold. Animated menus such as the title never settle: use `wait` or a higher `threshold` |
+| `advance [N]` | N × (click the profile's `[advance] point`, `settle`) |
+| `shot [NAME]` | client area → `shots/NAME.png` (PrintWindow); the result carries the VM position |
+| `state` | the frame stack, e.g. `SYSTEM4@0x477 > SC0000@0x8a9` |
+| `expect at=\|top=S@OFF` / `script=S` | fail unless any frame (`at`) or the running one (`top`) is there |
+| `wait-state … [timeout=S] [click=POINT every=S]` | poll until `expect` would pass, clicking meanwhile (boot: `wait-state script=TITLE click=adv.next every=3`) |
+| `point NAME X Y` | define a point for the session |
+| `dialogs` / `answer BUTTON` | list open message boxes / press a button |
+| `close [timeout=S]` | `WM_CLOSE` wParam=1 (AGE's own quit, which saves the shared profile), then the session ends |
+
+A failing step stops the request, and `do`/`run` exit 1. `tools/native-drive/scenarios/himegari-save-load.steps` is
+the worked example: boot, new game, save at page 3, read on, load, and expect page 3 again. On a fresh sandbox it takes
+about 45 s. Profile files live in `tools/native-drive/<profile>.toml` with `[engine]`, `[[dialog]]`, `[sandbox]`,
+`[advance]` and `[points]`. A profile without `[engine]` still drives; it just has no `state`.
 
 ## Runtime capture (Frida)
 

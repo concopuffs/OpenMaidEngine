@@ -20,8 +20,9 @@ per format.
 
 `SYS4INI.BIN` is not only the asset catalog. Its `S4IC` LZSS stream begins with the archive names and
 80-byte file records documented in `asset-resolution-re.md`, then continues with a 0x90-byte metadata block and a
-NUL-delimited per-game engine-settings trailer. `tools/parse_sys4ini.py` currently consumes only the
-directory prefix; the C# runtime catalog continues through the trailer and exposes the ordered pairs.
+NUL-delimited per-game engine-settings trailer. The C# runtime catalog continues through the trailer and exposes
+the ordered pairs; `tools/parse_sys4ini.py` emits only the directory, and its `read_settings()` returns the same
+pairs to tools (the native driver derives the save root from `USEAPPDATAFOLDER`/`REGFILEPATH`).
 
 After the directory prefix, Himegari's decompressed stream has this tail:
 

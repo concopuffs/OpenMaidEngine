@@ -1,0 +1,43 @@
+# Native AGE driving facts for Himegari, read by tools/native_drive.py.
+# Points are client pixels of the 800x600 window. Engine field offsets come from vm-map/engine-ctx.toml; only
+# the facts that table does not hold live here. Evidence: docs/engine-re.md, "Driving native AGE".
+
+[engine]
+ctx_global = 0x5c6020     # g_pEngineCtx: age_main_window_proc reads every EngineCtx field through it
+frame_stride = 0x78       # one 0x78-byte script-context record per frame
+frame_count = 20          # records in the array; cur_ctx_index selects the running one
+
+# Message boxes the driver answers without showing them (MessageBoxA, matched on the start of the text).
+[[dialog]]
+match = "データが壊れています．"
+answer = "yes"
+reason = "registration check (set:IsReggist == 0) on copied installs; Yes continues, No exits"
+
+# Settings written into the sandbox profile's SYS4REG.INI (cp932, other lines kept) before every sandboxed launch.
+[sandbox]
+settings_file = "SYS4REG.INI"
+
+[sandbox.settings]
+"display.ScreenMode" = 1   # windowed; a new profile starts fullscreen, which takes over the display and captures black
+
+[sandbox.quiet]            # also written unless --sound
+"sound.Volume0" = 0        # master volume 0 basis points: the audio paths still run, silently
+
+[advance]
+point = "adv.next"        # where `advance` clicks: any spot that is not a control-strip button
+
+# Verified 2026-11-01 by scenarios/himegari-save-load.steps.
+[points]
+"adv.next" = [400, 300]
+"title.start" = [400, 302]       # Game Start on the title screen (-> GAMESTART)
+"title.load" = [400, 352]        # Data Load
+"newgame.begin" = [400, 519]     # ゲーム開始 on the new-game settings page (-> SC0000)
+"menu.save" = [403, 25]          # SAVE tab of the right-click menu (-> SAVE)
+"menu.load" = [553, 25]          # LOAD tab
+"slot.0" = [400, 70]             # the five slots of a save/load page, top to bottom
+"slot.1" = [400, 168]
+"slot.2" = [400, 266]
+"slot.3" = [400, 364]
+"slot.4" = [400, 462]
+"slots.195" = [510, 577]         # page buttons along the bottom: 195 holds slots 195-199
+"confirm.yes" = [355, 299]       # はい in the in-game confirmation (AGE also glides the cursor onto it)
