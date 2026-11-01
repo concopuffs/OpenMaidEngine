@@ -4289,6 +4289,33 @@ poll/dispatch ops `0xff` and `0x100`. These calls are effectful engine configura
 `input_poll_joystick_action_bits@0x460380`. The first three logical actions are therefore not a generic
 Godot UI ordering; they are the native engine ABI established by the input manager and refined by scripts.
 
+**Where native input comes from (2026-11-01).** Found while driving native AGE from a script (gate 7):
+
+- **Buttons and keys** are read with `GetAsyncKeyState`, which reports the global hardware state.
+- **The cursor** comes from `input_poll_cursor_client@0x4602a0`: `GetCursorPos`, then `ScreenToClient`. Menus and
+  hotspots follow the real cursor, not the `WM_MOUSEMOVE` lParam.
+- **The polling gate** is `+0x1820`, set by `input_set_polling_enabled@0x460180`. On `WM_ACTIVATE`,
+  `age_main_window_proc` disables polling only in fullscreen (`+0x9a298`). A windowed AGE in the background
+  therefore still reacts to clicks and keys made in other applications.
+- **The click latch.** `WM_LBUTTONDOWN`/`WM_RBUTTONDOWN` also set a click latch (`+0x13e0` bit 0/1, via
+  `FUN_00485e20`), unless `+0x1c30` suppresses it. The opening movie's skip consumes the latch, while menus
+  consume the polled state.
+- **ESC.** `WM_KEYDOWN` with ESC posts `WM_CLOSE`.
+
+A script can therefore drive AGE without touching the desktop's input:
+- replace `GetAsyncKeyState` and `GetCursorPos` inside the process (Frida);
+- post the button messages for the latch;
+- capture the client area with `PrintWindow`.
+
+The gate 7 native run was driven this way.
+
+**The "data is corrupted" box is a registration check (2026-11-01).** `engine_main_tick_with_exception_policy`
+(`0x4119ca`..`0x411a1d`) checks whether `set:IsReggist` exists and is 0. If so, every 60–180 s
+(60 s plus `rand() % 120` s) it shows "データが壊れています．再インストールしてください．" through
+`engine_host_show_message` as a Yes/No box: Yes continues, and No throws the exit exception. Nothing is
+corrupted. The box appears when AGE runs from a `native_scratch.py` copy, and it blocks the main loop while it is
+open, so no clicks reach the game until it is answered.
+
 The same mask is also consumed directly by `adv_interpreter_tick@0x410fb0`. Logical action 6 is bit
 `0x40`, the exact bit used by the transient ADV fast-forward/run-state path. There is no Ctrl-specific
 branch: SYSTEM4's C and LeftCtrl mappings, the retained native Backspace default, and any joystick mapping

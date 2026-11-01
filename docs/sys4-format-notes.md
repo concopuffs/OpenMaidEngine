@@ -385,9 +385,16 @@ Kamidori): a sidecar-free rebuild of the translated SC0000 with three narration 
 first page adds six T1 entries there (F7 `0x816` → `0x81c`). A save made on the first inserted page and loaded
 against the unedited scene resumed on that scene's first page, the entry with the same index. Neither consumer
 depends on table order: `script_frame_restore_saved_layout@0x40f2d0` reads `table[index]` directly, and
-`read_text_db_find_message_index@0x468f50` searches T1 linearly for an equal offset. A compiler could keep
-existing entries at their indices and append new ones at the end, so that old saves and read flags stay
-aligned. This has not been tested natively.
+`read_text_db_find_message_index@0x468f50` searches T1 linearly for an equal offset. OMS patches (spec §10.4)
+therefore keep existing entries at their indices and append new ones at the end, so old saves and read flags
+stay aligned.
+
+Native evidence (2026-11-01, Himegari, gate 7): `oms/examples/himegari-patch/SC0000.oms` inserts two pages
+before SC0000's third. The patched script's T1 has 322 entries, and its two new entries come last, out of offset
+order. A save made on page 6 of the unpatched scene (slot 199) was loaded with the patched scene as a loose
+override. It resumed on the same page, and the next click showed page 7. Code-order tables would have resumed
+two pages earlier. A new game showed the two inserted pages between pages 2 and 3, so native AGE runs a script
+whose T1 is out of order.
 
 The variable section starts with six DWORD counts in this order:
 
