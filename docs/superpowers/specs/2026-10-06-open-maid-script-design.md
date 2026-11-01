@@ -176,8 +176,9 @@ that needs `extended` is a compile error under `native`.
 | `ref int`, `ref float`, `ref str` | reference variable | global/local pointer cells (types 6, 0xc, 0xd, 8, 0xe) |
 | `int[n]`, `int[r][c]`, `str[n]` | fixed arrays | contiguous cells; used through element access or as an `address` operand |
 
-There are no user-defined record types. Generated game modules may expose row tables as arrays with named
-columns, written `units[id].level`. This lowers to `lookup-array-2d` with the registry's stride and column.
+There are no record types: a record is never a value. A table (§5.3) names the parallel arrays that hold one kind
+of record, so `unit[id].stats.max_hp` reaches one cell of one of them. A row table's named columns are written
+`name[id].column`; with a computed row this lowers to `lookup-array-2d` with the registry's stride and column.
 
 ### 5.2 Declarations
 
@@ -217,7 +218,63 @@ compiler performs no constant folding.
 names registry globals by their registry names. An element is named only when the declared shape lowers to the
 same lookup: `name[i]` for a one-dimensional array, `name[r][c]` or `name[r].column` when the lookup's immediate
 stride is the declared row width. Any other view of a named array keeps the raw base, such as
-`G[0x6f70:0x7][r][c]`.
+`G[0x6f70:0x7][r][c]`. A plain cell inside a named array prints as its element, and a table field prints through
+its table (§11.3).
+
+### 5.3 Tables
+
+AGE keeps its data tables as parallel arrays. EBINIT stores a unit's name, level, stats, drops and graphics in
+about 30 arrays indexed by the same unit id, and writes each field to a fixed cell. A table gives those arrays one
+name, so a record's fields read and write as `unit[761].stats.max_hp`.
+
+A table is a compile-time view. It allocates nothing and emits nothing, and a record is never a value: it cannot
+be copied, passed or returned.
+
+```
+table unit[1000] {
+    full_name = unit_full_names            // string[1000]:  unit[i].full_name
+    starting_level = unit_starting_level   // int[1000]:     unit[i].starting_level
+    stats = unit_base_stats                // int[1000][14]: unit[i].stats.max_hp, unit[i].stats[10]
+    drop_item = unit_drop_item_ids         // int[1000][5]:  unit[i].drop_item[0]
+}
+```
+
+**Declaration.**
+
+- Each field names a declared array, a registry global or a `global` declaration, whose leading dimension is the
+  table's record count. Fields may sit in different banks.
+- A one-dimensional field holds one value per record. A two-dimensional field holds a row per record, reached as
+  `.field[k]` or, when the array names its columns, `.field.column`.
+- A table name follows the rules of every other declared name. Field names belong to their table.
+- Generated game modules declare the profile's tables from the registry (`[[table]]` entries in
+  `vm-map/globals[-<profile>].toml`). A source module or a script may declare its own.
+
+**Access.** `t[i].field…` is exactly the field array's element: `unit[i].stats.max_hp` is
+`unit_base_stats[i].max_hp`. With constant indices it is the cell itself (§7.6); otherwise it is a lookup.
+
+**`with` blocks.**
+
+```
+with unit[761] {
+    .stats.max_hp = 150
+    .experience_reward = 999
+    .drop_chance[0] = 100
+}
+```
+
+- Inside the block, `.field…` stands for `unit[761].field…`, as a target or as an operand. The innermost `with`
+  binds.
+- The block emits only its statements, in order. A label inside it is an ordinary label.
+- The record index is an expression, and every `.field` access evaluates it again. A statement in the block that
+  changes the index's cells therefore moves later accesses to another record. The decompiler forms blocks only
+  over constant indices (§11.3).
+
+**Not in the language:**
+
+- record values and record assignment (`unit[a] = unit[b]`);
+- constructors such as `unit[i] = { … }`, which read as replacing the whole record when they would set only the
+  fields listed;
+- tables of tables.
 
 ## 6. Statements and expressions
 
@@ -260,6 +317,7 @@ if c goto label                     // the original language's conditional goto:
 if !c goto label                    // the negated form: jcc c, -1, L (also break / continue)
 if c goto a else goto b             // jcc c, a, b
 atomic { … }                        // statement block 0x1f4/0x1f5
+with unit[i] { .field = v }         // record block (§5.3); emits only its statements
 name(args)                          // local subroutine, template or intrinsic call
 run SCRIPTNAME(args)                // cross-script call (call-script)
 return                              // ret
@@ -435,6 +493,27 @@ few dozen script/bank pairs, which are covered by the sidecar.
 - **Strings and arrays.** Each string reference gets its own copy, placed after the code in first-reference
   order. Inline integer arrays (`local int t[5] = [4, 0, 5, 0, 538]` → op `0x64`) interleave in the same order.
 - **Tables.** T1, T2 and T3 are derived from the code: the `0x71`, `0x03` and `0x8f` sites in order.
+
+### 7.6 Constant element addresses
+
+An element whose indices are all integer constants is the cell itself. `unit_base_stats[761][10]`,
+`unit[761].stats.max_hp` and `G[0x2beb7c:14][761][10]` all compile to the operand `G[0x2c1524]`, with no lookup and
+no temporary.
+
+- Literals, `const` names, enum members and constant template arguments count as constants. Arithmetic does not:
+  `a[760 + 1]` computes its index (§7.4).
+- An element with any computed index keeps its lookup, and its constant indices stay immediates.
+- A constant index outside a named array's declared dimensions is a compile error. Raw element access
+  (`G[0x3306][5]`) is not checked.
+- A lookup with constant indices can still be written as an intrinsic call or `@op`, and the decompiler prints it
+  that way.
+
+This is the original compiler's rule. Neither corpus contains a lookup whose indices are all immediates:
+
+- none of Himegari's 144,356 `lookup-array` instructions or Kamidori's 114,708 has an immediate index;
+- every `lookup-array-2d` has a computed row or column (50 / 615 have a constant row and a computed column).
+
+Data tables are written with plain cells instead: EBINIT writes unit 761's 45 fields as `mov`s to fixed cells.
 
 ## 8. Static checking
 
@@ -650,6 +729,29 @@ statements for now.
 name-plate column (`G[0x306f]`): name, alternate name, descriptor (for example `女剣士` before an introduction), or
 `？？？？`. A line reads `水那 "「…………」" (voice: 0x1be, form: form_descriptor)`; the default form is omitted.
 
+### 11.3 Elements and records
+
+Step 6 names a cell by its position in a declared array as well as by its address.
+
+- **Cells.** A global cell inside a declared array prints as its element: `G[0x2c1524]` becomes
+  `unit_base_stats[0x2f9].max_hp`, or `unit[0x2f9].stats.max_hp` when the array is a table field. The name
+  compiles back to the same cell (§7.6), so naming cannot change bytes.
+  - The cell exactly at a declared name keeps that name.
+  - Where declared arrays overlap, the smallest one that contains the cell names it.
+  - An array with an open leading dimension names only lookups.
+  - Raw `@op` operands stay raw.
+- **Lookups** print through the table too: `lookup-array-2d LP unit_base_stats id 14 10` reads
+  `unit[id].stats.max_hp`.
+- **Record blocks.** A run of two or more consecutive statements prints as one `with` block when every target is a
+  field of the same table at the same constant index and no label falls inside the run. Decompiled EBINIT then
+  reads as one block per unit, with the fields in their original order.
+- **Wrong extents mislead without breaking anything.** A misdeclared array size gives misleading names, never
+  different bytes. `tools/globals_build.py --lint` reports overlapping arrays.
+
+Before this naming, most data-table cells printed raw. The registry's fully sized arrays contain 133,816 Kamidori
+operands (113,776 of them in INIT scripts) and 107,526 Himegari operands (63,978) that do not sit at a declared
+name.
+
 ## 12. Validation gates
 
 Each gate must pass on the complete Himegari and Kamidori corpora before the next phase starts:
@@ -683,12 +785,16 @@ port's VM tests and native traces.
 | Extended mod-state model and its save interplay | `extended` globals | OMP / `maid.state` design (roadmap §3.8) |
 | Code-address immediates outside code-target positions | resolved 2026-10-07 | the decoder relabels immediates that meet a registry `code-address` value (§9.5); the scene loop's `G[0x6c3] = 0x45e` decompiles as `&label_45e`, so edits and sidecar-free rebuilds that move code keep it right |
 | Concrete surface syntax details (this draft's spelling) | none: semantics are fixed above | settle in review before the parser is written |
+| Record keys and field values by name (`unit[緑プテテット]`, `.drop_item[0] = 緑の液`) | readable table indices and id-valued fields (§5.3) | generate enums such as `unit_id` and `item_id` from the init image; a table declares its key kind and each field its value kind, as template parameters do. Needs naming rules for names that are not identifiers or repeat (`牙コウモリ（牙蝙蝠/ニュクテリス）`), a way to qualify members of different enums that share a name, and a policy for translations that rename entries |
+| Overlapping registry arrays | correct element names (§11.3) | 39 Kamidori and 2 Himegari arrays overlap another; classify each as a deliberate sub-view or a size error |
 
 ## 14. Language evolution
 
 - **Version declaration.** Every unit may declare `oms 1` (the default).
 - **What changes grammar:** only a new language version. That requires a spec revision, and the compiler keeps
   accepting older versions.
+- **Version 1 is open until its first release.** Grammar added before then belongs to version 1: tables and `with`
+  blocks (§5.3, 2026-11-01) are version 1.
 - **Data changes, no version bump:** new opcode contracts, extension opcodes and game registries regenerate
   their modules.
 - **Library changes, no version bump:** new idioms are prelude templates. Because templates also feed the
