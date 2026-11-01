@@ -4,6 +4,7 @@ using Age.Script.Compile;
 using Age.Script.Ir;
 using Age.Script.Layout;
 using Age.Script.Modules;
+using Age.Script.Patch;
 using Age.Script.Syntax;
 using Age.Script.Text;
 
@@ -34,11 +35,13 @@ public sealed record OmsSourceRoundTripReport(
 /// <summary>
 /// An idiomatic canonical rebuild with each instruction's relocation key on both sides. Linking without the sidecar
 /// moves library subs, so positions are compared by key: a library sub's name and offset inside it, or otherwise the
-/// instruction's ordinal among the script's own (non-library) instructions, which keep their order.
+/// instruction's ordinal among the script's own (non-library) instructions, which keep their order. A patch probe
+/// (gate 7) also marks the instructions its plan inserted (<see cref="RebuiltInserted"/>); traces skip them.
 /// </summary>
 public sealed record OmsRelocation(byte[] Rebuilt, long[] OriginalKeys, long[] RebuiltKeys,
                                    IReadOnlyDictionary<int, int> OriginalIndexByOffset,
-                                   IReadOnlyDictionary<int, int> RebuiltIndexByOffset)
+                                   IReadOnlyDictionary<int, int> RebuiltIndexByOffset,
+                                   bool[]? RebuiltInserted = null)
 {
     /// <summary>Whether two code offsets, one in the original and one in the rebuild, name the same instruction.</summary>
     public bool SamePosition(long original, long rebuilt)
@@ -171,6 +174,33 @@ public static class OmsSourceRoundTrip
         for (int k = 0, ordinal = 0; k < keys.Length; k++)
             if (!inLibrary[k]) keys[k] = ordinal++;
         return keys;
+    }
+
+    /// <summary>Gate 7: <paramref name="original"/> patched with its probe plan (<see cref="OmsPatchProbe"/>), with
+    /// relocation keys. A base instruction keys as its base index, and so does a region copy of it or a <c>before</c>
+    /// body at it, because transfers and code positions that named it land there. Inserted notes are marked.
+    /// <paramref name="emptyIdentical"/> reports whether an empty plan reproduces the original byte for byte.</summary>
+    public static OmsRelocation PatchProbe(byte[] original, string name, OpcodeTable table, OpcodeContracts contracts,
+                                           int stride, out bool emptyIdentical)
+    {
+        string fingerprint = OmsPatchPlan.FingerprintOf(original);
+        var empty = new OmsPatchPlan { Script = name, Fingerprint = fingerprint, Abi = table.AbiId };
+        emptyIdentical = OmsPatchApplier.Apply(original, name, [empty], table, contracts).Bytes.AsSpan().SequenceEqual(original);
+        IrScript ir = IrDecoder.Decode(original, table, contracts, name);
+        OmsPatchResult patched = OmsPatchApplier.Apply(original, name,
+            [OmsPatchProbe.Build(ir, fingerprint, table.AbiId, stride)], table, contracts);
+        var originalKeys = Enumerable.Range(0, ir.Code.Count).Select(k => (long)k).ToArray();
+        var rebuiltKeys = new long[patched.Provenance.Count];
+        var inserted = new bool[rebuiltKeys.Length];
+        for (int j = 0; j < rebuiltKeys.Length; j++)
+        {
+            OmsPatchProvenance origin = patched.Provenance[j];
+            inserted[j] = origin.Origin is OmsPatchOrigin.Before or OmsPatchOrigin.After or OmsPatchOrigin.Append;
+            rebuiltKeys[j] = origin.Origin is OmsPatchOrigin.Base or OmsPatchOrigin.Region or OmsPatchOrigin.Before
+                ? origin.BaseIndex : -1 - j;
+        }
+        return new OmsRelocation(patched.Bytes, originalKeys, rebuiltKeys, IndexByOffset(ir), IndexByOffset(patched.Script),
+            inserted);
     }
 
     private static Dictionary<int, int> IndexByOffset(IrScript script)

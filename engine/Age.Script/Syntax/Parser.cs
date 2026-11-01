@@ -60,17 +60,78 @@ public sealed class Parser
             EndStatement();
         }
         bool module = Peek().Is(TokenKind.Identifier, "module");
-        Token head = Expect(TokenKind.Identifier, module ? "module" : "script");
+        bool patch = Peek().Is(TokenKind.Identifier, "patch");
+        Token head = Expect(TokenKind.Identifier, module ? "module" : patch ? "patch" : "script");
         string name = module ? ParseDottedName() : Expect(TokenKind.String).Text;
+        string? fingerprint = null;
+        if (patch)
+        {
+            Expect(TokenKind.Identifier, "fingerprint");
+            Token value = Expect(TokenKind.String);
+            fingerprint = value.Text;
+            if (!System.Text.RegularExpressions.Regex.IsMatch(fingerprint, "^sha256:[0-9a-fA-F]{64}$"))
+                throw new OmsSyntaxException(value.Span, "a fingerprint is \"sha256:\" and 64 hex digits");
+        }
         string? abi = null;
         if (Accept(TokenKind.Identifier, "abi")) abi = Expect(TokenKind.Identifier).Text;
         EndStatement();
         var body = new List<Statement>();
         while (Peek().Kind != TokenKind.End)
         {
+            if (StartsSiteOperation())
+            {
+                if (!patch) throw new OmsSyntaxException(Peek().Span, "site operations belong in a patch unit (spec §10)");
+                body.Add(ParseSiteOperation());
+                continue;
+            }
             body.Add(ParseStatement());
         }
-        return new ScriptUnit(head.Span, version, name, abi, body, module);
+        return new ScriptUnit(head.Span, version, name, abi, body, module, fingerprint);
+    }
+
+    /// <summary><c>before site</c>, <c>after site</c> or <c>replace site</c>: the words are reserved only in that
+    /// order, so neither is a keyword elsewhere.</summary>
+    private bool StartsSiteOperation()
+        => Peek().Kind == TokenKind.Identifier && Peek().Text is "before" or "after" or "replace"
+           && Peek(1).Is(TokenKind.Identifier, "site");
+
+    /// <summary>A fragment's site operation (spec §10.2).</summary>
+    private Statement ParseSiteOperation()
+    {
+        Token keyword = Next();
+        Expect(TokenKind.Identifier, "site");
+        SiteRef site = ParseSiteRef();
+        if (keyword.Text == "replace" && Accept(TokenKind.Identifier, "operand"))
+        {
+            Token number = Expect(TokenKind.Integer);
+            if (number.Integer is < 1 or > 64)
+                throw new OmsSyntaxException(number.Span, "operands count from 1");
+            Expect(TokenKind.Identifier, "with");
+            Expr value = ParseExpression();
+            EndStatement();
+            return new OperandPatchStatement(keyword.Span, site, (int)number.Integer, value);
+        }
+        SiteRef? through = keyword.Text == "replace" && Accept(TokenKind.Identifier, "through") ? ParseSiteRef() : null;
+        IReadOnlyList<Statement> body = ParseBlock();
+        SkipNewlines();
+        var operation = keyword.Text switch
+        {
+            "before" => SiteOperation.Before,
+            "after" => SiteOperation.After,
+            _ => SiteOperation.Replace,
+        };
+        return new SiteStatement(keyword.Span, operation, site, through, body);
+    }
+
+    private SiteRef ParseSiteRef()
+    {
+        Token token = Next();
+        return token.Kind switch
+        {
+            TokenKind.Integer => new SiteRef(token.Span, token.Integer, null),
+            TokenKind.Identifier => new SiteRef(token.Span, null, token.Text),
+            _ => throw new OmsSyntaxException(token.Span, $"expected a site (an offset or a base label), found {token}"),
+        };
     }
 
     private string ParseDottedName()
@@ -83,6 +144,8 @@ public sealed class Parser
     private Statement ParseStatement()
     {
         Token token = Peek();
+        if (StartsSiteOperation())
+            throw new OmsSyntaxException(token.Span, "site operations belong at the top level of a patch unit (spec §10)");
         if (token.Kind == TokenKind.Identifier && Peek(1).Is(TokenKind.Punct, ":"))
         {
             _position += 2;

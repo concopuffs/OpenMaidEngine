@@ -186,10 +186,16 @@ public sealed class CanonicalTemps
     private readonly Dictionary<LExpr, int> _labels = new(ReferenceEqualityComparer.Instance);
     private int _ints, _refs;
 
+    private readonly IReadOnlyDictionary<int, uint>? _refBase;
+
+    /// <param name="refBase">The first reference slot per reference bank type, when a fragment's temporaries must stay
+    /// above the base script's (spec §10.2); otherwise reference temporaries start at slot 0.</param>
     public CanonicalTemps(LStatement statement, uint intBase, bool swapRefs = false,
-                          IReadOnlyList<uint>? intOverride = null, IReadOnlyList<uint>? refOverride = null)
+                          IReadOnlyList<uint>? intOverride = null, IReadOnlyList<uint>? refOverride = null,
+                          IReadOnlyDictionary<int, uint>? refBase = null)
     {
         _intBase = intBase;
+        _refBase = refBase;
         _swapRefs = swapRefs;
         _intOverride = intOverride;
         _refOverride = refOverride;
@@ -254,6 +260,6 @@ public sealed class CanonicalTemps
             return r < _refOverride.Count ? _refOverride[r] : throw new InvalidDataException(
                 $"the temporary override lists {_refOverride.Count} reference slots but the statement needs more");
         uint label = (uint)_labels[node];
-        return _swapRefs && type == 0xC && label < 2 ? 1 - label : label;
+        return (_swapRefs && type == 0xC && label < 2 ? 1 - label : label) + (_refBase?.GetValueOrDefault(type) ?? 0);
     }
 }

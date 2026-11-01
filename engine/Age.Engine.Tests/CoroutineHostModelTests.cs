@@ -80,6 +80,56 @@ public class CoroutineHostModelTests
         Assert.Equal("coroutine-yield-terminal@0x20: terminal 0x77 is not the scene loop head 0x10", vm.HaltReason);
     }
 
+    /// <summary>The scene loop as a patch leaves it (spec §10): inert comments (op 0x1a7) before the loop head, between
+    /// its call and exit and inside the labeled-yield block, and the terminal immediate names the first comment of the
+    /// run in front of the head, where the relocated jump to the head lands.</summary>
+    private static Script CommentedSceneLoop(int terminalImmediate, int setupCount, int slot, int observed)
+    {
+        const int output = 0x6be, terminal = 0x6c3, comment = 0x1a7;
+        return Script(
+            Ins(0x00, Op("eq"), new(T_LINT, 0), new(T_GINT, SceneEntryGate), new(T_IMM, 1)),
+            Ins(0x07, Op("jcc"), new(T_LINT, 0), new(T_IMM, 0x20), new(T_IMM, 0x80)),
+            Ins(0x0e, comment, new Operand(T_STR, 0x1000)),
+            Ins(0x11, Op("call"), new Operand(T_IMM, 0x80)),
+            Ins(0x14, comment, new Operand(T_STR, 0x1000)),
+            Ins(0x17, Op("exit")),
+            Ins(0x20, 0x140, new(T_GINT, output), new(T_STR, 0x1000), new(T_STR, 0x1001), new(T_GINT, output)),
+            Ins(0x29, comment, new Operand(T_STR, 0x1000)),
+            Ins(0x2c, Op("mov"), new(T_GINT, terminal), new(T_IMM, terminalImmediate)),
+            Ins(0x31, comment, new Operand(T_STR, 0x1000)),
+            Ins(0x34, Op("eq"), new(T_LINT, 1), new(T_GINT, terminal), new(T_GINT, output)),
+            Ins(0x3b, Op("jcc"), new(T_LINT, 1), new(T_IMM, 0x60), new(T_IMM, 0x40)),
+            Ins(0x40, Op("add"), new(T_GINT, setupCount), new(T_GINT, setupCount), new(T_IMM, 1)),
+            Ins(0x47, Op("mov"), new(T_GINT, slot), new(T_IMM, 4)),
+            Ins(0x4c, Op("jmp"), new Operand(T_IMM, 0x20)),
+            Ins(0x60, Op("mov"), new(T_GINT, SceneEntryGate), new(T_IMM, 0)),
+            Ins(0x65, Op("jmp"), new Operand(T_IMM, 0x80)),
+            Ins(0x80, Op("mov"), new(T_GINT, observed), new(T_GINT, slot)),
+            Ins(0x85, Op("exit")));
+    }
+
+    [Fact]
+    public void CommentsInTheLabeledYieldPatternAreSkipped()
+    {
+        const int setupCount = 0x7000, slot = 0x7001, observed = 0x7002;
+        var vm = new VirtualMachine(
+            CommentedSceneLoop(0x0e, setupCount, slot, observed), Table, new CaptureHost(),
+            compatibility: HimegariCompatibility);
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(1, vm.Globals[setupCount]);
+        Assert.Equal(4, vm.Globals[observed]);
+        Assert.Equal(0x0e, vm.Globals[0x6be]);
+
+        // An immediate in front of the comment run still names something other than the loop head.
+        var stale = new VirtualMachine(
+            CommentedSceneLoop(0x07, setupCount, slot, observed), Table, new CaptureHost(),
+            compatibility: HimegariCompatibility);
+        stale.Run();
+        Assert.Equal("coroutine-yield-terminal@0x20: terminal 0x7 is not the scene loop head 0x11", stale.HaltReason);
+    }
+
     [Fact]
     public void NonAdvLabeledServiceIsLeftStubbedAndDoesNotInjectSceneEntryGate()
     {

@@ -721,11 +721,17 @@ To apply plans P1 … Pn, in load order, to base B:
    - Plan labels resolve inside their blocks.
    - Base sites named by plans resolve as base transfers do.
 6. **Lay out data and header counts.** Data is B's items in order, then each plan's items. Each header count
-   is the largest of B's and the plans'.
+   is the largest of B's and the plans'. Two adjustments keep the result readable by loaders that end the code at
+   the first data item a string operand or an inline array (op 0x64's second operand) references, as the port's
+   does:
+   - a base item whose every reference the plans removed is dropped; items B never references stay;
+   - after a drop, items that would come before the first such item move to the end.
+   Every reference is renumbered, so native AGE, which reads data only by offset, sees the same values.
 7. **Keep the tables stable.**
    - T1, T2 and T3 keep every base entry at its index, pointing at its instruction's new offset.
    - Entries for inserted instructions follow, in code order.
-   - A base entry whose instruction a region removed keeps its slot and points at the replacement.
+   - A base entry whose instruction a region removed keeps its slot and points at the replacement. When the
+     replacement starts with an instruction of the same kind, that instruction takes no second slot.
    - When the result equals the derived tables, the layout stays derived, so an inert plan reproduces B byte for
      byte.
 
@@ -955,6 +961,7 @@ contracts.
 | 2. Core level, stage C4 (declarations and registry naming) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical with `<profile>.globals` and `<profile>.scripts` applied; `use`, `const`, `global` and `local` declarations, named elements and `run` names covered by `OmsCoreTests` |
 | 2. Core level, constant elements and element names (§7.6, §11.3) | **passed 2026-11-01** | still 520/520 and 732/732 byte-identical at core and idiomatic level and as fixed points, with 0 abandoned lifts; all 297 / 279 scenes stay equivalent after core and idiomatic rebuilds. `OmsCoreTests` covers constant elements compiling to their cells, out-of-range constant indices as errors, cells inside declared arrays decompiling as elements, and lookups with immediate indices staying explicit; `globals_build.py --lint` warns on overlapping arrays |
 | 2. Core level, tables and record blocks (§5.3, §11.3) | **passed 2026-11-01** | still 520/520 and 732/732 byte-identical at core and idiomatic level and as fixed points, with 0 abandoned lifts; all 297 / 279 scenes stay equivalent after core and idiomatic rebuilds. The registries declare `unit`, `item` and `skill`, plus Kamidori's `stage_enemy`. Decompiled EBINIT prints one `with unit[k] { … }` block per unit (277 / 368) and leaves no field write outside one. `OmsCoreTests` covers table access, `with` blocks (nested, around a label, inside a template), source-module and registry tables, misuse errors and decompiled record blocks. The table-based Kamidori `OMSAUTO.oms` compiles byte-identically to the native-tested BIN |
+| 7. Fragments (§10), VM part | **passed 2026-11-01**; native part pending | `Age.Cli oms-patch` compiles fragments into transform plans and applies them in load order (`Age.Script/Patch/`). `Age.Cli oms-rebuild --patch-probe`: an empty plan reproduces 520/520 and 732/732 scripts byte for byte. With probe plans applied to every script, all 297 / 279 scenes stay equivalent (27.7M / 38.1M steps) once the notes' steps are filtered out. The probes insert notes before branch targets and every fifth instruction and after calls, replace every fifth instruction by a copy of itself, and replace one operand by its own value. Inserted steps do not advance the simulated clock, and the port's op 0x140 host model skips comments (engine-re.md). The example fragment `oms/examples/himegari-patch/SC0000.oms` inserts two pages before SC0000's third. In the port VM, its two lines show before the original third line (171 lines against 169), and every other line is unchanged. T1 grows from 320 to 322 entries; the base's entries keep their indices and the two new lines are appended. `OmsPatchTests` covers the fragment syntax, each operation, conflicts and ordered interactions between plans, stable tables, new storage, library reuse and the plan format. Native: the fragment as a loose-file override, and a save made later in the unpatched scene loading on the same page |
 | 2. Core level, stage C3 (`sub`, `coroutine`, bound parameters) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical; 10,914 / 12,287 subs and 614 / 644 coroutines recovered; the compiler's falls-into, implicit-return, coroutine-ending and code-reference-kind checks are covered by `OmsCoreTests`; warnings (§8.2, including recursion with bound parameters) await a warning channel |
 | 2. Core level, stage C2 (expressions, `for`, `while`) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: still 520/520 and 732/732 byte-identical, with 331,075 / 330,708 instructions folded into expressions; temporary overrides in 6,548 / 8,332 statements (2.9% / 4.4% of folded statements); `Age.Cli oms-temps` ranks the residue |
 

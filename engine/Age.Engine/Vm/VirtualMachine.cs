@@ -409,6 +409,8 @@ public sealed partial class VirtualMachine
     private static bool IsStr(Operand o) => o.Type is T_STR or T_GSTR or T_GSTRPTR or T_LSTR or T_LSTRPTR;
     private static bool SameOperand(Operand a, Operand b) => a.Type == b.Type && a.Value == b.Value;
 
+    private const int CommentOpcode = 0x1a7;
+
     private static bool IsAdvLabeledYield(Script script, Instruction ins)
         => ins.Opcode == 0x140 && ins.Args.Count >= 4
            && ins.Args[1].Type == T_STR && ins.Args[2].Type == T_STR
@@ -418,14 +420,21 @@ public sealed partial class VirtualMachine
     /// <summary>The ADV labeled yield's terminal is the scene loop head: the nearest <c>call</c> followed by
     /// <c>exit</c> before the yield. The script's own terminal immediate (the <c>mov</c> after the yield, compared
     /// with the output) must name that instruction. A stale immediate, left by code that moved without relocating it,
-    /// is reported in <paramref name="problem"/>, never echoed back as if the service had returned it.</summary>
+    /// is reported in <paramref name="problem"/>, never echoed back as if the service had returned it. Comments
+    /// (op 0x1a7, which the native handler skips) may sit anywhere in the pattern, and the immediate may name a run of
+    /// them leading into the head, as a patch's notes do (Open Maid Script spec §10).</summary>
     private bool TryGetAdvYieldTerminal(int pc, Operand output, out long terminal, out string? problem)
     {
         terminal = 0;
         problem = null;
-        if (pc + 2 >= _cur.Script.Instructions.Count) return false;
-        var setTerminal = _cur.Script.Instructions[pc + 1];
-        var compare = _cur.Script.Instructions[pc + 2];
+        var instructions = _cur.Script.Instructions;
+        bool IsComment(int k) => instructions[k].Opcode == CommentOpcode;
+        int Next(int k) { do k++; while (k < instructions.Count && IsComment(k)); return k; }
+        int Previous(int k) { do k--; while (k >= 0 && IsComment(k)); return k; }
+        int setAt = Next(pc), compareAt = setAt < instructions.Count ? Next(setAt) : setAt;
+        if (compareAt >= instructions.Count) return false;
+        var setTerminal = instructions[setAt];
+        var compare = instructions[compareAt];
         if (_t.Label(setTerminal.Opcode) != "mov" || setTerminal.Args.Count < 2
             || setTerminal.Args[1].Type != T_IMM
             || _t.Label(compare.Opcode) != "eq" || compare.Args.Count < 3)
@@ -437,20 +446,23 @@ public sealed partial class VirtualMachine
             || (SameOperand(compare.Args[2], terminalOperand) && SameOperand(compare.Args[1], output));
         if (!comparesTerminalToOutput) return false;
 
-        var instructions = _cur.Script.Instructions;
         int head = -1;
-        for (int k = pc - 1; k > 0 && head < 0; k--)
-            if (_t.Label(instructions[k].Opcode) == "exit" && _t.Label(instructions[k - 1].Opcode) == "call")
-                head = k - 1;
+        for (int k = Previous(pc); k > 0 && head < 0; k = Previous(k))
+            if (_t.Label(instructions[k].Opcode) == "exit" && Previous(k) is int call and >= 0
+                && _t.Label(instructions[call].Opcode) == "call")
+                head = call;
         long immediate = Read(setTerminal.Args[1]);
-        if (head < 0 || immediate != instructions[head].Offset)
+        bool namesHead = head >= 0 && immediate >= 0 && immediate <= int.MaxValue
+                         && _cur.Script.IndexByOffset.TryGetValue((int)immediate, out int named) && named <= head
+                         && Enumerable.Range(named, head - named).All(IsComment);
+        if (!namesHead)
         {
             problem = head < 0
                 ? $"coroutine-yield-terminal@0x{instructions[pc].Offset:x}: no scene loop head precedes the yield"
                 : $"coroutine-yield-terminal@0x{instructions[pc].Offset:x}: terminal 0x{immediate:x} is not the scene loop head 0x{instructions[head].Offset:x}";
             return false;
         }
-        terminal = instructions[head].Offset;
+        terminal = immediate;   // names the head, or comments that lead into it
         return true;
     }
 

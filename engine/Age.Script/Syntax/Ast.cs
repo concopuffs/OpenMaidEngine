@@ -1,9 +1,13 @@
 namespace Age.Script.Syntax;
 
-/// <summary>A parsed unit (spec §3.1): a script (<c>script "X.BIN"</c>) or, when <see cref="IsModule"/>, a module
-/// (<c>module himegari.adv</c>) holding declarations, templates and library subroutines.</summary>
+/// <summary>A parsed unit (spec §3.1): a script (<c>script "X.BIN"</c>); when <see cref="IsModule"/>, a module
+/// (<c>module himegari.adv</c>) holding declarations, templates and library subroutines; or, when
+/// <see cref="Fingerprint"/> is set, a fragment (<c>patch "X.BIN" fingerprint "sha256:…"</c>, spec §10).</summary>
 public sealed record ScriptUnit(SourceSpan Span, int Version, string Name, string? Abi, IReadOnlyList<Statement> Body,
-                                bool IsModule = false);
+                                bool IsModule = false, string? Fingerprint = null)
+{
+    public bool IsPatch => Fingerprint != null;
+}
 
 public abstract record Statement(SourceSpan Span);
 
@@ -195,3 +199,18 @@ public sealed record TableStatement(SourceSpan Span, string Name, int Records, I
 /// <summary><c>with unit[i] { .field = v }</c> (spec §5.3): the parser has already written each <c>.field</c> in the
 /// body as <c>unit[i].field</c>, so the block emits only its statements.</summary>
 public sealed record WithStatement(SourceSpan Span, NamedElementExpr Record, IReadOnlyList<Statement> Body) : Statement(Span);
+
+/// <summary>A base instruction a fragment names (spec §10.1): an original dword offset or a base label.</summary>
+public sealed record SiteRef(SourceSpan Span, uint? Offset, string? Name)
+{
+    public override string ToString() => Offset is uint offset ? $"0x{offset:x}" : Name!;
+}
+
+public enum SiteOperation { Before, After, Replace }
+
+/// <summary><c>before site S { … }</c>, <c>after site S { … }</c> or <c>replace site S [through E] { … }</c>.</summary>
+public sealed record SiteStatement(SourceSpan Span, SiteOperation Operation, SiteRef Site, SiteRef? Through,
+                                   IReadOnlyList<Statement> Body) : Statement(Span);
+
+/// <summary><c>replace site S operand N with V</c>; <see cref="Operand"/> counts from 1.</summary>
+public sealed record OperandPatchStatement(SourceSpan Span, SiteRef Site, int Operand, Expr Value) : Statement(Span);

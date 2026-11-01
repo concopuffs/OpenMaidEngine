@@ -812,6 +812,13 @@ the immediate would hide a script whose code moved without relocating it, which 
 Maid Script decoder relabels this immediate as a code position (`G[0x6c3] = &label`, registry
 `value = "code-address"`), so recompiled scenes keep it correct.
 
+**Comments in the pattern (2026-11-01).** A fragment (OMS spec §10) may put code anywhere around the loop. The gate-7
+probe puts inert comments (op 0x1a7, whose native handler only advances) before the loop head, between its `call` and
+`exit`, and between the yield, the `mov` and the `eq`. A transfer to the head then lands on the first comment in front
+of it, so the relocated immediate names that comment. The host model skips comments when it matches the pattern. It
+accepts an immediate that names the head itself or a run of comments leading into it, and returns that immediate. Any
+other instruction between the named one and the head still halts with `coroutine-yield-terminal@…`.
+
 The same relocation work exposed a port bug in the setup's `call *G[0x6be]`. The port's `call` took the operand's
 cell number (`0x6be`) as the target instead of reading the cell. That was a silent no-op wherever `0x6be` is not an
 instruction offset, and a jump into unrelated code wherever it is. `call *v` now calls the offset the variable holds.

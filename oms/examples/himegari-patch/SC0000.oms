@@ -1,0 +1,14 @@
+oms 1
+// Gate 7 (spec §10, §12): a fragment against the pristine SC0000. It inserts two pages before the scene's third page
+// and changes nothing else. Every ADV line starts with a read-message boundary (op 0x71, reset_adv_text_layout), the
+// site saves resume from, so the two pages add two T1 entries. Stable tables append them after the base's 320, which
+// keeps a save made later in the unpatched scene on its own page.
+patch "SC0000.BIN" fingerprint "sha256:029718d6c927f90f6dcb1b89851591be310b5889dd53d6c8892604ad1fc9a9f6"
+use himegari.globals
+use himegari.adv
+
+// The third page's line (T1 entry 2; the page locator's `SC0000 P003` starts at its previous end_text_line, 0x874).
+before site 0x877 {
+    "[OMS] この二ページは、パッチがシナリオに差し込んだものです。"
+    魔王 "「元の台本は、一文字も書き換えられていない。」"
+}

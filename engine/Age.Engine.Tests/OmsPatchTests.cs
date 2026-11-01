@@ -1,0 +1,443 @@
+using Age.Engine.Model;
+using Age.Engine.Sys4;
+using Age.Script;
+using Age.Script.Abi;
+using Age.Script.Compile;
+using Age.Script.Ir;
+using Age.Script.Modules;
+using Age.Script.Patch;
+using Age.Script.Syntax;
+using Age.Script.Text;
+using Xunit;
+
+/// <summary>Open Maid Script fragments and patches (spec §10): fragment syntax, plan semantics, conflicts between plans,
+/// stable tables, new storage and library reuse.</summary>
+public class OmsPatchTests
+{
+    private const string Abi = "SYS4422";
+    private const uint None = 0xFFFFFFFF;
+    private const string Name = "T.BIN";
+
+    private static readonly OpcodeTable Table = new(new Dictionary<int, (string, int)>
+    {
+        [0x02] = ("exit", 0), [0x03] = ("call-script", 1), [0x05] = ("ret", 0), [0x50] = ("add", 3),
+        [0x52] = ("mul", 3), [0x55] = ("mov", 2), [0x5a] = ("eq", 3), [0x5c] = ("lt", 3), [0x6e] = ("show-text", 2),
+        [0x71] = ("reset-adv-text-layout", 1), [0x8c] = ("jmp", 1), [0x8f] = ("call", 1), [0xa0] = ("jcc", 3),
+        [0x1a3] = ("load-shared-profile-int", 1), [0x1a7] = ("comment", 1),
+    }, Abi);
+
+    private static readonly OpcodeContracts Contracts = OpcodeContracts.FromParts(
+        new Dictionary<int, int[]> { [0x8c] = [1], [0x8f] = [1], [0xa0] = [2, 3] },
+        new Dictionary<(int, int), string[]>
+        {
+            [(0x6e, 1)] = ["read"], [(0x6e, 2)] = ["read-string"], [(0x1a3, 1)] = ["write", "cell"],
+        },
+        new Dictionary<int, string>
+        {
+            [0x6e] = "show-text", [0x1a3] = "load-shared-profile-int", [0x1a7] = "comment",
+        },
+        new Dictionary<int, string> { [0x8c] = "transfer", [0x8f] = "call", [0xa0] = "transfer" });
+
+    private static readonly IntrinsicCatalog Intrinsics = new(Table, Contracts);
+
+    private static readonly GameModule Adv = GameModule.FromSource(Parser.ParseScript("""
+        module test.adv
+        enum speaker {
+            HERO = 7
+        }
+        @dialogue inline line(text: text, speaker: speaker = none, voice: const = none) {
+            static if speaker == none {
+                prologue()
+            } else {
+                G[0x10] = speaker
+                static if voice != none {
+                    play(voice)
+                }
+            }
+            show_text(0, text)
+        }
+        sub prologue {
+            G[0x2e47] = 0
+        }
+        sub play(v: G[0x20]) {
+            G[0x21] = v
+            helper()
+        }
+        sub helper {
+            G[0x22] = 1
+        }
+        """, "adv.oms"));
+
+    private static readonly IReadOnlyList<GameModule> Modules = [Adv];
+    private static readonly OmsIdioms Idioms = OmsIdioms.Build(Modules, Abi, Intrinsics);
+
+    /// <summary>Two ADV lines (each led by a read-message boundary), a conditional jump back to the second, a local
+    /// call and the called routine.</summary>
+    private const string DialogueBase = """
+        start:
+            @op(0x71, 1)
+            @op(0x6e, 0, "one")
+        second:
+            @op(0x71, 1)
+            @op(0x6e, 0, "two")
+            @op(0xa0, G[1], -1, second)
+            @op(0x8f, routine)
+            exit
+        routine:
+            G[2] = 1
+            @op(0x05)
+        """;
+
+    private sealed record Base(IrScript Script, byte[] Bytes, int[] Offsets)
+    {
+        /// <summary>The base label of instruction <paramref name="index"/>.</summary>
+        public string Label(int index) => $"label_{Offsets[index]:x}";
+    }
+
+    private static Base Compile(string body)
+    {
+        IrScript compiled = OmsCompiler.Compile(Parser.ParseScript($"script \"{Name}\"\n" + body, "base.oms"), Abi, Table,
+            null, Intrinsics, name => Modules.FirstOrDefault(module => module.Name == name));
+        byte[] bytes = IrEncoder.Encode(compiled);
+        IrScript decoded = IrDecoder.Decode(bytes, Table, Contracts, Name);
+        return new Base(decoded, bytes, OmsPatchBase.From(decoded).Offsets.ToArray());
+    }
+
+    private static string Header(byte[] bytes) => $"patch \"{Name}\" fingerprint \"{OmsPatchPlan.FingerprintOf(bytes)}\"\n";
+
+    private static OmsPatchPlan Plan(Base base_, string body, bool idiomatic = false)
+        => OmsPatchCompiler.Compile(Parser.ParseScript(Header(base_.Bytes) + body, "p.oms"), base_.Bytes, Table, Contracts,
+            Intrinsics, Modules, idiomatic ? Idioms : null);
+
+    private static OmsPatchResult Apply(Base base_, params OmsPatchPlan[] plans)
+        => OmsPatchApplier.Apply(base_.Bytes, Name, plans, Table, Contracts);
+
+    private static string Shape(IrScript script)
+        => string.Join(" ", script.Code.Select(i => i.Opcode.ToString("x") + "("
+            + string.Join(",", i.Operands.Select(o => o.Kind switch
+            {
+                IrOperandKind.CodeLabel => $"@{o.Value}",
+                IrOperandKind.DataRef => $"d{o.Value}",
+                _ => o.Value == None ? "-1" : $"{o.Type:x}:{o.Value:x}",
+            })) + ")"));
+
+    // ------------------------------------------------------------------------------------------- identity
+
+    [Fact]
+    public void AnEmptyPlanReproducesTheBase()
+    {
+        Base base_ = Compile(DialogueBase);
+        Assert.Equal("71(0:1) 6e(0:0,d0) 71(0:1) 6e(0:0,d1) a0(3:1,-1,@2) 8f(@7) 2() 55(3:2,0:1) 5()", Shape(base_.Script));
+        OmsPatchPlan empty = Plan(base_, "use test.adv\n");
+        Assert.Empty(empty.Operations);
+        Assert.Null(empty.Append);
+        OmsPatchResult result = Apply(base_, empty);
+        Assert.Equal(base_.Bytes, result.Bytes);
+        Assert.True(result.Script.Tables.IsDerived);
+    }
+
+    [Fact]
+    public void TheProbePlanAppliesAndAnEmptyPlanIsIdentical()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsRelocation probed = OmsSourceRoundTrip.PatchProbe(base_.Bytes, Name, Table, Contracts, 4, out bool emptyIdentical);
+        Assert.True(emptyIdentical);
+        IrScript patched = IrDecoder.Decode(probed.Rebuilt, Table, Contracts, Name);
+        // The notes are inert comments; without them the probed script is the base again, with its own targets.
+        var kept = Enumerable.Range(0, patched.Code.Count).Where(j => !probed.RebuiltInserted![j]).ToList();
+        Assert.Equal(base_.Script.Code.Count, kept.Count);
+        Assert.Equal(base_.Script.Code.Select(i => i.Opcode), kept.Select(j => patched.Code[j].Opcode));
+        Assert.All(patched.Code.Where((_, j) => probed.RebuiltInserted![j]), note => Assert.Equal(0x1a7, note.Opcode));
+    }
+
+    // ------------------------------------------------------------------------------------------- site operations
+
+    [Fact]
+    public void BaseTransfersLandOnABeforeBody()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchResult result = Apply(base_, Plan(base_, $"before site {base_.Label(2)} {{\n    G[9] = 1\n}}\n"));
+        // The jump back to `second` (base index 2) now runs the inserted body first.
+        Assert.Equal("71(0:1) 6e(0:0,d0) 55(3:9,0:1) 71(0:1) 6e(0:0,d1) a0(3:1,-1,@2) 8f(@8) 2() 55(3:2,0:1) 5()",
+            Shape(result.Script));
+        Assert.Equal([OmsPatchOrigin.Base, OmsPatchOrigin.Base, OmsPatchOrigin.Before, OmsPatchOrigin.Base],
+            result.Provenance.Take(4).Select(origin => origin.Origin));
+        Assert.True(result.Script.Tables.IsDerived);    // nothing inserted is a table site
+    }
+
+    [Fact]
+    public void AnAfterBodyRunsOnlyWhenControlFallsThrough()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchResult result = Apply(base_, Plan(base_, $"after site {base_.Offsets[1]} {{\n    G[9] = 1\n}}\n"));
+        // The jump to `second` skips the body inserted after the instruction in front of it.
+        Assert.Equal("71(0:1) 6e(0:0,d0) 55(3:9,0:1) 71(0:1) 6e(0:0,d1) a0(3:1,-1,@3) 8f(@8) 2() 55(3:2,0:1) 5()",
+            Shape(result.Script));
+    }
+
+    [Fact]
+    public void AnAfterBodyNeedsAnInstructionThatFallsThrough()
+    {
+        Base base_ = Compile(DialogueBase);
+        var error = Assert.Throws<OmsCompileException>(() => Plan(base_, $"after site {base_.Label(6)} {{\n    G[9] = 1\n}}\n"));
+        Assert.Contains("never falls through", error.Message);
+    }
+
+    [Fact]
+    public void ARegionIsReplacedAndItsOnlyDataReferenceDropsTheItem()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchResult result = Apply(base_, Plan(base_, $"replace site {base_.Label(1)} {{\n    @op(0x6e, 0, \"uno\")\n}}\n"));
+        Assert.Equal("71(0:1) 6e(0:0,d1) 71(0:1) 6e(0:0,d0) a0(3:1,-1,@2) 8f(@7) 2() 55(3:2,0:1) 5()", Shape(result.Script));
+        Assert.Equal(["two", "uno"], result.Script.Data.Select(item => item.Text));
+        Assert.Equal(OmsPatchOrigin.Region, result.Provenance[1].Origin);
+    }
+
+    [Fact]
+    public void ARegionAcceptsTransfersToItsStartButNotIntoItsInterior()
+    {
+        Base base_ = Compile(DialogueBase);
+        // The conditional jump targets `second` (index 2): a region starting there is fine...
+        OmsPatchResult result = Apply(base_, Plan(base_,
+            $"replace site {base_.Label(2)} through {base_.Label(3)} {{\n    @op(0x71, 1)\n    @op(0x6e, 0, \"zwei\")\n}}\n"));
+        Assert.Equal("71(0:1) 6e(0:0,d0) 71(0:1) 6e(0:0,d1) a0(3:1,-1,@2) 8f(@7) 2() 55(3:2,0:1) 5()", Shape(result.Script));
+        // The removed line's T1 slot points at the replacement, which starts with a line of its own: no second slot.
+        Assert.True(result.Script.Tables.IsDerived);
+        // ...one that covers it from the instruction before is not.
+        var error = Assert.Throws<OmsCompileException>(() => Plan(base_,
+            $"replace site {base_.Label(1)} through {base_.Label(2)} {{\n    @op(0x6e, 0, \"x\")\n}}\n"));
+        Assert.Contains($"transfers to 0x{base_.Offsets[2]:x} inside it", error.Message);
+    }
+
+    [Fact]
+    public void OperandReplacementsKeepTheInstructionAndRetargetCode()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchResult result = Apply(base_, Plan(base_, $"""
+            replace site {base_.Label(7)} operand 2 with 7
+            replace site {base_.Label(4)} operand 3 with {base_.Label(0)}
+            """ + "\n"));
+        Assert.Equal("71(0:1) 6e(0:0,d0) 71(0:1) 6e(0:0,d1) a0(3:1,-1,@0) 8f(@7) 2() 55(3:2,0:7) 5()", Shape(result.Script));
+    }
+
+    [Theory]
+    [InlineData(7, "operand 3 with 7", "has 2 operands, not an operand 3")]
+    [InlineData(7, "operand 2 with label_0", "is not a code position and takes no label")]
+    [InlineData(4, "operand 3 with 5", "is a code position and takes a label")]
+    public void OperandReplacementsMustFitTheInstruction(int index, string replacement, string expected)
+    {
+        Base base_ = Compile(DialogueBase);
+        var error = Assert.Throws<OmsCompileException>(() =>
+            Plan(base_, $"replace site {base_.Label(index)} {replacement}\n"));
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Fact]
+    public void AWrittenOperandTakesACell()
+    {
+        Base base_ = Compile("@op(0x1a3, G[4])\nexit\n");
+        var error = Assert.Throws<OmsCompileException>(() => Plan(base_, "replace site 0 operand 1 with 5\n"));
+        Assert.Contains("is written, so it takes a cell", error.Message);
+        Assert.Equal("1a3(3:6) 2()", Shape(Apply(base_, Plan(base_, "replace site 0 operand 1 with G[6]\n")).Script));
+    }
+
+    // ------------------------------------------------------------------------------------------- plans together
+
+    [Fact]
+    public void PlansAtOneSiteRunInLoadOrderAndTheInteractionIsReported()
+    {
+        Base base_ = Compile(DialogueBase);
+        string site = base_.Label(2);
+        OmsPatchResult result = Apply(base_, Plan(base_, $"before site {site} {{\n    G[9] = 1\n}}\n"),
+            Plan(base_, $"before site {site} {{\n    G[9] = 2\n}}\n"));
+        Assert.StartsWith("71(0:1) 6e(0:0,d0) 55(3:9,0:1) 55(3:9,0:2) 71(0:1) 6e(0:0,d1) a0(3:1,-1,@2)", Shape(result.Script));
+        Assert.Equal([$"plans 1, 2 insert before 0x{base_.Offsets[2]:x}, in that order"], result.Interactions);
+        Assert.Equal([-1, -1, 0, 1, -1], result.Provenance.Take(5).Select(origin => origin.Plan));
+    }
+
+    [Theory]
+    [InlineData("replace site {7} operand 2 with 7", "replace site {7} operand 2 with 8",
+                "conflict: plans 1 and 2 both replace operand 2 at {o7}")]
+    [InlineData("replace site {1} {{\n    G[9] = 1\n}}", "replace site {1} {{\n    G[9] = 2\n}}",
+                "overlaps the region plan 1 replaces at {o1}")]
+    [InlineData("replace site {1} {{\n    G[9] = 1\n}}", "before site {1} {{\n    G[9] = 2\n}}",
+                "conflict: plan 2 inserts before {o1}, inside the region plan 1 replaces at {o1}")]
+    [InlineData("replace site {2} through {3} {{\n    G[9] = 1\n}}", "before site {0} {{\n    goto label_{x3}\n}}",
+                "conflict: plan 2: block 0 names {o3}, inside the region plan 1 replaces at {o2}")]
+    public void PlansThatTouchTheSameCodeConflict(string first, string second, string expected)
+    {
+        Base base_ = Compile(DialogueBase);
+        string Fill(string text)
+        {
+            for (int k = 0; k < base_.Offsets.Length; k++)
+                text = text.Replace($"{{{k}}}", base_.Label(k)).Replace($"{{o{k}}}", $"0x{base_.Offsets[k]:x}")
+                    .Replace($"{{x{k}}}", $"{base_.Offsets[k]:x}");
+            return text.Replace("{{", "{").Replace("}}", "}");
+        }
+        var error = Assert.Throws<OmsPatchException>(() =>
+            Apply(base_, Plan(base_, Fill(first) + "\n"), Plan(base_, Fill(second) + "\n")));
+        Assert.Contains(Fill(expected), error.Message);
+    }
+
+    [Fact]
+    public void APlanAppliesOnlyToTheBaseItWasCompiledAgainst()
+    {
+        Base base_ = Compile(DialogueBase);
+        Base other = Compile(DialogueBase.Replace("\"two\"", "\"deux\""));
+        OmsPatchPlan plan = Plan(base_, $"before site 0 {{\n    G[9] = 1\n}}\n");
+        Assert.Contains("was compiled against", Assert.Throws<OmsPatchException>(() => Apply(other, plan)).Message);
+        var error = Assert.Throws<OmsCompileException>(() => OmsPatchCompiler.Compile(
+            Parser.ParseScript(Header(base_.Bytes) + "use test.adv\n", "p.oms"), other.Bytes, Table, Contracts, Intrinsics,
+            Modules));
+        Assert.Contains($"this patch targets {OmsPatchPlan.FingerprintOf(base_.Bytes)}", error.Message);
+    }
+
+    // ------------------------------------------------------------------------------------------- tables and storage
+
+    [Fact]
+    public void BaseTableEntriesKeepTheirIndexAndInsertedOnesAreAppended()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchResult result = Apply(base_, Plan(base_,
+            $"before site {base_.Label(2)} {{\n    @op(0x71, 1)\n    @op(0x6e, 0, \"new\")\n}}\n"));
+        int[] offsets = OmsPatchBase.From(result.Script).Offsets.ToArray();
+        // Saves resume by T1 index: entry 1 still names the base's second line, which moved past the inserted one.
+        Assert.Equal([(uint)offsets[0], (uint)offsets[4], (uint)offsets[2]], result.Script.Tables.ReadMessageSites!);
+        Assert.Equal([(uint)offsets[7]], result.Script.Tables.LocalCallSites!);
+        IrScript decoded = IrDecoder.Decode(result.Bytes, Table, Contracts, Name);
+        Assert.Equal(result.Script.Tables.ReadMessageSites, decoded.Tables.ReadMessageSites);
+    }
+
+    [Fact]
+    public void ARegionThatRemovesATableSitePointsItsSlotAtTheReplacement()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchResult result = Apply(base_, Plan(base_, $"replace site {base_.Label(2)} {{\n    G[9] = 1\n}}\n"));
+        Assert.Equal([0u, (uint)base_.Offsets[2]], result.Script.Tables.ReadMessageSites!);
+        Assert.Contains(result.Notes, note => note.Contains($"removes read-message site 0x{base_.Offsets[2]:x}; its T1 slot 1"));
+    }
+
+    [Fact]
+    public void NewStorageGoesAboveEverySlotTheBaseUses()
+    {
+        Base base_ = Compile("L[3] = 1\nexit\n");
+        Assert.Equal(5, base_.Script.LocalCounts[0]);
+        OmsPatchPlan plan = Plan(base_, """
+            local int x
+            before site 0 {
+                x = 2
+                G[9] = G[1] * 2 + G[2] * 3
+            }
+            """ + "\n");
+        var slots = plan.Blocks[0].SelectMany(instruction => instruction.Operands)
+            .Where(operand => operand.Type == StorageBanks.LocalBankTypes[0]).Select(operand => operand.Value).ToList();
+        Assert.Contains(4u, slots);                         // x
+        Assert.All(slots, slot => Assert.True(slot >= 4, $"L[{slot}] is a base slot"));
+        OmsPatchResult result = Apply(base_, plan);
+        Assert.Equal((int)slots.Max() + 2, result.Script.LocalCounts[0]);
+    }
+
+    // ------------------------------------------------------------------------------------------- library subs
+
+    [Fact]
+    public void LibrarySubsTheBaseLinksAreCalledThereAndOthersAreAppended()
+    {
+        Base base_ = Compile("use test.adv\n\"Narration.\"\nexit\n");
+        int prologue = base_.Offsets[3];
+        OmsPatchPlan reuse = Plan(base_, "use test.adv\nbefore site 0 {\n    \"Inserted.\"\n}\n", idiomatic: true);
+        Assert.Null(reuse.Append);
+        Assert.Equal(OmsPatchOperand.Site(0, prologue), reuse.Blocks[0][0].Operands[0]);
+
+        OmsPatchPlan linked = Plan(base_, "use test.adv\nbefore site 0 {\n    HERO \"Hi.\" (voice: 0x34e)\n}\n", idiomatic: true);
+        Assert.NotNull(linked.Append);
+        Assert.Equal(5, linked.Blocks[linked.Append.Value].Count);     // play and helper, not prologue again
+        OmsPatchOperand call = linked.Blocks[0].Single(instruction => instruction.Opcode == 0x8f).Operands[0];
+        Assert.Equal(OmsPatchOperandKind.Label, call.Kind);
+        Assert.Equal(linked.Append.Value, call.Block);
+        OmsPatchResult result = Apply(base_, linked);
+        Assert.Equal(OmsPatchOrigin.Append, result.Provenance[^1].Origin);
+    }
+
+    [Fact]
+    public void AppendedCodeNeedsABaseThatCannotReachItsEnd()
+    {
+        Base base_ = Compile("G[1] = 1\n");
+        var error = Assert.Throws<OmsCompileException>(() => Plan(base_, """
+            sub extra {
+                G[2] = 1
+            }
+            before site 0 {
+                extra()
+            }
+            """ + "\n"));
+        Assert.Contains("can reach the end of its code", error.Message);
+    }
+
+    // ------------------------------------------------------------------------------------------- plan format
+
+    [Fact]
+    public void APlanRoundTripsThroughJson()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchPlan plan = Plan(base_, $$"""
+            sub extra {
+                G[2] = 1
+            }
+            before site {{base_.Label(2)}} {
+                @op(0x71, 1)
+                @op(0x6e, 0, "new")
+                extra()
+                goto {{base_.Label(0)}}
+            }
+            replace site {{base_.Label(7)}} operand 2 with G[3]
+            """ + "\n");
+        string json = plan.ToJson();
+        OmsPatchPlan read = OmsPatchPlan.FromJson(json);
+        Assert.Equal(json, read.ToJson());
+        Assert.Contains("\"site\": 0", json);
+        Assert.Contains("\"label\": [", json);
+        Assert.Equal(Apply(base_, plan).Bytes, Apply(base_, read).Bytes);
+        Assert.Contains("unsupported transform plan version", Assert.Throws<InvalidDataException>(() =>
+            OmsPatchPlan.FromJson(json.Replace("\"oms_patch\": 1", "\"oms_patch\": 2"))).Message);
+    }
+
+    // ------------------------------------------------------------------------------------------- syntax
+
+    [Theory]
+    [InlineData("before site 1 {\n}\n", "0x1 is not an instruction start in T.BIN")]
+    [InlineData("before site nowhere {\n}\n", "'nowhere' is not a label of T.BIN")]
+    [InlineData("replace site 0 operand 0 with 1\n", "operands count from 1")]
+    [InlineData("before site 0 {\n    before site 3 {\n    }\n}\n", "top level of a patch unit")]
+    [InlineData("G[1] = 2\n", "a patch holds declarations, subs and site operations")]
+    [InlineData("before site 0 {\nlabel_5:\n    G[1] = 1\n}\n", "'label_5' is reserved")]
+    [InlineData("before site 0 {\n    goto label_99\n}\n", "unknown label 'label_99': neither the fragment nor its base defines it")]
+    public void FragmentErrorsNameTheProblem(string body, string expected)
+    {
+        Base base_ = Compile(DialogueBase);
+        Exception error = Assert.ThrowsAny<Exception>(() => Plan(base_, body));
+        Assert.True(error is OmsSyntaxException or OmsCompileException, error.ToString());
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Theory]
+    [InlineData("script \"T.BIN\"\nbefore site 0 {\n}\n", "site operations belong in a patch unit")]
+    [InlineData("patch \"T.BIN\" fingerprint \"sha256:00\"\n", "a fingerprint is \"sha256:\" and 64 hex digits")]
+    public void SiteOperationsNeedAFingerprintedPatchUnit(string source, string expected)
+    {
+        var error = Assert.Throws<OmsSyntaxException>(() => Parser.ParseScript(source, "p.oms"));
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Fact]
+    public void APatchUnitNamesItsScriptAndFingerprint()
+    {
+        string fingerprint = "sha256:" + new string('a', 64);
+        ScriptUnit unit = Parser.ParseScript($"patch \"SC0000.BIN\" fingerprint \"{fingerprint}\"\nbefore site 0x877 {{\n}}\n", "p.oms");
+        Assert.True(unit.IsPatch);
+        Assert.Equal("SC0000.BIN", unit.Name);
+        Assert.Equal(fingerprint, unit.Fingerprint);
+        SiteStatement site = Assert.IsType<SiteStatement>(Assert.Single(unit.Body));
+        Assert.Equal(SiteOperation.Before, site.Operation);
+        Assert.Equal(0x877u, site.Site.Offset);
+    }
+}

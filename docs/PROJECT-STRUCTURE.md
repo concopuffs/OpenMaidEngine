@@ -117,7 +117,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       subs that the compiler links and the idiomatic decompiler lifts
     │   ├── himegari/adv.oms                    Himegari ADV prelude: scene library, `@dialogue line`, speaker enum
     │   ├── kamidori/adv.oms                    Kamidori ADV prelude (same parts, plus the name_form enum)
-    │   └── examples/                           example scripts, not modules (gate 6: himegari-gate6/)
+    │   └── examples/                           example scripts, not modules (gate 6: himegari-gate6/,
+    │                                           kamidori-gate6/; gate 7 fragment: himegari-patch/)
     │
     ├── docs/                                 all documentation
     │   ├── PROJECT-STRUCTURE.md                this file (where things live)
@@ -185,7 +186,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       compiler, template expander, expression lowering, temporary allocator and canonical
     │                                       layout rules (Compile/), layout sidecar
     │                                       (Layout/), generated and source modules (Modules/), raw, core and idiomatic decompilers
-    │                                       with library/template patterns (Text/); referenced by Age.Cli and the tests,
+    │                                       with library/template patterns (Text/), and fragment plans, their compiler,
+    │                                       applier and gate-7 probe (Patch/); referenced by Age.Cli and the tests,
     │                                       not by the Godot runtime
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
@@ -215,7 +217,7 @@ boundary, not just a naming convention; tools resolve it from the selected immut
 `engine/Age.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
 `engine/Age.Cli` exposes it as `catalog-scan` for validation and diagnostic reports, and exposes the
 `Age.Script` round trips as `oms-roundtrip` (with `oms-residue` for its literal leftovers and `oms-temps` for its
-temporary-allocator residue) and decompiled source as `oms-decompile`. The source modules in `oms/<profile>/` are
+temporary-allocator residue), decompiled source as `oms-decompile`, and fragments (spec §10) as `oms-patch`. The source modules in `oms/<profile>/` are
 authored, like `vm-map/`, not derived: the compiler links them, and `--level idiomatic` lifts their library subs
 and templates.
 

@@ -5,6 +5,8 @@ using Age.Script.Layout;
 using Age.Script.Modules;
 using Age.Script.Syntax;
 
+using Age.Script.Patch;
+
 namespace Age.Script.Compile;
 
 public sealed class OmsCompileException(SourceSpan span, string message) : Exception($"{span}: {message}")
@@ -90,8 +92,37 @@ public static class OmsCompiler
         return generator.Build(unit.Name, abiId);
     }
 
+    /// <summary>
+    /// Compiles a fragment's code against its base (spec §10): one block per site operation in source order, then the
+    /// appended code (the fragment's subs and the library subs it links). Labels that name base instructions become
+    /// base sites. The result is a plan the applier still has to validate against the base.
+    /// </summary>
+    public static OmsPatchPlan CompilePatch(ScriptUnit unit, string abiId, OpcodeTable? table, IntrinsicCatalog? intrinsics,
+                                            Func<string, GameModule?>? modules, OmsPatchBase patchBase,
+                                            ICollection<OmsWarning>? warnings = null)
+    {
+        ArgumentNullException.ThrowIfNull(unit);
+        ArgumentNullException.ThrowIfNull(patchBase);
+        if (!unit.IsPatch) throw new OmsCompileException(unit.Span, "not a patch unit");
+        var generator = new CodeGenerator(table, intrinsics, null, modules, warnings, null, false, patchBase);
+        generator.EmitAll(unit.Body);
+        generator.ResolveLabels();
+        IrScript built = generator.Build(unit.Name, abiId);
+        return generator.ToPlan(built, unit, abiId);
+    }
+
     /// <summary>First slot of the probe range <see cref="Fit"/> and pattern builders use for temporaries.</summary>
     public const uint TempProbe = 0x40000000;
+
+    /// <summary>Pseudo-instructions of patch mode: a boundary between blocks, and the value of an operand
+    /// replacement. Neither reaches a plan.</summary>
+    private const int BoundaryOpcode = -1, OperandValueOpcode = -2;
+
+    /// <summary>Label values at and above this name base instructions (patch mode).</summary>
+    private const int SiteTag = 0x20000000;
+
+    private static readonly System.Text.RegularExpressions.Regex BaseLabelName =
+        new("^label_([0-9a-f]+)$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     private sealed record Occurrence(IrDataItem Item, SourceSpan Span);
 
@@ -108,8 +139,15 @@ public static class OmsCompiler
 
     private sealed class CodeGenerator(OpcodeTable? table, IntrinsicCatalog? intrinsics, OmsLayout? layout,
                                        Func<string, GameModule?>? modules, ICollection<OmsWarning>? warnings,
-                                       IrScript? reference, bool linkAll)
+                                       IrScript? reference, bool linkAll, OmsPatchBase? patchBase = null)
     {
+        /// <summary>Patch mode: the code of each site operation, the operand replacements' value instructions and the
+        /// appended code.</summary>
+        private readonly List<(SiteStatement Site, int Start, int End)> _siteBlocks = new();
+        private readonly List<(OperandPatchStatement Patch, int At)> _operandPatches = new();
+        private int _appendStart = -1, _appendEnd = -1;
+        /// <summary>Patch mode: the first slot of each reference bank above the base's.</summary>
+        private Dictionary<int, uint>? _refBase;
         private string? _currentSub;
         private readonly HashSet<int> _warnedOpcodes = new();
 
@@ -192,10 +230,16 @@ public static class OmsCompiler
             foreach (RawOperand operand in OperandsOf(scanned))
                 if (operand is RawStorage { Bank: "L" or "LF" or "LS" } local)
                     highest[local.Bank] = Math.Max(highest.GetValueOrDefault(local.Bank, -1), local.Index);
+            if (patchBase != null) UsePatchBase(highest);
             Declare(declarations, highest);
             foreach (var (bank, slot) in highest) _declaredLocals[StorageBanks.TypeByBank[bank]] = slot;
             DerivedTempBase = (uint)(highest.GetValueOrDefault("L", -1) + 1);
             _tempBase = layout?.TempBase ?? DerivedTempBase;
+            if (patchBase != null)
+            {
+                EmitPatch(statements);
+                return;
+            }
             foreach (Statement statement in statements)
             {
                 PlaceLibrary();
@@ -225,6 +269,7 @@ public static class OmsCompiler
                         case SubStatement sub: pending.Push(sub.Body); break;
                         case AtomicStatement atomic: pending.Push(atomic.Body); break;
                         case WithStatement with: pending.Push(with.Body); break;
+                        case SiteStatement site: pending.Push(site.Body); break;
                     }
             return declarations;
         }
@@ -531,6 +576,8 @@ public static class OmsCompiler
                         if (branch.Else != null) foreach (Statement inner in branch.Else) pending.Push(inner);
                         break;
                     case DialogueStatement line: foreach (CallArgument argument in line.Arguments) pending.Push(argument.Value); break;
+                    case SiteStatement site: foreach (Statement inner in site.Body) pending.Push(inner); break;
+                    case OperandPatchStatement patch: pending.Push(patch.Value); break;
                 }
             }
         }
@@ -562,6 +609,7 @@ public static class OmsCompiler
                     case ForStatement s: CollectUserLabels(s.Body); break;
                     case AtomicStatement s: CollectUserLabels(s.Body); break;
                     case WithStatement s: CollectUserLabels(s.Body); break;
+                    case SiteStatement s: CollectUserLabels(s.Body); break;
                 }
         }
 
@@ -826,7 +874,7 @@ public static class OmsCompiler
             }
             OmsTempOverride? entry = null;
             layout?.Temps?.TryGetValue(site, out entry);
-            var temps = new CanonicalTemps(statement, _tempBase, layout?.RefSwap == true, entry?.Ints, entry?.Refs);
+            var temps = new CanonicalTemps(statement, _tempBase, layout?.RefSwap == true, entry?.Ints, entry?.Refs, _refBase);
             try
             {
                 ExpressionLowering.Lower(statement, temps.Allocate, _code.Add);
@@ -1030,7 +1078,7 @@ public static class OmsCompiler
         {
             if (sub.Guarded)
                 Add(Exit, []);
-            else if (_code.Count > 0 && (!IsTerminator(_code[^1].Opcode) || LabelAt(_code.Count)))
+            else if (_code.Count > 0 && _code[^1].Opcode != BoundaryOpcode && (!IsTerminator(_code[^1].Opcode) || LabelAt(_code.Count)))
                 throw new OmsCompileException(sub.Span,
                     $"control falls into {(sub.Coroutine ? "coroutine" : "sub")} '{sub.Name}'; end the code before it with goto, return or exit");
             var parameters = new Dictionary<string, RawStorage>(StringComparer.Ordinal);
@@ -1170,7 +1218,7 @@ public static class OmsCompiler
                 EmitSubCall(sub, call);
                 return;
             }
-            if (_userLabels.Contains(call.Name))
+            if (_userLabels.Contains(call.Name) || TryBaseLabel(call.Name, out _))
             {
                 if (call.Arguments.Count != 0)
                     throw new OmsCompileException(call.Span, $"'{call.Name}' is a label; calls to it take no arguments");
@@ -1279,6 +1327,189 @@ public static class OmsCompiler
             }
         }
 
+        /// <summary>Patch mode: <c>label_&lt;hex&gt;</c> names the base instruction at that original offset, whether or not
+        /// the decompiled base prints the label (spec §10.1).</summary>
+        private bool TryBaseLabel(string name, out int target)
+        {
+            target = 0;
+            if (patchBase == null) return false;
+            System.Text.RegularExpressions.Match match = BaseLabelName.Match(name);
+            if (!match.Success || !int.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.HexNumber, null,
+                    out int offset) || !patchBase.IndexByOffset.TryGetValue(offset, out int index))
+                return false;
+            target = SiteTag + index;
+            return true;
+        }
+
+        /// <summary>Patch mode (spec §10.2): new storage goes above every slot the base uses, base labels resolve to
+        /// base sites, and the library subs the base already links are called there.</summary>
+        private void UsePatchBase(Dictionary<string, long> highest)
+        {
+            OmsPatchBase base_ = patchBase!;
+            string[] named = ["L", "LF", "LS"];
+            for (int bank = 0; bank < named.Length; bank++)
+                if (base_.HighestSlots[bank] >= 0)
+                    highest[named[bank]] = Math.Max(highest.GetValueOrDefault(named[bank], -1), base_.HighestSlots[bank]);
+            _refBase = new Dictionary<int, uint>();
+            for (int bank = 3; bank < IrScript.LocalBankCount; bank++)
+                _refBase[StorageBanks.LocalBankTypes[bank]] = (uint)(base_.HighestSlots[bank] + 1);
+
+            var fragmentLabels = new HashSet<string>(_userLabels, StringComparer.Ordinal);
+            foreach (string label in fragmentLabels)
+                if (BaseLabelName.IsMatch(label) && !_moduleNames.ContainsKey(label))
+                    throw new OmsCompileException(default, $"'{label}' is reserved: label_<hex> names a base instruction");
+            var libraryLabels = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LibrarySub library in _library)
+            {
+                if (!base_.Library.TryGetValue(library.Sub.Name, out string? module) || module != library.Module) continue;
+                _linked.Add(library.Sub.Name);
+                foreach (string label in library.Labels)
+                    if (base_.Labels.TryGetValue(label, out int index))
+                    {
+                        _labels[label] = SiteTag + index;
+                        libraryLabels.Add(label);
+                    }
+            }
+            foreach (var (name, index) in base_.Labels)
+            {
+                if (libraryLabels.Contains(name)) continue;
+                if (_moduleNames.TryGetValue(name, out string? owner))
+                    throw new OmsCompileException(default, $"'{name}' is a label of the base and a name of module {owner}");
+                if (fragmentLabels.Contains(name))
+                    throw new OmsCompileException(default, $"label '{name}' is defined by the base script; choose another name");
+                _labels[name] = SiteTag + index;
+                _userLabels.Add(name);
+            }
+        }
+
+        /// <summary>Patch mode: each site operation's body becomes a block between boundaries, then each operand
+        /// replacement's value, then the appended code, so that library subs referenced anywhere get linked.</summary>
+        private void EmitPatch(IReadOnlyList<Statement> statements)
+        {
+            var subs = new List<SubStatement>();
+            foreach (Statement statement in statements)
+                switch (statement)
+                {
+                    case SiteStatement site:
+                    {
+                        ResolveSite(site.Site);
+                        if (site.Through != null) ResolveSite(site.Through);
+                        Boundary();
+                        int start = _code.Count;
+                        foreach (Statement inner in site.Body) Emit(inner);
+                        _siteBlocks.Add((site, start, _code.Count));
+                        break;
+                    }
+                    case OperandPatchStatement patch:
+                        ResolveSite(patch.Site);
+                        Boundary();
+                        _operandPatches.Add((patch, _code.Count));
+                        _code.Add(new IrInstruction(OperandValueOpcode, [Atom(patch.Value, "a replaced operand")]));
+                        break;
+                    case SubStatement sub:
+                        subs.Add(sub);
+                        break;
+                    case UseStatement or ConstStatement or StorageDeclaration or TemplateStatement or EnumStatement
+                        or TableStatement:
+                        break;
+                    default:
+                        throw new OmsCompileException(statement.Span,
+                            "a patch holds declarations, subs and site operations; put code inside before, after or replace");
+                }
+            Boundary();
+            _appendStart = _code.Count;
+            foreach (SubStatement sub in subs) EmitSub(sub);
+            LinkLibrary();
+            _appendEnd = _code.Count;
+        }
+
+        private void Boundary() => _code.Add(new IrInstruction(BoundaryOpcode, []));
+
+        /// <summary>The base instruction a site names: an original offset, a base label or sub, or <c>label_&lt;hex&gt;</c>.</summary>
+        private int ResolveSite(SiteRef site)
+        {
+            OmsPatchBase base_ = patchBase!;
+            if (site.Offset is uint offset)
+                return base_.IndexByOffset.TryGetValue((int)offset, out int index) ? index
+                    : throw new OmsCompileException(site.Span, $"0x{offset:x} is not an instruction start in {base_.Script}");
+            if (_labels.TryGetValue(site.Name!, out int tagged) && tagged >= SiteTag || TryBaseLabel(site.Name!, out tagged))
+                return tagged - SiteTag;
+            throw new OmsCompileException(site.Span, _labels.ContainsKey(site.Name!)
+                ? $"'{site.Name}' is a label of the fragment; a site names a base instruction"
+                : $"'{site.Name}' is not a label of {base_.Script}");
+        }
+
+        /// <summary>Patch mode: the plan of a built fragment (spec §10.3).</summary>
+        public OmsPatchPlan ToPlan(IrScript built, ScriptUnit unit, string abiId)
+        {
+            OmsPatchBase base_ = patchBase!;
+            List<IrInstruction> code = built.Code;
+            var segments = _siteBlocks.Select(block => (block.Start, block.End)).ToList();
+            bool appends = _appendEnd > _appendStart;
+            if (appends) segments.Add((_appendStart, _appendEnd));
+            OmsPatchOperand Convert(IrOperand operand, SourceSpan span)
+            {
+                switch (operand.Kind)
+                {
+                    case IrOperandKind.Literal: return OmsPatchOperand.Literal(operand.Type, operand.Value);
+                    case IrOperandKind.DataRef: return OmsPatchOperand.Data(operand.Type, (int)operand.Value);
+                }
+                int target = (int)operand.Value;
+                if (target >= SiteTag) return OmsPatchOperand.Site(operand.Type, base_.Offsets[target - SiteTag]);
+                for (int s = 0; s < segments.Count; s++)
+                    if (target >= segments[s].Start && target <= segments[s].End)
+                        return OmsPatchOperand.Label(operand.Type, s, target - segments[s].Start);
+                throw new OmsCompileException(span, "a label of the fragment lies outside its code");
+            }
+            List<OmsPatchInstruction> Block(int start, int end, SourceSpan span)
+                => code.Skip(start).Take(end - start).Select(instruction => new OmsPatchInstruction(instruction.Opcode,
+                    instruction.Operands.Select(operand => Convert(operand, span)).ToArray())).ToList();
+
+            var plan = new OmsPatchPlan
+            {
+                Script = unit.Name,
+                Fingerprint = unit.Fingerprint!.ToLowerInvariant(),
+                Abi = abiId,
+                LocalCounts = built.LocalCounts.ToArray(),
+                Append = appends ? segments.Count - 1 : null,
+                Data = built.Data.Select(OmsPatchDataItem.From).ToList(),
+            };
+            int Offset(SiteRef site) => base_.Offsets[ResolveSite(site)];
+            var operations = new List<(SourceSpan Span, OmsPatchOperation Operation)>();
+            for (int b = 0; b < _siteBlocks.Count; b++)
+            {
+                var (site, start, end) = _siteBlocks[b];
+                plan.Blocks.Add(Block(start, end, site.Span));
+                operations.Add((site.Span, new OmsPatchOperation
+                {
+                    Kind = site.Operation switch
+                    {
+                        SiteOperation.Before => OmsPatchOperationKind.Before,
+                        SiteOperation.After => OmsPatchOperationKind.After,
+                        _ => OmsPatchOperationKind.Replace,
+                    },
+                    Site = Offset(site.Site),
+                    Through = site.Through != null ? Offset(site.Through) : null,
+                    Block = b,
+                    Source = site.Span.ToString(),
+                }));
+            }
+            foreach (var (patch, at) in _operandPatches)
+                operations.Add((patch.Span, new OmsPatchOperation
+                {
+                    Kind = OmsPatchOperationKind.Operand,
+                    Site = Offset(patch.Site),
+                    Operand = patch.Operand,
+                    Value = Convert(code[at].Operands[0], patch.Span),
+                    Source = patch.Span.ToString(),
+                }));
+            if (appends) plan.Blocks.Add(Block(_appendStart, _appendEnd, unit.Span));
+            // Operations keep source order.
+            plan.Operations.AddRange(operations.OrderBy(pair => pair.Span.Line).ThenBy(pair => pair.Span.Column)
+                .Select(pair => pair.Operation));
+            return plan;
+        }
+
         public void ResolveLabels()
         {
             for (int k = 0; k < _code.Count; k++)
@@ -1291,9 +1522,11 @@ public static class OmsCompiler
                     {
                         if (!IsPending(operand)) return operand;
                         var (key, span) = _pendingLabels[(int)(operand.Value & ~PendingTag)];
-                        return _labels.TryGetValue(key, out int target)
+                        return _labels.TryGetValue(key, out int target) || TryBaseLabel(key, out target)
                             ? IrOperand.Label(operand.Type, target)
-                            : throw new OmsCompileException(span, $"unknown label '{key}'");
+                            : throw new OmsCompileException(span, patchBase != null
+                                ? $"unknown label '{key}': neither the fragment nor its base defines it"
+                                : $"unknown label '{key}'");
                     }).ToArray(),
                 };
             }

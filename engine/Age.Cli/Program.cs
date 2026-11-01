@@ -150,6 +150,82 @@ if (args.Contains("oms-append"))
     return 0;
 }
 
+if (args.Contains("oms-patch"))
+{
+    // Spec §10: compile fragments (patch units) into transform plans against the mounted catalog's scripts, and apply
+    // plans, in the order given, to produce patched scripts as loose overrides.
+    if (OptionValue("--fingerprint") is { } fingerprintScript)
+    {
+        AssetEntry fingerprintEntry = catalog.ResolveName(fingerprintScript)
+            ?? throw new ArgumentException($"{fingerprintScript} is not in the mounted catalog");
+        Console.WriteLine($"patch \"{fingerprintEntry.Name}\" fingerprint "
+                          + $"\"{Age.Script.Patch.OmsPatchPlan.FingerprintOf(assetStore.ReadAll(fingerprintEntry))}\"");
+        return 0;
+    }
+    List<string> Values(string flag) => args.Select((arg, k) => (arg, k))
+        .Where(pair => pair.arg == flag && pair.k + 1 < args.Length).Select(pair => args[pair.k + 1]).ToList();
+    var patchSources = Values("--source");
+    var planFiles = Values("--plan");
+    if (patchSources.Count == 0 && planFiles.Count == 0)
+        throw new ArgumentException("oms-patch needs --source FRAGMENT.oms or --plan PLAN.omspatch.json (or --fingerprint SCRIPT)");
+    var patchModules = OmsModules();
+    var patchContracts = Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
+    var patchIntrinsics = new Age.Script.Abi.IntrinsicCatalog(table, patchContracts);
+    Age.Script.Text.OmsIdioms? patchIdioms = patchModules.Any(module => module.Source != null)
+        ? Age.Script.Text.OmsIdioms.Build(patchModules, table.AbiId, patchIntrinsics) : null;
+    var plans = new List<(string Origin, Age.Script.Patch.OmsPatchPlan Plan)>();
+    try
+    {
+        foreach (string source in patchSources)
+        {
+            var warnings = new List<Age.Script.Compile.OmsWarning>();
+            var notes = new List<string>();
+            var unit = Age.Script.Syntax.Parser.ParseScript(File.ReadAllText(source), source);
+            if (!unit.IsPatch) throw new InvalidDataException($"{source} is not a patch unit (patch \"SCRIPT.BIN\" fingerprint ...)");
+            AssetEntry baseEntry = catalog.ResolveName(unit.Name)
+                ?? throw new InvalidDataException($"{source}: {unit.Name} is not in the mounted catalog");
+            var plan = Age.Script.Patch.OmsPatchCompiler.Compile(unit, assetStore.ReadAll(baseEntry), table, patchContracts,
+                patchIntrinsics, patchModules, patchIdioms, warnings, notes);
+            foreach (var warning in warnings) Console.Error.WriteLine(warning);
+            foreach (string note in notes) Console.WriteLine($"  note: {note}");
+            string planPath = OptionValue("--plan-dir") is { } planDirectory
+                ? Path.Combine(planDirectory, Path.GetFileNameWithoutExtension(source) + ".omspatch.json")
+                : Path.ChangeExtension(source, ".omspatch.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(planPath))!);
+            File.WriteAllText(planPath, plan.ToJson());
+            Console.WriteLine($"oms-patch: {source} -> {planPath} ({plan.Operations.Count} operations, "
+                              + $"{plan.Blocks.Sum(block => block.Count)} instructions against {unit.Name})");
+            plans.Add((source, plan));
+        }
+        foreach (string file in planFiles)
+            plans.Add((file, Age.Script.Patch.OmsPatchPlan.FromJson(File.ReadAllText(file))));
+        if (OptionValue("--output-dir") is { } patchOutput)
+        {
+            Directory.CreateDirectory(patchOutput);
+            foreach (var group in plans.GroupBy(entry => entry.Plan.Script, StringComparer.OrdinalIgnoreCase))
+            {
+                AssetEntry baseEntry = catalog.ResolveName(group.Key)
+                    ?? throw new InvalidDataException($"{group.Key} is not in the mounted catalog");
+                var result = Age.Script.Patch.OmsPatchApplier.Apply(assetStore.ReadAll(baseEntry), baseEntry.Name,
+                    group.Select(entry => entry.Plan).ToList(), table, patchContracts);
+                foreach (string interaction in result.Interactions) Console.WriteLine($"  interaction: {interaction}");
+                foreach (string note in result.Notes) Console.WriteLine($"  note: {note}");
+                string output = Path.Combine(patchOutput, baseEntry.Name);
+                File.WriteAllBytes(output, result.Bytes);
+                Console.WriteLine($"oms-patch: {group.Count()} plans applied to {baseEntry.Name} -> {output} "
+                                  + $"({result.Script.Code.Count} instructions, {result.Bytes.Length} bytes)");
+            }
+        }
+        return 0;
+    }
+    catch (Exception error) when (error is Age.Script.Syntax.OmsSyntaxException or Age.Script.Compile.OmsCompileException
+                                      or Age.Script.Patch.OmsPatchException or InvalidDataException)
+    {
+        Console.Error.WriteLine($"error: {error.Message}");
+        return 1;
+    }
+}
+
 if (args.Contains("oms-rebuild"))
 {
     // Open Maid Script gate 3: canonical rebuild (no sidecar) must be VM-trace-equivalent on the scenes.
@@ -174,7 +250,12 @@ if (args.Contains("oms-rebuild"))
         // The profile's runtime facts, as the Godot runtime passes them (the ADV scene-entry gate among them).
         new VmCompatibilityContext(selectedProfile.Profile.Id, selectedProfile.Profile.EngineAbiId,
             selectedProfile.ProbeMode, selectedProfile.Profile.Runtime.SceneEntryCoroutineGateAddress),
-        idiomatic: OptionValue("--level") == "idiomatic");
+        idiomatic: OptionValue("--level") == "idiomatic",
+        // Gate 7 (spec §12): patch every script with an inert probe plan (--patch-probe [stride], default 5).
+        patchProbe: !args.Contains("--patch-probe") ? 0
+            : int.TryParse(OptionValue("--patch-probe"), out int probeStride) ? probeStride : 5,
+        // --dump DIR writes every rebuilt (or probed) script there, for diffing against the original.
+        dumpDirectory: OptionValue("--dump"));
 }
 
 if (args.Contains("oms-temps"))
