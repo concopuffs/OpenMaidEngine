@@ -177,6 +177,21 @@ public sealed record ConstStatement(SourceSpan Span, string Name, uint Value) : 
 public sealed record StorageDeclaration(SourceSpan Span, bool Local, string Type, string Name, IReadOnlyList<int> Dimensions,
                                         uint? Address, IReadOnlyDictionary<string, int> Columns) : Statement(Span);
 
-/// <summary>A named array element: <c>name[i]</c>, <c>name[r][c]</c> or the row-table column <c>name[r].column</c>.</summary>
-public sealed record NamedElementExpr(SourceSpan Span, string Name, IReadOnlyList<Expr> Indices, string? Column)
+/// <summary>A named array element: <c>name[i]</c>, <c>name[r][c]</c> or the row-table column <c>name[r].column</c>; or
+/// a table field (spec §5.3), where <see cref="Column"/> is the field and the field's own row index or column follows:
+/// <c>t[i].field</c>, <c>t[i].field[k]</c>, <c>t[i].field.column</c>.</summary>
+public sealed record NamedElementExpr(SourceSpan Span, string Name, IReadOnlyList<Expr> Indices, string? Column,
+                                      IReadOnlyList<Expr>? FieldIndices = null, string? FieldColumn = null)
     : Expr(Span);
+
+/// <summary>One field of a <c>table</c>: its name and the array that holds it.</summary>
+public sealed record TableField(SourceSpan Span, string Name, string Array);
+
+/// <summary><c>table unit[1000] { full_name = unit_full_names, … }</c> (spec §5.3): a compile-time view naming the
+/// parallel arrays that hold one kind of record. It allocates and emits nothing.</summary>
+public sealed record TableStatement(SourceSpan Span, string Name, int Records, IReadOnlyList<TableField> Fields)
+    : Statement(Span);
+
+/// <summary><c>with unit[i] { .field = v }</c> (spec §5.3): the parser has already written each <c>.field</c> in the
+/// body as <c>unit[i].field</c>, so the block emits only its statements.</summary>
+public sealed record WithStatement(SourceSpan Span, NamedElementExpr Record, IReadOnlyList<Statement> Body) : Statement(Span);

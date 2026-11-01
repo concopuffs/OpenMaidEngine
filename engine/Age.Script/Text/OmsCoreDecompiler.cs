@@ -899,8 +899,9 @@ public static class OmsCoreDecompiler
 
         /// <summary>Lifts a template use starting at node <paramref name="n"/> (spec §11 step 5): the longest variant
         /// whose code matches and ends on a node boundary, enters only at its start, and calls only recognized
-        /// library labels.</summary>
-        private (string Text, int Last)? Lift(List<Node> nodes, int n, int end)
+        /// library labels. A <paramref name="probe"/> only reports whether a use starts there: it counts nothing and
+        /// returns no text.</summary>
+        private (string Text, int Last)? Lift(List<Node> nodes, int n, int end, bool probe = false)
         {
             if (idioms == null || nodes[n] is SubNode) return null;
             int start = nodes[n].Start;
@@ -915,6 +916,7 @@ public static class OmsCoreDecompiler
                 if (!Match(start, pattern.Code, references, arguments)) continue;
                 if (references.Any(pair => !_libraryNames.TryGetValue(pair.Key, out string? name) || name != pair.Value)) continue;
                 if (!EntriesOnly(start, stop, NoEntries)) continue;
+                if (probe) return ("", last);
                 TemplateLifts++;
                 UsedModules.Add(pattern.Module);
                 CountLift(pattern.Module, pattern.Code.Length);
@@ -1439,8 +1441,39 @@ public static class OmsCoreDecompiler
                 switch (node)
                 {
                     case SimpleNode simple:
-                        text.Append(pad).Append(Statement(simple.Root, loop)).Append('\n');
+                    {
+                        string statement = Statement(simple.Root, loop);
+                        if (RecordOf(statement) is var (record, _))
+                        {
+                            // A record block (spec §11.3): consecutive statements that each write, or pass as their first
+                            // argument, a field of one table record with a constant index; no label or template use
+                            // falls inside the run.
+                            var run = new List<string> { statement };
+                            int m = n;
+                            while (m + 1 < nodes.Count && nodes[m + 1] is SimpleNode next && !_labels.Contains(next.Start)
+                                   && !_libraryAt.ContainsKey(next.Start) && Lift(nodes, m + 1, end, probe: true) == null
+                                   && Statement(next.Root, loop) is var following && RecordOf(following)?.Record == record)
+                            {
+                                run.Add(following);
+                                m++;
+                            }
+                            if (run.Count >= 2)
+                            {
+                                text.Append(pad).Append("with ").Append(record).Append(" {\n");
+                                foreach (string inner in run)
+                                {
+                                    int at = RecordOf(inner)!.Value.At;
+                                    text.Append(pad).Append("    ").Append(inner.AsSpan(0, at))
+                                        .Append(inner.AsSpan(at + record.Length)).Append('\n');
+                                }
+                                text.Append(pad).Append("}\n");
+                                n = m;
+                                break;
+                            }
+                        }
+                        text.Append(pad).Append(statement).Append('\n');
                         break;
+                    }
                     case IfChainNode chain:
                         for (int a = 0; a < chain.Arms.Count; a++)
                         {
@@ -1565,14 +1598,60 @@ public static class OmsCoreDecompiler
                 if (module.TryGetContaining(operand.Type, operand.Value, out GlobalSymbol symbol, out uint offset))
                 {
                     if (symbol.Dimensions.Count > 2) return null;
-                    UsedModules.Add(module);
-                    if (symbol.Dimensions.Count == 1) return $"{symbol.Name}[{Literal(offset)}]";
+                    if (symbol.Dimensions.Count == 1) return Element(module, symbol, Literal(offset), "");
                     uint width = (uint)symbol.Dimensions[1], row = offset / width, column = offset % width;
-                    return symbol.ColumnName((int)column) is { } columnName
-                        ? $"{symbol.Name}[{Literal(row)}].{columnName}"
-                        : $"{symbol.Name}[{Literal(row)}][{Literal(column)}]";
+                    return Element(module, symbol, Literal(row), symbol.ColumnName((int)column) is { } columnName
+                        ? $".{columnName}" : $"[{Literal(column)}]");
                 }
             return null;
+        }
+
+        /// <summary>An element of a named array, <c>array[row]rest</c>, or through the table whose field the array holds,
+        /// <c>table[row].field rest</c> (spec §11.3); marks the modules it names used.</summary>
+        private string Element(GameModule module, GlobalSymbol symbol, string row, string rest)
+        {
+            UsedModules.Add(module);
+            if (FieldOf(symbol) is not { } field) return $"{symbol.Name}[{row}]{rest}";
+            UsedModules.Add(field.Module);
+            return $"{field.Table.Name}[{row}].{field.Field}{rest}";
+        }
+
+        private Dictionary<GlobalSymbol, (TableSymbol Table, string Field, GameModule Module)>? _fields;
+
+        private static readonly System.Text.RegularExpressions.Regex RecordTarget = new(
+            @"^(?:\w+\((?:out )?)?(?<record>(?<table>\w+)\[(?:0x[0-9a-f]+|[0-9]+)\])\.",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+        /// <summary><c>table[k]</c> and its position when a printed statement assigns a field of a table record with a
+        /// constant index, or passes one as a call's first argument. Only a target begins a statement with a table
+        /// element, and only a first argument follows the call's opening parenthesis.</summary>
+        private (string Record, int At)? RecordOf(string statement)
+        {
+            System.Text.RegularExpressions.Match match = RecordTarget.Match(statement);
+            if (!match.Success) return null;
+            string table = match.Groups["table"].Value;
+            return modules.Any(module => module.Tables.Any(candidate => candidate.Name == table))
+                ? (match.Groups["record"].Value, match.Groups["record"].Index) : null;
+        }
+
+        /// <summary>The table field an array holds: the first field of a module's table that names it.</summary>
+        private (TableSymbol Table, string Field, GameModule Module)? FieldOf(GlobalSymbol array)
+        {
+            if (_fields == null)
+            {
+                _fields = new Dictionary<GlobalSymbol, (TableSymbol, string, GameModule)>(ReferenceEqualityComparer.Instance);
+                foreach (GameModule module in modules)
+                    foreach (TableSymbol table in module.Tables)
+                        foreach (var (field, name) in table.Fields)
+                        {
+                            GlobalSymbol? symbol = module.TryGet(name, out GlobalSymbol own) ? own
+                                : modules.Select(other => other.TryGet(name, out GlobalSymbol found) ? found : null)
+                                    .FirstOrDefault(found => found != null);
+                            if (symbol is { Dimensions: [var leading, ..] } && leading == table.Records && symbol.Dimensions.Count <= 2)
+                                _fields.TryAdd(symbol, (table, field, module));
+                        }
+            }
+            return _fields.TryGetValue(array, out var entry) ? entry : null;
         }
 
         private string Literal(uint value) => RawAtom(IrOperand.Literal(0, value));
@@ -1721,30 +1800,26 @@ public static class OmsCoreDecompiler
             if (element.Base.Kind != IrOperandKind.Literal || element.Base.Type is not (0x3 or 0x4 or 0x5)) return null;
             foreach (GameModule module in modules)
                 if (module.TryGet(element.Base.Type, element.Base.Value, out GlobalSymbol symbol))
-                {
-                    if (NamedElement(element, symbol) is not { } named) return null;
-                    UsedModules.Add(module);
-                    return named;
-                }
+                    return NamedElement(element, module, symbol);
             return null;
         }
 
         /// <summary>The named form of an element, when the symbol's declared shape lowers to exactly this lookup:
         /// <c>name[i]</c> for a one-dimensional array, <c>name[r][c]</c> or <c>name[r].column</c> for a table whose row
         /// width is the lookup's immediate stride.</summary>
-        private string? NamedElement(LElement element, GlobalSymbol symbol)
+        private string? NamedElement(LElement element, GameModule module, GlobalSymbol symbol)
         {
             IReadOnlyList<int> shape = symbol.Dimensions;
             if (element.Indices.Count == 1)
-                return shape.Count == 1 ? $"{symbol.Name}[{Expression(element.Indices[0], 0)}]" : null;
+                return shape.Count == 1 ? Element(module, symbol, Expression(element.Indices[0], 0), "") : null;
             if (shape.Count != 2 || element.Indices[1] is not LLeaf { Operand: { Kind: IrOperandKind.Literal, Type: 0 } stride }
                 || stride.Value != (uint)shape[1])
                 return null;
             string row = Expression(element.Indices[0], 0);
             if (element.Indices[2] is LLeaf { Operand: { Kind: IrOperandKind.Literal, Type: 0 } column }
                 && column.Value < int.MaxValue && symbol.ColumnName((int)column.Value) is { } columnName)
-                return $"{symbol.Name}[{row}].{columnName}";
-            return $"{symbol.Name}[{row}][{Expression(element.Indices[2], 0)}]";
+                return Element(module, symbol, row, $".{columnName}");
+            return Element(module, symbol, row, $"[{Expression(element.Indices[2], 0)}]");
         }
 
         private static bool IsComparison(int opcode) => opcode is >= 0x5A and <= 0x5F;

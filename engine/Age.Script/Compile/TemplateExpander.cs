@@ -101,6 +101,7 @@ public sealed class TemplateExpander
                 case DoWhileStatement loop: foreach (string name in DefinedLabels(loop.Body)) yield return name; break;
                 case ForStatement loop: foreach (string name in DefinedLabels(loop.Body)) yield return name; break;
                 case AtomicStatement atomic: foreach (string name in DefinedLabels(atomic.Body)) yield return name; break;
+                case WithStatement with: foreach (string name in DefinedLabels(with.Body)) yield return name; break;
             }
     }
 
@@ -183,6 +184,7 @@ public sealed class TemplateExpander
             Body = Statements(loop.Body),
         },
         AtomicStatement atomic => atomic with { Body = Statements(atomic.Body) },
+        WithStatement with => with with { Record = (NamedElementExpr)Expression(with.Record), Body = Statements(with.Body) },
         RunStatement run => run with { Script = Expression(run.Script) },
         NoteStatement note => note with { Value = Expression(note.Value) },
         IndirectCallStatement call => call with { Target = Expression(call.Target) },
@@ -205,7 +207,11 @@ public sealed class TemplateExpander
         OperandExpr { Operand: RawLabelRef name } when _labels.ContainsKey(name.Name)
             => new OperandExpr(expression.Span, name with { Name = Label(name.Name) }),
         OperandExpr => expression,
-        NamedElementExpr named => named with { Indices = named.Indices.Select(Expression).ToArray() },
+        NamedElementExpr named => named with
+        {
+            Indices = named.Indices.Select(Expression).ToArray(),
+            FieldIndices = named.FieldIndices?.Select(Expression).ToArray(),
+        },
         ElementExpr element => element with { Indices = element.Indices.Select(Expression).ToArray() },
         BinaryExpr binary => binary with { Left = Expression(binary.Left), Right = Expression(binary.Right) },
         UnaryExpr unary => unary with { Operand = Expression(unary.Operand) },

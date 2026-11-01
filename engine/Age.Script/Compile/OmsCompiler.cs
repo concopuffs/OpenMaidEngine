@@ -145,6 +145,8 @@ public static class OmsCompiler
         /// <summary>Label keys in order of first reference (code order), for the library link order.</summary>
         private readonly List<string> _referenceOrder = new();
         private readonly HashSet<string> _enums = new(StringComparer.Ordinal);
+        /// <summary>Tables in scope (spec §5.3), from used modules and the script's own declarations.</summary>
+        private readonly Dictionary<string, TableSymbol> _tables = new(StringComparer.Ordinal);
 
         /// <summary>The integer pool base the source itself implies (above every local it or its modules name).</summary>
         public uint DerivedTempBase { get; private set; }
@@ -216,11 +218,13 @@ public static class OmsCompiler
                 foreach (Statement statement in pending.Pop())
                     switch (statement)
                     {
-                        case UseStatement or ConstStatement or StorageDeclaration or TemplateStatement or EnumStatement:
+                        case UseStatement or ConstStatement or StorageDeclaration or TemplateStatement or EnumStatement
+                            or TableStatement:
                             declarations.Add(statement);
                             break;
                         case SubStatement sub: pending.Push(sub.Body); break;
                         case AtomicStatement atomic: pending.Push(atomic.Body); break;
+                        case WithStatement with: pending.Push(with.Body); break;
                     }
             return declarations;
         }
@@ -242,11 +246,16 @@ public static class OmsCompiler
                     symbol.Dimensions, symbol.Columns);
                 if (unit != null) Shared(symbol.Name, use.Span, unit.Name);
             }
+            foreach (TableSymbol table in module.Tables)
+            {
+                if (unit != null) Shared(table.Name, use.Span, unit.Name);
+                AddTable(table, use.Span);
+            }
             if (unit == null) return;
             foreach (Statement statement in unit.Body)
                 switch (statement)
                 {
-                    case UseStatement or StorageDeclaration { Local: false, Address: not null }:
+                    case UseStatement or TableStatement or StorageDeclaration { Local: false, Address: not null }:
                         break;
                     case ConstStatement constant:
                         Shared(constant.Name, constant.Span, unit.Name);
@@ -286,7 +295,7 @@ public static class OmsCompiler
                     }
                     default:
                         throw new OmsCompileException(statement.Span,
-                            $"module {unit.Name} may hold only use, const, enum, pinned global, inline and sub declarations");
+                            $"module {unit.Name} may hold only use, const, enum, pinned global, table, inline and sub declarations");
                 }
         }
 
@@ -371,10 +380,15 @@ public static class OmsCompiler
                 if (!user.Add(name) || _userLabels.Contains(name))
                     throw new OmsCompileException(span, $"'{name}' is declared twice");
             }
+            var tables = new List<TableStatement>();
             foreach (Statement statement in declarations)
             {
                 switch (statement)
                 {
+                    case TableStatement table:
+                        Claim(table.Name, table.Span);
+                        tables.Add(table);
+                        break;
                     case TemplateStatement template:
                         Claim(template.Name, template.Span);
                         _templates[template.Name] = template;
@@ -414,12 +428,34 @@ public static class OmsCompiler
                             index = (uint)next;
                             highest[bank] = next + size - 1;
                         }
+                        if (_tables.ContainsKey(declaration.Name))
+                            throw new OmsCompileException(declaration.Span, $"'{declaration.Name}' is already a table");
                         _names[declaration.Name] = new Declared(new RawStorage(declaration.Span, bank, index),
                             declaration.Dimensions, declaration.Columns);
                         break;
                     }
                 }
             }
+            foreach (TableStatement table in tables)
+                AddTable(new TableSymbol(table.Name, table.Records,
+                    table.Fields.Select(field => (field.Name, field.Array)).ToArray()), table.Span);
+        }
+
+        /// <summary>Brings a table into scope (spec §5.3). Each field must name a declared array of one or two dimensions
+        /// whose leading dimension is the record count.</summary>
+        private void AddTable(TableSymbol table, SourceSpan span)
+        {
+            if (_names.ContainsKey(table.Name))
+                throw new OmsCompileException(span, $"'{table.Name}' names both a table and an array");
+            foreach (var (field, array) in table.Fields)
+            {
+                Declared declared = Name(array)
+                    ?? throw new OmsCompileException(span, $"field '{field}' of table '{table.Name}' names '{array}', which is not a declared array");
+                if (declared.Dimensions.Count is not (1 or 2) || declared.Dimensions[0] != table.Records)
+                    throw new OmsCompileException(span,
+                        $"field '{field}' of table '{table.Name}' needs an array of {table.Records} entries or rows; '{array}' is declared [{string.Join("][", declared.Dimensions)}]");
+            }
+            _tables[table.Name] = table;
         }
 
         private Declared? Name(string name) => _names.TryGetValue(name, out Declared? declared) ? declared : null;
@@ -439,6 +475,7 @@ public static class OmsCompiler
                     case OperandExpr atom: pending.Push(atom.Operand); break;
                     case NamedElementExpr named:
                         foreach (Expr index in named.Indices) pending.Push(index);
+                        foreach (Expr index in named.FieldIndices ?? []) pending.Push(index);
                         break;
                     case ElementExpr element:
                         pending.Push(element.Base);
@@ -472,6 +509,10 @@ public static class OmsCompiler
                         foreach (Statement inner in loop.Body) pending.Push(inner);
                         break;
                     case AtomicStatement atomic: foreach (Statement inner in atomic.Body) pending.Push(inner); break;
+                    case WithStatement with:
+                        pending.Push(with.Record);
+                        foreach (Statement inner in with.Body) pending.Push(inner);
+                        break;
                     case RunStatement run: pending.Push(run.Script); break;
                     case NoteStatement note: pending.Push(note.Value); break;
                     case IndirectCallStatement call: pending.Push(call.Target); break;
@@ -520,6 +561,7 @@ public static class OmsCompiler
                     case DoWhileStatement s: CollectUserLabels(s.Body); break;
                     case ForStatement s: CollectUserLabels(s.Body); break;
                     case AtomicStatement s: CollectUserLabels(s.Body); break;
+                    case WithStatement s: CollectUserLabels(s.Body); break;
                 }
         }
 
@@ -605,6 +647,11 @@ public static class OmsCompiler
                     foreach (Statement inner in atomic.Body) Emit(inner);
                     Add(BlockEnd, []);
                     break;
+                case WithStatement with:
+                    if (!_tables.ContainsKey(with.Record.Name))
+                        throw new OmsCompileException(with.Span, $"'{with.Record.Name}' is not a table");
+                    foreach (Statement inner in with.Body) Emit(inner);
+                    break;
                 case ReturnStatement:
                     Add(Ret, []);
                     break;
@@ -634,7 +681,8 @@ public static class OmsCompiler
                     break;
                 case StaticIfStatement branch:
                     throw new OmsCompileException(branch.Span, "static if belongs in a template body");
-                case UseStatement or ConstStatement or StorageDeclaration or TemplateStatement or EnumStatement:
+                case UseStatement or ConstStatement or StorageDeclaration or TemplateStatement or EnumStatement
+                    or TableStatement:
                     break;
                 default:
                     throw new OmsCompileException(statement.Span, $"{statement.GetType().Name} is not supported yet");
@@ -882,26 +930,58 @@ public static class OmsCompiler
         }
 
         /// <summary>A constant index must lie inside a named array's declared dimension (an open one is unchecked).</summary>
-        private static void CheckBounds(NamedElementExpr named, LExpr index, int dimension)
+        private static void CheckBounds(NamedElementExpr named, LExpr index, int dimension, string? table = null)
         {
             if (dimension > 0 && index is LLeaf { Operand: { Kind: IrOperandKind.Literal, Type: 0, Value: var value } }
                 && value >= (uint)dimension)
-                throw new OmsCompileException(named.Span,
-                    $"index {unchecked((int)value)} is outside '{named.Name}', which has {dimension} entries in that dimension");
+                throw new OmsCompileException(named.Span, table != null
+                    ? $"record {unchecked((int)value)} is outside table '{table}', which has {dimension} records"
+                    : $"index {unchecked((int)value)} is outside '{named.Name}', which has {dimension} entries in that dimension");
         }
 
-        /// <summary><c>name[i]</c>, <c>name[r][c]</c> or <c>name[r].column</c> against the name's declared shape.</summary>
+        /// <summary><c>name[i]</c>, <c>name[r][c]</c>, <c>name[r].column</c> or a table field, against the declared
+        /// shape.</summary>
         private LExpr NamedElement(NamedElementExpr named)
         {
+            string? table = _tables.ContainsKey(named.Name) ? named.Name : null;
+            named = TableField(named);
             LExpr element = NamedLookup(named);
             if (element is LElement lookup)
             {
                 IReadOnlyList<int> shape = Name(named.Name)!.Dimensions;
-                CheckBounds(named, lookup.Indices[0], shape[0]);
+                CheckBounds(named, lookup.Indices[0], shape[0], table);
                 if (lookup.Indices.Count == 3) CheckBounds(named, lookup.Indices[2], shape[1]);
                 return ConstantCell(lookup);
             }
             return element;
+        }
+
+        /// <summary>A table field (spec §5.3) is exactly its array's element: <c>t[i].field</c> is <c>array[i]</c>,
+        /// <c>t[i].field[k]</c> is <c>array[i][k]</c> and <c>t[i].field.column</c> is <c>array[i].column</c>.</summary>
+        private NamedElementExpr TableField(NamedElementExpr named)
+        {
+            if (!_tables.TryGetValue(named.Name, out TableSymbol? table))
+            {
+                if (named.FieldIndices != null || named.FieldColumn != null)
+                    throw new OmsCompileException(named.Span, $"'{named.Name}' is not a table");
+                return named;
+            }
+            if (named.Indices.Count != 1)
+                throw new OmsCompileException(named.Span, $"table '{table.Name}' takes one record index: {table.Name}[i].field");
+            if (named.Column == null)
+                throw new OmsCompileException(named.Span,
+                    $"a record of '{table.Name}' is not a value; name one of its fields: {table.Name}[i].field");
+            string array = table.ArrayOf(named.Column)
+                ?? throw new OmsCompileException(named.Span, $"table '{table.Name}' has no field '{named.Column}'");
+            bool row = Name(array)!.Dimensions.Count == 2;
+            bool sub = named.FieldIndices != null || named.FieldColumn != null;
+            if (!row && sub)
+                throw new OmsCompileException(named.Span,
+                    $"field '{named.Column}' of table '{table.Name}' holds one value per record; it takes no index or column");
+            if (row && (named.FieldIndices?.Count ?? 0) + (named.FieldColumn != null ? 1 : 0) != 1)
+                throw new OmsCompileException(named.Span,
+                    $"field '{named.Column}' of table '{table.Name}' is a row; name one entry: .{named.Column}[k] or .{named.Column}.column");
+            return new NamedElementExpr(named.Span, array, [named.Indices[0], .. named.FieldIndices ?? []], named.FieldColumn);
         }
 
         private LExpr NamedLookup(NamedElementExpr named)

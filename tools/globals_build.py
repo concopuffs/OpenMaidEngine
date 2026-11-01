@@ -6,6 +6,8 @@ vm-map/globals-<profile>.toml -> docs/global-reference-<profile>.md.
   --build   merge curated over build/games/<profile>/global-var-map.json -> build/games/<profile>/globals.json
             + the profile's generated reference doc
   --lint    run the linter, print errors/warnings, exit nonzero on errors
+A registry may also declare `[[table]]` entries: Open Maid Script tables (record views over parallel
+arrays, design spec §5.3), emitted to the JSON's `tables` list and the reference doc.
 See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md."""
 from __future__ import annotations
 import os, re, sys, json, math, argparse, collections, tomllib
@@ -118,16 +120,75 @@ def lint(entries: dict[int, dict], all_addrs: set[int]) -> tuple[list[str], list
     return errors, warnings
 
 
-def extent_of(type_: str | None) -> int | None:
-    """Cells a fully sized array covers (`int[1000][14]` -> 14000); None for a scalar, an open leading
-    dimension (`int[][27]`) or a shape the OMS module loader would not read."""
+def dims_of(type_: str | None) -> list[int] | None:
+    """The dimensions of a fully sized array (`int[1000][14]` -> [1000, 14]); None for a scalar, an open
+    leading dimension (`int[][27]`) or a shape the OMS module loader would not read."""
     m = re.fullmatch(r"(?:int|string|float)((?:\[\d*\])+)", type_ or "")
     if not m:
         return None
     dims = re.findall(r"\[(\d*)\]", m.group(1))
     if "" in dims:
         return None
-    return math.prod(int(d) for d in dims)
+    return [int(d) for d in dims]
+
+
+def extent_of(type_: str | None) -> int | None:
+    """Cells a fully sized array covers (`int[1000][14]` -> 14000), or None (see dims_of)."""
+    dims = dims_of(type_)
+    return None if dims is None else math.prod(dims)
+
+
+IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*")
+
+
+def load_tables(path) -> list[dict]:
+    """The registry's `[[table]]` entries, in order: Open Maid Script tables (design spec §5.3). Each names
+    the parallel arrays that hold one kind of record; a field maps to a curated global by name."""
+    data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    return [dict(t) for t in data.get("table", [])]
+
+
+def lint_tables(tables: list[dict], entries: dict) -> list[str]:
+    """Errors: a table or field name that is not a lowercase identifier, a repeated table, a table named like
+    a global, and a field whose global is missing or is not a fully sized 1-D or 2-D array of `records` entries
+    or rows."""
+    errors: list[str] = []
+    by_name: dict[str, dict] = {}
+    for e in entries.values():
+        if e.get("name"):
+            by_name.setdefault(e["name"], e)
+    seen: set[str] = set()
+    for t in tables:
+        name = t.get("name")
+        tag = f"table {name!r}"
+        if not isinstance(name, str) or not IDENTIFIER.fullmatch(name):
+            errors.append(f"{tag}: name must be a lowercase identifier")
+            continue
+        if name in seen:
+            errors.append(f"{tag}: defined twice")
+        seen.add(name)
+        if name in by_name:
+            errors.append(f"{tag}: also names a global")
+        records = t.get("records")
+        if not isinstance(records, int) or isinstance(records, bool) or records <= 0:
+            errors.append(f"{tag}: records must be a positive integer")
+            continue
+        fields = t.get("fields")
+        if not isinstance(fields, dict) or not fields:
+            errors.append(f"{tag}: needs a [table.fields] map")
+            continue
+        for field, global_name in fields.items():
+            if not IDENTIFIER.fullmatch(field):
+                errors.append(f"{tag}: field {field!r} must be a lowercase identifier")
+            e = by_name.get(global_name) if isinstance(global_name, str) else None
+            if e is None:
+                errors.append(f"{tag}: field {field} names unknown global {global_name!r}")
+                continue
+            dims = dims_of(e.get("type"))
+            if dims is None or len(dims) not in (1, 2) or dims[0] != records:
+                errors.append(f"{tag}: field {field} needs a fully sized [{records}] or [{records}][n] array; "
+                              f"{global_name} is {e.get('type')!r}")
+    return errors
 
 
 def overlap_warnings(entries: dict) -> list[str]:
@@ -201,26 +262,43 @@ def merge(curated: dict, auto: dict) -> Registry:
     return out
 
 
-def emit_json(merged: Registry, meta: dict) -> str:
+def emit_json(merged: Registry, meta: dict, tables: list[dict] = ()) -> str:
     """`globals` is the legacy address-keyed view (the integer bank wins where a string global shares its
-    address); `cells` keys every entry by bank and address (`G:0x0`, `GS:0x0`)."""
+    address); `cells` keys every entry by bank and address (`G:0x0`, `GS:0x0`); `tables` lists the OMS
+    tables in declaration order."""
     ordered = sorted(merged.items(), key=lambda item: (item[0][1], item[0][0] != "G"))
     legacy: dict[str, dict] = {}
     for _, e in ordered:
         legacy.setdefault(e["address"], e)
     out = {"meta": {**GEN_JSON_META, **meta},
            "globals": legacy,
-           "cells": {cell_key(bank, addr): e for (bank, addr), e in sorted(merged.items())}}
+           "cells": {cell_key(bank, addr): e for (bank, addr), e in sorted(merged.items())},
+           "tables": [{"name": t["name"], "records": t["records"], "usage": t.get("usage", ""),
+                       "fields": dict(t["fields"])} for t in tables]}
     return json.dumps(out, ensure_ascii=False, indent=2) + "\n"
 
 
-def emit_reference_md(merged: Registry) -> str:
+def emit_reference_md(merged: Registry, tables: list[dict] = ()) -> str:
     source = f"vm-map/{TOML_DEFAULT.name}"
     L = [f"<!-- DO NOT EDIT -- generated from {source} by tools/globals_build.py --build -->",
          f"# Global Variable Reference — {paths.CONTEXT.profile_id} (generated)", "",
          f"{len(merged)} globals ({sum(1 for e in merged.values() if e['provenance']=='curated')} curated, "
          f"{sum(1 for e in merged.values() if e['provenance']=='auto')} auto shape-inferred). "
          f"Source of truth: `{source}`.", ""]
+    if tables:
+        by_name = {e["name"]: e for e in merged.values() if e.get("name")}
+        L += ["## Tables", "",
+              "Open Maid Script tables (design spec §5.3): `table[record].field` is the field's array element.", ""]
+        for t in tables:
+            L += [f"### {t['name']}[{t['records']}]", ""]
+            if t.get("usage"):
+                L += [t["usage"], ""]
+            L += ["| field | global | address | type |", "|---|---|---|---|"]
+            for field, global_name in t["fields"].items():
+                e = by_name[global_name]
+                address = e["address"] if e["bank"] == "G" else f"{e['bank']} {e['address']}"
+                L.append(f"| {field} | {global_name} | `{address}` | `{e['type']}` |")
+            L.append("")
     by_cat = collections.defaultdict(list)
     for key, e in merged.items():
         by_cat[e["category"]].append(key)
@@ -250,16 +328,18 @@ def build(tp: Path, auto_map: Path = AUTO_MAP) -> int:
     auto = load_auto(auto_map)
     all_addrs = curated.addresses() | {int(a, 16) for a in auto.get("globals", {})}
     errors, warnings = lint(curated, all_addrs)
+    tables = load_tables(tp)
+    errors += lint_tables(tables, curated)
     for m in warnings: print("warn:", m)
     if errors:
         for m in errors: print("error:", m)
         return 1
     merged = merge(curated, auto)
     paths.BUILD.mkdir(parents=True, exist_ok=True)
-    (paths.BUILD / "globals.json").write_text(emit_json(merged, meta), encoding="utf-8", newline="\n")
-    REFERENCE_DOC.write_text(emit_reference_md(merged), encoding="utf-8", newline="\n")
-    print(f"build: {len(merged)} globals -> {(paths.BUILD / 'globals.json').relative_to(paths.REPO)}, "
-          f"{REFERENCE_DOC.relative_to(paths.REPO)}")
+    (paths.BUILD / "globals.json").write_text(emit_json(merged, meta, tables), encoding="utf-8", newline="\n")
+    REFERENCE_DOC.write_text(emit_reference_md(merged, tables), encoding="utf-8", newline="\n")
+    print(f"build: {len(merged)} globals, {len(tables)} tables -> "
+          f"{(paths.BUILD / 'globals.json').relative_to(paths.REPO)}, {REFERENCE_DOC.relative_to(paths.REPO)}")
     return 0
 
 
@@ -275,6 +355,7 @@ def main(argv=None):
     if args.lint:
         entries, _ = load_toml(tp)
         errors, warnings = lint(entries, entries.addresses())
+        errors += lint_tables(load_tables(tp), entries)
         for m in warnings: print("warn:", m)
         for m in errors: print("error:", m)
         print(f"lint: {len(errors)} errors, {len(warnings)} warnings")

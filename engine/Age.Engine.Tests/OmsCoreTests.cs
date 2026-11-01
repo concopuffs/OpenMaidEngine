@@ -110,7 +110,8 @@ public class OmsCoreTests
         """, "adv.oms"));
 
     private static GameModule? Module(string name)
-        => name == Globals.Name ? Globals : name == Scripts.Name ? Scripts : name == Adv.Name ? Adv : null;
+        => name == Globals.Name ? Globals : name == Scripts.Name ? Scripts : name == Adv.Name ? Adv
+           : name == Heroes.Name ? Heroes : name == Party.Name ? Party : null;
 
     private static readonly OmsIdioms Idioms = OmsIdioms.Build([Globals, Scripts, Adv], Abi, Intrinsics);
 
@@ -599,6 +600,195 @@ public class OmsCoreTests
         var (first, second, decompiled) = RoundTrip(IrEncoder.Encode(compiled));
         Assert.Equal(first, second);
         Assert.DoesNotContain("G[0x100][0x5]", decompiled.Source);
+    }
+
+    /// <summary>A script's own arrays and a table over them (spec §5.3): fields in two banks, a scalar field and a
+    /// row field with named columns.</summary>
+    private const string HeroDeclarations = """
+        global int levels[10] @ 0x100
+        global int stats[10][4] @ 0x200 { hp: 0, mp: 1 }
+        global str names[10] @ 0x50
+        table hero[10] {
+            level = levels
+            stats = stats, name = names
+        }
+
+        """;
+
+    [Fact]
+    public void TableFieldsAreTheirArraysElements()
+    {
+        string table = Shape(Compile(HeroDeclarations + """
+            hero[3].level = 1
+            hero[2].stats.mp = 2
+            hero[2].stats[3] = 3
+            hero[L[1]].stats.hp = hero[L[2]].level
+            exit
+            """));
+        string arrays = Shape(Compile(HeroDeclarations + """
+            levels[3] = 1
+            stats[2].mp = 2
+            stats[2][3] = 3
+            stats[L[1]].hp = levels[L[2]]
+            exit
+            """));
+        Assert.Equal(arrays, table);
+        // Constant records are plain cells (spec §7.6): 0x200 + 2 * 4 + 1 and 0x200 + 2 * 4 + 3.
+        Assert.StartsWith("55(3:103,0:1) 55(3:209,0:2) 55(3:20b,0:3) ", table);
+    }
+
+    [Fact]
+    public void WithBlocksEmitOnlyTheirStatements()
+    {
+        string with = Shape(Compile(HeroDeclarations + """
+            with hero[L[1]] {
+                .level = 1
+                .stats.mp += .level
+            again:
+                with hero[2] { .stats[3] = .level }
+                if .level < 5 goto again
+            }
+            exit
+            """));
+        string plain = Shape(Compile(HeroDeclarations + """
+            hero[L[1]].level = 1
+            hero[L[1]].stats.mp += hero[L[1]].level
+            again:
+            hero[2].stats[3] = hero[2].level
+            if hero[L[1]].level < 5 goto again
+            exit
+            """));
+        Assert.Equal(plain, with);
+    }
+
+    [Theory]
+    [InlineData("hero[1] = 1", "a record of 'hero' is not a value")]
+    [InlineData("hero[1].mana = 1", "table 'hero' has no field 'mana'")]
+    [InlineData("hero[10].level = 1", "record 10 is outside table 'hero', which has 10 records")]
+    [InlineData("hero[1].level[0] = 1", "holds one value per record")]
+    [InlineData("hero[1].stats = 1", "is a row")]
+    [InlineData("hero[1][2].level = 1", "takes one record index")]
+    [InlineData("levels[1].x[2] = 1", "'levels' is not a table")]
+    [InlineData("with levels[1] { L[1] = 1 }", "'levels' is not a table")]
+    [InlineData("table short[5] { level = levels }", "needs an array of 5 entries or rows")]
+    [InlineData("table other[10] { level = missing }", "names 'missing', which is not a declared array")]
+    [InlineData("table levels[10] { level = levels }", "'levels' is declared twice")]
+    public void TableMisuseIsACompileError(string statement, string expected)
+    {
+        var error = Assert.Throws<OmsCompileException>(() => Compile(HeroDeclarations + statement + "\n"));
+        Assert.Contains(expected, error.Message);
+    }
+
+    [Theory]
+    [InlineData(".level = 1\n", "'.field' needs an enclosing with block")]
+    [InlineData("with hero[1].level { }\n", "with takes one table record")]
+    [InlineData("table t[2] { a = x, a = y }\n", "field 'a' is named twice")]
+    public void RecordSyntaxErrors(string body, string expected)
+    {
+        var error = Assert.Throws<OmsSyntaxException>(() => Compile(body));
+        Assert.Contains(expected, error.Message);
+    }
+
+    /// <summary>A generated-style module with a table over its arrays.</summary>
+    private static readonly GameModule Heroes = new("test.heroes",
+    [
+        new GlobalSymbol("hero_levels", 0x3, 0x100, [10], new Dictionary<string, int>()),
+        new GlobalSymbol("hero_stats", 0x3, 0x200, [10, 4], new Dictionary<string, int> { ["hp"] = 0, ["mp"] = 1 }),
+        new GlobalSymbol("hero_names", 0x5, 0x50, [10], new Dictionary<string, int>()),
+    ], tables: [new TableSymbol("hero", 10, [("level", "hero_levels"), ("stats", "hero_stats"), ("name", "hero_names")])]);
+
+    [Fact]
+    public void TableFieldsDecompileThroughTheirTableAndRecompileIdentically()
+    {
+        IrScript compiled = Compile("""
+            G[0x103] = 1
+            G[0x209] = G[0x100] + G[0x20b]
+            G[0x200:0x4][L[1]][0x0] = G[0x100][L[2]]
+            GS[0x51] = GS[0x50]
+            exit
+            """);
+        var (first, second, decompiled) = RoundTrip(IrEncoder.Encode(compiled), Heroes);
+        Assert.Equal(first, second);
+        string source = decompiled.Source;
+        Assert.Contains("\nuse test.heroes\n", source);
+        Assert.Contains("hero[0x3].level = 0x1", source);
+        // The cell at an array's own address keeps the array's name (spec §11.3).
+        Assert.Contains("hero[0x2].stats.mp = hero_levels + hero[0x2].stats[0x3]", source);
+        Assert.Contains("hero[L[0x1]].stats.hp = hero[L[0x2]].level", source);
+        Assert.Contains("hero[0x1].name = hero_names", source);
+    }
+
+    [Fact]
+    public void RecordFieldRunsDecompileAsWithBlocks()
+    {
+        IrScript compiled = Compile("""
+            if L[1] goto middle
+            G[0x103] = 1
+            G[0x20d] = 2
+            GS[0x53] = GS[0x50]
+            G[0x104] = 3
+            G[0x105] = 4
+            G[0x214] = 5
+            middle:
+            G[0x215] = 6
+            store_shared_profile_int(G[0x216])
+            exit
+            """);
+        var (first, second, decompiled) = RoundTrip(IrEncoder.Encode(compiled), Heroes);
+        Assert.Equal(first, second);
+        string source = string.Join("\n", decompiled.Source.Split('\n').Select(line => line.Trim()));
+        // Two or more consecutive targets in one record with a constant index form a block, as do calls whose first
+        // argument is such a field; a label ends the run. (The decompiler names the label by its position.)
+        Assert.Contains("\nwith hero[0x3] {\n.level = 0x1\n.stats.mp = 0x2\n.name = hero_names\n}\nhero[0x4].level = 0x3\n"
+                        + "with hero[0x5] {\n.level = 0x4\n.stats.hp = 0x5\n}\nlabel_25:\nwith hero[0x5] {\n.stats.mp = 0x6\n"
+                        + "store_shared_profile_int(.stats[0x2])\n}\n", source);
+    }
+
+    /// <summary>A source module declaring a table and a template that writes through it with a <c>with</c> block.</summary>
+    private static readonly GameModule Party = GameModule.FromSource(Parser.ParseScript("""
+        module test.party
+        global int party_levels[4] @ 0x400
+        table member[4] { level = party_levels }
+        inline level_up(slot: expr) {
+            with member[slot] { .level += 1 }
+        }
+        """, "party.oms"));
+
+    [Fact]
+    public void SourceModulesDeclareTablesForScriptsAndTemplates()
+    {
+        Assert.Equal("member", Assert.Single(Party.Tables).Name);
+        string table = Shape(Compile("use test.party\nlevel_up(L[1])\nmember[2].level = 5\nexit\n"));
+        string raw = Shape(Compile("G[0x400][L[1]] += 1\nG[0x402] = 5\nexit\n"));
+        Assert.Equal(raw, table);
+    }
+
+    [Fact]
+    public void RegistryTablesLoadWithTheirUsableFields()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"oms-tables-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, """
+            {"cells": {
+                "G:0x100": {"name": "hero_levels", "type": "int[10]", "address": "0x100"},
+                "G:0x200": {"name": "hero_stats", "type": "int[10][4]", "address": "0x200", "columns": {"0": "hp"}},
+                "G:0x300": {"name": "short_array", "type": "int[5]", "address": "0x300"}
+             },
+             "tables": [
+                {"name": "hero", "records": 10, "usage": "",
+                 "fields": {"level": "hero_levels", "stats": "hero_stats", "short": "short_array", "gone": "missing"}},
+                {"name": "empty", "records": 3, "usage": "", "fields": {"x": "short_array"}}
+             ]}
+            """);
+        try
+        {
+            TableSymbol hero = Assert.Single(GameModule.LoadGlobals("test", path).Tables);
+            Assert.Equal("hero", hero.Name);
+            Assert.Equal<(string, string)>([("level", "hero_levels"), ("stats", "hero_stats")], hero.Fields);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]

@@ -9,6 +9,9 @@ public sealed class Parser
     private readonly List<Token> _tokens;
     private int _position;
 
+    /// <summary>The records of the enclosing <c>with</c> blocks; the innermost binds <c>.field</c>.</summary>
+    private readonly Stack<NamedElementExpr> _records = new();
+
     private Parser(List<Token> tokens) => _tokens = tokens;
 
     public static ScriptUnit ParseScript(string source, string file = "<source>")
@@ -114,7 +117,8 @@ public sealed class Parser
             Next();
             return ParseDialogue(token, token.Text);
         }
-        Statement statement = token.Kind == TokenKind.Identifier ? ParseKeywordOrSimple(token) : null!;
+        Statement statement = token.Kind == TokenKind.Identifier ? ParseKeywordOrSimple(token)
+            : StartsRecordField() ? Finish(ParseSimple()) : null!;
         if (statement == null) throw new OmsSyntaxException(token.Span, $"unexpected {token}");
         return statement;
     }
@@ -184,6 +188,24 @@ public sealed class Parser
             case "atomic":
                 Next();
                 return Finish(new AtomicStatement(token.Span, ParseBlock()));
+            case "table" when Peek(1).Kind == TokenKind.Identifier:
+                Next();
+                return Finish(ParseTable(token));
+            case "with" when Peek(1).Kind == TokenKind.Identifier:
+            {
+                Next();
+                if (ParseNamed() is not NamedElementExpr { Indices.Count: 1, Column: null } record)
+                    throw new OmsSyntaxException(token.Span, "with takes one table record: with unit[i] { … }");
+                _records.Push(record);
+                try
+                {
+                    return Finish(new WithStatement(token.Span, record, ParseBlock()));
+                }
+                finally
+                {
+                    _records.Pop();
+                }
+            }
             case "goto":
                 Next();
                 return Finish(new JumpStatement(token.Span, new JumpTarget(JumpKind.Label, Expect(TokenKind.Identifier).Text)));
@@ -249,6 +271,32 @@ public sealed class Parser
             members.Add(new EnumMember(member.Span, member.Text, ParseSignedInteger()));
         }
         return new EnumStatement(keyword.Span, name, members);
+    }
+
+    /// <summary><c>table name[records] { field = array, … }</c> after <c>table</c>; fields are separated by commas or
+    /// newlines.</summary>
+    private Statement ParseTable(Token keyword)
+    {
+        string name = Expect(TokenKind.Identifier).Text;
+        Expect(TokenKind.Punct, "[");
+        Token records = Expect(TokenKind.Integer);
+        Expect(TokenKind.Punct, "]");
+        if (records.Integer is 0 or > int.MaxValue)
+            throw new OmsSyntaxException(records.Span, "a table needs a record count");
+        Expect(TokenKind.Punct, "{");
+        var fields = new List<TableField>();
+        while (true)
+        {
+            while (Peek().Kind == TokenKind.Newline || Peek().Is(TokenKind.Punct, ",")) _position++;
+            if (Accept(TokenKind.Punct, "}")) break;
+            Token field = Expect(TokenKind.Identifier);
+            Expect(TokenKind.Punct, "=");
+            Token array = Expect(TokenKind.Identifier);
+            if (fields.Any(other => other.Name == field.Text))
+                throw new OmsSyntaxException(field.Span, $"field '{field.Text}' is named twice");
+            fields.Add(new TableField(field.Span, field.Text, array.Text));
+        }
+        return new TableStatement(keyword.Span, name, (int)records.Integer, fields);
     }
 
     /// <summary><c>inline name(p: kind [= default], …) { … }</c> after <c>inline</c>; the kind is const, text, expr,
@@ -346,19 +394,46 @@ public sealed class Parser
         return new StorageDeclaration(keyword.Span, keyword.Text == "local", type.Text, name, dimensions, address, columns);
     }
 
-    /// <summary>A named operand: a bare name, or a named element <c>name[i]</c>, <c>name[r][c]</c>, <c>name[r].col</c>.</summary>
+    /// <summary>A named operand: a bare name, or a named element <c>name[i]</c>, <c>name[r][c]</c>, <c>name[r].col</c>,
+    /// or a table field <c>t[i].field</c> with the field's own index or column after it.</summary>
     private Expr ParseNamed()
     {
         Token name = Expect(TokenKind.Identifier);
         if (!Peek().Is(TokenKind.Punct, "[")) return new OperandExpr(name.Span, new RawLabelRef(name.Span, name.Text));
+        List<Expr> indices = ParseIndices();
+        if (!Accept(TokenKind.Punct, ".")) return new NamedElementExpr(name.Span, name.Text, indices, null);
+        return ParseFieldRest(new NamedElementExpr(name.Span, name.Text, indices, Expect(TokenKind.Identifier).Text));
+    }
+
+    private List<Expr> ParseIndices()
+    {
         var indices = new List<Expr>();
         while (Accept(TokenKind.Punct, "["))
         {
             indices.Add(ParseExpression());
             Expect(TokenKind.Punct, "]");
         }
+        return indices;
+    }
+
+    /// <summary>A table field's own row index or column, after <c>.field</c>.</summary>
+    private NamedElementExpr ParseFieldRest(NamedElementExpr element)
+    {
+        List<Expr>? indices = Peek().Is(TokenKind.Punct, "[") ? ParseIndices() : null;
         string? column = Accept(TokenKind.Punct, ".") ? Expect(TokenKind.Identifier).Text : null;
-        return new NamedElementExpr(name.Span, name.Text, indices, column);
+        return element with { FieldIndices = indices, FieldColumn = column };
+    }
+
+    private bool StartsRecordField() => Peek().Is(TokenKind.Punct, ".") && Peek(1).Kind == TokenKind.Identifier;
+
+    /// <summary><c>.field…</c> inside a <c>with</c> block: the innermost record's field (spec §5.3).</summary>
+    private NamedElementExpr ParseRecordField()
+    {
+        Token dot = Expect(TokenKind.Punct, ".");
+        if (_records.Count == 0) throw new OmsSyntaxException(dot.Span, "'.field' needs an enclosing with block");
+        NamedElementExpr record = _records.Peek();
+        Token field = Expect(TokenKind.Identifier);
+        return ParseFieldRest(new NamedElementExpr(dot.Span, record.Name, record.Indices, field.Text));
     }
 
     private bool StartsNamed()
@@ -375,9 +450,10 @@ public sealed class Parser
         bool storage = StorageBanks.TypeByBank.ContainsKey(token.Text) && Peek(1).Is(TokenKind.Punct, "[");
         bool named = token.Kind == TokenKind.Identifier && !storage && Peek(1).Kind == TokenKind.Punct
                      && (Peek(1).Text is "=" or "[" || CompoundOperators.Contains(Peek(1).Text));
-        if (storage || named)
+        bool record = StartsRecordField();
+        if (storage || named || record)
         {
-            Expr target = storage ? ParseStorageOrElement() : ParseNamed();
+            Expr target = record ? ParseRecordField() : storage ? ParseStorageOrElement() : ParseNamed();
             Token op = Next();
             if (op.Is(TokenKind.Punct, "="))
             {
@@ -546,6 +622,7 @@ public sealed class Parser
             return new NoneExpr(token.Span);
         }
         if (StartsNamed()) return ParseNamed();
+        if (StartsRecordField()) return ParseRecordField();
         if (token.Is(TokenKind.Punct, "&") && Peek(1).Kind == TokenKind.Identifier)
         {
             Next();

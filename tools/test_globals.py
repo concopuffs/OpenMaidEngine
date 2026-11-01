@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 import globals_build as G
 import sys4load
+from pathlib import Path
 
 FAILS = []
 def check(cond, msg):
@@ -214,6 +215,30 @@ def test_lint_warns_on_overlapping_arrays():
     check(errors == [], f"overlap fixture lints without errors ({errors})")
     check(len(warnings) == 1 and "array a" in warnings[0] and "overlaps b" in warnings[0],
           f"lint warns once, for a and b ({warnings})")
+
+def test_tables_lint():
+    base = {"category": "data-table", "source": "inference", "confidence": "med"}
+    entries = {("G", 0x10): {**base, "_addr": 0x10, "name": "hero_levels", "type": "int[4]"},
+               ("G", 0x20): {**base, "_addr": 0x20, "name": "hero_stats", "type": "int[4][3]"},
+               ("G", 0x40): {**base, "_addr": 0x40, "name": "hero_grid", "type": "int[4][3][2]"},
+               ("G", 0x60): {**base, "_addr": 0x60, "name": "open_rows", "type": "int[][3]"}}
+    good = [{"name": "hero", "records": 4, "fields": {"level": "hero_levels", "stats": "hero_stats"}}]
+    check(G.lint_tables(good, entries) == [], "a table over 1-D and 2-D arrays of its record count lints clean")
+    bad = [{"name": "hero_levels", "records": 4, "fields": {"level": "hero_levels"}},
+           {"name": "Hero", "records": 4, "fields": {"level": "hero_levels"}},
+           {"name": "short", "records": 5, "fields": {"level": "hero_levels"}},
+           {"name": "deep", "records": 4, "fields": {"grid": "hero_grid", "open": "open_rows", "x": "nope"}},
+           {"name": "empty", "records": 4, "fields": {}},
+           {"name": "dup", "records": 4, "fields": {"level": "hero_levels"}},
+           {"name": "dup", "records": 4, "fields": {"Level": "hero_levels"}}]
+    errors = G.lint_tables(bad, entries)
+    for needle in ("'hero_levels': also names a global", "'Hero': name must be", "field level needs a fully sized [5]",
+                   "field grid needs", "field open needs", "unknown global 'nope'", "needs a [table.fields] map",
+                   "'dup': defined twice", "field 'Level' must be"):
+        check(any(needle in e for e in errors), f"lint_tables flags {needle!r}")
+    for toml in sorted(Path(G.TOML_DEFAULT).parent.glob("globals*.toml")):
+        entries, _ = G.load_toml(toml)
+        check(G.lint_tables(G.load_tables(toml), entries) == [], f"{toml.name} tables lint clean")
 
 def test_adv_layer_surface_slot_evidence():
     scene = sys4load.load(paths.scripts()["SC0000.BIN"])
@@ -694,6 +719,7 @@ if __name__ == "__main__":
     test_load_and_lint()
     test_lint_catches_bad_vocab()
     test_lint_warns_on_overlapping_arrays()
+    test_tables_lint()
     test_adv_layer_surface_slot_evidence()
     test_selected_movement_route_grid_evidence()
     test_battle_triggered_passive_skill_flags_evidence()

@@ -13,6 +13,14 @@ public sealed record GlobalSymbol(string Name, int Type, uint Address, IReadOnly
     public string? ColumnName(int column) => Columns.FirstOrDefault(pair => pair.Value == column).Key;
 }
 
+/// <summary>A table (spec §5.3): a name for the parallel arrays that hold one kind of record. Each field names an
+/// array whose leading dimension is the record count.</summary>
+public sealed record TableSymbol(string Name, int Records, IReadOnlyList<(string Field, string Array)> Fields)
+{
+    /// <summary>The array that holds a field, if the table has it.</summary>
+    public string? ArrayOf(string field) => Fields.FirstOrDefault(pair => pair.Field == field).Array;
+}
+
 /// <summary>
 /// A module (spec §3.2). Generated modules: <c>&lt;profile&gt;.globals</c> holds every named global of the profile's
 /// registry (<c>vm-map/globals*.toml</c>, generated to <c>build/games/&lt;profile&gt;/globals.json</c>); integer and
@@ -30,6 +38,7 @@ public sealed class GameModule
     private readonly Dictionary<(int Type, uint Address), GlobalSymbol> _byCell = new();
     private readonly Dictionary<string, uint> _scriptIds = new(StringComparer.Ordinal);
     private readonly Dictionary<uint, string> _scriptNames = new();
+    private readonly List<TableSymbol> _tables = new();
 
     public string Name { get; }
 
@@ -37,7 +46,7 @@ public sealed class GameModule
     public ScriptUnit? Source { get; }
 
     public GameModule(string name, IEnumerable<GlobalSymbol> symbols, IEnumerable<(string Name, uint Id)>? scripts = null,
-                      ScriptUnit? source = null)
+                      ScriptUnit? source = null, IEnumerable<TableSymbol>? tables = null)
     {
         Name = name;
         Source = source;
@@ -49,7 +58,16 @@ public sealed class GameModule
         }
         foreach (var (script, id) in scripts ?? [])
             if (_scriptIds.TryAdd(script, id)) _scriptNames.TryAdd(id, script);
+        foreach (TableSymbol table in tables ?? [])
+        {
+            if (_byName.ContainsKey(table.Name) || _tables.Any(other => other.Name == table.Name))
+                throw new InvalidDataException($"module {name} names '{table.Name}' twice");
+            _tables.Add(table);
+        }
     }
+
+    /// <summary>The module's tables, in declaration order.</summary>
+    public IReadOnlyList<TableSymbol> Tables => _tables;
 
     /// <summary>A script module from catalog entries (<c>RECOVER.BIN</c> → <c>RECOVER</c>, its packed id).</summary>
     public static GameModule Scripts(string profileId, IEnumerable<(string FileName, long PackedId)> scripts)
@@ -62,11 +80,15 @@ public sealed class GameModule
     {
         if (!unit.IsModule) throw new InvalidDataException($"'{unit.Name}' is a script, not a module");
         var symbols = new List<GlobalSymbol>();
+        var tables = new List<TableSymbol>();
         foreach (Statement statement in unit.Body)
             if (statement is StorageDeclaration { Local: false, Address: uint address } declaration)
                 symbols.Add(new GlobalSymbol(declaration.Name, declaration.Type switch { "str" => 0x5, "float" => 0x4, _ => 0x3 },
                     address, declaration.Dimensions, declaration.Columns));
-        return new GameModule(unit.Name, symbols, source: unit);
+            else if (statement is TableStatement table)
+                tables.Add(new TableSymbol(table.Name, table.Records,
+                    table.Fields.Select(field => (field.Name, field.Array)).ToArray()));
+        return new GameModule(unit.Name, symbols, source: unit, tables: tables);
     }
 
     /// <summary>Every source module in a directory (<c>oms/&lt;profile&gt;/*.oms</c>), in file-name order; each must
@@ -141,7 +163,8 @@ public sealed class GameModule
     private static long Extent(GlobalSymbol symbol) => symbol.Dimensions.Aggregate(1L, (product, dimension) => product * dimension);
 
     /// <summary>Loads <c>&lt;profile&gt;.globals</c> from a generated registry view. Entries without a usable name or
-    /// with an unknown shape are skipped, as are names that would read as a keyword or a storage bank.</summary>
+    /// with an unknown shape are skipped, as are names that would read as a keyword or a storage bank. Its tables keep
+    /// the fields whose arrays loaded with the table's record count as their leading dimension.</summary>
     public static GameModule LoadGlobals(string profileId, string globalsJsonPath)
     {
         using FileStream stream = File.OpenRead(globalsJsonPath);
@@ -171,6 +194,24 @@ public sealed class GameModule
             uint address = Convert.ToUInt32(entry.GetProperty("address").GetString(), 16);
             symbols.Add(new GlobalSymbol(name, type, address, dimensions, columns));
         }
-        return new GameModule($"{profileId}.globals", symbols);
+        var arrays = symbols.ToDictionary(symbol => symbol.Name, StringComparer.Ordinal);
+        var tables = new List<TableSymbol>();
+        if (doc.RootElement.TryGetProperty("tables", out JsonElement tableList))
+            foreach (JsonElement entry in tableList.EnumerateArray())
+            {
+                if (entry.GetProperty("name").GetString() is not { Length: > 0 } name || !Identifier.IsMatch(name)
+                    || Abi.IntrinsicCatalog.Keywords.Contains(name) || StorageBanks.TypeByBank.ContainsKey(name)
+                    || arrays.ContainsKey(name))
+                    continue;
+                int records = entry.GetProperty("records").GetInt32();
+                var fields = new List<(string, string)>();
+                foreach (JsonProperty field in entry.GetProperty("fields").EnumerateObject())
+                    if (Identifier.IsMatch(field.Name) && field.Value.GetString() is { } array
+                        && arrays.TryGetValue(array, out GlobalSymbol? symbol) && symbol.Dimensions is [var leading, ..]
+                        && leading == records && symbol.Dimensions.Count <= 2)
+                        fields.Add((field.Name, array));
+                if (fields.Count > 0) tables.Add(new TableSymbol(name, records, fields));
+            }
+        return new GameModule($"{profileId}.globals", symbols, tables: tables);
     }
 }

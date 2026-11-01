@@ -1024,6 +1024,30 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x81c96"
+name = "unit_movement_routine_set_ids"
+category = "data-table"
+type = "int[1000][3]"
+value_domain = "RTINIT row id by difficulty"
+usage = "EBINIT default movement-AI routine set per unit for easy/normal/hard, written as one three-cell inline-array copy per unit. SETEN@0x0017c copies the row into entity_movement_routine_set_ids unless the stage enemy's own stage_enemy_movement_routine_set_ids row is populated."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "easy", "1" = "normal", "2" = "hard" }
+depends_on = ["0x53517", "0xe7889"]
+
+[[global]]
+address = "0x8284e"
+name = "unit_battle_routine_set_ids"
+category = "data-table"
+type = "int[1000][3]"
+value_domain = "RTINIT row id by difficulty"
+usage = "EBINIT default battle-AI routine set per unit for easy/normal/hard, written as one three-cell inline-array copy per unit. SETEN@0x001c8 copies the row into entity_battle_routine_set_ids unless the stage enemy's own stage_enemy_battle_routine_set_ids row is populated."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "easy", "1" = "normal", "2" = "hard" }
+depends_on = ["0x535ad", "0xe78e3"]
+
+[[global]]
 address = "0x0"
 name = "system_flow_request"
 category = "choice-output"
@@ -1587,6 +1611,48 @@ usage = "CNINIT's sparse unit-id keyed story-name table. Scene scripts and HISTO
 source = "investigation"
 confidence = "high"
 depends_on = ["0x624bf"]
+
+[[global]]
+address = "0x84a"
+name = "unit_full_names"
+category = "string-table"
+type = "string[1000]"
+value_domain = "EBINIT full unit name by unit id (the record key, e.g. unit 2 リリィ：幼少時代)"
+usage = "EBINIT writes one per unit record. INFOEN@0x00f26 draws it in the enemy-information list once enemy_encyclopedia_revealed_flags marks the unit, and draws question marks otherwise."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x56b85"]
+
+[[global]]
+address = "0xc32"
+name = "unit_display_names"
+category = "string-table"
+type = "string[1000]"
+value_domain = "EBINIT short display name by unit id"
+usage = "EBINIT writes one per unit record. BTL@0x00fcf/0x0100e/0x0172e, DRAWCHP@0x009a7, DRAWENP@0x008c5/0x00f41, EXILE@0x009db and INFOCH@0x0102e draw it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x101a"
+name = "unit_initial_class_titles"
+category = "string-table"
+type = "string[1000]"
+value_domain = "EBINIT class title by unit id (e.g. unit 1 脆弱な魔王)"
+usage = "EBINIT writes one per unit record. SETEN@0x0001f and SETCH@0x0003a copy it into the battle slot's title GS[0x2e2 + slot]; ADDEXP@0x00668 does the same outside the party (party units take unit_class_titles 0x27e), and INFOCH@0x01056 and INFOEN@0x01322 draw it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x1402"
+name = "unit_trait_notes"
+category = "string-table"
+type = "string[1000][2]"
+value_domain = "EBINIT short trait notes, two per unit (e.g. unit 200: 移動速度が遅い, 稀に分裂する)"
+usage = "EBINIT writes 194 cells. Unit 200 writes 0x1592/0x1593, which fixes the base and the two-cell row; the item-name table at 0x1bd2 starts exactly 2000 cells later. No shipped script reads it."
+source = "investigation"
+confidence = "med"
+columns = { "0" = "note_1", "1" = "note_2" }
 
 [[global]]
 address = "0x624bf"
@@ -4887,3 +4953,111 @@ usage = "Card-result visual selected by FIELD before applying and presenting the
 source = "investigation"
 confidence = "high"
 depends_on = ["0x1519f8"]
+
+# ---------------------------------------------------------------------------------------------- tables
+# Open Maid Script tables (design spec §5.3): record views over the parallel arrays above. A field names a
+# global by name; its leading dimension must be the record count. Generated into globals.json `tables`.
+
+[[table]]
+name = "unit"
+records = 1000
+usage = "EBINIT unit records keyed by unit id, with the CNINIT/CVINIT voice maps and the per-unit story flags. `unit[id].stats.max_hp` is `unit_base_stats[id].max_hp`."
+
+[table.fields]
+full_name = "unit_full_names"
+display_name = "unit_display_names"
+initial_class_title = "unit_initial_class_titles"
+trait_notes = "unit_trait_notes"
+story_display_name = "unit_story_display_names"
+story_speaker_seen_flag = "unit_story_speaker_seen_flags"
+voice_family_unit_id = "unit_voice_family_unit_ids"
+voice_suppression_flag_id = "unit_voice_suppression_flag_ids"
+voice = "unit_voice_asset_ids"
+status_art_asset_ids = "unit_status_art_asset_ids"
+map_sprite_asset_ids = "unit_map_sprite_asset_ids"
+battle_sprite_asset_id = "unit_battle_sprite_asset_id"
+battle_portrait_asset_ids = "unit_battle_portrait_asset_ids"
+battle_cutin_asset_ids = "unit_battle_cutin_asset_ids"
+sort_key = "unit_sort_key"
+enemy_info_listed = "unit_enemy_info_listed"
+icon_id = "unit_icon_id"
+species_category = "unit_species_category"
+sex_category = "unit_sex_category"
+boss_class = "unit_boss_class"
+canonical_id = "unit_canonical_id"
+capturable = "unit_capturable"
+roster_state_flag_base_index = "unit_roster_state_flag_base_index"
+sally_action_unlock_requirements = "unit_sally_action_unlock_requirements"
+sally_event_ids = "unit_sally_event_ids"
+roster_variant_ids = "unit_roster_variant_ids"
+sex_magic_bonus_item_id = "unit_sex_magic_bonus_item_id"
+essence_yield = "unit_essence_yield"
+summon_unlock_flag_index = "unit_summon_unlock_flag_index"
+summon_knowledge_threshold = "unit_summon_knowledge_threshold"
+summon_point_cost = "unit_summon_point_cost"
+defense_element = "unit_defense_element"
+default_attack_item_id = "unit_default_attack_item_id"
+power_tier = "unit_power_tier"
+weapon_item_category = "unit_weapon_item_category"
+starting_equipment_item_id = "unit_starting_equipment_item_id"
+starting_skill = "unit_starting_skill_ids"
+deployment_cost_base = "unit_deployment_cost_base"
+starting_level = "unit_starting_level"
+level_cap = "unit_level_cap"
+auto_level_scale_divisor = "unit_auto_level_scale_divisor"
+stats = "unit_base_stats"
+stat_growth = "unit_stat_growth_rates"
+movement_routine_set = "unit_movement_routine_set_ids"
+battle_routine_set = "unit_battle_routine_set_ids"
+experience_reward = "unit_experience_reward"
+drop_item = "unit_drop_item_ids"
+drop_chance = "unit_drop_chance_percent"
+large_battle_sprite = "unit_large_battle_sprite"
+
+[[table]]
+name = "item"
+records = 1000
+usage = "ITINIT item records keyed by item id."
+
+[table.fields]
+sort_key = "item_sort_key"
+random_tier = "item_random_tier"
+category = "item_category"
+min_range = "item_min_range"
+max_range = "item_max_range"
+icon_id = "item_icon_id"
+attack_element = "item_attack_element"
+defense_element = "item_defense_element"
+character_whitelist = "item_character_whitelist"
+sex_restriction_mask = "item_sex_restriction_mask"
+status_delta_levels = "item_status_delta_levels"
+equipped_status_levels = "item_equipped_status_levels"
+granted_skill_id = "item_granted_skill_id"
+stat_modifiers = "item_stat_modifiers"
+tuning_curve_ids = "item_tuning_curve_ids"
+resource_recovery_amounts = "item_resource_recovery_amounts"
+essence_recovery_amount = "item_essence_recovery_amount"
+weapon_class = "item_weapon_class"
+handler_script_id = "item_handler_script_id"
+
+[[table]]
+name = "skill"
+records = 300
+usage = "SKINIT skill records keyed by skill id, with the per-skill acquisition state."
+
+[table.fields]
+acquired_flag = "skill_acquired_flags"
+info_revealed_flag = "skill_info_revealed_flags"
+sort_key = "skill_sort_key"
+category = "skill_category"
+change_catalog_eligible = "skill_change_catalog_eligible"
+min_range_encoded = "skill_min_range_encoded"
+max_range_encoded = "skill_max_range_encoded"
+attack_element = "skill_attack_element"
+status_levels = "skill_status_levels"
+icon_id = "skill_icon_id"
+combat_stat_deltas = "skill_combat_stat_deltas"
+resource_deltas = "skill_resource_deltas"
+proc_chance_percent = "skill_proc_chance_percent"
+battle_animation_id = "skill_battle_animation_id"
+handler_script_id = "skill_handler_script_id"

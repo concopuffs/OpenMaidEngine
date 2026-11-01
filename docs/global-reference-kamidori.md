@@ -3,6 +3,173 @@
 
 8298 globals (624 curated, 7674 auto shape-inferred). Source of truth: `vm-map/globals-kamidori.toml`.
 
+## Tables
+
+Open Maid Script tables (design spec §5.3): `table[record].field` is the field's array element.
+
+### unit[1000]
+
+EBINIT unit records keyed by unit id, with the per-unit runtime arrays (history face, voice family and setting slot). `unit[761].stats.max_hp` is `unit_base_stats[761].max_hp`.
+
+| field | global | address | type |
+|---|---|---|---|
+| speaker_name | unit_speaker_names | `GS 0x322` | `string[1000][5]` |
+| full_name | unit_full_names | `GS 0x2ab7` | `string[1000]` |
+| display_name | unit_display_names | `GS 0x2e9f` | `string[1000]` |
+| initial_class_title | unit_initial_class_titles | `GS 0x3287` | `string[1000]` |
+| bestiary_description | unit_bestiary_description_lines | `GS 0x366f` | `string[1000][3]` |
+| history_face_asset_id | unit_history_face_asset_ids | `0xfd49c` | `int[1000]` |
+| voice_family_unit_id | unit_voice_family_unit_ids | `0xfdc6c` | `int[1000]` |
+| voice_setting_slot | unit_voice_setting_slot | `0xfe054` | `int[1000]` |
+| voice | unit_voice_asset_ids | `0x2a9b8c` | `int[1000][30]` |
+| graphic | unit_graphic_asset_ids | `0x2b10bc` | `int[1000][17]` |
+| sort_key | unit_sort_key | `0x2b570c` | `int[1000]` |
+| bestiary_listed | unit_bestiary_listed | `0x2b5af4` | `int[1000]` |
+| race | unit_race | `0x2b5edc` | `int[1000]` |
+| sex | unit_sex | `0x2b62c4` | `int[1000]` |
+| boss_class | unit_boss_class | `0x2b66ac` | `int[1000]` |
+| canonical_character_id | unit_canonical_character_id | `0x2b6a94` | `int[1000]` |
+| cutin_element | unit_cutin_element | `0x2b6e7c` | `int[1000]` |
+| element_resistance | unit_element_resistance_levels | `0x2b7264` | `int[1000][8]` |
+| default_attack_item_id | unit_default_attack_item_id | `0x2b91a4` | `int[1000]` |
+| initial_weapon_level | unit_initial_weapon_level | `0x2b958c` | `int[1000]` |
+| equippable_category_mask | unit_equippable_category_mask | `0x2b9974` | `int[1000]` |
+| initial_equipment | unit_initial_equipment_item_ids | `0x2b9d5c` | `int[1000][3]` |
+| default_costume_item_id | unit_default_costume_item_id | `0x2ba914` | `int[1000]` |
+| skill | unit_skill_ids | `0x2bacfc` | `int[1000][8]` |
+| initial_party_capacity | unit_initial_party_capacity | `0x2bcc3c` | `int[1000]` |
+| unused_0x2bd024 | unit_unused_0x2bd024 | `0x2bd024` | `int[1000]` |
+| party_cost | unit_party_cost | `0x2bd40c` | `int[1000]` |
+| initial_affinity_tenths | unit_initial_affinity_tenths | `0x2bd7f4` | `int[1000]` |
+| starting_level | unit_starting_level | `0x2bdbdc` | `int[1000]` |
+| level_cap | unit_level_cap | `0x2bdfc4` | `int[1000]` |
+| auto_level_scale_divisor | unit_auto_level_scale_divisor | `0x2be3ac` | `int[1000]` |
+| experience_level_cap | unit_experience_level_cap | `0x2be794` | `int[1000]` |
+| stats | unit_base_stats | `0x2beb7c` | `int[1000][14]` |
+| stat_growth | unit_stat_growth_rates | `0x2c222c` | `int[1000][14]` |
+| initial_stat_caps | unit_initial_stat_caps | `0x2c58dc` | `int[1000][14]` |
+| experience_reward | unit_experience_reward | `0x2c8f8c` | `int[1000]` |
+| bestiary_knowledge_gain | unit_bestiary_knowledge_gain | `0x2c9374` | `int[1000]` |
+| drop_item | unit_drop_item_ids | `0x2c975c` | `int[1000][5]` |
+| drop_chance | unit_drop_chance_percent | `0x2caae4` | `int[1000][5]` |
+| drop_knowledge_threshold | unit_drop_knowledge_threshold | `0x2cbe6c` | `int[1000][5]` |
+| drop_required_flag | unit_drop_required_flag_ids | `0x2cd1f4` | `int[1000][10]` |
+| drop_excluding_flag | unit_drop_excluding_flag_ids | `0x2cf904` | `int[1000][5]` |
+| large_battle_sprite | unit_large_battle_sprite | `0x2d0c8c` | `int[1000]` |
+| habitat_area | unit_habitat_area_ids | `0x2d1074` | `int[1000][4]` |
+
+### item[2000]
+
+ITINIT item records keyed by item id, with the per-item inventory and growth state.
+
+| field | global | address | type |
+|---|---|---|---|
+| name | item_names | `GS 0x4228` | `string[2000]` |
+| short_description | item_short_descriptions | `GS 0x49f8` | `string[2000]` |
+| inventory_count | item_inventory_counts | `0x7ea4f` | `int[2000]` |
+| growth_exp | item_growth_exp | `0x801bf` | `int[2000]` |
+| growth_level | item_growth_levels | `0x8098f` | `int[2000]` |
+| costume_enhancement_grid | item_costume_enhancement_grid | `0x82100` | `int[2000][225]` |
+| costume_gem_sockets | item_costume_gem_sockets | `0xefed0` | `int[2000][4]` |
+| handler_script_id | item_handler_script_id | `0x2d2848` | `int[2000]` |
+| costume_graphic_asset_ids | item_costume_graphic_asset_ids | `0x2d3018` | `int[2000][17]` |
+| icon_asset_id | item_icon_asset_id | `0x2db4e8` | `int[2000]` |
+| furniture_sprite_asset_id | item_furniture_sprite_asset_id | `0x2dbcb8` | `int[2000]` |
+| sort_key | item_sort_key | `0x2dc488` | `int[2000]` |
+| rank | item_rank | `0x2dcc58` | `int[2000]` |
+| category | item_category | `0x2dd428` | `int[2000]` |
+| min_range | item_min_range | `0x2ddbf8` | `int[2000]` |
+| max_range | item_max_range | `0x2de3c8` | `int[2000]` |
+| attack_element | item_attack_element | `0x2deb98` | `int[2000]` |
+| costume_battle_variant | item_costume_battle_variant | `0x2df368` | `int[2000]` |
+| affinity_level_deltas | item_affinity_level_deltas | `0x2dfb38` | `int[2000][8]` |
+| character_whitelist | item_character_whitelist | `0x2e39b8` | `int[2000][5]` |
+| species_restriction_mask | item_species_restriction_mask | `0x2e60c8` | `int[2000]` |
+| sex_restriction_mask | item_sex_restriction_mask | `0x2e6898` | `int[2000]` |
+| cursed_flag | item_cursed_flag | `0x2e7068` | `int[2000]` |
+| condition_level_deltas | item_condition_level_deltas | `0x2e7838` | `int[2000][30]` |
+| equipped_condition_levels | item_equipped_condition_levels | `0x2f6298` | `int[2000][30]` |
+| granted_skill_id | item_granted_skill_id | `0x304cf8` | `int[2000]` |
+| stat_modifiers | item_stat_modifiers | `0x3054c8` | `int[2000][14]` |
+| critical_rate_bonus | item_critical_rate_bonus | `0x30c228` | `int[2000]` |
+| resource_recovery_amounts | item_resource_recovery_amounts | `0x30c9f8` | `int[2000][3]` |
+| recovery_variance | item_recovery_variance | `0x30e168` | `int[2000]` |
+| battle_animation_id | item_battle_animation_id | `0x30e938` | `int[2000]` |
+| price | item_prices | `0x30f108` | `int[2000][3]` |
+| furniture_area | item_furniture_area | `0x310878` | `int[2000]` |
+| furniture_exclusive_group | item_furniture_exclusive_group | `0x311048` | `int[2000]` |
+| furniture_width | item_furniture_width | `0x311818` | `int[2000]` |
+| furniture_height | item_furniture_height | `0x311fe8` | `int[2000]` |
+| garden_production_period | item_garden_production_period | `0x3127b8` | `int[2000]` |
+| garden_product_item_id | item_garden_product_item_id | `0x312f88` | `int[2000]` |
+| furniture_sales_count_bonus | item_furniture_sales_count_bonus | `0x313758` | `int[2000]` |
+| furniture_purchase_desire_bonus | item_furniture_purchase_desire_bonus | `0x313f28` | `int[2000]` |
+| furniture_visit_rate_bonus | item_furniture_visit_rate_bonus | `0x3146f8` | `int[2000]` |
+| furniture_high_price_bonus | item_furniture_high_price_bonus | `0x314ec8` | `int[2000]` |
+| furniture_equipment_bonus | item_furniture_equipment_bonus | `0x315698` | `int[2000]` |
+| furniture_information_bonus | item_furniture_information_bonus | `0x315e68` | `int[2000]` |
+| furniture_mutation_bonus | item_furniture_mutation_bonus | `0x316638` | `int[2000]` |
+| furniture_knowledge_bonus | item_furniture_knowledge_bonus | `0x316e08` | `int[2000]` |
+| furniture_staff_count_bonus | item_furniture_staff_count_bonus | `0x3175d8` | `int[2000]` |
+| furniture_garden_bonus | item_furniture_garden_bonus | `0x317da8` | `int[2000]` |
+| field_use_target_kind | item_field_use_target_kind | `0x318578` | `int[2000]` |
+| usability_flag | item_usability_flags | `0x319ce8` | `int[2000]` |
+| growth_enabled | item_growth_enabled | `0x31a4b9` | `int[2000]` |
+| growth_mastery_reward_items | item_growth_mastery_reward_items | `0x38b939` | `int[2000]` |
+| growth_mastery_story_flag | item_growth_mastery_story_flags | `0x38c109` | `int[2000]` |
+
+### skill[1000]
+
+SKINIT skill records keyed by skill id.
+
+| field | global | address | type |
+|---|---|---|---|
+| name | skill_names | `GS 0x5998` | `string[1000]` |
+| short_description | skill_short_descriptions | `GS 0x5d80` | `string[1000]` |
+| icon_asset_id | skill_icon_asset_id | `0x3a10c8` | `int[1000]` |
+| sort_key | skill_sort_key | `0x3a14b0` | `int[1000]` |
+| upgrade_family_id | skill_upgrade_family_id | `0x3a1898` | `int[1000]` |
+| category | skill_category | `0x3a1c80` | `int[1000]` |
+| catalog_visible | skill_catalog_visible | `0x3a2068` | `int[1000]` |
+| equip_cost | skill_equip_cost | `0x3a2450` | `int[1000]` |
+| bundled_skill_ids | skill_bundled_skill_ids | `0x3a2838` | `int[1000][5]` |
+| min_range_encoded | skill_min_range_encoded | `0x3a3bc0` | `int[1000]` |
+| max_range_encoded | skill_max_range_encoded | `0x3a3fa8` | `int[1000]` |
+| required_weapon_category_mask | skill_required_weapon_category_mask | `0x3a4390` | `int[1000]` |
+| area_target_mode | skill_area_target_mode | `0x3a4778` | `int[1000]` |
+| area_shape_id | skill_area_shape_id | `0x3a4b60` | `int[1000]` |
+| area_cooldown_turns | skill_area_cooldown_turns | `0x3a4f48` | `int[1000]` |
+| attack_element_encoded | skill_attack_element_encoded | `0x3a5330` | `int[1000]` |
+| condition_levels | skill_condition_levels | `0x3a5718` | `int[1000][30]` |
+| combat_stat_deltas | skill_combat_stat_deltas | `0x3acc48` | `int[1000][10]` |
+| critical_rate_bonus | skill_critical_rate_bonus | `0x3af358` | `int[1000]` |
+| resource_deltas | skill_resource_deltas | `0x3af740` | `int[1000][3]` |
+| proc_chance_percent | skill_proc_chance_percent | `0x3b02f8` | `int[1000]` |
+| battle_animation_id | skill_battle_animation_id | `0x3b06e0` | `int[1000]` |
+| combo_partner_character_ids | skill_combo_partner_character_ids | `0x3b0ac8` | `int[1000][2]` |
+| handler_script_id | skill_handler_script_id | `0x3b1298` | `int[1000]` |
+| area_effect_texture_asset_id | skill_area_effect_texture_asset_id | `0x3b1680` | `int[1000]` |
+| area_effect_sound_asset_id | skill_area_effect_sound_asset_id | `0x3b1a68` | `int[1000]` |
+| area_effect_blend_mode | skill_area_effect_blend_mode | `0x3b1e50` | `int[1000]` |
+
+### stage_enemy[30]
+
+The current stage's enemy placements, keyed by placement slot: STINIT2 writes them and FIELD spawns from them.
+
+| field | global | address | type |
+|---|---|---|---|
+| spawn_tile_x | stage_enemy_spawn_tile_x | `0x14095a` | `int[30]` |
+| spawn_tile_y | stage_enemy_spawn_tile_y | `0x140978` | `int[30]` |
+| spawn_object_slot | stage_enemy_spawn_object_slot | `0x140996` | `int[30]` |
+| faction_id | stage_enemy_faction_id | `0x1409b4` | `int[30]` |
+| difficulty_mask | stage_enemy_difficulty_mask | `0x1409d2` | `int[30]` |
+| first_visit_only | stage_enemy_first_visit_only | `0x1409f0` | `int[30]` |
+| random_selection_weight | stage_enemy_random_selection_weight | `0x140a0e` | `int[30]` |
+| unit_id | stage_enemy_unit_id | `0x140a2c` | `int[30]` |
+| min_level | stage_enemy_min_level | `0x140a4a` | `int[30]` |
+| max_level | stage_enemy_max_level | `0x140a68` | `int[30]` |
+| auto_level_scale_divisor | stage_enemy_auto_level_scale_divisor | `0x140a86` | `int[30]` |
+
 ## choice-output
 
 | address | name | conf | source | usage |

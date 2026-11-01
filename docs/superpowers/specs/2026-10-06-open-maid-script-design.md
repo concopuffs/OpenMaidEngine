@@ -247,7 +247,8 @@ table unit[1000] {
   `.field[k]` or, when the array names its columns, `.field.column`.
 - A table name follows the rules of every other declared name. Field names belong to their table.
 - Generated game modules declare the profile's tables from the registry (`[[table]]` entries in
-  `vm-map/globals[-<profile>].toml`). A source module or a script may declare its own.
+  `vm-map/globals[-<profile>].toml`): Himegari declares `unit`, `item` and `skill`, and Kamidori also
+  `stage_enemy`. A source module or a script may declare its own.
 
 **Access.** `t[i].field…` is exactly the field array's element: `unit[i].stats.max_hp` is
 `unit_base_stats[i].max_hp`. With constant indices it is the cell itself (§7.6); otherwise it is a lookup.
@@ -742,9 +743,12 @@ Step 6 names a cell by its position in a declared array as well as by its addres
   - Raw `@op` operands stay raw.
 - **Lookups** print through the table too: `lookup-array-2d LP unit_base_stats id 14 10` reads
   `unit[id].stats.max_hp`.
-- **Record blocks.** A run of two or more consecutive statements prints as one `with` block when every target is a
-  field of the same table at the same constant index and no label falls inside the run. Decompiled EBINIT then
-  reads as one block per unit, with the fields in their original order.
+- **Record blocks.** A run of two or more consecutive statements prints as one `with` block when each one writes,
+  or passes as a call's first argument, a field of the same table at the same constant index, and no label or
+  template use falls inside the run. Only that leading field shortens to `.field`; other operands stay fully
+  written. Decompiled EBINIT then reads as one block per unit, with the fields in their original order: 277
+  Himegari and 368 Kamidori blocks, with no field write left outside one. Himegari's units also copy their
+  per-difficulty AI routine sets as `copy_inline_int_array(.movement_routine_set.easy, [0x3, 0x3, 0x3])`.
 - **Wrong extents mislead without breaking anything.** A misdeclared array size gives misleading names, never
   different bytes. `tools/globals_build.py --lint` reports overlapping arrays.
 
@@ -835,6 +839,7 @@ contracts.
 | 5. Idiomatic level (Himegari prelude) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level idiomatic`: 520/520 byte-identical with `oms/himegari/adv.oms` and 0 abandoned lifts. 9,256 library subs are recognized (the 32 scene-library subs), and 24,297 of 26,667 ADV pages lift to dialogue lines. Lift coverage is 998,654 instructions, **65.6%** of the corpus. Source shrinks from 44.7 MB (core) to 18.8 MB. With `--fixed-point`, idiomatic rebuilds are still 520/520 identical and 506 need no sidecar. The 307 scene sidecars that keep the header handlers' place hold `library` entries. Workspace tests `OmsCoreTests.InstalledHimegari*Idiomatic*`. Kamidori has no prelude yet |
 | 2. Core level, stage C4 (declarations and registry naming) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical with `<profile>.globals` and `<profile>.scripts` applied; `use`, `const`, `global` and `local` declarations, named elements and `run` names covered by `OmsCoreTests` |
 | 2. Core level, constant elements and element names (§7.6, §11.3) | **passed 2026-11-01** | still 520/520 and 732/732 byte-identical at core and idiomatic level and as fixed points, with 0 abandoned lifts; all 297 / 279 scenes stay equivalent after core and idiomatic rebuilds. `OmsCoreTests` covers constant elements compiling to their cells, out-of-range constant indices as errors, cells inside declared arrays decompiling as elements, and lookups with immediate indices staying explicit; `globals_build.py --lint` warns on overlapping arrays |
+| 2. Core level, tables and record blocks (§5.3, §11.3) | **passed 2026-11-01** | still 520/520 and 732/732 byte-identical at core and idiomatic level and as fixed points, with 0 abandoned lifts; all 297 / 279 scenes stay equivalent after core and idiomatic rebuilds. The registries declare `unit`, `item` and `skill`, plus Kamidori's `stage_enemy`. Decompiled EBINIT prints one `with unit[k] { … }` block per unit (277 / 368) and leaves no field write outside one. `OmsCoreTests` covers table access, `with` blocks (nested, around a label, inside a template), source-module and registry tables, misuse errors and decompiled record blocks. The table-based Kamidori `OMSAUTO.oms` compiles byte-identically to the native-tested BIN |
 | 2. Core level, stage C3 (`sub`, `coroutine`, bound parameters) | **passed 2026-10-07** | still 520/520 and 732/732 byte-identical; 10,914 / 12,287 subs and 614 / 644 coroutines recovered; the compiler's falls-into, implicit-return, coroutine-ending and code-reference-kind checks are covered by `OmsCoreTests`; warnings (§8.2, including recursion with bound parameters) await a warning channel |
 | 2. Core level, stage C2 (expressions, `for`, `while`) | **passed 2026-10-07** | `Age.Cli oms-roundtrip --level core`: still 520/520 and 732/732 byte-identical, with 331,075 / 330,708 instructions folded into expressions; temporary overrides in 6,548 / 8,332 statements (2.9% / 4.4% of folded statements); `Age.Cli oms-temps` ranks the residue |
 

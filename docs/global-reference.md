@@ -1,7 +1,115 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals.toml by tools/globals_build.py --build -->
 # Global Variable Reference — himegari (generated)
 
-3759 globals (448 curated, 3311 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+3760 globals (454 curated, 3306 auto shape-inferred). Source of truth: `vm-map/globals.toml`.
+
+## Tables
+
+Open Maid Script tables (design spec §5.3): `table[record].field` is the field's array element.
+
+### unit[1000]
+
+EBINIT unit records keyed by unit id, with the CNINIT/CVINIT voice maps and the per-unit story flags. `unit[id].stats.max_hp` is `unit_base_stats[id].max_hp`.
+
+| field | global | address | type |
+|---|---|---|---|
+| full_name | unit_full_names | `GS 0x84a` | `string[1000]` |
+| display_name | unit_display_names | `GS 0xc32` | `string[1000]` |
+| initial_class_title | unit_initial_class_titles | `GS 0x101a` | `string[1000]` |
+| trait_notes | unit_trait_notes | `GS 0x1402` | `string[1000][2]` |
+| story_display_name | unit_story_display_names | `GS 0x315` | `string[1000]` |
+| story_speaker_seen_flag | unit_story_speaker_seen_flags | `0x56223` | `int[1000]` |
+| voice_family_unit_id | unit_voice_family_unit_ids | `0x624bf` | `int[1000]` |
+| voice_suppression_flag_id | unit_voice_suppression_flag_ids | `0x628a7` | `int[1000]` |
+| voice | unit_voice_asset_ids | `0x66716` | `int[1000][30]` |
+| status_art_asset_ids | unit_status_art_asset_ids | `0x6dc46` | `int[1000][3]` |
+| map_sprite_asset_ids | unit_map_sprite_asset_ids | `0x6e7fe` | `int[1000][5]` |
+| battle_sprite_asset_id | unit_battle_sprite_asset_id | `0x6fb86` | `int[1000]` |
+| battle_portrait_asset_ids | unit_battle_portrait_asset_ids | `0x6ff6e` | `int[1000][2]` |
+| battle_cutin_asset_ids | unit_battle_cutin_asset_ids | `0x7073e` | `int[1000][2]` |
+| sort_key | unit_sort_key | `0x70f0e` | `int[1000]` |
+| enemy_info_listed | unit_enemy_info_listed | `0x712f6` | `int[1000]` |
+| icon_id | unit_icon_id | `0x716de` | `int[1000]` |
+| species_category | unit_species_category | `0x71ac6` | `int[1000]` |
+| sex_category | unit_sex_category | `0x71eae` | `int[1000]` |
+| boss_class | unit_boss_class | `0x72296` | `int[1000]` |
+| canonical_id | unit_canonical_id | `0x7267e` | `int[1000]` |
+| capturable | unit_capturable | `0x72a66` | `int[1000]` |
+| roster_state_flag_base_index | unit_roster_state_flag_base_index | `0x72e4e` | `int[1000]` |
+| sally_action_unlock_requirements | unit_sally_action_unlock_requirements | `0x73236` | `int[1000][4]` |
+| sally_event_ids | unit_sally_event_ids | `0x741d6` | `int[1000][8]` |
+| roster_variant_ids | unit_roster_variant_ids | `0x76116` | `int[1000][2]` |
+| sex_magic_bonus_item_id | unit_sex_magic_bonus_item_id | `0x768e6` | `int[1000]` |
+| essence_yield | unit_essence_yield | `0x76cce` | `int[1000]` |
+| summon_unlock_flag_index | unit_summon_unlock_flag_index | `0x770b6` | `int[1000]` |
+| summon_knowledge_threshold | unit_summon_knowledge_threshold | `0x7749e` | `int[1000]` |
+| summon_point_cost | unit_summon_point_cost | `0x77886` | `int[1000]` |
+| defense_element | unit_defense_element | `0x77c6e` | `int[1000]` |
+| default_attack_item_id | unit_default_attack_item_id | `0x78056` | `int[1000]` |
+| power_tier | unit_power_tier | `0x7843e` | `int[1000]` |
+| weapon_item_category | unit_weapon_item_category | `0x78826` | `int[1000]` |
+| starting_equipment_item_id | unit_starting_equipment_item_id | `0x78c0e` | `int[1000]` |
+| starting_skill | unit_starting_skill_ids | `0x78ff6` | `int[1000][4]` |
+| deployment_cost_base | unit_deployment_cost_base | `0x79f96` | `int[1000]` |
+| starting_level | unit_starting_level | `0x7a37e` | `int[1000]` |
+| level_cap | unit_level_cap | `0x7a766` | `int[1000]` |
+| auto_level_scale_divisor | unit_auto_level_scale_divisor | `0x7ab4e` | `int[1000]` |
+| stats | unit_base_stats | `0x7af36` | `int[1000][14]` |
+| stat_growth | unit_stat_growth_rates | `0x7e5e6` | `int[1000][14]` |
+| movement_routine_set | unit_movement_routine_set_ids | `0x81c96` | `int[1000][3]` |
+| battle_routine_set | unit_battle_routine_set_ids | `0x8284e` | `int[1000][3]` |
+| experience_reward | unit_experience_reward | `0x83406` | `int[1000]` |
+| drop_item | unit_drop_item_ids | `0x837ee` | `int[1000][8]` |
+| drop_chance | unit_drop_chance_percent | `0x8572e` | `int[1000][8]` |
+| large_battle_sprite | unit_large_battle_sprite | `0x8766e` | `int[1000]` |
+
+### item[1000]
+
+ITINIT item records keyed by item id.
+
+| field | global | address | type |
+|---|---|---|---|
+| sort_key | item_sort_key | `0x8c879` | `int[1000]` |
+| random_tier | item_random_tier | `0x8cc61` | `int[1000]` |
+| category | item_category | `0x8d049` | `int[1000]` |
+| min_range | item_min_range | `0x8d431` | `int[1000]` |
+| max_range | item_max_range | `0x8d819` | `int[1000]` |
+| icon_id | item_icon_id | `0x8dc01` | `int[1000]` |
+| attack_element | item_attack_element | `0x8dfe9` | `int[1000]` |
+| defense_element | item_defense_element | `0x8e3d1` | `int[1000]` |
+| character_whitelist | item_character_whitelist | `0x8e7b9` | `int[1000][5]` |
+| sex_restriction_mask | item_sex_restriction_mask | `0x8ff29` | `int[1000]` |
+| status_delta_levels | item_status_delta_levels | `0x906f9` | `int[1000][30]` |
+| equipped_status_levels | item_equipped_status_levels | `0x97c29` | `int[1000][30]` |
+| granted_skill_id | item_granted_skill_id | `0x9f159` | `int[1000]` |
+| stat_modifiers | item_stat_modifiers | `0x9f541` | `int[1000][14]` |
+| tuning_curve_ids | item_tuning_curve_ids | `0xa2bf1` | `int[1000][10]` |
+| resource_recovery_amounts | item_resource_recovery_amounts | `0xa5301` | `int[1000][3]` |
+| essence_recovery_amount | item_essence_recovery_amount | `0xa62a1` | `int[1000]` |
+| weapon_class | item_weapon_class | `0xa6689` | `int[1000]` |
+| handler_script_id | item_handler_script_id | `0xa6a71` | `int[1000]` |
+
+### skill[300]
+
+SKINIT skill records keyed by skill id, with the per-skill acquisition state.
+
+| field | global | address | type |
+|---|---|---|---|
+| acquired_flag | skill_acquired_flags | `0x65ce` | `int[300]` |
+| info_revealed_flag | skill_info_revealed_flags | `0x5660b` | `int[300]` |
+| sort_key | skill_sort_key | `0xa6e5a` | `int[300]` |
+| category | skill_category | `0xa6f86` | `int[300]` |
+| change_catalog_eligible | skill_change_catalog_eligible | `0xa70b2` | `int[300]` |
+| min_range_encoded | skill_min_range_encoded | `0xa71de` | `int[300]` |
+| max_range_encoded | skill_max_range_encoded | `0xa730a` | `int[300]` |
+| attack_element | skill_attack_element | `0xa7436` | `int[300]` |
+| status_levels | skill_status_levels | `0xa7562` | `int[300][30]` |
+| icon_id | skill_icon_id | `0xa988a` | `int[300]` |
+| combat_stat_deltas | skill_combat_stat_deltas | `0xa99b6` | `int[300][10]` |
+| resource_deltas | skill_resource_deltas | `0xaa56e` | `int[300][3]` |
+| proc_chance_percent | skill_proc_chance_percent | `0xaa8f2` | `int[300]` |
+| battle_animation_id | skill_battle_animation_id | `0xaaa1e` | `int[300]` |
+| handler_script_id | skill_handler_script_id | `0xaab4a` | `int[300]` |
 
 ## choice-output
 
@@ -152,6 +260,8 @@
 | `0x7ab4e` | unit_auto_level_scale_divisor | high | investigation | Default level-scaling divisor for 192 enemy definitions. SETEN uses a scenario override when supplied, otherwise divides the difference between scenario level and unit_starting_level by this value, adds the result to the runtime level, and clamps it to unit_level_cap. |
 | `0x7af36` | unit_base_stats | high | investigation | EBINIT fourteen-column base-stat record copied wholesale into each runtime unit by SETEN, UNITECH, and SALLY. Its layout matches item_stat_modifiers: columns 2 physical attack, 3 physical defense, 4 magic attack, 5 magic defense, 6 speed, 7 luck, 10 movement, 11 max HP, 12 max SP, and 13 max FS; accuracy/evasion and other unpopulated columns begin at zero. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
 | `0x7e5e6` | unit_stat_growth_rates | high | investigation | EBINIT per-level growth record with the same fourteen-column layout as unit_base_stats. ADDEXP adds each rate to a fractional accumulator, divides by 100 to award whole stat points, and retains the remainder; SETEN and UNITECH apply the same rates when materializing units above their starting level. Columns: 0=accuracy, 1=evasion, 2=physical_attack, 3=physical_defense, 4=magic_attack, 5=magic_defense, 6=speed, 7=luck, 8=critical_chance, 9=capture_power, 10=movement, 11=max_hp, 12=max_sp, 13=max_fs. |
+| `0x81c96` | unit_movement_routine_set_ids | high | investigation | EBINIT default movement-AI routine set per unit for easy/normal/hard, written as one three-cell inline-array copy per unit. SETEN@0x0017c copies the row into entity_movement_routine_set_ids unless the stage enemy's own stage_enemy_movement_routine_set_ids row is populated. Columns: 0=easy, 1=normal, 2=hard. |
+| `0x8284e` | unit_battle_routine_set_ids | high | investigation | EBINIT default battle-AI routine set per unit for easy/normal/hard, written as one three-cell inline-array copy per unit. SETEN@0x001c8 copies the row into entity_battle_routine_set_ids unless the stage enemy's own stage_enemy_battle_routine_set_ids row is populated. Columns: 0=easy, 1=normal, 2=hard. |
 | `0x83406` | unit_experience_reward | high | investigation | Per-opponent base experience progress. After each battle exchange, BTL awards a surviving faction-1 participant against the opposing unit definition. If the opponent survives, enemy-minus-player level differences >=3/2/1/<=0 select 40/30/20/10 percent. If the opponent is defeated, differences >=3/2/1/0/-1/-2/<=-3 select 250/200/150/100/75/40/20 percent. Integer division truncates. The result enters ADDEXP, whose normally cleared modifier bits can suppress, double, or multiply it by ten. A cell with no writer in the ordered INIT sequence remains zero; append unit 900 is such a cell and therefore awards zero at every bracket. |
 | `0x837ee` | unit_drop_item_ids | high | investigation | Enemy drop table. Values cross-resolve to ITINIT items (for example treasure puttetto drops bronze/silver/gold coins and planet stones); BTL rolls and awards the rows, while INFOEN displays the possible drops. Columns: 0=drop_1_item_id, 1=drop_2_item_id, 2=drop_3_item_id, 3=drop_4_item_id, 4=drop_5_item_id, 5=drop_6_item_id, 6=drop_7_item_id, 7=drop_8_item_id. |
 | `0x8572e` | unit_drop_chance_percent | high | investigation | Per-slot drop chance paired with unit_drop_item_ids. BTL draws random-modulo 100 for each populated slot and awards the item when the result is below this value; only columns 0..4 are populated in shipped EBINIT. Columns: 0=drop_1_percent, 1=drop_2_percent, 2=drop_3_percent, 3=drop_4_percent, 4=drop_5_percent, 5=drop_6_percent, 6=drop_7_percent, 7=drop_8_percent. |
@@ -512,6 +622,10 @@
 | `GS 0x315` | unit_story_display_names | high | investigation | CNINIT's sparse unit-id keyed story-name table. Scene scripts and HISTORY draw the selected speaker's value, DEBUGADV uses it for its scripted speaker previews, and INPUTNAME rejects a player-entered familiar name that collides with any populated row. The table intentionally leaves Lily's form ids 2..4 empty. |
 | `GS 0x7db` | modal_message_lines | high | investigation | Shared ten-string modal buffer. Producers append messages or menu options at modal_message_line_count; MES measures and draws each string, and SBUNKI reuses the same entries for an interactive selection list. |
 | `GS 0x7e5` | modal_annotation_texts | high | investigation | Optional small-font annotations rendered by MES and SBUNKI after the primary modal lines. No direct shipped producer was found; the paired count and placement arrays expose a reserved/extensible annotation ABI. |
+| `GS 0x84a` | unit_full_names | high | investigation | EBINIT writes one per unit record. INFOEN@0x00f26 draws it in the enemy-information list once enemy_encyclopedia_revealed_flags marks the unit, and draws question marks otherwise. |
+| `GS 0xc32` | unit_display_names | high | investigation | EBINIT writes one per unit record. BTL@0x00fcf/0x0100e/0x0172e, DRAWCHP@0x009a7, DRAWENP@0x008c5/0x00f41, EXILE@0x009db and INFOCH@0x0102e draw it. |
+| `GS 0x101a` | unit_initial_class_titles | high | investigation | EBINIT writes one per unit record. SETEN@0x0001f and SETCH@0x0003a copy it into the battle slot's title GS[0x2e2 + slot]; ADDEXP@0x00668 does the same outside the party (party units take unit_class_titles 0x27e), and INFOCH@0x01056 and INFOEN@0x01322 draw it. |
+| `GS 0x1402` | unit_trait_notes | med | investigation | EBINIT writes 194 cells. Unit 200 writes 0x1592/0x1593, which fixes the base and the two-cell row; the item-name table at 0x1bd2 starts exactly 2000 cells later. No shipped script reads it. Columns: 0=note_1, 1=note_2. |
 | `GS 0x25fa` | condition_level_names | high | investigation | ILINIT's row-major five-name matrix. Runtime condition UI selects the row by condition id and the column by current level minus one; id 1 has only the unnumbered instant-death label, id 12 and ids 15..29 are reserved. Columns: 0=level_1, 1=level_2, 2=level_3, 3=level_4, 4=level_5. |
 | `GS 0x2690` | attack_element_names | high | investigation | AFINIT attack-side affinity vocabulary. DRAWTIP indexes ids 1..8 from ITINIT, while INFOAF displays those same eight ordinary attack elements above attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 11=resistance_1, 12=resistance_2, 13=resistance_3, 14=resistance_4, 15=resistance_5, 16=resistance_6, 17=resistance_7. |
 | `GS 0x26a4` | defense_element_names | high | investigation | AFINIT defense-side affinity vocabulary. DRAWENP and DRAWTIP index it with unit/item defense element ids; the same id selects a row of attack_element_effectiveness_percent. Columns: 1=physical, 2=universal, 3=fire, 4=ice, 5=lightning, 6=earth, 7=holy, 8=dark, 9=divinity, 10=demon, 11=spirit, 12=undead. |
@@ -3753,9 +3867,6 @@
 | `0x15261c` | battle_hit_result | high | investigation | CALCDMG initializes this to miss, changes it to hit after the accuracy gate, and then to critical after the critical-chance gate. BTL uses the same result to choose presentation, cut-ins, and critical voice columns; -1 is written only by a synthetic pre-battle path. |
 | `0x15261d` | battle_hp_delta | high | investigation | CALCDMG's signed HP result. BTL subtracts it from the target's current HP, so positive values deal damage and negative values heal; zero and result state gate damage reactions and defeat handling. |
 | `0x15261e` | battle_actor_hp_recovery | high | investigation | CALCDMG's actor-side HP recovery output. Absorb (SKINIT skill 40) contributes half of positive battle_hp_delta with a minimum of one, and the target's HP-absorption condition can add its level-scaled amount capped at the damage dealt. BTL adds the result to the actor's current HP, renders the green recovery number, and clamps the resource through the ordinary post-battle path. |
-| `GS 0x84a` | — | high | auto-shape | unit-name-table |
-| `GS 0xc32` | — | high | auto-shape | unit-desc-table |
-| `GS 0x101a` | — | high | auto-shape | unit-desc1-table |
 | `0x14ca` | — | high | auto-shape | unit-desc2-table |
 | `0x14cb` | — | high | auto-shape | unit-desc3-table |
 | `GS 0x1bd2` | — | high | auto-shape | item-name-table |
@@ -3773,8 +3884,6 @@
 | `0x57356` | — | med | auto-shape | current-entity-index? |
 | `0x62436` | — | low | auto-shape | index/counter? |
 | `0x62ccb` | — | low | auto-shape | index/counter? |
-| `0x81c96` | — | med | auto-shape | record-table[stride 3] |
-| `0x8284e` | — | med | auto-shape | record-table[stride 3] |
 | `0xcc9f0` | — | low | auto-shape | index/counter? |
 | `0xccbdc` | — | med | auto-shape | record-table[stride 14] |
 | `0xccc33` | — | med | auto-shape | record-table[stride 3] |

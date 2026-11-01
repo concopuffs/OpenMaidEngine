@@ -57,6 +57,11 @@ All commands run from `age-reimpl/` with `py -3.11 -X utf8` and `--profile kamid
    boot order above and records each script's global delta. This is the ground truth that static extraction
    is checked against; `init_image.merged(TABLE)` gives a table's final cells.
 7. `global_map.py` then `globals_build.py --build` → auto shape map merged under `globals-kamidori.toml`.
+8. The registry's `[[table]]` entries (`unit`, `item`, `skill`, `stage_enemy`) group these parallel arrays as
+   Open Maid Script tables ([design spec](superpowers/specs/2026-10-06-open-maid-script-design.md) §5.3).
+   `Age.Cli oms-decompile --profile kamidori --script EBINIT.BIN` then prints one
+   `with unit[0x2f9] { .stats.max_hp = 0xc … }` block per unit, and a mod edits a unit the same way
+   (`oms/examples/kamidori-gate6/OMSAUTO.oms`).
 
 ## Table inventory
 
