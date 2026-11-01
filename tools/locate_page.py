@@ -4,8 +4,9 @@ Usage:
   py -3.11 -X utf8 tools/locate_page.py SC0000 14
   py -3.11 -X utf8 tools/locate_page.py SC0000 14 --map path/to/page-map.jsonl --context 10
 
-The Godot runtime writes build/page-map-<SCENE>.jsonl at each wait-for-input. Page numbers are
-run-relative conveniences; wait_script + wait_offset is the stable bytecode coordinate.
+The Godot editor runtime writes build/page-map-<SCENE>.jsonl (the shared build directory, for every
+profile) at each wait-for-input. Page numbers are run-relative conveniences; wait_script + wait_offset is
+the stable bytecode coordinate.
 """
 from __future__ import annotations
 
@@ -30,6 +31,11 @@ def load_records(path: Path) -> list[dict]:
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{path}:{number}: invalid JSON: {exc}") from exc
     return records
+
+
+def default_map_path(scene: str) -> Path:
+    """Where a Godot editor run writes the scene's map: the shared build directory, not the profile's."""
+    return paths.SHARED_BUILD / f"page-map-{scene.upper().removesuffix('.BIN')}.jsonl"
 
 
 def find_page(records: list[dict], scene: str, page: int) -> dict | None:
@@ -99,7 +105,7 @@ def main() -> int:
     parser.add_argument("--context", type=int, default=8, help="instructions on either side of the wait (default: 8)")
     args = parser.parse_args()
     scene = args.scene.upper().removesuffix(".BIN")
-    map_path = args.map_path or paths.BUILD / f"page-map-{scene}.jsonl"
+    map_path = args.map_path or default_map_path(scene)
     if not map_path.is_file():
         parser.error(f"page map not found: {map_path} (run the Godot scene to the desired page first)")
     if args.context < 0:

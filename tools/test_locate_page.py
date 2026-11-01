@@ -4,7 +4,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from locate_page import context_window, find_page, load_records
+import paths
+from locate_page import context_window, default_map_path, find_page, load_records
 
 FAILS = []
 
@@ -40,9 +41,17 @@ def test_context_window():
     check(raised, "non-instruction target is rejected")
 
 
+def test_default_map_path():
+    path = default_map_path("sc0000.bin")
+    check(path == paths.SHARED_BUILD / "page-map-SC0000.jsonl",
+          "default map is the shared build directory, where Godot editor runs write it")
+    check(paths.SHARED_BUILD != paths.GAME_BUILD, "the shared build directory is not the profile build directory")
+
+
 def main():
     test_load_and_find()
     test_context_window()
+    test_default_map_path()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

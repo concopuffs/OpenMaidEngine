@@ -16,6 +16,7 @@
 *.gd text eol=lf
 *.godot text eol=lf
 *.h text eol=lf
+*.js text eol=lf
 *.json text eol=lf
 *.jsonl text eol=lf
 *.md text eol=lf
@@ -26,6 +27,7 @@
 *.py text eol=lf
 *.sh text eol=lf
 *.sln text eol=lf
+*.steps text eol=lf
 *.toml text eol=lf
 *.tscn text eol=lf
 *.tres text eol=lf
