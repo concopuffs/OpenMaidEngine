@@ -10,7 +10,8 @@ public sealed partial class GodotAdvHost
     private (AudioPayload Audio, int PlaybackVariant, bool Muted)? _queuedSkippedVoice;
     private readonly object _scheduledVoiceLock = new();
     private (AudioPayload Audio, int PlaybackVariant, uint DelayMs, uint? StartMs)? _scheduledVoice;
-    private int _statementBlockActive;   // ops 0x1f4/0x1f5: delayed SFX/voice starts wait for the close
+    private int _statementBlockActive;   // ops 0x1f4/0x1f5: delayed starts and the tick's own render wait for the close
+    private bool _presentationWithheldByStatementBlock;   // main thread only (ConsumePresentationReasons)
 
     public bool StatementBlockActive => System.Threading.Volatile.Read(ref _statementBlockActive) != 0;
 

@@ -4903,16 +4903,20 @@ increments `statement_block_depth` (`ctx+0x5f300`).
 unless `script_launch_dispatch_active` is set, tail-calls `script_launch_queue_dispatch_next@0x40f6e0`. That function
 itself returns immediately while a block is open.
 
-While a block is open, `engine_main_tick_with_exception_policy@0x411840` withholds presentation and every deferred
-start. Run-state bit `0x400` (parked on an animation/surface transition) is the only override. The withheld
-services are:
+While a block is open, `engine_main_tick_with_exception_policy@0x411840` skips five services. The first three
+still run when run-state bit `0x400` is set (parked on an animation/surface transition):
 
-- `sfx_tick_delayed_starts@0x4827e0` on the sound facade at `ctx+0x14024`
-- `voice_tick_delayed_playback@0x4884d0`
-- pending per-surface movie starts (`movie_start_pending_after_sync_delay@0x4633b0`, over `ctx+0x52bd4[0..999]`)
-- `gfx_render_frame`, including the forced-redraw path at `ctx+0x51b6c`
-- run-state `0x1000`/`0x800` wait progression
-- the run-state `0x2000` modal service at `ctx+0x52bd0`
+- `sfx_tick_delayed_starts@0x4827e0` on the sound facade at `ctx+0x14024`, and
+  `voice_tick_delayed_playback@0x4884d0` (check at `0x411a42`)
+- pending per-surface movie starts (`movie_start_pending_after_sync_delay@0x4633b0`, over `ctx+0x52bd4[0..999]`;
+  `0x411b05`)
+- the tick's own `gfx_render_frame`, including the forced-redraw path at `ctx+0x51b6c` (`0x411cb3`)
+- the run-state `0x1000` timer (`0x411e9d`). Op `0xd8` arms it, and on expiry it sets `0x800` and enqueues script
+  `-ctx[0x5f718]` with `script_launch_queue_enqueue@0x40f820`. Op `0xd8` is unused in Himegari.
+- the run-state `0x2000` modal service at `ctx+0x52bd0`, i.e. the scene movie of op `0x236` (`0x412027`)
+
+The block does not touch sleep (`0xc8`), input waits or the explicit present. `gfx_op_0x20c_present_frame@0x4174a0`
+skips only its frame-timer baseline update while a block is open, then renders as usual.
 
 A block therefore makes one compiled command atomic. Nothing it draws is presented, and none of its audio, movie or
 queued-script starts take effect, until the outermost block closes.
@@ -4951,11 +4955,17 @@ historical labels were structural guesses:
 id/arg. The template runs it only while `G[0x2e47]` is nonzero, which is true at almost every Himegari line, so
 advancing cuts a voice that is still playing.
 
-**Open question.** Not every block is a template part. Some scripts open one block at their entry and keep it
-open across message calls (`MES.BIN`), timed-callback sequences and `sleep` / `present-frame` loops: ADDEXP from
-`0x0` past `0x725`, and UNITECH `0x0..0x511` in a live port timeline. The tick withholding above would freeze
-those, so some path (run-state `0x400`, explicit `present-frame`, or the message service) must bypass it. That
-path is not yet traced.
+**Blocks that span waits (resolved 2026-11-03).** Not every block is a template part. Some scripts keep one
+block open across waits:
+
+- **ADDEXP** wraps its whole body (`0x0..0x7da`), including a `MES.BIN` call and `sleep` / `present-frame` loops.
+- **MES.BIN** draws its message, calls `present-frame`, then polls input in a `sleep 1` / `present-frame` loop.
+- **SC0000's ADV control-strip buttons** (Auto `0x203`, Skip `0x25d`, read-skip `0x2ab`, `0x303`) redraw the strip
+  and `sleep 0x64` inside a block, with no present.
+
+These work because a block withholds only the tick's own render: sleeps and input waits still run, and explicit
+`present-frame` still draws. So inside a block, AGE shows a frame only on `present-frame` or while parked at
+run-state `0x400`. A strip button's new icon appears when the block closes, after its 100 ms sleep.
 
 **Port status (2026-11-03).**
 
@@ -4970,11 +4980,14 @@ path is not yet traced.
   native fades back (run-state `0x200`).
 - **Statement blocks.** `VirtualMachine` tracks the flag and depth and reports the outermost open and close to
   `IAudioHost.SetStatementBlockActive`. Godot withholds delayed voice service (`0x2c0`) and delayed SFX starts
-  (`0x2bf`) until the close. Presentation, waits and launches are not withheld:
-  - the port presents only at explicit service boundaries, and each VM burst is already atomic
-    (`ScriptPresentationBarrier`);
-  - launches run synchronously;
-  - the open question above leaves render withholding unsafe to model.
+  (`0x2bf`) until the close.
+  - **Render withholding.** `ConsumePresentationReasons` reports nothing while a block is open, unless an explicit
+    present (`HostRequest`) is pending or a transition is active (`IsTransitionWaiting` / screen transition, the
+    `0x400` equivalent). Retained changes stay pending for the next present.
+  - **Live check.** The timeline event `statement-block-presentation` brackets each withheld stretch. Each Auto
+    click on SC0000 withholds about 90 ms at `0x21b`. The save/load scenario passes.
+  - **Not modelled.** Movie starts and the `0x2000` modal service (no block contains op `0x236` on the observed
+    paths); the unused `0xd8` timer. Script launches run synchronously in the port.
 - **`0x21b`.** The value is stored, and op `0x247` reads it back. The port has no draw-mode-1 tick render gate.
 
 ### VM value, array and call semantics relevant to compilation (2026-10-06)

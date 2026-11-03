@@ -400,7 +400,7 @@ note = "per-frame return stack (companion)"
 offset = 0x5f2fc
 name = "statement_block_active"
 type = "int"
-note = "set by the outermost op 0x1f4 and cleared by its matching op 0x1f5; while set the outer tick defers delayed SFX/voice/movie service and forced redraw (unless run_state_flags bit 0x400) and script_launch_queue_dispatch_next refuses to dispatch"
+note = "set by the outermost op 0x1f4 and cleared by its matching op 0x1f5; while set the outer tick defers delayed SFX/voice/movie service and its own gfx_render_frame (unless run_state_flags bit 0x400) plus the 0x1000 timer and 0x2000 modal service; explicit op 0x20c still renders and script_launch_queue_dispatch_next refuses to dispatch"
 [[field]]
 offset = 0x5f300
 name = "statement_block_depth"

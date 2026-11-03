@@ -85,7 +85,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x55180` | `numeric_glyph_styles` | `int` | base of ten 20-byte decimal-glyph atlas records used by ops 0x13a/0x23b; opcode validation also admits one out-of-range record |
 | `0x55248` | `ret_stack_a` | `void*` | per-frame return stack (op 0x8f call pushes) |
 | `0x552e8` | `ret_stack_b` | `void*` | per-frame return stack (companion) |
-| `0x5f2fc` | `statement_block_active` | `int` | set by the outermost op 0x1f4 and cleared by its matching op 0x1f5; while set the outer tick defers delayed SFX/voice/movie service and forced redraw (unless run_state_flags bit 0x400) and script_launch_queue_dispatch_next refuses to dispatch |
+| `0x5f2fc` | `statement_block_active` | `int` | set by the outermost op 0x1f4 and cleared by its matching op 0x1f5; while set the outer tick defers delayed SFX/voice/movie service and its own gfx_render_frame (unless run_state_flags bit 0x400) plus the 0x1000 timer and 0x2000 modal service; explicit op 0x20c still renders and script_launch_queue_dispatch_next refuses to dispatch |
 | `0x5f300` | `statement_block_depth` | `int` | nested op 0x1f4 count beyond the outermost block; op 0x1f5 decrements it before clearing statement_block_active |
 | `0x5f304` | `sleep_timer` | `int` | sleep timer object (op 0xc8; +8 active, +0x14 start-ms, +0x18 duration) |
 | `0x5f3ac` | `timed_callback_timer` | `int` | elapsed timer object armed by op 0xd5 and sampled by the timed callback scheduler |

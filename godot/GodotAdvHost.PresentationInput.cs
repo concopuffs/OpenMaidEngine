@@ -768,6 +768,19 @@ public sealed partial class GodotAdvHost
         UpdateRetainedWaitIndicator(gfx);
         bool screenTransitionActive;
         lock (_screenTransitionLock) screenTransitionActive = _screenTransition != null;
+        // Native engine_main_tick skips its own gfx_render_frame while a statement block (op 0x1f4) is open,
+        // unless run-state 0x400 parks the interpreter on a transition. Explicit present-frame (op 0x20c)
+        // still renders. Scripts that keep a block open across a wait (ADDEXP, MES) call present-frame
+        // themselves. Leave the retained-state reasons pending so the next explicit present publishes them.
+        bool withheld = StatementBlockActive
+            && System.Threading.Volatile.Read(ref _presentRequested) == 0
+            && !screenTransitionActive && !IsTransitionWaiting;
+        if (withheld != _presentationWithheldByStatementBlock)
+        {
+            _presentationWithheldByStatementBlock = withheld;
+            _timeline?.Event("statement-block-presentation", new() { ["withheld"] = withheld });
+        }
+        if (withheld) return HostPresentationReason.None;
         var reasons = HostPresentationReason.None;
         if (System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0)
         {

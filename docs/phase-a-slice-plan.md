@@ -4366,3 +4366,16 @@ Five ops the port stepped as no-ops now follow the native decodes (`engine-re.md
     originals.
   - New tests: `ProfileStartupRecoveryTests`. 913 of 915 engine tests pass; the two failures predate this work.
 
+### Statement blocks withhold the port's tick presentation (2026-11-03)
+
+**How AGE keeps blocks open across waits.**
+
+- **Native.** A block makes the tick skip its own `gfx_render_frame`; `0x400` (transition) still overrides.
+  Sleep and input waits run, and `present-frame` (`0x20c`) always renders. Scripts that hold a block across waits
+  (ADDEXP, MES.BIN, SC0000's strip buttons) present explicitly or show their result after the close.
+- **Port.** `ConsumePresentationReasons` returns no reason while a block is open, unless an explicit present is
+  pending or a transition is active. Pending retained changes are kept for the next present.
+- **Validation.** Each Auto strip click on SC0000 withholds about 90 ms at `0x21b` (timeline event
+  `statement-block-presentation`); the strip and page render normally afterwards.
+- **Not modelled.** Movie starts, the `0x2000` modal service and the unused `0xd8` timer.
+- **References.** engine-re "Statement blocks"; Ghidra comments at the five gates and `0x4174bb`.
