@@ -74,6 +74,11 @@ public sealed partial class VirtualMachine
     private long _autoMessageTime0Ms = 500;
     private long _autoMessageTime1Ms = 2000;
     private bool _autoVoicePending;
+    private const int VoiceMuteRequested = 0x1, VoiceMutePromoted = 0x10000;
+    private int _voiceMuteNextFlags;          // native voice_mute_next_flags (ctx+0x1493c), ops 0x1d5/0xc4/0x1bd/0x1bc
+    private bool _statementBlockActive;       // native statement_block_active (ctx+0x5f2fc), ops 0x1f4/0x1f5
+    private int _statementBlockDepth;         // native statement_block_depth (ctx+0x5f300): nested opens
+    private bool _tickPresentationEnabled;    // native tick_presentation_enabled (ctx+0x99294), ops 0x21b/0x247
     private bool _initialRootRun = true;
     private volatile bool _stopRequested;
     private bool _sharedProfileShutdownHandled;
@@ -832,6 +837,9 @@ public sealed partial class VirtualMachine
         }
         _autoMessageEnabled = false;
         _autoVoicePending = false;
+        _voiceMuteNextFlags = 0;
+        _statementBlockActive = false;   // a root reload abandons every open block with its frames
+        _statementBlockDepth = 0;
         _messageSkipEnabled = false;
         _messageSkipServiceActive = false;
         _advReadSkipState = false;
@@ -1689,12 +1697,27 @@ public sealed partial class VirtualMachine
                 return StepAnimation(label, a, pc);
             case "play-movie-mask-transition":
                 return StepMovie(label, ins, pc);
-            case "u004156C0": // 0x1bf call-end marker
-            case "u00415700": // 0x1d5 conditional-body marker
-            case "u004160D0": // 0x1f4 statement-begin marker
-            case "u00416120": // 0x1f5 statement-end marker
-            case "u004213E0": // 0x21b tentative line/statement id marker
+            case "u004156C0": // 0x1bf arm-voice-duck-release
+            case "arm-voice-duck-release":
+            case "u00415700": // 0x1d5 mute-next-voice
+            case "mute-next-voice":
+                return StepAudio(label, a, pc);
+            case "u004160D0": // 0x1f4 stmt-begin: the outermost open withholds delayed audio starts
+            case "stmt-begin":
+                if (_statementBlockActive) _statementBlockDepth++;
+                else { _statementBlockActive = true; _host.SetStatementBlockActive(true); }
                 return pc + 1;
+            case "u00416120": // 0x1f5 stmt-end: the outermost close releases them
+            case "stmt-end":
+                if (_statementBlockDepth > 0) _statementBlockDepth--;
+                else if (_statementBlockActive) { _statementBlockActive = false; _host.SetStatementBlockActive(false); }
+                return pc + 1;
+            case "u004213E0": // 0x21b set-tick-presentation
+            case "set-tick-presentation":
+                _tickPresentationEnabled = Read(a[0]) != 0; return pc + 1;
+            case "u00416390": // 0x247 query-tick-presentation
+            case "query-tick-presentation":
+                Write(a[0], _tickPresentationEnabled ? 1 : 0); return pc + 1;
             case "queue-surface-alpha-transition": // 0x223: target surface crossfade over two object ranges
             case "u00422ED0": // shared opcode 0x24f upstream ABI label
             case "queue-patterned-surface-transition": // shared 0x24f type-2 retained range transition

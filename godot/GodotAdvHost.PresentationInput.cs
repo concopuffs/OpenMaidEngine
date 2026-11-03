@@ -367,7 +367,7 @@ public sealed partial class GodotAdvHost
     {
         bool effective;
         bool changed;
-        (AudioPayload Audio, int PlaybackVariant)? queued = null;
+        (AudioPayload Audio, int PlaybackVariant, bool Muted)? queued = null;
         lock (_messageSkipLock)
         {
             if (physical) _physicalMessageSkipActive = active;
@@ -395,7 +395,7 @@ public sealed partial class GodotAdvHost
             _inputCallbackSignal.Set();
             return;
         }
-        if (queued != null) DispatchVoice(queued.Value.Audio, queued.Value.PlaybackVariant);
+        if (queued != null) DispatchVoice(queued.Value.Audio, queued.Value.PlaybackVariant, queued.Value.Muted);
     }
 
     public void WakeInputCallbackService() => _inputCallbackSignal.Set();
@@ -839,6 +839,7 @@ public sealed partial class GodotAdvHost
         }
         lock (_scheduledVoiceLock) _scheduledVoice = null;
         System.Threading.Volatile.Write(ref _voiceBgmDuckControl, 0);
+        System.Threading.Volatile.Write(ref _statementBlockActive, 0);
         _advPagePresentationSuspended = false;
         _modalMovieCancelled = false;
         _modalMovieWaiting = false;
@@ -865,7 +866,8 @@ public sealed partial class GodotAdvHost
         (AudioPayload Audio, int PlaybackVariant)? due = null;
         lock (_scheduledVoiceLock)
         {
-            if (_scheduledVoice is { } pending)
+            // Native defers delayed voice service while a statement block (op 0x1f4) is open.
+            if (_scheduledVoice is { } pending && !StatementBlockActive)
             {
                 uint now = unchecked((uint)_clock.NowMs);
                 if (!pending.StartMs.HasValue)
@@ -883,7 +885,8 @@ public sealed partial class GodotAdvHost
             {
                 ["file"] = due.Value.Audio.Name, ["playback_variant"] = due.Value.PlaybackVariant,
             });
-            DispatchVoice(due.Value.Audio, due.Value.PlaybackVariant);
+            DispatchVoice(due.Value.Audio, due.Value.PlaybackVariant, false);
+            ArmVoiceBgmDuckRelease();   // native tick 0x411aae repeats op 0x1bf after a delayed start
         }
         _frameSignal.Set();
     }

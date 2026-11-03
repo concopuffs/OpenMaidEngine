@@ -52,14 +52,29 @@ public sealed partial class VirtualMachine
                 Write(a[0], _currentBgmTrackId);
                 return pc + 1;
             case "play-voice":
+            {
+                // 0xc4 promotes a 0x1d5 request (bit 0 -> 0x10001) and plays this voice muted; a request
+                // that was already promoted belongs to an earlier voice and is cleared instead.
+                if ((_voiceMuteNextFlags & VoiceMutePromoted) != 0) _voiceMuteNextFlags = 0;
+                else if ((_voiceMuteNextFlags & VoiceMuteRequested) != 0) _voiceMuteNextFlags |= VoiceMutePromoted;
+                bool muted = (_voiceMuteNextFlags & VoiceMuteRequested) != 0;
                 _autoVoicePending = true;
                 TextHistory.AppendVoice(Read(a[0]), 0, _advTextStyle);
-                _host.PlayVoice(Read(a[0]), 0); return pc + 1;
+                _host.PlayVoice(Read(a[0]), 0, muted); return pc + 1;
+            }
             case "play-history-voice": // 0x1bd: native voice start/history argument is one
             case "u0041D910":
+                // History replay always plays audibly and consumes any pending 0x1d5 request.
+                if ((_voiceMuteNextFlags & (VoiceMuteRequested | VoiceMutePromoted)) != 0) _voiceMuteNextFlags = 0;
                 _autoVoicePending = true;
                 TextHistory.AppendVoice(Read(a[0]), 1, _advTextStyle);
-                _host.PlayVoice(Read(a[0]), 1); return pc + 1;
+                _host.PlayVoice(Read(a[0]), 1, false); return pc + 1;
+            case "u00415700":
+            case "mute-next-voice": // 0x1d5: the next 0xc4 voice plays at volume 0
+                _voiceMuteNextFlags = VoiceMuteRequested; return pc + 1;
+            case "u004156C0":
+            case "arm-voice-duck-release": // 0x1bf: arm the tick's ducked-BGM restore for the current voice
+                _host.ArmVoiceBgmDuckRelease(); return pc + 1;
             case "set-voice-bgm-duck-control": // 0x1cf: bit 0 suppresses automatic voice ducking
                 _host.SetVoiceBgmDuckControl(Read(a[0])); return pc + 1;
             case "schedule-voice-playback": // 0x2c0: replace the pending delayed combat voice request

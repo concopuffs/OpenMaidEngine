@@ -68,6 +68,9 @@ public sealed partial class VirtualMachine
             case "u00415670":
             case "block-mark":
             case "reset-message-voice-state": // 0x1bc resets native per-message voice/queued-voice state
+                // Native stops channel 12, drops the Skip-queued voice and clears voice_mute_next_flags.
+                _host.StopVoice();
+                _voiceMuteNextFlags = 0;
                 _autoVoicePending = false; return pc + 1;
             case "u00415BF0":
             case "reset-message-skip-input": // 0x101 clears transient input/run bits, not op 0x88 state

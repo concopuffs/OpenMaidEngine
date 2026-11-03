@@ -593,6 +593,8 @@ public partial class Main : Godot.Control
 
             phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
             UpdateVoicePlaybackState();
+            UpdateVoiceBgmDuckRelease();
+            ReleaseWithheldSoundEffectStarts();
             UpdateSoundChannelPlaybackState();
             AdoptPendingMovies();
             UpdateMovieFrames();

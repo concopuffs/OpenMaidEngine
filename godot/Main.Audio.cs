@@ -16,6 +16,8 @@ public partial class Main
     private bool _voiceBgmDuckActive;
     private int _voiceBgmDuckGeneration;
     private float _voiceBgmDuckRestoreDb;
+    private bool _voiceBgmDuckReleaseArmed;               // native voice_bgm_duck_release_armed (op 0x1bf)
+    private readonly System.Collections.Generic.List<Action> _sfxStartsWithheld = new(); // statement block open
     private readonly AudioStreamPlayer[] _sfx = new AudioStreamPlayer[10]; // SC0000 channels 0..9
     private readonly int[] _sfxGenerations = new int[10];
     private readonly int[] _sfxPlaying = new int[10];
@@ -149,7 +151,8 @@ public partial class Main
         => System.Threading.Volatile.Read(ref _voiceCompletedGeneration)
            < System.Threading.Volatile.Read(ref _voiceQueuedGeneration);
 
-    public void PlayVoice(byte[] oggBytes, string assetName, int generation, bool duckBgm, int duckTargetPercent)
+    public void PlayVoice(byte[] oggBytes, string assetName, int generation, bool duckBgm, int duckTargetPercent,
+        bool muted)
     {
         var stream = AudioStreamOggVorbis.LoadFromBuffer(oggBytes);
         if (stream == null)
@@ -158,12 +161,13 @@ public partial class Main
             CompleteVoiceGeneration(generation);
             return;
         }
+        // Native voice_bgm_duck_begin ducks whenever 0x1cf bit 0 is clear, muted voices included. A
+        // suppressed start leaves an earlier duck in place; only the tick's armed release restores it.
         if (duckBgm)
             BeginVoiceBgmDuck(generation, duckTargetPercent);
-        else
-            RestoreVoiceBgmDuck();
         stream.Loop = false;
         _voice.Stream = stream;
+        _voice.VolumeDb = muted ? -80.0f : 0.0f;   // op 0x1d5: channel 12 at volume 0, timing unchanged
         System.Threading.Volatile.Write(ref _voiceStartedGeneration, generation);
         _voice.Play();
     }
@@ -191,8 +195,26 @@ public partial class Main
         }
         while (System.Threading.Interlocked.CompareExchange(
                    ref _voiceCompletedGeneration, generation, current) != current);
-        if (_voiceBgmDuckActive && generation >= _voiceBgmDuckGeneration)
-            RestoreVoiceBgmDuck();
+    }
+
+    public void ArmVoiceBgmDuckRelease() => _voiceBgmDuckReleaseArmed = true;
+
+    // Native engine_main_tick (0x411e12): with BGM ducked, restore it once the voice has ended, the
+    // release is armed (op 0x1bf or a delayed voice start), no explicit BGM fade owns the envelope and
+    // 0x1cf bit 0 is clear. So BGM stays ducked between lines until the next line arms the release.
+    private void UpdateVoiceBgmDuckRelease()
+    {
+        if (!_voiceBgmDuckActive || !_voiceBgmDuckReleaseArmed || IsVoicePlaybackActive) return;
+        if (_bgmFadeTween != null || (_host?.VoiceBgmDuckSuppressed ?? false)) return;
+        RestoreVoiceBgmDuck();
+    }
+
+    private void ReleaseWithheldSoundEffectStarts()
+    {
+        if (_sfxStartsWithheld.Count == 0 || (_host?.StatementBlockActive ?? false)) return;
+        Action[] starts = _sfxStartsWithheld.ToArray();
+        _sfxStartsWithheld.Clear();
+        foreach (Action start in starts) start();
     }
 
     private void BeginVoiceBgmDuck(int generation, int targetPercent)
@@ -203,6 +225,7 @@ public partial class Main
             _voiceBgmDuckRestoreDb = _bgm.VolumeDb;
         _voiceBgmDuckActive = true;
         _voiceBgmDuckGeneration = generation;
+        _voiceBgmDuckReleaseArmed = false;
         float linear = System.Math.Clamp(targetPercent / 100.0f, 0.0f, 1.0f);
         _bgm.VolumeDb = linear <= 0 ? -80.0f : Mathf.LinearToDb(linear);
     }
@@ -213,6 +236,7 @@ public partial class Main
         _bgm.VolumeDb = _voiceBgmDuckRestoreDb;
         _voiceBgmDuckActive = false;
         _voiceBgmDuckGeneration = 0;
+        _voiceBgmDuckReleaseArmed = false;
     }
 
     public void LoadSoundEffect(byte[] wavBytes, string assetName, int channel)
@@ -252,6 +276,12 @@ public partial class Main
         void StartIfCurrent()
         {
             if (_sfxGenerations[channel] != generation || _sfx[channel].Stream == null) return;
+            if (_host?.StatementBlockActive ?? false)
+            {
+                // Native tick withholds delayed SFX starts while a statement block (op 0x1f4) is open.
+                _sfxStartsWithheld.Add(StartIfCurrent);
+                return;
+            }
             if (_sfx[channel].Stream is AudioStreamWav wav)
                 wav.LoopMode = startMode == 0
                     ? AudioStreamWav.LoopModeEnum.Disabled

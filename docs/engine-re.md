@@ -4945,11 +4945,37 @@ historical labels were structural guesses:
   `tick_presentation_enabled` (`ctx+0x99294`). Under draw mode 1, the tick advances the presentation timer and may
   render only while it is set or run-state `0x2400` is active. Op `0x247` queries it.
 
-**Port status:** `VirtualMachine` still steps all five as no-ops.
+`op_0x1bc_handler@0x416c20` (`reset-message-voice-state`), the template's voice-state reset, does more than clear
+`adv_auto_voice_pending`. When the sound manager (`ctx+0x14910`) exists it first stops voice channel 12 through
+`sound_manager_stop_channel@0x482fa0`. It then clears `voice_mute_next_flags` and the message-Skip queued voice
+id/arg. The template runs it only while `G[0x2e47]` is nonzero, which is true at almost every Himegari line, so
+advancing cuts a voice that is still playing.
 
-- Statement-block deferral is a runtime-fidelity gap: presentation, delayed audio and movie starts, and queued
-  launches can occur mid-command.
-- The `0x1d5` gap is audible: voices the player disabled per character still play in the port.
+**Open question.** Not every block is a template part. Some scripts open one block at their entry and keep it
+open across message calls (`MES.BIN`), timed-callback sequences and `sleep` / `present-frame` loops: ADDEXP from
+`0x0` past `0x725`, and UNITECH `0x0..0x511` in a live port timeline. The tick withholding above would freeze
+those, so some path (run-state `0x400`, explicit `present-frame`, or the message service) must bypass it. That
+path is not yet traced.
+
+**Port status (2026-11-03).**
+
+- **`0x1d5`.** `VirtualMachine` keeps `voice_mute_next_flags` with the native `0xc4` / `0x1bd` / `0x1bc`
+  transitions and passes `muted` to `IAudioHost.PlayVoice(id, variant, muted)`. Godot plays a muted voice at
+  -80 dB, so completion and Auto timing are unchanged. Live: with "その他" voices off, every `MAN999.OGG` line in
+  SC0000 played muted, while the `LILA*.OGG` lines stayed audible.
+- **`0x1bc`.** It now also stops the voice (`IAudioHost.StopVoice`) and drops a Skip-queued voice.
+- **`0x1bf`.** It reaches `IAudioHost.ArmVoiceBgmDuckRelease`, which applies the `0x1cf` one-shot stage. Godot now
+  restores ducked BGM only once the release is armed and the voice is idle, with no `0xc2` fade and bit 0 clear.
+  It no longer restores at voice completion alone. A delayed voice start arms it too. The restore is immediate;
+  native fades back (run-state `0x200`).
+- **Statement blocks.** `VirtualMachine` tracks the flag and depth and reports the outermost open and close to
+  `IAudioHost.SetStatementBlockActive`. Godot withholds delayed voice service (`0x2c0`) and delayed SFX starts
+  (`0x2bf`) until the close. Presentation, waits and launches are not withheld:
+  - the port presents only at explicit service boundaries, and each VM burst is already atomic
+    (`ScriptPresentationBarrier`);
+  - launches run synchronously;
+  - the open question above leaves render withholding unsafe to model.
+- **`0x21b`.** The value is stored, and op `0x247` reads it back. The port has no draw-mode-1 tick render gate.
 
 ### VM value, array and call semantics relevant to compilation (2026-10-06)
 

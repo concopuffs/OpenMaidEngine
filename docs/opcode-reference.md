@@ -723,7 +723,7 @@ Port status (2026-07-29): implemented with native SYS4REG.INI route persistence 
 - **depends on:** 0x1cf
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1bf`; scope=Himegari SYS4422. Ghidra /v2: op_0x1bf_arm_voice_duck_release@0x416c70 clears ctx+0x6dbf0 when bit 0x10000 is set and stores 1 at ctx+0x6dbec unless bit 0 is set, exactly mirroring engine_main_tick_with_exception_policy's post-delayed-voice code (0x411aae). The tick consumes ctx+0x6dbec when the ducked voice ends (run-state 0x4000 -> 0x200 fade); voice_bgm_duck_begin clears it and op 0xbf skips re-applying the duck volume while it is set. Corpus: follows the ADV line template's speaker subroutine call inside a statement block (8,752 Himegari / 18,043 Kamidori sites). The historical name call-end was a structural guess.
 
-Port status (2026-10-06): stepped as a no-op.
+Port status (2026-11-03): VirtualMachine forwards it to IAudioHost.ArmVoiceBgmDuckRelease. The Godot host applies the 0x1cf one-shot stage (bit 0x10000 clears the mask) and, unless bit 0 is set, arms the release; Main restores ducked BGM once the voice is idle, the release is armed, no 0xc2 fade owns the envelope and bit 0 is clear. A delayed voice start (0x2c0) arms it the same way. The duck no longer lifts at voice completion alone, so BGM stays ducked between lines until the next line's 0x1bf. The restore is immediate; native fades it back (run-state 0x200).
 
 ### 0x1cf `set-voice-bgm-duck-control` (set-voice-bgm-duck-control, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -748,7 +748,7 @@ Port status (2026-10-06): stepped as a no-op.
 - **depends on:** 0xc4
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1d5`; scope=Himegari SYS4422. Ghidra /v2: op_0x1d5_mute_next_voice@0x416cb0 sets voice_mute_next_flags (ctx+0x1493c, voice facade +0x434) to 1. op_0xc4_handler promotes bit 0 to 0x10001 and clears an already-promoted value; voice_play_indexed_asset@0x4883a0 tests bit 0, sets channel-12 volume 0 and marks the playback muted. voice_tick_delayed_playback, op 0x1bd and op 0x1bc clear it. Corpus: emitted only in the ADV template's speaker<0 / character-voice-suppressed (G[0x2e49]) branches immediately before play-voice. The historical name cond-block was a structural guess.
 
-Port status (2026-10-06): stepped as a no-op, so voices the player disabled per character remain audible in the port.
+Port status (2026-11-03): VirtualMachine keeps voice_mute_next_flags with the native 0xc4/0x1bd/0x1bc transitions and passes muted to IAudioHost.PlayVoice(id, variant, muted). The Godot host plays a muted voice at -80 dB on the voice player, so completion and Auto timing are unchanged, and carries the flag through the message-Skip queue. Not modelled: voice_tick_delayed_playback also clears the request, but the port's delayed voices (0x2c0) do not touch it.
 
 ### 0x2bf `schedule-sfx-start` (schedule-sfx-start, argc 3)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2130,11 +2130,11 @@ Both-found swaps every object field, including surface binding, geometry, color,
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x21b` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x21b` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** (enabled) - store enabled != 0 in tick_presentation_enabled. Under draw mode 1 the outer tick advances the presentation frame timer and may render only while it is set or run-state bits 0x2400 are active; op 0x247 queries it.
 - **operand access:** `1` read
-- **grounding:** source=investigation, confidence=med, noop_headless=True
+- **grounding:** source=investigation, confidence=med
 - **depended on by:** 0x247
 - **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x21b`; scope=Himegari SYS4422. Ghidra /v2: op_0x21b_set_tick_presentation@0x4232d0 stores (fetch(1) != 0) at ctx+0x99294; engine_main_tick_with_exception_policy (0x411c61) requires it or run-state 0x2400 before moving frame_timer_current and calling gfx_render_frame under gfx_draw_mode 1; op_0x247_handler@0x42a5a0 writes it back to operand 1. Corpus: value 1 in every ADV line-template voice-reset block (26,856 Himegari sites), 0 at 150 sites. The historical name line-id? was a guess; the exact visible consequence of value 0 is not yet traced.
 
-Port status (2026-10-06): stepped as a no-op.
+Port status (2026-11-03): VirtualMachine stores tick_presentation_enabled for op 0x247. The port has no draw mode 1 tick render gate, so the value changes nothing visible.
 
 ### 0x21d `clone-gfx-object` (clone-gfx-object, argc 2)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2536,11 +2536,13 @@ The native handler returns without effect when the surface slot is null and igno
 - **observed by:** none in recorded corpora
 - **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
 - **semantic status:** investigated
-- **runtime implemented:** no
+- **runtime implemented:** yes
 - **summary:** (out) - write 1 when tick_presentation_enabled (set by op 0x21b) is nonzero, otherwise 0. Installed in SYS4422 but unused by the recorded corpora.
 - **grounding:** source=investigation, confidence=med
 - **depends on:** 0x21b
 - **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x247`; scope=Himegari SYS4422. Ghidra /v2: op_0x247_handler@0x42a5a0 calls vm_operand_write(1, ctx+0x99294 != 0).
+
+Port status (2026-11-03): implemented; writes the value VirtualMachine stores for op 0x21b.
 
 ### 0x248 `set-tiled-surface-edge-length` (set-tiled-surface-edge-length, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -3110,9 +3112,9 @@ This lifecycle operation affects persistent/read-driven active Skip only. Physic
 - **semantic status:** investigated
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x1bc` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x1bc` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** Reset the per-message queued-voice flag used by ADV Auto timing.
+- **summary:** Reset per-message voice state: stop voice channel 12, clear voice_mute_next_flags (op 0x1d5), the message-Skip queued voice and the ADV Auto queued-voice flag.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1bc`; scope=Himegari SYS4422. Ghidra /v2: op_0x1bc_handler@0x416c20 writes zero to ctx+0x6dbe4 (adv_auto_voice_pending). Opcode 0xc4 sets that field when voice playback is queued; adv_input_service_poll consumes it to select the post-voice AutoMessageTime0 path.
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1bc`; scope=Himegari SYS4422. Ghidra /v2: op_0x1bc_handler@0x416c20 calls sound_manager_stop_channel@0x482fa0(12) when the sound manager (ctx+0x14910) exists, then zeroes voice_mute_next_flags (ctx+0x1493c), message_skip_queued_voice_id/arg and ctx+0x6dbe4 (adv_auto_voice_pending). Opcode 0xc4 sets adv_auto_voice_pending when voice playback is queued; adv_input_service_poll consumes it to select the post-voice AutoMessageTime0 path. Corpus: the ADV line template runs it only when G[0x2e47] != 0, then zeroes G[0x2e47].
 
 ### 0x1c7 `get-message-skip` (get-message-skip, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -3189,7 +3191,7 @@ Port status (2026-07-24): implemented through the same profile-lifetime setting 
 - **depended on by:** 0x1f5
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1f4`; scope=Himegari SYS4422. Ghidra-free static RE of /v2 (tools/operand_access.py image walk): handler 0x417390 sets ctx+0x5f2fc and moves frame_timer_current (ctx+0x51b64) to its predecessor slot before storing timeGetTime, or increments ctx+0x5f300 when already active. engine_main_tick_with_exception_policy@0x411840 skips sfx service 0x4827e0, voice_tick_delayed_playback@0x4884d0, movie_start_pending_after_sync_delay@0x4633b0 over ctx+0x52bd4[0..999], and the forced-redraw check at ctx+0x51b6c while ctx+0x5f2fc is set unless run_state_flags bit 0x400 is set (sites 0x411a42, 0x411b05, 0x411cb3). script_launch_queue_dispatch_next@0x40f6e0 returns immediately while it is set. Corpus: balanced in all 481 Himegari base scripts, nesting at most two, and no jmp/jcc/switch/coroutine/timer edge crosses a block boundary (0 of ~160k); blocks wrap ADV line-template expansions. Headless no-op is safe only because no corpus path queues a launch inside a block.
 
-Port status (2026-10-06): VirtualMachine still steps 0x1f4/0x1f5 as no-ops, so delayed audio/movie starts and queued launches can begin mid-command. See docs/engine-re.md 'Statement blocks'.
+Port status (2026-11-03): VirtualMachine tracks statement_block_active and depth and reports the outermost open and close to IAudioHost.SetStatementBlockActive. The Godot host withholds delayed voice service (0x2c0) and delayed SFX starts (0x2bf) until the close. Not modelled: the tick's render withholding and its wait/modal/launch deferrals. The port renders only at explicit service boundaries and runs script launches synchronously. Whole scripts (e.g. ADDEXP) sit in one block that contains message waits and present-frame loops. See docs/engine-re.md 'Statement blocks'.
 
 ### 0x1f5 `stmt-end` (u00416120, argc 0)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -3203,7 +3205,7 @@ Port status (2026-10-06): VirtualMachine still steps 0x1f4/0x1f5 as no-ops, so d
 - **depended on by:** 0x1f4
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1f5`; scope=Himegari SYS4422. Static RE of /v2: handler 0x4173e0 decrements ctx+0x5f300 when positive; otherwise, when ctx+0x5f2fc is set, it clears it and, if ctx+0x6f8b8 is zero, tail-jumps to script_launch_queue_dispatch_next@0x40f6e0. See op 0x1f4 for the deferred tick services and corpus structure.
 
-Port status (2026-10-06): stepped as a no-op; see op 0x1f4.
+Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements the depth; an unmatched close is ignored, as natively. A root reload clears the block.
 
 ## unknown
 

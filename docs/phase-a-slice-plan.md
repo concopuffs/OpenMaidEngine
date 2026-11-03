@@ -4319,3 +4319,24 @@ load list, a port-written slot shows its full preview.
 - **Not addressed.** The port draws an opaque dark text band on SC0000 page 3 where AGE shows text over the CG (also
   without a load; possibly global `0x6c3`). The surface records of the two writers still differ in color keys
   (`0` versus `0xff000000`) and created flags. The port aborts `_Ready` when the shared profile fails to decode.
+
+### Voice mute, voice stop, duck release and statement blocks in the port (2026-11-03)
+
+Five ops the port stepped as no-ops now follow the native decodes (`engine-re.md`, "Statement blocks"):
+
+- **`0x1d5` mute-next-voice.** The next `0xc4` voice plays silently, keeping its completion timing.
+- **`0x1bc`.** It now stops the current voice and drops a Skip-queued one.
+- **`0x1bf` duck release.** Ducked BGM is restored only once this op has armed the release and the voice has ended.
+- **`0x1f4`/`0x1f5` statement blocks.** Delayed SFX/voice starts wait for the outermost close.
+- **`0x21b`/`0x247`.** The tick-presentation flag is stored and can be queried.
+
+- **Audible changes.** Character voices the player turns off in CONFIG are silent, as in AGE. Clicking past a
+  voiced line cuts its voice. BGM stays ducked between consecutive voiced lines.
+- **Validation.** Six new VM tests (`VoiceStatementOpsTests`). 911 of 913 engine tests pass; the two failures
+  predate this work.
+- **Live run.** The port was driven through SC0000 under `--timeline-log` with "その他" voices turned off in CONFIG.
+  Every `MAN999.OGG` voice event carries `muted: true`, while the `LILA*.OGG` voices stay audible. The `voice-stop` and
+  `statement-block` events fire as expected.
+- **Not addressed.** Render, wait and launch withholding in open blocks is not modelled; see the open question in
+  `engine-re.md`. The duck restore is immediate where native fades it back. The port's delayed voices do not clear
+  a mute request.

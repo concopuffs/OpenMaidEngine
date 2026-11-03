@@ -17,6 +17,21 @@ public interface IAudioHost
     // while History replay (0x1bd) passes 1. Existing non-audio hosts may ignore it.
     void PlayVoice(long id, int playbackVariant) => PlayVoice(id);
 
+    // Native op 0x1d5 arms voice_mute_next_flags; the following op 0xc4 then starts its voice on
+    // channel 12 at volume 0, so completion timing (ADV Auto, channel-12 queries) is unchanged.
+    void PlayVoice(long id, int playbackVariant, bool muted) => PlayVoice(id, playbackVariant);
+
+    // Native op 0x1bc stops channel 12 and drops a voice queued while message Skip was active.
+    void StopVoice() { }
+
+    // Native op 0x1bf: advance the one-shot stage of the 0x1cf control mask (bit 0x10000 clears it)
+    // and, unless bit 0 suppresses ducking, arm the tick's BGM restore for when the voice ends.
+    void ArmVoiceBgmDuckRelease() { }
+
+    // Native ops 0x1f4/0x1f5: while the outermost statement block is open the tick withholds
+    // delayed SFX/voice starts; they begin once the block closes.
+    void SetStatementBlockActive(bool active) { }
+
     void ScheduleVoicePlayback(long id, int playbackVariant, long delayMs) { }
 
     // Native op 0x1cf stores a transient control mask. Bit 0 suppresses the automatic

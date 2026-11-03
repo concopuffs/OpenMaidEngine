@@ -7,9 +7,12 @@ public sealed partial class GodotAdvHost
 {
     private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
     private int _voiceBgmDuckControl;
-    private (AudioPayload Audio, int PlaybackVariant)? _queuedSkippedVoice;
+    private (AudioPayload Audio, int PlaybackVariant, bool Muted)? _queuedSkippedVoice;
     private readonly object _scheduledVoiceLock = new();
     private (AudioPayload Audio, int PlaybackVariant, uint DelayMs, uint? StartMs)? _scheduledVoice;
+    private int _statementBlockActive;   // ops 0x1f4/0x1f5: delayed SFX/voice starts wait for the close
+
+    public bool StatementBlockActive => System.Threading.Volatile.Read(ref _statementBlockActive) != 0;
 
     public void PlayBgm(long id)
         => DispatchBgm(id, 1, false);
@@ -41,14 +44,16 @@ public sealed partial class GodotAdvHost
         _main.CallDeferred("StopBgm");
     }
 
-    public void PlayVoice(long id) => PlayVoice(id, 0);
+    public void PlayVoice(long id) => PlayVoice(id, 0, false);
 
-    public void PlayVoice(long id, int playbackVariant)
+    public void PlayVoice(long id, int playbackVariant) => PlayVoice(id, playbackVariant, false);
+
+    public void PlayVoice(long id, int playbackVariant, bool muted)
     {
         var asset = _res.ResolveVoice(id);
         var audio = asset != null ? LoadAudio(asset) : null;
         _timeline?.Event("voice", new() { ["id"] = id, ["file"] = audio?.Name,
-            ["playback_variant"] = playbackVariant });
+            ["playback_variant"] = playbackVariant, ["muted"] = muted });
         if (audio == null) return;
         bool queuedForSkip;
         bool firstQueued = false;
@@ -58,7 +63,7 @@ public sealed partial class GodotAdvHost
             if (queuedForSkip)
             {
                 firstQueued = _queuedSkippedVoice == null;
-                _queuedSkippedVoice = (audio, playbackVariant);
+                _queuedSkippedVoice = (audio, playbackVariant, muted);
             }
         }
         if (queuedForSkip)
@@ -66,16 +71,47 @@ public sealed partial class GodotAdvHost
             if (firstQueued) _main.CallDeferred("StopVoiceForMessageSkip");
             return;
         }
-        DispatchVoice(audio, playbackVariant);
+        DispatchVoice(audio, playbackVariant, muted);
     }
 
-    private void DispatchVoice(AudioPayload audio, int playbackVariant)
+    private void DispatchVoice(AudioPayload audio, int playbackVariant, bool muted)
     {
         int generation = _main.QueueVoicePlayback();
-        bool duckBgm = (System.Threading.Volatile.Read(ref _voiceBgmDuckControl) & 1) == 0;
+        bool duckBgm = !VoiceBgmDuckSuppressed;
         // Godot's stream player has no matching AGE start-mode control. Retain the native
         // variant through dispatch/timeline so that distinction is not erased at the VM seam.
-        _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation, duckBgm, 50);
+        // A muted voice (op 0x1d5) still plays, at volume 0, so its completion keeps Auto timing.
+        _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation, duckBgm, 50, muted);
+    }
+
+    // Op 0x1cf bit 0 suppresses both the duck at voice start and the tick's restore.
+    public bool VoiceBgmDuckSuppressed => (System.Threading.Volatile.Read(ref _voiceBgmDuckControl) & 1) != 0;
+
+    public void StopVoice()
+    {
+        // Op 0x1bc: native stops channel 12 and clears message_skip_queued_voice_id/arg.
+        lock (_messageSkipLock) _queuedSkippedVoice = null;
+        _timeline?.Event("voice-stop", new());
+        _main.CallDeferred("StopVoiceForMessageSkip");
+    }
+
+    public void ArmVoiceBgmDuckRelease()
+    {
+        // Op 0x1bf, and the tick after a delayed voice start: bit 0x10000 makes the 0x1cf mask one-shot.
+        int control = System.Threading.Volatile.Read(ref _voiceBgmDuckControl);
+        if ((control & 0x10000) != 0)
+        {
+            control = 0;
+            System.Threading.Volatile.Write(ref _voiceBgmDuckControl, 0);
+        }
+        if ((control & 1) != 0) return;
+        _main.CallDeferred("ArmVoiceBgmDuckRelease");
+    }
+
+    public void SetStatementBlockActive(bool active)
+    {
+        System.Threading.Volatile.Write(ref _statementBlockActive, active ? 1 : 0);
+        _timeline?.Event("statement-block", new() { ["active"] = active });
     }
 
     public void SetVoiceBgmDuckControl(long flags)

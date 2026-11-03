@@ -44,6 +44,10 @@ internal class RecordingHost : IHost
     public readonly List<(long Id, int PlaybackVariant)> VoiceRequests = new();
     public readonly List<(long Id, int PlaybackVariant, long DelayMs)> ScheduledVoiceRequests = new();
     public readonly List<long> VoiceBgmDuckControls = new();
+    public readonly List<(long Id, int PlaybackVariant, bool Muted)> VoicePlaybacks = new();
+    public int VoiceStops;
+    public int VoiceBgmDuckReleaseArms;
+    public readonly List<bool> StatementBlockChanges = new();
     public readonly List<int> SfxStarts = new();
     public readonly List<(int Channel, int StartMode)> SfxStartRequests = new();
     public readonly List<(int Channel, int StartMode, long DelayMs)> ScheduledSfxStarts = new();
@@ -274,6 +278,14 @@ internal class RecordingHost : IHost
         Voices.Add(id);
         VoiceRequests.Add((id, playbackVariant));
     }
+    public void PlayVoice(long id, int playbackVariant, bool muted)
+    {
+        VoicePlaybacks.Add((id, playbackVariant, muted));
+        PlayVoice(id, playbackVariant);
+    }
+    public void StopVoice() => VoiceStops++;
+    public void ArmVoiceBgmDuckRelease() => VoiceBgmDuckReleaseArms++;
+    public void SetStatementBlockActive(bool active) => StatementBlockChanges.Add(active);
     public void SetVoiceBgmDuckControl(long flags) => VoiceBgmDuckControls.Add(flags);
     public void ScheduleVoicePlayback(long id, int playbackVariant, long delayMs)
         => ScheduledVoiceRequests.Add((id, playbackVariant, delayMs));
