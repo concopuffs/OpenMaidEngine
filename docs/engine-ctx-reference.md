@@ -18,6 +18,8 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x13dc` | `message_skip_enabled` | `int` | persistent all-message Skip flag; op 0x88 writes it and adv_interpreter_tick injects input bit 0x40 while nonzero |
 | `0x1428` | `keyboard_vk_action_map` | `int` | base of 256-entry Win32 virtual-key to logical action table consumed by keyboard polling |
 | `0x1828` | `dik_to_vk_table` | `int` | base of 256-entry DirectInput DIK scan-code to Win32 virtual-key translation used by op 0x10c |
+| `0x1c28` | `input_polling_enabled` | `int` | input manager (ctx+0x408) +0x1820, the gate every poller checks (GetAsyncKeyState buttons and keys, GetCursorPos); input_set_polling_enabled@0x460180 stores (disable == 0). age_main_window_proc clears it on Alt and WM_ENTERMENULOOP, and on WM_ACTIVATE(WA_INACTIVE) when display_windowed is set, so a windowed AGE ignores polled input while inactive (read 0 live, 2026-11-03) |
+| `0x1c2c` | `input_hwnd` | `void*` | input manager +0x1824: the window input_poll_cursor_client passes to ScreenToClient after GetCursorPos (the main window, read live 2026-11-03) |
 | `0x1c34` | `mouse_wheel_delta` | `int` | signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it |
 | `0x4d7c` | `shared_profile_state` | `void*` | embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata |
 | `0x5190` | `shared_profile_int_table` | `int` | open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it |
@@ -130,6 +132,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x9928c` | `save_frame_boundary_index` | `int` | highest script-frame index included by numbered-save layouts 2/3; -1 falls back to cur_ctx_index; op 0x1ad marks current frame and op 0x2 clears after unwinding below it |
 | `0x99290` | `gfx_draw_mode` | `int` | loaded from set:DrawMode during runtime initialization; Himegari uses mode 1, selecting the cached GetGlyphOutline text path |
 | `0x99294` | `tick_presentation_enabled` | `int` | op 0x21b stores (operand != 0); under gfx_draw_mode 1 the outer tick advances frame_timer_current and may render only when set or run-state 0x2400 is active; op 0x247 queries it |
+| `0x9a298` | `display_windowed` | `int` | nonzero while AGE runs windowed (read 1 live with SYS4REG display.ScreenMode=1 and an 806x649 framed window, 2026-11-03). age_main_window_proc: WM_ACTIVATE(WA_INACTIVE) disables input polling only when set; when zero (fullscreen), WM_ACTIVATEAPP re-tops the window and centres the cursor at the next WM_PAINT; SC_KEYMENU+Enter toggles the mode through FUN_00412df0 |
 | `0x9b24c` | `dispatch_table` | `void*` | opcode->handler table base [0x400]; handler(op) = *(0x9b24c + op*4) |
 | `0x9c658` | `sys4ini_count` | `int` | SYS4INI record count at embedded FileDB+0x40c |
 | `0x9c65c` | `archive_name_table` | `void*` | archive-name table base at embedded FileDB+0x410; arc_id*0x100 indexes it |

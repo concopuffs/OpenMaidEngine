@@ -62,6 +62,16 @@ name = "dik_to_vk_table"
 type = "int"
 note = "base of 256-entry DirectInput DIK scan-code to Win32 virtual-key translation used by op 0x10c"
 [[field]]
+offset = 0x1c28
+name = "input_polling_enabled"
+type = "int"
+note = "input manager (ctx+0x408) +0x1820, the gate every poller checks (GetAsyncKeyState buttons and keys, GetCursorPos); input_set_polling_enabled@0x460180 stores (disable == 0). age_main_window_proc clears it on Alt and WM_ENTERMENULOOP, and on WM_ACTIVATE(WA_INACTIVE) when display_windowed is set, so a windowed AGE ignores polled input while inactive (read 0 live, 2026-11-03)"
+[[field]]
+offset = 0x1c2c
+name = "input_hwnd"
+type = "void*"
+note = "input manager +0x1824: the window input_poll_cursor_client passes to ScreenToClient after GetCursorPos (the main window, read live 2026-11-03)"
+[[field]]
 offset = 0x1c34
 name = "mouse_wheel_delta"
 type = "int"
@@ -621,6 +631,11 @@ offset = 0x99294
 name = "tick_presentation_enabled"
 type = "int"
 note = "op 0x21b stores (operand != 0); under gfx_draw_mode 1 the outer tick advances frame_timer_current and may render only when set or run-state 0x2400 is active; op 0x247 queries it"
+[[field]]
+offset = 0x9a298
+name = "display_windowed"
+type = "int"
+note = "nonzero while AGE runs windowed (read 1 live with SYS4REG display.ScreenMode=1 and an 806x649 framed window, 2026-11-03). age_main_window_proc: WM_ACTIVATE(WA_INACTIVE) disables input polling only when set; when zero (fullscreen), WM_ACTIVATEAPP re-tops the window and centres the cursor at the next WM_PAINT; SC_KEYMENU+Enter toggles the mode through FUN_00412df0"
 [[field]]
 offset = 0x9b24c
 name = "dispatch_table"

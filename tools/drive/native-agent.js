@@ -1,5 +1,5 @@
 'use strict';
-// Frida agent that tools/native_drive.py loads into native AGE. The driver spawns AGE suspended, calls
+// Frida agent that tools/drive_native.py loads into native AGE. The driver spawns AGE suspended, calls
 // init(config) and only then resumes it, so every hook below is in place before AGE's first instruction.
 // The modules are hooked as they load (the packed AGE.EXE resolves its imports itself).
 //
@@ -10,6 +10,9 @@
 //           MessageBoxA       answers boxes the profile's dialog policy names; shows and reports the rest
 //   winmm   joy*              no joystick is connected
 //   shell32 SHGetFolderPathA  the folders in config.folders (keyed by CSIDL & 0xff) point into the sandbox
+//   AGE.EXE input polling     keeppolling() stops WM_ACTIVATE from closing the polling gate: windowed AGE ignores
+//                             polled buttons and the cursor while inactive, and a driven AGE always is. It is
+//                             installed once the window exists, because AGE.EXE is unpacked at run time.
 //
 // Facts behind each hook: docs/engine-re.md, "Where native input comes from" and "Driving native AGE".
 
@@ -155,6 +158,29 @@ function hookModule(module) {
     }
 }
 
+let pollingKept = null;    // { count } once keeppolling() has run
+
+function keepPolling() {
+    const facts = config.keep_polling;
+    if (facts === null || facts === undefined) return null;
+    if (pollingKept === null) {
+        const activateReturn = ptr(facts.activate_return);
+        pollingKept = { count: 0 };
+        // input_set_polling_enabled(this = input manager, disable): thiscall, so args[0] is the stack argument.
+        Interceptor.attach(ptr(facts.setter), {
+            onEnter(args) {
+                if (this.returnAddress.equals(activateReturn) && !args[0].isNull()) {
+                    args[0] = ptr(0);
+                    pollingKept.count += 1;
+                }
+            },
+        });
+    }
+    const ctx = ptr(config.engine.ctx_global).readPointer();
+    if (!ctx.isNull()) ctx.add(facts.gate).writeU32(1);   // undo a deactivation that came before the hook
+    return pollingKept.count;
+}
+
 function frameState() {
     const engine = config.engine;
     const ctx = ptr(engine.ctx_global).readPointer();
@@ -185,6 +211,9 @@ rpc.exports = {
     },
     setwindow(value) {
         hwnd = ptr(value);
+    },
+    keeppolling() {
+        return keepPolling();
     },
     setcursor(x, y) {
         cursor = [x, y];

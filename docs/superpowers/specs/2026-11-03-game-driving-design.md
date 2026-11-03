@@ -1,9 +1,9 @@
 # Game driving: one step language, two backends — design
 
 **Date:** 2026-11-03
-**Status:** draft for review. No code has been written against it.
-**Home in the canonical map:** this file is the design. Tool usage stays in `docs/tools-reference.md` (today
-"Native AGE driver"). Native engine findings stay in `docs/engine-re.md` ("Driving native AGE"). Directory layout
+**Status:** accepted; M1 and M2 are built. §13 and §14 record where the build differs from the design.
+**Home in the canonical map:** this file is the design. Tool usage stays in `docs/tools-reference.md` ("Game
+driver"). Native engine findings stay in `docs/engine-re.md` ("Driving native AGE"). Directory layout
 stays in `docs/PROJECT-STRUCTURE.md`.
 
 ## 1. Purpose
@@ -303,3 +303,32 @@ M1 is implemented (`engine/Age.Engine.Frontend/Control/`, `engine/Age.Engine/Vm/
 - **Verified live on the port:** the save/load scenario's whole path (boot with pokes, new game, page 1/3/5
   offsets equal to native, save to slot 0, back to the page, read on, load, resume at `SC0000@0x8a9`). One
   difference remains open for M2: after the load, the port's caller frame reads `SYSTEM4@0x235`.
+
+## 14. As built: M2 (2026-11-03)
+
+M2 is implemented (`tools/drive.py`, `drive_core.py`, `drive_native.py`, `drive_port.py`, `tools/drive/`). Where it
+differs from the sections above, this section wins. Usage is in `docs/tools-reference.md` ("Game driver").
+
+- **The client runs more than §4 says.** `wait N` sleeps in the client, and `expect` is a `state` request matched in
+  the client (`drive_core.condition_matches`). Only `wait-state` becomes the server-side `wait`, with `poke` for its
+  clicks. Conditions combine: every key given has to match.
+- **Capabilities (§4).** Native `hello` lists `dialogs`, `answer` and `detach`; the port lists `speed` and `waiting`.
+  `drive.py` checks a scenario against them before its first step, so the committed scenario may use neither target's
+  extras.
+- **Events.** Native replies may carry an `events` list (dialogs answered, the window appearing); the client prints
+  them with the step results. The daemon also logs them to `events.jsonl`.
+- **Session file (§4).** Native `session.json` names the daemon as `pid` and AGE as `game_pid`, plus `port`, `token`,
+  `mode` (spawn or attach) and the save folders. The port writes its own (§13).
+- **`wheel`** without `x`/`y` turns at the driven cursor on both targets.
+- **Native input polling.** Windowed AGE turns polling off when its window loses activation (`engine-re.md`,
+  "Driving native AGE"), and a driven AGE runs inactive at the bottom of the z-order. The agent ignores that call and
+  reopens the gate once the window exists (profile `[native.keep_polling]`). The 2026-11-01 native runs passed only
+  because AGE happened to be active.
+- **Full stacks match after a load (§11, second question; §13's open item).** A restored ancestor parked on `0xae`
+  now reports its saved call site, so after the load both targets read `SYSTEM4@0x477 > SC0000@0x8a9`.
+- **Launch options (§5.5).** The port launcher builds `godot/OME.csproj` first (`--no-build` skips it) and passes
+  extra flags with `--port-arg`. It writes the profile's `[sandbox.settings]` (windowed) as well as the quiet volume.
+  Native's in-process daemon flag is `--inline`.
+- **Acceptance 2 passed.** `tools/drive/scenarios/himegari-save-load.steps` runs unchanged on the port (37 s) and on
+  native AGE (32 s), at the same offsets: pages at `0x83f`, `0x8a9`, `0x913`, and the load resumes at `0x8a9`. Native
+  stop reports `live-saves-unchanged`; both targets exit with code 0.

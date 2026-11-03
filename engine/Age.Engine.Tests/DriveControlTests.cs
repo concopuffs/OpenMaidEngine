@@ -39,6 +39,7 @@ public class DriveControlTests
         public void SetSpeed(double factor) => Speed = factor;
         public void Close() => Closes++;
         public (int X, int Y)? TakeCursorWarp() { var warp = Warp; Warp = null; return warp; }
+        public (int X, int Y) PointerPosition { get; set; } = (0, 0);
     }
 
     private static DriveState At(string location, string? waiting = null, bool busy = false, params string[] outer)
@@ -234,6 +235,9 @@ public class DriveControlTests
         Assert.Contains($"0:shot {absolute}", backend.Events);
         Run(dispatcher, backend, """{"id":4,"op":"wheel","notches":-2,"x":5,"y":6}""");
         Assert.Contains("0:wheel -2 5,6", backend.Events);
+        backend.PointerPosition = (355, 299);           // e.g. where the game glided the cursor
+        Run(dispatcher, backend, """{"id":4,"op":"wheel","notches":1}""");
+        Assert.Contains("0:wheel 1 355,299", backend.Events);
 
         var close = Run(dispatcher, backend, """{"id":5,"op":"close"}""");
         Assert.True((bool)close["ok"]!);

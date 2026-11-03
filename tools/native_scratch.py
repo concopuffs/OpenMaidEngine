@@ -11,7 +11,7 @@ is written beside the scratch copy; ``--check`` compares the install against it 
     py -3.11 -X utf8 tools/native_scratch.py --profile himegari --check
 
 Native AGE keeps saves under %LOCALAPPDATA% (docs/engine-re.md, "Save-root resolution"), shared with the real
-install. Drive the copy with tools/native_drive.py, which redirects them into a sandbox, or back that folder up
+install. Drive the copy with `tools/drive.py native`, which redirects them into a sandbox, or back that folder up
 before a run that may save.
 """
 from __future__ import annotations

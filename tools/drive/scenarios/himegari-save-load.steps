@@ -1,9 +1,9 @@
-# Native save/load round trip on a fresh sandbox (driver smoke test and the template for save gates).
-#   py -3.11 -X utf8 tools/native_drive.py --profile himegari start
-#   py -3.11 -X utf8 tools/native_drive.py run tools/native-drive/scenarios/himegari-save-load.steps
-#   py -3.11 -X utf8 tools/native_drive.py stop
-# Locations are native frame positions: at a text wait the pc is already past the wait instruction, so each is
-# the port page map's next page_start_offset (SC0000 page 3 waits at 0x8a6; the native position is 0x8a9).
+# Save/load round trip on a fresh sandbox, unchanged on both targets (driver smoke test, template for save gates).
+#   py -3.11 -X utf8 tools/drive.py --profile himegari native|port start
+#   py -3.11 -X utf8 tools/drive.py native|port run tools/drive/scenarios/himegari-save-load.steps
+#   py -3.11 -X utf8 tools/drive.py native|port stop
+# Locations are native frame positions, which the port reports too: at a text wait the pc is already past the wait
+# instruction, so each is the page map's next page_start_offset (SC0000 page 3 waits at 0x8a6; the position is 0x8a9).
 
 wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
 wait 1.5                                # the title fades in; it never settles (animated flames)

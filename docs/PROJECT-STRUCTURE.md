@@ -96,11 +96,13 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       specializations: init_kamidori_<domain>.py),
     │   │                                       global-var map builder
     │   ├── native_scratch.py                   gate-6 scratch install (hard-linked archives) + pristine check
-    │   ├── native_drive.py (+ test_native_drive.py)  drive native AGE: Frida-hooked input, screenshots, VM
-    │   │                                       position, sandboxed saves (daemon + `do`/`run` steps)
-    │   ├── native-drive/                       the driver's data: agent.js (Frida agent), <profile>.toml
-    │   │                                       (engine pointer, dialog policy, sandbox settings, UI points),
-    │   │                                       scenarios/*.steps (replayable runs)
+    │   ├── drive.py, drive_core.py (+ test_drive_core.py)  game driver for native AGE and the port: one step
+    │   │                                       language, input, screenshots, VM position, sandboxed saves
+    │   ├── drive_native.py, drive_port.py      the two targets: Frida daemon for AGE; launcher for the port's
+    │   │                                       --control channel
+    │   ├── drive/                              the driver's data: <profile>.toml (points, sandbox settings,
+    │   │                                       native engine pointer / polling / dialog policy),
+    │   │                                       native-agent.js (Frida agent), scenarios/*.steps (replayable runs)
     │   ├── validate_opcode_table*.py           decode-coverage validators
     │   ├── movie-corpus-gate/                  C# full-corpus FFmpeg decode/lifecycle acceptance tool
     │   └── probe_*.py                          format reverse-engineering probes (historical)
@@ -220,9 +222,10 @@ coverage, and `engine-ctx.json`) remain shared. Every content-derived artifact b
 `build/games/<profile-id>/`: catalog indexes, call-script names, disassembly/text corpora, parsed data,
 global/progression maps, native engine dumps, traces, page maps, coverage reports, and validation logs. This is an ownership
 boundary, not just a naming convention; tools resolve it from the selected immutable profile context.
-Native runs live there too: `native-scratch/` (the copied install), and `native-drive/`. `native-drive/` holds the
-driver session, its logs and screenshots, `sandbox/<name>/` (redirected LocalAppData/Desktop with the game's saves
-and `SYS4REG.INI`), and `backups/` of the live save folder.
+Native runs live there too: `native-scratch/` (the copied install), and `drive/<native|port>/`. Each target's
+`drive/` folder holds the driver session, its logs and screenshots, and `sandbox/<name>/` (native: redirected
+LocalAppData/Desktop with the game's saves and `SYS4REG.INI`; port: the `--data-root` profile in the same layout).
+`drive/native/backups/` holds copies of the live save folder.
 `engine/Age.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
 `engine/Age.Cli` exposes it as `catalog-scan` for validation and diagnostic reports, and exposes the
 `Age.Script` round trips as `oms-roundtrip` (with `oms-residue` for its literal leftovers and `oms-temps` for its

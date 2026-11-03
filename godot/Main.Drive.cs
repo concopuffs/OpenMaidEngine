@@ -18,6 +18,7 @@ public partial class Main
     private bool _driveExclusiveInput;
     private MouseButtonMask _driveButtonMask;
     private (int X, int Y)? _driveCursorWarp;
+    private (int X, int Y) _drivePointer;
 
     private static string? ArgumentValue(string[] userArgs, string name)
     {
@@ -93,6 +94,7 @@ public partial class Main
 
     private void InjectDrivePointer(int x, int y)
     {
+        _drivePointer = (x, y);
         Vector2 position = NativeToViewport(x, y);
         Input.ParseInputEvent(new InputEventMouseMotion
         {
@@ -197,5 +199,7 @@ public partial class Main
             main._driveCursorWarp = null;
             return warp;
         }
+
+        public (int X, int Y) PointerPosition => main._drivePointer;
     }
 }

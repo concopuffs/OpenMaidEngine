@@ -23,6 +23,8 @@ public interface IDriveBackend
     void Close();
     /// <summary>The last position the game itself moved the cursor to since the previous call, if any.</summary>
     (int X, int Y)? TakeCursorWarp();
+    /// <summary>Where the driven cursor is now, in native canvas pixels (the last pointer, click or warp).</summary>
+    (int X, int Y) PointerPosition { get; }
 }
 
 /// <summary>Runs one request at a time as a timed operation. The frontend calls <see cref="Poll"/> once per frame;
@@ -118,7 +120,9 @@ public sealed class DriveDispatcher
                     request.Int("hold_ms", DefaultKeyHoldMs));
             case "wheel":
             {
-                int notches = request.Int("notches"), x = request.Int("x"), y = request.Int("y");
+                // x/y default to the driven cursor, which the game may have moved since the client last saw it.
+                (int pointerX, int pointerY) = _backend.PointerPosition;
+                int notches = request.Int("notches"), x = request.Int("x", pointerX), y = request.Int("y", pointerY);
                 return Immediate(request, reply, () => { _backend.Wheel(notches, x, y); return null; });
             }
             case "wait":

@@ -45,10 +45,11 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
 
 - **Attach, don't spawn**, and **use the pid** (`frida.get_local_device().enumerate_processes()` — the
   module-level `frida.enumerate_processes()` was removed in frida 17.x). The process is `AGE.EXE`.
-  Two tools spawn on purpose: `capture_global_writes.py --spawn` (captures from boot) and `tools/native_drive.py`.
-  The driver must hook input, message boxes and `SHGetFolderPathA` before AGE first uses them. It hooks only system
-  DLL exports, as each module loads (`Process.attachModuleObserver`), so the packer is not in the way. It kills a
-  spawned process whose setup fails, and holds AGE in a kill-on-close job.
+  Two tools spawn on purpose: `capture_global_writes.py --spawn` (captures from boot) and the game driver's native
+  target (`tools/drive_native.py`). The driver must hook input, message boxes and `SHGetFolderPathA` before AGE first
+  uses them. It hooks those system DLL exports as each module loads (`Process.attachModuleObserver`), so the packer
+  is not in the way. Its one hook inside AGE.EXE (the input-polling gate) waits until the window exists, when the
+  image has unpacked. It kills a spawned process whose setup fails, and holds AGE in a kill-on-close job.
 - **The game is packed.** Himegari's proven interpreter and handlers unpack into its module image;
   other revisions must be measured independently. The dumper retains both the module and large anonymous
   executable ranges so a new profile does not assume either placement. Never reuse a Himegari RVA as a

@@ -4312,8 +4312,8 @@ channels share text completion, wait advance, and voice deferral.
 
 ### Driving native AGE (2026-11-01)
 
-These were found while driving native AGE from a script for gate 7, and they are built into `tools/native_drive.py`
-(`tools-reference.md`, "Native AGE driver").
+These were found while driving native AGE from a script for gate 7 and for the game driver, and they are built into
+`tools/drive_native.py` (`tools-reference.md`, "Game driver").
 
 **Where native input comes from.**
 
@@ -4325,9 +4325,20 @@ These were found while driving native AGE from a script for gate 7, and they are
 - **Cursor warps.** AGE also calls `SetCursorPos`: a confirmation such as セーブしますか？ glides the cursor onto its
   default button (はい) in about 20 steps.
 - **The top edge.** A `WM_MOUSEMOVE` with y < 2 starts the system-menu dwell timer for the top-edge strip.
-- **The polling gate** is `+0x1820`, set by `input_set_polling_enabled@0x460180`. On `WM_ACTIVATE`,
-  `age_main_window_proc` disables polling only in fullscreen (`+0x9a298`). A windowed AGE in the background
-  therefore still reacts to clicks and keys made in other applications.
+- **The polling gate** is input manager `+0x1820` (`ctx+0x1c28`, `input_polling_enabled`), written by
+  `input_set_polling_enabled@0x460180` as `disable == 0`. While it is 0, every poller skips `GetAsyncKeyState` and
+  `GetCursorPos`, so polled input (menus such as TITLE's `mouse_callback`) is ignored. The message latches below still
+  fire, so movie skips still work.
+  - On `WM_ACTIVATE`, `age_main_window_proc` passes `disable = display_windowed && wParam == WA_INACTIVE` (call at
+    `0x4865ee`; `display_windowed` is `ctx+0x9a298`, nonzero = windowed). A **windowed** AGE therefore stops polling
+    while its window is inactive and resumes on activation; fullscreen never disables it there. The gate also closes
+    on Alt (the system-menu strip) and `WM_ENTERMENULOOP`, and reopens on `WM_EXITMENULOOP`.
+  - *Corrected 2026-11-03:* the first reading took `+0x9a298` for fullscreen and concluded that a background AGE
+    keeps polling. A driven AGE runs inactive at the bottom of the z-order, and the 2026-11-01 runs passed only
+    because AGE happened to be active.
+  - The driver's agent therefore turns that one call (return address `0x4865f3`) into an enable and writes 1 to the
+    gate once the window exists (profile `[native.keep_polling]`). It installs then, not at spawn, because the packed
+    AGE.EXE unpacks at run time.
 - **The click latch.** `WM_LBUTTONDOWN`/`WM_RBUTTONDOWN` set a click latch (`ctx+0x13e0` bit 0/1, via
   `input_latch_mouse_click@0x485e20`), unless `+0x1c30` suppresses it. With `g_dwClickOnUp@0x5c6030` (SYS4INI
   `CLICKONUP`, loaded at `0x488080`) set, the latch is set on `WM_LBUTTONUP`/`WM_RBUTTONUP` instead; Himegari has
@@ -4353,7 +4364,8 @@ A driver can therefore play AGE without touching the desktop's input:
 **Frame positions.** Each script frame's pc is a byte pointer into its code. In the innermost frame it is the resume
 point: at a text wait it is already past the wait (SC0000 page 3 waits at `0x8a6` and reads `0x8a9`). A caller frame
 keeps its pc **on** its `call-script` instruction (`SYSTEM4@0x477 > SC0000@0x3a2` with MENU open, not the following
-`0x47a`/`0x3a5`). The port's control channel reports frames the same way (`DriveFrame.FromVm`).
+`0x47a`/`0x3a5`), also right after a load. The port's control channel reports frames the same way
+(`DriveFrame.FromVm`); a restored caller parked on the port's synthetic `0xae` reports its saved call site.
 
 **The engine context pointer.** `g_pEngineCtx@0x5c6020` holds the live `EngineCtx*`. `age_main_window_proc` reads
 every ctx field through it, and the host-callback thunks at `0x45f780`.. load `ECX` from it.

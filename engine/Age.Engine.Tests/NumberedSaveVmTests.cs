@@ -421,6 +421,77 @@ public class NumberedSaveVmTests
         }
     }
 
+    private sealed class FrameCapturingHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public readonly List<IReadOnlyList<VmFrameLocation>> Captures = new();
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Captures.Add(Vm.CaptureFrameLocations());
+            base.WaitForInput(layoutSlot, serviceInputCallback);
+        }
+    }
+
+    /// <summary>Native AGE reads SYSTEM4@0x477 > SC0000@0x8a9 after loading a page-3 save, the same as before the save;
+    /// the port parks the rebuilt SYSTEM4 frame on op 0xae (0x235) and must still report the saved call site.</summary>
+    [Fact]
+    public void RestoredCallerReportsItsSavedCallSiteWhileTheRestoredChildWaits()
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            int callScript = Table.ByLabel("call-script")!.Value;
+            int move = Table.ByLabel("mov")!.Value;
+            Script resumed = WithTables(WithPackedId(ScriptAssembler.Assemble(Table, "RESUMED.BIN",
+            [
+                (0xae, Array.Empty<Operand>()),
+                (callScript, [new Operand(Immediate, 0x89)]),
+                (move, [new Operand(GlobalInt, 0x600), new Operand(Immediate, 1)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x88), scriptCallOffsets: [1]);
+            Script child = WithPackedId(ScriptAssembler.Assemble(Table, "CHILD_WAIT.BIN",
+            [
+                (0xae, Array.Empty<Operand>()),
+                (0x72, [new Operand(Immediate, 0)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x89);
+            Script loader = WithPackedId(ScriptAssembler.Assemble(Table, "LOADER.BIN",
+            [
+                (0x1a1, [new Operand(LocalInt, 0), new Operand(Immediate, 1)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x99);
+            NativeNumberedSaveState source = NativeNumberedSaveCodec.Empty(
+            [
+                new NativeSavedScriptFrame(-1, 0x88, [], -1, 0),
+                new NativeSavedScriptFrame(0, 0x89, [], -1, -1),
+            ]);
+            store.SaveNumberedFile(
+                1, NativeNumberedSaveCodec.Encode(source), [],
+                NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
+            var host = new FrameCapturingHost();
+            var vm = new VirtualMachine(
+                loader, Table, host,
+                provider: new MapProvider(new() { [0x88] = resumed, [0x89] = child }),
+                nativeDatStore: store);
+            host.Vm = vm;
+
+            vm.Run();
+
+            IReadOnlyList<VmFrameLocation> frames = Assert.Single(host.Captures);
+            Assert.Equal(new[] { "RESUMED.BIN", "CHILD_WAIT.BIN" }, frames.Select(frame => frame.Script));
+            Assert.Equal(resumed.Instructions[1].Offset, frames[0].CurrentOffset);
+            Assert.Equal(resumed.Instructions[2].Offset, frames[0].ResumeOffset);
+            Assert.Equal(child.Instructions[2].Offset, frames[1].ResumeOffset);
+            Assert.Equal(1, vm.Globals[0x600]);          // and the caller does continue after that call site
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void DataOnlyLoadReleasesAllSurfacesWhenBothNativeSettingsEnableIt()
     {

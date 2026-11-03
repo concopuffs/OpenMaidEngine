@@ -4279,3 +4279,15 @@ The port control channel (game-driving spec M1) found both while running the nat
   - The full scenario runs live on the port with native-equal offsets.
   - All engine tests pass except two pre-existing workspace checks, which depend on the installed `RT.DAT` (322
     SC0000 records written by the OMS gate-7 run) and the local FFmpeg build's seek.
+
+### Restored callers report their saved call site (2026-11-03)
+
+The shared game driver (game-driving spec M2) ran the save/load scenario on both games. After the load, native AGE
+read `SYSTEM4@0x477 > SC0000@0x8a9` and the port `SYSTEM4@0x235 > SC0000@0x8a9`.
+
+- **Cause.** A restored ancestor is parked on the synthetic `0xae` with `ExecFrame.RestoredSaveFrame`, and frame
+  capture reported that parked pc instead of the call it will resume after.
+- **Fix.** `VirtualMachine.CaptureFrameLocations` reports such a frame at its saved T2 call site
+  (`ScriptCallOffsets[CallTargetIndex]`). Execution is unchanged; only the reported location moves.
+- **Validation.** New VM test `RestoredCallerReportsItsSavedCallSiteWhileTheRestoredChildWaits` fails without the
+  fix. Live on both games, the full stacks now match after the load.
