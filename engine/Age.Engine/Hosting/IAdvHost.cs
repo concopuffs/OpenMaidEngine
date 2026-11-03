@@ -16,7 +16,9 @@ public interface IAdvHost
         ShowText(run, glyphDelayMilliseconds);
         return null;
     }
-    int MessageGlyphDelayMilliseconds => 50;
+    // Native registers message:MessageSpeed=5 (ms per glyph) and message:MesWinAlpha=8 before SYS4REG.INI
+    // loads; hosts without a settings file start from those values.
+    int MessageGlyphDelayMilliseconds => Persistence.Sys4RegIniStore.DefaultMessageSpeed;
     void SetMessageGlyphDelayMilliseconds(int milliseconds) { }
     // Native ADV text subsystem: op 0x7a updates the selected layout's last 20-byte cursor record;
     // op 0x204 rasterizes a string into a numbered surface before 0x1fb binds that surface.
@@ -48,7 +50,7 @@ public interface IAdvHost
     // recording re-enable at exit ends that presentation and drops every bound target layout.
     void EndTextHistoryPresentation() { }
     void EndTextHistoryPresentation(GfxState gfx) => EndTextHistoryPresentation();
-    int MessageWindowAlphaSetting => 0;
+    int MessageWindowAlphaSetting => Persistence.Sys4RegIniStore.DefaultMesWinAlpha;
     void SetMessageWindowAlphaSetting(int value) { }
     void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) { }
     void SetAdvWaitIndicatorFollowLastGlyph(bool enabled) { }

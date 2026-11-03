@@ -459,6 +459,53 @@ public sealed class SharedProfile
         return _stringCells.TryGetValue(address, out string? value) ? value : string.Empty;
     }
 
+    /// <summary>
+    /// Load like <see cref="Load"/>, but a SAVE.DAT or RT.DAT that cannot be read or decoded leaves that part
+    /// empty instead of failing startup. AGE likewise reports "データが壊れています" and offers to continue.
+    /// </summary>
+    public IReadOnlyList<SharedProfileLoadFailure> LoadRecovering(INativeDatStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        var failures = new List<SharedProfileLoadFailure>();
+        try
+        {
+            NativeSaveDocument? document = store.LoadShared();
+            if (document is null)
+            {
+                ClearSharedPayload();
+                _accumulatedPlaySeconds = 0;
+            }
+            else
+            {
+                SharedProfilePayload payload = SharedProfilePayloadCodec.Decode(document.Payload, document.Metadata);
+                Replace(payload);
+                _accumulatedPlaySeconds = document.Metadata.AccumulatedPlaySeconds;
+            }
+        }
+        catch (Exception error) when (IsRecoverableLoadError(error))
+        {
+            ClearSharedPayload();
+            _accumulatedPlaySeconds = 0;
+            failures.Add(new SharedProfileLoadFailure(NativeProfileFile.Shared, error));
+        }
+        try
+        {
+            ReadText.Load(store);
+        }
+        catch (Exception error) when (IsRecoverableLoadError(error))
+        {
+            ReadText.Clear();
+            failures.Add(new SharedProfileLoadFailure(NativeProfileFile.ReadText, error));
+        }
+        return failures;
+    }
+
+    // A damaged or foreign file surfaces as a container/codec failure, an I/O failure, or an out-of-range read in
+    // a decoder; none of these may abort startup. Programming and runtime-fatal errors still propagate.
+    private static bool IsRecoverableLoadError(Exception error)
+        => error is IOException or UnauthorizedAccessException or InvalidDataException or FormatException
+            or ArgumentException or IndexOutOfRangeException or OverflowException or DecoderFallbackException;
+
     public bool Load(INativeDatStore store)
     {
         ArgumentNullException.ThrowIfNull(store);
@@ -681,3 +728,6 @@ public sealed class SharedProfile
             throw new ArgumentOutOfRangeException(nameof(address), "Shared profile cell address cannot be negative.");
     }
 }
+
+/// <summary>A profile file that <see cref="SharedProfile.LoadRecovering"/> could not load; its part starts empty.</summary>
+public sealed record SharedProfileLoadFailure(NativeProfileFile File, Exception Error);

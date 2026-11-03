@@ -73,6 +73,19 @@ public interface INativeDatStore
     int CopyNumberedPair(int sourceSlot, int destinationSlot);
     byte[]? LoadNumberedThumbnail(int slot);
     void SaveNumberedThumbnail(int slot, ReadOnlySpan<byte> data);
+
+    /// <summary>
+    /// Move a profile file set that failed to load (SAVE.DAT/SAVE.BAK or RT.DAT/RT.BAK) out of the way, so the
+    /// next save cannot overwrite it. Returns the names it now has, or none when the store keeps no files.
+    /// </summary>
+    IReadOnlyList<string> SetAsideUnreadable(NativeProfileFile file) => [];
+}
+
+/// <summary>The shared profile's two files: SAVE.DAT (shared payload) and RT.DAT (read-text database).</summary>
+public enum NativeProfileFile
+{
+    Shared,
+    ReadText,
 }
 
 /// <summary>
@@ -98,6 +111,24 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         _root = Path.GetFullPath(root);
         _identity = identity;
+    }
+
+    public IReadOnlyList<string> SetAsideUnreadable(NativeProfileFile file)
+    {
+        string[] names = file == NativeProfileFile.Shared
+            ? [SharedFileName, SharedBackupFileName]
+            : [ReadTextFileName, ReadTextBackupFileName];
+        string suffix = ".unreadable-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+        var moved = new List<string>();
+        foreach (string name in names)
+        {
+            string path = Path.Combine(_root, name);
+            if (!File.Exists(path)) continue;
+            string target = path + suffix;
+            File.Move(path, target);
+            moved.Add(Path.GetFileName(target));
+        }
+        return moved;
     }
 
     public NativeSaveDocument? LoadShared()

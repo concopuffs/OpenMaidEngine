@@ -299,7 +299,9 @@ The requested CP932 face is copied into the primary LOGFONT lfFaceName and AGE a
 - **summary:** (milliseconds) - set the per-glyph ADV text reveal delay; zero makes retained UI text publish immediately.
 - **operand access:** `1` read
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1b5`; scope=Himegari SYS4422. Complete corpus consistency across all 11 uses in 5 scripts: CONFIG initializes the value to 50 ms and changes it in 5-ms steps over 5..100; MAMES, ITMES, SKMES, and INFOMES bracket retained show-text descriptions with get op 0x7f, set 0, and restore the saved value. Native ADV traces show ordinary show-text consuming the corresponding charDelay with a 50-ms default.
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1b5`; scope=Himegari SYS4422. Complete corpus consistency across all 11 uses in 5 scripts: CONFIG's reset button sets 50 ms and its controls change the value in 5-ms steps over 5..100; MAMES, ITMES, SKMES, and INFOMES bracket retained show-text descriptions with get op 0x7f, set 0, and restore the saved value. Ghidra /v2: op_0x1b5_handler stores operand 1 at ctx+0x14e9c and sets message:MessageSpeed; engine_initialize_subsystems_from_settings seeds ctx+0x14e9c from message:MessageSpeed, which engine_settings_register_defaults@0x46be30 registers as 5 and Himegari's SYS4INI does not override. So a new profile reveals text at 5 ms per glyph; the 50 ms in earlier native traces presumably came from a profile whose stored MessageSpeed was 50 (not checked).
+
+Port status (2026-11-03): GodotAdvHost seeds the delay from SYS4REG.INI [message] MessageSpeed (default 5, was a fixed 50) and writes it back at shutdown, not per op, because the description scripts set 0 and restore it for every item.
 
 ### 0x1bb `set-text-history-recording` (set-text-history-recording, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -1767,6 +1769,8 @@ Both revision handlers convert origin/extent operands into paired edge rectangle
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x131`; scope=Himegari SYS4422. Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with `message:MesWinAlpha` and writes the result. HISTORY.BIN and the shared ADV redraw path compute (16-value)<<4 for the control-strip alpha.
 
+Port status (2026-11-03): GodotAdvHost seeds the value from SYS4REG.INI [message] MesWinAlpha (default 8 from engine_settings_register_defaults; the port used 0, an opaque window that hid the CG behind SC0000's opening text) and writes it back at shutdown.
+
 ### 0x13a `register-numeric-glyph-style` (u0041F3A0, argc 6)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -1791,6 +1795,8 @@ SYS4422 stores the five-dword definition at EngineCtx+0x55180+style_index*0x14. 
 - **operand access:** `1` read
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x141`; scope=Himegari SYS4422. CONFIG.BIN is a complete paired getter/setter proof: reset-defaults writes 4; the two message-window-opacity controls read op 0x131, increment/decrement within 0..16, then pass the result to op 0x141; the redraw path reads op 0x131 again and computes bar width (16-value)*80/16. The shared ADV/history paths independently consume the same getter as (16-value)<<4 alpha.
+
+Port status (2026-11-03): setter of the persisted message:MesWinAlpha; see op 0x131.
 
 ### 0x1ae `write-numbered-save-thumbnail` (write-numbered-save-thumbnail, argc 3)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)

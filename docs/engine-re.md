@@ -4437,7 +4437,7 @@ quits rewrites the shared profile even without a save: `WM_CLOSE` calls `shared_
 `SYS4REG.INI`, `SAVE.DAT` and `RT.DAT`/`RT.BAK`. The attach test showed exactly those four files changed.
 
 **A new profile starts fullscreen.** Without `SYS4REG.INI`, AGE writes its native defaults, including
-`display:ScreenMode=0` (fullscreen; windowed is 1), `sound:Volume0..4=-1`, `MessageSpeed=5` and
+`display:ScreenMode=0` (fullscreen; windowed is 1), `sound:Volume0..4=-1`, `MessageSpeed=5`, `MesWinAlpha=8` and
 `EffectSkipOnClick=0`. Fullscreen takes over the display, and `PrintWindow` then captures black, so a sandboxed run
 must write `ScreenMode=1` first.
 

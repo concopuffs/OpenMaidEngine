@@ -7,12 +7,20 @@ namespace Age.Engine.Persistence;
 
 /// <summary>
 /// Preserving reader/writer for AGE's native SYS4REG.INI engine-settings file. The current projection
-/// owns only the audio keys; all other sections, keys, comments, ordering, and newline style survive.
+/// owns the audio keys and the [message] MessageSpeed/MesWinAlpha keys; all other sections, keys,
+/// comments, ordering, and newline style survive.
 /// </summary>
 public sealed class Sys4RegIniStore
 {
     public const string FileName = "SYS4REG.INI";
     private const string SoundSection = "sound";
+    private const string MessageSection = "message";
+    public const string MessageSpeedKey = "MessageSpeed";   // op 0x1b5 per-glyph delay, milliseconds
+    public const string MesWinAlphaKey = "MesWinAlpha";     // ops 0x131/0x141 message-window transparency
+    // engine_settings_register_defaults@0x46be30 registers message:MessageSpeed=5 and message:MesWinAlpha=8;
+    // Himegari's SYS4INI trailer overrides neither. (CONFIG's reset button instead sets 50 ms and 4.)
+    public const int DefaultMessageSpeed = 5;
+    public const int DefaultMesWinAlpha = 8;
     private static readonly Encoding Cp932 = CreateCp932();
     private static readonly string[] RouteKeys = ["", "Music", "SE", "Voice", "Movie"];
 
@@ -114,13 +122,37 @@ public sealed class Sys4RegIniStore
             }
             for (int category = 0; category < AudioMixerSettings.CategoryCount; category++)
                 _document.SetInt(SoundSection, $"Volume{category}", snapshot.Volumes[category]);
-
-            string? directory = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
-            string temporary = _path + ".$tmp";
-            File.WriteAllText(temporary, _document.Serialize(), Cp932);
-            File.Move(temporary, _path, overwrite: true);
+            WriteLocked();
         }
+    }
+
+    /// <summary>A [message] integer, or the native registered default when the key is absent.</summary>
+    public int LoadMessageInt(string key, int defaultValue)
+    {
+        lock (_lock)
+        {
+            _document ??= LoadDocument();
+            return _document.TryGetInt(MessageSection, key, out int value) ? value : defaultValue;
+        }
+    }
+
+    public void SaveMessageInt(string key, int value)
+    {
+        lock (_lock)
+        {
+            _document ??= LoadDocument();
+            _document.SetInt(MessageSection, key, value);
+            WriteLocked();
+        }
+    }
+
+    private void WriteLocked()
+    {
+        string? directory = Path.GetDirectoryName(_path);
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+        string temporary = _path + ".$tmp";
+        File.WriteAllText(temporary, _document!.Serialize(), Cp932);
+        File.Move(temporary, _path, overwrite: true);
     }
 
     private IniDocument LoadDocument()

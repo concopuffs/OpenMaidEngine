@@ -315,7 +315,22 @@ public partial class Main : Godot.Control
             nativeSaveStore = profilePersistence.CreateNativeDatStore()
                 ?? throw new InvalidOperationException(
                     "write-enabled profile did not construct a native persistence store");
-            sharedProfile.Load(nativeSaveStore);
+            foreach (SharedProfileLoadFailure failure in sharedProfile.LoadRecovering(nativeSaveStore))
+            {
+                // Keep the damaged files: the next shared-profile write would otherwise replace them.
+                string asideNote;
+                try
+                {
+                    IReadOnlyList<string> aside = nativeSaveStore.SetAsideUnreadable(failure.File);
+                    asideNote = aside.Count == 0 ? "" : $"; kept as {string.Join(", ", aside)}";
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    asideNote = $"; could not set it aside ({error.Message})";
+                }
+                GD.PushWarning($"[persistence] {failure.File} profile file unreadable, starting it empty: " +
+                               $"{failure.Error.Message}{asideNote}");
+            }
             try
             {
                 _sys4RegIniStore = Sys4RegIniStore.ForPath(
@@ -442,6 +457,7 @@ public partial class Main : Godot.Control
             SleepScale = sleepScale,
             TraceOps = _gfxLogPath != null,
         };
+        if (_sys4RegIniStore != null) _host.UseMessageSettingsStore(_sys4RegIniStore);
         _trace = new GodotTraceSink(_locator, _timeline);
         if (_perfLogPath != null) _perf = new PerformanceFrameLog(_perfLogPath);
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
@@ -817,6 +833,7 @@ public partial class Main : Godot.Control
             }
             else
             {
+                _host?.FlushMessageSettings();
                 SharedProfileShutdownFlushResult flush = _vm.FlushSharedProfileOnShutdown();
                 if (flush.Outcome == SharedProfileShutdownFlushOutcome.Saved)
                     GD.Print("[persistence] clean shutdown wrote SAVE.DAT and RT.DAT");

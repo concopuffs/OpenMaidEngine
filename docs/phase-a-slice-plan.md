@@ -4340,3 +4340,29 @@ Five ops the port stepped as no-ops now follow the native decodes (`engine-re.md
 - **Not addressed.** Render, wait and launch withholding in open blocks is not modelled; see the open question in
   `engine-re.md`. The duck restore is immediate where native fades it back. The port's delayed voices do not clear
   a mute request.
+
+### Message-window and text-speed defaults; startup survives unreadable profile files (2026-11-03)
+
+**The dark band on SC0000 page 3 was a settings default.**
+
+- **Cause.** On a fresh profile the port drew the ADV window opaque over the opening CGs, while AGE shows the CG
+  through it. The port had no SYS4REG.INI `[message]` support: `MesWinAlpha` was 0, so the window alpha
+  `(16-v)<<4` was 256, and `MessageSpeed` was a fixed 50 ms.
+- **Native values.** `engine_settings_register_defaults@0x46be30` registers `MessageSpeed=5` and `MesWinAlpha=8`,
+  and Himegari's SYS4INI overrides neither. Native CONFIG confirms both: transparency at half, speed at full.
+- **Fix.** `Sys4RegIniStore` now reads and writes the two `[message]` keys with those defaults.
+  `GodotAdvHost.UseMessageSettingsStore` seeds the host from them, and `_ExitTree` writes changes back.
+  `IAdvHost` defaults follow the native values.
+- **Validation.** Pages 1–3 now match AGE pixel for pixel outside the text glyphs. A CONFIG change (4→6) was
+  written at quit.
+
+**An unreadable SAVE.DAT or RT.DAT no longer aborts `Main._Ready`.**
+
+- **Behavior.** `SharedProfile.LoadRecovering` starts the failed part empty and reports it.
+  `INativeDatStore.SetAsideUnreadable` renames the file and its `.BAK` to `*.unreadable-<timestamp>`, so the
+  next write cannot replace them. The port logs a warning and boots.
+- **Validation.**
+  - Live: a sandbox seeded with garbage SAVE.DAT and RT.DAT booted, played, and wrote fresh files beside the kept
+    originals.
+  - New tests: `ProfileStartupRecoveryTests`. 913 of 915 engine tests pass; the two failures predate this work.
+

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+using Age.Engine.Persistence;
 using Age.Engine.Text;
 
 public sealed partial class GodotAdvHost
@@ -31,9 +32,11 @@ public sealed partial class GodotAdvHost
     private int _advTextX = 100, _advTextY = 47;
     private int _currentAdvLayout = 1; // SYSTEM4's ordinary SC0000 ADV layout
     private long _advTextStartedMs;
-    private int _activeGlyphDelayMilliseconds = 50;
-    private int _messageGlyphDelayMilliseconds = 50;
-    private volatile int _messageWindowAlphaSetting;
+    private int _activeGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
+    private int _messageGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
+    private volatile int _messageWindowAlphaSetting = Sys4RegIniStore.DefaultMesWinAlpha;
+    private Sys4RegIniStore? _messageSettingsStore;
+    private int _messageSettingsDirty;   // nonzero once op 0x1b5 or 0x141 changed a [message] key
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
     private bool _waitIndicatorFollowLastGlyph;
@@ -69,6 +72,41 @@ public sealed partial class GodotAdvHost
     {
         lock (_textLock) _messageGlyphDelayMilliseconds = System.Math.Max(0, milliseconds);
         _timeline?.Event("message-glyph-delay", new() { ["delay_ms"] = milliseconds });
+        Interlocked.Exchange(ref _messageSettingsDirty, 1);   // op 0x1b5 sets message:MessageSpeed
+    }
+
+    /// <summary>
+    /// Seed MessageSpeed and MesWinAlpha from SYS4REG.INI [message] (native defaults when absent). Changes are
+    /// written back by <see cref="FlushMessageSettings"/> at shutdown, as AGE rewrites SYS4REG.INI when it
+    /// quits; MAMES/ITMES/SKMES/INFOMES briefly set the delay to 0 per description, so no per-op write.
+    /// Call before the VM is constructed: it reads both once.
+    /// </summary>
+    public void UseMessageSettingsStore(Sys4RegIniStore store)
+    {
+        _messageSettingsStore = store;
+        int speed = store.LoadMessageInt(Sys4RegIniStore.MessageSpeedKey, Sys4RegIniStore.DefaultMessageSpeed);
+        lock (_textLock)
+        {
+            _messageGlyphDelayMilliseconds = System.Math.Max(0, speed);
+            _activeGlyphDelayMilliseconds = _messageGlyphDelayMilliseconds;
+        }
+        _messageWindowAlphaSetting = store.LoadMessageInt(
+            Sys4RegIniStore.MesWinAlphaKey, Sys4RegIniStore.DefaultMesWinAlpha);
+    }
+
+    public void FlushMessageSettings()
+    {
+        if (_messageSettingsStore == null || Interlocked.Exchange(ref _messageSettingsDirty, 0) == 0) return;
+        try
+        {
+            _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.MessageSpeedKey, MessageGlyphDelayMilliseconds);
+            _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.MesWinAlphaKey, _messageWindowAlphaSetting);
+        }
+        catch (Exception error) when (
+            error is System.IO.IOException or UnauthorizedAccessException or System.IO.InvalidDataException)
+        {
+            Godot.GD.PushWarning($"[settings] message settings save failed: {error.Message}");
+        }
     }
 
     public void ShowText(int offset, string text)
@@ -502,6 +540,7 @@ public sealed partial class GodotAdvHost
     {
         _messageWindowAlphaSetting = value;
         _timeline?.Event("message-window-alpha", new() { ["value"] = value });
+        Interlocked.Exchange(ref _messageSettingsDirty, 1);   // op 0x141 sets message:MesWinAlpha
     }
 
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)

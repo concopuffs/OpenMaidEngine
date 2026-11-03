@@ -158,6 +158,16 @@ enabled, negative is disabled, and the native setter moves between bands by addi
 SE/Voice/Movie use zero/nonzero. The file is engine-option persistence, separate from `SAVE.DAT`,
 `RT.DAT`, and numbered saves.
 
+The `[message]` section holds two integers that scripts read and write through opcodes:
+
+- **`MessageSpeed`.** The per-glyph text delay in milliseconds (op `0x1b5`); the registered default is `5`.
+- **`MesWinAlpha`.** The ADV window transparency `0..16`, drawn as alpha `(16-value)<<4` (ops `0x131`/`0x141`);
+  the registered default is `8`.
+
+When a key is absent, AGE uses these values from `engine_settings_register_defaults`. Himegari's SYS4INI trailer
+overrides neither. CONFIG's reset button writes `50` and `4` instead. The port reads both keys at startup and
+writes them back at shutdown, as AGE does on quit.
+
 `SAVEPATH` and `REGFILEPATH` are independent native settings rather than one serialized profile-root
 field. Himegari deliberately relates them: `SAVEPATH` is the `SAVE` descendant of `REGFILEPATH`.
 The port's shared profile override preserves that relative layout beneath the selected profile namespace,
