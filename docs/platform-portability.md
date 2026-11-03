@@ -371,6 +371,13 @@ FFmpeg (step 6) each passed Himegari 213/213 and Kamidori 280/280, with identica
 (dimensions, frame counts and rates, timestamps, changed-frame counts, and audio counts/signal; 268 Kamidori titles
 carry audio, 19 of them silent).
 
+The minimal build omits FFmpeg's `extract_extradata` bitstream filter, which `avformat_find_stream_info` uses to
+fill MPEG video extradata with the sequence header. The installed movies carry that header only at the start of
+the stream. A decoder that was flushed and seeked before it decoded the first frame therefore had no picture
+size and produced no frames (found and fixed on 2026-11-03; the gate above plays from the start, so it did not
+notice). When extradata is empty, the shim's `capture_sequence_header_extradata` copies the header and its
+extension from the first video packet, so the fix needs no SDK change.
+
 ABI v2 and MPEG audio playback landed on 2026-07-25. The expanded installed-corpus gate passes all 213 assets:
 184 remain strictly video-only and all 29 audio-bearing streams decode to finite 44.1 kHz stereo PCM with
 monotonic timestamps and clean EOF/teardown. The gate decoded 17,537 audio blocks / 18,185,856 stereo PCM

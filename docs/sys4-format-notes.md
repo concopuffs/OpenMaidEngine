@@ -384,6 +384,10 @@ The installed Himegari file is exactly 76,752 bytes: 192 records plus 18,543 fla
 without trailing data. Base script `SC0000` has packed id `0x22` and 320 flags, exactly matching its
 T1 count.
 
+The file is mutable profile state: running a modified scene grows that scene's record to the modified
+script's T1 count. Since the OMS gate-7 native runs (2026-11-01), this machine's SC0000 record holds 322 flags.
+Tests must not pin the installed file's counts.
+
 ### Numbered `SAVE%02d.DAT`, logical layout 3 — CONFIRMED FOR HIMEGARI
 
 Himegari's numbered file begins with the common container, `SaveVersion1=3`, and `SaveVersion2=10`.

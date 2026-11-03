@@ -92,15 +92,36 @@ public class ReadTextDatabaseTests
             ReadTextDatabaseCodec.Decode(File.ReadAllBytes(path), Identity);
         ReadTextDatabaseSnapshot roundTripped = ReadTextDatabaseCodec.Decode(
             ReadTextDatabaseCodec.Encode(imported, Identity), Identity);
-        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson);
-        Script sc0000 = Sys4ScriptProvider.Load(table).RequireByName("SC0000.BIN");
 
+        // The live profile is mutable: running a modded scene natively grows its record to that scene's T1
+        // count (this machine's SC0000 record has 322 flags after the OMS gate-7 runs). So only check what
+        // holds for any profile; the T1 sizing rule is pinned by the synthesized test below.
         Assert.NotEmpty(imported.Records);
-        Assert.Equal(0x22u, sc0000.PackedId);
-        Assert.Equal(sc0000.ReadMessageOffsets.Count, imported.Records[sc0000.PackedId].Count);
         Assert.Equal(imported.Records.Keys.Order(), roundTripped.Records.Keys.Order());
         foreach (var record in imported.Records)
             Assert.Equal(record.Value, roundTripped.Records[record.Key]);
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void ReadMessageRecordsAreSizedByTheRunningScriptsT1Table()
+    {
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scripts = Sys4ScriptProvider.Load(table);
+        Script sc0000 = scripts.RequireByName("SC0000.BIN");
+        var profile = new SharedProfile();
+        var vm = new VirtualMachine(sc0000, table, new RecordingHost(),
+            new VmOptions(MaxSteps: 200_000), scripts, sharedProfile: profile);
+
+        // Each wait queues its message and the following op 0x71 commits it; the headless host returns
+        // from every wait at once, so the scene reads on until it exits or reaches the step limit.
+        vm.Run();
+
+        Assert.Equal(0x22u, sc0000.PackedId);
+        Assert.Equal(320, sc0000.ReadMessageOffsets.Count);   // the shipped T1 table
+        IReadOnlyList<uint> flags = profile.ReadText.Snapshot().Records[sc0000.PackedId];
+        Assert.Equal(sc0000.ReadMessageOffsets.Count, flags.Count);
+        Assert.Equal(1u, flags[0]);
     }
 
     [Fact]

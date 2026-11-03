@@ -256,6 +256,60 @@ static int determine_duration(age_movie *movie, AVStream *stream, int64_t *out_d
     return best_duration_ms > 0 ? 0 : AVERROR_INVALIDDATA;
 }
 
+/* avformat_find_stream_info fills MPEG video extradata with the extract_extradata bitstream filter, which the
+ * minimal FFmpeg build (--disable-everything) leaves out. Without that sequence header, a decoder that is
+ * flushed and seeked before it has decoded the stream's first frame receives slices it cannot size
+ * ("Invalid frame dimensions 0x0") and never produces a frame. So copy the sequence header and its extension
+ * from the first video packet when the demuxer left extradata empty. The quantiser matrices that may follow the
+ * header hold nonzero bytes only, so the next start code ends it. */
+static int capture_sequence_header_extradata(age_movie *movie, AVStream *stream) {
+    AVCodecParameters *parameters = stream->codecpar;
+    if (parameters->extradata_size > 0) return 0;
+    if (parameters->codec_id != AV_CODEC_ID_MPEG1VIDEO && parameters->codec_id != AV_CODEC_ID_MPEG2VIDEO)
+        return 0;
+    AVPacket *packet = av_packet_alloc();
+    if (packet == NULL) return AVERROR(ENOMEM);
+    int result;
+    while ((result = av_read_frame(movie->video_format, packet)) >= 0) {
+        if (packet->stream_index != movie->video_stream_index) {
+            av_packet_unref(packet);
+            continue;
+        }
+        const uint8_t *data = packet->data;
+        int size = packet->size;
+        int start = -1;
+        int end = size;
+        for (int i = 0; i + 3 < size; i++) {
+            if (data[i] != 0 || data[i + 1] != 0 || data[i + 2] != 1) continue;
+            uint8_t code = data[i + 3];
+            if (start < 0) {
+                if (code == 0xb3) start = i;
+            } else if (code != 0xb3 && code != 0xb5) {
+                end = i;
+                break;
+            }
+            i += 3;
+        }
+        if (start >= 0) {
+            int length = end - start;
+            uint8_t *extradata = (uint8_t *)av_mallocz((size_t)length + AV_INPUT_BUFFER_PADDING_SIZE);
+            if (extradata == NULL) {
+                result = AVERROR(ENOMEM);
+            } else {
+                memcpy(extradata, data + start, (size_t)length);
+                parameters->extradata = extradata;
+                parameters->extradata_size = length;
+                result = 0;
+            }
+        }
+        av_packet_unref(packet);
+        /* Only the stream's first video packet starts with the sequence header in these movies. */
+        break;
+    }
+    av_packet_free(&packet);
+    return result == AVERROR_EOF ? 0 : result;
+}
+
 static int rewind_for_decode(age_movie *movie, AVStream *stream) {
     /* MPEG video can contain decodable preroll before AVStream.start_time. DirectShow
        presents those opening frames from graph time zero; seeking to the video pin's
@@ -428,6 +482,11 @@ int32_t AGE_MOVIE_CALL age_movie_open(const uint8_t *bytes, size_t length,
     AVStream *stream = movie->video_format->streams[movie->video_stream_index];
     movie->video_time_base = stream->time_base;
     movie->video_fallback_origin_ms = 0;
+    result = capture_sequence_header_extradata(movie, stream);
+    if (result < 0) {
+        set_error(movie, "read MPEG sequence header", result);
+        goto failure;
+    }
 
     movie->video_codec = avcodec_alloc_context3(video_decoder);
     if (movie->video_codec == NULL) {

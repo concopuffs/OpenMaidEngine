@@ -4406,3 +4406,21 @@ Five ops the port stepped as no-ops now follow the native decodes (`engine-re.md
 - **References.** sys4-format-notes ("Surface-record bookkeeping", "Appended text-history tail", "Native
   SYS4REG.INI engine options"); engine-re surface-record and History sections; Ghidra annotations at
   `0x456f30`, `0x46e8b0` and the surface workers.
+
+### Two failing tests fixed: early movie seeks and the live RT.DAT check (2026-11-03)
+
+- **Movie seek before the first frame.** Since the 2026-10-06 switch to the project-built minimal FFmpeg,
+  `FfmpegShimSeeksBothVideoAndAudioNearRequestedPosition` had failed. A seek made before any video was decoded
+  produced no frame ("Invalid frame dimensions 0x0") until the next sequence header, which these movies carry
+  only at the start. Cause: `avformat_find_stream_info` fills MPEG video extradata through the
+  `extract_extradata` bitstream filter, and `--disable-everything` removes it. Extradata was 0 bytes in the
+  minimal build and 76 in the BtbN build. The shim now copies the sequence header and its extension from the
+  first video packet when extradata is empty (`capture_sequence_header_extradata`). The SDK is unchanged, so
+  no new `deps-ffmpeg-*` release is needed. After the fix, seeks to 5000 and 11000 ms land on 5405 and 11411 ms
+  in both builds.
+- **Live RT.DAT test.** `InstalledNativeRtDatRoundTripsItsLogicalRecordsWhenPresent` asserted SC0000's 320 flags
+  in the user's own profile. Native runs of the modded SC0000 (OMS gate 7) had grown that record to 322. The
+  test now checks only profile-independent invariants. `ReadMessageRecordsAreSizedByTheRunningScriptsT1Table`
+  pins the T1 sizing rule on a synthesized profile.
+- **Validation.** All 924 engine tests pass.
+- **References.** platform-portability (FFmpeg section); sys4-format-notes ("Shared `RT.DAT`").
