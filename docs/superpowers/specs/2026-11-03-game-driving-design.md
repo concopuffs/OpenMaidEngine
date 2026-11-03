@@ -1,7 +1,7 @@
 # Game driving: one step language, two backends — design
 
 **Date:** 2026-11-03
-**Status:** accepted; M1 to M3 are built. §13 to §15 record where the build differs from the design.
+**Status:** accepted; M1 to M4 are built. §13 to §16 record where the build differs from the design.
 **Home in the canonical map:** this file is the design. Tool usage stays in `docs/tools-reference.md` ("Game
 driver"). Native engine findings stay in `docs/engine-re.md` ("Driving native AGE"). Directory layout
 stays in `docs/PROJECT-STRUCTURE.md`.
@@ -347,3 +347,31 @@ differs from the sections above, this section wins. Usage is in `docs/tools-refe
   `docs/engine-re.md` ("Save identity and native read checks") record them, and `docs/phase-a-slice-plan.md` has the
   list.
 - **No driver changes were needed.** The steps, seeding and `close` from M2 covered the round trip.
+
+## 16. As built: M4 (2026-11-03)
+
+`tools/drive_mcp.py` implements §8; usage and setup are in `docs/tools-reference.md` ("MCP server").
+
+- **SDK 2.x.** The server uses `mcp` 2.3 (`mcp.server.mcpserver.MCPServer`; 2.x renamed `FastMCP`). The 2.x stdio
+  transport moves the wire off file descriptor 1 and points it at stderr, so stray prints and the CLI's child processes
+  cannot corrupt the protocol.
+- **One code path.** `drive.py` gained `execute_steps`, `session_status` and `steps_help`; the CLI and the server both
+  use them. `drive_start` and `drive_stop` run the CLI as a subprocess.
+- **Beyond §8's signatures.** `drive_steps` also takes `file` (a `.steps` file, as `run` does). `drive_start` also
+  takes `build` (`--no-build`). `drive_screenshot` takes an optional `name`; `drive_stop` takes `timeout`. The native
+  `--live-saves` and `--attach` options are not offered.
+- **Failures.** A failing step comes back as a `FAILED at step N` result with its screenshot. A call that cannot run
+  (no session, an unknown step, a missing capability) is a tool error.
+- **Instructions.** The server's instructions carry `drive.py steps` (syntax, conditions, named points), so an agent
+  does not need to look up the step language.
+- **Environment.** MCP clients may start servers with a reduced environment, and the SDK's stdio client dropped
+  `AGE_GODOT_CONSOLE`. Registration passes it explicitly. Codex's default 60 s tool timeout is too short for a port
+  start with its build.
+- **Validation.** `tools/test_drive_mcp.py` calls the tools through the SDK against the fake protocol server. It runs
+  by hand, not in `validate.py`: no layer requires the optional `mcp`, and validation never turns a missing
+  prerequisite into a skip. A live run over real stdio passed on both targets: start, boot to the
+  title, new game to page 3 with `expect top=SC0000@0x8a9`, state (`SYSTEM4@0x477 > SC0000@0x8a9` on both), a named
+  screenshot, a reported failing `expect`, and stop. - **Acceptance 4 passed (2026-11-03).** Through the MCP server, `himegari-save-load.steps` ran unchanged on the port
+  (34 steps, 37 s, the same offsets) while a script moved the real cursor over the port window 3,654 times in 75 s.
+  At every one of those points another window covered the port (`WindowFromPoint`). No real clicks were sent: they
+  would have landed on the covering window.

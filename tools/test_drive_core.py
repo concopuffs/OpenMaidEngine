@@ -286,10 +286,12 @@ def test_profiles():
 
 
 class FakeServer:
-    """A protocol server on a background thread: checks the token, records requests, answers from replies()."""
+    """A protocol server on a background thread: checks the token, records requests, answers from replies(). It
+    serves ``connections`` clients one after another (each drive.py or drive_mcp call is one client)."""
 
-    def __init__(self, replies, token="secret", capabilities=("speed", "waiting")):
+    def __init__(self, replies, token="secret", capabilities=("speed", "waiting"), connections=1):
         self.replies, self.token, self.capabilities = replies, token, list(capabilities)
+        self.connections = connections
         self.requests = []
         self.listener = socket.socket()
         self.listener.bind(("127.0.0.1", 0))
@@ -299,6 +301,10 @@ class FakeServer:
         self.thread.start()
 
     def serve(self):
+        for _ in range(self.connections):
+            self.serve_one()
+
+    def serve_one(self):
         connection, _ = self.listener.accept()
         with connection, connection.makefile("rwb") as stream:
             for line in stream:

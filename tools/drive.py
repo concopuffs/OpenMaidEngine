@@ -21,7 +21,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import paths  # noqa: E402
@@ -33,13 +33,17 @@ def print_result(result: dict[str, Any], as_json: bool) -> None:
     print(json.dumps(result, ensure_ascii=False) if as_json else core.describe(result), flush=True)
 
 
-def run_steps(target: str, steps: list[core.Step], as_json: bool) -> int:
+def execute_steps(target: str, steps: list[core.Step], report: Callable[[dict[str, Any]], None], *,
+                  on_event: Callable[[dict[str, Any]], None] | None = None,
+                  finish: Callable[[core.Executor], None] | None = None) -> bool:
+    """Run steps on the target's session, reporting one result per step. ``on_event`` receives what happened since
+    the last client (dialogs, exits); ``finish`` runs on the same connection afterwards unless a step closed the
+    game. drive.py and drive_mcp.py both drive through here."""
     with core.connect(target) as client:
         core.check_capabilities(steps, client.capabilities, f"{target} target")
-        for event in client.take_events():          # whatever happened since the last client (dialogs, exits)
-            fields = {k: v for k, v in event.items() if k not in ("t", "kind")}
-            print(json.dumps(event, ensure_ascii=False) if as_json else
-                  f"event {event.get('kind')}: {json.dumps(fields, ensure_ascii=False)}", flush=True)
+        for event in client.take_events():
+            if on_event is not None:
+                on_event(event)
         on_close = None
         if target == "port":
             import drive_port
@@ -48,7 +52,17 @@ def run_steps(target: str, steps: list[core.Step], as_json: bool) -> int:
             def on_close(_: dict[str, Any]) -> dict[str, Any]:
                 return {"exit_code": drive_port.wait_exit(info, 20)} if info else {}
         executor = core.Executor(client, core.load_profile(), core.drive_root(target) / "shots", on_close=on_close)
-        ok = executor.run(steps, lambda result: print_result(result, as_json))
+        ok = executor.run(steps, report)
+        if finish is not None and not executor.closed:
+            finish(executor)
+    return ok
+
+
+def run_steps(target: str, steps: list[core.Step], as_json: bool) -> int:
+    ok = execute_steps(
+        target, steps, lambda result: print_result(result, as_json),
+        on_event=lambda event: print(json.dumps(event, ensure_ascii=False) if as_json else core.describe_event(event),
+                                     flush=True))
     return 0 if ok else 1
 
 
@@ -82,11 +96,12 @@ def command_run(arguments: argparse.Namespace) -> int:
     return run_steps(arguments.target, steps, arguments.json)
 
 
-def command_status(arguments: argparse.Namespace) -> int:
-    info = core.read_session(arguments.target)
+def session_status(target: str) -> dict[str, Any] | None:
+    """The session (without its token), the hello, the VM stack and the events since the last client; None without
+    a session. `drive.py status` prints it and drive_mcp's drive_state returns it."""
+    info = core.read_session(target)
     if info is None:
-        print(f"drive {arguments.target}: no session")
-        return 1
+        return None
     with core.Client(int(info["port"]), info["token"]) as client:
         status: dict[str, Any] = {"session": {k: v for k, v in info.items() if k != "token"}, "hello": client.hello}
         try:
@@ -95,18 +110,31 @@ def command_status(arguments: argparse.Namespace) -> int:
         except DriveError as error:
             status["state"] = f"unavailable: {error}"
         status["events"] = client.take_events()
+    return status
+
+
+def command_status(arguments: argparse.Namespace) -> int:
+    status = session_status(arguments.target)
+    if status is None:
+        print(f"drive {arguments.target}: no session")
+        return 1
     print(json.dumps(status, ensure_ascii=False, indent=1))
     return 0
 
 
-def command_steps(arguments: argparse.Namespace) -> int:
-    for name, spec in core.STEPS.items():
-        print(spec.usage + (f"   [needs {spec.capability}]" if spec.capability else ""))
-    print("\nconditions: at=S@OFF (any frame), top=S@OFF (innermost), script=S, waiting=KIND (port: "
-          f"{', '.join(core.WAITING_KINDS)}); every condition given must match")
+def steps_help() -> str:
+    """The step syntax, the conditions and this profile's named points (`drive.py steps`; drive_mcp's instructions)."""
+    lines = [spec.usage + (f"   [needs {spec.capability}]" if spec.capability else "") for spec in core.STEPS.values()]
+    lines.append("\nconditions: at=S@OFF (any frame), top=S@OFF (innermost), script=S, waiting=KIND (port: "
+                 f"{', '.join(core.WAITING_KINDS)}); every condition given must match")
     profile = core.load_profile()
     if profile.points:
-        print(f"\npoints ({paths.CONTEXT.profile_id}): " + ", ".join(sorted(profile.points)))
+        lines.append(f"\npoints ({paths.CONTEXT.profile_id}): " + ", ".join(sorted(profile.points)))
+    return "\n".join(lines)
+
+
+def command_steps(arguments: argparse.Namespace) -> int:
+    print(steps_help())
     return 0
 
 

@@ -752,8 +752,9 @@ branching/state can shift page ordinals between runs. Resolve a reported page wi
 
 ## Game driver
 
-Use this to play native AGE or the Godot port from the shell: native gates, save tests, checking what the original
-does on a page, and comparing it with the port. Both targets run the same `.steps` files. The design and protocol are
+Use this to play native AGE or the Godot port from the shell or, through its MCP server, from an agent: native
+gates, save tests, checking what the original does on a page, and comparing it with the port. Both targets run the
+same `.steps` files. The design and protocol are
 in `docs/superpowers/specs/2026-11-03-game-driving-design.md`. Native driving needs Windows, Frida and Pillow; port
 driving needs the Godot .NET console binary and `dotnet`.
 
@@ -763,6 +764,8 @@ driving needs the Godot .NET console binary and `dotnet`.
 | `drive_core.py` | The shared half: step parsing and validation, profiles, conditions, the protocol client, the step executor, sandboxes and seeds, Win32 window helpers. | *(imported)* | — |
 | `drive_native.py` | The native target: the Frida daemon that serves the protocol for AGE. **`start` spawns AGE suspended** under Frida and loads `tools/drive/native-agent.js` before AGE runs, then leaves a detached daemon holding the session. AGE runs in a kill-on-close job owned by that daemon, so AGE never keeps running without the hooks. | *(through `drive.py native`)* | the `native_scratch.py` copy (default exe) + `vm-map/engine-ctx.toml` + `build/games/<profile>/callscript-names.json` |
 | `drive_port.py` | The port target: builds `godot/OME.csproj`, prepares the sandbox, and launches the port with `--control` (the port serves the protocol itself; see "Port control channel" below). | *(through `drive.py port`)* | `godot/` |
+| `drive_mcp.py` | MCP server (stdio) for agents: `drive_start`, `drive_steps`, `drive_screenshot`, `drive_state`, `drive_stop`, each taking `target`. A thin client over `drive.py` (below, "MCP server"). Needs the optional `mcp` package, 2.x. | `drive_mcp.py [--profile ID]` (an agent launches it) | as `drive.py` |
+| `test_drive_mcp.py` | The MCP tools called in-process through the SDK against the fake protocol server: listing, step results with the final screenshot as an image, failures, `.steps` files, `close`, state, refusals. Fails without `mcp`; run by hand (not in `validate.py`, since no layer requires `mcp`). | `test_drive_mcp.py` | — |
 | `test_drive_core.py` | Platform-independent tests: step parsing, refusals and capabilities, locations, conditions and native frame decoding, the settle rule, INI updates, save roots, backups and port sandboxes, the Himegari profile, the SYS4INI settings trailer, the client and executor against a fake server, and every committed scenario. | `test_drive_core.py` | — |
 
 **Start options.**
@@ -864,6 +867,40 @@ target's sandbox can seed the other's.
 So your own mouse, keyboard and gamepad cannot disturb a run, and AGE cannot move your cursor. Clicks set the polled
 button *and* post the button messages, because the movie skip and `CLICKONUP` use the message latch. Keys likewise
 post `WM_KEYDOWN`/`WM_KEYUP`.
+
+### MCP server
+
+`tools/drive_mcp.py` exposes the driver to agents as five tools over stdio. Each tool takes `target` (`native` or
+`port`) and does what the CLI does:
+
+| Tool | CLI equivalent | Returns |
+|---|---|---|
+| `drive_start(target, sandbox, seed, sound, foreground, build)` | `drive.py <target> start` (`build=false` is `--no-build`, port only) | the CLI's output |
+| `drive_steps(target, steps \| file, screenshot=true)` | `do STEP…` or `run FILE` | a summary line (`ok: …` or `FAILED at step N …`), one line per step result, and a screenshot after the last step unless `screenshot=false` or a step closed the game |
+| `drive_screenshot(target, name)` | `do "shot NAME"` | the PNG as an image, with its path and the VM position |
+| `drive_state(target)` | `status` | the session, hello, VM stack and new events, as JSON |
+| `drive_stop(target, timeout)` | `stop` | the CLI's output |
+
+The server's instructions carry the step syntax, the conditions and the profile's named points (the output of
+`drive.py <target> steps`), so an agent needs no separate lookup. A failing step is reported in the result, with
+its screenshot, rather than as a tool error. Tool errors are reserved for calls that cannot run: no session, an
+unknown step, a step the target lacks. `--live-saves` and `--attach` are deliberately not offered; use the CLI for
+those. Sessions belong to the game side, so the CLI and the server can drive the same running game.
+
+**Setup.** Install the SDK once (`py -3.11 -m pip install --user mcp`; the server needs 2.x), then register the
+server. A newly added server loads at the agent's next session.
+
+```text
+claude mcp add drive --scope local -e AGE_GODOT_CONSOLE=<Godot console exe> -- py -3.11 -X utf8 <repo>/tools/drive_mcp.py
+codex mcp add drive --env AGE_GODOT_CONSOLE=<Godot console exe> -- py -3.11 -X utf8 <repo>/tools/drive_mcp.py
+```
+
+- Pass `AGE_GODOT_CONSOLE` (or put Godot on `PATH`). MCP clients may start servers with a reduced environment; the
+  SDK's own stdio client passes only `PATH`, the profile folders and a few system variables.
+- Add `--profile ID` after `drive_mcp.py` for another game profile.
+- Codex stops a tool after 60 s by default, and a port start with its build can take longer. Add
+  `tool_timeout_sec = 600` under `[mcp_servers.drive]` in `~/.codex/config.toml`. In Claude Code,
+  `MCP_TOOL_TIMEOUT` (milliseconds) sets the limit.
 
 ### Port control channel
 

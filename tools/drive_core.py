@@ -828,6 +828,11 @@ class Executor:
         return True
 
 
+def describe_event(event: dict[str, Any]) -> str:
+    fields = {k: v for k, v in event.items() if k not in ("t", "kind")}
+    return f"event {event.get('kind')}: {json.dumps(fields, ensure_ascii=False)}"
+
+
 def describe(result: dict[str, Any]) -> str:
     mark = "ok  " if result.get("ok") else "FAIL"
     details = []
@@ -840,9 +845,7 @@ def describe(result: dict[str, Any]) -> str:
     if "dialogs" in result:
         details.append(f"dialogs={json.dumps(result['dialogs'], ensure_ascii=False)}")
     lines = [f"{mark} {result.get('step', '')}  " + "  ".join(details)]
-    for event in result.get("events", []):
-        fields = {k: v for k, v in event.items() if k not in ("t", "kind")}
-        lines.append(f"  event {event.get('kind')}: {json.dumps(fields, ensure_ascii=False)}")
+    lines += ["  " + describe_event(event) for event in result.get("events", [])]
     return "\n".join(lines)
 
 
