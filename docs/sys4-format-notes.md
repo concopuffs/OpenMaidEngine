@@ -158,6 +158,15 @@ enabled, negative is disabled, and the native setter moves between bands by addi
 SE/Voice/Movie use zero/nonzero. The file is engine-option persistence, separate from `SAVE.DAT`,
 `RT.DAT`, and numbered saves.
 
+AGE always writes the complete file. `engine_settings_load_sys4reg_ini@0x46b6e0` binds 44 keys in a fixed
+order: 16 `[display]`, 15 `[sound]`, 9 `[message]` and 4 `[system]`. `message:UseAntiFont` is bound only
+when `ENABLEANTIFONT` is set. Each key starts at its registered default or SYS4INI override, and a value
+present in the file replaces it. `engine_settings_write_sys4reg_ini@0x46e8b0` then rewrites the file in
+binding order: a `[section]` line wherever the section changes, `key=value`, CRLF, and no blank lines.
+It writes no unbound keys. A first run therefore leaves a 779-byte file for Himegari. `Sys4RegIniStore`
+writes the same file, and keeps any unbound keys after the bound ones; on shutdown it always rewrites the
+file, as AGE does on quit. Its output matched native's byte for byte (2026-11-03).
+
 The `[message]` section holds two integers that scripts read and write through opcodes:
 
 - **`MessageSpeed`.** The per-glyph text delay in milliseconds (op `0x1b5`); the registered default is `5`.
@@ -509,9 +518,26 @@ third page with one target and load it with the other. A port-written slot shows
 load list (序章, ＡＤＶパート, LV 1, 通常), resumes at `SC0000@0x8a9`, and two clicks later reaches
 `SC0000@0x913`. A native-written slot does the same in the port. Native AGE needed the header `+0xf0` length,
 the `(-1, 0, 0)` resource-record default and the `+1` string-bank rounding above. The port needed to accept
-native `SAVE.DAT` padding residue and other engine versions. Structural differences that remain between the
-two writers' files are known to be harmless for this resume: surface-record color keys (`0` versus
-`0xff000000`) and created flags, and the history-tail length.
+native `SAVE.DAT` padding residue and other engine versions. Later the same day the port's surface records
+and history tail were made to match native byte for byte on this page (see "Surface-record bookkeeping" and
+the history tail below). The remaining difference is in the ADV glyph objects: the port widens a glyph's
+crop to its own font's ink, which is a font-calibration matter.
+
+**Surface-record bookkeeping.** The gfx manager keeps a live table at `+0x700` (`ctx+0x46d14`) and a page
+snapshot at `+0x5520` (`ctx+0x4bb34`). Op `0x71` copies live to snapshot, and `context_state_serialize`
+writes the snapshot, so a save holds the records as of the current page's start. The two exceptions are
+ops `0x258`/`0x259`, which write `+0x08`/`+0x0c` to both tables at once. The workers write the live table
+as follows:
+
+- **Load** (`0x1f9`; `0x249` writes id `-1`): the resource id, the packed key and created `0`. A negative
+  key operand packs to `0`; any other packs to `0xff000000 | rgb`.
+- **Blank create**: id `-1`, created `1`. This covers op `0x70`'s layout surface (`layout + 0x14`), a
+  missing `0x223`/`0x24f` target, and `0x24`/`0x25` at boot.
+- **Release** (`0x1fa`, `0x23d`): only id `-1`. The key and created flag stay.
+- **Drawing into a surface**: created `1`. This covers fill (`0x20b`/`0x210`), copy, scale-copy, `0x33`,
+  `0x35`, `0x237` and the legacy transition scratch slot `0x20`.
+
+The restore does not copy the saved table back. It only reopens records flagged in `+0x08`.
 
 #### Kamidori 3.20 layout
 
@@ -587,9 +613,31 @@ The decoded history data is:
 2. `record_count:u32`, then `record_count` records of 11 DWORDs;
 3. `string_blob_dwords:u32`, then a DWORD-aligned CP932 string blob whose DWORDs are bitwise inverted.
 
-Each 11-DWORD record stores layout slot, origin X/Y, width/height, primary value, auxiliary value,
-primary font size, text color, cursor Y, and flags. The string blob contains one NUL-terminated string
-per record. The installed save has a 21-byte physical history tail, and container plus tail consume the
+Each record is the first 11 DWORDs of AGE's 0x48-byte retained record (`text_history_serialize@0x451d00`).
+Its field layout comes from `text_history_append_text_record@0x456000`:
+
+| DWORD | Text record | Line break | Metadata / voice |
+|---:|---|---|---|
+| 0 | layout slot | layout slot | layout slot |
+| 1–4 | row rectangle edges left/top/right/bottom | `0` | `0` |
+| 5 | primary color, BGR (text manager `+0x54c`) | same | value / voice id |
+| 6 | effect color, BGR (`+0x550`) | same | type / voice argument |
+| 7 | text manager `+0x554` (unidentified; always `0` observed) | same | `0` |
+| 8 | render mode (`+0x558`) | same | `0` |
+| 9 | primary pixel height (`-LOGFONT.lfHeight`) | `0` | `0` |
+| 10 | flags | `8` | `0x20000000` / `0x40000000` |
+
+Flag `1` marks a group start (a pending `0x70`/`0x71` boundary), flag `2` is navigation-filtered, and flag
+`8` is a line break. AGE records a show-text run as one text record per drawn row. Each horizontal wrap
+inserts a line-break record before the continuation row (`adv_text_build_glyph_records@0x4576c0`), and op
+`0x6f` appends one too (`adv_text_append_line_break_horizontal@0x456fd0`). SC0000's first page saves as
+`1 64 2f 1a9 47 ffffff 606060 0 3 18 1`, then two line breaks (`… 0 3 0 8`).
+
+The redraw (`text_history_render_records@0x4526c0`) ignores the rectangle. It flows each row from the
+layout cursor and starts a new line at each flag-8 record, so a writer must split rows the same way or long
+lines run off the layout. The port records rows from its own layout; its history tail matched native's
+byte for byte on SC0000 page 3 (2026-11-03). The string blob contains one NUL-terminated string per
+record; line breaks hold empty strings. The installed save has a 21-byte physical history tail, and container plus tail consume the
 file exactly.
 
 ### Numbered `SAVE%02d.STH` thumbnail — CONFIRMED

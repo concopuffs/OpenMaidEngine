@@ -1107,9 +1107,14 @@ public sealed partial class VirtualMachine
         {
             Surfaces = restoredSurfaces.Values.OrderBy(item => item.Slot).ToArray(),
         });
+        // The restore loop reopens each flagged record through gfx_surface_load_asset, which also rewrites
+        // that slot's live record; the rest of the live and snapshot tables are not replaced by the load.
         foreach (GfxSurfacePersistenceState surface in gfxSnapshot.Surfaces
                      .Where(item => item.ReloadOnRestore && item.ResourceId >= 0))
+        {
+            Gfx.SetSurface(surface.Slot, surface.ResourceId, surface.ColorKey);
             _host.SetTexture(surface.ResourceId, surface.Slot, surface.ColorKey);
+        }
     }
 
     private static void ReplaceDensePrefix<T>(

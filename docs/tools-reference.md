@@ -773,7 +773,7 @@ driving needs the Godot .NET console binary and `dotnet`.
 | Option | Targets | Effect |
 |---|---|---|
 | `--sandbox NAME` | both | persistent named save sandbox; the default `fresh` is emptied at every start |
-| `--seed live\|native:NAME\|port:NAME\|DIR` | both | fill a new sandbox from the live save folder, another sandbox of either target, or a folder (a `backups/` stamp or a plain copy) |
+| `--seed live\|native:NAME\|port:NAME\|DIR` | both | fill a new sandbox from the live save folder, another sandbox of either target, or a folder (a `backups/` stamp or a plain copy). A sandbox that already exists is left as it is: the seed is skipped with only a `serve.log` note, so use a new name to re-seed. The source is read at start, so do not restart the source target in between, because that empties its `fresh` |
 | `--sound` | both | keep the sandbox's volume instead of writing `[sandbox.quiet]` |
 | `--foreground` | both | leave the window where Windows puts it; by default it goes to the bottom of the z-order without being activated |
 | `--timeout S` | both | seconds to wait for the game (native 90, port 180, which includes Godot's boot) |

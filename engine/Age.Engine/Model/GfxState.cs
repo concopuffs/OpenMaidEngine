@@ -39,6 +39,8 @@ public sealed partial class GfxState
             _surfaces.Clear();
             _createdSurfaces.Clear();
             _reloadableSurfaces.Clear();
+            ResetSurfaceRecordTable(_surfaceRecords);         // scene_context_init_reset calls
+            ResetSurfaceRecordTable(_surfaceRecordSnapshot);  // gfx_surface_record_tables_init
             _movieStopTimesMs.Clear();
             _surfaceTransitions.Clear();
             _patternedSurfaceTransitions.Clear();

@@ -35,12 +35,15 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x202: arm the delayed one-shot packed-color interpolation without replacing the
-    /// current static color. Negative alpha/RGB operands resolve from current obj+0x60 independently.</summary>
+    /// current static color. Negative alpha/RGB operands resolve from current obj+0x60 independently.
+    /// Native gfx_op_0x202_worker_set_color_anim@0x47ea00 creates the object but arms the channel only
+    /// when its visible bit is set, so a fade sent to a hidden or just-erased handle is dropped.</summary>
     public void SetAnimatedObjectColorResolved(long handle, long delayMs, long durationMs, long alpha, long rgb)
     {
         lock (_lock)
         {
             var o = GetOrCreate(handle);
+            if (!o.Visible) return;
             long current = o.HasColor ? o.Color : 0xffffffff;
             long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
             long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;

@@ -168,9 +168,56 @@ public class AdvTextHistoryTests
 
         Assert.Equal("wait-for-input", vm.HaltReason);
         Assert.NotEmpty(vm.TextHistory.Entries);
-        var text = Assert.Single(vm.TextHistory.Records.Where(r => r.Kind == AdvTextHistoryRecordKind.Text));
-        Assert.Equal(0x14963, text.SourceOffset);
-        Assert.NotEmpty(text.Text);
-        Assert.True(text.Flags.HasFlag(AdvTextHistoryRecordFlags.GroupStart));
+        // Native SAVE00 at this wait holds the text row and the op-0x6f line break before the wait.
+        Assert.Collection(vm.TextHistory.Records,
+            text =>
+            {
+                Assert.Equal(0x14963, text.SourceOffset);
+                Assert.NotEmpty(text.Text);
+                Assert.Equal(AdvTextHistoryRecordFlags.GroupStart, text.Flags);
+            },
+            lineBreak =>
+            {
+                Assert.Equal(AdvTextHistoryRecordFlags.LineBreak, lineBreak.Flags);
+                Assert.Equal("", lineBreak.Text);
+            });
+    }
+
+    [Fact]
+    public void WrappedRowsAreRecordedAsRowsSeparatedByLineBreaks()
+    {
+        var script = ScriptAssembler.Assemble(Table, "HISTORY_ROWS",
+            new List<(int, Operand[])>
+            {
+                (0x70, new[] { I(1), I(640), I(160), I(0), I(430) }),
+                (0x6e, new[] { I(0), S(0) }),
+                (0x6f, new[] { I(0) }),
+                (0x2, Array.Empty<Operand>()),
+            }, new[] { "ab全cd" });
+        var host = new RecordingHost
+        {
+            OnRetainedText = run => new AdvRetainedTextRunResult(run.Layout.Slot, 0, 5, 50, 30)
+            {
+                Rows =
+                [
+                    new AdvTextRow(0, 3, 100, 47, 175, 71, WrapsAfter: true),
+                    new AdvTextRow(3, 2, 100, 79, 150, 103, WrapsAfter: false),
+                ],
+            },
+        };
+        var vm = new VirtualMachine(script, Table, host);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(
+            new (string, AdvTextHistoryRecordFlags, AdvTextHistoryRect)[]
+            {
+                ("ab全", AdvTextHistoryRecordFlags.GroupStart, new(100, 47, 175, 71)),
+                ("", AdvTextHistoryRecordFlags.LineBreak, default),
+                ("cd", AdvTextHistoryRecordFlags.None, new(100, 79, 150, 103)),
+                ("", AdvTextHistoryRecordFlags.LineBreak, default),
+            },
+            vm.TextHistory.Records.Select(r => (r.Text, r.Flags, r.Rect)));
     }
 }

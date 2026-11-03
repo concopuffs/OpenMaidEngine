@@ -28,6 +28,10 @@ public sealed class Sys4StartupSettings
         _values = new ReadOnlyDictionary<string, string>(values);
     }
 
+    /// <summary>Settings from explicit ordered pairs (tests and tools; games read them from SYS4INI).</summary>
+    public static Sys4StartupSettings FromPairs(IEnumerable<KeyValuePair<string, string>> pairs)
+        => new(pairs.ToList());
+
     public bool TryGetValue(string key, out string value)
         => _values.TryGetValue(key, out value!);
 

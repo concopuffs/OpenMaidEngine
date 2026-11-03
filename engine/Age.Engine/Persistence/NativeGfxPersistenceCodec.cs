@@ -18,19 +18,8 @@ internal static class NativeGfxPersistenceCodec
     {
         NativeGfxSaveLayout layout = NativeGfxSaveLayout.FromRecordSize(gfxRecordSize);
         GfxPersistenceSnapshot snapshot = gfx.CapturePersistenceSnapshot();
-        byte[] surfaces = new byte[NativeNumberedSaveState.SurfaceRecordsSize];
-        for (int slot = 0; slot < SurfaceCount; slot++)
-            WriteInt(surfaces, slot * SurfaceRecordSize, -1);
-        foreach (GfxSurfacePersistenceState surface in snapshot.Surfaces)
-        {
-            if ((uint)surface.Slot >= SurfaceCount) continue;
-            int at = surface.Slot * SurfaceRecordSize;
-            WriteInt(surfaces, at,
-                surface.Created ? -1 : unchecked((int)surface.ResourceId));
-            WriteInt(surfaces, at + 4, PackNativeColorKey(surface.ColorKey));
-            WriteInt(surfaces, at + 8, surface.ReloadOnRestore ? 1 : 0);
-            WriteInt(surfaces, at + 0x10, surface.Created ? 1 : 0);
-        }
+        // context_state_serialize copies the op-0x71 page snapshot of the native record table verbatim.
+        byte[] surfaces = gfx.CaptureNativeSurfaceRecords();
         NativeSavedGfxObject[] objects = snapshot.Objects
             .Select(item => new NativeSavedGfxObject(item.Handle, EncodeObject(item.Object, layout)))
             .ToArray();
@@ -217,9 +206,6 @@ internal static class NativeGfxPersistenceCodec
             TranslationEnabled = ReadInt(raw, 0x58) > 0,
         };
     }
-
-    private static int PackNativeColorKey(long colorKey)
-        => colorKey < 0 ? 0 : unchecked((int)(0xff000000 | (uint)colorKey & 0xffffff));
 
     private static long UnpackNativeColorKey(int colorKey)
         => colorKey == 0 ? -1 : unchecked((uint)colorKey) & 0xffffff;

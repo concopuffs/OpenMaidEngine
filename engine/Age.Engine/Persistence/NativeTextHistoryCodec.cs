@@ -5,7 +5,13 @@ using Age.Engine.Sys4;
 
 namespace Age.Engine.Persistence;
 
-/// <summary>The non-container LZSS tail appended to a layout-3 numbered save.</summary>
+/// <summary>
+/// The non-container LZSS tail appended to a layout-3 numbered save. Each record is the first 11 dwords of
+/// AGE's 0x48-byte retained record (text_history_serialize@0x451d00): slot, rect left/top/right/bottom,
+/// then for text the BGR primary and effect colors (text manager +0x54c/+0x550), text manager +0x554,
+/// render mode (+0x558) and primary pixel height (text_history_append_text_record@0x456000); metadata and
+/// voice records carry only value/aux at dwords 5/6. Dword 10 is the flags.
+/// </summary>
 public static class NativeTextHistoryCodec
 {
     private const int HeaderSize = 12;
@@ -57,15 +63,27 @@ public static class NativeTextHistoryCodec
         foreach (AdvTextHistoryRecord record in history.Records)
         {
             writer.Write(record.Layout.Slot);
-            writer.Write(record.Layout.OriginX);
-            writer.Write(record.Layout.OriginY);
-            writer.Write(record.Layout.Width);
-            writer.Write(record.Layout.Height);
-            writer.Write(unchecked((int)record.Value));
-            writer.Write(unchecked((int)record.AuxValue));
-            writer.Write(record.Style.PrimaryFontSize);
-            writer.Write(unchecked((int)record.Style.TextColor));
-            writer.Write(record.Layout.CursorY);
+            writer.Write(record.Rect.Left);
+            writer.Write(record.Rect.Top);
+            writer.Write(record.Rect.Right);
+            writer.Write(record.Rect.Bottom);
+            if (record.Kind == AdvTextHistoryRecordKind.Text)
+            {
+                bool lineBreak = record.Flags.HasFlag(AdvTextHistoryRecordFlags.LineBreak);
+                writer.Write(SwapRedBlue(record.Style.TextColor));
+                writer.Write(SwapRedBlue(record.Style.EffectColor));
+                writer.Write(record.TextManager554);
+                writer.Write(record.Style.RenderMode);
+                writer.Write(lineBreak ? 0 : PrimaryPixelHeight(record.Style));
+            }
+            else
+            {
+                writer.Write(unchecked((int)record.Value));
+                writer.Write(unchecked((int)record.AuxValue));
+                writer.Write(0);
+                writer.Write(0);
+                writer.Write(0);
+            }
             writer.Write(unchecked((int)record.Flags));
         }
 
@@ -116,19 +134,38 @@ public static class NativeTextHistoryCodec
                 flags.HasFlag(AdvTextHistoryRecordFlags.VoicePair) ? AdvTextHistoryRecordKind.Voice :
                 flags.HasFlag(AdvTextHistoryRecordFlags.TypedMetadata) ? AdvTextHistoryRecordKind.Metadata :
                 AdvTextHistoryRecordKind.Text;
-            var layout = new AdvTextLayoutSnapshot(
-                raw[i, 0], raw[i, 3], raw[i, 4], raw[i, 1], raw[i, 2],
-                0, raw[i, 9], raw[i, 3], raw[i, 4]);
-            var style = AdvTextStyle.Default with
-            {
-                PrimaryFontSize = raw[i, 7],
-                TextColor = unchecked((uint)raw[i, 8]),
-            };
+            var layout = new AdvTextLayoutSnapshot(raw[i, 0], 0, 0, 0, 0, 0, 0, 0, 0);
+            var rect = new AdvTextHistoryRect(raw[i, 1], raw[i, 2], raw[i, 3], raw[i, 4]);
+            bool text = kind == AdvTextHistoryRecordKind.Text;
+            var style = text
+                ? AdvTextStyle.Default with
+                {
+                    TextColor = SwapRedBlue(raw[i, 5]),
+                    EffectColor = SwapRedBlue(raw[i, 6]),
+                    RenderMode = raw[i, 8],
+                    PrimaryFontSize = raw[i, 9],
+                }
+                : AdvTextStyle.Default;
             records[i] = new AdvTextHistoryRecord(
-                kind, flags, layout, style, texts[i], raw[i, 5], raw[i, 6], -1);
+                kind, flags, layout, style, texts[i], text ? 0 : raw[i, 5], text ? 0 : raw[i, 6], -1)
+            {
+                Rect = rect,
+                TextManager554 = text ? raw[i, 7] : 0,
+            };
         }
         history.RestorePersistenceSnapshot(entries, records);
     }
+
+    // Script colors are RGB; the text manager keeps GDI COLORREFs (BGR), as ops 0x76/0x77 convert them.
+    private static int SwapRedBlue(long color)
+    {
+        uint value = unchecked((uint)color);
+        return unchecked((int)((value & 0xff) << 16 | value & 0xff00 | (value >> 16) & 0xff));
+    }
+
+    // text_history_append_text_record's size argument is -LOGFONT.lfHeight (text manager +0x4cc).
+    private static int PrimaryPixelHeight(AdvTextStyle style)
+        => Age.Engine.Text.ImmediateSurfaceTextRenderer.NativePixelHeight(style.PrimaryFontSize);
 
     private static string[] DecodeStrings(ReadOnlySpan<byte> blob, int count)
     {

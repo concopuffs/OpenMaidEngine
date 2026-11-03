@@ -6,9 +6,11 @@ using Age.Engine.Sys4;
 namespace Age.Engine.Persistence;
 
 /// <summary>
-/// Preserving reader/writer for AGE's native SYS4REG.INI engine-settings file. The current projection
-/// owns the audio keys and the [message] MessageSpeed/MesWinAlpha keys; all other sections, keys,
-/// comments, ordering, and newline style survive.
+/// Reader/writer for AGE's native SYS4REG.INI engine-settings file. The current projection owns the audio
+/// keys and the [message] MessageSpeed/MesWinAlpha keys; every other value survives. Like AGE, loading
+/// binds every key engine_settings_load_sys4reg_ini@0x46b6e0 binds (defaults for missing ones), and every
+/// write emits them in AGE's canonical order (engine_settings_write_sys4reg_ini@0x46e8b0); keys AGE does not
+/// bind are kept after them.
 /// </summary>
 public sealed class Sys4RegIniStore
 {
@@ -24,16 +26,43 @@ public sealed class Sys4RegIniStore
     private static readonly Encoding Cp932 = CreateCp932();
     private static readonly string[] RouteKeys = ["", "Music", "SE", "Voice", "Movie"];
 
+    // engine_settings_load_sys4reg_ini@0x46b6e0 binds these keys, in this order, to the engine settings;
+    // the values are engine_settings_register_defaults@0x46be30's. A SYS4INI trailer pair named like the key
+    // overrides the default (Himegari: FULLSCREENBIT=32, FONT), sound:Music follows NOSETMUSIC (see ForPath),
+    // and message:UseAntiFont is bound only when ENABLEANTIFONT is set.
+    private static readonly (string Section, string Key, string Default)[] NativeBindings =
+    [
+        ("display", "UseDirectDrawEmuration", "0"), ("display", "UseWideSurface", "0"),
+        ("display", "ScreenMode", "0"), ("display", "FullScreenBit", "16"), ("display", "UseIVideoWindow", "1"),
+        ("display", "DeviceType", "0"), ("display", "VertexProcessing", "0"), ("display", "PresentInterval", "0"),
+        ("display", "TextureBit", "32"), ("display", "PixelShader", "-1"), ("display", "ForceScreen", "0"),
+        ("display", "VirtualFullScreen", "0"), ("display", "AspectMode", "0"), ("display", "FullScreenWidth", "0"),
+        ("display", "FullScreenHeight", "0"), ("display", "LimitAero", "0"),
+        ("sound", "Sound", "1"), ("sound", "Music", "0"), ("sound", "SE", "1"), ("sound", "Voice", "1"),
+        ("sound", "Movie", "1"), ("sound", "UseDirectSound", "1"), ("sound", "UseDirectSoundEmuration", "1"),
+        ("sound", "DirectSoundCooperativeLevel", "1"), ("sound", "Volume0", "-1"), ("sound", "Volume1", "-1"),
+        ("sound", "Volume2", "-1"), ("sound", "Volume3", "-1"), ("sound", "Volume4", "-1"),
+        ("sound", "MusicFadeOnVoicePlaying", "1"), ("sound", "MusicFadeOnVoicePlayingVolume", "50"),
+        ("message", "Font", ""), ("message", "RMouseEvent", "0"), ("message", "MessageSpeed", "5"),
+        ("message", "MesWinAlpha", "8"), ("message", "UseAntiFont", "1"), ("message", "AutoMessageTime0", "500"),
+        ("message", "AutoMessageTime1", "2000"), ("message", "ReadTextSkip", "0"),
+        ("message", "AdvanceMesOnWheel", "0"),
+        ("system", "SaveBMPPath", ""), ("system", "UseMMX", "1"), ("system", "EffectSkipOnClick", "0"),
+        ("system", "OutErrorLog", "0"),
+    ];
+    private readonly Sys4StartupSettings _startupSettings;
+
     private readonly string _path;
     private readonly object _lock = new();
     private readonly int _defaultMusicRouteValue;
     private readonly int[] _routeValues = [0, 0, 1, 1, 1];
     private IniDocument? _document;
 
-    public Sys4RegIniStore(string path, int defaultMusicRouteValue)
+    public Sys4RegIniStore(string path, int defaultMusicRouteValue, Sys4StartupSettings? startupSettings = null)
     {
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Settings path is required.", nameof(path));
         _path = Path.GetFullPath(path);
+        _startupSettings = startupSettings ?? Sys4StartupSettings.Empty;
         _defaultMusicRouteValue = defaultMusicRouteValue;
         _routeValues[(int)AudioMixerCategory.Music] = defaultMusicRouteValue;
     }
@@ -56,7 +85,7 @@ public sealed class Sys4RegIniStore
             && noSetMusic != 0
             ? noSetMusic - 1
             : 0;
-        return new Sys4RegIniStore(path, defaultMusic);
+        return new Sys4RegIniStore(path, defaultMusic, startupSettings);
     }
 
     public AudioMixerSettings Load()
@@ -151,14 +180,44 @@ public sealed class Sys4RegIniStore
         string? directory = Path.GetDirectoryName(_path);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
         string temporary = _path + ".$tmp";
-        File.WriteAllText(temporary, _document!.Serialize(), Cp932);
+        File.WriteAllText(temporary, _document!.SerializeCanonical(BoundKeys()), Cp932);
         File.Move(temporary, _path, overwrite: true);
     }
 
+    private bool AntiFontBound
+        => int.TryParse(_startupSettings.GetValueOrDefault("ENABLEANTIFONT")?.Trim(),
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out int enableAntiFont) && enableAntiFont != 0;
+
+    private List<(string Section, string Key)> BoundKeys()
+    {
+        bool antiFont = AntiFontBound;
+        return NativeBindings.Where(b => b.Key != "UseAntiFont" || antiFont)
+            .Select(b => (b.Section, b.Key)).ToList();
+    }
+
+    private void AddMissingNativeKeys()
+    {
+        bool antiFont = AntiFontBound;
+        foreach ((string section, string key, string fallback) in NativeBindings)
+        {
+            if (key == "UseAntiFont" && !antiFont) continue;
+            string value = key == "Music"
+                ? _defaultMusicRouteValue.ToString(CultureInfo.InvariantCulture)
+                : _startupSettings.GetValueOrDefault(key.ToUpperInvariant()) ?? fallback;
+            _document!.AddIfMissing(section, key, value);
+        }
+    }
+
+    // The loaded document already holds every bound key (AGE binds them all before reading the file), so
+    // the next write leaves AGE's complete option set.
     private IniDocument LoadDocument()
-        => File.Exists(_path)
+    {
+        _document = File.Exists(_path)
             ? IniDocument.Parse(File.ReadAllText(_path, Cp932))
             : IniDocument.Empty();
+        AddMissingNativeKeys();
+        return _document;
+    }
 
     private static Encoding CreateCp932()
     {
@@ -169,32 +228,13 @@ public sealed class Sys4RegIniStore
     private sealed class IniDocument
     {
         private readonly List<string> _lines;
-        private readonly string _newline;
-        private readonly bool _trailingNewline;
 
-        private IniDocument(List<string> lines, string newline, bool trailingNewline)
-        {
-            _lines = lines;
-            _newline = newline;
-            _trailingNewline = trailingNewline;
-        }
+        private IniDocument(List<string> lines) => _lines = lines;
 
-        public static IniDocument Empty() => new([], "\r\n", true);
+        public static IniDocument Empty() => new([]);
 
         public static IniDocument Parse(string text)
-        {
-            if (text.Length == 0) return Empty();
-            string newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n"
-                : text.Contains('\n') ? "\n"
-                : text.Contains('\r') ? "\r"
-                : "\r\n";
-            bool trailing = text.EndsWith("\r\n", StringComparison.Ordinal)
-                || text.EndsWith('\n') || text.EndsWith('\r');
-            string normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
-            var lines = normalized.Split('\n').ToList();
-            if (trailing && lines.Count > 0 && lines[^1].Length == 0) lines.RemoveAt(lines.Count - 1);
-            return new IniDocument(lines, newline, trailing);
-        }
+            => new(text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').ToList());
 
         public bool TryGetInt(string section, string key, out int value)
         {
@@ -222,9 +262,30 @@ public sealed class Sys4RegIniStore
             return found;
         }
 
-        public void SetInt(string section, string key, int value)
+        public void AddIfMissing(string section, string key, string value)
         {
-            string rendered = value.ToString(CultureInfo.InvariantCulture);
+            if (!Contains(section, key)) SetString(section, key, value);
+        }
+
+        private bool Contains(string section, string key)
+        {
+            string? currentSection = null;
+            foreach (string line in _lines)
+            {
+                if (TryParseSection(line, out string? parsedSection)) currentSection = parsedSection;
+                else if (string.Equals(currentSection, section, StringComparison.OrdinalIgnoreCase)
+                         && TryParseKey(line, out string? parsedKey, out _)
+                         && string.Equals(parsedKey, key, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        public void SetInt(string section, string key, int value)
+            => SetString(section, key, value.ToString(CultureInfo.InvariantCulture));
+
+        private void SetString(string section, string key, string rendered)
+        {
             int sectionStart = -1;
             int sectionEnd = _lines.Count;
             string? currentSection = null;
@@ -256,22 +317,84 @@ public sealed class Sys4RegIniStore
             }
 
             if (replaced) return;
+            // Like AGE's own file: new sections follow directly, and new keys go after the section's
+            // last key rather than after trailing blank lines.
             if (sectionStart < 0)
             {
-                if (_lines.Count > 0 && _lines[^1].Length != 0) _lines.Add("");
                 _lines.Add($"[{section}]");
                 _lines.Add($"{key}={rendered}");
             }
             else
             {
+                while (sectionEnd - 1 > sectionStart && _lines[sectionEnd - 1].Trim().Length == 0) sectionEnd--;
                 _lines.Insert(sectionEnd, $"{key}={rendered}");
             }
         }
 
-        public string Serialize()
+        /// <summary>
+        /// engine_settings_write_sys4reg_ini@0x46e8b0 rewrites the file from its bindings: a section line
+        /// whenever the section changes, then key=value lines in binding order, CRLF. The port writes the
+        /// same, then keeps keys AGE does not bind after a section's bound keys and unbound sections last
+        /// (AGE drops them; it never reads them either way). Comments and blank lines are not kept.
+        /// </summary>
+        public string SerializeCanonical(IReadOnlyList<(string Section, string Key)> bound)
         {
-            string text = string.Join(_newline, _lines);
-            return _trailingNewline ? text + _newline : text;
+            var sections = new List<(string Name, List<(string Key, string Line)> Keys)>();
+            List<(string Key, string Line)>? current = null;
+            foreach (string line in _lines)
+            {
+                if (TryParseSection(line, out string? name))
+                {
+                    int index = sections.FindIndex(
+                        s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (index < 0)
+                    {
+                        sections.Add((name!, new List<(string Key, string Line)>()));
+                        index = sections.Count - 1;
+                    }
+                    current = sections[index].Keys;
+                }
+                else if (current != null && TryParseKey(line, out string? key, out _))
+                {
+                    current.Add((key!, line));
+                }
+            }
+
+            var output = new List<string>();
+            var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string Id(string section, string key) => section + "\u0001" + key;
+            List<(string Key, string Line)> KeysOf(string section)
+                => sections.Find(s => string.Equals(s.Name, section, StringComparison.OrdinalIgnoreCase)).Keys
+                   ?? new List<(string Key, string Line)>();
+            void WriteUnbound(string section)
+            {
+                foreach ((string key, string line) in KeysOf(section))
+                    if (written.Add(Id(section, key))) output.Add(line);
+            }
+
+            string? open = null;
+            foreach ((string section, string key) in bound)
+            {
+                if (!string.Equals(open, section, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (open != null) WriteUnbound(open);
+                    output.Add($"[{section}]");
+                    open = section;
+                }
+                // The last occurrence wins, as TryGetInt reads it.
+                (string Key, string Line) match = KeysOf(section).LastOrDefault(
+                    k => string.Equals(k.Key, key, StringComparison.OrdinalIgnoreCase));
+                if (match.Line != null && written.Add(Id(section, key))) output.Add(match.Line);
+            }
+            if (open != null) WriteUnbound(open);
+            foreach ((string name, List<(string Key, string Line)> keys) in sections)
+            {
+                if (bound.Any(b => string.Equals(b.Section, name, StringComparison.OrdinalIgnoreCase))) continue;
+                output.Add($"[{name}]");
+                foreach ((string key, string line) in keys)
+                    if (written.Add(Id(name, key))) output.Add(line);
+            }
+            return string.Join("\r\n", output) + "\r\n";
         }
 
         private static bool TryParseSection(string line, out string? section)

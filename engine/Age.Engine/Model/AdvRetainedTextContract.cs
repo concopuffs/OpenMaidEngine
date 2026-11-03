@@ -59,7 +59,20 @@ public readonly record struct AdvRetainedTextRunResult(
     int FirstGlyphIndex,
     int GlyphCount,
     int CursorX,
-    int CursorY);
+    int CursorY)
+{
+    /// <summary>The run's drawn rows; empty when the host did not lay the text out.</summary>
+    public IReadOnlyList<AdvTextRow> Rows { get; init; } = [];
+}
+
+/// <summary>
+/// One drawn row of a show-text run: <see cref="GlyphCount"/> glyphs (one per Unicode scalar of the run's
+/// text) from <see cref="FirstGlyph"/>, with rectangle edges from the first glyph's left/top to the last
+/// glyph's right/bottom. <see cref="WrapsAfter"/> marks a horizontal wrap, which AGE records as a line
+/// break (adv_text_build_glyph_records@0x4576c0).
+/// </summary>
+public readonly record struct AdvTextRow(
+    int FirstGlyph, int GlyphCount, int Left, int Top, int Right, int Bottom, bool WrapsAfter);
 
 /// <summary>Platform-neutral rules established from AGE's native retained-glyph workers.</summary>
 public static class AdvRetainedTextContract

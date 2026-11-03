@@ -19,7 +19,11 @@ public sealed record GlyphTextLayoutResult(
     int ConsumedGlyphs,
     int WrappedLines,
     AdvTextOverflowFlags ObservedOverflow,
-    bool StoppedOnVerticalOverflow);
+    bool StoppedOnVerticalOverflow)
+{
+    /// <summary>The drawn rows, split at horizontal wraps, as AGE's history records them.</summary>
+    public IReadOnlyList<AdvTextRow> Rows { get; init; } = [];
+}
 
 /// <summary>
 /// Builds native-edge retained records while rasterizing masks into the layout's RGBA surface.
@@ -45,6 +49,8 @@ public sealed class RetainedGlyphLayoutEngine
         int cursorX = options.CursorX;
         int cursorY = options.CursorY;
         int wrappedLines = 0;
+        var rows = new List<AdvTextRow>();
+        int rowFirst = 0, rowLeft = 0, rowTop = 0, rowRight = 0, rowBottom = 0;
         var observed = AdvTextOverflowFlags.None;
         bool stopped = false;
 
@@ -93,7 +99,18 @@ public sealed class RetainedGlyphLayoutEngine
                 wrappedLines++;
                 right = checked(cursorX + cellWidth);
                 bottom = checked(cursorY + cellHeight);
+                if (records.Count > rowFirst)
+                    rows.Add(new AdvTextRow(rowFirst, records.Count - rowFirst,
+                        rowLeft, rowTop, rowRight, rowBottom, WrapsAfter: true));
+                rowFirst = records.Count;
             }
+            if (records.Count == rowFirst)
+            {
+                rowLeft = cursorX;
+                rowTop = cursorY;
+            }
+            rowRight = right;
+            rowBottom = bottom;
 
             AgeGlyphMaskCompositor.DrawGlyph(
                 destination, mask, cursorX, cursorY, request.PixelHeight, options.Style);
@@ -111,9 +128,12 @@ public sealed class RetainedGlyphLayoutEngine
             if (aspectReference == null) cursorY = checked(cursorY + mask.CellAdvanceY);
         }
 
+        if (records.Count > rowFirst)
+            rows.Add(new AdvTextRow(rowFirst, records.Count - rowFirst,
+                rowLeft, rowTop, rowRight, rowBottom, WrapsAfter: false));
         return new GlyphTextLayoutResult(
             records, presentationRects, cursorX, cursorY, records.Count,
-            wrappedLines, observed, stopped);
+            wrappedLines, observed, stopped) { Rows = rows };
     }
 
     private static AdvRetainedGlyphPresentationRect PresentationRect(

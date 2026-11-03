@@ -6,6 +6,9 @@ public enum AdvTextHistoryRecordFlags : uint
     None = 0,
     GroupStart = 0x00000001,
     NavigationFiltered = 0x00000002,
+    /// <summary>An empty record that moves the redraw cursor to the next line: op 0x6f and every
+    /// horizontal wrap (adv_text_append_line_break_horizontal@0x456fd0).</summary>
+    LineBreak = 0x00000008,
     TypedMetadata = 0x20000000,
     VoicePair = 0x40000000,
 }
@@ -83,7 +86,19 @@ public sealed record AdvTextHistoryRecord(
     string Text,
     long Value,
     long AuxValue,
-    int SourceOffset);
+    int SourceOffset)
+{
+    /// <summary>A text row's drawn rectangle edges (record +0x04..+0x10); zero for line breaks,
+    /// metadata and voice records.</summary>
+    public AdvTextHistoryRect Rect { get; init; }
+
+    /// <summary>Text record +0x1c, copied from text manager +0x554 (unidentified; zero in every observed
+    /// save). Kept so a native save's records round-trip.</summary>
+    public int TextManager554 { get; init; }
+}
+
+/// <summary>Rectangle edges (not width/height) of one recorded text row.</summary>
+public readonly record struct AdvTextHistoryRect(int Left, int Top, int Right, int Bottom);
 
 /// <summary>AGE's logical 8-byte history index entry.</summary>
 public readonly record struct AdvTextHistoryEntry(int LayoutSlot, int FirstRecordIndex);
@@ -249,17 +264,47 @@ public sealed class AdvTextHistory
         int fontHeight = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
         layout.CursorX = layout.ResetCursorX;
         layout.CursorY += fontHeight + style.LineSpacing;
+        AppendLineBreak(slot, style);
     }
+
+    private void AppendLineBreak(int slot, AdvTextStyle style)
+        => AppendRecord(slot, AdvTextHistoryRecordKind.Text, AdvTextHistoryRecordFlags.LineBreak,
+                        style, "", 0, 0, -1);
 
     public AdvTextLayoutSnapshot GetLayoutSnapshot(int requestedSlot)
         => SnapshotLayout(ResolveLayout(requestedSlot));
 
+    /// <summary>
+    /// Record one show-text run the way adv_text_build_glyph_records@0x4576c0 does: one record per drawn
+    /// row with the row's rectangle, and a line-break record after every horizontal wrap. Without
+    /// <paramref name="rows"/> (a host that did not lay the text out) the run is one row at the cursor.
+    /// </summary>
     public void AppendText(int requestedSlot, int sourceOffset, string text, AdvTextStyle style,
-                           AdvTextHistoryRecordFlags flags = AdvTextHistoryRecordFlags.None)
+                           AdvTextHistoryRecordFlags flags = AdvTextHistoryRecordFlags.None,
+                           IReadOnlyList<AdvTextRow>? rows = null)
     {
         int slot = ResolveLayout(requestedSlot);
-        AppendRecord(slot, AdvTextHistoryRecordKind.Text, flags,
-                     style, text, 0, 0, sourceOffset);
+        if (rows is not { Count: > 0 })
+        {
+            var layout = GetOrCreateLayout(slot);
+            int height = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
+            AppendRecord(slot, AdvTextHistoryRecordKind.Text, flags, style, text, 0, 0, sourceOffset,
+                new AdvTextHistoryRect(layout.CursorX, layout.CursorY, layout.CursorX, layout.CursorY + height));
+            return;
+        }
+
+        // Rows count glyphs, one per Unicode scalar; map them back to UTF-16 positions.
+        var starts = new List<int>(text.Length + 1);
+        for (int i = 0; i < text.Length; i += char.IsSurrogatePair(text, i) ? 2 : 1) starts.Add(i);
+        starts.Add(text.Length);
+        int Position(int glyph) => starts[Math.Clamp(glyph, 0, starts.Count - 1)];
+        foreach (AdvTextRow row in rows)
+        {
+            int from = Position(row.FirstGlyph), to = Position(row.FirstGlyph + row.GlyphCount);
+            AppendRecord(slot, AdvTextHistoryRecordKind.Text, flags, style, text[from..to], 0, 0, sourceOffset,
+                new AdvTextHistoryRect(row.Left, row.Top, row.Right, row.Bottom));
+            if (row.WrapsAfter) AppendLineBreak(slot, style);
+        }
     }
 
     public void AppendMetadata(long value, long metadataType, AdvTextStyle style)
@@ -475,7 +520,8 @@ public sealed class AdvTextHistory
     }
 
     private void AppendRecord(int slot, AdvTextHistoryRecordKind kind, AdvTextHistoryRecordFlags flags,
-                              AdvTextStyle style, string text, long value, long auxValue, int sourceOffset)
+                              AdvTextStyle style, string text, long value, long auxValue, int sourceOffset,
+                              AdvTextHistoryRect rect = default)
     {
         if (RecordingSuppressed) return;
         if (_pendingGroupStarts.Remove(slot)) flags |= AdvTextHistoryRecordFlags.GroupStart;
@@ -484,6 +530,9 @@ public sealed class AdvTextHistory
         var snapshot = new AdvTextLayoutSnapshot(slot, layout.Width, layout.Height,
             layout.OriginX, layout.OriginY, layout.CursorX, layout.CursorY,
             layout.Right, layout.Bottom);
-        _records.Add(new AdvTextHistoryRecord(kind, flags, snapshot, style, text, value, auxValue, sourceOffset));
+        _records.Add(new AdvTextHistoryRecord(kind, flags, snapshot, style, text, value, auxValue, sourceOffset)
+        {
+            Rect = rect,
+        });
     }
 }

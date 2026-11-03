@@ -37,11 +37,13 @@ public sealed partial class VirtualMachine
                     lock (_debugControlLock) scriptStack = _activeFrameNames.ToArray();
                     var liveRun = new AdvLiveTextRun(
                         off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack);
-                    TextHistory.AppendText(layoutSlot, off, text, _advTextStyle);
                     AdvTextLayoutPresentationBinding binding =
                         TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
                     AdvRetainedTextRunResult? retained = _host.ShowText(
                         Gfx, binding, liveRun, _messageGlyphDelayMilliseconds);
+                    // History records the drawn rows (split at wraps), so it is written after layout but
+                    // before the cursor moves.
+                    TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: retained?.Rows);
                     if (retained is { } result)
                         TextHistory.SetCursor(
                             result.LayoutSlot, result.CursorX, result.CursorY);
@@ -50,6 +52,9 @@ public sealed partial class VirtualMachine
             case "define-adv-text-layout": // 0x70: configure layout and begin a logical retained group
                 TextHistory.DefineLayout((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
                                          (int)Read(a[3]), (int)Read(a[4]));
+                // adv_text_layout_define@0x4550e0 (DrawMode 1) creates the layout's blank surface at
+                // slot layout+0x14; the host allocates its pixels when text is drawn.
+                Gfx.RecordBlankSurfaceCreated(TextHistory.GetLayoutSnapshot((int)Read(a[0])).Slot + 0x14);
                 return pc + 1;
             case "reset-adv-text-layout": // 0x71: reset layout and begin the next logical retained group
             {
@@ -63,6 +68,7 @@ public sealed partial class VirtualMachine
                 _host.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
                 _host.ResetRenderedAdvTextLayout(Gfx, binding);
                 _cur.ReadMessageOffset = ins.Offset;
+                Gfx.SnapshotSurfaceRecords();   // native page snapshot that numbered saves write
                 _sharedProfile.ReadText.CommitPending();
                 RefreshAdvReadSkipState();
                 return pc + 1;

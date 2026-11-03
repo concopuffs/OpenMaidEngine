@@ -1161,7 +1161,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2 newline paths at 0x456fd0/0x452970 reset x to the layout's configured line origin and advance y by text-manager line spacing at +0x560 minus the negative primary LOGFONT height. The corpus pairs op 0x6f after show-text throughout ADV and retained UI helpers; STUDY's 16-pixel font plus 9-pixel spacing yields the observed 25-pixel MAMES line step."
+evidence = "Ghidra /v2 newline paths at 0x456fd0/0x452970 reset x to the layout's configured line origin and advance y by text-manager line spacing at +0x560 minus the negative primary LOGFONT height. The corpus pairs op 0x6f after show-text throughout ADV and retained UI helpers; STUDY's 16-pixel font plus 9-pixel spacing yields the observed 25-pixel MAMES line step. It also appends an empty flag-8 line-break record to the History backlog (text_history_append_record_with_render_mode@0x456f30); every horizontal wrap inside op 0x6e appends the same record (2026-11-03)."
 
 [[opcode.semantics.args]]
 i = 1
@@ -1230,7 +1230,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Corpus: T1 targets op-0x71 records, but the operand is a layout slot (SC0000 uses 1; HISTORY computes 2..6), not an anchor id. Ghidra /v2: op_0x71_handler@0x41e540 calls adv_text_layout_reset@0x455210 with ctx+0x55110; adv_text_layout_reset_cursor_and_bounds_record@0x455070 reconstructs the initial five-dword record, then reset zeroes the complete layout surface and calls gfx_object_erase_range(first,capacity). It appends {slot,current_record_count}/arms group-start unless suppressed. The handler also snapshots (frame_pc-frame_codebase)/4 and text state and calls read_text_db_commit_pending@0x46ae20."
+evidence = "Corpus: T1 targets op-0x71 records, but the operand is a layout slot (SC0000 uses 1; HISTORY computes 2..6), not an anchor id. Ghidra /v2: op_0x71_handler@0x41e540 calls adv_text_layout_reset@0x455210 with ctx+0x55110; adv_text_layout_reset_cursor_and_bounds_record@0x455070 reconstructs the initial five-dword record, then reset zeroes the complete layout surface and calls gfx_object_erase_range(first,capacity). It appends {slot,current_record_count}/arms group-start unless suppressed. The handler also snapshots (frame_pc-frame_codebase)/4 and text state and calls read_text_db_commit_pending@0x46ae20. It also snapshots the surface records: memcpy of the live table ctx+0x46d14 to the page snapshot ctx+0x4bb34 (1000 x 0x14), which numbered saves write, plus resource records ctx+0x3cac to ctx+0x415c (2026-11-03)."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5226,7 +5226,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x4224a0 (dispatch ctx[0x26c93+0x1fa]); frees ctx+0x52bd4[operand1*4] via vtbl, then FUN_00474e40(operand1)."
+evidence = "Ghidra handler 0x4224a0 (dispatch ctx[0x26c93+0x1fa]); frees ctx+0x52bd4[operand1*4] via vtbl, then FUN_00474e40(operand1). retained_gfx_release_surface writes only the surface record's resource id -1; the packed key and created flag stay (2026-11-03)."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5438,7 +5438,7 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00(handle,delay,duration,packed). Consumer 0x472f00: shared start +0x34; color delay/duration +0x38/+0x4c; current/target +0x60/+0x64; frame clock retained-gfx owner+0xb550 (EngineCtx+0x51b64); bytewise integer LERP; natural or owner+0xb55c (EngineCtx+0x51b70) forced completion. /v2 annotated and saved 2026-07-10."
+evidence = "Ghidra handler 0x4228d0 packs operands 4/5 and calls worker 0x47ea00(handle,delay,duration,packed). Consumer 0x472f00: shared start +0x34; color delay/duration +0x38/+0x4c; current/target +0x60/+0x64; frame clock retained-gfx owner+0xb550 (EngineCtx+0x51b64); bytewise integer LERP; natural or owner+0xb55c (EngineCtx+0x51b70) forced completion. /v2 annotated and saved 2026-07-10. Worker 0x47ea00 get-or-creates the object but arms the one-shot only when its visible bit 0 is set; a hidden object is created unarmed (2026-11-03)."
 
 [[opcode.semantics.args]]
 i = 1

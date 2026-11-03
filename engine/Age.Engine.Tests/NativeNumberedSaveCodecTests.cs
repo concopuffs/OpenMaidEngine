@@ -108,6 +108,38 @@ public class NativeNumberedSaveCodecTests
     }
 
     [Fact]
+    public void HistoryRecordsUseTheNativeDwordLayout()
+    {
+        // SC0000 page 1 as native AGE saves it (SAVE00 at the first wait).
+        var history = new AdvTextHistory();
+        history.DefineLayout(1, 800, 160, 0, 430);
+        var style = AdvTextStyle.Default with
+        {
+            PrimaryFontSize = 24, TextColor = 0x102030, EffectColor = 0x606060, RenderMode = 3,
+        };
+        history.AppendText(1, 0x123, "履歴", style, rows: [new AdvTextRow(0, 2, 100, 47, 150, 71, false)]);
+        history.EndLine(1, style);
+        history.AppendMetadata(42, 7, style);
+
+        byte[] tail = NativeTextHistoryCodec.Encode(history);
+        byte[] logical = LzssDecoder.Decode(tail.AsSpan(12), BitConverter.ToInt32(tail, 0), "history");
+        int[] Record(int index) => Enumerable.Range(0, 11)
+            .Select(d => BitConverter.ToInt32(logical, 4 + 8 + 4 + (index * 11 + d) * 4)).ToArray();
+
+        Assert.Equal([1, 100, 47, 150, 71, 0x302010, 0x606060, 0, 3, 24, 1], Record(0));
+        Assert.Equal([1, 0, 0, 0, 0, 0x302010, 0x606060, 0, 3, 0, 8], Record(1));
+        Assert.Equal([1, 0, 0, 0, 0, 42, 7, 0, 0, 0, 0x20000000], Record(2));
+
+        var restored = new AdvTextHistory();
+        NativeTextHistoryCodec.DecodeInto(tail, restored);
+        Assert.Equal((0x102030L, 0x606060L, 3, 24), (restored.Records[0].Style.TextColor,
+            restored.Records[0].Style.EffectColor, restored.Records[0].Style.RenderMode,
+            restored.Records[0].Style.PrimaryFontSize));
+        Assert.Equal(new AdvTextHistoryRect(100, 47, 150, 71), restored.Records[0].Rect);
+        Assert.Equal(AdvTextHistoryRecordFlags.LineBreak, restored.Records[1].Flags);
+    }
+
+    [Fact]
     public void HistoryTailRestorePreservesInitializedLiveLayoutBindings()
     {
         var savedHistory = new AdvTextHistory();

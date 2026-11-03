@@ -36,7 +36,6 @@ public sealed partial class GodotAdvHost
     private int _messageGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
     private volatile int _messageWindowAlphaSetting = Sys4RegIniStore.DefaultMesWinAlpha;
     private Sys4RegIniStore? _messageSettingsStore;
-    private int _messageSettingsDirty;   // nonzero once op 0x1b5 or 0x141 changed a [message] key
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
     private bool _waitIndicatorFollowLastGlyph;
@@ -72,7 +71,6 @@ public sealed partial class GodotAdvHost
     {
         lock (_textLock) _messageGlyphDelayMilliseconds = System.Math.Max(0, milliseconds);
         _timeline?.Event("message-glyph-delay", new() { ["delay_ms"] = milliseconds });
-        Interlocked.Exchange(ref _messageSettingsDirty, 1);   // op 0x1b5 sets message:MessageSpeed
     }
 
     /// <summary>
@@ -96,7 +94,8 @@ public sealed partial class GodotAdvHost
 
     public void FlushMessageSettings()
     {
-        if (_messageSettingsStore == null || Interlocked.Exchange(ref _messageSettingsDirty, 0) == 0) return;
+        // Unconditional, like AGE on quit: the write also leaves every key AGE binds (Sys4RegIniStore).
+        if (_messageSettingsStore == null) return;
         try
         {
             _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.MessageSpeedKey, MessageGlyphDelayMilliseconds);
@@ -303,7 +302,7 @@ public sealed partial class GodotAdvHost
                 first,
                 rendered.ConsumedGlyphs,
                 rendered.CursorX,
-                rendered.CursorY);
+                rendered.CursorY) { Rows = rendered.Rows };
         }
 
         lock (_imageLock)
@@ -540,7 +539,6 @@ public sealed partial class GodotAdvHost
     {
         _messageWindowAlphaSetting = value;
         _timeline?.Event("message-window-alpha", new() { ["value"] = value });
-        Interlocked.Exchange(ref _messageSettingsDirty, 1);   // op 0x141 sets message:MesWinAlpha
     }
 
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)

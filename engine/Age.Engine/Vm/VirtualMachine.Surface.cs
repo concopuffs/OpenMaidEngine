@@ -17,7 +17,7 @@ public sealed partial class VirtualMachine
                 Gfx.ClearSurfaceReloadPolicies();
                 return pc + 1;
             case "set-surface-persistence-flags": // 0x258 (slot)(flags): bit 0 = numbered-load reload
-                Gfx.SetSurfaceReloadOnRestore(unchecked((int)Read(a[0])), (Read(a[1]) & 1) != 0);
+                Gfx.SetSurfacePersistenceFlags(unchecked((int)Read(a[0])), Read(a[1]));
                 return pc + 1;
             case "create-texture":   // 0x1f8 (slot)(w)(h) — allocate a blank surface at the slot
                 _host.ReleaseSurface((int)Read(a[0]));
@@ -48,7 +48,7 @@ public sealed partial class VirtualMachine
                 long resourceId = Read(a[0]);
                 int surfaceSlot = (int)Read(a[1]);
                 _host.ReleaseSurface(surfaceSlot);
-                Gfx.SetSurface(surfaceSlot, resourceId, Read(a[2]));
+                Gfx.SetSurface(surfaceSlot, resourceId, Read(a[2]), rawTextureMode: true);
                 _host.SetTexture(resourceId, surfaceSlot, Read(a[2]));
                 return pc + 1;
             }
@@ -65,16 +65,19 @@ public sealed partial class VirtualMachine
             }
             case "fill-surface-rect": // 0x20b: clipped alpha/RGB fill of a mutable surface
             case "u00420D50":
+                Gfx.MarkSurfaceContentWritten((int)Read(a[0]));
                 _host.FillSurfaceRect(new SurfaceRectFill(
                     (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
                     (int)System.Math.Min(Read(a[5]), 255), Read(a[6]) & 0x00ff_ffff));
                 return pc + 1;
             case "copy-surface-rect": // 0x207: paired-clipped source-to-destination surface copy
+                Gfx.MarkSurfaceContentWritten((int)Read(a[1]));
                 _host.CopySurfaceRect(new SurfaceRectCopy(
                     (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
                     (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])));
                 return pc + 1;
             case "scale-copy-surface-rect": // 0x32: independent source/destination rectangle sizes
+                Gfx.MarkSurfaceContentWritten((int)Read(a[1]));
                 _host.CopySurfaceRect(new SurfaceRectCopy(
                     (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
                     (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),

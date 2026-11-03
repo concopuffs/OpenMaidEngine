@@ -5,15 +5,21 @@ namespace Age.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
+    // screen_transition_begin@0x439da0, _tick@0x43a7a0 and _finalize@0x4399c0 draw through scratch
+    // surface 0x20, which sets that record's created flag.
+    private void MarkLegacyTransitionScratchWritten() => Gfx.MarkSurfaceContentWritten(0x20);
+
     private int StepPresentation(string label, IReadOnlyList<Operand> a, int pc)
     {
         switch (label)
         {
             case "queue-surface-alpha-transition": // 0x223: target surface crossfade over two object ranges
+                Gfx.RecordTransitionTargetCreated((int)Read(a[1]));   // gfx_queue_surface_alpha_transition
                 Gfx.QueueSurfaceAlphaTransition(Read(a[0]), (int)Read(a[1]), Read(a[2]), (int)Read(a[3]),
                     Read(a[4]), (int)Read(a[5]), Read(a[6]), Read(a[7])); return pc + 1;
             case "u00422ED0": // shared SYS4422/SYS4433 upstream ABI label
             case "queue-patterned-surface-transition": // 0x24f: type-2 two-range wipe/strip command
+                Gfx.RecordTransitionTargetCreated((int)Read(a[1]));   // gfx_queue_patterned_surface_transition
                 Gfx.QueuePatternedSurfaceTransition(
                     Read(a[0]), (int)Read(a[1]), Read(a[2]), (int)Read(a[3]),
                     Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
@@ -36,30 +42,35 @@ public sealed partial class VirtualMachine
                 _host.PresentFrame(Gfx); return pc + 1;
             case "fade-surface-in-from-black": // 0x21: blocking black -> captured full-frame surface
             case "u00418860":
+                MarkLegacyTransitionScratchWritten();
                 _host.FadeSurfaceWithBlack(
                     Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.FromBlack,
                     _messageSkipServiceActive || _host.IsMessageSkipActive);
                 return pc + 1;
             case "fade-surface-out-to-black": // 0x22: blocking captured full-frame surface -> black
             case "u00418920":
+                MarkLegacyTransitionScratchWritten();
                 _host.FadeSurfaceWithBlack(
                     Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.ToBlack,
                     _messageSkipServiceActive || _host.IsMessageSkipActive);
                 return pc + 1;
             case "fade-surface-out-to-white": // 0x24: blocking captured full-frame surface -> white
             case "u00418A90":
+                MarkLegacyTransitionScratchWritten();
                 _host.FadeSurfaceToWhite(
                     Gfx, (int)Read(a[0]), Read(a[1]),
                     _messageSkipServiceActive || _host.IsMessageSkipActive);
                 return pc + 1;
             case "crossfade-surfaces": // 0x25: legacy full-frame surface alpha transition
             case "u00418B40":
+                MarkLegacyTransitionScratchWritten();
                 _host.CrossfadeSurfaces(
                     Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]),
                     _messageSkipServiceActive || _host.IsMessageSkipActive);
                 return pc + 1;
             case "u00418CC0": // SYS4433 0x27 upstream ABI label
             case "reveal-surface-striped":
+                MarkLegacyTransitionScratchWritten();
                 _host.RevealSurfaceWithPattern(
                     Gfx,
                     new SurfacePatternTransitionRequest(
@@ -69,6 +80,7 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "u00418D90": // SYS4433 0x28 upstream ABI label
             case "reveal-surface-staggered-strips":
+                MarkLegacyTransitionScratchWritten();
                 _host.RevealSurfaceWithPattern(
                     Gfx,
                     new SurfacePatternTransitionRequest(

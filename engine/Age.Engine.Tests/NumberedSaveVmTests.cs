@@ -44,11 +44,12 @@ public class NumberedSaveVmTests
             vm.GlobalStrings[4] = "姫狩り";
             vm.Gfx.SetSurface(3, 0x1234, 0xff00ff);
             vm.Gfx.SetSurface(5, 0x5678, 0);
-            vm.Gfx.SetSurfaceReloadOnRestore(5, true);
+            vm.Gfx.SetSurfacePersistenceFlags(5, 1);
             vm.Gfx.CreateSurface(4);
             vm.Gfx.SetSurface(7, 0x7777, 0);
-            vm.Gfx.SetSurfaceReloadOnRestore(7, true);
+            vm.Gfx.SetSurfacePersistenceFlags(7, 1);
             vm.Gfx.ReleaseSurfaceRange(7, 1);
+            vm.Gfx.SnapshotSurfaceRecords();   // the page's op 0x71; saves write this snapshot
             vm.Gfx.BindDraw(100, 3, 1, 2, 30, 40, 50, 60);
             vm.Gfx.SetCurrentTranslation(100, (7, 8, 9));
             vm.Gfx.SetRotationChannel(100, 0, 500, (0, 0, 1), 90);
@@ -549,7 +550,7 @@ public class NumberedSaveVmTests
         ], []);
         var vm = new VirtualMachine(script, Table, new RecordingHost());
         vm.Gfx.SetSurface(15, 0x3383, 0);
-        vm.Gfx.SetSurfaceReloadOnRestore(15, true);
+        vm.Gfx.SetSurfacePersistenceFlags(15, 1);
 
         vm.Run();
 

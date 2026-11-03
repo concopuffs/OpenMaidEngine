@@ -44,7 +44,8 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x46598` | `d3d9_device` | `void*` | IDirect3DDevice9 pointer at renderer_device_state+0x410; op 0x20e invokes vtable Clear +0xac |
 | `0x46614` | `retained_gfx_manager` | `int` | embedded retained graphics manager passed by gfx opcode handlers; worker offsets are relative to this base |
 | `0x46a1c` | `gfx_obj_registry` | `int` | retained_gfx_manager+0x408 std::map handle->object; 0x1f6 clears, geometry/draw get-or-create, 0x215 queries, 0x1f7 erases |
-| `0x46d14` | `surface_record_resource_id` | `int` | first resource-id word of the inline stride-0x14 surface-record table; op 0x216 reads base + slot*0x14, asset loads maintain resource IDs and empty/blank records use -1 |
+| `0x46d14` | `surface_record_resource_id` | `int` | first resource-id word of the live inline stride-0x14 surface-record table (gfx manager +0x700; 1000 x {id, key, reload, policy, created}); op 0x216 reads base + slot*0x14, asset loads maintain resource IDs and empty/blank records use -1; op 0x71 copies it to surface_record_snapshot |
+| `0x4bb34` | `surface_record_snapshot` | `int` | first word of the page snapshot of the surface-record table (gfx manager +0x5520, 1000 x 0x14); op_0x71_reset_adv_text_layout copies the live table here, context_state_serialize writes it to numbered saves, and ops 0x258/0x259 write +0x08/+0x0c in both tables |
 | `0x50ba4` | `gfx_render_target_table` | `void*` | retained_gfx_manager+0xa590 array of per-slot D3D texture wrappers selected by op 0x20d |
 | `0x51b44` | `gfx_current_render_target` | `int` | retained_gfx_manager+0xb530 selected surface slot; -1 denotes device backbuffer |
 | `0x51b64` | `frame_timer_current` | `int` | current shared millisecond presentation timestamp at retained_gfx_manager+0xb550; active outer-engine ticks and op 0x23c sample timeGetTime, and every retained animation channel samples it |

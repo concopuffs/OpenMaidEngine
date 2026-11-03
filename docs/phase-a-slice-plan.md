@@ -4379,3 +4379,30 @@ Five ops the port stepped as no-ops now follow the native decodes (`engine-re.md
   `statement-block-presentation`); the strip and page render normally afterwards.
 - **Not modelled.** Movie starts, the `0x2000` modal service and the unused `0xd8` timer.
 - **References.** engine-re "Statement blocks"; Ghidra comments at the five gates and `0x4174bb`.
+
+### Surface records, history tail and SYS4REG.INI written the way AGE writes them (2026-11-03)
+
+**What changed in the port's saves and settings file.**
+
+- **Surface records.** `GfxState` keeps AGE's live record table and the page snapshot that op `0x71` takes.
+  Each worker writes its native fields: load, blank create, release, drawing into a surface, and the
+  `0x258`/`0x259` flags. Numbered saves now write the snapshot.
+- **Hidden-object fades.** Op `0x202` no longer arms a one-shot fade on a hidden object; native only creates
+  it. This removed the stray fade on SC0000's strip highlight `0xd2f6`.
+- **History tail.** The host's layout reports the drawn rows. History records one record per row, adds a
+  flag-8 line break after each wrap and at op `0x6f`, and the codec writes native's field layout: rect, BGR
+  colors, render mode, pixel height. Native's redraw ignores the rect and breaks lines only at flag-8 records.
+  The old one-record-per-message tail therefore ran long lines off native's History view.
+- **SYS4REG.INI.** `Sys4RegIniStore` binds AGE's 44 keys with registered defaults and SYS4INI overrides. It
+  writes them in AGE's canonical order, and rewrites the file on every shutdown.
+- **Validation.** A port save on SC0000 page 3 matched native byte for byte in surface records, resources,
+  strings and the history tail (10 records). Native loaded that save, resumed, and its History view showed the
+  wrapped row correctly. A first-run SYS4REG.INI matched native's 779 bytes exactly. Unit tests:
+  `SurfaceRecordTableTests`, `HistoryRecordsUseTheNativeDwordLayout`,
+  `WrappedRowsAreRecordedAsRowsSeparatedByLineBreaks` and
+  `WritingAFreshSettingsFileProducesAgesCompleteKeySet`.
+- **Remaining difference.** 37 ADV glyph objects differ at `+0x14`, because the port widens a glyph's crop to
+  its own font's ink. This belongs to font calibration.
+- **References.** sys4-format-notes ("Surface-record bookkeeping", "Appended text-history tail", "Native
+  SYS4REG.INI engine options"); engine-re surface-record and History sections; Ghidra annotations at
+  `0x456f30`, `0x46e8b0` and the surface workers.

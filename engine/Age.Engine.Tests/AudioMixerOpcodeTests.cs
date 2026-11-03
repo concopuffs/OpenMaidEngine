@@ -145,12 +145,11 @@ public class AudioMixerOpcodeTests
             Assert.Equal(9000, master);
             Assert.Equal(3750, movie);
             Assert.False(voice);
-            Assert.Contains("[display]\r\nScreenMode=1\r\n", rewritten);
-            Assert.Contains("Sound=1\r\n", rewritten);
-            Assert.Contains("Music=2\r\n", rewritten);
-            Assert.Contains("SE=7\r\n", rewritten);
-            Assert.Contains("UseDirectSound=1\r\n", rewritten);
-            Assert.Contains("[message]\r\nFont=ＭＳ 明朝\r\nMessageSpeed=50\r\n", rewritten);
+            // Rewritten in AGE's binding order, values kept.
+            Assert.Contains("UseWideSurface=0\r\nScreenMode=1\r\nFullScreenBit=16\r\n", rewritten);
+            Assert.Contains("[sound]\r\nSound=1\r\nMusic=2\r\nSE=7\r\nVoice=0\r\nMovie=1\r\nUseDirectSound=1\r\n",
+                            rewritten);
+            Assert.Contains("[message]\r\nFont=ＭＳ 明朝\r\nRMouseEvent=0\r\nMessageSpeed=50\r\n", rewritten);
             Assert.DoesNotContain("engine-settings", rewritten);
         }
         finally

@@ -66,6 +66,7 @@ public class GfxCommandBufferTests
         var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
         {
             MovGI(1, 0x1000), MovGI(2, 0), MovGI(3, 0), MovGI(4, 0x80), MovGI(5, 0x112233),
+            (0x1fb, new[] { G(1), G(2), I(0), I(0), I(8), I(8), I(0), I(0) }),   // draw-texture: visible
             BlitColor(1, 2, 3, 4, 5), Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
@@ -73,6 +74,24 @@ public class GfxCommandBufferTests
         var o = vm.Gfx.TryGet(0x1000)!;
         Assert.Equal(0x80_112233L, o.OneShotColorTarget);
         Assert.True(o.OneShotColorEnabled);
+    }
+
+    // gfx_op_0x202_worker_set_color_anim@0x47ea00 arms the fade only when the object's visible bit is
+    // set. SC0000's control strip fades handle 0xd2f6 right after erasing it, and AGE keeps no fade there.
+    [Fact]
+    public void BlitColorOnAHiddenObjectCreatesItWithoutArmingTheFade()
+    {
+        var t = T();
+        var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
+        {
+            MovGI(1, 0x1000), MovGI(2, 0), MovGI(3, 500), MovGI(4, 0x80), MovGI(5, 0xffffff),
+            BlitColor(1, 2, 3, 4, 5), Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        vm.Run();
+        var o = vm.Gfx.TryGet(0x1000)!;
+        Assert.False(o.OneShotColorEnabled);
+        Assert.Equal(0, o.ColorDurationMs);
     }
 
     [Fact]

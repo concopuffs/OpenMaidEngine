@@ -2596,8 +2596,13 @@ The surface records have a related preservation boundary. Resource id is at `+0x
 1,000-record tables and initializes every resource id to `-1`.
 `gfx_surface_create_blank@0x477370` writes resource `-1` and created flag one;
 `gfx_surface_load_asset@0x477c40` writes resource/color and clears the created flag. Neither operation
-changes the reload flag. The layout-3 serializer copies all 20,000 live record bytes verbatim, rather
-than deriving reloadability from the presence of an asset.
+changes the reload flag. The layout-3 serializer copies 20,000 record bytes verbatim, rather than deriving
+reloadability from the presence of an asset. Those bytes are the op-`0x71` page snapshot at `ctx+0x4bb34`,
+not the live table at `ctx+0x46d14` (2026-11-03). `op_0x71_reset_adv_text_layout@0x41e540` copies live to
+snapshot, and also copies the resource records from `ctx+0x3cac` to `ctx+0x415c`. Releases (`0x1fa`,
+`0x23d`) write only the resource id `-1`; the key and created flag stay. Every worker that draws into a
+surface sets created. Which workers those are, and how the key is packed, is listed in
+[sys4-format-notes.md](sys4-format-notes.md) under "Surface-record bookkeeping".
 
 The restore loop calls `gfx_surface_load_asset` only when the saved reload flag is one and resource id is
 nonnegative. Otherwise the already-initialized surface survives. The optional all-surface release is
@@ -2874,9 +2879,11 @@ The native text manager at `ctx+0x14940` owns two vectors:
 - manager `+0xd24/+0xd28`: 0x48-byte retained records;
 - manager `+0xd34/+0xd38`: 8-byte logical entries `{layout_slot, first_record_index}`.
 
-A normal record holds the layout slot at `+0x00`, geometry at `+0x04..+0x10`, value/metadata fields at
-`+0x14/+0x18`, font/color/baseline state at `+0x1c..+0x24`, flags at `+0x28`, and an inline-or-heap string
-object at `+0x2c` (length `+0x40`, capacity `+0x44`). Flag bit 0 begins a logical group; bit 1 is filtered by
+A text record holds the layout slot at `+0x00`, the drawn row's rectangle edges at `+0x04..+0x10`, BGR
+primary/effect colors at `+0x14/+0x18` (metadata and voice records hold their value pair there instead),
+text manager `+0x554` at `+0x1c`, render mode at `+0x20`, primary pixel height at `+0x24`, flags at `+0x28`,
+and an inline-or-heap string object at `+0x2c` (length `+0x40`, capacity `+0x44`). The per-field table is in
+[sys4-format-notes.md](sys4-format-notes.md) under "Appended text-history tail" (2026-11-03). Flag bit 0 begins a logical group; bit 1 is filtered by
 History's navigation mode; `0x20000000` denotes typed metadata and `0x40000000` denotes a voice pair.
 
 The write path is part of ordinary ADV execution:
@@ -2885,7 +2892,9 @@ The write path is part of ordinary ADV execution:
   `{layout_slot,current_record_count}` and arms the next record's group-start bit. The op-`0x71` operand is a
   layout slot—not a T1 anchor id—although T1 entries structurally target these reset sites. Its ReadTextDB
   snapshot/commit work remains a second responsibility.
-- op `0x6e`'s glyph builder appends normal text chunks with the active geometry/font/color state.
+- op `0x6e`'s glyph builder (`adv_text_build_glyph_records@0x4576c0`) appends one record per drawn row.
+  Each horizontal wrap adds a flag-`8` line-break record before the continuation row. Op `0x6f` appends the
+  same line-break record (`adv_text_append_line_break_horizontal@0x456fd0`).
 - voice op `0xc4` appends a `0x40000000` record containing `{voice_id,0}`; History replay op `0x1bd`
   uses the same writer with `{voice_id,1}` when recording is enabled.
 - op `0x1d2` appends a `0x20000000` record with operand 1 as the metadata type and operand 2 as its value.
