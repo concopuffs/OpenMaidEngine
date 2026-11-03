@@ -210,6 +210,27 @@ public class NativeNumberedSaveCodecTests
     }
 
     [Fact]
+    public void AFrameThatStoppedAtANonT3ReturnKeepsNativesMinusOneMarker()
+    {
+        // context_state_serialize writes -1 before each T3 lookup and stops at the first miss.
+        var stopped = new NativeSavedScriptFrame(-1, 0x22, [38], 2, -1) { StoppedAtUnmatchedReturn = true };
+        byte[] payload = NativeNumberedSaveCodec.Encode(NativeNumberedSaveCodec.Empty([stopped]));
+
+        int frame = 0x5304;
+        Assert.Equal(1, BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(frame + 8)));
+        Assert.Equal(38, BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(frame + 12)));
+        Assert.Equal(-1, BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(frame + 16)));
+        NativeSavedScriptFrame decoded = Assert.Single(NativeNumberedSaveCodec.Decode(payload).Frames);
+        Assert.Equal([38], decoded.ReturnIndices);
+        Assert.True(decoded.StoppedAtUnmatchedReturn);
+
+        var complete = stopped with { StoppedAtUnmatchedReturn = false };
+        payload = NativeNumberedSaveCodec.Encode(NativeNumberedSaveCodec.Empty([complete]));
+        Assert.Equal(0, BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(frame + 16)));
+        Assert.False(Assert.Single(NativeNumberedSaveCodec.Decode(payload).Frames).StoppedAtUnmatchedReturn);
+    }
+
+    [Fact]
     public void InstalledHimegariLayoutThreeAndHistoryTailDecodeWhenPresent()
     {
         string eushullyRoot = Path.Combine(

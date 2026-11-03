@@ -13,7 +13,6 @@ public readonly record struct GlyphTextLayoutOptions(
 
 public sealed record GlyphTextLayoutResult(
     IReadOnlyList<AdvRetainedGlyphRecord> Records,
-    IReadOnlyList<AdvRetainedGlyphPresentationRect> PresentationRects,
     int CursorX,
     int CursorY,
     int ConsumedGlyphs,
@@ -44,8 +43,6 @@ public sealed class RetainedGlyphLayoutEngine
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(glyphs);
         var records = new List<AdvRetainedGlyphRecord>(glyphs.Count);
-        var presentationRects =
-            new List<AdvRetainedGlyphPresentationRect>(glyphs.Count);
         int cursorX = options.CursorX;
         int cursorY = options.CursorY;
         int wrappedLines = 0;
@@ -113,17 +110,9 @@ public sealed class RetainedGlyphLayoutEngine
             rowBottom = bottom;
 
             AgeGlyphMaskCompositor.DrawGlyph(
-                destination, mask, cursorX, cursorY, request.PixelHeight, options.Style);
+                destination, mask, cursorX, cursorY,
+                AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), options.Style);
             records.Add(new AdvRetainedGlyphRecord(0, cursorX, cursorY, right, bottom));
-            presentationRects.Add(PresentationRect(
-                destination.Height,
-                mask,
-                cursorX,
-                cursorY,
-                right,
-                bottom,
-                request.PixelHeight,
-                options.Style));
             cursorX = checked(cursorX + advanceX);
             if (aspectReference == null) cursorY = checked(cursorY + mask.CellAdvanceY);
         }
@@ -132,45 +121,7 @@ public sealed class RetainedGlyphLayoutEngine
             rows.Add(new AdvTextRow(rowFirst, records.Count - rowFirst,
                 rowLeft, rowTop, rowRight, rowBottom, WrapsAfter: false));
         return new GlyphTextLayoutResult(
-            records, presentationRects, cursorX, cursorY, records.Count,
+            records, cursorX, cursorY, records.Count,
             wrappedLines, observed, stopped) { Rows = rows };
-    }
-
-    private static AdvRetainedGlyphPresentationRect PresentationRect(
-        int surfaceHeight,
-        GlyphMask mask,
-        int cellLeft,
-        int cellTop,
-        int cellRight,
-        int cellBottom,
-        int topToBaseline,
-        AdvTextStyle style)
-    {
-        int minimumEffectY = 0;
-        int maximumEffectY = 0;
-        if (style.RenderMode == 1)
-        {
-            minimumEffectY = Math.Min(0, style.EffectOffsetY);
-            maximumEffectY = Math.Max(0, style.EffectOffsetY);
-        }
-        else if (style.RenderMode == 3)
-        {
-            foreach ((int _, int y) in AgeGlyphMaskCompositor.GetMode3OutlineOffsets(
-                         style.EffectOffsetX, style.EffectOffsetY))
-            {
-                minimumEffectY = Math.Min(minimumEffectY, y);
-                maximumEffectY = Math.Max(maximumEffectY, y);
-            }
-        }
-
-        int inkTop = checked(
-            cellTop + topToBaseline - mask.OriginY + minimumEffectY);
-        int inkBottom = checked(
-            cellTop + topToBaseline - mask.OriginY + mask.Height + maximumEffectY);
-        return new AdvRetainedGlyphPresentationRect(
-            cellLeft,
-            Math.Clamp(Math.Min(cellTop, inkTop), 0, surfaceHeight),
-            cellRight,
-            Math.Clamp(Math.Max(cellBottom, inkBottom), 0, surfaceHeight));
     }
 }

@@ -90,6 +90,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x5f300` | `statement_block_depth` | `int` | nested op 0x1f4 count beyond the outermost block; op 0x1f5 decrements it before clearing statement_block_active |
 | `0x5f304` | `sleep_timer` | `int` | sleep timer object (op 0xc8; +8 active, +0x14 start-ms, +0x18 duration) |
 | `0x5f3ac` | `timed_callback_timer` | `int` | elapsed timer object armed by op 0xd5 and sampled by the timed callback scheduler |
+| `0x5f400` | `bgm_fade_period_timer` | `int` | 10 ms period timer driving the run-state 0x200 BGM fade; the tick polls period_timer_poll_elapsed_periods@0x44d0f0 and feeds bgm_fade_tick@0x464960 (armed at 0x411e46 for the voice duck release) |
 | `0x5f64c` | `adv_wait_indicator_timer` | `int` | elapsed timer started by op 0x1ce and ADV wait setup to select the animated input-wait indicator frame |
 | `0x5f690` | `timed_callback_abort_pc` | `int` | optional local fallback PC supplied to op 0xd5; -1 disables abort redirection |
 | `0x5f694` | `timed_callback_entries_vector` | `int` | MSVC vector object base for 16-byte schedule entries; begin/end/capacity pointers follow |

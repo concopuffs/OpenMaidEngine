@@ -153,6 +153,10 @@ public sealed class WindowsGdiGlyphMaskRasterizer
             gdiBuffer.AsSpan(0, expectedBytes).CopyTo(coverage);
         }
 
+        // AGE's raster callers pass tmAscent (text manager +0x458) as the cell-top-to-baseline offset.
+        if (!NativeMethods.GetTextMetricsA(_displayIc.DangerousGetHandle(), out TextMetricA textMetrics))
+            ThrowWin32("GetTextMetricsA failed");
+
         byte[] encoded = EncodeCp932Code(code);
         if (!NativeMethods.GetTextExtentPoint32A(
                 _displayIc.DangerousGetHandle(), encoded, encoded.Length, out NativeSize cell))
@@ -163,7 +167,8 @@ public sealed class WindowsGdiGlyphMaskRasterizer
             metrics.GlyphOrigin.X, metrics.GlyphOrigin.Y,
             metrics.CellIncrementX, metrics.CellIncrementY,
             cell.Width, cell.Height,
-            coverage);
+            coverage,
+            textMetrics.Ascent);
     }
 
     private SafeGdiObjectHandle GetOrCreateFont(GlyphRasterRequest request)
@@ -314,8 +319,37 @@ public sealed class WindowsGdiGlyphMaskRasterizer
         protected override bool ReleaseHandle() => NativeMethods.DeleteObject(handle);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TextMetricA
+    {
+        public int Height;
+        public int Ascent;
+        public int Descent;
+        public int InternalLeading;
+        public int ExternalLeading;
+        public int AveCharWidth;
+        public int MaxCharWidth;
+        public int Weight;
+        public int Overhang;
+        public int DigitizedAspectX;
+        public int DigitizedAspectY;
+        public byte FirstChar;
+        public byte LastChar;
+        public byte DefaultChar;
+        public byte BreakChar;
+        public byte Italic;
+        public byte Underlined;
+        public byte StruckOut;
+        public byte PitchAndFamily;
+        public byte CharSet;
+    }
+
     private static class NativeMethods
     {
+        [DllImport("gdi32.dll", EntryPoint = "GetTextMetricsA", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetTextMetricsA(IntPtr deviceContext, out TextMetricA metrics);
+
         [DllImport("kernel32.dll")]
         public static extern uint GetACP();
 

@@ -5,6 +5,13 @@ namespace Age.Engine.Text;
 /// <summary>AGE's deterministic 32-bit glyph-mask compositor, independent of mask provenance.</summary>
 public static class AgeGlyphMaskCompositor
 {
+    /// <summary>
+    /// Distance from the cell top to the baseline. Every AGE raster caller passes the selected font's
+    /// tmAscent (text manager +0x458, TEXTMETRICA at +0x454; ruby +0x490), not its pixel height.
+    /// </summary>
+    public static int CellTopToBaseline(GlyphMask mask, int pixelHeight)
+        => (mask ?? throw new ArgumentNullException(nameof(mask))).Ascent ?? pixelHeight;
+
     public static void DrawGlyph(
         RgbaImage destination,
         GlyphMask mask,

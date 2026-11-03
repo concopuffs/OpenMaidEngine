@@ -45,7 +45,8 @@ public sealed class ImmediateSurfaceTextRenderer
         {
             GlyphMask mask = _rasterizer.Rasterize(request);
             AgeGlyphMaskCompositor.DrawGlyph(
-                destination, mask, cursorX, cursorY, request.PixelHeight, style);
+                destination, mask, cursorX, cursorY,
+                AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), style);
             cursorX = checked(cursorX + mask.CellAdvanceX);
             cursorY = checked(cursorY + mask.CellAdvanceY);
         }

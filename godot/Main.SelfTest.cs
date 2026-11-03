@@ -76,6 +76,17 @@ public partial class Main
         bool bgmOneShotModeOk = (_bgm.Stream as AudioStreamOggVorbis)?.Loop == false;
         RestartBgm(bgm.Bytes, bgm.Name, 1);
         bool bgmLoopModeOk = (_bgm.Stream as AudioStreamOggVorbis)?.Loop == true;
+        // Voice duck release: native fades back to full over 1 s and refuses a new duck meanwhile.
+        BeginVoiceBgmDuck(1, 50);
+        float duckedDb = _bgm.VolumeDb;
+        _voiceBgmDuckReleaseArmed = true;
+        if (!IsVoicePlaybackActive) UpdateVoiceBgmDuckRelease();
+        bool releaseFading = _bgmFadeTween?.IsValid() == true && !_voiceBgmDuckActive;
+        BeginVoiceBgmDuck(2, 50);
+        bool voiceDuckReleaseFadeOk = releaseFading
+                                      && !_voiceBgmDuckActive
+                                      && System.Math.Abs(duckedDb - Mathf.LinearToDb(0.5f)) < 0.001f
+                                      && System.Math.Abs(_bgm.VolumeDb - duckedDb) < 0.001f;
         StopBgm();
         bool bgmStopReleaseOk = _bgm.Stream == null
                                 && !_bgm.Playing
@@ -333,7 +344,7 @@ public partial class Main
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
               && firstRiffBoundaryOk
               && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk
-              && bgmStopReleaseOk && textEffectModesOk && fontCalibrationOk
+              && bgmStopReleaseOk && voiceDuckReleaseFadeOk && textEffectModesOk && fontCalibrationOk
               && immediateSurfaceTextOk
               && liveRetainedTextOk
               && historyRetainedTextOk
@@ -357,6 +368,7 @@ public partial class Main
                       $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +
                       $"bgm-one-shot={bgmOneShotModeOk}; bgm-loop={bgmLoopModeOk}; " +
                       $"bgm-stop-release={bgmStopReleaseOk}; " +
+                      $"voice-duck-release-fade={voiceDuckReleaseFadeOk}; " +
                       $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +
                       $"immediate-surface-text={immediateSurfaceTextOk}({immediateSurfaceTextMode}); " +
                       $"live-adv-text={liveRetainedTextOk}({liveRetainedTextMode}); " +

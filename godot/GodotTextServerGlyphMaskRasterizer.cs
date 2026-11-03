@@ -81,7 +81,9 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
                 0,
                 Math.Max(width, advanceX),
                 request.PixelHeight,
-                coverage);
+                coverage,
+                // AGE places the baseline at the cell top plus the font's ascent (GDI tmAscent).
+                Mathf.RoundToInt(_textServer.FontGetAscent(rid, request.PixelHeight)));
         }
     }
 

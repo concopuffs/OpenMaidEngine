@@ -293,7 +293,6 @@ public sealed partial class GodotAdvHost
                     $"ADV layout {binding.LayoutSlot} changed its retained binding without reset.");
             int first = presentation.Append(
                 rendered.Records,
-                rendered.PresentationRects,
                 run.Layout.OriginX,
                 run.Layout.OriginY);
             RebuildRetainedWaitIndicator(binding.LayoutSlot);

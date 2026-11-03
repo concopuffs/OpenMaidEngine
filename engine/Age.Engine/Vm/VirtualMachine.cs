@@ -987,16 +987,18 @@ public sealed partial class VirtualMachine
         {
             ExecFrame frame = active[i];
             NativeSavedScriptFrame? restored = frame.RestoredSaveFrame;
+            // Native looks each live return address up in T3 and stops at the first that is not a
+            // T3 site (context_state_serialize@0x40d320); later entries are not saved.
+            int[] liveReturns = frame.CallStack
+                .Select(returnPc => (uint)returnPc < (uint)frame.Script.Instructions.Count
+                    ? FindTableIndex(frame.Script.LocalCallOffsets,
+                        frame.Script.Instructions[returnPc].Offset - 3)
+                    : -1)
+                .ToArray();
             int[] returns = restored?.ReturnIndices.ToArray()
-                ?? frame.CallStack
-                    .Where(returnPc => (uint)returnPc < (uint)frame.Script.Instructions.Count)
-                    .Select(returnPc =>
-                    {
-                        int returnOffset = frame.Script.Instructions[returnPc].Offset;
-                        return FindTableIndex(frame.Script.LocalCallOffsets, returnOffset - 3);
-                    })
-                    .Where(index => index >= 0)
-                    .ToArray();
+                ?? liveReturns.TakeWhile(index => index >= 0).ToArray();
+            bool stoppedAtUnmatched = restored?.StoppedAtUnmatchedReturn
+                ?? returns.Length < liveReturns.Length;
             int resumeIndex = restored?.ResumeIndex ?? CurrentReadMessageIndex(frame);
             int callTargetIndex = i == cutoff
                 ? -1
@@ -1007,7 +1009,10 @@ public sealed partial class VirtualMachine
                             frame.Script.ScriptCallOffsets,
                             frame.Script.Instructions[frame.Pc].Offset));
             frames[i] = new NativeSavedScriptFrame(
-                i - 1, frame.Script.PackedId, returns, resumeIndex, callTargetIndex);
+                i - 1, frame.Script.PackedId, returns, resumeIndex, callTargetIndex)
+            {
+                StoppedAtUnmatchedReturn = stoppedAtUnmatched,
+            };
         }
 
         int gfxRecordSize = _nativeDatStore.Identity.NumberedGfxRecordSize;

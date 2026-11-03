@@ -193,37 +193,30 @@ public class GlyphMaskCompositorTests
     }
 
     [Fact]
-    public void RetainedPresentationCropIncludesInkBelowTheNativeCell()
+    public void GlyphsSitOnTheFontAscentNotThePixelHeight()
     {
+        // One ink row just above the baseline. AGE's baseline is cell top + tmAscent (manager +0x458).
         var mask = new GlyphMask(
-            width: 1, height: 4, stride: 1,
-            originX: 0, originY: 3,
+            width: 1, height: 1, stride: 1,
+            originX: 0, originY: 1,
             cellAdvanceX: 4, cellAdvanceY: 0,
             cellWidth: 4, cellHeight: 5,
-            coverage: [16, 16, 16, 16]);
+            coverage: [16],
+            ascent: 3);
         var destination = Image(16, 16);
-        var engine = new RetainedGlyphLayoutEngine(
-            new CountingRasterizer(_ => mask));
+        var engine = new RetainedGlyphLayoutEngine(new CountingRasterizer(_ => mask));
 
         GlyphTextLayoutResult result = engine.Render(
             destination,
             new GlyphTextLayoutOptions(
                 CursorX: 2, CursorY: 1, LineOriginX: 2,
                 RightBound: 16, BottomBound: 16, WrapHorizontally: true,
-                Style(renderMode: 3) with
-                {
-                    EffectOffsetX = 1,
-                    EffectOffsetY = 1,
-                }),
+                Style()),
             [NativeRequest(0x82a0, 0x3042)]);
 
-        Assert.Equal(
-            new AdvRetainedGlyphRecord(0, 2, 1, 6, 6),
-            Assert.Single(result.Records));
-        Assert.Equal(
-            new AdvRetainedGlyphPresentationRect(2, 1, 6, 8),
-            Assert.Single(result.PresentationRects));
-        Assert.NotEqual(0, Pixel(destination, 2, 7).A);
+        Assert.Equal(new AdvRetainedGlyphRecord(0, 2, 1, 6, 6), Assert.Single(result.Records));
+        Assert.Equal(255, Pixel(destination, 2, 3).A);
+        Assert.Equal(1, Enumerable.Range(0, 16).Sum(y => Pixel(destination, 2, y).A / 255));
     }
 
     [Fact]

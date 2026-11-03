@@ -1395,10 +1395,10 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    per-run origins, partial erase/republication, suspension, measured cursor handoff, reset, and
    reconstruction. The synthesized Godot VM self-test exercises timed exact reveal and reports
    `live-adv-text=retained-glyphs`; real GPU captures of SC0000 pages 1 and 7 confirm ordinary and voiced
-   dialogue placement/wrapping alongside the immediate speaker-name surface. A 2026-07-30 clipping
-   follow-up keeps those native measured-cell records intact but gives transient placements a separate
-   vertically ink-safe source crop, because backend glyph black boxes and mode-3 outlines can extend below
-   the measured cell; horizontal crops remain cell-bounded to preserve reveal isolation.
+   dialogue placement/wrapping alongside the immediate speaker-name surface. Placements publish exactly
+   the native measured cell. A 2026-07-30 vertically widened crop was removed on 2026-11-03: the ink it
+   rescued fell below the cell only because glyphs used the pixel height as their baseline instead of AGE's
+   `tmAscent`.
 6. **Migrate History and the ADV wait indicator through the same retained path. — Completed
    2026-07-30.** Op `0x1d1` now rasterizes each HISTORY row into its target layout surface and publishes its
    native glyph interval through ordinary `GfxState` bindings. Row reset, wheel redraw, the broad native exit
@@ -1416,8 +1416,8 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    sizes. `auto` selects exact GDI when its ACP-932 gate passes and otherwise selects the explicitly
    non-pixel-exact Unicode backend; development runs can force either with `--text-backend`. Both modes pass
    the same immediate/live/History retained-glyph self-test. Gameplay `Label` pools and surface-text overlay
-   projection are removed, so text always participates in the ordinary surface compositor. Publication uses
-   the transient ink-safe crop established in step 5 in both backends.
+   projection are removed, so text always participates in the ordinary surface compositor. Both backends
+   report the font ascent, and publication uses the native measured cell in both.
 
 **Acceptance gates:**
 

@@ -206,7 +206,36 @@ public partial class Main
     {
         if (!_voiceBgmDuckActive || !_voiceBgmDuckReleaseArmed || IsVoicePlaybackActive) return;
         if (_bgmFadeTween != null || (_host?.VoiceBgmDuckSuppressed ?? false)) return;
-        RestoreVoiceBgmDuck();
+        FadeBackFromVoiceBgmDuck();
+    }
+
+    // The release swaps run-state 0x4000 for the 0x200 BGM fade: bgm_fade_arm(10000, 1) on a 10 ms period
+    // timer, and bgm_fade_tick@0x464960 adds one progress point per elapsed period up to 100. The volume
+    // runs linearly in amplitude from the ducked level to full (target 10000, not the saved pre-duck level)
+    // over one second. While it runs, voice_bgm_duck_begin refuses to duck, as for an explicit 0xc2 fade.
+    private const double VoiceBgmDuckReleaseSeconds = 1.0;
+    private const int VoiceBgmDuckReleaseSteps = 100;
+
+    private void FadeBackFromVoiceBgmDuck()
+    {
+        float from = _bgm.VolumeDb <= -80.0f ? 0.0f : Mathf.DbToLinear(_bgm.VolumeDb);
+        _voiceBgmDuckActive = false;
+        _voiceBgmDuckGeneration = 0;
+        _voiceBgmDuckReleaseArmed = false;
+
+        var tween = CreateTween();
+        _bgmFadeTween = tween;
+        tween.Finished += () =>
+        {
+            if (ReferenceEquals(_bgmFadeTween, tween))
+                _bgmFadeTween = null;
+        };
+        tween.TweenMethod(Callable.From<float>(progress =>
+        {
+            float step = Mathf.Floor(progress * VoiceBgmDuckReleaseSteps) / VoiceBgmDuckReleaseSteps;
+            float linear = from + (1.0f - from) * step;
+            _bgm.VolumeDb = linear <= 0 ? -80.0f : Mathf.LinearToDb(linear);
+        }), 0.0f, 1.0f, VoiceBgmDuckReleaseSeconds);
     }
 
     private void ReleaseWithheldSoundEffectStarts()

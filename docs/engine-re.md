@@ -3343,9 +3343,18 @@ the `GetTextExtentPoint32A` measured cell edges in each retained record, and
 `text_raster_string_cached@0x45b600`, however, composites the complete `GetGlyphOutlineA` black-box
 bitmap and effect copies into the shared layout surface. Direct 24-pixel bold Mincho probes show several
 ordinary Japanese glyphs reaching below the 24-pixel measured cell even before the mode-3 `(1,1)` outline.
-Thus the record is a layout/publication cell, not a guaranteed ink bounding box. The port preserves that
-native record and derives a separate transient vertical publication crop from mask origin/height and effect
-offsets; its horizontal crop remains the measured cell to avoid exposing the next glyph during timed reveal.
+Thus the record is a layout/publication cell, not a guaranteed ink bounding box.
+
+**Correction: the baseline is `tmAscent` (2026-11-03).** The overflow above came from a wrong baseline,
+not from GDI ink. Every DrawMode-1 raster caller (`text_draw_string_primary_or_ruby@0x44fac0`,
+`draw_string_to_surface@0x450150`) passes text manager `+0x458` as the cell-top-to-baseline offset.
+`text_rebuild_primary_font_resources` fills a `TEXTMETRICA` at `+0x454` with `GetTextMetricsA`, so `+0x458` is
+the primary font's `tmAscent` (ruby: `+0x490`). For 24-pixel bold Mincho that is 21, not 24. The port had used
+the pixel height, which drew every glyph 3 pixels low and pushed ink below the cell. The port then compensated
+with a vertically widened publication crop. With the baseline at `cellTop + tmAscent`, native and port page 3
+of SC0000 agree to 20 white pixels in 4,444 with no offset. Native's own glyph objects use exactly the
+measured cell as their source rect (every SC0000 page-3 object ends at `0x47`/`0x67`), and so does the port
+now. `GlyphMask.Ascent` carries `tmAscent` from the GDI backend and `FontGetAscent` from the portable one.
 
 At the script/AGE request boundary, the ordinary ADV preset is therefore 24-pixel `ＭＳ 明朝`, weight
 700, white fill, mode-3 `(1,1)` outline in `0x606060`, with 8 pixels of line leading. The small
@@ -4985,8 +4994,15 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
 - **`0x1bc`.** It now also stops the voice (`IAudioHost.StopVoice`) and drops a Skip-queued voice.
 - **`0x1bf`.** It reaches `IAudioHost.ArmVoiceBgmDuckRelease`, which applies the `0x1cf` one-shot stage. Godot now
   restores ducked BGM only once the release is armed and the voice is idle, with no `0xc2` fade and bit 0 clear.
-  It no longer restores at voice completion alone. A delayed voice start arms it too. The restore is immediate;
-  native fades back (run-state `0x200`).
+  It no longer restores at voice completion alone. A delayed voice start arms it too.
+- **Duck release fade (2026-11-03).** The release at `engine_main_tick` `0x411e12` swaps run-state `0x4000`
+  for `0x200`. It arms the 10 ms period timer at `ctx+0x5f400` and calls `bgm_fade_arm(10000, 1)`. Each tick
+  then feeds `period_timer_poll_elapsed_periods@0x44d0f0` to `bgm_fade_tick@0x464960`, which adds one point per
+  elapsed period up to 100 and interpolates volume linearly in amplitude. The result is a one-second linear
+  fade from the ducked level to full volume (target 10000, not the level saved at `ctx+0x6dbe8`). The duck
+  itself stays instant: `voice_bgm_duck_begin` arms step 10 and ticks 100 periods at once. While the release
+  fade holds `0x200`, a new voice does not duck. The port matches: `Main.FadeBackFromVoiceBgmDuck` owns the
+  BGM envelope as an explicit fade does, in 10 ms amplitude steps over one second.
 - **Statement blocks.** `VirtualMachine` tracks the flag and depth and reports the outermost open and close to
   `IAudioHost.SetStatementBlockActive`. Godot withholds delayed voice service (`0x2c0`) and delayed SFX starts
   (`0x2bf`) until the close.

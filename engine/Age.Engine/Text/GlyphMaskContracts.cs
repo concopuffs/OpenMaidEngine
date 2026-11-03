@@ -66,7 +66,8 @@ public sealed class GlyphMask
         int cellAdvanceY,
         int cellWidth,
         int cellHeight,
-        ReadOnlySpan<byte> coverage)
+        ReadOnlySpan<byte> coverage,
+        int? ascent = null)
     {
         if (width < 0) throw new ArgumentOutOfRangeException(nameof(width));
         if (height < 0) throw new ArgumentOutOfRangeException(nameof(height));
@@ -91,6 +92,7 @@ public sealed class GlyphMask
         CellAdvanceY = cellAdvanceY;
         CellWidth = cellWidth;
         CellHeight = cellHeight;
+        Ascent = ascent;
         _coverage = coverage.ToArray();
     }
 
@@ -103,6 +105,14 @@ public sealed class GlyphMask
     public int CellAdvanceY { get; }
     public int CellWidth { get; }
     public int CellHeight { get; }
+
+    /// <summary>
+    /// The font's ascent (GDI <c>tmAscent</c>) at this size. AGE draws every glyph with its baseline at
+    /// the cell top plus this value. Null when the source has no font metrics; callers then fall back to
+    /// the pixel height.
+    /// </summary>
+    public int? Ascent { get; }
+
     public ReadOnlyMemory<byte> Coverage => _coverage;
 }
 

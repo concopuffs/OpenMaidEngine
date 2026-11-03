@@ -4424,3 +4424,33 @@ Five ops the port stepped as no-ops now follow the native decodes (`engine-re.md
   pins the T1 sizing rule on a synthesized profile.
 - **Validation.** All 924 engine tests pass.
 - **References.** platform-portability (FFmpeg section); sys4-format-notes ("Shared `RT.DAT`").
+
+### Glyph baseline at tmAscent, native-cell glyph crops, and the duck release fade (2026-11-03)
+
+- **Glyph baseline.** Native draws each glyph with its baseline at the cell top plus the font's `tmAscent`
+  (text manager `+0x458`, from `GetTextMetricsA`). The port used the pixel height, which drew SC0000's
+  24-pixel text 3 pixels low. `GlyphMask.Ascent` now carries the ascent from both backends (GDI `tmAscent`,
+  Godot `FontGetAscent`). After the fix, page 3 differs from native by 20 white pixels in 4,444, with no
+  offset.
+- **Glyph crops.** The 2026-07-30 vertically widened publication crop compensated for that baseline. It
+  is removed, so glyph objects publish exactly the native measured cell. This fixes the 37 glyph objects
+  that differed at `+0x14`.
+- **Saved return slots.** Native stops a frame's return list at the first live return address that is not
+  a T3 site, and leaves a -1 in that slot. The port filtered such entries out instead.
+  `NativeSavedScriptFrame.StoppedAtUnmatchedReturn` now reproduces native's rule and its -1 marker.
+- **Save result.** The SC0000 page-3 numbered-save payload now matches native byte for byte (0 of 1,837,712
+  bytes differ). The history tail's logical content is identical. Only the LZSS-compressed bytes differ
+  (276 vs 282), because the encoder makes different match choices.
+- **Duck release fade.** The voice duck release is native's run-state `0x200` fade: one second, linear in
+  amplitude, in 10 ms steps, from the ducked level to full volume. While it runs, a new voice does not
+  duck. It replaces the port's instant restore.
+- **Validation.**
+  - Engine tests: 925/925 pass.
+  - Godot `SELFTEST OK` with both the `gdi` and `portable` backends; the self-test now includes
+    `voice-duck-release-fade`.
+  - Unit tests: `GlyphsSitOnTheFontAscentNotThePixelHeight`,
+    `PublicationCropsTheLayoutSurfaceToTheNativeCell`,
+    `AFrameThatStoppedAtANonT3ReturnKeepsNativesMinusOneMarker`.
+- **References.** engine-re: "Correction: the baseline is `tmAscent`" and "Duck release fade". Roadmap
+  retained-glyph steps 5 and 7; `0x1bf` in `opcodes.toml`; `engine-ctx.toml` `bgm_fade_period_timer`.
+  Ghidra: `period_timer_poll_elapsed_periods@0x44d0f0`, plus comments at `0x44fac0` and `0x411e12`.

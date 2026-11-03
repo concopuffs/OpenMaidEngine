@@ -8,7 +8,15 @@ public sealed record NativeSavedScriptFrame(
     uint ScriptId,
     IReadOnlyList<int> ReturnIndices,
     int ResumeIndex,
-    int CallTargetIndex);
+    int CallTargetIndex)
+{
+    /// <summary>
+    /// The live return stack went on past <see cref="ReturnIndices"/> with a return address that is not a
+    /// T3 site. context_state_serialize@0x40d320 writes -1 into each slot before looking its address up,
+    /// then stops at the first miss, so that slot keeps the -1 and the count ends before it.
+    /// </summary>
+    public bool StoppedAtUnmatchedReturn { get; init; }
+}
 
 public sealed record NativeSavedGfxObject(long Handle, byte[] Record);
 
@@ -241,6 +249,8 @@ public static class NativeNumberedSaveCodec
         WriteInt(payload, offset + 8, frame.ReturnIndices.Count);
         for (int i = 0; i < frame.ReturnIndices.Count; i++)
             WriteInt(payload, offset + 12 + i * 4, frame.ReturnIndices[i]);
+        if (frame.StoppedAtUnmatchedReturn && frame.ReturnIndices.Count < FrameReturnCapacity)
+            WriteInt(payload, offset + 12 + frame.ReturnIndices.Count * 4, -1);
         WriteInt(payload, offset + 0x40c, frame.ResumeIndex);
         WriteInt(payload, offset + 0x410, terminal ? -1 : frame.CallTargetIndex);
     }
@@ -253,7 +263,11 @@ public static class NativeNumberedSaveCodec
         return new NativeSavedScriptFrame(
             ReadInt(payload, offset), unchecked((uint)ReadInt(payload, offset + 4)),
             ReadInts(payload, offset + 12, count),
-            ReadInt(payload, offset + 0x40c), ReadInt(payload, offset + 0x410));
+            ReadInt(payload, offset + 0x40c), ReadInt(payload, offset + 0x410))
+        {
+            StoppedAtUnmatchedReturn = count < FrameReturnCapacity
+                && ReadInt(payload, offset + 12 + count * 4) == -1,
+        };
     }
 
     private static byte[] EncodeStrings(IReadOnlyList<string> strings)

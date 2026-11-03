@@ -422,6 +422,11 @@ name = "timed_callback_timer"
 type = "int"
 note = "elapsed timer object armed by op 0xd5 and sampled by the timed callback scheduler"
 [[field]]
+offset = 0x5f400
+name = "bgm_fade_period_timer"
+type = "int"
+note = "10 ms period timer driving the run-state 0x200 BGM fade; the tick polls period_timer_poll_elapsed_periods@0x44d0f0 and feeds bgm_fade_tick@0x464960 (armed at 0x411e46 for the voice duck release)"
+[[field]]
 offset = 0x5f64c
 name = "adv_wait_indicator_timer"
 type = "int"

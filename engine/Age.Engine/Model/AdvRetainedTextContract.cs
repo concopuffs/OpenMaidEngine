@@ -35,22 +35,12 @@ public readonly record struct AdvTextLayoutPresentationBinding(
     int ResetCursorY);
 
 /// <summary>
-/// Transient publication crop. Native records retain measured cell edges, but a backend mask/effect can
-/// carry ink outside that cell. Keeping the expanded crop separate preserves the native layout ABI.
+/// A glyph's retained record and the layout origin it is published at. Like
+/// adv_text_publish_next_glyph@0x451220, publication crops the layout surface to the record's measured
+/// cell; ink placed at the font's ascent stays inside it.
 /// </summary>
-public readonly record struct AdvRetainedGlyphPresentationRect(
-    int Left,
-    int Top,
-    int Right,
-    int Bottom)
-{
-    public int Width => Right - Left;
-    public int Height => Bottom - Top;
-}
-
 public readonly record struct AdvRetainedGlyphPlacement(
     AdvRetainedGlyphRecord Record,
-    AdvRetainedGlyphPresentationRect PresentationRect,
     int LayoutOriginX,
     int LayoutOriginY);
 
