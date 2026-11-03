@@ -148,7 +148,7 @@ public class SaveUiIntegrationTests
     private static readonly OpcodeTable Table = OpcodeTableJson.Load(Paths.OpcodesJson);
     private static readonly NativeSaveIdentity Identity =
         new(NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター",
-            3, 10, 0x42323234,
+            3, 10,
             new NativeSaveBankDimensions(402459, 1, 789, 1, 1, 1));
 
     [Fact]

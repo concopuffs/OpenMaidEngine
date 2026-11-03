@@ -2549,7 +2549,8 @@ lossless opaque-section preservation. `SharedProfile` owns selected integer/stri
 load/save lifecycle; `GameSession` injects it into every fresh VM. Opcodes `0x1a2`/`0x1a3` and
 `0x1a9`/`0x1aa` now implement native upsert and missing-value defaults for direct cells and resolved
 global pointers. `RT.DAT` is now implemented as the separate S3RT layer described below. The numbered store
-validates its distinct compatibility id, queries metadata without decoding payloads, and performs exact
+validates magic, game id and versions (since 2026-11-03 not the compatibility id, like AGE; see "Save identity and
+native read checks" below), queries metadata without decoding payloads, and performs exact
 paired `.DAT`/`.STH` copy/delete status layering. `NumberedThumbnailCodec` reads and writes the native BMP
 dialect through host surface capture/replacement, and ops `0x1a0`, `0x1ab`–`0x1af` (including `0x1ad`'s
 frame marker) are wired. Godot's shared profile-path resolver injects the Himegari store at
@@ -2680,6 +2681,36 @@ native defaults, writes row-vector translation matrices correctly, and retains t
 behind the semantic object so still-unnamed fields survive native load/save cycles. The `/v2` serializer
 and deserializer comments record the corrected stride and overwrite behavior.
 
+### Save identity and native read checks (2026-11-03)
+
+Found while making a port-written slot load in AGE and the reverse (game-driving acceptance 3; scenarios
+`tools/drive/scenarios/himegari-save-page3.steps` / `himegari-load-page3.steps`). Format detail lives in
+[sys4-format-notes.md](sys4-format-notes.md#common-s3sd--s4sd-dat-container--confirmed).
+
+- **The compatibility id is the engine version.** `engine_ctx_construct_SYS4422` copies it into `ctx+0x53b74`
+  (`engine_version`, four characters). The /v2 dump shows the placeholder `"000 "` at its source `0x571218` (the exe
+  is packed); the running Himegari exe holds `"424J"`, as every file it writes shows. `engine_initialize_subsystems_from_settings` prints it as
+  `ARCGameEngine Ver %c.%c%c%c`. `shared_profile_save@0x40c950` passes it with the SYS4INI game id at `ctx+0xa0bc0`
+  to both `shared_profile_payload_write` and `read_text_db_write_file`; `op_0x19e_save_numbered_slot` passes it too.
+  The 2019 executable wrote `"422B"`, which is why the installed numbered saves differ from SAVE.DAT. It was never a
+  per-file-kind id. `engine_load_sys4ini_and_mount_append_catalogs` compares its first three characters with
+  SYS4INI header `+0x04` (`ctx+0xa0bbc`).
+- **No reader checks it.** `save_container_read_and_validate_header@0x4306f0` compares the magic (`S4SD` when the
+  SYS4INI header copy at `ctx+0xa0bb8` begins `S4`) and the NUL-terminated game id, then copies the header.
+  `read_text_db_read_file@0x46aad0` compares `S3RT`, the game id and version 1.0; its `compat_id` parameter is
+  unused. The port now behaves the same, so slots from other engine builds list and load.
+- **Header `+0xf0` is the checked logical length** (payload plus both CRC DWORDs). `shared_profile_payload_read`
+  and the numbered loader behind op `0x1a1` allocate `(len / 4) + 1` DWORDs from it before decoding. A port slot
+  with zero there made AGE report "メモリが不足しました" and crash.
+- **Restore-side defaults the port must write:** the 100 resource-reload records are `(-1, 0, 0)` when empty (the
+  loop at `0x410576` reloads only when the flag DWORD is one), and the numbered string bank is
+  `(unpadded / 4) + 1` DWORDs, the same rule as SAVE.DAT.
+- **Native SAVE.DAT string padding is not zero.** The writer leaves heap residue (`0x3f` observed) after the last
+  string; the reader ignores it. The port had rejected it and failed to boot on a native-written profile.
+
+The Ghidra plates of the functions named here and the `EngineCtx` fields `engine_version`, `sys4ini_magic`,
+`sys4ini_required_engine_version` and `sys4ini_game_id` carry the same findings (`vm-map/engine-ctx.toml`).
+
 ### Kamidori numbered-save graphics extension (2026-09-21)
 
 The SYS4433 image at `/kamidori/SYS4433/range_00400000.bin` now has the following persistence functions
@@ -2786,7 +2817,7 @@ The installed 76,752-byte native file validates the formula exactly: 192 records
 Its SC0000 record (`script_id=0x22`) has 320 messages, exactly matching SC0000's F7/T1 count.
 
 **Port implementation (2026-07-24):** `ReadTextDatabaseCodec` imports and emits the exact S3RT header,
-record table, and ordered flag arrays, validates compatibility/game/version identity, accepts native nonzero
+record table, and ordered flag arrays, validates magic/game/version identity (not the compatibility id), accepts native nonzero
 pointer residue, and writes zero in that ignored field. `DirectoryNativeDatStore` owns
 `$$RT.DAT` → `RT.DAT` / `RT.BAK` replacement; load follows native behavior and reads `RT.DAT` directly
 rather than treating `RT.BAK` as a fallback. `SharedProfile.ReadText` owns records and the pending queue

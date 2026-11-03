@@ -15,12 +15,12 @@ public sealed record GamePersistencePolicy
         bool writesEnabled,
         string? readOnlyReason,
         NativeSaveMagic magic,
-        uint sharedCompatibilityId,
-        uint numberedCompatibilityId,
+        uint compatibilityId,
         string gameId,
         int expectedPackedSaveVersion,
         NativeSaveBankDimensions bankDimensions,
-        int numberedGfxRecordSize)
+        int numberedGfxRecordSize,
+        IReadOnlyList<string>? legacyGameIds = null)
     {
         GameProfileManifest.RequireStableId(storageNamespace, nameof(storageNamespace));
         ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
@@ -41,9 +41,9 @@ public sealed record GamePersistencePolicy
         WritesEnabled = writesEnabled;
         ReadOnlyReason = writesEnabled ? null : readOnlyReason;
         Magic = magic;
-        SharedCompatibilityId = sharedCompatibilityId;
-        NumberedCompatibilityId = numberedCompatibilityId;
+        CompatibilityId = compatibilityId;
         GameId = gameId;
+        LegacyGameIds = legacyGameIds?.ToArray() ?? [];
         ExpectedPackedSaveVersion = expectedPackedSaveVersion;
         BankDimensions = bankDimensions;
         NumberedGfxRecordSize = numberedGfxRecordSize;
@@ -53,9 +53,12 @@ public sealed record GamePersistencePolicy
     public bool WritesEnabled { get; }
     public string? ReadOnlyReason { get; }
     public NativeSaveMagic Magic { get; }
-    public uint SharedCompatibilityId { get; }
-    public uint NumberedCompatibilityId { get; }
+    /// <summary>The engine version AGE writes at header +0x04 of every save file; see
+    /// <see cref="NativeSaveIdentity.CompatibilityId"/>.</summary>
+    public uint CompatibilityId { get; }
     public string GameId { get; }
+    /// <summary>Game ids that earlier port builds wrote, accepted on read only.</summary>
+    public IReadOnlyList<string> LegacyGameIds { get; }
     public int ExpectedPackedSaveVersion { get; }
     public NativeSaveBankDimensions BankDimensions { get; }
     public int NumberedGfxRecordSize { get; }
@@ -82,13 +85,13 @@ public sealed record GamePersistencePolicy
     private NativeSaveIdentity CreateNativeIdentity(int packed)
         => new(
             Magic,
-            SharedCompatibilityId,
+            CompatibilityId,
             GameId,
             SaveVersion1: packed / 100,
             SaveVersion2: packed % 100,
-            NumberedCompatibilityId: NumberedCompatibilityId,
             BankDimensions: BankDimensions,
-            NumberedGfxRecordSize: NumberedGfxRecordSize);
+            NumberedGfxRecordSize: NumberedGfxRecordSize,
+            LegacyGameIds: LegacyGameIds);
 }
 
 /// <summary>All Godot-owned writable locations and native persistence policy for one selection.</summary>

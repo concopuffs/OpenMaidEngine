@@ -89,9 +89,9 @@ public static class ReadTextDatabaseCodec
             throw new InvalidDataException("RT.DAT header is truncated.");
         if (BinaryPrimitives.ReadUInt32LittleEndian(source) != Magic)
             throw new InvalidDataException("RT.DAT magic is not S3RT.");
-        if (BinaryPrimitives.ReadUInt32LittleEndian(source[4..]) != identity.CompatibilityId)
-            throw new InvalidDataException("RT.DAT compatibility id mismatch.");
-        if (!StringComparer.Ordinal.Equals(ReadGameId(source.Slice(8, 0x100)), identity.GameId))
+        // +0x04 is the writing engine's version (NativeSaveIdentity.CompatibilityId); AGE does not check it
+        // (read_text_db_read_file).
+        if (!identity.AcceptsGameId(ReadGameId(source.Slice(8, 0x100))))
             throw new InvalidDataException("RT.DAT game id mismatch.");
         uint major = BinaryPrimitives.ReadUInt32LittleEndian(source[0x108..]);
         uint minor = BinaryPrimitives.ReadUInt32LittleEndian(source[0x10c..]);

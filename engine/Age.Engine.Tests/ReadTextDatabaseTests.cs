@@ -13,6 +13,22 @@ public class ReadTextDatabaseTests
         new(2026, 7, 5, 24, 13, 42, 17, 321);
 
     [Fact]
+    public void S3rtDecodeChecksTheGameIdButNotTheEngineCompatibilityIdLikeAge()
+    {
+        var snapshot = new ReadTextDatabaseSnapshot([new ReadTextScriptRecord(0x22, new uint[] { 1, 0 })]);
+        var olderEngine = Identity with { CompatibilityId = 0x42323234 };
+        var earlierPort = Identity with { GameId = "legacy" };
+
+        // read_text_db_read_file compares magic, game id and version 1.0 only.
+        Assert.Equal(new uint[] { 1, 0 },
+            ReadTextDatabaseCodec.Decode(ReadTextDatabaseCodec.Encode(snapshot, olderEngine), Identity).Records[0x22]);
+        byte[] legacy = ReadTextDatabaseCodec.Encode(snapshot, earlierPort);
+        Assert.Throws<InvalidDataException>(() => ReadTextDatabaseCodec.Decode(legacy, Identity));
+        Assert.Equal(new uint[] { 1, 0 }, ReadTextDatabaseCodec.Decode(
+            legacy, Identity with { LegacyGameIds = ["legacy"] }).Records[0x22]);
+    }
+
+    [Fact]
     public void S3rtCodecWritesNativeHeaderRecordTableAndFlagArrays()
     {
         var snapshot = new ReadTextDatabaseSnapshot(
@@ -51,8 +67,8 @@ public class ReadTextDatabaseTests
                 [new ReadTextScriptRecord(7, new uint[] { 1, 0 })]),
             Identity);
 
-        var wrongIdentity = Identity with { CompatibilityId = 1 };
-        Assert.Contains("compatibility", Assert.Throws<InvalidDataException>(
+        var wrongIdentity = Identity with { GameId = "other" };
+        Assert.Contains("game id", Assert.Throws<InvalidDataException>(
             () => ReadTextDatabaseCodec.Decode(encoded, wrongIdentity)).Message);
 
         Assert.Contains("truncated", Assert.Throws<InvalidDataException>(

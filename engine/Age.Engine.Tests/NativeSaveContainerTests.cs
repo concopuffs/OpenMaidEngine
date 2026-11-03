@@ -52,6 +52,8 @@ public class NativeSaveContainerTests
         Assert.Equal(2, BinaryPrimitives.ReadInt32LittleEndian(file.AsSpan(0x120)));
         Assert.Equal(0x78563412u, BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(0x130)));
         Assert.Equal(0x1357u, BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(0x134)));
+        // AGE's readers size their decode buffer from +0xf0, the checked logical length (payload + two CRCs).
+        Assert.Equal((uint)(payload.Length + 8), BinaryPrimitives.ReadUInt32LittleEndian(file.AsSpan(0xf0)));
 
         byte[] checkedLogical = new byte[payload.Length + 8];
         payload.CopyTo(checkedLogical.AsSpan(8));
@@ -135,6 +137,54 @@ public class NativeSaveContainerTests
             identity.Validate(identity.CreateMetadata(Timestamp, 0) with { SaveVersion1 = 3 }));
         Assert.Throws<InvalidDataException>(() =>
             identity.Validate(identity.CreateMetadata(Timestamp, 0) with { GameId = "other" }));
+    }
+
+    [Fact]
+    public void IdentityChecksTheGameIdButNotTheEngineCompatibilityIdLikeAge()
+    {
+        const string Misspelled = "蟋ｫ迢ｩ繧翫ム繝ｳ繧ｸ繝ｧ繝ｳ繝槭う繧ｹ繧ｿ繝ｼ";
+        var identity = new NativeSaveIdentity(
+            NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター", 3, 10, LegacyGameIds: [Misspelled]);
+        NativeSaveMetadata written = identity.CreateMetadata(Timestamp, 0);
+
+        // save_container_read_and_decode compares magic, game id and versions only: a save written by an older
+        // AGE.EXE ("422B") loads in the current one ("424J").
+        identity.Validate(written with { CompatibilityId = 0x42323234 });
+        identity.Validate(written with { GameId = Misspelled });
+        Assert.Throws<InvalidDataException>(() => identity.Validate(written with { GameId = "other" }));
+        Assert.Equal("姫狩りダンジョンマイスター", written.GameId);
+        Assert.Equal(0x4a343234u, written.CompatibilityId);
+    }
+
+    [Fact]
+    public void DirectoryStoreLoadsOtherEngineBuildsAndRewritesLegacyGameIds()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "age-native-identity-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            const string Misspelled = "蟋ｫ迢ｩ繧翫ム繝ｳ繧ｸ繝ｧ繝ｳ繝槭う繧ｹ繧ｿ繝ｼ";
+            var current = new NativeSaveIdentity(
+                NativeSaveMagic.S4SD, 0x4a343234, "姫狩りダンジョンマイスター", 3, 10, LegacyGameIds: [Misspelled]);
+            var olderEngine = current with { CompatibilityId = 0x42323234, LegacyGameIds = null };
+            var earlierPort = current with { GameId = Misspelled, LegacyGameIds = null };
+            byte[] payload = Enumerable.Repeat((byte)0x44, 64).ToArray();
+            new DirectoryNativeDatStore(root, olderEngine).SaveNumbered(0, payload, Timestamp, 1);
+            new DirectoryNativeDatStore(root, earlierPort).SaveShared(payload, Timestamp, 2);
+
+            var store = new DirectoryNativeDatStore(root, current);
+            Assert.Equal(0x42323234u, store.QueryNumberedMetadata(0)!.CompatibilityId);
+            Assert.Equal(payload, store.LoadNumbered(0)!.Payload);
+            Assert.Equal(Misspelled, store.LoadShared()!.Metadata.GameId);
+
+            store.SaveShared(payload, Timestamp, 3);
+            Assert.Equal("姫狩りダンジョンマイスター", store.LoadShared()!.Metadata.GameId);
+            Assert.Throws<InvalidDataException>(() =>
+                new DirectoryNativeDatStore(root, earlierPort).LoadNumbered(0));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]

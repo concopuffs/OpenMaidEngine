@@ -66,6 +66,13 @@ public static class NativeSaveContainerCodec
     public const int HeaderSize = 0x124;
     public const int CodecFrameSize = 0x14;
     public const int FixedPrefixSize = HeaderSize + CodecFrameSize;
+    /// <summary>The game id is a NUL-terminated string in header bytes 0x08..0xf0.</summary>
+    public const int GameIdAreaSize = 0xe8;
+    /// <summary>Header +0xf0: the byte length of the checked logical buffer (the payload plus its two CRC
+    /// DWORDs). AGE's readers allocate <c>length / 4 + 1</c> DWORDs from it before decoding (shared
+    /// <c>shared_profile_payload_read</c> and the numbered loader), so a zero makes them decode into a single DWORD
+    /// and fail ("out of memory" on load). Every native file holds it; decoding does not need it.</summary>
+    public const int CheckedLogicalLengthOffset = 0xf0;
 
     private const uint SeedIncrement = 0x0b0b0b0b;
     private const ushort MultiplierIncrement = 0x0b02;
@@ -97,6 +104,8 @@ public static class NativeSaveContainerCodec
 
         byte[] result = new byte[checked(HeaderSize + CodecFrameSize + encoded.Length)];
         WriteHeader(result.AsSpan(0, HeaderSize), metadata);
+        BinaryPrimitives.WriteUInt32LittleEndian(
+            result.AsSpan(CheckedLogicalLengthOffset), checked((uint)checkedLogical.Length));
         Span<byte> frame = result.AsSpan(HeaderSize, CodecFrameSize);
         BinaryPrimitives.WriteUInt32LittleEndian(frame, checked((uint)(encoded.Length / 4)));
         BinaryPrimitives.WriteUInt32LittleEndian(frame[4..], Crc32Msb(encoded));
@@ -196,8 +205,9 @@ public static class NativeSaveContainerCodec
         if (metadata.GameId.Contains('\0'))
             throw new ArgumentException("Native save game id cannot contain NUL.", nameof(metadata));
         byte[] gameId = ShiftJis.GetBytes(metadata.GameId);
-        if (gameId.Length >= 0x100)
-            throw new ArgumentException("Native save game id must fit in 255 Shift-JIS bytes.", nameof(metadata));
+        if (gameId.Length >= GameIdAreaSize)
+            throw new ArgumentException(
+                $"Native save game id must fit in {GameIdAreaSize - 1} Shift-JIS bytes.", nameof(metadata));
         gameId.CopyTo(header[8..]);
 
         Span<byte> systemTime = header[0x108..0x118];
@@ -218,7 +228,7 @@ public static class NativeSaveContainerCodec
     {
         NativeSaveMagic magic = ReadMagic(header);
         uint compatibilityId = BinaryPrimitives.ReadUInt32LittleEndian(header[4..]);
-        ReadOnlySpan<byte> gameIdBytes = header.Slice(8, 0x100);
+        ReadOnlySpan<byte> gameIdBytes = header.Slice(8, GameIdAreaSize);
         int terminator = gameIdBytes.IndexOf((byte)0);
         if (terminator < 0)
             throw new InvalidDataException("Native save game id is not NUL-terminated.");

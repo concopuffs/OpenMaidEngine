@@ -12,7 +12,7 @@ public class NumberedSavePairTests
     private static readonly NativeSystemTime Timestamp =
         new(2026, 7, 5, 24, 13, 42, 17, 321);
     private static readonly NativeSaveIdentity Identity =
-        new(NativeSaveMagic.S4SD, 0x4a343234, "numbered-test", 3, 10, 0x42323234,
+        new(NativeSaveMagic.S4SD, 0x4a343234, "numbered-test", 3, 10,
             new NativeSaveBankDimensions(402459, 1, 789, 1, 1, 1));
 
     [Fact]
@@ -59,7 +59,7 @@ public class NumberedSavePairTests
                     byte[] header = new byte[NativeSaveContainerCodec.HeaderSize];
                     stream.ReadExactly(header);
                     NativeSaveMetadata metadata = NativeSaveContainerCodec.ReadMetadata(header);
-                    return metadata.CompatibilityId == 0x42323234
+                    return metadata.GameId == "姫狩りダンジョンマイスター"
                         && metadata.SaveVersion1 == 3 && metadata.SaveVersion2 == 10;
                 }
                 catch (Exception ex) when (ex is IOException or InvalidDataException
@@ -84,7 +84,7 @@ public class NumberedSavePairTests
     }
 
     [Fact]
-    public void NumberedMetadataUsesItsOwnIdentityAndDoesNotDecodePayload()
+    public void NumberedMetadataReadsOnlyTheHeaderAndCarriesTheEngineCompatibilityId()
     {
         string root = NewTempRoot();
         try
@@ -97,7 +97,7 @@ public class NumberedSavePairTests
 
             NativeSaveMetadata metadata = store.QueryNumberedMetadata(4)!;
 
-            Assert.Equal(0x42323234u, metadata.CompatibilityId);
+            Assert.Equal(Identity.CompatibilityId, metadata.CompatibilityId);
             Assert.Equal(Timestamp, metadata.Timestamp);
             Assert.Equal(54321u, metadata.AccumulatedPlaySeconds);
             Assert.Throws<InvalidDataException>(() => store.LoadNumbered(4));

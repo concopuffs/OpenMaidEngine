@@ -64,9 +64,9 @@
     "storageNamespace": "himegari",
     "writesEnabled": true,
     "magic": "S4SD",
-    "sharedCompatibilityId": 1244934708,
-    "numberedCompatibilityId": 1110585908,
-    "gameId": "蟋ｫ迢ｩ繧翫ム繝ｳ繧ｸ繝ｧ繝ｳ繝槭う繧ｹ繧ｿ繝ｼ",
+    "compatibilityId": 1244934708,
+    "gameId": "姫狩りダンジョンマイスター",
+    "legacyGameIds": ["蟋ｫ迢ｩ繧翫ム繝ｳ繧ｸ繝ｧ繝ｳ繝槭う繧ｹ繧ｿ繝ｼ"],
     "expectedPackedSaveVersion": 310,
     "bankDimensions": {
       "integerGlobals": 402459,

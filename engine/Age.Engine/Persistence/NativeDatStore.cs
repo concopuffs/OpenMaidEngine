@@ -2,34 +2,37 @@ using System.Globalization;
 
 namespace Age.Engine.Persistence;
 
+/// <summary>What AGE writes into, and checks in, the headers of SAVE.DAT, RT.DAT and numbered saves.</summary>
+/// <param name="CompatibilityId">Header +0x04 of every file: the writing AGE.EXE's four-character engine version
+/// (<c>ctx+0x53b74</c>; Himegari's current exe writes "424J" = 0x4a343234, its 2019 saves carry "422B"). AGE writes
+/// it into every file and never checks it on read, so files from other engine builds load; the port does the same.</param>
+/// <param name="LegacyGameIds">Further game ids accepted on read but never written: misspellings that earlier port
+/// builds wrote, so their files load once and are rewritten with <paramref name="GameId"/>.</param>
 public sealed record NativeSaveIdentity(
     NativeSaveMagic Magic,
     uint CompatibilityId,
     string GameId,
     int SaveVersion1,
     int SaveVersion2,
-    uint? NumberedCompatibilityId = null,
     NativeSaveBankDimensions? BankDimensions = null,
-    int NumberedGfxRecordSize = NativeGfxSaveLayout.BaseRecordSize)
+    int NumberedGfxRecordSize = NativeGfxSaveLayout.BaseRecordSize,
+    IReadOnlyList<string>? LegacyGameIds = null)
 {
-    public uint EffectiveNumberedCompatibilityId => NumberedCompatibilityId ?? CompatibilityId;
+    public NativeSaveMetadata CreateMetadata(NativeSystemTime timestamp, uint accumulatedPlaySeconds)
+        => new(Magic, CompatibilityId, GameId, timestamp, accumulatedPlaySeconds, SaveVersion1, SaveVersion2);
 
-    public NativeSaveMetadata CreateMetadata(
-        NativeSystemTime timestamp,
-        uint accumulatedPlaySeconds,
-        bool numbered = false)
-        => new(
-            Magic, numbered ? EffectiveNumberedCompatibilityId : CompatibilityId, GameId,
-            timestamp, accumulatedPlaySeconds, SaveVersion1, SaveVersion2);
+    /// <summary>AGE's read check: the game id must equal its own (SYS4INI header +8).</summary>
+    public bool AcceptsGameId(string gameId)
+        => StringComparer.Ordinal.Equals(gameId, GameId)
+           || (LegacyGameIds?.Contains(gameId, StringComparer.Ordinal) ?? false);
 
-    public void Validate(NativeSaveMetadata metadata, bool numbered = false)
+    /// <summary>AGE's header check (<c>save_container_read_and_decode</c>): magic, game id, and the save versions.
+    /// The compatibility id is not checked.</summary>
+    public void Validate(NativeSaveMetadata metadata)
     {
         if (metadata.Magic != Magic)
             throw new InvalidDataException($"Native save generation mismatch: expected {Magic}, got {metadata.Magic}.");
-        uint expectedCompatibilityId = numbered ? EffectiveNumberedCompatibilityId : CompatibilityId;
-        if (metadata.CompatibilityId != expectedCompatibilityId)
-            throw new InvalidDataException("Native save compatibility id mismatch.");
-        if (!StringComparer.Ordinal.Equals(metadata.GameId, GameId))
+        if (!AcceptsGameId(metadata.GameId))
             throw new InvalidDataException("Native save game id mismatch.");
 
         bool versionsMatch =
@@ -170,7 +173,7 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
     public NativeSaveDocument? LoadNumbered(int slot)
     {
         string path = Path.Combine(_root, NumberedFileName(slot));
-        return File.Exists(path) ? LoadAndValidate(path, numbered: true) : null;
+        return File.Exists(path) ? LoadAndValidate(path) : null;
     }
 
     public NativeNumberedSaveFile? LoadNumberedFile(int slot)
@@ -179,7 +182,7 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         if (!File.Exists(path)) return null;
         byte[] source = File.ReadAllBytes(path);
         NativeSaveDocument document = NativeSaveContainerCodec.Decode(source);
-        _identity.Validate(document.Metadata, numbered: true);
+        _identity.Validate(document.Metadata);
         return new NativeNumberedSaveFile(
             document, source.AsSpan(document.BytesConsumed).ToArray());
     }
@@ -194,7 +197,7 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         byte[] header = new byte[NativeSaveContainerCodec.HeaderSize];
         stream.ReadExactly(header);
         NativeSaveMetadata metadata = NativeSaveContainerCodec.ReadMetadata(header);
-        _identity.Validate(metadata, numbered: true);
+        _identity.Validate(metadata);
         return metadata;
     }
 
@@ -205,7 +208,7 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         uint accumulatedPlaySeconds)
     {
         byte[] encoded = NativeSaveContainerCodec.Encode(
-            payload, _identity.CreateMetadata(timestamp, accumulatedPlaySeconds, numbered: true));
+            payload, _identity.CreateMetadata(timestamp, accumulatedPlaySeconds));
         Directory.CreateDirectory(_root);
         WriteThrough(Path.Combine(_root, NumberedFileName(slot)), encoded);
     }
@@ -218,7 +221,7 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         uint accumulatedPlaySeconds)
     {
         byte[] container = NativeSaveContainerCodec.Encode(
-            payload, _identity.CreateMetadata(timestamp, accumulatedPlaySeconds, numbered: true));
+            payload, _identity.CreateMetadata(timestamp, accumulatedPlaySeconds));
         byte[] encoded = new byte[checked(container.Length + historyTail.Length)];
         container.CopyTo(encoded, 0);
         historyTail.CopyTo(encoded.AsSpan(container.Length));
@@ -269,10 +272,10 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         return "SAVE" + slot.ToString("00", CultureInfo.InvariantCulture) + ".STH";
     }
 
-    private NativeSaveDocument LoadAndValidate(string path, bool numbered = false)
+    private NativeSaveDocument LoadAndValidate(string path)
     {
         NativeSaveDocument document = NativeSaveContainerCodec.Decode(File.ReadAllBytes(path));
-        _identity.Validate(document.Metadata, numbered);
+        _identity.Validate(document.Metadata);
         return document;
     }
 

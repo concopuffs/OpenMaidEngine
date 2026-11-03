@@ -69,6 +69,23 @@ public class SharedProfileTests
     }
 
     [Fact]
+    public void SharedPayloadIgnoresNativeResidueInStringBlobPadding()
+    {
+        var metadata = new NativeSaveMetadata(
+            NativeSaveMagic.S4SD, 1, "test", Timestamp, 0, 1, 1);
+        byte[] logical = SharedProfilePayloadCodec.Encode(
+            new SharedProfilePayload(stringCells: new Dictionary<int, string> { [0xd2] = "abc" }),
+            metadata);
+        // AGE leaves heap residue after the last string (0x3f in a native SAVE.DAT) and its reader ignores it.
+        int padding = logical.AsSpan().IndexOf("abc\0"u8) + 4;
+        logical[padding] = 0x3f;
+
+        SharedProfilePayload decoded = SharedProfilePayloadCodec.Decode(logical, metadata);
+
+        Assert.Equal("abc", decoded.StringCells[0xd2]);
+    }
+
+    [Fact]
     public void SharedProfilePersistsSelectedCellsThroughNativeDirectoryStore()
     {
         string root = Path.Combine(Path.GetTempPath(), "age-shared-profile-" + Guid.NewGuid().ToString("N"));

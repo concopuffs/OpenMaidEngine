@@ -23,8 +23,9 @@ public sealed class GameProfileSelectionTests
         Assert.Equal("himegari", himegari.PersistenceNamespace);
         Assert.True(himegari.PersistenceWritesEnabled);
         Assert.Equal(310, himegari.Persistence.ExpectedPackedSaveVersion);
-        Assert.Equal(0x4a343234u, himegari.Persistence.SharedCompatibilityId);
-        Assert.Equal(0x42323234u, himegari.Persistence.NumberedCompatibilityId);
+        Assert.Equal(0x4a343234u, himegari.Persistence.CompatibilityId);   // "424J", the current AGE.EXE
+        Assert.Equal("姫狩りダンジョンマイスター", himegari.Persistence.GameId);
+        Assert.Equal(["蟋ｫ迢ｩ繧翫ム繝ｳ繧ｸ繝ｧ繝ｳ繝槭う繧ｹ繧ｿ繝ｼ"], himegari.Persistence.LegacyGameIds);
         Assert.Equal([402459, 1, 789, 1, 1, 1], himegari.Persistence.BankDimensions.ToArray());
         Assert.Equal(0x2d4, himegari.Persistence.NumberedGfxRecordSize);
         Assert.Equal("res://config/japanese-text-rendering.json",
@@ -56,8 +57,9 @@ public sealed class GameProfileSelectionTests
         Assert.Equal("kamidori", kamidori.PersistenceNamespace);
         Assert.True(kamidori.PersistenceWritesEnabled);
         Assert.Equal(320, kamidori.Persistence.ExpectedPackedSaveVersion);
-        Assert.Equal(0x46333334u, kamidori.Persistence.SharedCompatibilityId);
-        Assert.Equal(0x46333334u, kamidori.Persistence.NumberedCompatibilityId);
+        Assert.Equal(0x46333334u, kamidori.Persistence.CompatibilityId);   // "433F"
+        Assert.Equal("神採りアルケミーマイスター", kamidori.Persistence.GameId);
+        Assert.Empty(kamidori.Persistence.LegacyGameIds);
         Assert.Equal([1037327, 1, 802, 1, 1, 1], kamidori.Persistence.BankDimensions.ToArray());
         Assert.Equal(0x2e4, kamidori.Persistence.NumberedGfxRecordSize);
         Assert.Null(kamidori.Persistence.ReadOnlyReason);
@@ -264,8 +266,7 @@ public sealed class GameProfileSelectionTests
                 writesEnabled: false,
                 readOnlyReason: "synthetic test profile",
                 NativeSaveMagic.S4SD,
-                sharedCompatibilityId: 1,
-                numberedCompatibilityId: 1,
+                compatibilityId: 1,
                 gameId: id,
                 expectedPackedSaveVersion: 300,
                 new NativeSaveBankDimensions(1, 1, 1, 1, 1, 1),

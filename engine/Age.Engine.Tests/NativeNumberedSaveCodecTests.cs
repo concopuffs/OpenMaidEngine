@@ -142,7 +142,7 @@ public class NativeNumberedSaveCodecTests
         try
         {
             var identity = new NativeSaveIdentity(
-                NativeSaveMagic.S4SD, 1, "test", 3, 10, NumberedCompatibilityId: 2);
+                NativeSaveMagic.S4SD, 1, "test", 3, 10);
             var store = new DirectoryNativeDatStore(root, identity);
             byte[] payload = NativeNumberedSaveCodec.Encode(NativeNumberedSaveCodec.Empty(
                 [new NativeSavedScriptFrame(-1, 0, Array.Empty<int>(), -1, -1)]));
@@ -163,6 +163,21 @@ public class NativeNumberedSaveCodecTests
     }
 
     [Fact]
+    public void EmptyStateAndStringBankFollowNativeDefaultsAndRounding()
+    {
+        NativeNumberedSaveState empty = NativeNumberedSaveCodec.Empty(
+            [new NativeSavedScriptFrame(-1, 0, Array.Empty<int>(), -1, -1)]);
+        Assert.All(Enumerable.Range(0, 100), slot => Assert.Equal(-1,
+            BinaryPrimitives.ReadInt32LittleEndian(empty.ResourceRecords.AsSpan(slot * 12))));
+
+        // "abc" plus its NUL ends on a DWORD boundary, so AGE adds a whole zero DWORD: (4 / 4) + 1 = 2.
+        byte[] payload = NativeNumberedSaveCodec.Encode(empty with { StringGlobals = ["abc"] });
+        int at = 0x5718 + 6 * 4;   // cutoff 0: six bank counts, then no integer or float globals
+        Assert.Equal(2, BinaryPrimitives.ReadInt32LittleEndian(payload.AsSpan(at)));
+        Assert.Equal(["abc"], NativeNumberedSaveCodec.Decode(payload).StringGlobals);
+    }
+
+    [Fact]
     public void InstalledHimegariLayoutThreeAndHistoryTailDecodeWhenPresent()
     {
         string eushullyRoot = Path.Combine(
@@ -176,7 +191,7 @@ public class NativeNumberedSaveCodecTests
                 {
                     NativeSaveMetadata metadata = NativeSaveContainerCodec.ReadMetadata(
                         File.ReadAllBytes(candidate));
-                    return metadata.CompatibilityId == 0x42323234
+                    return metadata.GameId == "姫狩りダンジョンマイスター"
                         && metadata.SaveVersion1 == 3 && metadata.SaveVersion2 == 10;
                 }
                 catch (Exception error) when (
@@ -196,6 +211,11 @@ public class NativeNumberedSaveCodecTests
         Assert.NotEmpty(state.Frames);
         Assert.Equal(402459, state.IntegerGlobals.Count);
         Assert.Equal(789, state.StringGlobals.Count);
+        // Native oracles for what the port writes: the +0xf0 checked logical length, and a re-encoded body with
+        // AGE's string-bank rounding comes out byte-identical.
+        Assert.Equal((uint)(document.Payload.Length + 8),
+            BinaryPrimitives.ReadUInt32LittleEndian(source.AsSpan(NativeSaveContainerCodec.CheckedLogicalLengthOffset)));
+        Assert.Equal(document.Payload, NativeNumberedSaveCodec.Encode(state));
         Assert.Equal(NativeNumberedSaveState.GfxRecordSize, state.RangeTransformRecord.Length);
         ReadOnlySpan<byte> systemChoiceAtlas = state.SurfaceRecords.AsSpan(15 * 20, 20);
         Assert.Equal(0x3383, BinaryPrimitives.ReadInt32LittleEndian(systemChoiceAtlas));
@@ -222,7 +242,7 @@ public class NativeNumberedSaveCodecTests
                 {
                     NativeSaveMetadata metadata = NativeSaveContainerCodec.ReadMetadata(
                         File.ReadAllBytes(candidate));
-                    return metadata.CompatibilityId == 0x46333334
+                    return metadata.GameId == "神採りアルケミーマイスター"
                         && metadata.SaveVersion1 == 3 && metadata.SaveVersion2 == 20;
                 }
                 catch (Exception error) when (
@@ -286,7 +306,7 @@ public class NativeNumberedSaveCodecTests
         var identity = Age.Engine.Profiles.GameProfileRegistry.BuiltIn.Find("kamidori")!
             .Persistence.CreateExpectedNativeIdentity();
         Assert.Equal(document.Metadata.GameId, identity.GameId);
-        identity.Validate(document.Metadata, numbered: true);
+        identity.Validate(document.Metadata);
         NativeNumberedSaveState decoded = NativeNumberedSaveCodec.Decode(document.Payload, 0x2e4);
         NativeNumberedSaveState roundTrip = NativeNumberedSaveCodec.Decode(
             NativeNumberedSaveCodec.Encode(decoded), 0x2e4);

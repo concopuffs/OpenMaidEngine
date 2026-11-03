@@ -207,13 +207,22 @@ public static class NativeNumberedSaveCodec
         int gfxRecordSize = NativeGfxSaveLayout.BaseRecordSize)
         => new(
             0, 0, new int[NativeNumberedSaveState.SoundEffectChannelCount],
-            new byte[NativeNumberedSaveState.ResourceRecordsSize],
+            EmptyResourceRecords(),
             EmptySurfaceRecords(),
             frames, Array.Empty<int>(), Array.Empty<int>(), Array.Empty<string>(),
             Array.Empty<int>(), Array.Empty<int>(), Array.Empty<int>(),
             Array.Empty<NativeSavedGfxObject>(), 0, 0,
             new byte[NativeGfxSaveLayout.FromRecordSize(gfxRecordSize).RecordSize],
             GraphicsRecordSize: gfxRecordSize);
+
+    /// <summary>100 three-DWORD records; AGE writes an unused one as resource id -1, 0, 0.</summary>
+    private static byte[] EmptyResourceRecords()
+    {
+        byte[] result = new byte[NativeNumberedSaveState.ResourceRecordsSize];
+        for (int slot = 0; slot < 100; slot++)
+            WriteInt(result, slot * 12, -1);
+        return result;
+    }
 
     private static byte[] EmptySurfaceRecords()
     {
@@ -256,7 +265,9 @@ public static class NativeNumberedSaveCodec
             stream.Write(encoded);
             stream.WriteByte(0);
         }
-        while ((stream.Length & 3) != 0) stream.WriteByte(0);
+        // AGE sizes the blob as (unpadded bytes / 4) + 1 DWORDs, adding a whole zero DWORD when the strings already
+        // end on a DWORD boundary (as for SAVE.DAT's string cells).
+        stream.SetLength(checked((stream.Length / 4 + 1) * 4));
         return stream.ToArray();
     }
 

@@ -163,8 +163,8 @@ public static class SharedProfilePayloadCodec
             if (!strings.TryAdd(address, decoded))
                 throw new InvalidDataException($"Shared SAVE.DAT repeats string cell 0x{address:x8}.");
         }
-        if (stringBlob[stringPosition..].IndexOfAnyExcept((byte)0) >= 0)
-            throw new InvalidDataException("Shared SAVE.DAT string blob has nonzero padding.");
+        // The bytes after the last string are padding. AGE leaves heap residue there (a native SAVE.DAT written on
+        // 2026-11-03 holds 0x3f) and its reader ignores them, so they are not checked; the writer emits zeros.
 
         uint[] selectors = Array.Empty<uint>();
         uint[] extended = Array.Empty<uint>();

@@ -211,9 +211,9 @@ public sealed class GameProfileRegistry
         public bool? WritesEnabled { get; init; }
         public string? ReadOnlyReason { get; init; }
         public string? Magic { get; init; }
-        public uint? SharedCompatibilityId { get; init; }
-        public uint? NumberedCompatibilityId { get; init; }
+        public uint? CompatibilityId { get; init; }
         public string? GameId { get; init; }
+        public string[]? LegacyGameIds { get; init; }
         public int? ExpectedPackedSaveVersion { get; init; }
         public BankDimensionsDocument? BankDimensions { get; init; }
         public int? NumberedGfxRecordSize { get; init; }
@@ -228,17 +228,16 @@ public sealed class GameProfileRegistry
                 WritesEnabled.Value,
                 ReadOnlyReason,
                 magic,
-                SharedCompatibilityId
-                    ?? throw new InvalidOperationException("sharedCompatibilityId is required"),
-                NumberedCompatibilityId
-                    ?? throw new InvalidOperationException("numberedCompatibilityId is required"),
+                CompatibilityId
+                    ?? throw new InvalidOperationException("compatibilityId is required"),
                 GameId ?? "",
                 ExpectedPackedSaveVersion
                     ?? throw new InvalidOperationException("expectedPackedSaveVersion is required"),
                 (BankDimensions
                     ?? throw new InvalidOperationException("bankDimensions is required")).ToDimensions(),
                 NumberedGfxRecordSize
-                    ?? throw new InvalidOperationException("numberedGfxRecordSize is required"));
+                    ?? throw new InvalidOperationException("numberedGfxRecordSize is required"),
+                LegacyGameIds);
         }
     }
 

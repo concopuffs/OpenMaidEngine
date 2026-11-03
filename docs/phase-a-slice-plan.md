@@ -3811,6 +3811,8 @@ handled (98.4%); its only remaining effectful gaps are numbered-save restore bou
 The bounded outer numbered-save lifecycle is now implemented before the much larger logical state payload.
 Himegari's numbered `.DAT` compatibility id is `0x42323234`, distinct from shared `SAVE.DAT`/`RT.DAT`
 id `0x4a343234`; `NativeSaveIdentity` and the directory store now validate those domains independently.
+*(Superseded 2026-11-03: the id is the writing executable's engine version, and neither AGE nor the port checks it.
+See "Saves cross between the port and native AGE".)*
 Opcode `0x1a0` reads and validates only the fixed header, while `0x1ab`/`0x1ac` attempt both native
 `SAVE%02d.DAT` and `SAVE%02d.STH` members and reproduce DAT-failure/STH-precedence statuses.
 
@@ -4291,3 +4293,29 @@ read `SYSTEM4@0x477 > SC0000@0x8a9` and the port `SYSTEM4@0x235 > SC0000@0x8a9`.
   (`ScriptCallOffsets[CallTargetIndex]`). Execution is unchanged; only the reported location moves.
 - **Validation.** New VM test `RestoredCallerReportsItsSavedCallSiteWhileTheRestoredChildWaits` fails without the
   fix. Live on both games, the full stacks now match after the load.
+
+### Saves cross between the port and native AGE (2026-11-03)
+
+Game-driving acceptance 3 (spec M3) passes in both directions. `himegari-save-page3.steps` saves slot 0 on SC0000
+page 3 with one target; `himegari-load-page3.steps` loads it with the other, starting from a sandbox seeded from the
+first (`--seed port:fresh` / `native:fresh`). The load resumes at `SC0000@0x8a9` and two clicks reach `0x913`. In AGE's
+load list, a port-written slot shows its full preview.
+
+- **Wrong game id.** `himegari.json` held the mojibake id, so AGE listed port slots as empty. Fixed. The profile's new
+  `legacyGameIds` still accepts the old id, and the next save rewrites such a file. A copy of the user's real profile
+  boots, and on quit its `SAVE.DAT` is rewritten with the native id.
+- **The compatibility id is the engine version and no reader checks it.** The port had a separate numbered id and
+  validated it, so it would have rejected native `"424J"` slots. Now one profile `compatibilityId` is written into
+  every file and never checked, as in AGE.
+- **Header `+0xf0` is a checked logical length.** The port wrote zero there, and AGE allocated from it, failed with
+  "メモリが不足しました" and crashed. `NativeSaveContainerCodec` now writes it, and the game id area is `0xe8` bytes.
+- **Restore defaults.** Empty resource-reload records are now `(-1, 0, 0)`, and the numbered string bank rounds
+  `(bytes / 4) + 1` DWORDs. A new test assertion shows the installed `SAVE00.DAT` re-encodes byte-identically.
+- **Native `SAVE.DAT` string padding holds heap residue.** The port rejected it and could not boot on a native-written
+  profile. It now ignores the residue, as AGE does.
+- **Validation.** New container, RT.DAT, shared-profile, numbered-codec and profile tests; 905 of 907 engine tests
+  pass, and the two failures predate this work (`InstalledNativeRtDat…`, `FfmpegShimSeeks…`). Format detail is in
+  `sys4-format-notes.md` and native evidence in `engine-re.md` ("Save identity and native read checks").
+- **Not addressed.** The port draws an opaque dark text band on SC0000 page 3 where AGE shows text over the CG (also
+  without a load; possibly global `0x6c3`). The surface records of the two writers still differ in color keys
+  (`0` versus `0xff000000`) and created flags. The port aborts `_Ready` when the shared profile fails to decode.

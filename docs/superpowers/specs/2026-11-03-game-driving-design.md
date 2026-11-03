@@ -1,7 +1,7 @@
 # Game driving: one step language, two backends — design
 
 **Date:** 2026-11-03
-**Status:** accepted; M1 and M2 are built. §13 and §14 record where the build differs from the design.
+**Status:** accepted; M1 to M3 are built. §13 to §15 record where the build differs from the design.
 **Home in the canonical map:** this file is the design. Tool usage stays in `docs/tools-reference.md` ("Game
 driver"). Native engine findings stay in `docs/engine-re.md` ("Driving native AGE"). Directory layout
 stays in `docs/PROJECT-STRUCTURE.md`.
@@ -332,3 +332,18 @@ differs from the sections above, this section wins. Usage is in `docs/tools-refe
 - **Acceptance 2 passed.** `tools/drive/scenarios/himegari-save-load.steps` runs unchanged on the port (37 s) and on
   native AGE (32 s), at the same offsets: pages at `0x83f`, `0x8a9`, `0x913`, and the load resumes at `0x8a9`. Native
   stop reports `live-saves-unchanged`; both targets exit with code 0.
+
+## 15. As built: M3 (2026-11-03)
+
+- **Acceptance 3 passed in both directions** with two committed scenarios rather than one:
+  `tools/drive/scenarios/himegari-save-page3.steps` (new game, save slot 0 on page 3, `close`) and
+  `himegari-load-page3.steps` (title Data Load, slot 0, はい, expect `SC0000@0x8a9`, two clicks, expect `0x913`).
+  The second target's sandbox is seeded from the first one's with `--seed port:fresh` or `--seed native:fresh`. Each
+  file's header gives the full run.
+- **The failures were findings, as §9 expected.** Native AGE listed port slots as empty (mojibake game id), then
+  crashed loading them (header `+0xf0` length left zero). The port refused to boot on a native `SAVE.DAT` (padding
+  residue), and it would have rejected native slots on their compatibility id, which is the writer's engine version
+  and which AGE never checks. All are fixed in the port's persistence layer. `docs/sys4-format-notes.md` and
+  `docs/engine-re.md` ("Save identity and native read checks") record them, and `docs/phase-a-slice-plan.md` has the
+  list.
+- **No driver changes were needed.** The steps, seeding and `close` from M2 covered the round trip.

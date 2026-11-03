@@ -1,0 +1,34 @@
+# Cross-game save gate, first half: on a fresh sandbox, save slot 0 on SC0000 page 3 and quit. Then load that slot
+# on the other target with himegari-load-page3.steps, seeding its sandbox from this one:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-save-page3.steps
+#   py -3.11 -X utf8 tools/drive.py native start --seed port:fresh
+#   py -3.11 -X utf8 tools/drive.py native run tools/drive/scenarios/himegari-load-page3.steps
+#   py -3.11 -X utf8 tools/drive.py native stop
+# (and the same with native and port swapped). `close` quits the game its own way, so SAVE.DAT and RT.DAT are
+# written too.
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5                                # the title fades in; it never settles natively (animated flames)
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+advance 2
+expect top=SC0000@0x8a9                 # page 3
+
+rclick adv.next                         # the menu opens on the character tab
+wait 1.5
+click menu.save
+wait 1.5
+click slot.0
+wait 1.5
+click confirm.yes
+wait 2
+rclick adv.next                         # back to the page
+wait 1.5
+expect top=SC0000@0x8a9
+shot cross-saved-page3
+close

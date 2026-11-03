@@ -817,6 +817,10 @@ attach the daemon's new events (dialogs answered, the window appearing).
 load, and expect page 3 again. It runs unchanged on both targets, about 35 s each on a fresh sandbox, at the same
 offsets.
 
+`himegari-save-page3.steps` and `himegari-load-page3.steps` cross a save between the targets. Save on one target, then
+start the other with `--seed port:fresh` (or `native:fresh`) and load. Their headers give the commands. Both directions
+resume at `SC0000@0x8a9` and reach `0x913`.
+
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
 `[native.keep_polling]` and `[[native.dialog]]`. Unknown sections are refused. A profile without `[native.engine]`

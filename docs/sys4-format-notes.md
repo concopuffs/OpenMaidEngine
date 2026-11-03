@@ -195,8 +195,10 @@ standalone `S3RT` layout documented below. The fixed `.DAT` header is `0x124` by
 | Offset | Size | Field |
 |---:|---:|---|
 | `0x000` | 4 | ASCII magic `S3SD` or `S4SD` |
-| `0x004` | 4 | compatibility id |
-| `0x008` | `0x100` | NUL-terminated CP932 game id area |
+| `0x004` | 4 | compatibility id: the writing `AGE.EXE`'s four-character engine version |
+| `0x008` | `0xe8` | NUL-terminated CP932 game id area |
+| `0x0f0` | 4 | checked logical length: payload bytes plus the two CRC DWORDs |
+| `0x0f4` | `0x14` | zero in every inspected file |
 | `0x108` | `0x10` | Win32 `SYSTEMTIME`: eight little-endian WORDs |
 | `0x118` | 4 | accumulated playtime in seconds |
 | `0x11c` | 4 | signed `SaveVersion1`, selecting the logical state layout |
@@ -204,14 +206,29 @@ standalone `S3RT` layout documented below. The fixed `.DAT` header is `0x124` by
 
 Observed profile identities are:
 
-| Profile | Game id | Version | Shared compatibility id | Numbered compatibility id |
-|---|---|---:|---:|---:|
-| Himegari | `姫狩りダンジョンマイスター` | 3.10 | `0x4a343234` | `0x42323234` |
-| Kamidori | `神採りアルケミーマイスター` | 3.20 | `0x46333334` | `0x46333334` |
+| Profile | Game id | Version | Compatibility id written by the current executable |
+|---|---|---:|---:|
+| Himegari | `姫狩りダンジョンマイスター` | 3.10 | `"424J"` = `0x4a343234` |
+| Kamidori | `神採りアルケミーマイスター` | 3.20 | `"433F"` = `0x46333334` |
+
+The compatibility id is `ctx+0x53b74`, the executable's engine version, which AGE prints as
+`ARCGameEngine Ver 4.24J`. Every writer stores it: shared `SAVE.DAT`, numbered saves and `RT.DAT`. It
+therefore records which build wrote a file, not a file kind. Himegari's installed numbered files carry `"422B"`
+(`0x42323234`) because the 2019 executable wrote them; files the current executable writes carry `"424J"`.
+The game id is the SYS4INI header copy at `ctx+0xa0bc0`.
 
 The packed SYS4INI `SAVEVERSION` values `310` and `320` split into these major/minor fields by quotient
-and remainder modulo 100. Compatibility ids and game ids are not currently derived from SYS4INI, so the
-selected profile owns them and checks the catalog-provided save version before any store is constructed.
+and remainder modulo 100. The selected profile owns the compatibility id and game id, and checks the
+catalog-provided save version before any store is constructed. The profile's `legacyGameIds` lists further
+ids that are accepted on read and never written. Himegari lists the mojibake id that port builds before
+2026-11-03 wrote, and the next save rewrites such a file with the native id.
+
+**Native read checks (2026-11-03).** `save_container_read_and_validate_header@0x4306f0` checks the magic
+(`S4SD` when the SYS4INI header begins `S4`, otherwise `S3SD`) and the game id. The decoder also checks
+both versions. No reader compares the compatibility id, so files from other engine builds load; the port
+does the same. Readers allocate `(header[+0xf0] / 4) + 1` DWORDs for the logical payload before decoding.
+A zero length therefore fails with "メモリが不足しました" and AGE crashes. Port builds before 2026-11-03
+wrote zero there, so AGE could not open their slots.
 
 A `0x14`-byte codec frame begins at file offset `0x124`, and expanded data begins at `0x138`:
 
@@ -272,7 +289,9 @@ to be zero when importing original data.
 The string blob repeats `{typed_key_cstring, value_cstring}` `string_count` times. String keys use raw
 type byte `0x05` plus the same eight-digit address and NUL; values are CP932. The stored blob length is
 a DWORD count. AGE rounds with `(unpadded_bytes / 4) + 1`, deliberately adding a whole zero DWORD when
-the last value already ends on a DWORD boundary.
+the last value already ends on a DWORD boundary. The padding after the last value is not always zero:
+native files can carry writer heap residue there (`0x3f` observed in a 2026-11-03 Himegari `SAVE.DAT`).
+The native reader ignores it, so readers must accept it. Writers emit zeros.
 
 The catalog sections are AGE's profile-wide **resource-seen/unlock database**. Each encrypted table begins
 with two header DWORDs:
@@ -319,7 +338,7 @@ a standalone ReadTextDB with a `0x114`-byte header:
 | Offset | Size | Field |
 |---:|---:|---|
 | `0x000` | 4 | ASCII magic `S3RT` |
-| `0x004` | 4 | compatibility id (`0x4a343234` for Himegari) |
+| `0x004` | 4 | compatibility id: the writer's engine version (`0x4a343234` for Himegari); never checked |
 | `0x008` | `0x100` | NUL-terminated CP932 game id area |
 | `0x108` | 4 | major version (`1`) |
 | `0x10c` | 4 | minor version (`0`) |
@@ -348,8 +367,9 @@ T1 count.
 
 ### Numbered `SAVE%02d.DAT`, logical layout 3 — CONFIRMED FOR HIMEGARI
 
-Himegari's numbered file begins with the common container using compatibility id `0x42323234`,
-`SaveVersion1=3`, and `SaveVersion2=10`. The header supplies the save-menu timestamp and accumulated
+Himegari's numbered file begins with the common container, `SaveVersion1=3`, and `SaveVersion2=10`.
+The installed files carry compatibility id `0x42323234` from the 2019 executable; the current
+executable writes `0x4a343234`, as it does in every file. The header supplies the save-menu timestamp and accumulated
 playtime without decoding the body.
 
 The decoded layout-3 body begins:
@@ -360,7 +380,7 @@ The decoded layout-3 body begins:
 | `0x004` | 4 | saved frame-owner/context word |
 | `0x008` | 4 | current direct-name BGM track id |
 | `0x00c` | `0x28` | ten packed SFX resource ids, one per retained channel |
-| `0x034` | `0x4b0` | 100 resource-reload records of three DWORDs |
+| `0x034` | `0x4b0` | 100 resource-reload records of three DWORDs; empty is `(-1, 0, 0)` |
 | `0x4e4` | `0x4e20` | 1,000 surface-reload records of 20 bytes |
 | `0x5304` | `(cutoff + 1) * 0x414` | saved script-frame records |
 | `0x5718 + cutoff * 0x414` | variable | global banks and retained graphics |
@@ -407,8 +427,9 @@ The variable section starts with six DWORD counts in this order:
 6. local pointer scratch.
 
 The integer and float arrays follow their counts. String count comes from bank count 3, but its storage
-begins with an additional `string_blob_dwords` followed by that many bytes of concatenated NUL-terminated
-CP932 strings and DWORD padding. The three pointer-family DWORD arrays follow.
+begins with an additional `string_blob_dwords` followed by that many DWORDs of concatenated NUL-terminated
+CP932 strings and padding. AGE sizes it `(unpadded_bytes / 4) + 1` DWORDs, as for `SAVE.DAT`, so a blob
+that ends on a DWORD boundary still gets a whole zero DWORD. The three pointer-family DWORD arrays follow.
 
 These counts are serialized mutable-prefix lengths, not declarations that every typed runtime bank ends
 there. Native deserialization zeroes and replaces only each counted prefix. Initialization-authored
@@ -449,7 +470,9 @@ The 1,000 surface records preserve the native 20-byte metadata cells verbatim:
 | `+0x0c` | 4 | unknown lifecycle field; cleared with `+0x08` at script entry |
 | `+0x10` | 4 | blank/mutable created-surface flag |
 
-Initialization writes resource id `-1` to every otherwise-zero record. Ordinary asset load, blank-surface
+Initialization writes resource id `-1` to every otherwise-zero record. The 100 resource-reload records
+before them follow the same convention: an empty record is `(-1, 0, 0)`, and the restore loop at
+`0x410576` reloads a record only when its flag DWORD (`ctx+0x7f49c + i*12`) is one. Ordinary asset load, blank-surface
 creation, and release do not synthesize or clear the reload flag; opcode `0x259` clears `+0x08` and
 `+0x0c` across both live/saved tables at script entry. During normal layout-3 restoration AGE reopens only
 records whose reload flag is one and whose resource id is nonnegative. Flag-zero records describe
@@ -467,7 +490,18 @@ larger than the meaningful sparse entries and range record
 
 The installed `SAVE00.DAT` validates the complete layout-3 decode: cutoff 1, global-bank counts
 `[402459,1,789,1,1,1]`, current BGM id `0x18`, retained SFX ids `0x3321` (channel 1) and
-`0x2aea` (channel 2), and 211 retained graphics objects.
+`0x2aea` (channel 2), and 211 retained graphics objects. Its decoded payload re-encodes byte-identically
+(`NativeNumberedSaveCodecTests`).
+
+**Cross-game evidence (2026-11-03, Himegari, game-driving acceptance 3).** The scenarios
+`tools/drive/scenarios/himegari-save-page3.steps` and `himegari-load-page3.steps` save slot 0 on SC0000's
+third page with one target and load it with the other. A port-written slot shows a complete preview in AGE's
+load list (序章, ＡＤＶパート, LV 1, 通常), resumes at `SC0000@0x8a9`, and two clicks later reaches
+`SC0000@0x913`. A native-written slot does the same in the port. Native AGE needed the header `+0xf0` length,
+the `(-1, 0, 0)` resource-record default and the `+1` string-bank rounding above. The port needed to accept
+native `SAVE.DAT` padding residue and other engine versions. Structural differences that remain between the
+two writers' files are known to be harmless for this resume: surface-record color keys (`0` versus
+`0xff000000`) and created flags, and the history-tail length.
 
 #### Kamidori 3.20 layout
 
@@ -521,7 +555,8 @@ timestamp at `+0x21c` is now retained alongside the other cyclic clocks.
 Installed original and translated Kamidori scripts pass full-load continuation through the terminal
 `0xae` to the saved FIELD instruction. The managed suite and both Godot profile self-tests pass;
 Kamidori startup reports `persistence=read-write`. These gates establish port operation and native-format
-structure; opening a port-authored slot in the original AGE executable has not been tested. Evidence is
+structure; opening a port-authored Kamidori slot in the original AGE executable has not been tested.
+Himegari port-authored slots load natively (2026-11-03, above). Evidence is
 scoped to the observed Kamidori SYS4433 executable, not every title using that script revision.
 
 #### Appended text-history tail

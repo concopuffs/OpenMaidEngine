@@ -16,8 +16,7 @@
     "storageNamespace": "kamidori",
     "writesEnabled": true,
     "magic": "S4SD",
-    "sharedCompatibilityId": 1177760564,
-    "numberedCompatibilityId": 1177760564,
+    "compatibilityId": 1177760564,
     "gameId": "神採りアルケミーマイスター",
     "expectedPackedSaveVersion": 320,
     "bankDimensions": {

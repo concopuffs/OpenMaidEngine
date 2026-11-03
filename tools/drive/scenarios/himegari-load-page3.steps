@@ -1,0 +1,17 @@
+# Cross-game save gate, second half: from the title's Data Load, load slot 0 (saved on SC0000 page 3 by
+# himegari-save-page3.steps, usually on the other target), expect page 3, and read on to page 5. See that file's
+# header for the full run.
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.load                        # the slot list (SAVE in load mode); an unreadable slot shows empty
+wait 3
+shot cross-load-list
+click slot.0
+wait 1.5
+click confirm.yes                       # ロードしますか？ -> はい
+wait-state top=SC0000@0x8a9 timeout=30  # page 3
+settle
+shot cross-loaded-page3
+advance 2
+expect top=SC0000@0x913                 # page 5

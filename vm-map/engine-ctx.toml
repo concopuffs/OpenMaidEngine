@@ -252,6 +252,11 @@ name = "surfaces"
 type = "void*"
 note = "surface array base [~1000 slots]; create/set-texture (0x1f8/0x1f9) allocate"
 [[field]]
+offset = 0x53b74
+name = "engine_version"
+type = "uint"
+note = "AGE.EXE four-character engine version (Himegari '424J', read as 0x4a343234; its 2019 exe wrote '422B'; Kamidori '433F'; the constructor copies it from 0x571218, which the packed exe's /v2 dump shows as placeholder '000 '); engine_initialize_subsystems_from_settings prints it as ARCGameEngine Ver %c.%c%c%c; every save writer (shared_profile_save, op 0x19e, RT.DAT) stores it as header +0x04 compatibility id, which no reader checks; engine_load_sys4ini_and_mount_append_catalogs compares its first three characters with sys4ini_required_engine_version"
+[[field]]
 offset = 0x53c7c
 name = "bank_size_int_globals"
 type = "int"
@@ -676,6 +681,21 @@ offset = 0xa0b8c
 name = "current_bgm_start_mode"
 type = "int"
 note = "logical playback mode retained by the music facade and forwarded to its backend: zero stops at decoder EOF, nonzero rewinds; ordinary op 0xbf and forced op 0xb7 use one, forced op 0xb9 uses zero"
+[[field]]
+offset = 0xa0bb8
+name = "sys4ini_magic"
+type = "uint"
+note = "SYS4INI header +0x00 (the loader reads the first 300 header bytes into ctx+0xa0bb8); save_container_read_and_validate_header expects S4SD save magic when it starts 'S4', else S3SD"
+[[field]]
+offset = 0xa0bbc
+name = "sys4ini_required_engine_version"
+type = "uint"
+note = "SYS4INI header +0x04: engine version the game data needs; engine_load_sys4ini_and_mount_append_catalogs compares its first three characters with engine_version"
+[[field]]
+offset = 0xa0bc0
+name = "sys4ini_game_id"
+type = "uint"
+note = "SYS4INI header +0x08: start of the NUL-terminated cp932 game id (Himegari 姫狩りダンジョンマイスター); save and RT.DAT writers store it at header +0x08 and every reader requires an exact match"
 [[field]]
 offset = 0xa0ca8
 name = "sys4ini_saved_int_globals_count"
