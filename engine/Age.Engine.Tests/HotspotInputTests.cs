@@ -675,6 +675,115 @@ public class HotspotInputTests
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x180));
     }
 
+    /// <summary>Right-click the way Godot's _Input does: raw button bit, physical-to-logical action, then the
+    /// bound-hotspot bridge on press.</summary>
+    private sealed class Sc0000MenuReopenHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        private long _now;
+        public int MenuSleeps;
+        public bool Opened;
+        public bool MenuReturned;
+        public bool Reopened;
+        public string Trail = "";
+        public override long InputClockMilliseconds => _now;
+
+        private bool InMenu => Vm.CaptureFrameLocations().Any(
+            frame => frame.Script.StartsWith("MENU", StringComparison.OrdinalIgnoreCase));
+
+        private bool RightButton(bool down)
+        {
+            Vm.UpdateMouseButtonState(0x2, down);
+            int action = Vm.UpdatePhysicalMouseButtonState(1, down);
+            return down && action >= 0 && Vm.TryActivateInputActions(1 << action);
+        }
+
+        public override void Sleep(long duration)
+        {
+            base.Sleep(duration);
+            _now += Math.Max(16, duration);
+            if (!InMenu) return;
+            MenuSleeps++;
+            if (MenuSleeps == 4) RightButton(false);       // release the opening click inside the menu
+            else if (MenuSleeps == 40) Trail += $"close-press:{RightButton(true)};";
+            else if (MenuSleeps == 46) RightButton(false);
+        }
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Opened = RightButton(true);
+            while (serviceInputCallback()) { }
+            MenuReturned = !InMenu;
+            Reopened = Vm.TryActivateInputActions(1 << 7);
+            throw new StopAtFirstWaitException();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void Sc0000RightClick_ReopensMenuAfterRightClickClosesIt()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scripts = Sys4ScriptProvider.Load(table);
+        var host = new Sc0000MenuReopenHost();
+        var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), table, host,
+            new VmOptions(MaxSteps: 5_000_000), scripts);
+        host.Vm = vm;
+        InputBindingBootstrap.Apply(scripts.RequireByName("SYSTEM4.BIN"), vm.InputBindings);
+        vm.Globals[0x6c1] = 1;
+        vm.Globals[0x62425] = 1;
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.True(host.Opened);
+        Assert.True(host.MenuSleeps > 40, $"menu sleeps={host.MenuSleeps} halt={vm.HaltReason} {host.Trail}");
+        Assert.True(host.MenuReturned, host.Trail);
+        Assert.True(host.Reopened, host.Trail);
+    }
+
+    private sealed class CallbackLocationHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public IReadOnlyList<VmFrameLocation>? AfterCallback;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+            Assert.True(Vm.TryActivatePointer(30, 40));
+            while (serviceInputCallback()) { }
+            AfterCallback = Vm.CaptureFrameLocations();
+        }
+    }
+
+    [Fact]
+    public void HotspotCallback_ReturnsTheFrameToItsWaitingInstruction()
+    {
+        // SC0000's right-click handler runs MENU inside the page wait; once it returns, saves and the driving
+        // protocol must see the page wait again, not the callback's last instruction.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int hoverTarget = 20, activateTarget = 21;
+        var script = ScriptAssembler.Assemble(table, "HOTSPOT_PC", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(hoverTarget), I(hoverTarget), I(activateTarget) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+            (0x5, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x100), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new CallbackLocationHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x100));
+        VmFrameLocation frame = Assert.Single(host.AfterCallback!);
+        Assert.Equal(script.Instructions[2].Offset, frame.CurrentOffset);
+        Assert.Equal(script.Instructions[3].Offset, frame.ResumeOffset);
+    }
+
     private static Operand I(long value) => new(0, value);
     private static Operand G(long address) => new(3, address);
 }

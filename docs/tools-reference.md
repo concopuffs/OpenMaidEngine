@@ -793,7 +793,9 @@ presses one.
 **VM position.** `state` reads the frame stack through `g_pEngineCtx@0x5c6020` and the `engine-ctx.toml` frame fields.
 Each frame reads as `SCRIPT@offset`, with `offset = (pc − codebase) >> 2`, the dword offset of the disassembly and the
 page locator. At a text wait the native pc is already **past** the wait instruction, so a page reads as the port page
-map's *next* `page_start_offset`. Example: SC0000 page 3 waits at `0x8a6` and the native position is `0x8a9`.
+map's *next* `page_start_offset`. Example: SC0000 page 3 waits at `0x8a6` and the native position is `0x8a9`. Caller
+frames are different: they stay **on** their `call-script` instruction (`SYSTEM4@0x477`, not the following `0x47a`).
+The port's control channel reports the same convention.
 
 **Steps.** One per line in a `.steps` file, with `#` comments; `native_drive.py steps` lists them with the profile's
 points. Points are named coordinates from `[points]` in the profile, or `X Y`.
@@ -819,6 +821,30 @@ A failing step stops the request, and `do`/`run` exit 1. `tools/native-drive/sce
 the worked example: boot, new game, save at page 3, read on, load, and expect page 3 again. On a fresh sandbox it takes
 about 45 s. Profile files live in `tools/native-drive/<profile>.toml` with `[engine]`, `[[dialog]]`, `[sandbox]`,
 `[advance]` and `[points]`. A profile without `[engine]` still drives; it just has no `state`.
+
+### Port control channel
+
+The Godot port accepts the same driving protocol as the native daemon: JSON lines on loopback TCP. The design, ops and
+conditions are in `docs/superpowers/specs/2026-11-03-game-driving-design.md`. Until the shared `tools/drive.py`
+client lands (milestone M2), talk to it with any JSON-lines client.
+
+| Flag (after `--`) | Effect |
+|---|---|
+| `--control` | Start the control server after the VM. Every other mouse, keyboard and joystick event is dropped for the whole run, so your own input cannot disturb it. Script cursor warps become injected moves (reported as `cursor_moved_to`) instead of moving your cursor. |
+| `--control-file PATH` | Where to write the session file (default `<profile diagnostics>/drive-session.json`). It holds the `hello` fields plus `pid`, `port`, `token` and `started`, is written atomically, and is deleted on exit. |
+| `--data-root DIR` | Use `DIR` as the profile root (`SAVE/`, `SYS4REG.INI`, `diagnostics/`) instead of `user://games/<profile>`: a save sandbox. |
+
+- The token comes from `OME_DRIVE_TOKEN`, or the port generates one and writes it to the session file. The first
+  line must be `{"op":"hello","token":…}`.
+- `waiting` is `input` (an ADV page or hotspot wait), `menu` (a script-polled menu), `movie`, `transition`, `sleep`
+  or null. `busy` means text is still revealing or a screen transition is running. `settle` waits for `input` or
+  `menu` that stays not busy for `quiet_ms`.
+- Port-only ops: `speed` (clock factor 0.05–8). `shot` needs an **absolute** path, because the port's working
+  directory is `godot/`. It captures the 800×600 viewport, so the window must not be minimized.
+- Give `--data-root` and `--control-file` as absolute paths; relative ones resolve against `godot/`. Example
+  (Himegari): `godot --path godot -- --game-root <install> --data-root <abs>/build/games/himegari/drive/port/sandbox/x
+  --control --control-file <abs>/build/games/himegari/drive/port/session.json`. To run silently, pre-write
+  `SYS4REG.INI` with `[sound]` `Volume0=0` in the sandbox.
 
 ## Runtime capture (Frida)
 

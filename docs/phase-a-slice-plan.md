@@ -4254,3 +4254,28 @@ covers BTL-style old/new texture copying, retained-object clearing, persistence
 snapshot restore, blank creation, release, and scene reset. Debug Godot build,
 40 selected graphics/save/reset tests, and EngineCtx builder tests pass. User
 confirmed battle entry works after the fix on 2026-09-22. Native evidence: `engine-re.md`.
+
+
+### Mouse clicks trigger on release under CLICKONUP; hotspot callbacks restore the wait pc (2026-11-03)
+
+The port control channel (game-driving spec M1) found both while running the native save/load scenario on the port.
+
+- **Click timing.** Native AGE latches a mouse click on button-up when SYS4INI `CLICKONUP` is set (Himegari: 1).
+  That latch triggers page advance, hotspot clicks, the op-`0x97` right-click binding and the movie and transition
+  skips (`engine-re.md`, "Driving native AGE"). The port triggered all of them on press, which caused two bugs:
+  - **MENU reopen.** After the first right-click MENU, every later open closed at once. CHMENU's close rule (press
+    seen, then release) saw the opening press still held. The first open survived only because cold asset loads
+    outlasted the click.
+  - **Title start.** A press that skipped the opening movie went on to activate ゲーム開始 when it was released.
+
+  The port now reads `Sys4StartupSettings.ClickOnUp` and fires those triggers on the native edge. The raw button
+  state (op `0x108`/`0xff`) still follows both edges.
+- **Hotspot callback pc.** `ServiceHotspotCallback` left the frame's pc on the callback's last instruction, so state
+  after a right-click MENU read `SC0000@0x3c9` instead of the page. The pc now returns to the waiting instruction.
+  Saves were unaffected: they use the read-message index and caller call sites.
+- **Validation.**
+  - New tests: VM regressions (callback pc restore; real SC0000/MENU/CHMENU right-click open, close and reopen)
+    and `ClickOnUp` parsing.
+  - The full scenario runs live on the port with native-equal offsets.
+  - All engine tests pass except two pre-existing workspace checks, which depend on the installed `RT.DAT` (322
+    SC0000 records written by the OMS gate-7 run) and the local FFmpeg build's seek.

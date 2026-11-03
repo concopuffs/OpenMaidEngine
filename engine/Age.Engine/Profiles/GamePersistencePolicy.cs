@@ -100,25 +100,38 @@ public sealed record ResolvedGamePersistence(
     bool WritesEnabled,
     string? ReadOnlyReason)
 {
+    /// <param name="profileRootOverride">An explicit profile root (the frontend's <c>--data-root</c>). It replaces
+    /// <c>&lt;user data&gt;/games/&lt;namespace&gt;</c> and keeps the native layout beneath it, so a driver sandbox
+    /// can hold one game's saves and seed the other's.</param>
     public static ResolvedGamePersistence Resolve(
         SelectedGameProfile selected,
         Sys4StartupSettings startupSettings,
-        string godotUserDataRoot)
+        string godotUserDataRoot,
+        string? profileRootOverride = null)
     {
         ArgumentNullException.ThrowIfNull(selected);
         ArgumentNullException.ThrowIfNull(startupSettings);
         ArgumentException.ThrowIfNullOrWhiteSpace(godotUserDataRoot);
 
         GamePersistencePolicy policy = selected.Profile.Persistence;
-        string userRoot = Path.GetFullPath(godotUserDataRoot);
-        string profileRoot = Path.GetFullPath(Path.Combine(
-            userRoot, "games", policy.StorageNamespace));
-        string relativeProfileRoot = Path.GetRelativePath(userRoot, profileRoot);
-        if (Path.IsPathRooted(relativeProfileRoot)
-            || relativeProfileRoot == ".."
-            || relativeProfileRoot.StartsWith(
-                ".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            throw new InvalidDataException("profile persistence root escaped the Godot user-data root");
+        string profileRoot;
+        if (profileRootOverride != null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(profileRootOverride);
+            profileRoot = Path.GetFullPath(profileRootOverride);
+        }
+        else
+        {
+            string userRoot = Path.GetFullPath(godotUserDataRoot);
+            profileRoot = Path.GetFullPath(Path.Combine(
+                userRoot, "games", policy.StorageNamespace));
+            string relativeProfileRoot = Path.GetRelativePath(userRoot, profileRoot);
+            if (Path.IsPathRooted(relativeProfileRoot)
+                || relativeProfileRoot == ".."
+                || relativeProfileRoot.StartsWith(
+                    ".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                throw new InvalidDataException("profile persistence root escaped the Godot user-data root");
+        }
 
         NativeSaveIdentity identity = policy.CreateExpectedNativeIdentity();
         string? contractMismatch = null;

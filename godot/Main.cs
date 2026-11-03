@@ -108,7 +108,8 @@ public partial class Main : Godot.Control
             profilePersistence = ResolvedGamePersistence.Resolve(
                 selectedProfile,
                 catalog.StartupSettings,
-                ProjectSettings.GlobalizePath("user://"));
+                ProjectSettings.GlobalizePath("user://"),
+                ArgumentValue(userArgs, "--data-root"));   // --data-root <dir>: driver sandboxes
         }
         catch (System.Exception error) when (
             error is System.ArgumentException or System.IO.IOException or System.UnauthorizedAccessException)
@@ -127,6 +128,8 @@ public partial class Main : Godot.Control
                  $"abi={selectedProfile.Profile.EngineAbiId} probe={selectedProfile.ProbeMode}");
         GD.Print($"[profile] catalog={selectedProfile.DetectedIdentity.Display} " +
                  $"game-root={gameRoot.Root} root-source={gameRoot.SourceName}");
+        _clickOnUp = catalog.StartupSettings.ClickOnUp;
+        GD.Print($"[input] mouse clicks trigger on {(_clickOnUp ? "release" : "press")} (SYS4INI CLICKONUP)");
         GD.Print($"[assets] overlays=" +
                  (assetOptions.OverlayRoots.Count == 0
                     ? "<none>"
@@ -522,6 +525,13 @@ public partial class Main : Godot.Control
             catch (Exception error) { _vmFailure = error; }
             finally { _done = true; }
         });
+        // --control [--control-file <json>]: the game-driving protocol (Main.Drive.cs).
+        if (!_selftest && System.Array.IndexOf(userArgs, "--control") >= 0
+            && !StartDriveServer(ArgumentValue(userArgs, "--control-file")))
+        {
+            GetTree().Quit(2);
+            return;
+        }
 
         if (_selftest)
             _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting) _host.SignalInput(); await Task.Delay(1); } });
@@ -555,6 +565,7 @@ public partial class Main : Godot.Control
 
     public override void _Process(double delta)
     {
+        PumpDriveServer();
         if (_fpsHud != null && _fpsHud.Visible)
         {
             _fpsHudUpdateSeconds += delta;
@@ -779,6 +790,7 @@ public partial class Main : Godot.Control
 
     public override void _ExitTree()
     {
+        StopDriveServer();
         bool vmStopped = true;
         if (_vm != null) _vm.RequestStop();
         _host?.Stop();

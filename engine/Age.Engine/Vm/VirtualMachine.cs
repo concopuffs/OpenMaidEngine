@@ -1212,6 +1212,9 @@ public sealed partial class VirtualMachine
         }
         if (_cur.Script.IndexByOffset.TryGetValue(target, out int pc))
         {
+            // The callback runs inside the instruction that waits (native AGE nests it the same way); when it
+            // returns, the frame is back on that waiting instruction, which observers (saves, frame locations) read.
+            int waitingPc = _cur.Pc;
             _cur.CallStack.Add(HOTSPOT_RETURN);
             while (pc >= 0 && pc < _cur.Script.Instructions.Count)
             {
@@ -1227,6 +1230,7 @@ public sealed partial class VirtualMachine
                 if (next == HALT) break;
                 pc = next;
             }
+            _cur.Pc = waitingPc;
             // A malformed callback must not leave its sentinel in the page's ordinary local-call stack.
             int sentinel = _cur.CallStack.LastIndexOf(HOTSPOT_RETURN);
             if (sentinel >= 0) _cur.CallStack.RemoveAt(sentinel);

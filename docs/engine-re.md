@@ -341,7 +341,7 @@ The meaningful consumer catalog is:
 | `NOSETMUSIC` | Seeds the live music-route state as described above; the route starts enabled. | Active audio initialization plus otherwise-unused policy copy |
 | all seven `MENU_*` keys | Imported as `set:Menu_*`. No direct non-loader reader of these exact registry keys was found; they appear to be shared AGE native-menu capability metadata rather than Himegari script-menu state. `MENU_USEANTIFONT` does **not** disable the independently enabled `message:UseAntiFont`. | Loaded compatibility/menu metadata |
 | `ENABLEMEMFLIP` | Gates `op_0x6d`, which swaps VM-bank pointer pairs only when enabled. Himegari disables it and its corpus does not use that opcode. | Compatibility capability gate |
-| `CLICKONUP` | Imported as `set:ClickOnUp`, but no direct runtime reader was found in this image. | Loaded, no observed consumer |
+| `CLICKONUP` | Copied at `0x488080` into `g_dwClickOnUp@0x5c6030`. When nonzero, `age_main_window_proc` latches mouse clicks (`input_latch_mouse_click@0x485e20`) on `WM_LBUTTONUP`/`WM_RBUTTONUP` instead of the down messages. That latch is the trigger for ADV page advance, hotspot clicks, bound actions (right-click → `MENU.BIN`) and movie/transition skips; see *Driving native AGE* below. Himegari has 1. | Active input timing; port implemented (`Sys4StartupSettings.ClickOnUp`) |
 | `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for persistent message Skip. | Active ADV input behavior; currently missing from port |
 | `CONTROLDISIBLECURSOR` | The spelling is native. Value 1 suppresses AGE's ordinary cursor-restore call when a bound ADV hotspot action or hover callback is selected. | Active ADV cursor behavior; currently missing from port |
 | `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. | Active ADV toggle behavior; currently missing from port |
@@ -4328,17 +4328,32 @@ These were found while driving native AGE from a script for gate 7, and they are
 - **The polling gate** is `+0x1820`, set by `input_set_polling_enabled@0x460180`. On `WM_ACTIVATE`,
   `age_main_window_proc` disables polling only in fullscreen (`+0x9a298`). A windowed AGE in the background
   therefore still reacts to clicks and keys made in other applications.
-- **The click latch.** `WM_LBUTTONDOWN`/`WM_RBUTTONDOWN` set a click latch (`+0x13e0` bit 0/1, via
-  `FUN_00485e20`), unless `+0x1c30` suppresses it. With `DAT_005c6030` set, the latch is set on `WM_LBUTTONUP`/
-  `WM_RBUTTONUP` instead; Himegari's SYS4INI has `CLICKONUP=1`. The opening movie's skip consumes the latch, while
-  menus consume the polled state.
-- **Keys.** A non-repeat `WM_KEYDOWN` also reaches `FUN_00485e50`, the key latch. ESC posts `WM_CLOSE`. F1 calls
+- **The click latch.** `WM_LBUTTONDOWN`/`WM_RBUTTONDOWN` set a click latch (`ctx+0x13e0` bit 0/1, via
+  `input_latch_mouse_click@0x485e20`), unless `+0x1c30` suppresses it. With `g_dwClickOnUp@0x5c6030` (SYS4INI
+  `CLICKONUP`, loaded at `0x488080`) set, the latch is set on `WM_LBUTTONUP`/`WM_RBUTTONUP` instead; Himegari has
+  `CLICKONUP=1`. Menus consume the polled state; everything else that reacts to a click consumes the latch.
+  `adv_input_service_poll@0x411230` calls `input_poll_triggered_action_mask@0x460880` on the input manager
+  (`ctx+0x408`), and its `input_poll_mouse_click_triggers@0x460320` turns each latched button into its logical action
+  (slot + 4: left → 4, right → 7) at `input+0xfd8` (= `ctx+0x13e0`). Page advance, hotspot clicks, bound actions
+  (right-click → `MENU.BIN`) and the movie and transition skips therefore fire on **release** in Himegari.
+  - This matters for CHMENU. It closes on a right press it saw followed by the release (local `0x3f5` latch over op
+    `0x108`). A menu opened on the press would see the button still held and close as soon as it is let go.
+  - The port used to trigger on press. It opened MENU, but every open after the first (once assets were cached)
+    closed at once, and a press that skipped the opening movie went on to activate the title's ゲーム開始 on release.
+    It now follows `Sys4StartupSettings.ClickOnUp` (`godot/Main.Input.cs`).
+- **Keys.** A non-repeat `WM_KEYDOWN` also reaches `FUN_00485e50`, the key latch, which
+  `input_poll_key_triggers@0x460220` consumes, so keys trigger on press. ESC posts `WM_CLOSE`. F1 calls
   `engine_save_screenshot_bmp@0x407ce0`, unless `ctx+0x6da7c` bit 0 is set.
 
 A driver can therefore play AGE without touching the desktop's input:
 - replace those user32/winmm calls inside the process;
 - post the button and key messages for the latches;
 - capture the client area with `PrintWindow`.
+
+**Frame positions.** Each script frame's pc is a byte pointer into its code. In the innermost frame it is the resume
+point: at a text wait it is already past the wait (SC0000 page 3 waits at `0x8a6` and reads `0x8a9`). A caller frame
+keeps its pc **on** its `call-script` instruction (`SYSTEM4@0x477 > SC0000@0x3a2` with MENU open, not the following
+`0x47a`/`0x3a5`). The port's control channel reports frames the same way (`DriveFrame.FromVm`).
 
 **The engine context pointer.** `g_pEngineCtx@0x5c6020` holds the live `EngineCtx*`. `age_main_window_proc` reads
 every ctx field through it, and the host-callback thunks at `0x45f780`.. load `ECX` from it.

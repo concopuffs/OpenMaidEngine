@@ -16,6 +16,19 @@ public class Sys4StartupSettingsTests
         Assert.Equal("800", width);
         Assert.Equal("600", height);
         Assert.Equal(new Sys4LogicalCanvas(800, 600), catalog.LogicalCanvas);
+        Assert.True(catalog.StartupSettings.ClickOnUp); // Himegari: CLICKONUP=1
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("0", false)]
+    [InlineData("1", true)]
+    [InlineData(" 2 ", true)]
+    [InlineData("yes", false)]
+    public void ClickOnUpIsAnyNonzeroInteger(string? value, bool expected)
+    {
+        var pairs = value == null ? Array.Empty<(string, string)>() : new[] { ("ClickOnUp", value) };
+        Assert.Equal(expected, Sys4AssetCatalog.Parse(BuildCatalog(pairs)).StartupSettings.ClickOnUp);
     }
 
     [Fact]

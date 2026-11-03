@@ -196,7 +196,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       not by the Godot runtime
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
-    │                                       audio alignment, surface registry, and WAV sanitization
+    │                                       audio alignment, surface registry, WAV sanitization, and the
+    │                                       game-driving control protocol (Control/)
     │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
@@ -243,7 +244,8 @@ paths: `godot/Main.SelfTest.cs` owns the synthetic threaded/headless regression 
 `godot/Main.Compositor.cs` owns retained/GPU/software composition state, texture resolution and caching,
 surface-transition drawing, raster helpers, and compositor decision logging. `godot/Main.Input.cs` owns
 Godot input routing, locator/debug hotkeys, debug-scene dispatch, cursor control, native alerts, and
-full-width text entry.
+full-width text entry. `godot/Main.Drive.cs` owns the `--control` driving backend: the control server's lifetime,
+injected input events, exclusive input, and the port side of the protocol (state, screenshots, speed, close).
 
 `engine/Age.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
 Both `engine/AgeEngine.sln` and `godot/OME.sln` include the project; Godot and `Age.Engine.Tests` consume it
@@ -255,7 +257,9 @@ audio-timeline alignment, movie-surface registry, and RIFF/WAVE sanitizer; only 
 asynchronous/paced decoder also live here; the `Age.MovieCorpusGate` tool receives friend access to the native
 frame-source seam and references this project rather than compiling source links. Reusable movie-corpus discovery,
 decode-gate, and report contracts live here as well; `tools/movie-corpus-gate/Program.cs` remains only the
-command-line entry point and output writer.
+command-line entry point and output writer. `Control/` holds the game-driving protocol
+(`docs/superpowers/specs/2026-11-03-game-driving-design.md`): its JSON model and conditions, the dispatcher that
+turns requests into timed input over an `IDriveBackend`, and the loopback `DriveServer`.
 
 `godot/GodotAdvHost.cs` retains cross-domain host coordination. Its partial-class companion
 `godot/GodotAdvHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,

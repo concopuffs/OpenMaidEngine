@@ -85,4 +85,25 @@ internal static class Win32VirtualKeyTranslator
         };
         return virtualKey != 0;
     }
+
+    private static System.Collections.Generic.Dictionary<int, Key>? _keysByVirtualKey;
+
+    /// <summary>The inverse of <see cref="TryTranslate"/>, for injected input (the driving protocol sends VK
+    /// codes). Built by probing <see cref="TryTranslate"/> so the two directions cannot disagree; where several
+    /// keys share a VK, the lowest key value wins.</summary>
+    public static bool TryCreateKey(int virtualKey, out Key key)
+    {
+        if (_keysByVirtualKey == null)
+        {
+            var keys = new System.Collections.Generic.Dictionary<int, Key>();
+            foreach (Key candidate in System.Enum.GetValues<Key>())
+            {
+                if (candidate is Key.None or Key.Unknown) continue;
+                using var probe = new InputEventKey { PhysicalKeycode = candidate };
+                if (TryTranslate(probe, out int translated)) keys.TryAdd(translated, candidate);
+            }
+            _keysByVirtualKey = keys;
+        }
+        return _keysByVirtualKey.TryGetValue(virtualKey, out key);
+    }
 }

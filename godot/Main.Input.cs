@@ -15,12 +15,19 @@ public partial class Main
     private IReadOnlyList<DebugSceneEntry> _debugSceneEntries = System.Array.Empty<DebugSceneEntry>();
     private PageLocatorState _locator = null!;
     private bool _locatorHudVisible;
+    /// <summary>SYS4INI CLICKONUP: mouse clicks trigger on release (see Sys4StartupSettings.ClickOnUp).</summary>
+    private bool _clickOnUp;
 
     // _Input (not _UnhandledInput): the root Control consumes mouse clicks as GUI input before they
     // reach _UnhandledInput, so clicks were swallowed while keyboard ui_accept still got through.
     public override void _Input(InputEvent e)
     {
         if (_selftest) return;
+        if (DropForExclusiveDrive(e))
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (e is InputEventKey key && key.Pressed && !key.Echo && key.Keycode == Key.F2)
         {
             _locatorHudVisible = !_locatorHudVisible;
@@ -84,7 +91,11 @@ public partial class Main
             int physicalButton = mb.ButtonIndex == MouseButton.Left ? 0 : 1;
             _vm.UpdateMouseButtonState(nativeButtonBit, mb.Pressed);
             int action = _vm.UpdatePhysicalMouseButtonState(physicalButton, mb.Pressed);
-            if (mb.Pressed && _host.IsModalMovieWaiting)
+            // Native AGE latches the click that every trigger below consumes on button-up under CLICKONUP
+            // (Himegari), on button-down otherwise. Menus read the polled state above, so a menu opened by this
+            // click starts with the button already up, as natively.
+            if (mb.Pressed == _clickOnUp) return;
+            if (_host.IsModalMovieWaiting)
             {
                 _host.SignalInput();
                 GetViewport().SetInputAsHandled();
@@ -92,7 +103,7 @@ public partial class Main
             }
             // Native blocking effect services poll logical action 4 before ADV hotspot dispatch.
             // Consume the trigger here so a retained hotspot under the transition cannot steal it.
-            if (mb.Pressed && action == 4 && _host.IsTransitionWaiting)
+            if (action == 4 && _host.IsTransitionWaiting)
             {
                 _host.SignalInput();
                 GetViewport().SetInputAsHandled();
@@ -100,19 +111,19 @@ public partial class Main
             }
             // AGE exposes mouse buttons twice: op 0x108 reads the raw bitmask while op 0xff translates
             // the held physical button through the script-configured logical action map.
-            if (mb.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))
+            if (action >= 0 && _vm.TryActivateInputActions(1 << action))
             {
                 GetViewport().SetInputAsHandled();
                 return;
             }
-            if (mb.ButtonIndex == MouseButton.Left && mb.Pressed && _vm.TryActivatePointer(p.X, p.Y))
+            if (mb.ButtonIndex == MouseButton.Left && _vm.TryActivatePointer(p.X, p.Y))
             {
                 GetViewport().SetInputAsHandled();
                 return;
             }
             // Modal callback scripts return through their own bytecode. Signaling the enclosing ADV wait
             // here would also advance the restored dialogue page after HISTORY/HIDEWIN exits.
-            if (mb.ButtonIndex == MouseButton.Left && mb.Pressed
+            if (mb.ButtonIndex == MouseButton.Left
                 && !advPageSuspended && !rawInputCallbackActive) _host.SignalInput();
             return;
         }
@@ -266,6 +277,7 @@ public partial class Main
 
     public void WarpAgeCursor(int virtualX, int virtualY)
     {
+        if (RedirectCursorWarpToDrive(virtualX, virtualY)) return;
         // Viewport.WarpMouse expects viewport coordinates. This is the inverse of ToNativeScreen and
         // lets Godot account for the platform window origin before moving the desktop pointer.
         Vector2 size = GetViewport().GetVisibleRect().Size;

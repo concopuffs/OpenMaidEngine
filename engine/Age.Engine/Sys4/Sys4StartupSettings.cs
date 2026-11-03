@@ -34,6 +34,14 @@ public sealed class Sys4StartupSettings
     public string? GetValueOrDefault(string key)
         => _values.GetValueOrDefault(key);
 
+    /// <summary>CLICKONUP: native AGE latches a mouse click, the trigger behind page advance, hotspot clicks, bound
+    /// actions (right-click -> MENU) and movie/transition skips, on button release instead of press
+    /// (g_dwClickOnUp@0x5c6030, input_latch_mouse_click@0x485e20). Missing or non-numeric means press, AGE's
+    /// registered default. Polled button state, which menus read, follows the hardware either way.</summary>
+    public bool ClickOnUp
+        => int.TryParse(GetValueOrDefault("CLICKONUP")?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
+               out int value) && value != 0;
+
     internal static Sys4StartupSettings ParseTrailer(byte[] blob, ref int offset, string source)
     {
         if (offset == blob.Length) return Empty;

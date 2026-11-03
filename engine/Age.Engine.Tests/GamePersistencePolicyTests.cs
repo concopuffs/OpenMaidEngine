@@ -43,6 +43,25 @@ public sealed class GamePersistencePolicyTests
     }
 
     [Fact]
+    public void ExplicitProfileRootReplacesTheNamespacedRootAndKeepsTheNativeLayout()
+    {
+        Sys4StartupSettings settings = Settings("310", "Eushully\\姫狩りダンジョンマイスター");
+        SelectedGameProfile selected = GameProfileSelection.Resolve([], HimegariIdentity);
+        string sandbox = Path.Combine(Path.GetTempPath(), "age-profile-policy", "sandbox", "fresh");
+
+        ResolvedGamePersistence resolved = ResolvedGamePersistence.Resolve(
+            selected, settings, Path.Combine(Path.GetTempPath(), "unused-user-root"), sandbox);
+
+        Assert.Equal(Path.GetFullPath(sandbox), resolved.ProfileRoot);
+        Assert.Equal(Path.Combine(resolved.ProfileRoot, "SAVE"), resolved.NativePaths.SaveDirectory);
+        Assert.Equal(
+            Path.Combine(resolved.ProfileRoot, Sys4RegIniStore.FileName),
+            resolved.NativePaths.Sys4RegIniPath);
+        Assert.Equal(Path.Combine(resolved.ProfileRoot, "diagnostics"), resolved.DiagnosticsDirectory);
+        Assert.True(resolved.WritesEnabled);
+    }
+
+    [Fact]
     public void ExplicitMismatchContinuesReadOnlyWithoutTreatingDetectedVersionAsRequestedProfileData()
     {
         SelectedGameProfile selected = GameProfileSelection.Resolve(

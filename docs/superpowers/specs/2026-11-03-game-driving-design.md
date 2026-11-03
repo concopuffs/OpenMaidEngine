@@ -270,3 +270,36 @@ The server stays a thin client: no logic the CLI does not have, and no scenario 
 4. **M4 MCP adapter.**
 
 The 0x1d5 voice fix stays a separate task, independent of this round.
+
+## 13. As built: M1 (2026-11-03)
+
+M1 is implemented (`engine/Age.Engine.Frontend/Control/`, `engine/Age.Engine/Vm/VirtualMachine.FrameLocations.cs`,
+`godot/Main.Drive.cs`). Where it differs from the sections above, this section wins:
+
+- **Location convention (§2.5).** Only the innermost frame reports its resume offset. Native AGE keeps a caller
+  frame's pc **on** its `call-script` instruction (`SYSTEM4@0x477 > SC0000@0x8a9`; with MENU open,
+  `SC0000@0x3a2`). The port reports frames the same way (`DriveFrame.FromVm`), so full stacks match, not just the top
+  frame (§11, second question).
+- **Hotspot callbacks.** A callback such as SC0000's right-click → MENU handler runs inside the page wait. The VM
+  now returns the frame's pc to the waiting instruction afterwards, so state, saves and `expect` see the page again
+  (`SC0000@0x8a9`) rather than the callback's last `ret`.
+- **Token and session file (§4).** `OME_DRIVE_TOKEN` is optional: without it the port generates a token. The session
+  file then carries `token` along with the `hello` fields, `pid`, `port` and `started`. It is written atomically and
+  deleted on exit.
+- **Waiting kinds (§5.3).** They come from the host's diagnostic snapshot, not a new VM snapshot record:
+  - `input`: an ADV page or hotspot wait, replacing the proposed `page`;
+  - `menu`: a script-polled menu (TITLE, GAMESTART, MENU) sleeping in a raw input-callback frame;
+  - `movie`, `transition`, `sleep`, or null.
+  `busy` is true while text reveals or a screen transition runs.
+- **Settle (§5.4).** `waiting` is `input` or `menu` and not busy, continuously for `quiet_ms` (default 700 ms; the
+  timeout defaults to 10 s). The title settles, unlike under the native pixel rule.
+- **Exclusive input (§5.2)** lasts for the whole `--control` run, not only while a client is connected.
+- **`shot` (§4)** requires an absolute path; relative paths would resolve against the port's working directory,
+  `godot/`.
+- **Click timing found on the way.** Native AGE triggers clicks on button **release** under SYS4INI `CLICKONUP`
+  (Himegari = 1), and the port triggered them on press. That made every MENU open after the first close at once, and
+  made a movie-skip press activate the title's ゲーム開始 on release. The port now follows `CLICKONUP`
+  (`engine-re.md`, "Driving native AGE"). Scenario pokes at `adv.next` are therefore safe on both targets.
+- **Verified live on the port:** the save/load scenario's whole path (boot with pokes, new game, page 1/3/5
+  offsets equal to native, save to slot 0, back to the page, read on, load, resume at `SC0000@0x8a9`). One
+  difference remains open for M2: after the load, the port's caller frame reads `SYSTEM4@0x235`.
