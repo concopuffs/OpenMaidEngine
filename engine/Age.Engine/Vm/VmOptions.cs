@@ -18,8 +18,16 @@ namespace Age.Engine.Vm;
 /// shared SAVE.DAT/RT.DAT flush only; successful numbered saves still flush both shared files.</param>
 /// <param name="CancelMessageSkipOnClick">Native set:CancelMesSkipOnClick (SYS4INI CANCELMESSKIPONCLICK).
 /// Nonzero: a completed action-4 click during active fast-forward cancels Skip; 2 also runs CALLBACK_SETTING.BIN.</param>
+/// <param name="FastForwardOpMicroseconds">Wall-clock cost of one op while ADV fast-forward is active (native runs one
+/// op per main-loop iteration). Zero disables pacing (headless tools and tests); interactive frontends use
+/// <see cref="NativeFastForwardOpMicroseconds"/>.</param>
 public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64,
                                bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false,
                                int NativeStringCodePage = 932, bool CreateObject = true,
                                bool AutoFreeTextures = false, bool NoSaveDat = false,
-                               int CancelMessageSkipOnClick = 0);
+                               int CancelMessageSkipOnClick = 0, int FastForwardOpMicroseconds = 0)
+{
+    /// <summary>Native Himegari fast-forward cost per op: 13,512 ops of SC0000 read-skip took 5.06 s on native AGE
+    /// (2026-11-03, docs/engine-re.md "Fast-forward pace").</summary>
+    public const int NativeFastForwardOpMicroseconds = 374;
+}

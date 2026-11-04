@@ -935,6 +935,8 @@ public sealed partial class GodotAdvHost
             while (_clock.NowMs < deadline)
             {
                 if (_stopping) break;
+                // Native: once ADV fast-forward starts, the main loop dispatches ops ahead of the armed sleep timer.
+                if (_messageSkipActive) break;
                 _frameSignal.WaitOne(50);
             }
         }

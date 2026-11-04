@@ -10,5 +10,6 @@ public static class GodotVmOptions
             MaxSteps: selftest ? DiagnosticMaxSteps : long.MaxValue,
             IgnoreExitRequests: ignoreExitRequests,
             NoSaveDat: selftest,
-            CancelMessageSkipOnClick: cancelMessageSkipOnClick);
+            CancelMessageSkipOnClick: cancelMessageSkipOnClick,
+            FastForwardOpMicroseconds: VmOptions.NativeFastForwardOpMicroseconds);
 }

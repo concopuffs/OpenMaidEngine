@@ -11,6 +11,8 @@ public sealed partial class VirtualMachine
             case "get-monotonic-time-ms":
                 Write(a[0], unchecked((int)_host.InputClockMilliseconds)); return pc + 1;
             case "sleep":   // 0xc8 (duration) — pause the host duration ms; headless hosts no-op (parity). Frame pacing.
+                // sleep_op_0xc8@0x420ec0 arms nothing while ADV fast-forward (run-state 0x08000000) is active.
+                if (_messageSkipServiceActive || _host.IsMessageSkipActive) return pc + 1;
                 _host.Sleep(Read(a[0])); return pc + 1;
             case "u00425960":
             case "begin-timed-callback-sequence": // 0xd3: clear the frame-local relative schedule

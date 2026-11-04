@@ -950,6 +950,7 @@ public sealed partial class VirtualMachine
                     if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
                     int next = Step(frame.Script.Instructions[pc], pc);
                     _host.FrameYield();
+                    PaceFastForwardOp();
                     if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
                     if (next == ROOT_RELOAD) { outcome = FrameOutcome.RootReload; break; }
                     if (next == HALT) { outcome = FrameOutcome.Halted; break; }

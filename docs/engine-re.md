@@ -1342,7 +1342,8 @@ has zero static xrefs, and its address bytes (`b0 10 41 00`) appear nowhere in `
 (`context_state_serialize`@`0x40d320`), and op-handlers — never the loop. The "run-until-yield then render"
 statement above is a **reconstruction** from those pieces, not a line read from the loop; pinning the actual
 loop + its exact per-frame step budget / vsync wait needs a **live-debugger break** (attach + break in the
-frame loop), or a wider memory dump that includes the mode object.
+frame loop), or a wider memory dump that includes the mode object. *(Superseded: the loop is
+`engine_main_tick_with_exception_policy@0x411840` in the /v2 image; see "Fast-forward pace".)*
 
 **Historical port conclusion (superseded):** this pass prescribed a bounded wall-clock opcode rate and led to
 the frame-stepped implementation documented in the historical spec. The 2026-07-10 native trace disproved that
@@ -2363,7 +2364,7 @@ queue suspends the frame and runs the script in reserved frame 37; its statement
 deferred launch). A native run on 2026-11-03 confirmed the behaviour: after the SC0000 page-1 Skip button, one
 held click stops Skip and the scene continues at normal speed to the next input wait, as in the port. The port
 reaches a later stop page because it fast-forwards faster than native (0.4 s after enabling Skip: native at
-`SC0000@0x13c8`, port at `0x126e8`). The same session showed that a scene called with `run` from SC0000
+`SC0000@0x13c8`, port at `0x126e8`). That pace gap is now closed (see "Fast-forward pace" above). The same session showed that a scene called with `run` from SC0000
 crashes native under fast-forward ("このコマンドはサポートされていません", the caller's pc in the callee),
 consistent with the documented rule that a `run`-called script cannot be a scene.
 
@@ -2388,6 +2389,29 @@ and Ctrl measured about 7,738 operand fetches/sec rather than one per display fr
 `GodotAdvHost.FrameYield` wait made the setup/cleanup bytecode between skipped fades take seconds even though
 the fades themselves correctly jumped to their endpoints. `FrameYield` is nonblocking again; only explicit
 presentation, sleep, and input services own wall-clock time.
+
+**Fast-forward pace (2026-11-03).** The main loop `engine_main_tick_with_exception_policy@0x411840` is now
+readable, and it settles the fast-forward rate. While run-state `0x08000000` is set it dispatches exactly one op
+per iteration through `adv_interpreter_tick`. Each iteration then calls `gfx_request_force_complete_and_reset_anim_clock`,
+`sfx_clear_scheduled_starts`, `FUN_004884c0`, a 1000-slot movie-surface pass and `Sleep(0)` before the next
+`PeekMessage`. It also runs `gfx_render_frame` at the top of the iteration when tick presentation is on, the frame
+is dirty and no statement block is open. The fast-forward branch is tested before the sleep bit (run-state `1`),
+and `sleep_op_0xc8@0x420ec0` arms nothing while `0x08000000` is set, so sleeps cost nothing under fast-forward.
+Native fast-forward is therefore paced by a per-op cost, not by sleeps or a display rate (`Present` is
+uncapped).
+
+Measured with `tools/drive` on 2026-11-03: SC0000 read-skip from page 1 to the first unread page `0x1b6e`
+(13,512 ops in the port's trace) took 5.06 s on native AGE, about 0.374 ms per op. The port took 2.72 s: its ops
+were nearly free, and its time went to three `0xc8` sleeps it still honoured (about 1.0 s, including a 1000 ms
+sleep at `SC0000@0x1342`) and 61 synchronized `0x20c` presentations (about 0.6 s).
+
+The port now matches this. `0xc8` returns at once while fast-forward is active, and the Godot host ends an
+in-progress sleep when fast-forward starts. `VirtualMachine.FastForwardPace.cs` paces fast-forward ops against a
+wall-clock deadline of `VmOptions.FastForwardOpMicroseconds` per op, with
+`VmOptions.NativeFastForwardOpMicroseconds = 374` in the Godot frontend and pacing off in headless tools and
+tests. Time already spent blocked in host services counts toward the budget, up to 100 ms of credit. The same
+measurement then took 5.08 s. The constant is calibrated on Himegari (SYS4422) on this machine. Native's
+per-iteration cost is CPU-bound, so it varies by machine, and Kamidori's SYS4433 loop is unmeasured.
 
 **ADV entry/exit lifecycle.** The script comments `savemesskip` and `loadmesskip` describe a temporary
 suspension boundary, not a second saved preference. `op_0x19b_suspend_adv_skip_service@0x416560` clears
