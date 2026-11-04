@@ -15,25 +15,25 @@ public sealed partial class GodotAdvHost
 
     public bool IsMovieSurfaceBound(int surfaceSlot) => _movieSurfaces.IsBound(surfaceSlot);
 
-    public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
+    public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long startDelayMs)
     {
         string scene = CurrentScene;
         var asset = _res.ResolveMovie(resourceId);
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
-        StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
-                   initialPositionMs: 0, startDelayMs: 0, presentationDurationMs: null,
+        StartMovie(asset, resourceId, surfaceSlot, movieFlags, modal: false,
+                   initialPositionMs: 0, startDelayMs: startDelayMs, presentationDurationMs: null,
                    movieMask: null, out long? stopTimeMs, out _);
         return stopTimeMs ?? 0;
     }
 
     public long? PlayMovieToSurfaceAtPosition(
-        long resourceId, int surfaceSlot, long movieFlags, long syncMask, long positionMs)
+        long resourceId, int surfaceSlot, long movieFlags, long startDelayMs, long positionMs)
     {
         string scene = CurrentScene;
         var asset = _res.ResolveMovie(resourceId);
         if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
-        StartMovie(asset, resourceId, surfaceSlot, movieFlags, syncMask, modal: false,
-                   initialPositionMs: positionMs, startDelayMs: 0, presentationDurationMs: null,
+        StartMovie(asset, resourceId, surfaceSlot, movieFlags, modal: false,
+                   initialPositionMs: positionMs, startDelayMs: startDelayMs, presentationDurationMs: null,
                    movieMask: null, out long? stopTimeMs, out _);
         return stopTimeMs ?? 0;
     }
@@ -58,7 +58,7 @@ public sealed partial class GodotAdvHost
 
         var mask = new MovieMaskPlayback(gfx, request, captured);
         bool started = StartMovie(
-            asset, request.ResourceId, request.SurfaceSlot, movieFlags: 6, syncMask: 0,
+            asset, request.ResourceId, request.SurfaceSlot, movieFlags: 6,
             modal: false, initialPositionMs: 0,
             startDelayMs: request.StartDelayMs,
             presentationDurationMs: request.DurationMs,
@@ -117,7 +117,7 @@ public sealed partial class GodotAdvHost
         bool scriptSuspended = false;
         try
         {
-            if (!StartMovie(asset, resourceId, surfaceSlot, movieFlags, 0, modal: true,
+            if (!StartMovie(asset, resourceId, surfaceSlot, movieFlags, modal: true,
                             initialPositionMs: 0, startDelayMs: 0,
                             presentationDurationMs: null, movieMask: null,
                             out _, out long playbackId)) return;
@@ -153,7 +153,7 @@ public sealed partial class GodotAdvHost
     }
 
     private bool StartMovie(AssetEntry asset, long resourceId, int surfaceSlot, long movieFlags,
-                            long syncMask, bool modal, long initialPositionMs, long startDelayMs,
+                            bool modal, long initialPositionMs, long startDelayMs,
                             long? presentationDurationMs, MovieMaskPlayback? movieMask,
                             out long? stopTimeMs, out long playbackId)
     {
@@ -190,7 +190,7 @@ public sealed partial class GodotAdvHost
             {
                 ["resource"] = resourceId, ["playback"] = playbackId,
                 ["surface"] = surfaceSlot, ["file"] = movie.Name,
-                ["flags"] = movieFlags, ["sync_mask"] = syncMask, ["modal"] = modal,
+                ["flags"] = movieFlags, ["modal"] = modal,
                 ["initial_position_ms"] = Math.Max(0, initialPositionMs),
                 ["start_delay_ms"] = Math.Max(0, startDelayMs),
                 ["presentation_duration_ms"] = presentationDurationMs,

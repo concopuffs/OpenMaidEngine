@@ -149,6 +149,20 @@ public class MovieOpcodeTests
         runtime.Decoder.Dispose();
     }
 
+    [Fact]
+    public void MovieRuntimeRetainsStartDelayAndExtendsWatchdogByIt()
+    {
+        // BTL passes battle_animation_effect_start_delays_ms as 0x236's fourth operand.
+        var decoder = new FakeMovieDecoder { StopTimeMs = 10000 };
+        var runtime = MovieRuntime.Open("TEST.AGF", 7, 0x123,
+            new MoviePayload("TEST.AGF", new byte[] { 0, 0, 1, 0xba }),
+            new FakeMovieDecoderFactory(decoder), startDelayMs: 750);
+
+        Assert.Equal(750, runtime.StartDelayMs);
+        Assert.Equal(12750, runtime.WatchdogMs);
+        runtime.Decoder.Dispose();
+    }
+
     [Theory]
     [InlineData(null, 30000)]
     [InlineData(-1L, 30000L)]
@@ -618,6 +632,25 @@ public class MovieOpcodeTests
         Assert.Equal(0x13c8, trace.Events[movieStep].Ins!.Offset);
         Assert.Equal(0x13d1, nextStep.Ins!.Offset);
         Assert.Contains((0x33L, 0, 2L, 0L), host.Movies);
+    }
+
+    [Fact]
+    public void PlayMovieForwardsNonzeroStartDelayToHost()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MOVIE", new List<(int, Operand[])>
+        {
+            (0x55, new[] { new Operand(3, 0x10), new Operand(0, 750) }),
+            (0x236, new[] { new Operand(0, 0x2b10), new Operand(0, 9), new Operand(0, 0), new Operand(3, 0x10) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(new[] { (0x2b10L, 9, 0L, 750L) }, host.Movies);
     }
 
     [Fact]

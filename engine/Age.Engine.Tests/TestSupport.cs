@@ -314,16 +314,16 @@ internal class RecordingHost : IHost
         => AudioVolumeChanges.Add((category, basisPoints));
     public void ApplyAudioRouteEnabled(int category, bool enabled)
         => AudioRouteChanges.Add((category, enabled));
-    public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask)
+    public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long startDelayMs)
     {
-        Movies.Add((resourceId, surfaceSlot, movieFlags, syncMask));
+        Movies.Add((resourceId, surfaceSlot, movieFlags, startDelayMs));
         OnPlayMovie?.Invoke();
         return MovieStopTimeMs;
     }
     public long? PlayMovieToSurfaceAtPosition(
-        long resourceId, int surfaceSlot, long movieFlags, long syncMask, long positionMs)
+        long resourceId, int surfaceSlot, long movieFlags, long startDelayMs, long positionMs)
     {
-        PositionedMovies.Add((resourceId, surfaceSlot, movieFlags, syncMask, positionMs));
+        PositionedMovies.Add((resourceId, surfaceSlot, movieFlags, startDelayMs, positionMs));
         OnPlayMovie?.Invoke();
         return MovieStopTimeMs;
     }

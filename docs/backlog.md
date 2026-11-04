@@ -30,10 +30,10 @@ it; git history keeps the record.
   (`engine-re.md`, "Port appearance"; remaining pixel differences are listed there).
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
-  statement blocks, "Not modelled"). No observed block contains a movie start yet.
-- **Delayed movie start.** The movie op's fourth operand delays the graph start until `current - start >= operand4`.
-  The port threads it as `syncMask` but does not delay FFmpeg for nonzero values (`engine-re.md`, movie start;
-  24 of 25 sites pass zero, BTL passes a dynamic value).
+  statement blocks, "Not modelled"). A static scan of both games' scripts (2026-11-04) finds a movie start inside
+  an open block only twice, both `play-movie-mask-transition` in `DEBUG.BIN` (`0x139`, `0x1ab`), which retail never
+  reaches (the port's F4 debug route does). Done when those two are modelled, or the item is closed as
+  debug-only.
 - **Control-strip tooltip after a click.** Clicking a hovered ADV control (for example Read-message Skip, x=750)
   hides its tooltip natively until the mouse moves; the port shows it again at once while the cursor stays still
   (driven runs 2026-11-03, `native-after-hover-click.png` versus `port-after-second-click.png`). Likely the port
@@ -142,6 +142,10 @@ it; git history keeps the record.
   failed once in a full `dotnet test` run on 2026-11-03 and passed alone and on the full rerun (1015/1015). It
   waits on cross-thread handshakes with 5 s timeouts, which a loaded test host can miss. Done when the failure is
   reproduced and its cause fixed, or the handshake no longer depends on wall-clock time.
+- **Intermittent root-reload test.** `RootReloadRequestTests.RequestRootReloadInterruptsAWaitAndReloadsRootWithoutTheInitialFlag`
+  failed once in a full Release `dotnet test` run on 2026-11-04 ("sleep was not interrupted", its host's
+  wall-clock timeout) and passed alone and on the full rerun (1038/1038). Done when its interrupt handshake no
+  longer depends on wall-clock time.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").

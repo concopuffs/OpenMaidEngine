@@ -1915,9 +1915,12 @@ mute/music/SE/voice routing; without an override, native setting `set:DependMovi
 movie route. The port applies those categories through Godot audio buses. Operand 4 is stored at movie object
 `+0x42c` as a millisecond start delay: `movie_start_pending_after_sync_delay` records `timeGetTime()` on the
 first service tick and starts the graph once `current - start >= operand4`. It is not a device mask or movie
-duration. Replacing or releasing the owning surface stops the graph and detaches the renderer. The port still
-threads this value through a legacy `syncMask`-named host parameter but does not yet delay FFmpeg start for
-nonzero values. The corpus has 25 sites: 24 pass literal zero, while BTL supplies a dynamic local-pointer value.
+duration. Replacing or releasing the owning surface stops the graph and detaches the renderer. The corpus has
+25 sites: 24 pass literal zero, while BTL supplies `battle_animation_effect_start_delays_ms` for the effect
+(`BTL@0x2b21`, the same delay its sprite-sheet effects give op `0x239`). Op `0x241` takes the same delay. The
+port passes it as the host's start delay (2026-11-04): the decoder opens at once, so op `0x23f` still reads the
+stop time immediately, but no frame is taken, and so no audio or presentation clock starts, until the delay has
+passed. As natively, the surface keeps its created contents until then, since a stopped graph prerolls nothing.
 
 Graph construction/open is synchronous, but playback and sample delivery are asynchronous. The handler
 returns normally and the interpreter advances one instruction: at SC0000 `0x13c8`, the native operand

@@ -6,16 +6,18 @@ public interface IMovieHost
 {
     // Native op 0x236 binds a movie decoder to an existing retained texture surface.
     // Playback is non-modal: the VM advances to the following instruction while the host publishes frames.
+    // The graph stays stopped until startDelayMs has passed since the first service tick
+    // (movie_start_pending_after_sync_delay@0x4633b0), so nothing is prerolled into the surface before then.
     /// <returns>The initialized movie graph's stop position in truncated integer milliseconds, or null
     /// when the host could not obtain usable timing metadata. Native op 0x23f queries this state
     /// immediately after 0x236 returns.</returns>
-    long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long syncMask) => null;
+    long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long startDelayMs) => null;
 
     // Native op 0x241 uses the same graph/surface lifecycle as 0x236, but seeks the graph before
     // playback configuration. Hosts without positioned decoding may fall back to ordinary playback.
     long? PlayMovieToSurfaceAtPosition(
-        long resourceId, int surfaceSlot, long movieFlags, long syncMask, long positionMs)
-        => PlayMovieToSurface(resourceId, surfaceSlot, movieFlags, syncMask);
+        long resourceId, int surfaceSlot, long movieFlags, long startDelayMs, long positionMs)
+        => PlayMovieToSurface(resourceId, surfaceSlot, movieFlags, startDelayMs);
 
     // Native op 0x24d captures a retained range into the scratch surface, then publishes each
     // decoded movie frame's green channel as an exact packed-alpha mask. A nonvisual host completes
