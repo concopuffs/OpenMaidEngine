@@ -209,7 +209,9 @@ internal class RecordingHost : IHost
         Sleep(duration);
     }
     public virtual void FrameYield() { }
-    public void ResetSceneContext() => SceneContextResets++;
+    public virtual void ResetSceneContext() => SceneContextResets++;
+    public int RootReloadInterrupts;
+    public virtual void InterruptForRootReload() => RootReloadInterrupts++;
     public bool IsMessageSkipActive => MessageSkip;
     public void SetMessageSkipActive(bool active)
     {

@@ -38,7 +38,11 @@ public sealed partial class GodotAdvHost
     private readonly SemaphoreSlim _gate = new(0, 1);
     private readonly AutoResetEvent _inputCallbackSignal = new(false);
     private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
-    private volatile bool _stopping;
+    private volatile bool _stopRequested;
+    // VirtualMachine.RequestRootReload (the 終了 dialog's タイトルに戻る): every wait ends as on stop, until the
+    // reload's ResetSceneContext clears it.
+    private volatile bool _rootReloadInterrupt;
+    private bool _stopping => _stopRequested || _rootReloadInterrupt;
     private readonly object _messageSkipLock = new();
     private bool _scriptMessageSkipActive;
     private bool _physicalMessageSkipActive;
@@ -803,8 +807,19 @@ public sealed partial class GodotAdvHost
 
     public void Stop()
     {
-        _stopping = true;
+        _stopRequested = true;
         _main.CallDeferred("ClearAgeCursor");
+        WakeAllWaits();
+    }
+
+    public void InterruptForRootReload()
+    {
+        _rootReloadInterrupt = true;
+        WakeAllWaits();
+    }
+
+    private void WakeAllWaits()
+    {
         lock (_textLock) _advTextForceComplete = true;
         if (_gate.CurrentCount == 0) _gate.Release();
         _inputCallbackSignal.Set();
@@ -815,6 +830,7 @@ public sealed partial class GodotAdvHost
 
     public void ResetSceneContext()
     {
+        _rootReloadInterrupt = false;
         // scene_context_init_reset releases ordinary surface/movie bindings but keeps decoded asset
         // caches and process-owned audio/configuration available to the reloaded SYSTEM4 root.
         ReleaseSurfaceRange(0, 1000);
@@ -908,7 +924,21 @@ public sealed partial class GodotAdvHost
     // Native dispatch remains burst-fast between explicit presentation/sleep/input services even when
     // message Skip removes those services. Per-op frame pacing turns ordinary skipped setup/cleanup bursts
     // into multi-second invisible stalls.
-    public void FrameYield() { }
+    // Native runs AGERC's 終了 dialog as a modal Win32 dialog inside the window procedure, so the engine main
+    // loop dispatches no opcodes while it is open. The frontend holds the VM at its next opcode boundary.
+    private readonly ManualResetEventSlim _frontendModalRelease = new(true);
+
+    public void SetFrontendModalHold(bool held)
+    {
+        if (held) _frontendModalRelease.Reset();
+        else _frontendModalRelease.Set();
+    }
+
+    public void FrameYield()
+    {
+        if (_frontendModalRelease.IsSet) return;
+        while (!_stopping && !_frontendModalRelease.Wait(50)) { }
+    }
 
     // op 0xc8: block the VM background thread while the main-thread compositor keeps presenting retained state.
     // Time-based sibling of WaitForInput's suspend. The native op arms a non-blocking main-loop-polled timer;

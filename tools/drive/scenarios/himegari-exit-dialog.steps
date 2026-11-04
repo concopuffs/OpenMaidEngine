@@ -1,0 +1,32 @@
+# AGE's close policy. An unforced close (the close button or ESC; here close-request) opens the 終了 dialog:
+# Cancel resumes, タイトルに戻る resets the scene and reloads SYSTEM4 back to TITLE. The title's fifth action
+# (op 0x1) then quits without asking. Run on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py native start
+#   py -3.11 -X utf8 tools/drive.py native run tools/drive/scenarios/himegari-exit-dialog.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+close-request                           # the dialog opens over the title
+wait 1
+dialogs
+shot exit-dialog-title
+answer ｷｬﾝｾﾙ
+wait 1
+expect script=TITLE
+
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+close-request
+wait 1
+answer タイトルに戻る(&T)
+answer OK
+wait-state script=TITLE click=adv.next every=3 timeout=120   # SYSTEM4 reloads: logos, then the title
+wait 1.5
+state
+shot exit-back-at-title
+
+click 400 502                           # the title's fifth action: op 0x1 quits without the dialog

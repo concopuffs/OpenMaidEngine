@@ -811,7 +811,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 |---|---|
 | `move X Y\|POINT` | park the cursor (hover) |
 | `click X Y\|POINT [hold=MS]`, `rclick …` | left/right click; right click opens the ADV menu |
-| `key NAME\|0xVK [hold=MS]` | press a key (`enter`, `space`, `ctrl`, arrows, `f2`…, letters). ESC and F1 are refused on both targets: native ESC posts `WM_CLOSE`, and F1 saves a BMP through `engine_save_screenshot_bmp` |
+| `key NAME\|0xVK [hold=MS]` | press a key (`enter`, `space`, `ctrl`, arrows, `f2`…, letters). ESC and F1 are refused on both targets: ESC asks to close (use `close-request`), and F1 saves a BMP through `engine_save_screenshot_bmp` |
 | `wheel up\|down [N]` | wheel notches at the cursor |
 | `wait SECONDS` | sleep (in the client) |
 | `settle [timeout=S] [quiet=S] [threshold=F]` | wait until the game is idle for `quiet` seconds (0.7). Native: the frame stays within `threshold` (default 0.4 % of pixels) of one reference; typing adds up and resets the wait, the ADV wait indicator stays below the threshold, and animated menus such as the title never settle (use `wait` or a higher `threshold`). Port: an `input` or `menu` wait that is not busy |
@@ -822,7 +822,8 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `wait-state CONDITIONS [timeout=S] [click=POINT every=S]` | poll until `expect` would pass, clicking `POINT` every `S` seconds (default 2) meanwhile (boot: `wait-state script=TITLE click=adv.next every=3`) |
 | `point NAME X Y` | define a point for the session |
 | `speed FACTOR` | port: run the frame clock 0.05–8 times as fast |
-| `dialogs` / `answer BUTTON` | native: list open message boxes / press a button |
+| `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes and the 終了 dialog; port: the 終了 dialog). `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
+| `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog |
 | `close [timeout=S]` | quit the game the way its own quit does (native `WM_CLOSE` wParam=1, which saves the shared profile), then the session ends |
 
 A failing step stops the request, and `do`/`run` exit 1. Results also carry what the game did meanwhile: a script
@@ -836,6 +837,9 @@ offsets.
 `himegari-save-page3.steps` and `himegari-load-page3.steps` cross a save between the targets. Save on one target, then
 start the other with `--seed port:fresh` (or `native:fresh`) and load. Their headers give the commands. Both directions
 resume at `SC0000@0x8a9` and reach `0x913`.
+
+`himegari-exit-dialog.steps` covers the close policy on both targets: Cancel on the title, タイトルに戻る from
+SC0000 page 1 back to TITLE without the logos, then TITLE's fifth action (op `0x1`) quits without asking.
 
 `himegari-read-skip.steps` saves on SC0000 page 1, reads six pages, reloads and turns on Read-message Skip (x=750).
 Both targets fast-forward over the read pages and stop at `SC0000@0xa18`, the first page not yet advanced past.

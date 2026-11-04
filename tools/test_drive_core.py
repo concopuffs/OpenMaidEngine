@@ -69,7 +69,7 @@ def test_step_files():
     for path in scenarios:
         try:
             parsed = core.parse_steps(path.read_text(encoding="utf-8").splitlines())
-            core.check_capabilities(parsed, (), "common subset")
+            core.check_capabilities(parsed, core.SHARED_CAPABILITIES, "shared subset")
             portable = True
         except core.DriveError as error:
             print("   ", error)
@@ -91,6 +91,10 @@ def test_capabilities():
           "a scenario is checked against the target before it starts, naming each line")
     check(not raises(core.check_capabilities, steps[2:], ["dialogs", "answer"], "native target"),
           "native capabilities cover dialogs and answer")
+    check(set(core.SHARED_CAPABILITIES) <= set(native.CAPABILITIES), "shared capabilities are native capabilities")
+    port_source = (HERE.parent / "godot" / "Main.Drive.cs").read_text(encoding="utf-8")
+    check(all(f'"{name}"' in port_source.split("PortCapabilities =")[1].split(";")[0]
+              for name in core.SHARED_CAPABILITIES), "shared capabilities are port capabilities")
 
 
 def test_keys_and_points():

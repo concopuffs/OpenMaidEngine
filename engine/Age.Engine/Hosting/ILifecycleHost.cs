@@ -17,4 +17,8 @@ public interface ILifecycleHost
     // Native op 0x9 resets scene-owned host services before reloading root script resource 0.
     // Global banks, engine configuration, decoded-asset caches, and persistent profile state survive.
     void ResetSceneContext() { }
+
+    // A frontend return-to-title request (VirtualMachine.RequestRootReload): end every blocking wait now so
+    // the VM reaches an opcode boundary. Waits stay interrupted until the reset calls ResetSceneContext.
+    void InterruptForRootReload() { }
 }

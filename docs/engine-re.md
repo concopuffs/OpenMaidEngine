@@ -529,8 +529,63 @@ past it. A distinct generic error-dialog policy at `0x412689` proves that fall-t
 two retries the same instruction, result four adds the decoded instruction length before restarting the
 loop, and other results exit. `Command_Exit_Exception` bypasses that policy entirely.
 
-The Windows/frontend policy that follows the returned exit request—full exit versus returning to
-title—is outside this opcode handler and is not implemented in the Godot frontend yet.
+**Close policy: forced and unforced WM_CLOSE (2026-11-04).** The catch continuation at `0x412961` sends
+`WM_CLOSE` with `wParam` 1 to the main window (`ctx+0x54fe8`), so `0x1` is a *forced* close. The window
+procedure `age_main_window_proc@0x486320` closes at once on `wParam == 1`. Any other `WM_CLOSE` is
+*unforced* and asks `wm_close_confirm_exit_or_title@0x405740` first. Three things post an unforced close:
+
+- the window's close button;
+- ESC (`WM_KEYDOWN 0x1b` posts `WM_CLOSE(0)` and still forwards the key to the engine);
+- system-menu command `0x9c41`.
+
+Menu command `0x9c6b` posts the forced form.
+
+The decision function returns 1 at once when run-state bit `0x1000000` is set. Otherwise:
+
+1. It dims the presented frame with a black fill at alpha `0x80`.
+2. It calls `g_pfnAgercHostCallback(3, hwnd, 0)`. In AGERC.DLL that is `agerc_dispatch_host_command` case 3,
+   which runs `DialogBoxParamA` on dialog resource 3 with `agerc_exit_dialog_proc@0x10002040`.
+   - The dialog is titled 終了 and reads 次の方法で終了しますか？.
+   - It has radio `0x3ea` プログラムを終了する(&E), checked at init, and radio `0x3eb` タイトルに戻る(&T).
+   - Its buttons are OK and ｷｬﾝｾﾙ.
+   - Its icon is `IDI_ASTERISK`.
+   - It is centred on the game window.
+3. It acts on the answer:
+
+| Answer | Native action |
+|---|---|
+| 1 (exit) | The screen fills black. The window procedure saves `SAVE.DAT` (unless `set:NoSaveDat`), tears down and destroys the window. |
+| 2 (title) | It undims, presents, sleeps 250 ms and calls `op_0x9_reset_scene_and_reload_root` from inside the window procedure. That reset clears the initial-root-run flag, so SYSTEM4's `0x130` skips LOGO/OP. |
+| 0 (cancel) | It undims and play resumes. |
+
+The dialog is modal, so native's main loop is frozen while it is open.
+
+A native drive confirmed this (`tools/drive/scenarios/himegari-exit-dialog.steps`):
+
+- Cancel on the title resumes.
+- タイトルに戻る from SC0000 page 1 is back at TITLE 0.42 s later.
+- TITLE's fifth action (`0x1`) then exits with code 0 and no dialog.
+
+**Port.** The port has the same boundary:
+
+- **Op `0x1`:** the VM ends with `exit-request` and the frontend quits at once (`Main.QuitAfterExitRequest`). As in
+  native, it writes `SAVE.DAT` unless `NoSaveDat` is set.
+- **Unforced closes:** the window's close request and ESC go to `Main.RequestUnforcedClose`. ESC is also still
+  forwarded to the VM. That method:
+  1. holds the VM thread at its next frame yield;
+  2. dims to 128/255;
+  3. opens `ExitConfirmationDialog`, which has native's texts, the default choice and E/T mnemonics.
+- **タイトルに戻る:** after 250 ms, `VirtualMachine.RequestRootReload` runs. It wakes any blocking host wait through
+  `ILifecycleHost.InterruptForRootReload`. The current frame stops at its next opcode boundary (a hotspot callback
+  unwinds too), and op `0x9`'s reset and root reload follow.
+
+The port's drive of the same scenario passes. Its return to TITLE takes 0.28 s, with no logos.
+
+The port does not yet match native in these ways:
+
+- Godot's main thread keeps presenting while the dialog is open.
+- The run-state `0x1000000` auto-confirm is not modelled.
+- The system-menu commands and the dialog icon are absent.
 
 TITLE happens to contain a developer menu immediately after its `0x1`, including a `call-script` to
 `DEBUG.BIN`; that code is unreachable in the native flow because the handler never returns. The port's
@@ -540,9 +595,8 @@ process-exit request through hotspot callbacks and nested script frames and ends
 executing the following bytecode. An explicit Godot `--native-debug-menu` diagnostic can deliberately
 restore the old fall-through for developer archaeology; it maps to `VmOptions.IgnoreExitRequests`, defaults
 off, and is not part of the native compatibility path. Because it changes the opcode globally, it also
-suppresses SYSTEM4's invalid-execution-mode exit site during that run. End-to-end visual validation of the native
-`SYSTEM4 -> TITLE -> child -> 0x9 -> SYSTEM4 -> TITLE` history remains deferred until the frontend
-exit/return-to-title boundary or a natural game-over/completion route exists.
+suppresses SYSTEM4's invalid-execution-mode exit site during that run. The 終了 dialog's タイトルに戻る now exercises
+`SC0000 -> 0x9 reset -> SYSTEM4 -> TITLE` end to end on both targets (close policy above).
 
 The unreachable developer menu nevertheless records the game's intended debug-scene handoff. Its two ADV
 viewer choices write `G[0]=1`, `G[0xaba5c]=-1`, `G[0x62ccf]=0`, and a raw script id into `G[0x699]`, then

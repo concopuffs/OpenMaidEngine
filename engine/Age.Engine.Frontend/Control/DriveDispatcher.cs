@@ -21,6 +21,12 @@ public interface IDriveBackend
     (int Width, int Height) Screenshot(string path);
     void SetSpeed(double factor);
     void Close();
+    /// <summary>Ask to close as the window's close button does (native: an unforced WM_CLOSE and the 終了 dialog).</summary>
+    void RequestClose() => throw new DriveProtocolException("close-request is not supported here");
+    /// <summary>The open dialogs as {title, text, buttons} objects (capability "dialogs").</summary>
+    JsonArray Dialogs() => throw new DriveProtocolException("'dialogs' has no implementation here");
+    /// <summary>Press the named button of an open dialog; returns {text, answered} (capability "answer").</summary>
+    JsonObject Answer(string button) => throw new DriveProtocolException("'answer' has no implementation here");
     /// <summary>The last position the game itself moved the cursor to since the previous call, if any.</summary>
     (int X, int Y)? TakeCursorWarp();
     /// <summary>Where the driven cursor is now, in native canvas pixels (the last pointer, click or warp).</summary>
@@ -165,14 +171,21 @@ public sealed class DriveDispatcher
             }
             case "close":
                 return Immediate(request, reply, () => null);
+            case "close-request":
+                return Immediate(request, reply, () => { _backend.RequestClose(); return null; });
             case "dialogs":
+                RequireCapability("dialogs");
+                return Immediate(request, reply, () => new JsonObject { ["dialogs"] = _backend.Dialogs() });
             case "answer":
-                RequireCapability(request.Op);
-                throw new DriveProtocolException($"'{request.Op}' has no implementation here");
+            {
+                RequireCapability("answer");
+                string button = request.Text("button");
+                return Immediate(request, reply, () => _backend.Answer(button));
+            }
             default:
                 throw new DriveProtocolException(
                     $"unknown op '{request.Op}' (the {_backend.Target} supports state, pointer, click, key, wheel, " +
-                    $"wait, settle, shot, close{string.Concat(_backend.Capabilities.Select(c => ", " + c))})");
+                    $"wait, settle, shot, close, close-request{string.Concat(_backend.Capabilities.Select(c => ", " + c))})");
         }
     }
 

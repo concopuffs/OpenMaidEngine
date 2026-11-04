@@ -329,7 +329,8 @@ VK_NAMES = {
 VK_NAMES.update({f"f{n}": 0x6F + n for n in range(1, 13)})
 # Refused on both targets so that every scenario stays runnable natively.
 REFUSED_KEYS = {
-    0x1B: "ESC posts WM_CLOSE in native AGE (age_main_window_proc); use the close step",
+    0x1B: "ESC posts WM_CLOSE in native AGE (age_main_window_proc), which opens its 終了 dialog; "
+          "use close-request (or close to quit)",
     0x70: "F1 saves a screenshot BMP in native AGE (engine_save_screenshot_bmp); use the shot step",
 }
 WAITING_KINDS = ("input", "menu", "movie", "transition", "sleep")
@@ -354,6 +355,11 @@ def virtual_key(name: str) -> int:
     if vk in REFUSED_KEYS:
         raise DriveError(f"key {name}: {REFUSED_KEYS[vk]}")
     return vk
+
+
+# Capabilities both targets offer (native: drive_native.CAPABILITIES; port: PortCapabilities in godot/Main.Drive.cs).
+# Committed scenarios may use these and nothing target-only.
+SHARED_CAPABILITIES = ("dialogs", "answer")
 
 
 @dataclass(frozen=True)
@@ -389,9 +395,12 @@ STEPS = {
                         "wait until the VM matches, clicking POINT every S seconds (default 2) meanwhile"),
     "point": _spec(3, 3, "", "point NAME X Y                define a named point for this session"),
     "speed": _spec(1, 1, "", "speed FACTOR                  run the frame clock FACTOR times as fast (port)", "speed"),
-    "dialogs": _spec(0, 0, "", "dialogs                       list AGE's open message boxes (native)", "dialogs"),
-    "answer": _spec(1, 1, "", "answer BUTTON                 press a button of the open message box (native)",
+    "dialogs": _spec(0, 0, "", "dialogs                       list the game's open dialogs (native message boxes; "
+                     "both: the 終了 dialog)", "dialogs"),
+    "answer": _spec(1, 1, "", "answer BUTTON                 press a button of an open dialog (radio buttons too)",
                     "answer"),
+    "close-request": _spec(0, 0, "", "close-request                 ask to close as the close button and ESC do: AGE "
+                           "opens its 終了 dialog (quit / return to title / cancel)"),
     "close": _spec(0, 0, "timeout", "close [timeout=S]             quit the game and end the session"),
 }
 NUMERIC_OPTIONS = {"hold", "timeout", "quiet", "threshold", "every"}
@@ -799,6 +808,8 @@ class Executor:
             return self.client.call("dialogs")
         elif step.name == "answer":
             return self.client.call("answer", button=step.args[0])
+        elif step.name == "close-request":
+            self.client.call("close-request")
         elif step.name == "close":
             timeout = float(options.get("timeout", 20))
             result = self.client.call("close", timeout=timeout + REPLY_MARGIN_S, timeout_ms=int(timeout * 1000))

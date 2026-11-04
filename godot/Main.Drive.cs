@@ -129,7 +129,7 @@ public partial class Main
 
     private sealed class PortDriveBackend(Main main) : IDriveBackend
     {
-        private static readonly string[] PortCapabilities = { "speed", "waiting" };
+        private static readonly string[] PortCapabilities = { "speed", "waiting", "dialogs", "answer" };
 
         public string Target => "port";
         public string Profile { get; } = main._selectedProfile.Profile.Id;
@@ -192,6 +192,22 @@ public partial class Main
         public void SetSpeed(double factor) => main._clock.Speed = factor;
 
         public void Close() => main.GetTree().Quit(0);
+
+        public void RequestClose() => main.RequestUnforcedClose();
+
+        public System.Text.Json.Nodes.JsonArray Dialogs()
+        {
+            var dialogs = new System.Text.Json.Nodes.JsonArray();
+            if (main._exitConfirmation is { } dialog) dialogs.Add(dialog.Describe());
+            return dialogs;
+        }
+
+        public System.Text.Json.Nodes.JsonObject Answer(string button)
+        {
+            if (main._exitConfirmation is not { } dialog || dialog.Press(button) is not { } pressed)
+                throw new DriveProtocolException($"no open dialog has a '{button}' button");
+            return new System.Text.Json.Nodes.JsonObject { ["text"] = ExitConfirmationDialog.NativeText, ["answered"] = pressed };
+        }
 
         public (int X, int Y)? TakeCursorWarp()
         {

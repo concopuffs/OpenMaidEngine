@@ -134,6 +134,9 @@ public partial class Main
                 && !advPageSuspended && !rawInputCallbackActive) _host.SignalInput();
             return;
         }
+        // Native WM_KEYDOWN VK_ESCAPE posts an unforced WM_CLOSE (the 終了 dialog) and still delivers the key.
+        if (e is InputEventKey escapeKey && escapeKey.Pressed && !escapeKey.Echo && escapeKey.Keycode == Key.Escape)
+            RequestUnforcedClose();
         if (e is InputEventKey gameplayKey && !gameplayKey.Echo
             && Win32VirtualKeyTranslator.TryTranslate(gameplayKey, out int virtualKey))
         {

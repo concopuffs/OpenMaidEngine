@@ -26,9 +26,15 @@ it; git history keeps the record.
   (`engine-re.md`). The port always ends the run (中止). The mapping from MessageBoxA's button codes to that policy
   is unverified, because the message-box call goes through a thunk. Done when a native run confirms each button's
   effect and the port offers the same choices outside driven runs.
-- **Exit and return-to-title boundary.** Op `0x1` and SYSTEM4's invalid-mode exit end the port's VM session, but
-  the frontend policy that follows (full exit versus returning to TITLE) is not implemented (`engine-re.md`,
-  "Frontend exit request is not a root reload").
+- **終了 dialog fidelity.** The port's close policy matches native's answers, but not these details
+  (`engine-re.md`, "Close policy"):
+  - Native's modal dialog freezes its main loop, while Godot keeps presenting (animations advance behind the dim).
+  - Run-state bit `0x1000000` makes native close without asking; its setter is unidentified.
+  - System-menu commands `0x9c41` (ask) and `0x9c6b` (forced close) have no port equivalent.
+  - The dialog has no `IDI_ASTERISK` icon.
+
+  Done when a driven run shows the port frozen behind the dialog, and each remaining item is modelled or shown
+  to be unreachable in retail.
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
   statement blocks, "Not modelled"). No observed block contains a movie start yet.

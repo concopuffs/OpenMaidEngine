@@ -81,6 +81,7 @@ public sealed partial class VirtualMachine
     private bool _tickPresentationEnabled;    // native tick_presentation_enabled (ctx+0x99294), ops 0x21b/0x247
     private bool _initialRootRun = true;
     private volatile bool _stopRequested;
+    private volatile bool _rootReloadRequested;   // frontend 終了 dialog: タイトルに戻る
     private bool _sharedProfileShutdownHandled;
     private volatile bool _messageSkipEnabled;
     private volatile bool _messageSkipServiceActive;
@@ -202,6 +203,18 @@ public sealed partial class VirtualMachine
 
     /// <summary>Request a clean stop at the next opcode boundary.</summary>
     public void RequestStop() => _stopRequested = true;
+
+    /// <summary>
+    /// Return to title from outside the script: native's 終了 dialog (AGERC dialog 3) answers 2 for
+    /// タイトルに戻る, and the window procedure's WM_CLOSE path (FUN_00405740) then calls
+    /// op_0x9_reset_scene_and_reload_root directly. The port ends every active frame at its next opcode
+    /// boundary, interrupting any host wait, and runs the same scene reset and resource-0 reload as op 0x9.
+    /// </summary>
+    public void RequestRootReload()
+    {
+        _rootReloadRequested = true;
+        _host.InterruptForRootReload();
+    }
 
     /// <summary>
     /// Match AGE's accepted-WM_CLOSE shared-profile lifecycle. The native NoSaveDat setting gates only
@@ -814,6 +827,16 @@ public sealed partial class VirtualMachine
                         outcome = callbackOutcome;
                         break;
                     }
+                    if (callbackOutcome == FrameOutcome.RootReload)
+                    {
+                        _loadedNumberedState = null;
+                        Script? reloadedRoot = ReloadRootOrNull();
+                        if (reloadedRoot == null) break;
+                        root = reloadedRoot;
+                        rootEntry = root.IndexByOffset.TryGetValue(0, out int lri) ? lri : 0;
+                        cause = FrameCause.RootReload;
+                        continue;
+                    }
                 }
                 root = ResolveSavedScript(_loadedNumberedState.Frames[0]);
                 rootEntry = 0;
@@ -826,13 +849,8 @@ public sealed partial class VirtualMachine
             {
                 // Native 0x9 performs the scene reset before attempting the resource-0 load. Keep
                 // that ordering even when a diagnostic provider cannot resolve the root script.
-                ResetSceneContextForRootReload();
-                var reloaded = _provider?.GetById(0);
-                if (reloaded == null)
-                {
-                    HaltReason ??= "root-reload-unresolved:0x0";
-                    break;
-                }
+                var reloaded = ReloadRootOrNull();
+                if (reloaded == null) break;
                 root = reloaded;
                 rootEntry = root.IndexByOffset.TryGetValue(0, out int ri) ? ri : 0;
                 cause = FrameCause.RootReload;
@@ -847,8 +865,18 @@ public sealed partial class VirtualMachine
         _sink.Emit(TraceEvent.Halt(HaltReason ?? "unknown", Steps));
     }
 
+    private Script? ReloadRootOrNull()
+    {
+        ResetSceneContextForRootReload();
+        var reloaded = _provider?.GetById(0);
+        if (reloaded == null) HaltReason ??= "root-reload-unresolved:0x0";
+        return reloaded;
+    }
+
     private void ResetSceneContextForRootReload()
     {
+        _rootReloadRequested = false;
+        _initialRootRun = false;   // op_0x9_reset_scene_and_reload_root: SYSTEM4 skips LOGO/OP from now on
         Gfx.ResetSceneContext();
         _valueSwitchTargets.Clear();
         _preloadedScriptSlots.Clear();
@@ -939,6 +967,7 @@ public sealed partial class VirtualMachine
                 while (pc >= 0 && pc < frame.Script.Instructions.Count)
                 {
                     if (_stopRequested) { outcome = FrameOutcome.ExitRequested; break; }
+                    if (_rootReloadRequested) { outcome = FrameOutcome.RootReload; break; }
                     if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
                     Steps++;
                     frame.Pc = pc;
@@ -1288,6 +1317,7 @@ public sealed partial class VirtualMachine
             while (pc >= 0 && pc < _cur.Script.Instructions.Count)
             {
                 if (_stopRequested) break;
+                if (_rootReloadRequested) throw new RootReloadRequestedException();
                 if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; break; }
                 Steps++;
                 _cur.Pc = pc;

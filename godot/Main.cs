@@ -80,6 +80,7 @@ public partial class Main : Godot.Control
             RunPackageSmoke();
             return;
         }
+        InitializeExitPolicy();
         GameRootSelection gameRoot;
         SelectedGameProfile selectedProfile;
         ResolvedGamePersistence profilePersistence;
@@ -727,6 +728,7 @@ public partial class Main : Godot.Control
                         GD.PushError($"[vm] script error: {scriptError.Text}");
                         _status.Text = "— script error —";
                     }
+                    else if (_vm.HaltReason == "exit-request" && !_selftest) QuitAfterExitRequest();
                     else ShowEnd();
                     if (_vm.HaltReason == "STEP-LIMIT")
                     {

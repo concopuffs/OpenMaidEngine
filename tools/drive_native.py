@@ -735,16 +735,22 @@ class Daemon:
             raise DriveError("AGE did not exit after WM_CLOSE; terminated it")
         return {"exit_code": code}
 
+    def op_close_request(self, request: dict[str, Any]) -> dict[str, Any]:
+        """An unforced WM_CLOSE (wParam 0), as the close button and ESC post: AGE opens its 終了 dialog."""
+        win32().post(self.require_window(), WM_CLOSE, 0, 0)
+        return {}
+
     def op_detach(self, request: dict[str, Any]) -> dict[str, Any]:
         self.closing = True
         return {"left_running": self.arguments.attach is not None}
 
     def handle(self, request: dict[str, Any]) -> dict[str, Any]:
         op = request.get("op")
-        handler = getattr(self, f"op_{op}", None) if isinstance(op, str) and op.isidentifier() else None
+        name = op.replace("-", "_") if isinstance(op, str) else None   # wire ops may hyphenate (close-request)
+        handler = getattr(self, f"op_{name}", None) if name is not None and name.isidentifier() else None
         if handler is None:
             raise DriveError(f"unknown op {op!r} (the native target supports state, pointer, click, key, wheel, "
-                             f"wait, settle, shot, close, {', '.join(CAPABILITIES)})")
+                             f"wait, settle, shot, close, close-request, {', '.join(CAPABILITIES)})")
         return handler(request)
 
     # protocol --------------------------------------------------------------------------------------

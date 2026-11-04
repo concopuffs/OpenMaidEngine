@@ -40,6 +40,11 @@ public class DriveControlTests
         public void Close() => Closes++;
         public (int X, int Y)? TakeCursorWarp() { var warp = Warp; Warp = null; return warp; }
         public (int X, int Y) PointerPosition { get; set; } = (0, 0);
+        public int CloseRequests;
+        public string? Answered;
+        public void RequestClose() => CloseRequests++;
+        public JsonArray Dialogs() => new() { new JsonObject { ["title"] = "exit" } };
+        public JsonObject Answer(string button) { Answered = button; return new JsonObject { ["answered"] = button }; }
     }
 
     private static DriveState At(string location, string? waiting = null, bool busy = false, params string[] outer)
@@ -195,6 +200,21 @@ public class DriveControlTests
         Assert.Contains("'dialogs' is not supported",
             (string?)Run(dispatcher, backend, """{"id":3,"op":"dialogs"}""")["error"]);
         Assert.Contains("unknown op 'fly'", (string?)Run(dispatcher, backend, """{"id":4,"op":"fly"}""")["error"]);
+    }
+
+    [Fact]
+    public void CloseRequestDialogsAndAnswerReachTheBackend()
+    {
+        var backend = new FakeBackend { Capabilities = new[] { "dialogs", "answer" } };
+        var dispatcher = new DriveDispatcher(backend);
+        Assert.True((bool)Run(dispatcher, backend, """{"id":1,"op":"close-request"}""")["ok"]!);
+        Assert.Equal(1, backend.CloseRequests);
+        var dialogs = Run(dispatcher, backend, """{"id":2,"op":"dialogs"}""");
+        Assert.Equal("exit", (string?)dialogs["result"]!["dialogs"]![0]!["title"]);
+        var answer = Run(dispatcher, backend, """{"id":3,"op":"answer","button":"OK"}""");
+        Assert.Equal("OK", (string?)answer["result"]!["answered"]);
+        Assert.Equal("OK", backend.Answered);
+        Assert.Equal(0, backend.Closes);
     }
 
     [Fact]
