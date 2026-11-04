@@ -522,6 +522,19 @@ public static class OmsCompiler
 
         private Declared? Name(string name) => _names.TryGetValue(name, out Declared? declared) ? declared : null;
 
+        /// <summary>The cell a bound parameter or result names (spec §6.3): a raw cell, or a declared or imported
+        /// scalar cell by name (a registry global, a <c>global … @</c> or a <c>local</c>).</summary>
+        private RawStorage BoundCell(RawOperand cell) => cell switch
+        {
+            RawStorage storage => storage,
+            RawLabelRef { Name: var name } when Name(name) is { Dimensions.Count: 0 } declared => declared.Cell,
+            RawLabelRef { Name: var name } when Name(name) != null => throw new OmsCompileException(cell.Span,
+                $"'{name}' is an array; bind the parameter to one cell, such as an element written as a raw cell"),
+            RawLabelRef { Name: var name } => throw new OmsCompileException(cell.Span,
+                $"'{name}' is not a declared cell; bind the parameter to a declared name or a raw cell such as L[0x40]"),
+            _ => throw new OmsCompileException(cell.Span, "expected a storage cell"),
+        };
+
         /// <summary>Every raw operand written in the statements, for the canonical pool base.</summary>
         private static IEnumerable<RawOperand> OperandsOf(IEnumerable<Statement> statements)
         {
@@ -1117,7 +1130,7 @@ public static class OmsCompiler
                     $"control falls into {(sub.Coroutine ? "coroutine" : "sub")} '{sub.Name}'; end the code before it with goto, return or exit");
             var parameters = new Dictionary<string, RawStorage>(StringComparer.Ordinal);
             foreach (SubParameter parameter in sub.Parameters)
-                if (!parameters.TryAdd(parameter.Name, parameter.Cell) || _userLabels.Contains(parameter.Name))
+                if (!parameters.TryAdd(parameter.Name, BoundCell(parameter.Cell)) || _userLabels.Contains(parameter.Name))
                     throw new OmsCompileException(parameter.Span, $"parameter '{parameter.Name}' clashes with another name");
             int start = _code.Count;
             Define(sub.Name, sub.Span);
@@ -1155,7 +1168,7 @@ public static class OmsCompiler
             {
                 if (call.Arguments[k].Out)
                     throw new OmsCompileException(call.Arguments[k].Value.Span, "sub arguments are assigned to their cells; remove 'out'");
-                Lower(new LAssign(new LLeaf(Operand(sub.Parameters[k].Cell)), ToL(call.Arguments[k].Value), false), call.Span);
+                Lower(new LAssign(new LLeaf(Operand(BoundCell(sub.Parameters[k].Cell))), ToL(call.Arguments[k].Value), false), call.Span);
             }
             Add(Call, [LabelOperand(sub.Name, call.Span)]);
         }
@@ -1227,7 +1240,7 @@ public static class OmsCompiler
                     throw new OmsCompileException(call.Span, $"sub '{sub.Name}' has no result cell (-> cell)");
                 LExpr target = LValue(assign.Target);
                 EmitSubCall(sub, call);
-                Lower(new LAssign(target, new LLeaf(Operand(sub.Result)), false), assign.Span);
+                Lower(new LAssign(target, new LLeaf(Operand(BoundCell(sub.Result))), false), assign.Span);
                 return;
             }
             if (intrinsics == null || !intrinsics.TryGet(call.Name, out Intrinsic intrinsic))

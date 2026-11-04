@@ -310,7 +310,7 @@ public sealed class Parser
     {
         Token name = Expect(TokenKind.Identifier);
         var parameters = new List<SubParameter>();
-        RawStorage? result = null;
+        RawOperand? result = null;
         if (!coroutine && Accept(TokenKind.Punct, "("))
         {
             if (!Peek().Is(TokenKind.Punct, ")"))
@@ -318,12 +318,24 @@ public sealed class Parser
                 {
                     Token parameter = Expect(TokenKind.Identifier);
                     Expect(TokenKind.Punct, ":");
-                    parameters.Add(new SubParameter(parameter.Span, parameter.Text, ParseCell()));
+                    parameters.Add(new SubParameter(parameter.Span, parameter.Text, ParseBoundCell()));
                 } while (Accept(TokenKind.Punct, ","));
             Expect(TokenKind.Punct, ")");
-            if (Accept(TokenKind.Punct, "->")) result = ParseCell();
+            if (Accept(TokenKind.Punct, "->")) result = ParseBoundCell();
         }
         return new SubStatement(keyword.Span, name.Text, parameters, result, ParseBlock(), coroutine);
+    }
+
+    /// <summary>A bound parameter's or result's cell (spec §6.3): a raw cell such as <c>L[0x40]</c>, or the name of a
+    /// declared or imported scalar cell, which the compiler resolves.</summary>
+    private RawOperand ParseBoundCell()
+    {
+        if (Peek().Kind == TokenKind.Identifier && !StorageBanks.TypeByBank.ContainsKey(Peek().Text))
+        {
+            Token cell = Expect(TokenKind.Identifier);
+            return new RawLabelRef(cell.Span, cell.Text);
+        }
+        return ParseCell();
     }
 
     /// <summary><c>enum name { member = value, … }</c> after <c>enum</c>; members are separated by commas or

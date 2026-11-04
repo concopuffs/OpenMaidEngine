@@ -439,6 +439,32 @@ public class OmsCoreTests
     }
 
     [Fact]
+    public void BoundParametersAndResultsBindToDeclaredNames()
+    {
+        // Spec §6.3: a parameter binds to any declared cell, as `sub adv_load_layer(layer: adv_gfx_layer_index, …)`
+        // does. Named cells lower exactly as the raw cells they stand for.
+        const string Body = """
+            G[9] = scale(2, L[1] + 1)
+            exit
+            sub scale(factor: {0}, value: {1}) -> {2} {
+                {2} = factor * value
+            }
+            """;
+        string Bind(string factor, string value, string result)
+            => Body.Replace("{0}", factor).Replace("{1}", value).Replace("{2}", result);
+        string raw = Shape(Compile(Bind("G[1]", "L[2]", "G[3]")));
+        string named = Shape(Compile("global int factor_cell @ 0x1\nglobal int result_cell @ 0x3\nlocal int value_slot @ 0x2\n"
+                                     + Bind("factor_cell", "value_slot", "result_cell")));
+        Assert.Equal(raw, named);
+
+        var array = Assert.Throws<OmsCompileException>(() => Compile("global int table_cells[4] @ 0x10\n"
+                                                                      + Bind("table_cells", "L[2]", "G[3]")));
+        Assert.Contains("'table_cells' is an array", array.Message);
+        var unknown = Assert.Throws<OmsCompileException>(() => Compile(Bind("missing_cell", "L[2]", "G[3]")));
+        Assert.Contains("'missing_cell' is not a declared cell", unknown.Message);
+    }
+
+    [Fact]
     public void DecompiledSubsAndCoroutinesRecompileIdentically()
     {
         var (first, second, decompiled) = SourceRoundTrip("""
