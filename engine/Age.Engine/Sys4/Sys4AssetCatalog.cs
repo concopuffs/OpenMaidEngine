@@ -40,6 +40,10 @@ public sealed class Sys4AssetCatalog
     public IReadOnlyList<AssetEntry> RawSlots { get; }
     public IReadOnlyList<AssetEntry> Files { get; }
     public IReadOnlyDictionary<int, Sys4AssetCatalog> AppendPacks => _appendPacks;
+    /// <summary>For an append catalog mounted from outside the game root (a mod layer): the directory its archive is
+    /// opened from. Null for the base catalog and the install's own append catalogs, whose archives sit in the
+    /// store's archive root.</summary>
+    public string? ArchiveDirectory { get; private set; }
     public Sys4StartupSettings StartupSettings { get; }
     public Sys4LogicalCanvas LogicalCanvas { get; }
 
@@ -59,7 +63,11 @@ public sealed class Sys4AssetCatalog
         LogicalCanvas = Sys4LogicalCanvas.FromSettings(startupSettings);
     }
 
-    public static Sys4AssetCatalog Load(string path)
+    /// <param name="extraAppendDirectories">Directories of further <c>*.AAI</c> catalogs (the linked mod layer's
+    /// <c>catalogs/</c>, mod loader spec §6.5), mounted after the install's own. Each one's archive is opened from its
+    /// own directory. A selector the install or an earlier extra catalog already mounts is an error here, not the
+    /// native silent replace: mod selectors are allocated to avoid them.</param>
+    public static Sys4AssetCatalog Load(string path, IEnumerable<string>? extraAppendDirectories = null)
     {
         var catalog = Parse(File.ReadAllBytes(path), Path.GetFileName(path));
         if (!catalog.Magic.StartsWith("S4IC", StringComparison.Ordinal)) return catalog;
@@ -68,6 +76,19 @@ public sealed class Sys4AssetCatalog
         if (root == null) return catalog;
         foreach (string appendPath in Directory.EnumerateFiles(root, "*.AAI"))
             catalog.MountAppend(Parse(File.ReadAllBytes(appendPath), Path.GetFileName(appendPath)));
+        foreach (string directory in extraAppendDirectories ?? [])
+        {
+            string full = Path.GetFullPath(directory);
+            foreach (string appendPath in Directory.EnumerateFiles(full, "*.AAI").Order(StringComparer.OrdinalIgnoreCase))
+            {
+                var append = Parse(File.ReadAllBytes(appendPath), Path.GetFileName(appendPath));
+                if (catalog._appendPacks.ContainsKey(append.PackId))
+                    throw new InvalidDataException(
+                        $"{appendPath}: selector {append.PackId} is already mounted; a mod catalog cannot replace it");
+                append.ArchiveDirectory = full;
+                catalog.MountAppend(append);
+            }
+        }
         return catalog;
     }
 

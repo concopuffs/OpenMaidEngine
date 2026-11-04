@@ -205,8 +205,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       Open Maid Pack containers (.omp ZIP or folder) with path and size checks,
     │                                       package hash and layout classification (Packages/), manifest.toml reader
     │                                       on Tomlyn plus semantic versions and ranges (Manifest/), and the linker:
-    │                                       stack resolution and load order, replacements, plan composition and the
-    │                                       spec §7 report (Linking/); referenced by the tests
+    │                                       stack resolution and load order, replacements, plan composition, the
+    │                                       spec §7 report, selector allocation, per-mod append catalogs, asset
+    │                                       overrides and the link cache (Linking/); referenced by the tests
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, WAV sanitization, and the
@@ -387,6 +388,13 @@ The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/devel
 runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
 have no repository output tree and write their automatic maps below
 `user://games/<profile-id>/diagnostics/page-maps` instead.
+
+A profile's `mods/` folder in its data root (`user://games/<profile-id>/mods/`, or the `--data-root` sandbox) holds
+the user's packages, `selectors.toml` (mod id → append-catalog selector, kept until `--forget-mod`), and `.cache/<key>/`,
+the disposable link result: `loose/` (patched and replaced scripts, asset overrides; first loose root),
+`catalogs/APPENDnn.AAI`/`.ALF` (one per mod with new scripts or assets, mounted after the install's own), `link.json`
+(order, selectors, which mod supplied each file and record) and `mod-link.txt` (the report). See the mod loader
+spec §6.2–§6.5.
 
 ## Conventions
 

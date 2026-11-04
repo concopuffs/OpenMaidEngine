@@ -12,12 +12,21 @@ public sealed record LinkedScript(string Name, byte[] Bytes, string? ReplacedBy,
 
 /// <summary>The outcome of a link: the resolved order, the changed scripts, and the report. When the report stops
 /// the link, <see cref="Scripts"/> holds what linked cleanly but must not be mounted.</summary>
+/// <summary>An <c>assets/</c> file that overrides the base asset of its basename; the last mod in load order wins.</summary>
+public sealed record LinkedAsset(string Name, string ModId, byte[] Bytes);
+
+/// <summary>The outcome of a link: the resolved order, the changed scripts, the mods' append catalogs, the asset
+/// overrides, the selector allocation after the link, and the report. When the report stops the link, the content
+/// holds what linked cleanly but must not be mounted, and the allocation must not be saved.</summary>
 public sealed record ModLinkResult(
     IReadOnlyList<ModPackage> Order,
     IReadOnlyDictionary<string, LinkedScript> Scripts,
     ModLinkReport Report)
 {
     public bool Succeeded => !Report.Stops;
+    public IReadOnlyList<LinkedCatalog> Catalogs { get; init; } = [];
+    public IReadOnlyDictionary<string, LinkedAsset> Assets { get; init; } = new Dictionary<string, LinkedAsset>();
+    public SelectorStore Selectors { get; init; } = new();
 }
 
 /// <summary>
@@ -27,17 +36,17 @@ public sealed record ModLinkResult(
 /// </summary>
 public static class ModLinker
 {
-    /// <param name="resolveResource">Binds <c>mod.id:NAME</c> references to packed ids once selectors are allocated;
-    /// null fails any plan that holds one.</param>
+    /// <param name="selectors">The kept allocation (<c>mods/selectors.toml</c>). It is not changed: the result carries
+    /// the allocation after the link, for the caller to save when the link succeeds. Null starts from none.</param>
     /// <param name="skipFailedMods">Drop every mod a stopping line names and link the rest again (spec §7).</param>
     public static ModLinkResult Link(ModLinkBase linkBase, IReadOnlyList<ModPackage> mods, IReadOnlyList<string> userOrder,
-                                     Func<string, uint>? resolveResource = null, bool skipFailedMods = false)
+                                     SelectorStore? selectors = null, bool skipFailedMods = false)
     {
         var dropped = new List<string>();
         var remaining = mods.ToList();
         while (true)
         {
-            ModLinkResult result = LinkOnce(linkBase, remaining, userOrder, resolveResource);
+            ModLinkResult result = LinkOnce(linkBase, remaining, userOrder, (selectors ?? new SelectorStore()).Clone());
             if (!skipFailedMods || result.Succeeded || result.Report.FailedMods.Count == 0)
             {
                 result.Report.Dropped = dropped;
@@ -55,7 +64,7 @@ public static class ModLinker
     }
 
     private static ModLinkResult LinkOnce(ModLinkBase linkBase, IReadOnlyList<ModPackage> mods,
-                                          IReadOnlyList<string> userOrder, Func<string, uint>? resolveResource)
+                                          IReadOnlyList<string> userOrder, SelectorStore selectors)
     {
         var report = new ModLinkReport();
         IReadOnlyList<ModPackage> order = StackResolver.Resolve(mods, linkBase, userOrder, report);
@@ -98,6 +107,59 @@ public static class ModLinker
                 }
                 replacements[script] = (mod, bytes);
             }
+        // Selectors and record layouts (spec §6.2), so every reference resolves before anything is compiled.
+        IReadOnlyDictionary<string, int> allocated = selectors.Allocate(
+            order.Where(mod => mod.Manifest.NeedsCatalog).Select(mod => mod.Id), linkBase.InstallSelectors, report);
+        var layouts = order.Where(mod => allocated.ContainsKey(mod.Id))
+            .ToDictionary(mod => mod.Id, ModCatalogBuilder.Layout, StringComparer.Ordinal);
+        uint ResolveResource(string reference)
+        {
+            int colon = reference.LastIndexOf(':');
+            string modId = colon < 0 ? "" : reference[..colon], name = reference[(colon + 1)..];
+            if (!layouts.TryGetValue(modId, out var layout))
+                throw new InvalidDataException($"'{reference}' names a mod that has no append catalog in this stack");
+            int record = layout.ToList().FindIndex(entry => entry.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (record < 0) throw new InvalidDataException($"'{reference}': {modId} has no script or asset {name}");
+            return (uint)(allocated[modId] << 24) | (uint)record;
+        }
+        var catalogs = new List<LinkedCatalog>();
+        foreach (ModPackage mod in order.Where(mod => allocated.ContainsKey(mod.Id)))
+            if (ModCatalogBuilder.Build(mod, allocated[mod.Id], ScopeOf(mod, byId), linkBase, ResolveResource, report)
+                is { } catalog)
+                catalogs.Add(catalog);
+
+        // Asset overrides: an unlisted assets/ file names a base asset; later mods win (spec §4.4).
+        var assets = new Dictionary<string, LinkedAsset>(StringComparer.OrdinalIgnoreCase);
+        foreach (ModPackage mod in order)
+            foreach (ModAssetFile file in mod.Layout.Assets)
+            {
+                bool inBase = linkBase.HasAsset(file.Name);
+                if (file.ListedAsNew)
+                {
+                    if (inBase)
+                        report.Add(ModReportClass.Error, mod.Id, file.Name,
+                            "[assets].names lists it as a new asset, but the base has an asset of that name; drop it "
+                            + "from the names to override the base asset");
+                    continue;
+                }
+                if (!inBase)
+                {
+                    report.Add(ModReportClass.Error, mod.Id, file.Name,
+                        "assets/ holds it, but the base has no asset of that name; a new asset must be listed in "
+                        + "[assets].names");
+                    continue;
+                }
+                if (file.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase))
+                {
+                    report.Add(ModReportClass.Error, mod.Id, file.Name, "a whole-script replacement goes in replace/, not assets/");
+                    continue;
+                }
+                if (assets.TryGetValue(file.Name, out LinkedAsset? earlier))
+                    report.Add(ModReportClass.Override, [earlier.ModId, mod.Id], file.Name,
+                        $"{mod.Id}'s asset overrides {earlier.ModId}'s (later in load order)");
+                assets[file.Name] = new LinkedAsset(file.Name, mod.Id, mod.ReadAll(file.File));
+            }
+
         byte[]? Chosen(string script) => replacements.TryGetValue(script, out var winner) ? winner.Bytes : BaseScript(script);
         string ReplacedNote(string script)
             => replacements.TryGetValue(script, out var winner) ? $" ({script} is replaced by {winner.Mod.Id})" : "";
@@ -119,11 +181,11 @@ public static class ModLinker
         foreach (var (script, list) in replacements.Where(pair => !uses.ContainsKey(pair.Key)))
             scripts[script] = new LinkedScript(script, list.Bytes, list.Mod.Id, []);
         foreach (var (script, list) in uses.OrderBy(pair => pair.Key, StringComparer.Ordinal))
-            if (ApplyAll(script, list, Chosen(script)!, linkBase, resolveResource, report) is { } bytes)
+            if (ApplyAll(script, list, Chosen(script)!, linkBase, ResolveResource, report) is { } bytes)
                 scripts[script] = new LinkedScript(script, bytes,
                     replacements.TryGetValue(script, out var winner) ? winner.Mod.Id : null,
                     list.Select(use => use.Mod.Id).Distinct().ToList());
-        return new ModLinkResult(order, scripts, report);
+        return new ModLinkResult(order, scripts, report) { Catalogs = catalogs, Assets = assets, Selectors = selectors };
     }
 
     /// <summary>The names a mod's code may reach: its own, and those of the mods it requires.</summary>
@@ -213,7 +275,7 @@ public static class ModLinker
     }
 
     private static byte[]? ApplyAll(string script, List<PatchUse> uses, byte[] baseBytes, ModLinkBase linkBase,
-                                    Func<string, uint>? resolveResource, ModLinkReport report)
+                                    Func<string, uint> resolveResource, ModLinkReport report)
     {
         var plans = new List<OmsPatchPlan>();
         foreach (PatchUse use in uses)
@@ -225,8 +287,7 @@ public static class ModLinker
             }
             try
             {
-                plans.Add(use.Plan.ResolveResources(reference => resolveResource?.Invoke(reference)
-                    ?? throw new InvalidDataException($"'{reference}' has no packed id: the stack has no selector for it")));
+                plans.Add(use.Plan.ResolveResources(resolveResource));
             }
             catch (Exception error) when (error is InvalidDataException or KeyNotFoundException)
             {

@@ -25,6 +25,18 @@ public sealed record ModLinkBase
     public IReadOnlyList<GameModule> Modules { get; init; } = [];
     public OmsIdioms? Idioms { get; init; }
     public OmsPatchPoints? PatchPoints { get; init; }
+    /// <summary>The base catalog's title, which every append catalog repeats (AGE mounts only its own game's).</summary>
+    public string CatalogTitle { get; init; } = "";
+    /// <summary>The append magic of the base catalog family, such as <c>"S4AC422 "</c>.</summary>
+    public string AppendMagic { get; init; } = "S4AC422 ";
+    /// <summary>The selectors the install's own <c>*.AAI</c> catalogs use; mods never receive them.</summary>
+    public IReadOnlySet<int> InstallSelectors { get; init; } = new HashSet<int>();
+    /// <summary>Whether the base catalog has a real (non-placeholder) record of that basename; an <c>assets/</c> file
+    /// of such a name overrides it, any other is a new asset (spec §4.4).</summary>
+    public Func<string, bool> HasAsset { get; init; } = _ => false;
+    /// <summary>The toolchain's identity for the link cache key (spec §6.4): the compiler and linker builds and the
+    /// profile's opcode table, preludes and patch points.</summary>
+    public string ToolchainStamp { get; init; } = "";
 
     /// <summary>
     /// The base of an installed game: the mounted catalog and its asset store (overlay roots included), with the
@@ -36,6 +48,19 @@ public sealed record ModLinkBase
                                          string? omsModulesDirectory = null, string? patchPointsJson = null)
     {
         var intrinsics = new IntrinsicCatalog(table, contracts);
+        var stamp = new List<string>
+        {
+            typeof(Age.Script.Compile.OmsCompiler).Assembly.ManifestModule.ModuleVersionId.ToString(),
+            typeof(ModLinkBase).Assembly.ManifestModule.ModuleVersionId.ToString(),
+            table.AbiId,
+        };
+        foreach (string? file in new[] { globalsJson, patchPointsJson })
+            if (file != null && File.Exists(file)) stamp.Add(OmsPatchPlan.FingerprintOf(File.ReadAllBytes(file)));
+        if (omsModulesDirectory != null && Directory.Exists(omsModulesDirectory))
+            foreach (string file in Directory.EnumerateFiles(omsModulesDirectory, "*", SearchOption.AllDirectories)
+                         .Order(StringComparer.Ordinal))
+                stamp.Add(Path.GetRelativePath(omsModulesDirectory, file).Replace('\\', '/') + "="
+                          + OmsPatchPlan.FingerprintOf(File.ReadAllBytes(file)));
         var modules = new List<GameModule>();
         if (globalsJson != null && File.Exists(globalsJson)) modules.Add(GameModule.LoadGlobals(profile, globalsJson));
         modules.Add(GameModule.Scripts(profile, catalog.EnumerateScripts().Select(packed => (packed.Asset.Name, packed.PackedId))));
@@ -54,6 +79,11 @@ public sealed record ModLinkBase
             Modules = modules,
             Idioms = modules.Any(module => module.Source != null) ? OmsIdioms.Build(modules, table.AbiId, intrinsics) : null,
             PatchPoints = patchPointsJson != null && File.Exists(patchPointsJson) ? OmsPatchPoints.Load(patchPointsJson) : null,
+            CatalogTitle = catalog.Title,
+            AppendMagic = ("S4AC" + catalog.Magic[4..]).PadRight(8)[..8],
+            InstallSelectors = catalog.AppendPacks.Keys.ToHashSet(),
+            HasAsset = name => catalog.ResolveName(name) is { IsPlaceholder: false },
+            ToolchainStamp = string.Join("\n", stamp),
         };
     }
 }

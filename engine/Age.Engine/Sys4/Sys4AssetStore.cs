@@ -37,7 +37,11 @@ public sealed class CatalogTrackingAssetStore : IAssetStore
     }
 }
 
-/// <summary>Native base-game precedence: exact-basename loose roots first, indexed ALF range second.</summary>
+/// <summary>Where a store finds an entry's bytes: a loose file in one of its roots, or a range of an archive.</summary>
+public sealed record AssetLocation(string Path, bool Loose, long Offset = 0, long Size = -1);
+
+/// <summary>Native base-game precedence: exact-basename loose roots first, indexed ALF range second. An append
+/// catalog mounted from outside the game root opens its archive from its own directory.</summary>
 public sealed class Sys4AssetStore : IAssetStore
 {
     private readonly string _archiveRoot;
@@ -72,10 +76,7 @@ public sealed class Sys4AssetStore : IAssetStore
             catch (UnauthorizedAccessException) { }
         }
 
-        ValidateBasename(entry.Archive, "archive");
-        string archivePath = Path.GetFullPath(Path.Combine(_archiveRoot, entry.Archive));
-        if (!IsDirectChild(_archiveRoot, archivePath))
-            throw new InvalidDataException($"unsafe archive name: {entry.Archive}");
+        string archivePath = ArchivePath(entry);
         var file = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read,
                                   64 * 1024, FileOptions.SequentialScan);
         try
@@ -90,6 +91,30 @@ public sealed class Sys4AssetStore : IAssetStore
             file.Dispose();
             throw;
         }
+    }
+
+    /// <summary>Which root or archive would serve <paramref name="entry"/>, without opening it for reading (spec §6.5
+    /// layer attribution). A loose file is reported when it exists; otherwise the archive range.</summary>
+    public AssetLocation Locate(AssetEntry entry)
+    {
+        ValidateBasename(entry.Name, "asset");
+        foreach (string root in _looseRoots)
+        {
+            string candidate = Path.GetFullPath(Path.Combine(root, entry.Name));
+            if (IsDirectChild(root, candidate) && File.Exists(candidate)) return new AssetLocation(candidate, true);
+        }
+        return new AssetLocation(ArchivePath(entry), false, entry.Offset, entry.Size);
+    }
+
+    private string ArchivePath(AssetEntry entry)
+    {
+        ValidateBasename(entry.Archive, "archive");
+        string root = entry.PackId != 0 && Catalog.AppendPacks.TryGetValue(entry.PackId, out var pack)
+                      && pack.ArchiveDirectory is { } own ? own : _archiveRoot;
+        string archivePath = Path.GetFullPath(Path.Combine(root, entry.Archive));
+        if (!IsDirectChild(root, archivePath))
+            throw new InvalidDataException($"unsafe archive name: {entry.Archive}");
+        return archivePath;
     }
 
     public byte[] ReadAll(AssetEntry entry)
