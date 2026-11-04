@@ -249,8 +249,7 @@ public sealed partial class GfxState
                    _rangeTransform.TranslationEnabled ||
                    _objects.Values.Any(o => o.Visible &&
                                             (o.OneShotAnimationControlFlags & 1) == 0 &&
-                                            (o.OneShotColorEnabled || o.ScaleEnabled ||
-                                             o.RotationChannelEnabled || o.TranslationEnabled));
+                                            HasBlockingChannels(o));
     }
 
     /// <summary>Observe-only state for a runtime stall capture. It identifies the exact finite channels
@@ -297,7 +296,8 @@ public sealed partial class GfxState
     }
 
     private static bool HasBlockingChannels(GfxObject o)
-        => o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled;
+        => o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled ||
+           o.SrcOneShotEnabled;
 
     private static BlockingGfxObjectDiagnostic DescribeBlockingObject(long handle, GfxObject o)
         => new(handle, o.SourceSlot, o.OneShotStartMs, o.OneShotAnimationControlFlags,
@@ -322,7 +322,7 @@ public sealed partial class GfxState
                    _rangeTransform.TranslationEnabled ||
                    _objects.Values.Any(o => o.Visible &&
                        (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
-                        o.TranslationEnabled ||
+                        o.TranslationEnabled || o.SrcOneShotEnabled ||
                         (o.SrcAnim && o.SrcPeriod > 0) ||
                         (o.ColorAnim && o.ColorPeriod > 0) ||
                         (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
@@ -390,7 +390,8 @@ public sealed partial class GfxState
         => (o.OneShotColorEnabled ? 1 : 0)
            + (o.ScaleEnabled ? 1 : 0)
            + (o.RotationChannelEnabled ? 1 : 0)
-           + (o.TranslationEnabled ? 1 : 0);
+           + (o.TranslationEnabled ? 1 : 0)
+           + (o.SrcOneShotEnabled ? 1 : 0);
 
     /// <summary>Force queued finite foreground effect commands. PresentFrame uses this to publish a
     /// command endpoint immediately; interactive run-state-0x400 skipping uses the broader method above.</summary>
@@ -535,7 +536,7 @@ public sealed partial class GfxState
                 _rangeTransform.TranslationEnabled ||
                 _objects.Values.Any(o => o.Visible &&
                     (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
-                     o.TranslationEnabled ||
+                     o.TranslationEnabled || o.SrcOneShotEnabled ||
                      (o.ColorAnim && o.ColorPeriod > 0) ||
                      (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
                      (o.RotationEnabled && o.RotationPeriodMs > 0) ||
@@ -618,7 +619,7 @@ public sealed partial class GfxState
                 var o = _objects[handle];
                 if (!o.Visible) continue;
                 bool hadOneShot = o.OneShotColorEnabled || o.ScaleEnabled ||
-                                  o.RotationChannelEnabled || o.TranslationEnabled;
+                                  o.RotationChannelEnabled || o.TranslationEnabled || o.SrcOneShotEnabled;
                 // Created/mutable surfaces have no file resource id but remain a distinct surface class.
                 // Zero is an active "key black" value, so created and absent slots both default to -1.
                 var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, -1L);
@@ -692,23 +693,23 @@ public sealed partial class GfxState
                     }
                 }
                 // ---- src-rect: preserve cell dimensions and offset it row-major through the sheet ----
+                // One-shot channels share the start stamp, seeded on first sight.
+                if (hadOneShot
+                    && o.OneShotStartMs < 0)
+                    o.OneShotStartMs = nowMs;
                 int srcX = o.SrcRect.X, srcY = o.SrcRect.Y, w = o.SrcRect.W, h = o.SrcRect.H;
-                if (o.SrcAnim && o.SrcFrameCount >= 1)
+                bool drawsNothing = o.SrcCollapsed;
+                if (o.SrcOneShotEnabled)
+                    (srcX, srcY, w, h) = SampleSrcOneShot(o, nowMs, out drawsNothing);
+                else if (o.SrcAnim && o.SrcPeriod > 0 && o.SrcFrameCount >= 1)
                 {
-                    long cell = o.SrcCell;
-                    if (o.SrcPeriod > 0)
-                    {
-                        if (o.SrcStart < 0) o.SrcStart = nowMs;
-                        cell = ((nowMs - o.SrcStart) / o.SrcPeriod) % o.SrcFrameCount;
-                    }
+                    if (o.SrcStart < 0) o.SrcStart = nowMs;
+                    long cell = ((nowMs - o.SrcStart) / o.SrcPeriod) % o.SrcFrameCount;
                     srcX = o.SrcRect.X + (int)(cell % o.SrcColumns) * o.SrcRect.W;
                     srcY = o.SrcRect.Y + (int)(cell / o.SrcColumns) * o.SrcRect.H;
                 }
 
                 // One-shot matrix channels: hold current through delay, then linearly sample current -> target.
-                if (hadOneShot
-                    && o.OneShotStartMs < 0)
-                    o.OneShotStartMs = nowMs;
                 var scale = SampleMatrixChannel(ref o.ScaleCurrent, o.ScaleTarget, o.ScaleDelayMs,
                                                 o.ScaleDurationMs, o.OneShotStartMs, ref o.ScaleEnabled, nowMs);
                 var rotation = SampleRotationChannel(ref o.RotationCurrent, o.RotationTarget,
@@ -718,7 +719,8 @@ public sealed partial class GfxState
                 var translation = SampleMatrixChannel(ref o.TranslationCurrent, o.TranslationTarget,
                                                       o.TranslationDelayMs, o.TranslationDurationMs,
                                                       o.OneShotStartMs, ref o.TranslationEnabled, nowMs);
-                if (!o.OneShotColorEnabled && !o.ScaleEnabled && !o.RotationChannelEnabled && !o.TranslationEnabled)
+                if (!o.OneShotColorEnabled && !o.ScaleEnabled && !o.RotationChannelEnabled && !o.TranslationEnabled
+                    && !o.SrcOneShotEnabled)
                 {
                     if (hadOneShot) o.OneShotAnimationControlFlags &= ~1L;
                     o.OneShotStartMs = -1;
@@ -767,7 +769,7 @@ public sealed partial class GfxState
                     ? ra : null;
                 bool timeVarying =
                     o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
-                    o.TranslationEnabled ||
+                    o.TranslationEnabled || o.SrcOneShotEnabled ||
                     (o.SrcAnim && o.SrcPeriod > 0) ||
                     (o.ColorAnim && o.ColorPeriod > 0) ||
                     (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
@@ -778,6 +780,7 @@ public sealed partial class GfxState
                     radialBlur is { Progress: < 1.0 } ||
                     directionalBlur is { Progress: < 1.0 } ||
                     (objectRangeTransform != null && rangeTimeVarying);
+                if (drawsNothing) continue;   // an empty native source rect draws no pixels
                 list.Add(new RenderObject(handle, resId, ck, srcX, srcY, w, h,
                                           (int)o.V24.X, (int)o.V24.Y,
                                           new TransformState(scale.X, scale.Y, scale.Z,

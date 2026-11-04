@@ -79,7 +79,7 @@ public class RenderObjectBlendTests
         // FIELD@0x9230: the shared zero-area prototype receives mode-0 color before its loop is armed.
         g.BindDraw(prototype, 0x3e, 0, 0, 0, 0, 0, 0);
         g.SetStaticObjectColorResolved(prototype, mode: 0, alpha: 0, rgb: 0);
-        g.SetSrcRect(prototype, frameCount: 4, columns: 2, cell: 0, period: 200);
+        g.SetSrcRect(prototype, frameCount: 4, columns: 2, period: 200);
 
         // DRAWCH clones the prototype, then draw-texture makes the concrete unit visible.
         Assert.True(g.CloneObject(prototype, idle));

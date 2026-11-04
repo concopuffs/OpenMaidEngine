@@ -175,23 +175,32 @@ public class AnimChannelTests
         Assert.Equal(0, o.StaticColorMode);
     }
 
-    [Fact]
-    public void Op0x239_SetsSpritesheetGridCell()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Op0x239_ArmsOneShotCellChannelOnlyOnVisibleObject(bool visible)
     {
         var t = T();
         var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
         {
-            (0x55, new[]{G(1), new Operand(0,0x1000)}), (0x55, new[]{G(2), new Operand(0,0)}), (0x55, new[]{G(3), new Operand(0,0)}),
-            (0x55, new[]{G(4), new Operand(0,4)}), (0x55, new[]{G(5), new Operand(0,1)}), (0x55, new[]{G(6), new Operand(0,2)}),
+            (0x55, new[]{G(1), new Operand(0,0x1000)}), (0x55, new[]{G(2), new Operand(0,50)}), (0x55, new[]{G(3), new Operand(0,1000)}),
+            (0x55, new[]{G(4), new Operand(0,28)}), (0x55, new[]{G(5), new Operand(0,7)}), (0x55, new[]{G(6), new Operand(0,2)}),
             (0x239, new[]{G(1), G(2), G(3), G(4), G(5), G(6)}), Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingHost());
+        if (visible)
+        {
+            vm.Gfx.SetSurface(1, resId: 5, colorKey: -1);
+            vm.Gfx.BindDraw(0x1000, 1, 0, 0, 140, 140, 330, 230);
+        }
         vm.Run();
         var o = vm.Gfx.TryGet(0x1000)!;
-        Assert.True(o.SrcAnim);
-        Assert.Equal(4, o.SrcFrameCount);
-        Assert.Equal(1, o.SrcColumns);
-        Assert.Equal(2, o.SrcCell);
+        Assert.False(o.SrcAnim);
+        Assert.Equal(visible, o.SrcOneShotEnabled);
+        if (!visible) return;
+        Assert.Equal((50L, 1000L, 28L, 7L, 2L),
+            (o.SrcDelayMs, o.SrcDurationMs, o.SrcFrameCount, o.SrcColumns, o.SrcOneShotFlags));
+        Assert.True(vm.Gfx.HasActiveVisualPresentation(0));
     }
 
     private static GfxState VisibleObj(long handle)
@@ -206,10 +215,9 @@ public class AnimChannelTests
     public void SetSrcRect_StoresGridCellPeriod()
     {
         var g = VisibleObj(0x100);
-        g.SetSrcRect(0x100, frameCount: 4, columns: 1, cell: 2, period: 800);
+        g.SetSrcRect(0x100, frameCount: 4, columns: 1, period: 800);
         var o = g.TryGet(0x100)!;
         Assert.Equal(4, o.SrcFrameCount);
-        Assert.Equal(2, o.SrcCell);
         Assert.Equal(800, o.SrcPeriod);
         Assert.True(o.SrcAnim);
         Assert.Equal(-1, o.SrcStart);   // uninitialized until first interpolated frame
@@ -219,7 +227,7 @@ public class AnimChannelTests
     public void SetSrcRect_ClampsGridToAtLeastOne()
     {
         var g = VisibleObj(0x100);
-        g.SetSrcRect(0x100, frameCount: 0, columns: 0, cell: 0, period: 0);
+        g.SetSrcRect(0x100, frameCount: 0, columns: 0, period: 0);
         var o = g.TryGet(0x100)!;
         Assert.Equal(1, o.SrcFrameCount);
         Assert.Equal(1, o.SrcColumns);

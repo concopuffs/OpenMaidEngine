@@ -1781,7 +1781,7 @@ public sealed partial class VirtualMachine
             case "set-gfx-range-scale-target": // 0x22d (delay)(duration)(sx%)(sy%)(sz%)
             case "set-gfx-range-rotation-target": // 0x22e (delay)(duration)(axis x/y/z)(angle degrees)
                 return StepRetainedObject(label, a, pc);
-            case "u004223C0":   // 0x239 spritesheet cell: (handle)(delay)(duration)(frame count)(columns)(cell)
+            case "u004223C0":   // 0x239 one-shot spritesheet: (handle)(delay)(duration)(frame count)(columns)(flags)
             case "reset-gfx-cyclic-animations": // 0x230: stop all five retained looping channels
             case "u00421E70":
             case "u00421EA0":   // 0x231 looping spritesheet: (handle)(ms per frame)(frame count)(columns)

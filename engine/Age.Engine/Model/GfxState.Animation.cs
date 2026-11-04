@@ -68,18 +68,79 @@ public sealed partial class GfxState
         }
     }
 
-    /// <summary>Ops 0x239 (one-shot cell endpoint, period=0 in this retained model) / 0x231 (looping):
-    /// set total frame count, column count, and visible cell. Every frame retains draw-texture's source
-    /// rectangle dimensions. For 0x231, <paramref name="period"/> is milliseconds per frame.</summary>
-    public void SetSrcRect(long handle, long frameCount, long columns, long cell, long period)
+    /// <summary>Op 0x231 (looping): set total frame count, column count and milliseconds per frame. Every
+    /// frame retains draw-texture's source rectangle dimensions.</summary>
+    public void SetSrcRect(long handle, long frameCount, long columns, long period)
     {
         lock (_lock)
         {
             var o = GetOrCreate(handle);
             o.SrcFrameCount = frameCount < 1 ? 1 : frameCount;
             o.SrcColumns = columns < 1 ? 1 : columns;
-            o.SrcCell = cell; o.SrcPeriod = period; o.SrcStart = -1; o.SrcAnim = true;
+            o.SrcPeriod = period; o.SrcStart = -1; o.SrcAnim = true;
         }
+    }
+
+    /// <summary>Op 0x239: arm the finite one-shot cell channel (native gfx_worker_set_srcrect_cell@0x47ed90).
+    /// After <paramref name="delayMs"/> it steps row-major through <paramref name="frameCount"/> cells over
+    /// <paramref name="durationMs"/>, and op 0x21c waits for it like the other one-shot channels. Like
+    /// them, it is dropped when the object is not visible.</summary>
+    public void SetSrcRectOneShot(long handle, long delayMs, long durationMs, long frameCount, long columns,
+                                  long flags)
+    {
+        lock (_lock)
+        {
+            var o = GetOrCreate(handle);
+            if (!o.Visible) return;
+            o.SrcDelayMs = delayMs; o.SrcDurationMs = durationMs;
+            o.SrcFrameCount = frameCount < 1 ? 1 : frameCount;
+            o.SrcColumns = columns < 1 ? 1 : columns;
+            o.SrcOneShotFlags = flags;
+            o.SrcOneShotEnabled = durationMs > 0; o.OneShotStartMs = -1;
+        }
+    }
+
+    /// <summary>The one-shot cell channel's end (native gfx_object_apply_transform_channels@0x473e3c): with
+    /// flag bit 0 the source rect moves to the last cell; otherwise it collapses to empty, so the object
+    /// draws nothing until it is drawn again.</summary>
+    private static void CommitSrcOneShot(GfxObject o)
+    {
+        if ((o.SrcOneShotFlags & 1) != 0)
+        {
+            long last = o.SrcFrameCount - 1;
+            o.SrcRect = (o.SrcRect.X + (int)(last % o.SrcColumns) * o.SrcRect.W,
+                         o.SrcRect.Y + (int)(last / o.SrcColumns) * o.SrcRect.H, o.SrcRect.W, o.SrcRect.H);
+        }
+        else
+        {
+            o.SrcCollapsed = true;
+        }
+        o.SrcDelayMs = 0;
+        o.SrcDurationMs = 0;
+        o.SrcOneShotEnabled = false;
+    }
+
+    /// <summary>The one-shot cell channel's draw rect at <paramref name="nowMs"/>, committing it at the end.
+    /// Native: during the delay the rect is the base cell with flag bit 1, else empty; then cell
+    /// (elapsed * frames / duration) row-major. <paramref name="empty"/> reports an empty rect.</summary>
+    private static (int X, int Y, int W, int H) SampleSrcOneShot(GfxObject o, long nowMs, out bool empty)
+    {
+        var r = o.SrcRect;
+        long elapsed = nowMs - o.OneShotStartMs - o.SrcDelayMs;
+        empty = false;
+        if (elapsed >= o.SrcDurationMs)
+        {
+            CommitSrcOneShot(o);
+            empty = o.SrcCollapsed;
+            return o.SrcRect;
+        }
+        if (elapsed <= 0)
+        {
+            empty = (o.SrcOneShotFlags & 2) == 0;
+            return r;
+        }
+        long cell = elapsed * o.SrcFrameCount / o.SrcDurationMs;
+        return (r.X + (int)(cell % o.SrcColumns) * r.W, r.Y + (int)(cell / o.SrcColumns) * r.H, r.W, r.H);
     }
 
     /// <summary>Op 0x232 worker contract: ping-pong a temporary copy of static packed ARGB toward
@@ -161,6 +222,7 @@ public sealed partial class GfxState
             o.TranslationDurationMs = 0;
             o.TranslationEnabled = false;
         }
+        if (o.SrcOneShotEnabled) CommitSrcOneShot(o);
         o.OneShotStartMs = -1;
     }
 

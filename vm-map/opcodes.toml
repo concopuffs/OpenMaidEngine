@@ -7012,12 +7012,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "animate-gfx-srcrect-target"
 category = "draw"
-summary = "(handle)(delay_ms)(duration_ms)(frame_count)(column_count)(target_frame) — one-shot row-major source-rectangle cell channel. Worker gfx_worker_set_srcrect_cell @0x47ed90 stores timing at obj+0x48/+0x5c, layout at +0x238/+0x23c, and target at +0x234. C# currently retains the endpoint cell immediately."
+summary = "(handle)(delay_ms)(duration_ms)(frame_count)(column_count)(flags) — finite one-shot row-major source-rectangle cell channel, the fifth one-shot channel (op 0x21c waits for it). Worker gfx_worker_set_srcrect_cell @0x47ed90 requires the visible bit, sets object flag bit 1, zeroes the shared start obj+0x34, and stores delay +0x48, duration +0x5c, frame count +0x238, columns +0x23c and flags +0x234. After the delay, cell = elapsed*frame_count/duration (row = cell/columns, column = cell%columns) offsets the source rect by whole cells. Flag bit 0 commits the last cell at the end, otherwise the source rect collapses to empty; flag bit 1 draws the base cell during the delay, otherwise nothing is drawn. BTL's sword-clash intro uses (0, 1000, 28, 7, 0)."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Native /v2 worker and gfx_object_apply_transform_channels decompile. The consumer advances target_frame cells over duration after delay, preserves the existing source-rect dimensions, and commits the endpoint."
+evidence = "Native /v2 worker and gfx_object_apply_transform_channels@0x472f00 disassembly 0x473cf9-0x473ec6 (2026-11-04): duration +0x5c > 0 keeps the channel live; before start+delay the working rect collapses unless +0x234 bit 1; at or after start+delay+duration (or forced completion) delay/duration are zeroed and +0x234 bit 0 selects last-cell commit versus collapse, written back to obj+0x8..+0x14. The surviving-channel count clears flag bit 1, 0x2d0 bit 0 and the start. BTL@0x539 plays the 28-cell sword clash before mark-frame-yield."
 
 [[opcode.semantics.args]]
 i = 1

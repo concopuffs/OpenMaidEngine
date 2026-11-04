@@ -116,7 +116,7 @@ public class GfxAnimationTests
         Assert.False(unchanged.SnapshotVisibleObjects(1000).Single().TimeVarying);
 
         var spritesheet = VisibleObject();
-        spritesheet.SetSrcRect(7, 4, 1, 0, 800);
+        spritesheet.SetSrcRect(7, 4, 1, 800);
         Assert.True(spritesheet.HasActiveVisualPresentation(1000));
         Assert.True(spritesheet.SnapshotVisibleObjects(1000).Single().TimeVarying);
 
@@ -142,7 +142,7 @@ public class GfxAnimationTests
         var g = new GfxState();
         g.SetSurface(4, 0x37, -1);
         g.BindDraw(0xcf3a, 4, 0, 0, 200, 200, 300, 100); // AE001H: 800x400, eight 200x200 cells
-        g.SetSrcRect(0xcf3a, frameCount: 8, columns: 4, cell: 0, period: 100);
+        g.SetSrcRect(0xcf3a, frameCount: 8, columns: 4, period: 100);
 
         var first = g.SnapshotVisibleObjects(1000).Single();
         var second = g.SnapshotVisibleObjects(1100).Single();
@@ -163,7 +163,7 @@ public class GfxAnimationTests
         var g = new GfxState();
         g.SetSurface(4, 0x37, -1);
         g.BindDraw(7, 4, 0, 0, 16, 16, 0, 0);
-        g.SetSrcRect(7, frameCount: 4, columns: 2, cell: 0, period: 200);
+        g.SetSrcRect(7, frameCount: 4, columns: 2, period: 200);
 
         Assert.Equal(GfxPresentationReason.RetainedMutation, g.ConsumePresentationReasons(1000));
         Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1199));
@@ -182,7 +182,7 @@ public class GfxAnimationTests
         var g = new GfxState();
         g.SetSurface(4, 0x37, -1);
         g.BindDraw(10, 4, 0, 0, 16, 16, 0, 0);
-        g.SetSrcRect(10, frameCount: 4, columns: 2, cell: 0, period: 200);
+        g.SetSrcRect(10, frameCount: 4, columns: 2, period: 200);
         Assert.True(g.CloneObject(10, 11));
 
         Assert.Equal(GfxPresentationReason.RetainedMutation, g.ConsumePresentationReasons(1000));
@@ -207,8 +207,8 @@ public class GfxAnimationTests
         g.SetSurface(4, 0x37, -1);
         g.BindDraw(10, 4, 0, 0, 16, 16, 0, 0);
         g.BindDraw(11, 4, 0, 0, 16, 16, 0, 0);
-        g.SetSrcRect(10, frameCount: 4, columns: 2, cell: 0, period: 100);
-        g.SetSrcRect(11, frameCount: 4, columns: 2, cell: 0, period: 250);
+        g.SetSrcRect(10, frameCount: 4, columns: 2, period: 100);
+        g.SetSrcRect(11, frameCount: 4, columns: 2, period: 250);
         g.ConsumePresentationReasons(1000);
 
         Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1099));
@@ -218,7 +218,7 @@ public class GfxAnimationTests
         Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1249));
         Assert.Equal(GfxPresentationReason.DiscreteSourceCell, g.ConsumePresentationReasons(1250));
 
-        g.SetSrcRect(10, frameCount: 4, columns: 2, cell: 0, period: 400);
+        g.SetSrcRect(10, frameCount: 4, columns: 2, period: 400);
         Assert.Equal(GfxPresentationReason.RetainedMutation, g.ConsumePresentationReasons(1250));
         Assert.Equal(1250, g.TryGet(10)!.SrcStart);
         Assert.Equal(GfxPresentationReason.None, g.ConsumePresentationReasons(1499));
@@ -246,7 +246,7 @@ public class GfxAnimationTests
         var g = new GfxState();
         g.SetSurface(4, 0x37, -1);
         g.BindDraw(100, 4, 0, 0, 16, 16, 0, 0);
-        g.SetSrcRect(100, frameCount: 4, columns: 2, cell: 0, period: 200);
+        g.SetSrcRect(100, frameCount: 4, columns: 2, period: 200);
         for (long handle = 101; handle < 151; handle++) Assert.True(g.CloneObject(100, handle));
         g.ConsumePresentationReasons(1000);
 
@@ -436,7 +436,7 @@ public class GfxAnimationTests
         g.SetScaleCycle(7, 600, (150, 75, 100));
         g.SetRotationCycle(7, 800, (0, 0, 1));
         g.SetTranslationCycle(7, 1000, (12, -8, 4));
-        g.SetSrcRect(7, frameCount: 8, columns: 4, cell: 3, period: 100);
+        g.SetSrcRect(7, frameCount: 8, columns: 4, period: 100);
 
         g.ResetCyclicAnimationChannels(7);
 
@@ -461,7 +461,7 @@ public class GfxAnimationTests
         Assert.Equal((1.5, 0.75, 1.0), o.ScaleCycleTarget);
         Assert.Equal((0L, 0L, 1L), o.RotationAxis);
         Assert.Equal((12.0, -8.0, 4.0), o.TranslationCycleTarget);
-        Assert.Equal((8L, 4L, 3L), (o.SrcFrameCount, o.SrcColumns, o.SrcCell));
+        Assert.Equal((8L, 4L), (o.SrcFrameCount, o.SrcColumns));
         Assert.Equal(0, o.NativePersistenceRecord[0] & 4);
         Assert.All(o.NativePersistenceRecord.Skip(0x20c).Take(0x28), value => Assert.Equal(0, value));
     }
@@ -483,7 +483,7 @@ public class GfxAnimationTests
         vm.Gfx.SetScaleCycle(0x1000, 600, (150, 75, 100));
         vm.Gfx.SetRotationCycle(0x1000, 800, (0, 0, 1));
         vm.Gfx.SetTranslationCycle(0x1000, 1000, (12, -8, 4));
-        vm.Gfx.SetSrcRect(0x1000, frameCount: 8, columns: 4, cell: 0, period: 100);
+        vm.Gfx.SetSrcRect(0x1000, frameCount: 8, columns: 4, period: 100);
         Assert.True(vm.Gfx.HasActiveVisualPresentation(1000));
 
         vm.Run();

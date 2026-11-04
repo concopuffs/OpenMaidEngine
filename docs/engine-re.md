@@ -1187,7 +1187,7 @@ engine generally permits different object-local starts and periods.
 FIELD's per-tile movement animation uses two retained objects. At `0x45c9`/`0x4686` and again at
 `0x51fd`, it clones the bound idle handle `0x9c40+entity_index` into temporary moving handle
 `0x9c40+0x76c`. The following mode-0 `0x203` write sets the idle handle's alpha to zero, while translation
-`0x220` and source-cell endpoint `0x239` animate only the temporary handle. After the presentation boundary,
+`0x220` and the one-shot source-cell channel `0x239` animate only the temporary handle. After the presentation boundary,
 `DRAWCH@0x51ec` rebinds the idle handle at the new tile; a multi-tile route immediately repeats the
 clone/suppress cycle. Treating every static mode-0 alpha byte on a loaded texture as inert therefore leaves
 the old idle sprite composited beneath the moving clone until each segment ends. The port records the
@@ -1724,7 +1724,7 @@ annotated in Ghidra, saved.
 |---|---|---|
 | `0x22f` | `op_0x22f_set_gfx_range_translation_target` → `gfx_range_transform_set_translation_target` | set the shared selected-range **translation target** with independent delay/duration (embedded object target matrix `owner+0x5d4` = `obj+0x1ac`); FIELD pairs it with the minimap marker's ordinary-object `0x220` tween. |
 | `0x229` | `op_0x229_set_gfx_range_transform` → `gfx_range_transform_reset` / `select_handles` / `set_anchor` | reset/select the shared **retained-object range transform**; not a per-object position setter (superseded finding above) |
-| `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | one-shot **spritesheet-cell** channel: delay/duration `obj+0x48/+0x5c`, total frames/columns `obj+0x238/+0x23c`, target frame `obj+0x234` |
+| `0x239` | `gfx_op_0x239_set_srcrect_cell` → `gfx_worker_set_srcrect_cell` | finite one-shot **spritesheet-cell** channel (the fifth one-shot; op `0x21c` waits for it): delay/duration `obj+0x48/+0x5c`, total frames/columns `obj+0x238/+0x23c`, flags `obj+0x234`. After the delay, cell = elapsed × frames / duration, row-major. Flag bit 0 keeps the last cell at the end, otherwise the source rect collapses to empty; flag bit 1 draws the base cell during the delay, otherwise nothing. BTL's sword-clash intro (`BTL@0x539`, gated on `G[0xaba5d]==0`, so the debug menu's battle skips it) is `(0, 1000, 28, 7, 0)`; FIELD's unit walk (`0x50d2`) uses flags 3 |
 | `0x231` | `gfx_op_0x231_anim_srcrect` → `gfx_worker_anim_srcrect` | looping **spritesheet-cell** channel: milliseconds per frame `obj+0x230`, total frames `obj+0x238`, columns `obj+0x23c`; row-major and wraps, not ping-pong |
 | `0x232` | `gfx_op_0x232_anim_color` → `gfx_worker_anim_color` | **animate color**: bit2 active, period `obj+0x220`, target `obj+0x240` → interpolator COLOR channel (ping-pong). Negative alpha/RGB preserve corresponding bytes from static color `obj+0x60`; alpha >255 clamps. Distinct from one-shot `0x202`/static `0x203` |
 | `0x228` | `gfx_op_0x228_query_position` → `gfx_object_query_translation_target` (`0x47cdd0`) | **query** the decomposed target-translation matrix (x,y,z), `obj+0x1ac/+0x1b0/+0x1b4`, → operand slots 3/4/5; success is 0 and missing is 1 |

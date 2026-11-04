@@ -61,7 +61,7 @@ internal static class NativeGfxPersistenceCodec
         int flags = ReadInt(raw, 0);
         flags = value.Visible ? flags | 1 : flags & ~1;
         flags = value.OneShotColorEnabled || value.ScaleEnabled
-            || value.RotationChannelEnabled || value.TranslationEnabled
+            || value.RotationChannelEnabled || value.TranslationEnabled || value.SrcOneShotEnabled
             ? flags | 2
             : flags & ~2;
         flags = value.ScaleCycleEnabled || value.RotationEnabled || value.TranslationCycleEnabled
@@ -72,8 +72,8 @@ internal static class NativeGfxPersistenceCodec
         WriteInt(raw, 4, value.SourceSlot);
         WriteInt(raw, 8, value.SrcRect.X);
         WriteInt(raw, 0x0c, value.SrcRect.Y);
-        WriteInt(raw, 0x10, checked(value.SrcRect.X + value.SrcRect.W));
-        WriteInt(raw, 0x14, checked(value.SrcRect.Y + value.SrcRect.H));
+        WriteInt(raw, 0x10, value.SrcCollapsed ? value.SrcRect.X : checked(value.SrcRect.X + value.SrcRect.W));
+        WriteInt(raw, 0x14, value.SrcCollapsed ? value.SrcRect.Y : checked(value.SrcRect.Y + value.SrcRect.H));
         WriteVector(raw, 0x18, value.V18);
         WriteVector(raw, 0x24, value.V24);
         WriteInt(raw, 0x30, unchecked((int)value.StaticColorMode));
@@ -82,10 +82,12 @@ internal static class NativeGfxPersistenceCodec
         WriteInt(raw, 0x3c, unchecked((int)value.ScaleDelayMs));
         WriteInt(raw, 0x40, unchecked((int)value.RotationDelayMs));
         WriteInt(raw, 0x44, unchecked((int)value.TranslationDelayMs));
+        WriteInt(raw, 0x48, unchecked((int)value.SrcDelayMs));
         WriteInt(raw, 0x4c, unchecked((int)value.ColorDurationMs));
         WriteInt(raw, 0x50, unchecked((int)value.ScaleDurationMs));
         WriteInt(raw, 0x54, unchecked((int)value.RotationDurationMs));
         WriteInt(raw, 0x58, unchecked((int)value.TranslationDurationMs));
+        WriteInt(raw, 0x5c, unchecked((int)value.SrcDurationMs));
         WriteInt(raw, 0x60, unchecked((int)value.Color));
         WriteInt(raw, 0x64, unchecked((int)value.OneShotColorTarget));
         WriteScaleMatrix(raw, 0x6c, value.ScaleCurrent);
@@ -112,9 +114,10 @@ internal static class NativeGfxPersistenceCodec
         WriteInt(raw, 0x228, unchecked((int)value.RotationPeriodMs));
         WriteInt(raw, 0x22c, unchecked((int)value.TranslationCyclePeriodMs));
         WriteInt(raw, 0x230, unchecked((int)value.SrcPeriod));
-        WriteInt(raw, 0x234, unchecked((int)value.SrcCell));
-        WriteInt(raw, 0x238, value.SrcAnim ? unchecked((int)value.SrcFrameCount) : 0);
-        WriteInt(raw, 0x23c, value.SrcAnim ? unchecked((int)value.SrcColumns) : 0);
+        WriteInt(raw, 0x234, unchecked((int)value.SrcOneShotFlags));
+        bool srcCells = value.SrcAnim || value.SrcOneShotEnabled;
+        WriteInt(raw, 0x238, srcCells ? unchecked((int)value.SrcFrameCount) : 0);
+        WriteInt(raw, 0x23c, srcCells ? unchecked((int)value.SrcColumns) : 0);
         if (value.ColorAnim)
             WriteInt(raw, 0x240, unchecked((int)value.ColorTarget));
         WriteVector(raw, 0x244, value.RotationAxis);
@@ -156,10 +159,12 @@ internal static class NativeGfxPersistenceCodec
             ScaleDelayMs = ReadInt(raw, 0x3c),
             RotationDelayMs = ReadInt(raw, 0x40),
             TranslationDelayMs = ReadInt(raw, 0x44),
+            SrcDelayMs = ReadInt(raw, 0x48),
             ColorDurationMs = ReadInt(raw, 0x4c),
             ScaleDurationMs = ReadInt(raw, 0x50),
             RotationDurationMs = ReadInt(raw, 0x54),
             TranslationDurationMs = ReadInt(raw, 0x58),
+            SrcDurationMs = ReadInt(raw, 0x5c),
             Color = unchecked((uint)ReadInt(raw, 0x60)),
             HasColor = ReadInt(raw, 0x60) != -1,
             OneShotColorTarget = unchecked((uint)ReadInt(raw, 0x64)),
@@ -187,7 +192,7 @@ internal static class NativeGfxPersistenceCodec
             RotationPeriodMs = ReadInt(raw, 0x228),
             TranslationCyclePeriodMs = ReadInt(raw, 0x22c),
             SrcPeriod = ReadInt(raw, 0x230),
-            SrcCell = ReadInt(raw, 0x234),
+            SrcOneShotFlags = ReadInt(raw, 0x234),
             SrcFrameCount = Math.Max(1, ReadInt(raw, 0x238)),
             SrcColumns = Math.Max(1, ReadInt(raw, 0x23c)),
             ColorTarget = unchecked((uint)ReadInt(raw, 0x240)),
@@ -204,6 +209,7 @@ internal static class NativeGfxPersistenceCodec
             ScaleEnabled = ReadInt(raw, 0x50) > 0,
             RotationChannelEnabled = ReadInt(raw, 0x54) > 0,
             TranslationEnabled = ReadInt(raw, 0x58) > 0,
+            SrcOneShotEnabled = ReadInt(raw, 0x5c) > 0,
         };
     }
 

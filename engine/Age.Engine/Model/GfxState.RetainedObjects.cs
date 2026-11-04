@@ -25,11 +25,21 @@ public sealed partial class GfxState
         // rebuilding the ADV backing after CONFIG. A later draw-texture rebind clears the latch.
         public bool PostBindStaticColorBlend;
 
-        // ---- src-rect / spritesheet-cell channel (ops 0x239 one-shot cell, 0x231 looping animation).
-        // Native obj+0x238 is the TOTAL FRAME COUNT and +0x23c is the COLUMN COUNT. Each frame keeps
-        // draw-texture's original source-rect size; those operands are not a grid to divide it by. ----
-        public long SrcFrameCount = 1, SrcColumns = 1, SrcCell, SrcPeriod, SrcStart = -1;
+        // ---- src-rect / spritesheet-cell channels (op 0x239 one-shot, op 0x231 looping animation).
+        // Native obj+0x238 is the TOTAL FRAME COUNT and +0x23c is the COLUMN COUNT, shared by both. Each
+        // frame keeps draw-texture's original source-rect size; those operands are not a grid to divide
+        // it by. The looping channel's period is obj+0x230 and its start +0x21c. The one-shot channel is
+        // the fifth finite channel: delay +0x48, duration +0x5c, the shared start +0x34, and its flags
+        // +0x234 (bit 0 commits the last cell at the end, else the source rect collapses to empty; bit 1
+        // draws the base cell during the delay, else nothing is drawn). ----
+        public long SrcFrameCount = 1, SrcColumns = 1, SrcOneShotFlags, SrcPeriod, SrcStart = -1;
         public bool SrcAnim;
+        public long SrcDelayMs, SrcDurationMs;
+        public bool SrcOneShotEnabled;
+        // The one-shot channel ended without flag bit 0: native collapses obj+0x8..+0x14 to an empty rect, so
+        // the object draws nothing until draw-texture binds it again. Kept apart from SrcRect because the
+        // port reads a zero width or height as "the whole surface".
+        public bool SrcCollapsed;
         // ---- animated color/glow channel (op 0x232). Interpolator COLOR channel: period obj+0x220,
         // start obj+0x20c, target obj+0x240 — PING-PONG (distinct from static 0x202/0x203). ----
         public long ColorPeriod, ColorStart = -1, ColorTarget;
@@ -361,7 +371,9 @@ public sealed partial class GfxState
             OneShotColorTarget = s.OneShotColorTarget, ColorDelayMs = s.ColorDelayMs,
             ColorDurationMs = s.ColorDurationMs, OneShotColorEnabled = s.OneShotColorEnabled,
             OneShotColorBlend = s.OneShotColorBlend, PostBindStaticColorBlend = s.PostBindStaticColorBlend,
-            SrcFrameCount = s.SrcFrameCount, SrcColumns = s.SrcColumns, SrcCell = s.SrcCell,
+            SrcFrameCount = s.SrcFrameCount, SrcColumns = s.SrcColumns, SrcOneShotFlags = s.SrcOneShotFlags,
+            SrcDelayMs = s.SrcDelayMs, SrcDurationMs = s.SrcDurationMs, SrcOneShotEnabled = s.SrcOneShotEnabled,
+            SrcCollapsed = s.SrcCollapsed,
             SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
             ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
             ColorAnim = s.ColorAnim, SourceSlot = s.SourceSlot, SrcRect = s.SrcRect, Visible = s.Visible,
@@ -393,7 +405,7 @@ public sealed partial class GfxState
         lock (_lock)
         {
             var o = GetOrCreate(handle);
-            o.SourceSlot = slot; o.SrcRect = (sx, sy, w, h); o.V24 = (dstX, dstY, 0); o.Visible = true;
+            o.SourceSlot = slot; o.SrcRect = (sx, sy, w, h); o.SrcCollapsed = false; o.V24 = (dstX, dstY, 0); o.Visible = true;
             o.PostBindStaticColorBlend = false;
         }
     }
