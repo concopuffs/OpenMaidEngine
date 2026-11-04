@@ -33,7 +33,7 @@ authors = ["you"]
 description = "Doubles experience awards."
 
 [game]                               # required
-profile = "himegari"                 # "himegari" or "kamidori" (required)
+profile = "<profile>"                # a profile id from games/README.md (required)
 target = "native"                    # "native" is the only version 1 target (required)
 revisions = ["sha256:…"]             # SYS4INI.BIN fingerprints this mod supports
 
@@ -67,7 +67,7 @@ Unknown keys are errors, so a misspelled setting cannot be silently ignored.
 ### Identity
 
 - **`id`:** lowercase letters and digits in dot-separated parts, each part optionally hyphenated, at most 64
-  characters (`my.first-line`, `example.kamidori-prologue-line`). The id identifies the mod everywhere: load order,
+  characters (`my.first-line`, `example.sc0000-page3`). The id identifies the mod everywhere: load order,
   selector allocation, save stamps and the link report. Changing it makes it a different mod.
 - **`version`:** semantic version `MAJOR.MINOR.PATCH` (semver 2.0, so `1.0.0-beta.1` is allowed). Dependents
   match it with a range: comma-separated comparators that must all hold, each `>=`, `>`, `<=`, `<`, `=` or a bare

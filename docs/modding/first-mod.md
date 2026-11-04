@@ -1,11 +1,9 @@
 # Your first mod
 
-This walks through one complete mod on each game: insert one line of narration into the opening scene, check that
-it links, run it in the port, and export it for the original engine. Each step shows the Himegari and Kamidori
-commands side by side. The finished results are in `oms/examples/mods/`:
-
-- `example.sc0000-page3` (Himegari);
-- `example.kamidori-prologue-line` (Kamidori with its translation).
+This walks through one complete mod: insert one line of narration into the opening scene, check that it links, run
+it in the port, and export it for the original engine. The steps are the same for every game. The values that
+differ per game (options, the page, the site, the fingerprint) are in your game's guide, under "First mod values"
+([games/README.md](games/README.md)). Each game also ships the finished result in `oms/examples/mods/`.
 
 Commands run from `age-reimpl/` unless a step says otherwise. `Age.Cli` is the command-line tool:
 
@@ -13,37 +11,26 @@ Commands run from `age-reimpl/` unless a step says otherwise. `Age.Cli` is the c
 dotnet run --project engine/Age.Cli -- <command> [options]
 ```
 
-The examples below shorten that to `Age.Cli <command>`.
+The examples below shorten that to `Age.Cli <command>`, and write `<game options>` for the options your game guide
+lists (empty for the default game).
 
 ## 0. Prerequisites
 
 - .NET 8 SDK, Python 3.11 and Godot 4.7 .NET, as for the port itself (`../../README.md`).
-- The game install beside the repository: `../Himegari_Game` or `../Kamidori`.
+- The game install in its expected place (your game guide says where), or `--game-root DIR`.
 - One build: `dotnet build engine/AgeEngine.sln`.
-- The generated registries: `py -3.11 -X utf8 tools/globals_build.py --build` (and with `--profile kamidori`),
-  and `py -3.11 -X utf8 tools/patch_points_build.py --build`. Fragments that `use himegari.globals` or
-  `kamidori.globals` need them.
+- The generated registries, which fragments that `use <profile>.globals` need. Run
+  `py -3.11 -X utf8 tools/globals_build.py --profile <profile> --build`, and
+  `py -3.11 -X utf8 tools/patch_points_build.py --profile <profile> --build` if the game has patch points.
 
-Every `Age.Cli` command selects the game with `--profile` and `--game-root`. Without them it uses Himegari. For
-Kamidori with the fan translation, also pass `--overlay-root patch` (relative to the game root), because the
-translation replaces scripts and therefore changes the base your fragment edits:
-
-| Game | Options every command needs |
-|---|---|
-| Himegari | *(none)* |
-| Kamidori, untranslated | `--profile kamidori --game-root ../Kamidori` |
-| Kamidori, translated | `--profile kamidori --game-root ../Kamidori --overlay-root patch` |
+Every `Age.Cli` command selects the game with its game options: `--profile`, `--game-root`, and `--overlay-root`
+for an install with a translation layer. A translation that replaces scripts changes the base your fragment edits,
+so use the same options for every step.
 
 ## 1. Find the place to edit
 
-Run the game in the port and stop on the page you want to change:
-
-```text
-.\run-godot.cmd                                  # Himegari
-.\run-godot.cmd -Kamidori -TranslationPatch      # Kamidori with the translation
-```
-
-Press **F2** to show the page locator and **F3** to copy it. A locator reads like
+Run the game in the port (`.\run-godot.cmd`, plus the switches in your game guide) and stop on the page you want to
+change. Press **F2** to show the page locator and **F3** to copy it. A locator reads like
 `SC0000 P003 · wait SC0000@0x8a6 · text SC0000@0x89e`. Then resolve it to bytecode:
 
 ```text
@@ -54,12 +41,12 @@ The output lists the page's text, its `show-text` and `wait-for-input` offsets, 
 Offsets are dword offsets into the script; those are the *sites* a fragment names.
 
 To insert a new page before an existing one, attach it to the instruction that starts the page, which is the
-`reset-adv-text-layout` right after the previous page's wait. On Himegari's third page:
+`reset-adv-text-layout` right after the previous page's `wait-for-input` and `end-text-line`:
 
 ```text
-    0x00871: wait-for-input 0x0          ; end of page 2
+    0x00871: wait-for-input 0x0          ; end of the previous page
     0x00874: end-text-line 0x0
-    0x00877: reset-adv-text-layout 0x1   ; start of page 3: insert before this
+    0x00877: reset-adv-text-layout 0x1   ; start of the next page: insert before this
 ```
 
 `patching.md` covers choosing sites in more detail.
@@ -69,12 +56,11 @@ To insert a new page before an existing one, attach it to the instruction that s
 A fragment names the exact bytes it edits. Print the header line for the script:
 
 ```text
-Age.Cli oms-patch --fingerprint SC0000.BIN
-Age.Cli oms-patch --fingerprint SC0000.BIN --profile kamidori --game-root ../Kamidori --overlay-root patch
+Age.Cli oms-patch --fingerprint SC0000.BIN <game options>
 ```
 
-Each prints a line such as `patch "SC0000.BIN" fingerprint "sha256:0297…"` to paste into the fragment. Use the full
-file name, including `.BIN`.
+It prints a line such as `patch "SC0000.BIN" fingerprint "sha256:…"` to paste into the fragment. Use the full file
+name, including `.BIN`.
 
 ## 3. Write the mod
 
@@ -88,44 +74,29 @@ my.first-line/
     └── opening.oms
 ```
 
-`manifest.toml` (Himegari):
+`manifest.toml`:
 
 ```toml
 omp = 1
 id = "my.first-line"
 name = "My first line"
 version = "1.0.0"
-description = "Adds a line of narration before the opening's third page."
+description = "Adds a line of narration to the opening."
 
 [game]
-profile = "himegari"
+profile = "<profile>"
 target = "native"
 ```
 
-For Kamidori, set `profile = "kamidori"`.
-
-`patches/opening.oms` (Himegari):
+`patches/opening.oms` (your game guide has the complete file with its fingerprint and site):
 
 ```text
 oms 1
-patch "SC0000.BIN" fingerprint "sha256:029718d6c927f90f6dcb1b89851591be310b5889dd53d6c8892604ad1fc9a9f6"
-use himegari.globals
-use himegari.adv
+patch "SC0000.BIN" fingerprint "sha256:<the fingerprint from step 2>"
+use <profile>.globals
+use <profile>.adv
 
-before site 0x877 {
-    "[MOD] Hello from my first mod."
-}
-```
-
-`patches/opening.oms` (Kamidori, translated):
-
-```text
-oms 1
-patch "SC0000.BIN" fingerprint "sha256:54d6bc4d8cf85e32903808979d16ff851f10e62f06dcb8ab87bc8076a31c1e30"
-use kamidori.globals
-use kamidori.adv
-
-before site 0xd0a {
+before site <the site from step 1> {
     "[MOD] Hello from my first mod."
 }
 ```
@@ -137,8 +108,7 @@ speaker and voice the same way the decompiled scenes do (`oms-language.md`, "Dia
 ## 4. Check that it links
 
 ```text
-Age.Cli omp check --mod my.first-line
-Age.Cli omp check --mod my.first-line --profile kamidori --game-root ../Kamidori --overlay-root patch
+Age.Cli omp check --mod my.first-line <game options>
 ```
 
 A good result ends with `omp check: links: 1 mods; 0 errors, …`. The note "compiled … at load time (no stored
@@ -150,13 +120,12 @@ column (`troubleshooting.md`).
 ## 5. Run it in the port
 
 ```text
-.\run-godot.cmd -Mod my.first-line
-.\run-godot.cmd -Kamidori -TranslationPatch -Mod my.first-line
+.\run-godot.cmd <game switches> -Mod my.first-line
 ```
 
 Start a new game. Your line appears as its own page at the place you chose. The console prints `[mods]` lines with
-the load order and every file the mod supplied. The full link report is written to
-`diagnostics/mod-link.txt` in the profile's data folder (`cli.md`).
+the load order and every file the mod supplied. The full link report is written to `diagnostics/mod-link.txt` in
+the profile's data folder (`cli.md`).
 
 To keep a mod installed rather than passing `-Mod` each time, copy its folder (or its `.omp`) into the profile's
 `mods/` folder (`cli.md`, "Installing mods in the port").
@@ -166,14 +135,14 @@ To keep a mod installed rather than passing `-Mod` each time, copy its folder (o
 Native AGE cannot read mods, so export the linked result as game files:
 
 ```text
-Age.Cli omp export --output-dir build/my-export --mod my.first-line
+Age.Cli omp export --output-dir build/my-export --mod my.first-line <game options>
 ```
 
 For this mod that writes one file, the patched `SC0000.BIN`. Native AGE reads loose `.BIN` files beside `AGE.EXE`
 before its archives, so the file overrides the original. Install it into a *copy* of the game, never the original:
 
 ```text
-py -3.11 -X utf8 tools/native_scratch.py --replace --overlay build/my-export/SC0000.BIN
+py -3.11 -X utf8 tools/native_scratch.py --profile <profile> --replace --overlay build/my-export/SC0000.BIN
 ```
 
 That builds `build/games/<profile>/native-scratch/` with your files added. Run its `AGE.EXE`, or drive it with
@@ -182,14 +151,14 @@ That builds `build/games/<profile>/native-scratch/` with your files added. Run i
 ## 7. Package it
 
 ```text
-Age.Cli omp build my.first-line
+Age.Cli omp build my.first-line <game options>
 ```
 
 `omp build` compiles every fragment against the base and writes `my.first-line-1.0.0.omp` beside the folder. The
 package is a ZIP file with fixed timestamps, so the same sources always produce the same bytes. Inside it, each
 fragment's compiled transform plan sits beside its source (`patches/opening.omspatch.json`). Your folder is not
-changed. Players load the stored plan instead of compiling your source on
-their machine. The source stays in the package so anyone can read and rebuild it.
+changed. Players load the stored plan instead of compiling your source on their machine. The source stays in the
+package so anyone can read and rebuild it.
 
 ## Where next
 

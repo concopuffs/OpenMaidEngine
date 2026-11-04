@@ -8,11 +8,10 @@ write mods. The full grammar and the exact lowering rules are in the language de
 The best way to learn the language is to decompile a script you want to change and read it:
 
 ```text
-Age.Cli oms-decompile --script SC0000.BIN --level idiomatic --output build/SC0000.oms
-Age.Cli oms-decompile --script SC0000.BIN --level idiomatic --profile kamidori --game-root ../Kamidori --overlay-root patch
+Age.Cli oms-decompile --script SC0000.BIN --level idiomatic --output build/SC0000.oms <game options>
 ```
 
-`--level idiomatic` names globals, scripts, library subroutines and dialogue lines. Without `--output` the source
+Use the game options from your game guide ([games/README.md](games/README.md)). `--level idiomatic` names globals, scripts, library subroutines and dialogue lines. Without `--output` the source
 goes to the console. Use `--level raw` to see one instruction per line with its exact operand forms.
 
 ## Files and units
@@ -30,20 +29,22 @@ with an operator. `;` also separates statements.
 
 ## Modules: `use`
 
-`use` imports names. Three modules exist per game, where `<profile>` is `himegari` or `kamidori`:
+`use` imports names. Each game has these modules, where `<profile>` is its profile id (your game's identity block in
+[games/README.md](games/README.md) lists them):
 
-- **`<profile>.globals`:** every named global variable and table, from the game's global registry. The generated
-  references list them: `../global-reference.md` (Himegari) and `../global-reference-kamidori.md`.
+- **`<profile>.globals`:** every named global variable and table, from the game's global registry. The game's
+  generated global reference lists them.
 - **`<profile>.scripts`:** every catalog script by its file stem, for `run`. A stem that is not an identifier is
   quoted: `run RECOVER`, `run "$1$SC2600"`.
 - **`<profile>.adv`:** the ADV prelude, which holds the scene library, the dialogue line template and the speaker
-  names. Its source is `oms/<profile>/adv.oms`, and it is worth reading.
+  names. Its source is `oms/<profile>/adv.oms`, and it is worth reading. A game without a prelude yet has no
+  dialogue statements; its identity block says so.
 
 `<profile>.adv` itself uses the other two. Most fragments that touch a scene start with:
 
 ```text
-use himegari.globals
-use himegari.adv
+use <profile>.globals
+use <profile>.adv
 ```
 
 ## Storage
@@ -71,8 +72,8 @@ enum mood { calm = 0, angry = 1 }        // named constants
 ```
 
 A `global` always needs its cell (`@ address`). The engine has no allocator for mod-owned globals yet, so you choose
-a cell no shipped script uses. The examples use string cells `GS[0x1400]` (Himegari) and `GS[0x9000]` (Kamidori).
-`../backlog.md` tracks finding free cells safely, and which of them saves keep.
+a cell no shipped script uses. Your game guide names the cells its examples use, and the range its saves keep.
+`../backlog.md` tracks finding free cells safely.
 
 The types are `int`, `float` and `str`, and arrays of them (`int[n]`, `int[r][c]`). A 2-D array declared with named
 columns reads by column: `unit_stats[i].max_fs`.
@@ -83,8 +84,8 @@ columns reads by column: `unit_stats[i].max_fs`.
 ## Tables and `with`
 
 The games store data records as parallel arrays: one array for every unit's level, one for its max HP, and so on.
-The globals module groups those arrays into **tables** (Himegari: `unit`, `item`, `skill`; Kamidori also
-`stage_enemy`), so a field reads as one name:
+The globals module groups those arrays into **tables**, such as `unit`, `item` and `skill` (your game's identity
+block lists its tables), so a field reads as one name:
 
 ```text
 unit[761].stats.max_hp = 150
@@ -101,8 +102,8 @@ with unit[761] {
 ```
 
 A record is never a value. You cannot copy one record to another, or assign a whole record at once. The table
-layouts and what each field means are in `../global-reference*.md`. For Kamidori, `../kamidori-data-tables.md` also
-covers how the init scripts fill them.
+layouts and what each field means are in the game's global reference, linked from its identity block. Record keys
+are numbers for now; naming them (`unit[<unit name>]`) is in `../backlog.md`.
 
 ## Expressions
 
@@ -140,7 +141,7 @@ sub award(amount: L[0x10]) { … }
 award(5)                                 // L[0x10] = 5, then call
 ```
 
-For now a parameter must be bound to a raw cell, written as `L[…]` or `G[…]`. Binding to a declared or registry name is designed but not yet accepted (`../backlog.md`). In a patch, `L[…]` is a
+A parameter binds to one cell: a raw cell (`L[…]`, `G[…]`) or the name of a declared or registry scalar, such as `sub f(n: current_unit_id)`. In a patch, `L[…]` is a
 slot of the base script's frame, so choose one the base does not use.
 
 **Templates** are `inline name(params) { … }`. They expand in place wherever they are used. The dialogue line
@@ -170,34 +171,25 @@ decompiler prints it at `--level raw`.
 Inside a scene, a line on its own is a dialogue statement. The `<profile>.adv` prelude expands it into the same
 instructions as the game's own pages: voice reset, nameplate, voice, text, wait for a click, end of page.
 
-**Himegari:**
+A line is an optional speaker, a string, and optional named arguments:
 
 ```text
-"――かつて、戦いがあった。"                   // narration
-魔王 "「元の台本は、一文字も書き換えられていない。」"   // a speaker
-魔王 "「…」" (voice: 0x34e)                        // a speaker with a voice clip
+"[MOD] A narration line."                  // narration
+speaker_name "[MOD] Spoken text."          // a speaker
+speaker_name "[MOD] Spoken text." (voice: 0x34e)
 ```
 
-The template is `line(text, speaker = none, voice = none)`.
+The prelude marks one template `@dialogue`. The string binds to its `text` parameter, the speaker to `speaker`, and
+named arguments to the parameters of the same name. A game's template can take more arguments, such as a nameplate
+form. Your game guide shows its template and real examples.
 
-**Kamidori:**
-
-```text
-"[MOD] A narration line."
-水那 "「…………」" (voice: 0x1be, form: form_descriptor)
-```
-
-Kamidori's template adds `form`, which picks what the nameplate shows: `form_name` (the default; leave it out),
-`form_alternate`, `form_descriptor` (a description such as "female swordsman" before the character is introduced),
-or `form_unknown` (`？？？？`).
-
-**Speakers** are the names in the prelude's `enum speaker` (`oms/<profile>/adv.oms`). These are the game's own
-character names, so they are Japanese identifiers. Names that repeat, or that are not identifiers (such as
-`？？？？`), carry their id instead: `speaker_0x10`. Copy a speaker name from the decompiled scene you are editing,
-or look up the id in the enum. **Voice ids** come from the decompiled scene as well: a voiced line prints its
+**Speakers** are the names in the prelude's `enum speaker` (`oms/<profile>/adv.oms`). They are the game's own
+character names, which may not be English. Names that repeat, or that are not identifiers (such as `？？？？`), carry
+their id instead: `speaker_0x10`. Copy a speaker name from the decompiled scene you are editing, or look up the id
+in the enum. **Voice ids** come from the decompiled scene as well: a voiced line prints its
 `voice:`.
 
-Text may be English, Japanese or any mix, provided every character is in CP932. A character outside CP932 is a
+Text may be in any language, provided every character is in CP932, the games' text encoding. A character outside CP932 is a
 compile error that names it. Pages that interpolate a string cell, carry furigana, or span rows in an unusual way
 decompile as plain statements rather than dialogue lines. Copy those as they are.
 

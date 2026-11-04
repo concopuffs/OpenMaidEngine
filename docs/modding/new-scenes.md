@@ -1,19 +1,20 @@
 # New scripts, scenes and assets
 
 Patches change what is there ([patching.md](patching.md)). This page is about adding things: scripts of your own, a
-boot-time data edit, a scene the player can save in, and new assets.
+boot-time data edit, a scene the player can save in, and new assets. Your game guide ([games/README.md](games/README.md))
+has the game's values: how many catalogs it ships, what its scene registry holds, its saved range, and working
+examples.
 
 ## Append catalogs
 
-The games already ship add-on content as *append catalogs*: `APPENDnn.AAI` (an index) and `APPENDnn.ALF` (the data).
-Himegari ships one and Kamidori three. A mod with new scripts or new assets gets a catalog of its own, built when the
-mods link:
+AGE games ship add-on content as *append catalogs*: `APPENDnn.AAI` (an index) and `APPENDnn.ALF` (the data). A mod
+with new scripts or new assets gets a catalog of its own, built when the mods link:
 
 - **Records.** The catalog's records are your `[scripts].names`, in order, then your `[assets].names`
   ([packages.md](packages.md)). Each script is `scripts/NAME.oms`, a unit that begins `script "NAME"`.
-- **Selector.** Each catalog has a number, its *selector*. The port allocates the lowest free one to your mod and
-  keeps it in `mods/selectors.toml` for as long as the mod is installed, whatever the load order. On a clean install
-  that is 2 on Himegari and 4 on Kamidori, but never rely on it.
+- **Selector.** Each catalog has a number, its *selector*. The port allocates the lowest one that neither the
+  install's own catalogs nor another mod use, and keeps it in `mods/selectors.toml` for as long as the mod is
+  installed, whatever the load order. Never rely on a particular selector.
 - **Packed ids.** The engine addresses record `n` of catalog `s` as `(s << 24) | n`. Write `run NAME` and
   `asset "NAME"` and the linker fills these in, so a mod never hard-codes its own ids.
 
@@ -36,28 +37,26 @@ A mod that ships new assets but no scripts gets an empty record 0 generated for 
 ## Data edits at boot
 
 Record 0 runs after the game's own init scripts fill its data tables, so a record-0 script can overwrite table
-entries. This Kamidori script changes one enemy unit (`oms/examples/kamidori-gate6/OMSAUTO.oms`):
+entries:
 
 ```text
 oms 1
 script "AUTO"
-use kamidori.globals
+use <profile>.globals
 
     with unit[761] {
         .stats.max_hp = 150
         .experience_reward = 999
-        .drop_chance.drop_1 = 100
     }
     exit
 ```
 
-Himegari has the same `unit`, `item` and `skill` tables. Field names and meanings are in `../global-reference.md` and
-`../global-reference-kamidori.md`. `../kamidori-data-tables.md` explains how Kamidori's tables are laid out.
+The tables and their fields are listed in the game's global reference, linked from its identity block.
 
-**Does the edit survive loading a save?** Boot runs on every start, so a table that boot fills, and that a save does
-not store, is rebuilt with your edit each time. Cells inside the save's stored range are overwritten by a loaded
-save. The Kamidori unit tables above sit outside it, so the edit holds after a load. Check the cells you edit
-against the reference before relying on this.
+**Does the edit survive loading a save?** Saves keep only a prefix of each global bank. Boot runs on every start, so
+a table cell above the saved range is rebuilt with your edit each time, and the edit holds after a load. A cell
+inside the saved range is overwritten by the loaded save. Your game guide gives the range; check your cells against
+it.
 
 ## Calling your scripts
 
@@ -66,9 +65,9 @@ page (a computation or a data edit) can always be called this way.
 
 **A script you `run` from a scene cannot be a scene itself.** The scene that calls it owns the ADV menu and the
 click handlers. If the player right-clicks during a text wait inside the called script, the engine sees a callback
-that belongs to the caller while the callee runs, and stops with the error *"Depth が不正です"* (the engine's
-"invalid depth" error). Native AGE and the port both do this. Short pages inserted with a patch are fine, because they
-run in the scene's own frame. A run of pages in a separate script needs its own scene.
+that belongs to the caller while the callee runs. It stops with the error *"Depth が不正です"* (the engine's "invalid
+depth" error). Native AGE and the port both do this. Short pages inserted with a patch are fine, because they run in
+the scene's own frame. A run of pages in a separate script needs its own scene.
 
 ## A scene of your own
 
@@ -82,31 +81,21 @@ as it enters the shipped ones:
    a story decision to the scene that plays it:
 
    ```text
-   scjump_scene_script_resource_ids[0x0] = asset "SCENE"
+   scjump_scene_script_resource_ids[<decision>] = asset "SCENE"
    ```
 
 3. **Unregister it when it ends.** At the end of the content, clear the row and request the next scene, so the
    story continues:
 
    ```text
-   scjump_scene_script_resource_ids[0x0] = 0x0
+   scjump_scene_script_resource_ids[<decision>] = 0x0
    system_flow_request = 0x1
    scjump_decision_out = 0x0
    ```
 
-The complete working example is `oms/examples/mods/example.prologue`. It is a Himegari scene built on the skeleton of
-`$1$SC1260`, played before the opening (decision 0, which is empty in the base game and falls back to SC0000). Saving
-and loading inside it was tested in the port and in native AGE. `tools/drive/scenarios/himegari-mod-*.steps` drive
-it.
-
-**On Kamidori** the mechanism is the same: `scjump_scene_script_resource_ids` and `system_flow_request` exist in
-`kamidori.globals`, and SYSTEM4 enters scenes through the registry. The details differ:
-
-- decision 0 already maps to SC0000, so overwriting it *replaces* the opening instead of preceding it;
-- no Kamidori scene mod has been tested yet (`../backlog.md`);
-- test saving inside the scene on native AGE as well as in the port.
-
-Copy the skeleton from one of Kamidori's own append scenes.
+Which decision to use depends on what the game's registry already holds there. An empty row that falls back to
+another scene lets yours play first, while a row that holds a scene is replaced. Your game guide says which games
+this recipe has been tested on, and names the example scene to copy.
 
 ## New assets
 

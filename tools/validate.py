@@ -160,6 +160,11 @@ def build_gate_plan(
         Gate("globals-lint", "Global registry lint", _python_tool("globals_build.py", "--lint")),
         Gate("engine-ctx-lint", "Engine context lint", _python_tool("engine_ctx_build.py", "--lint")),
         Gate(
+            "modding-games-check",
+            "Generated modding games page",
+            _python_tool("modding_games_build.py", "--check"),
+        ),
+        Gate(
             "generated-opcode-diff",
             "Generated opcode references",
             (

@@ -43,7 +43,7 @@ patches/page3.oms:3:1: this patch targets sha256:0297…f6, but SC0000.BIN is sh
 The installed script is not the one the fragment was written for. The second fingerprint is the installed one.
 Common causes:
 
-- Kamidori with versus without its translation (`--overlay-root patch`): each is a different base;
+- an install with versus without a translation layer (`--overlay-root`): each is a different base;
 - a different game version;
 - another mod that replaces the script wholesale. The report names that mod.
 
@@ -97,10 +97,10 @@ correctly. Reinstall the mod to recover such a save, since its selector is kept.
 **My new page does not show.** Check that the site is on the path the game actually takes. The page locator records
 the route of the run you made. Branches and earlier choices can skip your site.
 
-## Kamidori specifics
+## Game-specific problems
 
-- **Kamidori has no named patch points yet**, so its fragments use offsets.
-- **Translated and untranslated installs need separate fragments**, as described above.
+Each game guide lists its quirks and current limits, such as installs with several bases, missing patch points, or
+recipes not yet tested on that game ([games/README.md](games/README.md)).
 
 ## Outside the repository
 

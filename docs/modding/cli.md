@@ -7,9 +7,11 @@ from `age-reimpl/`.
 
 | Option | Meaning |
 |---|---|
-| `--profile himegari\|kamidori` | the game (default `himegari`) |
-| `--game-root DIR` | the install (default: `Himegari_Game` beside the repository) |
-| `--overlay-root DIR` | a loose-file layer over the install, relative to the game root; Kamidori's translation is `patch` (repeatable) |
+| `--profile <profile>` | the game; without it, `himegari` |
+| `--game-root DIR` | the install; without it, the game's expected install beside the repository |
+| `--overlay-root DIR` | a loose-file layer over the install, such as a translation, relative to the game root (repeatable) |
+
+Your game guide lists the options its installs need ([games/README.md](games/README.md)).
 
 ## `omp`: packages
 
@@ -53,9 +55,10 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 with the game switches:
 
 ```text
-.\run-godot.cmd -Mod path\to\my.mod
-.\run-godot.cmd -Kamidori -TranslationPatch -Mod path\to\my.mod
+.\run-godot.cmd <game switches> -Mod path\to\my.mod
 ```
+
+The game switches (such as `-Profile`, `-GameRoot`, `-OverlayRoot`, or a game's shortcut) are in your game guide.
 
 At startup the console prints `[mods]` lines with the load order and every file the mods supplied. The full report
 is `diagnostics/mod-link.txt` in the profile root.
@@ -68,7 +71,7 @@ Each game has a **profile root**:
 %APPDATA%\Godot\app_userdata\Open Maid Engine\games\<profile>\
 ```
 
-The profile is `himegari` or `kamidori`. `--data-root` replaces this folder. Inside it:
+`<profile>` is the game's profile id. `--data-root` replaces this folder. Inside it:
 
 | Path | Contents |
 |---|---|
@@ -93,11 +96,12 @@ native AGE.
 Native AGE has no mod loader. Export the stack and install the files into a **copy** of the game:
 
 ```text
-Age.Cli omp export --output-dir build/my-export --mod path\to\my.mod
-py -3.11 -X utf8 tools/native_scratch.py --replace --overlay build/my-export/SC0000.BIN build/my-export/APPEND02.AAI build/my-export/APPEND02.ALF
+Age.Cli omp export --output-dir build/my-export --mod path\to\my.mod <game options>
+py -3.11 -X utf8 tools/native_scratch.py --profile <profile> --replace --overlay build/my-export/SC0000.BIN --overlay build/my-export/APPENDnn.AAI --overlay build/my-export/APPENDnn.ALF
 ```
 
-`native_scratch.py` builds a copy at `build/games/<profile>/native-scratch/` with the listed files added. Run its
+`native_scratch.py` builds a copy at `build/games/<profile>/native-scratch/` with the listed files added. Pass one
+`--overlay` per file the export wrote; `nn` is the mod catalog's selector. Run its
 `AGE.EXE` directly. Native AGE reads loose `.BIN` files before its archives, and mounts every `APPENDnn` catalog
 beside it. Native AGE does not check versions, conflicts or save stamps; the export already resolved those.
 
@@ -106,12 +110,12 @@ beside it. Native AGE does not check versions, conflicts or save stamps; the exp
 `tools/drive.py` drives the port and native AGE with one step language, and takes the mod in its `start` command:
 
 ```text
-py -3.11 -X utf8 tools/drive.py port start --mod path\to\my.mod
-py -3.11 -X utf8 tools/drive.py --profile kamidori port start --mod path\to\my.mod --port-arg=--overlay-root --port-arg=<absolute path to Kamidori\patch> --port-arg=--allow-bmp-as-agf
+py -3.11 -X utf8 tools/drive.py --profile <profile> port start --mod path\to\my.mod
 ```
 
-Each start uses an empty save sandbox. See `../tools-reference.md`, "Game driver", for the steps and the
-native side. `tools/drive/scenarios/himegari-mod-*.steps` are working examples.
+Extra port options go through `--port-arg=…`, one per argument; your game guide has the full command for its
+installs. Each start uses an empty save sandbox. See `../tools-reference.md`, "Game driver", for the steps and the
+native side. `tools/drive/scenarios/*-mod-*.steps` are working examples.
 
 ## Outside the repository
 

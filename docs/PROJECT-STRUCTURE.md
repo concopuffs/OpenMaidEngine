@@ -86,6 +86,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── opcodes_model.py                    load + lint (dangling-ref, confidence-ceiling, vocab) + dependents
     │   ├── age_opcode_semantics.py             GENERATED investigated semantic-name view (do not hand-edit)
     │   ├── globals_build.py                    generator/linter: vm-map/globals[-<profile>].toml (+auto map) -> build/globals.json, docs/global-reference[-<profile>].md
+    │   ├── modding_games_build.py              generator: profile manifests + registries + oms/<profile>/ -> docs/modding/games/README.md
     │   ├── patch_points_build.py               validator/generator: vm-map/patch-points-<profile>.toml -> build/games/<profile>/patch-points.json, docs/patch-point-reference[-<profile>].md
     │   ├── story_flags.py                      static story-flag miner (branch-condition) -> build/story-flags-candidates.json; --bootstrap
     │   ├── scjump_decode.py                    decode SCJUMP progression logic -> build/scjump-decisions.* ; --verify (VM cross-check)
@@ -136,7 +137,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── PROJECT-STRUCTURE.md                this file (where things live)
     │   ├── tools-reference.md                  every tool: purpose, usage, I/O (operational companion)
     │   ├── modding/                            modder-facing guides (README, first-mod, packages, oms-language,
-    │   │                                         patching, new-scenes, cli, troubleshooting); English, plain Markdown
+    │   │                                         patching, new-scenes, cli, troubleshooting); English, plain Markdown;
+    │   │                                         generic only: game facts live in modding/games/
+    │   │   └── games/                          README.md GENERATED (supported games + identity blocks); <profile>.md per game
     │   ├── backlog.md                          open work items (fidelity gaps, deferred follow-ups, accepted ideas)
     │   ├── asset-resolution-re.md              resId→file RE (graphics/audio); asset-index steering
     │   ├── global-memory-re.md                 runtime global observation RE (SHELVED; future starting point)

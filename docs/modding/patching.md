@@ -8,19 +8,20 @@ fragment is a file `patches/NAME.oms` in your mod ([packages.md](packages.md)).
 
 ```text
 oms 1
-patch "ADDEXP.BIN" fingerprint "sha256:b4f38c43f2c500012be48517ce773d3c9e81c12deeb4d712cab4b99749661e1c"
-use himegari.globals
+patch "SCRIPT.BIN" fingerprint "sha256:<the base script's fingerprint>"
+use <profile>.globals
 
-local int exp @ 0x1                       // name an existing local of the base script
+local int amount @ 0x1                    // name an existing local of the base script
 
-before site himegari.experience.after_calculation {
-    exp = exp * 2                         // double every experience award
+before site 0x1234 {
+    amount = amount * 2                   // change the value the base computed
 }
 ```
 
+Your game guide has complete, working fragments ([games/README.md](games/README.md)).
+
 - **Header:** the script's catalog file name and the SHA-256 of its bytes. Print it with
-  `Age.Cli oms-patch --fingerprint ADDEXP.BIN` (add the Kamidori options from [first-mod.md](first-mod.md) for
-  Kamidori). If the installed bytes differ, compilation and loading both fail and print the real fingerprint.
+  `Age.Cli oms-patch --fingerprint SCRIPT.BIN <game options>`. If the installed bytes differ, compilation and loading both fail and print the real fingerprint.
 - **Declarations:** `use`, `const`, `enum`, `global`, `local`, `table`, `inline`, and any `sub`s the operations call.
 - **Operations:** one or more `before`, `after` or `replace` blocks. Code outside an operation is an error.
 
@@ -32,11 +33,11 @@ A site names one instruction of the original script. Write it in one of three wa
 |---|---|---|
 | offset | `site 0x877` | The dword offset shown by the page locator, `locate_page.py` and the decompiler. It must be the start of an instruction. |
 | label or sub | `site label_877`, `site adv_wait_page` | `label_<hex>` always names the instruction at that offset, even where the decompiled source prints no label. |
-| named patch point | `site himegari.experience.after_calculation` | A stable name from the game's patch-point registry. It resolves to the right offset for the installed script revision. |
+| named patch point | `site <profile>.area.point_name` | A stable name from the game's patch-point registry. It resolves to the right offset for the installed script revision. |
 
 Named patch points are the most robust choice, because a future revision of the game can move the offset while the
-name stays the same. The registry is small for now. Himegari has one point (`../patch-point-reference.md`), and
-Kamidori has none yet (`../backlog.md`), so most sites are offsets.
+name stays the same. Each game's identity block lists its points and links its patch-point reference. The
+registries are small for now, so most sites are offsets.
 
 ## Operations
 
@@ -67,23 +68,24 @@ Then decompile the script (`oms-decompile … --level idiomatic`) and read aroun
 patterns:
 
 - **A new page before page N:** use `before` on the instruction that starts page N. That is the
-  `reset-adv-text-layout` after the previous page's `wait-for-input` and `end-text-line`. Himegari SC0000 page 3
-  starts at `0x877`, and Kamidori's translated SC0000 starts its first page at `0xd0a`.
+  `reset-adv-text-layout` after the previous page's `wait-for-input` and `end-text-line`. Your game guide's
+  "First mod values" shows one.
 - **Change a value:** `replace site … operand N with …` on the instruction that sets it.
 - **Skip or rewrite a passage:** `replace site S through E`. Start and end on whole statements, and check the
   decompiled source for labels inside the region that code outside it jumps to.
 - **React to a computation:** `before` or `after` the instruction that finishes it. A named patch point, where one
   exists, says exactly what holds at that moment.
 
-## Kamidori's translation is a different base
+## Translations and updates are different bases
 
-The fan translation replaces scripts such as `SC0000.bin` with translated ones, which have different bytes and
-different offsets. A fragment fingerprints the bytes it was written against:
+A translation or update that replaces a script has different bytes and different offsets. A fragment fingerprints
+the bytes it was written against:
 
-- for a translated install, print fingerprints and decompile with `--overlay-root patch`;
-- a mod that should work on both needs two fragments, one per base.
+- print fingerprints and decompile with the same game options (such as `--overlay-root`) you play with;
+- a mod that should work on several bases needs one fragment per base.
 
-A fragment whose base is not installed fails with a fingerprint mismatch.
+A fragment whose base is not installed fails with a fingerprint mismatch. Your game guide lists the bases its
+installs have.
 
 ## How several mods combine
 
@@ -112,7 +114,8 @@ every original entry at its index and adds entries for new pages after them. So:
 - a save that stands on a message your patch removed resumes at your replacement code.
 
 Removing the mod again is less forgiving. A save made on a page the mod added has no such page in the original
-script. The port warns when a save's mod stamp differs from the installed mods ([troubleshooting.md](troubleshooting.md)).
+script. Loaded without the mod, it resumes on the scene's first page (observed on native AGE). The port warns when
+a save's mod stamp differs from the installed mods ([troubleshooting.md](troubleshooting.md)).
 
 ## Compiled plans
 

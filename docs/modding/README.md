@@ -1,13 +1,13 @@
 # Modding guide
 
 This directory is the modder's documentation for Open Maid Engine. It covers writing mods in Open Maid Script (OMS),
-packaging them as Open Maid Packs (OMP), and running them in the Godot port and in the original `AGE.EXE`. It
-applies equally to both supported games:
+packaging them as Open Maid Packs (OMP), and running them in the Godot port and in the original `AGE.EXE`.
 
-| Game | Profile id | Engine ABI | Install the docs assume |
-|---|---|---|---|
-| 姫狩りダンジョンマイスター (Himegari) | `himegari` | `SYS4422` | `Himegari_Game/` beside the repository |
-| 神採りアルケミーマイスター (Kamidori) | `kamidori` | `SYS4433` | `Kamidori/` beside the repository, optionally with its translation in `Kamidori/patch/` |
+The guides are the same for every supported game. Where a guide writes `<profile>`, use your game's profile id.
+Game-specific facts (install options, fingerprints, worked-example values, quirks) live only in the game guides:
+
+- [games/README.md](games/README.md): the supported games, each with a generated identity block;
+- `games/<profile>.md`: one guide per game.
 
 ## What a mod can do
 
@@ -49,6 +49,7 @@ Test a mod in the port first: its link report names every conflict, while native
 | add a scene, a boot-time data edit, or new assets | [new-scenes.md](new-scenes.md) |
 | look up a command or a port flag | [cli.md](cli.md) |
 | understand an error or a crash | [troubleshooting.md](troubleshooting.md) |
+| find your game's options, values and quirks | [games/README.md](games/README.md) |
 
 Working examples live in `oms/examples/mods/` (see its `README.md`). Every one of them links, and the gates that
 proved the loader run them in the port and in native AGE.
@@ -57,8 +58,8 @@ proved the loader run them in the port and in native AGE.
 
 - **Never modify the original install.** Mods load from the profile's data folder. Native tests use a copy
   (`tools/native_scratch.py`), never the game directory.
-- **A fragment is tied to exact bytes.** Each patch names the SHA-256 of the script it edits. Kamidori with its
-  translation is a different base from untranslated Kamidori, so it needs its own fragment.
+- **A fragment is tied to exact bytes.** Each patch names the SHA-256 of the script it edits. An install whose
+  scripts a translation or update replaces is a different base, and needs its own fragment.
 - **Text must be encodable in CP932** (Shift-JIS), since that is the games' only text encoding. English, Japanese
   and full-width characters work. Characters outside CP932 are compile errors.
 
@@ -69,5 +70,5 @@ These guides are the home for how to make mods. The design records behind them a
 - the language design: `../superpowers/specs/2026-10-06-open-maid-script-design.md`;
 - the loader design: `../superpowers/specs/2026-11-03-mod-loader-design.md`;
 - engine facts: `../engine-re.md` and `../sys4-format-notes.md`;
-- generated references for opcodes, globals and patch points: `../opcode-reference.md`,
-  `../global-reference.md`, `../global-reference-kamidori.md` and `../patch-point-reference.md`.
+- the generated opcode reference, `../opcode-reference.md`. Each game's global and patch-point references are
+  linked from its identity block in [games/README.md](games/README.md).

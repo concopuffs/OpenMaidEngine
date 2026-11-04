@@ -48,16 +48,23 @@ it; git history keeps the record.
   translation's append replacements. Tooling ignores them (`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`), but the port
   (like native AGE) loads them, so English append content shows even without `--overlay-root patch`. Decide whether
   the port should require the overlay for them.
+- **The `0x90`-byte SYS4INI block.** Its meaning is unknown and no consumer is known (OMS spec §13). Revisit only if
+  one appears.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,
   where the encoder's match choices differ. Matching is optional, since native reads both.
 
 ## Open Maid Script
 
-- **Bound parameters by name.** The language design binds a sub parameter to any declared cell, including registry
-  names (`sub adv_load_layer(layer: adv_gfx_layer_index, …)`, OMS spec §6.3). The parser accepts only raw cells
-  (`L[0x40]`, `G[0x1234]`; `Parser.ParseCell`), so `sub f(n: current_unit_id)` fails with "expected a storage cell".
-  Neither prelude declares parameters, so nothing exercised it. Done when named globals and pinned locals bind, with
-  a test, and `docs/modding/oms-language.md` drops its workaround note.
+- **Record keys and field values by name.** Tables index by number (`unit[761]`). The design goal is
+  `unit[緑プテテット]` and id-valued fields by name (`.drop_item[0] = 緑の液`) through enums such as `unit_id` and
+  `item_id` generated from the init image, with each table declaring its key kind and each field its value kind,
+  as template parameters do (OMS spec §13). Open: names that are not identifiers or repeat
+  (`牙コウモリ（牙蝙蝠/ニュクテリス）`), qualifying members of different enums that share a name, and translations
+  that rename entries. Done when both games' registries generate the enums, the decompiler prints keys and
+  values by name, and both games still rebuild byte-identically.
+- **Overlapping registry arrays.** `globals_build.py --lint` reports 2 Himegari and 39 Kamidori pairs of
+  overlapping arrays. Classify each as a deliberate sub-view or a size error, since element names depend on it
+  (OMS spec §11.3, §13).
 - **Compiler warnings.** The §8.2 warnings (recursion with bound parameters, string/number mixing, a wait inside an
   `atomic` body) need a warning channel and, for the type-based ones, a type checker (OMS spec §16, gate 2 C3).
 - **Whole-script rebuilds drift saves.** `oms-compile` re-derives T1/T2/T3, so old saves can drift on a rebuilt
