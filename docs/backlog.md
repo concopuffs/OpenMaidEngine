@@ -117,6 +117,27 @@ it; git history keeps the record.
   - mod merging;
   - precompiled new scripts.
 
+## Localization
+
+- **Brainstorm a localization framework (not started; user request 2026-11-04).** There are two layers:
+  - **Engine-owned text.** This is the strings that AGE.EXE and AGERC.DLL draw themselves, which the port reproduces
+    in Japanese, for example:
+    - the 終了 dialog (`godot/ExitConfirmationDialog.cs`);
+    - the エラーが発生しました box (`VirtualMachine.DiagnosticCaption`);
+    - other native message boxes.
+  - **Game text.** This is script dialogue, CG text and system graphics. Mods and translation packs carry it.
+
+  The engine's concern is the first layer. The goal is a framework, not a one-off English translation. Questions
+  to settle:
+  - String identity: keys versus native source text.
+  - Locale selection and fallback: the native Japanese stays the default and the fidelity reference.
+  - Per-profile overrides: games differ in wording.
+  - How mods ship and override both layers through the loader.
+  - Fonts and glyph coverage.
+  - Keeping the drive protocol's native control texts (`dialogs`/`answer`) stable whatever locale is shown.
+
+  Done when a design is agreed (a spec under `superpowers/specs/`) and the engine-owned strings go through it.
+
 ## Platform and project
 
 - **Intermittent allocation test.** `MovieSurfaceRegistryTests.ResourceLookup_SelectsNewestPublishedPlaybackWithoutAllocating`
