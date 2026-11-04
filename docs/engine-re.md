@@ -2402,9 +2402,8 @@ The port therefore keeps persistent Skip separate from currently active fast-for
 deactivates the host service without changing the control-strip toggle, and `0x19c` recomputes the host
 service from the persistent toggle plus the host's live read-skip channel. This also makes op `0x1c7`
 correctly report inactive during the suspended interval. Focused regressions cover preservation across the
-pair and read-skip-only reactivation. Implementing the `message:ReadTextSkip` preference itself remains
-deferred with ops `0x1ca`/`0x1cb` and the profile-owned `ReadTextDB`; the lifecycle implementation does not
-invent a storage backend.
+pair and read-skip-only reactivation. The `message:ReadTextSkip` preference and `ReadTextDB` were implemented
+later (2026-07-24; see "ADV read-message Skip and shared `RT.DAT` history").
 
 ### Opcode `0x1ad` marks the numbered-save resume-frame boundary (2026-07-20)
 
@@ -2870,6 +2869,14 @@ read-message behavior without scene-offset special cases and leaves JSON/export 
 The `/v2` Ghidra image now names/comments the lookup, queue, commit, mark, file read/write, shared-profile
 save/load chain, exact `WM_CLOSE` gate, and `NoSaveDat=0` default; saved/refined through 2026-07-24.
 
+**Native comparison (2026-11-03).** `tools/drive/scenarios/himegari-read-skip.steps` saves on SC0000 page 1,
+reads six pages, reloads the save and turns on Read-message Skip. Native AGE and the port both fast-forward over
+the read pages and stop at `SC0000@0xa18`, the page shown but not yet advanced past, with the control showing ON.
+The port's refresh is simpler than `adv_refresh_read_skip_state@0x406cd0`: native evaluates only while run-state
+`0x80000000` is set (op `0xfa` sets it when fast-forward is inactive), clears that gate when a read page starts
+fast-forward, and on an unread page clears `adv_read_skip_state` only while the all-message toggle `ctx+0x550fc`
+is off. The port recomputes at each text/wait boundary. No visible difference followed from this in the run.
+
 ### Remaining ADV control-strip actions and implementation cost (2026-07-18)
 
 The five standard controls are now fully inventoried. Auto message, all-message Skip, and Hide Window have
@@ -2881,7 +2888,7 @@ History remains a distinct retained-text subsystem rather than another variation
 | History (`x=684`) | Cancel the ADV hotspot wait and run `HISTORY.BIN` over the text manager's retained record stream | Input/callback infrastructure works; a bounded retained-history model, its read/write opcodes, and supporting text/presentation ops remain | Medium-high, bounded |
 | Auto (`x=706`) | Toggle the Auto service | Implemented, including timed wait completion | Done |
 | Message Skip (`x=728`) | Enable persistent all-message fast-forward | Implemented; pacing discrepancies remain a later fidelity adjustment | Done |
-| Read-message Skip (`x=750`) | Toggle `message:ReadTextSkip`; gate advancement through shared ReadTextDB state | Native persistence and queue/commit/query flow investigated; service not implemented | Medium-high, bounded |
+| Read-message Skip (`x=750`) | Toggle `message:ReadTextSkip`; gate advancement through shared ReadTextDB state | Implemented 2026-07-24; native-confirmed 2026-11-03 (both targets stop at the first unread page) | Done |
 | Hide Window (`x=772`) | Op `0x199` enters the saved ADV coroutine handler, removes chrome, and runs `HIDEWIN.BIN` | Implemented through the native script path, including coroutine re-entry, per-frame callbacks, mouse/joy state, and `.CUR` resources | Done |
 
 `HIDEWIN.BIN` is primarily an input/scheduler slice, not a new renderer. Its former eight effectful gaps were
@@ -3131,14 +3138,13 @@ re-entering the enclosing ADV wait.
 
 HISTORY is now 74/78 distinct opcodes and 849/854 instructions handled or safe-noop. Its remaining static
 gaps are four supporting opcodes across five instructions: text-style setter `0x8b` occurs twice,
-`0x1ce`/`0x20a` form a sprite-animation service pair, and `0x1cb` reads the deliberately deferred
-Read-message Skip profile setting.
+`0x1ce`/`0x20a` form a sprite-animation service pair, and `0x1cb` reads the Read-message Skip profile setting
+(implemented 2026-07-24).
 
 The original dependency order was **Hide Window first** to establish reusable callback/coroutine input, then
 Read-message Skip, then History after both the input layer and message-completion seam exist. Hide Window is
-now complete. Read-message Skip's semantics remain understood, but its implementation is deferred until the
-port can choose storage for numbered saves and shared profile/global data as one architecture rather than
-selecting an isolated ReadTextDB backend. History is therefore the sole remaining control-strip action under
+now complete. Read-message Skip was implemented on 2026-07-24 with native shared-profile `RT.DAT` storage (see
+"ADV read-message Skip and shared `RT.DAT` history"). History is therefore the sole remaining control-strip action under
 active consideration; it can already reuse Hide Window's input layer, while any useful sharing with the
 deferred ReadTextDB work should remain a seam rather than a storage dependency. The `/v2` image
 names/comments the cursor, callback dispatch, retained-history navigation/render/metadata, and history-voice

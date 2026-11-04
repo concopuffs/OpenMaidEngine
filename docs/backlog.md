@@ -35,8 +35,11 @@ it; git history keeps the record.
 - **Delayed movie start.** The movie op's fourth operand delays the graph start until `current - start >= operand4`.
   The port threads it as `syncMask` but does not delay FFmpeg for nonzero values (`engine-re.md`, movie start;
   24 of 25 sites pass zero, BTL passes a dynamic value).
-- **Read-message Skip service.** The ADV menu toggle and `message:ReadTextSkip` are stored, but gating advancement on
-  read-message state is not implemented (`engine-re.md`, ADV menu table).
+- **Control-strip tooltip after a click.** Clicking a hovered ADV control (for example Read-message Skip, x=750)
+  hides its tooltip natively until the mouse moves; the port shows it again at once while the cursor stays still
+  (driven runs 2026-11-03, `native-after-hover-click.png` versus `port-after-second-click.png`). Likely the port
+  re-arms hotspots at the next wait with a hover-enter for the current pointer, while native fires hover only on
+  entry. Done when native's hover re-arm rule is reversed and the port matches it.
 - **SYS4INI trailer ADV keys still unapplied.** `CONTROLDISIBLECURSOR=1` (suppress the cursor restore when a bound
   hotspot action or hover callback is selected), `WHEELKEYUP`/`WHEELKEYDOWN` (8/9, action bits for ADV wheel-key
   handling in `adv_input_service_poll@0x411230`) and `REDRAWTEXTONKEY=0` are not sourced from the trailer, and

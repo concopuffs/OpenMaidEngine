@@ -837,6 +837,9 @@ offsets.
 start the other with `--seed port:fresh` (or `native:fresh`) and load. Their headers give the commands. Both directions
 resume at `SC0000@0x8a9` and reach `0x913`.
 
+`himegari-read-skip.steps` saves on SC0000 page 1, reads six pages, reloads and turns on Read-message Skip (x=750).
+Both targets fast-forward over the read pages and stop at `SC0000@0xa18`, the first page not yet advanced past.
+
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
 `[native.keep_polling]` and `[[native.dialog]]`. Unknown sections are refused. A profile without `[native.engine]`

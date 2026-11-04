@@ -1,0 +1,46 @@
+# Read-message Skip: save on SC0000 page 1, read six pages, reload page 1 and turn on read-skip (the x=750
+# control). Fast-forward should run over the pages already read and stop at the first unread one. Run on a fresh
+# sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-read-skip.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+
+rclick adv.next                         # save slot 0 on page 1
+wait 1.5
+click menu.save
+wait 1.5
+click slot.0
+wait 1.5
+click confirm.yes
+wait 2
+rclick adv.next
+wait 1.5
+expect top=SC0000@0x83f
+
+advance 6                               # read pages 1-6
+state
+shot read-skip-read-ahead
+
+rclick adv.next                         # load slot 0: back on page 1
+wait 1.5
+click menu.load
+wait 1.5
+click slot.0
+wait 1.5
+click confirm.yes
+wait-state top=SC0000@0x83f timeout=30
+settle
+
+click 760 582                           # read-message Skip on
+wait 4
+settle timeout=20
+state
+shot read-skip-stopped
