@@ -13,7 +13,7 @@ The first two compose.
   scene (SCJUMP decision 0, which falls back to SC0000 in the base game), and `SCENE` is a full ADV scene built on the
   skeleton of the shipped append scene `$1$SC1260`, so the ADV menu, saving and loading work inside it. When it ends
   it clears the row and the opening follows. A scene called with `run` from another scene cannot open the ADV menu:
-  native AGE stops with "Depth が不正です" (`docs/engine-re.md`). `tools/drive/scenarios/himegari-mod-*.steps` drive it.
+  native AGE and the port both stop with "Depth が不正です" (`docs/engine-re.md`). `tools/drive/scenarios/himegari-mod-*.steps` drive it.
 
 Gate 5 exported `example.prologue`, `example.sc0000-page3` and `example.sc0000-page4` with `Age.Cli omp export` and
 ran the same scenarios on native AGE.

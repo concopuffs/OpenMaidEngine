@@ -227,6 +227,44 @@ public class HotspotInputTests
     }
 
     [Fact]
+    public void BoundActionArmedByACallerFrame_IsANativeDepthErrorInTheCalleesWait()
+    {
+        // Native keeps one hotspot table owned by the script that registered it; a script called from that
+        // scene cannot take its bindings: AGE stops with "Depth が不正です <running> != <owner>" (FUN_004079b0).
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int activateTarget = 30; // 0x90 (15) + 0x97 (11) + 0x94 (1) + call-script (3)
+        var outer = ScriptAssembler.Assemble(table, "OUTER", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(-1), I(-1), I(activateTarget) }),
+            (0x97, new[] { I(10), I(20), I(20), I(20), I(7) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x3, new[] { I(5) }),
+            (0x55, new[] { G(0x110), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var inner = ScriptAssembler.Assemble(table, "INNER", new List<(int, Operand[])>
+        {
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new BoundActionHost();
+        var vm = new VirtualMachine(outer, table, host, provider: new MapProvider(new() { [5] = inner }));
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.True(host.Consumed);
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x110)); // the caller's callback never ran in the callee
+        Assert.Equal("script-error: Depth が不正です INNER != OUTER", vm.HaltReason);
+        DiagnosticMessage shown = Assert.Single(host.Diagnostics);
+        Assert.Equal(vm.ScriptError, shown);
+        Assert.Equal("エラーが発生しました", shown.Caption);
+        Assert.StartsWith("Depth が不正です INNER != OUTER\n\nデバック情報：\nFILE=INNER ADDRESS=3 LINE=-1 COMMAND=-(2) DEPTH=1\n",
+                          shown.Text);
+        Assert.Contains("中止：プログラムを終了します．", shown.Text);
+    }
+
+    [Fact]
     public void ArmedHotspot_DispatchesBoundLogicalActionThroughOrdinaryActivationCallback()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

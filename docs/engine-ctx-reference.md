@@ -23,6 +23,9 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x1c34` | `mouse_wheel_delta` | `int` | signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it |
 | `0x4d7c` | `shared_profile_state` | `void*` | embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata |
 | `0x5190` | `shared_profile_int_table` | `int` | open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it |
+| `0x5650` | `hotspot_count` | `int` | number of records in the native hotspot table at ctx+0x5248 (table +0x408; at most 100); input_hotspot_register_rect_callbacks appends |
+| `0xc6dc` | `hotspot_owner_script_id` | `int` | packed script id of the frame that last registered a hotspot (table +0x7494; op 0x90 and the named-hotspot register). hotspot_check_owner_script@0x4079b0 compares it with the running frame before any hotspot callback dispatch and throws 'Depth が不正です <running> != <owner>' (flags 0x10007) on a mismatch |
+| `0xc6e4` | `hotspot_wait_armed` | `int` | op 0x94 sets 1, op 0x93 clears; while nonzero adv_input_service_poll resolves op-0x97 bound actions and hover/click hotspots |
 | `0x144e0` | `sfx_channel_resource_ids` | `int` | base of ten packed resource ids retained by the sound-effect facade; op 0xb4 loads a channel, op 0xb6 clears it, and numbered-save layouts restore then reopen every positive id |
 | `0x1493c` | `voice_mute_next_flags` | `uint` | voice-facade +0x434: op 0x1d5 sets 1; op 0xc4 promotes it to 0x10001 so voice_play_indexed_asset plays that voice at volume 0, and the following voice (or op 0x1bc) clears it |
 | `0x14d54` | `adv_text_layout_ptr_table` | `void*` | text_manager at ctx+0x14940 plus layout pointer table +0x414; ops 0x212/0x213 configure each layout's wait-indicator handle and retained glyph-object range at layout+0x64/+0x68/+0x6c |
@@ -99,8 +102,10 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x5f6a0` | `timed_callback_entries_capacity` | `void*` | capacity-end pointer for the timed callback entry vector |
 | `0x5f6a4` | `timed_callback_last_index` | `int` | last appended schedule index; op 0xd3 resets to -1 and op 0xd4 increments per entry |
 | `0x5f6a8` | `timed_callback_cursor` | `int` | next schedule entry consumed by timed_callback_sequence_tick; op 0xd3 resets to zero |
+| `0x5f6ac` | `mouse_callback_owner_script_id` | `int` | packed script id of the frame that registered the op-0xcc mouse callback; op 0xcd throws the Depth error when another frame dispatches it |
 | `0x5f6b4` | `timed_callback_script_resource_id` | `uint` | active frame script resource retained by op 0xd5 for local callback dispatch safety |
 | `0x5f6b8` | `timed_callback_script_resource_guard` | `uint` | companion current-script identity checked before redirecting to a scheduled callback |
+| `0x5f6bc` | `coroutine_yield_owner_script_id` | `int` | packed script id of the frame whose ADV coroutine yielded (op 0x199 / input dispatch); op 0x7c throws the Depth error when another frame resumes it |
 | `0x5f6c0` | `value_switch_table` | `int` | temporary formatted-value branch table reset by 0xa1, populated by 0xa2, queried by 0xa3; distinct from shared_profile_int_table |
 | `0x5f72c` | `adv_wait_indicator_frame` | `int` | current animated input-wait indicator frame, reset to zero when the service is armed |
 | `0x5f730` | `adv_wait_indicator_terminal_frame` | `int` | terminal frame returned by the indicator layout during ADV wait setup |

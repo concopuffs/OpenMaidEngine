@@ -77,6 +77,31 @@ name = "mouse_wheel_delta"
 type = "int"
 note = "signed WM_MOUSEWHEEL delta accumulated by age_main_window_proc; op 0x10d returns and clears it"
 [[field]]
+offset = 0x4d7c
+name = "shared_profile_state"
+type = "void*"
+note = "embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata"
+[[field]]
+offset = 0x5190
+name = "shared_profile_int_table"
+type = "int"
+note = "open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it"
+[[field]]
+offset = 0x5650
+name = "hotspot_count"
+type = "int"
+note = "number of records in the native hotspot table at ctx+0x5248 (table +0x408; at most 100); input_hotspot_register_rect_callbacks appends"
+[[field]]
+offset = 0xc6dc
+name = "hotspot_owner_script_id"
+type = "int"
+note = "packed script id of the frame that last registered a hotspot (table +0x7494; op 0x90 and the named-hotspot register). hotspot_check_owner_script@0x4079b0 compares it with the running frame before any hotspot callback dispatch and throws 'Depth が不正です <running> != <owner>' (flags 0x10007) on a mismatch"
+[[field]]
+offset = 0xc6e4
+name = "hotspot_wait_armed"
+type = "int"
+note = "op 0x94 sets 1, op 0x93 clears; while nonzero adv_input_service_poll resolves op-0x97 bound actions and hover/click hotspots"
+[[field]]
 offset = 0x144e0
 name = "sfx_channel_resource_ids"
 type = "int"
@@ -192,20 +217,15 @@ name = "surface_record_snapshot"
 type = "int"
 note = "first word of the page snapshot of the surface-record table (gfx manager +0x5520, 1000 x 0x14); op_0x71_reset_adv_text_layout copies the live table here, context_state_serialize writes it to numbered saves, and ops 0x258/0x259 write +0x08/+0x0c in both tables"
 [[field]]
-offset = 0x4d7c
-name = "shared_profile_state"
-type = "void*"
-note = "embedded shared SAVE.DAT state object; owns profile integer/settings tables and container timing metadata"
-[[field]]
-offset = 0x5190
-name = "shared_profile_int_table"
-type = "int"
-note = "open-addressing 12-byte string-key to 32-bit value table; op 0x1a2 stores, 0x1a3 loads, shared SAVE.DAT serializes it"
-[[field]]
 offset = 0x50ba4
 name = "gfx_render_target_table"
 type = "void*"
 note = "retained_gfx_manager+0xa590 array of per-slot D3D texture wrappers selected by op 0x20d"
+[[field]]
+offset = 0x51b44
+name = "gfx_current_render_target"
+type = "int"
+note = "retained_gfx_manager+0xb530 selected surface slot; -1 denotes device backbuffer"
 [[field]]
 offset = 0x51b64
 name = "frame_timer_current"
@@ -216,21 +236,6 @@ offset = 0x51b68
 name = "frame_timer_previous"
 type = "int"
 note = "previous shared presentation timestamp at retained_gfx_manager+0xb554; shifted from current before each new sample, and op 0x231 compares current/previous source cells to raise redraw dirty only at cell changes"
-[[field]]
-offset = 0x51b78
-name = "anim_clock_start"
-type = "int"
-note = "start timestamp for the separate finite-animation service window at retained_gfx_manager+0xb564; seeded from frame_timer_current by gfx_animation_service_poll, while op 0x238, op 0x243, and object reset 0x1f6 zero it"
-[[field]]
-offset = 0x51b7c
-name = "anim_clock_duration"
-type = "int"
-note = "global anim clock duration at retained_gfx_manager+0xb568; op 0x238 sets and object reset 0x1f6 zeroes it"
-[[field]]
-offset = 0x51b44
-name = "gfx_current_render_target"
-type = "int"
-note = "retained_gfx_manager+0xb530 selected surface slot; -1 denotes device backbuffer"
 [[field]]
 offset = 0x51b6c
 name = "gfx_dirty_a"
@@ -246,6 +251,16 @@ offset = 0x51b74
 name = "gfx_dirty_b"
 type = "int"
 note = "retained_gfx_manager+0xb560 blocking-presentation dirty flag; active finite object channels set it unless obj+0x2d0 bit 0 detaches them"
+[[field]]
+offset = 0x51b78
+name = "anim_clock_start"
+type = "int"
+note = "start timestamp for the separate finite-animation service window at retained_gfx_manager+0xb564; seeded from frame_timer_current by gfx_animation_service_poll, while op 0x238, op 0x243, and object reset 0x1f6 zero it"
+[[field]]
+offset = 0x51b7c
+name = "anim_clock_duration"
+type = "int"
+note = "global anim clock duration at retained_gfx_manager+0xb568; op 0x238 sets and object reset 0x1f6 zeroes it"
 [[field]]
 offset = 0x51b80
 name = "gfx_animation_service_flags"
@@ -467,6 +482,11 @@ name = "timed_callback_cursor"
 type = "int"
 note = "next schedule entry consumed by timed_callback_sequence_tick; op 0xd3 resets to zero"
 [[field]]
+offset = 0x5f6ac
+name = "mouse_callback_owner_script_id"
+type = "int"
+note = "packed script id of the frame that registered the op-0xcc mouse callback; op 0xcd throws the Depth error when another frame dispatches it"
+[[field]]
 offset = 0x5f6b4
 name = "timed_callback_script_resource_id"
 type = "uint"
@@ -476,6 +496,11 @@ offset = 0x5f6b8
 name = "timed_callback_script_resource_guard"
 type = "uint"
 note = "companion current-script identity checked before redirecting to a scheduled callback"
+[[field]]
+offset = 0x5f6bc
+name = "coroutine_yield_owner_script_id"
+type = "int"
+note = "packed script id of the frame whose ADV coroutine yielded (op 0x199 / input dispatch); op 0x7c throws the Depth error when another frame resumes it"
 [[field]]
 offset = 0x5f6c0
 name = "value_switch_table"

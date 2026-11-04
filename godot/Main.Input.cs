@@ -305,7 +305,10 @@ public partial class Main
     {
         try
         {
-            OS.Alert(text, caption);
+            // A driven run (--control) has nobody to dismiss a modal box, and OS.Alert would block the main thread
+            // that serves the control channel; log the box instead (the timeline records it either way).
+            if (_driveServer != null) GD.Print($"[diagnostic] {caption}: {text.Replace("\n", " / ")}");
+            else OS.Alert(text, caption);
         }
         catch (System.Exception error)
         {

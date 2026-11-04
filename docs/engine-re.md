@@ -5068,14 +5068,39 @@ departure.
   targets.
 - **Coroutine handlers are the exception.** Handlers registered by `0x7b` instead end at `coroutine-resume` (`0x7c`)
   in all 1,924 Himegari registrations.
-- **The ADV handlers belong to the frame depth that registered them (observed 2026-11-03).** A scene that `run`s
-  another script whose dialogue waits for input cannot open the ADV menu there. Native AGE stops on the right click
-  with "Depth が不正です $2$SCENE.BIN != SC0000.BIN … FILE=$2$SCENE.BIN ADDRESS=32 LINE=-1 COMMAND=-(111) DEPTH=2"
-  (the mod loader's gate 4 detour: SC0000 `run` a mod script before page 3). The port instead unwinds silently: the
-  menu runs from SC0000's handler, and closing it resumes SC0000's next page. Neither the native check nor the port's
-  divergence has been traced in Ghidra yet. Consequence for content: a new scene that must support the menu and
-  saving is a scene of its own, entered by SYSTEM4 through the SCJUMP registry with its own `0x7b` handlers and
-  `0x1ad` save-resume mark, as the shipped append scenes are (`oms/examples/mods/example.prologue`).
+- **Callbacks belong to the script that registered them (traced 2026-11-03).** Native keeps one hotspot table
+  (`ctx+0x5248`, at most 100 records) rather than one per frame. Each register (`input_hotspot_register_rect_callbacks`
+  for op `0x90`, `input_hotspot_register_named_callback@0x403e10`) records the registering frame's packed script id at
+  table `+0x7494`, i.e. `EngineCtx::hotspot_owner_script_id` (`ctx+0xc6dc`). While op `0x94` keeps
+  `hotspot_wait_armed` (`ctx+0xc6e4`) set, *every* ADV wait polls that table, including a wait in a script the scene
+  called. Before redirecting to any hotspot callback (op-`0x97` bound action, hover, click; from
+  `adv_input_service_poll`, `adv_input_dispatch_callbacks`, `adv_interpreter_tick` and two helpers),
+  `hotspot_check_owner_script@0x4079b0` compares the owner with the running frame's `frame_script_resource_id`. On
+  a mismatch it throws flags `0x10007` with `Depth が不正です <running> != <owner>` (`0x570424`). The same guard,
+  with the same message, protects the op-`0xcc` mouse callback (`mouse_callback_owner_script_id`, `ctx+0x5f6ac`,
+  checked by op `0xcd`), coroutine resume (`coroutine_yield_owner_script_id`, `ctx+0x5f6bc`, checked by op `0x7c`),
+  op `0xcf` and `timed_callback_sequence_tick`.
+  - The main loop's catch (`engine_main_tick_with_exception_policy`) shows the error through
+    `age_show_message_box` mode 7: caption `エラーが発生しました`, body = message + the `デバック情報` coordinate +
+    the "プログラムを続行しますか？" abort/retry/ignore explanation (`0x570558`), MessageBoxA style `0x112`. Policy
+    result 2 re-executes the command, 4 skips it, and anything else exits the game.
+  - Observed with the mod loader's gate 4 detour (SC0000 `run`s a mod script before page 3; a right click at the
+    script's first text wait): native shows "Depth が不正です $2$SCENE.BIN != SC0000.BIN … FILE=$2$SCENE.BIN
+    ADDRESS=32 LINE=-1 COMMAND=-(111) DEPTH=2" and the game closes. A Frida hook on the six throw sites confirmed
+    the guard is `hotspot_check_owner_script` called from `adv_input_service_poll` (the bound right-click action).
+    `ADDRESS`/`COMMAND` are the instruction after the wait, because a waiting frame's pc is already past it.
+  - **Port (fixed 2026-11-03):** the port's hotspot registry is the owning frame (`_interactiveFrame`); it used to
+    dequeue the owner's callback offset and look it up in the *running* script, so the click was silently dropped
+    (or, had the offset existed there, ran unrelated code). `VirtualMachine.ServiceHotspotCallback` now raises the
+    native error when the owner is not the running frame: the same caption and text through
+    `IDiagnosticHost.ShowDiagnosticMessage`, then the run ends (`HaltReason = "script-error: …"`,
+    `VirtualMachine.ScriptError`), i.e. native's 中止. Retry/ignore are not offered. The port's message matches
+    native's byte for byte. The mouse-callback, coroutine, `0xcf` and timed-callback guards are not yet modelled:
+    the port keeps that state per frame, so a deeper frame simply has none.
+  - Consequence for content: a new scene that must support the menu and saving is a scene of its own, entered by
+    SYSTEM4 through the SCJUMP registry with its own `0x7b` handlers, hotspots and `0x1ad` save-resume mark, as
+    the shipped append scenes are (`oms/examples/mods/example.prologue`). A script reached by `run` must not wait
+    for input while its caller's menu bindings are armed.
 
 **Persistent global state.**
 

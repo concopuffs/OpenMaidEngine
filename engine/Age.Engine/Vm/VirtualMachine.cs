@@ -118,6 +118,8 @@ public sealed partial class VirtualMachine
     public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
     public string? HaltReason { get; private set; }
     public UnsupportedOpcodeDiagnostic? CompatibilityFailure { get; private set; }
+    /// <summary>The native script error that ended the run (AGE's エラーが発生しました box), or null.</summary>
+    public DiagnosticMessage? ScriptError { get; private set; }
     public long Steps { get; private set; }
     public bool AutoMessageEnabled => _autoMessageEnabled;
     public bool MessageSkipEnabled => _messageSkipEnabled;
@@ -721,23 +723,50 @@ public sealed partial class VirtualMachine
     }
 
     private DiagnosticMessage BuildDiagnosticMessage(Instruction instruction)
+        => new(DiagnosticCaption, _diagnosticOutput.PendingText + DiagnosticContext(instruction));
+
+    private string DiagnosticContext(Instruction instruction)
     {
         // Himegari's release AGE initializes both optional debug metadata tables to null and has no
         // writer for either one. The native formatter consequently emits -1 and "-" here.
         const int sourceLine = -1;
         const string commandName = "-";
         int nativeDepth = Math.Max(0, _depth - 1);
-        string context = string.Format(
+        return string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
             "\n\nデバック情報：\nFILE={0} ADDRESS={1:X} LINE={2} COMMAND={3}({4}) DEPTH={5}\n",
             _cur.Script.Name, instruction.Offset, sourceLine, commandName,
             instruction.Opcode, nativeDepth);
-        return new DiagnosticMessage(DiagnosticCaption, _diagnosticOutput.PendingText + context);
+    }
+
+    // age_show_message_box@0x409370 mode 7 (the errors the interpreter throws with flags 0x10007): body "%s%s"
+    // followed by this prompt, MessageBoxA style 0x112 (abort/retry/ignore).
+    private const string ScriptErrorPrompt =
+        "\n\nプログラムを続行しますか？\n\n中止：プログラムを終了します．\n再試行：もう一度このコマンドを実行します．\n"
+        + "        (ただし正常に動作しない場合があります)\n無視：エラーを無視しプログラムを続行します．\n"
+        + "      (ただし正常に動作しない場合があります)\n";
+
+    /// <summary>
+    /// A native interpreter error (a C++ throw with flags 0x10007): AGE shows エラーが発生しました with the
+    /// current FILE/ADDRESS/DEPTH and, on 中止, ends the game. The port presents the same text and ends the run;
+    /// 再試行 and 無視 are not offered. While a frame waits, native's frame pc is already past the waiting
+    /// instruction, so the coordinate is the next instruction's.
+    /// </summary>
+    private ScriptErrorException RaiseScriptError(string text)
+    {
+        int at = Math.Min(_cur.Pc + 1, _cur.Script.Instructions.Count - 1);
+        var message = new DiagnosticMessage(DiagnosticCaption,
+            text + DiagnosticContext(_cur.Script.Instructions[at]) + ScriptErrorPrompt);
+        ScriptError = message;
+        HaltReason ??= "script-error: " + text;
+        _host.ShowDiagnosticMessage(message);
+        return new ScriptErrorException();
     }
 
     private sealed class RootReloadRequestedException : Exception { }
     private sealed class NumberedRestoreRequestedException : Exception { }
     private sealed class ProcessExitRequestedException : Exception { }
+    private sealed class ScriptErrorException : Exception { }
     private sealed record DebugFrameReturnRequest(ExecFrame Frame, IReadOnlyDictionary<int, long> GlobalWrites);
     private sealed record PreloadedScriptSlot(long ScriptId, ExecFrame Frame);
     private enum FrameOutcome { Returned, DebugReturned, RootReload, ExitRequested, Halted, RanOff }
@@ -765,6 +794,11 @@ public sealed partial class VirtualMachine
                     : CreateRestoredFrame(root, restoredRootFrame);
                 restoredRootFrame = null;
                 outcome = RunFrame(rootFrame, cause);
+            }
+            catch (ScriptErrorException)
+            {
+                outcome = FrameOutcome.Halted;
+                break;
             }
             catch (NumberedRestoreRequestedException)
             {
@@ -1224,10 +1258,18 @@ public sealed partial class VirtualMachine
     private bool ServiceHotspotCallback()
     {
         int target;
+        ExecFrame owner;
         lock (_interactiveLock)
         {
             if (_interactiveFrame == null || !_interactiveFrame.Hotspots.TryDequeue(out target)) return false;
+            owner = _interactiveFrame;
         }
+        // Native keeps one hotspot table and records the script that registered it (+0x7494 of the table at
+        // ctx+0x5248). Every hotspot dispatch from an ADV wait first checks that owner against the running frame
+        // (FUN_004079b0): a script `run` from a scene whose menu bindings are still armed cannot take them, and AGE
+        // stops with "Depth が不正です <running> != <owner>" (docs/engine-re.md).
+        if (!ReferenceEquals(owner, _cur))
+            throw RaiseScriptError($"Depth が不正です {_cur.Script.Name} != {owner.Script.Name}");
         if (_cur.Script.IndexByOffset.TryGetValue(target, out int pc))
         {
             // The callback runs inside the instruction that waits (native AGE nests it the same way); when it

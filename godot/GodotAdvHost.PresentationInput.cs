@@ -278,9 +278,10 @@ public sealed partial class GodotAdvHost
         finally
         {
             ResumeScriptAfterPresentation(scriptSuspended);
+            // Also when a callback ends the run with a native script error (the exception leaves this wait).
+            IsWaiting = false;
+            lock (_textLock) _waitIndicatorEnabled = false;
         }
-        IsWaiting = false;
-        lock (_textLock) _waitIndicatorEnabled = false;
         Interlocked.Exchange(ref _presentRequested, 1);
         _timeline?.State("running", new()
         {

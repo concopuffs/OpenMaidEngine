@@ -721,6 +721,12 @@ public partial class Main : Godot.Control
                             CaptureStallDiagnostic(_trace.HaltSnapshot ?? _trace.Snapshot(),
                                                    "compatibility-halt");
                     }
+                    else if (_vm.ScriptError is { } scriptError)
+                    {
+                        // Native AGE ends the game after its エラーが発生しました box (中止).
+                        GD.PushError($"[vm] script error: {scriptError.Text}");
+                        _status.Text = "— script error —";
+                    }
                     else ShowEnd();
                     if (_vm.HaltReason == "STEP-LIMIT")
                     {
