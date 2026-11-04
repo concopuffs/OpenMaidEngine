@@ -197,6 +197,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       with library/template patterns (Text/), and fragment plans, their compiler,
     │                                       applier and gate-7 probe (Patch/); referenced by Age.Cli and the tests,
     │                                       not by the Godot runtime
+    │   ├── Age.Mods/                        mod loader (docs/superpowers/specs/2026-11-03-mod-loader-design.md):
+    │                                       Open Maid Pack containers (.omp ZIP or folder) with path and size checks,
+    │                                       package hash and layout classification (Packages/), manifest.toml reader
+    │                                       on Tomlyn plus semantic versions and ranges (Manifest/); referenced by the tests
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, WAV sanitization, and the

@@ -25,6 +25,7 @@
     <ProjectReference Include="..\Age.Engine.Frontend\Age.Engine.Frontend.csproj" />
     <ProjectReference Include="..\Age.Engine.Text.Windows\Age.Engine.Text.Windows.csproj" />
     <ProjectReference Include="..\Age.Script\Age.Script.csproj" />
+    <ProjectReference Include="..\Age.Mods\Age.Mods.csproj" />
   </ItemGroup>
 
 </Project>

@@ -363,7 +363,7 @@ Packages are untrusted:
 
 - reject absolute paths, `..` segments, drive letters, and names that collide case-insensitively;
 - bound each package to 65,536 entries, 1 GiB per expanded entry and 8 GiB expanded in total, and reject an entry
-  whose compression ratio exceeds 200:1. These limits are provisional: they admit a full voice or CG replacement
+  that expands past 1 MiB at a compression ratio over 200:1 (small, regular files legitimately compress further). These limits are provisional: they admit a full voice or CG replacement
   and stop a decompression bomb, and will be revisited once real packages exist;
 - treat transform plans as untrusted: the loader revalidates every plan against its base (OMS §10.4, step 3);
 - load no native code. Version 1 has nothing executable except AGE bytecode, which runs in the VM.

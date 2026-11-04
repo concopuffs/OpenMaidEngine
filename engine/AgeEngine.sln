@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Engine.Text.Windows", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Script", "Age.Script\Age.Script.csproj", "{DF54A5A6-A2FE-4CCA-88C0-F335ADA197C1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Age.Mods", "Age.Mods\Age.Mods.csproj", "{51310224-BEED-4907-B1F0-EB33D2442F79}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -48,5 +50,9 @@ Global
 		{DF54A5A6-A2FE-4CCA-88C0-F335ADA197C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DF54A5A6-A2FE-4CCA-88C0-F335ADA197C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DF54A5A6-A2FE-4CCA-88C0-F335ADA197C1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{51310224-BEED-4907-B1F0-EB33D2442F79}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{51310224-BEED-4907-B1F0-EB33D2442F79}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{51310224-BEED-4907-B1F0-EB33D2442F79}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{51310224-BEED-4907-B1F0-EB33D2442F79}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
