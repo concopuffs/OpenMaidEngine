@@ -1,7 +1,8 @@
 # Mod loader — Open Maid Pack loading, linking and native export
 
 **Date:** 2026-11-03
-**Status:** draft for review. No loader code has been written against it.
+**Status:** accepted 2026-11-03. Implementation plan: `docs/superpowers/plans/2026-11-03-mod-loader.md`; no loader
+code has been written yet.
 **Home in the canonical map:** this file is the mod loader design. Direction stays in
 `docs/remake-architecture-and-roadmap.md` §3.4–§3.6 and §3.10, which this spec implements in part. Fragment syntax,
 transform plans and their application rules stay in `docs/superpowers/specs/2026-10-06-open-maid-script-design.md`
