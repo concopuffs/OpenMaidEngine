@@ -66,7 +66,7 @@ public partial class Main
         AssetEntry bgmEntry = _catalog.Files.First(entry =>
             entry.Name.EndsWith(".OGG", StringComparison.OrdinalIgnoreCase));
         AudioPayload bgm = selftestResources.ReadAudio(bgmEntry);
-        FadeBgm(0, 10.0);
+        FadeBgm(0, 100, 10.0);
         bool bgmFadeStarted = _bgmFadeTween?.IsValid() == true;
         PlayBgm(bgm.Bytes, bgm.Name);
         bool bgmReplacementCancelsFade = bgmFadeStarted
@@ -85,7 +85,7 @@ public partial class Main
         BeginVoiceBgmDuck(2, 50);
         bool voiceDuckReleaseFadeOk = releaseFading
                                       && !_voiceBgmDuckActive
-                                      && System.Math.Abs(duckedDb - Mathf.LinearToDb(0.5f)) < 0.001f
+                                      && System.Math.Abs(duckedDb - NativeAudioVolume.ToDecibels(5000)) < 0.001f
                                       && System.Math.Abs(_bgm.VolumeDb - duckedDb) < 0.001f;
         StopBgm();
         bool bgmStopReleaseOk = _bgm.Stream == null

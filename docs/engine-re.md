@@ -3666,9 +3666,9 @@ not the logical clip: `sound_stream_fill_quarter@0x483b70` rewinds the decoder o
 otherwise it pads after EOF and `sound_buffer_stop@0x483aa0` stops playback. This family carries no volume or
 pan operands. It inherits configured SFX volume and centered pan: the first-pair capture applies DirectSound
 attenuation `-2377` to both channel loads, and the shared audio service later records centered `SetPan(0)`.
-`sound_buffer_set_volume@0x483f80` computes that inherited attenuation; neither value is supplied by these
-five handlers. The bounded port does not yet import native audio preferences, so its extracted-WAV bootstrap
-uses unity gain and centered pan rather than hard-coding the captured user's setting.
+`sound_buffer_set_volume@0x483f80` applies that inherited attenuation; neither value is supplied by these
+five handlers. The attenuation comes from `sound_channel_apply_volume@0x4830d0` and AGE's shared volume curve
+(see "Native volume curve" below); the port reaches the same gain through its mixer buses, and pan stays centered.
 
 **Native RIFF boundary contract (2026-07-29).** The RIFF branch constructs
 `wav_decoder_ctor@0x4885b0`; `wav_decoder_open@0x488790` then opens the packed-entry handle with WinMM
@@ -3879,6 +3879,32 @@ The port now owns one `AudioMixerSettings` instance across fresh scene VMs. `0xc
 `0xc6`/`0x1ba` update it before calling the host's live-application seam. Godot maps selectors 0..4 to its
 Master/Music/SFX/Voice/Movie buses; the parent Master bus and category bus multiply naturally, and route
 changes mute immediately while preserving the native stop/restart distinctions above.
+
+**Native volume curve (2026-11-04).** Every native audio path converts a basis-point level with one expression:
+level 0 is −10000 mB (silence), otherwise `trunc((ln(level) × 14.427 − 132.88) × 100)` mB, which is
+`1000 × log2(level / 10000)` mB, or 10 dB per halving. The sites are:
+
+- `sound_channel_apply_volume@0x4830d0` for SFX channels 0..9 and voice channel 12, with
+  `level = master × channel / 10000` (`sound_set_channel_volume@0x483890`,
+  `sound_set_master_volume_reapply_channels@0x483850`);
+- `bgm_dshow_apply_volume_level@0x4610d0` for BGM (`IBasicAudio::put_Volume`), fed by
+  `bgm_dshow_set_volume_level@0x4615a0` with `music × master / 10000`;
+- `movie_audio_apply_volume@0x462610` for movies.
+
+Before this the port scaled amplitude linearly, so a 50% setting played at −6 dB instead of −10 dB, and the
+CONFIG reset values (music 6500, SFX 5000, voice 8000) were all too loud. `Age.Engine.Model.NativeAudioVolume`
+now holds the curve. Godot sets every bus with it; because the curve is logarithmic, the Master and category
+buses' decibels add exactly where native multiplies the levels (up to native's integer truncation). Levels 1..9
+would compute below −10000 mB, which DirectSound and DirectShow reject (the previous volume stays); the port
+clamps them to silence.
+
+BGM fades and the voice duck work in the same domain. `bgm_fade_tick@0x464960` interpolates
+`((100 − p) × current + target × p) / 100` in basis points and the backend applies the curve, so a fade is linear
+in level, not amplitude. Op `0xc2`'s target is a level in basis points. CONFIG and CALLBACK_LOAD (which restores
+the BGM level after a load) pass `G[0x3236] × 100`, TITLE passes `0 × 100`, and every other site passes 0. The
+port read it as a percent, so any nonzero restored level (above 1%) played at full volume. Godot now keeps the BGM envelope as a basis-point level (native `+0x420`), steps `0xc2` fades
+100 or 10 times as native does, sets the duck to `MusicFadeOnVoicePlayingVol × 100` (0 reads as 100) and runs the
+duck release from that level to 10000 in 100 steps.
 
 Persistence uses AGE's CP932 `SYS4REG.INI`, not a port-owned format.
 `engine_resolve_sys4reg_ini_path@0x46b150` selects the fixed filename under the SYS4INI
@@ -5054,11 +5080,12 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
 - **Duck release fade (2026-11-03).** The release at `engine_main_tick` `0x411e12` swaps run-state `0x4000`
   for `0x200`. It arms the 10 ms period timer at `ctx+0x5f400` and calls `bgm_fade_arm(10000, 1)`. Each tick
   then feeds `period_timer_poll_elapsed_periods@0x44d0f0` to `bgm_fade_tick@0x464960`, which adds one point per
-  elapsed period up to 100 and interpolates volume linearly in amplitude. The result is a one-second linear
-  fade from the ducked level to full volume (target 10000, not the level saved at `ctx+0x6dbe8`). The duck
+  elapsed period up to 100 and interpolates the level linearly in basis points (the backend then applies the
+  native volume curve; "linear in amplitude" here was corrected 2026-11-04). The result is a one-second fade from
+  the ducked level to full volume (target 10000, not the level saved at `ctx+0x6dbe8`). The duck
   itself stays instant: `voice_bgm_duck_begin` arms step 10 and ticks 100 periods at once. While the release
   fade holds `0x200`, a new voice does not duck. The port matches: `Main.FadeBackFromVoiceBgmDuck` owns the
-  BGM envelope as an explicit fade does, in 10 ms amplitude steps over one second.
+  BGM envelope as an explicit fade does, in 100 basis-point-level steps over one second.
 - **Statement blocks.** `VirtualMachine` tracks the flag and depth and reports the outermost open and close to
   `IAudioHost.SetStatementBlockActive`. Godot withholds delayed voice service (`0x2c0`) and delayed SFX starts
   (`0x2bf`) until the close.

@@ -46,8 +46,6 @@ it; git history keeps the record.
   Kamidori's extra keys (`OUTERFRAMEMODE`, `AUTOFREETEX`, `BLANKEXTENTMODE`, `USEPROPORTIONALFONT`,
   `VALIDFONTCHECKER`, `RUBYSHIFTMODE`, `DEPENDMOVIESOUND=2`) are not reverse-engineered (`engine-re.md`, trailer
   catalog). Done when each key is reversed and either applied or shown inert for both games.
-- **Native audio preferences.** Native applies the user's stored attenuation and pan; the port uses unity gain and
-  centered pan (`engine-re.md`, audio load handlers).
 - **Calibrated font realization (unobserved).** Native builds fonts through
   `text_create_calibrated_single_byte_font@0x451b70` and its mode-1/mode-2 calibration (found in the SYS4433 image,
   display-aspect text). The port implements the layout rule it feeds, not the realization itself (`engine-re.md`).

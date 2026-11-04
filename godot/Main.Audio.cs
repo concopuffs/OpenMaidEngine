@@ -15,7 +15,11 @@ public partial class Main
     private int _voiceCompletedGeneration;
     private bool _voiceBgmDuckActive;
     private int _voiceBgmDuckGeneration;
-    private float _voiceBgmDuckRestoreDb;
+    private int _voiceBgmDuckRestoreLevel = AudioMixerSettings.MaximumVolume;
+    // Native bgm object +0x420: the committed BGM envelope level in basis points. The player's volume is
+    // always NativeAudioVolume.ToDecibels(level); the Master and Music buses carry the mixer settings, and
+    // decibels add where native multiplies the levels.
+    private int _bgmLevel = AudioMixerSettings.MaximumVolume;
     private bool _voiceBgmDuckReleaseArmed;               // native voice_bgm_duck_release_armed (op 0x1bf)
     private readonly System.Collections.Generic.List<Action> _sfxStartsWithheld = new(); // statement block open
     private readonly AudioStreamPlayer[] _sfx = new AudioStreamPlayer[10]; // SC0000 channels 0..9
@@ -42,7 +46,7 @@ public partial class Main
         // track just before the old fade tween reaches zero. Do not let that orphaned tween mute the new
         // stream after this method restores its normal gain.
         CancelBgmFade();
-        _bgm.VolumeDb = 0;
+        SetBgmLevel(AudioMixerSettings.MaximumVolume);
         _bgm.Stream = stream;
         _bgm.Play();
         System.Threading.Volatile.Write(ref _bgmPlaying, 1);
@@ -54,7 +58,7 @@ public partial class Main
         CancelBgmFade();
         _bgm.Stop();
         _bgm.Stream = null;
-        _bgm.VolumeDb = 0;
+        SetBgmLevel(AudioMixerSettings.MaximumVolume);
         System.Threading.Volatile.Write(ref _bgmPlaying, 0);
     }
 
@@ -88,11 +92,9 @@ public partial class Main
         if (busName == null) return;
         int bus = AudioServer.GetBusIndex(busName);
         if (bus < 0) return;
-        int effectiveBasisPoints = basisPoints < 0
-            ? AudioMixerSettings.MaximumVolume
-            : System.Math.Clamp(basisPoints, 0, AudioMixerSettings.MaximumVolume);
-        float linear = effectiveBasisPoints / (float)AudioMixerSettings.MaximumVolume;
-        AudioServer.SetBusVolumeDb(bus, linear <= 0 ? -80.0f : Mathf.LinearToDb(linear));
+        // -1 is native's unconfigured sentinel: the hardware default gain stays (full scale here).
+        int effectiveBasisPoints = basisPoints < 0 ? AudioMixerSettings.MaximumVolume : basisPoints;
+        AudioServer.SetBusVolumeDb(bus, NativeAudioVolume.ToDecibels(effectiveBasisPoints));
     }
 
     public void ApplyAudioRouteEnabled(int category, bool enabled)
@@ -167,7 +169,7 @@ public partial class Main
             BeginVoiceBgmDuck(generation, duckTargetPercent);
         stream.Loop = false;
         _voice.Stream = stream;
-        _voice.VolumeDb = muted ? -80.0f : 0.0f;   // op 0x1d5: channel 12 at volume 0, timing unchanged
+        _voice.VolumeDb = muted ? NativeAudioVolume.ToDecibels(0) : 0.0f;   // op 0x1d5: channel 12 at volume 0, timing unchanged
         System.Threading.Volatile.Write(ref _voiceStartedGeneration, generation);
         _voice.Play();
     }
@@ -210,19 +212,33 @@ public partial class Main
     }
 
     // The release swaps run-state 0x4000 for the 0x200 BGM fade: bgm_fade_arm(10000, 1) on a 10 ms period
-    // timer, and bgm_fade_tick@0x464960 adds one progress point per elapsed period up to 100. The volume
-    // runs linearly in amplitude from the ducked level to full (target 10000, not the saved pre-duck level)
-    // over one second. While it runs, voice_bgm_duck_begin refuses to duck, as for an explicit 0xc2 fade.
+    // timer, and bgm_fade_tick@0x464960 adds one progress point per elapsed period up to 100. The level runs
+    // linearly in basis points from the ducked level to full (target 10000, not the saved pre-duck level)
+    // over one second, through the native volume curve. While it runs, voice_bgm_duck_begin refuses to duck,
+    // as for an explicit 0xc2 fade.
     private const double VoiceBgmDuckReleaseSeconds = 1.0;
     private const int VoiceBgmDuckReleaseSteps = 100;
 
     private void FadeBackFromVoiceBgmDuck()
     {
-        float from = _bgm.VolumeDb <= -80.0f ? 0.0f : Mathf.DbToLinear(_bgm.VolumeDb);
         _voiceBgmDuckActive = false;
         _voiceBgmDuckGeneration = 0;
         _voiceBgmDuckReleaseArmed = false;
+        StartBgmLevelFade(AudioMixerSettings.MaximumVolume, VoiceBgmDuckReleaseSteps, VoiceBgmDuckReleaseSeconds);
+    }
 
+    private void SetBgmLevel(int basisPoints)
+    {
+        _bgmLevel = System.Math.Clamp(basisPoints, 0, AudioMixerSettings.MaximumVolume);
+        _bgm.VolumeDb = NativeAudioVolume.ToDecibels(_bgmLevel);
+    }
+
+    // bgm_fade_tick@0x464960: the level at progress p is (from × (100 − p) + target × p) / 100, applied in
+    // whole steps; the target is committed when the fade completes.
+    private void StartBgmLevelFade(int target, int steps, double realDurationSeconds)
+    {
+        int from = _bgmLevel;
+        target = System.Math.Clamp(target, 0, AudioMixerSettings.MaximumVolume);
         var tween = CreateTween();
         _bgmFadeTween = tween;
         tween.Finished += () =>
@@ -232,10 +248,9 @@ public partial class Main
         };
         tween.TweenMethod(Callable.From<float>(progress =>
         {
-            float step = Mathf.Floor(progress * VoiceBgmDuckReleaseSteps) / VoiceBgmDuckReleaseSteps;
-            float linear = from + (1.0f - from) * step;
-            _bgm.VolumeDb = linear <= 0 ? -80.0f : Mathf.LinearToDb(linear);
-        }), 0.0f, 1.0f, VoiceBgmDuckReleaseSeconds);
+            int points = (int)System.Math.Floor(progress * steps) * (100 / steps);
+            SetBgmLevel(NativeAudioVolume.InterpolateFade(from, target, points));
+        }), 0.0f, 1.0f, realDurationSeconds);
     }
 
     private void ReleaseWithheldSoundEffectStarts()
@@ -251,18 +266,20 @@ public partial class Main
         // Native voice ducking is suppressed while an explicit 0xc2 BGM fade owns the envelope.
         if (_bgmFadeTween != null) return;
         if (!_voiceBgmDuckActive)
-            _voiceBgmDuckRestoreDb = _bgm.VolumeDb;
+            _voiceBgmDuckRestoreLevel = _bgmLevel;
         _voiceBgmDuckActive = true;
         _voiceBgmDuckGeneration = generation;
         _voiceBgmDuckReleaseArmed = false;
-        float linear = System.Math.Clamp(targetPercent / 100.0f, 0.0f, 1.0f);
-        _bgm.VolumeDb = linear <= 0 ? -80.0f : Mathf.LinearToDb(linear);
+        // voice_bgm_duck_begin: MusicFadeOnVoicePlayingVol × 100 basis points (0 reads as 100), applied at
+        // once by a terminal fade tick.
+        int target = targetPercent * 100;
+        SetBgmLevel(target == 0 ? 100 : target);
     }
 
     private void RestoreVoiceBgmDuck()
     {
         if (!_voiceBgmDuckActive) return;
-        _bgm.VolumeDb = _voiceBgmDuckRestoreDb;
+        SetBgmLevel(_voiceBgmDuckRestoreLevel);
         _voiceBgmDuckActive = false;
         _voiceBgmDuckGeneration = 0;
         _voiceBgmDuckReleaseArmed = false;
@@ -361,22 +378,13 @@ public partial class Main
                 System.Threading.Volatile.Write(ref _sfxPlaying[channel], 0);
     }
 
-    public void FadeBgm(int targetPercent, double realDurationSeconds)
+    // Op 0xc2 target is a level in basis points (CONFIG passes setting × 100), not a percent.
+    public void FadeBgm(int targetBasisPoints, int steps, double realDurationSeconds)
     {
-        float linear = System.Math.Clamp(targetPercent / 100.0f, 0.0f, 1.0f);
-        float targetDb = linear <= 0 ? -80.0f : Mathf.LinearToDb(linear);
         RestoreVoiceBgmDuck();
         CancelBgmFade();
-        if (realDurationSeconds <= 0) { _bgm.VolumeDb = targetDb; return; }
-
-        var tween = CreateTween();
-        _bgmFadeTween = tween;
-        tween.Finished += () =>
-        {
-            if (ReferenceEquals(_bgmFadeTween, tween))
-                _bgmFadeTween = null;
-        };
-        tween.TweenProperty(_bgm, "volume_db", targetDb, realDurationSeconds);
+        if (realDurationSeconds <= 0) { SetBgmLevel(targetBasisPoints); return; }
+        StartBgmLevelFade(targetBasisPoints, steps, realDurationSeconds);
     }
 
     private void CancelBgmFade()

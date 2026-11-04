@@ -50,7 +50,8 @@ public interface IAudioHost
     void ScheduleSoundEffectStart(int channel, int startMode, long delayMs) { }
 
     void ReleaseSoundEffect(int channel) { }
-    void FadeBgm(int targetPercent, long durationMs) { }
+    // Op 0xc2: fade the BGM envelope to a level in basis points (0..10000) over durationMs.
+    void FadeBgm(int targetBasisPoints, long durationMs) { }
 
     // Native op 0x1be queries the common 13-slot sound manager. Observed assignments are
     // SFX 0..9, BGM 11, and voice 12; unsupported/unavailable slots report false.

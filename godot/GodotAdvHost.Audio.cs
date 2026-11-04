@@ -188,12 +188,12 @@ public sealed partial class GodotAdvHost
         }
     }
 
-    public void FadeBgm(int targetPercent, long durationMs)
+    public void FadeBgm(int targetBasisPoints, long durationMs)
     {
         long ms = System.Math.Clamp(durationMs, 0, 60_000);
         double realSeconds = ms / 1000.0 / System.Math.Max(0.05, _clock.Speed);
-        _timeline?.State("bgm-fade", new() { ["target_percent"] = targetPercent, ["duration_ms"] = ms });
-        _main.CallDeferred("FadeBgm", targetPercent, realSeconds);
+        _timeline?.State("bgm-fade", new() { ["target_basis_points"] = targetBasisPoints, ["duration_ms"] = ms });
+        _main.CallDeferred("FadeBgm", targetBasisPoints, NativeAudioVolume.FadeSteps(ms), realSeconds);
         long deadline = _clock.NowMs + ms;
         IsSleeping = true;
         bool scriptSuspended = SuspendScriptForPresentation();
