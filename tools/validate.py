@@ -156,6 +156,8 @@ def build_gate_plan(
     low_memory_profile_environment = LOW_MEMORY_DOTNET_ENVIRONMENT + profile_environment
     phases = selected_phases(level)
     gates = [
+        # The check runs before the build so stale tracked files are reported, not silently rewritten.
+        Gate("opcodes-check", "Generated opcode references", _python_tool("opcodes_build.py", "--check")),
         Gate("opcodes-build", "Opcode metadata build", _python_tool("opcodes_build.py", "--build")),
         Gate("globals-lint", "Global registry lint", _python_tool("globals_build.py", "--lint")),
         Gate("engine-ctx-lint", "Engine context lint", _python_tool("engine_ctx_build.py", "--lint")),
@@ -163,14 +165,6 @@ def build_gate_plan(
             "modding-games-check",
             "Generated modding games page",
             _python_tool("modding_games_build.py", "--check"),
-        ),
-        Gate(
-            "generated-opcode-diff",
-            "Generated opcode references",
-            (
-                "git", "diff", "--exit-code", "--",
-                "tools/age_opcode_semantics.py", "docs/opcode-reference.md",
-            ),
         ),
     ]
     gates.extend(

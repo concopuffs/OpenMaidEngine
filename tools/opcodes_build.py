@@ -4,6 +4,8 @@
   --bootstrap-age  seed compatibility stubs from the canonical broader AGE catalog
   --build      emit age_opcodes.py + age_opcode_semantics.py + JSON/Markdown views
   --lint       run the linter, print errors/warnings, exit nonzero on errors
+  --check      lint, then exit nonzero if a tracked generated file differs from what --build would
+               write (writes nothing; the core validation gate)
 See docs/superpowers/specs/2026-07-06-opcode-reference-design.md."""
 from __future__ import annotations
 import os, sys, json, argparse, collections, re
@@ -531,12 +533,30 @@ def emit_coverage_md(
     L += ["", "## by category", ""] + [f"- {k}: {v}" for k, v in sorted(by_cat.items())]
     return "\n".join(L) + "\n"
 
+def tracked_outputs(model, runtime_implemented) -> dict[Path, str]:
+    """The generated files kept in git, by path, as --build writes them."""
+    return {
+        paths.REPO / "tools" / "age_opcodes.py": emit_runtime_py(model),
+        paths.REPO / "tools" / "age_opcode_semantics.py": emit_semantics_py(model),
+        paths.REPO / "docs" / "opcode-reference.md": emit_reference_md(model, runtime_implemented),
+    }
+
+
+def _read_or_none(path: Path) -> str | None:
+    try:
+        with path.open(encoding="utf-8", newline="") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--bootstrap", action="store_true")
     ap.add_argument("--bootstrap-age", action="store_true")
     ap.add_argument("--build", action="store_true")
     ap.add_argument("--lint", action="store_true")
+    ap.add_argument("--check", action="store_true")
     ap.add_argument("--toml", default=str(TOML_DEFAULT))
     args = ap.parse_args(argv)
     tp = Path(args.toml)
@@ -546,7 +566,7 @@ def main(argv=None):
     if args.bootstrap_age:
         bootstrap_age(tp)
         return 0
-    if args.build:
+    if args.build or args.check:
         model = M.load(tp)
         errors, warnings = M.lint(model)
         errors.extend(profile_contract_errors(model))
@@ -557,17 +577,22 @@ def main(argv=None):
                 print("error:", m)
             return 1
         runtime_implemented = load_runtime_coverage()
-        (paths.REPO / "tools" / "age_opcodes.py").write_text(emit_runtime_py(model), encoding="utf-8", newline="\n")
-        (paths.REPO / "tools" / "age_opcode_semantics.py").write_text(
-            emit_semantics_py(model), encoding="utf-8", newline="\n"
-        )
-        print("build: wrote tools/age_opcodes.py, tools/age_opcode_semantics.py")
+        tracked = tracked_outputs(model, runtime_implemented)
+        if args.check:
+            stale = [path for path, text in tracked.items() if _read_or_none(path) != text]
+            for path in stale:
+                print("stale:", path.relative_to(paths.REPO).as_posix())
+            if stale:
+                print("check: generated opcode files are out of date; run opcodes_build.py --build")
+                return 1
+            print(f"check: {len(tracked)} generated opcode files are current")
+            return 0
+        for path, text in tracked.items():
+            path.write_text(text, encoding="utf-8", newline="\n")
+        print("build: wrote tools/age_opcodes.py, tools/age_opcode_semantics.py, docs/opcode-reference.md")
         paths.SHARED_BUILD.mkdir(parents=True, exist_ok=True)
         (paths.SHARED_BUILD / "opcodes.json").write_text(
             emit_json(model, runtime_implemented), encoding="utf-8", newline="\n"
-        )
-        (paths.REPO / "docs" / "opcode-reference.md").write_text(
-            emit_reference_md(model, runtime_implemented), encoding="utf-8", newline="\n"
         )
         (paths.SHARED_BUILD / "opcode-coverage.md").write_text(
             emit_coverage_md(model, runtime_implemented), encoding="utf-8", newline="\n"
@@ -590,7 +615,7 @@ def main(argv=None):
             print("error:", m)
         print(f"lint: {len(errors)} errors, {len(warnings)} warnings")
         return 1 if errors else 0
-    ap.error("no action (expected --bootstrap/--bootstrap-age/--build/--lint)")
+    ap.error("no action (expected --bootstrap/--bootstrap-age/--build/--check/--lint)")
 
 if __name__ == "__main__":
     sys.exit(main())
