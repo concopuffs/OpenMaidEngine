@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\engine\Age.Engine\Age.Engine.csproj" />
     <ProjectReference Include="..\engine\Age.Engine.Frontend\Age.Engine.Frontend.csproj" />
+    <ProjectReference Include="..\engine\Age.Mods\Age.Mods.csproj" />
     <EmbeddedResource Include="..\build\opcodes.json"
                       LogicalName="OME.Runtime.opcodes.json" />
   </ItemGroup>

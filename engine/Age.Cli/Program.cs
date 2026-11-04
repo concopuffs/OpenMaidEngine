@@ -71,6 +71,37 @@ List<Age.Script.Modules.GameModule> OmsModules()
     return omsModules;
 }
 
+if (args.Length > 0 && args[0] == "omp")
+{
+    // Mod loader spec §10: omp build DIR [--output FILE.omp] [--mod DEP …] | omp check [--data-root DIR] [--mod PATH …]
+    // [--skip-failed-mods] | omp explain NAME [--data-root DIR] [--mod PATH …]. --data-root is a port profile root
+    // (its mods/ folder, load-order.txt and selectors.toml); without it only --mod packages are linked.
+    List<string> Paths_(string flag) => args.Select((arg, k) => (arg, k))
+        .Where(pair => pair.arg == flag && pair.k + 1 < args.Length).Select(pair => Path.GetFullPath(args[pair.k + 1])).ToList();
+    string profileId = selectedProfile.Profile.Id;
+    var linkBase = Age.Mods.Linking.ModLinkBase.ForInstall(profileId, sys4Ini, catalog, assetStore, table,
+        Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), Paths.GlobalsJson(profileId), Paths.OmsModules(profileId),
+        Paths.PatchPointsJson(profileId));
+    string? dataRoot = OptionValue("--data-root") is { } root ? Path.GetFullPath(root) : null;
+    string verb = args.Length > 1 ? args[1] : "";
+    return verb switch
+    {
+        "build" when args.Length > 2 => Age.Mods.Tools.OmpCommands.Build(linkBase, args[2], OptionValue("--output"),
+            Paths_("--mod"), Console.Out),
+        "check" => Age.Mods.Tools.OmpCommands.Check(linkBase, dataRoot, Paths_("--mod"), args.Contains("--skip-failed-mods"),
+            Console.Out),
+        "explain" when args.Length > 2 => Age.Mods.Tools.OmpCommands.Explain(linkBase, catalog, assetStore, dataRoot,
+            Paths_("--mod"), args[2], Console.Out),
+        _ => Usage(),
+    };
+    static int Usage()
+    {
+        Console.Error.WriteLine("usage: omp build DIR [--output FILE.omp] [--mod DEP] | omp check [--data-root DIR] "
+                                + "[--mod PATH] [--skip-failed-mods] | omp explain NAME [--data-root DIR] [--mod PATH]");
+        return 2;
+    }
+}
+
 if (args.Contains("oms-compile"))
 {
     // Compile one OMS source file to a SYS4 script. A sidecar next to the source (<file>.omslayout.json) is applied

@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Age.Engine\Age.Engine.csproj" />
     <ProjectReference Include="..\Age.Script\Age.Script.csproj" />
+    <ProjectReference Include="..\Age.Mods\Age.Mods.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

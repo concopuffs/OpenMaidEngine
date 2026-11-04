@@ -85,9 +85,9 @@ public partial class Main : Godot.Control
         ResolvedGamePersistence profilePersistence;
         Sys4AssetCatalog catalog;
         AssetLaunchOptions assetOptions;
+        string workingDirectory = System.IO.Directory.GetCurrentDirectory();
         try
         {
-            string workingDirectory = System.IO.Directory.GetCurrentDirectory();
             if (!System.OperatingSystem.IsWindows())
             {
                 // Godot can chdir to the project before managed startup. Unix shells preserve the launch
@@ -122,6 +122,32 @@ public partial class Main : Godot.Control
         _selectedProfile = selectedProfile;
         _profilePersistence = profilePersistence;
         _assetStore = new Sys4AssetStore(catalog, gameRoot.Root, assetOptions.LooseRoots.ToArray());
+        try
+        {
+            if (!LinkMods(userArgs, workingDirectory, selectedProfile, profilePersistence, gameRoot.Sys4IniPath, catalog,
+                          _assetStore, out _modLayer))
+            {
+                GetTree().Quit(2);
+                return;
+            }
+            if (_modLayer != null)
+            {
+                // Spec §6.5: the linked layer's loose files outrank --overlay-root roots and the game root; its
+                // catalogs mount after the install's own append catalogs.
+                catalog = Sys4AssetCatalog.Load(gameRoot.Sys4IniPath, [_modLayer.CatalogDirectory]);
+                _catalog = catalog;
+                _assetStore = new Sys4AssetStore(catalog, gameRoot.Root,
+                    [_modLayer.LooseRoot, .. assetOptions.LooseRoots]);
+            }
+        }
+        catch (System.Exception error) when (
+            error is System.ArgumentException or System.IO.IOException or System.UnauthorizedAccessException
+                or System.IO.InvalidDataException)
+        {
+            GD.PushError($"[startup] mods: {error.Message}");
+            GetTree().Quit(2);
+            return;
+        }
         GD.Print($"[profile] id={selectedProfile.Profile.Id} title=\"{selectedProfile.Profile.DisplayTitle}\" " +
                  $"selection={selectedProfile.SourceName} identity-match={selectedProfile.IdentityMatched} " +
                  $"frontend={selectedProfile.Profile.SysFrontendId} " +
@@ -312,9 +338,9 @@ public partial class Main : Godot.Control
         _audioMixerSettings = new AudioMixerSettings();
         if (!_selftest && profilePersistence.WritesEnabled)
         {
-            nativeSaveStore = profilePersistence.CreateNativeDatStore()
+            nativeSaveStore = StampSaves(profilePersistence.CreateNativeDatStore()
                 ?? throw new InvalidOperationException(
-                    "write-enabled profile did not construct a native persistence store");
+                    "write-enabled profile did not construct a native persistence store"), profilePersistence);
             foreach (SharedProfileLoadFailure failure in sharedProfile.LoadRecovering(nativeSaveStore))
             {
                 // Keep the damaged files: the next shared-profile write would otherwise replace them.

@@ -1,0 +1,202 @@
+oms 1
+// Gate 4 (mod loader spec §13): a scene the mod's append catalog supplies, entered by the scene scheduler like any
+// shipped scene, so the ADV menu, saving and loading work inside it. AUTO (record 0) registers it as New Game's
+// scene (SCJUMP decision 0); when it ends it clears that row, so the next pass falls back to SC0000.
+//
+// The skeleton is the shipped append scene $1$SC1260's, from `Age.Cli oms-decompile --level idiomatic`: the ADV
+// yield handlers, the hotspots, the save-resume mark, the load-restore rendezvous, and the per-pass setup and
+// teardown. Only the content (sub scene_content, SC1260's label_71b) and the scene's own id are the mod's.
+script "SCENE"
+use himegari.globals
+use himegari.adv
+
+
+    script_entry()
+    set_surface_persistence_flags(0x4, 0x1)
+    set_surface_persistence_flags(0x5, 0x1)
+    set_surface_persistence_flags(0x6, 0x1)
+    set_surface_persistence_flags(0x7, 0x1)
+    set_surface_persistence_flags(0x8, 0x1)
+    set_surface_persistence_flags(0x9, 0x1)
+    set_surface_persistence_flags(0xa, 0x1)
+    set_surface_persistence_flags(0xb, 0x1)
+    set_surface_persistence_flags(0x2b, 0x1)
+    set_surface_persistence_flags(0x2c, 0x1)
+    set_surface_persistence_flags(0x2d, 0x1)
+    set_surface_persistence_flags(0x2e, 0x1)
+    set_surface_persistence_flags(0x2f, 0x1)
+    set_surface_persistence_flags(0x30, 0x1)
+    set_surface_persistence_flags(0x31, 0x1)
+    set_surface_persistence_flags(0x32, 0x1)
+    set_surface_persistence_flags(0x33, 0x1)
+    set_surface_persistence_flags(0x34, 0x1)
+    set_surface_persistence_flags(0x35, 0x1)
+    set_surface_persistence_flags(0x36, 0x1)
+    set_surface_persistence_flags(0x37, 0x1)
+    set_surface_persistence_flags(0x38, 0x1)
+    set_surface_persistence_flags(0x39, 0x1)
+    set_surface_persistence_flags(0x3a, 0x1)
+    coroutine_save_yield_handlers(adv_hide_window_handler, adv_show_window_handler)
+    register_adv_hotspots()
+    mark_save_resume_frame()
+    set_adv_text_layout_origin(0x1, 0x0, 0x1ae)
+    goto label_444
+label_444:
+    label_719()
+    continue_save_load_stack_restore()
+    label_71a()
+    zero_int_range(G[0x2de3], 0x64)
+    if G[0xaba5c] == 0x1 goto label_462
+label_45e:
+    loop {
+        label_71b()
+        exit
+    label_462:
+        if !0x1 goto label_714
+        note "ループ開始"
+        instruction_marker_noop()
+        G[0x6be] = coroutine_label_yield("LABEL", "J", G[0x6be])
+        G[0x6c3] = &label_45e
+        if !(G[0x6c3] == G[0x6be]) break
+        G[0xaba5c] = 0x0
+    }
+    system_flow_request = 0x1
+    atomic {
+        if G[0xaba5c] == 0x0 {
+            scene_decision_seen_flags[scjump_decision_out] = 0x1
+            store_shared_profile_int(scene_decision_seen_flags[scjump_decision_out])
+        }
+        set_tick_presentation(0x1)
+        if G[0x3275] == 0x0 {
+            if G[0x624bd] {
+                gfx_elem_erase(0xcb20, 0x15f90 - 0xcb20)
+            } else {
+                set_gfx_range_transform(0x0, 0x0, 0x0, 0x0, 0x0)
+                clear_retained_gfx_objects()
+                release_transient_surfaces()
+                draw_texture(0xcf08, 0x3, 0x0, 0x0, 0x320, 0x258, 0x0, 0x0)
+                gfx_draw_color(0xcf08, 0x0, 0xff, 0x0)
+                G[0x32ee] = 0x0
+            }
+            clear_render_target()
+            init_adv_layer_slots()
+            adv_chrome_enabled = 0x1
+            G[0x6c5] = 0x0
+            G[0x6c7] = 0x0
+            G[0x6c8] = 0x0
+            G[0x6c6] = 0x0
+            G[0x6241c] = 0x0
+            G[0x6241d] = 0x0
+            G[0x6241e] = 0x0
+            G[0x6241f] = 0x0
+            G[0x62420] = 0x0
+            adv_hover_history = 0x0
+            adv_hover_auto_message = 0x0
+            adv_hover_message_skip = 0x0
+            adv_hover_read_message_skip = 0x0
+            G[0x32ee] = 0x0
+            G[0x3232] = -(0x1)
+            set_adv_text_layout_origin(0x1, 0x0, 0x1ae)
+            G[0x6bf] = 0x0
+            draw_message_window()
+            clear_message_text()
+            set_font_size(0x18)
+            if game_mode != 0x2 {
+                set_font("ＭＳ 明朝")
+                set_font_bold(0x1)
+                set_ruby_font_size(0x8)
+                set_text_line_spacing(0x8)
+                set_text_render_mode(0x3)
+                set_text_effect_offset(0x1, 0x1)
+                set_text_color(0xffffff)
+                set_text_effect_color(0x606060)
+                game_mode = 0x2
+            }
+            clear_text_history()
+        }
+        G[0x3275] = 0x0
+        reset_message_skip_input()
+        resume_adv_skip_service()
+        note "loadmesskip advset"
+        instruction_marker_noop()
+        if G[0x624bd] == 0x0 {
+            draw_texture(0x0, 0x3, 0x0, 0x0, 0x320, 0x258, 0x0, 0x0)
+            gfx_draw_color(0x0, 0x0, 0xff, 0x0)
+            set_texture(0x21, 0xe, -(0x1))
+            draw_texture(0xc350, 0xe, 0x0, 0x0, 0x320, 0x258, 0x0, 0x0)
+        }
+        if G[0x767b] == 0x0 && G[0x55e3a] == 0x0 {
+            GS[0x278] = set_string("ＡＤＶパート")
+        }
+    }
+    call *G[0x6be]
+    atomic {
+        set_tick_presentation(0x0)
+        cancel_hotspot_wait()
+        set_adv_wait_indicator_enabled(0x0)
+        suspend_adv_skip_service()
+        note "savemesskip advend"
+        instruction_marker_noop()
+        sfx_release(0x0)
+        sfx_release(0x1)
+        sfx_release(0x2)
+        sfx_release(0x3)
+        sfx_release(0x4)
+        sfx_release(0x5)
+        sfx_release(0x6)
+        sfx_release(0x7)
+        sfx_release(0x8)
+        sfx_release(0x9)
+        G[0x3235] = 0x0
+        reset_message_voice_state()
+        set_voice_bgm_duck_control(0x0)
+        G[0x3237] = 0x0
+        arm_voice_duck_release()
+        clear_run_state_0x1000()
+        if G[0x3275] == 0x0 {
+            clear_text_history()
+            script_entry()
+            if G[0x624bd] {
+                gfx_elem_erase(0xcb20, 0x15f90 - 0xcb20)
+            } else {
+                clear_retained_gfx_objects()
+            }
+            clear_render_target()
+            for G[0x62ccb] = 0x0; G[0x62ccb] < 0x14; G[0x62ccb] += 0x1 {
+                G[0x3276][G[0x62ccb]] = 0x0
+                G[0x328a][G[0x62ccb]] = 0x0
+                G[0x32b2][G[0x62ccb]] = 0x0
+                for scjump_decision_out2 = 0x0; scjump_decision_out2 < 0x3; scjump_decision_out2 += 0x1 {
+                    if adv_layer_surface_slots[G[0x62ccb]][scjump_decision_out2] {
+                        gfx_elem_release(adv_layer_surface_slots[G[0x62ccb]][scjump_decision_out2])
+                    }
+                }
+            }
+        }
+        set_gfx_range_transform(0x0, 0x0, 0x0, 0x0, 0x0)
+    }
+    goto label_462
+label_714:
+    G[0x69c] = asset "SCENE"
+label_719:
+    return
+sub label_71a {
+    return
+}
+sub label_71b {
+    note "prologue: the mod's own scene"
+    adv_gfx_layer_index = 0x0
+    adv_gfx_resource_id = 0x171
+    show_layer_graphic()
+    transition_background_and_show_window()
+    "[OMS] 追加カタログの場面、一ページ目。"
+    "[OMS] 追加カタログの場面、二ページ目。"
+    "[OMS] 追加カタログの場面、三ページ目。この後は本編の冒頭へ。"
+    hide_window_and_fade_to_black()
+    scjump_scene_script_resource_ids[0x0] = 0x0
+    system_flow_request = 0x1
+    scjump_decision_out = 0x0
+    G[0x55e39] = -(0x1)
+    G[0x767b] = 0x0
+    return
+}

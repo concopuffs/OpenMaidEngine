@@ -1,0 +1,12 @@
+omp = 1
+id = "example.prologue"
+name = "Prologue scene"
+version = "1.0.0"
+description = "Plays a three-page scene from the mod's own append catalog before the opening (SC0000)."
+
+[game]
+profile = "himegari"
+target = "native"
+
+[scripts]
+names = ["AUTO", "SCENE"]

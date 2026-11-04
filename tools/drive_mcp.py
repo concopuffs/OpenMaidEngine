@@ -138,7 +138,7 @@ def run(target: str, steps: list[core.Step], screenshot: bool) -> list[str | Ima
 
 @server.tool()
 def drive_start(target: Target, sandbox: str | None = None, seed: str | None = None, sound: bool = False,
-                foreground: bool = False, build: bool = True) -> str:
+                foreground: bool = False, build: bool = True, mods: list[str] | None = None) -> str:
     """Launch the game under the driver and return once it is up (`drive.py <target> start`).
 
     sandbox: named save sandbox kept between runs (default 'fresh', emptied on every start).
@@ -146,6 +146,7 @@ def drive_start(target: Target, sandbox: str | None = None, seed: str | None = N
     sound: keep the profile's volume (default: muted).
     foreground: leave the window where Windows puts it (default: bottom of the z-order, not activated).
     build: port only; false skips `dotnet build` of the Godot project (start takes about 30-90 s with the build).
+    mods: port only; mod packages (.omp files or folders) to load in addition to the sandbox's mods/ folder.
     Fails if the target already has a session; drive_stop it first."""
     arguments = [target, "start"]
     if sandbox:
@@ -160,6 +161,10 @@ def drive_start(target: Target, sandbox: str | None = None, seed: str | None = N
         if target != "port":
             raise ToolError("build=false applies to the port only")
         arguments.append("--no-build")
+    for mod in mods or []:
+        if target != "port":
+            raise ToolError("mods apply to the port only; native AGE takes an `omp export`")
+        arguments += ["--mod", mod]
     return run_cli(*arguments, timeout=START_TIMEOUT_S)
 
 

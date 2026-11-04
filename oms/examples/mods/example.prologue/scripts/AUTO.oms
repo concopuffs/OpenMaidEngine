@@ -1,0 +1,9 @@
+oms 1
+// Record 0 of the mod's append catalog: native op 0x143 runs it once at INIT2, after SCINIT has filled the SCJUMP
+// registry. It makes the mod's scene New Game's first scene (decision 0, whose shipped row is empty and falls back
+// to SC0000).
+script "AUTO"
+use himegari.globals
+
+    scjump_scene_script_resource_ids[0x0] = asset "SCENE"
+    exit

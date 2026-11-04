@@ -50,6 +50,8 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
                          help="leave the window where Windows puts it (default: the bottom of the z-order)")
     command.add_argument("--godot", help="Godot .NET console binary (default: AGE_GODOT_CONSOLE, then PATH)")
     command.add_argument("--no-build", action="store_true", help="skip `dotnet build godot/OME.csproj`")
+    command.add_argument("--mod", action="append", default=[], metavar="PATH",
+                         help="load this mod package (.omp or folder) in addition to the sandbox's mods/ (repeatable)")
     command.add_argument("--port-arg", action="append", default=[], metavar="ARG",
                          help="extra argument for the port after --, e.g. --port-arg=--locator-hud (repeatable)")
 
@@ -82,7 +84,8 @@ def start(arguments: argparse.Namespace) -> int:
     environment = {**os.environ, core.TOKEN_ENVIRONMENT: token}
     command = [str(godot), "--path", str(GODOT_PROJECT), "--",
                "--game-root", str(paths.CONTEXT.game_root), "--data-root", str(profile_root.resolve()),
-               "--control", "--control-file", str(session.resolve()), *arguments.port_arg]
+               "--control", "--control-file", str(session.resolve()),
+               *[part for mod in arguments.mod for part in ("--mod", str(Path(mod).resolve()))], *arguments.port_arg]
     log_path = root / "godot.log"
     log = log_path.open("wb")
     flags = 0x00000008 | 0x00000200            # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP

@@ -1,0 +1,36 @@
+# Mod loader gate 4, first half: save inside a scene a mod's append catalog supplies. Start the port with the
+# example prologue mod (its record 0 makes New Game open with the mod's scene, $2$SCENE), read to its second page,
+# save slot 0 there (SAVE00.mods.toml is written beside SAVE00.DAT), and quit. Then load it on a restart with
+# himegari-mod-load-scene.steps:
+#   py -3.11 -X utf8 tools/drive.py port start --mod oms/examples/mods/example.prologue
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-mod-save-scene.steps
+#   py -3.11 -X utf8 tools/drive.py port start --sandbox gate4 --seed port:fresh --mod oms/examples/mods/example.prologue
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-mod-load-scene.steps
+#   py -3.11 -X utf8 tools/drive.py port stop
+# Starting the second run with another stack (add --mod oms/examples/mods/example.sc0000-page3) loads the same save
+# and logs the difference ("[mods] save slot 0 was made with a different mod stack: added ...").
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state script=$2$SCENE timeout=60          # the mod's scene, not SC0000
+settle
+advance 1
+expect top=$2$SCENE@0x3dd               # its second page
+
+rclick adv.next                         # the ADV menu works: the scene registered its own handlers
+wait 1.5
+click menu.save
+wait 1.5
+click slot.0
+wait 1.5
+click confirm.yes
+wait 2
+rclick adv.next
+wait 1.5
+expect top=$2$SCENE@0x3dd
+shot mod-saved-scene-page2
+close

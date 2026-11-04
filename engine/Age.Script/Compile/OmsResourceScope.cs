@@ -33,14 +33,21 @@ public sealed class OmsResourceScope
     /// base script). A qualified name (<c>mod.id:NAME</c>) that does not resolve is an error.</summary>
     public string? Script(string name, out string? error) => Resolve(name, kind: "script", assets: false, out error);
 
-    /// <summary>The canonical reference of an asset name; an unknown name is an error, since base assets are
-    /// addressed by packed id in version 1.</summary>
+    /// <summary>The canonical reference of an <c>asset "NAME"</c> value: a new asset, or a new script (a catalog
+    /// record either way; a scene registers its own packed id in the SCJUMP tables this way). An unknown name is an
+    /// error, since base assets are addressed by packed id in version 1.</summary>
     public string? Asset(string name, out string? error)
     {
-        string? reference = Resolve(name, kind: "asset", assets: true, out error);
-        if (reference == null && error == null)
-            error = $"'{name}' is not a new asset of {ModId}; base assets are addressed by packed id";
-        return reference;
+        string? reference = Resolve(name, kind: "asset", assets: true, out error)
+                            ?? Resolve(name, kind: "script", assets: false, out _);
+        if (reference != null)
+        {
+            error = null;
+            return reference;
+        }
+        // A qualified name keeps the asset lookup's error (no such mod in scope, or no such record).
+        error ??= $"'{name}' is not a new asset or script of {ModId}; base assets are addressed by packed id";
+        return null;
     }
 
     private string? Resolve(string name, string kind, bool assets, out string? error)

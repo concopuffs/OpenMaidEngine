@@ -573,7 +573,7 @@ public class OmsPatchTests
     [Theory]
     [InlineData("run \"other.mod:X\"", "'other.mod' is not example.mod or a mod it declares in [[requires]]")]
     [InlineData("run \"base.lib:MISSING\"", "base.lib has no script named 'MISSING'")]
-    [InlineData("G[1] = asset \"SYSTEM.AGF\"", "'SYSTEM.AGF' is not a new asset of example.mod")]
+    [InlineData("G[1] = asset \"SYSTEM.AGF\"", "'SYSTEM.AGF' is not a new asset or script of example.mod")]
     public void ModNamesOutsideTheScopeAreErrors(string statement, string reason)
     {
         Base base_ = Compile(DialogueBase);

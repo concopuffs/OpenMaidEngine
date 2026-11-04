@@ -1,0 +1,16 @@
+# Mod loader gate 4, second half: load slot 0 (saved on the mod scene's second page by
+# himegari-mod-save-scene.steps; see its header), expect the same page, and read on: the scene ends and the
+# opening (SC0000) follows.
+
+wait-state script=TITLE click=adv.next every=3 timeout=120
+wait 1.5
+click title.load
+wait 3
+click slot.0
+wait 1.5
+click confirm.yes
+wait-state top=$2$SCENE@0x3dd timeout=30
+settle
+shot mod-loaded-scene-page2
+advance 1                               # the third page
+wait-state top=SC0000@0x83f timeout=60 click=adv.next every=3   # the opening's first page

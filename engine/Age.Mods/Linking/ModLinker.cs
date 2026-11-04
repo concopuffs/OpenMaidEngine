@@ -8,7 +8,11 @@ namespace Age.Mods.Linking;
 
 /// <summary>A catalog script the stack changed: its linked bytes, the mod whose replacement it starts from (null for
 /// the base), and the mods whose patches it carries, in load order.</summary>
-public sealed record LinkedScript(string Name, byte[] Bytes, string? ReplacedBy, IReadOnlyList<string> PatchedBy);
+public sealed record LinkedScript(string Name, byte[] Bytes, string? ReplacedBy, IReadOnlyList<string> PatchedBy)
+{
+    /// <summary>The plans applied, in order, as <c>mod.id (patches/stem)</c>.</summary>
+    public IReadOnlyList<string> Plans { get; init; } = [];
+}
 
 /// <summary>The outcome of a link: the resolved order, the changed scripts, and the report. When the report stops
 /// the link, <see cref="Scripts"/> holds what linked cleanly but must not be mounted.</summary>
@@ -184,7 +188,7 @@ public static class ModLinker
             if (ApplyAll(script, list, Chosen(script)!, linkBase, ResolveResource, report) is { } bytes)
                 scripts[script] = new LinkedScript(script, bytes,
                     replacements.TryGetValue(script, out var winner) ? winner.Mod.Id : null,
-                    list.Select(use => use.Mod.Id).Distinct().ToList());
+                    list.Select(use => use.Mod.Id).Distinct().ToList()) { Plans = list.Select(use => use.Label).ToList() };
         return new ModLinkResult(order, scripts, report) { Catalogs = catalogs, Assets = assets, Selectors = selectors };
     }
 

@@ -5068,6 +5068,14 @@ departure.
   targets.
 - **Coroutine handlers are the exception.** Handlers registered by `0x7b` instead end at `coroutine-resume` (`0x7c`)
   in all 1,924 Himegari registrations.
+- **The ADV handlers belong to the frame depth that registered them (observed 2026-11-03).** A scene that `run`s
+  another script whose dialogue waits for input cannot open the ADV menu there. Native AGE stops on the right click
+  with "Depth が不正です $2$SCENE.BIN != SC0000.BIN … FILE=$2$SCENE.BIN ADDRESS=32 LINE=-1 COMMAND=-(111) DEPTH=2"
+  (the mod loader's gate 4 detour: SC0000 `run` a mod script before page 3). The port instead unwinds silently: the
+  menu runs from SC0000's handler, and closing it resumes SC0000's next page. Neither the native check nor the port's
+  divergence has been traced in Ghidra yet. Consequence for content: a new scene that must support the menu and
+  saving is a scene of its own, entered by SYSTEM4 through the SCJUMP registry with its own `0x7b` handlers and
+  `0x1ad` save-resume mark, as the shipped append scenes are (`oms/examples/mods/example.prologue`).
 
 **Persistent global state.**
 

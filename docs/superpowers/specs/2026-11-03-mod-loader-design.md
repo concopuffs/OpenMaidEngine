@@ -167,6 +167,13 @@ A fragment names its sites by original offset, by base label or sub (OMS §10.1)
 refer to each other with `run NAME`, using the name in `[scripts].names`. Another mod's scripts are reached only
 through a declared dependency, as `run <mod-id>:NAME`.
 
+A script reached by `run` from a scene cannot host the ADV menu or a save: AGE's ADV handlers belong to the frame that
+registered them, and a right click at a deeper text wait stops native AGE with "Depth が不正です" (found by gate 4,
+`engine-re.md`). A new scene the player can save in is therefore a scene of its own, with the ADV skeleton of a shipped
+scene, entered by SYSTEM4 through the SCJUMP registry: the mod's record 0 writes the scene's packed id
+(`asset "SCENE"`) into `scjump_scene_script_resource_ids` at INIT2, as the shipped `APPEND01` does
+(`oms/examples/mods/example.prologue`).
+
 ### 4.4 Assets
 
 `assets/<NAME>` overrides the catalog asset of that basename. Lookup is case-insensitive, as AGE's own loose
@@ -250,7 +257,8 @@ stays installed.
   to a packed id after allocation. `oms-patch` and `oms-append` emit `Resource` operands for every `run` and every
   resource operand whose target belongs to a mod; references to base scripts and assets may stay literal.
   In source, `run NAME` and `run "mod.id:NAME"` name a script, and the expression `asset "NAME"` (or
-  `asset "mod.id:NAME"`) names a new asset; a base asset keeps its packed id. A plan that holds resource references is
+  `asset "mod.id:NAME"`) names a new asset, or a new script as a value (a scene registering its own id); a base asset
+  keeps its packed id. A plan that holds resource references is
   format version 2 (a `resources` list and `{"t": …, "res": k}` operands); one without them stays version 1.
 - **Record 0.** Op `0x143` runs every mounted catalog's record 0 as a script at INIT2, in ascending selector
   order. Record 0 is therefore always a script: the first name in `[scripts].names`, or, for a mod that ships new

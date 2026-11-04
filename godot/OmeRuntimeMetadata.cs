@@ -21,4 +21,13 @@ internal static class OmeRuntimeMetadata
                 $"{assembly.GetName().Name}.");
         return OpcodeTableJson.Load(stream, abiId);
     }
+
+    /// <summary>Operand access contracts from the same embedded opcode metadata (the mod linker needs them).</summary>
+    internal static Age.Script.Abi.OpcodeContracts LoadOpcodeContracts()
+    {
+        Assembly assembly = typeof(OmeRuntimeMetadata).Assembly;
+        using Stream stream = assembly.GetManifestResourceStream(OpcodeTableResourceName)
+            ?? throw new InvalidDataException($"Embedded runtime metadata '{OpcodeTableResourceName}' is missing.");
+        return Age.Script.Abi.OpcodeContracts.Load(stream);
+    }
 }

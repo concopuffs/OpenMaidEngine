@@ -207,7 +207,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       on Tomlyn plus semantic versions and ranges (Manifest/), and the linker:
     │                                       stack resolution and load order, replacements, plan composition, the
     │                                       spec §7 report, selector allocation, per-mod append catalogs, asset
-    │                                       overrides and the link cache (Linking/); referenced by the tests
+    │                                       overrides and the link cache (Linking/), startup discovery, flags and
+    │                                       save stamps (Launch/), and the omp commands (Tools/); referenced by
+    │                                       Age.Cli, the Godot port (godot/Main.Mods.cs) and the tests
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, WAV sanitization, and the
