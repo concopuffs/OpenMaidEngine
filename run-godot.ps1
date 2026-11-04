@@ -12,6 +12,8 @@
 #   .\run-godot.ps1 -Kamidori  launch the conventional ../Kamidori install with its profile
 #   .\run-godot.ps1 -Kamidori -TranslationPatch  enable its patch/ English overlay and BMP assets
 #   .\run-godot.ps1 -OverlayRoot <dir> -AllowBmpAsAgf  select generic asset compatibility options
+#   .\run-godot.ps1 -Mod <mod folder or .omp> [-Mod ...]  also load these mods (docs/modding/cli.md)
+#   .\run-godot.ps1 -NoMods    start without any mod, even those in the profile's mods/ folder
 #   .\run-godot.ps1 -Profile kamidori -GameRoot <install>  explicitly select a game profile
 #   .\run-godot.ps1 -Profile himegari -Probe -GameRoot <install>  force a read-only diagnostic run
 #   .\run-godot.ps1 -Doctor     resolve and print prerequisites without building or launching
@@ -25,6 +27,8 @@ param(
     [switch]$Kamidori,
     [string[]]$OverlayRoot,
     [switch]$AllowBmpAsAgf,
+    [string[]]$Mod,
+    [switch]$NoMods,
     [switch]$TranslationPatch,
     [switch]$Probe,
     [switch]$SelfTest,
@@ -210,6 +214,12 @@ if ($SelfTest) {
     # Do not add --boot or SC0000 seeds here: those belong only to explicit direct-scene diagnostics.
     Write-Host "==> launching windowed from SYSTEM4" -ForegroundColor Cyan
     $userArgs = @('--game-root', $resolvedGameRoot) + $profileArguments + $assetArguments
+    # Mod paths resolve against the caller's directory; Godot itself runs from godot/.
+    foreach ($modPath in $Mod) {
+        if (-not (Test-Path -LiteralPath $modPath)) { throw "mod not found: $modPath" }
+        $userArgs += @('--mod', (Resolve-Path -LiteralPath $modPath).ProviderPath)
+    }
+    if ($NoMods) { $userArgs += '--no-mods' }
     if ($perfLogFile) {
         Write-Host "==> performance log: $perfLogFile" -ForegroundColor Cyan
         $userArgs += @('--perf-log', $perfLogFile)

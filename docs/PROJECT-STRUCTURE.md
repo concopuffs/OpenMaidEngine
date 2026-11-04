@@ -135,6 +135,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     ├── docs/                                 all documentation
     │   ├── PROJECT-STRUCTURE.md                this file (where things live)
     │   ├── tools-reference.md                  every tool: purpose, usage, I/O (operational companion)
+    │   ├── modding/                            modder-facing guides (README, first-mod, packages, oms-language,
+    │   │                                         patching, new-scenes, cli, troubleshooting); English, plain Markdown
+    │   ├── backlog.md                          open work items (fidelity gaps, deferred follow-ups, accepted ideas)
     │   ├── asset-resolution-re.md              resId→file RE (graphics/audio); asset-index steering
     │   ├── global-memory-re.md                 runtime global observation RE (SHELVED; future starting point)
     │   ├── remake-architecture-and-roadmap.md  THE direction doc (phases A–E)
