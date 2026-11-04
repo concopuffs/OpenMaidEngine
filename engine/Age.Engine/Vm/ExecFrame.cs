@@ -35,5 +35,8 @@ internal sealed class ExecFrame
     public long? TimedCallbackStartedAtMs;
     public int TimedCallbackAbortOffset = -1;
     public readonly HotspotRegistry Hotspots = new();
+    // 無視 after an interpreter error: native adds the frame's last decoded instruction length to its pc. A
+    // waiting frame's native pc is already past the wait, so the port applies the dwords to the wait's successor.
+    public int IgnoredDwords;
     public ExecFrame(Script script, int pc) { Script = script; Pc = pc; }
 }

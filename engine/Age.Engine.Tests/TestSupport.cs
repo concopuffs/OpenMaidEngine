@@ -103,6 +103,13 @@ internal class RecordingHost : IHost
         Diagnostics.Add(message);
         OnDiagnosticMessage?.Invoke(message);
     }
+    /// <summary>Answers for interpreter error boxes, in order; 中止 once they run out.</summary>
+    public readonly Queue<ScriptErrorChoice> ScriptErrorAnswers = new();
+    public ScriptErrorChoice ShowScriptError(DiagnosticMessage message)
+    {
+        ShowDiagnosticMessage(message);
+        return ScriptErrorAnswers.Count > 0 ? ScriptErrorAnswers.Dequeue() : ScriptErrorChoice.Abort;
+    }
     public FullwidthTextEditResult EditFullwidthString(FullwidthTextEditRequest request)
     {
         FullwidthTextEdits.Add(request);

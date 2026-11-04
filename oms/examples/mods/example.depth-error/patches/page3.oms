@@ -1,0 +1,7 @@
+oms 1
+// Before SC0000's third page (site 0x877), run the mod's DETOUR script.
+patch "SC0000.BIN" fingerprint "sha256:029718d6c927f90f6dcb1b89851591be310b5889dd53d6c8892604ad1fc9a9f6"
+
+before site 0x877 {
+    run "DETOUR"
+}

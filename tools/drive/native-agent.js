@@ -86,9 +86,16 @@ function hookUser32(module) {
         return 1;
     }, 'int', ['int', 'int'], 'stdcall'));
 
-    const messageBoxA = module.getExportByName('MessageBoxA');
-    const showMessageBox = new NativeFunction(messageBoxA, 'int', ['pointer', 'pointer', 'pointer', 'uint'], 'stdcall');
-    Interceptor.replace(messageBoxA, new NativeCallback((owner, text, caption, style) => {
+    hookMessageBoxA(module.getExportByName('MessageBoxA'));
+}
+
+// MessageBoxA's replacement is C, not a JS NativeCallback: a shown box runs its modal loop inside the call, and
+// with a JS frame around that loop AGE died (0xC000041D) as soon as the box painted. JS runs only for the policy
+// lookup before the call and the report after it.
+let messageBoxHook = null;    // keeps the CModule and its callbacks alive
+
+function hookMessageBoxA(messageBoxA) {
+    const lookup = new NativeCallback((text, caption, style) => {
         const body = cstring(text, 4096);
         const title = hex(cstring(caption, 512));
         const policy = config.dialogs.find(dialog => startsWith(body, dialog.match));
@@ -97,10 +104,29 @@ function hookUser32(module) {
             return policy.answer;
         }
         report('dialog', { text: hex(body), caption: title, style, shown: true });
-        const result = showMessageBox(owner, text, caption, style);   // calls past the replacement
-        report('dialog-closed', { text: hex(body), result });
-        return result;
-    }, 'int', ['pointer', 'pointer', 'pointer', 'uint'], 'stdcall'));
+        return 0;
+    }, 'int', ['pointer', 'pointer', 'uint']);
+    const closed = new NativeCallback((text, result) => {
+        report('dialog-closed', { text: hex(cstring(text, 4096)), result });
+    }, 'void', ['pointer', 'int']);
+    const module = new CModule(`
+typedef int (__attribute__((stdcall)) *box_fn)(void *, const char *, const char *, unsigned int);
+extern int dialog_lookup(const char *text, const char *caption, unsigned int style);
+extern void dialog_closed(const char *text, int result);
+box_fn original;
+
+int __attribute__((stdcall)) replacement(void *owner, const char *text, const char *caption, unsigned int style)
+{
+    int answer = dialog_lookup(text, caption, style);
+    if (answer != 0)
+        return answer;
+    int result = original(owner, text, caption, style);
+    dialog_closed(text, result);
+    return result;
+}
+`, { dialog_lookup: lookup, dialog_closed: closed });
+    module.original.writePointer(Interceptor.replaceFast(messageBoxA, module.replacement));
+    messageBoxHook = { module, lookup, closed };
 }
 
 function hookWinmm(module) {

@@ -31,7 +31,8 @@ public sealed partial class VirtualMachine
                     frame.Script.ScriptCallOffsets[restored.CallTargetIndex], out int callSite))
                 pc = callSite;
             int current = (uint)pc < (uint)code.Count ? code[pc].Offset : -1;
-            int resume = (uint)(pc + 1) < (uint)code.Count ? code[pc + 1].Offset : current;
+            int resume = ((uint)(pc + 1) < (uint)code.Count ? code[pc + 1].Offset : current)
+                         + Volatile.Read(ref frame.IgnoredDwords);
             locations[i] = new VmFrameLocation(frame.Script.Name, resume, current);
         }
         return locations;

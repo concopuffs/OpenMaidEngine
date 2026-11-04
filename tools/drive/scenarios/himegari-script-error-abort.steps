@@ -1,0 +1,14 @@
+# AGE's interpreter error box answered 中止: the game closes through the forced WM_CLOSE (exit code 0, the shared
+# profile saved). Setup as in himegari-script-error.steps.
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state script=$2$DETOUR timeout=90 click=adv.next every=3
+wait 2
+rclick adv.next                         # Depth が不正です
+wait 1
+answer Abort                            # the game closes

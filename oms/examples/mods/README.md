@@ -15,6 +15,10 @@ The first two compose.
   it clears the row and the opening follows. A scene called with `run` from another scene cannot open the ADV menu:
   native AGE and the port both stop with "Depth が不正です" (`docs/engine-re.md`). `tools/drive/scenarios/himegari-mod-*.steps` drive it.
 
+- `example.depth-error` raises AGE's interpreter error on purpose. SC0000 `run`s its DETOUR script, which waits
+  for text while SC0000's ADV bindings are armed, so a right click there is "Depth が不正です".
+  `tools/drive/scenarios/himegari-script-error*.steps` answer the box on both targets.
+
 Gate 5 exported `example.prologue`, `example.sc0000-page3` and `example.sc0000-page4` with `Age.Cli omp export` and
 ran the same scenarios on native AGE.
 

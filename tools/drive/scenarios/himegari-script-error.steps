@@ -1,0 +1,38 @@
+# AGE's interpreter error box (エラーが発生しました: 中止/再試行/無視), raised by the example.depth-error mod: SC0000
+# runs its DETOUR script, which waits for text while SC0000's ADV bindings are armed, so a right click fails the
+# hotspot owner check ("Depth が不正です"). DETOUR waits at 0x2f (3 dwords); 0x32 is end-text-line; 0x35 exits.
+# 再試行 re-executes nothing; 無視 adds the wait's length to the pc, skipping end-text-line. Both targets:
+#   port:   py -3.11 -X utf8 tools/drive.py port start --mod oms/examples/mods/example.depth-error
+#   native: engine> dotnet run --project Age.Cli -- omp export --output-dir ../build/depth-export
+#                       --mod ../oms/examples/mods/example.depth-error
+#           py -3.11 -X utf8 tools/native_scratch.py --replace --overlay build/depth-export/SC0000.BIN
+#               --overlay build/depth-export/APPEND02.AAI --overlay build/depth-export/APPEND02.ALF
+#           py -3.11 -X utf8 tools/drive.py native start
+# then `drive.py <target> run` this file. himegari-script-error-abort.steps covers 中止.
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state script=$2$DETOUR timeout=90 click=adv.next every=3
+wait 2
+expect top=$2$DETOUR@0x32               # waiting for input
+
+rclick adv.next                         # the ADV menu binding belongs to SC0000: Depth が不正です
+wait 1
+dialogs
+shot script-error-box
+answer Retry
+wait 1
+expect top=$2$DETOUR@0x32               # nothing re-executed; still waiting
+
+rclick adv.next
+wait 1
+answer Ignore
+wait 1
+expect top=$2$DETOUR@0x35               # pc += 3 dwords: end-text-line is skipped, the wait goes on
+click adv.next
+wait-state top=SC0000@0x8ac timeout=10  # DETOUR exits; SC0000's third page
+close

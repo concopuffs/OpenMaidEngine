@@ -724,9 +724,10 @@ public partial class Main : Godot.Control
                     }
                     else if (_vm.ScriptError is { } scriptError)
                     {
-                        // Native AGE ends the game after its エラーが発生しました box (中止).
+                        // Native AGE closes the game after its エラーが発生しました box is answered 中止.
                         GD.PushError($"[vm] script error: {scriptError.Text}");
                         _status.Text = "— script error —";
+                        if (!_selftest) QuitAfterExitRequest("script error answered 中止");
                     }
                     else if (_vm.HaltReason == "exit-request" && !_selftest) QuitAfterExitRequest();
                     else ShowEnd();

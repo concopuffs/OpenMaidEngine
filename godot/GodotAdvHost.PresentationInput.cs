@@ -29,6 +29,8 @@ public sealed partial class GodotAdvHost
     private readonly ScriptPresentationBarrier _presentationBarrier = new();
     private readonly AutoResetEvent _presentationRequestConsumed = new(false);
     private readonly AutoResetEvent _diagnosticMessageCompleted = new(false);
+    private readonly AutoResetEvent _scriptErrorCompleted = new(false);
+    private volatile ScriptErrorChoice _scriptErrorChoice;
     private readonly AutoResetEvent _fullwidthTextEditCompleted = new(false);
     private readonly object _fullwidthTextEditLock = new();
     private FullwidthTextEditResult _fullwidthTextEditResult;
@@ -80,6 +82,29 @@ public sealed partial class GodotAdvHost
     }
 
     public void CompleteDiagnosticMessage() => _diagnosticMessageCompleted.Set();
+
+    /// <summary>The interpreter error box (中止/再試行/無視): the VM thread blocks until the dialog answers. A stop
+    /// aborts; a root reload (タイトルに戻る) retries, so the VM reaches its next opcode boundary and reloads.</summary>
+    public ScriptErrorChoice ShowScriptError(DiagnosticMessage message)
+    {
+        if (_stopRequested) return ScriptErrorChoice.Abort;
+        _timeline?.Event("script-error", new()
+        {
+            ["caption"] = message.Caption,
+            ["text"] = message.Text,
+        });
+        _main.CallDeferred("ShowAgeScriptError", message.Text, message.Caption);
+        while (!_stopping && !_scriptErrorCompleted.WaitOne(50)) { }
+        if (_stopRequested) return ScriptErrorChoice.Abort;
+        if (_rootReloadInterrupt) return ScriptErrorChoice.Retry;
+        return _scriptErrorChoice;
+    }
+
+    public void CompleteScriptError(ScriptErrorChoice choice)
+    {
+        _scriptErrorChoice = choice;
+        _scriptErrorCompleted.Set();
+    }
 
     public FullwidthTextEditResult EditFullwidthString(FullwidthTextEditRequest request)
     {
@@ -825,6 +850,7 @@ public sealed partial class GodotAdvHost
         _inputCallbackSignal.Set();
         _frameSignal.Set();
         _diagnosticMessageCompleted.Set();
+        _scriptErrorCompleted.Set();
         _fullwidthTextEditCompleted.Set();
     }
 

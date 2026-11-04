@@ -18,6 +18,7 @@ public partial class Main
     private const double ReturnToTitleDelaySeconds = 0.25;   // FUN_00405740: Sleep(250) before op 0x9
 
     private ExitConfirmationDialog? _exitConfirmation;
+    private ScriptErrorDialog? _scriptErrorDialog;
     private CanvasLayer? _exitDimLayer;
     private ColorRect? _exitDim;
 
@@ -34,7 +35,8 @@ public partial class Main
     /// <summary>Native WM_CLOSE with wParam 0: confirm through the 終了 dialog while a game is running.</summary>
     private void RequestUnforcedClose()
     {
-        if (_exitConfirmation != null) return;
+        // A modal message box disables AGE's window, so neither its close button nor ESC can ask meanwhile.
+        if (_exitConfirmation != null || _scriptErrorDialog != null) return;
         if (_vm == null || _host == null || _done || _selftest)
         {
             GetTree().Quit(0);
@@ -92,10 +94,11 @@ public partial class Main
         _exitDim.Visible = alpha > 0;
     }
 
-    /// <summary>Native forced close after op 0x1 (Command_Exit_Exception): quit without the dialog.</summary>
-    private void QuitAfterExitRequest()
+    /// <summary>Native forced close after op 0x1 (Command_Exit_Exception) or an interpreter error answered 中止:
+    /// both leave through continuation 0x412961 and quit without the dialog.</summary>
+    private void QuitAfterExitRequest(string reason = "exit request")
     {
-        GD.Print("[vm] exit request: closing like AGE's forced WM_CLOSE");
+        GD.Print($"[vm] {reason}: closing like AGE's forced WM_CLOSE");
         GetTree().Quit(0);
     }
 }

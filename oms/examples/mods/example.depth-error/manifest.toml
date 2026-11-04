@@ -1,0 +1,12 @@
+omp = 1
+id = "example.depth-error"
+name = "Depth error repro"
+version = "1.0.0"
+description = "Deliberately raises AGE's Depth error: SC0000 runs a script that waits for text, so a right click there fails the hotspot owner check."
+
+[game]
+profile = "himegari"
+target = "native"
+
+[scripts]
+names = ["AUTO", "DETOUR"]

@@ -4599,6 +4599,12 @@ must write `ScreenMode=1` first.
 thunk. Mode 5 is style `0x14` (`MB_YESNO | MB_ICONHAND`) with the caption エラーが発生しました. Returning `IDYES`
 from a `MessageBoxA` replacement continues exactly as pressing the button does.
 
+The agent's `MessageBoxA` replacement is C (a CModule), not a JS `NativeCallback`. Before 2026-11-04 it was JS, and
+AGE died with `0xC000041D` (an exception in a user-mode callback) as soon as a shown box painted. The box's modal
+loop ran inside the JS frame. Policy-answered boxes never entered that loop, so the bug stayed hidden until the
+interpreter error box was left open. Input posts also skip a disabled window now, as hardware input does while a
+modal box owns it.
+
 **The "data is corrupted" box is a registration check.** `engine_main_tick_with_exception_policy`
 (`0x4119ca`..`0x411a1d`) checks whether `set:IsReggist` exists and is 0. If so, every 60–180 s (60 s plus
 `rand() % 120` s) it shows a mode-5 box. Its full text:
@@ -5219,20 +5225,48 @@ departure.
   op `0xcf` and `timed_callback_sequence_tick`.
   - The main loop's catch (`engine_main_tick_with_exception_policy`) shows the error through
     `age_show_message_box` mode 7: caption `エラーが発生しました`, body = message + the `デバック情報` coordinate +
-    the "プログラムを続行しますか？" abort/retry/ignore explanation (`0x570558`), MessageBoxA style `0x112`. Policy
-    result 2 re-executes the command, 4 skips it, and anything else exits the game.
-  - Observed with the mod loader's gate 4 detour (SC0000 `run`s a mod script before page 3; a right click at the
-    script's first text wait): native shows "Depth が不正です $2$SCENE.BIN != SC0000.BIN … FILE=$2$SCENE.BIN
-    ADDRESS=32 LINE=-1 COMMAND=-(111) DEPTH=2" and the game closes. A Frida hook on the six throw sites confirmed
-    the guard is `hotspot_check_owner_script` called from `adv_input_service_poll` (the bound right-click action).
-    `ADDRESS`/`COMMAND` are the instruction after the wait, because a waiting frame's pc is already past it.
-  - **Port (fixed 2026-11-03):** the port's hotspot registry is the owning frame (`_interactiveFrame`); it used to
-    dequeue the owner's callback offset and look it up in the *running* script, so the click was silently dropped
-    (or, had the offset existed there, ran unrelated code). `VirtualMachine.ServiceHotspotCallback` now raises the
-    native error when the owner is not the running frame: the same caption and text through
-    `IDiagnosticHost.ShowDiagnosticMessage`, then the run ends (`HaltReason = "script-error: …"`,
-    `VirtualMachine.ScriptError`), i.e. native's 中止. Retry/ignore are not offered. The port's message matches
-    native's byte for byte. The mouse-callback, coroutine, `0xcf` and timed-callback guards are not yet modelled:
+    the "プログラムを続行しますか？" abort/retry/ignore explanation (`0x570558`), MessageBoxA style `0x112`
+    (`MB_ABORTRETRYIGNORE | MB_ICONHAND | MB_DEFBUTTON2`).
+  - **The answers (driven 2026-11-04, `tools/drive/scenarios/himegari-script-error*.steps`).** The packer thunk
+    in place of `MessageBoxA` translates the button before the policy at `0x412689` sees it. EAX was measured at
+    `0x412679`:
+
+    | Button | `MessageBoxA` returns | Policy sees | Native effect |
+    |---|---|---|---|
+    | 再試行 | `IDRETRY` 4 | 2 | Logs `0x570f34` and restarts the loop with the pc unchanged. Nothing is re-executed, so the error comes back only if its cause does: a held button re-raises it on every tick. |
+    | 無視 | `IDIGNORE` 5 | 4 | Logs `0x570d24` and adds 4 × the frame's *last decoded* instruction length (`ctx+0x53d88` per frame) to `frame_pc`, then restarts. |
+    | 中止 (and any other code) | `IDABORT` 3 | 1 | Continuation `0x412961`, the forced `WM_CLOSE`: exit code 0, and `SYS4REG.INI` and the saves are written. |
+
+    For 無視 after an input-poll error, the last decoded instruction is the wait. A waiting frame's pc is already
+    past the wait, so its successor is skipped by the wait's length without running, and the frame keeps waiting.
+    `example.depth-error`'s DETOUR shows this: it waits at `0x2f` (3 dwords), and 無視 moves the pc from `0x32`
+    (`end-text-line`) to `0x35` (`exit`).
+
+    Repeated 無視 under a held button kept adding 3 dwords even where the instruction at the pc was 1 dword long,
+    so the step is the last decoded length, not the current instruction's. Its pc then left the script, and a later
+    Depth error surfaced as a plain mode-1 box (style `0x10`, no debug block) that closed the game.
+  - Raised with `oms/examples/mods/example.depth-error` (SC0000 `run`s a mod script before page 3; a right click at
+    its text wait): "Depth が不正です $2$DETOUR.BIN != SC0000.BIN … FILE=$2$DETOUR.BIN ADDRESS=32 LINE=-1
+    COMMAND=-(111) DEPTH=2". A Frida hook on the six throw sites confirmed the guard is `hotspot_check_owner_script`
+    called from `adv_input_service_poll` (the bound right-click action). `ADDRESS`/`COMMAND` are the instruction
+    after the wait, because a waiting frame's pc is already past it.
+
+    The gate-4 record that "the game closes" was the driver's own crash, not 中止 (see "Driving native AGE",
+    message boxes).
+  - **Port (fixed 2026-11-03; answers 2026-11-04):**
+    - **Owner check.** The port's hotspot registry is the owning frame (`_interactiveFrame`). It used to dequeue the
+      owner's callback offset and look it up in the *running* script, so the click was silently dropped, or, had the
+      offset existed there, ran unrelated code. `VirtualMachine.ServiceHotspotCallback` now raises the native error
+      when the owner is not the running frame. The text matches native's byte for byte.
+    - **The box.** The error goes through `IDiagnosticHost.ShowScriptError`, which returns a `ScriptErrorChoice`.
+      Godot shows `ScriptErrorDialog`: native's caption and text, 中止(&A)/再試行(&R)/無視(&I), 再試行 as the default
+      button, and no cancel.
+    - **中止** ends the run (`HaltReason = "script-error: …"`, `VirtualMachine.ScriptError`), and the frontend quits
+      like the forced close.
+    - **再試行** keeps waiting, with the owner's bindings re-armed.
+    - **無視** adds the wait's length to `ExecFrame.IgnoredDwords`. The frame resumes that many dwords past the
+      wait's successor, and the drive position shows the skip while the frame still waits.
+    - Both targets pass the same scenarios. The mouse-callback, coroutine, `0xcf` and timed-callback guards are not yet modelled:
     the port keeps that state per frame, so a deeper frame simply has none.
   - Consequence for content: a new scene that must support the menu and saving is a scene of its own, entered by
     SYSTEM4 through the SCJUMP registry with its own `0x7b` handlers, hotspots and `0x1ad` save-resume mark, as

@@ -174,6 +174,7 @@ class Win32(core.Windows):
         self.gdi32 = gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
         user32.EnumChildWindows.argtypes = [wintypes.HWND, self.WNDENUMPROC, wintypes.LPARAM]
         user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+        user32.IsWindowEnabled.argtypes = [wintypes.HWND]
         user32.PrintWindow.argtypes = [wintypes.HWND, wintypes.HDC, wintypes.UINT]
         user32.GetDC.argtypes = [wintypes.HWND]
         user32.GetDC.restype = wintypes.HDC
@@ -219,6 +220,13 @@ class Win32(core.Windows):
 
     def post(self, hwnd: int, message: int, wparam: int, lparam: int) -> None:
         self.user32.PostMessageW(hwnd, message, wparam, lparam)
+
+    def post_input(self, hwnd: int, message: int, wparam: int, lparam: int) -> None:
+        """Post a mouse or keyboard message as hardware input arrives: not while the window is disabled. A modal
+        message box disables its owner, and AGE's window procedure must not see input from inside the box's loop
+        (a right-button-up posted under the Depth error box crashed AGE with 0xC000041D)."""
+        if self.user32.IsWindowEnabled(hwnd):
+            self.user32.PostMessageW(hwnd, message, wparam, lparam)
 
     def client_to_screen(self, hwnd: int, x: int, y: int) -> tuple[int, int]:
         point = self.wintypes.POINT(x, y)
@@ -565,7 +573,7 @@ class Daemon:
         hwnd = self.require_window()
         self.api.setcursor(x, y)
         self.cursor = (x, y)
-        win32().post(hwnd, WM_MOUSEMOVE, 0, lparam(x, y))
+        win32().post_input(hwnd, WM_MOUSEMOVE, 0, lparam(x, y))
 
     def click(self, x: int, y: int, right: bool, hold: float) -> None:
         hwnd = self.require_window()
@@ -574,20 +582,20 @@ class Daemon:
         vk, down, up = (2, WM_RBUTTONDOWN, WM_RBUTTONUP) if right else (1, WM_LBUTTONDOWN, WM_LBUTTONUP)
         # Menus poll the button (GetAsyncKeyState); the movie skip and CLICKONUP consume the message latch.
         self.api.setkey(vk, True)
-        win32().post(hwnd, down, vk, lparam(x, y))
+        win32().post_input(hwnd, down, vk, lparam(x, y))
         time.sleep(hold)
         self.api.setkey(vk, False)
-        win32().post(hwnd, up, 0, lparam(x, y))
+        win32().post_input(hwnd, up, 0, lparam(x, y))
         time.sleep(0.05)
 
     def key(self, vk: int, hold: float) -> None:
         hwnd = self.require_window()
         scan = win32().scan_code(vk)
         self.api.setkey(vk, True)
-        win32().post(hwnd, WM_KEYDOWN, vk, 1 | (scan << 16))
+        win32().post_input(hwnd, WM_KEYDOWN, vk, 1 | (scan << 16))
         time.sleep(hold)
         self.api.setkey(vk, False)
-        win32().post(hwnd, WM_KEYUP, vk, 1 | (scan << 16) | 0xC0000000)
+        win32().post_input(hwnd, WM_KEYUP, vk, 1 | (scan << 16) | 0xC0000000)
         time.sleep(0.05)
 
     def capture(self) -> Any:
@@ -657,7 +665,7 @@ class Daemon:
         hwnd = self.require_window()
         x, y = win32().client_to_screen(hwnd, *self.cursor)
         for _ in range(abs(notches)):
-            win32().post(hwnd, WM_MOUSEWHEEL, wheel_wparam(1 if notches > 0 else -1), lparam(x, y))
+            win32().post_input(hwnd, WM_MOUSEWHEEL, wheel_wparam(1 if notches > 0 else -1), lparam(x, y))
             time.sleep(0.08)
         return {}
 

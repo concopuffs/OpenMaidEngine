@@ -334,6 +334,29 @@ public partial class Main
         }
     }
 
+    /// <summary>AGE's interpreter error box (中止/再試行/無視), shown for driven runs too: the driver answers it with
+    /// `answer`, as it answers the native box.</summary>
+    public void ShowAgeScriptError(string text, string caption)
+    {
+        if (_scriptErrorDialog != null)
+        {
+            GD.PushWarning("[vm] replaced an already-open script error box");
+            _scriptErrorDialog.QueueFree();
+        }
+        GD.Print($"[vm] script error box: {text.Split('\n')[0]}");
+        var dialog = new ScriptErrorDialog(caption, text);
+        _scriptErrorDialog = dialog;
+        dialog.Completed += choice =>
+        {
+            if (_scriptErrorDialog == dialog) _scriptErrorDialog = null;
+            GD.Print($"[vm] script error answered: {choice}");
+            _host?.CompleteScriptError(choice);
+            dialog.QueueFree();
+        };
+        AddChild(dialog);
+        dialog.Open();
+    }
+
     public void ShowAgeFullwidthTextEditor(string initialText)
     {
         if (_fullwidthTextEditor != null)

@@ -1,0 +1,5 @@
+oms 1
+// Record 0 of the append catalog runs once at INIT2 (op 0x143). This mod needs nothing there.
+script "AUTO"
+
+    exit

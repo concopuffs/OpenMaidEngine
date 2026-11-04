@@ -264,6 +264,97 @@ public class HotspotInputTests
         Assert.Contains("中止：プログラムを終了します．", shown.Text);
     }
 
+    /// <summary>The Depth error's box answered 再試行 or 無視 (driven natively 2026-11-04). The callee waits at
+    /// offset 0 (3 dwords); its successor at 3 is a 3-dword call-script whose target sets G[0x111]; at 6 a mov sets
+    /// G[0x112]. 再試行 keeps waiting and then runs both. 無視 adds the wait's length to the resume point, so the
+    /// call-script is skipped unexecuted.</summary>
+    [Theory]
+    [InlineData(ScriptErrorChoice.Retry, 1)]
+    [InlineData(ScriptErrorChoice.Ignore, 0)]
+    public void DepthErrorRetryKeepsWaitingAndIgnoreSkipsTheWaitsLengthPastIt(ScriptErrorChoice answer, long marker)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var outer = ScriptAssembler.Assemble(table, "OUTER", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(-1), I(-1), I(30) }),
+            (0x97, new[] { I(10), I(20), I(20), I(20), I(7) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x3, new[] { I(5) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var inner = ScriptAssembler.Assemble(table, "INNER", new List<(int, Operand[])>
+        {
+            (0x72, new[] { I(1) }),               // 0: the wait the right click interrupts
+            (0x3, new[] { I(6) }),                // 3: skipped by 無視
+            (0x55, new[] { G(0x112), I(1) }),     // 6
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var markerScript = ScriptAssembler.Assemble(table, "MARKER", new List<(int, Operand[])>
+        {
+            (0x55, new[] { G(0x111), I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new BoundActionHost();
+        host.ScriptErrorAnswers.Enqueue(answer);
+        var vm = new VirtualMachine(outer, table, host,
+            provider: new MapProvider(new() { [5] = inner, [6] = markerScript }));
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.True(host.Consumed);
+        Assert.Single(host.Diagnostics);
+        Assert.Null(vm.ScriptError);                  // only 中止 ends the run
+        Assert.Equal(marker, vm.Globals.GetValueOrDefault(0x111));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x112));
+        Assert.Equal("exit", vm.HaltReason);
+    }
+
+    private sealed class TwoClickHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public readonly List<bool> Activations = new();
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            for (int click = 0; click < 2; click++)
+            {
+                Activations.Add(Vm.TryActivateInputActions(1 << 7));
+                while (serviceInputCallback()) { }
+            }
+        }
+    }
+
+    [Fact]
+    public void DepthErrorAnsweredRetryLeavesTheBindingArmedForTheNextClick()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var outer = ScriptAssembler.Assemble(table, "OUTER", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(-1), I(-1), I(30) }),
+            (0x97, new[] { I(10), I(20), I(20), I(20), I(7) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x3, new[] { I(5) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var inner = ScriptAssembler.Assemble(table, "INNER", new List<(int, Operand[])>
+        {
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new TwoClickHost();
+        host.ScriptErrorAnswers.Enqueue(ScriptErrorChoice.Retry);
+        host.ScriptErrorAnswers.Enqueue(ScriptErrorChoice.Retry);
+        var vm = new VirtualMachine(outer, table, host, provider: new MapProvider(new() { [5] = inner }));
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal(new[] { true, true }, host.Activations);
+        Assert.Equal(2, host.Diagnostics.Count);
+        Assert.Equal("exit", vm.HaltReason);
+    }
+
     [Fact]
     public void ArmedHotspot_DispatchesBoundLogicalActionThroughOrdinaryActivationCallback()
     {

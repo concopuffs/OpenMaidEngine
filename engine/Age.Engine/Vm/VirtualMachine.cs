@@ -760,20 +760,54 @@ public sealed partial class VirtualMachine
         + "      (ただし正常に動作しない場合があります)\n";
 
     /// <summary>
-    /// A native interpreter error (a C++ throw with flags 0x10007): AGE shows エラーが発生しました with the
-    /// current FILE/ADDRESS/DEPTH and, on 中止, ends the game. The port presents the same text and ends the run;
-    /// 再試行 and 無視 are not offered. While a frame waits, native's frame pc is already past the waiting
+    /// A native interpreter error (a C++ throw with flags 0x10007) raised while the current frame waits: AGE shows
+    /// エラーが発生しました with the current FILE/ADDRESS/DEPTH and acts on the answer (engine_main_tick's policy
+    /// at 0x412689, driven 2026-11-04). 中止 ends the run, as native's forced close ends the game. 再試行 restarts
+    /// with nothing re-executed. 無視 advances the frame by its last decoded instruction, the wait, so the wait's
+    /// successor is skipped by that many dwords. While a frame waits, native's frame pc is already past the waiting
     /// instruction, so the coordinate is the next instruction's.
     /// </summary>
-    private ScriptErrorException RaiseScriptError(string text)
+    private ScriptErrorChoice PresentWaitScriptError(string text)
     {
         int at = Math.Min(_cur.Pc + 1, _cur.Script.Instructions.Count - 1);
         var message = new DiagnosticMessage(DiagnosticCaption,
             text + DiagnosticContext(_cur.Script.Instructions[at]) + ScriptErrorPrompt);
-        ScriptError = message;
-        HaltReason ??= "script-error: " + text;
-        _host.ShowDiagnosticMessage(message);
-        return new ScriptErrorException();
+        ScriptErrorChoice choice = _host.ShowScriptError(message);
+        switch (choice)
+        {
+            case ScriptErrorChoice.Retry:
+                break;
+            case ScriptErrorChoice.Ignore:
+                Interlocked.Add(ref _cur.IgnoredDwords, InstructionDwords(_cur.Script, _cur.Pc));
+                break;
+            default:
+                ScriptError = message;
+                HaltReason ??= "script-error: " + text;
+                choice = ScriptErrorChoice.Abort;
+                break;
+        }
+        return choice;
+    }
+
+    /// <summary>An instruction's encoded length in dwords: the opcode and two per operand.</summary>
+    private static int InstructionDwords(Script script, int index)
+    {
+        IReadOnlyList<Instruction> code = script.Instructions;
+        if ((uint)(index + 1) < (uint)code.Count) return code[index + 1].Offset - code[index].Offset;
+        return 1 + 2 * code[index].Args.Count;
+    }
+
+    /// <summary>Apply a pending 無視 skip once the waiting instruction completes: native resumes that many dwords
+    /// past the successor. An offset inside or past the code has no port equivalent (native decodes whatever is
+    /// there), so the run halts.</summary>
+    private int ApplyIgnoredDwords(ExecFrame frame, int next)
+    {
+        if (Volatile.Read(ref frame.IgnoredDwords) == 0 || (uint)next >= (uint)frame.Script.Instructions.Count)
+            return next;
+        int offset = frame.Script.Instructions[next].Offset + Interlocked.Exchange(ref frame.IgnoredDwords, 0);
+        if (frame.Script.IndexByOffset.TryGetValue(offset, out int index)) return index;
+        HaltReason ??= $"script-error-ignored: {frame.Script.Name} resumed at 0x{offset:x}, outside its instructions";
+        return HALT;
     }
 
     private sealed class RootReloadRequestedException : Exception { }
@@ -977,7 +1011,7 @@ public sealed partial class VirtualMachine
                         break;
                     }
                     if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
-                    int next = Step(frame.Script.Instructions[pc], pc);
+                    int next = ApplyIgnoredDwords(frame, Step(frame.Script.Instructions[pc], pc));
                     _host.FrameYield();
                     PaceFastForwardOp();
                     if (next == FRAME_RETURN) { outcome = FrameOutcome.Returned; break; }
@@ -1307,7 +1341,15 @@ public sealed partial class VirtualMachine
         // (FUN_004079b0): a script `run` from a scene whose menu bindings are still armed cannot take them, and AGE
         // stops with "Depth が不正です <running> != <owner>" (docs/engine-re.md).
         if (!ReferenceEquals(owner, _cur))
-            throw RaiseScriptError($"Depth が不正です {_cur.Script.Name} != {owner.Script.Name}");
+        {
+            // The dequeued callback is gone either way: 再試行 and 無視 keep waiting without it, with the owner's
+            // bindings still armed (natively, the next right click raises the error again).
+            if (PresentWaitScriptError($"Depth が不正です {_cur.Script.Name} != {owner.Script.Name}")
+                == ScriptErrorChoice.Abort)
+                throw new ScriptErrorException();
+            lock (_interactiveLock) owner.Hotspots.RearmAfterCallback(_pointerX, _pointerY);
+            return false;
+        }
         if (_cur.Script.IndexByOffset.TryGetValue(target, out int pc))
         {
             // The callback runs inside the instruction that waits (native AGE nests it the same way); when it

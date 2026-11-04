@@ -1,0 +1,8 @@
+oms 1
+// Run from SC0000 before its third page. The line waits for input while SC0000's ADV hotspots stay armed, and those
+// hotspots belong to SC0000, so a right click here fails AGE's hotspot owner check: "Depth が不正です".
+script "DETOUR"
+use himegari.adv
+
+    "[OMS] 寄り道のスクリプト。ここで右クリックするとエラーになる。"
+    exit

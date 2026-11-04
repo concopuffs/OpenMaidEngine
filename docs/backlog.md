@@ -21,19 +21,16 @@ it; git history keeps the record.
 
   The port keeps that state per frame, so a deeper frame silently has none. Done when each path raises the
   native error from a non-owner frame, with a synthesized test per path.
-- **Retry and Ignore in the native error box.** For interpreter errors (flags `0x10007`), native offers
-  中止/再試行/無視. Its catch policy re-executes the command on result 2, skips it on result 4, and exits otherwise
-  (`engine-re.md`). The port always ends the run (中止). The mapping from MessageBoxA's button codes to that policy
-  is unverified, because the message-box call goes through a thunk. Done when a native run confirms each button's
-  effect and the port offers the same choices outside driven runs.
-- **終了 dialog fidelity.** The port's close policy matches native's answers, but not these details
-  (`engine-re.md`, "Close policy"):
-  - Native's modal dialog freezes its main loop, while Godot keeps presenting (animations advance behind the dim).
+- **Modal dialog fidelity (終了 and エラーが発生しました).** The port's dialogs match native's answers, but not
+  these details (`engine-re.md`, "Close policy" and the Depth error):
+  - Native's modal dialogs freeze its main loop, while Godot keeps presenting: animations advance behind them.
+  - The error box's Godot window shows a close ✕. It does nothing, whereas Win32's abort/retry/ignore box has
+    no close button.
   - Run-state bit `0x1000000` makes native close without asking; its setter is unidentified.
   - System-menu commands `0x9c41` (ask) and `0x9c6b` (forced close) have no port equivalent.
-  - The dialog has no `IDI_ASTERISK` icon.
+  - The 終了 dialog has no `IDI_ASTERISK` icon.
 
-  Done when a driven run shows the port frozen behind the dialog, and each remaining item is modelled or shown
+  Done when a driven run shows the port frozen behind both dialogs, and each remaining item is modelled or shown
   to be unreachable in retail.
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,

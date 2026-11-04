@@ -838,6 +838,11 @@ offsets.
 start the other with `--seed port:fresh` (or `native:fresh`) and load. Their headers give the commands. Both directions
 resume at `SC0000@0x8a9` and reach `0x913`.
 
+`himegari-script-error.steps` and `himegari-script-error-abort.steps` cover the interpreter error box
+(エラーが発生しました) on both targets, raised by the `oms/examples/mods/example.depth-error` mod: 再試行, 無視 (the
+pc steps past the wait's successor), and 中止 (the game closes). Their headers give the setup. On the port,
+`answer` takes the Japanese label (`再試行`) or the English one (`Retry`).
+
 `himegari-exit-dialog.steps` covers the close policy on both targets: Cancel on the title, タイトルに戻る from
 SC0000 page 1 back to TITLE without the logos, then TITLE's fifth action (op `0x1`) quits without asking.
 
@@ -883,6 +888,10 @@ target's sandbox can seed the other's.
 - `MessageBoxA` answers the boxes the profile's `[[native.dialog]]` policy names without showing them. Himegari's
   registration box on copied installs gets **Yes**. Other boxes are shown and reported (`dialogs`), and `answer
   BUTTON` presses one.
+  - The replacement is C (a CModule). A JS frame around a shown box's modal loop crashed AGE.
+  - Its buttons carry the Windows UI language's labels, for example `&Retry` on English Windows.
+- Mouse and key messages are not posted while AGE's window is disabled, for example under a modal box, because
+  hardware input would not reach it either.
 
 So your own mouse, keyboard and gamepad cannot disturb a run, and AGE cannot move your cursor. Clicks set the polled
 button *and* post the button messages, because the movie skip and `CLICKONUP` use the message latch. Keys likewise

@@ -198,12 +198,18 @@ public partial class Main
         public System.Text.Json.Nodes.JsonArray Dialogs()
         {
             var dialogs = new System.Text.Json.Nodes.JsonArray();
-            if (main._exitConfirmation is { } dialog) dialogs.Add(dialog.Describe());
+            if (main._exitConfirmation is { } exit) dialogs.Add(exit.Describe());
+            if (main._scriptErrorDialog is { } error) dialogs.Add(error.Describe());
             return dialogs;
         }
 
         public System.Text.Json.Nodes.JsonObject Answer(string button)
         {
+            if (main._scriptErrorDialog is { } error && error.Press(button) is { } errorButton)
+                return new System.Text.Json.Nodes.JsonObject
+                {
+                    ["text"] = (string?)error.Describe()["text"], ["answered"] = errorButton,
+                };
             if (main._exitConfirmation is not { } dialog || dialog.Press(button) is not { } pressed)
                 throw new DriveProtocolException($"no open dialog has a '{button}' button");
             return new System.Text.Json.Nodes.JsonObject { ["text"] = ExitConfirmationDialog.NativeText, ["answered"] = pressed };
