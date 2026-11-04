@@ -42,8 +42,12 @@ it; git history keeps the record.
   `CancelMesSkipOnClick`).
 - **Native audio preferences.** Native applies the user's stored attenuation and pan; the port uses unity gain and
   centered pan (`engine-re.md`, audio load handlers).
-- **Per-glyph font calibration.** The port implements native's layout rule, not the calibrated font realization
-  (`text_create_calibrated_single_byte_font@0x451b70`) or display-aspect scaling (`engine-re.md`).
+- **Calibrated font realization (unobserved).** Native builds fonts through
+  `text_create_calibrated_single_byte_font@0x451b70` and its mode-1/mode-2 calibration (found in the SYS4433 image,
+  display-aspect text). The port implements the layout rule it feeds, not the realization itself (`engine-re.md`).
+  No visible or save difference is known: glyph baselines and crops match native and the SC0000 page-3 save is byte
+  identical (`4b621ed`). Done when a native comparison shows whether it changes any glyph, and the port matches if
+  it does.
 - **Kamidori translated append files load without the overlay.** Kamidori's root `$n$*.bin` files are the fan
   translation's append replacements. Tooling ignores them (`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`), but the port
   (like native AGE) loads them, so English append content shows even without `--overlay-root patch`. Decide whether

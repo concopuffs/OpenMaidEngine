@@ -4402,7 +4402,8 @@ Five ops the port stepped as no-ops now follow the native decodes (`engine-re.md
   `WrappedRowsAreRecordedAsRowsSeparatedByLineBreaks` and
   `WritingAFreshSettingsFileProducesAgesCompleteKeySet`.
 - **Remaining difference.** 37 ADV glyph objects differ at `+0x14`, because the port widens a glyph's crop to
-  its own font's ink. This belongs to font calibration.
+  its own font's ink. This belongs to font calibration. *(Resolved 2026-11-03, `4b621ed`: the widened crop was
+  removed, glyph objects publish native's measured cell, and the page-3 save matches native byte for byte.)*
 - **References.** sys4-format-notes ("Surface-record bookkeeping", "Appended text-history tail", "Native
   SYS4REG.INI engine options"); engine-re surface-record and History sections; Ghidra annotations at
   `0x456f30`, `0x46e8b0` and the surface workers.
