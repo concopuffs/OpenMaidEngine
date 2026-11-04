@@ -4349,6 +4349,18 @@ retained objects when `0x20c` targets an offscreen surface, composites the captu
 source on the shared frame clock, blocks the VM through the endpoint, and only then permits the following
 surface release/root reload. Headless hosts retain their non-rendering no-op policy.
 
+**Port fix (2026-11-04): flatten the target before blending.** Mode 4 blends two complete surfaces. The
+port's snapshots are retained-object lists, and it drew the target as separate objects at the progress alpha over a
+black fill at that alpha. Mid-transition that dimmed the whole frame, background included, and let the
+target's layers show through each other. This was seen when ROOM's menu faded in or out and on its sub-menu
+entries.
+
+`Main.CompositeFlattenedTransitionTarget` now draws the target opaquely over its clear (black, or the overlay
+colour for the white fade) into the frame buffer. It then blends that over the flattened source with
+`LegacyScreenTransitionComposite.BlendTargetOverSource`, so pixels the two surfaces share stay steady. A
+driven ROOM entry's mid-transition frame is a plain linear mix of its two endpoints (35%, mean error 0.3
+grey levels).
+
 #### Single-surface black/white fade family — `0x21`–`0x24` (2026-07-29)
 
 The widest remaining opcode `0x22` is not a new renderer. It and `0x21` are the single-surface siblings of

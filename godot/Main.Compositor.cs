@@ -418,11 +418,11 @@ public partial class Main
         {
             allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             // Native mode 4 keeps the captured source opaque and alpha-composites the complete target
-            // surface over it. Each offscreen target has an opaque-black clear beneath its objects.
+            // surface over it. The target is one flattened surface: its objects drawn opaquely over the
+            // surface's clear (black, or the overlay colour for the white fade). Fading each object on its own
+            // instead dims the whole frame mid-transition and lets the target's layers show through each other.
             CompositeVisibleObjects(transition.Source, 1f, decisions);
-            FillQuad(0, 0, _screenWidth, _screenHeight,
-                transition.OverlayRgb, (float)transition.Progress);
-            CompositeVisibleObjects(transition.Target, (float)transition.Progress, decisions);
+            CompositeFlattenedTransitionTarget(transition, decisions);
             _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         }
         else
@@ -441,6 +441,27 @@ public partial class Main
         _perf?.RecordTextureUpdate(PerformanceFrameLog.Timestamp() - phase);
         if (decisions != null) LogGfxDecisionChanges(decisions);
         _perf?.EndRecomposite();
+    }
+
+    private byte[] _transitionSourcePixels = [];
+
+    /// <summary>Blend the transition's flattened target surface over the source already in the screen
+    /// buffer at the transition's progress (native screen_transition_tick mode 4).</summary>
+    private void CompositeFlattenedTransitionTarget(
+        LegacyScreenTransitionSnapshot transition,
+        System.Collections.Generic.Dictionary<long, string>? decisions)
+    {
+        int alpha = Age.Engine.Model.LegacyScreenTransitionComposite.Alpha(transition.Progress);
+        if (alpha == 0) return;
+        if (_transitionSourcePixels.Length != _screenPixels.Length)
+            _transitionSourcePixels = new byte[_screenPixels.Length];
+        System.Buffer.BlockCopy(_screenPixels, 0, _transitionSourcePixels, 0, _screenPixels.Length);
+        System.Array.Clear(_screenPixels);
+        FillQuad(0, 0, _screenWidth, _screenHeight, transition.OverlayRgb, 1f);
+        CompositeVisibleObjects(transition.Target, 1f, decisions);
+        if (alpha < 256)
+            Age.Engine.Model.LegacyScreenTransitionComposite.BlendTargetOverSource(
+                _screenPixels, _transitionSourcePixels, alpha);
     }
 
     private void CompositeVisibleObjects(

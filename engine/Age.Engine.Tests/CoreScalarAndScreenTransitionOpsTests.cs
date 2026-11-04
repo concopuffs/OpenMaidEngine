@@ -144,6 +144,47 @@ public class CoreScalarAndScreenTransitionOpsTests
         Assert.Equal(1024, LegacyScreenTransitionTiming.DurationMilliseconds(65));
     }
 
+    // ROOM's 0x25 fades its menu in and out over an unchanged room. The flattened target is blended over the
+    // flattened source, so pixels the two surfaces share hold steady; fading each target object over a
+    // progress-alpha black fill instead dimmed the whole frame mid-transition.
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(0.25)]
+    [InlineData(0.5)]
+    [InlineData(0.9)]
+    public void CrossfadeComposite_KeepsPixelsSharedBySourceAndTargetSteady(double progress)
+    {
+        byte[] room = { 40, 30, 60, 255 };                       // the room background, in both surfaces
+        byte[] menuSource = { 40, 30, 60, 255, 40, 30, 60, 255 };
+        byte[] menuTarget = { 40, 30, 60, 255, 250, 200, 20, 255 }; // second pixel: a menu button appears
+        byte[] blended = (byte[])menuTarget.Clone();
+
+        LegacyScreenTransitionComposite.BlendTargetOverSource(
+            blended, menuSource, LegacyScreenTransitionComposite.Alpha(progress));
+
+        Assert.Equal(room, blended[..4]);
+        int a = LegacyScreenTransitionComposite.Alpha(progress);
+        Assert.Equal((byte)((40 * (256 - a) + 250 * a) >> 8), blended[4]);
+        Assert.Equal((byte)((60 * (256 - a) + 20 * a) >> 8), blended[6]);
+        Assert.Equal(255, blended[7]);
+    }
+
+    [Fact]
+    public void CrossfadeComposite_EndpointsAreTheSourceAndTheTarget()
+    {
+        byte[] source = { 10, 20, 30, 255 };
+        byte[] target = { 200, 100, 0, 255 };
+        byte[] start = (byte[])target.Clone();
+        byte[] end = (byte[])target.Clone();
+
+        LegacyScreenTransitionComposite.BlendTargetOverSource(start, source, LegacyScreenTransitionComposite.Alpha(0));
+        LegacyScreenTransitionComposite.BlendTargetOverSource(end, source, LegacyScreenTransitionComposite.Alpha(1));
+
+        Assert.Equal(source, start);
+        Assert.Equal(target, end);
+        Assert.Equal(256, LegacyScreenTransitionComposite.Alpha(1.5));
+    }
+
     [Fact]
     public void KamidoriWhiteSurfaceFade_ForwardsCapturedSlotAndTimingArgument()
     {
