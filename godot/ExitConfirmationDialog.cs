@@ -6,8 +6,10 @@ using Godot;
 /// host command 3 from FUN_00405740 when the window receives an unforced WM_CLOSE (close button, ESC,
 /// system-menu command 0x9c41). Radio 0x3ea プログラムを終了する (checked by WM_INITDIALOG) answers 1, radio
 /// 0x3eb タイトルに戻る answers 2, and Cancel answers 0.
+/// <para>Drawn as the native dialog looks on Windows 10 (<see cref="Win32Dialog"/>): the control rectangles,
+/// font and placement are the ones captured from AGE.</para>
 /// </summary>
-public partial class ExitConfirmationDialog : Window
+public partial class ExitConfirmationDialog : Win32Dialog
 {
     public enum Choice { Cancel = 0, Quit = 1, ReturnToTitle = 2 }
 
@@ -19,72 +21,98 @@ public partial class ExitConfirmationDialog : Window
     private static readonly string[] NativeButtons =
         { "プログラムを終了する(&E)", "タイトルに戻る(&T)", "OK", "ｷｬﾝｾﾙ" };
 
-    private readonly CheckBox _quit = new() { Text = "プログラムを終了する(E)" };
-    private readonly CheckBox _title = new() { Text = "タイトルに戻る(T)" };
+    // Captured client size and control rectangles (client coordinates), 2026-11-04.
+    private static readonly Vector2I NativeClientSize = new(327, 140);
+
+    // AGE's windowed frame around its 800×600 client on the capture machine (caption and menu bar on top):
+    // agerc_center_dialog_on_parent centres the dialog on this outer window, not on the client.
+    private const int OuterLeft = 3, OuterTop = 46, OuterRight = 3, OuterBottom = 3;
+
+    private readonly Win32ClassicRadio _quit;
+    private readonly Win32ClassicRadio _title;
+    private readonly Win32ClassicButton _ok;
+    private readonly Win32ClassicButton _cancel;
     private bool _completed;
 
     public event Action<Choice>? Completed;
 
-    public ExitConfirmationDialog()
+    public ExitConfirmationDialog() : base(NativeTitle, NativeClientSize, closeEnabled: true)
     {
-        Title = NativeTitle;
-        Exclusive = true;
-        Transient = true;
-        Unresizable = true;
-
-        var margin = new MarginContainer();
-        margin.AddThemeConstantOverride("margin_left", 16);
-        margin.AddThemeConstantOverride("margin_top", 12);
-        margin.AddThemeConstantOverride("margin_right", 16);
-        margin.AddThemeConstantOverride("margin_bottom", 12);
-        AddChild(margin);
-        margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-
-        var column = new VBoxContainer();
-        margin.AddChild(column);
-        column.AddChild(new Label { Text = Prompt });
+        Win32Font font = Win32DialogStyle.DialogFont;
+        Place(new Win32DialogIcon(Win32DialogIcon.Kind.Asterisk), 12, 30, 32, 32);
+        Place(new Win32StaticText(Prompt, font, 235), 81, 24, 235, 17);
         var group = new ButtonGroup();
-        _quit.ButtonGroup = group;
-        _title.ButtonGroup = group;
-        column.AddChild(_quit);
-        column.AddChild(_title);
+        _quit = Place(new Win32ClassicRadio(NativeButtons[0], group), 81, 51, 235, 15);
+        _title = Place(new Win32ClassicRadio(NativeButtons[1], group), 81, 72, 235, 18);
+        _ok = Place(new Win32ClassicButton(NativeButtons[2], font) { IsDefault = true }, 130, 108, 88, 21);
+        _cancel = Place(new Win32ClassicButton(NativeButtons[3], font), 228, 108, 88, 21);
 
-        var actions = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
-        var ok = new Button { Text = "OK", CustomMinimumSize = new Vector2(80, 0) };
-        var cancel = new Button { Text = "ｷｬﾝｾﾙ", CustomMinimumSize = new Vector2(80, 0) };
-        actions.AddChild(ok);
-        actions.AddChild(cancel);
-        column.AddChild(actions);
-
-        ok.Pressed += () => Complete(_title.ButtonPressed ? Choice.ReturnToTitle : Choice.Quit);
-        cancel.Pressed += () => Complete(Choice.Cancel);
+        _ok.Pressed += () => Complete(SelectedChoice);
+        _cancel.Pressed += () => Complete(Choice.Cancel);
         CloseRequested += () => Complete(Choice.Cancel);
         WindowInput += OnWindowInput;
     }
 
-    public void Open()
+    private T Place<T>(T control, int x, int y, int w, int h) where T : Control
+    {
+        control.Position = new Vector2(x, y);
+        control.Size = new Vector2(w, h);
+        Client.AddChild(control);
+        return control;
+    }
+
+    private Choice SelectedChoice => _title.ButtonPressed ? Choice.ReturnToTitle : Choice.Quit;
+
+    /// <summary>Open centred on AGE's outer window over a game client of <paramref name="client"/> pixels.</summary>
+    public void Open(Vector2I client)
     {
         _completed = false;
         _quit.ButtonPressed = true;
-        PopupCentered(new Vector2I(300, 150));
+        Vector2I window = NativeWindowSize(NativeClientSize);
+        int outerWidth = OuterLeft + client.X + OuterRight, outerHeight = OuterTop + client.Y + OuterBottom;
+        PopupAtNativeWindow(new Vector2I(outerWidth / 2 - window.X / 2 - OuterLeft,
+                                         outerHeight / 2 - window.Y / 2 - OuterTop));
         _quit.GrabFocus();
     }
 
-    // The dialog's mnemonics and keys: E and T pick a choice, Enter is OK, Escape is Cancel.
+    // The dialog's keys, as Win32's dialog manager handles them: E and T select a radio, the arrows move within
+    // the radio group, Tab cycles the checked radio, OK and Cancel, Enter presses the focused push button (else
+    // OK, the default), and Escape is Cancel.
     private void OnWindowInput(InputEvent e)
     {
-        if (e is not InputEventKey { Pressed: true, Echo: false } key) return;
+        if (e is not InputEventKey { Pressed: true } key) return;
+        Control? focus = Client.GetViewport().GuiGetFocusOwner();
+        Win32ClassicRadio selected = _title.ButtonPressed ? _title : _quit;
         switch (key.Keycode)
         {
-            case Key.E: _quit.ButtonPressed = true; break;
-            case Key.T: _title.ButtonPressed = true; break;
-            case Key.Enter or Key.KpEnter:
-                Complete(_title.ButtonPressed ? Choice.ReturnToTitle : Choice.Quit);
+            case Key.E: Select(_quit); break;
+            case Key.T: Select(_title); break;
+            case Key.Up or Key.Down or Key.Left or Key.Right when focus is Win32ClassicRadio:
+                Select(selected == _quit ? _title : _quit);
                 break;
-            case Key.Escape: Complete(Choice.Cancel); break;
+            case Key.Tab:
+                Control[] stops = { selected, _ok, _cancel };
+                int at = Array.IndexOf(stops, focus);
+                int step = key.ShiftPressed ? stops.Length - 1 : 1;
+                stops[at < 0 ? 0 : (at + step) % stops.Length].GrabFocus();
+                break;
+            case Key.Enter or Key.KpEnter:
+                if (key.Echo) return;
+                Complete(focus == _cancel ? Choice.Cancel : SelectedChoice);
+                break;
+            case Key.Escape:
+                if (key.Echo) return;
+                Complete(Choice.Cancel);
+                break;
             default: return;
         }
         SetInputAsHandled();
+    }
+
+    private static void Select(Win32ClassicRadio radio)
+    {
+        radio.ButtonPressed = true;
+        radio.GrabFocus();
     }
 
     /// <summary>The dialog as the drive protocol lists it, with native AGE's control texts.</summary>
@@ -108,7 +136,7 @@ public partial class ExitConfirmationDialog : Window
         {
             case 0: _quit.ButtonPressed = true; break;
             case 1: _title.ButtonPressed = true; break;
-            case 2: Complete(_title.ButtonPressed ? Choice.ReturnToTitle : Choice.Quit); break;
+            case 2: Complete(SelectedChoice); break;
             case 3: Complete(Choice.Cancel); break;
             default: return null;
         }

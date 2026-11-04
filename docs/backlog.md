@@ -23,15 +23,11 @@ it; git history keeps the record.
   native error from a non-owner frame, with a synthesized test per path.
 - **Modal dialog fidelity (終了 and エラーが発生しました).** The port's dialogs match native's answers, but not
   these details (`engine-re.md`, "Close policy" and the Depth error):
-  - Native's modal dialogs freeze its main loop, while Godot keeps presenting: animations advance behind them.
-  - The error box's Godot window shows a close ✕. It does nothing, whereas Win32's abort/retry/ignore box has
-    no close button.
   - Run-state bit `0x1000000` makes native close without asking; its setter is unidentified.
   - System-menu commands `0x9c41` (ask) and `0x9c6b` (forced close) have no port equivalent.
-  - The 終了 dialog has no `IDI_ASTERISK` icon.
 
-  Done when a driven run shows the port frozen behind both dialogs, and each remaining item is modelled or shown
-  to be unreachable in retail.
+  Done when each item is modelled or shown to be unreachable in retail. The look and the frozen frame are done
+  (`engine-re.md`, "Port appearance"; remaining pixel differences are listed there).
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
   statement blocks, "Not modelled"). No observed block contains a movie start yet.

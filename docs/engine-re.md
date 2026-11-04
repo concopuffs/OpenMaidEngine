@@ -549,7 +549,8 @@ The decision function returns 1 at once when run-state bit `0x1000000` is set. O
    - It has radio `0x3ea` プログラムを終了する(&E), checked at init, and radio `0x3eb` タイトルに戻る(&T).
    - Its buttons are OK and ｷｬﾝｾﾙ.
    - Its icon is `IDI_ASTERISK`.
-   - It is centred on the game window.
+   - `agerc_center_dialog_on_parent` centres it on AGE's *outer* window, caption and menu bar included. With the
+     800×600 client (outer frame 3/46/3/3 px) its window rect starts at client (234,194).
 3. It acts on the answer:
 
 | Answer | Native action |
@@ -574,7 +575,8 @@ A native drive confirmed this (`tools/drive/scenarios/himegari-exit-dialog.steps
   forwarded to the VM. That method:
   1. holds the VM thread at its next frame yield;
   2. dims to 128/255;
-  3. opens `ExitConfirmationDialog`, which has native's texts, the default choice and E/T mnemonics.
+  3. freezes the presented frame (see "Port appearance" below);
+  4. opens `ExitConfirmationDialog`, which has native's texts, the default choice and E/T mnemonics.
 - **タイトルに戻る:** after 250 ms, `VirtualMachine.RequestRootReload` runs. It wakes any blocking host wait through
   `ILifecycleHost.InterruptForRootReload`. The current frame stops at its next opcode boundary (a hotspot callback
   unwinds too), and op `0x9`'s reset and root reload follow.
@@ -583,9 +585,37 @@ The port's drive of the same scenario passes. Its return to TITLE takes 0.28 s, 
 
 The port does not yet match native in these ways:
 
-- Godot's main thread keeps presenting while the dialog is open.
 - The run-state `0x1000000` auto-confirm is not modelled.
-- The system-menu commands and the dialog icon are absent.
+- The system-menu commands are absent.
+
+**Port appearance (2026-11-04).** Both modal dialogs (this one and the interpreter error box) are drawn to look like
+AGE's on Windows 10. The reference is PrintWindow captures of the native dialogs with their layout read through
+`GetWindowRect`, `GetClientRect`, `WM_GETFONT` and GDI text metrics.
+
+- **Frame.** AGE has no common-controls manifest, so its dialogs are classic Win32 controls inside a Windows 10
+  DWM frame. The frame is a 1 px `#191919` border and a white 25 px caption with a 10 px ✕; the client is
+  `COLOR_BTNFACE`. The window rect also has a 2 px invisible border left, right and bottom.
+- **Controls.**
+  - Push buttons have a two-pixel bevel and a 1 px `#646464` frame on the default button. Radios use GDI's
+    12×12 glyph. Focus rectangles are dotted.
+  - `godot/Win32Dialog.cs` and its control classes reproduce these pixel for pixel: the 終了 dialog's frame,
+    bevels, radios, focus rectangles and ＭＳ Ｐゴシック text match the capture exactly.
+  - The icons (`IDI_ASTERISK`, `IDI_HAND`) are vector look-alikes.
+- **Fonts.** The 終了 dialog uses ＭＳ Ｐゴシック 12 px from its bitmap strike (GDI tmAscent 10). Its extents are the
+  sums of the character advances: Godot's shaped string size can differ by a pixel.
+  - The message box and the caption use Segoe UI −11/−12. GDI links their Japanese to Meiryo UI at 13 px
+    (extents match), and the message box's line pitch is 13 px.
+  - `SystemFont` loads a collection's first face (MS Gothic, not MS PGothic), so faces are picked from the TTC by
+    name. Without the Windows fonts, the dialogs fall back to portable Japanese fonts.
+- **Freeze.** Native's modal loops freeze its main loop, so the window keeps the last presented frame.
+  `Main.FreezePresentedFrame` shows a snapshot of that frame under the dim until the dialog closes. タイトルに戻る
+  keeps it through the 250 ms sleep.
+- **Placement.** The 終了 dialog sits where native puts it. Windows centres the message box on the monitor, but the
+  port centres it on the game.
+- **Known differences.**
+  - Grey antialiasing stands in for ClearType.
+  - Godot's unhinted Segoe UI advances are about 1% narrower than GDI's, so the error box is up to 10 px narrower.
+  - The error box shows Japanese Windows' button labels (native shows the Windows UI language's, `&Retry` here).
 
 TITLE happens to contain a developer menu immediately after its `0x1`, including a `call-script` to
 `DEBUG.BIN`; that code is unreachable in the native flow because the handler never returns. The port's
@@ -5260,7 +5290,8 @@ departure.
       when the owner is not the running frame. The text matches native's byte for byte.
     - **The box.** The error goes through `IDiagnosticHost.ShowScriptError`, which returns a `ScriptErrorChoice`.
       Godot shows `ScriptErrorDialog`: native's caption and text, 中止(&A)/再試行(&R)/無視(&I), 再試行 as the default
-      button, and no cancel.
+      button, no cancel and a disabled ✕. It has the native box's MessageBox layout, over a frozen frame (see "Port
+      appearance" under the close policy).
     - **中止** ends the run (`HaltReason = "script-error: …"`, `VirtualMachine.ScriptError`), and the frontend quits
       like the forced close.
     - **再試行** keeps waiting, with the owner's bindings re-armed.

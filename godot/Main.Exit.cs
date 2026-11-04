@@ -12,6 +12,9 @@ using Godot;
 /// windowed game is minimized) skips the dialog and quits.</item>
 /// </list>
 /// An accepted close saves the shared profile unless set:NoSaveDat (_ExitTree's shutdown flush).
+/// <para>Native's dialogs are modal: their message loop runs inside AGE's main loop, so the game window keeps the
+/// last presented frame until the dialog closes. The port shows a snapshot of that frame meanwhile
+/// (<see cref="FreezePresentedFrame"/>), since Godot itself keeps presenting.</para>
 /// </summary>
 public partial class Main
 {
@@ -21,6 +24,9 @@ public partial class Main
     private ScriptErrorDialog? _scriptErrorDialog;
     private CanvasLayer? _exitDimLayer;
     private ColorRect? _exitDim;
+    private CanvasLayer? _frozenFrameLayer;
+    private TextureRect? _frozenFrame;
+    private int _frozenFrameHolds;
 
     private void InitializeExitPolicy()
     {
@@ -44,6 +50,7 @@ public partial class Main
         }
 
         _host.SetFrontendModalHold(true);
+        FreezePresentedFrame(true);
         SetExitDim(128 / 255.0f);
         var dialog = new ExitConfirmationDialog();
         _exitConfirmation = dialog;
@@ -54,7 +61,7 @@ public partial class Main
             CompleteUnforcedClose(choice);
         };
         AddChild(dialog);
-        dialog.Open();
+        dialog.Open(new Vector2I(_screenWidth, _screenHeight));
     }
 
     private void CompleteUnforcedClose(ExitConfirmationDialog.Choice choice)
@@ -69,12 +76,15 @@ public partial class Main
                 SetExitDim(0.0f);
                 GetTree().CreateTimer(ReturnToTitleDelaySeconds).Timeout += () =>
                 {
+                    // FUN_00405740 sleeps 250 ms inside the modal handler, so the frame stays frozen until then.
+                    FreezePresentedFrame(false);
                     _vm?.RequestRootReload();
                     _host?.SetFrontendModalHold(false);
                 };
                 break;
             default:
                 SetExitDim(0.0f);
+                FreezePresentedFrame(false);
                 _host?.SetFrontendModalHold(false);
                 break;
         }
@@ -92,6 +102,39 @@ public partial class Main
         }
         _exitDim.Color = new Color(0, 0, 0, alpha);
         _exitDim.Visible = alpha > 0;
+    }
+
+    /// <summary>While held, show the frame presented when the first hold began instead of the live game, as
+    /// native's modal dialog loops do. Holds nest; each true needs a false.</summary>
+    private void FreezePresentedFrame(bool hold)
+    {
+        if (!hold)
+        {
+            if (_frozenFrameHolds > 0 && --_frozenFrameHolds == 0 && _frozenFrame != null)
+            {
+                _frozenFrame.Visible = false;
+                _frozenFrame.Texture = null;
+            }
+            return;
+        }
+        if (_frozenFrameHolds++ > 0) return;
+        if (_frozenFrame == null)
+        {
+            _frozenFrameLayer = new CanvasLayer { Layer = 99 };   // under the exit dim (100) and the dialogs
+            _frozenFrame = new TextureRect
+            {
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.Scale,
+                MouseFilter = MouseFilterEnum.Stop,
+            };
+            _frozenFrame.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+            _frozenFrameLayer.AddChild(_frozenFrame);
+            AddChild(_frozenFrameLayer);
+        }
+        Image? presented = GetViewport().GetTexture()?.GetImage();
+        if (presented == null) return;
+        _frozenFrame.Texture = ImageTexture.CreateFromImage(presented);
+        _frozenFrame.Visible = true;
     }
 
     /// <summary>Native forced close after op 0x1 (Command_Exit_Exception) or an interpreter error answered 中止:

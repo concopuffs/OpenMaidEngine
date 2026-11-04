@@ -342,6 +342,7 @@ public partial class Main
         {
             GD.PushWarning("[vm] replaced an already-open script error box");
             _scriptErrorDialog.QueueFree();
+            FreezePresentedFrame(false);
         }
         GD.Print($"[vm] script error box: {text.Split('\n')[0]}");
         var dialog = new ScriptErrorDialog(caption, text);
@@ -350,11 +351,13 @@ public partial class Main
         {
             if (_scriptErrorDialog == dialog) _scriptErrorDialog = null;
             GD.Print($"[vm] script error answered: {choice}");
+            FreezePresentedFrame(false);
             _host?.CompleteScriptError(choice);
             dialog.QueueFree();
         };
+        FreezePresentedFrame(true);
         AddChild(dialog);
-        dialog.Open();
+        dialog.Open(new Vector2I(_screenWidth, _screenHeight));
     }
 
     public void ShowAgeFullwidthTextEditor(string initialText)
