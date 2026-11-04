@@ -86,6 +86,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── opcodes_model.py                    load + lint (dangling-ref, confidence-ceiling, vocab) + dependents
     │   ├── age_opcode_semantics.py             GENERATED investigated semantic-name view (do not hand-edit)
     │   ├── globals_build.py                    generator/linter: vm-map/globals[-<profile>].toml (+auto map) -> build/globals.json, docs/global-reference[-<profile>].md
+    │   ├── patch_points_build.py               validator/generator: vm-map/patch-points-<profile>.toml -> build/games/<profile>/patch-points.json, docs/patch-point-reference[-<profile>].md
     │   ├── story_flags.py                      static story-flag miner (branch-condition) -> build/story-flags-candidates.json; --bootstrap
     │   ├── scjump_decode.py                    decode SCJUMP progression logic -> build/scjump-decisions.* ; --verify (VM cross-check)
     │   ├── test_globals.py, test_opcodes.py    unit tests for the globals / opcode tooling
@@ -118,6 +119,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── globals.toml                        ★ CANONICAL Himegari global-variable registry (hand-edited: name + category
     │   │                                        + value_domain + provenance). Single source of truth for globals/story-flags.
     │   ├── globals-kamidori.toml               ★ CANONICAL Kamidori global registry (same schema; addresses are per game)
+    │   ├── patch-points-<profile>.toml         ★ CANONICAL named patch points (stable fragment site names, one site per
+    │   │                                        script revision; mod loader spec §5); patch_points_build.py generates the rest
     │   └── opcode-leads.json, small-script-listings.md
     │
     ├── oms/<profile>/*.oms                   hand-written Open Maid Script source modules (preludes): `module
@@ -414,6 +417,9 @@ have no repository output tree and write their automatic maps below
   provenance). Run `tools/globals_build.py [--profile ID] --build` to regenerate that profile's
   `build/globals.json` (sys4load labels) and `docs/global-reference[-<profile>].md`; `--lint` checks vocabulary / auto-shape≠high / dangling deps. Curated entries
   override the auto shape map (`build/global-var-map.json`). Discover story-flag candidates with `tools/story_flags.py`.
+- **Named patch points are edited ONLY in `vm-map/patch-points-<profile>.toml`.** Run
+  `tools/patch_points_build.py [--profile ID] --build` to validate them against the installed base and regenerate
+  `build/games/<profile>/patch-points.json` (read by `Age.Cli oms-patch`) and `docs/patch-point-reference[-<profile>].md`.
 - **Encoding:** all generated text is UTF-8 (source strings are cp932/Shift-JIS, decoded on
   extraction). Run Python as `py -3.11 -X utf8`.
 - **The game install is a runnable unit** — do not relocate `AGE.EXE`/`*.ALF`/DLLs relative to each

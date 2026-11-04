@@ -49,6 +49,7 @@ CORE_TESTS = (
     "test_compiler_census.py",
     "test_opcodes.py",
     "test_operand_access.py",
+    "test_patch_points.py",
     "test_paths.py",
     "test_sys4load.py",
     "frida/test_dump_engine.py",

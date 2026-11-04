@@ -1432,6 +1432,17 @@ public static class OmsCompiler
             if (site.Offset is uint offset)
                 return base_.IndexByOffset.TryGetValue((int)offset, out int index) ? index
                     : throw new OmsCompileException(site.Span, $"0x{offset:x} is not an instruction start in {base_.Script}");
+            if (site.IsPatchPoint)
+            {
+                if (base_.Points is not { } points)
+                    throw new OmsCompileException(site.Span, $"'{site.Name}' is a named patch point, but no patch-point "
+                        + "registry is loaded (tools/patch_points_build.py --build)");
+                int pointOffset = points.Resolve(site.Name!, base_.Script, base_.Fingerprint, out string? why)
+                                  ?? throw new OmsCompileException(site.Span, why!);
+                return base_.IndexByOffset.TryGetValue(pointOffset, out int pointIndex) ? pointIndex
+                    : throw new OmsCompileException(site.Span,
+                        $"patch point {site.Name} names 0x{pointOffset:x}, which is not an instruction start in {base_.Script}");
+            }
             if (_labels.TryGetValue(site.Name!, out int tagged) && tagged >= SiteTag || TryBaseLabel(site.Name!, out tagged))
                 return tagged - SiteTag;
             throw new OmsCompileException(site.Span, _labels.ContainsKey(site.Name!)
@@ -1490,6 +1501,8 @@ public static class OmsCompiler
                     },
                     Site = Offset(site.Site),
                     Through = site.Through != null ? Offset(site.Through) : null,
+                    Point = site.Site.IsPatchPoint ? site.Site.Name : null,
+                    ThroughPoint = site.Through?.IsPatchPoint == true ? site.Through.Name : null,
                     Block = b,
                     Source = site.Span.ToString(),
                 }));
@@ -1499,6 +1512,7 @@ public static class OmsCompiler
                 {
                     Kind = OmsPatchOperationKind.Operand,
                     Site = Offset(patch.Site),
+                    Point = patch.Site.IsPatchPoint ? patch.Site.Name : null,
                     Operand = patch.Operand,
                     Value = Convert(code[at].Operands[0], patch.Span),
                     Source = patch.Span.ToString(),

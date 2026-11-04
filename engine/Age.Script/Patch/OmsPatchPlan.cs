@@ -57,6 +57,11 @@ public sealed record OmsPatchOperation
     [JsonPropertyName("block")] public int? Block { get; init; }
     [JsonPropertyName("operand")] public int? Operand { get; init; }
     [JsonPropertyName("value")] public OmsPatchOperand? Value { get; init; }
+    /// <summary>The named patch point <see cref="Site"/> was resolved from (mod loader spec §5), for attribution and
+    /// diagnostics; the applier uses <see cref="Site"/> only.</summary>
+    [JsonPropertyName("point")] public string? Point { get; init; }
+    /// <summary>The named patch point <see cref="Through"/> was resolved from.</summary>
+    [JsonPropertyName("through_point")] public string? ThroughPoint { get; init; }
     /// <summary>Where the operation was written, for diagnostics.</summary>
     [JsonPropertyName("source")] public string? Source { get; init; }
 }

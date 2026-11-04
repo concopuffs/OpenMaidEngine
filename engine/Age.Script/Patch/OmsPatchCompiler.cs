@@ -22,6 +22,11 @@ public sealed record OmsPatchBase(
     IReadOnlyDictionary<string, string> Library,
     int[] HighestSlots)
 {
+    /// <summary>The base's fingerprint, which selects a named patch point's site.</summary>
+    public string Fingerprint { get; init; } = "";
+    /// <summary>The profile's named patch points (mod loader spec §5), when a registry is loaded.</summary>
+    public OmsPatchPoints? Points { get; init; }
+
     /// <summary>The environment of a decoded base with the labels and library subs of its decompilation.</summary>
     public static OmsPatchBase From(IrScript script, IReadOnlyDictionary<string, int>? labels = null,
                                     IReadOnlyDictionary<string, string>? library = null)
@@ -53,9 +58,11 @@ public static class OmsPatchCompiler
     /// <param name="modules">The profile's modules: they resolve the fragment's <c>use</c> statements and name the
     /// base's labels and library subs (with <paramref name="idioms"/>, at the idiomatic level).</param>
     /// <param name="notes">Receives the applier's notes, such as base table sites a region removes.</param>
+    /// <param name="points">The profile's named patch points, which <c>site a.b.c</c> resolves through.</param>
     public static OmsPatchPlan Compile(ScriptUnit unit, byte[] baseBytes, OpcodeTable table, OpcodeContracts contracts,
                                        IntrinsicCatalog intrinsics, IReadOnlyList<GameModule> modules, OmsIdioms? idioms = null,
-                                       ICollection<OmsWarning>? warnings = null, ICollection<string>? notes = null)
+                                       ICollection<OmsWarning>? warnings = null, ICollection<string>? notes = null,
+                                       OmsPatchPoints? points = null)
     {
         ArgumentNullException.ThrowIfNull(unit);
         if (!unit.IsPatch) throw new OmsCompileException(unit.Span, $"{unit.Name}: not a patch unit");
@@ -65,7 +72,8 @@ public static class OmsPatchCompiler
         if (unit.Abi != null && unit.Abi != table.AbiId)
             throw new OmsCompileException(unit.Span, $"this patch targets ABI {unit.Abi}, not {table.AbiId}");
         IrScript script = IrDecoder.Decode(baseBytes, table, contracts, unit.Name);
-        OmsPatchBase environment = Environment(script, baseBytes, table, contracts, intrinsics, modules, idioms);
+        OmsPatchBase environment = Environment(script, baseBytes, table, contracts, intrinsics, modules, idioms)
+            with { Fingerprint = fingerprint, Points = points };
         OmsPatchPlan plan = OmsCompiler.CompilePatch(unit, table.AbiId, table, intrinsics,
             name => modules.FirstOrDefault(module => module.Name == name), environment, warnings);
         CheckOperandAccess(plan, script, environment, intrinsics, unit);

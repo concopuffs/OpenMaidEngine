@@ -174,6 +174,9 @@ if (args.Contains("oms-patch"))
     Age.Script.Text.OmsIdioms? patchIdioms = patchModules.Any(module => module.Source != null)
         ? Age.Script.Text.OmsIdioms.Build(patchModules, table.AbiId, patchIntrinsics) : null;
     var plans = new List<(string Origin, Age.Script.Patch.OmsPatchPlan Plan)>();
+    string patchPointsPath = Paths.PatchPointsJson(selectedProfile.Profile.Id);
+    Age.Script.Patch.OmsPatchPoints? patchPoints = File.Exists(patchPointsPath)
+        ? Age.Script.Patch.OmsPatchPoints.Load(patchPointsPath) : null;
     try
     {
         foreach (string source in patchSources)
@@ -185,7 +188,7 @@ if (args.Contains("oms-patch"))
             AssetEntry baseEntry = catalog.ResolveName(unit.Name)
                 ?? throw new InvalidDataException($"{source}: {unit.Name} is not in the mounted catalog");
             var plan = Age.Script.Patch.OmsPatchCompiler.Compile(unit, assetStore.ReadAll(baseEntry), table, patchContracts,
-                patchIntrinsics, patchModules, patchIdioms, warnings, notes);
+                patchIntrinsics, patchModules, patchIdioms, warnings, notes, patchPoints);
             foreach (var warning in warnings) Console.Error.WriteLine(warning);
             foreach (string note in notes) Console.WriteLine($"  note: {note}");
             string planPath = OptionValue("--plan-dir") is { } planDirectory

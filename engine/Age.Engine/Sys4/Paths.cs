@@ -15,6 +15,8 @@ public static class Paths
     public static string GameBuild(string profileId) => Path.Combine(Build, "games", profileId);
     /// <summary>A profile's generated global registry view (<c>globals_build.py --build</c>).</summary>
     public static string GlobalsJson(string profileId) => Path.Combine(GameBuild(profileId), "globals.json");
+    /// <summary>Generated named patch points (tools/patch_points_build.py --build; mod loader spec §5).</summary>
+    public static string PatchPointsJson(string profileId) => Path.Combine(GameBuild(profileId), "patch-points.json");
     /// <summary>A profile's hand-written Open Maid Script source modules, <c>oms/&lt;profile&gt;</c>.</summary>
     public static string OmsModules(string profileId) => Path.Combine(Repo, "oms", profileId);
     public static string Textures => Path.Combine(Build, "textures");

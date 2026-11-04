@@ -200,9 +200,12 @@ public sealed record TableStatement(SourceSpan Span, string Name, int Records, I
 /// body as <c>unit[i].field</c>, so the block emits only its statements.</summary>
 public sealed record WithStatement(SourceSpan Span, NamedElementExpr Record, IReadOnlyList<Statement> Body) : Statement(Span);
 
-/// <summary>A base instruction a fragment names (spec §10.1): an original dword offset or a base label.</summary>
+/// <summary>A base instruction a fragment names (spec §10.1): an original dword offset, a base label, or a named
+/// patch point (a dotted name, mod loader spec §5).</summary>
 public sealed record SiteRef(SourceSpan Span, uint? Offset, string? Name)
 {
+    public bool IsPatchPoint => Name?.Contains('.') == true;
+
     public override string ToString() => Offset is uint offset ? $"0x{offset:x}" : Name!;
 }
 

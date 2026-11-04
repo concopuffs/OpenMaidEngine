@@ -1,0 +1,21 @@
+# Named patch points for Himegari (mod loader spec §5: docs/superpowers/specs/2026-11-03-mod-loader-design.md).
+#
+# A point gives fragments a stable site name: `before site himegari.experience.after_calculation { ... }`.
+# Each [[point.at]] entry is one revision of the script: the SHA-256 of its bytes as the catalog serves them
+# (`Age.Cli oms-patch --fingerprint NAME.BIN`) and the original dword offset of the instruction the point names.
+# The point's description says what holds when control reaches that instruction.
+#
+# Source data. Run `py -3.11 -X utf8 tools/patch_points_build.py --build` after editing; it validates every entry
+# against the installed base and generates build/games/himegari/patch-points.json and docs/patch-point-reference.md.
+
+[[point]]
+name = "himegari.experience.after_calculation"
+script = "ADDEXP.BIN"
+description = """
+The award is final and not yet applied. L[0x1] holds the experience the unit receives: G[0x62ccb] after the \
+G[0x3302] multiplier bits (0x10 zero, 0x20 double, 0x40 tenfold). current_unit_id is the canonical unit. All three \
+multiplier paths jump here, so `before site` sees every award and may rewrite L[0x1]."""
+
+[[point.at]]
+fingerprint = "sha256:b4f38c43f2c500012be48517ce773d3c9e81c12deeb4d712cab4b99749661e1c"
+site = 0x9a

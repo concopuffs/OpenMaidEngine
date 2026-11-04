@@ -440,4 +440,75 @@ public class OmsPatchTests
         Assert.Equal(SiteOperation.Before, site.Operation);
         Assert.Equal(0x877u, site.Site.Offset);
     }
+
+    // ------------------------------------------------------------------------------------------- named patch points
+
+    private static OmsPatchPoints Points(Base base_, string script = Name, int index = 2)
+        => new([new OmsPatchPoint("test.dialogue.second_line", script, "before the second line",
+            [new OmsPatchPointSite("sha256:" + new string('0', 64), 0x10),
+             new OmsPatchPointSite(OmsPatchPlan.FingerprintOf(base_.Bytes), base_.Offsets[index])])]);
+
+    private static OmsPatchPlan PlanWithPoints(Base base_, string body, OmsPatchPoints? points)
+        => OmsPatchCompiler.Compile(Parser.ParseScript(Header(base_.Bytes) + body, "p.oms"), base_.Bytes, Table, Contracts,
+            Intrinsics, Modules, points: points);
+
+    [Fact]
+    public void ANamedPatchPointCompilesToTheSamePlanAsItsOffset()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchPlan byName = PlanWithPoints(base_,
+            "before site test.dialogue.second_line {\n    G[9] = 1\n}\nreplace site test.dialogue.second_line operand 1 with 0\n",
+            Points(base_));
+        OmsPatchPlan byOffset = PlanWithPoints(base_,
+            $"before site 0x{base_.Offsets[2]:x} {{\n    G[9] = 1\n}}\nreplace site 0x{base_.Offsets[2]:x} operand 1 with 0\n",
+            null);
+
+        Assert.Equal(2, byName.Operations.Count);
+        Assert.All(byName.Operations, operation => Assert.Equal("test.dialogue.second_line", operation.Point));
+        Assert.All(byOffset.Operations, operation => Assert.Null(operation.Point));
+        Assert.Equal(byOffset.Operations.Select(operation => operation with { Source = null, Value = null }),
+                     byName.Operations.Select(operation => operation with { Point = null, Source = null, Value = null }));
+        Assert.Equal(byOffset.Operations.Select(operation => operation.Value),
+                     byName.Operations.Select(operation => operation.Value));
+        Assert.Equal(Apply(base_, byOffset).Bytes, Apply(base_, byName).Bytes);
+        Assert.Equal("test.dialogue.second_line", OmsPatchPlan.FromJson(byName.ToJson()).Operations[0].Point);
+    }
+
+    [Fact]
+    public void ANamedPatchPointFailsForARevisionItDoesNotList()
+    {
+        Base base_ = Compile(DialogueBase);
+        Base other = Compile(DialogueBase.Replace("\"two\"", "\"zwei\""));
+        var error = Assert.Throws<OmsCompileException>(() => PlanWithPoints(other,
+            "before site test.dialogue.second_line {\n    G[9] = 1\n}\n", Points(base_)));
+        Assert.Contains("has no site for T.BIN " + OmsPatchPlan.FingerprintOf(other.Bytes), error.Message);
+        Assert.Contains("it supports sha256:" + new string('0', 64) + ", " + OmsPatchPlan.FingerprintOf(base_.Bytes),
+                        error.Message);
+    }
+
+    [Theory]
+    [InlineData("test.dialogue.second_line", "OTHER.BIN", "is in OTHER.BIN, not T.BIN")]
+    [InlineData("test.dialogue.missing", "T.BIN", "is not a named patch point of this profile")]
+    public void ANamedPatchPointMustExistForThisScript(string point, string script, string reason)
+    {
+        Base base_ = Compile(DialogueBase);
+        var error = Assert.Throws<OmsCompileException>(() => PlanWithPoints(base_,
+            $"before site {point} {{\n    G[9] = 1\n}}\n", Points(base_, script)));
+        Assert.Contains(reason, error.Message);
+    }
+
+    [Fact]
+    public void ANamedPatchPointNeedsARegistryAndAnInstructionStart()
+    {
+        Base base_ = Compile(DialogueBase);
+        var missing = Assert.Throws<OmsCompileException>(() => PlanWithPoints(base_,
+            "before site test.dialogue.second_line {\n    G[9] = 1\n}\n", null));
+        Assert.Contains("no patch-point registry is loaded", missing.Message);
+
+        var inside = new OmsPatchPoints([new OmsPatchPoint("test.dialogue.inside", Name, null,
+            [new OmsPatchPointSite(OmsPatchPlan.FingerprintOf(base_.Bytes), base_.Offsets[1] + 1)])]);
+        var error = Assert.Throws<OmsCompileException>(() => PlanWithPoints(base_,
+            "before site test.dialogue.inside {\n    G[9] = 1\n}\n", inside));
+        Assert.Contains("which is not an instruction start", error.Message);
+    }
 }

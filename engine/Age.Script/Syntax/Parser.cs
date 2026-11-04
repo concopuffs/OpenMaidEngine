@@ -129,9 +129,17 @@ public sealed class Parser
         return token.Kind switch
         {
             TokenKind.Integer => new SiteRef(token.Span, token.Integer, null),
-            TokenKind.Identifier => new SiteRef(token.Span, null, token.Text),
-            _ => throw new OmsSyntaxException(token.Span, $"expected a site (an offset or a base label), found {token}"),
+            TokenKind.Identifier => new SiteRef(token.Span, null, DottedSiteName(token.Text)),
+            _ => throw new OmsSyntaxException(token.Span, $"expected a site (an offset, a base label or a patch point), found {token}"),
         };
+    }
+
+    /// <summary>A dotted site name is a named patch point (mod loader spec §5); a base label has no dot.</summary>
+    private string DottedSiteName(string first)
+    {
+        string name = first;
+        while (Accept(TokenKind.Punct, ".")) name += "." + Expect(TokenKind.Identifier).Text;
+        return name;
     }
 
     private string ParseDottedName()
