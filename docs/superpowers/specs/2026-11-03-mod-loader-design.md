@@ -249,6 +249,9 @@ stays installed.
   `Resource`, holds a script or asset reference by name (`<mod-id>:NAME`, or a catalog name). The linker resolves it
   to a packed id after allocation. `oms-patch` and `oms-append` emit `Resource` operands for every `run` and every
   resource operand whose target belongs to a mod; references to base scripts and assets may stay literal.
+  In source, `run NAME` and `run "mod.id:NAME"` name a script, and the expression `asset "NAME"` (or
+  `asset "mod.id:NAME"`) names a new asset; a base asset keeps its packed id. A plan that holds resource references is
+  format version 2 (a `resources` list and `{"t": …, "res": k}` operands); one without them stays version 1.
 - **Record 0.** Op `0x143` runs every mounted catalog's record 0 as a script at INIT2, in ascending selector
   order. Record 0 is therefore always a script: the first name in `[scripts].names`, or, for a mod that ships new
   assets but no scripts, an empty stub script the linker generates. Selector order controls the order between

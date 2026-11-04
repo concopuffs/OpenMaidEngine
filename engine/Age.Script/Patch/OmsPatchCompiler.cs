@@ -59,10 +59,12 @@ public static class OmsPatchCompiler
     /// base's labels and library subs (with <paramref name="idioms"/>, at the idiomatic level).</param>
     /// <param name="notes">Receives the applier's notes, such as base table sites a region removes.</param>
     /// <param name="points">The profile's named patch points, which <c>site a.b.c</c> resolves through.</param>
+    /// <param name="resources">The mod's names, when the fragment belongs to a mod: references to them stay symbolic
+    /// in the plan (mod loader spec §6.2).</param>
     public static OmsPatchPlan Compile(ScriptUnit unit, byte[] baseBytes, OpcodeTable table, OpcodeContracts contracts,
                                        IntrinsicCatalog intrinsics, IReadOnlyList<GameModule> modules, OmsIdioms? idioms = null,
                                        ICollection<OmsWarning>? warnings = null, ICollection<string>? notes = null,
-                                       OmsPatchPoints? points = null)
+                                       OmsPatchPoints? points = null, OmsResourceScope? resources = null)
     {
         ArgumentNullException.ThrowIfNull(unit);
         if (!unit.IsPatch) throw new OmsCompileException(unit.Span, $"{unit.Name}: not a patch unit");
@@ -75,11 +77,12 @@ public static class OmsPatchCompiler
         OmsPatchBase environment = Environment(script, baseBytes, table, contracts, intrinsics, modules, idioms)
             with { Fingerprint = fingerprint, Points = points };
         OmsPatchPlan plan = OmsCompiler.CompilePatch(unit, table.AbiId, table, intrinsics,
-            name => modules.FirstOrDefault(module => module.Name == name), environment, warnings);
+            name => modules.FirstOrDefault(module => module.Name == name), environment, warnings, resources);
         CheckOperandAccess(plan, script, environment, intrinsics, unit);
         try
         {
-            OmsPatchResult applied = OmsPatchApplier.Apply(script, fingerprint, [plan], table);
+            // Resource references are bound at link time; any packed id validates the plan's shape.
+            OmsPatchResult applied = OmsPatchApplier.Apply(script, fingerprint, [plan.ResolveResources(_ => 0)], table);
             foreach (string note in applied.Notes) notes?.Add(note);
         }
         catch (OmsPatchException error)

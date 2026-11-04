@@ -692,6 +692,11 @@ public sealed class Parser
             Next();
             return new NoneExpr(token.Span);
         }
+        if (token.Is(TokenKind.Identifier, "asset") && Peek(1).Kind == TokenKind.String)
+        {
+            Next();
+            return new AssetExpr(token.Span, Next().Text);
+        }
         if (StartsNamed()) return ParseNamed();
         if (StartsRecordField()) return ParseRecordField();
         if (token.Is(TokenKind.Punct, "&") && Peek(1).Kind == TokenKind.Identifier)

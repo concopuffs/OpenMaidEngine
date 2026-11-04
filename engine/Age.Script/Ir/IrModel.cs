@@ -12,6 +12,10 @@ public enum IrOperandKind
     CodeLabel,
     /// <summary>The value is a data offset; <see cref="IrOperand.Value"/> is the data item index.</summary>
     DataRef,
+    /// <summary>A packed resource id not known until link time (mod loader spec §6.2): <see cref="IrOperand.Value"/>
+    /// indexes <see cref="IrScript.Resources"/>. <see cref="IrScript.ResolveResources"/> turns it into a literal; the
+    /// encoder refuses one left unresolved.</summary>
+    Resource,
 }
 
 /// <summary>One operand: its SYS4 type tag and a value whose meaning depends on <see cref="Kind"/>.</summary>
@@ -20,6 +24,7 @@ public readonly record struct IrOperand(int Type, IrOperandKind Kind, uint Value
     public static IrOperand Literal(int type, uint value) => new(type, IrOperandKind.Literal, value);
     public static IrOperand Label(int type, int instructionIndex) => new(type, IrOperandKind.CodeLabel, (uint)instructionIndex);
     public static IrOperand Data(int type, int itemIndex) => new(type, IrOperandKind.DataRef, (uint)itemIndex);
+    public static IrOperand Resource(int type, int referenceIndex) => new(type, IrOperandKind.Resource, (uint)referenceIndex);
 }
 
 /// <summary>One instruction. <see cref="OriginalOffset"/> is the decoded dword offset (the original-site
@@ -104,4 +109,25 @@ public sealed class IrScript
     public required List<IrInstruction> Code { get; init; }
     public required List<IrDataItem> Data { get; init; }
     public IrTables Tables { get; init; } = IrTables.Derived;
+    /// <summary>The symbolic references <see cref="IrOperandKind.Resource"/> operands index, as
+    /// <c>mod.id:NAME</c>.</summary>
+    public List<string> Resources { get; init; } = new();
+
+    /// <summary>A copy whose resource operands are the packed ids <paramref name="resolve"/> gives their references.</summary>
+    public IrScript ResolveResources(Func<string, uint> resolve)
+    {
+        if (Resources.Count == 0) return this;
+        uint[] ids = Resources.Select(resolve).ToArray();
+        return new IrScript
+        {
+            Name = Name, Magic = Magic, LocalCounts = LocalCounts, Field6 = Field6, Data = Data, Tables = Tables,
+            Code = Code.Select(instruction => instruction.Operands.Any(operand => operand.Kind == IrOperandKind.Resource)
+                ? instruction with
+                {
+                    Operands = instruction.Operands.Select(operand => operand.Kind == IrOperandKind.Resource
+                        ? IrOperand.Literal(operand.Type, ids[operand.Value]) : operand).ToArray(),
+                }
+                : instruction).ToList(),
+        };
+    }
 }

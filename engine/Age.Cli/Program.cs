@@ -120,14 +120,21 @@ if (args.Contains("oms-append"))
     var appendModules = OmsModules();
     var appendIntrinsics = new Age.Script.Abi.IntrinsicCatalog(table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson));
     var records = new List<Sys4AppendCatalogWriter.File>();
+    // --mod-id ID: the scripts are one mod's catalog; `run NAME` with NAME a script's file stem resolves to its record
+    // (mod loader spec §6.2), here at once, since the selector is given.
+    string? appendModId = OptionValue("--mod-id");
+    var recordNames = sources.Select(Path.GetFileNameWithoutExtension).Select(stem => stem!).ToList();
     try
     {
         foreach (string source in sources)
         {
             var warnings = new List<Age.Script.Compile.OmsWarning>();
             var unit = Age.Script.Syntax.Parser.ParseScript(File.ReadAllText(source), source);
+            var scope = appendModId == null ? null : new Age.Script.Compile.OmsResourceScope(appendModId, recordNames, []);
             var compiled = Age.Script.Compile.OmsCompiler.Compile(unit, table.AbiId, table, null, appendIntrinsics,
-                name => appendModules.FirstOrDefault(module => module.Name == name), warnings);
+                name => appendModules.FirstOrDefault(module => module.Name == name), warnings, scope);
+            compiled = compiled.ResolveResources(reference =>
+                (uint)(selector << 24) | (uint)recordNames.IndexOf(reference[(reference.IndexOf(':') + 1)..]));
             foreach (var warning in warnings) Console.Error.WriteLine(warning);
             records.Add(new Sys4AppendCatalogWriter.File(unit.Name, Age.Script.Ir.IrEncoder.Encode(compiled)));
         }
@@ -174,6 +181,16 @@ if (args.Contains("oms-patch"))
     Age.Script.Text.OmsIdioms? patchIdioms = patchModules.Any(module => module.Source != null)
         ? Age.Script.Text.OmsIdioms.Build(patchModules, table.AbiId, patchIntrinsics) : null;
     var plans = new List<(string Origin, Age.Script.Patch.OmsPatchPlan Plan)>();
+    // --mod-id ID --names A,B,ICON.AGF: compile the fragments as part of a mod whose catalog records are those names in
+    // order; references to them stay symbolic in the plans (mod loader spec §6.2). --selector N binds them for
+    // --output-dir.
+    string? patchModId = OptionValue("--mod-id");
+    var patchNames = (OptionValue("--names") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .ToList();
+    Age.Script.Compile.OmsResourceScope? patchScope = patchModId == null ? null
+        : new Age.Script.Compile.OmsResourceScope(patchModId,
+            patchNames.Where(name => !Path.HasExtension(name)), patchNames.Where(Path.HasExtension));
+    int? patchSelector = int.TryParse(OptionValue("--selector"), out int boundSelector) ? boundSelector : null;
     string patchPointsPath = Paths.PatchPointsJson(selectedProfile.Profile.Id);
     Age.Script.Patch.OmsPatchPoints? patchPoints = File.Exists(patchPointsPath)
         ? Age.Script.Patch.OmsPatchPoints.Load(patchPointsPath) : null;
@@ -188,7 +205,7 @@ if (args.Contains("oms-patch"))
             AssetEntry baseEntry = catalog.ResolveName(unit.Name)
                 ?? throw new InvalidDataException($"{source}: {unit.Name} is not in the mounted catalog");
             var plan = Age.Script.Patch.OmsPatchCompiler.Compile(unit, assetStore.ReadAll(baseEntry), table, patchContracts,
-                patchIntrinsics, patchModules, patchIdioms, warnings, notes, patchPoints);
+                patchIntrinsics, patchModules, patchIdioms, warnings, notes, patchPoints, patchScope);
             foreach (var warning in warnings) Console.Error.WriteLine(warning);
             foreach (string note in notes) Console.WriteLine($"  note: {note}");
             string planPath = OptionValue("--plan-dir") is { } planDirectory
@@ -209,8 +226,18 @@ if (args.Contains("oms-patch"))
             {
                 AssetEntry baseEntry = catalog.ResolveName(group.Key)
                     ?? throw new InvalidDataException($"{group.Key} is not in the mounted catalog");
+                var bound = group.Select(entry => entry.Plan.Resources.Count == 0 ? entry.Plan
+                    : entry.Plan.ResolveResources(reference =>
+                    {
+                        string local = reference[(reference.IndexOf(':') + 1)..];
+                        int record = patchNames.FindIndex(name => string.Equals(name, local, StringComparison.OrdinalIgnoreCase));
+                        return patchSelector is int chosenSelector && record >= 0 && reference.StartsWith(patchModId + ":")
+                            ? (uint)(chosenSelector << 24) | (uint)record
+                            : throw new InvalidDataException(
+                                $"{entry.Origin}: '{reference}' needs --mod-id, --names and --selector to bind it");
+                    })).ToList();
                 var result = Age.Script.Patch.OmsPatchApplier.Apply(assetStore.ReadAll(baseEntry), baseEntry.Name,
-                    group.Select(entry => entry.Plan).ToList(), table, patchContracts);
+                    bound, table, patchContracts);
                 foreach (string interaction in result.Interactions) Console.WriteLine($"  interaction: {interaction}");
                 foreach (string note in result.Notes) Console.WriteLine($"  note: {note}");
                 string output = Path.Combine(patchOutput, baseEntry.Name);

@@ -167,6 +167,10 @@ public sealed record EnumStatement(SourceSpan Span, string Name, IReadOnlyList<E
 /// <summary><c>none</c>: the absent value of an optional constant parameter.</summary>
 public sealed record NoneExpr(SourceSpan Span) : Expr(Span);
 
+/// <summary><c>asset "NAME"</c> or <c>asset "mod.id:NAME"</c>: the packed resource id of a mod's new asset (mod loader
+/// spec §4.4), resolved when the mod's catalog selector is known.</summary>
+public sealed record AssetExpr(SourceSpan Span, string Name) : Expr(Span);
+
 /// <summary><c>resume</c>: the coroutine resume point, op 0x7c.</summary>
 public sealed record ResumeStatement(SourceSpan Span) : Statement(Span);
 

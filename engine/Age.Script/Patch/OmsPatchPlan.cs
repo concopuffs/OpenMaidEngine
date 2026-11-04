@@ -16,6 +16,9 @@ public enum OmsPatchOperandKind
     Label,
     /// <summary>A base instruction, by its original dword offset in <see cref="OmsPatchOperand.Value"/>.</summary>
     Site,
+    /// <summary>A packed resource id bound at link time (mod loader spec §6.2): <see cref="OmsPatchOperand.Value"/>
+    /// indexes <see cref="OmsPatchPlan.Resources"/>. <see cref="OmsPatchPlan.ResolveResources"/> makes it a literal.</summary>
+    Resource,
 }
 
 /// <summary>One operand of plan code: its SYS4 type tag and a value whose meaning depends on <see cref="Kind"/>.</summary>
@@ -26,6 +29,7 @@ public readonly record struct OmsPatchOperand(int Type, OmsPatchOperandKind Kind
     public static OmsPatchOperand Data(int type, int item) => new(type, OmsPatchOperandKind.Data, (uint)item);
     public static OmsPatchOperand Label(int type, int block, int index) => new(type, OmsPatchOperandKind.Label, (uint)index, block);
     public static OmsPatchOperand Site(int type, int originalOffset) => new(type, OmsPatchOperandKind.Site, (uint)originalOffset);
+    public static OmsPatchOperand Resource(int type, int reference) => new(type, OmsPatchOperandKind.Resource, (uint)reference);
 }
 
 /// <summary>One instruction of plan code.</summary>
@@ -82,7 +86,10 @@ public sealed record OmsPatchDataItem(
 /// </summary>
 public sealed class OmsPatchPlan
 {
+    /// <summary>The format version of a plan without resource references; older readers load it.</summary>
     public const int CurrentVersion = 1;
+    /// <summary>The format version of a plan that holds resource references (<c>resources</c>, <c>res</c> operands).</summary>
+    public const int ResourceVersion = 2;
 
     [JsonPropertyName("oms_patch")] public int Version { get; init; } = CurrentVersion;
     [JsonPropertyName("script")] public required string Script { get; init; }
@@ -96,6 +103,17 @@ public sealed class OmsPatchPlan
     /// <summary>The block placed after the base code: the fragment's subs and the library subs it links.</summary>
     [JsonPropertyName("append")] public int? Append { get; init; }
     [JsonPropertyName("data")] public List<OmsPatchDataItem> Data { get; init; } = new();
+    /// <summary>The symbolic references <see cref="OmsPatchOperandKind.Resource"/> operands index, as
+    /// <c>mod.id:NAME</c> (version 2).</summary>
+    [JsonIgnore] public List<string> Resources { get; init; } = new();
+
+    /// <summary>The JSON form of <see cref="Resources"/>, left out when empty so version 1 plans keep their text.</summary>
+    [JsonPropertyName("resources")]
+    public List<string>? ResourcesJson
+    {
+        get => Resources.Count > 0 ? Resources : null;
+        init => Resources = value ?? new();
+    }
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -114,9 +132,32 @@ public sealed class OmsPatchPlan
     {
         OmsPatchPlan plan = JsonSerializer.Deserialize<OmsPatchPlan>(json, Options)
             ?? throw new InvalidDataException("empty transform plan");
-        if (plan.Version != CurrentVersion)
+        if (plan.Version is not (CurrentVersion or ResourceVersion))
             throw new InvalidDataException($"unsupported transform plan version {plan.Version}");
+        bool usesResources = plan.Blocks.SelectMany(block => block).SelectMany(instruction => instruction.Operands)
+            .Concat(plan.Operations.Where(operation => operation.Value != null).Select(operation => operation.Value!.Value))
+            .Any(operand => operand.Kind == OmsPatchOperandKind.Resource);
+        if (usesResources && plan.Version < ResourceVersion)
+            throw new InvalidDataException($"a version {plan.Version} plan cannot hold resource references");
         return plan;
+    }
+
+    /// <summary>A copy whose resource operands are the packed ids <paramref name="resolve"/> gives their references.</summary>
+    public OmsPatchPlan ResolveResources(Func<string, uint> resolve)
+    {
+        if (Resources.Count == 0) return this;
+        uint[] ids = Resources.Select(resolve).ToArray();
+        OmsPatchOperand Bind(OmsPatchOperand operand) => operand.Kind == OmsPatchOperandKind.Resource
+            ? OmsPatchOperand.Literal(operand.Type, ids[operand.Value]) : operand;
+        return new OmsPatchPlan
+        {
+            Version = CurrentVersion, Script = Script, Fingerprint = Fingerprint, Abi = Abi, LocalCounts = LocalCounts,
+            Append = Append, Data = Data,
+            Blocks = Blocks.Select(block => block.Select(instruction =>
+                instruction with { Operands = instruction.Operands.Select(Bind).ToArray() }).ToList()).ToList(),
+            Operations = Operations.Select(operation =>
+                operation.Value is { } value ? operation with { Value = Bind(value) } : operation).ToList(),
+        };
     }
 
     /// <summary>The fingerprint of a script's bytes: <c>sha256:</c> and the lowercase hex digest.</summary>
@@ -124,7 +165,7 @@ public sealed class OmsPatchPlan
         => "sha256:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
 }
 
-/// <summary>Writes an operand as <c>{"t": type, "lit"|"data"|"site": value}</c> or <c>{"t": type, "label": [block,
+/// <summary>Writes an operand as <c>{"t": type, "lit"|"data"|"site"|"res": value}</c> or <c>{"t": type, "label": [block,
 /// index]}</c>.</summary>
 internal sealed class OmsPatchOperandConverter : JsonConverter<OmsPatchOperand>
 {
@@ -136,9 +177,10 @@ internal sealed class OmsPatchOperandConverter : JsonConverter<OmsPatchOperand>
         if (root.TryGetProperty("lit", out JsonElement literal)) return OmsPatchOperand.Literal(type, literal.GetUInt32());
         if (root.TryGetProperty("data", out JsonElement data)) return OmsPatchOperand.Data(type, data.GetInt32());
         if (root.TryGetProperty("site", out JsonElement site)) return OmsPatchOperand.Site(type, site.GetInt32());
+        if (root.TryGetProperty("res", out JsonElement resource)) return OmsPatchOperand.Resource(type, resource.GetInt32());
         if (root.TryGetProperty("label", out JsonElement label) && label.GetArrayLength() == 2)
             return OmsPatchOperand.Label(type, label[0].GetInt32(), label[1].GetInt32());
-        throw new JsonException("a plan operand needs one of lit, data, site or label");
+        throw new JsonException("a plan operand needs one of lit, data, site, res or label");
     }
 
     public override void Write(Utf8JsonWriter writer, OmsPatchOperand value, JsonSerializerOptions options)
@@ -150,6 +192,7 @@ internal sealed class OmsPatchOperandConverter : JsonConverter<OmsPatchOperand>
             case OmsPatchOperandKind.Literal: writer.WriteNumber("lit", value.Value); break;
             case OmsPatchOperandKind.Data: writer.WriteNumber("data", value.Value); break;
             case OmsPatchOperandKind.Site: writer.WriteNumber("site", value.Value); break;
+            case OmsPatchOperandKind.Resource: writer.WriteNumber("res", value.Value); break;
             case OmsPatchOperandKind.Label:
                 writer.WriteStartArray("label");
                 writer.WriteNumberValue(value.Block);

@@ -40,6 +40,10 @@ public static class IrEncoder
                     IrOperandKind.DataRef => operand.Value < script.Data.Count
                         ? (uint)dataOffsets[operand.Value]
                         : throw new InvalidOperationException($"data item {operand.Value} does not exist"),
+                    IrOperandKind.Resource => throw new InvalidDataException(
+                        $"{script.Name}: resource reference "
+                        + (operand.Value < script.Resources.Count ? $"'{script.Resources[(int)operand.Value]}'" : $"#{operand.Value}")
+                        + " is unresolved; link the mod before encoding"),
                     _ => throw new InvalidOperationException($"unknown operand kind {operand.Kind}"),
                 });
             }

@@ -129,6 +129,11 @@ public static class OmsPatchApplier
                                                            && operand.Value == plan.Blocks[operand.Block].Count:
                         errors.Add($"{who}: {what} names position {operand.Value} of block {operand.Block}, which the plan lacks");
                         return false;
+                    case OmsPatchOperandKind.Resource:
+                        errors.Add($"{who}: {what} is the unresolved resource reference "
+                                   + (operand.Value < plan.Resources.Count ? $"'{plan.Resources[(int)operand.Value]}'" : $"#{operand.Value}")
+                                   + "; the linker resolves it before applying");
+                        return false;
                     case OmsPatchOperandKind.Site:
                         if (Site((int)operand.Value, what) is not int index) return false;
                         siteReferences.Add((p, index, what));

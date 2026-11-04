@@ -46,12 +46,14 @@ public static class OmsCompiler
     /// <param name="modules">Resolves <c>use</c> module names, such as <c>himegari.globals</c>.</param>
     /// <param name="warnings">Receives §8.2 warnings: recursion with bound parameters, division by a constant zero,
     /// and opcodes no game corpus of the ABI executes.</param>
+    /// <param name="resources">A mod's names (mod loader spec §6.2): <c>run</c> targets and <c>asset</c> names it
+    /// resolves compile to resource operands, which <see cref="IrScript.ResolveResources"/> binds at link time.</param>
     public static IrScript Compile(ScriptUnit unit, string abiId, OpcodeTable? table = null, OmsLayout? layout = null,
                                    IntrinsicCatalog? intrinsics = null, Func<string, GameModule?>? modules = null,
-                                   ICollection<OmsWarning>? warnings = null)
+                                   ICollection<OmsWarning>? warnings = null, OmsResourceScope? resources = null)
     {
         ArgumentNullException.ThrowIfNull(unit);
-        var generator = new CodeGenerator(table, intrinsics, layout, modules, warnings, null, false);
+        var generator = new CodeGenerator(table, intrinsics, layout, modules, warnings, null, false, resources: resources);
         generator.EmitAll(unit.Body);
         generator.ResolveLabels();
         return generator.Build(unit.Name, abiId);
@@ -99,12 +101,12 @@ public static class OmsCompiler
     /// </summary>
     public static OmsPatchPlan CompilePatch(ScriptUnit unit, string abiId, OpcodeTable? table, IntrinsicCatalog? intrinsics,
                                             Func<string, GameModule?>? modules, OmsPatchBase patchBase,
-                                            ICollection<OmsWarning>? warnings = null)
+                                            ICollection<OmsWarning>? warnings = null, OmsResourceScope? resources = null)
     {
         ArgumentNullException.ThrowIfNull(unit);
         ArgumentNullException.ThrowIfNull(patchBase);
         if (!unit.IsPatch) throw new OmsCompileException(unit.Span, "not a patch unit");
-        var generator = new CodeGenerator(table, intrinsics, null, modules, warnings, null, false, patchBase);
+        var generator = new CodeGenerator(table, intrinsics, null, modules, warnings, null, false, patchBase, resources);
         generator.EmitAll(unit.Body);
         generator.ResolveLabels();
         IrScript built = generator.Build(unit.Name, abiId);
@@ -139,8 +141,23 @@ public static class OmsCompiler
 
     private sealed class CodeGenerator(OpcodeTable? table, IntrinsicCatalog? intrinsics, OmsLayout? layout,
                                        Func<string, GameModule?>? modules, ICollection<OmsWarning>? warnings,
-                                       IrScript? reference, bool linkAll, OmsPatchBase? patchBase = null)
+                                       IrScript? reference, bool linkAll, OmsPatchBase? patchBase = null,
+                                       OmsResourceScope? resources = null)
     {
+        /// <summary>The symbolic references of resource operands, in first-use order.</summary>
+        private readonly List<string> _resources = new();
+
+        private IrOperand ResourceOperand(string reference)
+        {
+            int index = _resources.IndexOf(reference);
+            if (index < 0)
+            {
+                index = _resources.Count;
+                _resources.Add(reference);
+            }
+            return IrOperand.Resource(0, index);
+        }
+
         /// <summary>Patch mode: the code of each site operation, the operand replacements' value instructions and the
         /// appended code.</summary>
         private readonly List<(SiteStatement Site, int Start, int End)> _siteBlocks = new();
@@ -933,6 +950,15 @@ public static class OmsCompiler
                     return new LBinary(0x51, new LLeaf(IrOperand.Literal(0, NoTarget)), ToL(complement.Operand));
                 case NoneExpr:
                     throw new OmsCompileException(expression.Span, "'none' has no value here; test for it with static if");
+                case AssetExpr asset:
+                {
+                    if (resources == null)
+                        throw new OmsCompileException(asset.Span,
+                            $"asset \"{asset.Name}\" names a mod's new asset; compile it as part of its mod");
+                    string? reference = resources.Asset(asset.Name, out string? error);
+                    return reference != null ? new LLeaf(ResourceOperand(reference))
+                        : throw new OmsCompileException(asset.Span, error!);
+                }
                 default:
                     throw new OmsCompileException(expression.Span, $"unsupported expression {expression.GetType().Name}");
             }
@@ -948,10 +974,18 @@ public static class OmsCompiler
                 _ => null,
             };
             if (name == null) return null;
+            if (resources != null)
+            {
+                string? reference = resources.Script(name, out string? error);
+                if (error != null) throw new OmsCompileException(script.Span, error);
+                if (reference != null) return new LLeaf(ResourceOperand(reference));
+            }
             foreach (GameModule module in _used)
                 if (module.TryGetScript(name, out uint id)) return new LLeaf(IrOperand.Literal(0, id));
             if (script is OperandExpr { Operand: RawString })
-                throw new OmsCompileException(script.Span, $"unknown script \"{name}\"; use the game's scripts module");
+                throw new OmsCompileException(script.Span, name.Contains(':')
+                    ? $"unknown script \"{name}\"; another mod's scripts are reached only from a mod that declares it"
+                    : $"unknown script \"{name}\"; use the game's scripts module");
             return null;
         }
 
@@ -1261,7 +1295,7 @@ public static class OmsCompiler
 
         private IrOperand Atom(Expr expression, string what)
             => expression is OperandExpr atom ? Operand(atom.Operand)
-                : expression is NamedElementExpr or ElementExpr && ToL(expression) is LLeaf cell ? cell.Operand
+                : expression is NamedElementExpr or ElementExpr or AssetExpr && ToL(expression) is LLeaf cell ? cell.Operand
                 : throw new OmsCompileException(expression.Span, $"{what} must be a single operand at this stage");
 
         private string Resolve(JumpTarget target, SourceSpan span)
@@ -1464,6 +1498,7 @@ public static class OmsCompiler
                 {
                     case IrOperandKind.Literal: return OmsPatchOperand.Literal(operand.Type, operand.Value);
                     case IrOperandKind.DataRef: return OmsPatchOperand.Data(operand.Type, (int)operand.Value);
+                    case IrOperandKind.Resource: return OmsPatchOperand.Resource(operand.Type, (int)operand.Value);
                 }
                 int target = (int)operand.Value;
                 if (target >= SiteTag) return OmsPatchOperand.Site(operand.Type, base_.Offsets[target - SiteTag]);
@@ -1484,6 +1519,8 @@ public static class OmsCompiler
                 LocalCounts = built.LocalCounts.ToArray(),
                 Append = appends ? segments.Count - 1 : null,
                 Data = built.Data.Select(OmsPatchDataItem.From).ToList(),
+                Resources = built.Resources.ToList(),
+                Version = built.Resources.Count > 0 ? OmsPatchPlan.ResourceVersion : OmsPatchPlan.CurrentVersion,
             };
             int Offset(SiteRef site) => base_.Offsets[ResolveSite(site)];
             var operations = new List<(SourceSpan Span, OmsPatchOperation Operation)>();
@@ -1623,6 +1660,7 @@ public static class OmsCompiler
                 Code = _code,
                 Data = data,
                 Tables = tables == null ? IrTables.Derived : new IrTables(tables[0], tables[1], tables[2]),
+                Resources = _resources,
             };
         }
     }

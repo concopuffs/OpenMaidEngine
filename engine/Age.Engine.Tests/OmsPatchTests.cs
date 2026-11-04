@@ -398,7 +398,7 @@ public class OmsPatchTests
         Assert.Contains("\"label\": [", json);
         Assert.Equal(Apply(base_, plan).Bytes, Apply(base_, read).Bytes);
         Assert.Contains("unsupported transform plan version", Assert.Throws<InvalidDataException>(() =>
-            OmsPatchPlan.FromJson(json.Replace("\"oms_patch\": 1", "\"oms_patch\": 2"))).Message);
+            OmsPatchPlan.FromJson(json.Replace("\"oms_patch\": 1", "\"oms_patch\": 3"))).Message);
     }
 
     // ------------------------------------------------------------------------------------------- syntax
@@ -510,5 +510,93 @@ public class OmsPatchTests
         var error = Assert.Throws<OmsCompileException>(() => PlanWithPoints(base_,
             "before site test.dialogue.inside {\n    G[9] = 1\n}\n", inside));
         Assert.Contains("which is not an instruction start", error.Message);
+    }
+
+    // ------------------------------------------------------------------------------------------- resource operands
+
+    private static OmsResourceScope Scope()
+        => new OmsResourceScope("example.mod", ["HELLO", "OTHER"], ["ICON.AGF"])
+            .WithDependency("base.lib", ["UTIL"], []);
+
+    private static OmsPatchPlan ModPlan(Base base_, string body)
+        => OmsPatchCompiler.Compile(Parser.ParseScript(Header(base_.Bytes) + body, "p.oms"), base_.Bytes, Table, Contracts,
+            Intrinsics, Modules, resources: Scope());
+
+    [Fact]
+    public void ModNamesCompileToResourceOperandsThatTheLinkerBinds()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchPlan plan = ModPlan(base_,
+            "before site 0x0 {\n    run HELLO\n    run \"base.lib:UTIL\"\n    G[5] = asset \"icon.agf\"\n    run HELLO\n}\n");
+
+        Assert.Equal(OmsPatchPlan.ResourceVersion, plan.Version);
+        Assert.Equal(["example.mod:HELLO", "base.lib:UTIL", "example.mod:ICON.AGF"], plan.Resources);
+        string json = plan.ToJson();
+        Assert.Contains("\"res\": 0", json);
+        Assert.Contains("\"resources\"", json);
+        OmsPatchPlan loaded = OmsPatchPlan.FromJson(json);
+        Assert.Equal(plan.Resources, loaded.Resources);
+
+        // An unbound plan does not apply; bound with two selector maps it encodes each map's ids.
+        var unbound = Assert.Throws<OmsPatchException>(() => Apply(base_, loaded));
+        Assert.Contains("unresolved resource reference 'example.mod:HELLO'", unbound.Message);
+        var selectors = new Dictionary<string, uint> { ["example.mod"] = 2, ["base.lib"] = 5 };
+        uint Bind(string reference, IReadOnlyDictionary<string, uint> map) => reference switch
+        {
+            "example.mod:HELLO" => map["example.mod"] << 24 | 0,
+            "example.mod:ICON.AGF" => map["example.mod"] << 24 | 2,
+            "base.lib:UTIL" => map["base.lib"] << 24 | 0,
+            _ => throw new InvalidOperationException(reference),
+        };
+        string first = Shape(Apply(base_, loaded.ResolveResources(reference => Bind(reference, selectors))).Script);
+        string second = Shape(Apply(base_, loaded.ResolveResources(reference =>
+            Bind(reference, new Dictionary<string, uint> { ["example.mod"] = 9, ["base.lib"] = 5 }))).Script);
+        Assert.StartsWith("3(0:2000000) 3(0:5000000) 55(3:5,0:2000002) 3(0:2000000) 71(0:1)", first);
+        Assert.StartsWith("3(0:9000000) 3(0:5000000) 55(3:5,0:9000002) 3(0:9000000) 71(0:1)", second);
+        Assert.DoesNotContain("resources", loaded.ResolveResources(reference => Bind(reference, selectors)).ToJson());
+    }
+
+    [Fact]
+    public void PlansWithoutResourcesStayVersionOne()
+    {
+        Base base_ = Compile(DialogueBase);
+        OmsPatchPlan plan = ModPlan(base_, "before site 0x0 {\n    G[9] = 1\n}\n");
+        Assert.Equal(OmsPatchPlan.CurrentVersion, plan.Version);
+        Assert.DoesNotContain("resources", plan.ToJson());
+
+        string forged = plan.ToJson().Replace("\"lit\": 1", "\"res\": 0");
+        Assert.Contains("\"res\": 0", forged);
+        var error = Assert.Throws<InvalidDataException>(() => OmsPatchPlan.FromJson(forged));
+        Assert.Contains("cannot hold resource references", error.Message);
+    }
+
+    [Theory]
+    [InlineData("run \"other.mod:X\"", "'other.mod' is not example.mod or a mod it declares in [[requires]]")]
+    [InlineData("run \"base.lib:MISSING\"", "base.lib has no script named 'MISSING'")]
+    [InlineData("G[1] = asset \"SYSTEM.AGF\"", "'SYSTEM.AGF' is not a new asset of example.mod")]
+    public void ModNamesOutsideTheScopeAreErrors(string statement, string reason)
+    {
+        Base base_ = Compile(DialogueBase);
+        var error = Assert.Throws<OmsCompileException>(() => ModPlan(base_, $"before site 0x0 {{\n    {statement}\n}}\n"));
+        Assert.Contains(reason, error.Message);
+    }
+
+    [Fact]
+    public void ScriptsWithResourcesEncodeOnlyOnceResolved()
+    {
+        IrScript compiled = OmsCompiler.Compile(Parser.ParseScript("script \"HELLO.BIN\"\nrun OTHER\nG[1] = asset \"ICON.AGF\"\nexit\n",
+            "s.oms"), Abi, Table, null, Intrinsics, name => Modules.FirstOrDefault(module => module.Name == name),
+            resources: Scope());
+        Assert.Equal(["example.mod:OTHER", "example.mod:ICON.AGF"], compiled.Resources);
+        var error = Assert.Throws<InvalidDataException>(() => IrEncoder.Encode(compiled));
+        Assert.Contains("resource reference 'example.mod:OTHER' is unresolved", error.Message);
+
+        IrScript bound = compiled.ResolveResources(reference => reference.EndsWith("OTHER") ? 0x03000001u : 0x03000002u);
+        IrScript decoded = IrDecoder.Decode(IrEncoder.Encode(bound), Table, Contracts, "HELLO.BIN");
+        Assert.Equal("3(0:3000001) 55(3:1,0:3000002) 2()", Shape(decoded));
+
+        var outside = Assert.Throws<OmsCompileException>(() => OmsCompiler.Compile(
+            Parser.ParseScript("script \"X.BIN\"\nG[1] = asset \"ICON.AGF\"\n", "x.oms"), Abi, Table, null, Intrinsics));
+        Assert.Contains("compile it as part of its mod", outside.Message);
     }
 }
