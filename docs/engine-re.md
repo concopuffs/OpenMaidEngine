@@ -2359,7 +2359,17 @@ page advance. The blocking-host model retains the registered definitions across 
 represent the native scheduler's subsequent shared-registration pass; explicit op `0x93` still clears them,
 and callbacks such as History rebuild through their script path. The existing bytecode therefore owns the
 SO001 hover/active redraw rather than a parallel widget layer; callback completion publishes one retained
-frame even though the enclosing wait remains static. `0x1b6`/`0x1b7` are implemented as VM service
+frame even though the enclosing wait remains static.
+
+**Hover after an activation (native-driven 2026-11-04, `tools/drive/scenarios/himegari-hover-after-click.steps`).**
+A clicked control stays hovered until the pointer leaves it. After a click on read-skip, its tooltip stays hidden
+while the pointer rests on the control or moves within it. A direct move to the neighbouring control shows that
+control's tooltip, and moving back shows read-skip's again. The port had cleared the hovered record on activation,
+so the re-arm after the callback ran the enter callback again under a still pointer and redrew the tooltip at once.
+`HotspotRegistry` now keeps the hovered record across an activation. The native mechanism is not fully traced:
+`input_hotspot_take_click_callback@0x404330` resets the registry (`+0xefc = -1`), and SC0000's read-skip callback
+does not re-register. So the state that keeps the record hovered lives in whatever republishes the registration,
+which is still unidentified. `0x1b6`/`0x1b7` are implemented as VM service
 state for the first Auto action bridge; timed automatic page advance remains separate follow-up work.
 
 **Port correction from manual validation (2026-07-18).** Merely implementing op `0x90` was insufficient in

@@ -34,11 +34,6 @@ it; git history keeps the record.
   an open block only twice, both `play-movie-mask-transition` in `DEBUG.BIN` (`0x139`, `0x1ab`), which retail never
   reaches (the port's F4 debug route does). Done when those two are modelled, or the item is closed as
   debug-only.
-- **Control-strip tooltip after a click.** Clicking a hovered ADV control (for example Read-message Skip, x=750)
-  hides its tooltip natively until the mouse moves; the port shows it again at once while the cursor stays still
-  (driven runs 2026-11-03, `native-after-hover-click.png` versus `port-after-second-click.png`). Likely the port
-  re-arms hotspots at the next wait with a hover-enter for the current pointer, while native fires hover only on
-  entry. Done when native's hover re-arm rule is reversed and the port matches it.
 - **SYS4INI trailer ADV keys still unapplied.** `CONTROLDISIBLECURSOR=1` (suppress the cursor restore when a bound
   hotspot action or hover callback is selected), `WHEELKEYUP`/`WHEELKEYDOWN` (8/9, action bits for ADV wheel-key
   handling in `adv_input_service_poll@0x411230`) and `REDRAWTEXTONKEY=0` are not sourced from the trailer, and

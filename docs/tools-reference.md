@@ -849,6 +849,10 @@ SC0000 page 1 back to TITLE without the logos, then TITLE's fifth action (op `0x
 `himegari-read-skip.steps` saves on SC0000 page 1, reads six pages, reloads and turns on Read-message Skip (x=750).
 Both targets fast-forward over the read pages and stop at `SC0000@0xa18`, the first page not yet advanced past.
 
+`himegari-hover-after-click.steps` clicks the read-skip control on SC0000 page 1 and shoots the control strip as the
+pointer rests, moves inside the control, moves to its neighbour and comes back. Compare the shots: a clicked control
+stays hovered until the pointer leaves it, so its tooltip only returns after the pointer has been elsewhere.
+
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
 `[native.keep_polling]` and `[[native.dialog]]`. Unknown sections are refused. A profile without `[native.engine]`

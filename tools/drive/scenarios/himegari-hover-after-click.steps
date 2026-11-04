@@ -1,0 +1,37 @@
+# ADV control strip: a clicked control stays hovered until the pointer leaves it. On SC0000 page 1, hover the
+# read-skip control (x=750..770, y=572..592) and click it. Its tooltip stays hidden while the pointer rests or
+# moves inside the control; the neighbouring Message-skip control's tooltip shows on a direct move, and the
+# read-skip tooltip returns once the pointer comes back. Compare the shots between targets. Run on a fresh
+# sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-hover-after-click.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+
+move 700 400
+wait 1
+move 760 582
+wait 1
+shot hover-1-read-skip                  # tooltip 既読メッセージスキップ
+click 760 582
+wait 1.5
+shot hover-2-after-click                # no tooltip; the control shows ON
+move 761 583
+wait 1
+shot hover-3-moved-inside               # still no tooltip
+move 745 582
+wait 1
+shot hover-4-neighbour                  # tooltip メッセージスキップ
+move 760 582
+wait 1
+shot hover-5-back                       # tooltip 既読メッセージスキップ again
+click 760 582                           # read-skip off again
+wait 1.5
+expect top=SC0000@0x83f

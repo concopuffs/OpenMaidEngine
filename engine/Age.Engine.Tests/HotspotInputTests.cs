@@ -221,9 +221,61 @@ public class HotspotInputTests
         Assert.True(host.SecondClickConsumed);
         Assert.True(vm.AutoMessageEnabled);
         Assert.Equal(1, host.Waits);
-        Assert.Equal(7, host.InputCallbackFrames);
+        // enter, leave, enter, activate, activate: the hovered record survives each activation, so the
+        // re-arm under the still pointer fires no second enter (native, driven 2026-11-04).
+        Assert.Equal(5, host.InputCallbackFrames);
         Assert.Equal("exit", vm.HaltReason);
         Assert.False(vm.TryActivatePointer(30, 40)); // the script frame has exited, so no hotspot remains active
+    }
+
+    private sealed class HoverAfterClickHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public readonly List<long> EntersAfterStep = new();
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+            void Step(Action action)
+            {
+                action();
+                while (serviceInputCallback()) { }
+                EntersAfterStep.Add(Vm.Globals.GetValueOrDefault(0x120));
+            }
+            Step(() => Vm.UpdatePointer(20, 30));                 // enter
+            Step(() => Assert.True(Vm.TryActivatePointer(20, 30))); // click: callback, then re-arm
+            Step(() => Vm.UpdatePointer(21, 30));                 // move within the hotspot
+            Step(() => Vm.UpdatePointer(50, 60));                 // leave
+            Step(() => Vm.UpdatePointer(20, 30));                 // enter again
+        }
+    }
+
+    [Fact]
+    public void ActivatedHotspot_StaysHoveredUntilThePointerLeaves()
+    {
+        // Native ADV control strip, driven 2026-11-04: after a click on read-skip the tooltip (its enter
+        // callback's redraw) does not come back while the pointer rests or moves inside the control; it
+        // returns once the pointer has left and re-entered.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int enterTarget = 20, leaveTarget = 27, activateTarget = 28;
+        var script = ScriptAssembler.Assemble(table, "HOTSPOT", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(enterTarget), I(leaveTarget), I(activateTarget) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+            (0x50, new[] { G(0x120), G(0x120), I(1) }),  // enter: count it
+            (0x5, Array.Empty<Operand>()),
+            (0x5, Array.Empty<Operand>()),                // leave
+            (0x5, Array.Empty<Operand>()),                // activate
+        }, Array.Empty<string>());
+        var host = new HoverAfterClickHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal(new long[] { 1, 1, 1, 1, 2 }, host.EntersAfterStep);
     }
 
     [Fact]

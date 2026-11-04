@@ -91,8 +91,12 @@ internal sealed class HotspotRegistry
         // Native consumes the active input registration before dispatch. Its ADV scheduler revisits the
         // shared registration routine afterward; retain the definitions so the blocking host can model
         // that revisit without advancing the enclosing dialogue page.
+        // The hovered record survives the activation. Native, driven 2026-11-04: after a click on the ADV
+        // read-skip control, the control's tooltip stays hidden while the pointer rests on it or moves
+        // within it, the neighbouring control's enter fires on a direct move, and the clicked control's enter
+        // fires again only after the pointer has left it. Forgetting the hovered record here made the re-arm
+        // after the callback re-enter the control under a still pointer, redrawing the tooltip at once.
         _pendingTargets.Clear();
-        _hovered = -1;
         Armed = false;
         QueueTarget(target);
         return true;
