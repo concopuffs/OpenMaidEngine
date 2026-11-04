@@ -1,0 +1,9 @@
+omp = 1
+id = "example.sc0000-page4"
+name = "SC0000 page 4 insert"
+version = "1.0.0"
+description = "Inserts a line before the opening's fourth page."
+
+[game]
+profile = "himegari"
+target = "native"

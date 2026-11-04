@@ -1,0 +1,9 @@
+oms 1
+// Gate 2: a line before SC0000's third page (T1 entry 2; the page locator's SC0000 P003).
+patch "SC0000.BIN" fingerprint "sha256:029718d6c927f90f6dcb1b89851591be310b5889dd53d6c8892604ad1fc9a9f6"
+use himegari.globals
+use himegari.adv
+
+before site 0x877 {
+    "[OMS] 三ページ目の前に、一つ目の MOD が一行を差し込んだ。"
+}

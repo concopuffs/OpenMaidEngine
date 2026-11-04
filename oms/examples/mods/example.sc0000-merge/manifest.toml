@@ -1,0 +1,9 @@
+omp = 1
+id = "example.sc0000-merge"
+name = "SC0000 pages 3-4 merge"
+version = "1.0.0"
+description = "Replaces the opening's third and fourth pages with one line; conflicts with both page inserts."
+
+[game]
+profile = "himegari"
+target = "native"

@@ -44,11 +44,13 @@ public static class OmsPatchApplier
     ];
 
     /// <summary>Decodes <paramref name="baseBytes"/> and applies <paramref name="plans"/> in load order.</summary>
+    /// <param name="planNames">How messages name each plan (the mod loader passes the mod and fragment); by default
+    /// "plan N" in load order.</param>
     public static OmsPatchResult Apply(byte[] baseBytes, string name, IReadOnlyList<OmsPatchPlan> plans,
-                                       OpcodeTable table, OpcodeContracts contracts)
+                                       OpcodeTable table, OpcodeContracts contracts, IReadOnlyList<string>? planNames = null)
     {
         IrScript script = IrDecoder.Decode(baseBytes, table, contracts, name, out int literalCodeValues);
-        OmsPatchResult result = Apply(script, OmsPatchPlan.FingerprintOf(baseBytes), plans, table);
+        OmsPatchResult result = Apply(script, OmsPatchPlan.FingerprintOf(baseBytes), plans, table, planNames);
         if (literalCodeValues > 0 && result.Provenance.Any(origin => origin.Origin != OmsPatchOrigin.Base))
             return result with
             {
@@ -67,10 +69,13 @@ public static class OmsPatchApplier
                 && instruction.Operands[2].Kind == IrOperandKind.CodeLabel);
 
     public static OmsPatchResult Apply(IrScript baseScript, string fingerprint, IReadOnlyList<OmsPatchPlan> plans,
-                                       OpcodeTable? table = null)
+                                       OpcodeTable? table = null, IReadOnlyList<string>? planNames = null)
     {
         ArgumentNullException.ThrowIfNull(baseScript);
         ArgumentNullException.ThrowIfNull(plans);
+        if (planNames != null && planNames.Count != plans.Count)
+            throw new ArgumentException("one name per plan", nameof(planNames));
+        string Plan(int index) => planNames?[index] ?? $"plan {index + 1}";
         List<IrInstruction> code = baseScript.Code;
         int n = code.Count;
         var offsets = new int[n + 1];
@@ -94,7 +99,7 @@ public static class OmsPatchApplier
         for (int p = 0; p < plans.Count; p++)
         {
             OmsPatchPlan plan = plans[p];
-            string who = $"plan {p + 1} ({plan.Script})";
+            string who = $"{Plan(p)} ({plan.Script})";
             if (!string.Equals(plan.Script, baseScript.Name, StringComparison.OrdinalIgnoreCase))
             {
                 errors.Add($"{who} targets {plan.Script}, not {baseScript.Name}");
@@ -197,7 +202,7 @@ public static class OmsPatchApplier
                         if (overlap >= 0)
                         {
                             var other = regions[regionOf[overlap]];
-                            errors.Add($"conflict: {who} {what} overlaps the region plan {other.Plan + 1} replaces at "
+                            errors.Add($"conflict: {who} {what} overlaps the region {Plan(other.Plan)} replaces at "
                                        + $"{Where(regionOf[overlap])} (both cover {Where(overlap)})");
                             break;
                         }
@@ -230,7 +235,7 @@ public static class OmsPatchApplier
                         {
                             errors.Add(earlier.Plan == p
                                 ? $"{who} replaces operand {number} at {Where(s)} twice"
-                                : $"conflict: plans {earlier.Plan + 1} and {p + 1} both replace operand {number} at {Where(s)}");
+                                : $"conflict: {(planNames == null ? $"plans {earlier.Plan + 1} and {p + 1}" : $"{Plan(earlier.Plan)} and {Plan(p)}")} both replace operand {number} at {Where(s)}");
                             break;
                         }
                         operands[(s, number)] = (p, value);
@@ -253,25 +258,25 @@ public static class OmsPatchApplier
         {
             foreach (var (from, to) in incoming)
                 if (to > s && to <= e && (from < s || from > e))
-                    errors.Add($"plan {owner + 1} replaces {Where(s)} through {Where(e)}, but base instruction {Where(from)} "
+                    errors.Add($"{Plan(owner)} replaces {Where(s)} through {Where(e)}, but base instruction {Where(from)} "
                                + $"transfers to {Where(to)} inside it");
             for (int k = s; k <= e; k++)
             {
                 foreach (var (kind, inserts) in new[] { ("before", before), ("after", after) })
                     if (inserts.TryGetValue(k, out var list))
                         foreach (var (plan, _) in list)
-                            errors.Add($"conflict: plan {plan + 1} inserts {kind} {Where(k)}, inside the region plan {owner + 1} "
+                            errors.Add($"conflict: {Plan(plan)} inserts {kind} {Where(k)}, inside the region {Plan(owner)} "
                                        + $"replaces at {Where(s)}");
                 foreach (var ((index, number), (plan, _)) in operands)
                     if (index == k)
-                        errors.Add($"conflict: plan {plan + 1} replaces operand {number} at {Where(k)}, inside the region "
-                                   + $"plan {owner + 1} replaces at {Where(s)}");
+                        errors.Add($"conflict: {Plan(plan)} replaces operand {number} at {Where(k)}, inside the region "
+                                   + $"{Plan(owner)} replaces at {Where(s)}");
             }
             foreach (var (plan, index, what) in siteReferences)
                 if (index >= s && index <= e && !(plan == owner && index == s))
                     errors.Add(plan == owner
-                        ? $"plan {plan + 1}: {what} names {Where(index)}, inside the region it replaces at {Where(s)}"
-                        : $"conflict: plan {plan + 1}: {what} names {Where(index)}, inside the region plan {owner + 1} replaces "
+                        ? $"{Plan(plan)}: {what} names {Where(index)}, inside the region it replaces at {Where(s)}"
+                        : $"conflict: {Plan(plan)}: {what} names {Where(index)}, inside the region {Plan(owner)} replaces "
                           + $"at {Where(s)}");
         }
         bool appends = plans.Any(plan => plan.Append is int a && a >= 0 && a < plan.Blocks.Count && plan.Blocks[a].Count > 0);
@@ -282,7 +287,7 @@ public static class OmsPatchApplier
         foreach (var (kind, inserts) in new[] { ("before", before), ("after", after) })
             foreach (var (k, list) in inserts.OrderBy(pair => pair.Key))
                 if (list.Select(insert => insert.Plan).Distinct().Count() > 1)
-                    interactions.Add($"plans {string.Join(", ", list.Select(insert => insert.Plan + 1))} insert {kind} {Where(k)}, "
+                    interactions.Add($"{(planNames == null ? "plans " : "")}{string.Join(", ", list.Select(insert => planNames == null ? (insert.Plan + 1).ToString() : Plan(insert.Plan)))} insert {kind} {Where(k)}, "
                                      + "in that order");
 
         // Layout (step 4).

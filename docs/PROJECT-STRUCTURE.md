@@ -129,7 +129,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── himegari/adv.oms                    Himegari ADV prelude: scene library, `@dialogue line`, speaker enum
     │   ├── kamidori/adv.oms                    Kamidori ADV prelude (same parts, plus the name_form enum)
     │   └── examples/                           example scripts, not modules (gate 6: himegari-gate6/,
-    │                                           kamidori-gate6/; gate 7 fragment: himegari-patch/)
+    │                                           kamidori-gate6/; gate 7 fragment: himegari-patch/; mod loader
+    │                                           gate 2 packages: mods/)
     │
     ├── docs/                                 all documentation
     │   ├── PROJECT-STRUCTURE.md                this file (where things live)
@@ -203,7 +204,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── Age.Mods/                        mod loader (docs/superpowers/specs/2026-11-03-mod-loader-design.md):
     │                                       Open Maid Pack containers (.omp ZIP or folder) with path and size checks,
     │                                       package hash and layout classification (Packages/), manifest.toml reader
-    │                                       on Tomlyn plus semantic versions and ranges (Manifest/); referenced by the tests
+    │                                       on Tomlyn plus semantic versions and ranges (Manifest/), and the linker:
+    │                                       stack resolution and load order, replacements, plan composition and the
+    │                                       spec §7 report (Linking/); referenced by the tests
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, WAV sanitization, and the
