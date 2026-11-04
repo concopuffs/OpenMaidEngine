@@ -166,6 +166,59 @@ public static class OmpCommands
         }
     }
 
+    /// <summary>
+    /// <c>omp export --output-dir DIR</c> (spec §10.1): links the stack, then writes what native AGE loads into
+    /// <paramref name="outputDirectory"/> only: patched and replaced scripts and asset overrides as loose files, and one
+    /// <c>APPENDnn.AAI</c>/<c>.ALF</c> pair per mod catalog. Refused when a mod's target is not <c>native</c>. The data
+    /// root's kept selectors are used, so an export matches the port's saves; installing the files is the user's step.
+    /// </summary>
+    public static int Export(ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages,
+                             string outputDirectory, TextWriter console)
+    {
+        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console);
+        try
+        {
+            if (result == null) return 1;
+            console.Write(result.Report.Render());
+            var portOnly = result.Order.Where(mod => !mod.Manifest.Target.Equals("native", StringComparison.Ordinal)).ToList();
+            if (portOnly.Count > 0)
+            {
+                console.WriteLine("omp export: refused: " + string.Join(", ", portOnly.Select(mod => $"{mod.Id} targets {mod.Manifest.Target}"))
+                                  + "; only target = \"native\" mods export");
+                return 1;
+            }
+            if (!result.Succeeded)
+            {
+                console.WriteLine($"omp export: the stack does not link: {result.Report.Summary()}");
+                return 1;
+            }
+            Directory.CreateDirectory(outputDirectory);
+            var written = new List<string>();
+            void Put(string name, byte[] bytes)
+            {
+                File.WriteAllBytes(Path.Combine(outputDirectory, name), bytes);
+                written.Add(name);
+            }
+            foreach (LinkedScript script in result.Scripts.Values.OrderBy(script => script.Name, StringComparer.Ordinal))
+                Put(script.Name, script.Bytes);
+            foreach (LinkedAsset asset in result.Assets.Values.OrderBy(asset => asset.Name, StringComparer.Ordinal))
+                Put(asset.Name, asset.Bytes);
+            foreach (LinkedCatalog catalog in result.Catalogs)
+            {
+                var (aai, alf) = catalog.Write(linkBase.AppendMagic, linkBase.CatalogTitle);
+                Put(catalog.CatalogFile, aai);
+                Put(catalog.ArchiveFile, alf);
+            }
+            foreach (string name in written) console.WriteLine($"  {name}");
+            console.WriteLine($"omp export: {result.Order.Count} mods, {written.Count} files -> {Path.GetFullPath(outputDirectory)}");
+            return 0;
+        }
+        finally
+        {
+            foreach (ModPackage package in opened) package.Dispose();
+        }
+    }
+
     private static (ModLinkResult? Result, IReadOnlyList<ModPackage> Opened) LinkForInspection(
         ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages, bool skipFailed, TextWriter console)
     {

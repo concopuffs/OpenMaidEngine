@@ -1,4 +1,4 @@
-# Example mods (mod loader gate 2)
+# Example mods (mod loader gates 2, 4, 5 and 6)
 
 Three Himegari mods that patch `SC0000.BIN` (mod loader spec §13, gate 2; `Age.Engine.Tests/ModLinkerTests.cs`):
 
@@ -14,5 +14,12 @@ The first two compose.
   skeleton of the shipped append scene `$1$SC1260`, so the ADV menu, saving and loading work inside it. When it ends
   it clears the row and the opening follows. A scene called with `run` from another scene cannot open the ADV menu:
   native AGE stops with "Depth が不正です" (`docs/engine-re.md`). `tools/drive/scenarios/himegari-mod-*.steps` drive it.
+
+Gate 5 exported `example.prologue`, `example.sc0000-page3` and `example.sc0000-page4` with `Age.Cli omp export` and
+ran the same scenarios on native AGE.
+
+- `example.kamidori-prologue-line` (gate 6) targets Kamidori with the translation overlay: it inserts a line before
+  the first page of the translated `patch/SC0000.bin` (site 0xd0a, fingerprinted on the translated bytes).
+  `NaturalBootIntegrationTests.KamidoriTranslatedPrologueFragmentIsTheFirstAdvPage` boots a new game into it.
 
 Each folder is an unpacked Open Maid Pack; `Age.Cli omp build DIR` packs one into a `.omp` with stored plans.

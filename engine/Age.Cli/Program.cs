@@ -90,6 +90,8 @@ if (args.Length > 0 && args[0] == "omp")
             Paths_("--mod"), Console.Out),
         "check" => Age.Mods.Tools.OmpCommands.Check(linkBase, dataRoot, Paths_("--mod"), args.Contains("--skip-failed-mods"),
             Console.Out),
+        "export" when OptionValue("--output-dir") is { } exportDirectory => Age.Mods.Tools.OmpCommands.Export(linkBase,
+            dataRoot, Paths_("--mod"), exportDirectory, Console.Out),
         "explain" when args.Length > 2 => Age.Mods.Tools.OmpCommands.Explain(linkBase, catalog, assetStore, dataRoot,
             Paths_("--mod"), args[2], Console.Out),
         _ => Usage(),
@@ -97,7 +99,8 @@ if (args.Length > 0 && args[0] == "omp")
     static int Usage()
     {
         Console.Error.WriteLine("usage: omp build DIR [--output FILE.omp] [--mod DEP] | omp check [--data-root DIR] "
-                                + "[--mod PATH] [--skip-failed-mods] | omp explain NAME [--data-root DIR] [--mod PATH]");
+                                + "[--mod PATH] [--skip-failed-mods] | omp export --output-dir DIR [--data-root DIR] [--mod PATH] | "
+                                + "omp explain NAME [--data-root DIR] [--mod PATH]");
         return 2;
     }
 }

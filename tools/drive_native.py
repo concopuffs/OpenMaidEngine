@@ -90,6 +90,21 @@ def agent_config(profile: core.Profile, folders: dict[int, Path] | None, engine_
 
 # --------------------------------------------------------------------------------------------- VM state
 
+def append_record_names(game_root: Path) -> dict[str, str]:
+    """Packed id -> record name for every ``*.AAI`` append catalog beside AGE.EXE (the install's own and any a mod
+    export added), so frames in append scripts read ``$2$SCENE`` as on the port, not ``#0x2000001``."""
+    import parse_sys4ini
+    names: dict[str, str] = {}
+    for catalog in sorted(game_root.glob("*.AAI")) + sorted(game_root.glob("*.aai")):
+        try:
+            selector = int.from_bytes(catalog.read_bytes()[0x108:0x10C], "little")
+            for entry in parse_sys4ini.parse(catalog)["files"]:
+                names[str((selector << 24) | entry["raw_index"])] = entry["name"]
+        except (OSError, ValueError, KeyError, SystemExit):
+            continue
+    return names
+
+
 def describe_frames(raw: dict[str, Any] | None, names: dict[str, str]) -> dict[str, Any]:
     """Turn the agent's raw frame reads into the protocol's state. offset = (pc - codebase) >> 2, the instruction
     offset in dwords that the port and the disassembly use. Native AGE keeps every caller's pc on its call-script
@@ -447,6 +462,7 @@ class Daemon:
         exe = Path(self.arguments.exe) if self.arguments.exe else scratch_exe()
         if not exe.is_file():
             raise DriveError(f"no {exe}; build the scratch install with native_scratch.py or pass --exe")
+        self.names = {**self.names, **append_record_names(exe.parent)}
         self.age_pid = device.spawn([str(exe)], cwd=str(exe.parent))
         try:
             self.session = device.attach(self.age_pid)

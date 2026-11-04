@@ -7,7 +7,7 @@ using Age.Mods.Tools;
 using Age.Script.Abi;
 
 /// <summary>Mod loader spec §8–§10 (plan M6): startup discovery and flags, save stamps, the save sidecar store, and
-/// <c>omp build</c>.</summary>
+/// <c>omp build</c>; M7 <c>omp export</c>.</summary>
 public sealed class ModLaunchTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "age-launch-" + Guid.NewGuid().ToString("N"));
@@ -33,13 +33,13 @@ public sealed class ModLaunchTests : IDisposable
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 
-    private string Package(string parent, string id, bool script = true)
+    private string Package(string parent, string id, bool script = true, string target = "native")
     {
         string folder = Path.Combine(parent, id);
         Directory.CreateDirectory(Path.Combine(folder, "scripts"));
         File.WriteAllText(Path.Combine(folder, "manifest.toml"),
             $"omp = 1\nid = \"{id}\"\nname = \"{id}\"\nversion = \"1.0.0\"\n"
-            + (script ? "[scripts]\nnames = [\"AUTO\"]\n" : "") + "[game]\nprofile = \"himegari\"\ntarget = \"native\"\n");
+            + (script ? "[scripts]\nnames = [\"AUTO\"]\n" : "") + $"[game]\nprofile = \"himegari\"\ntarget = \"{target}\"\n");
         if (script) File.WriteAllText(Path.Combine(folder, "scripts", "AUTO.oms"), "oms 1\nscript \"AUTO\"\n\n    exit\n");
         return folder;
     }
@@ -212,5 +212,30 @@ public sealed class ModLaunchTests : IDisposable
         ModLinkResult linked = ModLinker.Link(linkBase, [package], []);
         Assert.True(linked.Succeeded, linked.Report.Render());
         Assert.DoesNotContain(linked.Report.Lines, line => line.Message.Contains("at load time"));
+    }
+
+    [Fact]
+    public void OmpExportWritesTheAppendCatalogAndLooseFilesOnly()
+    {
+        string extra = Package(_root, "example.export");
+        string output = Path.Combine(_root, "export");
+        var console = new StringWriter();
+
+        Assert.True(OmpCommands.Export(SyntheticBase(), null, [extra], output, console) == 0, console.ToString());
+        Assert.Equal(["APPEND02.AAI", "APPEND02.ALF"],
+            Directory.GetFiles(output).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        Assert.Contains("omp export: 1 mods, 2 files", console.ToString());
+    }
+
+    [Fact]
+    public void OmpExportRefusesAPortTargetMod()
+    {
+        string extra = Package(_root, "example.portonly", target: "port");
+        string output = Path.Combine(_root, "export");
+        var console = new StringWriter();
+
+        Assert.True(OmpCommands.Export(SyntheticBase(), null, [extra], output, console) == 1, console.ToString());
+        Assert.False(Directory.Exists(output));
+        Assert.Contains("game.target: 'port' is not supported", console.ToString());
     }
 }

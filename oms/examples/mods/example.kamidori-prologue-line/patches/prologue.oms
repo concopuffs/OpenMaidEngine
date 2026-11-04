@@ -1,0 +1,10 @@
+oms 1
+// Mod loader gate 6: a line before the first page of Kamidori's prologue (Dir Lifyna). The fingerprint is the
+// translated SC0000 that the patch/ overlay supplies, which is part of the base the port links against (spec §2).
+patch "SC0000.BIN" fingerprint "sha256:54d6bc4d8cf85e32903808979d16ff851f10e62f06dcb8ab87bc8076a31c1e30"
+use kamidori.globals
+use kamidori.adv
+
+before site 0xd0a {
+    "[OMS] A mod inserted this line before the prologue's first page."
+}

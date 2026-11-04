@@ -1,0 +1,9 @@
+omp = 1
+id = "example.kamidori-prologue-line"
+name = "Kamidori prologue line"
+version = "1.0.0"
+description = "Inserts a line before the first page of Kamidori's prologue, against the translated patch/SC0000.bin."
+
+[game]
+profile = "kamidori"
+target = "native"

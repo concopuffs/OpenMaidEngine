@@ -239,15 +239,66 @@ public class NaturalBootIntegrationTests
         bool translationOverlay)
     {
         string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string[] looseRoots = translationOverlay
+            ? [Path.Combine(gameRoot, "patch"), gameRoot]
+            : [gameRoot];
+        var (reachedAdv, entered) = RunKamidoriNewGameToFirstAdvPage(looseRoots);
+        Assert.Contains("TITLE.BIN", entered);
+        Assert.Contains("GAMESTART.BIN", entered);
+        Assert.Equal("SC0000.BIN", reachedAdv.ScriptName);
+        Assert.NotEmpty(reachedAdv.Text);
+        Assert.True(reachedAdv.VisibleObjectCount > 0);
+        Assert.True(reachedAdv.AudioRequestCount > 0);
+        Assert.Equal(reachedAdv.ScriptName, entered[^1]);
+    }
+
+    /// <summary>Mod loader gate 6 (plan M7): a fragment patched into the translated Kamidori SC0000
+    /// (<c>patch/SC0000.bin</c>) links against the overlay base, and its line is the first ADV page of a natural
+    /// new game.</summary>
+    [Fact]
+    [Trait("Profile", "kamidori")]
+    public void KamidoriTranslatedPrologueFragmentIsTheFirstAdvPage()
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+        string[] baseRoots = [Path.Combine(gameRoot, "patch"), gameRoot];
+        GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("kamidori")!;
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, profile.EngineAbiId);
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var store = new Sys4AssetStore(catalog, gameRoot, baseRoots);
+        Age.Mods.Linking.ModLinkBase linkBase = Age.Mods.Linking.ModLinkBase.ForInstall("kamidori", sys4Ini, catalog,
+            store, table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson),
+            Paths.GlobalsJson("kamidori"), Paths.OmsModules("kamidori"), Paths.PatchPointsJson("kamidori"));
+        string source = Path.Combine(Paths.Repo, "oms", "examples", "mods", "example.kamidori-prologue-line");
+        using var mod = Age.Mods.Packages.ModPackage.Open(source);
+        var link = Age.Mods.Linking.ModLinker.Link(linkBase, [mod], []);
+        Assert.True(link.Succeeded, link.Report.Render());
+
+        string layer = Path.Combine(Path.GetTempPath(), "age-gate6-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(layer);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(layer, "SC0000.BIN"), link.Scripts["SC0000.BIN"].Bytes);
+            var (reachedAdv, _) = RunKamidoriNewGameToFirstAdvPage([layer, ..baseRoots]);
+            Assert.Equal("[OMS] A mod inserted this line before the prologue's first page.", reachedAdv.Text);
+        }
+        finally
+        {
+            Directory.Delete(layer, recursive: true);
+        }
+    }
+
+    private static (ReachedKamidoriAdvPageException Reached, List<string> Entered) RunKamidoriNewGameToFirstAdvPage(
+        string[] looseRoots)
+    {
+        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
 
         GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("kamidori")!;
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, profile.EngineAbiId);
         Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
-        string[] looseRoots = translationOverlay
-            ? [Path.Combine(gameRoot, "patch"), gameRoot]
-            : [gameRoot];
         var scripts = new Sys4ScriptProvider(
             table, catalog, new Sys4AssetStore(catalog, gameRoot, looseRoots));
         // Kamidori's 1024x576 title menu begins at x=606; its first row spans y=286..340.
@@ -271,15 +322,8 @@ public class NaturalBootIntegrationTests
             $"exception={exception?.GetType().Name ?? "none"}; halt={vm.HaltReason}; "
             + $"title_sleeps={host.TitlePollSleeps}; entered={string.Join(",", sink.Entered)}");
         var reachedAdv = Assert.IsType<ReachedKamidoriAdvPageException>(exception);
-
         Assert.Null(vm.CompatibilityFailure);
-        Assert.Contains("TITLE.BIN", sink.Entered);
-        Assert.Contains("GAMESTART.BIN", sink.Entered);
-        Assert.Equal("SC0000.BIN", reachedAdv.ScriptName);
-        Assert.NotEmpty(reachedAdv.Text);
-        Assert.True(reachedAdv.VisibleObjectCount > 0);
-        Assert.True(reachedAdv.AudioRequestCount > 0);
-        Assert.Equal(reachedAdv.ScriptName, sink.Entered[^1]);
+        return (reachedAdv, sink.Entered);
     }
 
     [Fact]
