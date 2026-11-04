@@ -99,8 +99,6 @@ the route of the run you made. Branches and earlier choices can skip your site.
 
 ## Kamidori specifics
 
-- **The port does not save Kamidori games yet.** The built-in profile is read-only until its save format is
-  validated (`../backlog.md`). Test saving with an exported mod on native AGE.
 - **Kamidori has no named patch points yet**, so its fragments use offsets.
 - **Translated and untranslated installs need separate fragments**, as described above.
 

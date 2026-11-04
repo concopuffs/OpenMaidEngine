@@ -140,7 +140,7 @@ sub award(amount: L[0x10]) { … }
 award(5)                                 // L[0x10] = 5, then call
 ```
 
-A parameter is bound to a raw cell, written as `L[…]` or `G[…]`, not to a declared name. In a patch, `L[…]` is a
+For now a parameter must be bound to a raw cell, written as `L[…]` or `G[…]`. Binding to a declared or registry name is designed but not yet accepted (`../backlog.md`). In a patch, `L[…]` is a
 slot of the base script's frame, so choose one the base does not use.
 
 **Templates** are `inline name(params) { … }`. They expand in place wherever they are used. The dialogue line

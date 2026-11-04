@@ -29,8 +29,45 @@ it; git history keeps the record.
 - **Exit and return-to-title boundary.** Op `0x1` and SYSTEM4's invalid-mode exit end the port's VM session, but
   the frontend policy that follows (full exit versus returning to TITLE) is not implemented (`engine-re.md`,
   "Frontend exit request is not a root reload").
+- **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
+  SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
+  statement blocks, "Not modelled"). No observed block contains a movie start yet.
+- **Delayed movie start.** The movie op's fourth operand delays the graph start until `current - start >= operand4`.
+  The port threads it as `syncMask` but does not delay FFmpeg for nonzero values (`engine-re.md`, movie start;
+  24 of 25 sites pass zero, BTL passes a dynamic value).
+- **Read-message Skip service.** The ADV menu toggle and `message:ReadTextSkip` are stored, but gating advancement on
+  read-message state is not implemented (`engine-re.md`, ADV menu table).
+- **SYS4INI trailer ADV policy.** Himegari's trailer sets `CANCELMESSKIPONCLICK=2` (press/release cancellation). The
+  port keeps the engine fallback `0` because it does not apply the trailer's ADV policy settings (`engine-re.md`,
+  `CancelMesSkipOnClick`).
+- **Native audio preferences.** Native applies the user's stored attenuation and pan; the port uses unity gain and
+  centered pan (`engine-re.md`, audio load handlers).
+- **Per-glyph font calibration.** The port implements native's layout rule, not the calibrated font realization
+  (`text_create_calibrated_single_byte_font@0x451b70`) or display-aspect scaling (`engine-re.md`).
+- **Kamidori translated append files load without the overlay.** Kamidori's root `$n$*.bin` files are the fan
+  translation's append replacements. Tooling ignores them (`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`), but the port
+  (like native AGE) loads them, so English append content shows even without `--overlay-root patch`. Decide whether
+  the port should require the overlay for them.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,
   where the encoder's match choices differ. Matching is optional, since native reads both.
+
+## Open Maid Script
+
+- **Bound parameters by name.** The language design binds a sub parameter to any declared cell, including registry
+  names (`sub adv_load_layer(layer: adv_gfx_layer_index, …)`, OMS spec §6.3). The parser accepts only raw cells
+  (`L[0x40]`, `G[0x1234]`; `Parser.ParseCell`), so `sub f(n: current_unit_id)` fails with "expected a storage cell".
+  Neither prelude declares parameters, so nothing exercised it. Done when named globals and pinned locals bind, with
+  a test, and `docs/modding/oms-language.md` drops its workaround note.
+- **Compiler warnings.** The §8.2 warnings (recursion with bound parameters, string/number mixing, a wait inside an
+  `atomic` body) need a warning channel and, for the type-based ones, a type checker (OMS spec §16, gate 2 C3).
+- **Whole-script rebuilds drift saves.** `oms-compile` re-derives T1/T2/T3, so old saves can drift on a rebuilt
+  scene. Fragments keep tables stable and are the save-safe route; a `replace/` script built from edited source does
+  not. Done when whole-script compiles can keep the base's table order (for example from the sidecar).
+- **Prelude coverage.** About 2.4k dialogue pages stay core statements: pages that interpolate `GS[…]`, carry
+  furigana or span several rows. A scene-skeleton template would also replace the copied skeleton in
+  `example.prologue`.
+- **Allocator residue (optional).** The remaining temporary-slot overrides (OMS spec §13) and Kamidori's explicit
+  `L[0x0]` in `place_scene_background` (394 sidecars) only matter for sidecar-free byte identity.
 
 ## Mod loader and modding
 
@@ -51,9 +88,6 @@ it; git history keeps the record.
   scenes' skeletons, plays and saves on native AGE.
 - **Kamidori named patch points.** `vm-map/patch-points-himegari.toml` has one point. Kamidori has no registry yet,
   so Kamidori fragments name sites by offset only.
-- **Kamidori saves in the port.** The built-in Kamidori profile is read-only until its persistence contract is
-  validated (`tools-reference.md`, `--probe`). Saving inside a modded Kamidori game is therefore untested in the
-  port.
 - **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12):
   - a launcher;
   - runtime scripting (Lua);
@@ -61,3 +95,12 @@ it; git history keeps the record.
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
+
+## Platform and project
+
+- **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
+  follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
+  font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
+- **Flaky test.** `Transform2DMathTests.ValueMatrixBuild_DoesNotAllocatePerObject` counts allocations and fails
+  intermittently in full parallel runs; it passes alone.
+- **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default).

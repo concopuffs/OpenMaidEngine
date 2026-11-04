@@ -104,7 +104,7 @@ it.
 
 - decision 0 already maps to SC0000, so overwriting it *replaces* the opening instead of preceding it;
 - no Kamidori scene mod has been tested yet (`../backlog.md`);
-- the port cannot save in Kamidori yet, so test saving on native AGE.
+- test saving inside the scene on native AGE as well as in the port.
 
 Copy the skeleton from one of Kamidori's own append scenes.
 

@@ -646,8 +646,8 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   identities but continues with the requested profile; the current K0 safety policy suppresses persistence
   writes for mismatches. An unknown profile id is an error rather than a fallback.
 - `--probe` — require an explicit `--profile` and run it read-only for diagnostic inspection of an unknown or
-  incomplete install. It disables save and `SYS4REG.INI` stores. Kamidori's built-in profile is likewise
-  read-only until K1 validates and isolates its persistence contract.
+  incomplete install. It disables save and `SYS4REG.INI` stores. Both built-in profiles write saves (Kamidori since `ce4eb1c`,
+  2026-09-23), each in its own `games/<profile>/` namespace.
 - `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and
   asserts it matches a live headless run (full handling; no vm0/frozen golden). Profile-owned fixture checks
