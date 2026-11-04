@@ -37,9 +37,15 @@ it; git history keeps the record.
   24 of 25 sites pass zero, BTL passes a dynamic value).
 - **Read-message Skip service.** The ADV menu toggle and `message:ReadTextSkip` are stored, but gating advancement on
   read-message state is not implemented (`engine-re.md`, ADV menu table).
-- **SYS4INI trailer ADV policy.** Himegari's trailer sets `CANCELMESSKIPONCLICK=2` (press/release cancellation). The
-  port keeps the engine fallback `0` because it does not apply the trailer's ADV policy settings (`engine-re.md`,
-  `CancelMesSkipOnClick`).
+- **SYS4INI trailer ADV keys still unapplied.** `CONTROLDISIBLECURSOR=1` (suppress the cursor restore when a bound
+  hotspot action or hover callback is selected), `WHEELKEYUP`/`WHEELKEYDOWN` (8/9, action bits for ADV wheel-key
+  handling in `adv_input_service_poll@0x411230`) and `REDRAWTEXTONKEY=0` are not sourced from the trailer, and
+  Kamidori's extra keys (`OUTERFRAMEMODE`, `AUTOFREETEX`, `BLANKEXTENTMODE`, `USEPROPORTIONALFONT`,
+  `VALIDFONTCHECKER`, `RUBYSHIFTMODE`, `DEPENDMOVIESOUND=2`) are not reverse-engineered (`engine-re.md`, trailer
+  catalog). Done when each key is reversed and either applied or shown inert for both games.
+- **Fast-forward pace.** The port's Skip outruns native's: 0.4 s after the SC0000 page-1 Skip button, native was
+  at `SC0000@0x13c8` and the port at `0x126e8` (`engine-re.md`, "Click cancels Skip"). Native runs bursts of
+  about 7,700 operand fetches a second. Done when the port's fast-forward rate matches a native measurement.
 - **Native audio preferences.** Native applies the user's stored attenuation and pan; the port uses unity gain and
   centered pan (`engine-re.md`, audio load handlers).
 - **Calibrated font realization (unobserved).** Native builds fonts through
@@ -109,6 +115,11 @@ it; git history keeps the record.
 
 ## Platform and project
 
+- **Intermittent allocation test.** `MovieSurfaceRegistryTests.ResourceLookup_SelectsNewestPublishedPlaybackWithoutAllocating`
+  failed once in a `validate.py --level core` run on 2026-11-03 and passed on every rerun. It measures
+  `GC.GetAllocatedBytesForCurrentThread` around the lookup, which tiered JIT or runtime work on the test thread can
+  disturb. Done when the test is deterministic (for example a warmed loop with a tolerance) or the lookup is shown
+  to allocate.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").

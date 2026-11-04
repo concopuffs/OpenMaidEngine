@@ -46,6 +46,14 @@ public sealed class Sys4StartupSettings
         => int.TryParse(GetValueOrDefault("CLICKONUP")?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
                out int value) && value != 0;
 
+    /// <summary>CANCELMESSKIPONCLICK (set:CancelMesSkipOnClick, registered default 0). Nonzero runs
+    /// adv_interpreter_tick's press/release state machine: while ADV fast-forward is active, a completed action-4
+    /// click cancels all-message Skip and the ReadTextSkip setting; value 2 then launches CALLBACK_SETTING.BIN.
+    /// Missing or non-numeric means 0.</summary>
+    public int CancelMessageSkipOnClick
+        => int.TryParse(GetValueOrDefault("CANCELMESSKIPONCLICK")?.Trim(), NumberStyles.Integer,
+               CultureInfo.InvariantCulture, out int value) ? value : 0;
+
     internal static Sys4StartupSettings ParseTrailer(byte[] blob, ref int offset, string source)
     {
         if (offset == blob.Length) return Empty;

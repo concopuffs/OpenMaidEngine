@@ -113,7 +113,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x6da6c` | `input_callback_scan_index` | `int` | op 0xff resets this to zero; op 0x100 advances it while scanning set action bits below input_action_count |
 | `0x6da70` | `input_action_count_snapshot` | `int` | op 0xff copies input_action_count here when beginning a callback poll/dispatch pass |
 | `0x6da78` | `message_skip_activation_guard` | `int` | set when op 0x88 enables Skip; suppresses the enabling click from immediately becoming a hotspot activation |
-| `0x6da80` | `message_skip_cancel_click_phase` | `int` | press/release phase used only when set:CancelMesSkipOnClick is nonzero |
+| `0x6da80` | `message_skip_cancel_click_phase` | `int` | adv_interpreter_tick CancelMesSkipOnClick state (setting nonzero): 0 idle, 1 armed after a tick with action 4 clear, 2 pressed; release in 2 cancels Skip/ReadTextSkip (value 2 also launches CALLBACK_SETTING.BIN). op 0x101 resets it to 0 |
 | `0x6da84` | `adv_wait_indicator_layout_slot` | `int` | ADV text layout whose wait indicator is armed or erased by input-wait setup and op 0x1ce |
 | `0x6da88` | `coroutine_yield_a` | `void*` | op 0x7b yield-state save (op1 -> +ctxidx*4) |
 | `0x6db28` | `coroutine_yield_b` | `void*` | op 0x7b yield-state save (op2 -> +ctxidx*4) |

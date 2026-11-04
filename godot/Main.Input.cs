@@ -109,6 +109,13 @@ public partial class Main
                 GetViewport().SetInputAsHandled();
                 return;
             }
+            // CANCELMESSKIPONCLICK: during active fast-forward native withholds hotspot dispatch and feeds the
+            // action-4 click to adv_interpreter_tick's cancel state machine instead.
+            if (action == 4 && _vm.TryLatchMessageSkipCancelClick())
+            {
+                GetViewport().SetInputAsHandled();
+                return;
+            }
             // AGE exposes mouse buttons twice: op 0x108 reads the raw bitmask while op 0xff translates
             // the held physical button through the script-configured logical action map.
             if (action >= 0 && _vm.TryActivateInputActions(1 << action))
@@ -134,6 +141,10 @@ public partial class Main
             if (gameplayKey.Pressed && action == 4 && _host.IsTransitionWaiting)
             {
                 _host.SignalInput();
+                GetViewport().SetInputAsHandled();
+            }
+            else if (gameplayKey.Pressed && action == 4 && _vm.TryLatchMessageSkipCancelClick())
+            {
                 GetViewport().SetInputAsHandled();
             }
             else if (gameplayKey.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))

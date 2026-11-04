@@ -5,9 +5,10 @@ public static class GodotVmOptions
 {
     public const long DiagnosticMaxSteps = 20_000_000;
 
-    public static VmOptions Create(bool selftest, bool ignoreExitRequests)
+    public static VmOptions Create(bool selftest, bool ignoreExitRequests, int cancelMessageSkipOnClick = 0)
         => new(
             MaxSteps: selftest ? DiagnosticMaxSteps : long.MaxValue,
             IgnoreExitRequests: ignoreExitRequests,
-            NoSaveDat: selftest);
+            NoSaveDat: selftest,
+            CancelMessageSkipOnClick: cancelMessageSkipOnClick);
 }

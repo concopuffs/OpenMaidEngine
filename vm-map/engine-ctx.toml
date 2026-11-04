@@ -540,7 +540,7 @@ note = "set when op 0x88 enables Skip; suppresses the enabling click from immedi
 offset = 0x6da80
 name = "message_skip_cancel_click_phase"
 type = "int"
-note = "press/release phase used only when set:CancelMesSkipOnClick is nonzero"
+note = "adv_interpreter_tick CancelMesSkipOnClick state (setting nonzero): 0 idle, 1 armed after a tick with action 4 clear, 2 pressed; release in 2 cancels Skip/ReadTextSkip (value 2 also launches CALLBACK_SETTING.BIN). op 0x101 resets it to 0"
 [[field]]
 offset = 0x6da84
 name = "adv_wait_indicator_layout_slot"

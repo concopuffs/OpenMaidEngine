@@ -877,6 +877,9 @@ public sealed partial class VirtualMachine
         _messageSkipEnabled = false;
         _messageSkipServiceActive = false;
         _advReadSkipState = false;
+        _skipClickCancelState = 0;
+        _skipClickCancelTriggers = 0;
+        _settingCallbackPending = false;
         _advTextStyle = AdvTextStyle.Default;
         _systemMenuActionsEnabled = 1;
         _systemMenuShowDelayMilliseconds = 0;
@@ -939,6 +942,11 @@ public sealed partial class VirtualMachine
                     if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
                     Steps++;
                     frame.Pc = pc;
+                    if (_o.CancelMessageSkipOnClick != 0 && ServiceMessageSkipClickCancel() is { } cancelOutcome)
+                    {
+                        outcome = cancelOutcome;
+                        break;
+                    }
                     if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
                     int next = Step(frame.Script.Instructions[pc], pc);
                     _host.FrameYield();

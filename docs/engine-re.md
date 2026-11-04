@@ -342,9 +342,9 @@ The meaningful consumer catalog is:
 | all seven `MENU_*` keys | Imported as `set:Menu_*`. No direct non-loader reader of these exact registry keys was found; they appear to be shared AGE native-menu capability metadata rather than Himegari script-menu state. `MENU_USEANTIFONT` does **not** disable the independently enabled `message:UseAntiFont`. | Loaded compatibility/menu metadata |
 | `ENABLEMEMFLIP` | Gates `op_0x6d`, which swaps VM-bank pointer pairs only when enabled. Himegari disables it and its corpus does not use that opcode. | Compatibility capability gate |
 | `CLICKONUP` | Copied at `0x488080` into `g_dwClickOnUp@0x5c6030`. When nonzero, `age_main_window_proc` latches mouse clicks (`input_latch_mouse_click@0x485e20`) on `WM_LBUTTONUP`/`WM_RBUTTONUP` instead of the down messages. That latch is the trigger for ADV page advance, hotspot clicks, bound actions (right-click → `MENU.BIN`) and movie/transition skips; see *Driving native AGE* below. Himegari has 1. | Active input timing; port implemented (`Sys4StartupSettings.ClickOnUp`) |
-| `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for persistent message Skip. | Active ADV input behavior; currently missing from port |
+| `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for active fast-forward; value 2 also launches `CALLBACK_SETTING.BIN`. See "Click cancels Skip" below. | Active ADV input behavior; port implemented (`Sys4StartupSettings.CancelMessageSkipOnClick`) |
 | `CONTROLDISIBLECURSOR` | The spelling is native. Value 1 suppresses AGE's ordinary cursor-restore call when a bound ADV hotspot action or hover callback is selected. | Active ADV cursor behavior; currently missing from port |
-| `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. | Active ADV toggle behavior; currently missing from port |
+| `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. Their only callers are slots 33/34 of the interface vtable `0x578034` (global object `0x5c5f10`); no opcode reaches them, and the script menus' ops `0x88`/`0x1b7` ignore the setting. | Inert on the script path (both shipped games have 1); not modelled |
 | `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The generic fallback is 0; the active Himegari profile has value 1. While one of the native effect-service run-state bits `0x8`, `0x10`, `0x80`, or `0x100` is active, logical action 4 is consumed and the selected effect tick receives delta `0x10000000`, forcing its terminal frame. | Active visual-effect input policy; port routes action 4 ahead of retained ADV hotspots while a transition service is parked |
 | `REDRAWTEXTONKEY` | Value 0 disables the wheel/key path that traverses and republishes the current text-history view through `CALLBACK_TEXT.BIN`. | Active ADV history-input policy; port uses its script callback path instead |
 | `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. `adv_input_service_poll@0x411230` uses them for ADV wheel-key/history handling; raw `WM_MOUSEWHEEL` accumulation for op `0x10d` remains a separate channel. | Active ADV input binding; port does not source these values |
@@ -2337,9 +2337,35 @@ All 301 ordinary ADV button callbacks call `0x88(1)`. `CALLBACK_LOAD.BIN` contai
 `0x88(0)` reset. The engine supports an optional click-cancel state machine, but
 `engine_settings_register_defaults@0x46be30` registers `set:CancelMesSkipOnClick=0` only as the generic
 fallback. Himegari's SYS4INI trailer overrides it with `CANCELMESSKIPONCLICK=2`, enabling the
-press/release cancellation path. The port currently preserves the fallback instead because it does not yet
-apply the trailer's ADV policy settings; that is now a cataloged parity gap rather than evidence that
-Himegari intended click-cancel to remain disabled.
+press/release cancellation path described next.
+
+**Click cancels Skip (2026-11-03).** `adv_interpreter_tick` runs only while run-state `0x08000000` (active
+fast-forward from persistent Skip, read-skip or held action 6) is set. With a nonzero `CancelMesSkipOnClick` it
+runs a state machine at `ctx+0x6da80` on action-4 bit `0x10` (polled held mask plus click triggers) before the
+dispatch:
+
+- bit set: the bit is removed from the tick's mask; state 1 becomes 2;
+- bit clear in state 2: state 0, `input_flush_action_triggers`, run-state `0x08000000`, `ctx+0x13dc` and
+  `ctx+0x550fc` cleared, `message:ReadTextSkip=0`; with value 2 `script_launch_by_name@0x410d10`
+  (`"CALLBACK_SETTING.BIN"`) enqueues the redraw callback through `script_launch_queue_enqueue@0x40f820`, and the
+  tick returns without dispatching;
+- bit clear otherwise: state 1.
+
+Op `0x101` also zeroes `ctx+0x6da80`, so the Skip button's own callback leaves the machine idle until a tick
+with action 4 clear. With a nonzero setting the tick's hotspot hover/click dispatch is withheld during
+fast-forward. A held physical action 6 keeps fast-forward on after a cancel. `CALLBACK_SETTING.BIN` redraws the
+message window and nameplate when `system_flow_request == 1` and `G[0x6bf]` is set.
+
+The port implements this in `VirtualMachine.SkipClickCancel.cs`: the machine runs at each instruction boundary
+while fast-forward is active, the frontend latches an action-4 click to it instead of hotspots or page advance,
+and the mode-2 callback runs nested at the first boundary outside an open statement block (the native launch
+queue suspends the frame and runs the script in reserved frame 37; its statement-block close dispatches a
+deferred launch). A native run on 2026-11-03 confirmed the behaviour: after the SC0000 page-1 Skip button, one
+held click stops Skip and the scene continues at normal speed to the next input wait, as in the port. The port
+reaches a later stop page because it fast-forwards faster than native (0.4 s after enabling Skip: native at
+`SC0000@0x13c8`, port at `0x126e8`). The same session showed that a scene called with `run` from SC0000
+crashes native under fast-forward ("このコマンドはサポートされていません", the caller's pc in the callee),
+consistent with the documented rule that a `run`-called script cannot be a scene.
 
 Voice playback also has a native Skip queue. `op_0xc4_handler@0x420610` plays immediately while the skip bit
 is clear. While it is set, the handler replaces `ctx+0x6dbf4/+0x6dbf8` with the latest requested voice instead
