@@ -839,6 +839,13 @@ collapse is fully understood; the native finding and the implemented host-model 
 `1`. So `aba5c==1` is set by the engine's scene loader/scheduler on entry — the **same class as the INIT2
 handle array** (native entry-state a cold single-scene harness skips), NOT a story flag. Cold, it reads `0`.
 
+> **Correction (native-traced 2026-11-04).** The "set on entry" inference does not hold for native New Game.
+> `tools/frida/trace_engine_ops.py` over TITLE → GAMESTART → SC0000 shows `0x450 → 0x457 → 0x45e → label_71b`, so
+> `G[0xaba5c]` is not 1 at that entry. The loop body below, including `call label_125bd` at `0x50f` and the
+> `0x93` at `0x622`, does not run before page 1. Which native path does enter with `aba5c==1` is open
+> (`docs/backlog.md`). The port sets it only when the root script is the ADV scene (`VirtualMachine.Run`), which
+> the full boot never does.
+
 **Corrected roles of the two branches** (the earlier head-start had them inverted). At SC0000 `0x450`
 `eq local0 = (aba5c==1)`; `0x457 jcc local0 label_462 <fallthrough>`:
 - **`aba5c==1` → `label_462` "ループ開始" (loop start)** = the scene's **intro/setup LOOP**. Its body
@@ -2315,9 +2322,13 @@ compared inclusively.
 `input_hotspot_update_cursor_hit@0x403e90` publishes the first matching record index.
 `input_hotspot_poll_hover_callback@0x4040b0` maps the stored PCs exactly: operand 5 on pointer entry and
 operand 6 on pointer exit. A direct move from one hotspot to another dispatches the old record's exit first
-and the new record's entry on the next poll. `input_hotspot_take_click_callback@0x404330` resets the
-registry and returns operand 7 on activation. The interpreter temporarily redirects the current script PC
-to these callbacks; registration itself returns normally. Companion op `0x97` finds an identical registered
+and the new record's entry on the next poll. At the ADV text wait (`adv_input_service_poll@0x411230`,
+run-state `0x80000000`) a click takes operand 7 through `input_hotspot_current_click_callback@0x404f70`, which
+leaves the registry and its hovered record as they are. Every dispatch from that wait first pushes the waiting
+op's offset (`vm_return_stack_push_pc(-3)`), so the callback's `ret` runs the wait again. The interpreter
+temporarily redirects the current script PC to these callbacks; registration itself returns normally. The
+registry-resetting `input_hotspot_take_click_callback@0x404330` belongs only to the modal waits (see "Modal
+hotspot waits" below). Companion op `0x97` finds an identical registered
 rectangle and binds its fifth operand as an input-bit index; SC0000 uses bits 0, 8, and 7 for its three
 `1x1` keyed records.
 
@@ -2359,18 +2370,53 @@ page advance. The blocking-host model retains the registered definitions across 
 represent the native scheduler's subsequent shared-registration pass; explicit op `0x93` still clears them,
 and callbacks such as History rebuild through their script path. The existing bytecode therefore owns the
 SO001 hover/active redraw rather than a parallel widget layer; callback completion publishes one retained
-frame even though the enclosing wait remains static.
+frame even though the enclosing wait remains static. (Correction, 2026-11-04: no native registration pass
+follows an action callback. The ADV text wait never clears the registry on a click, so retaining the
+definitions is the native behaviour itself; see the next paragraph.)
 
 **Hover after an activation (native-driven 2026-11-04, `tools/drive/scenarios/himegari-hover-after-click.steps`).**
 A clicked control stays hovered until the pointer leaves it. After a click on read-skip, its tooltip stays hidden
 while the pointer rests on the control or moves within it. A direct move to the neighbouring control shows that
 control's tooltip, and moving back shows read-skip's again. The port had cleared the hovered record on activation,
 so the re-arm after the callback ran the enter callback again under a still pointer and redrew the tooltip at once.
-`HotspotRegistry` now keeps the hovered record across an activation. The native mechanism is not fully traced:
-`input_hotspot_take_click_callback@0x404330` resets the registry (`+0xefc = -1`), and SC0000's read-skip callback
-does not re-register. So the state that keeps the record hovered lives in whatever republishes the registration,
-which is still unidentified. `0x1b6`/`0x1b7` are implemented as VM service
-state for the first Auto action bridge; timed automatic page advance remains separate follow-up work.
+`HotspotRegistry` now keeps the hovered record across an activation.
+
+The mechanism is simple: nothing is reset. A Frida probe on native AGE (2026-11-04, SC0000 page 1) logged the
+registry at ctx+0x5248 through the same scenario:
+- **Hover.** Read-skip's enter (`label_295`) is dispatched from `0x4114ed` with a return push of -3.
+- **Click.** It goes through `input_hotspot_current_click_callback@0x404f70` (push -3 from `0x4115ae`) and returns
+  `label_2ab`. The record count stays 8 and the hovered record `+0xefc` stays 3. `input_hotspot_take_click_callback`,
+  `input_hotspot_reset` and `input_hotspot_register_rect_callbacks` are not called.
+- **After the callback.** Its `ret` re-runs `wait-for-input@0x83c`. The callback's one-pixel cursor jiggle keeps
+  the hit on record 3, so `input_hotspot_poll_hover_callback` sees no transition.
+- **Neighbour.** The move to message skip dispatches read-skip's leave (`label_2a0`), then message skip's enter
+  (`label_247`) on the next poll.
+
+`0x1b6`/`0x1b7` are implemented as VM service state for the first Auto action bridge; timed automatic page
+advance remains separate follow-up work.
+
+**Modal hotspot waits (ops `0x91`, `0x92`, `0x95`, `0x96`; static, 2026-11-04).** These waits reset the registry on
+a click. Neither game's scripts use them, and the port stops on them as unsupported opcodes.
+- **`0x91`/`0x92` (main registry).** They keep the PC on the op under run-state `0x800000`.
+  `input_hotspot_wait_poll@0x408710` serves that bit:
+  - A hover transition pushes the op's own offset, so its callback returns into the wait.
+  - A click goes through `input_hotspot_take_click_callback@0x404330`, which resets the registry, and jumps
+    without a return push. The click callback replaces the wait, and its `ret` pops the enclosing call.
+  - Operand 1 sets the keyboard row stride (`+0xf00`) used by `input_hotspot_keyboard_navigate@0x404010`. Op `0x94`
+    passes 10000.
+  - Op `0x92` adds a callback (operand 2, table `+0x74ac`) that runs on each poll with no hover transition or click.
+  - Op `0x93` run without an op-`0x94` arm sets a pending cancel (`ctx+0xc6e0`), and the next `0x91`/`0x92` falls
+    through.
+- **`0x95`/`0x96` (choice table).** They are the same pair over a second, engine-drawn table at ctx+0xc72c with
+  the same layout:
+  - `input_hotspot_arm_highlight_table@0x4042b0` lays out the records' texts in ADV text slot operand 1
+    (`adv_text_layout_choice_table@0x457e20`).
+  - `adv_input_dispatch_callbacks@0x408530` (run-state `0x10000000`) moves a `0x60`-alpha highlight over the hit
+    (`hotspot_highlight_move@0x450070`).
+  - The click and poll-callback paths match `0x91`/`0x92`.
+  - Op `0x96` is the table's `0x93`.
+
+The opcode records are in `vm-map/opcodes.toml`.
 
 **Port correction from manual validation (2026-07-18).** Merely implementing op `0x90` was insufficient in
 the cold single-scene harness. The visible SO001 strip is drawn independently, while `jcc@0x8d` skips its five
@@ -2381,6 +2427,19 @@ SYSTEM4 chrome bootstrap as SO000/SO001. The blocking VM retains canceled defini
 coroutine templates, replaces them if script registration runs first, and otherwise re-arms them at a stable
 message wait. A full SC0000 regression proves the real History enter callback and retained-frame publication,
 not just a synthetic registry path.
+
+**Correction (native-traced 2026-11-04).** Native New Game does not run `cancel-hotspot-wait@0x622` before page 1,
+so there is nothing for an ADV coroutine to republish:
+- The Frida probe saw the registry written once, by `label_8c` called from `0x7e` (8 records, armed at `0x19d`),
+  and never reset before `wait-for-input@0x83c`.
+- The executed-offset trace (`tools/frida/trace_engine_ops.py`) takes `0x450 → 0x457 → 0x45e → label_71b`. So
+  `G[0xaba5c]` is not 1 there, and the loop body `0x462..0x711` that holds `0x622` does not run.
+
+The cancel runs only where the port forces that body: a cold run whose root script is the ADV scene, where
+`VirtualMachine.Run` sets `G[0xaba5c]=1` (see the scene-coroutine framework section). The port's full boot
+(TITLE → GAMESTART → SC0000) does not set it. The retained-template re-arm at `wait-for-input` therefore serves
+that cold path; on the full boot op `0x94` has already armed the registry. `docs/backlog.md` tracks what native
+does after an `0x93` that no registration follows.
 
 ### ADV Auto-message timing and voice completion (2026-07-18)
 

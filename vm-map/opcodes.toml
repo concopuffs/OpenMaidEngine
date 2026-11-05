@@ -264,7 +264,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "ret"
 category = "control"
-summary = "() - pop the current frame's local return stack and resume at the popped code offset unless it is -1; when a run-state snapshot is pending on ctx+0x5f2f4/+0x5f2f8 it is restored. Local calls (op 0x8f) and every native callback dispatch push the return entry, so callback bodies are local subroutines that return to the waiting opcode."
+summary = "() - pop the current frame's local return stack and resume at the popped code offset unless it is -1; when a run-state snapshot is pending on ctx+0x5f2f4/+0x5f2f8 it is restored. Local calls (op 0x8f) and the native callback dispatches push the return entry, so callback bodies are local subroutines that return to the waiting opcode. The exception is a click in the modal hotspot waits (ops 0x91/0x92/0x95), which redirects without a push, so that callback's ret pops the enclosing call."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -1747,7 +1747,7 @@ noop_headless = true
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x90_handler@0x41fc80 fetches x/y/w/h, forms x+w/y+h, fetches operands 5/6/7, and calls input_hotspot_register_rect_callbacks@0x403d70 on the current frame registry. The worker appends rect + callbacks to arrays and returns without changing PC. input_hotspot_poll_hover_callback@0x4040b0 returns operand 5 on entry and operand 6 on exit; input_hotspot_take_click_callback@0x404330 resets the registry and returns operand 7 on activation. All 301 ADV scripts contain the identical five control-strip records plus three keyed records."
+evidence = "Ghidra /v2: op_0x90_handler@0x41fc80 fetches x/y/w/h, forms x+w/y+h, fetches operands 5/6/7, and calls input_hotspot_register_rect_callbacks@0x403d70 on the current frame registry. The worker appends rect + callbacks to arrays and returns without changing PC. input_hotspot_poll_hover_callback@0x4040b0 returns operand 5 on entry and operand 6 on exit; at the ADV text wait, adv_input_service_poll@0x411230 pushes the waiting op's offset (delta -3) and takes operand 7 through input_hotspot_current_click_callback@0x404f70, which keeps the registry and its hovered record (native Frida trace 2026-11-04, SC0000 read-skip click: count 8 and hovered 3 unchanged, no reset or re-registration). Only the modal waits of ops 0x91/0x92/0x95 take the click through input_hotspot_take_click_callback@0x404330, which resets the registry. All 301 ADV scripts contain the identical five control-strip records plus three keyed records."
 confirm_by = ""
 details = """
 op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "ukn" noting args
@@ -1756,7 +1756,9 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
   `(x,y,x+w,y+h)` and the cursor hit-test compares them inclusively.
 - The later input service maps targets exactly: target A = pointer enter, target B = pointer leave,
   target C = activation/click. Moving directly between records emits leave first, then enter on the
-  next service poll. Activation consumes/resets the registry before dispatching target C.
+  next service poll. At the ADV text wait, activation keeps the registry: the callback returns into
+  the wait, and the clicked record stays hovered until the pointer leaves it. Only the modal waits
+  (ops 0x91/0x92/0x95) reset the registry on a click.
 - Two forms, both ONLY in one shared ADV-chrome subroutine copied into every ADV script:
   * Mode A (1505 = 5x301): immediate x,y,w,h with w=h=20; the five on-screen buttons at
     (684|706|728|750|772, 572): History, Auto message, Message skip, Read-message skip, and
@@ -8856,46 +8858,50 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041BFB0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "wait-hotspot-menu"
+category = "input"
+summary = "(columns) - modal wait on the current hotspot registry. The PC stays on this op while the run-state 0x800000 service polls: a hover transition calls the enter or leave callback, which returns into this op; a click resets the registry and jumps to the record's click callback without a return entry, so that callback replaces the wait. Operand 1 is the keyboard row stride. If op 0x93 ran while no op-0x94 wait was armed, this op falls through instead. Neither Himegari's nor Kamidori's scripts use it, and the port does not implement it (an unsupported-opcode stop)."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra /v2: op_0x91_wait_hotspot_menu@0x41fd80 (instruction length 3) clears a pending cancel (ctx+0xc6e0, set by op 0x93 when ctx+0xc6e4 is clear) and falls through, else sets run-state 0x800000, calls input_hotspot_arm_cursor_tracking@0x404230(operand 1 -> table +0xf00) and keeps the PC (length 0). input_hotspot_wait_poll@0x408710 serves the bit: input_hotspot_keyboard_navigate@0x404010, hover through input_hotspot_poll_hover_callback with a delta-0 return push, click through input_hotspot_take_click_callback@0x404330 (resets) with no push. Corpus: no use in either game."
 
 [[opcode]]
 op = 0x92
 label = "u0041C030"
 argc = 2
+code_target_args = [2]
+code_target_kind = "callback"
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041C030"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "wait-hotspot-menu-with-poll-callback"
+category = "input"
+summary = "(columns)(poll_callback_pc) - op 0x91 plus a callback that runs on every poll with no hover transition or click, and returns into this op. Neither Himegari's nor Kamidori's scripts use it, and the port does not implement it (an unsupported-opcode stop)."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra /v2: op_0x92_wait_hotspot_menu_with_poll_callback@0x41fe10 (instruction length 5) is op 0x91 plus operand 2 stored in table +0x74ac (ctx+0xc6f4). input_hotspot_wait_poll@0x408710 dispatches it after hotspot_check_owner_script and a delta-0 return push when neither a hover transition nor a click is pending; input_hotspot_reset@0x404130 sets it back to -1. Corpus: no use in either game."
 
 [[opcode]]
 op = 0x95
 label = "u0041C0C0"
 argc = 2
+code_target_args = [2]
+code_target_kind = "callback"
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041C0C0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "wait-choice-table"
+category = "input"
+summary = "(text_slot)(poll_callback_pc) - modal wait on the engine-drawn choice table, a second registry at ctx+0xc72c with the main registry's layout. Arming lays out the records' texts in ADV text slot operand 1 and the run-state 0x10000000 service highlights the hovered record. A click resets the table and jumps to the record's click callback without a return entry; operand 2 runs on every poll otherwise and returns into this op. If op 0x96 ran first, this op falls through. Neither Himegari's nor Kamidori's scripts use it, and the port does not implement it (an unsupported-opcode stop)."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra /v2: op_0x95_wait_choice_table@0x41fea0 (instruction length 5) clears a pending cancel (ctx+0x13bc4) and falls through, else sets run-state 0x10000000, stores operand 2 in ctx+0x13bd8 (table +0x74ac) and calls input_hotspot_arm_highlight_table@0x4042b0 (adv_text_layout_choice_table@0x457e20 on the first arm). adv_input_dispatch_callbacks@0x408530 serves the bit with the table at ctx+0xc72c: keyboard navigation, input_hotspot_sync_highlight -> hotspot_highlight_move@0x450070 (0x60-alpha highlight), a click through input_hotspot_take_click_callback (resets, no push), else the poll callback with a delta-0 push. Corpus: no use in either game."
 
 [[opcode]]
 op = 0x96
@@ -8904,14 +8910,14 @@ argc = 0
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u004150C0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "cancel-choice-table-wait"
+category = "input"
+summary = "() - the choice-table twin of op 0x93: reset the ctx+0xc72c table and clear run-state 0x10000000; when no wait is armed, mark a pending cancel so the next op 0x95 falls through. Neither Himegari's nor Kamidori's scripts use it, and the port does not implement it (an unsupported-opcode stop)."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra /v2: op_0x96_cancel_choice_table_wait@0x416700 clears run-state 0x10000000, calls input_hotspot_reset on the choice table, then clears ctx+0x13bc8 when set or else sets ctx+0x13bc4 (consumed by op 0x95). Corpus: no use in either game."
 
 [[opcode]]
 op = 0xaa

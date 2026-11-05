@@ -13,9 +13,9 @@ public sealed partial class VirtualMachine
                 RefreshAdvReadSkipState();
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
                 if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }
-                // The native ADV chrome is a coroutine: after an earlier 0x93 cancellation its shared
-                // registration pass runs again before a stable message wait. Our blocking host models that
-                // scheduler boundary by re-arming the frame's retained definitions here.
+                // Re-arm definitions that an earlier 0x93 left as a template (HotspotRegistry.Reset). Only
+                // direct-scene runs reach this before page 1: they force the scene-coroutine loop body and its
+                // 0x93 at SC0000 0x622, which native New Game never runs (traced 2026-11-04; docs/backlog.md).
                 bool wakeAtWait = false;
                 lock (_interactiveLock)
                 {

@@ -820,8 +820,11 @@ public sealed partial class VirtualMachine
 
     public void Run(int entryOffset = 0)
     {
-        // The native scheduler supplies this scene-entry state outside script-visible global writes.
-        // Restrict it to the byte-identical ADV LABEL/J idiom; op 0x140 also has an unrelated TITLE use.
+        // Direct-scene runs (the root script is an ADV scene) set the scene-entry gate so the scene's
+        // coroutine loop body runs once. This is a host model, not traced native entry state: native New Game
+        // enters SC0000 with the gate not 1 and skips that body (2026-11-04; docs/backlog.md). The natural
+        // boot root is never an ADV scene. Restrict it to the byte-identical ADV LABEL/J idiom; op 0x140 also
+        // has an unrelated TITLE use.
         if (entryOffset == 0
             && _compatibility.SceneEntryCoroutineGateAddress is { } sceneEntryGate
             && _s.Instructions.Any(ins => IsAdvLabeledYield(_s, ins)))
