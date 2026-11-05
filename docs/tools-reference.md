@@ -679,6 +679,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--no-menu-bar` — leave out the native menu bar. By default a game whose install has AGERC.DLL gets AGERC's menu
   110 above the game canvas, drawn as native's Win32 bar: the window is 20 px taller, and the canvas, the cursor
   mapping and the dialogs sit below the bar (`engine-re.md`, "Native menu bar").
+- `--desktop-dir DIR` — use DIR as the Desktop folder, where F1 and 表示画面を保存 write `CG%6.6d.BMP` while
+  `system:SaveBMPPath` is empty and which 画像の保存場所 preselects for Himegari. The driver points it into its
+  sandbox, as it redirects native AGE's Desktop.
 - `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced
   dialogue. In a hosted `--scene` run the seeds apply at TITLE's return, after SYSTEM4's boot scripts, so they
   override boot state.
@@ -823,7 +826,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 |---|---|
 | `move X Y\|POINT` | park the cursor (hover) |
 | `click X Y\|POINT [hold=MS]`, `rclick …` | left/right click; right click opens the ADV menu |
-| `key NAME\|0xVK [hold=MS]` | press a key (`enter`, `space`, `ctrl`, arrows, `f2`…, letters). ESC and F1 are refused on both targets: ESC asks to close (use `close-request`), and F1 saves a BMP through `engine_save_screenshot_bmp` |
+| `key NAME\|0xVK [hold=MS]` | press a key (`enter`, `space`, `ctrl`, arrows, `f1`…, letters). ESC is refused on both targets: it asks to close (use `close-request`). F1 saves a screenshot BMP in the sandbox Desktop; a native session on the live folders (`--live-saves`, `--attach`) refuses it, and the `menu` commands `save-screen` and `image-folder` too |
 | `wheel up\|down [N]` | wheel notches at the cursor |
 | `wait SECONDS` | sleep (in the client) |
 | `settle [timeout=S] [quiet=S] [threshold=F]` | wait until the game is idle for `quiet` seconds (0.7). Native: the frame stays within `threshold` (default 0.4 % of pixels) of one reference; typing adds up and resets the wait, the ADV wait indicator stays below the threshold, and animated menus such as the title never settle (use `wait` or a higher `threshold`). Port: an `input` or `menu` wait that is not busy |
@@ -834,7 +837,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `wait-state CONDITIONS [timeout=S] [click=POINT every=S]` | poll until `expect` would pass, clicking `POINT` every `S` seconds (default 2) meanwhile (boot: `wait-state script=TITLE click=adv.next every=3`) |
 | `point NAME X Y` | define a point for the session |
 | `speed FACTOR` | port: run the frame clock 0.05–8 times as fast |
-| `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes and the 終了 dialog; port: the 終了 dialog). `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
+| `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, the 終了 dialog and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs and the folder picker). The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
 | `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
 | `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground` |
 | `menu NAME\|ID` | choose a menu-bar command as a user does. The menu refreshes first, and a grayed item fails the step. Names: `exit`, `save`, `load`, `version`, `save-screen`, `image-folder`, `fullscreen`, `windowed`, `skip`, `hide`, `auto`, `read-skip`, `sound-settings`, `message-settings`, `system-info`, `other-settings`; or a numeric `WM_COMMAND` id. The result prints the item's `label` and whether it was `checked` before. Native sends `WM_INITMENU` (AGE has AGERC refresh the items), reads the item, then posts `WM_COMMAND`; the port runs the same refresh and command on its drawn bar |
@@ -897,6 +900,13 @@ six pages and loads. Then:
 Both targets match at every checkpoint. The `menu-*` shots also compare the control strip; they differ only in the
 wait indicator's phase.
 
+`himegari-screenshot.steps` saves screenshots on SC0000 pages 1 and 2, with 表示画面を保存 and F1, and writes
+`CG000000`–`CG000002.BMP` into the sandbox Desktop. It cancels the 画像の保存場所 folder picker, then accepts it. Himegari
+preselects the Desktop, so `SaveBMPPath` becomes the sandbox Desktop and `CG000003.BMP` goes there. Compare each BMP
+with the `screenshot-*` shot taken before it. On both targets they differ only in the wait indicator, and the BMP
+headers are identical. Native writes `SYS4REG.INI` when it exits, so `SaveBMPPath` shows only after `stop`; the port
+writes it at once (`engine-re.md`, "Native menu bar", Screenshots).
+
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
 `[native.keep_polling]` and `[[native.dialog]]`. Unknown sections are refused. A profile without `[native.engine]`
@@ -917,7 +927,8 @@ target's sandbox can seed the other's.
 - It also writes `[sandbox.quiet]` (master volume 0, so the audio paths still run) unless you pass `--sound`.
 - Port: the sandbox is the port's `--data-root`.
 - Native: `SHGetFolderPathA` points LocalAppData, AppData, Desktop, Documents and ProgramData into the sandbox, which
-  covers the save root, `SYS4REG.INI`, F1 screenshots and the debug report. The profile root sits at
+  covers the save root, `SYS4REG.INI`, screenshots (F1, 表示画面を保存) and the debug report. Port: the sandbox's
+  `Desktop` is the port's `--desktop-dir`. The profile root sits at
   `sandbox/<name>/LocalAppData/<the live path below LocalAppData>`. At the end the daemon checks that the live save
   folder is unchanged and logs `live-saves-unchanged` or what changed.
 - `--live-saves` and `--attach` use the real folder after an automatic backup to `backups/<stamp>/`. That backup is

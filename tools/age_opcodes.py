@@ -200,7 +200,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x010c: ('u0041E5E0', 2),
     0x010d: ('u00415F10', 1),
     0x010e: ('u0041E650', 2),
-    0x010f: ('u0041E690', 1),
+    0x010f: ('set-system-key-disable-mask', 1),
     0x012c: ('lookup-array-2d', 5),
     0x012d: ('u0041E720', 7),
     0x012e: ('find-hit-rectangle', 8),

@@ -187,6 +187,9 @@ public partial class Main : Godot.Control
         _screenPixels = new byte[logicalCanvas.RgbaByteCount];
         // The windowed AGE's menu bar sits above the game's client area, so the viewport is the canvas plus the bar.
         LoadMenuBar(gameRoot.Root, catalog.StartupSettings, userArgs);
+        InitScreenshots(userArgs, gameRoot.Root,
+                        int.TryParse(catalog.StartupSettings.GetValueOrDefault("USEAPPDATAFOLDER"),
+                                     out int useAppDataFolder) && useAppDataFolder == 1);
         Window rootWindow = GetTree().Root;
         rootWindow.ContentScaleMode = Window.ContentScaleModeEnum.Viewport;
         rootWindow.ContentScaleAspect = Window.ContentScaleAspectEnum.Keep;

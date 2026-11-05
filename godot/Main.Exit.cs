@@ -30,6 +30,8 @@ public partial class Main
     private ColorRect? _exitDim;
     private CanvasLayer? _frozenFrameLayer;
     private TextureRect? _frozenFrame;
+    /// <summary>The frame the first hold froze: what native's back buffer still holds while a modal loop runs.</summary>
+    private Image? _frozenFrameImage;
     private int _frozenFrameHolds;
 
     private void InitializeExitPolicy()
@@ -136,6 +138,7 @@ public partial class Main
             {
                 _frozenFrame.Visible = false;
                 _frozenFrame.Texture = null;
+                _frozenFrameImage = null;
             }
             return;
         }
@@ -155,6 +158,7 @@ public partial class Main
         }
         Image? presented = CaptureGameImage();
         if (presented == null) return;
+        _frozenFrameImage = presented;
         _frozenFrame.Texture = ImageTexture.CreateFromImage(presented);
         _frozenFrame.Visible = true;
     }

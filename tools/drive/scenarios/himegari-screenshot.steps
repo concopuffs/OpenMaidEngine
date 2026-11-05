@@ -1,0 +1,43 @@
+# 画像の保存 (AGERC menu 110) and F1 on SC0000. 表示画面を保存 (0x9c46) and F1 both save the presented frame as the
+# next free CG%6.6d.BMP (a bottom-up 24-bit 800x600 BMP, 1,440,054 bytes) in system:SaveBMPPath, else the Desktop: in a
+# sandbox that is <sandbox>/Desktop. Compare each CG00000N.BMP with the shot taken before it (the text-wait cursor
+# animates, so its few pixels may differ). 画像の保存場所 (0x9c47) opens the shell's folder picker; Himegari sets
+# UseAppDataFolder=1, so it preselects the Desktop. Cancel changes nothing; OK sets [system] SaveBMPPath to the sandbox
+# Desktop, where CG000003.BMP then goes (native writes SYS4REG.INI when it exits, the port at once). Run on a fresh
+# sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py native start
+#   py -3.11 -X utf8 tools/drive.py native run tools/drive/scenarios/himegari-screenshot.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+
+shot screenshot-1-page1
+menu save-screen                        # CG000000.BMP
+wait 1
+key f1                                  # CG000001.BMP
+wait 1
+advance 1
+shot screenshot-2-page2
+menu save-screen                        # CG000002.BMP
+wait 1
+
+menu image-folder                       # 画像を保存するフォルダを選択してください
+wait 2
+dialogs
+answer Cancel                           # the shell labels its buttons in the Windows UI language
+wait 1
+state
+menu image-folder
+wait 2
+answer OK                               # the preselected folder: the Desktop
+wait 1
+state
+shot screenshot-3-page2
+menu save-screen                        # CG000003.BMP, now through SaveBMPPath
+wait 1

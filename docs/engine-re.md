@@ -1395,6 +1395,46 @@ presents, no script progress, no input reaches it. A focus loss closes the menu.
 even when the keyboard selects it. With a popup open, hovering another bar item switches to it, and pressing the
 open item's title closes it.
 
+**Screenshots** (native-read and driver-checked 2026-11-05). F1 and 表示画面を保存 (`0x9c46`) both reach
+`engine_save_screenshot_bmp@0x407ce0`:
+
+- **Callers.** `age_main_window_proc`'s `WM_KEYDOWN` F1 passes surface 0. It fires on auto-repeat too, unless bit 0
+  of `ctx+0x6da7c` (`system_key_disable_mask`, op `0x10f` below) is set. `agerc_menu_command` sends `0x9c46` to
+  IAGEService `+0xa4` (`iage_service_save_screenshot_bmp@0x45f780`), which passes surface `0x1e`.
+- **Name.** A process-global counter (`0x5c4544`, from 0) numbers `CG%6.6d.BMP`. Each probe opens the name with
+  `OPEN_EXISTING` and advances the counter, so the first missing name is written and the next save goes on from
+  there. At 1,000,000 the function gives up.
+- **Folder.** `system:SaveBMPPath` when it is set, else the Desktop (`SHGetFolderPathA(0x8010)`).
+- **Pixels.** In draw mode 1 (`ctx+0x99290`, Himegari) `gfx_backend1_save_backbuffer_bmp24@0x479800` reads the D3D
+  back buffer and ignores the surface argument. `gfx_surface_write_bmp24_to_path@0x475420` writes it as the save
+  thumbnails' BMP: bottom-up, 24-bit, with a `bfSize` that leaves out the 14-byte file header. An 800×600 frame
+  makes 1,440,054 bytes with `bfSize` 1,440,040. The game frame is saved without the menu bar. While the menu loop
+  runs nothing is presented, so the menu command saves the frame from when the menu opened.
+- **Feedback.** None: no message and no sound, on success or failure.
+
+**Op `0x10f`.** `op_0x10f_set_system_key_disable_mask@0x4217a0` stores its operand at `ctx+0x6da7c`. Bit 0 blocks
+F1. Bit `0x200` makes `age_main_window_proc` swallow `WM_SYSKEYDOWN` F10, the key that selects the menu bar. The
+constructor and `scene_context_init_reset@0x40b3b0` clear the field. Neither Himegari's nor Kamidori's scripts use the
+opcode.
+
+**画像の保存場所** (`0x9c47`). `agerc_choose_screenshot_folder@0x10002bc0` opens `SHBrowseForFolderA`, owned by the
+game window, rooted at the desktop, with `BIF_RETURNONLYFSDIRS` and the prompt 画像を保存するフォルダを選択してください.
+Its callback, `agerc_screenshot_folder_browse_callback@0x10002a70`, preselects where the next screenshot would go:
+
+- `SaveBMPPath`;
+- when that is empty, the game's directory (`agerc_game_executable_directory@0x10002980`);
+- or the Desktop instead when `set:UseAppDataFolder` is 1, as Himegari's is.
+
+OK stores the folder through `AGE:reg` as `system:SaveBMPPath`; Cancel changes nothing. AGE writes `SYS4REG.INI`
+when it exits, so the file shows the value only then. The dialog's modal loop runs on AGE's thread, so the game stops
+while it is open.
+
+**Native check.** `tools/drive/scenarios/himegari-screenshot.steps` runs on both targets in a sandbox, whose Desktop
+the driver redirects. It saves `CG000000`–`CG000003.BMP` there. The BMP headers are identical on both targets. Each
+BMP equals the shot taken before it, except the animated wait indicator (about x 387..412, y 570..597). Native and port
+BMPs differ only where their shots do, in glyph-edge antialiasing. After OK, both targets store the sandbox Desktop as
+`SaveBMPPath`, and the next BMP goes there.
+
 **Measured look** (native captures, 2026-11-05):
 
 - **Bar.** 20 px tall. Each item is its text width plus 14, and the text starts 7 px in.
@@ -1414,6 +1454,14 @@ open item's title closes it.
   (`RequestMenuMessageSkipToggle`, `…AutoMessageToggle`, `…ReadMessageSkipToggle`, `RequestMenuHideWindow`). The VM
   applies them at its next instruction boundary or text-wait service, then runs `CALLBACK_SETTING.BIN`. Ending a
   text wait from Auto goes through `IInputHost.EndInputWait`.
+- **Screenshots.** `godot/Main.Screenshot.cs` saves through `ScreenshotBmpStore` (`engine/Age.Engine/Persistence`).
+  表示画面を保存 saves the frame frozen when the menu opened; F1 saves the current frame unless
+  `VirtualMachine.SystemKeyDisableMask` (op `0x10f`) has bit 0, or a dialog is open. `--desktop-dir` replaces the
+  Desktop. The port has no F10 handling, so it only stores bit `0x200`.
+- **Image folder.** 画像の保存場所 holds the VM, freezes the frame and opens the same shell dialog
+  (`godot/ScreenshotFolderDialog.cs`). The dialog runs on a thread of its own so that Godot keeps drawing, and the
+  driver's `dialogs` and `answer` steps reach it as they reach native's. Other platforms use their own folder
+  dialog. The port writes `SaveBMPPath` to `SYS4REG.INI` at once.
 - **Unimplemented commands.** The refresh grays every command the port cannot run yet.
 - **Menu loop.** While a menu is open, the port holds the VM and freezes the presented frame. The hold nests, so the
   終了 dialog can open from it.
@@ -1422,7 +1470,7 @@ open item's title closes it.
   The 終了 and script-error dialogs share this text path.
 - **Opting out.** `--no-menu-bar` restores the plain window.
 - **Checks.** `tools/drive/scenarios/himegari-menu-bar.steps` checks read skip, hide, Auto and 終了 on both
-  targets. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
+  targets, and `himegari-screenshot.steps` checks the screenshots and the image folder. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
   state, then posts `WM_COMMAND`. Both targets refuse a grayed item.
 - **Remaining gaps.** The AGERC dialogs and the other commands, the right-click popup, the top-edge strip,
   Alt/F10 focus, and native's off-window popups are listed in `docs/backlog.md`, "Native menu bar".
@@ -5135,7 +5183,8 @@ These were found while driving native AGE from a script for gate 7 and for the g
     It now follows `Sys4StartupSettings.ClickOnUp` (`godot/Main.Input.cs`).
 - **Keys.** A non-repeat `WM_KEYDOWN` also reaches `FUN_00485e50`, the key latch, which
   `input_poll_key_triggers@0x460220` consumes, so keys trigger on press. ESC posts `WM_CLOSE`. F1 calls
-  `engine_save_screenshot_bmp@0x407ce0`, unless `ctx+0x6da7c` bit 0 is set.
+  `engine_save_screenshot_bmp@0x407ce0`, auto-repeat included, unless op `0x10f` set bit 0 of `ctx+0x6da7c`
+  ("Native menu bar", Screenshots).
 
 A driver can therefore play AGE without touching the desktop's input:
 - replace those user32/winmm calls inside the process;
@@ -5174,7 +5223,7 @@ closes, the SC0000 frame is back on the page offset.
 | `save_root_resolve@0x40b880` | `0x801c` LocalAppData | the save root |
 | `FUN_0040bd80` | `0x801c` | same shape as `save_root_resolve` |
 | `engine_resolve_sys4reg_ini_path@0x46b150` | `0x801c` | `SYS4REG.INI` |
-| `engine_save_screenshot_bmp@0x407ce0` | `0x8010` Desktop | F1 screenshots `CG%06d.BMP`, when `system:SaveBMPPath` is empty |
+| `engine_save_screenshot_bmp@0x407ce0` | `0x8010` Desktop | F1 and 表示画面を保存 screenshots `CG%06d.BMP`, when `system:SaveBMPPath` is empty |
 | `engine_write_debug_report@0x42d4d0` | `0x8010` Desktop | debug report (below) |
 
 The debug report writes `REPORT\NN\` with surface BMPs and names `VARIABLES0INT.TXT`, `VARIABLES2STRING.TXT` and

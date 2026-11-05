@@ -9507,19 +9507,28 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 
 [[opcode]]
 op = 0x10f
-label = "u0041E690"
+label = "set-system-key-disable-mask"
 argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041E690"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-system-key-disable-mask"
+category = "input"
+summary = "(mask) - replace the EngineCtx system-key disable mask that AGE's window procedure reads: bit 0 (0x1) suppresses F1's screenshot BMP, bit 9 (0x200) swallows F10's menu-bar focus. Scene reset clears it."
+details = "Port status (2026-11-05): implemented as VirtualMachine.SystemKeyDisableMask, cleared by the scene reset. The Godot frontend's F1 screenshot honours bit 0; the menu bar has no F10 focus yet (docs/backlog.md, \"Native menu bar\"). Neither shipped corpus calls the op."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra /v2: op_0x10f_set_system_key_disable_mask@0x4217a0 stores operand 1 at EngineCtx+0x6da7c; scene_context_init_reset@0x40b3b0 and the EngineCtx constructor zero it. age_main_window_proc@0x486320 calls engine_save_screenshot_bmp(0) on WM_KEYDOWN VK_F1 only while bit 0 is clear, and returns without DefWindowProc for WM_SYSKEYDOWN VK_F10 while bit 0x200 is set. No Himegari or Kamidori script calls it."
+evidence_records = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2", scope = "op 0x10f handler, scene reset and window procedure", profile_ids = ["himegari"], engine_revisions = ["SYS4422"], confidence = "high", text = "op_0x10f_set_system_key_disable_mask@0x4217a0 stores operand 1 at EngineCtx+0x6da7c (system_key_disable_mask); scene_context_init_reset zeroes it; age_main_window_proc tests bit 0 before F1's engine_save_screenshot_bmp and bit 0x200 before passing WM_SYSKEYDOWN F10 on." },
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "system-key disable mask (bit 0 F1 screenshot, bit 9 F10 menu focus)"
+observed_types = []
 
 [[opcode]]
 op = 0x12d

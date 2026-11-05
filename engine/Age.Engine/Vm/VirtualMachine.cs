@@ -100,6 +100,9 @@ public sealed partial class VirtualMachine
     // EngineCtx +0x5511c: unsigned TIMER_SHOWMENU dwell threshold. Native op 0x148
     // returns the same dword through the VM's signed integer-cell representation.
     private uint _systemMenuShowDelayMilliseconds;
+    // EngineCtx +0x6da7c, op 0x10f: the window procedure's system-key disable mask. Bit 0 suppresses F1's screenshot
+    // BMP, bit 9 (0x200) swallows F10's menu-bar focus. Scene reset clears it.
+    private int _systemKeyDisableMask;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     // Eleven safely isolated handler-addressable FIFO slots. Native physically owns ten at
     // +0x55130; its admitted id 10 aliases stack slot zero. ATSEEK/MVSEEK use FIFO slot zero.
@@ -129,6 +132,9 @@ public sealed partial class VirtualMachine
     public bool MessageSkipEnabled => _messageSkipEnabled;
     public int SystemMenuActionsEnabled => _systemMenuActionsEnabled;
     public uint SystemMenuShowDelayMilliseconds => _systemMenuShowDelayMilliseconds;
+    /// <summary>Op 0x10f's system-key disable mask (EngineCtx +0x6da7c), read by the frontend's F1 and F10 handling.
+    /// Written on the VM thread; a frontend read sees the last completed write.</summary>
+    public int SystemKeyDisableMask => Volatile.Read(ref _systemKeyDisableMask);
     public string PendingDiagnosticText => _diagnosticOutput.PendingText;
     /// <summary>
     /// Zero-based active-frame cutoff selected by opcode 0x1ad, or null when no surviving marker
@@ -1048,6 +1054,7 @@ public sealed partial class VirtualMachine
         _advTextStyle = AdvTextStyle.Default;
         _systemMenuActionsEnabled = 1;
         _systemMenuShowDelayMilliseconds = 0;
+        Volatile.Write(ref _systemKeyDisableMask, 0);
         TextHistory.SetRecordingEnabled(true);
         _host.SetMessageSkipActive(false);
         _host.SetPhysicalMessageSkipActive(false);
@@ -1864,6 +1871,8 @@ public sealed partial class VirtualMachine
             case "u004160A0": // pre-reference compatibility
             case "set-system-menu-show-delay": // 0x149: top-edge dwell threshold in milliseconds
             case "u0041FCE0": // pre-reference compatibility
+            case "set-system-key-disable-mask": // 0x10f: F1 screenshot / F10 menu-focus disable bits
+            case "u0041E690": // pre-reference compatibility
                 return StepRuntimeSetting(label, a, pc);
             case "get-message-glyph-delay": // 0x7f
             case "u00414C60":

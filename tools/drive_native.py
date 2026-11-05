@@ -681,6 +681,8 @@ class Daemon:
             raise DriveError(f"vk {vk:#x} is not a key")
         if vk in core.REFUSED_KEYS:
             raise DriveError(core.REFUSED_KEYS[vk])
+        if vk in core.LIVE_REFUSED_KEYS and self.saves.get("mode") == "live":
+            raise DriveError(core.LIVE_REFUSED_KEYS[vk])
         self.key(vk, _int(request, "hold_ms", core.DEFAULT_HOLD_MS) / 1000)
         return {}
 
@@ -795,6 +797,8 @@ class Daemon:
         """Choose a menu-bar command as a user does: the menu refreshes, a grayed item cannot be chosen, and an
         enabled one sends WM_COMMAND (AGE hands AGERC's ids to its _OperateMenu command handler)."""
         command = _int(request, "command", 0)
+        if command in core.LIVE_REFUSED_MENU_COMMANDS and self.saves.get("mode") == "live":
+            raise DriveError(core.LIVE_REFUSED_MENU_COMMANDS[command])
         hwnd = self.require_window()
         item = win32().menu_item(hwnd, command)
         if item is None:

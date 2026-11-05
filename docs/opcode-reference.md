@@ -3007,6 +3007,17 @@ Both native handlers directly return the input manager field populated from the 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x10d`; scope=Himegari SYS4422. Ghidra /v2: op_0x10d_consume_mouse_wheel_delta@0x428cf0 copies ctx+0x1c34 to operand 1 and immediately clears the field. AGE's window procedure at 0x486925 handles WM_MOUSEWHEEL by sign-extending the high word of wParam and accumulating it at ctx+0x1c34; HISTORY.BIN polls this value and branches on its sign to select one scroll direction.
 
+### 0x10f `set-system-key-disable-mask` (set-system-key-disable-mask, argc 1)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **summary:** (mask) - replace the EngineCtx system-key disable mask that AGE's window procedure reads: bit 0 (0x1) suppresses F1's screenshot BMP, bit 9 (0x200) swallows F10's menu-bar focus. Scene reset clears it.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x10f`; scope=Himegari SYS4422. Ghidra /v2: op_0x10f_set_system_key_disable_mask@0x4217a0 stores operand 1 at EngineCtx+0x6da7c; scene_context_init_reset@0x40b3b0 and the EngineCtx constructor zero it. age_main_window_proc@0x486320 calls engine_save_screenshot_bmp(0) on WM_KEYDOWN VK_F1 only while bit 0 is clear, and returns without DefWindowProc for WM_SYSKEYDOWN VK_F10 while bit 0x200 is set. No Himegari or Kamidori script calls it.
+
+Port status (2026-11-05): implemented as VirtualMachine.SystemKeyDisableMask, cleared by the scene reset. The Godot frontend's F1 screenshot honours bit 0; the menu bar has no F10 focus yet (docs/backlog.md, "Native menu bar"). Neither shipped corpus calls the op.
+
 ### 0x12e `find-hit-rectangle` (find-hit-rectangle, argc 8)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -4194,15 +4205,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x10e`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x10f `u0041E690` (u0041E690, argc 1)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x10f`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x12d `u0041E720` (u0041E720, argc 7)
 - **observed by:** none in recorded corpora

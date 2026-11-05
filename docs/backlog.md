@@ -10,17 +10,17 @@ it; git history keeps the record.
 
 ## Engine fidelity
 
-- **Native menu bar: the remaining commands (AGERC menu 110).** The port draws the pruned bar and runs ｹﾞｰﾑ>終了
-  and the four ﾒｯｾｰｼﾞ toggles as native does (`engine-re.md`, "Native menu bar"). It grays everything else. Still
-  missing:
+- **Native menu bar: the remaining commands (AGERC menu 110).** The port draws the pruned bar and runs ｹﾞｰﾑ>終了,
+  画像の保存 and the four ﾒｯｾｰｼﾞ toggles as native does (`engine-re.md`, "Native menu bar"). It grays everything
+  else. Still missing:
   - The AGERC dialogs behind ﾒｯｾｰｼﾞ設定, 画面表示, ｻｳﾝﾄﾞ設定, その他の設定 and the ﾍﾙﾌﾟ items (version, system
     information).
-  - 画像の保存 (`0x9c46`, the BMP that `engine_save_screenshot_bmp` writes) and the image-folder command (`0x9c47`).
   - ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (`0x9c5a`/`0x9c5b`), and in fullscreen the top-edge strip that shows the bar (op `0x149` sets
     its delay; the port keeps that state and op `0x142`'s).
   - The right-click ﾒｯｾｰｼﾞ popup under `message:RMouseEvent=2`.
-  - Keyboard focus without a dropdown: Alt pressed and released, or F10, selects the bar. The port's keyboard
-    access starts only from Alt with an access key, which opens that dropdown.
+  - Keyboard focus without a dropdown: Alt pressed and released, or F10, selects the bar; bit `0x200` of op
+    `0x10f`'s mask swallows F10. The port's keyboard access starts only from Alt with an access key, which opens
+    that dropdown.
   - Smaller look differences. Native popups may extend past the game window (the ﾍﾙﾌﾟ popup spans x 744..989), but
     the port clamps them inside it. Latin glyphs are drawn without ClearType's exact rasterization.
 

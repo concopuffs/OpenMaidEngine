@@ -197,7 +197,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       publication, and bounded font/glyph cache primitives
     │   ├── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
-    │                                       profile-owned state, identity, and serialized bank dimensions
+    │                                       screenshot BMP naming, profile-owned state, identity, and
+    │                                       serialized bank dimensions
     │   ├── Age.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
     │                                       open-maid-script-design.md): operand contracts, intrinsics (Abi/), intermediate
     │                                       form and byte-exact decoder/encoder (Ir/), lexer/parser/AST (Syntax/),
@@ -272,7 +273,9 @@ full-width text entry. `godot/Main.Drive.cs` owns the `--control` driving backen
 injected input events, exclusive input, and the port side of the protocol (state, screenshots, speed, close).
 `godot/Main.MenuBar.cs` attaches the native menu bar (AGERC menu 110) above the game canvas and runs its commands;
 `godot/NativeMenuBar.cs` draws the bar and its popups, and `godot/GdiTextMetrics.cs` supplies the GDI advances
-that the bar and the `godot/Win32Dialog.cs` dialogs lay their labels out with.
+that the bar and the `godot/Win32Dialog.cs` dialogs lay their labels out with. `godot/Main.Screenshot.cs` saves the
+F1 and 表示画面を保存 screenshot BMPs and runs 画像の保存場所 through `godot/ScreenshotFolderDialog.cs`, the shell's
+folder picker.
 
 `engine/Age.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
 Both `engine/AgeEngine.sln` and `godot/OME.sln` include the project; Godot and `Age.Engine.Tests` consume it

@@ -86,6 +86,7 @@ def start(arguments: argparse.Namespace) -> int:
     environment = {**os.environ, core.TOKEN_ENVIRONMENT: token}
     command = [str(godot), "--path", str(GODOT_PROJECT), "--",
                "--game-root", str(paths.CONTEXT.game_root), "--data-root", str(profile_root.resolve()),
+               "--desktop-dir", str((sandbox / core.SANDBOX_FOLDERS[0x10]).resolve()),
                "--control", "--control-file", str(session.resolve()),
                *[part for mod in arguments.mod for part in ("--mod", str(Path(mod).resolve()))], *arguments.port_arg]
     log_path = root / "godot.log"

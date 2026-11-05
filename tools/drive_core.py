@@ -331,7 +331,14 @@ VK_NAMES.update({f"f{n}": 0x6F + n for n in range(1, 13)})
 REFUSED_KEYS = {
     0x1B: "ESC posts WM_CLOSE in native AGE (age_main_window_proc), which opens its 終了 dialog; "
           "use close-request (or close to quit)",
-    0x70: "F1 saves a screenshot BMP in native AGE (engine_save_screenshot_bmp); use the shot step",
+}
+# F1 and the menu's 表示画面を保存 save a screenshot BMP in the Desktop folder (engine_save_screenshot_bmp), and
+# 画像の保存場所 sets system:SaveBMPPath. A sandbox redirects the Desktop (native: CSIDL 0x10; port: --desktop-dir), so
+# only a native session on the live folders refuses them.
+LIVE_REFUSED_KEYS = {0x70: "F1 would save a screenshot BMP on the real Desktop; drive a sandbox"}
+LIVE_REFUSED_MENU_COMMANDS = {
+    0x9C46: "表示画面を保存 would save a screenshot BMP on the real Desktop; drive a sandbox",
+    0x9C47: "画像の保存場所 would change the live system:SaveBMPPath; drive a sandbox",
 }
 WAITING_KINDS = ("input", "menu", "movie", "transition", "sleep")
 CONDITION_KEYS = ("at", "top", "script", "waiting")
@@ -401,7 +408,8 @@ STEPS = {
     "move": _spec(1, 2, "", "move X Y | move POINT          park the cursor (hover)"),
     "click": _spec(1, 2, "hold", "click X Y | click POINT [hold=MS]   left click"),
     "rclick": _spec(1, 2, "hold", "rclick X Y | rclick POINT [hold=MS] right click (opens the ADV menu)"),
-    "key": _spec(1, 1, "hold", "key NAME|0xVK [hold=MS]       press a key; ESC and F1 are refused"),
+    "key": _spec(1, 1, "hold", "key NAME|0xVK [hold=MS]       press a key; ESC is refused (F1 saves a screenshot "
+                 "BMP in the sandbox Desktop)"),
     "wheel": _spec(1, 2, "", "wheel up|down [N]             turn the wheel N notches at the cursor"),
     "wait": _spec(1, 1, "", "wait SECONDS"),
     "settle": _spec(0, 0, "timeout quiet threshold",

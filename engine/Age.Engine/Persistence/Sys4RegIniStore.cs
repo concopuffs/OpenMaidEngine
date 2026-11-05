@@ -171,6 +171,30 @@ public sealed class Sys4RegIniStore
         }
     }
 
+    /// <summary>A string of any section as written after its <c>=</c>, or <paramref name="defaultValue"/> when the key
+    /// is absent (system:SaveBMPPath, for one).</summary>
+    public string LoadString(string section, string key, string defaultValue)
+    {
+        lock (_lock)
+        {
+            _document ??= LoadDocument();
+            return _document.TryGetString(section, key, out string value) ? value : defaultValue;
+        }
+    }
+
+    public void SaveString(string section, string key, string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.IndexOfAny(['\r', '\n']) >= 0)
+            throw new ArgumentException("SYS4REG.INI values are single lines.", nameof(value));
+        lock (_lock)
+        {
+            _document ??= LoadDocument();
+            _document.SetValue(section, key, value);
+            WriteLocked();
+        }
+    }
+
     public void SaveMessageInt(string key, int value)
     {
         lock (_lock)
@@ -246,6 +270,33 @@ public sealed class Sys4RegIniStore
         {
             value = default;
             bool found = false;
+            foreach (string rawValue in RawValues(section, key))
+            {
+                if (int.TryParse(rawValue.Trim(), NumberStyles.Integer,
+                                 CultureInfo.InvariantCulture, out int parsed))
+                {
+                    value = parsed;
+                    found = true;
+                }
+            }
+            return found;
+        }
+
+        /// <summary>The last occurrence wins, as for integers.</summary>
+        public bool TryGetString(string section, string key, out string value)
+        {
+            value = "";
+            bool found = false;
+            foreach (string rawValue in RawValues(section, key))
+            {
+                value = rawValue;
+                found = true;
+            }
+            return found;
+        }
+
+        private IEnumerable<string> RawValues(string section, string key)
+        {
             string? currentSection = null;
             foreach (string line in _lines)
             {
@@ -254,18 +305,11 @@ public sealed class Sys4RegIniStore
                     currentSection = parsedSection;
                     continue;
                 }
-                if (!string.Equals(currentSection, section, StringComparison.OrdinalIgnoreCase)
-                    || !TryParseKey(line, out string? parsedKey, out string? rawValue)
-                    || !string.Equals(parsedKey, key, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (int.TryParse(rawValue!.Trim(), NumberStyles.Integer,
-                                 CultureInfo.InvariantCulture, out int parsed))
-                {
-                    value = parsed;
-                    found = true;
-                }
+                if (string.Equals(currentSection, section, StringComparison.OrdinalIgnoreCase)
+                    && TryParseKey(line, out string? parsedKey, out string? rawValue)
+                    && string.Equals(parsedKey, key, StringComparison.OrdinalIgnoreCase))
+                    yield return rawValue!;
             }
-            return found;
         }
 
         public void AddIfMissing(string section, string key, string value)
@@ -289,6 +333,8 @@ public sealed class Sys4RegIniStore
 
         public void SetInt(string section, string key, int value)
             => SetString(section, key, value.ToString(CultureInfo.InvariantCulture));
+
+        public void SetValue(string section, string key, string value) => SetString(section, key, value);
 
         private void SetString(string section, string key, string rendered)
         {

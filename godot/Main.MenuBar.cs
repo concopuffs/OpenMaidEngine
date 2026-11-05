@@ -15,7 +15,8 @@ using Godot;
 /// game's client area starts below them. A game without AGERC.DLL, or a run with <c>--no-menu-bar</c>, has no bar.
 /// <para>Opening a menu starts native's modal menu loop: the game holds at its next opcode boundary, its frame
 /// freezes, and AGERC refreshes the items (WM_INITMENU). A chosen command then runs as WM_COMMAND does. The port
-/// performs 終了, the ﾒｯｾｰｼﾞ toggles and ｳｲﾝﾄﾞｳ; it grays the commands it lacks (docs/backlog.md).</para>
+/// performs 終了, 画像の保存 (表示画面を保存, 画像の保存場所; Main.Screenshot.cs), the ﾒｯｾｰｼﾞ toggles and ｳｲﾝﾄﾞｳ; it grays
+/// the commands it lacks (docs/backlog.md).</para>
 /// </summary>
 public partial class Main
 {
@@ -26,8 +27,8 @@ public partial class Main
 
     private static readonly HashSet<int> PortMenuCommands = new()
     {
-        AgercMenu.Exit, AgercMenu.MessageSkip, AgercMenu.ReadMessageSkip, AgercMenu.HideWindow, AgercMenu.AutoMessage,
-        AgercMenu.Windowed,
+        AgercMenu.Exit, AgercMenu.SaveScreen, AgercMenu.ImageFolder, AgercMenu.MessageSkip, AgercMenu.ReadMessageSkip,
+        AgercMenu.HideWindow, AgercMenu.AutoMessage, AgercMenu.Windowed,
     };
 
     /// <summary>Read and prune the menu before the window is sized, since the bar adds rows above the game.</summary>
@@ -95,7 +96,7 @@ public partial class Main
     {
         if (_menuBar == null || _vm == null || _host == null) return false;
         if (_exitConfirmation != null || _scriptErrorDialog != null || _fullwidthTextEditor != null
-            || _debugSceneLauncher?.Visible == true)
+            || _screenshotFolderDialog != null || _debugSceneLauncher?.Visible == true)
             return false;
         return _menuBar.HandleInput(e);
     }
@@ -168,6 +169,12 @@ public partial class Main
         {
             case AgercMenu.Exit:
                 RequestUnforcedClose();   // PostMessage(WM_CLOSE, 0): the 終了 dialog
+                break;
+            case AgercMenu.SaveScreen:
+                SaveScreenshotFromMenu();   // IAGEService +0xa4: engine_save_screenshot_bmp
+                break;
+            case AgercMenu.ImageFolder:
+                ChooseScreenshotFolder();   // agerc_choose_screenshot_folder: SHBrowseForFolder
                 break;
             case AgercMenu.MessageSkip:
                 _vm.RequestMenuMessageSkipToggle();

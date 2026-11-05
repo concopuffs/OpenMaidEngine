@@ -29,6 +29,10 @@ public sealed partial class VirtualMachine
             case "u0041FCE0": // pre-reference compatibility
                 _systemMenuShowDelayMilliseconds = unchecked((uint)Read(a[0]));
                 return pc + 1;
+            case "set-system-key-disable-mask": // 0x10f: op_0x10f_set_system_key_disable_mask@0x4217a0
+            case "u0041E690": // pre-reference compatibility
+                Volatile.Write(ref _systemKeyDisableMask, unchecked((int)Read(a[0])));
+                return pc + 1;
             default:
                 throw new InvalidOperationException($"Non-runtime-setting opcode routed to runtime-setting handler: {label}");
         }

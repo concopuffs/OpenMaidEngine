@@ -592,6 +592,11 @@ name = "message_skip_activation_guard"
 type = "int"
 note = "set when op 0x88 enables Skip; suppresses the enabling click from immediately becoming a hotspot activation"
 [[field]]
+offset = 0x6da7c
+name = "system_key_disable_mask"
+type = "int"
+note = "op 0x10f stores its operand here; bit 0 blocks the F1 screenshot (engine_save_screenshot_bmp) and bit 0x200 swallows WM_SYSKEYDOWN F10 in age_main_window_proc. The constructor and scene_context_init_reset clear it"
+[[field]]
 offset = 0x6da80
 name = "message_skip_cancel_click_phase"
 type = "int"

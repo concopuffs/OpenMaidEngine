@@ -219,11 +219,18 @@ public partial class Main
             var dialogs = new System.Text.Json.Nodes.JsonArray();
             if (main._exitConfirmation is { } exit) dialogs.Add(exit.Describe());
             if (main._scriptErrorDialog is { } error) dialogs.Add(error.Describe());
+            if (main._screenshotFolderDialog?.Describe() is { } folder) dialogs.Add(folder);
             return dialogs;
         }
 
         public System.Text.Json.Nodes.JsonObject Answer(string button)
         {
+            if (main._screenshotFolderDialog is { } folderDialog && folderDialog.Describe() is { } folder
+                && folderDialog.Press(button) is { } folderButton)
+                return new System.Text.Json.Nodes.JsonObject
+                {
+                    ["text"] = (string?)folder["text"], ["answered"] = folderButton,
+                };
             if (main._scriptErrorDialog is { } error && error.Press(button) is { } errorButton)
                 return new System.Text.Json.Nodes.JsonObject
                 {

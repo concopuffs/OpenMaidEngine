@@ -42,7 +42,9 @@ def test_step_parsing():
     check(raises(core.parse_step, "click 1 2 speed=3", contains="no option"), "unknown options are rejected")
     check(raises(core.parse_step, "settle timeout=soon", contains="not a number"), "numeric options must parse")
     check(raises(core.parse_step, "key esc", contains="WM_CLOSE"), "ESC is refused at parse time")
-    check(raises(core.parse_step, "key F1", contains="screenshot"), "F1 is refused at parse time")
+    check(core.parse_step("key F1").name == "key", "F1 parses: a sandbox catches its screenshot BMP")
+    check(0x70 in core.LIVE_REFUSED_KEYS and 0x9C46 in core.LIVE_REFUSED_MENU_COMMANDS,
+          "a live native session refuses F1 and the screenshot menu commands")
     check(raises(core.parse_step, "expect", contains="at least one"), "expect needs a condition")
     check(core.parse_step("expect script=SC0000 waiting=input").options == {"script": "SC0000", "waiting": "input"},
           "conditions combine; every one must match")

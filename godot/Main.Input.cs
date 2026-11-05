@@ -70,6 +70,8 @@ public partial class Main
             }
             return;
         }
+        // WM_KEYDOWN VK_F1 saves a screenshot BMP, and the key still reaches the game's bindings below.
+        TrySaveScreenshotFromKey(e);
         if (e is InputEventMouseMotion motion)
         {
             var p = ToNativeScreen(motion.Position);
