@@ -2985,7 +2985,7 @@ Both native handlers directly return the input manager field populated from the 
 - **semantic status:** investigated
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x10d` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x10d` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** (out) - return the accumulated signed mouse-wheel delta and clear it.
+- **summary:** (out) - return the accumulated signed mouse-wheel delta and clear it. The wheel accumulates only outside an ADV text wait: while one polls, a turn raises set:WheelKeyUp/Down's logical action instead (docs/engine-re.md, "Mouse wheel at an ADV text wait").
 - **operand access:** `1` write
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x10d`; scope=Himegari SYS4422. Ghidra /v2: op_0x10d_consume_mouse_wheel_delta@0x428cf0 copies ctx+0x1c34 to operand 1 and immediately clears the field. AGE's window procedure at 0x486925 handles WM_MOUSEWHEEL by sign-extending the high word of wParam and accumulating it at ctx+0x1c34; HISTORY.BIN polls this value and branches on its sign to select one scroll direction.

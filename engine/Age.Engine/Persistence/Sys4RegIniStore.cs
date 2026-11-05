@@ -23,6 +23,9 @@ public sealed class Sys4RegIniStore
     // Himegari's SYS4INI trailer overrides neither. (CONFIG's reset button instead sets 50 ms and 4.)
     public const int DefaultMessageSpeed = 5;
     public const int DefaultMesWinAlpha = 8;
+    // message:AdvanceMesOnWheel (registered default 0): 1 makes a wheel-down advance an ADV text wait and finish a text
+    // reveal (adv_input_service_poll@0x411230, the reveal service at 0x406fa0). Neither game's scripts change it.
+    public const string AdvanceMesOnWheelKey = "AdvanceMesOnWheel";
     private static readonly Encoding Cp932 = CreateCp932();
     private static readonly string[] RouteKeys = ["", "Music", "SE", "Voice", "Movie"];
 

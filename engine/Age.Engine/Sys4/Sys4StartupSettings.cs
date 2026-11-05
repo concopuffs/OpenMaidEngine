@@ -54,6 +54,19 @@ public sealed class Sys4StartupSettings
         => int.TryParse(GetValueOrDefault("CANCELMESSKIPONCLICK")?.Trim(), NumberStyles.Integer,
                CultureInfo.InvariantCulture, out int value) ? value : 0;
 
+    /// <summary>WHEELKEYUP (set:WheelKeyUp, registered default 3): the logical action a wheel-up raises while an ADV
+    /// text wait polls (age_main_window_proc@0x486320 WM_MOUSEWHEEL under run-state 0x90100000). Both games use 8,
+    /// which every scene binds to its History record with op 0x97. Missing or non-numeric means 3.</summary>
+    public int WheelKeyUpAction => ReadInt("WHEELKEYUP", 3);
+
+    /// <summary>WHEELKEYDOWN (set:WheelKeyDown, registered default 1): the logical action a wheel-down raises in the
+    /// same mode. Both games use 9, which no script binds. Missing or non-numeric means 1.</summary>
+    public int WheelKeyDownAction => ReadInt("WHEELKEYDOWN", 1);
+
+    private int ReadInt(string key, int fallback)
+        => int.TryParse(GetValueOrDefault(key)?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
+               out int value) ? value : fallback;
+
     internal static Sys4StartupSettings ParseTrailer(byte[] blob, ref int offset, string source)
     {
         if (offset == blob.Length) return Empty;

@@ -343,11 +343,11 @@ The meaningful consumer catalog is:
 | `ENABLEMEMFLIP` | Gates `op_0x6d`, which swaps VM-bank pointer pairs only when enabled. Himegari disables it and its corpus does not use that opcode. | Compatibility capability gate |
 | `CLICKONUP` | Copied at `0x488080` into `g_dwClickOnUp@0x5c6030`. When nonzero, `age_main_window_proc` latches mouse clicks (`input_latch_mouse_click@0x485e20`) on `WM_LBUTTONUP`/`WM_RBUTTONUP` instead of the down messages. That latch is the trigger for ADV page advance, hotspot clicks, bound actions (right-click → `MENU.BIN`) and movie/transition skips; see *Driving native AGE* below. Himegari has 1. | Active input timing; port implemented (`Sys4StartupSettings.ClickOnUp`) |
 | `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for active fast-forward; value 2 also launches `CALLBACK_SETTING.BIN`. See "Click cancels Skip" below. | Active ADV input behavior; port implemented (`Sys4StartupSettings.CancelMessageSkipOnClick`) |
-| `CONTROLDISIBLECURSOR` | The spelling is native. Value 1 suppresses AGE's ordinary cursor-restore call when a bound ADV hotspot action or hover callback is selected. | Active ADV cursor behavior; currently missing from port |
+| `CONTROLDISIBLECURSOR` | The spelling is native. The "cursor" is the page-wait indicator. With value 0, `adv_input_service_poll` calls `adv_wait_indicator_stop@0x4051c0` (erase the indicator, clear run-state `0x40000000`) before it runs a bound-action or hover callback. Value 1 skips that call, so the indicator keeps running under the callback. | Both games set 1, which is the port's behavior (callbacks leave the indicator alone); value 0 is not modelled (2026-11-04) |
 | `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. Their only callers are slots 33/34 of the interface vtable `0x578034` (global object `0x5c5f10`); no opcode reaches them, and the script menus' ops `0x88`/`0x1b7` ignore the setting. | Inert on the script path (both shipped games have 1); not modelled |
 | `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The generic fallback is 0; the active Himegari profile has value 1. While one of the native effect-service run-state bits `0x8`, `0x10`, `0x80`, or `0x100` is active, logical action 4 is consumed and the selected effect tick receives delta `0x10000000`, forcing its terminal frame. | Active visual-effect input policy; port routes action 4 ahead of retained ADV hotspots while a transition service is parked |
-| `REDRAWTEXTONKEY` | Value 0 disables the wheel/key path that traverses and republishes the current text-history view through `CALLBACK_TEXT.BIN`. | Active ADV history-input policy; port uses its script callback path instead |
-| `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. `adv_input_service_poll@0x411230` uses them for ADV wheel-key/history handling; raw `WM_MOUSEWHEEL` accumulation for op `0x10d` remains a separate channel. | Active ADV input binding; port does not source these values |
+| `REDRAWTEXTONKEY` | Value 1 lets a wheel action at an ADV text wait step the text view (`FUN_00453520` ±1) and launch `CALLBACK_TEXT.BIN` under run-state `0x100000`. | Inert: both games set 0, and the port does not model value 1 (2026-11-04) |
+| `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. While an ADV text wait polls, a wheel turn raises that action instead of feeding op `0x10d`; every scene binds action 8 to History ("Mouse wheel at an ADV text wait"). The `message:WheelKey*OnTW` copies have no reader. | Active ADV input binding; port implemented (`Sys4StartupSettings.WheelKeyUpAction`, 2026-11-04) |
 | `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; the port redirects it through the shared profile-root policy |
 | `REGFILEPATH` | Supplies the Eushully/product-relative directory for native `SYS4REG.INI`. With Himegari's `USEAPPDATAFOLDER=1`, AGE resolves `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SYS4REG.INI`. | Active native engine-options path; redirected with saves while retaining the native format |
 | `SAVEVERSION` | Selects numbered-save layout 3.10 and enables the matching append-catalog persistence structures. | Active persistence ABI |
@@ -365,9 +365,10 @@ dimensions. The port still preserves requested Mincho/Gothic faces and movie/aud
 existing paths. Persistence now reads and validates the selected profile's packed `SAVEVERSION` from this
 registry; the other keys have not yet been migrated to semantic consumers.
 
-The remaining generic-profile gap is semantic application of further portable settings. In particular,
-click-cancel, Auto/Skip coexistence, cursor policy, redraw policy, and wheel action ids must be decided from
-this evidence instead of AGE's compiled defaults. The port deliberately redirects each native profile beneath
+The port now applies click-cancel (`CANCELMESSKIPONCLICK`) and the wheel action ids (`WHEELKEYUP`/`WHEELKEYDOWN`)
+from the trailer instead of AGE's compiled defaults. Auto/Skip coexistence, the wait-indicator policy
+(`CONTROLDISIBLECURSOR`) and the text-redraw policy (`REDRAWTEXTONKEY`) are inert or already matched for both games
+(rows above). Kamidori's extra keys remain open (`docs/backlog.md`). The port deliberately redirects each native profile beneath
 Godot `user://games/<profile-id>/`: save payloads remain under its `SAVE` child, while engine options retain
 AGE's native `SYS4REG.INI` filename and format at the profile root.
 It should not reproduce legacy DirectDraw selection or native registration/key validation.
@@ -3381,6 +3382,49 @@ active consideration; it can already reuse Hide Window's input layer, while any 
 deferred ReadTextDB work should remain a seam rather than a storage dependency. The `/v2` image
 names/comments the cursor, callback dispatch, retained-history navigation/render/metadata, and history-voice
 opcode paths.
+
+#### Mouse wheel at an ADV text wait (static and native-driven, 2026-11-04)
+
+The "special run modes" above are the ADV waits. `age_main_window_proc@0x486320` sends a wheel turn to the
+accumulator only while run-state has none of `0x90100000`:
+- `0x80000000`, an ADV text wait polling;
+- `0x10000000`, the op-`0x95` choice table (no game uses it);
+- `0x100000`, text-redraw mode.
+
+Otherwise the sign selects `set:WheelKeyUp`/`set:WheelKeyDown` (SYS4INI `WHEELKEYUP=8`/`WHEELKEYDOWN=9` in both
+games, registered defaults 3/1). The window procedure ORs that logical action's bit into
+`service_action_trigger_mask` (ctx+`0xa0ce8`), and the delta never reaches op `0x10d`. `adv_input_service_poll@0x411230`
+then handles the bit in this order:
+1. A hotspot record bound to the action with op `0x97` runs its activation callback. Every Himegari scene binds
+   actions 0, 7 and 8 (301 sites each), and Kamidori binds 0–3, 7 and 8 (322 each). SC0000's action-8 record calls
+   `label_339`, which opens HISTORY (`call-script` at `0x35a`).
+2. Otherwise, with no click or fast-forward bit, a `WheelKeyDown` bit advances like a click when
+   `message:AdvanceMesOnWheel` is 1 and text-redraw mode is off.
+3. With `set:ReDrawTextOnKey` 1, either wheel bit steps the text view and launches `CALLBACK_TEXT.BIN`. Both games
+   set `REDRAWTEXTONKEY=0`.
+4. An unconsumed bit has no effect; the next text reveal clears the mask.
+
+No script binds action 9, and neither game changes `AdvanceMesOnWheel`: its op pair `0x2cc`/`0x2cd` is unused, so it
+comes only from `SYS4REG.INI`, default 0. In retail, wheel-up at a text wait opens History and wheel-down does
+nothing. Dispatching a callback clears `0x80000000`, so inside HISTORY the wheel feeds op `0x10d` again and scrolls.
+
+The text-reveal service `adv_text_reveal_service_tick@0x406fa0` (run-state `0x20000000`, outside the mask) has a
+matching rule. With `AdvanceMesOnWheel` 1 it reads and clears the accumulator each tick: a negative total finishes
+the reveal, and any other total is discarded.
+
+**Native driving.** `tools/drive/scenarios/himegari-wheel-history.steps` covers the behavior at the SC0000 page-7
+wait (`SC0000@0xa18`): wheel-down changes nothing, and wheel-up opens HISTORY as `SYSTEM4 > SC0000@0x35a > HISTORY`.
+Inside, one wheel-up scrolls a row older. The close button returns to the wait, where wheel-up reopens HISTORY.
+Before the port change, its wheel-up stayed on the page.
+
+**Port.**
+- `VirtualMachine.ApplyMouseWheel` implements the routing. Its wait-polling flag follows `0x80000000`: the VM sets
+  it around the host's text wait and clears it while a hotspot callback runs.
+- The ids come from `Sys4StartupSettings.WheelKeyUpAction`/`WheelKeyDownAction`.
+- Godot reads `AdvanceMesOnWheel` from `SYS4REG.INI` on each event.
+
+The native reveal tick also consumes a negative delta queued before the reveal began. The port consumes the
+accumulator only when a wheel event arrives during the reveal. Text-redraw mode is not modelled.
 
 ### Menu default cursor auto-move (2026-08-16)
 

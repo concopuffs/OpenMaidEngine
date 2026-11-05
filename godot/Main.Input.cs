@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Age.Engine.Diagnostics;
+using Age.Engine.Persistence;
 using Age.Engine.Profiles;
 using Age.Engine.Vm;
 
@@ -72,11 +73,17 @@ public partial class Main
             && wheel.Pressed
             && (wheel.ButtonIndex == MouseButton.WheelUp || wheel.ButtonIndex == MouseButton.WheelDown))
         {
-            // WM_MOUSEWHEEL supplies signed multiples of WHEEL_DELTA (120). AGE accumulates that
-            // value until op 0x10d reads and clears it; HISTORY currently uses only its sign.
+            // WM_MOUSEWHEEL supplies signed multiples of WHEEL_DELTA (120). At an ADV text wait its sign raises
+            // the WHEELKEYUP/WHEELKEYDOWN action (wheel-up opens History); otherwise AGE accumulates it until op
+            // 0x10d reads and clears it (HISTORY scrolls by its sign). VirtualMachine.ApplyMouseWheel has the rules.
             int direction = wheel.ButtonIndex == MouseButton.WheelUp ? 1 : -1;
             int steps = System.Math.Max(1, (int)System.Math.Round(wheel.Factor));
-            _vm.QueueMouseWheelDelta(direction * 120 * steps);
+            bool advanceOnWheel = _sys4RegIniStore?.LoadMessageInt(Sys4RegIniStore.AdvanceMesOnWheelKey, 0) == 1;
+            MouseWheelOutcome outcome = _vm.ApplyMouseWheel(direction * 120 * steps, advanceOnWheel,
+                                                            _host.IsTextRevealing);
+            if (outcome == MouseWheelOutcome.Advance
+                && !_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
+                _host.SignalInput();
             GetViewport().SetInputAsHandled();
             return;
         }

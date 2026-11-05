@@ -46,12 +46,19 @@ it; git history keeps the record.
   - direct-scene runs enter like the F4 launcher (SYSTEM4 hosting the scene, gate -1), the forced pass and the
     template re-arm are removed, and `0x93` empties the table as native does;
   - or the difference is accepted as a documented developer convenience.
-- **SYS4INI trailer ADV keys still unapplied.** `CONTROLDISIBLECURSOR=1` (suppress the cursor restore when a bound
-  hotspot action or hover callback is selected), `WHEELKEYUP`/`WHEELKEYDOWN` (8/9, action bits for ADV wheel-key
-  handling in `adv_input_service_poll@0x411230`) and `REDRAWTEXTONKEY=0` are not sourced from the trailer, and
-  Kamidori's extra keys (`OUTERFRAMEMODE`, `AUTOFREETEX`, `BLANKEXTENTMODE`, `USEPROPORTIONALFONT`,
-  `VALIDFONTCHECKER`, `RUBYSHIFTMODE`, `DEPENDMOVIESOUND=2`) are not reverse-engineered (`engine-re.md`, trailer
-  catalog). Done when each key is reversed and either applied or shown inert for both games.
+- **Kamidori's extra SYS4INI trailer keys.** `OUTERFRAMEMODE`, `AUTOFREETEX`, `BLANKEXTENTMODE`,
+  `USEPROPORTIONALFONT`, `VALIDFONTCHECKER`, `RUBYSHIFTMODE` and `DEPENDMOVIESOUND=2` are not reverse-engineered
+  (`engine-re.md`, trailer catalog). The ADV keys both games share are done: the wheel ids are applied, and
+  `CONTROLDISIBLECURSOR`/`REDRAWTEXTONKEY` are matched or inert. Done when each key is reversed and either applied
+  or shown inert for Kamidori.
+- **History text draws at the recorded size.** HISTORY sets a 22 px font and effect colour `0x333e52`
+  (`HISTORY.BIN` `0xf78..0xfa0`) before `render-text-history` (`0x10c0`). Native draws the rows at that size: a row
+  ending at x≈583 natively ends at x≈622 in the port, a 0.92 width ratio (22/24). The port draws them with each
+  record's retained 24 px font and grey `0x606060` effect. Evidence: `tools/drive/scenarios/himegari-wheel-history.steps`
+  shots `wheel-3`/`wheel-4`, which differ only in the text. `engine-re.md` says records keep their font, colour
+  and effect, which this contradicts at least for size and effect colour. Done when `text_history_render_records@0x452970`
+  is decoded for which fields come from the record and which from the current style, and the port's History shots
+  match native.
 - **Calibrated font realization (unobserved).** Native builds fonts through
   `text_create_calibrated_single_byte_font@0x451b70` and its mode-1/mode-2 calibration (found in the SYS4433 image,
   display-aspect text). The port implements the layout rule it feeds, not the realization itself (`engine-re.md`).

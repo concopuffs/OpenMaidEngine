@@ -26,9 +26,18 @@ public sealed partial class VirtualMachine
                     }
                 }
                 if (wakeAtWait) _host.WakeInputCallbackService();
-                _host.WaitForInput((int)Read(a[0]), ServiceHotspotCallback,
-                    () => new AdvAutoWaitState(_autoMessageEnabled, _autoVoicePending,
-                                               _autoMessageTime0Ms, _autoMessageTime1Ms));
+                bool outerWaitPolling = _advTextWaitPolling;
+                _advTextWaitPolling = true;
+                try
+                {
+                    _host.WaitForInput((int)Read(a[0]), ServiceHotspotCallback,
+                        () => new AdvAutoWaitState(_autoMessageEnabled, _autoVoicePending,
+                                                   _autoMessageTime0Ms, _autoMessageTime1Ms));
+                }
+                finally
+                {
+                    _advTextWaitPolling = outerWaitPolling;
+                }
                 _sharedProfile.ReadText.QueueMessage(
                     _cur.Script.PackedId, CurrentReadMessageIndex(),
                     _cur.Script.ReadMessageOffsets.Count);
@@ -189,4 +198,17 @@ public sealed partial class VirtualMachine
                 throw new InvalidOperationException($"Non-input opcode routed to input handler: {label}");
         }
     }
+}
+
+/// <summary>Where <see cref="VirtualMachine.ApplyMouseWheel"/> sent one wheel delta.</summary>
+public enum MouseWheelOutcome
+{
+    /// <summary>Accumulated for op 0x10d.</summary>
+    Accumulated,
+    /// <summary>Queued the hotspot callback bound to the wheel's logical action.</summary>
+    Activated,
+    /// <summary>The frontend should advance the page or finish the text reveal, as a click does.</summary>
+    Advance,
+    /// <summary>Consumed with no effect.</summary>
+    Dropped,
 }

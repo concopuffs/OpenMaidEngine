@@ -495,7 +495,7 @@ public partial class Main : Godot.Control
         if (histFile != null) { _hist = new Age.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Age.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
         _vm = new VirtualMachine(script, table, _host,
-            GodotVmOptions.Create(_selftest, nativeDebugMenu, _catalog.StartupSettings.CancelMessageSkipOnClick),
+            GodotVmOptions.Create(_selftest, nativeDebugMenu, _catalog.StartupSettings),
             provider, sink,
             sharedProfile: sharedProfile,
             nativeDatStore: nativeSaveStore,

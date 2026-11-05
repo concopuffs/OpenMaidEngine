@@ -68,6 +68,9 @@ public sealed partial class VirtualMachine
     private int _pointerX = int.MinValue, _pointerY = int.MinValue;
     private int _mouseButtonState;
     private int _mouseWheelDelta;
+    // Native run-state bit 0x80000000: an ADV text wait (op 0x72) is polling input. It is clear while that wait
+    // runs a hotspot callback, as native clears the bit on dispatch and the callback's ret re-runs the wait.
+    private volatile bool _advTextWaitPolling;
     private int _heldInputCallbackMask;
     private int _queuedInputCallbackMask;
     private bool _autoMessageEnabled;
@@ -316,6 +319,40 @@ public sealed partial class VirtualMachine
         if (delta == 0) return;
         Interlocked.Add(ref _mouseWheelDelta, delta);
         _host.WakeInputCallbackService();
+    }
+
+    /// <summary>True while an ADV text wait polls input with no hotspot callback running (native run-state
+    /// 0x80000000).</summary>
+    public bool IsAdvTextWaitPolling => _advTextWaitPolling;
+
+    /// <summary>Route one native WM_MOUSEWHEEL delta as age_main_window_proc@0x486320 and the ADV services do.
+    /// <list type="bullet">
+    /// <item>While an ADV text wait polls, the sign raises logical action set:WheelKeyUp/Down. The wait runs a
+    /// hotspot record bound to that action by op 0x97 (both games bind wheel-up's action 8 to History). Otherwise
+    /// a wheel-down advances when <paramref name="advanceMessageOnWheel"/> is set
+    /// (adv_input_service_poll@0x411230), and the delta is dropped. It never reaches op 0x10d.</item>
+    /// <item>During a text reveal with <paramref name="advanceMessageOnWheel"/> set, the reveal service (0x406fa0)
+    /// reads and clears the accumulated delta: a negative total finishes the reveal, any other total is
+    /// discarded.</item>
+    /// <item>Otherwise the delta accumulates for op 0x10d (HISTORY scrolls with it).</item>
+    /// </list>
+    /// set:ReDrawTextOnKey (CALLBACK_TEXT.BIN) is not modelled: both games set REDRAWTEXTONKEY=0.</summary>
+    public MouseWheelOutcome ApplyMouseWheel(int delta, bool advanceMessageOnWheel, bool textRevealing)
+    {
+        if (delta == 0) return MouseWheelOutcome.Dropped;
+        if (_advTextWaitPolling)
+        {
+            int action = delta > 0 ? _o.WheelKeyUpAction : _o.WheelKeyDownAction;
+            if (action is >= 0 and < 32 && TryActivateInputActions(1 << action)) return MouseWheelOutcome.Activated;
+            return delta < 0 && advanceMessageOnWheel ? MouseWheelOutcome.Advance : MouseWheelOutcome.Dropped;
+        }
+        if (textRevealing && advanceMessageOnWheel)
+        {
+            int total = Interlocked.Exchange(ref _mouseWheelDelta, 0) + delta;
+            return total < 0 ? MouseWheelOutcome.Advance : MouseWheelOutcome.Dropped;
+        }
+        QueueMouseWheelDelta(delta);
+        return MouseWheelOutcome.Accumulated;
     }
 
     /// <summary>Update one held logical AGE action directly. Physical frontends should use the
@@ -1359,20 +1396,31 @@ public sealed partial class VirtualMachine
             // returns, the frame is back on that waiting instruction, which observers (saves, frame locations) read.
             int waitingPc = _cur.Pc;
             _cur.CallStack.Add(HOTSPOT_RETURN);
-            while (pc >= 0 && pc < _cur.Script.Instructions.Count)
+            // Native clears run-state 0x80000000 on dispatch, so the wheel feeds op 0x10d while the callback (HISTORY)
+            // runs; the callback's ret re-runs the wait, which sets it again.
+            bool waitPolling = _advTextWaitPolling;
+            _advTextWaitPolling = false;
+            try
             {
-                if (_stopRequested) break;
-                if (_rootReloadRequested) throw new RootReloadRequestedException();
-                if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; break; }
-                Steps++;
-                _cur.Pc = pc;
-                if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, _cur.Script.Instructions[pc], _depth));
-                int next = Step(_cur.Script.Instructions[pc], pc);
-                _host.FrameYield();
-                if (next == ROOT_RELOAD) throw new RootReloadRequestedException();
-                if (next == HOTSPOT_RETURN || next == FRAME_RETURN) break;
-                if (next == HALT) break;
-                pc = next;
+                while (pc >= 0 && pc < _cur.Script.Instructions.Count)
+                {
+                    if (_stopRequested) break;
+                    if (_rootReloadRequested) throw new RootReloadRequestedException();
+                    if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; break; }
+                    Steps++;
+                    _cur.Pc = pc;
+                    if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, _cur.Script.Instructions[pc], _depth));
+                    int next = Step(_cur.Script.Instructions[pc], pc);
+                    _host.FrameYield();
+                    if (next == ROOT_RELOAD) throw new RootReloadRequestedException();
+                    if (next == HOTSPOT_RETURN || next == FRAME_RETURN) break;
+                    if (next == HALT) break;
+                    pc = next;
+                }
+            }
+            finally
+            {
+                _advTextWaitPolling = waitPolling;
             }
             _cur.Pc = waitingPc;
             // A malformed callback must not leave its sentinel in the page's ordinary local-call stack.

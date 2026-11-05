@@ -853,6 +853,10 @@ Both targets fast-forward over the read pages and stop at `SC0000@0xa18`, the fi
 pointer rests, moves inside the control, moves to its neighbour and comes back. Compare the shots: a clicked control
 stays hovered until the pointer leaves it, so its tooltip only returns after the pointer has been elsewhere.
 
+`himegari-wheel-history.steps` turns the wheel at the SC0000 page-7 wait (`SC0000@0xa18`). Wheel-down leaves the page
+alone, and wheel-up opens HISTORY through `SC0000@0x35a`. Inside HISTORY a wheel-up scrolls one row older. Its close
+button returns to the same wait, where wheel-up reopens it.
+
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
 `[native.keep_polling]` and `[[native.dialog]]`. Unknown sections are refused. A profile without `[native.engine]`

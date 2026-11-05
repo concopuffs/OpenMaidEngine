@@ -2821,7 +2821,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "consume-mouse-wheel-delta"
 category = "input"
-summary = "(out) - return the accumulated signed mouse-wheel delta and clear it."
+summary = "(out) - return the accumulated signed mouse-wheel delta and clear it. The wheel accumulates only outside an ADV text wait: while one polls, a turn raises set:WheelKeyUp/Down's logical action instead (docs/engine-re.md, \"Mouse wheel at an ADV text wait\")."
 noop_headless = false
 source = "investigation"
 confidence = "high"

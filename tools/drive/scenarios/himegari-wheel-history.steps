@@ -1,0 +1,47 @@
+# Mouse wheel at an ADV text wait. During the wait the wheel raises WHEELKEYUP/WHEELKEYDOWN's logical action (8/9)
+# instead of feeding op 0x10d: wheel-down does nothing (action 9 is unbound, AdvanceMesOnWheel=0), and wheel-up runs
+# the record SC0000 binds to action 8, which opens HISTORY (SC0000@0x35a). Inside HISTORY the wheel feeds op 0x10d
+# again, so a wheel-up scrolls to older rows. Its close button returns to the same wait, where wheel-up reopens it.
+# Compare the shots between targets. Run on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-wheel-history.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+advance 6                               # page 7, waiting at SC0000@0xa18
+wait 1.5
+move 400 300
+wait 1
+shot wheel-1-wait
+state
+
+wheel down 1
+wait 2
+shot wheel-2-after-down                 # unchanged: the page did not advance
+expect top=SC0000@0xa18
+
+wheel up 1
+wait-state script=HISTORY timeout=10    # SYSTEM4 > SC0000@0x35a > HISTORY
+wait 2
+shot wheel-3-history
+
+wheel up 1                              # op 0x10d inside HISTORY: one row older
+wait 2
+shot wheel-4-history-scrolled
+expect script=HISTORY
+
+click 778 562                           # the close button
+wait-state top=SC0000@0xa18 timeout=10
+wait 2
+shot wheel-5-back
+
+wheel up 1
+wait-state script=HISTORY timeout=10    # reopened from the same wait
+wait 2
+shot wheel-6-history-again

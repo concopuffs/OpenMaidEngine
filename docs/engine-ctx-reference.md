@@ -167,6 +167,6 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0xa0cd8` | `sys4ini_int_pointer_globals_count` | `int` | SYS4INI header +0x120: full integer-pointer globals bank size, copied to bank_size_int_pointer_globals; Himegari/Kamidori 2/2 |
 | `0xa0cdc` | `sys4ini_string_pointer_globals_count` | `int` | SYS4INI header +0x124: full string-pointer globals bank size, copied to bank_size_string_pointer_globals; Himegari/Kamidori 2/2 |
 | `0xa0ce0` | `sys4ini_local_pointer_scratch_count` | `int` | SYS4INI header +0x128: full local pointer scratch bank size, copied to bank_size_local_pointer_scratch; Himegari/Kamidori 2/2 |
-| `0xa0ce4` | `run_state_flags` | `uint` | interpreter run-state flags (bit1 sleeping; 0x8000000 skip/fast-forward) |
-| `0xa0ce8` | `timed_callback_abort_signal` | `int` | scheduler-polled abort/input signal cleared when op 0xd5 starts; redirects to abort PC when configured |
+| `0xa0ce4` | `run_state_flags` | `uint` | interpreter run-state flags (bit1 sleeping; 0x8000000 skip/fast-forward; 0x40000000 wait indicator shown; 0x80000000 ADV text wait polling) |
+| `0xa0ce8` | `service_action_trigger_mask` | `uint` | triggered logical-action bits the blocking services poll (input_poll_triggered_action_mask ORs keys, clicks and joystick in); WM_MOUSEWHEEL under run-state 0x90100000 ORs in set:WheelKeyUp/Down's bit; cleared when op 0xd5 starts, and its abort test redirects to the abort PC |
 | `0xa0d10` | `system_menu_actions_enabled` | `int` | op 0x142 replaces this AGERC/IAGEService reentrancy guard; scene reset defaults it to 1, while CONFIG brackets its scripted settings UI with 0 then 1 |
