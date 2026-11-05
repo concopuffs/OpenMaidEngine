@@ -2,6 +2,9 @@ using Age.Engine.Model;
 
 namespace Age.Engine.Text;
 
+/// <param name="LineBreaksBefore">Glyph indices, ascending (repeats allowed), before which the run starts a new
+/// row: x returns to <paramref name="LineOriginX"/> and y advances by the font height plus line spacing. Native
+/// History (text_history_render_records@0x4526c0) breaks only at retained line-break records this way.</param>
 public readonly record struct GlyphTextLayoutOptions(
     int CursorX,
     int CursorY,
@@ -9,7 +12,8 @@ public readonly record struct GlyphTextLayoutOptions(
     int RightBound,
     int BottomBound,
     bool WrapHorizontally,
-    AdvTextStyle Style);
+    AdvTextStyle Style,
+    IReadOnlyList<int>? LineBreaksBefore = null);
 
 public sealed record GlyphTextLayoutResult(
     IReadOnlyList<AdvRetainedGlyphRecord> Records,
@@ -58,9 +62,27 @@ public sealed class RetainedGlyphLayoutEngine
                 "激", options.Style with { FontFace = "ＭＳ ゴシック" }, glyphs[0].Policy)[0])
             : null;
 
-        foreach (GlyphRasterRequest request in glyphs)
+        IReadOnlyList<int> breaks = options.LineBreaksBefore ?? [];
+        int nextBreak = 0;
+        int LineAdvance(int pixelHeight)
+            => (options.Style.PrimaryFontSize > 0 ? options.Style.PrimaryFontSize : pixelHeight)
+               + options.Style.LineSpacing;
+        void BreakLine(int pixelHeight)
         {
+            if (records.Count > rowFirst)
+                rows.Add(new AdvTextRow(rowFirst, records.Count - rowFirst,
+                    rowLeft, rowTop, rowRight, rowBottom, WrapsAfter: true));
+            rowFirst = records.Count;
+            cursorX = options.LineOriginX;
+            cursorY = checked(cursorY + LineAdvance(pixelHeight));
+        }
+
+        for (int index = 0; index < glyphs.Count; index++)
+        {
+            GlyphRasterRequest request = glyphs[index];
             ArgumentNullException.ThrowIfNull(request);
+            for (; nextBreak < breaks.Count && breaks[nextBreak] <= index; nextBreak++)
+                BreakLine(request.PixelHeight);
             GlyphMask mask = _rasterizer.Rasterize(request);
             int advanceX = aspectReference == null ? mask.CellAdvanceX
                 : aspectReference.CellAdvanceX / (request.Cp932Code is <= 0xff ? 2 : 1);
@@ -88,11 +110,8 @@ public sealed class RetainedGlyphLayoutEngine
                     || !AdvRetainedTextContract.PreventsHorizontalWrapBefore(
                         request.Cp932Code.Value)))
             {
-                int fontHeight = options.Style.PrimaryFontSize > 0
-                    ? options.Style.PrimaryFontSize
-                    : request.PixelHeight;
                 cursorX = options.LineOriginX;
-                cursorY = checked(cursorY + fontHeight + options.Style.LineSpacing);
+                cursorY = checked(cursorY + LineAdvance(request.PixelHeight));
                 wrappedLines++;
                 right = checked(cursorX + cellWidth);
                 bottom = checked(cursorY + cellHeight);
@@ -117,6 +136,10 @@ public sealed class RetainedGlyphLayoutEngine
             if (aspectReference == null) cursorY = checked(cursorY + mask.CellAdvanceY);
         }
 
+        // Breaks after the last glyph move only the cursor.
+        if (!stopped)
+            for (; nextBreak < breaks.Count; nextBreak++)
+                BreakLine(glyphs.Count > 0 ? glyphs[^1].PixelHeight : 24);
         if (records.Count > rowFirst)
             rows.Add(new AdvTextRow(rowFirst, records.Count - rowFirst,
                 rowLeft, rowTop, rowRight, rowBottom, WrapsAfter: false));

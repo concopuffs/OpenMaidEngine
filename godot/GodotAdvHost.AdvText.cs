@@ -218,12 +218,16 @@ public sealed partial class GodotAdvHost
         return result;
     }
 
+    /// <param name="recordedLineBreaks">History's retained rows (op 0x1d1): break only at these glyph
+    /// indices, never at the layout's edges. Native text_history_render_records@0x4526c0 checks no bounds;
+    /// the surface clips what falls outside.</param>
     private void PrepareRetainedTextRun(
         GfxState gfx,
         AdvTextLayoutPresentationBinding binding,
         AdvLiveTextRun run,
         out RetainedAdvTextLayoutPresentation presentation,
-        out AdvRetainedTextRunResult result)
+        out AdvRetainedTextRunResult result,
+        IReadOnlyList<int>? recordedLineBreaks = null)
     {
         presentation = null!;
         result = default;
@@ -255,10 +259,11 @@ public sealed partial class GodotAdvHost
                 run.Layout.CursorX,
                 run.Layout.CursorY,
                 binding.ResetCursorX,
-                run.Layout.Right,
-                run.Layout.Bottom,
-                WrapHorizontally: true,
-                run.Style),
+                recordedLineBreaks == null ? run.Layout.Right : int.MaxValue,
+                recordedLineBreaks == null ? run.Layout.Bottom : int.MaxValue,
+                WrapHorizontally: recordedLineBreaks == null,
+                run.Style,
+                recordedLineBreaks),
             requests);
 
         _timeline?.Event("adv-text-layout-result", new()
@@ -465,7 +470,8 @@ public sealed partial class GodotAdvHost
         PrepareRetainedTextRun(
             gfx, binding, run,
             out RetainedAdvTextLayoutPresentation? presentation,
-            out AdvRetainedTextRunResult result);
+            out AdvRetainedTextRunResult result,
+            batch.RecordedLineBreaks);
 
         presentation.PublishThrough(
             gfx,

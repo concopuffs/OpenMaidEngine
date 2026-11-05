@@ -4893,12 +4893,16 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "render-text-history"
 category = "adv"
-summary = "(layout_slot)(record_index)(flags)(color_a)(color_b) - render retained ADV text records into a selected text layout/surface."
+summary = "(layout_slot)(record_index)(flags)(text_color)(effect_color) - render one retained ADV text group into a selected layout in the current text style, breaking rows only at retained line breaks."
+details = "Records supply only text and flags. Font, colors, effect and render mode are the text manager's current state, so HISTORY.BIN's 22 px style (set at 0xf78) applies, not the 24 px style the ADV window recorded. Rows flow from the target layout's cursor; a line-break record returns x to the layout's reset x and advances y by the current pixel height plus line spacing. There is no wrap or bounds check. Flag bit 0 crosses navigation-filtered records, bit 1 temporarily overrides both colors, bit 2 suppresses destination binding and bit 3 replays voice records. Metadata records are skipped."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x1d1_render_text_history@0x41f950 forwards all five operands plus the text manager at ctx+0x14508 to text_history_render_records@0x4526c0. That helper walks 0x48-byte retained text records, applies record flags/colors/font state, measures strings, and rasterizes/binds them to the chosen layout. HISTORY.BIN uses it to draw each visible backlog line."
+evidence = [
+  { method = "native-re", artifact = "Himegari SYS4422 Ghidra /v2", scope = "handler and worker", profile_ids = ["himegari"], engine_revisions = ["SYS4422"], confidence = "high", text = "op_0x1d1_render_text_history@0x41f950 forwards all five operands plus the text manager at ctx+0x14508 to text_history_render_records@0x4526c0. The worker measures each record string with GetTextExtentPoint32A on the manager DC (current font) and draws with manager +0x54c/+0x550/+0x558; it never reads the record's retained +0x14..+0x24 style, unlike op 0x82's text_redraw_retained_group@0x451530. Flags-8 records reset x to layout+0x1c and add manager +0x560 - +0x4cc." },
+  { method = "frida", artifact = "tools/drive.py native and port, tools/drive/scenarios/himegari-wheel-history.steps", scope = "SC0000 History page", profile_ids = ["himegari"], engine_revisions = ["SYS4422"], confidence = "high", text = "Native draws SC0000's 24 px rows at 22 px with the 0x333e52 effect and the ADV window's own row breaks; after the port adopted current-style rendering its History shots align pixel for pixel (2026-11-04)." },
+]
 
 [[opcode.semantics.args]]
 i = 1
@@ -4914,19 +4918,19 @@ access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "render flags"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "override text color (flag 2)"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "override effect color (flag 2)"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -8694,7 +8698,7 @@ abi_source = "kelebek+decode-validated"
 name = "redraw-retained-text-group"
 category = "adv"
 summary = "(layout_slot)(record_index)(flags)(text_color)(effect_color) - clear and redraw an ordinary retained ADV text group into its original layout."
-details = "This is the ordinary-page redraw sibling of 0x1d1's reflowed History renderer. It preserves each retained record's saved position/style, stops at the next group boundary, and replaces the selected layout's glyph objects. Flag bit 0 crosses navigation-filtered records, bit 1 temporarily overrides both colors, bit 2 suppresses destination binding, and bit 3 replays retained voice records. All six Kamidori calls are CONFIG return paths: 0x83 supplies layout_slot/record_index, flags is 2, text_color is white, and effect_color is the configured global. The portable retained-text presentation preserves the selected group/layout and shipped color-override path; it uses the existing host text batch abstraction rather than native per-glyph GDI records."
+details = "This is the ordinary-page redraw sibling of 0x1d1's History renderer, which draws in the current style. It preserves each retained record's saved position/style, stops at the next group boundary, and replaces the selected layout's glyph objects. Flag bit 0 crosses navigation-filtered records, bit 1 temporarily overrides both colors, bit 2 suppresses destination binding, and bit 3 replays retained voice records. All six Kamidori calls are CONFIG return paths: 0x83 supplies layout_slot/record_index, flags is 2, text_color is white, and effect_color is the configured global. The portable retained-text presentation preserves the selected group/layout and shipped color-override path; it uses the existing host text batch abstraction rather than native per-glyph GDI records."
 noop_headless = false
 source = "investigation"
 confidence = "high"

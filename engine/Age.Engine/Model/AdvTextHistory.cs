@@ -110,7 +110,16 @@ public sealed record AdvTextHistoryRenderBatch(
     int Flags,
     AdvTextLayoutSnapshot Layout,
     string Text,
-    AdvTextStyle Style);
+    AdvTextStyle Style)
+{
+    /// <summary>
+    /// Set for op 0x1d1: the rows break only here, never at the layout's right edge. Each entry is a glyph
+    /// (Unicode scalar) index into <see cref="Text"/> where a retained line-break record starts a new row at
+    /// the layout's reset x, <see cref="Style"/>'s font height plus line spacing lower. Null for op 0x82's
+    /// reflowed redraw.
+    /// </summary>
+    public IReadOnlyList<int>? RecordedLineBreaks { get; init; }
+}
 
 /// <summary>
 /// Engine-owned retained ADV backlog. Native numbered saves serialize this same model; live HISTORY.BIN
@@ -434,9 +443,49 @@ public sealed class AdvTextHistory
     }
 
     /// <summary>
-    /// Build the ordinary bound-text result of native op 0x1d1. The game-facing HISTORY path passes flags
-    /// and colors as zero: metadata and voice records are skipped, while adjacent text records in the same
-    /// group are emitted continuously into the selected target layout.
+    /// Build native op 0x1d1's History rendering of one retained group
+    /// (text_history_render_records@0x4526c0). The record supplies only its text and flags: every row draws
+    /// with the text manager's current font, colors, effect and leading (<paramref name="currentStyle"/>,
+    /// which HISTORY.BIN sets to 22 px before rendering), and flag 2 swaps in the override colors for the
+    /// call. Rows start at the target layout's cursor and break only at retained line-break records.
+    /// Metadata and voice records are skipped; HISTORY passes flags and colors as zero.
+    /// </summary>
+    public bool TryBuildHistoryRenderBatch(int requestedLayoutSlot, int firstRecordIndex, int flags,
+                                           long overrideTextColor, long overrideEffectColor,
+                                           AdvTextStyle currentStyle, out AdvTextHistoryRenderBatch batch)
+    {
+        batch = null!;
+        if ((uint)firstRecordIndex >= (uint)_records.Count) return false;
+
+        int slot = ResolveLayout(requestedLayoutSlot);
+        var text = new System.Text.StringBuilder();
+        var lineBreaks = new List<int>();
+        int glyphs = 0;
+        foreach (var record in EnumerateGroup(firstRecordIndex))
+        {
+            if (record.Flags.HasFlag(AdvTextHistoryRecordFlags.NavigationFiltered) && (flags & 1) == 0)
+                break;
+            if (record.Kind != AdvTextHistoryRecordKind.Text) continue;
+            if (record.Flags.HasFlag(AdvTextHistoryRecordFlags.LineBreak)) lineBreaks.Add(glyphs);
+            text.Append(record.Text);
+            foreach (System.Text.Rune _ in record.Text.EnumerateRunes()) glyphs++;
+        }
+
+        AdvTextStyle style = (flags & 2) != 0
+            ? currentStyle with { TextColor = overrideTextColor, EffectColor = overrideEffectColor }
+            : currentStyle;
+        batch = new AdvTextHistoryRenderBatch(slot, firstRecordIndex, flags, SnapshotLayout(slot),
+                                              text.ToString(), style)
+        {
+            RecordedLineBreaks = lineBreaks,
+        };
+        return true;
+    }
+
+    /// <summary>
+    /// Build op 0x82's redraw of one retained group: the first text record's retained style, with the
+    /// group's text reflowed through the target layout. Native text_redraw_retained_group@0x451530 instead
+    /// draws each record at its retained rectangle and style.
     /// </summary>
     public bool TryBuildRenderBatch(int requestedLayoutSlot, int firstRecordIndex, int flags,
                                     long overrideTextColor, long overrideEffectColor,

@@ -4290,17 +4290,37 @@ and entry-name helper, corrects the opener/caller comments, and is saved.
 weight, or effect selector. `adv_text_manager_initialize@0x456800` gives it a native default of 6.
 
 The horizontal line-break path (`adv_text_append_line_break_horizontal@0x456fd0`) and retained History
-renderer (`text_history_render_records@0x452970`) pass `manager+0x560 - manager+0x4cc` as the line
+renderer (`text_history_render_records@0x4526c0`) pass `manager+0x560 - manager+0x4cc` as the line
 advance. Offset `+0x4cc` is the primary `LOGFONT.lfHeight`, which AGE stores as a negative pixel height,
 so the effective pitch is `font pixel height + text_line_spacing`. The corresponding vertical-writing
 path uses the same pitch to move to the next column. Corpus values support that interpretation: scripts
 pair 8 pixels with 22/24-pixel Mincho text and 9 pixels with 16-pixel Gothic text.
 
 History records do not snapshot the `+0x560` field. `text_history_append_text_record@0x456000` retains
-font, color, effect, geometry, flags, and string state, while `text_history_render_records` reads the
-manager's current line spacing when it encounters a retained line-break marker. The port therefore keeps
-line spacing in the current ADV style manager and overrides a History render batch with that current value;
-the individual record continues to supply its retained font/color/effect fields.
+the row rectangle, text color, effect color, `+0x554`, render mode, pixel height, flags and string, but
+op `0x1d1`'s History renderer reads only the string and flags:
+
+> **Correction (2026-11-04).** This section formerly said the History record supplies its retained
+> font/color/effect fields. The decompile disproves it, and native shots confirm it.
+> `text_history_render_records@0x4526c0` measures each string with `GetTextExtentPoint32A` on the
+> manager DC (the current font). It draws with the current `+0x54c` text color, `+0x550` effect color
+> and `+0x558` render mode. It never reads record `+0x14..+0x24`. So History draws in HISTORY.BIN's own
+> style, set at `0xf78`: 22 px ＭＳ 明朝 bold, line spacing 8, mode 3, effect `0x333e52`. It does not use
+> the 24 px / `0x606060` style the ADV window recorded.
+>
+> Rows flow from the target layout's cursor: x advances by the measured extent. A line-break (flags-8)
+> record resets x to the layout's reset x (`layout+0x1c`) and adds the current pixel height plus line
+> spacing. There is no wrap and no bounds check, so the rows break exactly where the ADV window wrapped.
+> Flag 2 swaps the operand colors in for the call.
+>
+> Op `0x82`'s `text_redraw_retained_group@0x451530` is different: it restores each record's retained
+> style and draws at the record rectangle.
+>
+> The port builds an op-`0x1d1` batch in the VM's current `AdvTextStyle`, carrying the glyph indices of
+> the group's line-break records (`AdvTextHistory.TryBuildHistoryRenderBatch`). The Godot host lays
+> that batch out unbounded and breaks only there (`GlyphTextLayoutOptions.LineBreaksBefore`). Driven
+> with `himegari-wheel-history.steps`, the port's History shots align with native's pixel for pixel;
+> what remains is antialiasing (no channel differs by more than 160).
 
 The `/v2` image names/comments the handler, manager initializer, horizontal/vertical line-break paths, and
 their low-level cursor-advance helpers. The regenerated 58-field `EngineCtx` is applied and the program is

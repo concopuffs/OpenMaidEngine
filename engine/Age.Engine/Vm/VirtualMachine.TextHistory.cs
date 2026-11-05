@@ -48,8 +48,17 @@ public sealed partial class VirtualMachine
                 }
                 return pc + 1;
             case "render-text-history": // 0x1d1: rasterize/bind one retained group to a target layout
-            case "redraw-retained-text-group": // 0x82: restore an ordinary ADV group at its retained layout
             case "u0041BAE0":
+            {
+                // Native History draws every record in the text manager's current style.
+                int flags = (int)Read(a[2]);
+                if ((flags & 4) == 0 && TextHistory.TryBuildHistoryRenderBatch(
+                        (int)Read(a[0]), (int)Read(a[1]), flags, Read(a[3]), Read(a[4]), _advTextStyle,
+                        out var batch))
+                    _host.RenderTextHistory(Gfx, TextHistory.GetPresentationBinding(batch.LayoutSlot), batch);
+                return pc + 1;
+            }
+            case "redraw-retained-text-group": // 0x82: restore an ordinary ADV group at its retained layout
             {
                 int flags = (int)Read(a[2]);
                 if ((flags & 4) == 0 && TextHistory.TryBuildRenderBatch(
@@ -57,7 +66,7 @@ public sealed partial class VirtualMachine
                 {
                     batch = batch with
                     {
-                        // Native History uses the text manager's current leading, not a retained-record field.
+                        // Records do not retain leading; the reflow uses the text manager's current value.
                         Style = batch.Style with { LineSpacing = _advTextStyle.LineSpacing }
                     };
                     _host.RenderTextHistory(

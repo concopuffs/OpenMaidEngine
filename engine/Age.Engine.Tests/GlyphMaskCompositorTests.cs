@@ -193,6 +193,37 @@ public class GlyphMaskCompositorTests
     }
 
     [Fact]
+    public void RecordedLineBreaksStartRowsAtTheLineOriginAndNeverWrapAtTheEdge()
+    {
+        var engine = new RetainedGlyphLayoutEngine(new CountingRasterizer(_ => CellMask()));
+
+        // History (op 0x1d1): the second glyph crosses the right bound without wrapping, two breaks before
+        // the third glyph leave a blank row, and a break after the last glyph moves only the cursor.
+        GlyphTextLayoutResult result = engine.Render(
+            Image(16, 32),
+            new GlyphTextLayoutOptions(
+                CursorX: 6, CursorY: 1, LineOriginX: 2,
+                RightBound: 8, BottomBound: 32, WrapHorizontally: false, Style(),
+                LineBreaksBefore: [2, 2, 3]),
+            [NativeRequest(0x82a0, 0x3042), NativeRequest(0x82a2, 0x3044), NativeRequest(0x82a4, 0x3046)]);
+
+        Assert.Equal(3, result.ConsumedGlyphs);
+        Assert.Equal(0, result.WrappedLines);
+        Assert.Collection(result.Records,
+            first => Assert.Equal(new AdvRetainedGlyphRecord(0, 6, 1, 10, 6), first),
+            second => Assert.Equal(new AdvRetainedGlyphRecord(0, 10, 1, 14, 6), second),
+            third => Assert.Equal(new AdvRetainedGlyphRecord(0, 2, 13, 6, 18), third));
+        Assert.Equal(
+            new[]
+            {
+                new AdvTextRow(0, 2, 6, 1, 14, 6, WrapsAfter: true),
+                new AdvTextRow(2, 1, 2, 13, 6, 18, WrapsAfter: true),
+            },
+            result.Rows);
+        Assert.Equal((2, 19), (result.CursorX, result.CursorY));
+    }
+
+    [Fact]
     public void GlyphsSitOnTheFontAscentNotThePixelHeight()
     {
         // One ink row just above the baseline. AGE's baseline is cell top + tmAscent (manager +0x458).

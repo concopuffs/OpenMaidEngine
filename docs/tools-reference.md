@@ -855,7 +855,9 @@ stays hovered until the pointer leaves it, so its tooltip only returns after the
 
 `himegari-wheel-history.steps` turns the wheel at the SC0000 page-7 wait (`SC0000@0xa18`). Wheel-down leaves the page
 alone, and wheel-up opens HISTORY through `SC0000@0x35a`. Inside HISTORY a wheel-up scrolls one row older. Its close
-button returns to the same wait, where wheel-up reopens it.
+button returns to the same wait, where wheel-up reopens it. The History shots (`wheel-3`, `wheel-4`, `wheel-6`) also
+compare History's rows between targets. Those rows are drawn in HISTORY's own 22 px style and keep the ADV window's
+row breaks.
 
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
