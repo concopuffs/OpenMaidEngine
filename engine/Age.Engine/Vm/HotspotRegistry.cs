@@ -1,6 +1,11 @@
 namespace Age.Engine.Vm;
 
 /// <summary>Per-script-frame registry populated by SYS4 ops 0x90/0x94/0x97.</summary>
+/// <remarks>Native keeps two indices (registry at ctx+0x5248). The current hit (+0x74b0) changes only when
+/// <c>age_main_window_proc</c> hit-tests a WM_MOUSEMOVE at a new point, when the first arm after a registration
+/// hit-tests the cursor, and when ops 0x90 and 0x7c clear it. The hovered record (+0xefc) follows the hit only when a
+/// wait polls (<c>input_hotspot_poll_hover_callback@0x4040b0</c>): a difference dispatches leave, then enter. A click
+/// activates the current hit, never the point under the button.</remarks>
 internal sealed class HotspotRegistry
 {
     private sealed class Entry
@@ -16,6 +21,8 @@ internal sealed class HotspotRegistry
     private readonly List<Entry> _entries = new();
     private readonly Queue<int> _pendingTargets = new();
     private int _hovered = -1;
+    private int _hit = -1;
+    private bool _hitTestedSinceRegister;
     private bool _replaceOnNextRegister;
     public bool Armed { get; private set; }
     public bool HasDefinitions => _entries.Count != 0;
@@ -34,6 +41,10 @@ internal sealed class HotspotRegistry
             EnterTarget = enterTarget, LeaveTarget = leaveTarget,
             ActivateTarget = activateTarget,
         });
+        // op_0x90_handler@0x41fc80 clears the hit; input_hotspot_register_rect_callbacks clears the arm's +0x74a4, so
+        // the next arm hit-tests the cursor again.
+        _hit = -1;
+        _hitTestedSinceRegister = false;
     }
 
     public void BindKey(int x, int y, int width, int height, int logicalAction)
@@ -44,32 +55,54 @@ internal sealed class HotspotRegistry
         if (entry != null) entry.LogicalAction = logicalAction;
     }
 
+    /// <summary>Arm dispatch and poll. The first arm after a registration hit-tests the cursor
+    /// (<c>input_hotspot_arm_cursor_tracking@0x404230</c>); later arms keep the current hit.</summary>
     public bool Arm(int pointerX, int pointerY)
     {
         _replaceOnNextRegister = false;
         Armed = true;
-        return UpdatePointer(pointerX, pointerY);
+        if (!_hitTestedSinceRegister)
+        {
+            _hitTestedSinceRegister = true;
+            _hit = FindHit(pointerX, pointerY);
+        }
+        return Poll();
     }
 
-    public bool UpdatePointer(int x, int y)
+    /// <summary>A pointer move to a new point (native WM_MOUSEMOVE): hit-test it, armed or not, as
+    /// <c>age_main_window_proc</c> does while a callback runs. Only an armed registry polls the change.</summary>
+    public bool MovePointer(int x, int y)
     {
-        if (!Armed) return false;
-        int hit = FindHit(x, y);
-        if (hit == _hovered) return false;
+        if (_entries.Count == 0) return false;
+        _hit = FindHit(x, y);
+        return Armed && Poll();
+    }
+
+    /// <summary>Op 0x7c clears the hit (<c>op_0x7c_handler@0x417cb0</c>) and keeps the hovered record, so the next
+    /// poll leaves the hovered record until the pointer moves again.</summary>
+    public bool InvalidateHit()
+    {
+        _hit = -1;
+        return Armed && Poll();
+    }
+
+    private bool Poll()
+    {
+        if (_hit == _hovered) return false;
 
         if (_hovered >= 0) QueueTarget(_entries[_hovered].LeaveTarget);
-        _hovered = hit;
+        _hovered = _hit;
         if (_hovered >= 0) QueueTarget(_entries[_hovered].EnterTarget);
         return _pendingTargets.Count != 0;
     }
 
-    public bool Activate(int x, int y)
+    /// <summary>A click activates the current hit (<c>input_hotspot_current_click_callback@0x404f70</c>). With no hit
+    /// the click is not consumed and advances the page.</summary>
+    public bool Activate()
     {
-        if (!Armed) return false;
-        int hit = FindHit(x, y);
-        if (hit < 0) return false;
+        if (!Armed || _hit < 0) return false;
 
-        return ConsumeActivation(_entries[hit].ActivateTarget);
+        return ConsumeActivation(_entries[_hit].ActivateTarget);
     }
 
     /// <summary>Activate the first armed record whose op-0x97 logical action is present in the
@@ -119,6 +152,8 @@ internal sealed class HotspotRegistry
     {
         _pendingTargets.Clear();
         _hovered = -1;
+        _hit = -1;
+        _hitTestedSinceRegister = false;
         Armed = false;
         // Native op 0x93 empties the table. The port keeps the definitions as a template that the next
         // wait-for-input re-arms. That serves direct-scene runs, which force the scene's developer-loop 0x93

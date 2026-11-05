@@ -92,6 +92,11 @@ name = "hotspot_count"
 type = "int"
 note = "number of records in the native hotspot table at ctx+0x5248 (table +0x408; at most 100); input_hotspot_register_rect_callbacks appends"
 [[field]]
+offset = 0x6144
+name = "hotspot_hovered"
+type = "int"
+note = "the hotspot record whose enter callback last ran, -1 none (table +0xefc). It follows hotspot_hit only when a wait polls (input_hotspot_poll_hover_callback@0x4040b0: leave first, then enter on the next poll); op 0x93's reset clears it, and ops 0x90/0x7c and clicks keep it"
+[[field]]
 offset = 0xc6dc
 name = "hotspot_owner_script_id"
 type = "int"
@@ -101,6 +106,21 @@ offset = 0xc6e4
 name = "hotspot_wait_armed"
 type = "int"
 note = "op 0x94 sets 1, op 0x93 clears; while nonzero adv_input_service_poll resolves op-0x97 bound actions and hover/click hotspots"
+[[field]]
+offset = 0xc6e8
+name = "hotspot_tracking_active"
+type = "int"
+note = "table +0x74a0: input_hotspot_arm_cursor_tracking@0x404230 sets 1. A WM_MOUSEMOVE hit-tests the table while this or hotspot_wait_armed is set (input_mouse_move_update_hotspot_hits@0x485db0)"
+[[field]]
+offset = 0xc6f0
+name = "hotspot_pending_enter"
+type = "int"
+note = "table +0x74a8: set when a poll returns a leave callback, so the next poll returns the hovered record's enter; ops 0x90 and 0x7c and the bound-action/Auto click dispatches clear it"
+[[field]]
+offset = 0xc6f8
+name = "hotspot_hit"
+type = "int"
+note = "table +0x74b0: the record under the pointer at the last hit test (input_hotspot_update_cursor_hit), -1 none. Only a WM_MOUSEMOVE at a new point and the first op-0x94 arm after a registration hit-test; ops 0x90 and 0x7c and the bound-action/Auto click dispatches set -1. A click takes this record's callback (engine-re.md, 'The hit and the hovered record')"
 [[field]]
 offset = 0x144e0
 name = "sfx_channel_resource_ids"
@@ -351,6 +371,11 @@ offset = 0x54ff0
 name = "initial_root_run"
 type = "int"
 note = "initialized to 1 at AGE context construction; queried by op 0x130 and cleared by op 0x9 before root script id 0 is reloaded"
+[[field]]
+offset = 0x54ff4
+name = "message_pump_mask"
+type = "uint"
+note = "engine_main_tick_with_exception_policy sets 4 on entry; the loop drains the Win32 message queue whenever message_pump_counter & this is nonzero, i.e. every third iteration"
 [[field]]
 offset = 0x550fc
 name = "message_skip_display_enabled"
@@ -846,6 +871,11 @@ offset = 0xa0ce8
 name = "service_action_trigger_mask"
 type = "uint"
 note = "triggered logical-action bits the blocking services poll (input_poll_triggered_action_mask ORs keys, clicks and joystick in); WM_MOUSEWHEEL under run-state 0x90100000 ORs in set:WheelKeyUp/Down's bit; cleared when op 0xd5 starts, and its abort test redirects to the abort PC"
+[[field]]
+offset = 0xa0cec
+name = "message_pump_counter"
+type = "uint"
+note = "engine_main_tick_with_exception_policy's iteration counter: 1 after each PeekMessage drain, incremented per iteration; run-state 0 dispatches one op per iteration, so messages (a WM_MOUSEMOVE from op 0x10a's SetCursorPos) are handled within three ops"
 [[field]]
 offset = 0xa0d10
 name = "system_menu_actions_enabled"

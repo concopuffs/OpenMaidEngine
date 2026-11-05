@@ -156,19 +156,24 @@ public class HotspotInputTests
         public bool UseSpace;
         public VmFrameLocation? AtWait;
         public VmFrameLocation? HiddenAt;
+        public long HoverFlagAfterRestore = -1;
+        public bool? SameSpotClickConsumed;
 
         public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
         {
-            Vm.UpdatePointer(772, 572);
+            Vm.UpdatePointer(772, 582);
             while (serviceInputCallback()) { }
             AtWait = Vm.CaptureFrameLocations()[^1];
             if (UseSpace) Assert.True(Vm.TryRequestAdvWaitCoroutineYield());
             else
             {
                 Vm.UpdateMouseButtonState(0x1, true);
-                Assert.True(Vm.TryActivatePointer(772, 572));
+                Assert.True(Vm.TryActivatePointer(772, 582));
+                Vm.UpdateMouseButtonState(0x1, false);
             }
             while (serviceInputCallback()) { }
+            HoverFlagAfterRestore = Vm.Globals.GetValueOrDefault(0x6cd);
+            SameSpotClickConsumed = Vm.TryActivatePointer(772, 582); // the pointer never moved
             throw new StopAtFirstWaitException();
         }
 
@@ -734,6 +739,77 @@ public class HotspotInputTests
         Assert.Equal(useSpace ? host.AtWait!.ResumeOffset : 0x30d, host.HiddenAt!.ResumeOffset);
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x3233)); // handler B (label_41e) ran
         Assert.Equal(new[] { true, false }, host.AdvPagePresentationSuspended);
+        // Handler B's op 0x7c clears the hotspot hit. From the control, the callback's one-pixel cursor nudge (op 0x10a)
+        // is a pointer move that hits the control again, so a click on the same spot hides the window again. From
+        // Space nothing moves: the wait's poll leaves the control (label_2f8 clears its tooltip flag G[0x6cd]) and a
+        // click on the same spot advances the page (native, driven 2026-11-05).
+        Assert.Equal(0, host.HoverFlagAfterRestore);
+        Assert.Equal(!useSpace, host.SameSpotClickConsumed);
+    }
+
+    private sealed class ResumeClearsHitHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public readonly List<(long Enters, long Leaves)> AfterStep = new();
+        public bool? StillClickConsumed;
+        public bool? MovedClickConsumed;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            void Step(Action action)
+            {
+                action();
+                while (serviceInputCallback()) { }
+                AfterStep.Add((Vm.Globals.GetValueOrDefault(0x120), Vm.Globals.GetValueOrDefault(0x121)));
+            }
+            Step(() => Vm.UpdatePointer(20, 30));                                // enter
+            Step(() => Assert.True(Vm.TryRequestAdvWaitCoroutineYield()));       // hide and restore: op 0x7c
+            Step(() => StillClickConsumed = Vm.TryActivatePointer(20, 30));     // same point: no hit
+            Step(() => Vm.UpdatePointer(21, 30));                                // a move inside: enter again
+            Step(() => MovedClickConsumed = Vm.TryActivatePointer(21, 30));
+        }
+
+        public override void WaitForServiceTrigger(Func<bool> triggered)
+        {
+            Assert.True(Vm.TryLatchAdvCoroutineYieldTrigger(1 << 5));
+            base.WaitForServiceTrigger(triggered);
+        }
+    }
+
+    [Fact]
+    public void CoroutineResume_ClearsTheHitSoAStillPointerLeavesAndItsClickIsNotConsumed()
+    {
+        // op_0x7c_handler@0x417cb0 sets the hotspot hit (ctx+0xc6f8) to -1 and keeps the hovered record. The wait's
+        // next poll therefore runs the leave callback, and only a pointer move to a new point hits the record again.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int enter = 25, leave = 33, activate = 41, handlerA = 47, handlerB = 48;
+        var script = ScriptAssembler.Assemble(table, "HOTSPOT", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(enter), I(leave), I(activate) }), // 0
+            (0x7b, new[] { I(handlerA), I(handlerB) }),   // 15
+            (0x94, Array.Empty<Operand>()),               // 20
+            (0x72, new[] { I(1) }),                       // 21
+            (0x2, Array.Empty<Operand>()),                // 24
+            (0x50, new[] { G(0x120), G(0x120), I(1) }),  // 25: enter
+            (0x5, Array.Empty<Operand>()),                // 32
+            (0x50, new[] { G(0x121), G(0x121), I(1) }),  // 33: leave
+            (0x5, Array.Empty<Operand>()),                // 40
+            (0x55, new[] { G(0x122), I(1) }),             // 41: activate
+            (0x5, Array.Empty<Operand>()),                // 46
+            (0x7c, Array.Empty<Operand>()),               // 47: handler A, then the hidden-window wait
+            (0x7c, Array.Empty<Operand>()),               // 48: handler B, back to the text wait
+        }, Array.Empty<string>());
+        var host = new ResumeClearsHitHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal(new (long, long)[] { (1, 0), (1, 1), (1, 1), (2, 1), (2, 1) }, host.AfterStep);
+        Assert.False(host.StillClickConsumed);
+        Assert.True(host.MovedClickConsumed);
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x122));
+        Assert.Equal("exit", vm.HaltReason);
     }
 
     [Fact]

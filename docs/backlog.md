@@ -10,17 +10,6 @@ it; git history keeps the record.
 
 ## Engine fidelity
 
-- **A left click does not close HIDEWIN.BIN in the port.** Retail Himegari never runs `HIDEWIN.BIN` (`engine-re.md`,
-  "ADV hide window: the engine's hidden-window wait"), but Kamidori's handler A always does, and so does Himegari
-  once a mod sets `adv_hide_window_enabled` (`G[0x62425]`).
-  - Evidence: on 2026-11-04 the port was driven with that global seeded to 1. On SC0000 page 3 its frames were
-    `SC0000@0x3f6 > HIDEWIN`, and a driven left click did not restore the text box; a right click did.
-  - Native `input_poll_mouse_action_bits@0x460240` maps both buttons to callback indices 4/5, and HIDEWIN registers
-    both to its restore callback, so a left click should restore it (`engine-re.md`, the 2026-07-18 manual-validation
-    correction).
-
-  Done when a driven left click closes `HIDEWIN.BIN` in the port as it does natively. Check it on Kamidori native and
-  port, or on Himegari with the global set.
 - **Modal dialog fidelity (終了 and エラーが発生しました).** The port's dialogs match native's answers, but not
   these details (`engine-re.md`, "Close policy" and the Depth error):
   - Run-state bit `0x1000000` makes native close without asking; its setter is unidentified.

@@ -182,6 +182,11 @@ public sealed partial class VirtualMachine
                     bool hiddenWindow = _coroutineYieldEntered;
                     bool resumesTextWait = _coroutineResumesTextWait;
                     ResetCoroutineYield();
+                    // Op 0x7c also clears the current hotspot hit (ctx+0xc6f8) and keeps the hovered record: the
+                    // next poll leaves it, and only a pointer move hits it again.
+                    bool hitCleared;
+                    lock (_interactiveLock) hitCleared = _interactiveFrame?.Hotspots.InvalidateHit() == true;
+                    if (hitCleared) _host.WakeInputCallbackService();
                     if (hiddenWindow && WaitInHiddenWindow(resumePc, resumesTextWait) is >= 0 and int handlerB)
                         return handlerB;
                     _host.SetAdvPagePresentationSuspended(Gfx, false);

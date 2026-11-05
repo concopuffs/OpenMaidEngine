@@ -2443,6 +2443,44 @@ registry at ctx+0x5248 through the same scenario:
 - **Neighbour.** The move to message skip dispatches read-skip's leave (`label_2a0`), then message skip's enter
   (`label_247`) on the next poll.
 
+**The hit and the hovered record (native-traced 2026-11-05).** The registry keeps two indices, and they change at
+different times.
+- **The current hit** (`+0x74b0`, ctx+`0xc6f8`) is the record under the pointer as of the last hit test.
+  `input_hotspot_update_cursor_hit` runs from only two places:
+  - **`WM_MOUSEMOVE`.** `age_main_window_proc` calls `input_mouse_move_update_hotspot_hits@0x485db0` (call at
+    `0x48690f`) with the message's client point, and only when that point differs from the last move's. The hit test
+    runs whether or not a wait is polling, so it also covers a running callback.
+  - **The first arm after a registration.** `input_hotspot_arm_cursor_tracking@0x404230` hit-tests `GetCursorPos`.
+
+  Nothing else re-tests. A button press hit-tests nothing, and the click callback is the current hit's
+  (`input_hotspot_current_click_callback@0x404f70`). With no hit, the click advances the page.
+- **The hit is cleared (−1) by:**
+  - op `0x90` (`op_0x90_handler@0x41fc80`, which also clears the pending enter `+0x74a8`);
+  - op `0x7c` (`op_0x7c_handler@0x417cb0`, for this registry and the op-`0x95` choice table at ctx+`0xc72c`);
+  - the bound-action and Auto click dispatches in `adv_input_service_poll`.
+- **The hovered record** (`+0xefc`) follows the hit only when a wait polls (`input_hotspot_poll_hover_callback`). A
+  difference dispatches the old record's leave, then the new record's enter on the next poll.
+- **Op `0x7c` and a still pointer.** Op `0x7c` ends both coroutine handlers of the hide window. After it, a pointer
+  that has not moved hits nothing: the wait's next poll runs the hovered control's leave, which clears its tooltip,
+  and a click on the same spot advances the page until the pointer moves.
+  - Native-driven on SC0000 page 4 (`himegari-hide-window.steps`): Space hides and restores under a pointer resting
+    on the hide control, the tooltip goes, and a click there advanced to `0x913`.
+  - From the control itself, the callback continues at `0x30d` with its one-pixel cursor nudge. Op `0x10a` calls
+    `SetCursorPos`, and Windows answers with a `WM_MOUSEMOVE` at the new point, which hits the control again.
+  - `engine_main_tick_with_exception_policy` pumps messages every third loop iteration (counter ctx+`0xa0cec` against
+    mask ctx+`0x54ff4` = 4). Run-state 0 dispatches one op per iteration, so the move is handled before the callback's
+    `ret` re-runs the wait. That wait finds hit = hovered, and no tooltip returns.
+- **Port.** `HotspotRegistry` keeps both indices:
+  - `MovePointer` is the `WM_MOUSEMOVE` path, and `VirtualMachine.UpdatePointer` skips an unchanged point.
+  - The first `Arm` after a registration hit-tests.
+  - `InvalidateHit` is op `0x7c`.
+  - `Activate` takes the current hit.
+  - Tests: `HotspotInputTests.CoroutineResume_ClearsTheHitSoAStillPointerLeavesAndItsClickIsNotConsumed` and the
+    real-SC0000 hide-window theory.
+- **Driver.** The native driver's `SetCursorPos` replacement now posts that `WM_MOUSEMOVE` too
+  (`tools/drive/native-agent.js`). Without it, driven native never re-hit-tested after the nudge, and a move inside the
+  control brought the tooltip back.
+
 `0x1b6`/`0x1b7` are implemented as VM service state for the first Auto action bridge; timed automatic page
 advance remains separate follow-up work.
 
@@ -3536,6 +3574,9 @@ A calls `HIDEWIN.BIN` unconditionally, then yields again into handler B.
   wait with its `0x80000000`.
 - The wait consumes the trigger. A restoring click never advances the page, and a restoring right click never opens
   the menu.
+- Both ops `0x7c` also clear the hotspot hit. After a Space restore under a resting pointer, the control the pointer
+  rests on loses its tooltip, and a click there advances the page until the pointer moves. From the control, the
+  cursor nudge at `0x30d` hits it again ("The hit and the hovered record").
 
 **Native-driven 2026-11-05 (`tools/drive/scenarios/himegari-hide-window.steps`).**
 
@@ -3544,8 +3585,11 @@ A calls `HIDEWIN.BIN` unconditionally, then yields again into handler B.
 - Space leaves the frames on the wait (`SC0000@0x8a9`). The wheel, Space, a right click or a left click restores
   it.
 - Enter still advances.
+- On page 4, Space hides and restores under a pointer resting on the hide control: the tooltip goes, and a click on
+  the same spot advances to `0x913`.
 - The port matches every step. Its hidden frames are pixel-identical to native. Its restored frames differ only as
-  any port page does: 68 px of glyph edges and the animated wait indicator.
+  any port page does: 68 px of glyph edges and the animated wait indicator. The control strip in the tooltip shots
+  is pixel-identical.
 
 **Port.**
 
@@ -3588,6 +3632,23 @@ logical actions (defaults 0/1) to callback indices 4/5, and HIDEWIN registers bo
 callback. A completed ordinary left click therefore restores the textbox as observed in the original game.
 The raw left-button edge branch only supports moving an oversized retained display object while held; it is
 not evidence that dungeon gameplay camera panning is enabled during an ordinary 800x600 VN scene.
+
+> **Correction (2026-11-05, native-driven).** A left click never closes Himegari's `HIDEWIN.BIN`. The click observed
+> in the original game ended the engine's hidden-window wait, which retail runs instead of `HIDEWIN.BIN` (next
+> section). Native was forced onto the `HIDEWIN.BIN` path by a test hook that makes every read of `G[0x62425]` return 1
+> (`vm_operand_fetch@0x41b940` stores the operand slot at `0x5c55c0`; type at slot−4, value at slot).
+> - **Driven on SC0000 page 3.** A left click, short or held 300 ms, left the text box hidden. Enter, Space, a right
+>   click and X restored it; A did nothing. Enter restored the page without advancing it. The port with
+>   `--seed 0x62425=1` behaved identically.
+> - **Why the left button never restores.** Op `0xff` polls button levels (`input_poll_action_mask@0x4608b0` →
+>   `input_poll_mouse_action_bits@0x460240`, `GetAsyncKeyState`), not click edges. At `HIDEWIN@0x3ad` a held left
+>   button takes the pan branch, which polls nothing. Once the button is up, the poll no longer sees action 4.
+> - **The restore inputs.** The restore callbacks run on joy actions 4–7: Enter 4, Space 5, X 7, and mapped joystick
+>   inputs. They restore only after the idle callback (slot 10, `label_47f`) has cleared local `0xd`. The
+>   `mouse_callback` at `label_120` also restores on a raw right-button release.
+> - **Kamidori.** Its `HIDEWIN.BIN` restores on a left-button release only in its no-pan mode, while `G[0xfd41c]` is
+>   nonzero (`label_4b5` tracks a raw left edge). No script writes `G[0xfd41c]` directly. With it 0, a left click does
+>   not restore, as in Himegari.
 
 The manual run also exposed that ADV text and the op-`0x72` wait indicator are currently Godot presentation
 overlays rather than retained texture objects. The shipped handler correctly faded the textbox/chrome, but
@@ -4843,10 +4904,14 @@ These were found while driving native AGE from a script for gate 7 and for the g
 - **Buttons and keys** are read with `GetAsyncKeyState`, which reports the global hardware state. The joystick goes
   through winmm `joyGetPosEx`/`joyGetDevCapsA` (`input_poll_joystick_action_bits@0x460380`). On Windows 10,
   `joyGetNumDevs` is the constant `push 0x10; pop eax; ret` (16 slots, not devices).
-- **The cursor** comes from `input_poll_cursor_client@0x4602a0`: `GetCursorPos`, then `ScreenToClient`. Menus and
-  hotspots follow the real cursor, not the `WM_MOUSEMOVE` lParam.
+- **The cursor** comes from `input_poll_cursor_client@0x4602a0`: `GetCursorPos`, then `ScreenToClient`. Menus that
+  poll it follow the real cursor. The op-`0x90` hotspot registry is the exception: it hit-tests the `WM_MOUSEMOVE`
+  lParam, and `GetCursorPos` only on its first arm after a registration ("The hit and the hovered record"; corrected
+  2026-11-05).
 - **Cursor warps.** AGE also calls `SetCursorPos`: a confirmation such as セーブしますか？ glides the cursor onto its
-  default button (はい) in about 20 steps.
+  default button (はい) in about 20 steps, and the ADV control callbacks nudge it by a pixel (op `0x10a`). Windows
+  answers a moved cursor with a `WM_MOUSEMOVE`, the only message that hit-tests hotspots ("The hit and the hovered
+  record"), so the driver's replacement posts one for a new point inside the client area (2026-11-05).
 - **The top edge.** A `WM_MOUSEMOVE` with y < 2 starts the system-menu dwell timer for the top-edge strip.
 - **The polling gate** is input manager `+0x1820` (`ctx+0x1c28`, `input_polling_enabled`), written by
   `input_set_polling_enabled@0x460180` as `disable == 0`. While it is 0, every poller skips `GetAsyncKeyState` and

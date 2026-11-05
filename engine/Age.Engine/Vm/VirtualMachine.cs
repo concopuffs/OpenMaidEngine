@@ -270,31 +270,35 @@ public sealed partial class VirtualMachine
     /// <summary>Update the native 800x600 cursor coordinate without advancing the current ADV page.</summary>
     public void UpdatePointer(int x, int y)
     {
-        bool wake = false;
-        lock (_interactiveLock)
-        {
-            _pointerX = x; _pointerY = y;
-            if (_interactiveFrame != null)
-                wake = _interactiveFrame.Hotspots.UpdatePointer(x, y);
-        }
+        bool wake;
+        lock (_interactiveLock) wake = MovePointerLocked(x, y);
         if (wake) _host.WakeInputCallbackService();
     }
 
-    /// <summary>Queue an armed hotspot's activation callback. True means the click was consumed.</summary>
+    /// <summary>Queue the activation callback of the armed hotspot under the pointer. True means the click was
+    /// consumed.</summary>
     public bool TryActivatePointer(int x, int y)
     {
         bool consumed = false;
         lock (_interactiveLock)
         {
-            _pointerX = x; _pointerY = y;
+            // Windows delivers a WM_MOUSEMOVE before a button message at a new point. The click itself hit-tests
+            // nothing: it activates the current hit, which op 0x7c may have cleared under a still pointer.
+            MovePointerLocked(x, y);
             if (_interactiveFrame != null)
-            {
-                _interactiveFrame.Hotspots.UpdatePointer(x, y);
-                consumed = _interactiveFrame.Hotspots.Activate(x, y);
-            }
+                consumed = _interactiveFrame.Hotspots.Activate();
         }
         if (consumed) _host.WakeInputCallbackService();
         return consumed;
+    }
+
+    /// <summary>The WM_MOUSEMOVE path: <c>age_main_window_proc</c> hit-tests a move only at a point other than the last
+    /// move's (call at 0x48690f). Caller holds <see cref="_interactiveLock"/>.</summary>
+    private bool MovePointerLocked(int x, int y)
+    {
+        if (x == _pointerX && y == _pointerY) return false;
+        _pointerX = x; _pointerY = y;
+        return _interactiveFrame?.Hotspots.MovePointer(x, y) == true;
     }
 
     /// <summary>Queue the first armed hotspot callback bound by op 0x97 to any action in

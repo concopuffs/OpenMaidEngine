@@ -3,7 +3,10 @@
 # triggered action brings it back through handler B: a mapped key, a left or right click. The control (x=772)
 # leaves the frame at SC0000@0x30d, where the wheel and an unmapped key (A) do nothing. Space (logical action 5)
 # at the text wait hides from the wait itself, so the wheel restores there too. Restoring never advances the page
-# or opens the menu. Run on a fresh sandbox, on both targets, and compare the shots:
+# or opens the menu. Handler B's op 0x7c clears the hotspot hit: after a Space restore under a resting pointer the
+# control loses its tooltip, and a click on the same spot advances the page until the pointer moves. (From the
+# control, the callback's one-pixel cursor nudge hits it again.) Run on a fresh sandbox, on both targets, and
+# compare the shots:
 #   py -3.11 -X utf8 tools/drive.py port start
 #   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-hide-window.steps
 
@@ -59,3 +62,16 @@ shot hide-7-space-restored
 key 0x0d                                # Enter still advances
 wait 2
 expect top=SC0000@0x8de
+
+move 772 582                            # rest the pointer on the hide control: its tooltip shows
+wait 1.5
+shot hide-8-tooltip
+key 0x20                                # Space hides, and Space restores, under the resting pointer
+wait 2
+key 0x20
+wait 2.5
+expect top=SC0000@0x8de
+shot hide-9-tooltip-gone                # op 0x7c cleared the hotspot hit, so the wait's poll left the control
+click 772 582                           # the same spot, no move: there is no hit, so the click advances
+wait 2
+expect top=SC0000@0x913

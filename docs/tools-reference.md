@@ -865,7 +865,9 @@ Space at the text wait. Retail never runs HIDEWIN.BIN, so both targets wait in t
   left click restores it.
 - After Space, the frames stay on the wait. The wheel, a right click or Space restores the box.
 - Restoring never advances the page or opens the menu, and Enter still advances.
-- The `hide-*` shots compare the hidden and restored frames.
+- On page 4, Space hides and restores the box under a pointer resting on the hide control. The control loses its
+  tooltip, and a click on the same spot advances to `0x913`: op `0x7c` cleared the hotspot hit.
+- The `hide-*` shots compare the hidden and restored frames, and `hide-8`/`hide-9` the tooltip.
 
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
@@ -897,7 +899,8 @@ target's sandbox can seed the other's.
 **What the native hooks do inside AGE.**
 - `GetAsyncKeyState` reports only the keys and buttons the driver holds.
 - `GetCursorPos` reports the driver's client point.
-- `SetCursorPos` moves only that point.
+- `SetCursorPos` moves only that point. For a new point inside the client area it also posts the `WM_MOUSEMOVE`
+  Windows would send, which is what re-hit-tests AGE's hotspots after the ADV callbacks' cursor nudge.
 - `joyGetPos[Ex]`/`joyGetDevCapsA` report no joystick.
 - Windowed AGE turns input polling off when its window loses activation, and a driven AGE runs inactive. Once the
   window exists the agent ignores that call (`[native.keep_polling]`) and reopens the gate; `hello` reports the calls

@@ -6,7 +6,8 @@
 // Inside AGE only:
 //   user32  GetAsyncKeyState  reports exactly the keys and buttons the driver holds
 //           GetCursorPos      reports the driver's client point, converted to the screen at call time
-//           SetCursorPos      moves the driver's point, never the desktop cursor
+//           SetCursorPos      moves the driver's point, never the desktop cursor, and posts the WM_MOUSEMOVE
+//                             Windows would send for it
 //           MessageBoxA       answers boxes the profile's dialog policy names; shows and reports the rest
 //   winmm   joy*              no joystick is connected
 //   shell32 SHGetFolderPathA  the folders in config.folders (keyed by CSIDL & 0xff) point into the sandbox
@@ -54,6 +55,21 @@ function hookUser32(module) {
         ['pointer', 'pointer'], 'stdcall');
     const screenToClient = new NativeFunction(module.getExportByName('ScreenToClient'), 'int',
         ['pointer', 'pointer'], 'stdcall');
+    const getClientRect = new NativeFunction(module.getExportByName('GetClientRect'), 'int',
+        ['pointer', 'pointer'], 'stdcall');
+    const postMessage = new NativeFunction(module.getExportByName('PostMessageA'), 'int',
+        ['pointer', 'uint', 'uint', 'uint'], 'stdcall');
+    const WM_MOUSEMOVE = 0x200;
+    const insideClient = point => {
+        const rect = Memory.alloc(16);
+        if (!getClientRect(hwnd, rect)) return false;
+        return point[0] >= rect.readS32() && point[0] < rect.add(8).readS32()
+            && point[1] >= rect.add(4).readS32() && point[1] < rect.add(12).readS32();
+    };
+    // MK_LBUTTON, MK_RBUTTON, MK_SHIFT, MK_CONTROL from the keys the driver holds
+    const mouseKeyFlags = () => (held.has(0x01) ? 0x1 : 0) | (held.has(0x02) ? 0x2 : 0)
+        | (held.has(0x10) ? 0x4 : 0) | (held.has(0x11) ? 0x8 : 0);
+    const lparam = point => ((point[1] & 0xffff) << 16 | (point[0] & 0xffff)) >>> 0;
 
     Interceptor.replace(module.getExportByName('GetAsyncKeyState'), new NativeCallback(
         vk => held.has(vk & 0xff) ? 0x8000 : 0, 'int', ['int'], 'stdcall'));
@@ -72,14 +88,19 @@ function hookUser32(module) {
     }, 'int', ['pointer'], 'stdcall'));
 
     // AGE glides the cursor onto a dialog's default button with a run of SetCursorPos calls; the driver collects
-    // them through warps() instead of one message each.
+    // them through warps() instead of one message each. Windows also sends a WM_MOUSEMOVE to the window under a
+    // moved cursor. AGE's hotspots are hit-tested only on WM_MOUSEMOVE, and its ADV callbacks nudge the cursor by
+    // a pixel to re-hit-test, so a moved point inside the client area posts one too.
     Interceptor.replace(module.getExportByName('SetCursorPos'), new NativeCallback((x, y) => {
         if (!hwnd.isNull()) {
             const point = Memory.alloc(8);
             point.writeS32(x);
             point.add(4).writeS32(y);
             screenToClient(hwnd, point);
-            cursor = [point.readS32(), point.add(4).readS32()];
+            const moved = [point.readS32(), point.add(4).readS32()];
+            const changed = cursor === null || cursor[0] !== moved[0] || cursor[1] !== moved[1];
+            cursor = moved;
+            if (changed && insideClient(moved)) postMessage(hwnd, WM_MOUSEMOVE, mouseKeyFlags(), lparam(moved));
         }
         warps.count += 1;
         warps.last = cursor;
