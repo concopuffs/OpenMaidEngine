@@ -75,7 +75,6 @@ public sealed record GameProfileManifest
         string naturalBootScript,
         IReadOnlyDictionary<string, string>? metadataReferences,
         GamePersistencePolicy persistence,
-        GameRuntimePolicy? runtime = null,
         DirectSceneDiagnosticPolicy? directSceneDiagnostics = null,
         DebugSceneLaunchPolicy? debugSceneLaunch = null)
     {
@@ -108,7 +107,6 @@ public sealed record GameProfileManifest
         MetadataReferences = (metadataReferences ?? new Dictionary<string, string>())
             .ToImmutableDictionary(StringComparer.Ordinal);
         Persistence = persistence;
-        Runtime = runtime ?? GameRuntimePolicy.Empty;
         DirectSceneDiagnostics = directSceneDiagnostics;
         DebugSceneLaunch = debugSceneLaunch;
     }
@@ -122,7 +120,6 @@ public sealed record GameProfileManifest
     public string NaturalBootScript { get; }
     public ImmutableDictionary<string, string> MetadataReferences { get; }
     public GamePersistencePolicy Persistence { get; }
-    public GameRuntimePolicy Runtime { get; }
     public DirectSceneDiagnosticPolicy? DirectSceneDiagnostics { get; }
     public DebugSceneLaunchPolicy? DebugSceneLaunch { get; }
     public string PersistenceNamespace => Persistence.StorageNamespace;

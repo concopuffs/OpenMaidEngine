@@ -41,7 +41,7 @@ public class TextureOpsTests
             script, table, host, new VmOptions(MaxSteps: 20_000_000), provider,
             compatibility: new VmCompatibilityContext(
                 profile.Id, profile.EngineAbiId,
-                SceneEntryCoroutineGateAddress: profile.Runtime.SceneEntryCoroutineGateAddress));
+                SceneEntryCoroutineGateAddress: profile.DirectSceneDiagnostics!.SceneEntryCoroutineGateAddress));
         foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
         vm.Run();

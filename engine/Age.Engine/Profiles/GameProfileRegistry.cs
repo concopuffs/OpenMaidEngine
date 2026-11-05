@@ -79,7 +79,6 @@ public sealed class GameProfileRegistry
         public string? NaturalBootScript { get; init; }
         public Dictionary<string, string>? MetadataReferences { get; init; }
         public PersistenceDocument? Persistence { get; init; }
-        public RuntimeDocument? Runtime { get; init; }
         public DirectSceneDiagnosticDocument? DirectSceneDiagnostics { get; init; }
         public DebugSceneLaunchDocument? DebugSceneLaunch { get; init; }
 
@@ -96,22 +95,9 @@ public sealed class GameProfileRegistry
                 MetadataReferences,
                 (Persistence ?? throw new InvalidOperationException("persistence is required"))
                     .ToPolicy(),
-                Runtime?.ToPolicy(),
                 DirectSceneDiagnostics?.ToPolicy(),
                 DebugSceneLaunch?.ToPolicy());
         }
-    }
-
-    private sealed class RuntimeDocument
-    {
-        public CellSeedDocument[]? ExternalGlobalSeeds { get; init; }
-        public string? SceneEntryCoroutineGateAddress { get; init; }
-
-        public GameRuntimePolicy ToPolicy()
-            => new(
-                (ExternalGlobalSeeds ?? []).Select(seed => seed.ToSeed()),
-                SceneEntryCoroutineGateAddress == null
-                    ? null : ParseAddress(SceneEntryCoroutineGateAddress));
     }
 
     private sealed class DirectSceneDiagnosticDocument
@@ -120,9 +106,9 @@ public sealed class GameProfileRegistry
         public string[]? DataBootstrapScripts { get; init; }
         public string[]? DataTableBootstrapScripts { get; init; }
         public CellSeedDocument[]? GlobalSeeds { get; init; }
-        public SceneCellSeedDocument[]? SceneExternalGlobalSeeds { get; init; }
         public SurfaceBootstrapDocument[]? InheritedSurfaces { get; init; }
         public WaitIndicatorDocument? WaitIndicator { get; init; }
+        public string? SceneEntryCoroutineGateAddress { get; init; }
 
         public DirectSceneDiagnosticPolicy ToPolicy()
             => new(
@@ -130,9 +116,10 @@ public sealed class GameProfileRegistry
                 DataBootstrapScripts,
                 DataTableBootstrapScripts,
                 (GlobalSeeds ?? []).Select(seed => seed.ToSeed()),
-                (SceneExternalGlobalSeeds ?? []).Select(seed => seed.ToSeed()),
                 (InheritedSurfaces ?? []).Select(surface => surface.ToBootstrap()),
-                WaitIndicator?.ToBootstrap());
+                WaitIndicator?.ToBootstrap(),
+                SceneEntryCoroutineGateAddress == null
+                    ? null : ParseAddress(SceneEntryCoroutineGateAddress));
     }
 
     private sealed class DebugSceneLaunchDocument
@@ -156,16 +143,6 @@ public sealed class GameProfileRegistry
         public long Value { get; init; }
 
         public ProfileCellSeed ToSeed() => new(ParseAddress(Address), Value);
-    }
-
-    private sealed class SceneCellSeedDocument
-    {
-        public string? Script { get; init; }
-        public string? Address { get; init; }
-        public long Value { get; init; }
-
-        public ProfileSceneCellSeed ToSeed()
-            => new(Script ?? "", ParseAddress(Address), Value);
     }
 
     private sealed class SurfaceBootstrapDocument

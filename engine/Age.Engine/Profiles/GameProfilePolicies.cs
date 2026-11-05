@@ -5,12 +5,6 @@ namespace Age.Engine.Profiles;
 
 public sealed record ProfileCellSeed(int Address, long Value);
 
-public sealed record ProfileSceneCellSeed(string ScriptName, int Address, long Value)
-{
-    public bool Matches(string scriptName)
-        => ScriptName.Equals(scriptName, StringComparison.OrdinalIgnoreCase);
-}
-
 public sealed record ProfileSurfaceBootstrap(string ResourceName, int SurfaceSlot, uint Flags);
 
 public sealed record ProfileWaitIndicatorBootstrap(
@@ -63,36 +57,11 @@ public sealed record DebugSceneLaunchPolicy
     }
 }
 
-/// <summary>Native service state proven for one game profile, outside script-visible writes.</summary>
-public sealed record GameRuntimePolicy
-{
-    public GameRuntimePolicy(
-        IEnumerable<ProfileCellSeed>? externalGlobalSeeds = null,
-        int? sceneEntryCoroutineGateAddress = null)
-    {
-        ExternalGlobalSeeds = (externalGlobalSeeds ?? []).ToImmutableArray();
-        if (ExternalGlobalSeeds.Any(seed => seed.Address < 0))
-            throw new ArgumentException("external global seed addresses cannot be negative");
-        if (sceneEntryCoroutineGateAddress < 0)
-            throw new ArgumentException("scene-entry coroutine gate address cannot be negative");
-        SceneEntryCoroutineGateAddress = sceneEntryCoroutineGateAddress;
-    }
-
-    public ImmutableArray<ProfileCellSeed> ExternalGlobalSeeds { get; }
-    public int? SceneEntryCoroutineGateAddress { get; }
-    public static GameRuntimePolicy Empty { get; } = new();
-
-    public void ApplyExternalGlobals(IDictionary<int, long> target)
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        foreach (ProfileCellSeed seed in ExternalGlobalSeeds)
-            target[seed.Address] = seed.Value;
-    }
-}
-
 /// <summary>
 /// Profile-owned state used only when a developer starts after the natural boot script. It is never
-/// applied to an ordinary profile boot and therefore cannot silently become an engine-wide rule.
+/// applied to an ordinary profile boot and therefore cannot silently become an engine-wide rule. A natural
+/// boot gets every value from the game's own scripts (SYSTEM4 and what it calls) and the zero-filled banks;
+/// these entries stand in for the scripts a direct-scene run skips, so each must name a script writer.
 /// </summary>
 public sealed record DirectSceneDiagnosticPolicy
 {
@@ -101,9 +70,9 @@ public sealed record DirectSceneDiagnosticPolicy
         IEnumerable<string>? dataBootstrapScripts = null,
         IEnumerable<string>? dataTableBootstrapScripts = null,
         IEnumerable<ProfileCellSeed>? globalSeeds = null,
-        IEnumerable<ProfileSceneCellSeed>? sceneExternalGlobalSeeds = null,
         IEnumerable<ProfileSurfaceBootstrap>? inheritedSurfaces = null,
-        ProfileWaitIndicatorBootstrap? waitIndicator = null)
+        ProfileWaitIndicatorBootstrap? waitIndicator = null,
+        int? sceneEntryCoroutineGateAddress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(systemScript);
         SystemScript = RequireScriptName(systemScript, nameof(systemScript));
@@ -112,16 +81,13 @@ public sealed record DirectSceneDiagnosticPolicy
         DataTableBootstrapScripts = (dataTableBootstrapScripts ?? [])
             .Select(value => RequireScriptName(value, nameof(dataTableBootstrapScripts))).ToImmutableArray();
         GlobalSeeds = (globalSeeds ?? []).ToImmutableArray();
-        SceneExternalGlobalSeeds = (sceneExternalGlobalSeeds ?? []).ToImmutableArray();
         InheritedSurfaces = (inheritedSurfaces ?? []).ToImmutableArray();
         WaitIndicator = waitIndicator;
-        if (GlobalSeeds.Any(seed => seed.Address < 0)
-            || SceneExternalGlobalSeeds.Any(seed => seed.Address < 0))
+        if (GlobalSeeds.Any(seed => seed.Address < 0))
             throw new ArgumentException("diagnostic seed addresses cannot be negative");
-        if (SceneExternalGlobalSeeds.Any(seed =>
-                Path.GetFileName(seed.ScriptName) != seed.ScriptName
-                || !seed.ScriptName.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)))
-            throw new ArgumentException("scene diagnostic seeds require .BIN script names");
+        if (sceneEntryCoroutineGateAddress < 0)
+            throw new ArgumentException("scene-entry coroutine gate address cannot be negative");
+        SceneEntryCoroutineGateAddress = sceneEntryCoroutineGateAddress;
         if (InheritedSurfaces.Any(surface => string.IsNullOrWhiteSpace(surface.ResourceName)
                                                 || surface.SurfaceSlot < 0))
             throw new ArgumentException("diagnostic surfaces require a resource name and nonnegative slot");
@@ -131,9 +97,12 @@ public sealed record DirectSceneDiagnosticPolicy
     public ImmutableArray<string> DataBootstrapScripts { get; }
     public ImmutableArray<string> DataTableBootstrapScripts { get; }
     public ImmutableArray<ProfileCellSeed> GlobalSeeds { get; }
-    public ImmutableArray<ProfileSceneCellSeed> SceneExternalGlobalSeeds { get; }
     public ImmutableArray<ProfileSurfaceBootstrap> InheritedSurfaces { get; }
     public ProfileWaitIndicatorBootstrap? WaitIndicator { get; }
+    /// <summary>The ADV scene-entry gate a direct-scene run sets, standing in for TITLE's developer entry
+    /// (ＡＤＶパート writes 1), so a scene run as the root takes its label-picker loop once. Retail keeps it 0
+    /// and SYSTEM4 hosts every scene, so a natural boot never uses it.</summary>
+    public int? SceneEntryCoroutineGateAddress { get; }
 
     private static string RequireScriptName(string value, string parameterName)
     {

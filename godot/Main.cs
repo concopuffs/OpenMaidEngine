@@ -504,7 +504,7 @@ public partial class Main : Godot.Control
                 selectedProfile.Profile.Id,
                 selectedProfile.Profile.EngineAbiId,
                 selectedProfile.ProbeMode,
-                selectedProfile.Profile.Runtime.SceneEntryCoroutineGateAddress));
+                directScenePolicy?.SceneEntryCoroutineGateAddress));
         if (scripts != null && selectedProfile.Profile.DebugSceneLaunch != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);
@@ -519,6 +519,7 @@ public partial class Main : Godot.Control
             var systemScript = scripts!.RequireByName(directScenePolicy.SystemScript);
             AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(systemScript, table, _vm.TextHistory);
             InputBindingBootstrap.Apply(systemScript, _vm.InputBindings);
+            InlineArrayBootstrap.Apply(systemScript, _vm.Globals); // SYSTEM4@0x1ca: the SFX channel table
         }
         var loadedDiagnosticSurfaceSlots = new HashSet<int>();
         foreach (ProfileSurfaceBootstrap surface in directScenePolicy?.InheritedSurfaces ?? [])
@@ -553,12 +554,7 @@ public partial class Main : Godot.Control
         {
             foreach (ProfileCellSeed seed in directScenePolicy.GlobalSeeds)
                 _vm.Globals[seed.Address] = seed.Value;
-            foreach (ProfileSceneCellSeed seed in directScenePolicy.SceneExternalGlobalSeeds
-                         .Where(value => value.Matches(scene + ".BIN")))
-                _vm.ExternalGlobals[seed.Address] = seed.Value;
         }
-        if (!_selftest)
-            selectedProfile.Profile.Runtime.ApplyExternalGlobals(_vm.ExternalGlobals);
         foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed overrides boot state
         if (holdMessageSkip)
             _vm.UpdateKeyboardVirtualKeyState(0x11, true); // Ctrl; bindings resolve it to logical action 6.

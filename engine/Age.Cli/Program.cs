@@ -311,9 +311,10 @@ if (args.Contains("oms-rebuild"))
     return OmsRebuildCheck.Run(catalog, assetStore, table, Age.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson),
         OmsModules(), rebuildScenes, bootScripts, new VmOptions(HaltAtWaitForInput: args.Contains("--halt-at-wait")),
         int.TryParse(OptionValue("--limit"), out int rebuildLimit) ? rebuildLimit : 30,
-        // The profile's runtime facts, as the Godot runtime passes them (the ADV scene-entry gate among them).
+        // The profile's VM facts, as a Godot direct-scene run passes them (the ADV scene-entry gate among them).
         new VmCompatibilityContext(selectedProfile.Profile.Id, selectedProfile.Profile.EngineAbiId,
-            selectedProfile.ProbeMode, selectedProfile.Profile.Runtime.SceneEntryCoroutineGateAddress),
+            selectedProfile.ProbeMode,
+            selectedProfile.Profile.DirectSceneDiagnostics?.SceneEntryCoroutineGateAddress),
         idiomatic: OptionValue("--level") == "idiomatic",
         // Gate 7 (spec §12): patch every script with an inert probe plan (--patch-probe [stride], default 5).
         patchProbe: !args.Contains("--patch-probe") ? 0

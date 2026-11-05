@@ -4039,8 +4039,14 @@ contract on the dispatcher and parser.
 The native trace in `build/native-sfx-trace.jsonl` captures SC0000's first pair: `0xb4@0xc29` resolves
 raw catalog id `0x28` to `E0808.WAV`, loads channel 0, and `0xb5@0xc2e` starts it in the same millisecond. The next
 `0xb4@0xc31` preloads the same WAV into engine-owned secondary channel 4 for a later service start. The
-scratch global `G[0x6242d]` is maintained outside script-visible writes; the SC0000 port profile exposes it
-as an external value of 4 rather than pretending the script assigned it.
+channel comes from `G[0x6242d]`.
+
+> **Correction (2026-11-05).** `G[0x6242d]` is script-written after all. `SYSTEM4@0x1ca` (op `0x64`,
+> copy-inline-int-array) copies the SFX channel table `[0,4,5,6,9]` to `G[0x6242c..0x62430]` on every boot. The
+> Frida write capture (`capture_global_writes.py`) missed it because op `0x64` writes the bank directly, not
+> through `vm_operand_write`. The port's natural boot holds 4 there, as native does. The profile's SC0000
+> "external" seed and the VM's external-global overlay are gone. Direct-scene runs now replay the copy
+> (`InlineArrayBootstrap`).
 
 **TITLE SFX packed-raw correction (2026-07-20).** TITLE preloads raw id `0x2aea` (`SE020.WAV`) into channel 2
 and executes `0xb5(2)` whenever mouse/joy selection changes. Each activation path loads raw id `0x3321`
@@ -4303,6 +4309,11 @@ detour (`0x202/0x203` @ `0x122d0`, writing `G[0x62451]`) the full state does NOT
 difference to chase (not state). **Caveats:** snapshot is playthrough-specific (best for canonical entry
 points — new-game opening, chapter starts); v1 captures global-INTS only (type 3; strings/floats TODO);
 includes the scene's own early writes (can exclude by codebase for a pure pre-scene boundary).
+
+**Gap (2026-11-05).** The capture sees only writes through `vm_operand_write`. Op `0x64` (copy-inline-int-array)
+writes the bank directly, so `SYSTEM4@0x1ca`'s SFX channel table (`G[0x6242c..0x62430]`) is absent from it. Before
+treating a global as engine-owned because the capture lacks it, check the scripts' bulk writes (op `0x64`, `0x1b0`
+copy-dwords, `0x2d8` fill-int-array, indexed `lookup-array` stores), or watch the port's natural boot.
 
 ---
 

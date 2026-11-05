@@ -51,7 +51,6 @@ public class RootReloadTests
         var trace = new RecordingTraceSink();
         var vm = new VirtualMachine(initial, table, host, provider: provider, sink: trace);
         vm.Globals[0x2ff] = 0x1234;
-        vm.ExternalGlobals[7] = 0x5678;
         vm.Gfx.SetSurface(5, 0x33, 0);
         vm.Gfx.BindDraw(0x100, 5, 0, 0, 1, 1, 0, 0);
         vm.TextHistory.DefineLayout(1, 10, 10, 0, 0);
@@ -68,7 +67,6 @@ public class RootReloadTests
         Assert.False(vm.Globals.ContainsKey(0x204));
         Assert.False(vm.Globals.ContainsKey(0x205));
         Assert.Equal(0x1234, vm.Globals[0x2ff]);
-        Assert.Equal(0x5678, vm.ExternalGlobals[7]);
         Assert.Equal(0, vm.Globals[0x220]);
         Assert.Equal(0, vm.Globals[0x221]);
         Assert.Empty(vm.Gfx.SnapshotVisibleObjects());

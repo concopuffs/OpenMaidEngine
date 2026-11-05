@@ -30,9 +30,6 @@ public sealed class GameProfileSelectionTests
         Assert.Equal(0x2d4, himegari.Persistence.NumberedGfxRecordSize);
         Assert.Equal("res://config/japanese-text-rendering.json",
             himegari.MetadataReferences["portableTextRendering"]);
-        // adv_hide_window_enabled (G[0x62425]) is 0 in retail: nothing writes it, so hide window takes the engine wait.
-        Assert.Empty(himegari.Runtime.ExternalGlobalSeeds);
-        Assert.Equal(0xaba5c, himegari.Runtime.SceneEntryCoroutineGateAddress);
         DirectSceneDiagnosticPolicy himegariDiagnostics =
             Assert.IsType<DirectSceneDiagnosticPolicy>(himegari.DirectSceneDiagnostics);
         Assert.Equal("SYSTEM4.BIN", himegariDiagnostics.SystemScript);
@@ -42,7 +39,8 @@ public sealed class GameProfileSelectionTests
             "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
             "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN",
         ], himegariDiagnostics.DataTableBootstrapScripts);
-        Assert.Equal([new ProfileCellSeed(0x6c1, 1)], himegariDiagnostics.GlobalSeeds);
+        Assert.Equal([new ProfileCellSeed(0x6c1, 1)], himegariDiagnostics.GlobalSeeds); // SYSTEM4@0x341
+        Assert.Equal(0xaba5c, himegariDiagnostics.SceneEntryCoroutineGateAddress);
         DebugSceneLaunchPolicy debugLaunch =
             Assert.IsType<DebugSceneLaunchPolicy>(himegari.DebugSceneLaunch);
         Assert.Equal("SYSTEM4.BIN", debugLaunch.RootScript);
@@ -64,24 +62,18 @@ public sealed class GameProfileSelectionTests
         Assert.Equal([1037327, 1, 802, 1, 1, 1], kamidori.Persistence.BankDimensions.ToArray());
         Assert.Equal(0x2e4, kamidori.Persistence.NumberedGfxRecordSize);
         Assert.Null(kamidori.Persistence.ReadOnlyReason);
-        Assert.Empty(kamidori.Runtime.ExternalGlobalSeeds);
-        Assert.Null(kamidori.Runtime.SceneEntryCoroutineGateAddress);
         Assert.Null(kamidori.DirectSceneDiagnostics);
         Assert.Null(kamidori.DebugSceneLaunch);
         Assert.True(kamidori.Matches(KamidoriIdentity));
     }
 
     [Fact]
-    public void NormalKamidoriRuntimePolicyInjectsNoHimegariState()
+    public void NormalKamidoriProfileInjectsNoHimegariState()
     {
+        // A natural boot takes no profile state at all; only direct-scene and debug launches have any.
         GameProfileManifest kamidori = Assert.IsType<GameProfileManifest>(
             GameProfileRegistry.BuiltIn.Find("kamidori"));
-        var externalGlobals = new Dictionary<int, long>();
 
-        kamidori.Runtime.ApplyExternalGlobals(externalGlobals);
-
-        Assert.Empty(externalGlobals);
-        Assert.False(externalGlobals.ContainsKey(0x62425));
         Assert.Null(kamidori.DirectSceneDiagnostics);
         Assert.Null(kamidori.DebugSceneLaunch);
         Assert.True(kamidori.PersistenceWritesEnabled);

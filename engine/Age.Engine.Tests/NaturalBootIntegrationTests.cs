@@ -175,9 +175,7 @@ public class NaturalBootIntegrationTests
         GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("himegari")!;
         var vm = new VirtualMachine(scripts.RequireByName("SYSTEM4.BIN"), table, host,
             new VmOptions(MaxSteps: 5_000_000), scripts, sink,
-            compatibility: new VmCompatibilityContext(
-                profile.Id, profile.EngineAbiId,
-                SceneEntryCoroutineGateAddress: profile.Runtime.SceneEntryCoroutineGateAddress));
+            compatibility: new VmCompatibilityContext(profile.Id, profile.EngineAbiId));
         host.Vm = vm;
         sink.OnEnter = name =>
         {
@@ -227,6 +225,11 @@ public class NaturalBootIntegrationTests
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0));
         Assert.Equal(0x22, vm.Globals.GetValueOrDefault(0x699));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x6c1));
+        // The boot scripts own every value SC0000 reads: SYSTEM4@0x1ca copies the SFX channel table, and nothing
+        // writes adv_hide_window_enabled, so it stays at the zero-filled bank's 0.
+        Assert.Equal(new long[] { 0, 4, 5, 6, 9 },
+            Enumerable.Range(0x6242c, 5).Select(address => vm.Globals.GetValueOrDefault(address)).ToArray());
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x62425));
         Assert.False(sink.SawStringEqualsStub);
         Assert.False(sink.SawUnitDataCopyStub);
     }
@@ -307,9 +310,7 @@ public class NaturalBootIntegrationTests
         var vm = new VirtualMachine(
             scripts.RequireByName(profile.NaturalBootScript), table, host,
             new VmOptions(MaxSteps: 5_000_000), scripts, sink,
-            compatibility: new VmCompatibilityContext(
-                profile.Id, profile.EngineAbiId,
-                SceneEntryCoroutineGateAddress: profile.Runtime.SceneEntryCoroutineGateAddress));
+            compatibility: new VmCompatibilityContext(profile.Id, profile.EngineAbiId));
         host.Vm = vm;
         sink.OnEnter = name =>
         {
@@ -339,7 +340,6 @@ public class NaturalBootIntegrationTests
             new RecordingHost(), new VmOptions(MaxSteps: 5_000_000), boot.Scripts, sink);
         sink.Vm = menuVm;
         foreach (var (address, value) in boot.Vm.Globals) menuVm.Globals[address] = value;
-        foreach (var (address, value) in boot.Vm.ExternalGlobals) menuVm.ExternalGlobals[address] = value;
         foreach (var (address, value) in boot.Vm.GlobalStrings) menuVm.GlobalStrings[address] = value;
 
         var exception = Record.Exception(() => menuVm.Run());

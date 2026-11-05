@@ -112,8 +112,6 @@ public sealed partial class VirtualMachine
 
     public Dictionary<int, long> Globals { get; } = new();
     public Dictionary<int, long> GlobalFloats { get; } = new();
-    /// <summary>Native/profile-owned values read by scripts but maintained outside script-visible writes.</summary>
-    public Dictionary<int, long> ExternalGlobals { get; } = new();
     public Dictionary<int, string> GlobalStrings { get; } = new();
     public Dictionary<int, int> GlobalPointers { get; } = new();
     public Dictionary<int, int> GlobalStringPointers { get; } = new();
@@ -467,7 +465,7 @@ public sealed partial class VirtualMachine
         => GlobalPointers.TryGetValue(index, out int value) ? value : unchecked((int)Gi(Globals, index));
     private int GlobalStringPointer(int index)
         => GlobalStringPointers.TryGetValue(index, out int value) ? value : unchecked((int)Gi(Globals, index));
-    private long ReadGlobal(int k) => ExternalGlobals.TryGetValue(k, out var v) ? v : Gi(Globals, k);
+    private long ReadGlobal(int k) => Gi(Globals, k);
     private static string Gs(Dictionary<int, string> d, int k) => d.TryGetValue(k, out var v) ? v : "";
     // Ops 0x53/0x54 are native CDQ+IDIV: truncate toward zero, remainder takes the dividend's sign.
     private static long NativeDiv(long a, long b) => b == 0 ? 0 : a / b;

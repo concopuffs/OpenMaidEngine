@@ -338,7 +338,7 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = "Ghidra /v2: op_0x9_reset_scene_and_reload_root@0x418f50 clears EngineCtx+0x54ff0, disposes all 40 interpreter-frame slots with script_frame_dispose@0x40e610, aborts timed/input callback state, calls scene_context_init_reset@0x40b3b0, resets hotspot/input services, optionally releases AutoFreeTex surfaces, then calls script_frame_load_resource(...,0). The scene reset clears interpreter/ADV/input/retained-gfx state and normally releases the 1000 surface/movie slots; it does not clear the VM global bank or engine configuration. Corpus sites are terminal scene/control exits rather than ordinary local returns."
-details = "Implemented as a whole-stack root-reload boundary in the persistent VM. A request propagates through every nested call-script frame without resuming caller instructions, clears VM/host scene presentation and input state, cancels deferred SFX starts while preserving active/process-owned audio, preserves globals/external globals and process-owned host configuration/caches, then resolves raw resource 0 through the script provider and starts it at offset zero. The retained history backlog is deliberately preserved pending a separate proof of its native lifetime; recording suppression is reset."
+details = "Implemented as a whole-stack root-reload boundary in the persistent VM. A request propagates through every nested call-script frame without resuming caller instructions, clears VM/host scene presentation and input state, cancels deferred SFX starts while preserving active/process-owned audio, preserves globals and process-owned host configuration/caches, then resolves raw resource 0 through the script provider and starts it at offset zero. The retained history backlog is deliberately preserved pending a separate proof of its native lifetime; recording suppression is reset."
 
 [[opcode]]
 op = 0x21
@@ -1071,7 +1071,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "copy-inline-int-array"
 category = "compute"
-summary = "(destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination."
+summary = "(destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination. Himegari SYSTEM4@0x1ca copies the SFX channel table [0,4,5,6,9] to G[0x6242c..] this way; direct-scene runs replay that copy (InlineArrayBootstrap). The copy writes the bank directly, not through vm_operand_write, so the Frida write capture does not see it."
 noop_headless = false
 source = "investigation"
 confidence = "high"

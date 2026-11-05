@@ -37,8 +37,6 @@ public class IndexedSortOpsTests
             table, new RecordingHost());
         long[] primaryKeys = { 4, -2, 4, 1, int.MaxValue };
         for (int i = 0; i < primaryKeys.Length; i++) vm.Globals[0x100 + i] = primaryKeys[i];
-        vm.Globals[0x104] = 0;
-        vm.ExternalGlobals[0x104] = int.MaxValue; // addressed global reads honor the host-owned overlay
 
         vm.Run();
 

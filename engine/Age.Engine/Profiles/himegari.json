@@ -14,9 +14,6 @@
   "metadataReferences": {
     "portableTextRendering": "res://config/japanese-text-rendering.json"
   },
-  "runtime": {
-    "sceneEntryCoroutineGateAddress": "0xaba5c"
-  },
   "directSceneDiagnostics": {
     "systemScript": "SYSTEM4.BIN",
     "dataBootstrapScripts": ["INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN"],
@@ -27,9 +24,7 @@
     "globalSeeds": [
       { "address": "0x6c1", "value": 1 }
     ],
-    "sceneExternalGlobalSeeds": [
-      { "script": "SC0000.BIN", "address": "0x6242d", "value": 4 }
-    ],
+    "sceneEntryCoroutineGateAddress": "0xaba5c",
     "inheritedSurfaces": [
       { "resource": "SO001.AGF", "surfaceSlot": 17, "flags": 0 },
       { "resource": "SO000.AGF", "surfaceSlot": 12, "flags": 65280 }

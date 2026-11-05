@@ -1295,7 +1295,7 @@ name = "adv_chrome_enabled"
 category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "Inherited SYSTEM4 UI-boot flag. Standard ADV scripts register the five visible SO001 control-strip pointer rectangles only while nonzero; zero skips directly to the three off-screen keyboard/pad records. The Phase-A single-scene Godot bootstrap seeds the native observed value 1."
+usage = "SYSTEM4 UI-boot flag. Standard ADV scripts register the five visible SO001 control-strip pointer rectangles only while nonzero; zero skips directly to the three off-screen keyboard/pad records. SYSTEM4@0x341 writes 1 after TITLE returns, before it hosts the scene; a direct-scene run skips SYSTEM4, so the profile's direct-scene diagnostics seed that 1."
 source = "investigation"
 confidence = "high"
 depends_on = ["0x6c9", "0x6ca", "0x6cb", "0x6cc", "0x6cd"]
@@ -1306,10 +1306,21 @@ name = "adv_hide_window_enabled"
 category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "Gates the standard ADV scenes' HIDEWIN.BIN call: after op 0x199 (or Space at a text wait) enters the registered yield-A handler, the handler calls HIDEWIN.BIN only while this value is nonzero. Retail Himegari leaves it 0 and nothing writes it: the integer bank is VirtualAlloc'd (zero-filled), the cell lies past the saved prefix 0x6241b, no native instruction addresses its byte offset 0x189094, and all 301 script uses are branch reads. So retail never runs HIDEWIN.BIN: handler A ends at op 0x7c and the frame waits in the engine's hidden-window wait (run-state 0x4000000) until any trigger enters handler B (native-driven 2026-11-04/05; docs/engine-re.md, \"ADV hide window: the engine's hidden-window wait\"). The port no longer seeds it; a mod that sets it selects the HIDEWIN.BIN path, which Kamidori always takes."
+usage = "Gates the standard ADV scenes' HIDEWIN.BIN call: after op 0x199 (or Space at a text wait) enters the registered yield-A handler, the handler calls HIDEWIN.BIN only while this value is nonzero. Retail Himegari leaves it 0 and nothing writes it: the integer bank is VirtualAlloc'd (zero-filled), the cell lies past the saved prefix 0x6241b, no native instruction addresses its byte offset 0x189094, and all 301 script uses are branch reads; no op-0x64 copy covers it, no indexed lookup has its base in 0x62380..0x6242b, and the port's natural boot leaves it 0 through SC0000. So retail never runs HIDEWIN.BIN: handler A ends at op 0x7c and the frame waits in the engine's hidden-window wait (run-state 0x4000000) until any trigger enters handler B (native-driven 2026-11-04/05; docs/engine-re.md, \"ADV hide window: the engine's hidden-window wait\"). The port no longer seeds it; a mod that sets it selects the HIDEWIN.BIN path, which Kamidori always takes."
 source = "investigation"
 confidence = "high"
 depends_on = ["0x6c1"]
+
+[[global]]
+address = "0x6242c"
+name = "adv_sfx_channel_table"
+category = "data-table"
+type = "int[5]"
+value_domain = "SFX channel numbers (native manager channels 0..12)"
+usage = "SYSTEM4@0x1ca copies the inline table [0,4,5,6,9] here (op 0x64, copy-inline-int-array) on every boot. ADV scenes pass its cells as the channel operand of play-sound-effect (0xb4), schedule-sfx-start and sfx-start (0xb5): cell 1 (G[0x6242d] = 4, 37 scripts; SC0000@0xc31 preloads channel 4 in native's SFX trace) and cells 0 and 2 (G[0x6242c] = 0, 4 scripts; G[0x6242e] = 5, 7 scripts). No script uses cells 3 and 4. Frida's write capture misses op-0x64 copies, which once made G[0x6242d] look engine-owned (corrected 2026-11-05). Direct-scene runs replay the copy (InlineArrayBootstrap)."
+source = "investigation"
+confidence = "high"
+depends_on = []
 
 [[global]]
 address = "0x3239"
