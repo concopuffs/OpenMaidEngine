@@ -5,6 +5,19 @@ namespace Age.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
+    // The op-0x199 yield is engine state (coroutine_runstate +0x6dbc8, resume offset +0x6dbcc, owner +0x5f6bc).
+    // The resume is held as an instruction index: op 0x7c only takes it in a frame of the owner's script.
+    private bool _coroutineYieldEntered;      // coroutine_runstate 0x4000000
+    private int? _coroutineResumePc;          // coroutine_runstate 0x2000000 with its resume offset
+    private Script? _coroutineYieldOwner;
+
+    private void ResetCoroutineYield()
+    {
+        _coroutineYieldEntered = false;
+        _coroutineResumePc = null;
+        _coroutineYieldOwner = null;
+    }
+
     private int StepControlFlow(string label, Instruction ins, int pc)
     {
         int op = ins.Opcode;
@@ -48,26 +61,32 @@ public sealed partial class VirtualMachine
             case "u00414D50":
             case "yield-adv-coroutine":             // 0x199: A -> nested service -> B -> 0x7c resume
             {
-                int? targetOffset;
-                if (!_cur.CoroutineYieldActive)
+                // op_0x199_yield_adv_coroutine@0x416440. Only the 0x7b handlers belong to the frame; the yield state
+                // and its owner (+0x5f6bc) are engine-wide. The first yield saves the resume pc and its owner and
+                // enters handler A. A yield while one is entered (or with no handler A) leaves for handler B, with
+                // the resume still armed.
+                if (!_coroutineYieldEntered && _cur.CoroutineYieldHandlerA != -1)
                 {
-                    _cur.CoroutineResumePc = pc + 1;
-                    _cur.CoroutineYieldActive = true;
+                    _coroutineResumePc = pc + 1;
+                    _coroutineYieldOwner = _cur.Script;
+                    _coroutineYieldEntered = true;
                     _host.SetAdvPagePresentationSuspended(Gfx, true);
-                    targetOffset = _cur.CoroutineYieldHandlerA;
+                    return _cur.Script.IndexByOffset.GetValueOrDefault(_cur.CoroutineYieldHandlerA, pc + 1);
                 }
-                else targetOffset = _cur.CoroutineYieldHandlerB;
-
-                return targetOffset is int offset
-                    ? _cur.Script.IndexByOffset.GetValueOrDefault(offset, pc + 1)
-                    : pc + 1;
+                if (_cur.CoroutineYieldHandlerB == -1) return pc + 1;
+                _coroutineYieldEntered = false;
+                return _cur.Script.IndexByOffset.GetValueOrDefault(_cur.CoroutineYieldHandlerB, pc + 1);
             }
             case "u00416A90":
             case "coroutine-resume":                // 0x7c: restore the PC saved by op 0x199
-                if (_cur.CoroutineResumePc is int resumePc)
+                if (_coroutineResumePc is int resumePc)
                 {
-                    _cur.CoroutineResumePc = null;
-                    _cur.CoroutineYieldActive = false;
+                    // op_0x7c_handler@0x417cb0: a resume saved by another script raises Depth before anything changes,
+                    // so 再試行 raises it again. Op 0x7c records no instruction length before the throw, so native's
+                    // 無視 skips by the previous handler's; the port skips the 0x7c itself.
+                    if (_coroutineYieldOwner is { } owner && !IsSameScript(owner, _cur.Script))
+                        return RaiseInstructionScriptError(DepthErrorText(owner), pc);
+                    ResetCoroutineYield();
                     _host.SetAdvPagePresentationSuspended(Gfx, false);
                     return resumePc;
                 }

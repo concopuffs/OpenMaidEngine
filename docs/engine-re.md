@@ -3479,6 +3479,12 @@ pointer/button reads, cursor host forwarding, and real CUR decoding.
 Validation is engine 175/175, opcode/global generator tests and lints clean, zero-warning Godot build, and
 threaded `SELFTEST OK`.
 
+> **Correction (2026-11-04, native-driven).** Retail native does not enter HIDEWIN.BIN on SC0000 page 3. After the
+> x=772 control its frames stay `SYSTEM4 > SC0000@0x30d` with the text box hidden, and a left click restores it.
+> Handler A takes the `G[0x62425]` = 0 branch to op `0x7c`, and the restored run-state bit `0x4000000` is an engine
+> hidden-window wait that ends in handler B ("The other guards", coroutine yield). The seeded value 1 therefore
+> does not mirror native. The open item is in `backlog.md`.
+
 **Manual-validation correction (2026-07-18).** Native `bit-set`/`bit-reset` operands are bit indices, not
 literal masks: HIDEWIN sets index 1 at `0x13d`, tests mask `0x2` at `0x146`, and clears index 1 at `0x154`.
 The old VM interpretation wrote mask `0x1`, so the right-button release edge could never reach the restore
@@ -5483,6 +5489,64 @@ departure.
 
     The gate-4 record that "the game closes" was the driver's own crash, not 中止 (see "Driving native AGE",
     message boxes).
+  - **The other guards (static, 2026-11-04).** Their state lives in `EngineCtx`, not in the frame. A registration
+    from any frame therefore replaces the earlier one, and a frame other than the registrant can reach the dispatch.
+    - **Mouse callback.**
+      - Op `0xcc` (`op_0xcc_register_mouse_callback@0x420f70`) stores the target (`+0x5f684`) and the running
+        script (`mouse_callback_owner_script_id`, `+0x5f6ac`). It then starts the interval timer at `+0x5f320` with
+        operand 1.
+      - Op `0xcd` (`@0x417e10`, length 1) does nothing until the interval has passed. Fast-forward (run-state
+        `0x8000000`) makes it due at once.
+      - Once it is due, op `0xcd` restarts the timer and pushes the return pc; a target of -1 pops it again.
+      - If the running script is not the owner, op `0xcd` throws Depth with the return pc still pushed. Otherwise it
+        jumps to the target in the running frame.
+      - After 再試行 the dispatch is not due again until the interval passes. Either answer leaves the stale return
+        pc for the successor's `ret`.
+    - **Coroutine yield.**
+      - Op `0x7b`'s handlers are per depth (`+0x6da88`/`+0x6db28`). The yield itself is global: `coroutine_runstate`
+        (`+0x6dbc8`), `coroutine_resume_off` (`+0x6dbcc`) and `coroutine_yield_owner_script_id` (`+0x5f6bc`).
+      - Op `0x199` (`@0x416440`) clears the service-action trigger mask.
+      - When no yield is entered (bit `0x4000000` clear) and handler A is set, op `0x199` saves
+        `run_state | 0x6000000` and clears the run state. It saves pc+1 and the running script as owner, then enters
+        handler A.
+      - Otherwise, when handler B is set, op `0x199` clears `0x4000000`, sets `0x2000000` and enters handler B.
+      - Op `0x7c` (`op_0x7c_handler@0x417cb0`) throws 「不正な位置でEndHWLが呼び出されました．」 (`0x571498`,
+        flags `0x10005`) when `0x2000000` is clear. Native calls the op EndHWL.
+      - Op `0x7c` throws Depth when the owner is not the running script, before it changes anything. It records no
+        instruction length first, so 無視 skips by the previous handler's length.
+      - Otherwise op `0x7c` restores the pc and the run state (`coroutine_runstate & ~0x2000000`), and clears the
+        yield. The restored run state keeps op `0x199`'s bit `0x4000000`: unless handler B ran in between, the frame
+        then sits in the engine's hidden-window wait at the resume pc.
+      - The engine arms the same yield itself:
+        - `adv_input_dispatch_callbacks` (`0x4085a5`) and `adv_input_service_poll` (`0x411338`) enter handler A on
+          trigger bit `0x20` (logical action 5);
+        - `engine_main_tick_with_exception_policy` (`0x411ef5`) ends the `0x4000000` wait on any service trigger and
+          enters handler B.
+
+        Each of the three sets the owner to the running frame.
+      - Retail hide window uses that wait (native-driven 2026-11-04). On SC0000 page 3, handler A skips HIDEWIN.BIN
+        and resumes at `SC0000@0x30d` with the text box hidden, and a left click enters handler B. The port does not
+        model the wait or either engine entry (`backlog.md`).
+    - **Timed sequence.**
+      - Ops `0xd3`/`0xd4` build one engine-wide schedule (entries `+0x5f694`).
+      - Op `0xd5` (`@0x421090`, length 0) starts the schedule when the cursor is 0. It records the abort pc and the
+        running script in `timed_callback_script_resource_id`/`_guard` (`+0x5f6b4`/`+0x5f6b8`).
+      - While the cursor is below the last index, op `0xd5` sets run-state `0x40`.
+      - `timed_callback_sequence_tick@0x408170` then waits for the entry's deadline and picks the on-time or catch-up
+        target. It throws Depth when a target is set and the running script is not the guard.
+      - A frame reaches this guard when it runs op `0xd5` while another script's sequence is under way. The pc is
+        still on op `0xd5`, with length 0, so 再試行 and 無視 both raise the error again until 中止.
+      - A nested op `0xd3` instead resets the shared schedule, so the outer sequence ends at its next op `0xd5`.
+    - **Op `0xcf`.**
+      - `op_0xce_register_timed_catchup_callback@0x420fd0` registers an on-time target (`+0x5f688`), a catch-up
+        target (`+0x5f68c`) and owner `+0x5f6b0`, and starts its interval timer (`+0x5f33c`).
+      - `op_0xcf_dispatch_timed_catchup_callback@0x417f80` dispatches it with the same check. Its on-time path
+        formats the raw ids instead: 「Depth が不正です %d != %d」 (`0x5714c0`).
+      - Neither game uses ops `0xce`/`0xcf`.
+    - **Resets.**
+      - Construction and op `0x9`'s root reload call `scene_context_init_reset@0x40b3b0`. It sets every owner to -1
+        and clears `coroutine_runstate` and the timed schedule, but keeps the `0xcc` target.
+      - No other code writes the mouse or timed fields, so they survive a save load.
   - **Port (fixed 2026-11-03; answers 2026-11-04):**
     - **Owner check.** The port's hotspot registry is the owning frame (`_interactiveFrame`). It used to dequeue the
       owner's callback offset and look it up in the *running* script, so the click was silently dropped, or, had the
@@ -5497,8 +5561,19 @@ departure.
     - **再試行** keeps waiting, with the owner's bindings re-armed.
     - **無視** adds the wait's length to `ExecFrame.IgnoredDwords`. The frame resumes that many dwords past the
       wait's successor, and the drive position shows the skip while the frame still waits.
-    - Both targets pass the same scenarios. The mouse-callback, coroutine, `0xcf` and timed-callback guards are not yet modelled:
-    the port keeps that state per frame, so a deeper frame simply has none.
+    - Both targets pass the same scenarios.
+    - **The other guards (2026-11-04).**
+      - The mouse callback, the coroutine yield and the timed sequence are VM state, kept in
+        `VirtualMachine.Input`, `.ControlFlow` and `.Timing`. Only op `0x7b`'s handlers stay on `ExecFrame`.
+      - Each owner is the registrant's `Script`. Owners are compared by packed id, as native compares resource ids,
+        so two activations of one script are the same owner.
+      - Each guard raises the native error through `RaiseInstructionScriptError`, with the dispatching instruction
+        as the coordinate. 再試行 runs that instruction again. 無視 skips it, except at op `0xd5`, where it runs again.
+      - A root reload clears all three, and the `0xcc` target with them.
+      - A save restore clears the yield: the port does not model the engine-armed yields, and its restored scenes
+        take op `0x7c`'s cold path.
+      - Op `0xcf` stays a stub.
+      - `CallbackOwnershipTests` has a synthesized test for each path.
   - Consequence for content: a new scene that must support the menu and saving is a scene of its own, entered by
     SYSTEM4 through the SCJUMP registry with its own `0x7b` handlers, hotspots and `0x1ad` save-resume mark, as
     the shipped append scenes are (`oms/examples/mods/example.prologue`). A script reached by `run` must not wait

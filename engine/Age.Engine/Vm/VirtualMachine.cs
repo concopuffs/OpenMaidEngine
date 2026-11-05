@@ -806,24 +806,50 @@ public sealed partial class VirtualMachine
     /// </summary>
     private ScriptErrorChoice PresentWaitScriptError(string text)
     {
-        int at = Math.Min(_cur.Pc + 1, _cur.Script.Instructions.Count - 1);
-        var message = new DiagnosticMessage(DiagnosticCaption,
-            text + DiagnosticContext(_cur.Script.Instructions[at]) + ScriptErrorPrompt);
-        ScriptErrorChoice choice = _host.ShowScriptError(message);
-        switch (choice)
-        {
-            case ScriptErrorChoice.Retry:
-                break;
-            case ScriptErrorChoice.Ignore:
-                Interlocked.Add(ref _cur.IgnoredDwords, InstructionDwords(_cur.Script, _cur.Pc));
-                break;
-            default:
-                ScriptError = message;
-                HaltReason ??= "script-error: " + text;
-                choice = ScriptErrorChoice.Abort;
-                break;
-        }
+        ScriptErrorChoice choice = ShowScriptError(text, Math.Min(_cur.Pc + 1, _cur.Script.Instructions.Count - 1));
+        if (choice == ScriptErrorChoice.Ignore)
+            Interlocked.Add(ref _cur.IgnoredDwords, InstructionDwords(_cur.Script, _cur.Pc));
         return choice;
+    }
+
+    /// <summary>
+    /// A native interpreter error raised while the instruction at <paramref name="pc"/> executes (or, for the timed
+    /// callback service, while the frame sits on it). Native's frame pc is still on that instruction, so it is the
+    /// coordinate. Returns the instruction index to continue at. 再試行 restarts with the pc unchanged, so the
+    /// instruction runs again. 無視 adds the frame's last decoded instruction length, which for these handlers is the
+    /// instruction's own (op 0xcd sets it on entry; op 0xd5 sets 0, so its error repeats). 中止 ends the run.
+    /// </summary>
+    private int RaiseInstructionScriptError(string text, int pc, bool ignoreSkipsInstruction = true)
+        => ShowScriptError(text, pc) switch
+        {
+            ScriptErrorChoice.Retry => pc,
+            ScriptErrorChoice.Ignore => ignoreSkipsInstruction ? pc + 1 : pc,
+            _ => throw new ScriptErrorException(),
+        };
+
+    /// <summary>"Depth が不正です <running> != <owner>": a callback registered by one script is dispatched while
+    /// another runs (native throws flags 0x10007 from each guard).</summary>
+    private string DepthErrorText(Script owner) => $"Depth が不正です {_cur.Script.Name} != {owner.Name}";
+
+    /// <summary>
+    /// Native callback guards compare the running frame's packed resource id with the registrant's, so two
+    /// activations of one script are the same owner. Synthesized scripts carry no packed id; their names decide.
+    /// </summary>
+    private static bool IsSameScript(Script a, Script b)
+        => ReferenceEquals(a, b)
+           || (a.PackedId != 0 && b.PackedId != 0
+               ? a.PackedId == b.PackedId
+               : string.Equals(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+
+    private ScriptErrorChoice ShowScriptError(string text, int coordinateIndex)
+    {
+        var message = new DiagnosticMessage(DiagnosticCaption,
+            text + DiagnosticContext(_cur.Script.Instructions[coordinateIndex]) + ScriptErrorPrompt);
+        ScriptErrorChoice choice = _host.ShowScriptError(message);
+        if (choice is ScriptErrorChoice.Retry or ScriptErrorChoice.Ignore) return choice;
+        ScriptError = message;
+        HaltReason ??= "script-error: " + text;
+        return ScriptErrorChoice.Abort;
     }
 
     /// <summary>An instruction's encoded length in dwords: the opcode and two per operand.</summary>
@@ -890,6 +916,11 @@ public sealed partial class VirtualMachine
             catch (NumberedRestoreRequestedException)
             {
                 if (_loadedNumberedState == null) throw;
+                // Native also arms the yield from the engine (adv_input_dispatch_callbacks, adv_input_service_poll and
+                // engine_main_tick set the resume and its owner to the running frame), which the port does not model.
+                // The port's restored scenes take op 0x7c's cold path, so a yield saved before the load must not
+                // survive it.
+                ResetCoroutineYield();
                 Script? callback = _provider?.GetByName("CALLBACK_LOAD.BIN");
                 if (callback != null)
                 {
@@ -955,6 +986,13 @@ public sealed partial class VirtualMachine
         _valueSwitchTargets.Clear();
         _preloadedScriptSlots.Clear();
         ResetIntegerStacks();
+        // scene_context_init_reset@0x40b3b0 clears coroutine_runstate, the timed sequence and every callback owner
+        // (-1). It keeps the 0xcc target, which no script dispatches before registering again; the port clears it
+        // with its owner.
+        ResetCoroutineYield();
+        ResetTimedCallbackSequence();
+        _mouseCallbackTarget = -1;
+        _mouseCallbackOwner = null;
         lock (_interactiveLock)
         {
             _interactiveFrame = null;
@@ -1384,8 +1422,7 @@ public sealed partial class VirtualMachine
         {
             // The dequeued callback is gone either way: 再試行 and 無視 keep waiting without it, with the owner's
             // bindings still armed (natively, the next right click raises the error again).
-            if (PresentWaitScriptError($"Depth が不正です {_cur.Script.Name} != {owner.Script.Name}")
-                == ScriptErrorChoice.Abort)
+            if (PresentWaitScriptError(DepthErrorText(owner.Script)) == ScriptErrorChoice.Abort)
                 throw new ScriptErrorException();
             lock (_interactiveLock) owner.Hotspots.RearmAfterCallback(_pointerX, _pointerY);
             return false;

@@ -432,6 +432,16 @@ name = "sleep_timer"
 type = "int"
 note = "sleep timer object (op 0xc8; +8 active, +0x14 start-ms, +0x18 duration)"
 [[field]]
+offset = 0x5f320
+name = "mouse_callback_timer"
+type = "int"
+note = "op-0xcc poll interval timer object (same layout as sleep_timer); op 0xcd dispatches once +0x14 start-ms is +0x18 interval old, then restarts it"
+[[field]]
+offset = 0x5f33c
+name = "timed_catchup_callback_timer"
+type = "int"
+note = "op-0xce interval timer object (same layout as sleep_timer), sampled by op 0xcf; unused in Himegari and Kamidori"
+[[field]]
 offset = 0x5f3ac
 name = "timed_callback_timer"
 type = "int"
@@ -446,6 +456,21 @@ offset = 0x5f64c
 name = "adv_wait_indicator_timer"
 type = "int"
 note = "elapsed timer started by op 0x1ce and ADV wait setup to select the animated input-wait indicator frame"
+[[field]]
+offset = 0x5f684
+name = "mouse_callback_target_pc"
+type = "int"
+note = "op-0xcc callback dword offset, one engine-wide registration; -1 makes op 0xcd pop its return pc and continue. scene_context_init_reset keeps it"
+[[field]]
+offset = 0x5f688
+name = "timed_catchup_callback_pc"
+type = "int"
+note = "op-0xce on-time callback dword offset, dispatched by op 0xcf"
+[[field]]
+offset = 0x5f68c
+name = "timed_catchup_callback_catchup_pc"
+type = "int"
+note = "op-0xce catch-up callback dword offset; op 0xcf pushes it once per further elapsed interval (at most 128)"
 [[field]]
 offset = 0x5f690
 name = "timed_callback_abort_pc"
@@ -487,6 +512,11 @@ name = "mouse_callback_owner_script_id"
 type = "int"
 note = "packed script id of the frame that registered the op-0xcc mouse callback; op 0xcd throws the Depth error when another frame dispatches it"
 [[field]]
+offset = 0x5f6b0
+name = "timed_catchup_callback_owner_script_id"
+type = "int"
+note = "packed script id of the frame that ran op 0xce; op 0xcf throws a Depth error (named, or raw ids via 0x5714c0) when another frame dispatches it"
+[[field]]
 offset = 0x5f6b4
 name = "timed_callback_script_resource_id"
 type = "uint"
@@ -495,7 +525,7 @@ note = "active frame script resource retained by op 0xd5 for local callback disp
 offset = 0x5f6b8
 name = "timed_callback_script_resource_guard"
 type = "uint"
-note = "companion current-script identity checked before redirecting to a scheduled callback"
+note = "running script recorded by op 0xd5 when its cursor is 0; timed_callback_sequence_tick throws the Depth error when another script's frame would dispatch an entry"
 [[field]]
 offset = 0x5f6bc
 name = "coroutine_yield_owner_script_id"

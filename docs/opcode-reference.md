@@ -1250,9 +1250,11 @@ Implemented as a whole-stack root-reload boundary in the persistent VM. A reques
 - **semantic status:** investigated
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x7c` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x7c` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** () — scene-coroutine RESUME point. Native requires run-state bit 0x2000000 (ctx[0x6dbc8]) set — THROWS (__CxxThrowException) if unset, so it is only ever reached on a scheduler-driven re-entry, NEVER on a cold first pass (cold flow jmps over it). Restores PC=ctx[0x53d28]+ctx[0x6dbcc]*4, clears the run-bit (ctx+0xa0ce4 &= ~0x2000000), resets input/line state. SC0000 0x443 (falls into the main loop label_444). See engine-re.md §Scene-coroutine framework.
+- **summary:** () — scene-coroutine RESUME point (native name EndHWL). Native requires run-state bit 0x2000000 (ctx[0x6dbc8]) set — THROWS (__CxxThrowException) if unset, so it is only ever reached on a scheduler-driven re-entry, NEVER on a cold first pass (cold flow jmps over it). A resume saved by another script raises the Depth error first. Restores PC=ctx[0x53d28]+ctx[0x6dbcc]*4, clears the run-bit (ctx+0xa0ce4 &= ~0x2000000), resets input/line state. SC0000 0x443 (falls into the main loop label_444). See engine-re.md §Scene-coroutine framework.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x7c`; scope=Himegari SYS4422. Ghidra: handler FUN_00417cb0 (dispatch ctx[0x26c93+0x7c]). Guards on (ctx[0x6dbc8] & 0x2000000)==0 → throw; else restores PC = ctx[0x53d2c-slot] = ctx[0x53d28]+ctx[0x6dbcc]*4, ctx[0xa0ce4]=ctx[0x6dbc8]&0xfdffffff, clears input state (ctx[0x13bdc]/0xc6f8=-1 etc.).
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x7c`; scope=Himegari SYS4422. Ghidra /v2: op_0x7c_handler@0x417cb0 (dispatch ctx[0x26c93+0x7c]). Guards on (ctx[0x6dbc8] & 0x2000000)==0 → throw flags 0x10005 with 0x571498 「不正な位置でEndHWLが呼び出されました．」; compares frame_script_resource_id with ctx+0x5f6bc and throws the 0x570424 Depth message on a mismatch; else restores PC = ctx[0x53d2c-slot] = ctx[0x53d28]+ctx[0x6dbcc]*4, ctx[0xa0ce4]=ctx[0x6dbc8]&0xfdffffff, clears input state (ctx[0x13bdc]/0xc6f8=-1 etc.).
+
+The yield state is engine-wide: coroutine_runstate (+0x6dbc8), coroutine_resume_off (+0x6dbcc) and coroutine_yield_owner_script_id (+0x5f6bc), the script that op 0x199 (or an engine-armed yield) saved it from. When the running frame's script is not that owner, the handler throws flags 0x10007 "Depth が不正です <running> != <owner>" before changing anything, so 再試行 raises it again. It records no instruction length before either throw, so 無視 skips by the previous handler's length. The port keeps the yield on the VM and skips the 0x7c itself on 無視 (engine-re.md, "The other guards").
 
 ### 0x8f `call` (call, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -1361,12 +1363,12 @@ Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_t
 - **semantic status:** investigated
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xd5` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0xd5` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** Start or service the frame-local timed sequence, dispatching scheduled local callbacks through the penultimate entry and selecting the catch-up target when the following deadline is already late.
+- **summary:** Start or service the engine-wide timed sequence, dispatching scheduled local callbacks through the penultimate entry and selecting the catch-up target when the following deadline is already late. A sequence started by another script raises the Depth error.
 - **operand access:** `1` read (transfer target)
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xd5`; scope=Himegari SYS4422. Ghidra /v2: op_0xd5_handler@0x421090 retains the current script resource, starts the ctx+0x5f3ac timer, sorts the schedule, and keeps run-state bit 0x40 active only while cursor < last_index, making the final entry a non-dispatched look-ahead sentinel. timed_callback_sequence_tick@0x408170 waits to each deadline, compares the following entry deadline with elapsed time to select entry+8 versus entry+0xc, redirects the frame PC, and advances ctx+0x5f6a8. engine_main_tick_with_exception_policy@0x411840 bypasses its ordinary gfx_render_frame path while only run-state bit 0x40 owns the wait. Operand 1 is an optional abort/fallback PC; HISTORY and BUNKIMOVE pass 0xffffffff.
 
-Run-state bit 0x40 suppresses the outer loop's ordinary retained-frame renderer while the timed service sleeps. A scheduled callback becomes visible only through its own explicit presentation opcode; the pacing wait is not itself a retained-state publication boundary.
+Run-state bit 0x40 suppresses the outer loop's ordinary retained-frame renderer while the timed service sleeps. A scheduled callback becomes visible only through its own explicit presentation opcode; the pacing wait is not itself a retained-state publication boundary. The schedule is one engine-wide list: the op starts it when its cursor is 0, recording the abort PC and the running script as guard (+0x5f6b4/+0x5f6b8). A frame that runs op 0xd5 while another script's sequence is mid-way reaches the tick's guard, which throws flags 0x10007 "Depth が不正です <running> != <owner>" before the cursor moves. The op records length 0, so 再試行 and 無視 both run it again until 中止. A nested op 0xd3 instead resets the shared schedule.
 
 ### 0xd9 `clear-run-state-0x1000` (u00415880, argc 0)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -1435,7 +1437,9 @@ record-zero failure. Natural SYSTEM4 boot proves BTANINIT2 -> `$1$AUTORUN.BIN` -
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x199` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x199` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** Yield/re-enter the registered ADV coroutine handler. The fifth standard chrome button uses this transition to enter the HIDEWIN/window-hidden flow.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x199`; scope=Himegari SYS4422. Ghidra /v2: op_0x199_yield_adv_coroutine@0x416440 selects the registered coroutine yield-A or yield-B PC according to ctx+0x6dbc8, saves the current resume offset/state, and redirects the current frame PC. SC0000's x=772 ADV button invokes it; the SO001 tooltip at source x=528 reads Window hide, and the surrounding coroutine calls HIDEWIN.BIN.
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x199`; scope=Himegari SYS4422. Ghidra /v2: op_0x199_yield_adv_coroutine@0x416440 clears the service-action trigger mask, selects the registered coroutine yield-A or yield-B PC according to ctx+0x6dbc8 bit 0x4000000 and the handlers at ctx+0x6da88/+0x6db28[depth], saves the current resume offset/state and the frame_script_resource_id at ctx+0x5f6bc, and redirects the current frame PC. SC0000's x=772 ADV button invokes it; the SO001 tooltip at source x=528 reads Window hide, and the surrounding coroutine calls HIDEWIN.BIN.
+
+The handlers are per frame (op 0x7b), but the yield is engine-wide. With no yield entered (coroutine_runstate bit 0x4000000 clear) and handler A set, the op saves run_state | 0x6000000, clears the run state, saves pc+1 with the running script as owner (+0x5f6bc) and enters handler A. Otherwise, with handler B set, it clears 0x4000000, sets 0x2000000 and enters handler B. Op 0x7c resumes only in the owner's script.
 
 ### 0x19e `save-numbered-slot` (save-numbered-slot, argc 2)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2836,10 +2840,12 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **semantic status:** investigated
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xcc` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0xcc` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** (poll_interval_ms)(target_pc) - register a timed per-frame mouse callback in the current script.
+- **summary:** (poll_interval_ms)(target_pc) - register the engine's one timed mouse callback, owned by the current script.
 - **operand access:** `1` read · `2` read (callback target)
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xcc`; scope=Himegari SYS4422. Ghidra /v2: op_0xcc_register_mouse_callback@0x420f70 stores operand 2 as the callback PC and the current frame_script_resource_id as its owner, then arms operand 1 as the poll interval. HIDEWIN.BIN and HISTORY.BIN both register a 0x10-ms callback. Op 0xcd performs the timed dispatch.
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xcc`; scope=Himegari SYS4422. Ghidra /v2: op_0xcc_register_mouse_callback@0x420f70 stores operand 2 as the callback PC at ctx+0x5f684 and the current frame_script_resource_id as its owner at ctx+0x5f6ac, then arms operand 1 as the poll interval of the timer at ctx+0x5f320. Only ops 0xcc/0xcd and scene_context_init_reset@0x40b3b0 (owner -1) touch these fields. 36 Himegari scripts register a callback, all with interval 0x32. Op 0xcd performs the timed dispatch.
+
+The registration is engine-wide (target +0x5f684, owner mouse_callback_owner_script_id +0x5f6ac, interval timer +0x5f320), not per frame: a registration from any frame replaces the earlier one, and op 0xcd in another script raises the Depth error. Root reload clears the owner but keeps the target.
 
 ### 0xcd `dispatch-mouse-callback` (get-input-type, argc 0)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2847,9 +2853,11 @@ op 0x90 (u0041BEB0, argc 7): `0x90 x y w h tgt_a tgt_b tgt_c`. Kelebek left it "
 - **semantic status:** investigated
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0xcd` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0xcd` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** Dispatch the registered mouse callback when its polling interval elapses.
+- **summary:** Dispatch the registered mouse callback when its polling interval elapses (at once under fast-forward). A callback registered by another script raises the Depth error.
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xcd`; scope=Himegari SYS4422. Ghidra /v2: op_0xcd_dispatch_mouse_callback@0x417e10 compares timeGetTime against the registered interval, pushes the following PC, verifies the callback's saved script resource id matches the current frame, and jumps to the registered callback target. It writes no operand, so the upstream get-input-type label was incorrect.
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xcd`; scope=Himegari SYS4422. Ghidra /v2: op_0xcd_dispatch_mouse_callback@0x417e10 sets frame_instruction_word_count 1, compares timeGetTime minus ctx+0x5f334 against the interval at ctx+0x5f338 (or run-state 0x8000000), stores the new time, pushes the following PC, pops it again for target -1, compares frame_script_resource_id with ctx+0x5f6ac and throws the 0x570424 Depth message on a mismatch, and otherwise jumps to the registered callback target. It writes no operand, so the upstream get-input-type label was incorrect.
+
+Once due, the handler restarts the timer and pushes the following pc; a -1 target pops it again. When the running script is not the registrant it throws flags 0x10007 "Depth が不正です <running> != <owner>" with that return pc still pushed. Its recorded length is 1, so 無視 resumes at the successor, whose ret then pops the stale return pc; 再試行 re-runs it, which is not due again until the interval passes.
 
 ### 0xfb `register-joy-callback` (joy_callback, argc 2)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)

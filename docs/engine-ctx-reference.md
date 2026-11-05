@@ -92,9 +92,14 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x5f2fc` | `statement_block_active` | `int` | set by the outermost op 0x1f4 and cleared by its matching op 0x1f5; while set the outer tick defers delayed SFX/voice/movie service and its own gfx_render_frame (unless run_state_flags bit 0x400) plus the 0x1000 timer and 0x2000 modal service; explicit op 0x20c still renders and script_launch_queue_dispatch_next refuses to dispatch |
 | `0x5f300` | `statement_block_depth` | `int` | nested op 0x1f4 count beyond the outermost block; op 0x1f5 decrements it before clearing statement_block_active |
 | `0x5f304` | `sleep_timer` | `int` | sleep timer object (op 0xc8; +8 active, +0x14 start-ms, +0x18 duration) |
+| `0x5f320` | `mouse_callback_timer` | `int` | op-0xcc poll interval timer object (same layout as sleep_timer); op 0xcd dispatches once +0x14 start-ms is +0x18 interval old, then restarts it |
+| `0x5f33c` | `timed_catchup_callback_timer` | `int` | op-0xce interval timer object (same layout as sleep_timer), sampled by op 0xcf; unused in Himegari and Kamidori |
 | `0x5f3ac` | `timed_callback_timer` | `int` | elapsed timer object armed by op 0xd5 and sampled by the timed callback scheduler |
 | `0x5f400` | `bgm_fade_period_timer` | `int` | 10 ms period timer driving the run-state 0x200 BGM fade; the tick polls period_timer_poll_elapsed_periods@0x44d0f0 and feeds bgm_fade_tick@0x464960 (armed at 0x411e46 for the voice duck release) |
 | `0x5f64c` | `adv_wait_indicator_timer` | `int` | elapsed timer started by op 0x1ce and ADV wait setup to select the animated input-wait indicator frame |
+| `0x5f684` | `mouse_callback_target_pc` | `int` | op-0xcc callback dword offset, one engine-wide registration; -1 makes op 0xcd pop its return pc and continue. scene_context_init_reset keeps it |
+| `0x5f688` | `timed_catchup_callback_pc` | `int` | op-0xce on-time callback dword offset, dispatched by op 0xcf |
+| `0x5f68c` | `timed_catchup_callback_catchup_pc` | `int` | op-0xce catch-up callback dword offset; op 0xcf pushes it once per further elapsed interval (at most 128) |
 | `0x5f690` | `timed_callback_abort_pc` | `int` | optional local fallback PC supplied to op 0xd5; -1 disables abort redirection |
 | `0x5f694` | `timed_callback_entries_vector` | `int` | MSVC vector object base for 16-byte schedule entries; begin/end/capacity pointers follow |
 | `0x5f698` | `timed_callback_entries_begin` | `void*` | begin pointer for 16-byte entries {deadline_ms, field_100, primary_pc, catchup_pc} |
@@ -103,8 +108,9 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x5f6a4` | `timed_callback_last_index` | `int` | last appended schedule index; op 0xd3 resets to -1 and op 0xd4 increments per entry |
 | `0x5f6a8` | `timed_callback_cursor` | `int` | next schedule entry consumed by timed_callback_sequence_tick; op 0xd3 resets to zero |
 | `0x5f6ac` | `mouse_callback_owner_script_id` | `int` | packed script id of the frame that registered the op-0xcc mouse callback; op 0xcd throws the Depth error when another frame dispatches it |
+| `0x5f6b0` | `timed_catchup_callback_owner_script_id` | `int` | packed script id of the frame that ran op 0xce; op 0xcf throws a Depth error (named, or raw ids via 0x5714c0) when another frame dispatches it |
 | `0x5f6b4` | `timed_callback_script_resource_id` | `uint` | active frame script resource retained by op 0xd5 for local callback dispatch safety |
-| `0x5f6b8` | `timed_callback_script_resource_guard` | `uint` | companion current-script identity checked before redirecting to a scheduled callback |
+| `0x5f6b8` | `timed_callback_script_resource_guard` | `uint` | running script recorded by op 0xd5 when its cursor is 0; timed_callback_sequence_tick throws the Depth error when another script's frame would dispatch an entry |
 | `0x5f6bc` | `coroutine_yield_owner_script_id` | `int` | packed script id of the frame whose ADV coroutine yielded (op 0x199 / input dispatch); op 0x7c throws the Depth error when another frame resumes it |
 | `0x5f6c0` | `value_switch_table` | `int` | temporary formatted-value branch table reset by 0xa1, populated by 0xa2, queried by 0xa3; distinct from shared_profile_int_table |
 | `0x5f72c` | `adv_wait_indicator_frame` | `int` | current animated input-wait indicator frame, reset to zero when the service is armed |

@@ -4,6 +4,24 @@ namespace Age.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
+    private readonly record struct TimedCallback(long DeadlineMs, int PrimaryOffset, int CatchUpOffset);
+
+    // The op-0xd3..0xd5 timed sequence is engine state (entries +0x5f694, guard +0x5f6b8), shared by every frame.
+    private readonly List<TimedCallback> _timedCallbacks = new();
+    private int _timedCallbackCursor;
+    private long _timedCallbackStartedAtMs;
+    private int _timedCallbackAbortOffset = -1;
+    private Script? _timedCallbackGuard;
+
+    private void ResetTimedCallbackSequence()
+    {
+        _timedCallbacks.Clear();
+        _timedCallbackCursor = 0;
+        _timedCallbackStartedAtMs = 0;
+        _timedCallbackAbortOffset = -1;
+        _timedCallbackGuard = null;
+    }
+
     private int StepTiming(string label, IReadOnlyList<Operand> a, int pc)
     {
         switch (label)
@@ -15,11 +33,8 @@ public sealed partial class VirtualMachine
                 if (_messageSkipServiceActive || _host.IsMessageSkipActive) return pc + 1;
                 _host.Sleep(Read(a[0])); return pc + 1;
             case "u00425960":
-            case "begin-timed-callback-sequence": // 0xd3: clear the frame-local relative schedule
-                _cur.TimedCallbacks.Clear();
-                _cur.TimedCallbackCursor = 0;
-                _cur.TimedCallbackStartedAtMs = null;
-                _cur.TimedCallbackAbortOffset = -1;
+            case "begin-timed-callback-sequence": // 0xd3: clear the engine-wide relative schedule
+                ResetTimedCallbackSequence();
                 return pc + 1;
             case "u004266F0":
             case "append-relative-timed-callbacks": // 0xd4: (interval ms, count, on-time PC, catch-up PC)
@@ -28,44 +43,48 @@ public sealed partial class VirtualMachine
                 int count = System.Math.Max(0, unchecked((int)Read(a[1])));
                 int primaryOffset = unchecked((int)Read(a[2]));
                 int catchUpOffset = unchecked((int)Read(a[3]));
-                long deadlineMs = _cur.TimedCallbacks.Count == 0 ? 0 : _cur.TimedCallbacks[^1].DeadlineMs;
+                long deadlineMs = _timedCallbacks.Count == 0 ? 0 : _timedCallbacks[^1].DeadlineMs;
                 for (int i = 0; i < count; i++)
                 {
                     deadlineMs += intervalMs;
-                    _cur.TimedCallbacks.Add(new ExecFrame.TimedCallback(
-                        deadlineMs, primaryOffset, catchUpOffset));
+                    _timedCallbacks.Add(new TimedCallback(deadlineMs, primaryOffset, catchUpOffset));
                 }
                 return pc + 1;
             }
             case "u004262C0":
             case "run-timed-callback-sequence": // 0xd5: dispatch each scheduled local callback, resuming here after ret
             {
-                if (_cur.TimedCallbackStartedAtMs == null)
+                // op_0xd5_handler@0x421090 starts the sequence when its cursor is 0: it records the abort pc and the
+                // running script as the guard (+0x5f6b8) and starts the clock.
+                if (_timedCallbackCursor == 0)
                 {
-                    _cur.TimedCallbackStartedAtMs = _host.InputClockMilliseconds;
-                    _cur.TimedCallbackAbortOffset = unchecked((int)Read(a[0]));
+                    _timedCallbackStartedAtMs = _host.InputClockMilliseconds;
+                    _timedCallbackAbortOffset = unchecked((int)Read(a[0]));
+                    _timedCallbackGuard = _cur.Script;
                 }
                 // Native op 0xd5 stops at last_index rather than count. The final entry is a
                 // look-ahead sentinel: it supplies the next deadline for the preceding event but
                 // is not itself dispatched.
-                if (_cur.TimedCallbackCursor >= _cur.TimedCallbacks.Count - 1)
-                {
-                    _cur.TimedCallbackStartedAtMs = null;
-                    return pc + 1;
-                }
+                if (_timedCallbackCursor >= _timedCallbacks.Count - 1) return pc + 1;
 
-                var callback = _cur.TimedCallbacks[_cur.TimedCallbackCursor];
-                long elapsedMs = _host.InputClockMilliseconds - _cur.TimedCallbackStartedAtMs.Value;
+                var callback = _timedCallbacks[_timedCallbackCursor];
+                long elapsedMs = _host.InputClockMilliseconds - _timedCallbackStartedAtMs;
                 if (elapsedMs < callback.DeadlineMs)
                 {
                     _host.WaitForTimedCallbackDeadline(callback.DeadlineMs - elapsedMs);
-                    elapsedMs = _host.InputClockMilliseconds - _cur.TimedCallbackStartedAtMs.Value;
+                    elapsedMs = _host.InputClockMilliseconds - _timedCallbackStartedAtMs;
                 }
 
-                bool fellBehind = _cur.TimedCallbackCursor + 1 < _cur.TimedCallbacks.Count
-                    && _cur.TimedCallbacks[_cur.TimedCallbackCursor + 1].DeadlineMs < elapsedMs;
+                bool fellBehind = _timedCallbackCursor + 1 < _timedCallbacks.Count
+                    && _timedCallbacks[_timedCallbackCursor + 1].DeadlineMs < elapsedMs;
                 int targetOffset = fellBehind ? callback.CatchUpOffset : callback.PrimaryOffset;
-                _cur.TimedCallbackCursor++;
+                // timed_callback_sequence_tick@0x408170: the schedule is engine-wide, so a frame that runs op 0xd5
+                // while another script's sequence is under way dispatches that script's entry. When the guard is
+                // another script, AGE raises Depth before the cursor moves; op 0xd5 recorded length 0, so 再試行 and
+                // 無視 both run it again and the error repeats until 中止.
+                if (targetOffset != -1 && _timedCallbackGuard is { } guard && !IsSameScript(guard, _cur.Script))
+                    return RaiseInstructionScriptError(DepthErrorText(guard), pc, ignoreSkipsInstruction: false);
+                _timedCallbackCursor++;
                 if (targetOffset < 0 || !_cur.Script.IndexByOffset.TryGetValue(targetOffset, out int target))
                     return pc;
                 _cur.CallStack.Add(pc);

@@ -5,6 +5,12 @@ namespace Age.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
+    // The op-0xcc mouse callback is engine state, not frame state (op 0xcd checks the registrant).
+    private int _mouseCallbackTarget = -1;
+    private Script? _mouseCallbackOwner;
+    private long _mouseCallbackIntervalMs;
+    private long _mouseCallbackArmedAtMs;
+
     private int StepInput(string label, IReadOnlyList<Operand> a, int pc)
     {
         switch (label)
@@ -82,21 +88,32 @@ public sealed partial class VirtualMachine
                 _host.ClearCursorResource(); return pc + 1;
             case "mouse_callback":
             case "register-mouse-callback": // 0xcc (poll interval ms, local target dword offset)
-                _cur.MouseCallbackIntervalMs = System.Math.Max(0, Read(a[0]));
-                _cur.MouseCallbackTarget = (int)Read(a[1]);
-                _cur.MouseCallbackNextAtMs = _host.InputClockMilliseconds + _cur.MouseCallbackIntervalMs;
+                // op_0xcc_register_mouse_callback@0x420f70: one engine-wide registration (target +0x5f684, owner
+                // +0x5f6ac, interval timer +0x5f320). A registration from any frame replaces the earlier one.
+                _mouseCallbackTarget = (int)Read(a[1]);
+                _mouseCallbackOwner = _cur.Script;
+                _mouseCallbackIntervalMs = System.Math.Max(0, Read(a[0]));
+                _mouseCallbackArmedAtMs = _host.InputClockMilliseconds;
                 lock (_interactiveLock) _rawInputFrame = _cur;
                 return pc + 1;
             case "get-input-type":
             case "dispatch-mouse-callback": // 0xcd
             {
+                // op_0xcd_dispatch_mouse_callback@0x417e10: once the interval has passed (at once under fast-forward),
+                // restart it, push the return pc and jump to the target. A target registered by another script raises
+                // Depth with the return pc still pushed, so 再試行 and 無視 resume with it on the stack.
                 long now = _host.InputClockMilliseconds;
-                if (_cur.MouseCallbackTarget < 0 || now < _cur.MouseCallbackNextAtMs) return pc + 1;
-                _cur.MouseCallbackNextAtMs = now + _cur.MouseCallbackIntervalMs;
-                if (!_cur.Script.IndexByOffset.TryGetValue(_cur.MouseCallbackTarget, out int target))
+                if (now - _mouseCallbackArmedAtMs < _mouseCallbackIntervalMs
+                    && !(_messageSkipServiceActive || _host.IsMessageSkipActive))
                     return pc + 1;
+                _mouseCallbackArmedAtMs = now;
+                if (_mouseCallbackTarget == -1) return pc + 1;
                 _cur.CallStack.Add(pc + 1);
-                return target;
+                if (_mouseCallbackOwner is { } owner && !IsSameScript(owner, _cur.Script))
+                    return RaiseInstructionScriptError(DepthErrorText(owner), pc);
+                if (_cur.Script.IndexByOffset.TryGetValue(_mouseCallbackTarget, out int target)) return target;
+                _cur.CallStack.RemoveAt(_cur.CallStack.Count - 1);
+                return pc + 1;
             }
             case "joy_callback":
             case "register-joy-callback": // 0xfb (input index, local target dword offset)
