@@ -185,13 +185,16 @@ public partial class Main : Godot.Control
         _screenWidth = logicalCanvas.Width;
         _screenHeight = logicalCanvas.Height;
         _screenPixels = new byte[logicalCanvas.RgbaByteCount];
+        // The windowed AGE's menu bar sits above the game's client area, so the viewport is the canvas plus the bar.
+        LoadMenuBar(gameRoot.Root, catalog.StartupSettings, userArgs);
         Window rootWindow = GetTree().Root;
         rootWindow.ContentScaleMode = Window.ContentScaleModeEnum.Viewport;
         rootWindow.ContentScaleAspect = Window.ContentScaleAspectEnum.Keep;
-        rootWindow.ContentScaleSize = new Vector2I(_screenWidth, _screenHeight);
+        rootWindow.ContentScaleSize = new Vector2I(_screenWidth, _screenHeight + _menuBarHeight);
+        int windowBarHeight = (int)System.Math.Round(_menuBarHeight * (double)_windowOptions.Height / _screenHeight);
         if (rootWindow.Mode == Window.ModeEnum.Windowed)
-            rootWindow.Size = new Vector2I(_windowOptions.Width, _windowOptions.Height);
-        GD.Print($"[profile] SYS4INI logical canvas={_screenWidth}x{_screenHeight} " +
+            rootWindow.Size = new Vector2I(_windowOptions.Width, _windowOptions.Height + windowBarHeight);
+        GD.Print($"[profile] SYS4INI logical canvas={_screenWidth}x{_screenHeight} menu-bar={_menuBarHeight} " +
                  $"requested window={_windowOptions.Width}x{_windowOptions.Height} " +
                  $"source={(_windowOptions.IsOverridden ? "boot-arguments" : "logical-canvas")} " +
                  $"actual={rootWindow.Size.X}x{rootWindow.Size.Y} mode={rootWindow.Mode}");
@@ -208,6 +211,8 @@ public partial class Main : Godot.Control
         };
         AddChild(_screenView);   // added first -> draws behind the text/status labels
         _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        CreateMenuBar();
+        Win32Dialog.GameClientOrigin = new Vector2I(0, _menuBarHeight);
         _gpuRenderer = new GpuRetainedRenderer(this);
 
         _status = new Label();
@@ -658,7 +663,7 @@ public partial class Main : Godot.Control
                 System.IO.Directory.CreateDirectory(_seqDir);
                 // Headless has no rendered viewport texture (GetImage() is null). Still advance/count/quit so the
                 // real-run trace-histogram can profile the live path without a display; only the PNG grab is skipped.
-                var fimg = GetViewport().GetTexture()?.GetImage();
+                var fimg = CaptureGameImage();
                 fimg?.SavePng($"{_seqDir}/frame_{_seqIdx:0000}.png");
                 _seqIdx++;
                 if (_seqIdx >= _seqFrames) { GD.Print($"SEQ saved {_seqIdx} frames -> {_seqDir}"); GetTree().Quit(0); }
@@ -670,8 +675,8 @@ public partial class Main : Godot.Control
                 if (++_shotSettle >= _shotSettleTarget)
                 {
                     _shotDone = true;
-                    var img = GetViewport().GetTexture().GetImage();
-                    img.SavePng(_shotPath);
+                    var img = CaptureGameImage();
+                    img?.SavePng(_shotPath);
                     GD.Print($"SHOT saved page {_pageCount} -> {_shotPath}");
                     ReportSubroutines();
                     GetTree().Quit(0);

@@ -24,12 +24,15 @@ namespace Age.Engine.Vm;
 /// <param name="WheelKeyUpAction">Native set:WheelKeyUp (SYS4INI WHEELKEYUP, registered default 3): the logical action
 /// a wheel-up raises while an ADV text wait polls (<see cref="VirtualMachine.ApplyMouseWheel"/>).</param>
 /// <param name="WheelKeyDownAction">Native set:WheelKeyDown (SYS4INI WHEELKEYDOWN, registered default 1).</param>
+/// <param name="CoexistMessageSkip">Native set:CoexistMesSkip (SYS4INI COEXISTMESSKIP, registered default 0). With
+/// it off, the native menu's Skip toggle clears Auto and its Auto toggle clears Skip; the script ops ignore it.</param>
 public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64,
                                bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false,
                                int NativeStringCodePage = 932, bool CreateObject = true,
                                bool AutoFreeTextures = false, bool NoSaveDat = false,
                                int CancelMessageSkipOnClick = 0, int FastForwardOpMicroseconds = 0,
-                               int WheelKeyUpAction = 3, int WheelKeyDownAction = 1)
+                               int WheelKeyUpAction = 3, int WheelKeyDownAction = 1,
+                               bool CoexistMessageSkip = false)
 {
     /// <summary>Native Himegari fast-forward cost per op: 13,512 ops of SC0000 read-skip took 5.06 s on native AGE
     /// (2026-11-03, docs/engine-re.md "Fast-forward pace").</summary>

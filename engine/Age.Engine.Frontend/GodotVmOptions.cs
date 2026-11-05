@@ -18,6 +18,7 @@ public static class GodotVmOptions
             CancelMessageSkipOnClick: settings.CancelMessageSkipOnClick,
             FastForwardOpMicroseconds: VmOptions.NativeFastForwardOpMicroseconds,
             WheelKeyUpAction: settings.WheelKeyUpAction,
-            WheelKeyDownAction: settings.WheelKeyDownAction);
+            WheelKeyDownAction: settings.WheelKeyDownAction,
+            CoexistMessageSkip: settings.CoexistMessageSkip);
     }
 }

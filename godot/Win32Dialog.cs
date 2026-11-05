@@ -44,7 +44,10 @@ public abstract partial class Win32Dialog : Window
     /// <summary>Show the dialog where native places a window whose GetWindowRect top-left is
     /// <paramref name="nativeWindowTopLeft"/> in the game's client coordinates.</summary>
     protected void PopupAtNativeWindow(Vector2I nativeWindowTopLeft) =>
-        Popup(new Rect2I(nativeWindowTopLeft + new Vector2I(InvisibleBorder, 0), Size));
+        Popup(new Rect2I(GameClientOrigin + nativeWindowTopLeft + new Vector2I(InvisibleBorder, 0), Size));
+
+    /// <summary>Where the game's client area starts in the port's viewport: below the menu bar, when there is one.</summary>
+    public static Vector2I GameClientOrigin { get; set; }
 
     /// <summary>Called by the frame's ✕ when it is enabled.</summary>
     protected virtual void OnCloseButton() => EmitSignal(Window.SignalName.CloseRequested);
@@ -91,7 +94,7 @@ public static class Win32DialogStyle
         "IPAGothic", "sans-serif",
     };
 
-    private static Win32Font? _dialogFont, _messageFont, _captionFont;
+    private static Win32Font? _dialogFont, _messageFont, _captionFont, _menuFont;
 
     /// <summary>AGERC's dialog font, ＭＳ Ｐゴシック 12 px. GDI draws it from the font's 12 px bitmap strike
     /// without antialiasing; Godot does the same when the font is installed. Text sits 10 px above its
@@ -107,6 +110,11 @@ public static class Win32DialogStyle
     public static Win32Font CaptionFont => _captionFont ??= Make("Segoe UI", 12, bitmapStrike: false, ascent: 0,
         height: 0, ("Meiryo UI", LinkedSize), ("Yu Gothic UI", LinkedSize));
 
+    /// <summary>The system menu font (lfMenuFont, Segoe UI -12), linked like the message font. GDI measures a line
+    /// 15 px tall with its baseline 12 px down (GetTextMetrics on the capture machine, 2026-11-05).</summary>
+    public static Win32Font MenuFont => _menuFont ??= Make("Segoe UI", 12, bitmapStrike: false, ascent: 12,
+        height: 15, lcd: true, ("Meiryo UI", LinkedSize), ("Yu Gothic UI", LinkedSize));
+
     // GDI's font linking draws Segoe UI's Japanese as Meiryo UI 13 px for both the -11 and -12 heights: the
     // extents of エラーが発生しました (105 px) and 再試行：もう一度このコマンドを実行します． (233 px) match it.
     private const int LinkedSize = 13;
@@ -114,21 +122,29 @@ public static class Win32DialogStyle
     // ascent/height 0: use the font's own metrics. Substitute fonts always do, since the measured values
     // belong to the Windows faces. The first installed linked face draws what the face lacks.
     private static Win32Font Make(string face, int size, bool bitmapStrike, int ascent, int height,
+        params (string Face, int Size)[] linked) => Make(face, size, bitmapStrike, ascent, height, false, linked);
+
+    // lcd: subpixel antialiasing, as ClearType draws the menus.
+    private static Win32Font Make(string face, int size, bool bitmapStrike, int ascent, int height, bool lcd,
         params (string Face, int Size)[] linked)
     {
         var portable = new SystemFont { FontNames = PortableJapanese };
         if (LoadSystemFace(face) is not { } font) return new Win32Font(portable, size, 0, 0);
-        Configure(font, bitmapStrike);
+        Configure(font, bitmapStrike, lcd);
         font.Fallbacks = new Godot.Collections.Array<Font> { portable };
         foreach ((string name, int linkedSize) in linked)
             if (LoadSystemFace(name) is { } link)
-                return new Win32Font(font, size, ascent, height, Configure(link, false), linkedSize);
-        return new Win32Font(font, size, ascent, height);
+                return new Win32Font(font, size, ascent, height, Configure(link, false, lcd), linkedSize)
+                {
+                    GdiFace = face,
+                };
+        return new Win32Font(font, size, ascent, height) { GdiFace = face };
     }
 
-    private static FontFile Configure(FontFile font, bool bitmapStrike)
+    private static FontFile Configure(FontFile font, bool bitmapStrike, bool lcd = false)
     {
-        font.Antialiasing = bitmapStrike ? TextServer.FontAntialiasing.None : TextServer.FontAntialiasing.Gray;
+        font.Antialiasing = bitmapStrike ? TextServer.FontAntialiasing.None
+            : lcd ? TextServer.FontAntialiasing.Lcd : TextServer.FontAntialiasing.Gray;
         font.DisableEmbeddedBitmaps = !bitmapStrike;
         font.SubpixelPositioning = TextServer.SubpixelPositioning.Disabled;
         font.Hinting = TextServer.Hinting.Normal;
@@ -189,6 +205,9 @@ public sealed class Win32Font
     private readonly Font? _linked;
     private readonly int _linkedSize;
 
+    /// <summary>The Windows face this font stands in for: on Windows, GDI measures the advances with it.</summary>
+    public string? GdiFace { get; init; }
+
     public Win32Font(Font font, int size, int ascent, int height, Font? linked = null, int linkedSize = 0)
     {
         Font = font;
@@ -204,46 +223,59 @@ public sealed class Win32Font
     public float Width(string text)
     {
         float width = 0;
-        foreach (Rune rune in text.Replace("&", "").EnumerateRunes())
-        {
-            (Font font, int size) = FaceFor(rune);
-            width += font.GetCharSize(rune.Value, size).X;
-        }
+        foreach (Rune rune in text.Replace("&", "").EnumerateRunes()) width += Advance(rune);
         return width;
     }
 
+    // GDI's advance where GDI is available (it links the faces itself), else the drawing face's.
+    private float Advance(Rune rune)
+    {
+        if (GdiFace != null && GdiTextMetrics.Advance(GdiFace, Size, rune.Value) is int gdi) return gdi;
+        (Font font, int size) = FaceFor(rune);
+        return font.GetCharSize(rune.Value, size).X;
+    }
+
     // The linked face draws the characters the primary face lacks, at its own size, as GDI font linking does.
+    // Font.HasChar also answers for the fallbacks (the portable Japanese chain), so coverage is asked of the
+    // primary face's own data.
     private (Font, int) FaceFor(Rune rune) =>
-        _linked != null && !Font.HasChar(rune.Value) && _linked.HasChar(rune.Value) ? (_linked, _linkedSize) : (Font, Size);
+        _linked != null && !PrimaryHasChar(rune.Value) && _linked.HasChar(rune.Value)
+            ? (_linked, _linkedSize)
+            : (Font, Size);
+
+    private bool PrimaryHasChar(int codepoint)
+    {
+        if (_primaryRid is not { } rid)
+        {
+            Godot.Collections.Array<Rid> rids = Font.GetRids();
+            rid = rids.Count > 0 ? rids[0] : default;
+            _primaryRid = rid;
+        }
+        return rid.IsValid
+            ? TextServerManager.GetPrimaryInterface().FontHasChar(rid, codepoint)
+            : Font.HasChar(codepoint);
+    }
+
+    private Rid? _primaryRid;
 
     /// <summary>Draw one line from its top-left. With <paramref name="mnemonic"/>, "&amp;" marks the
-    /// underlined character and is not drawn, as Win32 labels do.</summary>
-    public void Draw(CanvasItem canvas, Vector2 topLeft, string text, Color color, bool mnemonic = true)
+    /// underlined character and is not drawn, as Win32 labels do; <paramref name="underline"/> false hides the
+    /// underline, as Windows does for menus opened with the mouse while keyboard cues are off.</summary>
+    public void Draw(CanvasItem canvas, Vector2 topLeft, string text, Color color, bool mnemonic = true,
+                     bool underline = true)
     {
         int mark = mnemonic ? text.IndexOf('&') : -1;
         string shown = mnemonic ? text.Replace("&", "") : text;
         float baseline = topLeft.Y + Ascent;
-        // Draw runs of one face each on the shared baseline.
+        // GDI places each glyph at the sum of the advances before it, without kerning or shaping; so does this.
         float x = topLeft.X;
-        var run = new StringBuilder();
-        (Font, int)? runFace = null;
-        void Flush()
-        {
-            if (run.Length == 0 || runFace is not var (font, size)) return;
-            string part = run.ToString();
-            canvas.DrawString(font, new Vector2(x, baseline), part, HorizontalAlignment.Left, -1, size, color);
-            x += Width(part);
-            run.Clear();
-        }
         foreach (Rune rune in shown.EnumerateRunes())
         {
-            (Font, int) face = FaceFor(rune);
-            if (runFace is { } current && !ReferenceEquals(current.Item1, face.Item1)) Flush();
-            runFace = face;
-            run.Append(rune.ToString());
+            (Font font, int size) = FaceFor(rune);
+            canvas.DrawChar(font, new Vector2(x, baseline), rune.ToString(), size, color);
+            x += Advance(rune);
         }
-        Flush();
-        if (mark < 0 || mark >= shown.Length) return;
+        if (!underline || mark < 0 || mark >= shown.Length) return;
         float before = Width(shown[..mark]);
         float width = Width(shown[mark].ToString());
         canvas.DrawRect(new Rect2(Mathf.Round(topLeft.X + before), baseline + 1, Mathf.Round(width), 1), color);

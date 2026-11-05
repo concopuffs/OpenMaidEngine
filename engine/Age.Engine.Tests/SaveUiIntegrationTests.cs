@@ -337,6 +337,10 @@ public class SaveUiIntegrationTests
             $"saved={string.Join(", ", numbered.Frames.Select((frame, index) =>
                 $"{index}:0x{frame.ScriptId:x}/resume={frame.ResumeIndex}/call={frame.CallTargetIndex}"))}; " +
             $"frames={string.Join(", ", state.Frames)}");
+        // The load zeroes every global bank in full. The definition tables past the saved prefix come back only through
+        // SYSTEM4's restored prologue, whose INIT2 call precedes its 0xae: gallery_thumbnail_sheet_asset_ids reads
+        // SO026A.AGF's id after a native load too (native-read 2026-11-05).
+        Assert.NotEqual(0, vm.Globals.GetValueOrDefault(0x66381));
     }
 
     [Theory]

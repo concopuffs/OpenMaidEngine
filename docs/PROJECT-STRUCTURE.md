@@ -218,8 +218,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       Age.Cli, the Godot port (godot/Main.Mods.cs) and the tests
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
-    │                                       audio alignment, surface registry, WAV sanitization, and the
-    │                                       game-driving control protocol (Control/)
+    │                                       audio alignment, surface registry, WAV sanitization, the
+    │                                       game-driving control protocol (Control/), and AGERC.DLL's menu
+    │                                       resource and its prune/refresh model (NativeMenu/)
     │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
@@ -269,6 +270,9 @@ surface-transition drawing, raster helpers, and compositor decision logging. `go
 Godot input routing, locator/debug hotkeys, debug-scene dispatch, cursor control, native alerts, and
 full-width text entry. `godot/Main.Drive.cs` owns the `--control` driving backend: the control server's lifetime,
 injected input events, exclusive input, and the port side of the protocol (state, screenshots, speed, close).
+`godot/Main.MenuBar.cs` attaches the native menu bar (AGERC menu 110) above the game canvas and runs its commands;
+`godot/NativeMenuBar.cs` draws the bar and its popups, and `godot/GdiTextMetrics.cs` supplies the GDI advances
+that the bar and the `godot/Win32Dialog.cs` dialogs lay their labels out with.
 
 `engine/Age.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
 Both `engine/AgeEngine.sln` and `godot/OME.sln` include the project; Godot and `Age.Engine.Tests` consume it

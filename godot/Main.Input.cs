@@ -29,6 +29,13 @@ public partial class Main
             GetViewport().SetInputAsHandled();
             return;
         }
+        // The menu bar is the window's non-client area: its own input never reaches the game, and an open menu's
+        // loop takes every key and button.
+        if (RouteMenuBarInput(e))
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (e is InputEventKey key && key.Pressed && !key.Echo && key.Keycode == Key.F2)
         {
             _locatorHudVisible = !_locatorHudVisible;
@@ -317,10 +324,11 @@ public partial class Main
     {
         // Godot reports input in viewport coordinates after content scaling. This ratio is therefore
         // normally identity, while remaining correct for any viewport expansion policy.
+        // The game's client area starts below the menu bar.
         Vector2 size = GetViewport().GetVisibleRect().Size;
         if (size.X <= 0 || size.Y <= 0) return (0, 0);
         return ((int)System.Math.Floor(position.X * _screenWidth / size.X),
-                (int)System.Math.Floor(position.Y * _screenHeight / size.Y));
+                (int)System.Math.Floor(position.Y * (_screenHeight + _menuBarHeight) / size.Y) - _menuBarHeight);
     }
 
     public void WarpAgeCursor(int virtualX, int virtualY)
@@ -332,7 +340,7 @@ public partial class Main
         if (size.X <= 0 || size.Y <= 0 || _screenWidth <= 0 || _screenHeight <= 0) return;
         GetViewport().WarpMouse(new Vector2(
             virtualX * size.X / _screenWidth,
-            virtualY * size.Y / _screenHeight));
+            (virtualY + _menuBarHeight) * size.Y / (_screenHeight + _menuBarHeight)));
     }
 
     public void SetAgeCursor(byte[] rgba, int width, int height, int hotspotX, int hotspotY)

@@ -1042,6 +1042,9 @@ public sealed partial class VirtualMachine
         _skipClickCancelState = 0;
         _skipClickCancelTriggers = 0;
         _settingCallbackPending = false;
+        _menuToggles.Clear();
+        _menuTogglesPending = false;
+        _advSkipServiceEnabled = true;
         _advTextStyle = AdvTextStyle.Default;
         _systemMenuActionsEnabled = 1;
         _systemMenuShowDelayMilliseconds = 0;
@@ -1119,9 +1122,9 @@ public sealed partial class VirtualMachine
                     if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; outcome = FrameOutcome.Halted; break; }
                     Steps++;
                     frame.Pc = pc;
-                    if (_o.CancelMessageSkipOnClick != 0 && ServiceMessageSkipClickCancel() is { } cancelOutcome)
+                    if (ServiceInstructionBoundary() is { } boundaryOutcome)
                     {
-                        outcome = cancelOutcome;
+                        outcome = boundaryOutcome;
                         break;
                     }
                     if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
@@ -1317,13 +1320,18 @@ public sealed partial class VirtualMachine
 
     private void ApplyNumberedState(NativeNumberedSaveState state)
     {
-        ReplaceDensePrefix(
-            Globals, state.IntegerGlobals.Select(value => (long)value).ToArray(), value => value != 0);
-        ReplaceDensePrefix(
-            GlobalFloats, state.FloatGlobals.Select(value => (long)value).ToArray(), value => value != 0);
-        ReplaceDensePrefix(GlobalStrings, state.StringGlobals, value => value.Length != 0);
-        ReplaceDensePrefix(GlobalPointers, state.PointerGlobals, value => value != 0);
-        ReplaceDensePrefix(GlobalStringPointers, state.PointerStrings, value => value != 0);
+        // Layout 3 of save_data_deserialize_and_begin_restore@0x40fd10 zeroes each global bank in full, to its live
+        // size (ctx+0x53c7c..0x53c90; Himegari 1419442 integers and 18180 strings), and only then copies the saved
+        // prefixes (402459 integers, 789 strings). The cells past a prefix are therefore zero after any load until a
+        // restored frame re-authors them: every saved script re-runs its prologue from its entry to op 0xae, and
+        // SYSTEM4's (LOADCONFIG or INITCONFIG, the 0x1ca table copy, INIT2 and its *INIT data tables) precedes its 0xae.
+        // Script flags past the prefix such as G[0x62428], which SC0000 sets around its MENU.BIN call and a load from
+        // MENU never clears, read zero again (native-read 2026-11-05; docs/engine-re.md, "Native menu bar").
+        ReplaceBank(Globals, state.IntegerGlobals.Select(value => (long)value).ToArray(), value => value != 0);
+        ReplaceBank(GlobalFloats, state.FloatGlobals.Select(value => (long)value).ToArray(), value => value != 0);
+        ReplaceBank(GlobalStrings, state.StringGlobals, value => value.Length != 0);
+        ReplaceBank(GlobalPointers, state.PointerGlobals, value => value != 0);
+        ReplaceBank(GlobalStringPointers, state.PointerStrings, value => value != 0);
 
         _currentBgmTrackId = unchecked((uint)state.BgmTrackId);
         if (_currentBgmTrackId == 0) _host.FadeBgm(0, 0);
@@ -1362,11 +1370,9 @@ public sealed partial class VirtualMachine
         }
     }
 
-    private static void ReplaceDensePrefix<T>(
-        Dictionary<int, T> bank, IReadOnlyList<T> values, Func<T, bool> retain)
+    private static void ReplaceBank<T>(Dictionary<int, T> bank, IReadOnlyList<T> values, Func<T, bool> retain)
     {
-        foreach (int key in bank.Keys.Where(key => (uint)key < (uint)values.Count).ToArray())
-            bank.Remove(key);
+        bank.Clear();
         for (int i = 0; i < values.Count; i++)
             if (retain(values[i])) bank[i] = values[i];
     }
@@ -1467,6 +1473,8 @@ public sealed partial class VirtualMachine
         // action-5 yield, so a pending request comes before the hover and click callbacks queued after it.
         if (Interlocked.Exchange(ref _advWaitCoroutineYieldRequested, 0) != 0 && ServiceAdvWaitCoroutineYield())
             return true;
+        // A native menu command's toggle and its CALLBACK_SETTING.BIN, which native's launch queue runs from the tick.
+        if (ServiceWaitSettingCallback()) return true;
         int target;
         ExecFrame owner;
         lock (_interactiveLock)

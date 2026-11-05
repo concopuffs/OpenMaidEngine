@@ -63,6 +63,11 @@ public sealed class Sys4StartupSettings
     /// same mode. Both games use 9, which no script binds. Missing or non-numeric means 1.</summary>
     public int WheelKeyDownAction => ReadInt("WHEELKEYDOWN", 1);
 
+    /// <summary>COEXISTMESSKIP (set:CoexistMesSkip, registered default 0). Nonzero lets the native menu's Skip and
+    /// Auto toggles stay on together (adv_toggle_skip_mode@0x406c20, adv_toggle_auto_mode@0x406b70); with zero,
+    /// enabling one clears the other. Both shipped games set 1. Missing or non-numeric means 0.</summary>
+    public bool CoexistMessageSkip => ReadInt("COEXISTMESSKIP", 0) != 0;
+
     private int ReadInt(string key, int fallback)
         => int.TryParse(GetValueOrDefault(key)?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
                out int value) ? value : fallback;

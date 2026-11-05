@@ -314,7 +314,7 @@ public partial class Main
                                && _screen.GetHeight() == _screenHeight
                                && _screenPixels.Length == checked(_screenWidth * _screenHeight * 4)
                                && rootWindow.ContentScaleSize
-                                  == new Vector2I(_screenWidth, _screenHeight)
+                                  == new Vector2I(_screenWidth, _screenHeight + _menuBarHeight)
                                && _windowOptions == WindowLaunchOptions.Resolve(
                                       OS.GetCmdlineUserArgs(),
                                       new Sys4LogicalCanvas(_screenWidth, _screenHeight));

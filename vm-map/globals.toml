@@ -2850,14 +2850,25 @@ depends_on = []
 
 [[global]]
 address = "0x62428"
-name = ""
-category = "story-flag"
+name = "adv_sub_screen_active"
+category = "ui-toggle"
 type = "int"
 value_domain = "{0,1}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 3 scripts; compared against [0]; writers=['CALLBACK_WINDOW.BIN', 'DEBUG.BIN', 'DEBUGADV.BIN', 'DEBUGADV2.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+usage = "Set while an ADV scene runs one of its sub-screen scripts. 304 scripts write it in pairs: SC0000 sets 1 before call-script HISTORY.BIN (0x1c1, 0x355), MENU.BIN (0x39d, the right-click handler), HIDEWIN.BIN (0x3f1) and INPUTNAME.BIN, and clears it after the call returns (0x1d2, 0x366, 0x3ae, 0x402, 0xe63e). CALLBACK_WINDOW.BIN sets it around its own control-strip redraw. Only the callbacks read it: CALLBACK_SETTING.BIN and CALLBACK_WINDOW.BIN then defer their redraw to adv_control_strip_redraw_deferred, and CALLBACK_LOST.BIN skips its op 0x20c. A load from MENU never reaches the clear, but native layout 3 zeroes the whole integer bank, and the cell lies past the saved prefix 0x6241b, so it reads 0 after any load (native-read 2026-11-05; docs/engine-re.md, \"Layout-3 restore mechanics\")."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62429"]
+
+[[global]]
+address = "0x62429"
+name = "adv_control_strip_redraw_deferred"
+category = "ui-toggle"
+type = "int"
+value_domain = "{0,1}"
+usage = "A control-strip redraw put off while adv_sub_screen_active was set. CALLBACK_SETTING.BIN (run after each menu-bar toggle) and CALLBACK_WINDOW.BIN set it instead of redrawing. Each sub-screen call's epilogue (317 scripts; SC0000 0x1d7, 0x36b, 0x3b3, 0x407, 0xe643) then clears adv_sub_screen_active, redraws the strip at 0xd2f0 (SC0000 label_11ffa and label_12227, then op 0x20c) when this is set, and clears it (docs/engine-re.md, \"Native menu bar\")."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x62428"]
 
 [[global]]
 address = "0x62439"

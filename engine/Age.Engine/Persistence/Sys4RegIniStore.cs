@@ -159,12 +159,15 @@ public sealed class Sys4RegIniStore
     }
 
     /// <summary>A [message] integer, or the native registered default when the key is absent.</summary>
-    public int LoadMessageInt(string key, int defaultValue)
+    public int LoadMessageInt(string key, int defaultValue) => LoadInt(MessageSection, key, defaultValue);
+
+    /// <summary>An integer of any section, or <paramref name="defaultValue"/> when the key is absent.</summary>
+    public int LoadInt(string section, string key, int defaultValue)
     {
         lock (_lock)
         {
             _document ??= LoadDocument();
-            return _document.TryGetInt(MessageSection, key, out int value) ? value : defaultValue;
+            return _document.TryGetInt(section, key, out int value) ? value : defaultValue;
         }
     }
 

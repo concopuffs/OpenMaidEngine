@@ -1,0 +1,74 @@
+# The menu bar (AGERC.DLL menu 110) on SC0000. Each `menu` step refreshes the menu as opening it does and fails on a
+# grayed item, as a user cannot choose one. ﾒｯｾｰｼﾞ > 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ (0x9c6f) on a read page fast-forwards to the
+# first unread one. ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す (0x9c64) at a text wait hides the window as Space does; the item then reads
+# ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを表示する and brings it back. Turning ｵｰﾄﾒｯｾｰｼﾞ (0x9c65) on ends the text wait at once, so on and
+# straight off again moves exactly one page.
+# ｹﾞｰﾑ > 終了 (0x9c41) opens the 終了 dialog. Run on a fresh sandbox, on both targets, and compare the shots:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-menu-bar.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+
+rclick adv.next                         # save slot 0 on page 1
+wait 1.5
+click menu.save
+wait 1.5
+click slot.0
+wait 1.5
+click confirm.yes
+wait 2
+rclick adv.next
+wait 1.5
+expect top=SC0000@0x83f
+
+advance 6                               # read pages 1-6
+rclick adv.next                         # load slot 0: back on page 1
+wait 1.5
+click menu.load
+wait 1.5
+click slot.0
+wait 1.5
+click confirm.yes
+wait-state top=SC0000@0x83f timeout=30
+settle
+
+menu read-skip                          # 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ on: fast-forward to the first unread page
+wait 4
+settle timeout=20
+state
+shot menu-1-read-skip-stopped
+menu read-skip                          # and off again
+wait 1                                  # its CALLBACK_SETTING.BIN redraws the control strip
+
+menu hide                              # ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す
+wait 2
+state
+shot menu-2-hidden
+menu hide                               # now ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを表示する
+wait 2
+state
+shot menu-3-restored
+
+menu auto                               # ｵｰﾄﾒｯｾｰｼﾞ on: the text wait ends at once
+menu auto                               # off again before the next page's auto timer runs out
+wait 2
+settle
+state                                   # one page on
+wait 6
+state                                   # and no further without input
+shot menu-4-auto-off
+
+menu exit                               # ｹﾞｰﾑ > 終了: the 終了 dialog
+wait 1
+dialogs
+shot menu-5-exit-dialog
+answer ｷｬﾝｾﾙ
+wait 1
+state

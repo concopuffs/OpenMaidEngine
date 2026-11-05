@@ -204,6 +204,7 @@ internal class RecordingHost : IHost
                                      Func<AdvAutoWaitState> autoWaitState)
         => WaitForInput(layoutSlot, serviceInputCallback);
     public void InputCallbackCompleted(GfxState gfx) => InputCallbackFrames++;
+    public virtual void EndInputWait() { }
     // Each hidden-window wait runs this first (a test supplies the input that ends it) and then takes the trigger.
     public Action? ServiceTriggerWaitStarted;
     public int ServiceTriggerWaits;

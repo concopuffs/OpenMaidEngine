@@ -359,7 +359,29 @@ def virtual_key(name: str) -> int:
 
 # Capabilities both targets offer (native: drive_native.CAPABILITIES; port: PortCapabilities in godot/Main.Drive.cs).
 # Committed scenarios may use these and nothing target-only.
-SHARED_CAPABILITIES = ("dialogs", "answer", "window")
+SHARED_CAPABILITIES = ("dialogs", "answer", "window", "menu")
+
+# AGERC.DLL's menu-bar commands (menu 110; docs/engine-re.md "Native menu bar"), by the names `menu` steps take.
+MENU_COMMANDS = {
+    "exit": 0x9c41, "save": 0x9c43, "load": 0x9c44, "version": 0x9c45, "save-screen": 0x9c46,
+    "image-folder": 0x9c47, "fullscreen": 0x9c5a, "windowed": 0x9c5b, "skip": 0x9c63, "hide": 0x9c64,
+    "auto": 0x9c65, "sound-settings": 0x9c68, "message-settings": 0x9c6c, "system-info": 0x9c6d,
+    "other-settings": 0x9c6e, "read-skip": 0x9c6f,
+}
+
+
+def menu_command(name: str) -> int:
+    """A `menu` step's command: a name from MENU_COMMANDS or a numeric WM_COMMAND id."""
+    key = name.lower()
+    if key in MENU_COMMANDS:
+        return MENU_COMMANDS[key]
+    try:
+        command = int(name, 0)
+    except ValueError:
+        raise DriveError(f"menu takes a command id or one of {', '.join(MENU_COMMANDS)}, got {name!r}") from None
+    if not 0 < command <= 0xFFFF:
+        raise DriveError(f"menu command ids are 1..0xffff, got {name!r}")
+    return command
 
 
 @dataclass(frozen=True)
@@ -403,6 +425,9 @@ STEPS = {
                            "opens its 終了 dialog (quit / return to title / cancel)"),
     "window": _spec(1, 1, "", "window minimize|restore       minimize or restore the game window, as its title-bar "
                     "and taskbar buttons do (AGE: WM_SYSCOMMAND SC_MINIMIZE/SC_RESTORE)", "window"),
+    "menu": _spec(1, 1, "", "menu NAME|ID                  choose a menu-bar command as a user does: the menu "
+                  "refreshes, a grayed item fails the step (AGE: WM_INITMENU, then WM_COMMAND); names: skip, "
+                  "read-skip, auto, hide, exit, windowed, …", "menu"),
     "close": _spec(0, 0, "timeout", "close [timeout=S]             quit the game and end the session"),
 }
 NUMERIC_OPTIONS = {"hold", "timeout", "quiet", "threshold", "every"}
@@ -479,6 +504,8 @@ def _validate(step: Step) -> None:
     elif step.name == "window":
         if step.args[0].lower() not in ("minimize", "restore"):
             raise DriveError("window takes minimize or restore")
+    elif step.name == "menu":
+        menu_command(step.args[0])
     elif step.name == "wait":
         try:
             float(step.args[0])
@@ -822,6 +849,8 @@ class Executor:
             if self.on_window is not None:
                 self.on_window(result)
             return result
+        elif step.name == "menu":
+            return self.client.call("menu", command=menu_command(step.args[0]))
         elif step.name == "close":
             timeout = float(options.get("timeout", 20))
             result = self.client.call("close", timeout=timeout + REPLY_MARGIN_S, timeout_ms=int(timeout * 1000))
@@ -860,7 +889,7 @@ def describe(result: dict[str, Any]) -> str:
     mark = "ok  " if result.get("ok") else "FAIL"
     details = []
     for key in ("error", "path", "location", "settled", "pokes", "seconds", "answered", "exit_code",
-                "cursor_moved_to"):
+                "cursor_moved_to", "label", "checked"):
         if key in result and result[key] is not None:
             details.append(f"{key}={result[key]}")
     if "frames" in result:

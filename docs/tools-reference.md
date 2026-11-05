@@ -676,6 +676,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--fps-counter` — show Godot's rendered FPS and corresponding average frame time in the top-right corner,
   refreshed four times per second. The overlay observes the presentation loop only; it does not alter VM
   timing, input, compositor selection, or opcode handling.
+- `--no-menu-bar` — leave out the native menu bar. By default a game whose install has AGERC.DLL gets AGERC's menu
+  110 above the game canvas, drawn as native's Win32 bar: the window is 20 px taller, and the canvas, the cursor
+  mapping and the dialogs sit below the bar (`engine-re.md`, "Native menu bar").
 - `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced
   dialogue. In a hosted `--scene` run the seeds apply at TITLE's return, after SYSTEM4's boot scripts, so they
   override boot state.
@@ -834,6 +837,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes and the 終了 dialog; port: the 終了 dialog). `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
 | `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
 | `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground` |
+| `menu NAME\|ID` | choose a menu-bar command as a user does. The menu refreshes first, and a grayed item fails the step. Names: `exit`, `save`, `load`, `version`, `save-screen`, `image-folder`, `fullscreen`, `windowed`, `skip`, `hide`, `auto`, `read-skip`, `sound-settings`, `message-settings`, `system-info`, `other-settings`; or a numeric `WM_COMMAND` id. The result prints the item's `label` and whether it was `checked` before. Native sends `WM_INITMENU` (AGE has AGERC refresh the items), reads the item, then posts `WM_COMMAND`; the port runs the same refresh and command on its drawn bar |
 | `close [timeout=S]` | quit the game the way its own quit does (native `WM_CLOSE` wParam=1, which saves the shared profile), then the session ends |
 
 A failing step stops the request, and `do`/`run` exit 1. Results also carry what the game did meanwhile: a script
@@ -882,6 +886,16 @@ Space at the text wait. Retail never runs HIDEWIN.BIN, so both targets wait in t
 - On page 4, Space hides and restores the box under a pointer resting on the hide control. The control loses its
   tooltip, and a click on the same spot advances to `0x913`: op `0x7c` cleared the hotspot hit.
 - The `hide-*` shots compare the hidden and restored frames, and `hide-8`/`hide-9` the tooltip.
+
+`himegari-menu-bar.steps` chooses the menu bar's ﾒｯｾｰｼﾞ items and ｹﾞｰﾑ > 終了 on SC0000. It saves on page 1, reads
+six pages and loads. Then:
+- 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ fast-forwards to `SC0000@0xa18` with the control strip's read-skip cell ON.
+- ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す hides the box at the wait, and the same item, now ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを表示する, restores it.
+- ｵｰﾄﾒｯｾｰｼﾞ on and straight off again moves exactly one page, to `0xa4d`.
+- 終了 opens the 終了 dialog, answered ｷｬﾝｾﾙ.
+
+Both targets match at every checkpoint. The `menu-*` shots also compare the control strip; they differ only in the
+wait indicator's phase.
 
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
@@ -984,7 +998,8 @@ these flags; you need them directly only to drive the port from another client.
   `menu` that stays not busy for `quiet_ms`.
 - `wheel` without `x`/`y` turns at the driven cursor.
 - Port-only ops: `speed` (clock factor 0.05–8). `shot` needs an **absolute** path, because the port's working
-  directory is `godot/`. It captures the 800×600 viewport, so the window must not be minimized.
+  directory is `godot/`. It captures the 800×600 viewport, without the menu bar above it, so the window must not be
+  minimized. Points and cursor positions are canvas pixels on both targets, below the bar.
 - Give `--data-root` and `--control-file` as absolute paths; relative ones resolve against `godot/`.
 
 ## Runtime capture (Frida)

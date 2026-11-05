@@ -455,11 +455,14 @@ CP932 strings and padding. AGE sizes it `(unpadded_bytes / 4) + 1` DWORDs, as fo
 that ends on a DWORD boundary still gets a whole zero DWORD. The three pointer-family DWORD arrays follow.
 
 These counts are serialized mutable-prefix lengths, not declarations that every typed runtime bank ends
-there. Native deserialization zeroes and replaces only each counted prefix. Initialization-authored
-definitions after the prefix remain live: in Himegari the saved integer prefix ends at `0x6241b`, before
-unit/stage definition tables such as `0x66716` and `0xe8275`, while the saved string prefix ends at
-`0x315`, exactly where `unit_story_display_names` begins. Clearing the whole runtime dictionary during
-import therefore destroys data that is intentionally absent from the numbered file.
+there. In Himegari the saved integer prefix ends at `0x6241b`, before unit/stage definition tables such as
+`0x66716` and `0xe8275`, while the saved string prefix ends at `0x315`, exactly where
+`unit_story_display_names` begins.
+
+Native deserialization nevertheless zeroes every bank to its live size before copying the prefixes. The
+definitions after the prefix come back when the restored SYSTEM4 frame re-runs its prologue (INIT2 precedes its
+`0xae`). A loader must clear the whole bank too, and must also re-run the prologues. See `engine-re.md`,
+"Layout-3 restore mechanics".
 
 Retained graphics then uses:
 

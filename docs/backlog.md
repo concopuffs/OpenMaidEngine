@@ -10,21 +10,21 @@ it; git history keeps the record.
 
 ## Engine fidelity
 
-- **Native menu bar (AGERC menu 110).** A windowed native AGE has a Win32 menu bar; the port has none
-  (`engine-re.md`, "Native menu bar").
-  - Himegari's pruned bar offers:
-    - ｹﾞｰﾑ>終了 (`0x9c41`, the asking close);
-    - 画像の保存;
-    - ﾒｯｾｰｼﾞ: skip, read skip, hide window, auto, and message settings;
-    - 設定: 画面表示, ｻｳﾝﾄﾞ設定 and その他の設定;
-    - ﾍﾙﾌﾟ.
-  - Every command except 終了 runs through AGERC host command 2, and several open AGERC dialogs.
-  - Fullscreen reaches the same commands through the top-edge strip (op `0x149` sets its delay).
-    `message:RMouseEvent=2` adds a right-click ﾒｯｾｰｼﾞ popup.
-  - The port keeps the state of ops `0x142` and `0x149` for a future menu, but shows no menu.
+- **Native menu bar: the remaining commands (AGERC menu 110).** The port draws the pruned bar and runs ｹﾞｰﾑ>終了
+  and the four ﾒｯｾｰｼﾞ toggles as native does (`engine-re.md`, "Native menu bar"). It grays everything else. Still
+  missing:
+  - The AGERC dialogs behind ﾒｯｾｰｼﾞ設定, 画面表示, ｻｳﾝﾄﾞ設定, その他の設定 and the ﾍﾙﾌﾟ items (version, system
+    information).
+  - 画像の保存 (`0x9c46`, the BMP that `engine_save_screenshot_bmp` writes) and the image-folder command (`0x9c47`).
+  - ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (`0x9c5a`/`0x9c5b`), and in fullscreen the top-edge strip that shows the bar (op `0x149` sets
+    its delay; the port keeps that state and op `0x142`'s).
+  - The right-click ﾒｯｾｰｼﾞ popup under `message:RMouseEvent=2`.
+  - Keyboard focus without a dropdown: Alt pressed and released, or F10, selects the bar. The port's keyboard
+    access starts only from Alt with an access key, which opens that dropdown.
+  - Smaller look differences. Native popups may extend past the game window (the ﾍﾙﾌﾟ popup spans x 744..989), but
+    the port clamps them inside it. Latin glyphs are drawn without ClearType's exact rasterization.
 
-  Done when the port offers an equivalent menu, drawn or a native window menu, whose commands reach the same
-  services, or when the item is closed as out of scope.
+  Done when each command reaches the same native service or dialog, or is closed as out of scope.
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
   statement blocks, "Not modelled"). A static scan of both games' scripts (2026-11-04) finds a movie start inside

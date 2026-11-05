@@ -261,6 +261,13 @@ public sealed partial class GodotAdvHost
             RequestSynchronizedPresentation();
             while (!_stopping)
             {
+                // A native modal loop (an open menu or dialog) stops the engine tick, so the wait neither services
+                // input nor lets Auto time out until it closes.
+                if (!_frontendModalRelease.IsSet)
+                {
+                    _frontendModalRelease.Wait(50);
+                    continue;
+                }
                 while (true)
                 {
                     bool markerWasEnabled;
@@ -429,6 +436,13 @@ public sealed partial class GodotAdvHost
     }
 
     public void WakeInputCallbackService() => _inputCallbackSignal.Set();
+
+    // A service call ended the polling text wait (native run-state 0x80000000 cleared): the wait returns as a click
+    // would make it.
+    public void EndInputWait()
+    {
+        if (IsWaiting && _gate.CurrentCount == 0) _gate.Release();
+    }
 
     // Native run-state 0x4000000, the hidden-window wait (engine_main_tick_with_exception_policy@0x411ec8): the page
     // stays hidden and frames keep presenting while the VM thread waits for any triggered action. Main.Input latches
@@ -970,14 +984,22 @@ public sealed partial class GodotAdvHost
     // Native dispatch remains burst-fast between explicit presentation/sleep/input services even when
     // message Skip removes those services. Per-op frame pacing turns ordinary skipped setup/cleanup bursts
     // into multi-second invisible stalls.
-    // Native runs AGERC's 終了 dialog as a modal Win32 dialog inside the window procedure, so the engine main
-    // loop dispatches no opcodes while it is open. The frontend holds the VM at its next opcode boundary.
+    // Native runs AGERC's 終了 dialog as a modal Win32 dialog inside the window procedure, and a menu's modal loop
+    // the same way, so the engine main loop dispatches no opcodes while either is open. The frontend holds the VM at
+    // its next opcode boundary. Holds nest (a menu command opens the 終了 dialog before the menu loop ends), so the
+    // VM runs again only when the last one is released. Main thread only.
     private readonly ManualResetEventSlim _frontendModalRelease = new(true);
+    private int _frontendModalHolds;
 
     public void SetFrontendModalHold(bool held)
     {
-        if (held) _frontendModalRelease.Reset();
-        else _frontendModalRelease.Set();
+        if (held)
+        {
+            if (_frontendModalHolds++ == 0) _frontendModalRelease.Reset();
+            return;
+        }
+        if (_frontendModalHolds == 0) return;
+        if (--_frontendModalHolds == 0) _frontendModalRelease.Set();
     }
 
     public void FrameYield()

@@ -25,11 +25,13 @@ public sealed partial class VirtualMachine
                 Write(a[0], _messageSkipEnabled ? 1 : 0); return pc + 1;
             case "u00414E80":
             case "suspend-adv-skip-service": // 0x19b: preserve the toggle while leaving ADV presentation
+                _advSkipServiceEnabled = false;
                 _messageSkipServiceActive = false;
                 _host.SetMessageSkipActive(false);
                 return pc + 1;
             case "u00414EC0":
             case "resume-adv-skip-service": // 0x19c: recompute active fast-forward on ADV entry
+                _advSkipServiceEnabled = true;
                 _messageSkipServiceActive =
                     _messageSkipEnabled || _advReadSkipState || _host.IsAdvReadSkipActive;
                 _host.SetMessageSkipActive(_messageSkipServiceActive);

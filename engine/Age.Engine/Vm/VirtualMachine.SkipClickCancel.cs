@@ -26,7 +26,7 @@ public sealed partial class VirtualMachine
 
     private int _skipClickCancelState;        // native ctx+0x6da80
     private int _skipClickCancelTriggers;     // latched action-4 click triggers since the last tick
-    private bool _settingCallbackPending;     // CALLBACK_SETTING.BIN queued by a mode-2 cancel
+    private bool _settingCallbackPending;     // CALLBACK_SETTING.BIN queued by a mode-2 cancel or a menu toggle
 
     private bool AdvFastForwardActive => _messageSkipServiceActive || _host.IsMessageSkipActive;
 
@@ -43,9 +43,20 @@ public sealed partial class VirtualMachine
         return true;
     }
 
-    /// <summary>One adv_interpreter_tick pass of the click-cancel machine at an instruction boundary, then any
-    /// queued CALLBACK_SETTING.BIN launch. Non-null only when the callback ends the enclosing frame.</summary>
-    private FrameOutcome? ServiceMessageSkipClickCancel()
+    /// <summary>The services native's tick runs before dispatching an op: the click-cancel machine (with
+    /// CANCELMESSKIPONCLICK set), queued native-menu toggles, then any queued CALLBACK_SETTING.BIN launch. Non-null
+    /// only when the callback ends the enclosing frame.</summary>
+    private FrameOutcome? ServiceInstructionBoundary()
+    {
+        if (_o.CancelMessageSkipOnClick != 0) ServiceMessageSkipClickCancel();
+        ApplyMenuToggles();
+        if (!_settingCallbackPending || _statementBlockActive) return null;
+        _settingCallbackPending = false;
+        return RunSettingCallback();
+    }
+
+    /// <summary>One adv_interpreter_tick pass of the click-cancel machine.</summary>
+    private void ServiceMessageSkipClickCancel()
     {
         if (AdvFastForwardActive)
         {
@@ -68,10 +79,6 @@ public sealed partial class VirtualMachine
         {
             Interlocked.Exchange(ref _skipClickCancelTriggers, 0);
         }
-
-        if (!_settingCallbackPending || _statementBlockActive) return null;
-        _settingCallbackPending = false;
-        return RunSettingCallback();
     }
 
     private void CancelMessageSkipFromClick()

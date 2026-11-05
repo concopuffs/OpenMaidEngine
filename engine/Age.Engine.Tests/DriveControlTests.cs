@@ -47,6 +47,13 @@ public class DriveControlTests
         public JsonObject Answer(string button) { Answered = button; return new JsonObject { ["answered"] = button }; }
         public bool? Minimized;
         public JsonObject Window(bool minimize) { Minimized = minimize; return new JsonObject { ["minimized"] = minimize }; }
+        public int? Chosen;
+        public JsonObject Menu(int command)
+        {
+            if (command == 0x9c46) throw new DriveProtocolException("menu command 0x9c46 is grayed");
+            Chosen = command;
+            return new JsonObject { ["command"] = command, ["enabled"] = true };
+        }
     }
 
     private static DriveState At(string location, string? waiting = null, bool busy = false, params string[] outer)
@@ -235,6 +242,22 @@ public class DriveControlTests
         var without = new FakeBackend { Capabilities = Array.Empty<string>() };
         Assert.Contains("'window' is not supported",
             (string?)Run(new DriveDispatcher(without), without, """{"id":4,"op":"window","state":"minimize"}""")["error"]);
+    }
+
+    [Fact]
+    public void MenuChoosesACommandThroughTheBackendAndNeedsItsCapability()
+    {
+        var backend = new FakeBackend { Capabilities = new[] { "menu" } };
+        var dispatcher = new DriveDispatcher(backend);
+        var chosen = Run(dispatcher, backend, """{"id":1,"op":"menu","command":40035}""");
+        Assert.Equal(0x9c63, (int)chosen["result"]!["command"]!);
+        Assert.Equal(0x9c63, backend.Chosen);
+        Assert.Contains("grayed", (string?)Run(dispatcher, backend, """{"id":2,"op":"menu","command":40006}""")["error"]);
+        Assert.Contains("1..0xffff", (string?)Run(dispatcher, backend, """{"id":3,"op":"menu","command":0}""")["error"]);
+
+        var without = new FakeBackend { Capabilities = Array.Empty<string>() };
+        Assert.Contains("'menu' is not supported",
+            (string?)Run(new DriveDispatcher(without), without, """{"id":4,"op":"menu","command":40035}""")["error"]);
     }
 
     [Fact]

@@ -43,7 +43,7 @@ from drive_core import DriveError  # noqa: E402
 
 AGENT = core.DATA / "native-agent.js"
 ENGINE_CTX_TOML = paths.VM_MAP / "engine-ctx.toml"
-CAPABILITIES = ("dialogs", "answer", "window", "detach")
+CAPABILITIES = ("dialogs", "answer", "window", "menu", "detach")
 QUIET_EVENTS = {"folder", "request"}       # logged, but not sent to clients
 
 
@@ -221,6 +221,31 @@ class Win32(core.Windows):
     def post(self, hwnd: int, message: int, wparam: int, lparam: int) -> None:
         self.user32.PostMessageW(hwnd, message, wparam, lparam)
 
+    def menu_item(self, hwnd: int, command: int) -> dict[str, Any] | None:
+        """Refresh the window's menu bar as opening a menu does (WM_INITMENU: AGE has AGERC update the items), then
+        read command's item: {label, enabled, checked}, or None when the bar has no such command."""
+        ctypes, wintypes, user32 = self.ctypes, self.wintypes, self.user32
+        user32.GetMenu.argtypes = [wintypes.HWND]
+        user32.GetMenu.restype = wintypes.HMENU
+        user32.SendMessageTimeoutW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+                                               wintypes.UINT, wintypes.UINT, ctypes.c_void_p]
+        user32.GetMenuState.argtypes = [wintypes.HMENU, wintypes.UINT, wintypes.UINT]
+        user32.GetMenuState.restype = wintypes.UINT
+        user32.GetMenuStringW.argtypes = [wintypes.HMENU, wintypes.UINT, wintypes.LPWSTR, ctypes.c_int, wintypes.UINT]
+        menu = user32.GetMenu(hwnd)
+        if not menu:
+            return None
+        result = ctypes.c_size_t()
+        abort_if_hung = 0x2
+        user32.SendMessageTimeoutW(hwnd, WM_INITMENU, menu, 0, abort_if_hung, 5000, ctypes.byref(result))
+        state = user32.GetMenuState(menu, command, MF_BYCOMMAND)
+        if state == 0xFFFFFFFF:
+            return None
+        buffer = ctypes.create_unicode_buffer(256)
+        user32.GetMenuStringW(menu, command, buffer, 256, MF_BYCOMMAND)
+        return {"label": buffer.value, "enabled": not state & (MF_GRAYED | MF_DISABLED),
+                "checked": bool(state & MF_CHECKED)}
+
     def post_input(self, hwnd: int, message: int, wparam: int, lparam: int) -> None:
         """Post a mouse or keyboard message as hardware input arrives: not while the window is disabled. A modal
         message box disables its owner, and AGE's window procedure must not see input from inside the box's loop
@@ -334,6 +359,7 @@ def wheel_wparam(notches: int) -> int:
 WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP = 0x200, 0x201, 0x202, 0x204, 0x205
 WM_KEYDOWN, WM_KEYUP, WM_MOUSEWHEEL, WM_CLOSE, BM_CLICK = 0x100, 0x101, 0x20A, 0x10, 0xF5
 WM_SYSCOMMAND, SC_MINIMIZE, SC_RESTORE = 0x112, 0xF020, 0xF120
+WM_COMMAND, WM_INITMENU, MF_BYCOMMAND, MF_GRAYED, MF_DISABLED, MF_CHECKED = 0x111, 0x116, 0x0, 0x1, 0x2, 0x8
 
 
 # --------------------------------------------------------------------------------------------- requests
@@ -764,6 +790,19 @@ class Daemon:
         if not minimize and not self.arguments.foreground:
             win32().send_to_bottom(hwnd)    # a restore activates the window
         return {"minimized": win32().iconic(hwnd)}
+
+    def op_menu(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Choose a menu-bar command as a user does: the menu refreshes, a grayed item cannot be chosen, and an
+        enabled one sends WM_COMMAND (AGE hands AGERC's ids to its _OperateMenu command handler)."""
+        command = _int(request, "command", 0)
+        hwnd = self.require_window()
+        item = win32().menu_item(hwnd, command)
+        if item is None:
+            raise DriveError(f"the menu bar has no command 0x{command:x}")
+        if not item["enabled"]:
+            raise DriveError(f"menu command 0x{command:x} ({item['label']}) is grayed")
+        win32().post(hwnd, WM_COMMAND, command, 0)
+        return {"command": command, **item}
 
     def op_detach(self, request: dict[str, Any]) -> dict[str, Any]:
         self.closing = True

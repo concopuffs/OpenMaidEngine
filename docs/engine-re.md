@@ -344,7 +344,7 @@ The meaningful consumer catalog is:
 | `CLICKONUP` | Copied at `0x488080` into `g_dwClickOnUp@0x5c6030`. When nonzero, `age_main_window_proc` latches mouse clicks (`input_latch_mouse_click@0x485e20`) on `WM_LBUTTONUP`/`WM_RBUTTONUP` instead of the down messages. That latch is the trigger for ADV page advance, hotspot clicks, bound actions (right-click → `MENU.BIN`) and movie/transition skips; see *Driving native AGE* below. Himegari has 1. | Active input timing; port implemented (`Sys4StartupSettings.ClickOnUp`) |
 | `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for active fast-forward; value 2 also launches `CALLBACK_SETTING.BIN`. See "Click cancels Skip" below. | Active ADV input behavior; port implemented (`Sys4StartupSettings.CancelMessageSkipOnClick`) |
 | `CONTROLDISIBLECURSOR` | The spelling is native. The "cursor" is the page-wait indicator. With value 0, `adv_input_service_poll` calls `adv_wait_indicator_stop@0x4051c0` (erase the indicator, clear run-state `0x40000000`) before it runs a bound-action or hover callback. Value 1 skips that call, so the indicator keeps running under the callback. | Both games set 1, which is the port's behavior (callbacks leave the indicator alone); value 0 is not modelled (2026-11-04) |
-| `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. Their only callers are slots 33/34 of the interface vtable `0x578034` (global object `0x5c5f10`); no opcode reaches them, and the script menus' ops `0x88`/`0x1b7` ignore the setting. | Inert on the script path (both shipped games have 1); not modelled |
+| `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. Their only callers are IAGEService `+0x84`/`+0x88` (vtable `0x578034`, global object `0x5c5f10`), which the menu bar's ｵｰﾄﾒｯｾｰｼﾞ and ﾒｯｾｰｼﾞｽｷｯﾌﾟ call ("Native menu bar"); no opcode reaches them, and the script menus' ops `0x88`/`0x1b7` ignore the setting. | Modelled for the menu toggles (`VmOptions.CoexistMessageSkip`); inert on the script path (both shipped games have 1) |
 | `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The generic fallback is 0; the active Himegari profile has value 1. While one of the native effect-service run-state bits `0x8`, `0x10`, `0x80`, or `0x100` is active, logical action 4 is consumed and the selected effect tick receives delta `0x10000000`, forcing its terminal frame. | Active visual-effect input policy; port routes action 4 ahead of retained ADV hotspots while a transition service is parked |
 | `REDRAWTEXTONKEY` | Value 1 lets a wheel action at an ADV text wait step the text view (`FUN_00453520` ±1) and launch `CALLBACK_TEXT.BIN` under run-state `0x100000`. | Inert: both games set 0, and the port does not model value 1 (2026-11-04) |
 | `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. While an ADV text wait polls, a wheel turn raises that action instead of feeding op `0x10d`; every scene binds action 8 to History ("Mouse wheel at an ADV text wait"). The `message:WheelKey*OnTW` copies have no reader. | Active ADV input binding; port implemented (`Sys4StartupSettings.WheelKeyUpAction`, 2026-11-04) |
@@ -607,7 +607,7 @@ A native drive confirmed this (`tools/drive/scenarios/himegari-exit-dialog.steps
 The port's drive of the same scenario passes. Its return to TITLE takes 0.28 s, with no logos. The minimized-close
 scenario passes on the port too.
 
-The port has no menu bar, so nothing in it sends `0x9c41` (see "Native menu bar" below, and `docs/backlog.md`).
+The port's drawn menu bar sends `0x9c41` from ｹﾞｰﾑ>終了 as native's does: the asking close (see "Native menu bar" below).
 
 **Port appearance (2026-11-04).** Both modal dialogs (this one and the interpreter error box) are drawn to look like
 AGE's on Windows 10. The reference is PrintWindow captures of the native dialogs with their layout read through
@@ -1305,7 +1305,7 @@ It is called by the maximize box (`SC_MAXIMIZE`), Alt+Enter, op `0x2cf` and `0x4
 set to 1, it refuses to leave a window.
 
 - **To a window,** it sets style `0x90cb0000`, sizes the frame for the caption and the menu, and attaches the menu:
-  `LoadMenuA(110)`, `SetMenu`, AGERC host command 1, `DrawMenuBar`.
+  `LoadMenuA(110)`, `SetMenu`, AGERC `_OperateMenu` op 1, `DrawMenuBar`.
 - **To fullscreen,** it sets style `0x90000000` and detaches the menu with `SetMenu(NULL)`. In fullscreen the same
   commands come from the top-edge strip ("System-menu top-edge reveal delay" below).
 
@@ -1322,7 +1322,7 @@ Menu resource 110 is in AGERC.DLL. Its labels, without their mnemonics, are:
 AGERC.DLL also holds a debug menu, 124. Its items are F2–F12 commands such as BINﾌｧｲﾙの再読込, ﾀｲﾄﾙに戻る `0x9c6a` and
 ﾌﾟﾛｸﾞﾗﾑの終了 `0x9c6b`. No code loads that menu ("Close policy" above).
 
-**Pruning.** Host command 1 is `agerc_prune_menu_by_settings@0x10002ca0`. A `set:Menu_*` key of 0 removes:
+**Pruning.** `_OperateMenu` op 1 is `agerc_prune_menu_by_settings@0x10002ca0`. A `set:Menu_*` key of 0 removes:
 
 - `Menu_Save`: ｾｰﾌﾞ, ﾛｰﾄﾞ and their separator;
 - `Menu_RClick`: ﾏｳｽの右ｸﾘｯｸ時の動作;
@@ -1345,17 +1345,87 @@ The windowed game's outer window is 806×649, and its client starts at (3,46).
 **Commands.** `age_main_window_proc@0x486320` handles `WM_COMMAND`:
 
 - `0x9c41` posts `WM_CLOSE(0)`, and `0x9c6b` posts `WM_CLOSE(1)` ("Close policy" above).
-- Every other id goes to AGERC host command 2, together with the menu that `WM_INITMENU` saved. `WM_INITMENU` also
-  runs host command 0 and `DrawMenuBar`.
+- Every other id goes to AGERC `_OperateMenu` op 2, together with the menu that `WM_INITMENU` saved. `WM_INITMENU`
+  also runs op 0, the refresh, and `DrawMenuBar`.
 - Opcode `0x142` below grays the settings and save items while CONFIG runs.
 
 **Right-click popup.** On `WM_RBUTTONDOWN`, AGE checks two things: any of run-state bits `0x94800000` must be set,
-and `message:RMouseEvent` must be 2. When both hold, AGE loads a fresh copy of menu 110. Host command 1 never prunes
+and `message:RMouseEvent` must be 2. When both hold, AGE loads a fresh copy of menu 110. Op 1 never prunes
 that copy. AGE then opens its third popup, ﾒｯｾｰｼﾞ, at the cursor with `TrackPopupMenu`. The default in
 `SYS4REG.INI` is `RMouseEvent=0`, and Himegari prunes ﾏｳｽの右ｸﾘｯｸ時の動作 from the bar.
 
-**Port.** The port has no menu bar, no right-click popup and no top-edge strip. None of the AGERC commands above has
-a port source (`docs/backlog.md`, "Native menu bar").
+**`_OperateMenu@16`.** AGE resolves AGERC's export `_OperateMenu@16` (`agerc_operate_menu_export@0x10001070`, ordinal
+6) into `g_pfnAgercOperateMenu` (`0x5c601c`). Its first argument selects the operation: 0 refreshes the menu
+(`agerc_refresh_system_menu_state@0x10002e10`), 1 prunes it (above), 2 runs a command (`agerc_menu_command@0x100032f0`);
+anything else returns -1. Earlier revisions called these "host commands 0/1/2"; the AGERC host commands 4, -1 and 10
+named elsewhere in this document go through a different export. Each call first resolves `AGE:reg` and
+`AGE:IAGEService` (vtable `0x578034`) through the host callback.
+
+**Refresh.** On every `WM_INITMENU` the refresh rebuilds the check marks, labels and enabled states:
+
+- ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ from IAGEService `+0x08`; ﾒｯｾｰｼﾞｽｷｯﾌﾟ from `+0x04` (persistent Skip, `ctx+0x550fc`); ｵｰﾄﾒｯｾｰｼﾞ
+  from `+0x0c` (`ctx+0x55104`); 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ from `message:ReadTextSkip`.
+- `0x9c64` reads ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを表示する(&O) and is enabled while the hidden-window wait runs (`+0xb8`, run-state
+  `0x4000000`). Otherwise it reads ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す(&H), enabled only at a polling text wait (`+0xbc`, run-state
+  `0x80000000`) or the op-`0x95` choice wait (`+0xc0`, `0x10000000`) whose running frame has an op-`0x7b` handler A
+  (`+0x80`).
+- The 設定 radio groups from `AGE:reg`: `message:RMouseEvent`, `display:UseAntiFont`, `message:MessageSpeed`
+  (0 / 2–10 / 11–20 / above 20), `message:MesWinAlpha` (0/4/8/12), `sound:SE` and `sound:Music` (-1 is off).
+- Op `0x142`'s field grays the settings and message items (below).
+
+**Command handler.** `agerc_menu_command` runs the ﾒｯｾｰｼﾞ items through IAGEService, and after each of the three toggles
+it calls `+0x20` `launch_script_by_name("CALLBACK_SETTING.BIN")`, which the launch queue runs from the ADV tick:
+
+| Id | Service | Native function | Effect |
+|---|---|---|---|
+| `0x9c63` ﾒｯｾｰｼﾞｽｷｯﾌﾟ | `+0x88` | `adv_toggle_skip_mode@0x406c20` | Flips the persistent Skip; enabling clears Auto unless `set:CoexistMesSkip`. With the skip service on (`ctx+0x55100`, set by scene reset and op `0x19c`, cleared by op `0x19b`), enabling starts fast-forward at once. Disabling leaves run-state `0x08000000` until the page's op `0xfa` recomputes it. |
+| `0x9c65` ｵｰﾄﾒｯｾｰｼﾞ | `+0x84` | `adv_toggle_auto_mode@0x406b70` | Enabling sets `0x55104`, clears Skip unless `CoexistMesSkip`, and arms the sleep timer with `AutoMessageTime1` (100 if unset) unless a voice is pending. With the skip service on it clears run-state `0x80000000`: the polling text wait ends at once, so the page advances immediately. Disabling only clears `0x55104`. |
+| `0x9c6f` 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ | `+0xd8` (thunk `0x45f8b0`) | `adv_toggle_read_skip_and_refresh@0x406cd0` | Toggles `message:ReadTextSkip` first. At a text wait, turning it off clears `adv_read_skip_state` (`0x6dbd4`); turning it on checks ReadTextDB: a read message starts fast-forward (run-state `0x08000000`, `0x6dbd4` = 1, indicator stopped); an unread one clears `0x6dbd4` only if Skip is off. |
+| `0x9c64` | `+0x8c` | `iage_service_request_hide_window@0x45f700` | ORs `0x80000000` into the trigger mask while hidden (any trigger ends that wait), else bit `0x20` (action 5), which a polling text wait takes as Space's hide ("ADV hide window" below). |
+
+`CALLBACK_SETTING.BIN` redraws the control strip at `0xd2f0`: the base strip, then an ON cell for each of Auto
+(`+4`), Skip (`+2`) and read skip (`+3`). While G[`0x62428`] is set it only sets G[`0x62429`]; the scene's next
+`0x62428`-clearing epilogue then redraws. SC0000's right-click handler (`0x381`) sets `0x62428` before
+`call-script MENU.BIN` and clears it only when MENU returns, so a load from MENU leaves it set. Native's load still
+reads it as 0 because layout 3 clears every bank in full ("Layout-3 restore mechanics" below; native-read
+2026-11-05).
+
+**Menu loop.** While a menu is open, Windows runs its modal menu loop on AGE's thread, so the game stops: no
+presents, no script progress, no input reaches it. A focus loss closes the menu. A disabled item draws no highlight,
+even when the keyboard selects it. With a popup open, hovering another bar item switches to it, and pressing the
+open item's title closes it.
+
+**Measured look** (native captures, 2026-11-05):
+
+- **Bar.** 20 px tall. Each item is its text width plus 14, and the text starts 7 px in.
+- **Popups.** A popup opens at its bar item's x and client y 19. Rows are 22 px, separators 7 px, and labels start
+  at x 35. A submenu opens at its parent's right edge minus 6. Native popups may extend past the game window; the
+  ﾍﾙﾌﾟ popup spans 744..989.
+- **Font.** The menu font is Segoe UI at -12 (9 pt at 96 dpi). GDI font linking draws the Japanese labels in
+  Meiryo UI at 13 px, so a halfwidth katakana advances 7 px (6.5 hinted), using GDI's integer per-glyph advances
+  with no kerning.
+
+**Port** (2026-11-05). `godot/Main.MenuBar.cs` draws menu 110 above the game:
+
+- **Data and geometry.** `NativeMenuResource` reads menu 110 from the installed AGERC.DLL. `AgercMenu.Prune` and
+  `AgercMenu.Refresh` model op 1 and op 0. `godot/NativeMenuBar.cs` draws the bar and the popups with the measured
+  geometry. The window grows by the bar's height; shots, the cursor mapping and the dialogs place the game below it.
+- **Commands.** 終了 sends the asking close. The four ﾒｯｾｰｼﾞ items call `VirtualMachine.MenuServices`
+  (`RequestMenuMessageSkipToggle`, `…AutoMessageToggle`, `…ReadMessageSkipToggle`, `RequestMenuHideWindow`). The VM
+  applies them at its next instruction boundary or text-wait service, then runs `CALLBACK_SETTING.BIN`. Ending a
+  text wait from Auto goes through `IInputHost.EndInputWait`.
+- **Unimplemented commands.** The refresh grays every command the port cannot run yet.
+- **Menu loop.** While a menu is open, the port holds the VM and freezes the presented frame. The hold nests, so the
+  終了 dialog can open from it.
+- **Text.** Labels are drawn glyph by glyph, with GDI's advances (`GdiTextMetrics`, Windows only), the font's own
+  coverage check (`Win32Font.PrimaryHasChar`; Godot's `Font.HasChar` also counts fallbacks), and LCD antialiasing.
+  The 終了 and script-error dialogs share this text path.
+- **Opting out.** `--no-menu-bar` restores the plain window.
+- **Checks.** `tools/drive/scenarios/himegari-menu-bar.steps` checks read skip, hide, Auto and 終了 on both
+  targets. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
+  state, then posts `WM_COMMAND`. Both targets refuse a grayed item.
+- **Remaining gaps.** The AGERC dialogs and the other commands, the right-click popup, the top-edge strip,
+  Alt/F10 focus, and native's off-window popups are listed in `docs/backlog.md`, "Native menu bar".
 
 ### Native system-menu reentrancy guard — opcode `0x142` (2026-07-29)
 
@@ -2000,8 +2070,9 @@ The completed native chain is `0x21d` snapshot -> `0x223` queue -> `label_1235a`
   `handle+1`; the loader then rebinds the source handle to the new CG, and `0x223 @ 0x129e7` uses
   `handle+1` as old range A, the updated handle as new range B, and `handle+2` as the target presenter.
 - `0x1c7` is the `run_state_flags & 0x08000000` message-skip query. `0x1cc` reads
-  `ctx+0x6dbd4`, now named `adv_read_skip_state`; `adv_refresh_read_skip_state` (`0x406cd0`) and the
-  text/label/wait handlers maintain it from `message_ReadTextSkip` plus per-PC read history. It is not
+  `ctx+0x6dbd4`, now named `adv_read_skip_state`; the text/label/wait handlers maintain it from
+  `message_ReadTextSkip` plus per-PC read history, and the menu bar's 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ toggle
+  (`adv_toggle_read_skip_and_refresh@0x406cd0`) re-checks it. It is not
   surface-transition progress.
 - Zero OR-state is normal playback and reaches `0x21c`; run-state bit `0x400` parks interpreter
   progression while the type-0 surface command advances from the frame clock. Nonzero skip/read state
@@ -2960,8 +3031,8 @@ diagnostic/extended-mode surface.
 
 The port tracks the native global banks separately at runtime, captures the marked frame chain, serializes
 live surfaces and retained objects, and applies the 20-byte surface records' explicit reload flags. Full
-load first replaces each serialized mutable bank prefix while preserving initialization-authored cells
-beyond its count, restores history/gfx and retained audio, unwinds the obsolete managed call chain, runs
+load first clears each global bank and copies the serialized prefix into it, restores history/gfx and retained
+audio, unwinds the obsolete managed call chain, runs
 `CALLBACK_LOAD.BIN` when
 the mounted script provider resolves it, loads each saved script at its ordinary entry so its frame-local
 prologue runs, lets that script reach its own `0xae` rendezvous, recursively reconstructs child frames,
@@ -2971,9 +3042,29 @@ and finally resumes the terminal frame at its T1 boundary. Successful `0x19e` al
 
 The prefix boundary is observable in the installed file: integer count `0x6241b` stops before the
 initialization-authored unit/stage definition tables, and string count `0x315` stops exactly before
-`unit_story_display_names`. Native `save_data_deserialize_and_begin_restore@0x40fd10` zeroes only those
-counted regions; the port's former whole-dictionary clear erased the definitions needed by CHMENU,
-unit-management, and SELSTAGE after load.
+`unit_story_display_names`.
+
+**A load zeroes each bank in full** (corrected 2026-11-05; an earlier revision of this section said only the
+counted regions). Before copying the prefixes, layouts 2 and 3 of
+`save_data_deserialize_and_begin_restore@0x40fd10` memset every bank to its live size:
+
+- integers `ctx+0x53c7c` (Himegari 1,419,442 cells);
+- floats `+0x53c80`;
+- strings `+0x53c84` (18,180, each erased);
+- the integer-pointer and string-pointer banks `+0x53c88` and `+0x53c8c`, and the local pointer scratch `+0x53c90`.
+
+The definitions past the prefix come back because every restored frame re-runs its prologue from its entry to
+`0xae`. SYSTEM4's `0xae` is at `0x235`, after LOADCONFIG or INITCONFIG, the op-`0x64` table copy at `0x1ca`, and
+`call-script INIT2` at `0x232`. INIT2 runs EBINIT, CNINIT and the other `*INIT` tables. Kamidori's SYSTEM4 calls
+INIT2 at `0x23c` and reaches `0xae` at `0x23f`.
+
+A cell past the prefix that no prologue writes therefore reads 0 after any load. Native measurements after a load
+from MENU: `G[0x62428]` = 0, `G[0x6242d]` = 4 (the `0x1ca` copy) and `G[0x66381]` = SO026A.AGF's id (INIT2).
+`G[0x62428]` is SC0000's MENU-busy flag, which the right-click handler sets before `call-script MENU.BIN` and a load
+from MENU never clears ("Native menu bar"). The port matches: `ApplyNumberedState` clears each bank before applying
+the prefix, and `InstalledSave00ContinuesToRestoredGameplayPollWhenPresent` checks INIT2's tables after a load. It
+had preserved the cells past the prefix until 2026-11-05, which left `G[0x62428]` set after a load from MENU and
+deferred every `CALLBACK_SETTING.BIN` redraw.
 
 The fixed audio fields are also resolved. Payload `+0x008` is
 `EngineCtx.current_bgm_track_id` (`ctx+0xa0b84`), maintained by
@@ -3180,8 +3271,8 @@ their SYS4INI file index, while append resources retain the high-byte pack selec
 `read_text_db_find_message_index@0x468f50` maps the current code dword offset through that table to a
 per-script message index. `read_text_db_is_message_read@0x469930` formats the script id as an eight-digit
 lowercase hexadecimal key, looks up that script's record, bounds-checks the index, and returns the stored
-dword flag. `adv_refresh_read_skip_state@0x406cd0` and ops `0x6e/0x71/0x72` combine that result with
-`message:ReadTextSkip`; a read page sets `run_state_flags & 0x08000000` and
+dword flag. Ops `0x6e/0x71/0x72`, and the menu bar's toggle `adv_toggle_read_skip_and_refresh@0x406cd0`,
+combine that result with `message:ReadTextSkip`; a read page sets `run_state_flags & 0x08000000` and
 `ctx->adv_read_skip_state`, which op `0x1cc` exposes to the scripts.
 
 The write side records completion, rather than merely displaying text. Ordinary click/wheel advance and
@@ -3242,7 +3333,8 @@ save/load chain, exact `WM_CLOSE` gate, and `NoSaveDat=0` default; saved/refined
 **Native comparison (2026-11-03).** `tools/drive/scenarios/himegari-read-skip.steps` saves on SC0000 page 1,
 reads six pages, reloads the save and turns on Read-message Skip. Native AGE and the port both fast-forward over
 the read pages and stop at `SC0000@0xa18`, the page shown but not yet advanced past, with the control showing ON.
-The port's refresh is simpler than `adv_refresh_read_skip_state@0x406cd0`: native evaluates only while run-state
+The port's refresh is simpler than the check in `adv_toggle_read_skip_and_refresh@0x406cd0`, whose only caller is
+the menu bar's 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ toggle (2026-11-05). That check evaluates only while run-state
 `0x80000000` is set (op `0xfa` sets it when fast-forward is inactive), clears that gate when a read page starts
 fast-forward, and on an unread page clears `adv_read_skip_state` only while the all-message toggle `ctx+0x550fc`
 is off. The port recomputes at each text/wait boundary. No visible difference followed from this in the run.
@@ -3628,7 +3720,8 @@ threaded `SELFTEST OK`.
 
 - `engine_load_sys4ini_and_mount_append_catalogs@0x4099f0` allocates the integer bank with `VirtualAlloc`, which
   zero-fills it.
-- The cell lies past the saved prefix (`0x6241b`), so no save restores it.
+- The cell lies past the saved prefix (`0x6241b`), so no save restores it, and a load zeroes it with the rest of
+  the bank ("Layout-3 restore mechanics").
 - No native instruction addresses its byte offset (`0x189094`).
 - All 301 scripts that mention it only branch on it.
 
@@ -5429,8 +5522,9 @@ The zero-operand SYS4422 handler `op_0xfa_refresh_adv_skip_input_state@0x416de0`
 at `0x417560` reconcile one input-service boundary. They poll the configured held-action mask; when logical
 action 6 (`0x40`) is absent they clear transient fast-forward and play/clear the latest voice queued during
 message skip. If fast-forward is then inactive, they consume the triggered-action mask into the timed-
-callback abort slot, set run-state `0x80000000`, and clear the abort slot. That high bit is the gate consumed
-by `adv_refresh_read_skip_state@0x406cd0` before consulting `message:ReadTextSkip` and ReadTextDB.
+callback abort slot, set run-state `0x80000000`, and clear the abort slot. That high bit is the polling text
+wait's gate, which the menu bar's `adv_toggle_read_skip_and_refresh@0x406cd0` checks before consulting
+`message:ReadTextSkip` and ReadTextDB.
 
 The portable VM maps this onto its existing split physical/script skip channels, host-owned latest-voice
 queue, and ReadTextDB refresh rather than retaining native bitfields. Kamidori's only call is
@@ -5859,8 +5953,8 @@ departure.
   mirrored at `ctx+0xa0ccc` and copied to `bank_size_*` for allocation. See `sys4-format-notes.md`,
   "SYS4INI file header". The port's per-profile `bankDimensions` equal the saved-prefix counts, and a workspace
   test now checks this. The persistent/non-persistent split is therefore a toolchain declaration. A native mod
-  needing more persistent cells could in principle raise the header prefix, since loads replace only the counted
-  prefix, but that is untested.
+  needing more persistent cells could in principle raise the header prefix, since a load copies exactly the
+  counted prefix into banks it has first zeroed in full, but that is untested.
 
 **New scripts under native AGE.** Mounted `*.AAI` append catalogs (see "S4AC append catalogs") already provide the
 mechanism:

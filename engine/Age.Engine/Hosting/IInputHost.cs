@@ -24,6 +24,9 @@ public interface IInputHost
         => WaitForInput(layoutSlot, serviceInputCallback);
 
     void WakeInputCallbackService() { }
+    // Native clearing run-state 0x80000000 from a service call: the polling text wait returns as if the page were
+    // advanced. Called on the VM thread from the wait's input callback.
+    void EndInputWait() { }
     void InputCallbackCompleted(GfxState gfx) { }
 
     // Native run-state 0x4000000, the hidden-window wait: the engine keeps presenting frames and polls the triggered

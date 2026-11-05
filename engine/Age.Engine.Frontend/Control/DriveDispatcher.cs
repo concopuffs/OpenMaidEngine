@@ -30,6 +30,9 @@ public interface IDriveBackend
     /// <summary>Minimize the game window or restore it, as its title-bar and taskbar buttons do (native: WM_SYSCOMMAND
     /// SC_MINIMIZE / SC_RESTORE); returns {minimized} (capability "window").</summary>
     JsonObject Window(bool minimize) => throw new DriveProtocolException("'window' has no implementation here");
+    /// <summary>Choose menu-bar command <paramref name="command"/> as a user does: refresh the menu, refuse a grayed or
+    /// missing item, run an enabled one; returns {command, label, enabled, checked} (capability "menu").</summary>
+    JsonObject Menu(int command) => throw new DriveProtocolException("'menu' has no implementation here");
     /// <summary>The last position the game itself moved the cursor to since the previous call, if any.</summary>
     (int X, int Y)? TakeCursorWarp();
     /// <summary>Where the driven cursor is now, in native canvas pixels (the last pointer, click or warp).</summary>
@@ -195,6 +198,13 @@ public sealed class DriveDispatcher
                     var other => throw new DriveProtocolException($"window state must be minimize or restore, not '{other}'"),
                 };
                 return Immediate(request, reply, () => _backend.Window(minimize));
+            }
+            case "menu":
+            {
+                RequireCapability("menu");
+                int command = request.Int("command");
+                if (command is <= 0 or > 0xffff) throw new DriveProtocolException("menu command ids are 1..0xffff");
+                return Immediate(request, reply, () => _backend.Menu(command));
             }
             default:
                 throw new DriveProtocolException(

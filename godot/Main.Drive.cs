@@ -87,9 +87,12 @@ public partial class Main
     private Vector2 NativeToViewport(int x, int y)
     {
         Vector2 size = GetViewport().GetVisibleRect().Size;
-        if (size.X <= 0 || size.Y <= 0 || _screenWidth <= 0 || _screenHeight <= 0) return new Vector2(x, y);
-        // The centre of the native pixel, so ToNativeScreen's floor maps it back exactly.
-        return new Vector2((x + 0.5f) * size.X / _screenWidth, (y + 0.5f) * size.Y / _screenHeight);
+        if (size.X <= 0 || size.Y <= 0 || _screenWidth <= 0 || _screenHeight <= 0)
+            return new Vector2(x, y + _menuBarHeight);
+        // The centre of the native pixel, so ToNativeScreen's floor maps it back exactly. Client coordinates start
+        // below the menu bar.
+        return new Vector2((x + 0.5f) * size.X / _screenWidth,
+                           (y + _menuBarHeight + 0.5f) * size.Y / (_screenHeight + _menuBarHeight));
     }
 
     private void InjectDrivePointer(int x, int y)
@@ -129,7 +132,8 @@ public partial class Main
 
     private sealed class PortDriveBackend(Main main) : IDriveBackend
     {
-        private static readonly string[] PortCapabilities = { "speed", "waiting", "dialogs", "answer", "window" };
+        private static readonly string[] PortCapabilities =
+            { "speed", "waiting", "dialogs", "answer", "window", "menu" };
 
         public string Target => "port";
         public string Profile { get; } = main._selectedProfile.Profile.Id;
@@ -177,7 +181,7 @@ public partial class Main
 
         public (int Width, int Height) Screenshot(string path)
         {
-            Image? image = main.GetViewport().GetTexture()?.GetImage();
+            Image? image = main.CaptureGameImage();
             if (image == null || image.IsEmpty())
                 throw new DriveProtocolException("no rendered frame to capture (a headless or minimized window)");
             if (image.GetWidth() != main._screenWidth || image.GetHeight() != main._screenHeight)
@@ -207,6 +211,8 @@ public partial class Main
                 ["minimized"] = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Minimized,
             };
         }
+
+        public System.Text.Json.Nodes.JsonObject Menu(int command) => main.ChooseMenuCommand(command);
 
         public System.Text.Json.Nodes.JsonArray Dialogs()
         {

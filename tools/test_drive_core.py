@@ -56,6 +56,11 @@ def test_step_parsing():
     check(raises(core.parse_step, "wait soon", contains="seconds"), "wait takes seconds")
     check(raises(core.parse_step, "window maximize", contains="minimize or restore"), "window states are checked")
     check(core.step_capabilities(core.parse_step("window Minimize")) == {"window"}, "window needs its capability")
+    check(raises(core.parse_step, "menu sideways", contains="command id or one of"), "menu names are checked")
+    check(raises(core.parse_step, "menu 0x10000", contains="1..0xffff"), "menu ids are bounded")
+    check(core.step_capabilities(core.parse_step("menu skip")) == {"menu"}, "menu needs its capability")
+    check(core.menu_command("Read-Skip") == 0x9c6f and core.menu_command("0x9c41") == 0x9c41,
+          "menu takes AGERC names in any case, or ids")
     check(raises(core.parse_step, "speed 20", contains="between"), "speed factors are bounded like the port's")
     check(core.parse_step("wait-state script=TITLE click=adv.next every=3").options["every"] == "3",
           "wait-state can click while it waits")
@@ -427,6 +432,18 @@ def test_window_step():
     check(placed == [{"minimized": True}, {"minimized": False}], "the launcher sees each window result")
 
 
+def test_menu_step():
+    server = FakeServer(lambda request: {"ok": True, "result": {"command": request.get("command"), "enabled": True}})
+    with tempfile.TemporaryDirectory() as directory:
+        with core.Client(server.port, "secret") as client:
+            executor = core.Executor(client, core.Profile(points={}), Path(directory))
+            results = []
+            ok = executor.run(core.parse_steps(["menu skip", "menu 0x9c41"]), results.append)
+    check(ok and [r["op"] for r in server.requests[1:]] == ["menu", "menu"], "menu steps send the menu op")
+    check([r["command"] for r in server.requests[1:]] == [0x9c63, 0x9c41], "the command id rides as 'command'")
+    check(all(r["id"] != r["command"] for r in server.requests[1:]), "the request id stays the request's own")
+
+
 def test_settings_trailer():
     pairs = [("USEAPPDATAFOLDER", "1"), ("SAVEPATH", "Eushully\\姫\\SAVE")]
     strings = b"".join(key.encode("ascii") + b"\0" + value.encode("cp932") + b"\0" for key, value in pairs)
@@ -450,6 +467,7 @@ def main():
     test_profiles()
     test_client_and_executor()
     test_window_step()
+    test_menu_step()
     test_settings_trailer()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0

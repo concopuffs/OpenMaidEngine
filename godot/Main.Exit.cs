@@ -14,7 +14,7 @@ using Godot;
 /// and SC_RESTORE clears it, so closing the minimized game (from the taskbar) quits at once. The port reads the
 /// window's minimized state when the close arrives.</item>
 /// </list>
-/// The port has no AGERC menu bar (menu 110), so 0x9c41 has no port source (docs/backlog.md).
+/// The port's AGERC menu bar (Main.MenuBar.cs) sends 0x9c41 here as an unforced close.
 /// An accepted close saves the shared profile unless set:NoSaveDat (_ExitTree's shutdown flush).
 /// <para>Native's dialogs are modal: their message loop runs inside AGE's main loop, so the game window keeps the
 /// last presented frame until the dialog closes. The port shows a snapshot of that frame meanwhile
@@ -39,7 +39,18 @@ public partial class Main
 
     public override void _Notification(int what)
     {
-        if (what == NotificationWMCloseRequest) RequestUnforcedClose();
+        switch ((long)what)
+        {
+            case NotificationWMCloseRequest:
+                RequestUnforcedClose();
+                break;
+            case NotificationApplicationFocusIn:
+                SetMenuBarActive(true);
+                break;
+            case NotificationApplicationFocusOut:
+                SetMenuBarActive(false);   // an inactive window grays its bar; deactivation ends a menu loop
+                break;
+        }
     }
 
     /// <summary>Native WM_CLOSE with wParam 0: confirm through the 終了 dialog while a game is running.</summary>
@@ -107,7 +118,7 @@ public partial class Main
         {
             _exitDimLayer = new CanvasLayer { Layer = 100 };
             _exitDim = new ColorRect { MouseFilter = Control.MouseFilterEnum.Ignore };
-            _exitDim.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            PlaceOverGame(_exitDim);   // AGE dims its client area, not the menu bar
             _exitDimLayer.AddChild(_exitDim);
             AddChild(_exitDimLayer);
         }
@@ -138,11 +149,11 @@ public partial class Main
                 StretchMode = TextureRect.StretchModeEnum.Scale,
                 MouseFilter = MouseFilterEnum.Stop,
             };
-            _frozenFrame.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+            PlaceOverGame(_frozenFrame);
             _frozenFrameLayer.AddChild(_frozenFrame);
             AddChild(_frozenFrameLayer);
         }
-        Image? presented = GetViewport().GetTexture()?.GetImage();
+        Image? presented = CaptureGameImage();
         if (presented == null) return;
         _frozenFrame.Texture = ImageTexture.CreateFromImage(presented);
         _frozenFrame.Visible = true;

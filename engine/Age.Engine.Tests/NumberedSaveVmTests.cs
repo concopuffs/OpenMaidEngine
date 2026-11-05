@@ -210,16 +210,19 @@ public class NumberedSaveVmTests
                 sink: trace, textHistory: liveHistory, nativeDatStore: store);
             vm.Globals[0x10] = 999;
             vm.Globals[0x123] = 999;
-            vm.Globals[0x124] = 777;
+            vm.Globals[0x124] = 777;           // past the saved integer prefix
+            vm.Globals[0x510] = 5;             // past it too; RESUMED.BIN's prologue re-authors it
             vm.GlobalStrings[0] = "stale";
-            vm.GlobalStrings[1] = "static-unit-name";
+            vm.GlobalStrings[1] = "static-unit-name";   // past the saved string prefix
             vm.Gfx.SetSurface(15, 0x3383, 0);
 
             vm.Run();
 
             Assert.False(vm.Globals.ContainsKey(0x10));
             Assert.Equal(456, vm.Globals[0x123]);
-            Assert.Equal(777, vm.Globals[0x124]);
+            // Native layout 3 zeroes each bank to its live size before copying the saved prefix, so cells past the
+            // prefix come back only through a restored frame's prologue (SYSTEM4's re-runs INIT2's tables).
+            Assert.False(vm.Globals.ContainsKey(0x124));
             Assert.Equal(456, vm.Globals[0x500]);
             Assert.Equal(456, vm.Globals[0x501]);
             Assert.Equal(11, vm.Globals[0x510]);
@@ -227,7 +230,7 @@ public class NumberedSaveVmTests
             Assert.Equal(1, vm.Globals[0x502]);
             Assert.Equal("復帰", vm.GlobalStrings[0]);
             Assert.Equal(0x123, vm.GlobalPointers[0]);
-            Assert.Equal("static-unit-name", vm.GlobalStrings[1]);
+            Assert.False(vm.GlobalStrings.ContainsKey(1));
             Assert.Equal([24L], host.BgmTracks);
             Assert.Equal(
                 [(0x3321L, 1), (0x2aeaL, 2)],

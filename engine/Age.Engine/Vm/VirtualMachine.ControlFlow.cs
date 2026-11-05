@@ -92,8 +92,11 @@ public sealed partial class VirtualMachine
         try
         {
             _host.WaitForServiceTrigger(() =>
-                Interlocked.Exchange(ref _hiddenWindowTriggerLatch, 0) != 0
-                || _messageSkipServiceActive || _stopRequested || _rootReloadRequested);
+            {
+                ApplyMenuToggles();   // the native menu's Skip toggle starts fast-forward, which ends this wait
+                return Interlocked.Exchange(ref _hiddenWindowTriggerLatch, 0) != 0
+                       || _messageSkipServiceActive || _stopRequested || _rootReloadRequested;
+            });
         }
         finally
         {
