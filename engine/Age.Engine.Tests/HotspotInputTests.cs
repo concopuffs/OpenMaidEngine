@@ -148,6 +148,38 @@ public class HotspotInputTests
         }
     }
 
+    // Retail hide window (G[0x62425] = 0): the x=772 control or Space enters handler A, which skips HIDEWIN.BIN and
+    // leaves the frame in the engine's hidden-window wait. A click ends it; handler B restores the page.
+    private sealed class Sc0000RetailHideHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public bool UseSpace;
+        public VmFrameLocation? AtWait;
+        public VmFrameLocation? HiddenAt;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Vm.UpdatePointer(772, 572);
+            while (serviceInputCallback()) { }
+            AtWait = Vm.CaptureFrameLocations()[^1];
+            if (UseSpace) Assert.True(Vm.TryRequestAdvWaitCoroutineYield());
+            else
+            {
+                Vm.UpdateMouseButtonState(0x1, true);
+                Assert.True(Vm.TryActivatePointer(772, 572));
+            }
+            while (serviceInputCallback()) { }
+            throw new StopAtFirstWaitException();
+        }
+
+        public override void WaitForServiceTrigger(Func<bool> triggered)
+        {
+            HiddenAt = Vm.CaptureFrameLocations()[^1];
+            Assert.True(Vm.TryLatchAdvCoroutineYieldTrigger(1 << 4)); // a left click
+            base.WaitForServiceTrigger(triggered);
+        }
+    }
+
     private sealed class Sc0000HideWindowHost : RecordingHost
     {
         public VirtualMachine Vm = null!;
@@ -674,6 +706,36 @@ public class HotspotInputTests
         Assert.Equal(1, host.CursorClearCount);
     }
 
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Sc0000HideWindow_RetailWaitsInTheEngineAndAClickRestoresThePage(bool useSpace)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scene = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
+        var hide = Sys4Loader.Load(Paths.Scripts()["HIDEWIN.BIN"], table);
+        var provider = new MapProvider(new Dictionary<long, Script> { [0x20] = hide });
+        var trace = new RecordingTraceSink { TracingSteps = true };
+        var host = new Sc0000RetailHideHost { UseSpace = useSpace };
+        var vm = new VirtualMachine(scene, table, host, new VmOptions(MaxSteps: 1_000_000), provider, trace);
+        host.Vm = vm;
+        InputBindingBootstrap.Apply(
+            Sys4Loader.Load(Paths.Scripts()["SYSTEM4.BIN"], table), vm.InputBindings);
+        vm.Globals[0x6c1] = 1;
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.DoesNotContain(trace.Events, e => e.Kind == Age.Engine.Diagnostics.TraceEventKind.FrameEnter
+                                              && e.Name?.EndsWith("HIDEWIN.BIN", StringComparison.OrdinalIgnoreCase) == true);
+        Assert.Equal(1, host.ServiceTriggerWaits);
+        Assert.True(host.LastServiceTriggerWaitTriggered);
+        // Native, driven 2026-11-05: the control leaves the frame at SC0000@0x30d, Space at the text wait itself.
+        Assert.Equal(useSpace ? host.AtWait!.ResumeOffset : 0x30d, host.HiddenAt!.ResumeOffset);
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x3233)); // handler B (label_41e) ran
+        Assert.Equal(new[] { true, false }, host.AdvPagePresentationSuspended);
+    }
+
     [Fact]
     [Trait("Category", "Workspace")]
     public void Sc0000HideWindowButton_RunsRealHidewinAndReturnsToAdvWait()
@@ -689,7 +751,7 @@ public class HotspotInputTests
         InputBindingBootstrap.Apply(
             Sys4Loader.Load(Paths.Scripts()["SYSTEM4.BIN"], table), vm.InputBindings);
         vm.Globals[0x6c1] = 1;
-        vm.Globals[0x62425] = 1; // inherited native ADV scheduler state, mirrored by Godot Main
+        vm.Globals[0x62425] = 1; // the HIDEWIN.BIN branch; retail leaves it 0 (Sc0000HideWindowButton_RetailWaits...)
 
         Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
 

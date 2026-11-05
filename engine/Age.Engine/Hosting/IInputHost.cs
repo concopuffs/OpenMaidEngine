@@ -26,6 +26,12 @@ public interface IInputHost
     void WakeInputCallbackService() { }
     void InputCallbackCompleted(GfxState gfx) { }
 
+    // Native run-state 0x4000000, the hidden-window wait: the engine keeps presenting frames and polls the triggered
+    // actions until any arrives. Return once triggered() is true (it consumes the trigger) or the host stops;
+    // WakeInputCallbackService signals new input. Headless hosts have no input, so they return at once, as if a
+    // trigger had arrived.
+    void WaitForServiceTrigger(Func<bool> triggered) { }
+
     // Generic AGE input-callback services (ops 0xcc/0xcd, 0xfb/0xff/0x100, 0x108).
     // Interactive hosts expose the same monotonic clock used by their frame scheduler.
     long InputClockMilliseconds => Environment.TickCount64;

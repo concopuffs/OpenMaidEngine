@@ -15,10 +15,7 @@
     "portableTextRendering": "res://config/japanese-text-rendering.json"
   },
   "runtime": {
-    "sceneEntryCoroutineGateAddress": "0xaba5c",
-    "externalGlobalSeeds": [
-      { "address": "0x62425", "value": 1 }
-    ]
+    "sceneEntryCoroutineGateAddress": "0xaba5c"
   },
   "directSceneDiagnostics": {
     "systemScript": "SYSTEM4.BIN",

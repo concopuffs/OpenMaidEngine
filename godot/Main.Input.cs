@@ -116,6 +116,13 @@ public partial class Main
                 GetViewport().SetInputAsHandled();
                 return;
             }
+            // An ADV coroutine yield (hide window) runs with no input service: the click only latches for the
+            // hidden-window wait, which it ends. It reaches no hotspot and never advances the page.
+            if (action >= 0 && _vm.TryLatchAdvCoroutineYieldTrigger(1 << action))
+            {
+                GetViewport().SetInputAsHandled();
+                return;
+            }
             // CANCELMESSKIPONCLICK: during active fast-forward native withholds hotspot dispatch and feeds the
             // action-4 click to adv_interpreter_tick's cancel state machine instead.
             if (action == 4 && _vm.TryLatchMessageSkipCancelClick())
@@ -153,11 +160,19 @@ public partial class Main
                 _host.SignalInput();
                 GetViewport().SetInputAsHandled();
             }
+            else if (gameplayKey.Pressed && action >= 0 && _vm.TryLatchAdvCoroutineYieldTrigger(1 << action))
+            {
+                GetViewport().SetInputAsHandled();
+            }
             else if (gameplayKey.Pressed && action == 4 && _vm.TryLatchMessageSkipCancelClick())
             {
                 GetViewport().SetInputAsHandled();
             }
             else if (gameplayKey.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))
+            {
+                GetViewport().SetInputAsHandled();
+            }
+            else if (gameplayKey.Pressed && action == HideWindowAction && _vm.TryRequestAdvWaitCoroutineYield())
             {
                 GetViewport().SetInputAsHandled();
             }
@@ -181,7 +196,16 @@ public partial class Main
                 _host.SignalInput();
                 GetViewport().SetInputAsHandled();
             }
+            else if (joyButton.Pressed && _vm.TryLatchAdvCoroutineYieldTrigger(actionMask))
+            {
+                GetViewport().SetInputAsHandled();
+            }
             else if (joyButton.Pressed && _vm.TryActivateInputActions(actionMask))
+            {
+                GetViewport().SetInputAsHandled();
+            }
+            else if (joyButton.Pressed && !HasAdvanceAction(actionMask)
+                     && (actionMask & (1 << HideWindowAction)) != 0 && _vm.TryRequestAdvWaitCoroutineYield())
             {
                 GetViewport().SetInputAsHandled();
             }
@@ -201,8 +225,11 @@ public partial class Main
             _vm.UpdateJoystickAxisState((int)joyMotion.Axis, joyMotion.AxisValue);
     }
 
-    private static bool IsAdvanceAction(int action) => action is 4 or 5;
-    private static bool HasAdvanceAction(int mask) => (mask & ((1 << 4) | (1 << 5))) != 0;
+    // Native services advance, finish a reveal, skip an effect or cancel a movie on logical action 4 only. At a text
+    // wait, action 5 (Space in both games) enters the coroutine yield instead: hide window (adv_input_service_poll).
+    private const int HideWindowAction = 5;
+    private static bool IsAdvanceAction(int action) => action == 4;
+    private static bool HasAdvanceAction(int mask) => (mask & (1 << 4)) != 0;
 
     private void ToggleDebugSceneLauncher()
     {

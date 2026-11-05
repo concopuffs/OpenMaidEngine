@@ -859,6 +859,14 @@ button returns to the same wait, where wheel-up reopens it. The History shots (`
 compare History's rows between targets. Those rows are drawn in HISTORY's own 22 px style and keep the ADV window's
 row breaks.
 
+`himegari-hide-window.steps` hides the text window on SC0000 page 3 in both ways: with the control (x=772) and with
+Space at the text wait. Retail never runs HIDEWIN.BIN, so both targets wait in the engine with the box hidden.
+- After the control, the frames stay at `SC0000@0x30d`. The wheel and an unmapped key (A) keep the box hidden, and a
+  left click restores it.
+- After Space, the frames stay on the wait. The wheel, a right click or Space restores the box.
+- Restoring never advances the page or opens the menu, and Enter still advances.
+- The `hide-*` shots compare the hidden and restored frames.
+
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
 `[native.keep_polling]` and `[[native.dialog]]`. Unknown sections are refused. A profile without `[native.engine]`

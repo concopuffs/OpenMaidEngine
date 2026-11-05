@@ -97,10 +97,17 @@ internal sealed class HotspotRegistry
         // polls nothing then; RearmAfterCallback resumes it. (The registry-resetting
         // input_hotspot_take_click_callback@0x404330 serves the modal ops 0x91/0x92/0x95, which the port
         // does not implement.)
-        _pendingTargets.Clear();
-        Armed = false;
+        SuspendDispatch();
         QueueTarget(target);
         return true;
+    }
+
+    /// <summary>Stop dispatch, keeping the definitions and the hovered record, as an activation does: native polls
+    /// nothing while a callback or coroutine handler runs. RearmAfterCallback resumes it.</summary>
+    public void SuspendDispatch()
+    {
+        _pendingTargets.Clear();
+        Armed = false;
     }
 
     public bool RearmAfterCallback(int pointerX, int pointerY)

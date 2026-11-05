@@ -30,7 +30,8 @@ public sealed class GameProfileSelectionTests
         Assert.Equal(0x2d4, himegari.Persistence.NumberedGfxRecordSize);
         Assert.Equal("res://config/japanese-text-rendering.json",
             himegari.MetadataReferences["portableTextRendering"]);
-        Assert.Equal([new ProfileCellSeed(0x62425, 1)], himegari.Runtime.ExternalGlobalSeeds);
+        // adv_hide_window_enabled (G[0x62425]) is 0 in retail: nothing writes it, so hide window takes the engine wait.
+        Assert.Empty(himegari.Runtime.ExternalGlobalSeeds);
         Assert.Equal(0xaba5c, himegari.Runtime.SceneEntryCoroutineGateAddress);
         DirectSceneDiagnosticPolicy himegariDiagnostics =
             Assert.IsType<DirectSceneDiagnosticPolicy>(himegari.DirectSceneDiagnostics);

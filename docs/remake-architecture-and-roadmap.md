@@ -1771,7 +1771,8 @@ lists. The Godot self-test uses synthetic WAV fixtures, a profile-selected OGG, 
 checks; direct Himegari and Kamidori runs pass. Native RE and all 122 `EngineCtx` fields are pinned to
 Himegari `S4IC422`/`SYS4422`, the exact packed executable SHA-256, and the exact unpacked `/v2` image SHA-256;
 their offsets explicitly do not transfer to Kamidori. K6 can now investigate `0x1be` against `SYS4433` without
-introducing a game-named opcode shim.
+introducing a game-named opcode shim. (Superseded 2026-11-05: the `0x62425` seed is gone. Retail leaves that value
+0, and the port models the engine's hidden-window wait instead; see `engine-re.md`, "ADV hide window".)
 
 ##### Phase K6 — full Kamidori inventory and vertical bring-up
 

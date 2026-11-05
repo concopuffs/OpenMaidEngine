@@ -10,25 +10,17 @@ it; git history keeps the record.
 
 ## Engine fidelity
 
-- **Hide window takes HIDEWIN.BIN where native waits in the engine.** Native, driven 2026-11-04: on SC0000 page 3
-  the hide-window control (x=772) does not call HIDEWIN.BIN. Native's frames stay `SYSTEM4 > SC0000@0x30d` with
-  the text box hidden, and a left click restores it. The port's frames are `SC0000@0x3f6 > HIDEWIN`, and a driven
-  left click does not restore there; a right click does. The mechanism, statically (`engine-re.md`, "The other
-  guards"):
-  - Op `0x199` saves `run_state | 0x6000000` and enters handler A (`label_3c9`).
-  - Handler A finds `adv_hide_window_enabled` (`G[0x62425]`) 0 and runs op `0x7c`. That op restores the run state
-    with `0x4000000` still set, which is the hidden-window wait.
-  - `engine_main_tick_with_exception_policy` (`0x411ef5`) ends that wait on any service trigger by entering handler
-    B (`label_41e`), which restores the window.
-  - The port seeds `G[0x62425]` = 1 (`Profiles/himegari.json`, `externalGlobalSeeds`) and models neither the
-    `0x4000000` wait nor the handler-B entry.
-  - `adv_input_service_poll` and `adv_input_dispatch_callbacks` also enter handler A on trigger bit `0x20`
-    (logical action 5), which Godot treats as an advance key.
+- **A left click does not close HIDEWIN.BIN in the port.** Retail Himegari never runs `HIDEWIN.BIN` (`engine-re.md`,
+  "ADV hide window: the engine's hidden-window wait"), but Kamidori's handler A always does, and so does Himegari
+  once a mod sets `adv_hide_window_enabled` (`G[0x62425]`).
+  - Evidence: on 2026-11-04 the port was driven with that global seeded to 1. On SC0000 page 3 its frames were
+    `SC0000@0x3f6 > HIDEWIN`, and a driven left click did not restore the text box; a right click did.
+  - Native `input_poll_mouse_action_bits@0x460240` maps both buttons to callback indices 4/5, and HIDEWIN registers
+    both to its restore callback, so a left click should restore it (`engine-re.md`, the 2026-07-18 manual-validation
+    correction).
 
-  Done when all three hold:
-  - native's `G[0x62425]` is known (its value in retail, and what writes it);
-  - the port's hide window matches native's frames and restore input;
-  - the trigger-`0x20` entry is modelled or shown unreachable.
+  Done when a driven left click closes `HIDEWIN.BIN` in the port as it does natively. Check it on Kamidori native and
+  port, or on Himegari with the global set.
 - **Modal dialog fidelity (終了 and エラーが発生しました).** The port's dialogs match native's answers, but not
   these details (`engine-re.md`, "Close policy" and the Depth error):
   - Run-state bit `0x1000000` makes native close without asking; its setter is unidentified.

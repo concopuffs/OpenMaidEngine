@@ -1,0 +1,61 @@
+# Hide window on SC0000 page 3. Retail Himegari never runs HIDEWIN.BIN: adv_hide_window_enabled (G[0x62425]) is 0,
+# so handler A ends at op 0x7c and the frame waits in the engine (run-state 0x4000000) with the text box hidden. Any
+# triggered action brings it back through handler B: a mapped key, a left or right click. The control (x=772)
+# leaves the frame at SC0000@0x30d, where the wheel and an unmapped key (A) do nothing. Space (logical action 5)
+# at the text wait hides from the wait itself, so the wheel restores there too. Restoring never advances the page
+# or opens the menu. Run on a fresh sandbox, on both targets, and compare the shots:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-hide-window.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+advance 2
+expect top=SC0000@0x8a9                 # page 3
+move 400 300
+wait 1
+shot hide-0-page
+
+click 772 582                           # the hide-window control
+wait 2
+expect top=SC0000@0x30d
+shot hide-1-control-hidden
+wheel down 2
+wait 1.5
+key 0x41                                # A: no logical action
+wait 1.5
+expect top=SC0000@0x30d
+shot hide-2-still-hidden
+click 400 300
+wait 2
+expect top=SC0000@0x8a9
+shot hide-3-restored
+
+key 0x20                                # Space
+wait 2
+expect top=SC0000@0x8a9
+shot hide-4-space-hidden
+wheel down 2
+wait 2
+expect top=SC0000@0x8a9
+shot hide-5-wheel-restored
+key 0x20
+wait 2
+rclick 400 300
+wait 2
+expect top=SC0000@0x8a9                 # restored; the menu did not open
+shot hide-6-rclick-restored
+key 0x20
+wait 2
+key 0x20                                # Space again restores
+wait 2
+expect top=SC0000@0x8a9
+shot hide-7-space-restored
+key 0x0d                                # Enter still advances
+wait 2
+expect top=SC0000@0x8de

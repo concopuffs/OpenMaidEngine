@@ -430,6 +430,26 @@ public sealed partial class GodotAdvHost
 
     public void WakeInputCallbackService() => _inputCallbackSignal.Set();
 
+    // Native run-state 0x4000000, the hidden-window wait (engine_main_tick_with_exception_policy@0x411ec8): the page
+    // stays hidden and frames keep presenting while the VM thread waits for any triggered action. Main.Input latches
+    // triggers into the VM, which wakes this wait.
+    public void WaitForServiceTrigger(Func<bool> triggered)
+    {
+        _timeline?.State("hidden-window-wait", new());
+        bool scriptSuspended = SuspendScriptForPresentation();
+        try
+        {
+            RequestSynchronizedPresentation();
+            while (!_stopping && !triggered())
+                WaitHandle.WaitAny(new WaitHandle[] { _inputCallbackSignal, _frameSignal }, 50);
+        }
+        finally
+        {
+            ResumeScriptAfterPresentation(scriptSuspended);
+        }
+        _timeline?.State("running", new() { ["hidden_window_triggered"] = true });
+    }
+
     public bool IsAdvPagePresentationSuspended => _advPagePresentationSuspended;
 
     public void SetAdvPagePresentationSuspended(bool suspended)

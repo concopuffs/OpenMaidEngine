@@ -3122,7 +3122,7 @@ History remains a distinct retained-text subsystem rather than another variation
 | Auto (`x=706`) | Toggle the Auto service | Implemented, including timed wait completion | Done |
 | Message Skip (`x=728`) | Enable persistent all-message fast-forward | Implemented; pacing discrepancies remain a later fidelity adjustment | Done |
 | Read-message Skip (`x=750`) | Toggle `message:ReadTextSkip`; gate advancement through shared ReadTextDB state | Implemented 2026-07-24; native-confirmed 2026-11-03 (both targets stop at the first unread page) | Done |
-| Hide Window (`x=772`) | Op `0x199` enters the saved ADV coroutine handler, removes chrome, and runs `HIDEWIN.BIN` | Implemented through the native script path, including coroutine re-entry, per-frame callbacks, mouse/joy state, and `.CUR` resources | Done |
+| Hide Window (`x=772`) | Op `0x199` enters the saved ADV coroutine handler, which fades the text box out. Retail Himegari then waits in the engine until any trigger. `HIDEWIN.BIN` runs only when `G[0x62425]` is set, which retail never does; Kamidori always runs it | Implemented 2026-11-05 on both paths: the engine's hidden-window wait, and the `HIDEWIN.BIN` script path (coroutine re-entry, per-frame callbacks, mouse/joy state, `.CUR` resources). See "ADV hide window: the engine's hidden-window wait" | Done |
 
 `HIDEWIN.BIN` is primarily an input/scheduler slice, not a new renderer. Its former eight effectful gaps were
 cursor selection (`0x86/0x87`), mouse callback registration/dispatch (`0xcc/0xcd`), mouse-button state
@@ -3483,7 +3483,98 @@ threaded `SELFTEST OK`.
 > x=772 control its frames stay `SYSTEM4 > SC0000@0x30d` with the text box hidden, and a left click restores it.
 > Handler A takes the `G[0x62425]` = 0 branch to op `0x7c`, and the restored run-state bit `0x4000000` is an engine
 > hidden-window wait that ends in handler B ("The other guards", coroutine yield). The seeded value 1 therefore
-> does not mirror native. The open item is in `backlog.md`.
+> does not mirror native. Resolved 2026-11-05: the port no longer seeds it and models the wait (next section).
+
+### ADV hide window: the engine's hidden-window wait (2026-11-05)
+
+**`adv_hide_window_enabled` (`G[0x62425]`) is 0 in retail, and nothing writes it.**
+
+- `engine_load_sys4ini_and_mount_append_catalogs@0x4099f0` allocates the integer bank with `VirtualAlloc`, which
+  zero-fills it.
+- The cell lies past the saved prefix (`0x6241b`), so no save restores it.
+- No native instruction addresses its byte offset (`0x189094`).
+- All 301 scripts that mention it only branch on it.
+
+So every Himegari scene's handler A skips `HIDEWIN.BIN`, which is unreachable in retail Himegari. Kamidori's handler
+A calls `HIDEWIN.BIN` unconditionally, then yields again into handler B.
+
+**Two entries hide the window.** Both enter the frame's op-`0x7b` handler A with the yield saved.
+
+- **The control** (`x=772`) runs op `0x199` at `SC0000@0x30c`. The saved run state is the callback's (0), and the
+  resume is `SC0000@0x30d`.
+- **Space** at a text wait. Space is logical action 5 in both games' SYSTEM4 key maps.
+  `adv_input_service_poll@0x411230` takes this entry when the poll has no click or fast-forward bit and no
+  op-`0x97` binding takes the action.
+  - It saves the run state, which holds the text wait's `0x80000000`, and the wait itself as the resume. Native
+    pushes no return pc.
+  - Both games bind only actions 0, 7 and 8, so Space is free.
+  - `adv_input_dispatch_callbacks@0x408530` has the same entry for op `0x95`'s choice table, which no game uses.
+
+**The wait.**
+
+- Handler A (`SC0000@0x3c9`) fades the text box out through `label_1226b`/`label_1235a`. Its `G[0x62425]` branch
+  then jumps to op `0x7c` at `0x41d`.
+- Op `0x7c` restores `coroutine_runstate & ~0x2000000`, which still holds op `0x199`'s `0x4000000`.
+- `engine_main_tick_with_exception_policy` tests that bit before every other run-state service except the dialog,
+  close and BGM-fade bits.
+- Each tick it calls `input_poll_triggered_action_mask@0x460880`, which takes:
+  - the keyboard latch (a non-repeat `WM_KEYDOWN` of a mapped key);
+  - the mouse latch (button-up under CLICKONUP; left → action 4, right → action 7);
+  - mapped joystick buttons and axes;
+  - action 6 whenever the persistent Skip state (`ctx+0x13dc`, the input manager's `+0xfd4`) is set.
+- `age_main_window_proc@0x486320` turns `WM_MOUSEWHEEL` into the action of set:WheelKeyUp/Down only while run-state
+  `0x90100000` is set.
+  - The Space entry keeps `0x80000000`, so there the wheel ends the wait.
+  - From the control, the run state is `0x4000000` alone, so the wheel delta accumulates for op `0x10d`.
+- The first trigger clears `0x4000000` and enters handler B. The new yield gets:
+  - `coroutine_runstate` = the run state | `0x2000000`;
+  - the resume = the frame pc (`frame_pc_word_offset@0x405200`);
+  - the owner = the running script.
+- Handler B (`0x41e`) fades the text box back in, sets `G[0x3233]` = 1 and ends at op `0x7c` (`0x443`). From the
+  control, that returns to `0x30d`, where the
+  callback sleeps 100 ms, nudges the cursor and returns to its wait. From Space, it returns to the parked text
+  wait with its `0x80000000`.
+- The wait consumes the trigger. A restoring click never advances the page, and a restoring right click never opens
+  the menu.
+
+**Native-driven 2026-11-05 (`tools/drive/scenarios/himegari-hide-window.steps`).**
+
+- The control leaves the frames at `SYSTEM4 > SC0000@0x30d`. The wheel and A (no action) keep the window hidden.
+  A left click restores it.
+- Space leaves the frames on the wait (`SC0000@0x8a9`). The wheel, Space, a right click or a left click restores
+  it.
+- Enter still advances.
+- The port matches every step. Its hidden frames are pixel-identical to native. Its restored frames differ only as
+  any port page does: 68 px of glyph edges and the animated wait indicator.
+
+**Port.**
+
+- `VirtualMachine.ControlFlow` keeps the yield as engine state:
+  - entered (`0x4000000`);
+  - the resume pc (`0x2000000`);
+  - the owner;
+  - whether the resume is a text wait.
+- Op `0x7c` with the yield still entered calls `WaitInHiddenWindow`.
+  - That sets the frame location to the resume and blocks in `IInputHost.WaitForServiceTrigger`. The wait ends on a
+    latched trigger, the Skip service, a stop or a root reload.
+  - It then enters handler B, or returns to the resume when the frame has none.
+- `TryRequestAdvWaitCoroutineYield` is the Space entry. `ServiceHotspotCallback` runs it before queued hotspot
+  callbacks, with hotspot dispatch suspended as during any callback. Its op `0x7c` returns `HOTSPOT_RETURN` to the
+  parked wait.
+- `TryLatchAdvCoroutineYieldTrigger` latches Godot's trigger edges while a yield is under way.
+  - It applies only when no nested script's raw input callbacks own input, so `HIDEWIN.BIN` keeps its own input.
+  - The latch consumes the input.
+  - Op `0x199` and the Space entry clear the latch, as native clears the trigger mask.
+- `ApplyMouseWheel` latches the WheelKey action only in the Space entry's wait.
+- Godot (`Main.Input`) no longer treats action 5 as advance. Native advances, finishes a reveal, skips an effect
+  and cancels a movie on action 4 only.
+- Op `0x199` with no yield entered and no handler A now does nothing, as native does. The port used to jump to
+  handler B.
+- The Himegari profile no longer seeds `G[0x62425]`.
+- Tests:
+  - `HiddenWindowWaitTests` (synthesized): both entries, the triggers, wheel routing, Skip and missing handlers;
+  - `HotspotInputTests.Sc0000HideWindow_RetailWaitsInTheEngineAndAClickRestoresThePage` (real SC0000, both
+    entries).
 
 **Manual-validation correction (2026-07-18).** Native `bit-set`/`bit-reset` operands are bit indices, not
 literal masks: HIDEWIN sets index 1 at `0x13d`, tests mask `0x2` at `0x146`, and clears index 1 at `0x154`.
@@ -5525,8 +5616,8 @@ departure.
 
         Each of the three sets the owner to the running frame.
       - Retail hide window uses that wait (native-driven 2026-11-04). On SC0000 page 3, handler A skips HIDEWIN.BIN
-        and resumes at `SC0000@0x30d` with the text box hidden, and a left click enters handler B. The port does not
-        model the wait or either engine entry (`backlog.md`).
+        and resumes at `SC0000@0x30d` with the text box hidden, and a left click enters handler B. The port models
+        the wait and the text-wait entry ("ADV hide window: the engine's hidden-window wait").
     - **Timed sequence.**
       - Ops `0xd3`/`0xd4` build one engine-wide schedule (entries `+0x5f694`).
       - Op `0xd5` (`@0x421090`, length 0) starts the schedule when the cursor is 0. It records the abort pc and the
@@ -5570,8 +5661,9 @@ departure.
       - Each guard raises the native error through `RaiseInstructionScriptError`, with the dispatching instruction
         as the coordinate. 再試行 runs that instruction again. 無視 skips it, except at op `0xd5`, where it runs again.
       - A root reload clears all three, and the `0xcc` target with them.
-      - A save restore clears the yield: the port does not model the engine-armed yields, and its restored scenes
-        take op `0x7c`'s cold path.
+      - A save restore clears the yield, and restored scenes take op `0x7c`'s cold path.
+      - The port models two of the engine-armed yields (2026-11-05): the text wait's action-5 entry and the
+        hidden-window wait's handler B. The third, op `0x95`'s choice table, is unused.
       - Op `0xcf` stays a stub.
       - `CallbackOwnershipTests` has a synthesized test for each path.
   - Consequence for content: a new scene that must support the menu and saving is a scene of its own, entered by

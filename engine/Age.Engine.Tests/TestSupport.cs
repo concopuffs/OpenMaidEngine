@@ -204,6 +204,16 @@ internal class RecordingHost : IHost
                                      Func<AdvAutoWaitState> autoWaitState)
         => WaitForInput(layoutSlot, serviceInputCallback);
     public void InputCallbackCompleted(GfxState gfx) => InputCallbackFrames++;
+    // Each hidden-window wait runs this first (a test supplies the input that ends it) and then takes the trigger.
+    public Action? ServiceTriggerWaitStarted;
+    public int ServiceTriggerWaits;
+    public bool LastServiceTriggerWaitTriggered;
+    public virtual void WaitForServiceTrigger(Func<bool> triggered)
+    {
+        ServiceTriggerWaits++;
+        ServiceTriggerWaitStarted?.Invoke();
+        LastServiceTriggerWaitTriggered = triggered();
+    }
     public virtual long InputClockMilliseconds => Environment.TickCount64;
     public int JoystickButtonCount { get; set; }
     public void SetCursorResource(long resourceId) => CursorResources.Add(resourceId);

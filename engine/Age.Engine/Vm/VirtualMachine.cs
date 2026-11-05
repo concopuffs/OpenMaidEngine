@@ -334,12 +334,22 @@ public sealed partial class VirtualMachine
     /// <item>During a text reveal with <paramref name="advanceMessageOnWheel"/> set, the reveal service (0x406fa0)
     /// reads and clears the accumulated delta: a negative total finishes the reveal, any other total is
     /// discarded.</item>
+    /// <item>In the hidden-window wait entered from a text wait, the run state still holds the wait's 0x80000000, so
+    /// the window proc raises the same action, which ends the wait (the window comes back). Entered from a control
+    /// callback, the run state is 0x4000000 alone and the delta accumulates.</item>
     /// <item>Otherwise the delta accumulates for op 0x10d (HISTORY scrolls with it).</item>
     /// </list>
     /// set:ReDrawTextOnKey (CALLBACK_TEXT.BIN) is not modelled: both games set REDRAWTEXTONKEY=0.</summary>
     public MouseWheelOutcome ApplyMouseWheel(int delta, bool advanceMessageOnWheel, bool textRevealing)
     {
         if (delta == 0) return MouseWheelOutcome.Dropped;
+        if (_hiddenWindowWaiting && _hiddenWindowWheelTriggers)
+        {
+            int action = delta > 0 ? _o.WheelKeyUpAction : _o.WheelKeyDownAction;
+            if (action is >= 0 and < 32 && TryLatchAdvCoroutineYieldTrigger(1 << action))
+                return MouseWheelOutcome.Activated;
+            return MouseWheelOutcome.Dropped;
+        }
         if (_advTextWaitPolling)
         {
             int action = delta > 0 ? _o.WheelKeyUpAction : _o.WheelKeyDownAction;
@@ -1407,6 +1417,10 @@ public sealed partial class VirtualMachine
 
     private bool ServiceHotspotCallback()
     {
+        // adv_input_service_poll takes op-0x97 bound actions first, which Godot activates before it requests the
+        // action-5 yield, so a pending request comes before the hover and click callbacks queued after it.
+        if (Interlocked.Exchange(ref _advWaitCoroutineYieldRequested, 0) != 0 && ServiceAdvWaitCoroutineYield())
+            return true;
         int target;
         ExecFrame owner;
         lock (_interactiveLock)
@@ -1429,41 +1443,69 @@ public sealed partial class VirtualMachine
         }
         if (_cur.Script.IndexByOffset.TryGetValue(target, out int pc))
         {
-            // The callback runs inside the instruction that waits (native AGE nests it the same way); when it
-            // returns, the frame is back on that waiting instruction, which observers (saves, frame locations) read.
-            int waitingPc = _cur.Pc;
             _cur.CallStack.Add(HOTSPOT_RETURN);
-            // Native clears run-state 0x80000000 on dispatch, so the wheel feeds op 0x10d while the callback (HISTORY)
-            // runs; the callback's ret re-runs the wait, which sets it again.
-            bool waitPolling = _advTextWaitPolling;
-            _advTextWaitPolling = false;
-            try
-            {
-                while (pc >= 0 && pc < _cur.Script.Instructions.Count)
-                {
-                    if (_stopRequested) break;
-                    if (_rootReloadRequested) throw new RootReloadRequestedException();
-                    if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; break; }
-                    Steps++;
-                    _cur.Pc = pc;
-                    if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, _cur.Script.Instructions[pc], _depth));
-                    int next = Step(_cur.Script.Instructions[pc], pc);
-                    _host.FrameYield();
-                    if (next == ROOT_RELOAD) throw new RootReloadRequestedException();
-                    if (next == HOTSPOT_RETURN || next == FRAME_RETURN) break;
-                    if (next == HALT) break;
-                    pc = next;
-                }
-            }
-            finally
-            {
-                _advTextWaitPolling = waitPolling;
-            }
-            _cur.Pc = waitingPc;
+            RunWaitCallback(pc);
             // A malformed callback must not leave its sentinel in the page's ordinary local-call stack.
             int sentinel = _cur.CallStack.LastIndexOf(HOTSPOT_RETURN);
             if (sentinel >= 0) _cur.CallStack.RemoveAt(sentinel);
         }
+        RearmAfterWaitCallback();
+        return true;
+    }
+
+    /// <summary>The action-5 entry of adv_input_service_poll@0x411230: the waiting frame enters its op-0x7b handler A
+    /// with the wait saved as the resume. The handler ends at op 0x7c (after the hidden-window wait and handler B
+    /// when it takes that path), which returns here to the parked wait. Native pushes no return pc.</summary>
+    private bool ServiceAdvWaitCoroutineYield()
+    {
+        if (_cur.CoroutineYieldHandlerA == -1
+            || !_cur.Script.IndexByOffset.ContainsKey(_cur.CoroutineYieldHandlerA))
+            return false;
+        // The handlers run with the wait's poll stopped (native clears run-state 0x80000000), so no hover or click
+        // dispatches until the frame is back on the wait; RearmAfterWaitCallback resumes it.
+        lock (_interactiveLock) _interactiveFrame?.Hotspots.SuspendDispatch();
+        RunWaitCallback(EnterCoroutineYieldHandlerA(_cur.Pc + 1, resumesTextWait: true));
+        RearmAfterWaitCallback();
+        return true;
+    }
+
+    /// <summary>Run a callback inside the instruction that waits (native AGE nests it the same way) until it returns
+    /// to the wait. The frame is then back on that waiting instruction, which observers (saves, frame locations)
+    /// read.</summary>
+    private void RunWaitCallback(int pc)
+    {
+        int waitingPc = _cur.Pc;
+        // Native clears run-state 0x80000000 on dispatch, so the wheel feeds op 0x10d while the callback (HISTORY)
+        // runs; the callback's ret re-runs the wait, which sets it again.
+        bool waitPolling = _advTextWaitPolling;
+        _advTextWaitPolling = false;
+        try
+        {
+            while (pc >= 0 && pc < _cur.Script.Instructions.Count)
+            {
+                if (_stopRequested) break;
+                if (_rootReloadRequested) throw new RootReloadRequestedException();
+                if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; break; }
+                Steps++;
+                _cur.Pc = pc;
+                if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, _cur.Script.Instructions[pc], _depth));
+                int next = Step(_cur.Script.Instructions[pc], pc);
+                _host.FrameYield();
+                if (next == ROOT_RELOAD) throw new RootReloadRequestedException();
+                if (next == HOTSPOT_RETURN || next == FRAME_RETURN) break;
+                if (next == HALT) break;
+                pc = next;
+            }
+        }
+        finally
+        {
+            _advTextWaitPolling = waitPolling;
+        }
+        _cur.Pc = waitingPc;
+    }
+
+    private void RearmAfterWaitCallback()
+    {
         lock (_interactiveLock)
         {
             // History/Hide callbacks cancel the active registry, run a nested script, then republish the
@@ -1473,7 +1515,6 @@ public sealed partial class VirtualMachine
             _interactiveFrame?.Hotspots.RearmAfterCallback(_pointerX, _pointerY);
         }
         _host.InputCallbackCompleted(Gfx);
-        return true;
     }
 
     private int Step(Instruction ins, int pc)

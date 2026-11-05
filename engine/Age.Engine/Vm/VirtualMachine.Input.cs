@@ -32,6 +32,7 @@ public sealed partial class VirtualMachine
                     }
                 }
                 if (wakeAtWait) _host.WakeInputCallbackService();
+                Volatile.Write(ref _advWaitCoroutineYieldRequested, 0); // a request belongs to the wait it reached
                 bool outerWaitPolling = _advTextWaitPolling;
                 _advTextWaitPolling = true;
                 try
