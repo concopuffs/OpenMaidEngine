@@ -23,18 +23,6 @@ it; git history keeps the record.
   an open block only twice, both `play-movie-mask-transition` in `DEBUG.BIN` (`0x139`, `0x1ab`), which retail never
   reaches (the port's F4 debug route does). Done when those two are modelled, or the item is closed as
   debug-only.
-- **Direct-scene runs keep hotspots that native's developer entry cancels.** Direct-scene runs (`--scene`, or an
-  ADV root script in `Age.Cli`) model TITLE's unreachable ＡＤＶパート developer entry: they set
-  `adv_developer_entry_mode` (`G[0xaba5c]`) to 1 and force one pass of the scene's label-picker loop. That pass
-  runs advend's `0x93` at `0x622`. Native empties the registry there, and nothing in the scene re-registers before
-  page 1. The port instead keeps the canceled definitions as a template that the first `wait-for-input` re-arms
-  (`HotspotRegistry.Reset`). These runs also skip SYSTEM4's ADV setup, so the scene's own copy fills the slot table,
-  and Godot seeds `adv_chrome_enabled`. Retail paths are unaffected: the natural boot, a save load and the F4
-  launcher all go through SYSTEM4 and never reach the loop (`engine-re.md`, "Native ADV hosting and Himegari's
-  developer entry"). Done when one of these holds:
-  - direct-scene runs enter like the F4 launcher (SYSTEM4 hosting the scene, gate -1), the forced pass and the
-    template re-arm are removed, and `0x93` empties the table as native does;
-  - or the difference is accepted as a documented developer convenience.
 - **Kamidori's extra SYS4INI trailer keys.** `OUTERFRAMEMODE`, `AUTOFREETEX`, `BLANKEXTENTMODE`,
   `USEPROPORTIONALFONT`, `VALIDFONTCHECKER`, `RUBYSHIFTMODE` and `DEPENDMOVIESOUND=2` are not reverse-engineered
   (`engine-re.md`, trailer catalog). The ADV keys both games share are done: the wheel ids are applied, and

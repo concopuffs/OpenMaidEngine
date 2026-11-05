@@ -102,24 +102,11 @@ public sealed class GameProfileRegistry
 
     private sealed class DirectSceneDiagnosticDocument
     {
-        public string? SystemScript { get; init; }
         public string[]? DataBootstrapScripts { get; init; }
         public string[]? DataTableBootstrapScripts { get; init; }
-        public CellSeedDocument[]? GlobalSeeds { get; init; }
-        public SurfaceBootstrapDocument[]? InheritedSurfaces { get; init; }
-        public WaitIndicatorDocument? WaitIndicator { get; init; }
-        public string? SceneEntryCoroutineGateAddress { get; init; }
 
         public DirectSceneDiagnosticPolicy ToPolicy()
-            => new(
-                SystemScript ?? "",
-                DataBootstrapScripts,
-                DataTableBootstrapScripts,
-                (GlobalSeeds ?? []).Select(seed => seed.ToSeed()),
-                (InheritedSurfaces ?? []).Select(surface => surface.ToBootstrap()),
-                WaitIndicator?.ToBootstrap(),
-                SceneEntryCoroutineGateAddress == null
-                    ? null : ParseAddress(SceneEntryCoroutineGateAddress));
+            => new(DataBootstrapScripts, DataTableBootstrapScripts);
     }
 
     private sealed class DebugSceneLaunchDocument
@@ -143,34 +130,6 @@ public sealed class GameProfileRegistry
         public long Value { get; init; }
 
         public ProfileCellSeed ToSeed() => new(ParseAddress(Address), Value);
-    }
-
-    private sealed class SurfaceBootstrapDocument
-    {
-        public string? Resource { get; init; }
-        public int SurfaceSlot { get; init; }
-        public uint Flags { get; init; }
-
-        public ProfileSurfaceBootstrap ToBootstrap()
-            => new(Resource ?? "", SurfaceSlot, Flags);
-    }
-
-    private sealed class WaitIndicatorDocument
-    {
-        public int TextLayout { get; init; }
-        public int X { get; init; }
-        public int Y { get; init; }
-        public int SurfaceSlot { get; init; }
-        public int SourceX { get; init; }
-        public int SourceY { get; init; }
-        public int FrameWidth { get; init; }
-        public int FrameHeight { get; init; }
-        public int FrameCount { get; init; }
-        public int FrameMilliseconds { get; init; }
-
-        public ProfileWaitIndicatorBootstrap ToBootstrap()
-            => new(TextLayout, X, Y, SurfaceSlot, SourceX, SourceY,
-                   FrameWidth, FrameHeight, FrameCount, FrameMilliseconds);
     }
 
     private static int ParseAddress(string? value)

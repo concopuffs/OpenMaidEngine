@@ -28,26 +28,24 @@ public class TextureOpsTests
     [Trait("Category", "Workspace")]
     public void SC0000FiresTextureOpsWithAssignedFullScreenSlot()
     {
+        // SC0000 hosted by SYSTEM4, as a Godot direct-scene run and the F4 launcher enter it.
         var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4422");
         var provider = Sys4ScriptProvider.Load(table);
-        var session = new GameSession();
-        foreach (var name in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
-            session.RunScene(Sys4Loader.Load(Paths.Scripts()[name], table), table, new CaptureHost(), provider: provider);
-
-        var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
-        var host = new RecHost();
         GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("himegari")!;
+        DebugSceneLaunchPolicy launch = profile.DebugSceneLaunch!;
+        var scene = provider.RequireByName("SC0000.BIN");
+        var writes = new Dictionary<int, long>();
+        foreach (var seed in launch.CoordinatorWrites) writes[seed.Address] = seed.Value;
+        writes[launch.PackedScriptIdAddress] = scene.PackedId;
+        var host = new RecHost();
         var vm = new VirtualMachine(
-            script, table, host, new VmOptions(MaxSteps: 20_000_000), provider,
-            compatibility: new VmCompatibilityContext(
-                profile.Id, profile.EngineAbiId,
-                SceneEntryCoroutineGateAddress: profile.DirectSceneDiagnostics!.SceneEntryCoroutineGateAddress));
-        foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
-        foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
-        vm.Run();
+            provider.RequireByName(launch.RootScript), table, host, new VmOptions(MaxSteps: 20_000_000), provider,
+            compatibility: new VmCompatibilityContext(profile.Id, profile.EngineAbiId));
+        vm.HostScene(new HostedSceneEntry(launch.CoordinatorScript, scene.PackedId, writes));
+        vm.Run();   // headless, the scene ends polling INPUTNAME's name entry (SC0000@0xe632) until the step limit
 
         Assert.True(host.Creates > 0, "create-texture should fire");
-        // Boot + coroutine setup fill the handle/slot tables, so the first bg uses its assigned slot.
+        // SYSTEM4's boot and ADV setup fill the handle/slot tables, so the first bg uses its assigned slot.
         Assert.Contains(host.Sets, s => s.resId == 0x23 && s.slot == 5);
         Assert.Contains(host.Draws, d => d.slot == 5 && d.w == 0x320 && d.h == 0x258);
         // AE001H is the ritual/magic-circle sheet. At the post-effect transition SC0000 explicitly queries its

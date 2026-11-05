@@ -3,9 +3,10 @@ using Age.Engine.Model;
 namespace Age.Engine.Vm;
 
 /// <summary>
-/// Replays the data-only leading ADV layout block from an engine system script. This lets a bounded
-/// single-scene runner inherit script-owned layout state without hard-coding one game's coordinates or
-/// entering the system script's later menu/session control flow.
+/// Replays the data-only leading ADV layout block from an engine system script. This lets a test that runs one
+/// scene without its system root inherit script-owned layout state without hard-coding one game's coordinates or
+/// entering the system script's later menu/session control flow. Runtime runs execute the system script itself:
+/// the natural boot, and Godot direct-scene runs, which the system root hosts.
 /// </summary>
 public static class AdvTextLayoutBootstrap
 {

@@ -483,7 +483,8 @@ not a thin handle seed: it calls 23 data initializers in order (`EBINIT`, `CNINI
 `RTINIT`, `CGINIT`, `SPINIT`, `CTINIT`, `CVINIT`, `CIINIT`, `VIINIT`, `SCINIT`, `BTANINIT2`) and then
 `TUNE.BIN`. The CLI `play --boot` nine-script list is therefore only a partial diagnostic approximation.
 Godot now runs SYSTEM4 itself by default, so this complete sequence and its host-visible side effects execute
-in one VM; Godot `--boot` remains only for an explicit direct-scene diagnostic such as `--scene SC0000`.
+in one VM. Godot direct-scene runs (`--scene SC0000`) are hosted by SYSTEM4 as well, so Godot has no `--boot`
+(2026-11-05; "Native ADV hosting and Himegari's developer entry").
 
 **Startup-video gate and modal player (2026-07-20).** The apparently optional `LOGO`/`OP` calls are
 deterministic first-process-run behavior, not a profile/save decision. `SYSTEM4@0x29a` calls op `0x130` and
@@ -982,12 +983,31 @@ until its step limit. Neither path is reachable without the developer menu.
   - each scene's developer-loop copy at `0x622`.
 
   On the developer path, native therefore reaches the content after the loop with an empty registry.
-- **Port routes.**
+- **Port routes (2026-11-05).**
   - The natural boot matches native: SYSTEM4 hosts SC0000 with the gate at 0.
   - The F4 launcher takes TITLE's case 1/2 route, with the gate at -1 and SYSTEM4 hosting (`tools-reference.md`).
-  - Direct-scene runs (`--scene`, or an ADV root script in `Age.Cli`) model case 0 without SYSTEM4. They set the
-    gate to 1, force one loop pass in which `call G[0x6be]` calls nothing, and re-arm at the first text wait the
-    definitions that advend's `0x93` canceled. Native would leave them empty (`docs/backlog.md`).
+    Unlike case 1/2, it names the chosen scene itself rather than DEBUGADV.
+  - Godot direct-scene runs (`--scene SC0000`) enter the same way (`VirtualMachine.HostScene`).
+    - SYSTEM4 starts as after a return to title (`get-initial-root-run` answers 0, as after op `0x9`), so it skips
+      LOGO and OP and runs LOADCONFIG/INITCONFIG, INIT2 and INIT.
+    - TITLE returns before its first instruction with the launcher's writes and the scene's packed id.
+    - SYSTEM4 then runs its ADV setup and hosts the scene, and the run ends when the scene returns.
+    - Because the gate is -1, the scene skips its loop (`0x450`), and nothing cancels the control strip that
+      `0x7e` registers.
+    - The profile's direct-scene stand-ins are gone: the forced gate and loop pass, the SYSTEM4 layout, binding
+      and inline-array replays, the inherited SO000/SO001 surfaces, the wait indicator, and the
+      `adv_chrome_enabled` seed.
+    - TITLE's own setup (title textures, BGM `0x17`, its input callbacks) does not run, so a scene with no
+      `play-bgm` of its own starts silent, where the F4 launcher would still play the title music.
+    - Driven 2026-11-05: `--scene SC0000` reaches page 1 at `SYSTEM4@0x477 > SC0000@0x83f`, the frames native New
+      Game shows. Hovering the History control shows its tooltip. Against the port's own New Game, the page-3 shot
+      is pixel-identical and page 1 differs only in the wait indicator's animation frame. Against native, both
+      port runs differ only in the usual glyph-edge antialiasing and that indicator.
+  - The CLI's headless scene tools (`trace`, `gfx`, `play`, `sweep`, `oms-rebuild`) run the scene as the root
+    with zeroed banks. The gate stays 0, so they take the retail content path. Only `--boot` stands in for
+    SYSTEM4's state prefix there.
+  - The port's op `0x93` empties the table as `input_hotspot_reset@0x404130` does (record count `+0x408` = 0).
+    The retained-template re-arm that served the old forced loop pass is gone.
 
 **Magic-circle retention fixed in the host model (2026-07-09).** The effect is `AE001H.AGF`
 (resource `0x37`). SC0000 already contains the correct teardown, but the port's wrong `0x215` query
@@ -1523,7 +1543,8 @@ collapsed onto object `0` and its geometry accumulated. Those handles are set by
 (mov `0x62455=0xcb20 … 0x6245c=0xcbc0`), which is call-scripted by the real entrypoint **`SYSTEM4.BIN`**
 (`LOADCONFIG → INITCONFIG → INIT2 → LOGO → OP → INIT → TITLE → …`). Our harness teleports straight into
 SC0000, skipping that boot. **Fix:** run the system-boot state prefix (`INITCONFIG/INIT2/INIT`, skipping the
-UI scripts) before the scene — `Age.Cli gfx --boot` and Godot `--boot` (both via `GameSession`). With boot,
+UI scripts) before the scene — `Age.Cli gfx --boot` and, until 2026-11-05, Godot `--boot` (both via
+`GameSession`; Godot direct-scene runs are now hosted by SYSTEM4 itself). With boot,
 the CGs **de-collapse and render correctly** (screenshot-confirmed). **This is the synthesis of the old
 (a)-vs-(b) debate: the drift needed BOTH the native gfx ops (b) AND boot state (a) — specifically INIT2's
 handle array, never before identified (it is not a story flag).** Note two distinct boots: our Phase-B
@@ -2525,12 +2546,11 @@ so there is nothing for an ADV coroutine to republish:
   `G[0xaba5c]` is not 1 there, and the loop body `0x462..0x711` that holds `0x622` does not run.
 
 That loop is TITLE's developer entry ("Native ADV hosting and Himegari's developer entry" above). Retail never runs
-it, and no retail text wait follows a `0x93` without a re-registration in between. The cancel runs only where the
-port forces that body: a cold run whose root script is the ADV scene, where `VirtualMachine.Run` sets
-`G[0xaba5c]=1`. The port's full boot (TITLE → GAMESTART → SC0000) does not set it. The retained-template re-arm at
-`wait-for-input` therefore serves that cold path only; on the full boot op `0x94` has already armed the registry.
-On its developer path, native would reach page 1 with the registry empty. `docs/backlog.md` tracks that
-difference.
+it, and no retail text wait follows a `0x93` without a re-registration in between. On its developer path, native
+reaches page 1 with the registry empty. The port once forced that body for a cold run whose root was the ADV scene
+(`VirtualMachine.Run` set `G[0xaba5c]=1`) and re-armed the canceled definitions as a template. Since 2026-11-05
+direct-scene runs are hosted by SYSTEM4 with the gate at -1, so they skip the loop, and op `0x93` empties the table
+as native does.
 
 ### ADV Auto-message timing and voice completion (2026-07-18)
 
@@ -4106,8 +4126,8 @@ channel comes from `G[0x6242d]`.
 > copy-inline-int-array) copies the SFX channel table `[0,4,5,6,9]` to `G[0x6242c..0x62430]` on every boot. The
 > Frida write capture (`capture_global_writes.py`) missed it because op `0x64` writes the bank directly, not
 > through `vm_operand_write`. The port's natural boot holds 4 there, as native does. The profile's SC0000
-> "external" seed and the VM's external-global overlay are gone. Direct-scene runs now replay the copy
-> (`InlineArrayBootstrap`).
+> "external" seed and the VM's external-global overlay are gone. Godot direct-scene runs are hosted by SYSTEM4,
+> which makes the copy itself ("Native ADV hosting and Himegari's developer entry").
 
 **TITLE SFX packed-raw correction (2026-07-20).** TITLE preloads raw id `0x2aea` (`SE020.WAV`) into channel 2
 and executes `0xb5(2)` whenever mouse/joy selection changes. Each activation path loads raw id `0x3321`
@@ -4841,7 +4861,8 @@ from the layout origin and sized from `right-cursor_x` / `bottom-cursor_y`; the 
 rectangle is gone. The ordinary overlay remains bound to the parent input wait's captured layout while a
 nested callback such as HISTORY selects and renders into layouts 2–6; closing the callback therefore
 reveals the retained parent text at its original geometry rather than consulting the callback's last
-current-layout selection. The direct-scene SYSTEM4 bootstrap also recognizes all nine configuration pairs and
+current-layout selection. The SYSTEM4 layout bootstrap (`AdvTextLayoutBootstrap`, now only a test fixture: Godot
+direct-scene runs execute SYSTEM4 since 2026-11-05) also recognizes all nine configuration pairs and
 evaluates the two constant `add` expressions used for slot 1 without entering SYSTEM4's control flow. This
 is script-owned state, with no boot seed or game-specific coordinates in the runtime.
 

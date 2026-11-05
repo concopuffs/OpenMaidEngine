@@ -211,7 +211,7 @@ if ($SelfTest) {
     & $godot --headless --path $project -- @userArgs
 } else {
     # The selected profile owns its natural boot script (currently SYSTEM4 for both built-ins).
-    # Do not add --boot or SC0000 seeds here: those belong only to explicit direct-scene diagnostics.
+    # Do not add --scene or seeds here: a direct-scene run (SYSTEM4 hosting one scene) is an explicit diagnostic.
     Write-Host "==> launching windowed from SYSTEM4" -ForegroundColor Cyan
     $userArgs = @('--game-root', $resolvedGameRoot) + $profileArguments + $assetArguments
     # Mod paths resolve against the caller's directory; Godot itself runs from godot/.

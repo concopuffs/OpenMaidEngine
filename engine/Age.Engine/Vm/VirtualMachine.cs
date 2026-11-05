@@ -63,6 +63,8 @@ public sealed partial class VirtualMachine
     private long _debugActiveFrameId;
     private long _debugNextFrameId;
     private DebugFrameReturnRequest? _debugFrameReturnRequest;
+    private HostedSceneEntry? _hostedSceneEntry;   // pending until the coordinator frame enters
+    private long? _hostedScenePackedId;            // set once the coordinator returned, until the scene enters
     private ExecFrame? _interactiveFrame;
     private ExecFrame? _rawInputFrame;
     private int _pointerX = int.MinValue, _pointerY = int.MinValue;
@@ -204,6 +206,21 @@ public sealed partial class VirtualMachine
 
     /// <summary>Request a clean stop at the next opcode boundary.</summary>
     public void RequestStop() => _stopRequested = true;
+
+    /// <summary>Host one scene the way the F4 developer launcher does, before <see cref="Run"/>. The root starts as
+    /// after a return to title (so SYSTEM4 skips LOGO and OP), the coordinator returns at its entry with the entry's
+    /// writes, and the run ends when the hosted scene returns (<see cref="HostedSceneEntry"/>).</summary>
+    public void HostScene(HostedSceneEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentException.ThrowIfNullOrWhiteSpace(entry.CoordinatorScript);
+        _hostedSceneEntry = entry with
+        {
+            CoordinatorWrites = new Dictionary<int, long>(entry.CoordinatorWrites),
+        };
+        _hostedScenePackedId = null;
+        _initialRootRun = false;
+    }
 
     /// <summary>
     /// Return to title from outside the script: native's 終了 dialog (AGERC dialog 3) answers 2 for
@@ -895,16 +912,6 @@ public sealed partial class VirtualMachine
 
     public void Run(int entryOffset = 0)
     {
-        // Direct-scene runs (the root script is an ADV scene) set the scene-entry gate so the scene's
-        // label-picker loop runs once. This models TITLE's developer entry (ＡＤＶパート writes 1), which retail
-        // never reaches: retail keeps the gate at 0, and SYSTEM4 hosts every scene (2026-11-04;
-        // docs/backlog.md). The natural boot root is never an ADV scene. Restrict it to the byte-identical ADV
-        // LABEL/J idiom; op 0x140 also has an unrelated TITLE use.
-        if (entryOffset == 0
-            && _compatibility.SceneEntryCoroutineGateAddress is { } sceneEntryGate
-            && _s.Instructions.Any(ins => IsAdvLabeledYield(_s, ins)))
-            Globals[sceneEntryGate] = 1;
-
         Script root = _s;
         int rootEntry = root.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0;
         FrameCause cause = FrameCause.TopScene;
@@ -1021,6 +1028,9 @@ public sealed partial class VirtualMachine
             _debugFrameReturnRequest = null;
             _saveResumeFrame = null;
         }
+        // A return to title reloads the root the natural way: TITLE runs, and nothing ends the run at a scene's return.
+        _hostedSceneEntry = null;
+        _hostedScenePackedId = null;
         _autoMessageEnabled = false;
         _autoVoicePending = false;
         _voiceMuteNextFlags = 0;
@@ -1086,6 +1096,20 @@ public sealed partial class VirtualMachine
             _sink.Emit(TraceEvent.FrameEnter(frame.Script.Name, _depth, cause, callId));
             var outcome = FrameOutcome.RanOff;
             int pc = frame.Pc;
+            bool hostedScene = false;
+            if (cause == FrameCause.CallScript)
+            {
+                if (TryReturnHostedCoordinator(frame))
+                {
+                    _sink.Emit(TraceEvent.FrameExit(frame.Script.Name, _depth, FrameOutcome.DebugReturned.ToString()));
+                    return FrameOutcome.DebugReturned;
+                }
+                if (_hostedScenePackedId == callId)
+                {
+                    _hostedScenePackedId = null;
+                    hostedScene = true;
+                }
+            }
             try
             {
                 while (pc >= 0 && pc < frame.Script.Instructions.Count)
@@ -1114,6 +1138,12 @@ public sealed partial class VirtualMachine
             catch (RootReloadRequestedException) { outcome = FrameOutcome.RootReload; }
             catch (ProcessExitRequestedException) { outcome = FrameOutcome.ExitRequested; }
             _sink.Emit(TraceEvent.FrameExit(frame.Script.Name, _depth, outcome.ToString()));
+            // A hosted scene's return ends the run, as a root scene's exit did: the scene is the run's unit.
+            if (hostedScene && outcome is FrameOutcome.Returned or FrameOutcome.RanOff)
+            {
+                HaltReason ??= outcome == FrameOutcome.Returned ? "exit" : "pc-out-of-range";
+                return FrameOutcome.Halted;
+            }
             return outcome;
         }
         finally
@@ -1146,6 +1176,20 @@ public sealed partial class VirtualMachine
                 _cur = prev; _depth--;
             }
         }
+    }
+
+    /// <summary>The coordinator of a <see cref="HostScene"/> run returns before its first instruction, as TITLE's
+    /// developer menu returns its choice, and arms the end of the run at the scene's return.</summary>
+    private bool TryReturnHostedCoordinator(ExecFrame frame)
+    {
+        if (_hostedSceneEntry is not { } entry
+            || !frame.Script.Name.Equals(entry.CoordinatorScript, StringComparison.OrdinalIgnoreCase))
+            return false;
+        _hostedSceneEntry = null;
+        foreach (var (address, value) in entry.CoordinatorWrites)
+            Globals[address] = value;
+        _hostedScenePackedId = entry.ScenePackedId;
+        return true;
     }
 
     private bool TryConsumeDebugFrameReturn(ExecFrame frame)

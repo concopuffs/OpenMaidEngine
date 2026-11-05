@@ -185,7 +185,8 @@ reaches and renders TITLE using SYSTEM4-owned retained state. A real-script inte
 Game Start input, GAMESTART's release-gated default selection, and proves the same VM enters SC0000 through
 SYSTEM4's computed resource id `G[0x699]=0x22`; `G[0]=1` and the script-produced ADV-chrome flag
 `G[0x6c1]=1` are present at that boundary. `--scene SC0000 --boot` remains available only as the explicit
-single-scene diagnostic harness. This lands the boot/title/New Game entry half of B1–B3; proving a completed
+single-scene diagnostic harness (superseded 2026-11-05: `--scene SC0000` is hosted by SYSTEM4 as the F4 launcher
+enters a scene, and Godot has no `--boot`). This lands the boot/title/New Game entry half of B1–B3; proving a completed
 scene return plus boundary cleanup still belongs to B1 completion.
 
 **TITLE SFX packed-raw correction (2026-07-20).** Hover and activation callbacks were already executing their
@@ -424,6 +425,8 @@ is manual: open Character Info at the first stable SC0000 page and confirm the i
 ## Stage B2 — Faithful full boot
 
 Replace `--boot`'s diagnostic seeding and separately injected inherited surfaces with normal boot execution.
+(Godot direct-scene runs do this since 2026-11-05: SYSTEM4 runs its boot scripts and hosts the scene;
+`engine-re.md`, "Native ADV hosting and Himegari's developer entry". Only the CLI's headless tools keep `--boot`.)
 First prove the installed game's actual ordering; do not assume the current helper lists are complete.
 
 The boot path must cover two existing categories:

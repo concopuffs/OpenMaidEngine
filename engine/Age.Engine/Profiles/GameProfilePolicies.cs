@@ -1,28 +1,8 @@
 using System.Collections.Immutable;
-using Age.Engine.Model;
 
 namespace Age.Engine.Profiles;
 
 public sealed record ProfileCellSeed(int Address, long Value);
-
-public sealed record ProfileSurfaceBootstrap(string ResourceName, int SurfaceSlot, uint Flags);
-
-public sealed record ProfileWaitIndicatorBootstrap(
-    int TextLayout,
-    int X,
-    int Y,
-    int SurfaceSlot,
-    int SourceX,
-    int SourceY,
-    int FrameWidth,
-    int FrameHeight,
-    int FrameCount,
-    int FrameMilliseconds)
-{
-    public AdvWaitIndicatorConfig ToConfig()
-        => new(TextLayout, X, Y, SurfaceSlot, SourceX, SourceY,
-               FrameWidth, FrameHeight, FrameCount, FrameMilliseconds);
-}
 
 public sealed record DebugSceneLaunchPolicy
 {
@@ -58,51 +38,26 @@ public sealed record DebugSceneLaunchPolicy
 }
 
 /// <summary>
-/// Profile-owned state used only when a developer starts after the natural boot script. It is never
-/// applied to an ordinary profile boot and therefore cannot silently become an engine-wide rule. A natural
-/// boot gets every value from the game's own scripts (SYSTEM4 and what it calls) and the zero-filled banks;
-/// these entries stand in for the scripts a direct-scene run skips, so each must name a script writer.
+/// Profile-owned script lists for the CLI's headless scene diagnostics (<c>--boot</c> on <c>trace</c>, <c>gfx</c>,
+/// <c>play</c>, <c>sweep</c> and <c>oms-rebuild</c>), which run a scene as the root without SYSTEM4. A natural boot
+/// and a Godot direct-scene run never use them: SYSTEM4 runs these scripts itself.
 /// </summary>
 public sealed record DirectSceneDiagnosticPolicy
 {
     public DirectSceneDiagnosticPolicy(
-        string systemScript,
         IEnumerable<string>? dataBootstrapScripts = null,
-        IEnumerable<string>? dataTableBootstrapScripts = null,
-        IEnumerable<ProfileCellSeed>? globalSeeds = null,
-        IEnumerable<ProfileSurfaceBootstrap>? inheritedSurfaces = null,
-        ProfileWaitIndicatorBootstrap? waitIndicator = null,
-        int? sceneEntryCoroutineGateAddress = null)
+        IEnumerable<string>? dataTableBootstrapScripts = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(systemScript);
-        SystemScript = RequireScriptName(systemScript, nameof(systemScript));
         DataBootstrapScripts = (dataBootstrapScripts ?? [])
             .Select(value => RequireScriptName(value, nameof(dataBootstrapScripts))).ToImmutableArray();
         DataTableBootstrapScripts = (dataTableBootstrapScripts ?? [])
             .Select(value => RequireScriptName(value, nameof(dataTableBootstrapScripts))).ToImmutableArray();
-        GlobalSeeds = (globalSeeds ?? []).ToImmutableArray();
-        InheritedSurfaces = (inheritedSurfaces ?? []).ToImmutableArray();
-        WaitIndicator = waitIndicator;
-        if (GlobalSeeds.Any(seed => seed.Address < 0))
-            throw new ArgumentException("diagnostic seed addresses cannot be negative");
-        if (sceneEntryCoroutineGateAddress < 0)
-            throw new ArgumentException("scene-entry coroutine gate address cannot be negative");
-        SceneEntryCoroutineGateAddress = sceneEntryCoroutineGateAddress;
-        if (InheritedSurfaces.Any(surface => string.IsNullOrWhiteSpace(surface.ResourceName)
-                                                || surface.SurfaceSlot < 0))
-            throw new ArgumentException("diagnostic surfaces require a resource name and nonnegative slot");
     }
 
-    public string SystemScript { get; }
+    /// <summary>SYSTEM4's state prefix (its boot-time <c>call-script</c>s, without the UI scripts).</summary>
     public ImmutableArray<string> DataBootstrapScripts { get; }
+    /// <summary>The data-table <c>*INIT</c> scripts.</summary>
     public ImmutableArray<string> DataTableBootstrapScripts { get; }
-    public ImmutableArray<ProfileCellSeed> GlobalSeeds { get; }
-    public ImmutableArray<ProfileSurfaceBootstrap> InheritedSurfaces { get; }
-    public ProfileWaitIndicatorBootstrap? WaitIndicator { get; }
-    /// <summary>The ADV scene-entry gate a direct-scene run sets, standing in for TITLE's developer entry
-    /// (ＡＤＶパート writes 1), so a scene run as the root takes its label-picker loop once. Retail keeps it 0
-    /// and SYSTEM4 hosts every scene, so a natural boot never uses it.</summary>
-    public int? SceneEntryCoroutineGateAddress { get; }
 
     private static string RequireScriptName(string value, string parameterName)
     {

@@ -32,20 +32,19 @@ public sealed class GameProfileSelectionTests
             himegari.MetadataReferences["portableTextRendering"]);
         DirectSceneDiagnosticPolicy himegariDiagnostics =
             Assert.IsType<DirectSceneDiagnosticPolicy>(himegari.DirectSceneDiagnostics);
-        Assert.Equal("SYSTEM4.BIN", himegariDiagnostics.SystemScript);
         Assert.Equal(["INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN"],
             himegariDiagnostics.DataBootstrapScripts);
         Assert.Equal([
             "SKINIT.BIN", "ITINIT.BIN", "EBINIT.BIN", "CGINIT.BIN", "MPINIT.BIN",
             "AFINIT.BIN", "CCINIT.BIN", "STINIT.BIN", "STINIT2.BIN",
         ], himegariDiagnostics.DataTableBootstrapScripts);
-        Assert.Equal([new ProfileCellSeed(0x6c1, 1)], himegariDiagnostics.GlobalSeeds); // SYSTEM4@0x341
-        Assert.Equal(0xaba5c, himegariDiagnostics.SceneEntryCoroutineGateAddress);
         DebugSceneLaunchPolicy debugLaunch =
             Assert.IsType<DebugSceneLaunchPolicy>(himegari.DebugSceneLaunch);
         Assert.Equal("SYSTEM4.BIN", debugLaunch.RootScript);
         Assert.Equal("TITLE.BIN", debugLaunch.CoordinatorScript);
         Assert.Equal(0x699, debugLaunch.PackedScriptIdAddress);
+        Assert.Equal([new ProfileCellSeed(0x0, 1), new ProfileCellSeed(0xaba5c, -1), new ProfileCellSeed(0x62ccf, 0)],
+            debugLaunch.CoordinatorWrites);   // TITLE's ＡＤＶデバッグ writes (TITLE@0x61b)
         Assert.True(himegari.Matches(HimegariIdentity));
 
         GameProfileManifest kamidori = Assert.IsType<GameProfileManifest>(registry.Find("kamidori"));

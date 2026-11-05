@@ -6,8 +6,7 @@ namespace Age.Engine.Vm;
 public sealed record VmCompatibilityContext(
     string ProfileId,
     string EngineAbiId,
-    bool ProbeMode = false,
-    int? SceneEntryCoroutineGateAddress = null)
+    bool ProbeMode = false)
 {
     public static VmCompatibilityContext ForTable(OpcodeTable table)
         => new("unselected", table.AbiId);

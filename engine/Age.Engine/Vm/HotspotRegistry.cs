@@ -23,18 +23,12 @@ internal sealed class HotspotRegistry
     private int _hovered = -1;
     private int _hit = -1;
     private bool _hitTestedSinceRegister;
-    private bool _replaceOnNextRegister;
     public bool Armed { get; private set; }
     public bool HasDefinitions => _entries.Count != 0;
 
     public void Register(int x, int y, int width, int height,
                          int enterTarget, int leaveTarget, int activateTarget)
     {
-        if (_replaceOnNextRegister)
-        {
-            _entries.Clear();
-            _replaceOnNextRegister = false;
-        }
         _entries.Add(new Entry
         {
             Left = x, Top = y, Right = x + width, Bottom = y + height,
@@ -59,7 +53,6 @@ internal sealed class HotspotRegistry
     /// (<c>input_hotspot_arm_cursor_tracking@0x404230</c>); later arms keep the current hit.</summary>
     public bool Arm(int pointerX, int pointerY)
     {
-        _replaceOnNextRegister = false;
         Armed = true;
         if (!_hitTestedSinceRegister)
         {
@@ -148,19 +141,16 @@ internal sealed class HotspotRegistry
 
     public bool TryDequeue(out int target) => _pendingTargets.TryDequeue(out target);
 
+    /// <summary>Native op 0x93 (<c>input_hotspot_reset</c>): empty the table and clear the hit, the hovered record
+    /// and the arm.</summary>
     public void Reset()
     {
+        _entries.Clear();
         _pendingTargets.Clear();
         _hovered = -1;
         _hit = -1;
         _hitTestedSinceRegister = false;
         Armed = false;
-        // Native op 0x93 empties the table. The port keeps the definitions as a template that the next
-        // wait-for-input re-arms. That serves direct-scene runs, which force the scene's developer-loop 0x93
-        // at 0x622. Native reaches that 0x93 only through TITLE's unreachable developer menu, and leaves the
-        // table empty (docs/backlog.md). On retail paths a script registration always comes first; it
-        // replaces the template instead of duplicating it, which is the native result.
-        _replaceOnNextRegister = _entries.Count != 0;
     }
 
     private int FindHit(int x, int y)

@@ -414,7 +414,7 @@ root/call-script parsing). Generated asset/callscript JSON remains a tooling and
 | `oms-compile --source <file.oms> [--layout <sidecar>] [--no-layout] [--output <file.BIN>]` | Compile one OMS source file to a SYS4 script for the selected profile. A sidecar next to the source (`<file>.omslayout.json`) is applied unless `--no-layout`, which builds the canonical layout; `use <profile>.globals` / `<profile>.scripts` and the source modules in `oms/<profile>/` resolve as for `oms-decompile`. | Writes the `.BIN` (default: the source path with `.BIN`); warnings (spec §8.2) and errors go to stderr as `file:line:col`; exits non-zero on an error. |
 | `omp build DIR [--output FILE.omp] [--mod DEP …]`, `omp check [--data-root DIR] [--mod PATH …] [--skip-failed-mods]`, `omp explain NAME [--data-root DIR] [--mod PATH …]`, `omp export --output-dir DIR [--data-root DIR] [--mod PATH …]` | Mod loader spec §10. Package commands for modders: `build` links one mod folder and writes a deterministic `.omp` with stored plans; `check` links a stack without writing anything; `explain` names the layer and mod supplying a script or asset; `export` writes the linked stack as loose files and `APPENDnn` catalogs for native AGE. Full options, defaults and examples: `docs/modding/cli.md` (the canonical modder reference). | `build`: the link report and the package path. `check`: the report, each mod catalog's records with packed ids, and a summary; exits non-zero when the stack does not link. `export`: the report and each written file. `explain`: one line per supplier. |
 | `oms-patch (--source FRAGMENT.oms … \| --plan PLAN.omspatch.json …) [--plan-dir DIR] [--output-dir DIR]`, `oms-patch --fingerprint SCRIPT`, `[--mod-id ID --names A,B,ICON.AGF [--selector N]]` | Spec §10 fragments. Each `--source` (repeatable) is a `patch "SCRIPT" fingerprint "sha256:…"` unit. It is compiled against that script as the selected profile's mounted catalog serves it: the fingerprint must match, and base labels, subs and linked library subs come from the script's decompilation (idiomatic when `oms/<profile>/` has source modules). The resulting transform plan is checked by applying it, then written beside the source as `<name>.omspatch.json` (or into `--plan-dir`). `--plan` (repeatable) loads plans already written. With `--output-dir`, all plans are applied per script in the order given (sources first, then plans) to the pristine catalog script, and each patched script is written to `DIR/<SCRIPT>` for use as a loose override. `--fingerprint SCRIPT` prints the header line for a new fragment. A dotted site name (`site himegari.experience.after_calculation`) is a named patch point, resolved for the base's fingerprint through `build/games/<profile>/patch-points.json` (`patch_points_build.py`). `--mod-id ID --names …` compiles the fragments as part of a mod whose catalog records are those names in order (names with an extension are assets): `run NAME` and `asset "NAME"` stay symbolic in the plan (version 2, `res` operands), and `--selector N` binds them for `--output-dir`. | Prints each plan's operation and instruction counts, ordered interactions between plans, notes (table sites a region removes, proven code positions that stay numbers) and each patched script's size. Errors go to stderr as `file:line:col`; conflicts between plans stop the apply; exits non-zero on an error. |
-| `oms-rebuild [--level idiomatic \| --patch-probe [STRIDE]] [--scene <SCENE.BIN>] [--boot] [--halt-at-wait] [--limit N] [--dump DIR]` | Open Maid Script gate 3: serve every catalog script rebuilt from core source (idiomatic source with `--level idiomatic`) without its sidecar, run each SC/SP scene (or one `--scene`) on the original and the rebuilt catalog from the same baseline (`--boot`: the profile's data-table bootstrap, run on both), and compare executed instruction sequences, frames, emitted text, halts and final session states on a simulated input clock. Scenes run with the profile's VM compatibility facts, as the Godot runtime runs them (the ADV scene-entry gate among them). Idiomatic rebuilds link library subs elsewhere, so positions compare by relocation key (library sub and offset, or the script's own instruction ordinal), and a global holding a code position may differ when both values name the same instruction. Scenes walk every page unless `--halt-at-wait`. `--patch-probe` runs spec §12 gate 7 instead: it serves every script patched with its probe plan (`OmsPatchProbe`: inert notes, op 0x1a7, before branch targets and every STRIDE-th instruction (default 5) and after calls and other fall-through instructions, every STRIDE-th instruction replaced by a copy of itself, and one operand replaced by its own value) and checks that an empty plan reproduces each script byte for byte. The comparison drops the notes' steps, and the simulated clock does not advance for them. Probed runs get four times the step limit, and a step-limited original is compared as a prefix. `--dump DIR` writes each served (rebuilt or probed) script to `DIR`. | Prints rebuilt/byte-identical/failed script counts, equivalent and divergent scenes with the first divergence, and total steps/lines; with `--patch-probe`, also the number of scripts an empty plan reproduces. Set `OMS_REBUILD_CONTEXT=1` to print the last five events up to a divergence on both sides. Exits non-zero on any divergence. |
+| `oms-rebuild [--level idiomatic \| --patch-probe [STRIDE]] [--scene <SCENE.BIN>] [--boot] [--halt-at-wait] [--limit N] [--dump DIR]` | Open Maid Script gate 3: serve every catalog script rebuilt from core source (idiomatic source with `--level idiomatic`) without its sidecar, run each SC/SP scene (or one `--scene`) on the original and the rebuilt catalog from the same baseline (`--boot`: the profile's data-table bootstrap, run on both), and compare executed instruction sequences, frames, emitted text, halts and final session states on a simulated input clock. Scenes run as the root with the profile's VM compatibility facts and zeroed banks, so each takes its retail entry (Himegari's developer-entry gate `G[0xaba5c]` stays 0); unlike a Godot `--scene` run, SYSTEM4 does not host them. Idiomatic rebuilds link library subs elsewhere, so positions compare by relocation key (library sub and offset, or the script's own instruction ordinal), and a global holding a code position may differ when both values name the same instruction. Scenes walk every page unless `--halt-at-wait`. `--patch-probe` runs spec §12 gate 7 instead: it serves every script patched with its probe plan (`OmsPatchProbe`: inert notes, op 0x1a7, before branch targets and every STRIDE-th instruction (default 5) and after calls and other fall-through instructions, every STRIDE-th instruction replaced by a copy of itself, and one operand replaced by its own value) and checks that an empty plan reproduces each script byte for byte. The comparison drops the notes' steps, and the simulated clock does not advance for them. Probed runs get four times the step limit, and a step-limited original is compared as a prefix. `--dump DIR` writes each served (rebuilt or probed) script to `DIR`. | Prints rebuilt/byte-identical/failed script counts, equivalent and divergent scenes with the first divergence, and total steps/lines; with `--patch-probe`, also the number of scripts an empty plan reproduces. Set `OMS_REBUILD_CONTEXT=1` to print the last five events up to a divergence on both sides. Exits non-zero on any divergence. |
 | `oms-residue [--limit N]` | Explain the gate-1 residue: operands at code-target positions that stayed literal (with the reason: variable operand, past code, mid-instruction) and referenced data items the decoder could not type. | Diagnostic listing only; reads the same store as `oms-roundtrip`. |
 | `run <file.BIN>` | Execute a script; print steps, show-text count, **call-script dispatch count**, the first 30 lines (each tagged with its source script), and the distinct source scripts. | `CaptureHost` (headless); **executes call-script**. |
 | `trace <out.json>` | Trace every SC/SP scene → offsets + halt + steps. **Provider-less** (call-script stubbed) = a base-ISA offset dump. | writes JSON. (Was the vm0 differential oracle; vm0 is retired from oracle duty — `TraceDiffTests` removed.) |
@@ -458,7 +458,7 @@ at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`swee
 - **Godot** accepts **`--trace-histogram <file>`** — profile the **real** run (headless flow diverges because
   `wait-for-input` is a no-op there; the real run to page 1 is ~562 steps with **0** sleeps vs headless's 2M
   steps / 493k sleeps). Dumped when the scene ends or the window closes. e.g.
-  `godot --path godot -- --scene SC0000 --boot --shot out/p1.png --trace-histogram out/hist.txt`.
+  `godot --path godot -- --scene SC0000 --shot out/p1.png --trace-histogram out/hist.txt`.
 
 **Godot frontend** (Godot 4.7 .NET; project = `godot/`). Toolchain: `godot --headless --path godot
 --import` → `dotnet build godot/OME.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
@@ -605,7 +605,7 @@ For an immediate native Vulkan startup crash involving injected overlay DLLs, se
 BMP compatibility, requested profile/probe state, .NET, and Python prerequisites without building or
 launching. `-Profile <id>` forwards an authoritative `--profile`; `-Probe` requires it and forces the
 read-only diagnostic policy. The launchers leave the natural boot script to the selected manifest and pass
-neither `--boot` nor SC0000 seeds. Examples below focus on their
+neither `--scene` nor seeds. Examples below focus on their
 feature-specific arguments and assume the game root is already selected this way. `--headless` can't
 render texture ops (no GPU context) — run windowed for real scenes.
 On VM termination the console prints the exact halt reason and step count before the generic on-screen
@@ -613,7 +613,7 @@ On VM termination the console prints the exact halt reason and step count before
 
 The local launchers also accept **`-StartupDiagnostics`** for a native-faithful cold boot through TITLE,
 Game Start, and SC0000. The switch overrides `run-godot.cmd`'s usual `-NativeDebugMenu` convenience for
-that run and adds no `--boot`, seeds, timing changes, screenshots, or input injection. It writes four
+that run and adds no `--scene`, seeds, timing changes, screenshots, or input injection. It writes four
 disposable files under `build/validation/title-newgame/`: `godot.log` (Godot warnings/errors),
 `timeline.jsonl` (ordered VM/host/compositor evidence), `histogram.txt` (executed opcode and hot-call-site
 counts), and `page-map.jsonl` (authoritative wait/text locations and call stack). After Godot closes, the
@@ -649,7 +649,17 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--probe` — require an explicit `--profile` and run it read-only for diagnostic inspection of an unknown or
   incomplete install. It disables save and `SYS4REG.INI` stores. Both built-in profiles write saves (Kamidori since `ce4eb1c`,
   2026-09-23), each in its own `games/<profile>/` namespace.
-- `--scene <NAME>` — override the default `SYSTEM4` root with a direct diagnostic scene, e.g. `--scene SC0240` (executes 29 nested subroutines).
+- `--scene <NAME>` — start in one script instead of the natural boot, e.g. `--scene SC0240`. When the profile
+  declares the F4 launcher's coordinator (Himegari), the scene is entered as that launcher enters it
+  (`VirtualMachine.HostScene`; `engine-re.md`, "Native ADV hosting and Himegari's developer entry"):
+  - `SYSTEM4` starts as after a return to title, so it skips LOGO and OP, runs its boot scripts and ADV setup,
+    and hosts the scene;
+  - TITLE returns at its entry with the launcher's writes (`G[0]=1`, `G[0xaba5c]=-1`, `G[0x62ccf]=0`) and the
+    scene's packed id;
+  - the run ends when the scene returns;
+  - `--scene TITLE` is refused (TITLE is the coordinator).
+
+  A profile without a coordinator (Kamidori) runs the script as the root with no setup.
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and
   asserts it matches a live headless run (full handling; no vm0/frozen golden). Profile-owned fixture checks
   use the selected install's proven assets; the complete self-test passes for both built-in profiles. Exits.
@@ -666,10 +676,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--fps-counter` — show Godot's rendered FPS and corresponding average frame time in the top-right corner,
   refreshed four times per second. The overlay observes the presentation loop only; it does not alter VM
   timing, input, compositor selection, or opcode handling.
-- `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced dialogue.
-- `--boot` — direct-scene diagnostic only: with `--scene <non-SYSTEM4>`, run the old
-  `INITCONFIG/INIT2/INIT` state prefix before that isolated scene. The normal SYSTEM4-rooted launch neither
-  needs nor applies it. e.g. `godot --path godot -- --scene SC0000 --boot`.
+- `--seed 0xADDR=VAL` (repeatable) — seed initial global state, e.g. `--seed 0xa57=1` unlocks Lily's form-A voiced
+  dialogue. In a hosted `--scene` run the seeds apply at TITLE's return, after SYSTEM4's boot scripts, so they
+  override boot state.
 - `--native-debug-menu` — intentionally treat exit-request opcode `0x1` as a no-op, exposing TITLE's
   otherwise unreachable shipped developer menu. This is a non-native debug divergence and also suppresses
   SYSTEM4's invalid-execution-mode exit request for that run. Direct Godot and PowerShell launches leave it
@@ -692,7 +701,7 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   executed script byte offset/opcode, script-frame entry/exit with depth/cause/outcome, resolved call-script
   ids/names, unknown-fallback `stub` events, virtual time/frame, VM state changes (`running`, `sleep`, `input-wait`,
   `halted`), audio events, and changed visible-object compositor outcomes in one ordered JSONL file. Combine with
-  `--scene SC0000 --boot --shot-sequence ... --gfx-log ...` to distinguish control-flow stalls from retained-object/compositor
+  `--scene SC0000 --shot-sequence ... --gfx-log ...` to distinguish control-flow stalls from retained-object/compositor
   failures at an exact bytecode boundary. Relative output paths are project-relative (`godot/`).
 
 **Godot performance frame log:** `--perf-log <csv>` enables a buffered, diagnostic-only capture of the real
@@ -724,7 +733,7 @@ validate the schema only. Before a baseline, verify that no older Godot game pro
 apparently closed window can otherwise leave a renderer consuming CPU and contaminate later runs. Do not
 combine baseline captures with `--shot-sequence`, `--gfx-log`, or
 `--timeline-log`, whose diagnostics add substantial or differently shaped work. Example from `age-reimpl/`:
-`godot --path godot -- --scene SC0000 --boot --perf-log ../build/perf/sc0000.csv`.
+`godot --path godot -- --scene SC0000 --perf-log ../build/perf/sc0000.csv`.
 
 `run-godot.ps1 -PerfLog` creates `build/perf/run-yyyyMMdd-HHmmss-fff.csv` and prints the absolute target
 before Godot starts; normal shutdown flushes it and prints the captured frame/recomposition counts. The

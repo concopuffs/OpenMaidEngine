@@ -76,7 +76,8 @@ public class HotspotInputTests
     {
         public VirtualMachine Vm = null!;
         public bool MenuEntered;
-        private bool _returnRequested;
+        public bool MenuReturnRequested;
+        private bool _childReturnRequested;
         public bool TracingSteps => true;
 
         public void Emit(in Age.Engine.Diagnostics.TraceEvent e)
@@ -87,13 +88,23 @@ public class HotspotInputTests
                 MenuEntered = true;
                 return;
             }
-            // Request the controlled return when MENU reaches its slot selector. Step events are emitted
-            // before execution, so op 0x80 still runs and the request is consumed at its next boundary.
-            if (!MenuEntered || _returnRequested
-                || e.Kind != Age.Engine.Diagnostics.TraceEventKind.Step || e.Opcode != 0x80) return;
+            if (!MenuEntered || MenuReturnRequested || e.Kind != Age.Engine.Diagnostics.TraceEventKind.Step) return;
             var frame = Assert.IsType<DebugFrameSnapshot>(Vm.DebugFrame);
-            Assert.True(Vm.TryRequestDebugFrameReturn(frame.FrameId, new Dictionary<int, long>()));
-            _returnRequested = true;
+            // MENU opens CHMENU first. Return CHMENU when it reaches its slot selector (CHMENU@0x3): step events
+            // come before execution, so op 0x80 still runs and the request is consumed at its next boundary. Then
+            // return MENU at its next opcode, so SC0000's callback re-registers its records (label_8c) without
+            // running either menu's input loop.
+            if (!_childReturnRequested && e.Opcode == 0x80)
+            {
+                Assert.True(Vm.TryRequestDebugFrameReturn(frame.FrameId, new Dictionary<int, long>()));
+                _childReturnRequested = true;
+            }
+            else if (_childReturnRequested
+                     && string.Equals(frame.CurrentScript, "MENU.BIN", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.True(Vm.TryRequestDebugFrameReturn(frame.FrameId, new Dictionary<int, long>()));
+                MenuReturnRequested = true;
+            }
         }
     }
 
@@ -859,7 +870,8 @@ public class HotspotInputTests
 
         Assert.True(host.MenuActionConsumed);
         Assert.True(sink.MenuEntered);
-        Assert.Equal(8, vm.Gfx.DefaultObjectSlot); // MENU's entry selector ran before the controlled return.
+        Assert.True(sink.MenuReturnRequested);
+        Assert.Equal(8, vm.Gfx.DefaultObjectSlot); // CHMENU's entry selector ran before the controlled returns.
         Assert.True(host.ParentHotspotsRearmed);
     }
 

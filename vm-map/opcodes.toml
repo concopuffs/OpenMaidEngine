@@ -1071,7 +1071,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "copy-inline-int-array"
 category = "compute"
-summary = "(destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination. Himegari SYSTEM4@0x1ca copies the SFX channel table [0,4,5,6,9] to G[0x6242c..] this way; direct-scene runs replay that copy (InlineArrayBootstrap). The copy writes the bank directly, not through vm_operand_write, so the Frida write capture does not see it."
+summary = "(destination)(inline_blob_offset) - decode the count-prefixed integer literal blob at codebase + offset*4 and copy its values to consecutive VM integer cells beginning at destination. Himegari SYSTEM4@0x1ca copies the SFX channel table [0,4,5,6,9] to G[0x6242c..] this way, on every boot and in a Godot direct-scene run, which SYSTEM4 hosts. The copy writes the bank directly, not through vm_operand_write, so the Frida write capture does not see it."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -1835,7 +1835,7 @@ noop_headless = true
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x93_cancel_hotspot_wait@0x416670 clears run-state bit 0x00800000, calls input_hotspot_reset@0x404130, and clears the active flag at ctx+0xc6e4 (or sets the pending flag at +0xc6e0 when already inactive)."
+evidence = "Ghidra /v2: op_0x93_cancel_hotspot_wait@0x416670 clears run-state bit 0x00800000, calls input_hotspot_reset@0x404130, and clears the active flag at ctx+0xc6e4 (or sets the pending flag at +0xc6e0 when already inactive). input_hotspot_reset empties the table (record count +0x408 = 0) and clears the hit, the hovered record, the pending enter and cursor tracking, so an op 0x94 arm with no new registration arms nothing. Port: HotspotRegistry.Reset matches since 2026-11-05; it had kept the records as a template that direct-scene runs re-armed."
 
 [[opcode]]
 op = 0x94
@@ -3305,7 +3305,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "coroutine-label-yield"
 category = "control"
-summary = "(out)(name_str)(sub_str)(in) — developer jump picker. Copies the name/sub strings and the int operand, calls AGERC host command 8 (modal dialog resource 8, agerc_label_dialog_proc@0x10002270) and writes its result to operand 1. Name 'LABEL' lists the script's labels filtered by the sub string ('J') and returns the chosen label's PC (Cancel: 0); any other name picks a catalog entry by suffix and '?' pattern (TITLE's 'BIN','SC????.BIN' scene-script picker). ADV scenes use it in their entry loop (SC0000 label_462 'ループ開始': `out=G[0x6be]=LABEL('J',G[0x6be])`; the loop runs the setup body, calls *out, and exits when out==G[0x6c3], the scene loop head's offset). The loop only runs when the scene-entry gate (Himegari G[0xaba5c], Kamidori G[0x1372d9]) is 1, which only the developer entry sets (Kamidori TITLE developer-menu case 0); retail play skips it. PORT = HOST-MODEL: for direct scene launches the VM sets the Himegari gate, runs the setup once (first visit returns -1), then returns the scene loop head (the nearest call followed by exit before the yield; the script's terminal immediate must name it, or a run of comments (op 0x1a7) leading into it, or the VM halts with coroutine-yield-terminal; comments anywhere in the pattern are skipped). It does not emulate the dialog. See engine-re.md §Scene-coroutine framework."
+summary = "(out)(name_str)(sub_str)(in) — developer jump picker. Copies the name/sub strings and the int operand, calls AGERC host command 8 (modal dialog resource 8, agerc_label_dialog_proc@0x10002270) and writes its result to operand 1. Name 'LABEL' lists the script's labels filtered by the sub string ('J') and returns the chosen label's PC (Cancel: 0); any other name picks a catalog entry by suffix and '?' pattern (TITLE's 'BIN','SC????.BIN' scene-script picker). ADV scenes use it in their entry loop (SC0000 label_462 'ループ開始': `out=G[0x6be]=LABEL('J',G[0x6be])`; the loop runs the setup body, calls *out, and exits when out==G[0x6c3], the scene loop head's offset). The loop only runs when the scene-entry gate (Himegari G[0xaba5c], Kamidori G[0x1372d9]) is 1, which only the developer entry sets (Kamidori TITLE developer-menu case 0); retail play skips it. PORT = HOST-MODEL: at gate 1 the VM runs the setup once (first visit returns -1), then returns the scene loop head (the nearest call followed by exit before the yield; the script's terminal immediate must name it, or a run of comments (op 0x1a7) leading into it, or the VM halts with coroutine-yield-terminal; comments anywhere in the pattern are skipped). It does not emulate the dialog. Only a seeded gate reaches it: port direct-scene runs enter as the F4 launcher does (SYSTEM4 hosts the scene, gate -1; 2026-11-05). See engine-re.md §Scene-coroutine framework."
 noop_headless = false
 source = "investigation"
 confidence = "med"

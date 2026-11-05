@@ -265,12 +265,11 @@ public partial class Main : Godot.Control
         _audioOutputLatencySeconds = AudioServer.GetOutputLatency();
 
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
-        bool boot = System.Array.IndexOf(userArgs, "--boot") >= 0; // diagnostic prefix for direct-scene runs
         bool nativeDebugMenu = System.Array.IndexOf(userArgs, "--native-debug-menu") >= 0;
         if (nativeDebugMenu)
             GD.Print("[debug] native exit requests disabled; post-0x1 bytecode may execute");
         string scene = System.IO.Path.GetFileNameWithoutExtension(
-            selectedProfile.Profile.NaturalBootScript); // natural profile root; --scene keeps direct diagnostics
+            selectedProfile.Profile.NaturalBootScript); // natural profile root; --scene picks a hosted scene
         var seeds = new List<(int Addr, long Val)>();   // --seed 0xADDR=VAL (repeatable) — initial global state
         double sleepScale = 1.0;                         // --sleep-scale <f>: scale explicit op-0xc8 holds
         double speed = 1.0;                              // --speed <f>: sleeps + retained presentation clocks
@@ -380,6 +379,16 @@ public partial class Main : Godot.Control
         IScriptProvider provider;
         Sys4ScriptProvider? scripts = null;
         IAssetStore? trackedAssetStore = null;
+        // A direct-scene run (--scene other than the natural root) enters as the F4 launcher does: the profile's
+        // root (SYSTEM4) hosts the scene after its own boot setup, and the coordinator (TITLE) returns the launcher's
+        // writes. A profile without that coordinator runs the scene as the root, with no setup at all.
+        DebugSceneLaunchPolicy? hostPolicy = !_selftest
+            && !scene.Equals(
+                System.IO.Path.GetFileNameWithoutExtension(selectedProfile.Profile.NaturalBootScript),
+                System.StringComparison.OrdinalIgnoreCase)
+            ? selectedProfile.Profile.DebugSceneLaunch
+            : null;
+        Script? hostedScene = null;
         if (_selftest) (script, provider) = BuildSelfTestScene(table);
         else
         {
@@ -393,15 +402,22 @@ public partial class Main : Godot.Control
             scripts = new Sys4ScriptProvider(table, catalog, trackedAssetStore);
             script = scripts.RequireByName(scene + ".BIN");
             provider = scripts;
+            if (hostPolicy != null)
+            {
+                if (script.Name.Equals(hostPolicy.CoordinatorScript, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    GD.PushError($"[startup] --scene {scene}: {hostPolicy.CoordinatorScript} is the launcher's "
+                                 + "coordinator; run the natural boot instead");
+                    GetTree().Quit(2);
+                    return;
+                }
+                hostedScene = script;
+                script = scripts.RequireByName(hostPolicy.RootScript);
+                GD.Print($"[startup] {hostPolicy.RootScript} hosts {hostedScene.Name} "
+                         + $"(0x{hostedScene.PackedId:x8}) as the F4 launcher does; LOGO and OP are skipped");
+            }
         }
         _scripts = scripts;
-        bool directSceneHarness = !_selftest
-            && !scene.Equals(
-                System.IO.Path.GetFileNameWithoutExtension(selectedProfile.Profile.NaturalBootScript),
-                System.StringComparison.OrdinalIgnoreCase);
-        DirectSceneDiagnosticPolicy? directScenePolicy = directSceneHarness
-            ? selectedProfile.Profile.DirectSceneDiagnostics
-            : null;
         if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
         if (!_selftest && pageMapPath == null)
             pageMapPath = DefaultPageMapPath(scene);
@@ -503,8 +519,7 @@ public partial class Main : Godot.Control
             compatibility: new VmCompatibilityContext(
                 selectedProfile.Profile.Id,
                 selectedProfile.Profile.EngineAbiId,
-                selectedProfile.ProbeMode,
-                directScenePolicy?.SceneEntryCoroutineGateAddress));
+                selectedProfile.ProbeMode));
         if (scripts != null && selectedProfile.Profile.DebugSceneLaunch != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);
@@ -512,50 +527,18 @@ public partial class Main : Godot.Control
             _debugSceneLauncher.LaunchRequested += LaunchDebugScene;
             AddChild(_debugSceneLauncher);
         }
-        // Direct-scene runs deliberately skip the natural boot script. Only apply bootstrap state that
-        // the selected profile explicitly owns as diagnostic policy; normal boot never enters this path.
-        if (directScenePolicy != null)
+        if (hostedScene != null)
         {
-            var systemScript = scripts!.RequireByName(directScenePolicy.SystemScript);
-            AdvTextLayoutBootstrap.ApplyLeadingDefinitionsAndResets(systemScript, table, _vm.TextHistory);
-            InputBindingBootstrap.Apply(systemScript, _vm.InputBindings);
-            InlineArrayBootstrap.Apply(systemScript, _vm.Globals); // SYSTEM4@0x1ca: the SFX channel table
+            var coordinatorWrites = hostPolicy!.CoordinatorWrites
+                .ToDictionary(seed => seed.Address, seed => seed.Value);
+            coordinatorWrites[hostPolicy.PackedScriptIdAddress] = hostedScene.PackedId;
+            // --seed applies at the handoff, so it overrides the state SYSTEM4's boot setup wrote.
+            foreach (var (addr, val) in seeds) coordinatorWrites[addr] = val;
+            _vm.HostScene(new HostedSceneEntry(
+                hostPolicy.CoordinatorScript, hostedScene.PackedId, coordinatorWrites));
         }
-        var loadedDiagnosticSurfaceSlots = new HashSet<int>();
-        foreach (ProfileSurfaceBootstrap surface in directScenePolicy?.InheritedSurfaces ?? [])
-        {
-            if (resources.ResolveName(surface.ResourceName) is not { } resource) continue;
-            _host.SetTexture(resource.PackedId, surface.SurfaceSlot);
-            _vm.Gfx.SetSurface(surface.SurfaceSlot, resource.PackedId, surface.Flags);
-            loadedDiagnosticSurfaceSlots.Add(surface.SurfaceSlot);
-        }
-        if (directScenePolicy?.WaitIndicator is { } waitIndicator
-            && loadedDiagnosticSurfaceSlots.Contains(waitIndicator.SurfaceSlot))
-        {
-            _host.ConfigureAdvWaitIndicator(waitIndicator.ToConfig());
-            AdvTextLayoutSnapshot waitLayout =
-                _vm.TextHistory.GetLayoutSnapshot(waitIndicator.TextLayout);
-            _host.BindAdvWaitIndicator(
-                _vm.TextHistory.GetPresentationBinding(waitIndicator.TextLayout),
-                waitLayout);
-        }
-        // --boot: run SYSTEM4's state prefix (INITCONFIG/INIT2/INIT) so the scene sees boot state — chiefly
-        // INIT2's gfx handle array 0x62455.. (skips the UI scripts LOGO/OP/TITLE). State carries via globals.
-        if (boot && directScenePolicy != null)
-        {
-            var session = new GameSession();
-            foreach (string b in directScenePolicy.DataBootstrapScripts)
-                session.RunScene(scripts!.RequireByName(b), table, new CaptureHost(), null, provider);
-            foreach (var kv in session.Globals) _vm.Globals[kv.Key] = kv.Value;
-            foreach (var kv in session.GlobalStrings) _vm.GlobalStrings[kv.Key] = kv.Value;
-            GD.Print($"[boot] system boot done: {session.Globals.Count} globals seeded");
-        }
-        if (directScenePolicy != null)
-        {
-            foreach (ProfileCellSeed seed in directScenePolicy.GlobalSeeds)
-                _vm.Globals[seed.Address] = seed.Value;
-        }
-        foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed overrides boot state
+        else
+            foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed: initial global state
         if (holdMessageSkip)
             _vm.UpdateKeyboardVirtualKeyState(0x11, true); // Ctrl; bindings resolve it to logical action 6.
         _vmTask = Task.Run(() =>

@@ -66,6 +66,14 @@ public class Sys4AssetStoreTests
         Directory.CreateDirectory(temp);
         try
         {
+            // The extractor opens the archive without sharing it, so it gets a private copy: on the install it fails
+            // the parallel tests that read APPEND01.ALF.
+            string install = Path.Combine(temp, "install");
+            Directory.CreateDirectory(install);
+            string appendCatalog = Path.Combine(install, Path.GetFileName(Paths.Append01Aai));
+            File.Copy(Paths.Append01Aai, appendCatalog);
+            File.Copy(Path.Combine(Paths.GameDir, "APPEND01.ALF"), Path.Combine(install, "APPEND01.ALF"));
+
             var start = new ProcessStartInfo(Paths.BinExtractAlf)
             {
                 UseShellExecute = false,
@@ -73,7 +81,7 @@ public class Sys4AssetStoreTests
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
-            start.ArgumentList.Add(Paths.Append01Aai);
+            start.ArgumentList.Add(appendCatalog);
             start.ArgumentList.Add(temp);
             using var process = Process.Start(start)!;
             string stdout = process.StandardOutput.ReadToEnd();

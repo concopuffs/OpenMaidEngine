@@ -3,8 +3,9 @@ using Age.Engine.Model;
 namespace Age.Engine.Vm;
 
 /// <summary>
-/// Replays SYSTEM4's data-only input configuration for a direct-scene diagnostic harness which starts
-/// after the persistent system root. Natural boot executes the same opcode handlers normally.
+/// Replays SYSTEM4's data-only input configuration for a test that runs one scene without its system root.
+/// Runtime runs execute the same opcode handlers: the natural boot, and Godot direct-scene runs, which SYSTEM4
+/// hosts.
 /// </summary>
 public static class InputBindingBootstrap
 {

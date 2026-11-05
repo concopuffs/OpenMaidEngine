@@ -1774,9 +1774,10 @@ their offsets explicitly do not transfer to Kamidori. K6 can now investigate `0x
 introducing a game-named opcode shim. (Superseded 2026-11-05: a natural boot takes no profile state at all.
 - The `0x62425` seed is gone. Retail leaves that value 0, and the port models the engine's hidden-window wait (see
   `engine-re.md`, "ADV hide window").
-- The SC0000 "external" SFX value is gone with the VM's external-global overlay. `SYSTEM4@0x1ca` writes it, and
-  direct-scene runs replay that copy.
-- The `0xaba5c` gate now sits with the other direct-scene diagnostics.)
+- The SC0000 "external" SFX value is gone with the VM's external-global overlay. `SYSTEM4@0x1ca` writes it.
+- Godot direct-scene runs are hosted by SYSTEM4 as the F4 launcher hosts a scene (2026-11-05). The `0xaba5c` gate
+  and the direct-scene SYSTEM4/resource bootstrap are gone, and the profile's direct-scene policy keeps only the
+  CLI's `--boot` script lists.)
 
 ##### Phase K6 — full Kamidori inventory and vertical bring-up
 

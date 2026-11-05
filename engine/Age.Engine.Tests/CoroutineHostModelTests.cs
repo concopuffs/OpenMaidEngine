@@ -12,8 +12,13 @@ public class CoroutineHostModelTests
     private const int T_IMM = 0, T_STR = 2, T_GINT = 3, T_LINT = 9;
     private const int SceneEntryGate = 0xaba5c;
     private static readonly OpcodeTable Table = OpcodeTableJson.Load(Paths.OpcodesJson);
-    private static readonly VmCompatibilityContext HimegariCompatibility =
-        new("himegari", "AGE-catalog", SceneEntryCoroutineGateAddress: SceneEntryGate);
+
+    /// <summary>TITLE's ＡＤＶパート developer entry writes 1 to the gate (TITLE@0x5fa); retail keeps it 0.</summary>
+    private static VirtualMachine DeveloperEntry(VirtualMachine vm)
+    {
+        vm.Globals[SceneEntryGate] = 1;
+        return vm;
+    }
 
     private static int Op(string label) => Table.ByLabel(label)!.Value;
     private static Instruction Ins(int offset, int opcode, params Operand[] args) => new(offset, opcode, args);
@@ -55,9 +60,8 @@ public class CoroutineHostModelTests
     {
         const int output = 0x6be, setupCount = 0x7000, slot = 0x7001, observed = 0x7002;
         var sink = new RecordingTraceSink { TracingSteps = true };
-        var vm = new VirtualMachine(
-            SceneLoop(0x10, setupCount, slot, observed), Table, new CaptureHost(), sink: sink,
-            compatibility: HimegariCompatibility);
+        var vm = DeveloperEntry(new VirtualMachine(
+            SceneLoop(0x10, setupCount, slot, observed), Table, new CaptureHost(), sink: sink));
         vm.Globals[output] = 0x10; // stale value from a previous scene: already equal to this scene's terminal
         vm.Run();
 
@@ -73,8 +77,8 @@ public class CoroutineHostModelTests
     public void AStaleTerminalImmediateHaltsInsteadOfBeingEchoed()
     {
         // The loop head is at 0x10, but the script still says 0x77: its code moved without relocating the immediate.
-        var vm = new VirtualMachine(
-            SceneLoop(0x77, 0x7000, 0x7001, 0x7002), Table, new CaptureHost(), compatibility: HimegariCompatibility);
+        var vm = DeveloperEntry(new VirtualMachine(
+            SceneLoop(0x77, 0x7000, 0x7001, 0x7002), Table, new CaptureHost()));
         vm.Run();
 
         Assert.Equal("coroutine-yield-terminal@0x20: terminal 0x77 is not the scene loop head 0x10", vm.HaltReason);
@@ -112,9 +116,8 @@ public class CoroutineHostModelTests
     public void CommentsInTheLabeledYieldPatternAreSkipped()
     {
         const int setupCount = 0x7000, slot = 0x7001, observed = 0x7002;
-        var vm = new VirtualMachine(
-            CommentedSceneLoop(0x0e, setupCount, slot, observed), Table, new CaptureHost(),
-            compatibility: HimegariCompatibility);
+        var vm = DeveloperEntry(new VirtualMachine(
+            CommentedSceneLoop(0x0e, setupCount, slot, observed), Table, new CaptureHost()));
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
@@ -123,15 +126,14 @@ public class CoroutineHostModelTests
         Assert.Equal(0x0e, vm.Globals[0x6be]);
 
         // An immediate in front of the comment run still names something other than the loop head.
-        var stale = new VirtualMachine(
-            CommentedSceneLoop(0x07, setupCount, slot, observed), Table, new CaptureHost(),
-            compatibility: HimegariCompatibility);
+        var stale = DeveloperEntry(new VirtualMachine(
+            CommentedSceneLoop(0x07, setupCount, slot, observed), Table, new CaptureHost()));
         stale.Run();
         Assert.Equal("coroutine-yield-terminal@0x20: terminal 0x7 is not the scene loop head 0x11", stale.HaltReason);
     }
 
     [Fact]
-    public void NonAdvLabeledServiceIsLeftStubbedAndDoesNotInjectSceneEntryGate()
+    public void NonAdvLabeledServiceIsLeftStubbedAndDoesNotTouchTheSceneEntryGate()
     {
         var script = new Script
         {
@@ -171,13 +173,12 @@ public class CoroutineHostModelTests
 
     [Fact]
     [Trait("Category", "Workspace")]
-    public void Sc0000EntryRunsSetupAndFillsDistinctTextureSlots()
+    public void Sc0000DeveloperEntryRunsTheLoopSetupOnceAndFillsDistinctTextureSlots()
     {
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], Table);
         var sink = new RecordingTraceSink { TracingSteps = true };
-        var vm = new VirtualMachine(script, Table, new CaptureHost(),
-            new VmOptions(HaltAtWaitForInput: true), sink: sink,
-            compatibility: HimegariCompatibility);
+        var vm = DeveloperEntry(new VirtualMachine(script, Table, new CaptureHost(),
+            new VmOptions(HaltAtWaitForInput: true), sink: sink));
         vm.Run();
 
         Assert.Equal("wait-for-input", vm.HaltReason);
