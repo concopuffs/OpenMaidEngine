@@ -49,6 +49,57 @@ public abstract partial class Win32Dialog : Window
     /// <summary>Where the game's client area starts in the port's viewport: below the menu bar, when there is one.</summary>
     public static Vector2I GameClientOrigin { get; set; }
 
+    // AGE's windowed frame around its client on the capture machine (caption and menu bar on top):
+    // agerc_center_dialog_on_parent centres a dialog on this outer window, not on the client.
+    private const int OuterLeft = 3, OuterTop = 46, OuterRight = 3, OuterBottom = 3;
+
+    /// <summary>Show the dialog as agerc_center_dialog_on_parent places it: centred on AGE's outer window around a
+    /// game client of <paramref name="gameClient"/> pixels.</summary>
+    protected void PopupCenteredOnAgeWindow(Vector2I gameClient, Vector2I clientSize)
+    {
+        Vector2I window = NativeWindowSize(clientSize);
+        int outerWidth = OuterLeft + gameClient.X + OuterRight, outerHeight = OuterTop + gameClient.Y + OuterBottom;
+        PopupAtNativeWindow(new Vector2I(outerWidth / 2 - window.X / 2 - OuterLeft,
+                                         outerHeight / 2 - window.Y / 2 - OuterTop));
+    }
+
+    /// <summary>The dialog's UISF_HIDEFOCUS state cleared: focus rectangles are drawn. Windows hides them in a
+    /// dialog opened by the mouse (a menu click included) until a navigation key is pressed.</summary>
+    public bool FocusCuesVisible { get; private set; } = true;
+
+    /// <summary>The dialog's UISF_HIDEACCEL state cleared: mnemonic underlines are drawn. Windows hides them in a
+    /// dialog opened by the mouse until Alt is pressed.</summary>
+    public bool AcceleratorCuesVisible { get; private set; } = true;
+
+    /// <summary>Set the cues a dialog starts with (WM_CHANGEUISTATE UIS_INITIALIZE).</summary>
+    protected void InitializeCues(bool focus, bool accelerators)
+    {
+        FocusCuesVisible = focus;
+        AcceleratorCuesVisible = accelerators;
+        RedrawControls(Client);
+    }
+
+    /// <summary>Show the cues a key reveals, as DefDlgProc does: navigation keys show focus rectangles, Alt shows
+    /// both.</summary>
+    protected void RevealCues(InputEventKey key)
+    {
+        bool alt = key.Keycode == Key.Alt || key.AltPressed;
+        bool navigation = alt || key.Keycode is Key.Tab or Key.Up or Key.Down or Key.Left or Key.Right;
+        if (!navigation || (FocusCuesVisible && (AcceleratorCuesVisible || !alt))) return;
+        FocusCuesVisible = true;
+        if (alt) AcceleratorCuesVisible = true;
+        RedrawControls(Client);
+    }
+
+    private static void RedrawControls(Node node)
+    {
+        foreach (Node child in node.GetChildren())
+        {
+            if (child is CanvasItem item) item.QueueRedraw();
+            RedrawControls(child);
+        }
+    }
+
     /// <summary>Called by the frame's ✕ when it is enabled.</summary>
     protected virtual void OnCloseButton() => EmitSignal(Window.SignalName.CloseRequested);
 
@@ -98,17 +149,26 @@ public static class Win32DialogStyle
 
     /// <summary>AGERC's dialog font, ＭＳ Ｐゴシック 12 px. GDI draws it from the font's 12 px bitmap strike
     /// without antialiasing; Godot does the same when the font is installed. Text sits 10 px above its
-    /// baseline and centres as 13 px tall (measured; Godot reports an ascent of 11).</summary>
-    public static Win32Font DialogFont => _dialogFont ??= Make("MS PGothic", 12, bitmapStrike: true, ascent: 10, height: 13);
+    /// baseline and centres as 13 px tall (measured; Godot reports an ascent of 11), but a multi-line static's
+    /// lines are tmHeight, 12 px, apart (ﾊﾞｰｼﾞｮﾝ情報's Ogg Vorbis notice, captured 2026-11-05).</summary>
+    public static Win32Font DialogFont => _dialogFont ??= WithLineHeight(
+        Make("MS PGothic", 12, bitmapStrike: true, ascent: 10, height: 13), 12);
+
+    private static Win32Font WithLineHeight(Win32Font font, int lineHeight)
+    {
+        font.LineHeight = lineHeight;
+        return font;
+    }
 
     /// <summary>The system message font, used by MessageBox: Segoe UI 11 px. Lines are 13 px apart (measured).
     /// Its Japanese comes from the Windows SystemLink chain's Meiryo UI, which GDI draws at 13 px.</summary>
     public static Win32Font MessageFont => _messageFont ??= Make("Segoe UI", 11, bitmapStrike: false, ascent: 10,
         height: 13, ("Meiryo UI", LinkedSize), ("Yu Gothic UI", LinkedSize));
 
-    /// <summary>The caption font of the Windows 10 frame (Segoe UI 12 px), linked like the message font.</summary>
+    /// <summary>The caption font of the Windows 10 frame (Segoe UI 12 px), linked like the message font and drawn
+    /// with ClearType, as every captured caption is.</summary>
     public static Win32Font CaptionFont => _captionFont ??= Make("Segoe UI", 12, bitmapStrike: false, ascent: 0,
-        height: 0, ("Meiryo UI", LinkedSize), ("Yu Gothic UI", LinkedSize));
+        height: 0, lcd: true, ("Meiryo UI", LinkedSize), ("Yu Gothic UI", LinkedSize));
 
     /// <summary>The system menu font (lfMenuFont, Segoe UI -12), linked like the message font. GDI measures a line
     /// 15 px tall with its baseline 12 px down (GetTextMetrics on the capture machine, 2026-11-05).</summary>
@@ -199,8 +259,12 @@ public sealed class Win32Font
     public int Size { get; }
     /// <summary>Pixels from a text line's top to its baseline (GDI tmAscent).</summary>
     public int Ascent { get; }
-    /// <summary>A text line's height: the line pitch, and what DT_VCENTER centres.</summary>
+    /// <summary>A text line's height: what DT_VCENTER centres, and the line pitch unless
+    /// <see cref="LineHeight"/> says otherwise.</summary>
     public int Height { get; }
+
+    /// <summary>The pitch of DT_WORDBREAK lines.</summary>
+    public int LineHeight { get; set; }
 
     private readonly Font? _linked;
     private readonly int _linkedSize;
@@ -216,6 +280,7 @@ public sealed class Win32Font
         _linkedSize = linkedSize;
         Ascent = ascent > 0 ? ascent : (int)Mathf.Round(font.GetAscent(size));
         Height = height > 0 ? height : (int)Mathf.Round(font.GetHeight(size));
+        LineHeight = Height;
     }
 
     /// <summary>GDI's text extent: the sum of the characters' advances (Godot's shaped string size can differ

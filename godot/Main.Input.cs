@@ -24,6 +24,7 @@ public partial class Main
     public override void _Input(InputEvent e)
     {
         if (_selftest) return;
+        NoteInputSource(e);
         if (DropForExclusiveDrive(e))
         {
             GetViewport().SetInputAsHandled();

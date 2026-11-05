@@ -220,6 +220,7 @@ public partial class Main
             if (main._exitConfirmation is { } exit) dialogs.Add(exit.Describe());
             if (main._scriptErrorDialog is { } error) dialogs.Add(error.Describe());
             if (main._screenshotFolderDialog?.Describe() is { } folder) dialogs.Add(folder);
+            if (main._agercDialog is { } agerc) dialogs.Add(agerc.Describe());
             return dialogs;
         }
 
@@ -230,6 +231,12 @@ public partial class Main
                 return new System.Text.Json.Nodes.JsonObject
                 {
                     ["text"] = (string?)folder["text"], ["answered"] = folderButton,
+                };
+            if (main._agercDialog is { } agerc && agerc.Describe() is var described
+                && agerc.Press(button) is { } agercButton)
+                return new System.Text.Json.Nodes.JsonObject
+                {
+                    ["text"] = (string?)described["text"], ["answered"] = agercButton,
                 };
             if (main._scriptErrorDialog is { } error && error.Press(button) is { } errorButton)
                 return new System.Text.Json.Nodes.JsonObject

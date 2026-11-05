@@ -325,8 +325,8 @@ Most entries are direct integer/string mappings, but three transforms matter:
   three. The `set:NoSetMusic` copy itself has no later direct reader in this image.
 - `WHEELKEYUP`/`WHEELKEYDOWN` each populate both `set:WheelKey*` and
   `message:WheelKey*OnTW`. A nonempty `VERREGPOS` also invokes
-  `registration_read_class00_version@0x46ae80`; its Windows `CLASS00` registry result replaces
-  `set:GameVersion`.
+  `registration_read_install_display_version@0x46ae80`, which replaces `set:GameVersion` with the installer's
+  `DisplayVersion` ("AGERC dialogs" under "Native menu bar").
 
 The meaningful consumer catalog is:
 
@@ -351,9 +351,9 @@ The meaningful consumer catalog is:
 | `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; the port redirects it through the shared profile-root policy |
 | `REGFILEPATH` | Supplies the Eushully/product-relative directory for native `SYS4REG.INI`. With Himegari's `USEAPPDATAFOLDER=1`, AGE resolves `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SYS4REG.INI`. | Active native engine-options path; redirected with saves while retaining the native format |
 | `SAVEVERSION` | Selects numbered-save layout 3.10 and enables the matching append-catalog persistence structures. | Active persistence ABI |
-| `GAMEVERSION`, `VERREGPOS` | Seeds display/registration version `1.00`, then permits the GUID-selected Windows registry `CLASS00` value to replace it. | Windows version/registration metadata |
+| `GAMEVERSION`, `VERREGPOS` | Seeds `set:GameVersion` with `1.00`. A nonempty `VERREGPOS` replaces it with the `DisplayVersion` of the GUID's InstallShield uninstall key, or `1.00.0000` when that value is missing. ﾊﾞｰｼﾞｮﾝ情報 shows the result. | Version dialog text; port implemented (`Main.AgercDialogs.cs`, 2026-11-05) |
 | `REGKEY` | A nonzero value activates `registration_validate_key_file@0x46fc80`, which opens `SYS4RK.BIN`, validates its header/transformed payload and both CRC variants, and publishes the registration result. | Native registration/key validation |
-| `COPYRIGHT`, `RCVERSION` | Both are imported; no later direct consumer of the exact registry keys was found in this image. | Loaded product metadata |
+| `COPYRIGHT`, `RCVERSION` | Both are imported. AGERC's ﾊﾞｰｼﾞｮﾝ情報 shows `set:Copyright`; no consumer of `RCVERSION` was found. | Version dialog text; port implemented for `COPYRIGHT` |
 
 This is intentionally a native-behavior catalog, not a mandate to reproduce every Win32-era switch.
 `Sys4AssetCatalog` now parses the ordered trailer once, retaining unknown pairs for diagnostics, and projects
@@ -1435,6 +1435,57 @@ BMP equals the shot taken before it, except the animated wait indicator (about x
 BMPs differ only where their shots do, in glyph-edge antialiasing. After OK, both targets store the sandbox Desktop as
 `SaveBMPPath`, and the next BMP goes there.
 
+**AGERC dialogs** (native-read and driver-checked 2026-11-05). The other dialog commands go through
+`agerc_dispatch_host_command@0x100025f0`. In fullscreen only (IAGEService `+0x08`,
+`iage_service_query_display_windowed`, returns 0), `agerc_menu_command` first hides the top-edge strip and brackets
+the dialog with two IAGEService calls:
+
+- `+0x14` is `engine_suspend_presentation_for_dialog@0x405e10`. It sets run-state `0x200000`, and in draw mode 1 it
+  also sets `ctx+0x9b240`.
+- `+0x18` is `engine_resume_presentation_after_dialog@0x405fc0`, which undoes both.
+
+A windowed game skips both calls. Either way the dialog's modal loop runs on AGE's thread, so the game stops and its
+last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
+
+- **Commands.** Command 2 opens dialog resource 2, ﾊﾞｰｼﾞｮﾝ情報. Command 9 opens dialog 9, 設定, through proc
+  `0x10006400`: a tab control `0x417` holding the pages 100–105, with OK, ｷｬﾝｾﾙ, ﾊﾞｰｼﾞｮﾝ情報 and ﾃﾞﾊﾞｯｸﾞ設定 buttons.
+  The starting tab comes from `0x100a0b6c`: `0x64` selects ﾒｯｾｰｼﾞ (tab 0), `0x66` ｻｳﾝﾄﾞ (1), `0x68` その他 (2) and
+  `0x69` 動作環境 (3). Page 105, 動作環境, fills bordered read-only edits with the OS, DirectX version, CPU, memory and
+  VRAM, and drive space, and has a ｸﾘｯﾌﾟﾎﾞｰﾄﾞにｺﾋﾟｰ button `0x419`. このｺﾝﾋﾟｭｰﾀの動作環境 (`0x9c6d`) is therefore
+  dialog 9 opened at tab 3.
+- **Layout.** AGERC's templates use ＭＳ Ｐゴシック 9 pt, whose base units are 7×12. `CreateDialogIndirect` converts each
+  control's x, y, cx and cy on its own: `MulDiv(x, 7, 4)`, `MulDiv(y, 12, 8)`, rounding half away from zero. A width is
+  therefore not the difference of two converted edges. This rule reproduces every control rectangle of the 終了
+  dialog and of all 14 controls of ﾊﾞｰｼﾞｮﾝ情報 (client 376×278).
+- **ﾊﾞｰｼﾞｮﾝ情報.** The procedure is `agerc_version_dialog_proc@0x10001e70`. On `WM_INITDIALOG` it centres the dialog on
+  AGE's window and fills its controls:
+  - `0x400` is "Version " plus the running EXE's `\StringFileInfo\041103a4\FileVersion`
+    (`agerc_exe_file_version_string@0x10001c90`; AGE.EXE 4.24J);
+  - `0x404` gets `STM_SETICON` with AGERC's `IDI_ICON1`;
+  - `0x3ee` is `set:GameName`, the SYS4INI catalog title;
+  - `0x407` is `set:Copyright`;
+  - `0x3ef` is "Version " plus `set:GameVersion`;
+  - `0x3f0` is IAGEService `+0xcc` (`iage_service_product_id_string@0x470090`), the copy protector's
+    machine-specific product ID.
+
+  The OK button's id is 2 (IDCANCEL), so OK, Enter, Escape and the ✕ all close the dialog, and IDOK does nothing.
+  OK with Ctrl held opens registration dialog 134 (キーの入力), but only when `set:IsReggist` exists and the
+  registration check fails. Himegari never sets `set:IsReggist`.
+- **`set:GameVersion`.** With `VERREGPOS` set, `registration_read_install_display_version@0x46ae80` opens
+  `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallShield_{<VERREGPOS>}`. It calls
+  `RegCreateKeyExA` with class `CLASS00` and `KEY_ALL_ACCESS` through the protector stub. It then reads
+  `DisplayVersion`, or uses `1.00.0000` when that value is missing. AGE is 32-bit, so this is the WOW6432Node
+  view. The capture machine's installer (patch 1.03) gives 1.03.0008, while SYS4INI's `GAMEVERSION` is 1.00.
+- **Look.** The focused OK gains `BS_DEFPUSHBUTTON` and its 1 px frame. A dialog opened from the menu shows no
+  focus rectangle or mnemonic underline until a navigation key or Alt is pressed (Windows' UI state). Read-only
+  borderless edits draw on COLOR_BTNFACE, 1 px in from the left and at the top, and the `ES_CENTER` one centres its
+  text. The separator is a 2 px `SS_BLACKFRAME | SS_SUNKEN` static: its top row and left column are shadow, its
+  bottom row and right column are highlight. The lines of a multi-line static are 12 px apart (tmHeight). The icon
+  is 32×32, so the `SS_ICON` static takes that size.
+- **Frame.** Every captured AGE dialog draws its caption in ClearType. The port draws it from 4 px inside the
+  frame's left edge, which lines its glyphs up with the captures. The ✕ is antialiased with one coverage mask: an end pixel is full, a diagonal pixel 250/255, and its side neighbours 51/255.
+  The mask is drawn black, white over red when hovered, and grey `0xcccccc` when disabled.
+
 **Measured look** (native captures, 2026-11-05):
 
 - **Bar.** 20 px tall. Each item is its text width plus 14, and the text starts 7 px in.
@@ -1462,6 +1513,14 @@ BMPs differ only where their shots do, in glyph-edge antialiasing. After OK, bot
   (`godot/ScreenshotFolderDialog.cs`). The dialog runs on a thread of its own so that Godot keeps drawing, and the
   driver's `dialogs` and `answer` steps reach it as they reach native's. Other platforms use their own folder
   dialog. The port writes `SaveBMPPath` to `SYS4REG.INI` at once.
+- **AGERC dialogs.** `godot/Win32TemplateDialog.cs` builds a dialog from its AGERC.DLL template as
+  `CreateDialogIndirect` does. The readers in `engine/Age.Engine.Frontend/NativeResources` supply the template, the
+  icon and the version string (`DialogTemplateResource`, `IconResource`, `VersionResource`). The base units come from
+  the dialog font. The class also gives the dialog manager's keys and the driver's `dialogs` and `answer` steps.
+  Push buttons, text, icon and frame statics, and display-only edits are drawn; the settings controls are not yet.
+  `godot/AgercVersionDialog.cs` is ﾊﾞｰｼﾞｮﾝ情報's procedure. `godot/Main.AgercDialogs.cs` holds the VM and freezes
+  the frame while the dialog is open, and reads `DisplayVersion` from the registry on Windows. The product ID stays
+  empty because the port has no protector.
 - **Unimplemented commands.** The refresh grays every command the port cannot run yet.
 - **Menu loop.** While a menu is open, the port holds the VM and freezes the presented frame. The hold nests, so the
   終了 dialog can open from it.
@@ -1470,9 +1529,13 @@ BMPs differ only where their shots do, in glyph-edge antialiasing. After OK, bot
   The 終了 and script-error dialogs share this text path.
 - **Opting out.** `--no-menu-bar` restores the plain window.
 - **Checks.** `tools/drive/scenarios/himegari-menu-bar.steps` checks read skip, hide, Auto and 終了 on both
-  targets, and `himegari-screenshot.steps` checks the screenshots and the image folder. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
+  targets, `himegari-screenshot.steps` checks the screenshots and the image folder, and
+  `himegari-version-dialog.steps` checks ﾊﾞｰｼﾞｮﾝ情報. On the last, both targets list the same title, texts and
+  button, close on OK and resume on the same page. Against the native capture the port's dialog differs only in the
+  caption's glyph filtering and the empty product ID. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
   state, then posts `WM_COMMAND`. Both targets refuse a grayed item.
-- **Remaining gaps.** The AGERC dialogs and the other commands, the right-click popup, the top-edge strip,
+- **Remaining gaps.** The 設定 dialog (dialog 9, including 動作環境) and the other commands, the right-click popup,
+  the top-edge strip,
   Alt/F10 focus, and native's off-window popups are listed in `docs/backlog.md`, "Native menu bar".
 
 ### Native system-menu reentrancy guard — opcode `0x142` (2026-07-29)

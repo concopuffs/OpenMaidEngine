@@ -49,9 +49,9 @@ public partial class Win32ClassicButton : BaseButton
         int textWidth = (int)Mathf.Ceil(_font.Width(_text));
         var topLeft = new Vector2((w - textWidth) / 2, (h - _font.Height) / 2);
         if (pressed) topLeft += Vector2.One;
-        _font.Draw(this, topLeft, _text, Win32DialogStyle.Text);
+        _font.Draw(this, topLeft, _text, Win32DialogStyle.Text, underline: Dialog?.AcceleratorCuesVisible != false);
 
-        if (HasFocus())
+        if (HasFocus() && Dialog?.FocusCuesVisible != false)
             Win32DialogStyle.DrawFocusRect(this, new Rect2I(FocusInset, FocusInset, w - 2 * FocusInset, h - 2 * FocusInset));
     }
 

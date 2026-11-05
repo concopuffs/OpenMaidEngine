@@ -24,10 +24,6 @@ public partial class ExitConfirmationDialog : Win32Dialog
     // Captured client size and control rectangles (client coordinates), 2026-11-04.
     private static readonly Vector2I NativeClientSize = new(327, 140);
 
-    // AGE's windowed frame around its 800×600 client on the capture machine (caption and menu bar on top):
-    // agerc_center_dialog_on_parent centres the dialog on this outer window, not on the client.
-    private const int OuterLeft = 3, OuterTop = 46, OuterRight = 3, OuterBottom = 3;
-
     private readonly Win32ClassicRadio _quit;
     private readonly Win32ClassicRadio _title;
     private readonly Win32ClassicButton _ok;
@@ -68,10 +64,7 @@ public partial class ExitConfirmationDialog : Win32Dialog
     {
         _completed = false;
         _quit.ButtonPressed = true;
-        Vector2I window = NativeWindowSize(NativeClientSize);
-        int outerWidth = OuterLeft + client.X + OuterRight, outerHeight = OuterTop + client.Y + OuterBottom;
-        PopupAtNativeWindow(new Vector2I(outerWidth / 2 - window.X / 2 - OuterLeft,
-                                         outerHeight / 2 - window.Y / 2 - OuterTop));
+        PopupCenteredOnAgeWindow(client, NativeClientSize);
         _quit.GrabFocus();
     }
 

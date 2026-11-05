@@ -59,8 +59,10 @@ public partial class Win32ClassicRadio : BaseButton
             if (color is { } c) Win32DialogStyle.Pixel(this, 1 + x, top + y, c);
         }
 
-        _font.Draw(this, new Vector2(TextLeft, (h - _font.Height) / 2), _text, Win32DialogStyle.Text);
-        if (HasFocus())
+        var dialog = GetWindow() as Win32Dialog;
+        _font.Draw(this, new Vector2(TextLeft, (h - _font.Height) / 2), _text, Win32DialogStyle.Text,
+                   underline: dialog?.AcceleratorCuesVisible != false);
+        if (HasFocus() && dialog?.FocusCuesVisible != false)
         {
             int width = (int)Mathf.Ceil(_font.Width(_text));
             Win32DialogStyle.DrawFocusRect(this, new Rect2I(TextLeft - 1, 0, width + 2, h));

@@ -15,7 +15,8 @@ using Godot;
 /// game's client area starts below them. A game without AGERC.DLL, or a run with <c>--no-menu-bar</c>, has no bar.
 /// <para>Opening a menu starts native's modal menu loop: the game holds at its next opcode boundary, its frame
 /// freezes, and AGERC refreshes the items (WM_INITMENU). A chosen command then runs as WM_COMMAND does. The port
-/// performs 終了, 画像の保存 (表示画面を保存, 画像の保存場所; Main.Screenshot.cs), the ﾒｯｾｰｼﾞ toggles and ｳｲﾝﾄﾞｳ; it grays
+/// performs 終了, 画像の保存 (表示画面を保存, 画像の保存場所; Main.Screenshot.cs), the ﾒｯｾｰｼﾞ toggles, ｳｲﾝﾄﾞｳ and ﾍﾙﾌﾟ's
+/// ﾊﾞｰｼﾞｮﾝ情報 (Main.AgercDialogs.cs); it grays
 /// the commands it lacks (docs/backlog.md).</para>
 /// </summary>
 public partial class Main
@@ -28,7 +29,7 @@ public partial class Main
     private static readonly HashSet<int> PortMenuCommands = new()
     {
         AgercMenu.Exit, AgercMenu.SaveScreen, AgercMenu.ImageFolder, AgercMenu.MessageSkip, AgercMenu.ReadMessageSkip,
-        AgercMenu.HideWindow, AgercMenu.AutoMessage, AgercMenu.Windowed,
+        AgercMenu.HideWindow, AgercMenu.AutoMessage, AgercMenu.Windowed, AgercMenu.VersionInfo,
     };
 
     /// <summary>Read and prune the menu before the window is sized, since the bar adds rows above the game.</summary>
@@ -59,6 +60,7 @@ public partial class Main
             return;
         }
         AgercMenu.Prune(items, key => AgercMenu.Setting(settings, key));
+        _agercPath = path;
         _menuItems = items;
         _menuBarHeight = NativeMenuBar.BarHeight;
         GD.Print($"[menu] AGERC menu {AgercMenu.ResourceId}: {string.Join(" ", items.ConvertAll(i => i.Label))}");
@@ -96,7 +98,7 @@ public partial class Main
     {
         if (_menuBar == null || _vm == null || _host == null) return false;
         if (_exitConfirmation != null || _scriptErrorDialog != null || _fullwidthTextEditor != null
-            || _screenshotFolderDialog != null || _debugSceneLauncher?.Visible == true)
+            || _screenshotFolderDialog != null || _agercDialog != null || _debugSceneLauncher?.Visible == true)
             return false;
         return _menuBar.HandleInput(e);
     }
@@ -190,6 +192,9 @@ public partial class Main
                 break;
             case AgercMenu.Windowed:
                 break;   // IAGEService +0x1c(1): already windowed
+            case AgercMenu.VersionInfo:
+                OpenVersionDialog();   // AGERC host command 2: the ﾊﾞｰｼﾞｮﾝ情報 dialog (Main.AgercDialogs.cs)
+                break;
             default:
                 GD.Print($"[menu] command 0x{id:x} has no port implementation (docs/backlog.md, \"Native menu bar\")");
                 break;

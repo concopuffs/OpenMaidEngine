@@ -72,7 +72,7 @@ public partial class ScriptErrorDialog : Win32Dialog
     {
         var message = new Win32StaticText(text.TrimEnd('\n'), Win32DialogStyle.MessageFont, TextWrap);
         int textWidth = (int)Mathf.Ceil(message.ContentWidth) + 2;     // the static is 2 px wider than its widest line
-        int textHeight = message.LineCount * Win32DialogStyle.MessageFont.Height + 2;
+        int textHeight = message.LineCount * Win32DialogStyle.MessageFont.LineHeight + 2;
         message.Size = new Vector2(textWidth, textHeight);
         int white = TextTop + Math.Max(textHeight, 32) + TextBottom;
         int width = Math.Max(TextLeft + textWidth + TextRight, ButtonFromRight[0] + 15);

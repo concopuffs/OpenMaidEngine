@@ -220,8 +220,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, WAV sanitization, the
-    │                                       game-driving control protocol (Control/), and AGERC.DLL's menu
-    │                                       resource and its prune/refresh model (NativeMenu/)
+    │                                       game-driving control protocol (Control/), AGERC.DLL's menu
+    │                                       resource and its prune/refresh model (NativeMenu/), and PE
+    │                                       resource readers for dialog templates, icons and version strings
+    │                                       (NativeResources/)
     │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
@@ -275,7 +277,9 @@ injected input events, exclusive input, and the port side of the protocol (state
 `godot/NativeMenuBar.cs` draws the bar and its popups, and `godot/GdiTextMetrics.cs` supplies the GDI advances
 that the bar and the `godot/Win32Dialog.cs` dialogs lay their labels out with. `godot/Main.Screenshot.cs` saves the
 F1 and 表示画面を保存 screenshot BMPs and runs 画像の保存場所 through `godot/ScreenshotFolderDialog.cs`, the shell's
-folder picker.
+folder picker. `godot/Main.AgercDialogs.cs` opens AGERC's own dialogs: `godot/Win32TemplateDialog.cs` builds one from
+its AGERC.DLL template with the classic controls (`godot/Win32ClassicButton.cs`, `Win32StaticText.cs`, `Win32Edit.cs`,
+`Win32StaticImage.cs`, `Win32StaticEdge.cs`), and `godot/AgercVersionDialog.cs` is ﾊﾞｰｼﾞｮﾝ情報's procedure.
 
 `engine/Age.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
 Both `engine/AgeEngine.sln` and `godot/OME.sln` include the project; Godot and `Age.Engine.Tests` consume it

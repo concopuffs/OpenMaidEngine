@@ -737,6 +737,11 @@ name = "display_windowed"
 type = "int"
 note = "nonzero while AGE runs windowed (read 1 live with SYS4REG display.ScreenMode=1 and an 806x649 framed window, 2026-11-03). age_main_window_proc: WM_ACTIVATE(WA_INACTIVE) disables input polling only when set; when zero (fullscreen), WM_ACTIVATEAPP re-tops the window and centres the cursor at the next WM_PAINT; SC_KEYMENU+Enter toggles the mode through display_toggle_screen_mode_and_menu_bar@0x412df0, which attaches the native menu bar (menu 110) to a window and detaches it for fullscreen; zero also gates the top-edge system-menu strip, which only fullscreen reveals"
 [[field]]
+offset = 0x9b240
+name = "presentation_suspended_for_dialog"
+type = "int"
+note = "draw mode 1 only: engine_suspend_presentation_for_dialog@0x405e10 (IAGEService +0x14, which agerc_menu_command calls before its dialogs only in fullscreen) sets 1 alongside run-state 0x200000; engine_resume_presentation_after_dialog@0x405fc0 (+0x18) clears both. The game frame stays as last presented, undimmed"
+[[field]]
 offset = 0x9b24c
 name = "dispatch_table"
 type = "void*"

@@ -71,7 +71,7 @@ public partial class Main
         if (e is not InputEventKey { Pressed: true, Keycode: Key.F1 }) return false;
         if (_vm == null || (_vm.SystemKeyDisableMask & 1) != 0) return false;
         if (_exitConfirmation != null || _scriptErrorDialog != null || _fullwidthTextEditor != null
-            || _screenshotFolderDialog != null)
+            || _screenshotFolderDialog != null || _agercDialog != null)
             return false;
         SaveScreenshot(CaptureGameImage());
         return true;

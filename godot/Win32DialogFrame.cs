@@ -34,10 +34,11 @@ public partial class Win32DialogFrame : Control
         DrawRect(new Rect2(1, 1 + Win32Dialog.CaptionHeight, size.X - 2, size.Y - Win32Dialog.CaptionHeight - 2),
             Win32DialogStyle.Face);
 
-        // The caption text is vertically centred in the caption, 5 px from the frame's left edge.
+        // The caption text is vertically centred in the caption and starts 4 px from the frame's left edge, which lines
+        // its ClearType glyphs up with the captures.
         Win32Font font = Win32DialogStyle.CaptionFont;
         float top = Mathf.Round(1 + (Win32Dialog.CaptionHeight - font.Height) / 2f) - 1;
-        font.Draw(this, new Vector2(5, top), _caption, Win32DialogStyle.CaptionText, mnemonic: false);
+        font.Draw(this, new Vector2(4, top), _caption, Win32DialogStyle.CaptionText, mnemonic: false);
 
         Color cross = Win32DialogStyle.CaptionText;
         if (!_closeEnabled) cross = Win32DialogStyle.CloseDisabled;
@@ -47,12 +48,29 @@ public partial class Win32DialogFrame : Control
             cross = Colors.White;
         }
         int x0 = size.X - CrossRight;
-        for (int i = 0; i < CrossSize; i++)
+        for (int y = 0; y < CrossSize; y++)
+        for (int x = 0; x < CrossSize; x++)
         {
-            Win32DialogStyle.Pixel(this, x0 + i, CrossTop + i, cross);
-            Win32DialogStyle.Pixel(this, x0 + CrossSize - 1 - i, CrossTop + i, cross);
+            float alpha = CrossMask[y][x] switch { '#' => 1f, 'o' => 250 / 255f, '+' => 51 / 255f, _ => 0f };
+            if (alpha > 0) Win32DialogStyle.Pixel(this, x0 + x, CrossTop + y, new Color(cross, alpha));
         }
     }
+
+    // The ✕'s coverage, as Windows 10 antialiases it: '#' full, 'o' 250/255, '+' 51/255 (the 終了 dialog, the
+    // interpreter error box's disabled ✕ and the ﾊﾞｰｼﾞｮﾝ情報 dialog all capture it so, 2026-11-04/05).
+    private static readonly string[] CrossMask =
+    {
+        "#+......+#",
+        "+o+....+o+",
+        ".+o+..+o+.",
+        "..+o++o+..",
+        "...+oo+...",
+        "...+oo+...",
+        "..+o++o+..",
+        ".+o+..+o+.",
+        "+o+....+o+",
+        "#+......+#",
+    };
 
     public override void _GuiInput(InputEvent e)
     {

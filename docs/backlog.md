@@ -11,10 +11,12 @@ it; git history keeps the record.
 ## Engine fidelity
 
 - **Native menu bar: the remaining commands (AGERC menu 110).** The port draws the pruned bar and runs ｹﾞｰﾑ>終了,
-  画像の保存 and the four ﾒｯｾｰｼﾞ toggles as native does (`engine-re.md`, "Native menu bar"). It grays everything
-  else. Still missing:
-  - The AGERC dialogs behind ﾒｯｾｰｼﾞ設定, 画面表示, ｻｳﾝﾄﾞ設定, その他の設定 and the ﾍﾙﾌﾟ items (version, system
-    information).
+  画像の保存, the four ﾒｯｾｰｼﾞ toggles and ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報 as native does (`engine-re.md`, "Native menu bar"). It grays
+  everything else. Still missing:
+  - The 設定 dialog (AGERC dialog 9, proc `0x10006400`) behind ﾒｯｾｰｼﾞの設定, ｻｳﾝﾄﾞ設定, その他の設定 and
+    このｺﾝﾋﾟｭｰﾀの動作環境, which open it at tabs 0–3. It needs the tab control, check boxes, radio buttons, group
+    boxes, trackbars, combo boxes and bordered edits in `godot/Win32TemplateDialog.cs`, the page procedures, and
+    what OK writes.
   - ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (`0x9c5a`/`0x9c5b`), and in fullscreen the top-edge strip that shows the bar (op `0x149` sets
     its delay; the port keeps that state and op `0x142`'s).
   - The right-click ﾒｯｾｰｼﾞ popup under `message:RMouseEvent=2`.

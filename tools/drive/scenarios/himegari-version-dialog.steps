@@ -1,0 +1,26 @@
+# ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 (menu 0x9c45; AGERC dialog resource 2) on SC0000 page 1. The game holds and its frame stays frozen,
+# with no dim, while the dialog is open. `dialogs` lists its title, its static texts (the icon static's template name
+# SYSTEM3 first) and OK, its only button, whose id is IDCANCEL (2). OK closes it, and the game goes on from the page it
+# held on. Run on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-version-dialog.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+
+menu version
+wait 1.5
+dialogs                                 # ﾊﾞｰｼﾞｮﾝ情報: SYSTEM3, ARCGameEngine, ... ; buttons OK
+shot version-dialog
+answer OK
+wait 1
+dialogs                                 # none
+expect top=SC0000@0x83f
+advance                                 # the game goes on
+expect top=SC0000@0x874                 # page 2

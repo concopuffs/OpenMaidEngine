@@ -837,7 +837,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `wait-state CONDITIONS [timeout=S] [click=POINT every=S]` | poll until `expect` would pass, clicking `POINT` every `S` seconds (default 2) meanwhile (boot: `wait-state script=TITLE click=adv.next every=3`) |
 | `point NAME X Y` | define a point for the session |
 | `speed FACTOR` | port: run the frame clock 0.05–8 times as fast |
-| `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, the 終了 dialog and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs and the folder picker). The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
+| `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, AGERC's dialogs and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs, the folder picker and ﾊﾞｰｼﾞｮﾝ情報). The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
 | `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
 | `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground` |
 | `menu NAME\|ID` | choose a menu-bar command as a user does. The menu refreshes first, and a grayed item fails the step. Names: `exit`, `save`, `load`, `version`, `save-screen`, `image-folder`, `fullscreen`, `windowed`, `skip`, `hide`, `auto`, `read-skip`, `sound-settings`, `message-settings`, `system-info`, `other-settings`; or a numeric `WM_COMMAND` id. The result prints the item's `label` and whether it was `checked` before. Native sends `WM_INITMENU` (AGE has AGERC refresh the items), reads the item, then posts `WM_COMMAND`; the port runs the same refresh and command on its drawn bar |
@@ -906,6 +906,11 @@ preselects the Desktop, so `SaveBMPPath` becomes the sandbox Desktop and `CG0000
 with the `screenshot-*` shot taken before it. On both targets they differ only in the wait indicator, and the BMP
 headers are identical. Native writes `SYS4REG.INI` when it exits, so `SaveBMPPath` shows only after `stop`; the port
 writes it at once (`engine-re.md`, "Native menu bar", Screenshots).
+
+`himegari-version-dialog.steps` opens ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 on SC0000 page 1. It lists the dialog, takes a shot, answers OK,
+and checks that no dialog is left and that the game goes on to page 2 (`SC0000@0x874`). Both targets list the same
+title, texts and button. Native's `shot` is AGE's own window, so it leaves the dialog out; the port's `version-dialog`
+shot includes it, for comparison with a capture of the native dialog.
 
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
