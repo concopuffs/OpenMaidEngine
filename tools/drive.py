@@ -44,14 +44,16 @@ def execute_steps(target: str, steps: list[core.Step], report: Callable[[dict[st
         for event in client.take_events():
             if on_event is not None:
                 on_event(event)
-        on_close = None
+        on_close = on_window = None
         if target == "port":
             import drive_port
             info = core.read_session("port")
+            on_window = drive_port.window_placement(info)
 
             def on_close(_: dict[str, Any]) -> dict[str, Any]:
                 return {"exit_code": drive_port.wait_exit(info, 20)} if info else {}
-        executor = core.Executor(client, core.load_profile(), core.drive_root(target) / "shots", on_close=on_close)
+        executor = core.Executor(client, core.load_profile(), core.drive_root(target) / "shots", on_close=on_close,
+                                 on_window=on_window)
         ok = executor.run(steps, report)
         if finish is not None and not executor.closed:
             finish(executor)

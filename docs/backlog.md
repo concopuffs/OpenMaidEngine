@@ -10,13 +10,21 @@ it; git history keeps the record.
 
 ## Engine fidelity
 
-- **Modal dialog fidelity (終了 and エラーが発生しました).** The port's dialogs match native's answers, but not
-  these details (`engine-re.md`, "Close policy" and the Depth error):
-  - Run-state bit `0x1000000` makes native close without asking; its setter is unidentified.
-  - System-menu commands `0x9c41` (ask) and `0x9c6b` (forced close) have no port equivalent.
+- **Native menu bar (AGERC menu 110).** A windowed native AGE has a Win32 menu bar; the port has none
+  (`engine-re.md`, "Native menu bar").
+  - Himegari's pruned bar offers:
+    - ｹﾞｰﾑ>終了 (`0x9c41`, the asking close);
+    - 画像の保存;
+    - ﾒｯｾｰｼﾞ: skip, read skip, hide window, auto, and message settings;
+    - 設定: 画面表示, ｻｳﾝﾄﾞ設定 and その他の設定;
+    - ﾍﾙﾌﾟ.
+  - Every command except 終了 runs through AGERC host command 2, and several open AGERC dialogs.
+  - Fullscreen reaches the same commands through the top-edge strip (op `0x149` sets its delay).
+    `message:RMouseEvent=2` adds a right-click ﾒｯｾｰｼﾞ popup.
+  - The port keeps the state of ops `0x142` and `0x149` for a future menu, but shows no menu.
 
-  Done when each item is modelled or shown to be unreachable in retail. The look and the frozen frame are done
-  (`engine-re.md`, "Port appearance"; remaining pixel differences are listed there).
+  Done when the port offers an equivalent menu, drawn or a native window menu, whose commands reach the same
+  services, or when the item is closed as out of scope.
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
   statement blocks, "Not modelled"). A static scan of both games' scripts (2026-11-04) finds a movie start inside

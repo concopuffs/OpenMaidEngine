@@ -832,7 +832,8 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `point NAME X Y` | define a point for the session |
 | `speed FACTOR` | port: run the frame clock 0.05–8 times as fast |
 | `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes and the 終了 dialog; port: the 終了 dialog). `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
-| `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog |
+| `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
+| `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground` |
 | `close [timeout=S]` | quit the game the way its own quit does (native `WM_CLOSE` wParam=1, which saves the shared profile), then the session ends |
 
 A failing step stops the request, and `do`/`run` exit 1. Results also carry what the game did meanwhile: a script
@@ -854,6 +855,10 @@ pc steps past the wait's successor), and 中止 (the game closes). Their headers
 
 `himegari-exit-dialog.steps` covers the close policy on both targets: Cancel on the title, タイトルに戻る from
 SC0000 page 1 back to TITLE without the logos, then TITLE's fifth action (op `0x1`) quits without asking.
+
+`himegari-minimized-close.steps` covers a close while minimized on both targets. On the title it minimizes and
+restores, and `close-request` still opens the 終了 dialog (answered ｷｬﾝｾﾙ). It then minimizes again, and
+`close-request` quits at once with exit code 0, no dialog and a `SAVE.DAT` write. The last step ends the session.
 
 `himegari-read-skip.steps` saves on SC0000 page 1, reads six pages, reloads and turns on Read-message Skip (x=750).
 Both targets fast-forward over the read pages and stop at `SC0000@0xa18`, the first page not yet advanced past.

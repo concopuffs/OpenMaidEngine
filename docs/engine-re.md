@@ -339,7 +339,7 @@ The meaningful consumer catalog is:
 | `FULLSCREENBIT`, `ALWAYSBACKUPSURFACE` | These are read only inside the legacy `CreateObject & 1` DirectDraw branch of `engine_initialize_graphics_from_settings@0x406480`. Himegari selects only bit 2, so its 32-bit/zero values do not drive the active renderer. | Valid compatibility settings, inert for this profile |
 | `SCREENWARNING` | Imported as `set:ScreenWarning`; no reader beyond default registration/import was found in this EXE image. | Loaded, no observed consumer |
 | `NOSETMUSIC` | Seeds the live music-route state as described above; the route starts enabled. | Active audio initialization plus otherwise-unused policy copy |
-| all seven `MENU_*` keys | Imported as `set:Menu_*`. No direct non-loader reader of these exact registry keys was found; they appear to be shared AGE native-menu capability metadata rather than Himegari script-menu state. `MENU_USEANTIFONT` does **not** disable the independently enabled `message:UseAntiFont`. | Loaded compatibility/menu metadata |
+| all seven `MENU_*` keys | Imported as `set:Menu_*`. AGE.EXE does not read them. AGERC.DLL does: `agerc_prune_menu_by_settings@0x10002ca0` removes items from the native menu bar when it is attached (see "Native menu bar" below). It reads `Menu_MesWinA` twice and never reads `Menu_MesSpeed`. They are not Himegari script-menu state. `MENU_USEANTIFONT` prunes only the menu's 文字表示 entries; it does **not** disable the independently enabled `message:UseAntiFont` (corrected 2026-11-05). | Native menu-bar pruning |
 | `ENABLEMEMFLIP` | Gates `op_0x6d`, which swaps VM-bank pointer pairs only when enabled. Himegari disables it and its corpus does not use that opcode. | Compatibility capability gate |
 | `CLICKONUP` | Copied at `0x488080` into `g_dwClickOnUp@0x5c6030`. When nonzero, `age_main_window_proc` latches mouse clicks (`input_latch_mouse_click@0x485e20`) on `WM_LBUTTONUP`/`WM_RBUTTONUP` instead of the down messages. That latch is the trigger for ADV page advance, hotspot clicks, bound actions (right-click → `MENU.BIN`) and movie/transition skips; see *Driving native AGE* below. Himegari has 1. | Active input timing; port implemented (`Sys4StartupSettings.ClickOnUp`) |
 | `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for active fast-forward; value 2 also launches `CALLBACK_SETTING.BIN`. See "Click cancels Skip" below. | Active ADV input behavior; port implemented (`Sys4StartupSettings.CancelMessageSkipOnClick`) |
@@ -536,13 +536,31 @@ loop, and other results exit. `Command_Exit_Exception` bypasses that policy enti
 procedure `age_main_window_proc@0x486320` closes at once on `wParam == 1`. Any other `WM_CLOSE` is
 *unforced* and asks `wm_close_confirm_exit_or_title@0x405740` first. Three things post an unforced close:
 
-- the window's close button;
+- the window's close button, or the taskbar's Close;
 - ESC (`WM_KEYDOWN 0x1b` posts `WM_CLOSE(0)` and still forwards the key to the engine);
-- system-menu command `0x9c41`.
+- menu command `0x9c41`, the menu bar's ｹﾞｰﾑ>終了 (labelled ESC; see "Native menu bar" below).
 
-Menu command `0x9c6b` posts the forced form.
+Two things post the forced form:
 
-The decision function returns 1 at once when run-state bit `0x1000000` is set. Otherwise:
+- `WM_USER+1`, unless its hook stub returns true;
+- menu command `0x9c6b`. Only AGERC's debug menu 124 holds it (ﾌﾟﾛｸﾞﾗﾑの終了, labelled F12). No code loads that
+  menu, since `LoadMenuA`'s only callers pass 110. `WM_KEYDOWN` tests only ESC, and neither image posts the id. This
+  build cannot send it (2026-11-05).
+
+The decision function returns 1 at once, before it dims or asks, when run-state bit `0x1000000` is set. The bit
+means the game is minimized or suspended:
+
+- `WM_SYSCOMMAND SC_MINIMIZE` sets it, windowed or with `display:VirtualFullScreen`, and removes `SC_MAXIMIZE` from
+  the system menu. `SC_RESTORE` clears it.
+- In fullscreen, `display_suspend_on_deactivate_set_minimized_flag@0x45f9b0` sets it on `WM_ACTIVATEAPP(0)` and on
+  message `0x1401`.
+
+A native drive confirmed it (`tools/drive/scenarios/himegari-minimized-close.steps`):
+
+- A close while minimized exits with code 0, shows no dialog and writes `SAVE.DAT`.
+- After a restore the dialog asks again (2026-11-05).
+
+Otherwise:
 
 1. It dims the presented frame with a black fill at alpha `0x80`.
 2. It calls `g_pfnAgercHostCallback(3, hwnd, 0)`. In AGERC.DLL that is `agerc_dispatch_host_command` case 3,
@@ -579,16 +597,17 @@ A native drive confirmed this (`tools/drive/scenarios/himegari-exit-dialog.steps
   2. dims to 128/255;
   3. freezes the presented frame (see "Port appearance" below);
   4. opens `ExitConfirmationDialog`, which has native's texts, the default choice and E/T mnemonics.
+- **Minimized:** `RequestUnforcedClose` first checks the window mode. A minimized window quits at once with exit
+  code 0, and the shutdown flush writes `SAVE.DAT`, as native does under run-state `0x1000000`. The port reads
+  the window's state instead of keeping the bit.
 - **タイトルに戻る:** after 250 ms, `VirtualMachine.RequestRootReload` runs. It wakes any blocking host wait through
   `ILifecycleHost.InterruptForRootReload`. The current frame stops at its next opcode boundary (a hotspot callback
   unwinds too), and op `0x9`'s reset and root reload follow.
 
-The port's drive of the same scenario passes. Its return to TITLE takes 0.28 s, with no logos.
+The port's drive of the same scenario passes. Its return to TITLE takes 0.28 s, with no logos. The minimized-close
+scenario passes on the port too.
 
-The port does not yet match native in these ways:
-
-- The run-state `0x1000000` auto-confirm is not modelled.
-- The system-menu commands are absent.
+The port has no menu bar, so nothing in it sends `0x9c41` (see "Native menu bar" below, and `docs/backlog.md`).
 
 **Port appearance (2026-11-04).** Both modal dialogs (this one and the interpreter error box) are drawn to look like
 AGE's on Windows 10. The reference is PrintWindow captures of the native dialogs with their layout read through
@@ -1279,6 +1298,65 @@ backing's earlier one-shot-color provenance, so classifying only animated or loo
 rebuilt message window opaque. Post-bind static alpha now controls this fresh backing as well; repeated
 CONFIG changes therefore take effect immediately while the enclosing ADV wait remains active.
 
+### Native menu bar — AGERC menu 110 (2026-11-05)
+
+A windowed AGE has a Win32 menu bar. `display_toggle_screen_mode_and_menu_bar@0x412df0` switches the screen mode.
+It is called by the maximize box (`SC_MAXIMIZE`), Alt+Enter, op `0x2cf` and `0x45f4f6`. With `display:ForceScreen`
+set to 1, it refuses to leave a window.
+
+- **To a window,** it sets style `0x90cb0000`, sizes the frame for the caption and the menu, and attaches the menu:
+  `LoadMenuA(110)`, `SetMenu`, AGERC host command 1, `DrawMenuBar`.
+- **To fullscreen,** it sets style `0x90000000` and detaches the menu with `SetMenu(NULL)`. In fullscreen the same
+  commands come from the top-edge strip ("System-menu top-edge reveal delay" below).
+
+Menu resource 110 is in AGERC.DLL. Its labels, without their mnemonics, are:
+
+| Popup | Items (command id) |
+|---|---|
+| ｹﾞｰﾑ | ｾｰﾌﾞ `0x9c43`, ﾛｰﾄﾞ `0x9c44`, a separator, 終了 `0x9c41` (labelled ESC) |
+| 画像の保存 | 表示画面を保存 `0x9c46`, 画像の保存場所 `0x9c47` |
+| ﾒｯｾｰｼﾞ | ﾒｯｾｰｼﾞｽｷｯﾌﾟ `0x9c63`, 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ `0x9c6f`, ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す `0x9c64`, ｵｰﾄﾒｯｾｰｼﾞ `0x9c65`, a separator, ﾒｯｾｰｼﾞの設定 `0x9c6c` |
+| 設定 | 画面表示 (ﾌﾙｽｸﾘｰﾝ `0x9c5a`, ｳｲﾝﾄﾞｳ `0x9c5b`); ﾏｳｽの右ｸﾘｯｸ時の動作 (`0x9c49`–`0x9c4b`); 文字表示 (`0x9c5d`, `0x9c5e`); ﾒｯｾｰｼﾞｽﾋﾟｰﾄﾞ (`0x9c4d`–`0x9c50`); ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳの透過 (なし `0x9c55`, 25–75% `0x9c52`–`0x9c54`); a separator; BGMの設定 (`0x9c56`, `0x9c57`); SEの設定 (`0x9c58`, `0x9c59`); ｻｳﾝﾄﾞ設定 `0x9c68`; その他の設定 `0x9c6e` |
+| ﾍﾙﾌﾟ | このｺﾝﾋﾟｭｰﾀの動作環境 `0x9c6d`, a separator, ﾊﾞｰｼﾞｮﾝ情報 `0x9c45` |
+
+AGERC.DLL also holds a debug menu, 124. Its items are F2–F12 commands such as BINﾌｧｲﾙの再読込, ﾀｲﾄﾙに戻る `0x9c6a` and
+ﾌﾟﾛｸﾞﾗﾑの終了 `0x9c6b`. No code loads that menu ("Close policy" above).
+
+**Pruning.** Host command 1 is `agerc_prune_menu_by_settings@0x10002ca0`. A `set:Menu_*` key of 0 removes:
+
+- `Menu_Save`: ｾｰﾌﾞ, ﾛｰﾄﾞ and their separator;
+- `Menu_RClick`: ﾏｳｽの右ｸﾘｯｸ時の動作;
+- `Menu_UseAntiFont`: 文字表示;
+- `Menu_MesWinA`: both ﾒｯｾｰｼﾞｽﾋﾟｰﾄﾞ and ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳの透過. The second test reads `Menu_MesWinA` again, so
+  `Menu_MesSpeed` is never read.
+- `Menu_SoundONOFF`: BGMの設定 and SEの設定;
+- `Menu_Message`: the whole ﾒｯｾｰｼﾞ popup.
+
+Himegari sets every key to 0 except `MENU_MESSAGE`, which is 1. Its live bar is therefore:
+
+- ｹﾞｰﾑ, holding only 終了;
+- 画像の保存;
+- ﾒｯｾｰｼﾞ;
+- 設定, holding 画面表示, a separator, ｻｳﾝﾄﾞ設定 and その他の設定;
+- ﾍﾙﾌﾟ.
+
+The windowed game's outer window is 806×649, and its client starts at (3,46).
+
+**Commands.** `age_main_window_proc@0x486320` handles `WM_COMMAND`:
+
+- `0x9c41` posts `WM_CLOSE(0)`, and `0x9c6b` posts `WM_CLOSE(1)` ("Close policy" above).
+- Every other id goes to AGERC host command 2, together with the menu that `WM_INITMENU` saved. `WM_INITMENU` also
+  runs host command 0 and `DrawMenuBar`.
+- Opcode `0x142` below grays the settings and save items while CONFIG runs.
+
+**Right-click popup.** On `WM_RBUTTONDOWN`, AGE checks two things: any of run-state bits `0x94800000` must be set,
+and `message:RMouseEvent` must be 2. When both hold, AGE loads a fresh copy of menu 110. Host command 1 never prunes
+that copy. AGE then opens its third popup, ﾒｯｾｰｼﾞ, at the cursor with `TrackPopupMenu`. The default in
+`SYS4REG.INI` is `RMouseEvent=0`, and Himegari prunes ﾏｳｽの右ｸﾘｯｸ時の動作 from the bar.
+
+**Port.** The port has no menu bar, no right-click popup and no top-edge strip. None of the AGERC commands above has
+a port source (`docs/backlog.md`, "Native menu bar").
+
 ### Native system-menu reentrancy guard — opcode `0x142` (2026-07-29)
 
 `op_0x142_set_system_menu_actions_enabled@0x421fe0` is a direct one-operand setter for
@@ -1324,7 +1402,8 @@ clears the timestamp and kills the timer. The tick reveals the menu only when:
 
 - unsigned elapsed time is strictly greater than `system_menu_show_delay_ms`;
 - neither the left nor right mouse button is held;
-- `display:ScreenMode` is windowed; and
+- the game is fullscreen (`display_windowed` is 0). A windowed game has the menu bar instead ("Native menu bar"
+  above). An earlier revision said "windowed"; corrected 2026-11-05.
 - AGERC host command `-1` reports no active host UI.
 
 The unsigned comparison preserves the setter's complete dword: a negative script value becomes a very

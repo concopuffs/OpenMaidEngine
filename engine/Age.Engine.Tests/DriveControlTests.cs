@@ -45,6 +45,8 @@ public class DriveControlTests
         public void RequestClose() => CloseRequests++;
         public JsonArray Dialogs() => new() { new JsonObject { ["title"] = "exit" } };
         public JsonObject Answer(string button) { Answered = button; return new JsonObject { ["answered"] = button }; }
+        public bool? Minimized;
+        public JsonObject Window(bool minimize) { Minimized = minimize; return new JsonObject { ["minimized"] = minimize }; }
     }
 
     private static DriveState At(string location, string? waiting = null, bool busy = false, params string[] outer)
@@ -215,6 +217,24 @@ public class DriveControlTests
         Assert.Equal("OK", (string?)answer["result"]!["answered"]);
         Assert.Equal("OK", backend.Answered);
         Assert.Equal(0, backend.Closes);
+    }
+
+    [Fact]
+    public void WindowMinimizesOrRestoresThroughTheBackendAndNeedsItsCapability()
+    {
+        var backend = new FakeBackend { Capabilities = new[] { "window" } };
+        var dispatcher = new DriveDispatcher(backend);
+        var minimized = Run(dispatcher, backend, """{"id":1,"op":"window","state":"minimize"}""");
+        Assert.True((bool)minimized["result"]!["minimized"]!);
+        Assert.True(backend.Minimized);
+        Run(dispatcher, backend, """{"id":2,"op":"window","state":"restore"}""");
+        Assert.False(backend.Minimized);
+        Assert.Contains("minimize or restore",
+            (string?)Run(dispatcher, backend, """{"id":3,"op":"window","state":"maximize"}""")["error"]);
+
+        var without = new FakeBackend { Capabilities = Array.Empty<string>() };
+        Assert.Contains("'window' is not supported",
+            (string?)Run(new DriveDispatcher(without), without, """{"id":4,"op":"window","state":"minimize"}""")["error"]);
     }
 
     [Fact]

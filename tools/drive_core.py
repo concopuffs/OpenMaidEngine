@@ -359,7 +359,7 @@ def virtual_key(name: str) -> int:
 
 # Capabilities both targets offer (native: drive_native.CAPABILITIES; port: PortCapabilities in godot/Main.Drive.cs).
 # Committed scenarios may use these and nothing target-only.
-SHARED_CAPABILITIES = ("dialogs", "answer")
+SHARED_CAPABILITIES = ("dialogs", "answer", "window")
 
 
 @dataclass(frozen=True)
@@ -401,6 +401,8 @@ STEPS = {
                     "answer"),
     "close-request": _spec(0, 0, "", "close-request                 ask to close as the close button and ESC do: AGE "
                            "opens its 終了 dialog (quit / return to title / cancel)"),
+    "window": _spec(1, 1, "", "window minimize|restore       minimize or restore the game window, as its title-bar "
+                    "and taskbar buttons do (AGE: WM_SYSCOMMAND SC_MINIMIZE/SC_RESTORE)", "window"),
     "close": _spec(0, 0, "timeout", "close [timeout=S]             quit the game and end the session"),
 }
 NUMERIC_OPTIONS = {"hold", "timeout", "quiet", "threshold", "every"}
@@ -474,6 +476,9 @@ def _validate(step: Step) -> None:
             raise DriveError("wheel takes up or down")
         if len(step.args) > 1 and not step.args[1].isdigit():
             raise DriveError("wheel notches must be a number")
+    elif step.name == "window":
+        if step.args[0].lower() not in ("minimize", "restore"):
+            raise DriveError("window takes minimize or restore")
     elif step.name == "wait":
         try:
             float(step.args[0])
@@ -717,12 +722,14 @@ class Executor:
 
     def __init__(self, client: Client, profile: Profile, shots: Path, *,
                  on_close: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+                 on_window: Callable[[dict[str, Any]], None] | None = None,
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic) -> None:
         self.client = client
         self.points = dict(profile.points)
         self.advance_point = profile.advance_point
         self.shots = shots
         self.on_close = on_close
+        self.on_window = on_window
         self.sleep = sleep
         self.clock = clock
         self.closed = False
@@ -810,6 +817,11 @@ class Executor:
             return self.client.call("answer", button=step.args[0])
         elif step.name == "close-request":
             self.client.call("close-request")
+        elif step.name == "window":
+            result = self.client.call("window", state=step.args[0].lower())
+            if self.on_window is not None:
+                self.on_window(result)
+            return result
         elif step.name == "close":
             timeout = float(options.get("timeout", 20))
             result = self.client.call("close", timeout=timeout + REPLY_MARGIN_S, timeout_ms=int(timeout * 1000))
@@ -880,6 +892,7 @@ class Windows:
         user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
         user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
         user32.IsWindowVisible.argtypes = [wintypes.HWND]
+        user32.IsIconic.argtypes = [wintypes.HWND]
         user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
                                         ctypes.c_int, wintypes.UINT]
         kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
@@ -927,6 +940,10 @@ class Windows:
         candidates = [hwnd for hwnd in self.top_windows(pid) if self._class(hwnd) != "#32770"]
         sizes = {hwnd: self.client_size(hwnd)[0] * self.client_size(hwnd)[1] for hwnd in candidates}
         return max((hwnd for hwnd in candidates if sizes[hwnd] > 0), key=sizes.get, default=None)
+
+    def iconic(self, hwnd: int) -> bool:
+        """Minimized."""
+        return bool(self.user32.IsIconic(hwnd))
 
     def send_to_bottom(self, hwnd: int) -> None:
         """Bottom of the z-order without activating it, so a run does not cover the user's work."""

@@ -730,7 +730,7 @@ note = "op 0x21b stores (operand != 0); under gfx_draw_mode 1 the outer tick adv
 offset = 0x9a298
 name = "display_windowed"
 type = "int"
-note = "nonzero while AGE runs windowed (read 1 live with SYS4REG display.ScreenMode=1 and an 806x649 framed window, 2026-11-03). age_main_window_proc: WM_ACTIVATE(WA_INACTIVE) disables input polling only when set; when zero (fullscreen), WM_ACTIVATEAPP re-tops the window and centres the cursor at the next WM_PAINT; SC_KEYMENU+Enter toggles the mode through FUN_00412df0"
+note = "nonzero while AGE runs windowed (read 1 live with SYS4REG display.ScreenMode=1 and an 806x649 framed window, 2026-11-03). age_main_window_proc: WM_ACTIVATE(WA_INACTIVE) disables input polling only when set; when zero (fullscreen), WM_ACTIVATEAPP re-tops the window and centres the cursor at the next WM_PAINT; SC_KEYMENU+Enter toggles the mode through display_toggle_screen_mode_and_menu_bar@0x412df0, which attaches the native menu bar (menu 110) to a window and detaches it for fullscreen; zero also gates the top-edge system-menu strip, which only fullscreen reveals"
 [[field]]
 offset = 0x9b24c
 name = "dispatch_table"
@@ -865,7 +865,7 @@ note = "SYS4INI header +0x128: full local pointer scratch bank size, copied to b
 offset = 0xa0ce4
 name = "run_state_flags"
 type = "uint"
-note = "interpreter run-state flags (bit1 sleeping; 0x8000000 skip/fast-forward; 0x40000000 wait indicator shown; 0x80000000 ADV text wait polling)"
+note = "interpreter run-state flags (bit1 sleeping; 0x1000000 minimized/suspended: WM_SYSCOMMAND SC_MINIMIZE sets it and SC_RESTORE clears it for a windowed game, and an unforced WM_CLOSE then quits without the 終了 dialog; 0x8000000 skip/fast-forward; 0x40000000 wait indicator shown; 0x80000000 ADV text wait polling)"
 [[field]]
 offset = 0xa0ce8
 name = "service_action_trigger_mask"

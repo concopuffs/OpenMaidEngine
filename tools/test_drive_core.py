@@ -54,6 +54,8 @@ def test_step_parsing():
     check(raises(core.parse_step, "shot ../escape", contains="plain file names"), "shot names cannot be paths")
     check(raises(core.parse_step, "wheel sideways", contains="up or down"), "wheel direction is checked")
     check(raises(core.parse_step, "wait soon", contains="seconds"), "wait takes seconds")
+    check(raises(core.parse_step, "window maximize", contains="minimize or restore"), "window states are checked")
+    check(core.step_capabilities(core.parse_step("window Minimize")) == {"window"}, "window needs its capability")
     check(raises(core.parse_step, "speed 20", contains="between"), "speed factors are bounded like the port's")
     check(core.parse_step("wait-state script=TITLE click=adv.next every=3").options["every"] == "3",
           "wait-state can click while it waits")
@@ -412,6 +414,19 @@ def test_client_and_executor():
     check("close" not in ops, "nothing runs after the failure")
 
 
+def test_window_step():
+    server = FakeServer(lambda request: {"ok": True, "result": {"minimized": request.get("state") == "minimize"}})
+    placed = []
+    with tempfile.TemporaryDirectory() as directory:
+        with core.Client(server.port, "secret") as client:
+            executor = core.Executor(client, core.Profile(points={}), Path(directory), on_window=placed.append)
+            results = []
+            ok = executor.run(core.parse_steps(["window Minimize", "window restore"]), results.append)
+    check(ok and [r["op"] for r in server.requests[1:]] == ["window", "window"], "window steps send the window op")
+    check([r["state"] for r in server.requests[1:]] == ["minimize", "restore"], "the state goes in lower case")
+    check(placed == [{"minimized": True}, {"minimized": False}], "the launcher sees each window result")
+
+
 def test_settings_trailer():
     pairs = [("USEAPPDATAFOLDER", "1"), ("SAVEPATH", "Eushully\\姫\\SAVE")]
     strings = b"".join(key.encode("ascii") + b"\0" + value.encode("cp932") + b"\0" for key, value in pairs)
@@ -434,6 +449,7 @@ def main():
     test_port_sandboxes()
     test_profiles()
     test_client_and_executor()
+    test_window_step()
     test_settings_trailer()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0

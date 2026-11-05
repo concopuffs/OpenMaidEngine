@@ -27,6 +27,9 @@ public interface IDriveBackend
     JsonArray Dialogs() => throw new DriveProtocolException("'dialogs' has no implementation here");
     /// <summary>Press the named button of an open dialog; returns {text, answered} (capability "answer").</summary>
     JsonObject Answer(string button) => throw new DriveProtocolException("'answer' has no implementation here");
+    /// <summary>Minimize the game window or restore it, as its title-bar and taskbar buttons do (native: WM_SYSCOMMAND
+    /// SC_MINIMIZE / SC_RESTORE); returns {minimized} (capability "window").</summary>
+    JsonObject Window(bool minimize) => throw new DriveProtocolException("'window' has no implementation here");
     /// <summary>The last position the game itself moved the cursor to since the previous call, if any.</summary>
     (int X, int Y)? TakeCursorWarp();
     /// <summary>Where the driven cursor is now, in native canvas pixels (the last pointer, click or warp).</summary>
@@ -181,6 +184,17 @@ public sealed class DriveDispatcher
                 RequireCapability("answer");
                 string button = request.Text("button");
                 return Immediate(request, reply, () => _backend.Answer(button));
+            }
+            case "window":
+            {
+                RequireCapability("window");
+                bool minimize = request.Text("state") switch
+                {
+                    "minimize" => true,
+                    "restore" => false,
+                    var other => throw new DriveProtocolException($"window state must be minimize or restore, not '{other}'"),
+                };
+                return Immediate(request, reply, () => _backend.Window(minimize));
             }
             default:
                 throw new DriveProtocolException(

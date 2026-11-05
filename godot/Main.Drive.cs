@@ -129,7 +129,7 @@ public partial class Main
 
     private sealed class PortDriveBackend(Main main) : IDriveBackend
     {
-        private static readonly string[] PortCapabilities = { "speed", "waiting", "dialogs", "answer" };
+        private static readonly string[] PortCapabilities = { "speed", "waiting", "dialogs", "answer", "window" };
 
         public string Target => "port";
         public string Profile { get; } = main._selectedProfile.Profile.Id;
@@ -193,7 +193,20 @@ public partial class Main
 
         public void Close() => main.GetTree().Quit(0);
 
-        public void RequestClose() => main.RequestUnforcedClose();
+        /// <summary>Deferred to the end of the frame, so the reply is on its way before a close that quits at once
+        /// (a minimized window) ends the process.</summary>
+        public void RequestClose() => Callable.From(main.RequestUnforcedClose).CallDeferred();
+
+        /// <summary>The window manager's minimize and restore; restoring leaves the window's z-order to the launcher
+        /// (drive_port.py sends it back to the bottom).</summary>
+        public System.Text.Json.Nodes.JsonObject Window(bool minimize)
+        {
+            DisplayServer.WindowSetMode(minimize ? DisplayServer.WindowMode.Minimized : DisplayServer.WindowMode.Windowed);
+            return new System.Text.Json.Nodes.JsonObject
+            {
+                ["minimized"] = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Minimized,
+            };
+        }
 
         public System.Text.Json.Nodes.JsonArray Dialogs()
         {

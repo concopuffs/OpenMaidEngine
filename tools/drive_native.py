@@ -43,7 +43,7 @@ from drive_core import DriveError  # noqa: E402
 
 AGENT = core.DATA / "native-agent.js"
 ENGINE_CTX_TOML = paths.VM_MAP / "engine-ctx.toml"
-CAPABILITIES = ("dialogs", "answer", "detach")
+CAPABILITIES = ("dialogs", "answer", "window", "detach")
 QUIET_EVENTS = {"folder", "request"}       # logged, but not sent to clients
 
 
@@ -333,6 +333,7 @@ def wheel_wparam(notches: int) -> int:
 
 WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP = 0x200, 0x201, 0x202, 0x204, 0x205
 WM_KEYDOWN, WM_KEYUP, WM_MOUSEWHEEL, WM_CLOSE, BM_CLICK = 0x100, 0x101, 0x20A, 0x10, 0xF5
+WM_SYSCOMMAND, SC_MINIMIZE, SC_RESTORE = 0x112, 0xF020, 0xF120
 
 
 # --------------------------------------------------------------------------------------------- requests
@@ -747,6 +748,22 @@ class Daemon:
         """An unforced WM_CLOSE (wParam 0), as the close button and ESC post: AGE opens its 終了 dialog."""
         win32().post(self.require_window(), WM_CLOSE, 0, 0)
         return {}
+
+    def op_window(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Minimize or restore AGE's window as its title-bar and taskbar buttons do. AGE's window procedure sets
+        run-state 0x1000000 on SC_MINIMIZE and clears it on SC_RESTORE; a close while it is set quits at once."""
+        state = request.get("state")
+        if state not in ("minimize", "restore"):
+            raise DriveError("window state must be minimize or restore")
+        hwnd = self.require_window()
+        minimize = state == "minimize"
+        win32().post(hwnd, WM_SYSCOMMAND, SC_MINIMIZE if minimize else SC_RESTORE, 0)
+        deadline = time.monotonic() + 5
+        while win32().iconic(hwnd) != minimize and time.monotonic() < deadline:
+            time.sleep(0.05)
+        if not minimize and not self.arguments.foreground:
+            win32().send_to_bottom(hwnd)    # a restore activates the window
+        return {"minimized": win32().iconic(hwnd)}
 
     def op_detach(self, request: dict[str, Any]) -> dict[str, Any]:
         self.closing = True

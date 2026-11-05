@@ -18,12 +18,14 @@ Usage and steps: docs/tools-reference.md ("Game driver").
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import secrets
 import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import paths  # noqa: E402
@@ -93,7 +95,7 @@ def start(arguments: argparse.Namespace) -> int:
                                stdin=subprocess.DEVNULL, env=environment, creationflags=flags)
     core.write_json_atomic(root / "launch.json", {
         "launcher_pid": process.pid, "command": command, "sandbox": str(sandbox), "profile_root": str(profile_root),
-        "log": str(log_path), "started": core.now_text(),
+        "log": str(log_path), "started": core.now_text(), "foreground": bool(arguments.foreground),
     })
     deadline = time.monotonic() + arguments.timeout
     while time.monotonic() < deadline:
@@ -114,6 +116,20 @@ def start(arguments: argparse.Namespace) -> int:
     raise DriveError(f"no control session within {arguments.timeout:.0f} s; see {log_path}")
 
 
+def window_placement(info: dict | None) -> Callable[[dict], None] | None:
+    """What runs after a `window` step: a restore activates the window, so it goes back to the bottom of the z-order
+    as at start, unless the session was started with --foreground."""
+    launch = core.drive_root("port") / "launch.json"
+    foreground = launch.is_file() and json.loads(launch.read_text(encoding="utf-8")).get("foreground", False)
+    if info is None or foreground:
+        return None
+
+    def place(result: dict) -> None:
+        if not result.get("minimized"):
+            core.send_windows_to_bottom(int(info["pid"]))
+    return place
+
+
 def wait_exit(info: dict, timeout: float) -> int | None:
     """Wait for the port's process (and the console launcher in front of it) to exit; terminate stragglers."""
     code = core.windows().wait_exit(int(info["pid"]), timeout)
@@ -121,7 +137,6 @@ def wait_exit(info: dict, timeout: float) -> int | None:
         core.windows().terminate(int(info["pid"]))
     launch = core.drive_root("port") / "launch.json"
     if launch.is_file():
-        import json
         launcher = int(json.loads(launch.read_text(encoding="utf-8")).get("launcher_pid", 0))
         if launcher and core.windows().wait_exit(launcher, 5) is None:
             core.windows().terminate(launcher)

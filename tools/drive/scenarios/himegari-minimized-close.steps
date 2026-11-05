@@ -1,0 +1,22 @@
+# AGE's close while minimized. WM_SYSCOMMAND SC_MINIMIZE sets run-state 0x1000000 and SC_RESTORE clears it; while
+# it is set, an unforced close (the taskbar's Close; here close-request) quits at once without the 終了 dialog and
+# saves SAVE.DAT. After a restore the dialog asks again. The last step ends the game, so the session ends with it.
+# Run on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py native start
+#   py -3.11 -X utf8 tools/drive.py native run tools/drive/scenarios/himegari-minimized-close.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+window minimize
+wait 1
+window restore                          # SC_RESTORE clears the bit again
+wait 1
+close-request                           # so the dialog asks
+wait 1
+answer ｷｬﾝｾﾙ
+wait 1
+expect script=TITLE
+
+window minimize
+wait 1
+close-request                           # quits at once: no dialog
