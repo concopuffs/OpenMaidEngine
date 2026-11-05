@@ -196,6 +196,47 @@ public class MenuServicesTests
     }
 
     [Fact]
+    public void MessageSettingsSeedFromTheHostAndTheDialogsOkAppliesThemAtTheNextBoundary()
+    {
+        // The 設定 dialog reads the four values (VirtualMachine.MessageSettings) and its OK writes them back the way
+        // ops 0x1b5, 0x141 and 0x1b9 do, then runs CALLBACK_SETTING.BIN. Ops 0x7f, 0x131 and 0x1b8 read them.
+        (int, Operand[])[] Read(int at) =>
+        [
+            (0x7f, new[] { G(at) }), (0x131, new[] { G(at + 1) }), (0x1b8, new[] { I(0), G(at + 2) }),
+            (0x1b8, new[] { I(1), G(at + 3) }),
+        ];
+        var host = new MenuHost
+        {
+            MessageWindowAlphaSetting = 8, AutoMessageTime0Milliseconds = 700, AutoMessageTime1Milliseconds = 2400,
+        };
+        var vm = new VirtualMachine(Build("MENU_MESSAGE_SETTINGS", [.. Read(0x400), .. Probes(0, 3), .. Read(0x410)]),
+                                    Table, host, new VmOptions(), SettingCallback());
+        host.Vm = vm;
+        Assert.Equal(new VmMessageSettings(50, 8, 700, 2400), vm.MessageSettings);
+        host.AtYield[5] = v => v.RequestMessageSettings(new VmMessageSettings(20, 3, 1500, 4000));   // after the reads
+
+        vm.Run();
+
+        Assert.Equal([50, 8, 700, 2400], Enumerable.Range(0x400, 4).Select(g => vm.Globals.GetValueOrDefault(g)));
+        Assert.Equal([20, 3, 1500, 4000], Enumerable.Range(0x410, 4).Select(g => vm.Globals.GetValueOrDefault(g)));
+        Assert.Equal((20, 3, 1500L, 4000L), (host.MessageGlyphDelayMilliseconds, host.MessageWindowAlphaSetting,
+                                             host.AutoMessageTime0Milliseconds, host.AutoMessageTime1Milliseconds));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(CallbackRan));
+    }
+
+    [Fact]
+    public void AutoMessageTimeOpcodeWritesTheSettingThroughTheHost()
+    {
+        var (vm, host) = Start(Build("AUTO_TIME_WRITE",
+            (0x1b9, new[] { I(0), I(900) }), (0x1b9, new[] { I(1), I(3000) }), (0x1b9, new[] { I(2), I(1) })));
+
+        vm.Run();
+
+        Assert.Equal((900L, 3000L), (host.AutoMessageTime0Milliseconds, host.AutoMessageTime1Milliseconds));
+        Assert.Equal(new VmMessageSettings(50, 0, 900, 3000), vm.MessageSettings);
+    }
+
+    [Fact]
     public void StartupSettingReadsCoexistMesSkip()
     {
         Assert.True(Sys4StartupSettings.FromPairs(new[]

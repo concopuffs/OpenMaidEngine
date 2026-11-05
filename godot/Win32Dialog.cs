@@ -43,8 +43,27 @@ public abstract partial class Win32Dialog : Window
 
     /// <summary>Show the dialog where native places a window whose GetWindowRect top-left is
     /// <paramref name="nativeWindowTopLeft"/> in the game's client coordinates.</summary>
-    protected void PopupAtNativeWindow(Vector2I nativeWindowTopLeft) =>
+    protected void PopupAtNativeWindow(Vector2I nativeWindowTopLeft)
+    {
+        NativeWindowTopLeft = nativeWindowTopLeft;
         Popup(new Rect2I(GameClientOrigin + nativeWindowTopLeft + new Vector2I(InvisibleBorder, 0), Size));
+    }
+
+    /// <summary>Where the dialog's native window rect starts, in the game's client coordinates.</summary>
+    public Vector2I NativeWindowTopLeft { get; private set; }
+
+    /// <summary>The dialog's native window size (GetWindowRect's, with the invisible border).</summary>
+    public Vector2I NativeSize => NativeWindowSize(Size - new Vector2I(2, CaptionHeight + 2));
+
+    /// <summary>Show the dialog as agerc_center_dialog_on_parent places a dialog owned by another dialog: centred on
+    /// the owner's window rect.</summary>
+    protected void PopupCenteredOnDialog(Win32Dialog owner, Vector2I clientSize)
+    {
+        Vector2I window = NativeWindowSize(clientSize);
+        Vector2I ownerTopLeft = owner.NativeWindowTopLeft, ownerSize = owner.NativeSize;
+        PopupAtNativeWindow(new Vector2I((2 * ownerTopLeft.X + ownerSize.X) / 2 - window.X / 2,
+                                         (2 * ownerTopLeft.Y + ownerSize.Y) / 2 - window.Y / 2));
+    }
 
     /// <summary>Where the game's client area starts in the port's viewport: below the menu bar, when there is one.</summary>
     public static Vector2I GameClientOrigin { get; set; }
@@ -105,19 +124,21 @@ public abstract partial class Win32Dialog : Window
 
     internal void PressCloseButton() => OnCloseButton();
 
-    /// <summary>Redraw every classic push button, since the default frame follows the focus.</summary>
-    internal void RedrawButtons()
+    /// <summary>Redraw every classic push button, pages' included, since the default frame follows the focus.
+    /// </summary>
+    internal void RedrawButtons() => RedrawButtons(Client);
+
+    private static void RedrawButtons(Node node)
     {
-        foreach (Node child in Client.GetChildren())
+        foreach (Node child in node.GetChildren())
+        {
             if (child is Win32ClassicButton button) button.QueueRedraw();
+            RedrawButtons(child);
+        }
     }
 
-    internal bool AnyPushButtonFocused()
-    {
-        foreach (Node child in Client.GetChildren())
-            if (child is Win32ClassicButton { } button && button.HasFocus()) return true;
-        return false;
-    }
+    internal bool AnyPushButtonFocused() => Client.GetViewport().GuiGetFocusOwner() is Win32ClassicButton focus
+                                            && Client.IsAncestorOf(focus);
 }
 
 /// <summary>Colours and fonts of the native dialogs, as captured.</summary>

@@ -31,6 +31,16 @@ public class Sys4StartupSettingsTests
         Assert.Equal(expected, Sys4AssetCatalog.Parse(BuildCatalog(pairs)).StartupSettings.ClickOnUp);
     }
 
+    [Theory]
+    [InlineData(null, 0)]
+    [InlineData("3", 3)]   // Himegari: the 設定 dialog's ｻｳﾝﾄﾞ page is dialog 102, without sound:Music's radios
+    [InlineData("x", 0)]
+    public void NoSetMusicDefaultsToZero(string? value, int expected)
+    {
+        var pairs = value == null ? Array.Empty<(string, string)>() : new[] { ("NoSetMusic", value) };
+        Assert.Equal(expected, Sys4AssetCatalog.Parse(BuildCatalog(pairs)).StartupSettings.NoSetMusic);
+    }
+
     [Fact]
     public void SyntheticCatalogPreservesUnknownKeysAndUsesLastCaseInsensitiveValue()
     {

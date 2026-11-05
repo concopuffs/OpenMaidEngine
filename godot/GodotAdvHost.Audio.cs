@@ -1,6 +1,7 @@
 using System;
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+using Age.Engine.Persistence;
 using Age.Engine.Sys4;
 
 public sealed partial class GodotAdvHost
@@ -78,11 +79,31 @@ public sealed partial class GodotAdvHost
     private void DispatchVoice(AudioPayload audio, int playbackVariant, bool muted)
     {
         int generation = _main.QueueVoicePlayback();
-        bool duckBgm = !VoiceBgmDuckSuppressed;
+        // voice_bgm_duck_begin@0x406de0 reads sound:MusicFadeOnVoicePlaying and its volume (percent) at each
+        // voice start; the 設定 dialog's ｻｳﾝﾄﾞ page sets both.
+        (bool fadeOnVoice, int fadePercent) = VoiceBgmDuckSettings();
+        bool duckBgm = fadeOnVoice && !VoiceBgmDuckSuppressed;
         // Godot's stream player has no matching AGE start-mode control. Retain the native
         // variant through dispatch/timeline so that distinction is not erased at the VM seam.
         // A muted voice (op 0x1d5) still plays, at volume 0, so its completion keeps Auto timing.
-        _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation, duckBgm, 50, muted);
+        _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation, duckBgm, fadePercent, muted);
+    }
+
+    /// <summary>sound:MusicFadeOnVoicePlaying (registered default 1) and sound:MusicFadeOnVoicePlayingVolume (50).
+    /// </summary>
+    private (bool Enabled, int Percent) VoiceBgmDuckSettings()
+    {
+        Sys4RegIniStore? store = _messageSettingsStore;
+        if (store == null) return (true, 50);
+        try
+        {
+            return (store.LoadInt("sound", "MusicFadeOnVoicePlaying", 1) != 0,
+                    store.LoadInt("sound", "MusicFadeOnVoicePlayingVolume", 50));
+        }
+        catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException)
+        {
+            return (true, 50);
+        }
     }
 
     // Op 0x1cf bit 0 suppresses both the duck at voice start and the tick's restore.

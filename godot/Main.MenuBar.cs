@@ -30,6 +30,7 @@ public partial class Main
     {
         AgercMenu.Exit, AgercMenu.SaveScreen, AgercMenu.ImageFolder, AgercMenu.MessageSkip, AgercMenu.ReadMessageSkip,
         AgercMenu.HideWindow, AgercMenu.AutoMessage, AgercMenu.Windowed, AgercMenu.VersionInfo,
+        AgercMenu.MessageSettings, AgercMenu.SoundSettings, AgercMenu.OtherSettings, AgercMenu.SystemInfo,
     };
 
     /// <summary>Read and prune the menu before the window is sized, since the bar adds rows above the game.</summary>
@@ -194,6 +195,9 @@ public partial class Main
                 break;   // IAGEService +0x1c(1): already windowed
             case AgercMenu.VersionInfo:
                 OpenVersionDialog();   // AGERC host command 2: the ﾊﾞｰｼﾞｮﾝ情報 dialog (Main.AgercDialogs.cs)
+                break;
+            case AgercMenu.MessageSettings or AgercMenu.SoundSettings or AgercMenu.OtherSettings or AgercMenu.SystemInfo:
+                OpenSettingsDialog(id);   // AGERC host command 9: the 設定 dialog on the command's tab
                 break;
             default:
                 GD.Print($"[menu] command 0x{id:x} has no port implementation (docs/backlog.md, \"Native menu bar\")");

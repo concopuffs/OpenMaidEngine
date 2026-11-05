@@ -322,7 +322,8 @@ Most entries are direct integer/string mappings, but three transforms matter:
 - `NOSETMUSIC=3` stores `set:NoSetMusic=3` and also seeds `sound:Music=2`
   (`NOSETMUSIC - 1`). `sound_route_is_enabled@0x405420` treats nonnegative music states as enabled;
   `sound_set_music_route_enabled@0x407f80` moves the state between enabled/disabled bands separated by
-  three. The `set:NoSetMusic` copy itself has no later direct reader in this image.
+  three. AGE.EXE has no later reader of the `set:NoSetMusic` copy; AGERC's 設定 dialog reads it to choose its
+  ｻｳﾝﾄﾞ page ("Native menu bar").
 - `WHEELKEYUP`/`WHEELKEYDOWN` each populate both `set:WheelKey*` and
   `message:WheelKey*OnTW`. A nonempty `VERREGPOS` also invokes
   `registration_read_install_display_version@0x46ae80`, which replaces `set:GameVersion` with the installer's
@@ -338,14 +339,14 @@ The meaningful consumer catalog is:
 | `DEPENDMOVIESOUND` | Supplies the default movie-audio dependency/routing policy when movie opcode flags do not force another route. | Active media policy |
 | `FULLSCREENBIT`, `ALWAYSBACKUPSURFACE` | These are read only inside the legacy `CreateObject & 1` DirectDraw branch of `engine_initialize_graphics_from_settings@0x406480`. Himegari selects only bit 2, so its 32-bit/zero values do not drive the active renderer. | Valid compatibility settings, inert for this profile |
 | `SCREENWARNING` | Imported as `set:ScreenWarning`; no reader beyond default registration/import was found in this EXE image. | Loaded, no observed consumer |
-| `NOSETMUSIC` | Seeds the live music-route state as described above; the route starts enabled. | Active audio initialization plus otherwise-unused policy copy |
+| `NOSETMUSIC` | Seeds the live music-route state as described above; the route starts enabled. AGERC's 設定 dialog shows ｻｳﾝﾄﾞ page 102, without `sound:Music`'s radio buttons, when it is nonzero (both games have 3). | Active audio initialization; the port picks the 設定 page the same way (`Sys4StartupSettings.NoSetMusic`) |
 | all seven `MENU_*` keys | Imported as `set:Menu_*`. AGE.EXE does not read them. AGERC.DLL does: `agerc_prune_menu_by_settings@0x10002ca0` removes items from the native menu bar when it is attached (see "Native menu bar" below). It reads `Menu_MesWinA` twice and never reads `Menu_MesSpeed`. They are not Himegari script-menu state. `MENU_USEANTIFONT` prunes only the menu's 文字表示 entries; it does **not** disable the independently enabled `message:UseAntiFont` (corrected 2026-11-05). | Native menu-bar pruning |
 | `ENABLEMEMFLIP` | Gates `op_0x6d`, which swaps VM-bank pointer pairs only when enabled. Himegari disables it and its corpus does not use that opcode. | Compatibility capability gate |
 | `CLICKONUP` | Copied at `0x488080` into `g_dwClickOnUp@0x5c6030`. When nonzero, `age_main_window_proc` latches mouse clicks (`input_latch_mouse_click@0x485e20`) on `WM_LBUTTONUP`/`WM_RBUTTONUP` instead of the down messages. That latch is the trigger for ADV page advance, hotspot clicks, bound actions (right-click → `MENU.BIN`) and movie/transition skips; see *Driving native AGE* below. Himegari has 1. | Active input timing; port implemented (`Sys4StartupSettings.ClickOnUp`) |
 | `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for active fast-forward; value 2 also launches `CALLBACK_SETTING.BIN`. See "Click cancels Skip" below. | Active ADV input behavior; port implemented (`Sys4StartupSettings.CancelMessageSkipOnClick`) |
 | `CONTROLDISIBLECURSOR` | The spelling is native. The "cursor" is the page-wait indicator. With value 0, `adv_input_service_poll` calls `adv_wait_indicator_stop@0x4051c0` (erase the indicator, clear run-state `0x40000000`) before it runs a bound-action or hover callback. Value 1 skips that call, so the indicator keeps running under the callback. | Both games set 1, which is the port's behavior (callbacks leave the indicator alone); value 0 is not modelled (2026-11-04) |
 | `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. Their only callers are IAGEService `+0x84`/`+0x88` (vtable `0x578034`, global object `0x5c5f10`), which the menu bar's ｵｰﾄﾒｯｾｰｼﾞ and ﾒｯｾｰｼﾞｽｷｯﾌﾟ call ("Native menu bar"); no opcode reaches them, and the script menus' ops `0x88`/`0x1b7` ignore the setting. | Modelled for the menu toggles (`VmOptions.CoexistMessageSkip`); inert on the script path (both shipped games have 1) |
-| `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The generic fallback is 0; the active Himegari profile has value 1. While one of the native effect-service run-state bits `0x8`, `0x10`, `0x80`, or `0x100` is active, logical action 4 is consumed and the selected effect tick receives delta `0x10000000`, forcing its terminal frame. | Active visual-effect input policy; port routes action 4 ahead of retained ADV hotspots while a transition service is parked |
+| `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The registered default is 0, which a new profile writes; the 設定 dialog's その他 page sets it ("Native menu bar"). When it is 1 and one of the native effect-service run-state bits `0x8`, `0x10`, `0x80`, or `0x100` is active, logical action 4 is consumed and the selected effect tick receives delta `0x10000000`, forcing its terminal frame. | Active visual-effect input policy. The port routes action 4 ahead of retained ADV hotspots while a transition service is parked, but forces the endpoint whatever the setting (`docs/backlog.md`) |
 | `REDRAWTEXTONKEY` | Value 1 lets a wheel action at an ADV text wait step the text view (`FUN_00453520` ±1) and launch `CALLBACK_TEXT.BIN` under run-state `0x100000`. | Inert: both games set 0, and the port does not model value 1 (2026-11-04) |
 | `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. While an ADV text wait polls, a wheel turn raises that action instead of feeding op `0x10d`; every scene binds action 8 to History ("Mouse wheel at an ADV text wait"). The `message:WheelKey*OnTW` copies have no reader. | Active ADV input binding; port implemented (`Sys4StartupSettings.WheelKeyUpAction`, 2026-11-04) |
 | `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; the port redirects it through the shared profile-root policy |
@@ -1486,6 +1487,85 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   frame's left edge, which lines its glyphs up with the captures. The ✕ is antialiased with one coverage mask: an end pixel is full, a diagonal pixel 250/255, and its side neighbours 51/255.
   The mask is drawn black, white over red when hovered, and grey `0xcccccc` when disabled.
 
+**設定** (dialog 9; native-read and driver-checked 2026-11-05). `agerc_settings_dialog_proc@0x10006400` runs it.
+
+- **Init.** On `WM_INITDIALOG` it centres the dialog on AGE's window and inserts the tabs ﾒｯｾｰｼﾞ, ｻｳﾝﾄﾞ, その他 and
+  動作環境 into `0x417`. It then creates the DS_CONTROL pages with `CreateDialogParamA`, in this order:
+  - 105 (動作環境);
+  - 104 (その他);
+  - the ｻｳﾝﾄﾞ page: 101, or 102 when `set:NoSetMusic` is nonzero (Himegari's is 3);
+  - 100 (ﾒｯｾｰｼﾞ).
+
+  Each page sits at its template's x and y and keeps its template's size. Page 103 is never created. The
+  procedure shows only the start tab's page and hides ﾃﾞﾊﾞｯｸﾞ設定 `0x410`. A tab change hides the old page on
+  `TCN_SELCHANGING` and shows the new one on `TCN_SELCHANGE`.
+- **Buttons.** ﾊﾞｰｼﾞｮﾝ情報 `0x3ff` is host command 2 with 設定 as the owner. `agerc_center_dialog_on_parent`
+  centres it on its owner, 設定, which is itself centred on AGE's window. The version dialog therefore opens where
+  the menu opens it: (212,171)–(594,478), inside 設定's (160,131)–(647,517). OK runs `agerc_settings_apply@0x10005c20`, launches
+  `CALLBACK_SETTING.BIN` through IAGEService `+0x20` and ends with 1. ｷｬﾝｾﾙ undoes the ｻｳﾝﾄﾞ page's live changes
+  (below) and ends with 0. `0x410` would open dialog 6.
+- **ﾒｯｾｰｼﾞ** (`agerc_settings_message_page_proc@0x10004cc0`). The page has four `TBS_BOTTOM` trackbars. `0x414`
+  (0..100) is set to 100 − `message:MessageSpeed`, and `0x415` (0..16) to 16 − `MesWinAlpha`. `0x416` and `0x417`
+  (0..100) are set to `AutoMessageTime0` and `AutoMessageTime1` divided by 100. Moving a trackbar refreshes its edit
+  only:
+  - `0x3ee` reads ﾉｰｳｴｲﾄ at 100, else ｳｴｲﾄ%d (100 − pos);
+  - `0x3ef` reads `%d%%` (pos × 100 / 16);
+  - `0x3f0` and `0x3f1` read `%d.%d秒`.
+
+  Check 1000 is `message:UseAntiFont`, and `0x3e9` is `AdvanceMesOnWheel`.
+- **ｻｳﾝﾄﾞ** (`agerc_settings_sound_page_proc@0x10005080`). Its four vertical `TBS_BOTH` trackbars show the master,
+  BGM, SE and voice volumes at 100 − basis points / 100. The values come from IAGEService `+0x40`/`+0x48`/`+0x50`/`+0x58`;
+  `+0x40` reads `ctx+0x4b68`, the sound object's `+0x530`, which `FUN_004829f0` initialises to 10000. An unconfigured
+  volume reads 10000 and shows at the top. (The driver's quiet seed `sound.Volume0=0` puts the master at the bottom.)
+  The page acts at once, and ｷｬﾝｾﾙ restores the saved values:
+  - a volume trackbar calls `+0x3c`/`+0x44`/`+0x4c`/`+0x54` with (100 − pos) × 100;
+  - the BGM (1000), 効果音 (`0x3e9`) and 音声 (`0x3ed`) checks call the route enables `+0x24`/`+0x28`/`+0x2c`.
+
+  `0x3ea` (`MusicFadeOnVoicePlaying`) and the `TBS_BOTH` trackbar `0x418` (`MusicFadeOnVoicePlayingVolume`, edit
+  `0x3ee` `%d%%`) take effect only on OK. Page 101 adds radio buttons for `sound:Music`: 1 checks `0x40f`, 2 checks
+  `0x3ec`, and 0 or -1 checks `0x3eb`.
+- **その他** (`agerc_settings_other_page_proc@0x10005600`). Check 1000 is `system:EffectSkipOnClick`.
+- **動作環境** (`agerc_settings_system_info_page_proc@0x10005870`). `WM_INITDIALOG` starts the clock measurement and
+  a 100 ms timer, then fills the edits:
+  - `0x3ee`: `agerc_os_version_string`, from `GetVersionExA`. Unmanifested, Windows 8 and later report 6.2.9200, so
+    the edit reads " Windows Vista 以降  (6.2.9200)".
+  - `0x3f2`: `agerc_directx_version_string`. It reads the 32-bit view of `HKLM\Software\Microsoft\DirectX`: the top
+    bytes of `InstalledVersion`'s two dwords, and `Version`. The result is " DirectX 9.0 (4.09.00.0904)".
+  - `0x3f3` and `0x3f4`: `agerc_format_drive_space` for the current directory's drive and the Windows drive. Each
+    shows " %c: ", then the total and the free space in MiB as " %dMByte" up to 1000, " %d.%2.2dGByte" above,
+    joined by " /".
+
+  The 11th tick fills `0x3ef` (" %s / %dMHz") and `0x3f1` (" %dMByte / %dMByte"), then kills the timer:
+  - **CPU.** The brand comes from CPUID `0x80000002..4`, from its first non-space (trailing spaces stay).
+    `agerc_cpu_clock_measure_mhz` divides the RDTSC ticks since init by 1000 and by the `timeGetTime`
+    milliseconds. Repeat opens read 4686–4694 MHz against the registry's `~MHz` of 4691. The first open in each of
+    two processes read 0 and 14862 MHz instead, which was not explained.
+  - **Memory.** `GlobalMemoryStatus`'s `dwTotalPhys` (at most 2 GiB − 1 for this 32-bit, non-large-address-aware
+    AGE) / 2^20 + 1.
+  - **VRAM.** IAGEService `+0x78` / 1,000,000. `+0x78` multiplies DxDiag's display memory in MB by 1,000,000 as a
+    32-bit int, so 4095 MB reads −199.
+
+  ｸﾘｯﾌﾟﾎﾞｰﾄﾞにｺﾋﾟｰ (`0x419`) copies `0x3ee`, `0x3f2`, `0x3ef`, `0x3f1`, `0x3f3` and `0x3f4` as CF_TEXT lines.
+- **OK** (`agerc_settings_apply`) writes through `AGE:reg` in this order:
+  - `message:MessageSpeed`, also IAGEService `+0x10`;
+  - `MesWinAlpha`;
+  - `AutoMessageTime0/1` = pos × 100;
+  - UseAntiFont through `+0x68`;
+  - `AdvanceMesOnWheel`;
+  - the three route enables;
+  - `MusicFadeOnVoicePlaying`;
+  - `sound:Volume0..3` = (100 − pos) × 100;
+  - `MusicFadeOnVoicePlayingVolume`;
+  - `system:EffectSkipOnClick`;
+  - `mk:mksh` through `+0x14`, from a control page 104 lacks, so always 0. It is not persisted.
+
+  AGE writes `SYS4REG.INI` only when it quits. The port's store writes at once, and after
+  `himegari-settings-dialog.steps` both targets' files are identical.
+- **Classic controls.** The pages draw unthemed comctl32 controls: check boxes, group boxes, trackbars with a
+  22 px thumb, the tab control and `WS_EX_CLIENTEDGE` edits. Their measured pixel geometry is documented on the
+  port's classes (`godot/Win32ClassicCheckBox.cs`, `Win32GroupBox.cs`, `Win32Trackbar.cs`, `Win32TabControl.cs`,
+  `Win32Edit.cs`, `Win32Edges.cs`).
+
 **Measured look** (native captures, 2026-11-05):
 
 - **Bar.** 20 px tall. Each item is its text width plus 14, and the text starts 7 px in.
@@ -1517,8 +1597,15 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   `CreateDialogIndirect` does. The readers in `engine/Age.Engine.Frontend/NativeResources` supply the template, the
   icon and the version string (`DialogTemplateResource`, `IconResource`, `VersionResource`). The base units come from
   the dialog font. The class also gives the dialog manager's keys and the driver's `dialogs` and `answer` steps.
-  Push buttons, text, icon and frame statics, and display-only edits are drawn; the settings controls are not yet.
-  `godot/AgercVersionDialog.cs` is ﾊﾞｰｼﾞｮﾝ情報's procedure. `godot/Main.AgercDialogs.cs` holds the VM and freezes
+  It draws push buttons, text, icon and frame statics, check boxes, group boxes, trackbars, the tab control and
+  display-only edits (with or without a client edge), and child pages (`AddPage`). Radio buttons and combo boxes are
+  not drawn. `godot/AgercVersionDialog.cs` is ﾊﾞｰｼﾞｮﾝ情報's procedure. `godot/AgercSettingsDialog.cs` is 設定's,
+  with its four page procedures; `godot/AgercSystemInfo.cs` gathers 動作環境's values and
+  `AgercSettingsText` (`engine/Age.Engine.Frontend/NativeMenu`) formats them. OK hands the message settings to
+  `VirtualMachine.RequestMessageSettings`, which applies them at the next safe point and runs
+  `CALLBACK_SETTING.BIN`. The port reads the CPU clock from the registry's `~MHz` and the VRAM from DirectX's adapter
+  list (`DedicatedVideoMemory` of the adapter Godot renders with, at most 4095 MB). A dialog opened from another
+  (ﾊﾞｰｼﾞｮﾝ情報 from 設定) stacks above it. `godot/Main.AgercDialogs.cs` holds the VM and freezes
   the frame while the dialog is open, and reads `DisplayVersion` from the registry on Windows. The product ID stays
   empty because the port has no protector.
 - **Unimplemented commands.** The refresh grays every command the port cannot run yet.
@@ -1530,12 +1617,14 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
 - **Opting out.** `--no-menu-bar` restores the plain window.
 - **Checks.** `tools/drive/scenarios/himegari-menu-bar.steps` checks read skip, hide, Auto and 終了 on both
   targets, `himegari-screenshot.steps` checks the screenshots and the image folder, and
-  `himegari-version-dialog.steps` checks ﾊﾞｰｼﾞｮﾝ情報. On the last, both targets list the same title, texts and
+  `himegari-version-dialog.steps` checks ﾊﾞｰｼﾞｮﾝ情報, and `himegari-settings-dialog.steps` checks 設定. On the last, both targets list the same title, texts and
   button, close on OK and resume on the same page. Against the native capture the port's dialog differs only in the
-  caption's glyph filtering and the empty product ID. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
+  caption's glyph filtering and the empty product ID. The 設定 pages' client areas match native's capture pixel for
+  pixel, apart from 動作環境's live free space; both targets list the same texts and buttons and write the same
+  `SYS4REG.INI`. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
   state, then posts `WM_COMMAND`. Both targets refuse a grayed item.
-- **Remaining gaps.** The 設定 dialog (dialog 9, including 動作環境) and the other commands, the right-click popup,
-  the top-edge strip,
+- **Remaining gaps.** The other commands, what the port does with `EffectSkipOnClick` and `UseAntiFont`, the
+  right-click popup, the top-edge strip,
   Alt/F10 focus, and native's off-window popups are listed in `docs/backlog.md`, "Native menu bar".
 
 ### Native system-menu reentrancy guard — opcode `0x142` (2026-07-29)

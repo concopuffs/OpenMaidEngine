@@ -53,6 +53,8 @@ public static class DialogStyles
     public const uint SsNoPrefix = 0x80, SsSunken = 0x1000;
 
     public const uint EsCenter = 0x1, EsRight = 0x2, EsMultiline = 0x4, EsAutoHScroll = 0x80, EsReadOnly = 0x800;
+
+    public const uint TbsVert = 0x2, TbsBoth = 0x8;   // msctls_trackbar32
 }
 
 /// <summary>Reads RT_DIALOG templates (classic DLGTEMPLATE and DLGTEMPLATEEX) from a PE image, as CreateDialog

@@ -73,6 +73,11 @@ public class ProfileStartupRecoveryTests
             Assert.Contains("Font=ＭＳ 明朝\r\nRMouseEvent=0\r\nMessageSpeed=30\r\nMesWinAlpha=4\r\n", text);
             var reloaded = new Sys4RegIniStore(path, defaultMusicRouteValue: 2);
             Assert.Equal(4, reloaded.LoadMessageInt(Sys4RegIniStore.MesWinAlphaKey, Sys4RegIniStore.DefaultMesWinAlpha));
+
+            // The 設定 dialog's OK writes keys of other sections the same way (system:EffectSkipOnClick).
+            reloaded.SaveInt("system", "EffectSkipOnClick", 1);
+            Assert.Equal(1, new Sys4RegIniStore(path, defaultMusicRouteValue: 2).LoadInt("system", "EffectSkipOnClick", 0));
+            Assert.Contains("[system]\r\nSaveBMPPath=\r\nUseMMX=1\r\nEffectSkipOnClick=1\r\n", File.ReadAllText(path, cp932));
         }
         finally
         {

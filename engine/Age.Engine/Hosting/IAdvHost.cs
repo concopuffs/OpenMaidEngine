@@ -20,6 +20,11 @@ public interface IAdvHost
     // loads; hosts without a settings file start from those values.
     int MessageGlyphDelayMilliseconds => Persistence.Sys4RegIniStore.DefaultMessageSpeed;
     void SetMessageGlyphDelayMilliseconds(int milliseconds) { }
+    // message:AutoMessageTime0/1 (registered defaults 500/2000 ms): ops 0x1b8/0x1b9 and the 設定 dialog read and
+    // write these configuration values, which SYS4REG.INI keeps.
+    long AutoMessageTime0Milliseconds => Persistence.Sys4RegIniStore.DefaultAutoMessageTime0;
+    long AutoMessageTime1Milliseconds => Persistence.Sys4RegIniStore.DefaultAutoMessageTime1;
+    void SetAutoMessageTime(int selector, long milliseconds) { }
     // Native ADV text subsystem: op 0x7a updates the selected layout's last 20-byte cursor record;
     // op 0x204 rasterizes a string into a numbered surface before 0x1fb binds that surface.
     void SetAdvTextCursor(int layoutSlot, int x, int y) { }

@@ -220,7 +220,8 @@ public partial class Main
             if (main._exitConfirmation is { } exit) dialogs.Add(exit.Describe());
             if (main._scriptErrorDialog is { } error) dialogs.Add(error.Describe());
             if (main._screenshotFolderDialog?.Describe() is { } folder) dialogs.Add(folder);
-            if (main._agercDialog is { } agerc) dialogs.Add(agerc.Describe());
+            // EnumWindows order: the newest, topmost dialog first.
+            for (int i = main._agercDialogs.Count - 1; i >= 0; i--) dialogs.Add(main._agercDialogs[i].Describe());
             return dialogs;
         }
 
@@ -232,12 +233,16 @@ public partial class Main
                 {
                     ["text"] = (string?)folder["text"], ["answered"] = folderButton,
                 };
-            if (main._agercDialog is { } agerc && agerc.Describe() is var described
-                && agerc.Press(button) is { } agercButton)
-                return new System.Text.Json.Nodes.JsonObject
-                {
-                    ["text"] = (string?)described["text"], ["answered"] = agercButton,
-                };
+            for (int i = main._agercDialogs.Count - 1; i >= 0; i--)
+            {
+                Win32TemplateDialog agerc = main._agercDialogs[i];
+                System.Text.Json.Nodes.JsonObject described = agerc.Describe();
+                if (agerc.Press(button) is { } agercButton)
+                    return new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["text"] = (string?)described["text"], ["answered"] = agercButton,
+                    };
+            }
             if (main._scriptErrorDialog is { } error && error.Press(button) is { } errorButton)
                 return new System.Text.Json.Nodes.JsonObject
                 {

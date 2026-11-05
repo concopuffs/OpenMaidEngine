@@ -310,4 +310,73 @@ public class NativeResourceTests
         Assert.Equal((32, 32), (icon!.Width, icon.Height));
         Assert.Equal("4.24J", VersionResource.QueryString(File.ReadAllBytes(exe), "041103a4", "FileVersion"));
     }
+
+    [Fact]
+    public void HimegarisAgercSettingsDialogAndItsPagesLandOnNativesPixels()
+    {
+        string agerc = Path.Combine(Paths.GameDir, "AGERC.DLL");
+        if (!File.Exists(agerc)) return;
+        byte[] dll = File.ReadAllBytes(agerc);
+        var units = new DialogBaseUnits(7, 12);
+
+        // AGE's 設定 dialog (2026-11-05): its client, then every child window in creation order (EnumChildWindows,
+        // rects in the dialog's client): dialog 9's own controls, then the DS_CONTROL pages 105 (動作環境),
+        // 104 (その他), 102 (ｻｳﾝﾄﾞ, as set:NoSetMusic 3 picks) and 100 (ﾒｯｾｰｼﾞ), each followed by its controls. A
+        // page sits at its template's x and y and has its template's size.
+        (string Kind, int X, int Y, int W, int H)[] captured =
+        [
+            ("Button", 284, 326, 88, 21), ("Button", 382, 326, 88, 21), ("Button", 11, 326, 88, 21),
+            ("Button", 103, 326, 88, 21), ("Tab", 11, 11, 459, 306), ("Page", 14, 33, 453, 279),
+            ("Static", 32, 59, 124, 18), ("Edit", 163, 54, 287, 20), ("Static", 32, 128, 124, 18),
+            ("Edit", 163, 125, 287, 20), ("Static", 32, 152, 124, 18), ("Edit", 163, 147, 287, 20),
+            ("Static", 32, 80, 124, 18), ("Edit", 163, 77, 287, 20), ("Button", 23, 41, 438, 62),
+            ("Button", 23, 111, 438, 107), ("Static", 32, 176, 124, 18), ("Static", 163, 176, 89, 18),
+            ("Edit", 257, 173, 193, 20), ("Static", 163, 197, 89, 18), ("Edit", 257, 194, 193, 20),
+            ("Button", 23, 225, 438, 62), ("Edit", 163, 240, 287, 20), ("Edit", 163, 263, 287, 20),
+            ("Static", 32, 245, 124, 18), ("Static", 32, 264, 124, 18), ("Button", 312, 290, 149, 21),
+            ("Page", 14, 33, 453, 267), ("Button", 23, 42, 438, 71), ("Button", 32, 74, 410, 15),
+            ("Page", 14, 33, 453, 267), ("Static", 51, 68, 63, 17), ("Button", 26, 45, 429, 165),
+            ("Button", 26, 221, 427, 53), ("Edit", 387, 240, 47, 20), ("Button", 172, 66, 63, 17),
+            ("Button", 268, 66, 74, 17), ("Button", 364, 66, 65, 17), ("Trackbar", 58, 95, 39, 107),
+            ("Trackbar", 182, 95, 42, 107), ("Trackbar", 277, 95, 39, 107), ("Trackbar", 371, 95, 39, 107),
+            ("Button", 40, 242, 201, 15), ("Trackbar", 259, 228, 123, 44), ("Page", 14, 33, 453, 281),
+            ("Button", 25, 104, 431, 53), ("Button", 25, 44, 431, 53), ("Button", 25, 164, 431, 81),
+            ("Static", 117, 66, 33, 20), ("Static", 117, 128, 33, 21), ("Static", 340, 65, 25, 20),
+            ("Static", 340, 128, 25, 20), ("Edit", 371, 63, 70, 20), ("Edit", 371, 125, 70, 20),
+            ("Static", 117, 186, 33, 20), ("Static", 117, 213, 33, 20), ("Static", 340, 185, 25, 20),
+            ("Static", 340, 218, 25, 20), ("Edit", 371, 183, 70, 20), ("Edit", 371, 215, 70, 20),
+            ("Static", 37, 186, 81, 18), ("Static", 37, 212, 81, 18), ("Button", 25, 251, 431, 53),
+            ("Trackbar", 154, 59, 179, 29), ("Trackbar", 154, 123, 179, 29), ("Trackbar", 154, 179, 179, 29),
+            ("Trackbar", 154, 212, 179, 29), ("Button", 39, 273, 177, 15), ("Button", 257, 273, 177, 15),
+        ];
+
+        DialogTemplate settings = DialogTemplateResource.Load(dll, 9)!;
+        Assert.Equal("設定", settings.Title);
+        Assert.Equal((481, 357), (units.ToPixelsX(settings.Width), units.ToPixelsY(settings.Height)));
+        static string Kind(DialogItem item) => item.ClassName switch
+        {
+            "SysTabControl32" => "Tab",
+            "msctls_trackbar32" => "Trackbar",
+            string name => name,
+        };
+        var built = settings.Items.Select(i => (Kind(i), units.ToPixels(i.X, i.Y, i.Width, i.Height))).ToList();
+        foreach (int id in new[] { 105, 104, 102, 100 })
+        {
+            DialogTemplate page = DialogTemplateResource.Load(dll, id)!;
+            (int px, int py) = (units.ToPixelsX(page.X), units.ToPixelsY(page.Y));
+            built.Add(("Page", (px, py, units.ToPixelsX(page.Width), units.ToPixelsY(page.Height))));
+            foreach (DialogItem item in page.Items)
+            {
+                (int x, int y, int w, int h) = units.ToPixels(item.X, item.Y, item.Width, item.Height);
+                built.Add((Kind(item), (px + x, py + y, w, h)));
+            }
+        }
+        Assert.Equal(captured.Select(c => (c.Kind, (c.X, c.Y, c.W, c.H))), built);
+
+        // Trackbar styles: the ﾒｯｾｰｼﾞ page's are TBS_BOTTOM, the ｻｳﾝﾄﾞ volumes TBS_VERT | TBS_BOTH, its fade TBS_BOTH.
+        DialogTemplate sound = DialogTemplateResource.Load(dll, 102)!;
+        Assert.Equal(DialogStyles.TbsVert | DialogStyles.TbsBoth, sound.Item(0x414)!.Style & 0xf);
+        Assert.Equal(DialogStyles.TbsBoth, sound.Item(0x418)!.Style & 0xf);
+        Assert.Equal(0u, DialogTemplateResource.Load(dll, 100)!.Item(0x414)!.Style & 0xf);
+    }
 }

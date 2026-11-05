@@ -23,6 +23,10 @@ public sealed class Sys4RegIniStore
     // Himegari's SYS4INI trailer overrides neither. (CONFIG's reset button instead sets 50 ms and 4.)
     public const int DefaultMessageSpeed = 5;
     public const int DefaultMesWinAlpha = 8;
+    public const string AutoMessageTime0Key = "AutoMessageTime0"; // ops 0x1b8/0x1b9 selector 0: post-voice delay
+    public const string AutoMessageTime1Key = "AutoMessageTime1"; // selector 1: unvoiced delay
+    public const int DefaultAutoMessageTime0 = 500;
+    public const int DefaultAutoMessageTime1 = 2000;
     // message:AdvanceMesOnWheel (registered default 0): 1 makes a wheel-down advance an ADV text wait and finish a text
     // reveal (adv_input_service_poll@0x411230, the reveal service at 0x406fa0). Neither game's scripts change it.
     public const string AdvanceMesOnWheelKey = "AdvanceMesOnWheel";
@@ -195,12 +199,15 @@ public sealed class Sys4RegIniStore
         }
     }
 
-    public void SaveMessageInt(string key, int value)
+    public void SaveMessageInt(string key, int value) => SaveInt(MessageSection, key, value);
+
+    /// <summary>Set an integer of any section and write the file.</summary>
+    public void SaveInt(string section, string key, int value)
     {
         lock (_lock)
         {
             _document ??= LoadDocument();
-            _document.SetInt(MessageSection, key, value);
+            _document.SetInt(section, key, value);
             WriteLocked();
         }
     }

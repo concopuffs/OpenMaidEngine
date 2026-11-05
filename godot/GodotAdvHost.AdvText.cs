@@ -35,6 +35,8 @@ public sealed partial class GodotAdvHost
     private int _activeGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
     private int _messageGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
     private volatile int _messageWindowAlphaSetting = Sys4RegIniStore.DefaultMesWinAlpha;
+    private long _autoMessageTime0Milliseconds = Sys4RegIniStore.DefaultAutoMessageTime0;
+    private long _autoMessageTime1Milliseconds = Sys4RegIniStore.DefaultAutoMessageTime1;
     private Sys4RegIniStore? _messageSettingsStore;
     private bool _advTextForceComplete;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
@@ -73,11 +75,20 @@ public sealed partial class GodotAdvHost
         _timeline?.Event("message-glyph-delay", new() { ["delay_ms"] = milliseconds });
     }
 
+    public long AutoMessageTime0Milliseconds => Interlocked.Read(ref _autoMessageTime0Milliseconds);
+    public long AutoMessageTime1Milliseconds => Interlocked.Read(ref _autoMessageTime1Milliseconds);
+
+    public void SetAutoMessageTime(int selector, long milliseconds)
+    {
+        if (selector == 0) Interlocked.Exchange(ref _autoMessageTime0Milliseconds, milliseconds);
+        else if (selector == 1) Interlocked.Exchange(ref _autoMessageTime1Milliseconds, milliseconds);
+    }
+
     /// <summary>
-    /// Seed MessageSpeed and MesWinAlpha from SYS4REG.INI [message] (native defaults when absent). Changes are
-    /// written back by <see cref="FlushMessageSettings"/> at shutdown, as AGE rewrites SYS4REG.INI when it
-    /// quits; MAMES/ITMES/SKMES/INFOMES briefly set the delay to 0 per description, so no per-op write.
-    /// Call before the VM is constructed: it reads both once.
+    /// Seed MessageSpeed, MesWinAlpha and AutoMessageTime0/1 from SYS4REG.INI [message] (native defaults when
+    /// absent). Changes are written back by <see cref="FlushMessageSettings"/> at shutdown, as AGE rewrites
+    /// SYS4REG.INI when it quits; MAMES/ITMES/SKMES/INFOMES briefly set the delay to 0 per description, so no
+    /// per-op write. Call before the VM is constructed: it reads them once.
     /// </summary>
     public void UseMessageSettingsStore(Sys4RegIniStore store)
     {
@@ -90,6 +101,10 @@ public sealed partial class GodotAdvHost
         }
         _messageWindowAlphaSetting = store.LoadMessageInt(
             Sys4RegIniStore.MesWinAlphaKey, Sys4RegIniStore.DefaultMesWinAlpha);
+        SetAutoMessageTime(0, store.LoadMessageInt(
+            Sys4RegIniStore.AutoMessageTime0Key, Sys4RegIniStore.DefaultAutoMessageTime0));
+        SetAutoMessageTime(1, store.LoadMessageInt(
+            Sys4RegIniStore.AutoMessageTime1Key, Sys4RegIniStore.DefaultAutoMessageTime1));
     }
 
     public void FlushMessageSettings()
@@ -100,6 +115,11 @@ public sealed partial class GodotAdvHost
         {
             _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.MessageSpeedKey, MessageGlyphDelayMilliseconds);
             _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.MesWinAlphaKey, _messageWindowAlphaSetting);
+            // The registry keeps a 32-bit value: op 0x1b9's operand wraps as AGE's int does.
+            _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.AutoMessageTime0Key,
+                                                 unchecked((int)AutoMessageTime0Milliseconds));
+            _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.AutoMessageTime1Key,
+                                                 unchecked((int)AutoMessageTime1Milliseconds));
         }
         catch (Exception error) when (
             error is System.IO.IOException or UnauthorizedAccessException or System.IO.InvalidDataException)

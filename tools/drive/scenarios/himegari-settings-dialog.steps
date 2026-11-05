@@ -1,0 +1,71 @@
+# AGERC's 設定 dialog (dialog resource 9) on SC0000 page 1, opened from the menu on each of its tabs. The game holds and
+# its frame stays frozen while it is open. `dialogs` lists every static text and Button control of the dialog and its
+# four pages (hidden pages included, in creation order 動作環境, その他, ｻｳﾝﾄﾞ, ﾒｯｾｰｼﾞ).
+#
+# - ﾏｳｽﾎｲｰﾙでﾒｯｾｰｼﾞを進める + OK writes message:AdvanceMesOnWheel=1, so a wheel-down at the text wait then advances.
+# - 効果音 turns the SE route off live, and ｷｬﾝｾﾙ turns it back on.
+# - ﾊﾞｰｼﾞｮﾝ情報 opens that dialog over 設定 (both listed, the newer first).
+# - その他's check box + OK writes system:EffectSkipOnClick=1.
+#
+# Compare SYS4REG.INI after `close` on both targets: AdvanceMesOnWheel=1, EffectSkipOnClick=1, SE=1, Volume0..3 written
+# by OK (Volume0=0 from the driver's quiet seed, 10000 for the rest). Run on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-settings-dialog.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+
+move adv.next
+wheel down                              # AdvanceMesOnWheel=0: the wheel does not advance
+wait 1
+expect top=SC0000@0x83f
+
+menu message-settings
+wait 1.5
+dialogs                                 # 設定 with every page's texts and buttons
+shot settings-message
+answer ﾏｳｽﾎｲｰﾙでﾒｯｾｰｼﾞを進める
+wait 0.5
+answer OK
+wait 2
+dialogs                                 # none
+expect top=SC0000@0x83f
+wheel down                              # now the wheel advances
+wait 1.5
+expect top=SC0000@0x874                 # page 2
+
+menu sound-settings
+wait 1.5
+shot settings-sound
+answer 効果音(&S)                       # SE route off, live
+wait 0.5
+answer ﾊﾞｰｼﾞｮﾝ情報
+wait 1.5
+dialogs                                 # ﾊﾞｰｼﾞｮﾝ情報, then 設定
+answer OK                               # the version dialog's OK
+wait 1
+answer ｷｬﾝｾﾙ                            # SE back on
+wait 2
+dialogs                                 # none
+
+menu other-settings
+wait 1.5
+shot settings-other
+answer エフェクト中にキー入力でエフェクトをスキップ
+wait 0.5
+answer OK
+wait 2
+
+menu system-info
+wait 2
+shot settings-system
+answer ｷｬﾝｾﾙ
+wait 2
+dialogs                                 # none
+expect top=SC0000@0x874

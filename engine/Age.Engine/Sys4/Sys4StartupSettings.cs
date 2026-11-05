@@ -59,6 +59,11 @@ public sealed class Sys4StartupSettings
     /// which every scene binds to its History record with op 0x97. Missing or non-numeric means 3.</summary>
     public int WheelKeyUpAction => ReadInt("WHEELKEYUP", 3);
 
+    /// <summary>NOSETMUSIC (set:NoSetMusic, registered default 0). Nonzero gives AGERC's 設定 dialog the ｻｳﾝﾄﾞ page
+    /// without sound:Music's radio buttons (dialog 102 instead of 101); Himegari's 3 also starts sound:Music at 2
+    /// (<see cref="Persistence.Sys4RegIniStore.ForPath"/>). Missing or non-numeric means 0.</summary>
+    public int NoSetMusic => ReadInt("NOSETMUSIC", 0);
+
     /// <summary>WHEELKEYDOWN (set:WheelKeyDown, registered default 1): the logical action a wheel-down raises in the
     /// same mode. Both games use 9, which no script binds. Missing or non-numeric means 1.</summary>
     public int WheelKeyDownAction => ReadInt("WHEELKEYDOWN", 1);

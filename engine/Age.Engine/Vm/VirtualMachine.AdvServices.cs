@@ -64,8 +64,7 @@ public sealed partial class VirtualMachine
                 Write(a[1], Read(a[0]) == 0 ? _autoMessageTime0Ms : _autoMessageTime1Ms); return pc + 1;
             case "u0041B710":
             case "set-auto-message-time": // 0x1b9 (selector, milliseconds)
-                if (Read(a[0]) == 0) _autoMessageTime0Ms = Read(a[1]);
-                else if (Read(a[0]) == 1) _autoMessageTime1Ms = Read(a[1]);
+                SetAutoMessageTime((int)Read(a[0]), Read(a[1]));
                 return pc + 1;
             case "u00415670":
             case "block-mark":

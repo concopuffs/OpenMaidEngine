@@ -206,6 +206,8 @@ public sealed partial class VirtualMachine
         _nativeDatStore = nativeDatStore;
         _messageWindowAlphaSetting = host.MessageWindowAlphaSetting;
         _messageGlyphDelayMilliseconds = System.Math.Max(0, host.MessageGlyphDelayMilliseconds);
+        _autoMessageTime0Ms = host.AutoMessageTime0Milliseconds;
+        _autoMessageTime1Ms = host.AutoMessageTime1Milliseconds;
         _accumulatedPlaySeconds = _sharedProfile.AccumulatedPlaySeconds;
         _sessionStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
     }

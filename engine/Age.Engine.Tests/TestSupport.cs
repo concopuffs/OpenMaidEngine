@@ -133,6 +133,13 @@ internal class RecordingHost : IHost
     }
     public void SetMessageGlyphDelayMilliseconds(int milliseconds)
         => MessageGlyphDelayMilliseconds = milliseconds;
+    public long AutoMessageTime0Milliseconds { get; set; } = 500;
+    public long AutoMessageTime1Milliseconds { get; set; } = 2000;
+    public void SetAutoMessageTime(int selector, long milliseconds)
+    {
+        if (selector == 0) AutoMessageTime0Milliseconds = milliseconds;
+        else if (selector == 1) AutoMessageTime1Milliseconds = milliseconds;
+    }
     public RgbaImage? CaptureSurfacePixels(int slot)
         => SurfacePixels.TryGetValue(slot, out var image) ? image : null;
     public bool ReplaceSurfacePixels(int slot, RgbaImage image)

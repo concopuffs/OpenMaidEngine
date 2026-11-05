@@ -11,12 +11,10 @@ it; git history keeps the record.
 ## Engine fidelity
 
 - **Native menu bar: the remaining commands (AGERC menu 110).** The port draws the pruned bar and runs ｹﾞｰﾑ>終了,
-  画像の保存, the four ﾒｯｾｰｼﾞ toggles and ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報 as native does (`engine-re.md`, "Native menu bar"). It grays
-  everything else. Still missing:
-  - The 設定 dialog (AGERC dialog 9, proc `0x10006400`) behind ﾒｯｾｰｼﾞの設定, ｻｳﾝﾄﾞ設定, その他の設定 and
-    このｺﾝﾋﾟｭｰﾀの動作環境, which open it at tabs 0–3. It needs the tab control, check boxes, radio buttons, group
-    boxes, trackbars, combo boxes and bordered edits in `godot/Win32TemplateDialog.cs`, the page procedures, and
-    what OK writes.
+  画像の保存, the four ﾒｯｾｰｼﾞ toggles, ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報 and the 設定 dialog's four commands as native does
+  (`engine-re.md`, "Native menu bar"). It grays everything else. Still missing:
+  - The menu's own radio groups under 設定: 文字表示, ﾏｳｽの右ｸﾘｯｸ時の動作, ﾒｯｾｰｼﾞｽﾋﾟｰﾄﾞ, ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳの透過,
+    BGMの設定 and SEの設定 (`0x9c49`–`0x9c59`, `0x9c5d`, `0x9c5e`).
   - ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (`0x9c5a`/`0x9c5b`), and in fullscreen the top-edge strip that shows the bar (op `0x149` sets
     its delay; the port keeps that state and op `0x142`'s).
   - The right-click ﾒｯｾｰｼﾞ popup under `message:RMouseEvent=2`.
@@ -24,9 +22,21 @@ it; git history keeps the record.
     `0x10f`'s mask swallows F10. The port's keyboard access starts only from Alt with an access key, which opens
     that dropdown.
   - Smaller look differences. Native popups may extend past the game window (the ﾍﾙﾌﾟ popup spans x 744..989), but
-    the port clamps them inside it. Latin glyphs are drawn without ClearType's exact rasterization.
+    the port clamps them inside it. Latin glyphs are drawn without ClearType's exact rasterization. The 設定 tab
+    control is `TCS_HOTTRACK`, and native's hover look is neither captured nor drawn. Page 101 (`sound:Music`'s radio
+    buttons, for `NOSETMUSIC=0`) is not drawn; both games have 3 and get page 102.
 
   Done when each command reaches the same native service or dialog, or is closed as out of scope.
+- **`system:EffectSkipOnClick` is not honoured.** Native forces a running effect to its endpoint on a click only when
+  the setting is 1 (`engine-re.md`, run-state `0x400` and the legacy transitions). A new profile writes 0, and
+  the 設定 dialog's その他 page now sets it. The port forces the endpoint whatever the value
+  (`GodotAdvHost.TryForceActiveTransition`). With the setting off, native leaves action 4 unconsumed, and where that
+  click goes next is not traced. Done when the port reads the setting, and a native run with it off shows what a click
+  during a fade does, and the port matches.
+- **`message:UseAntiFont` 0 is not rendered.** Native's 0 selects `GGO_BITMAP` glyphs instead of `GGO_GRAY4_BITMAP`
+  (`engine-ctx.toml` `text_antialias_enabled`, IAGEService `+0x68`). The 設定 dialog's ﾒｯｾｰｼﾞ page writes it, but the
+  port always draws grayscale glyphs (`WindowsGdiGlyphMaskRasterizer`). Done when 0 draws aliased glyphs that match a
+  native capture.
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
   statement blocks, "Not modelled"). A static scan of both games' scripts (2026-11-04) finds a movie start inside
@@ -153,4 +163,17 @@ it; git history keeps the record.
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
 - **Flaky test.** `Transform2DMathTests.ValueMatrixBuild_DoesNotAllocatePerObject` counts allocations and fails
   intermittently in full parallel runs; it passes alone.
+- **ﾊﾞｰｼﾞｮﾝ情報 should present Open Maid Engine, not AGE.** The port builds ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 from AGERC.DLL's
+  dialog 2 and fills it as AGE does (`engine-re.md`, "Native menu bar"). Its engine half therefore misattributes the
+  port:
+  - the SYSTEM3 icon, the ARCGameEngine label, "Version 4.24J" (AGE.EXE's FileVersion) and ARC Software Laboratory's
+    copyright;
+  - the Xiphophorus Ogg Vorbis notice, which belongs to AGE's own decoder;
+  - the empty プロダクトID box, a copy-protection field the port has no use for.
+
+  The game half (title, game version, game copyright) comes from the game's data and stays. Decide how OME
+  identifies itself: replace the engine texts in the template-built dialog, or give OME its own about dialog. It
+  should show OME's name, release version, license and a pointer to `THIRD_PARTY_NOTICES.md`. Done when the dialog shows
+  OME's identity beside the game's, `engine-re.md`'s port notes say so, and `himegari-version-dialog.steps` compares
+  only the parts that are meant to match native.
 - **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default).
