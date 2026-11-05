@@ -839,12 +839,15 @@ collapse is fully understood; the native finding and the implemented host-model 
 `1`. So `aba5c==1` is set by the engine's scene loader/scheduler on entry — the **same class as the INIT2
 handle array** (native entry-state a cold single-scene harness skips), NOT a story flag. Cold, it reads `0`.
 
-> **Correction (native-traced 2026-11-04).** The "set on entry" inference does not hold for native New Game.
-> `tools/frida/trace_engine_ops.py` over TITLE → GAMESTART → SC0000 shows `0x450 → 0x457 → 0x45e → label_71b`, so
-> `G[0xaba5c]` is not 1 at that entry. The loop body below, including `call label_125bd` at `0x50f` and the
-> `0x93` at `0x622`, does not run before page 1. Which native path does enter with `aba5c==1` is open
-> (`docs/backlog.md`). The port sets it only when the root script is the ADV scene (`VirtualMachine.Run`), which
-> the full boot never does.
+> **Correction (2026-11-04).** The engine does not set the gate; it is `adv_developer_entry_mode`.
+> - The scan above missed the one write of 1, at TITLE `0x5fa` in TITLE's developer menu, which retail never
+>   reaches. In retail the gate stays 0.
+> - The loop below is a developer label picker, not the source of the slot table. SYSTEM4 fills the table before it
+>   calls any scene.
+> - A native New Game trace (`tools/frida/trace_engine_ops.py`) passes `0x450 → 0x457 → 0x45e → label_71b`.
+>
+> The lifecycle inferred next ("enter `aba5c=1` → intro loop fills slots") describes no native path. See "Native
+> ADV hosting and Himegari's developer entry" below.
 
 **Corrected roles of the two branches** (the earlier head-start had them inverted). At SC0000 `0x450`
 `eq local0 = (aba5c==1)`; `0x457 jcc local0 label_462 <fallthrough>`:
@@ -937,6 +940,53 @@ character of every string the translators did not rewrite: `"LABEL","J"` became 
 as `"シーン回想終了"` became `"ーン回想終了"`. In retail play that only shows as broken choice text. Through the
 developer entry, native AGE would open the entry picker (no `ABEL` entries), while the port stubs the call and loops
 until its step limit. Neither path is reachable without the developer menu.
+
+**Native ADV hosting and Himegari's developer entry (static and Frida-traced, 2026-11-04).** This replaces the
+2026-07-09 reading that the engine sets `G[0xaba5c]` (`adv_developer_entry_mode`) on scene entry.
+
+- **SYSTEM4 hosts every ADV scene.** Its `system_flow_request==1` branch (`0x2b7`) calls the scene with
+  `call-script G[0x699]` at `0x477`. The call sits between the "advset" block (from `0x3d6`) and the "advend" block
+  (from `0x47f`; its `0x93` is at `0x483`). While `G[0x3275]` is 0, the branch first runs the ADV setup:
+  - `call label_5bf` at `0x33e` fills `adv_layer_surface_slots` (`G[0x3239]`) with 4/43/51 … 11/50/58;
+  - `0x341` sets `adv_chrome_enabled`;
+  - the font and text state follow.
+
+  So the slot table is filled before any scene runs. The SC0000 page-3 saves of native and the port hold the same
+  table.
+- **The scene loop is a developer copy of that wrapper.** Each scene's `0x462..0x711` loop repeats:
+  1. advset;
+  2. `call G[0x6be]`, an indirect call to the label that AGERC command 8 returned;
+  3. advend, with its `0x93` at `0x622`.
+
+  The loop's `label_125bd` is a copy of `label_5bf`.
+- **Only TITLE's developer menu sets the gate.** The menu starts at TITLE `0x394`, right after the main menu's
+  forced quit (`throw-exit-request@0x393`). No label points into it, so retail never runs it (op `0x1` record).
+  - Case 0, ＡＤＶパート (`0x5f5`), writes `G[0]=1`, `G[0xaba5c]=1` and `G[0x62ccf]=0`. It then picks a scene with
+    op `0x140` `"BIN","SC????.BIN"`.
+  - Cases 1 and 2, ＡＤＶデバッグ and ＡＤＶデバッグ（ＰＧ用）, write -1 and name DEBUGADV and DEBUGADV2.
+  - Every other script write is 0, and AGE.EXE holds no `0xaba5c` immediate.
+
+  SYSTEM4 reads the gate twice. Only at 0 does it mark the SCJUMP decision seen (`0x2c6`) and take `G[0x699]` from
+  `scjump_scene_script_resource_ids` (`0x44a`). At 1 or -1 it runs TITLE's choice. In retail the gate is 0, and
+  native New Game passes `0x450 → 0x457 → 0x45e → label_71b` (`tools/frida/trace_engine_ops.py`).
+- **A save load resumes before the gate.** A load from TITLE's Data Load re-enters SC0000 from its start and
+  re-registers the control strip at `0x7e`. Then `continue-save-load-stack-restore` at `0x447` jumps to the saved
+  position (`0x877` for a page-3 save), so the gate at `0x450` is never reached (Frida-traced).
+- **No retail text wait follows an orphan `0x93`.** Native `0x93` empties the frame's registry
+  (`input_hotspot_reset`). A linear scan finds that 1,623 of the corpus's 1,766 `0x93` sites re-register before
+  any text wait. SC0000's sites show the pattern: `0x93`, a call into History, Menu, HIDEWIN or INPUTNAME, then
+  `call label_8c`. The other 143 are advend blocks:
+  - one in each of the five hosts (SYSTEM4, CAMP, FIELD, FORT, HMODE), whose own frames never wait for text or
+    register hotspots;
+  - each scene's developer-loop copy at `0x622`.
+
+  On the developer path, native therefore reaches the content after the loop with an empty registry.
+- **Port routes.**
+  - The natural boot matches native: SYSTEM4 hosts SC0000 with the gate at 0.
+  - The F4 launcher takes TITLE's case 1/2 route, with the gate at -1 and SYSTEM4 hosting (`tools-reference.md`).
+  - Direct-scene runs (`--scene`, or an ADV root script in `Age.Cli`) model case 0 without SYSTEM4. They set the
+    gate to 1, force one loop pass in which `call G[0x6be]` calls nothing, and re-arm at the first text wait the
+    definitions that advend's `0x93` canceled. Native would leave them empty (`docs/backlog.md`).
 
 **Magic-circle retention fixed in the host model (2026-07-09).** The effect is `AE001H.AGF`
 (resource `0x37`). SC0000 already contains the correct teardown, but the port's wrong `0x215` query
@@ -2435,11 +2485,13 @@ so there is nothing for an ADV coroutine to republish:
 - The executed-offset trace (`tools/frida/trace_engine_ops.py`) takes `0x450 → 0x457 → 0x45e → label_71b`. So
   `G[0xaba5c]` is not 1 there, and the loop body `0x462..0x711` that holds `0x622` does not run.
 
-The cancel runs only where the port forces that body: a cold run whose root script is the ADV scene, where
-`VirtualMachine.Run` sets `G[0xaba5c]=1` (see the scene-coroutine framework section). The port's full boot
-(TITLE → GAMESTART → SC0000) does not set it. The retained-template re-arm at `wait-for-input` therefore serves
-that cold path; on the full boot op `0x94` has already armed the registry. `docs/backlog.md` tracks what native
-does after an `0x93` that no registration follows.
+That loop is TITLE's developer entry ("Native ADV hosting and Himegari's developer entry" above). Retail never runs
+it, and no retail text wait follows a `0x93` without a re-registration in between. The cancel runs only where the
+port forces that body: a cold run whose root script is the ADV scene, where `VirtualMachine.Run` sets
+`G[0xaba5c]=1`. The port's full boot (TITLE → GAMESTART → SC0000) does not set it. The retained-template re-arm at
+`wait-for-input` therefore serves that cold path only; on the full boot op `0x94` has already armed the registry.
+On its developer path, native would reach page 1 with the registry empty. `docs/backlog.md` tracks that
+difference.
 
 ### ADV Auto-message timing and voice completion (2026-07-18)
 

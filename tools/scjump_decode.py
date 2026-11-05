@@ -32,7 +32,7 @@ def load_scjump():
 def _code_targets(ins):
     """Yield the code-target offsets of an instruction (excludes 0xffffffff fallthrough)."""
     for i, (t, v) in enumerate(ins.args):
-        if is_label_argument(ins.opcode, i, v) and v != FALLTHROUGH:
+        if is_label_argument(ins.opcode, i, v, t) and v != FALLTHROUGH:
             yield v
 
 

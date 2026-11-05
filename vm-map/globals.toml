@@ -3068,14 +3068,14 @@ confidence = "high"
 
 [[global]]
 address = "0xaba5c"
-name = ""
-category = "story-flag"
+name = "adv_developer_entry_mode"
+category = "choice-output"
 type = "int"
-value_domain = "{0,1}"
-usage = "TODO: confirm. Branch-read in 136 scenes / 149 scripts; compared against [0, 1]; writers=['DEBUGADV.BIN', 'DEBUGADV2.BIN', 'SC0000.BIN', 'SC0010.BIN']."
-source = "auto-shape"
-confidence = "med"
-depends_on = []
+value_domain = "0 retail; 1 ADV-part developer entry (scene label picker); -1 ADV-debug script"
+usage = "How SYSTEM4 hosts the next ADV script. Only TITLE's developer menu writes non-zero, and retail never reaches it (it follows the forced quit at TITLE 0x393). Case 0 (ＡＤＶパート, 0x5fa) writes 1 after picking a scene. Cases 1 and 2 (ＡＤＶデバッグ) write -1 and name DEBUGADV/DEBUGADV2. Only at 0 does SYSTEM4 mark the SCJUMP decision seen (0x2c6) and take next_script_resource_id from SCJUMP (0x44a). Each scene runs its label-picker loop (0x462..0x711, op 0x140 \"LABEL\",\"J\") only at 1, and writes 0 on leaving it. Every other script write is 0."
+source = "investigation"
+confidence = "high"
+depends_on = ["0x0", "0x699", "0x62ccf", "0x6be"]
 
 [[global]]
 address = "0xaba5e"

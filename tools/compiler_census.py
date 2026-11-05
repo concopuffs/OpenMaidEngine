@@ -44,7 +44,7 @@ REFERENCE_OPS = {0x7B, 0x90, 0xCC, 0xD4, 0xD5, 0xFB}                 # code refe
 def code_targets(ins) -> list[int]:
     """Code offsets referenced by one instruction (sentinel -1 excluded)."""
     return [v for a, (t, v) in enumerate(ins.args)
-            if a + 1 in CODE_TARGET_ARGS.get(ins.opcode, ()) and v != NONE]
+            if t == 0 and a + 1 in CODE_TARGET_ARGS.get(ins.opcode, ()) and v != NONE]
 
 
 # --------------------------------------------------------------------------- control-flow shapes
@@ -178,7 +178,7 @@ def subroutine_key(script, instructions: list, index: dict[int, int], entry: int
         i = instructions[index[off]]
         norm = [i.opcode]
         for a, (t, v) in enumerate(i.args):
-            if a + 1 in CODE_TARGET_ARGS.get(i.opcode, ()) and v != NONE:
+            if t == 0 and a + 1 in CODE_TARGET_ARGS.get(i.opcode, ()) and v != NONE:
                 norm.append(("rel", v - entry))
             elif t == 2:
                 norm.append(("s", script.strings.get(v, ("?",))[0]))

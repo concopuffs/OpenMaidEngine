@@ -821,10 +821,10 @@ public sealed partial class VirtualMachine
     public void Run(int entryOffset = 0)
     {
         // Direct-scene runs (the root script is an ADV scene) set the scene-entry gate so the scene's
-        // coroutine loop body runs once. This is a host model, not traced native entry state: native New Game
-        // enters SC0000 with the gate not 1 and skips that body (2026-11-04; docs/backlog.md). The natural
-        // boot root is never an ADV scene. Restrict it to the byte-identical ADV LABEL/J idiom; op 0x140 also
-        // has an unrelated TITLE use.
+        // label-picker loop runs once. This models TITLE's developer entry (ＡＤＶパート writes 1), which retail
+        // never reaches: retail keeps the gate at 0, and SYSTEM4 hosts every scene (2026-11-04;
+        // docs/backlog.md). The natural boot root is never an ADV scene. Restrict it to the byte-identical ADV
+        // LABEL/J idiom; op 0x140 also has an unrelated TITLE use.
         if (entryOffset == 0
             && _compatibility.SceneEntryCoroutineGateAddress is { } sceneEntryGate
             && _s.Instructions.Any(ins => IsAdvLabeledYield(_s, ins)))

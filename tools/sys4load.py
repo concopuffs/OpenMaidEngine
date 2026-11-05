@@ -385,7 +385,7 @@ def _fmt_operand(op: int, arg_index: int, atype: int, aval: int, strings: dict) 
     if atype == 2:                                  # inline string
         text = strings.get(aval, ("?",))[0]
         return f'"{text}"'
-    if is_label_argument(op, arg_index, aval):      # code-offset jump/call target
+    if is_label_argument(op, arg_index, aval, atype):  # code-offset jump/call target
         return f"label_{aval:x}"
     tlabel = ARG_TYPES.get(atype)
     if atype == 0 or tlabel is None:                # immediate / unknown-tag: raw value
@@ -410,7 +410,7 @@ def render_listing(scr: Sys4Script) -> str:
     label_targets = set()
     for ins in scr.instructions:
         for x, (atype, aval) in enumerate(ins.args):
-            if is_label_argument(ins.opcode, x, aval):
+            if is_label_argument(ins.opcode, x, aval, atype):
                 label_targets.add(aval)
 
     for ins in scr.instructions:

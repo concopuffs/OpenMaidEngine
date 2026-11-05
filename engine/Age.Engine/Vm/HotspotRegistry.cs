@@ -114,9 +114,10 @@ internal sealed class HotspotRegistry
         _hovered = -1;
         Armed = false;
         // Native op 0x93 empties the table. The port keeps the definitions as a template that the next
-        // wait-for-input re-arms, for direct-scene runs that force SC0000's 0x93 at 0x622 (native New Game
-        // never runs it; docs/backlog.md). A script registration first replaces the template instead of
-        // duplicating it, which is the native result.
+        // wait-for-input re-arms. That serves direct-scene runs, which force the scene's developer-loop 0x93
+        // at 0x622. Native reaches that 0x93 only through TITLE's unreachable developer menu, and leaves the
+        // table empty (docs/backlog.md). On retail paths a script registration always comes first; it
+        // replaces the template instead of duplicating it, which is the native result.
         _replaceOnNextRegister = _entries.Count != 0;
     }
 

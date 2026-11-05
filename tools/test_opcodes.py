@@ -301,9 +301,10 @@ def test_emit_runtime():
     check(ns["OPCODES"][0x90] == (canonical.opcodes[0x90].label, 7),
           "runtime view preserves opcode label and argc")
     check(ns["ARG_TYPES"][0] == "imm", "runtime view emits canonical argument labels")
-    check(ns["is_label_argument"](0x90, 4, 0x123), "runtime view recognizes hotspot target arg")
-    check(not ns["is_label_argument"](0x90, 3, 0x123), "runtime view rejects hotspot data arg")
-    check(not ns["is_label_argument"](0x90, 4, 0xffffffff), "fallthrough sentinel is not a target")
+    check(ns["is_label_argument"](0x90, 4, 0x123, 0), "runtime view recognizes hotspot target arg")
+    check(not ns["is_label_argument"](0x90, 3, 0x123, 0), "runtime view rejects hotspot data arg")
+    check(not ns["is_label_argument"](0x90, 4, 0xffffffff, 0), "fallthrough sentinel is not a target")
+    check(not ns["is_label_argument"](0x8f, 0, 0x6be, 3), "a global in a code-target slot is not a label")
     check(ns["ARRAY_OPCODE"] == 0x64, "runtime view emits the inline-array opcode")
 
 def test_canonical_kamidori_revision_provenance():

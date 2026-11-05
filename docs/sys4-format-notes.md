@@ -816,13 +816,20 @@ code order. They match in 481/481 and 732/732 scripts, so a compiler can generat
 
 **Code targets.** The code-target operand positions are:
 
-- `0x7b` 1 and 2; `0x8c` 1; `0x8f` 1; `0x90` 5–7
+- `0x7b` 1 and 2; `0x8c` 1; `0x8f` 1; `0x90` 5–7; `0x92` 2; `0x95` 2
 - `0xa0` 2 and 3; `0xa2` 2; `0xa3` 2
 - `0xcc` 2; `0xd4` 3 and 4; `0xd5` 1; `0xfb` 2
 
 `0xffffffff` means "no target / fall through". The value-switch pair `0xa2`/`0xa3` and the timed-callback abort PC
 (`0xd5` 1, always `-1` in the corpora) were missing from the upstream table until 2026-10-06 (`docs/engine-re.md`,
-"VM operand accessors").
+"VM operand accessors"). The modal waits' poll callbacks (`0x92` 2, `0x95` 2) were added on 2026-11-04; neither game
+uses those ops.
+
+Only an immediate (operand type 0) in these positions names a code offset. A variable there is an indirect target:
+the instruction uses the offset the variable holds at run time. The corpus case is every ADV scene's
+`call G[0x6be]` at `0x61b` (138 Himegari scripts), which calls the label that AGERC command 8 returned. Until
+2026-11-04 the Python disassembler printed that operand as `label_6be`. It now prints the variable, as the C#
+decoder (`IrDecoder`) always did.
 
 **What each kind of code reference points at.** These follow from the corpus and from how the engine dispatches
 callbacks (`docs/engine-re.md`, "VM value, array and call semantics"):

@@ -596,7 +596,11 @@ CODE_TARGET_ARGS: dict[int, frozenset[int]] = {
 CONTROL_FLOW = frozenset(CODE_TARGET_ARGS)
 ARRAY_OPCODE = 0x64
 
-def is_label_argument(op: int, arg_index: int, raw_value: int) -> bool:
-    """Return whether a zero-based operand is a non-fallthrough code target."""
-    return (raw_value != 0xFFFFFFFF
+def is_label_argument(op: int, arg_index: int, raw_value: int, operand_type: int) -> bool:
+    """Return whether a zero-based operand is a non-fallthrough code target.
+
+    Only an immediate (type 0) names a code offset. A variable in a code-target slot is an indirect target
+    whose value is the variable's address, as in each ADV scene's `call G[0x6be]` (SC0000 0x61b).
+    """
+    return (operand_type == 0 and raw_value != 0xFFFFFFFF
             and arg_index + 1 in CODE_TARGET_ARGS.get(op, ()))

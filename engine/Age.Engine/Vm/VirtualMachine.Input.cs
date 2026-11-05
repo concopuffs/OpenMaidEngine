@@ -14,8 +14,8 @@ public sealed partial class VirtualMachine
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
                 if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }
                 // Re-arm definitions that an earlier 0x93 left as a template (HotspotRegistry.Reset). Only
-                // direct-scene runs reach this before page 1: they force the scene-coroutine loop body and its
-                // 0x93 at SC0000 0x622, which native New Game never runs (traced 2026-11-04; docs/backlog.md).
+                // direct-scene runs reach this: they force the scene's developer-loop 0x93 at 0x622. On retail
+                // paths every 0x93 is re-registered before a text wait (2026-11-04; docs/backlog.md).
                 bool wakeAtWait = false;
                 lock (_interactiveLock)
                 {
