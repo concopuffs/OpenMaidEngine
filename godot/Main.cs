@@ -381,6 +381,7 @@ public partial class Main : Godot.Control
             _audioMixerSettings.Changed += PersistAudioMixerSettings;
         }
         ApplyAudioMixerSnapshot(_audioMixerSettings.Snapshot());
+        InitScreenMode(userArgs);
 
         // Full op handling everywhere: the provider lets call-script load & run subroutines. Selftest
         // runs a SYNTHESIZED scene (not a real scene in a crippled mode) so its output is deterministic.
@@ -597,6 +598,7 @@ public partial class Main : Godot.Control
     public override void _Process(double delta)
     {
         PumpDriveServer();
+        ProcessScreenMode();
         if (_fpsHud != null && _fpsHud.Visible)
         {
             _fpsHudUpdateSeconds += delta;

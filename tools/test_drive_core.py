@@ -286,8 +286,9 @@ def test_profiles():
           "the Himegari profile has its points and a valid advance point")
     check(profile.dialogs[0].code == 6 and profile.dialogs[0].match.startswith("データ"),
           "the registration box is answered Yes")
-    check(profile.settings == {"display.ScreenMode": "1"} and profile.quiet == {"sound.Volume0": "0"},
-          "the sandbox forces windowed mode and, unless --sound, silence")
+    check(profile.settings == {"display.ScreenMode": "1", "display.VirtualFullScreen": "1"}
+          and profile.quiet == {"sound.Volume0": "0"},
+          "the sandbox forces windowed mode, a windowed fullscreen and, unless --sound, silence")
     config = native.agent_config(profile, core.sandbox_folders(Path("C:/box")), engine_ctx)
     check(config["dialogs"][0]["match"] == list("データが壊れています．".encode("cp932")),
           "dialog matches reach the agent as cp932 bytes")

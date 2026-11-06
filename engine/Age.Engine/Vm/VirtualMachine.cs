@@ -1051,6 +1051,7 @@ public sealed partial class VirtualMachine
         _skipClickCancelState = 0;
         _skipClickCancelTriggers = 0;
         _settingCallbackPending = false;
+        _windowCallbackPending = false;
         _menuToggles.Clear();
         _menuTogglesPending = false;
         _advSkipServiceEnabled = true;
@@ -1882,6 +1883,9 @@ public sealed partial class VirtualMachine
             case "set-system-key-disable-mask": // 0x10f: F1 screenshot / F10 menu-focus disable bits
             case "u0041E690": // pre-reference compatibility
                 return StepRuntimeSetting(label, a, pc);
+            case "request-screen-mode": // 0x2cf: display_toggle_screen_mode_and_menu_bar (1 window, 0 fullscreen)
+            case "u0042B617": // pre-reference compatibility
+                return StepScreenMode(a, pc);
             case "get-message-glyph-delay": // 0x7f
             case "u00414C60":
             case "set-message-glyph-delay": // 0x1b5

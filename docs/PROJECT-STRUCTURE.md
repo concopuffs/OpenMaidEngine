@@ -278,7 +278,9 @@ full-width text entry. `godot/Main.Drive.cs` owns the `--control` driving backen
 injected input events, exclusive input, and the port side of the protocol (state, screenshots, speed, close).
 `godot/Main.MenuBar.cs` attaches the native menu bar (AGERC menu 110) above the game canvas and runs its commands;
 `godot/NativeMenuBar.cs` draws the bar and its popups, and `godot/GdiTextMetrics.cs` supplies the GDI advances
-that the bar and the `godot/Win32Dialog.cs` dialogs lay their labels out with. `godot/Main.Screenshot.cs` saves the
+that the bar and the `godot/Win32Dialog.cs` dialogs lay their labels out with. `godot/Main.ScreenMode.cs` switches
+between the window and fullscreen and runs fullscreen's top-edge strip, which `godot/SystemMenuStrip.cs` draws
+around a second `NativeMenuBar`. `godot/Main.Screenshot.cs` saves the
 F1 and 表示画面を保存 screenshot BMPs and runs 画像の保存場所 through `godot/ScreenshotFolderDialog.cs`, the shell's
 folder picker. `godot/Main.AgercDialogs.cs` opens AGERC's own dialogs, stacking one opened from another:
 `godot/Win32TemplateDialog.cs` builds one, with any child pages, from its AGERC.DLL template with the classic controls

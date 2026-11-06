@@ -1301,14 +1301,13 @@ CONFIG changes therefore take effect immediately while the enclosing ADV wait re
 
 ### Native menu bar — AGERC menu 110 (2026-11-05)
 
-A windowed AGE has a Win32 menu bar. `display_toggle_screen_mode_and_menu_bar@0x412df0` switches the screen mode.
-It is called by the maximize box (`SC_MAXIMIZE`), Alt+Enter, op `0x2cf` and `0x45f4f6`. With `display:ForceScreen`
-set to 1, it refuses to leave a window.
+A windowed AGE has a Win32 menu bar. `display_toggle_screen_mode_and_menu_bar@0x412df0` switches the screen mode
+("Screen mode" below):
 
 - **To a window,** it sets style `0x90cb0000`, sizes the frame for the caption and the menu, and attaches the menu:
   `LoadMenuA(110)`, `SetMenu`, AGERC `_OperateMenu` op 1, `DrawMenuBar`.
 - **To fullscreen,** it sets style `0x90000000` and detaches the menu with `SetMenu(NULL)`. In fullscreen the same
-  commands come from the top-edge strip ("System-menu top-edge reveal delay" below).
+  commands come from AGERC's top-edge strip ("Screen mode" below).
 
 Menu resource 110 is in AGERC.DLL. Its labels, without their mnemonics, are:
 
@@ -1333,7 +1332,8 @@ AGERC.DLL also holds a debug menu, 124. Its items are F2–F12 commands such as 
 - `Menu_SoundONOFF`: BGMの設定 and SEの設定;
 - `Menu_Message`: the whole ﾒｯｾｰｼﾞ popup.
 
-Himegari sets every key to 0 except `MENU_MESSAGE`, which is 1. Its live bar is therefore:
+Himegari and Kamidori both set every key to 0 except `MENU_MESSAGE`, which is 1 (Kamidori's trailer read
+2026-11-06). Their live bar is therefore:
 
 - ｹﾞｰﾑ, holding only 終了;
 - 画像の保存;
@@ -1342,6 +1342,12 @@ Himegari sets every key to 0 except `MENU_MESSAGE`, which is 1. Its live bar is 
 - ﾍﾙﾌﾟ.
 
 The windowed game's outer window is 806×649, and its client starts at (3,46).
+
+**Out of scope** (2026-11-06). The port leaves out three parts no shipped game can reach. It draws only the pruned
+bar, so the six radio groups (`0x9c49`–`0x9c59`, `0x9c5d`, `0x9c5e`) never appear, and their command handlers
+are not decoded. It opens no right-click ﾒｯｾｰｼﾞ popup ("Right-click popup" below). It does not draw 設定 page 101,
+which only `NOSETMUSIC=0` selects ("AGERC dialogs" below). A profile that ships a `MENU_*` key at 1, or
+`NOSETMUSIC=0`, reopens the matching part.
 
 **Commands.** `age_main_window_proc@0x486320` handles `WM_COMMAND`:
 
@@ -1353,7 +1359,8 @@ The windowed game's outer window is 806×649, and its client starts at (3,46).
 **Right-click popup.** On `WM_RBUTTONDOWN`, AGE checks two things: any of run-state bits `0x94800000` must be set,
 and `message:RMouseEvent` must be 2. When both hold, AGE loads a fresh copy of menu 110. Op 1 never prunes
 that copy. AGE then opens its third popup, ﾒｯｾｰｼﾞ, at the cursor with `TrackPopupMenu`. The default in
-`SYS4REG.INI` is `RMouseEvent=0`, and Himegari prunes ﾏｳｽの右ｸﾘｯｸ時の動作 from the bar.
+`SYS4REG.INI` is `RMouseEvent=0`, and both games prune ﾏｳｽの右ｸﾘｯｸ時の動作 from the bar. The 設定 dialog's pages
+do not write the key either, so in both games only a hand-edited `SYS4REG.INI` opens the popup.
 
 **`_OperateMenu@16`.** AGE resolves AGERC's export `_OperateMenu@16` (`agerc_operate_menu_export@0x10001070`, ordinal
 6) into `g_pfnAgercOperateMenu` (`0x5c601c`). Its first argument selects the operation: 0 refreshes the menu
@@ -1627,6 +1634,130 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   off-window popups are listed in `docs/backlog.md`, "Native menu bar". The ﾒｯｾｰｼﾞ page's UseAntiFont check is applied
   on OK ("AntiFont off" in the text sections).
 
+### Screen mode — ﾌﾙｽｸﾘｰﾝ, ｳｲﾝﾄﾞｳ and the top-edge strip (2026-11-06)
+
+**The switch.** `display_toggle_screen_mode_and_menu_bar@0x412df0` takes the target mode: 1 for a window, 0 for
+fullscreen.
+
+- When the target equals `display_windowed` (`ctx+0x9a298`), it returns at once and runs no callback.
+- With `display:ForceScreen` set to 1, it refuses to leave a window.
+- Otherwise it restyles the window and attaches or detaches the menu ("Native menu bar" above). It then flips
+  `display_windowed`, stores `display:ScreenMode` (written to `SYS4REG.INI` at exit) and stamps `ctx+0x55118` with
+  `timeGetTime`. For one second after that stamp, AGE ignores message `0x1401`, the fullscreen suspend on losing the
+  foreground. Last, it calls `script_launch_by_name("CALLBACK_WINDOW.BIN")`. The launch queue runs that script from
+  the ADV tick, as it runs `CALLBACK_SETTING.BIN`.
+
+Four callers reach the switch:
+
+| Caller | Target |
+|---|---|
+| `WM_SYSCOMMAND` `SC_MAXIMIZE` (the maximize box) | 0 |
+| `SC_KEYMENU` with `lParam` `0xd` (Alt+Enter) | the other mode |
+| op `0x2cf` | its operand, when 0 or 1 (no Himegari or Kamidori script calls it) |
+| IAGEService `+0x1c` (`iage_service_toggle_screen_mode@0x45f4f0`) | AGERC's ﾌﾙｽｸﾘｰﾝ `0x9c5a` passes 0 and ｳｲﾝﾄﾞｳ `0x9c5b` passes 1; the strip's restore passes 1 and its Alt+Enter the other mode |
+
+The window procedure ignores the first two while `display:ForceScreen` is 1.
+
+**Startup.** `engine_initialize_graphics_from_settings@0x406480` starts windowed when `display:ScreenMode` is
+nonzero. The registered default is 0, so a new profile starts fullscreen. A SYS4INI `FORCESCREEN` pair overrides
+`display:ForceScreen`'s default (the trailer import at `0x46e5f5`). With `display:VirtualFullScreen` 0 (the default),
+fullscreen changes the display mode. With 1, a window covers the desktop instead, and the driver's sandboxes set 1
+(`tools/drive/himegari.toml`). In that mode, the driver's client capture is desktop-sized, not a canvas image.
+
+**The strip.** Fullscreen has no menu bar. Instead, AGERC shows a strip across the top of the screen: host command 4
+(`agerc_dispatch_host_command@0x100025f0`). The first time, the host command creates it with `CreateDialogParam(4,
+agerc_system_menu_strip_dialog_proc@0x10003c20)`; later it calls `ShowWindow(SW_SHOW)`. It also sets active-host-UI bit
+`0x10`.
+
+`WM_INITDIALOG` builds the strip:
+
+- It copies AGE's title and sets AGERC's `IDI_ICON1` (`WM_SETICON`).
+- It sets style `0x91cb0000`, a maximized popup with a caption, system menu and minimize/maximize boxes.
+- It calls `SetWindowPos` to (0,0), `SM_CXSCREEN` wide and `SM_CYCAPTION + 2·SM_CYFIXEDFRAME + SM_CYMENU` tall
+  (49 rows here).
+- It refreshes and prunes its own copy of menu 110, as the bar's are.
+
+A capture of the strip on Windows 10 at 96 dpi (`PrintWindow`, inactive look, 3440×49) gives this layout:
+
+- **Rows.** Row 0 is frame. Rows 1–25 are the white caption and rows 26–45 the menu bar; its bottom lines are
+  rows 44 (`f2`) and 45 (`f0`). Row 46 is frame. Rows 47–48 are transparent.
+- **Columns.** Columns 0–1 and the last two are transparent; the frame is at column 2 and at W−3.
+- **Caption.** The 16×16 icon is at (5,5) and the title strokes start at x 27. The caption glyphs are 10 px wide:
+  the minimize line at W−122 (row 13), the restore glyph at W−77 (rows 8–17; two 8 px squares) and the ✕ at W−31.
+- **Menu.** The menu text starts at x 10. ﾍﾙﾌﾟ is right-justified and ends at W−11.
+- **Colours.** The inactive look has frame `0x2b2b2b` and caption text `0x999999`.
+
+`agerc_system_menu_strip_hide@0x10002a40` hides the strip in three steps:
+
+1. `ShowWindow(SW_HIDE)`.
+2. IAGEService `+0x30` (`iage_service_system_menu_strip_hidden@0x45f540` → `system_menu_strip_hidden_resume@0x407c70`):
+   this clears run-state bit `0x400000`, resumes presentation and turns input polling back on.
+3. It clears bit `0x10`.
+
+The dialog procedure handles these messages:
+
+- `WM_ACTIVATE` inactive hides the strip while it shows (IAGEService `+0xc4`, run-state `0x400000`).
+- `SC_MINIMIZE` hides it, calls IAGEService `+0x9c(1, 0)` (`iage_service_suspend_on_minimize@0x45fa90`), then forwards
+  `SC_MINIMIZE` to AGE.
+- `SC_RESTORE` (the restore button or a double click on the caption) hides it, then calls `+0x1c(1)`.
+- `SC_KEYMENU` `0xd` hides it, then switches to the other mode.
+- `IDCANCEL` (Escape, the close button, Alt+F4) and `0x9c41` post `WM_CLOSE(0)` to AGE, then hide it. `0x9c6b` hides
+  it, then posts `WM_CLOSE(1)`. Every other command goes to `agerc_menu_command`.
+- `WM_ENTERMENULOOP` refreshes the menu and redraws it. `WM_MOVING` keeps the strip in place, and
+  `WM_GETMINMAXINFO` keeps its height.
+
+In fullscreen (IAGEService `+0x08` returns 0), `agerc_menu_command` hides the strip before its command for these ids:
+`0x9c43`–`0x9c45`, `0x9c47`, `0x9c52`–`0x9c55`, `0x9c5a`, `0x9c5b`, `0x9c5d`, `0x9c5e`, `0x9c62`–`0x9c65`,
+`0x9c68`, `0x9c6a` and `0x9c6c`–`0x9c6f`. It brackets its dialogs with `+0x14`/`+0x18`. `0x9c46` saves the
+screenshot first, then hides the strip.
+
+**Showing the strip.** `system_menu_strip_show@0x407bd0` has two callers:
+
+- The top-edge dwell ("System-menu top-edge reveal delay" below).
+- `WM_SYSKEYDOWN` `VK_MENU` in fullscreen. This shows the strip at once, turns input polling off, clears the dwell
+  and kills timer 1.
+
+The function does four things:
+
+1. It freezes the presented frame (`engine_suspend_presentation_for_dialog`).
+2. It sets run-state bit `0x400000`.
+3. It calls host command 4.
+4. With draw mode 1 and `display:PresentInterval` nonzero, it saves the system's selection-fade setting and turns
+   it off (`SPI_SETSELECTIONFADE`). The hide restores it.
+
+The following was observed natively on 2026-11-06. While the strip shows, the VM keeps running and the screen keeps
+its last frame. Input polling is off. A click on the game deactivates the strip, so the strip hides, and the click
+then reaches the game. While the strip's menu loop runs, the game holds, as it does for the bar's.
+
+**Port** (`godot/Main.ScreenMode.cs`, `godot/SystemMenuStrip.cs`, `VirtualMachine.ScreenMode.cs`):
+
+- **Switches.** ﾌﾙｽｸﾘｰﾝ, ｳｲﾝﾄﾞｳ, Alt+Enter, the maximize box, the strip's restore button and op `0x2cf` all switch.
+  Op `0x2cf` asks the host (`ILifecycleHost.RequestScreenMode`), and the frontend switches at its next frame. A
+  switch to the current mode does nothing, and `display:ForceScreen` 1 keeps the window. Each switch queues
+  `CALLBACK_WINDOW.BIN` (`VirtualMachine.RequestWindowCallback`). It runs where `CALLBACK_SETTING.BIN` would: at the
+  next instruction boundary, or inside a polling text wait.
+- **Startup.** The game starts in the mode `display:ScreenMode` names. A run without `SYS4REG.INI` (self-test,
+  read-only persistence) or with `--windowed` starts windowed.
+- **Fullscreen.** The port uses a modern fullscreen rather than native's exclusive mode: a borderless window over
+  the monitor, with the canvas scaled to fit, its aspect kept and centred. It ignores `VirtualFullScreen`,
+  `AspectMode`, `FullScreenWidth`/`Height` and `FullScreenBit`, and never changes the display mode.
+- **The strip's drawing.** The port draws the strip in game pixels over the top of the canvas, as native's default
+  800×600 fullscreen shows it (`SM_CXSCREEN` is then the canvas width). It uses the active look: frame `0x191919`
+  and black text. Its geometry matches the capture above. The text differs from native only in ClearType fringes,
+  as the windowed bar's does.
+- **The strip's behaviour.** It shows from the top-edge dwell (the screen's top two rows, 100 ms ticks) or from
+  Alt. It freezes the presented frame without holding the VM. It takes the keyboard. A click elsewhere hides it and
+  reaches the game. Its menu loop holds the VM as the bar's does.
+- **Persistence.** `display:ScreenMode` is written at each switch. Native writes it at exit, and the final file is
+  the same.
+- **Not modelled.** The `ctx+0x55118` stamp is not modelled. The selection-fade setting is never touched, because it
+  is a system-wide setting. The hover colours of the minimize and restore buttons (`0xe5e5e5`, pressed `0xcccccc`)
+  are Windows 10's defaults, not captured from native.
+- **Driver.** In fullscreen, the `menu` step uses the strip's menu, which must be showing. Natively the driver
+  refreshes it with `WM_ENTERMENULOOP` and posts `WM_COMMAND` to the strip.
+- **Scenario.** `tools/drive/scenarios/himegari-fullscreen.steps` passes on both targets: ﾌﾙｽｸﾘｰﾝ, the dwell, then
+  ｳｲﾝﾄﾞｳ from the strip. Both `SYS4REG.INI` files end with `ScreenMode=1`.
+
 ### Native system-menu reentrancy guard — opcode `0x142` (2026-07-29)
 
 `op_0x142_set_system_menu_actions_enabled@0x421fe0` is a direct one-operand setter for
@@ -1652,10 +1783,9 @@ IAGEService getter, AGERC menu refresher, and typed EngineCtx field are annotate
 programs.
 
 The port retains the complete signed dword on `VirtualMachine`, initializes it to one, replaces it on each
-`0x142` call, and restores one during opcode-`0x9` root scene-context reset. It deliberately does not call
-an `IHost` service: the Godot frontend has no AGERC/native application menu to gray, and treating the flag
-as a game-input or persistence switch would broaden its native effect. `SystemMenuActionsEnabled` exposes
-the retained value for a future equivalent frontend menu.
+`0x142` call, and restores one during opcode-`0x9` root scene-context reset. It calls no `IHost` service: treating
+the flag as a game-input or persistence switch would broaden its native effect. The Godot frontend's menu refresh
+reads it (`VmMenuState.SystemMenuEnabled`) and grays the same items, on the bar and on the fullscreen strip.
 
 ### System-menu top-edge reveal delay — opcodes `0x148` / `0x149` (2026-07-29)
 
@@ -1680,24 +1810,17 @@ The unsigned comparison preserves the setter's complete dword: a negative script
 long effective delay rather than being clamped. The independent Alt-key path calls the same reveal worker
 immediately and does not consult this field.
 
-`system_menu_strip_show@0x407bd0` prepares/suspends presentation, marks `TIMER_SHOWMENU` active, and calls
-AGERC host command 4. In the shipped DLL, `agerc_system_menu_strip_dialog_proc@0x10003c20` owns that
-modeless top strip: it copies the AGE window's title and icon, sizes itself to the screen width and one
-menu-bar height, refreshes the settings/save action state described for opcode `0x142`, and dispatches its
-menu commands. `agerc_system_menu_strip_hide@0x10002a40` hides the retained window and clears AGERC bit
-`0x10`, allowing a later dwell to reveal it again.
+`system_menu_strip_show@0x407bd0` freezes presentation, sets run-state bit `0x400000` (`TIMER_SHOWMENU`) and
+calls AGERC host command 4, which shows AGERC's top-edge strip: a maximized captioned window as wide as the
+screen, holding the title, the caption buttons and menu 110 ("Screen mode" above has its layout and messages).
+`agerc_system_menu_strip_hide@0x10002a40` hides it and clears AGERC bit `0x10`, so a later dwell can reveal it
+again. The handlers, timer/reveal workers, EngineCtx field, AGERC dispatcher/dialog/hide workers, and key globals
+are named/commented in the saved Ghidra programs.
 
-The port has no equivalent host application-menu strip, so this is an isolated scene-context state slice:
-retain the unsigned value, reset it to zero on root scene reload, expose the exact getter, and leave game
-input, the script-owned right-click menu, and settings persistence unchanged. The handlers, timer/reveal
-workers, EngineCtx field, AGERC dispatcher/dialog/hide workers, and key globals are named/commented in the
-saved Ghidra programs.
-
-The VM implementation retains the field as a `uint`, sign-extends the getter's dword into the existing
-script integer-cell representation, and restores zero in the opcode-`0x9` scene reset. It exposes
-`SystemMenuShowDelayMilliseconds` for a future frontend consumer but deliberately makes no `IHost` call.
-Focused coverage includes SYSTEM4's 1000-millisecond setting/getter pair, a high-bit dword round trip, and
-root-reload lifetime.
+The VM retains the field as a `uint`, sign-extends the getter's dword into the existing script integer-cell
+representation, and restores zero in the opcode-`0x9` scene reset. It makes no `IHost` call: the Godot frontend
+reads `SystemMenuShowDelayMilliseconds` for its own dwell (`godot/Main.ScreenMode.cs`). Focused coverage includes
+SYSTEM4's 1000-millisecond setting/getter pair, a high-bit dword round trip, and root-reload lifetime.
 
 The same route exposed an independent publication-atomicity requirement. Each tile step reaches
 `FIELD@0x4eb2 -> 0x9225`, which calls `DRAWMAP`, `DRAWOBJ`, and `DRAWMINIMAP`. `DRAWMAP` first erases its

@@ -1,0 +1,23 @@
+# Fullscreen and back (docs/engine-re.md, "Screen mode") on the title screen. ﾌﾙｽｸﾘｰﾝ (0x9c5a) detaches the menu bar
+# and covers the monitor; the pointer held on the top edge past op 0x149's delay (Himegari: 1000 ms) shows AGERC's
+# system-menu strip, and its ｳｲﾝﾄﾞｳ (0x9c5b) brings the window back. Each switch runs CALLBACK_WINDOW.BIN and stores
+# display:ScreenMode, so SYS4REG.INI ends with ScreenMode=1 on both targets.
+# The game takes over the screen while fullscreen: native AGE runs with display:VirtualFullScreen 1 (the sandbox
+# setting in tools/drive/himegari.toml), a desktop-sized window instead of a display mode change.
+#   py -3.11 -X utf8 tools/drive.py native start
+#   py -3.11 -X utf8 tools/drive.py native run tools/drive/scenarios/himegari-fullscreen.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 2
+shot fullscreen-0-window
+menu fullscreen                         # ﾌﾙｽｸﾘｰﾝ
+wait 2
+shot fullscreen-1-fullscreen
+move 400 0                              # the top edge arms the dwell
+wait 0.5
+move 401 0
+wait 1.5                                # past the delay: the strip shows
+menu windowed                           # ｳｲﾝﾄﾞｳ, from the strip's menu
+wait 2
+shot fullscreen-2-window
+expect script=TITLE

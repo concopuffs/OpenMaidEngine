@@ -920,6 +920,9 @@ public sealed partial class GodotAdvHost
         WakeAllWaits();
     }
 
+    /// <summary>Op 0x2cf: Main switches at its next frame (Main.ScreenMode.cs).</summary>
+    public void RequestScreenMode(bool windowed) => _main.RequestScreenModeFromScript(windowed);
+
     public void InterruptForRootReload()
     {
         _rootReloadInterrupt = true;

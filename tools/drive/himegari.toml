@@ -29,6 +29,7 @@ settings_file = "SYS4REG.INI"
 
 [sandbox.settings]
 "display.ScreenMode" = 1   # windowed; a new profile starts fullscreen, which takes over the display and captures black
+"display.VirtualFullScreen" = 1   # native: a fullscreen switch scales into a desktop-sized window, no display mode change
 
 [sandbox.quiet]            # also written unless --sound
 "sound.Volume0" = 0        # master volume 0 basis points: the audio paths still run, silently

@@ -2699,6 +2699,17 @@ Scripts place declaration chains immediately after opcode 0x259 clears both fiel
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x25a`; scope=Himegari SYS4422. Ghidra matching handlers: SYS4422 op_0x25a_set_display_background_color@0x4253a0 and SYS4433 @0x423120 store persistent background mode 1 and the operand RGB value, then call display_recreate_background_color_surface (SYS4422 0x479a90; SYS4433 0x4803d0) when the active display mode permits. That worker supplies the logical canvas width/height, RGB value, and backend mode to gfx_create_filled_canvas_surface, which creates a surface and fills its full rectangle at alpha 255. Kamidori SYSTEM4.BIN@0x1f3 sets black (0) during natural startup.
 
+### 0x2cf `request-screen-mode` (request-screen-mode, argc 1)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **summary:** (mode) - switch the screen mode: 1 to a window, 0 to fullscreen; other values do nothing. A switch to the current mode does nothing; otherwise the switch stores display:ScreenMode and launches CALLBACK_WINDOW.BIN.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2cf`; scope=Himegari SYS4422. Ghidra /v2: op_0x2cf_handler@0x425370 reads operand 1 and, when it is 0 or 1, calls display_toggle_screen_mode_and_menu_bar@0x412df0 with it. That switch returns at once when its target equals display_windowed (ctx+0x9a298), refuses to leave a window while display:ForceScreen is 1, sets the window style, attaches (window) or detaches (fullscreen) menu 110, flips display_windowed, stores display:ScreenMode, stamps ctx+0x55118 and calls script_launch_by_name(CALLBACK_WINDOW.BIN). No Himegari or Kamidori script calls it.
+
+Port status (2026-11-06): the VM passes 0 and 1 to IHost.RequestScreenMode; the Godot frontend performs the switch as the menu does (Main.ScreenMode.cs) and queues CALLBACK_WINDOW.BIN through VirtualMachine.RequestWindowCallback. Neither shipped corpus calls the op.
+
 ### 0x2da `register-extended-numeric-glyph-style` (u004234E0, argc 8)
 - **observed by:** kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
@@ -3112,9 +3123,9 @@ Port status (2026-07-29): implemented with opcode 0x149. The getter writes the r
 - **summary:** (milliseconds) - replace the unsigned dwell threshold before pointer hover at the top two client rows reveals AGERC's modeless system-menu strip. Scene reset defaults to 0; SYSTEM4 sets 1000.
 - **operand access:** `1` read
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x149`; scope=Himegari SYS4422. Ghidra /v2: op_0x149_set_system_menu_show_delay@0x422050 directly stores operand 1 at EngineCtx+0x5511c; scene_context_init_reset writes 0 and paired op_0x148_get_system_menu_show_delay@0x429c70 reads it. system_menu_top_edge_dwell_timer_tick@0x486280 compares the field unsigned against timeGetTime elapsed while WM_MOUSEMOVE is in client y=0..1, then requires no left/right button, windowed ScreenMode, and g_pfnAgercHostCallback(-1)==0 before system_menu_strip_show@0x407bd0 invokes AGERC command 4. The handler uses the complete dword. SYSTEM4's sole site sets 1000 immediately before the unrelated tiled-surface edge setting.
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x149`; scope=Himegari SYS4422. Ghidra /v2: op_0x149_set_system_menu_show_delay@0x422050 directly stores operand 1 at EngineCtx+0x5511c; scene_context_init_reset writes 0 and paired op_0x148_get_system_menu_show_delay@0x429c70 reads it. system_menu_top_edge_dwell_timer_tick@0x486280 compares the field unsigned against timeGetTime elapsed while WM_MOUSEMOVE is in client y=0..1, then requires no left/right button, fullscreen (display_windowed 0; corrected 2026-11-05), and g_pfnAgercHostCallback(-1)==0 before system_menu_strip_show@0x407bd0 invokes AGERC command 4. The handler uses the complete dword. SYSTEM4's sole site sets 1000 immediately before the unrelated tiled-surface edge setting.
 
-Port status (2026-07-29): implemented as unsigned scene-context state. The setter preserves all 32 operand bits, root scene reload restores zero, and the current Godot frontend deliberately adds no host effect because it has no AGERC application-menu strip.
+Port status (2026-11-06): implemented as unsigned scene-context state. The setter preserves all 32 operand bits and root scene reload restores zero. The Godot frontend reads it as the dwell before the fullscreen top-edge strip appears (Main.ScreenMode.cs).
 
 ### 0x19a `get-message-skip` (u00414E50, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -4834,15 +4845,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2ce`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2cf `u0042B617` (u0042B617, argc 1)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2cf`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2d0 `u0042B940` (u0042B940, argc 3)
 - **observed by:** none in recorded corpora

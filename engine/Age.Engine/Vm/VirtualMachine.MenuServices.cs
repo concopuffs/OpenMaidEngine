@@ -19,7 +19,7 @@ public readonly record struct VmMessageSettings(int MessageSpeed, int MesWinAlph
 /// </summary>
 public sealed partial class VirtualMachine
 {
-    private enum MenuToggle { MessageSkip, AutoMessage, ReadMessageSkip, MessageSettings }
+    private enum MenuToggle { MessageSkip, AutoMessage, ReadMessageSkip, MessageSettings, ScreenModeSwitched }
 
     private readonly record struct MenuRequest(MenuToggle Kind, VmMessageSettings Settings = default);
 
@@ -78,7 +78,8 @@ public sealed partial class VirtualMachine
     }
 
     /// <summary>Apply queued menu toggles on the VM thread, then queue CALLBACK_SETTING.BIN (each AGERC toggle command,
-    /// and the 設定 dialog's OK, launches it after the service calls).</summary>
+    /// and the 設定 dialog's OK, launches it after the service calls). A screen-mode switch queues CALLBACK_WINDOW.BIN
+    /// instead.</summary>
     private void ApplyMenuToggles()
     {
         if (!_menuTogglesPending) return;
@@ -91,6 +92,9 @@ public sealed partial class VirtualMachine
                 case MenuToggle.AutoMessage: ToggleAutoMessageFromMenu(); break;
                 case MenuToggle.ReadMessageSkip: ToggleReadMessageSkipFromMenu(); break;
                 case MenuToggle.MessageSettings: ApplyMessageSettings(request.Settings); break;
+                case MenuToggle.ScreenModeSwitched:
+                    _windowCallbackPending = true;
+                    continue;
             }
             _settingCallbackPending = true;
         }
@@ -168,18 +172,17 @@ public sealed partial class VirtualMachine
         RefreshAdvReadSkipState();
     }
 
-    /// <summary>Run the queued CALLBACK_SETTING.BIN from a text wait's input service, nested in the wait as native's
-    /// launch queue runs it from the ADV tick. True when it ran.</summary>
+    /// <summary>Run a queued CALLBACK_SETTING.BIN or CALLBACK_WINDOW.BIN from a text wait's input service, nested in
+    /// the wait as native's launch queue runs it from the ADV tick. True when one ran.</summary>
     private bool ServiceWaitSettingCallback()
     {
         ApplyMenuToggles();
-        if (!_settingCallbackPending || _statementBlockActive) return false;
-        _settingCallbackPending = false;
+        if (_statementBlockActive || TakePendingCallbackScript() is not { } callback) return false;
         bool waitPolling = _advTextWaitPolling;
         _advTextWaitPolling = false;
         try
         {
-            switch (RunSettingCallback())
+            switch (RunCallbackScript(callback))
             {
                 case FrameOutcome.RootReload: throw new RootReloadRequestedException();
                 case FrameOutcome.ExitRequested: throw new ProcessExitRequestedException();

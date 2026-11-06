@@ -44,15 +44,14 @@ public sealed partial class VirtualMachine
     }
 
     /// <summary>The services native's tick runs before dispatching an op: the click-cancel machine (with
-    /// CANCELMESSKIPONCLICK set), queued native-menu toggles, then any queued CALLBACK_SETTING.BIN launch. Non-null
-    /// only when the callback ends the enclosing frame.</summary>
+    /// CANCELMESSKIPONCLICK set), queued native-menu toggles, then any queued CALLBACK_SETTING.BIN or
+    /// CALLBACK_WINDOW.BIN launch. Non-null only when the callback ends the enclosing frame.</summary>
     private FrameOutcome? ServiceInstructionBoundary()
     {
         if (_o.CancelMessageSkipOnClick != 0) ServiceMessageSkipClickCancel();
         ApplyMenuToggles();
-        if (!_settingCallbackPending || _statementBlockActive) return null;
-        _settingCallbackPending = false;
-        return RunSettingCallback();
+        if (_statementBlockActive || TakePendingCallbackScript() is not { } callback) return null;
+        return RunCallbackScript(callback);
     }
 
     /// <summary>One adv_interpreter_tick pass of the click-cancel machine.</summary>
@@ -94,9 +93,9 @@ public sealed partial class VirtualMachine
         if (_o.CancelMessageSkipOnClick == 2) _settingCallbackPending = true;
     }
 
-    private FrameOutcome? RunSettingCallback()
+    private FrameOutcome? RunCallbackScript(string name)
     {
-        Script? callback = _provider?.GetByName(SettingCallbackScript);
+        Script? callback = _provider?.GetByName(name);
         if (callback == null) return null;
         if (_depth >= _o.CallDepthCap)
         {

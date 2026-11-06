@@ -679,6 +679,11 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--no-menu-bar` — leave out the native menu bar. By default a game whose install has AGERC.DLL gets AGERC's menu
   110 above the game canvas, drawn as native's Win32 bar: the window is 20 px taller, and the canvas, the cursor
   mapping and the dialogs sit below the bar (`engine-re.md`, "Native menu bar").
+- `--windowed` — start in a window whatever `display:ScreenMode` says. The port otherwise starts in the mode it
+  names, and a new profile's 0 is fullscreen: a borderless window over the monitor with the canvas scaled to fit
+  (`engine-re.md`, "Screen mode"). A run without `SYS4REG.INI` (self-test, read-only persistence) also starts
+  windowed. ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ, Alt+Enter and the maximize box switch while the game runs, and each switch stores
+  `display:ScreenMode`.
 - `--desktop-dir DIR` — use DIR as the Desktop folder, where F1 and 表示画面を保存 write `CG%6.6d.BMP` while
   `system:SaveBMPPath` is empty and which 画像の保存場所 preselects for Himegari. The driver points it into its
   sandbox, as it redirects native AGE's Desktop.
@@ -858,8 +863,8 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `speed FACTOR` | port: run the frame clock 0.05–8 times as fast |
 | `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, AGERC's dialogs and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs, the folder picker, ﾊﾞｰｼﾞｮﾝ情報 and 設定). AGERC's dialogs list every static text and button of the dialog and its pages, hidden pages included, the topmost dialog first; `answer` presses the first match from the topmost dialog down, and a check box toggles. The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
 | `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
-| `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground` |
-| `menu NAME\|ID` | choose a menu-bar command as a user does. The menu refreshes first, and a grayed item fails the step. Names: `exit`, `save`, `load`, `version`, `save-screen`, `image-folder`, `fullscreen`, `windowed`, `skip`, `hide`, `auto`, `read-skip`, `sound-settings`, `message-settings`, `system-info`, `other-settings`; or a numeric `WM_COMMAND` id. The result prints the item's `label` and whether it was `checked` before. Native sends `WM_INITMENU` (AGE has AGERC refresh the items), reads the item, then posts `WM_COMMAND`; the port runs the same refresh and command on its drawn bar |
+| `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode, restoring the screen mode the game was in, and its result also reads `windowed`. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground` |
+| `menu NAME\|ID` | choose a menu-bar command as a user does. The menu refreshes first, and a grayed item fails the step. Names: `exit`, `save`, `load`, `version`, `save-screen`, `image-folder`, `fullscreen`, `windowed`, `skip`, `hide`, `auto`, `read-skip`, `sound-settings`, `message-settings`, `system-info`, `other-settings`; or a numeric `WM_COMMAND` id. The result prints the item's `label` and whether it was `checked` before. Native sends `WM_INITMENU` (AGE has AGERC refresh the items), reads the item, then posts `WM_COMMAND`; the port runs the same refresh and command on its drawn bar. In fullscreen the menu is the top-edge strip's, so the step fails unless the strip shows (hold the pointer on row 0 past op `0x149`'s delay first); native then refreshes the strip with `WM_ENTERMENULOOP` and posts `WM_COMMAND` to it |
 | `close [timeout=S]` | quit the game the way its own quit does (native `WM_CLOSE` wParam=1, which saves the shared profile), then the session ends |
 
 A failing step stops the request, and `do`/`run` exit 1. Results also carry what the game did meanwhile: a script
@@ -952,6 +957,11 @@ six pages and loads. Then:
 Both targets match at every checkpoint. The `menu-*` shots also compare the control strip; they differ only in the
 wait indicator's phase.
 
+`himegari-fullscreen.steps` switches to fullscreen on the title screen with ﾌﾙｽｸﾘｰﾝ, holds the pointer on the top edge
+until the system-menu strip shows, and chooses ｳｲﾝﾄﾞｳ from the strip. Both targets pass, and both `SYS4REG.INI` files
+end with `ScreenMode=1` after `stop`. The native run covers the screen for a few seconds. Native's fullscreen `shot`
+is its desktop-sized client, not a canvas image (`engine-re.md`, "Screen mode").
+
 `himegari-screenshot.steps` saves screenshots on SC0000 pages 1 and 2, with 表示画面を保存 and F1, and writes
 `CG000000`–`CG000002.BMP` into the sandbox Desktop. It cancels the 画像の保存場所 folder picker, then accepts it. Himegari
 preselects the Desktop, so `SaveBMPPath` becomes the sandbox Desktop and `CG000003.BMP` goes there. Compare each BMP
@@ -996,7 +1006,8 @@ available there.
 target's sandbox can seed the other's.
 - Before launch the driver writes the profile's `[sandbox.settings]` into the sandbox `SYS4REG.INI`. For Himegari that
   is windowed `display.ScreenMode=1`: a fresh profile starts fullscreen, which takes over the display and captures
-  black.
+  black. It also sets `display.VirtualFullScreen=1`, so a native switch to fullscreen covers the desktop with a
+  window instead of changing the display mode.
 - It also writes `[sandbox.quiet]` (master volume 0, so the audio paths still run) unless you pass `--sound`.
 - Each `--set SECTION.KEY=VALUE` is written last, so it overrides both.
 - Port: the sandbox is the port's `--data-root`.

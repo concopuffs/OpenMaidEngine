@@ -11,22 +11,20 @@ it; git history keeps the record.
 ## Engine fidelity
 
 - **Native menu bar: the remaining commands (AGERC menu 110).** The port draws the pruned bar and runs ｹﾞｰﾑ>終了,
-  画像の保存, the four ﾒｯｾｰｼﾞ toggles, ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報 and the 設定 dialog's four commands as native does
-  (`engine-re.md`, "Native menu bar"). It grays everything else. Still missing:
-  - The menu's own radio groups under 設定: 文字表示, ﾏｳｽの右ｸﾘｯｸ時の動作, ﾒｯｾｰｼﾞｽﾋﾟｰﾄﾞ, ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳの透過,
-    BGMの設定 and SEの設定 (`0x9c49`–`0x9c59`, `0x9c5d`, `0x9c5e`).
-  - ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (`0x9c5a`/`0x9c5b`), and in fullscreen the top-edge strip that shows the bar (op `0x149` sets
-    its delay; the port keeps that state and op `0x142`'s).
-  - The right-click ﾒｯｾｰｼﾞ popup under `message:RMouseEvent=2`.
+  画像の保存, the four ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (with the fullscreen top-edge strip), ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報 and
+  the 設定 dialog's four commands as native does (`engine-re.md`, "Native menu bar" and "Screen mode"). It grays
+  everything else. Still missing:
   - Keyboard focus without a dropdown: Alt pressed and released, or F10, selects the bar; bit `0x200` of op
     `0x10f`'s mask swallows F10. The port's keyboard access starts only from Alt with an access key, which opens
     that dropdown.
   - Smaller look differences. Native popups may extend past the game window (the ﾍﾙﾌﾟ popup spans x 744..989), but
     the port clamps them inside it. Latin glyphs are drawn without ClearType's exact rasterization. The 設定 tab
-    control is `TCS_HOTTRACK`, and native's hover look is neither captured nor drawn. Page 101 (`sound:Music`'s radio
-    buttons, for `NOSETMUSIC=0`) is not drawn; both games have 3 and get page 102.
+    control is `TCS_HOTTRACK`, and native's hover look is neither captured nor drawn. The fullscreen strip's
+    minimize and restore buttons use Windows 10's default hover colours, not captured ones.
 
-  Done when each command reaches the same native service or dialog, or is closed as out of scope.
+  Done when each command reaches the same native service or dialog, or is closed as out of scope. Closed as out of
+  scope (2026-11-06): the 設定 radio groups, the right-click ﾒｯｾｰｼﾞ popup and 設定 page 101, which neither shipped
+  game can reach (`engine-re.md`, "Native menu bar", "Out of scope").
 - **Input-latch cases the port does not model.** The port's latch (`VirtualMachine.InputLatch`) covers effects,
   sleeps, the ops between waits, the coroutine yield, and every consumer and flush point that SC0000 reaches
   (`engine-re.md`, "Effect skipping and the input latch"). Still open:
@@ -40,6 +38,12 @@ it; git history keeps the record.
     triggers in the port. Himegari never runs those ops; Kamidori is unchecked.
 
   Done when each case is driven natively and the port matches, or the case is shown unreachable in both games.
+- **One unexplained port crash on exit (2026-11-06).** A driven port exited with `0xC0000005` on `drive.py port
+  stop`. That session had switched to fullscreen and shown the top-edge strip. An injected click had then landed in
+  the side bar outside the canvas: the driver passed viewport coordinates as window coordinates, fixed the same day.
+  Seven later sessions exited 0. They covered stops in fullscreen and while windowed, and clicks in the side bars.
+  Windows logged no Application Error event, and the next start overwrote `godot.log`. Done when a crash recurs with
+  its log kept and is fixed, or after a period of driven runs without one.
 - **Kamidori's furigana is unverified.** The port draws op `0x196`'s ruby by Himegari's rule (`engine-re.md`,
   "Furigana"). Kamidori runs the op 3,054 times, but its SYS4433 engine has neither of Himegari's two ruby code
   sequences (the gap division and the centring), and its SYS4INI trailer has `RUBYSHIFTMODE`. Done when Kamidori's

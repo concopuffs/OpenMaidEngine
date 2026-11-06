@@ -132,6 +132,10 @@ public partial class NativeMenuBar : Control
     public IReadOnlyList<NativeMenuItem> Items => _items;
     public bool IsOpen => _openBar >= 0;
 
+    /// <summary>The screen in the bar's own coordinates, which dropdowns stay inside. Null: the bar's own rectangle
+    /// (the windowed bar covers the whole viewport). The fullscreen strip's bar sits below its caption.</summary>
+    public Rect2I? Screen { get; set; }
+
     /// <summary>The window is the active window; an inactive window draws its bar labels gray.</summary>
     public void SetActive(bool active)
     {
@@ -198,15 +202,16 @@ public partial class NativeMenuBar : Control
 
     // ---- input ----
 
-    /// <summary>Take an input event before the game does. True when the menu consumed it.</summary>
+    /// <summary>Take an input event before the game does. True when the menu consumed it. Positions are viewport
+    /// coordinates; the bar measures them from its own origin.</summary>
     public bool HandleInput(InputEvent e)
     {
         switch (e)
         {
             case InputEventMouseMotion motion:
-                return OnMotion(ToPoint(motion.Position));
+                return OnMotion(ToPoint(motion.Position - GlobalPosition));
             case InputEventMouseButton button:
-                return OnButton(button, ToPoint(button.Position));
+                return OnButton(button, ToPoint(button.Position - GlobalPosition));
             case InputEventKey key:
                 return OnKey(key);
             default:
@@ -529,12 +534,12 @@ public partial class NativeMenuBar : Control
         int height = y + PopupInset;
         // The port's window is the screen: a dropdown that would leave it moves back inside, and a submenu that
         // would leave on the right opens on its parent's left instead.
-        int viewportWidth = (int)Size.X, viewportHeight = (int)Size.Y;
+        Rect2I screen = Screen ?? new Rect2I(0, 0, (int)Size.X, (int)Size.Y);
         int x = at.X;
-        if (x + width > viewportWidth)
-            x = parent is { } p ? p.Position.X - width + SubmenuOverlap : viewportWidth - width;
-        x = Math.Max(0, x);
-        int top = Math.Max(0, Math.Min(at.Y, viewportHeight - height));
+        if (x + width > screen.End.X)
+            x = parent is { } p ? p.Position.X - width + SubmenuOverlap : screen.End.X - width;
+        x = Math.Max(screen.Position.X, x);
+        int top = Math.Max(screen.Position.Y, Math.Min(at.Y, screen.End.Y - height));
         return new Dropdown
         {
             Items = items,

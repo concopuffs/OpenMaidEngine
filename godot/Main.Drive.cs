@@ -84,21 +84,26 @@ public partial class Main
         return true;
     }
 
-    private Vector2 NativeToViewport(int x, int y)
+    /// <summary>Where a native client pixel is in the window: Input.ParseInputEvent takes window coordinates, which
+    /// the root viewport maps through its stretch (fullscreen scales the canvas and centres it).</summary>
+    private Vector2 NativeToWindow(int x, int y)
     {
         Vector2 size = GetViewport().GetVisibleRect().Size;
+        Vector2 viewport;
         if (size.X <= 0 || size.Y <= 0 || _screenWidth <= 0 || _screenHeight <= 0)
-            return new Vector2(x, y + _menuBarHeight);
-        // The centre of the native pixel, so ToNativeScreen's floor maps it back exactly. Client coordinates start
-        // below the menu bar.
-        return new Vector2((x + 0.5f) * size.X / _screenWidth,
-                           (y + _menuBarHeight + 0.5f) * size.Y / (_screenHeight + _menuBarHeight));
+            viewport = new Vector2(x, y + _menuBarHeight);
+        else
+            // The centre of the native pixel, so ToNativeScreen's floor maps it back exactly. Client coordinates
+            // start below the menu bar.
+            viewport = new Vector2((x + 0.5f) * size.X / _screenWidth,
+                                   (y + _menuBarHeight + 0.5f) * size.Y / (_screenHeight + _menuBarHeight));
+        return GetViewport().GetScreenTransform() * viewport;
     }
 
     private void InjectDrivePointer(int x, int y)
     {
         _drivePointer = (x, y);
-        Vector2 position = NativeToViewport(x, y);
+        Vector2 position = NativeToWindow(x, y);
         Input.ParseInputEvent(new InputEventMouseMotion
         {
             Device = DriveInputDevice,
@@ -117,7 +122,7 @@ public partial class Main
             _ => 0,
         };
         if (bit != 0) _driveButtonMask = pressed ? _driveButtonMask | bit : _driveButtonMask & ~bit;
-        Vector2 position = NativeToViewport(x, y);
+        Vector2 position = NativeToWindow(x, y);
         Input.ParseInputEvent(new InputEventMouseButton
         {
             Device = DriveInputDevice,
@@ -201,14 +206,17 @@ public partial class Main
         /// (a minimized window) ends the process.</summary>
         public void RequestClose() => Callable.From(main.RequestUnforcedClose).CallDeferred();
 
-        /// <summary>The window manager's minimize and restore; restoring leaves the window's z-order to the launcher
-        /// (drive_port.py sends it back to the bottom).</summary>
+        /// <summary>The window manager's minimize and restore, which brings back the screen mode the game was in;
+        /// restoring leaves the window's z-order to the launcher (drive_port.py sends it back to the bottom).</summary>
         public System.Text.Json.Nodes.JsonObject Window(bool minimize)
         {
-            DisplayServer.WindowSetMode(minimize ? DisplayServer.WindowMode.Minimized : DisplayServer.WindowMode.Windowed);
+            DisplayServer.WindowSetMode(minimize ? DisplayServer.WindowMode.Minimized
+                                        : main._windowed ? DisplayServer.WindowMode.Windowed
+                                        : DisplayServer.WindowMode.Fullscreen);
             return new System.Text.Json.Nodes.JsonObject
             {
                 ["minimized"] = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Minimized,
+                ["windowed"] = main._windowed,
             };
         }
 

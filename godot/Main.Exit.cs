@@ -51,6 +51,7 @@ public partial class Main
                 break;
             case NotificationApplicationFocusOut:
                 SetMenuBarActive(false);   // an inactive window grays its bar; deactivation ends a menu loop
+                HideMenuStrip("the window lost focus");   // WM_ACTIVATE(WA_INACTIVE) on the strip
                 break;
         }
     }

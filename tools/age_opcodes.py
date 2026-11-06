@@ -436,7 +436,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x02cc: ('2CC', 1),
     0x02cd: ('2CD', 1),
     0x02ce: ('u0042B616', 1),
-    0x02cf: ('u0042B617', 1),
+    0x02cf: ('request-screen-mode', 1),
     0x02d0: ('u0042B940', 3),
     0x02d1: ('u0042B950', 3),
     0x02d2: ('u0042B960', 3),

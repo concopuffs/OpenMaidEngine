@@ -201,8 +201,8 @@ class Win32(core.Windows):
     def dialogs(self, pid: int) -> list[dict[str, Any]]:
         boxes = []
         for hwnd in self.top_windows(pid):
-            if self._class(hwnd) != "#32770":
-                continue
+            if self._class(hwnd) != "#32770" or self.has_menu(hwnd):
+                continue   # a dialog with a menu bar is AGERC's fullscreen system-menu strip, not a box
             children: list[tuple[int, str, str]] = []
 
             def child(handle, _):
@@ -221,9 +221,23 @@ class Win32(core.Windows):
     def post(self, hwnd: int, message: int, wparam: int, lparam: int) -> None:
         self.user32.PostMessageW(hwnd, message, wparam, lparam)
 
+    def has_menu(self, hwnd: int) -> bool:
+        self.user32.GetMenu.argtypes = [self.wintypes.HWND]
+        self.user32.GetMenu.restype = self.wintypes.HMENU
+        return bool(self.user32.GetMenu(hwnd))
+
+    def menu_window(self, pid: int, hwnd: int) -> int | None:
+        """The window holding the game's menu: AGE's own while windowed; in fullscreen, which detaches the bar, AGERC's
+        top-edge strip (a #32770 popup with menu 110) while it shows; None otherwise."""
+        if self.has_menu(hwnd):
+            return hwnd
+        return next((window for window in self.top_windows(pid)
+                     if self._class(window) == "#32770" and self.has_menu(window)), None)
+
     def menu_item(self, hwnd: int, command: int) -> dict[str, Any] | None:
-        """Refresh the window's menu bar as opening a menu does (WM_INITMENU: AGE has AGERC update the items), then
-        read command's item: {label, enabled, checked}, or None when the bar has no such command."""
+        """Refresh the window's menu bar as opening a menu does, then read command's item: {label, enabled, checked},
+        or None when the bar has no such command. AGE's window refreshes on WM_INITMENU (AGE has AGERC update the
+        items); the fullscreen strip on WM_ENTERMENULOOP (agerc_system_menu_strip_dialog_proc)."""
         ctypes, wintypes, user32 = self.ctypes, self.wintypes, self.user32
         user32.GetMenu.argtypes = [wintypes.HWND]
         user32.GetMenu.restype = wintypes.HMENU
@@ -237,7 +251,10 @@ class Win32(core.Windows):
             return None
         result = ctypes.c_size_t()
         abort_if_hung = 0x2
-        user32.SendMessageTimeoutW(hwnd, WM_INITMENU, menu, 0, abort_if_hung, 5000, ctypes.byref(result))
+        if self._class(hwnd) == "#32770":
+            user32.SendMessageTimeoutW(hwnd, WM_ENTERMENULOOP, 0, 0, abort_if_hung, 5000, ctypes.byref(result))
+        else:
+            user32.SendMessageTimeoutW(hwnd, WM_INITMENU, menu, 0, abort_if_hung, 5000, ctypes.byref(result))
         state = user32.GetMenuState(menu, command, MF_BYCOMMAND)
         if state == 0xFFFFFFFF:
             return None
@@ -360,6 +377,7 @@ WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP = 0x200
 WM_KEYDOWN, WM_KEYUP, WM_MOUSEWHEEL, WM_CLOSE, BM_CLICK = 0x100, 0x101, 0x20A, 0x10, 0xF5
 WM_SYSCOMMAND, SC_MINIMIZE, SC_RESTORE = 0x112, 0xF020, 0xF120
 WM_COMMAND, WM_INITMENU, MF_BYCOMMAND, MF_GRAYED, MF_DISABLED, MF_CHECKED = 0x111, 0x116, 0x0, 0x1, 0x2, 0x8
+WM_ENTERMENULOOP = 0x211
 
 
 # --------------------------------------------------------------------------------------------- requests
@@ -795,17 +813,22 @@ class Daemon:
 
     def op_menu(self, request: dict[str, Any]) -> dict[str, Any]:
         """Choose a menu-bar command as a user does: the menu refreshes, a grayed item cannot be chosen, and an
-        enabled one sends WM_COMMAND (AGE hands AGERC's ids to its _OperateMenu command handler)."""
+        enabled one sends WM_COMMAND (AGE hands AGERC's ids to its _OperateMenu command handler). In fullscreen the
+        menu is the top-edge strip's, which must be showing; its WM_COMMAND goes to the strip."""
         command = _int(request, "command", 0)
         if command in core.LIVE_REFUSED_MENU_COMMANDS and self.saves.get("mode") == "live":
             raise DriveError(core.LIVE_REFUSED_MENU_COMMANDS[command])
         hwnd = self.require_window()
-        item = win32().menu_item(hwnd, command)
+        target = win32().menu_window(self.age_pid, hwnd)
+        if target is None:
+            raise DriveError("fullscreen detaches the menu bar: show the top-edge strip first "
+                             "(hold the pointer on the top edge)")
+        item = win32().menu_item(target, command)
         if item is None:
             raise DriveError(f"the menu bar has no command 0x{command:x}")
         if not item["enabled"]:
             raise DriveError(f"menu command 0x{command:x} ({item['label']}) is grayed")
-        win32().post(hwnd, WM_COMMAND, command, 0)
+        win32().post(target, WM_COMMAND, command, 0)
         return {"command": command, **item}
 
     def op_detach(self, request: dict[str, Any]) -> dict[str, Any]:

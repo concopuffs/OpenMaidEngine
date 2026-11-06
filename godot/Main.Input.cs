@@ -37,6 +37,13 @@ public partial class Main
             GetViewport().SetInputAsHandled();
             return;
         }
+        // The fullscreen strip is a window of its own: while it shows it has the keyboard, and a click elsewhere
+        // hides it and reaches the game. Alt+Enter and fullscreen's Alt belong to the window procedure.
+        if (RouteMenuStripInput(e) || RouteScreenModeKey(e))
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (e is InputEventKey key && key.Pressed && !key.Echo && key.Keycode == Key.F2)
         {
             _locatorHudVisible = !_locatorHudVisible;
@@ -75,6 +82,7 @@ public partial class Main
         TrySaveScreenshotFromKey(e);
         if (e is InputEventMouseMotion motion)
         {
+            if (!_windowed) NoteTopEdgePointer(motion.Position);   // the strip's top-edge dwell
             var p = ToNativeScreen(motion.Position);
             _vm.UpdatePointer(p.X, p.Y);
             return;
