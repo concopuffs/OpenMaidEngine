@@ -233,6 +233,20 @@ The first result is the native direct-history redraw direction/state (-1, 0, or 
 
 Both revisions first clear a save/load-adjacent transient flag, then poll the configured action mask. If bit 0x40 (logical action 6) is absent they clear run-state fast-forward bit 0x08000000 and play/clear the latest voice retained during skip. When fast-forward is then inactive they consume the triggered-action mask into the timed-callback abort slot, set run-state bit 0x80000000 (the polling text wait's gate, which the menu bar's adv_toggle_read_skip_and_refresh@0x406cd0 checks), and clear that abort slot. The portable VM maps this onto its existing independently tracked physical/script skip channels, host-owned queued-voice release, and ReadTextDB refresh. Kamidori's only site is SHOWALLMAP@0x16a.
 
+### 0x196 `display-furigana` (display-furigana, argc 3)
+- **observed by:** himegari (SYS4422), kamidori (SYS4433)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
+- **semantic status:** investigated
+- **runtime implemented:** yes
+- **handler bindings:** `SYS4422` -> `age-vm-switch/0x196` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x196` (compatibility-reuse-unconfirmed-for-revision)
+- **summary:** (layout_slot)(base)(ruby) - show-text for a base word with furigana: the base reveals as ordinary glyphs and the ruby is drawn above it in the ruby font.
+- **operand access:** `1` read · `2` read-string · `3` read-string
+- **grounding:** source=investigation, confidence=high
+- **depends on:** 0x197
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x196`; scope=Himegari SYS4422. op_0x196_display_furigana@0x41f2a0 calls adv_text_build_glyph_records@0x4576c0 (or adv_text_build_and_reveal_blocking) with the ruby as the third argument; adv_text_draw_ruby_over_row@0x456b40 lays the ruby out and pushes chain-flag-1 records; adv_text_manager_initialize sets the ruby LOGFONT to MS Gothic -8/-4; text_history_render_records@0x4526c0 redraws flag-4 runs over the preceding record. Native SC0000 page 18 (MessageSpeed=100, 2026-11-06): the op took 4 ticks (0.4 s) for 篝火+かがりび and the following 24-glyph show-text 23 ticks; the port's page 18 and its History match native pixel for pixel in the text.
+
+The ruby (MS Gothic, op-0x197 size, default 8) is spread over each drawn base row: with the ruby narrower, an equal gap (row width - ruby width) / (characters + 1) before, between and after its characters; otherwise centred with half the difference overhanging. Cells start at the base top + lfHeight + 1 (minus the effect y in render mode 3) and draw plain in the text color. A wrapped base splits the ruby by CP932 bytes per row. Every record after a ruby character has chain flag 1, so the first ruby character publishes alone, the rest in the next tick, and the following run's first glyph shares a tick. History keeps one flag-4 record per ruby character. Unlike op 0x6e it does not re-read message:ReadTextSkip or re-arm the glyph timer.
+
 ### 0x197 `set-ruby-font-size` (set-ruby-font-size, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -242,6 +256,7 @@ Both revisions first clear a save/load-adjacent transient flag, then poll the co
 - **summary:** (pixels) - set the secondary/ruby text font height and rebuild its native rasterization state.
 - **operand access:** `1` read
 - **grounding:** source=investigation, confidence=high
+- **depended on by:** 0x196
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x197`; scope=Himegari SYS4422. Ghidra /v2: op_0x197_handler@0x41f3b0 calls the parallel secondary-font size worker at 0x415c40 on ctx+0x14940, which updates the second LOGFONT pair and rebuilds it. UI font preset sequences consistently set primary size through 0x75 and the smaller ruby size through 0x197; HISTORY.BIN uses 22/8.
 
 ### 0x198 `set-adv-text-layout-origin` (set-adv-text-layout-origin, argc 3)
@@ -4332,16 +4347,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x192` (compatibility-reuse-unconfirmed-for-revision); `SYS4433` -> `age-vm-switch/0x192` (compatibility-reuse-unconfirmed-for-revision)
 - **summary:** —
 - **operand access:** `1` write-string · `2` read-string
-- **grounding:** source=kelebek, confidence=med
-
-### 0x196 `display-furigana` (display-furigana, argc 3)
-- **observed by:** himegari (SYS4422), kamidori (SYS4433)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
-- **semantic status:** catalog-only
-- **runtime implemented:** yes
-- **handler bindings:** `SYS4422` -> `age-vm-switch/0x196` (compatibility-reuse-unconfirmed-for-revision); `SYS4433` -> `age-vm-switch/0x196` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** —
-- **operand access:** `1` read · `2` read-string · `3` read-string
 - **grounding:** source=kelebek, confidence=med
 
 ### 0x1c0 `u0041DB70` (u0041DB70, argc 1)

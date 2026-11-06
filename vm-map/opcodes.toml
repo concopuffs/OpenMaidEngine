@@ -3643,29 +3643,30 @@ abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
 name = "display-furigana"
-category = "unknown"
-summary = ""
+category = "adv"
+summary = "(layout_slot)(base)(ruby) - show-text for a base word with furigana: the base reveals as ordinary glyphs and the ruby is drawn above it in the ruby font."
+details = "The ruby (MS Gothic, op-0x197 size, default 8) is spread over each drawn base row: with the ruby narrower, an equal gap (row width - ruby width) / (characters + 1) before, between and after its characters; otherwise centred with half the difference overhanging. Cells start at the base top + lfHeight + 1 (minus the effect y in render mode 3) and draw plain in the text color. A wrapped base splits the ruby by CP932 bytes per row. Every record after a ruby character has chain flag 1, so the first ruby character publishes alone, the rest in the next tick, and the following run's first glyph shares a tick. History keeps one flag-4 record per ruby character. Unlike op 0x6e it does not re-read message:ReadTextSkip or re-arm the glyph timer."
 noop_headless = false
-source = "kelebek"
-confidence = "med"
-depends_on = []
-evidence = ""
+source = "investigation"
+confidence = "high"
+depends_on = [0x197]
+evidence = "op_0x196_display_furigana@0x41f2a0 calls adv_text_build_glyph_records@0x4576c0 (or adv_text_build_and_reveal_blocking) with the ruby as the third argument; adv_text_draw_ruby_over_row@0x456b40 lays the ruby out and pushes chain-flag-1 records; adv_text_manager_initialize sets the ruby LOGFONT to MS Gothic -8/-4; text_history_render_records@0x4526c0 redraws flag-4 runs over the preceding record. Native SC0000 page 18 (MessageSpeed=100, 2026-11-06): the op took 4 ticks (0.4 s) for 篝火+かがりび and the following 24-glyph show-text 23 ticks; the port's page 18 and its History match native pixel for pixel in the text."
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "base text"
 observed_types = ["string"]
 access = ["read-string"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "ruby (furigana) text"
 observed_types = ["string"]
 access = ["read-string"]
 

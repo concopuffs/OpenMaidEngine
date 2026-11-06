@@ -40,15 +40,15 @@ it; git history keeps the record.
     triggers in the port. Himegari never runs those ops; Kamidori is unchecked.
 
   Done when each case is driven natively and the port matches, or the case is shown unreachable in both games.
-- **Furigana (op `0x196` `display-furigana`) is not drawn.** The port runs the op as a no-op, so the base word and
-  its ruby are both missing: SC0000 page 18 lacks 篝火 and かがりび (9,242 pixels of its text band differ from
-  native's). Himegari's scripts run the op 279 times. Native reveals the ruby glyph by glyph at the message speed
-  (かがりび took 0.4 s at 100 ms a glyph, `SC0000@0x1a50`), and a held click publishes it with the runs around it.
-  Done when the op is decoded (`engine-re.md`) and the port draws the base text and ruby at native's positions,
-  revealed and recorded in History as native does.
-- **A reveal run ends one glyph early.** Native ends a run of n glyphs after n × the glyph delay; the port shows the
-  first glyph at once and ends after (n - 1) × delay (SC0000 page 18, `MessageSpeed=100`, traced 2026-11-06). Done
-  when the port's reveal clock matches native's for a run, including the first glyph's delay.
+- **Kamidori's furigana is unverified.** The port draws op `0x196`'s ruby by Himegari's rule (`engine-re.md`,
+  "Furigana"). Kamidori runs the op 3,054 times, but its SYS4433 engine has neither of Himegari's two ruby code
+  sequences (the gap division and the centring), and its SYS4INI trailer has `RUBYSHIFTMODE`. Done when Kamidori's
+  ruby builder is decoded and a Kamidori furigana page and its History match native.
+- **A reveal run ends one tick early.** Native ends a run of n publication ticks after n × the glyph delay; the port
+  publishes the first tick at once and ends after (n - 1) × delay (SC0000 page 18, `MessageSpeed=100`, traced
+  2026-11-06). A tick can publish several records (`engine-re.md`, "Furigana"). Op `0x6e` arms the glyph timer
+  (`sleep_timer_arm`) and op `0x196` does not, so the two may start their first tick differently. Done when the
+  port's reveal clock matches native's for both ops, including the first tick.
 - **Native blocks inside a movie start.** At `SC0000@0x13c8` native AGE stays in `play-movie-to-surface` for about
   4.66 s (traced 2026-11-06 under the driver), while the port passes it at once. It is not known whether this is the
   decoder's preroll, the sandboxed environment, or an engine wait. Done when the block is traced to its cause and
@@ -76,6 +76,7 @@ it; git history keeps the record.
     first text record's style and the current leading.
   - Only Kamidori calls it (CONFIG1–CONFIG5 return paths, flags 2). A group recorded in a single style in that
     same layout should come out the same, and no visible difference is known.
+  - The reflow leaves out op `0x196`'s ruby records (flag 4), which native's per-record redraw would draw again.
   - Done when a native Kamidori CONFIG-return comparison shows whether any page differs, and the port matches if
     one does.
 - **Calibrated font realization (unobserved).** Native builds fonts through

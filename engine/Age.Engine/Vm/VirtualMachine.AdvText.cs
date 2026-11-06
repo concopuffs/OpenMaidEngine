@@ -5,6 +5,49 @@ namespace Age.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
+    /// <summary>One show-text run (op 0x6e's string, or op 0x196's base text with its ruby). False when the
+    /// runaway-line guard halted the VM.</summary>
+    private bool ShowTextRun(Instruction ins, IReadOnlyList<Operand> a, Operand o, string? ruby)
+    {
+        int off = o.Type == T_STR ? (int)o.Value : ins.Offset;
+        string text = ReadStr(o);
+        // Inline strings identify one authored line, so repeated emission is a useful
+        // runaway-loop guard. Dynamic string operands identify a reusable renderer site:
+        // Kamidori SC2310@0x57b7 legitimately publishes every speaker name through the
+        // same local-string-pointer instruction. MaxSteps remains the guard for dynamic
+        // script loops.
+        if (o.Type == T_STR)
+        {
+            _cur.EmitSeen.TryGetValue(off, out var c); c++; _cur.EmitSeen[off] = c;
+            if (c > _o.EmitCap)
+            {
+                HaltReason = $"LOOP:line@0x{off:x}×{c}";
+                return false;
+            }
+        }
+        Emitted.Add((off, text, _cur.Script.Name));
+        int layoutSlot = a.Count > 0 ? (int)Read(a[0]) : 0;
+        string[] scriptStack;
+        lock (_debugControlLock) scriptStack = _activeFrameNames.ToArray();
+        var liveRun = new AdvLiveTextRun(
+            off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack)
+        {
+            Ruby = string.IsNullOrEmpty(ruby) ? null : ruby,
+        };
+        AdvTextLayoutPresentationBinding binding =
+            TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
+        OfferHeldTriggersToReveal();
+        AdvRetainedTextRunResult? retained = _host.ShowText(
+            Gfx, binding, liveRun, _messageGlyphDelayMilliseconds);
+        // History records the drawn rows (split at wraps), so it is written after layout but
+        // before the cursor moves.
+        TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: retained?.Rows, ruby: retained?.Ruby);
+        if (retained is { } result)
+            TextHistory.SetCursor(
+                result.LayoutSlot, result.CursorX, result.CursorY);
+        return true;
+    }
+
     private int StepAdvText(string label, Instruction ins, int pc)
     {
         var a = ins.Args;
@@ -15,40 +58,13 @@ public sealed partial class VirtualMachine
                 foreach (var o in a)
                 {
                     if (!IsStr(o)) continue;
-                    int off = o.Type == T_STR ? (int)o.Value : ins.Offset;
-                    string text = ReadStr(o);
-                    // Inline strings identify one authored line, so repeated emission is a useful
-                    // runaway-loop guard. Dynamic string operands identify a reusable renderer site:
-                    // Kamidori SC2310@0x57b7 legitimately publishes every speaker name through the
-                    // same local-string-pointer instruction. MaxSteps remains the guard for dynamic
-                    // script loops.
-                    if (o.Type == T_STR)
-                    {
-                        _cur.EmitSeen.TryGetValue(off, out var c); c++; _cur.EmitSeen[off] = c;
-                        if (c > _o.EmitCap)
-                        {
-                            HaltReason = $"LOOP:line@0x{off:x}×{c}";
-                            return HALT;
-                        }
-                    }
-                    Emitted.Add((off, text, _cur.Script.Name));
-                    int layoutSlot = a.Count > 0 ? (int)Read(a[0]) : 0;
-                    string[] scriptStack;
-                    lock (_debugControlLock) scriptStack = _activeFrameNames.ToArray();
-                    var liveRun = new AdvLiveTextRun(
-                        off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack);
-                    AdvTextLayoutPresentationBinding binding =
-                        TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
-                    OfferHeldTriggersToReveal();
-                    AdvRetainedTextRunResult? retained = _host.ShowText(
-                        Gfx, binding, liveRun, _messageGlyphDelayMilliseconds);
-                    // History records the drawn rows (split at wraps), so it is written after layout but
-                    // before the cursor moves.
-                    TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: retained?.Rows);
-                    if (retained is { } result)
-                        TextHistory.SetCursor(
-                            result.LayoutSlot, result.CursorX, result.CursorY);
+                    if (!ShowTextRun(ins, a, o, ruby: null)) return HALT;
                 }
+                return pc + 1;
+            case "display-furigana": // 0x196 (layout slot, base text, ruby)
+                // op_0x196_handler@0x41f2a0 builds the base text like show-text with the ruby as the builder's third
+                // argument. Unlike op 0x6e it neither re-reads message:ReadTextSkip nor re-arms the glyph timer.
+                if (!ShowTextRun(ins, a, a[1], ReadStr(a[2]))) return HALT;
                 return pc + 1;
             case "define-adv-text-layout": // 0x70: configure layout and begin a logical retained group
                 TextHistory.DefineLayout((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
@@ -176,7 +192,7 @@ public sealed partial class VirtualMachine
                 TextHistory.EndLine((int)Read(a[0]), _advTextStyle); return pc + 1;
             case "set-font":
                 _advTextStyle = _advTextStyle with { FontFace = ReadStr(a[0]) }; return pc + 1;
-            case "comment": case "display-furigana": case "dev_ukn":
+            case "comment": case "dev_ukn":
                 return pc + 1;
             case "u0041F3A0":
             case "register-numeric-glyph-style": // 0x13a: (style)(surface)(atlas x/y)(digit w/h)

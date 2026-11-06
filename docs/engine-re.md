@@ -4482,6 +4482,70 @@ then differed from native in 494 pixels, 54 of them by more than 24 levels; it n
   A profile started with `UseAntiFont=0` draws page 1 aliased on both targets. With AntiFont on, page 1 now matches
   native pixel for pixel too.
 
+#### Furigana: op `0x196` (2026-11-06)
+
+`op_0x196_display_furigana@0x41f2a0` takes (layout slot, base text, ruby). It is op `0x6e` with the ruby passed as
+`adv_text_build_glyph_records@0x4576c0`'s third argument, with two differences: it does not re-read
+`message:ReadTextSkip`, and it does not call `sleep_timer_arm`. Himegari's scripts run it 279 times and Kamidori's
+3,054.
+
+**The ruby font.** `adv_text_manager_initialize@0x456800` copies the initial primary LOGFONT into the ruby one
+(`+0x508`), then sets lfHeight -8, lfWidth -4 and the face ＭＳ ゴシック (`0x577f60`). Op `0x1a5` changes only the primary
+face, so ruby text is always MS Gothic at the default weight. Op `0x197` (`text_set_ruby_font_size@0x415c40`) sets the
+size with the primary font's adjustment (odd sizes and 32 lose a pixel, 33 becomes 31); every Himegari script sets 8.
+
+**Layout.** The builder draws the base text as ordinary glyphs. After each row's History record it hands the row's
+share of the ruby to `adv_text_draw_ruby_over_row@0x456b40`, with the row's width (last glyph right minus first glyph
+left) and its first glyph's cell.
+
+- A row before a wrap takes `((rubyLeft * rowBytes) / baseLeft / 2) * 2` CP932 bytes of the ruby. `rubyLeft` and
+  `baseLeft` count the bytes still undrawn from the row's start. The last row takes the rest.
+- `difference = row width - ruby width`. When it is positive, the gap `difference / (n + 1)` goes before, between and
+  after the n characters (n is the CP932 length over two). Otherwise the ruby is centred and overhangs both sides by
+  `-(difference / 2)`.
+- The first cell starts at `(first.left - overhang + gap, first.top + lfHeight + 1)`. A render-mode-3 effect raises
+  it by the effect's y offset. Himegari's page-18 ruby かがりび over 篝火 (48 px) sits 8 px above the base with 3 px gaps.
+- Each two-byte character is drawn plain, with no effect, in the text color. With AntiFont on that goes through
+  `text_draw_antialiased_plain_string` (ruby lfWidth and tmAscent, `+0x50c`/`+0x490`); with it off, through
+  `text_draw_string_primary_or_ruby` in mode 0 with the ruby flag.
+- Each character's record keeps its own extent, and the cursor returns to the end of the base text.
+
+**Publication.** The builders always draw into the layout's last (pending) record and then push the next one. The base
+builder pushes chain flag 0, `adv_text_draw_ruby_over_row` chain flag 1, and a layout reset
+(`adv_text_layout_reset_cursor_and_bounds_record@0x455070`) starts over with 0. Each tick of
+`adv_text_publish_next_glyph@0x451220` publishes one record and keeps going while the record it just published has chain
+flag 1.
+
+- 篝火 + かがりび therefore publishes 篝 | 火 | か | がりび: four ticks.
+- The record after the last ruby character keeps chain flag 1. The next run's first glyph therefore shares a tick with
+  its second: の如 | く | ….
+
+Native SC0000 page 18 at `MessageSpeed=100` (2026-11-06) took 0.40 s in op `0x196` and 2.30 s for the following 24
+glyphs: 4 and 23 ticks.
+
+**History.** Each ruby character gets its own record: flags | 4, the character's rectangle, size `-lfHeight` (8),
+render mode 0. The records follow their row's record and come before the row's line break.
+`text_history_render_records@0x4526c0` gathers a run of flag-4 records into one string and spreads it over the record
+drawn before it with the same rule, using the current ruby font. That record's width is measured in History's current
+font.
+
+**Port.**
+
+- `VirtualMachine` runs op `0x196` through `ShowTextRun`, as op `0x6e` does, with `AdvLiveTextRun.Ruby`.
+- `Age.Engine.Text.RubyTextLayout` holds the font, the row split and the layout. `RetainedGlyphLayoutEngine.RenderRuby`
+  draws a run's ruby and `RenderRubyOver` History's.
+- `GodotAdvHost` appends each row's base glyphs and then its ruby, in AGE's order.
+- `RetainedAdvTextLayoutPresentation.AppendRun` applies the chain rule across runs. The reveal counts ticks through
+  `PublicationTarget`.
+- `AdvTextHistory` keeps the flag-4 records (`AdvTextHistoryRecordFlags.Ruby`), and `TryBuildHistoryRenderBatch` turns
+  them into `AdvTextRubyAnnotation`s. Op `0x82`'s reflowed redraw leaves them out.
+- Numbered saves keep the records in native's record layout (not yet compared with a native save of a furigana page).
+- Tests: `RubyTextLayoutTests` (synthesized).
+- Check: `tools/drive/scenarios/himegari-furigana.steps`. Page 18 and its History match native pixel for pixel in
+  every text row, the ruby included.
+- Not checked: Kamidori. Its SYS4433 engine has neither of Himegari's two ruby code sequences, and its SYS4INI trailer
+  has `RUBYSHIFTMODE` (`docs/backlog.md`).
+
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 
 The small bat marker is a configured ADV-layout sprite, not a glyph or part of SO001. `SYSTEM4.BIN`

@@ -38,7 +38,73 @@ public sealed class RetainedAdvTextLayoutPresentation
         int first = _glyphs.Count;
         foreach (AdvRetainedGlyphRecord record in records)
             _glyphs.Add(new AdvRetainedGlyphPlacement(record, layoutOriginX, layoutOriginY));
+        if (records.Count > 0) _lastAppendedIsRuby = false;
         return first;
+    }
+
+    /// <summary>
+    /// Append one run's records in drawing order, marking which are ruby characters. AGE's builders always draw into
+    /// the layout's last (pending) record and then push the next one: the base builder pushes chain flag 0, the ruby
+    /// builder (adv_text_draw_ruby_over_row@0x456b40) chain flag 1, and a layout reset starts over with 0. A record's
+    /// chain flag is therefore 1 exactly when the record drawn before it, in this run or an earlier one, is a ruby
+    /// character, and the publisher then shows it in the same tick as that character's successor.
+    /// </summary>
+    public int AppendRun(
+        IReadOnlyList<AdvRetainedGlyphRecord> records,
+        IReadOnlyList<bool> isRuby,
+        int layoutOriginX,
+        int layoutOriginY)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(isRuby);
+        if (isRuby.Count != records.Count)
+            throw new ArgumentException("Each record needs a ruby marker.", nameof(isRuby));
+        int first = _glyphs.Count;
+        for (int index = 0; index < records.Count; index++)
+        {
+            AdvRetainedGlyphRecord record = records[index] with
+            {
+                PublicationChainFlag = _lastAppendedIsRuby ? 1 : 0,
+            };
+            _glyphs.Add(new AdvRetainedGlyphPlacement(record, layoutOriginX, layoutOriginY));
+            _lastAppendedIsRuby = isRuby[index];
+        }
+        return first;
+    }
+
+    private bool _lastAppendedIsRuby;
+
+    /// <summary>
+    /// The glyph count published after <paramref name="ticks"/> publication ticks of a run's records
+    /// [<paramref name="firstGlyph"/>, +<paramref name="glyphCount"/>). Each tick of
+    /// adv_text_publish_next_glyph@0x451220 publishes one record and keeps going while the record it just published has
+    /// chain flag 1, stopping at the run's end.
+    /// </summary>
+    public int PublicationTarget(int firstGlyph, int glyphCount, int ticks)
+    {
+        int index = firstGlyph;
+        int end = Math.Min(_glyphs.Count, checked(firstGlyph + glyphCount));
+        for (int tick = 0; tick < ticks && index < end; tick++)
+        {
+            bool chained;
+            do
+            {
+                chained = _glyphs[index].Record.PublishesNextInSameTick;
+                index++;
+            }
+            while (chained && index < end);
+        }
+        return index;
+    }
+
+    /// <summary>The number of publication ticks a run's records take (<see cref="PublicationTarget"/>).</summary>
+    public int PublicationTicks(int firstGlyph, int glyphCount)
+    {
+        int ticks = 0;
+        int end = Math.Min(_glyphs.Count, checked(firstGlyph + glyphCount));
+        for (int index = firstGlyph; index < end; ticks++)
+            index = PublicationTarget(index, end - index, 1);
+        return ticks;
     }
 
     /// <summary>Publish newly revealed glyphs through a layout-global target count.</summary>

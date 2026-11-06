@@ -1,0 +1,32 @@
+# Furigana (op 0x196). SC0000 page 18 shows 篝火 with the ruby かがりび: 8 px MS Gothic, spread over the base word with
+# equal 3 px gaps and drawn plain above it (adv_text_draw_ruby_over_row@0x456b40). History redraws the ruby over the
+# same word in its 22 px style. Compare the furigana-* shots between targets: the text matches pixel for pixel; the
+# scene's wisp and the wait indicator differ by their animation phase (docs/engine-re.md, "Furigana").
+# Run on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-furigana.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=90  # page 1
+wait-state top=SC0000@0x133c click=adv.next every=1.5 timeout=240   # page 17
+settle
+expect top=SC0000@0x133c
+
+click adv.next
+wait-state top=SC0000@0x1a5b timeout=60 # page 18: 今にも消えそうな篝火の如く、…
+wait 1
+move 400 300
+wait 1
+shot furigana-page18
+
+wheel up 1
+wait-state script=HISTORY timeout=10
+wait 2
+shot furigana-history
+click 778 562                           # the close button
+wait-state top=SC0000@0x1a5b timeout=10

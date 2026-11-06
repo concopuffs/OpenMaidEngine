@@ -154,4 +154,49 @@ public sealed class RetainedGlyphLayoutEngine
             records, cursorX, cursorY, records.Count,
             wrappedLines, observed, stopped) { Rows = rows };
     }
+
+    /// <summary>
+    /// Draw op 0x196's ruby over the rows <see cref="Render"/> drew for its base text, each row taking its share
+    /// (<see cref="RubyTextLayout.SplitAcrossRows"/>), as adv_text_build_glyph_records@0x4576c0 does after each row.
+    /// The cursor is not moved: AGE restores it to the end of the base text.
+    /// </summary>
+    public IReadOnlyList<AdvRubyGlyph> RenderRuby(
+        RgbaImage destination,
+        string baseText,
+        IReadOnlyList<AdvTextRow> rows,
+        string ruby,
+        AdvTextStyle style,
+        GlyphRasterPolicy policy,
+        bool antialias)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        var glyphs = new List<AdvRubyGlyph>();
+        IReadOnlyList<string> shares = RubyTextLayout.SplitAcrossRows(baseText, rows, ruby);
+        for (int index = 0; index < rows.Count; index++)
+        {
+            AdvTextRow row = rows[index];
+            IReadOnlyList<AdvRetainedGlyphRecord> records = RenderRubyOver(
+                destination, row.Left, row.Top, row.Right - row.Left, shares[index], style, policy, antialias);
+            int at = 0;
+            foreach (System.Text.Rune rune in shares[index].EnumerateRunes())
+            {
+                if (at >= records.Count) break;
+                glyphs.Add(new AdvRubyGlyph(index, rune.ToString(), records[at++]));
+            }
+        }
+        return glyphs;
+    }
+
+    /// <summary>Draw a ruby over one base (<see cref="RubyTextLayout.Draw"/>) with this engine's rasterizer.</summary>
+    public IReadOnlyList<AdvRetainedGlyphRecord> RenderRubyOver(
+        RgbaImage destination,
+        int baseLeft,
+        int baseTop,
+        int baseWidth,
+        string ruby,
+        AdvTextStyle style,
+        GlyphRasterPolicy policy,
+        bool antialias)
+        => RubyTextLayout.Draw(
+            destination, _rasterizer, baseLeft, baseTop, baseWidth, ruby, style, policy, antialias);
 }

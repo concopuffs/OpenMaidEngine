@@ -53,7 +53,13 @@ public readonly record struct AdvRetainedTextRunResult(
 {
     /// <summary>The run's drawn rows; empty when the host did not lay the text out.</summary>
     public IReadOnlyList<AdvTextRow> Rows { get; init; } = [];
+
+    /// <summary>Op 0x196's ruby characters in drawing order, each with the row it was drawn over.</summary>
+    public IReadOnlyList<AdvRubyGlyph> Ruby { get; init; } = [];
 }
+
+/// <summary>One drawn ruby character: its text, the base row it sits over, and its retained record.</summary>
+public readonly record struct AdvRubyGlyph(int Row, string Text, AdvRetainedGlyphRecord Record);
 
 /// <summary>
 /// One drawn row of a show-text run: <see cref="GlyphCount"/> glyphs (one per Unicode scalar of the run's

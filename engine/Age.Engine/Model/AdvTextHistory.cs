@@ -6,6 +6,9 @@ public enum AdvTextHistoryRecordFlags : uint
     None = 0,
     GroupStart = 0x00000001,
     NavigationFiltered = 0x00000002,
+    /// <summary>One ruby character drawn over the record before it (adv_text_draw_ruby_over_row@0x456b40 appends one
+    /// per character, flags | 4). History draws a run of these with the ruby font.</summary>
+    Ruby = 0x00000004,
     /// <summary>An empty record that moves the redraw cursor to the next line: op 0x6f and every
     /// horizontal wrap (adv_text_append_line_break_horizontal@0x456fd0).</summary>
     LineBreak = 0x00000008,
@@ -66,6 +69,9 @@ public sealed record AdvLiveTextRun(
     string Text,
     IReadOnlyList<string> ScriptStack)
 {
+    /// <summary>Op 0x196's ruby, drawn over <see cref="Text"/> (null for show-text).</summary>
+    public string? Ruby { get; init; }
+
     public bool BelongsToScript(string scriptName)
     {
         foreach (string frame in ScriptStack)
@@ -119,7 +125,14 @@ public sealed record AdvTextHistoryRenderBatch(
     /// reflowed redraw.
     /// </summary>
     public IReadOnlyList<int>? RecordedLineBreaks { get; init; }
+
+    /// <summary>The group's ruby runs (op 0x1d1 only), each over the text record drawn before it.</summary>
+    public IReadOnlyList<AdvTextRubyAnnotation> Ruby { get; init; } = [];
 }
+
+/// <summary>A ruby drawn over glyphs <see cref="BaseFirstGlyph"/>..+<see cref="BaseGlyphCount"/> of a History
+/// batch's text (text_history_render_records@0x4526c0: consecutive flag-4 records over the preceding record).</summary>
+public readonly record struct AdvTextRubyAnnotation(int BaseFirstGlyph, int BaseGlyphCount, string Text);
 
 /// <summary>
 /// Engine-owned retained ADV backlog. Native numbered saves serialize this same model; live HISTORY.BIN
@@ -287,10 +300,14 @@ public sealed class AdvTextHistory
     /// Record one show-text run the way adv_text_build_glyph_records@0x4576c0 does: one record per drawn
     /// row with the row's rectangle, and a line-break record after every horizontal wrap. Without
     /// <paramref name="rows"/> (a host that did not lay the text out) the run is one row at the cursor.
+    /// An op-0x196 run's <paramref name="ruby"/> characters follow their row's record, one record each
+    /// (adv_text_draw_ruby_over_row@0x456b40: flags | 4, the character's rectangle, the ruby pixel height, render mode
+    /// 0), before the row's line break.
     /// </summary>
     public void AppendText(int requestedSlot, int sourceOffset, string text, AdvTextStyle style,
                            AdvTextHistoryRecordFlags flags = AdvTextHistoryRecordFlags.None,
-                           IReadOnlyList<AdvTextRow>? rows = null)
+                           IReadOnlyList<AdvTextRow>? rows = null,
+                           IReadOnlyList<AdvRubyGlyph>? ruby = null)
     {
         int slot = ResolveLayout(requestedSlot);
         if (rows is not { Count: > 0 })
@@ -307,11 +324,23 @@ public sealed class AdvTextHistory
         for (int i = 0; i < text.Length; i += char.IsSurrogatePair(text, i) ? 2 : 1) starts.Add(i);
         starts.Add(text.Length);
         int Position(int glyph) => starts[Math.Clamp(glyph, 0, starts.Count - 1)];
-        foreach (AdvTextRow row in rows)
+        AdvTextStyle rubyStyle = style with
         {
+            PrimaryFontSize = style.RubyFontSize > 0 ? style.RubyFontSize : Text.RubyTextLayout.DefaultSize,
+            RenderMode = 0,
+        };
+        for (int index = 0; index < rows.Count; index++)
+        {
+            AdvTextRow row = rows[index];
             int from = Position(row.FirstGlyph), to = Position(row.FirstGlyph + row.GlyphCount);
             AppendRecord(slot, AdvTextHistoryRecordKind.Text, flags, style, text[from..to], 0, 0, sourceOffset,
                 new AdvTextHistoryRect(row.Left, row.Top, row.Right, row.Bottom));
+            foreach (AdvRubyGlyph glyph in ruby ?? [])
+                if (glyph.Row == index)
+                    AppendRecord(slot, AdvTextHistoryRecordKind.Text, flags | AdvTextHistoryRecordFlags.Ruby,
+                        rubyStyle, glyph.Text, 0, 0, sourceOffset,
+                        new AdvTextHistoryRect(glyph.Record.Left, glyph.Record.Top, glyph.Record.Right,
+                                               glyph.Record.Bottom));
             if (row.WrapsAfter) AppendLineBreak(slot, style);
         }
     }
@@ -448,7 +477,8 @@ public sealed class AdvTextHistory
     /// with the text manager's current font, colors, effect and leading (<paramref name="currentStyle"/>,
     /// which HISTORY.BIN sets to 22 px before rendering), and flag 2 swaps in the override colors for the
     /// call. Rows start at the target layout's cursor and break only at retained line-break records.
-    /// Metadata and voice records are skipped; HISTORY passes flags and colors as zero.
+    /// Metadata and voice records are skipped; HISTORY passes flags and colors as zero. A run of ruby (flag 4)
+    /// records becomes an annotation over the text record drawn before it, which the host draws with the ruby font.
     /// </summary>
     public bool TryBuildHistoryRenderBatch(int requestedLayoutSlot, int firstRecordIndex, int flags,
                                            long overrideTextColor, long overrideEffectColor,
@@ -460,16 +490,35 @@ public sealed class AdvTextHistory
         int slot = ResolveLayout(requestedLayoutSlot);
         var text = new System.Text.StringBuilder();
         var lineBreaks = new List<int>();
-        int glyphs = 0;
+        var ruby = new List<AdvTextRubyAnnotation>();
+        var pendingRuby = new System.Text.StringBuilder();
+        int glyphs = 0, baseFirst = -1, baseCount = 0;
+        void FlushRuby()
+        {
+            if (pendingRuby.Length > 0 && baseFirst >= 0)
+                ruby.Add(new AdvTextRubyAnnotation(baseFirst, baseCount, pendingRuby.ToString()));
+            pendingRuby.Clear();
+        }
         foreach (var record in EnumerateGroup(firstRecordIndex))
         {
             if (record.Flags.HasFlag(AdvTextHistoryRecordFlags.NavigationFiltered) && (flags & 1) == 0)
                 break;
             if (record.Kind != AdvTextHistoryRecordKind.Text) continue;
+            if (record.Flags.HasFlag(AdvTextHistoryRecordFlags.Ruby))
+            {
+                pendingRuby.Append(record.Text);
+                continue;
+            }
+            FlushRuby();
             if (record.Flags.HasFlag(AdvTextHistoryRecordFlags.LineBreak)) lineBreaks.Add(glyphs);
+            int count = 0;
+            foreach (System.Text.Rune _ in record.Text.EnumerateRunes()) count++;
             text.Append(record.Text);
-            foreach (System.Text.Rune _ in record.Text.EnumerateRunes()) glyphs++;
+            baseFirst = glyphs;
+            baseCount = count;
+            glyphs += count;
         }
+        FlushRuby();
 
         AdvTextStyle style = (flags & 2) != 0
             ? currentStyle with { TextColor = overrideTextColor, EffectColor = overrideEffectColor }
@@ -478,6 +527,7 @@ public sealed class AdvTextHistory
                                               text.ToString(), style)
         {
             RecordedLineBreaks = lineBreaks,
+            Ruby = ruby,
         };
         return true;
     }
@@ -503,7 +553,9 @@ public sealed class AdvTextHistory
         {
             if (record.Flags.HasFlag(AdvTextHistoryRecordFlags.NavigationFiltered) && (flags & 1) == 0)
                 break;
-            if (record.Kind != AdvTextHistoryRecordKind.Text) continue;
+            // Ruby records are not reflowed into the text (docs/backlog.md, op 0x82).
+            if (record.Kind != AdvTextHistoryRecordKind.Text
+                || record.Flags.HasFlag(AdvTextHistoryRecordFlags.Ruby)) continue;
             if (!haveStyle)
             {
                 style = record.Style;

@@ -180,6 +180,8 @@ public sealed partial class GodotAdvHost
             0, System.Math.Min(
                 result.GlyphCount,
                 presentation.PublishableGlyphCount - result.FirstGlyphIndex));
+        // A tick publishes one record, or a chained group after a ruby (adv_text_publish_next_glyph@0x451220).
+        int revealTicks = presentation.PublicationTicks(result.FirstGlyphIndex, revealGlyphCount);
         var state = new LiveTextState
         {
             Run = run,
@@ -214,9 +216,11 @@ public sealed partial class GodotAdvHost
             ["presentation"] = "retained-glyphs",
         });
 
-        int initiallyVisible = IsTextRevealing ? 1 : revealGlyphCount;
         presentation.PublishThrough(
-            gfx, checked(result.FirstGlyphIndex + initiallyVisible));
+            gfx,
+            IsTextRevealing
+                ? presentation.PublicationTarget(result.FirstGlyphIndex, revealGlyphCount, 1)
+                : checked(result.FirstGlyphIndex + revealGlyphCount));
         Interlocked.Exchange(ref _presentRequested, 1);
         if (!IsTextRevealing)
         {
@@ -230,19 +234,19 @@ public sealed partial class GodotAdvHost
             RequestSynchronizedPresentation();
             while (IsTextRevealing && !_stopping)
             {
-                int visible;
+                int ticks;
                 lock (_textLock)
                 {
-                    visible = _advTextForceComplete
-                        ? revealGlyphCount
+                    ticks = _advTextForceComplete
+                        ? revealTicks
                         : (int)System.Math.Clamp(
                             (_clock.NowMs - state.StartedMs) / delay + 1,
-                            0, revealGlyphCount);
-                    if (visible >= revealGlyphCount) IsTextRevealing = false;
+                            0, revealTicks);
+                    if (ticks >= revealTicks) IsTextRevealing = false;
                 }
                 int before = presentation.PublishedGlyphCount;
                 presentation.PublishThrough(
-                    gfx, checked(result.FirstGlyphIndex + visible));
+                    gfx, presentation.PublicationTarget(result.FirstGlyphIndex, revealGlyphCount, ticks));
                 if (presentation.PublishedGlyphCount != before)
                 {
                     Interlocked.Exchange(ref _presentRequested, 1);
@@ -262,13 +266,15 @@ public sealed partial class GodotAdvHost
     /// <param name="recordedLineBreaks">History's retained rows (op 0x1d1): break only at these glyph
     /// indices, never at the layout's edges. Native text_history_render_records@0x4526c0 checks no bounds;
     /// the surface clips what falls outside.</param>
+    /// <param name="historyRuby">History's ruby runs (op 0x1d1), each drawn over its base glyphs.</param>
     private void PrepareRetainedTextRun(
         GfxState gfx,
         AdvTextLayoutPresentationBinding binding,
         AdvLiveTextRun run,
         out RetainedAdvTextLayoutPresentation presentation,
         out AdvRetainedTextRunResult result,
-        IReadOnlyList<int>? recordedLineBreaks = null)
+        IReadOnlyList<int>? recordedLineBreaks = null,
+        IReadOnlyList<AdvTextRubyAnnotation>? historyRuby = null)
     {
         presentation = null!;
         result = default;
@@ -307,6 +313,45 @@ public sealed partial class GodotAdvHost
                 recordedLineBreaks),
             requests);
 
+        // Op 0x196's ruby follows each base row in AGE's drawing order; History draws its ruby runs after the text.
+        IReadOnlyList<AdvRubyGlyph> ruby = [];
+        var ordered = new List<AdvRetainedGlyphRecord>(rendered.Records.Count);
+        var orderedIsRuby = new List<bool>(rendered.Records.Count);
+        void Add(AdvRetainedGlyphRecord record, bool isRuby)
+        {
+            ordered.Add(record);
+            orderedIsRuby.Add(isRuby);
+        }
+        if (!string.IsNullOrEmpty(run.Ruby) && rendered.Rows.Count > 0)
+        {
+            ruby = _retainedGlyphLayoutEngine.RenderRuby(
+                updated, run.Text, rendered.Rows, run.Ruby, run.Style,
+                _surfaceTextBackendInfo.Policy, _textAntialias);
+            for (int row = 0; row < rendered.Rows.Count; row++)
+            {
+                AdvTextRow drawn = rendered.Rows[row];
+                for (int glyph = drawn.FirstGlyph; glyph < drawn.FirstGlyph + drawn.GlyphCount; glyph++)
+                    Add(rendered.Records[glyph], false);
+                foreach (AdvRubyGlyph character in ruby)
+                    if (character.Row == row) Add(character.Record, true);
+            }
+        }
+        else
+        {
+            foreach (AdvRetainedGlyphRecord record in rendered.Records) Add(record, false);
+            foreach (AdvTextRubyAnnotation annotation in historyRuby ?? [])
+            {
+                int firstBase = annotation.BaseFirstGlyph;
+                int lastBase = firstBase + annotation.BaseGlyphCount - 1;
+                if (annotation.BaseGlyphCount <= 0 || lastBase >= rendered.Records.Count) continue;
+                AdvRetainedGlyphRecord left = rendered.Records[firstBase], right = rendered.Records[lastBase];
+                foreach (AdvRetainedGlyphRecord record in _retainedGlyphLayoutEngine.RenderRubyOver(
+                             updated, left.Left, left.Top, right.Right - left.Left, annotation.Text, run.Style,
+                             _surfaceTextBackendInfo.Policy, _textAntialias))
+                    Add(record, true);
+            }
+        }
+
         _timeline?.Event("adv-text-layout-result", new()
         {
             ["layout"] = binding.LayoutSlot,
@@ -320,6 +365,8 @@ public sealed partial class GodotAdvHost
             ["line_spacing"] = run.Style.LineSpacing,
             ["requested_glyphs"] = requests.Count,
             ["rendered_glyphs"] = rendered.ConsumedGlyphs,
+            ["ruby"] = run.Ruby ?? "",
+            ["ruby_glyphs"] = orderedIsRuby.Count(isRuby => isRuby),
             ["wrapped_lines"] = rendered.WrappedLines,
             ["vertical_overflow"] = rendered.StoppedOnVerticalOverflow,
             ["result_cursor_x"] = rendered.CursorX,
@@ -337,17 +384,18 @@ public sealed partial class GodotAdvHost
             else if (presentation.Binding != binding)
                 throw new InvalidOperationException(
                     $"ADV layout {binding.LayoutSlot} changed its retained binding without reset.");
-            int first = presentation.Append(
-                rendered.Records,
+            int first = presentation.AppendRun(
+                ordered,
+                orderedIsRuby,
                 run.Layout.OriginX,
                 run.Layout.OriginY);
             RebuildRetainedWaitIndicator(binding.LayoutSlot);
             result = new AdvRetainedTextRunResult(
                 binding.LayoutSlot,
                 first,
-                rendered.ConsumedGlyphs,
+                ordered.Count,
                 rendered.CursorX,
-                rendered.CursorY) { Rows = rendered.Rows };
+                rendered.CursorY) { Rows = rendered.Rows, Ruby = ruby };
         }
 
         lock (_imageLock)
@@ -512,7 +560,8 @@ public sealed partial class GodotAdvHost
             gfx, binding, run,
             out RetainedAdvTextLayoutPresentation? presentation,
             out AdvRetainedTextRunResult result,
-            batch.RecordedLineBreaks);
+            batch.RecordedLineBreaks,
+            batch.Ruby);
 
         presentation.PublishThrough(
             gfx,

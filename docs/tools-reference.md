@@ -911,8 +911,12 @@ reaches it in 1.81 s and the port in 1.83 s (`engine-re.md`, "Service waits end 
 `SC0000@0x1345`, and left-clicks during the 750 ms sleep at `0x16cb`. 6.2 s later page 18 must already wait at
 `0x1a5b`: the held left click finished its two-run reveal at once, and the right click opened no MENU. Without the
 click the reveal still runs at that point (`engine-re.md`, "Effect skipping and the input latch", clicks during a
-sleep). The `latch-sleep-page18` shots differ in the furigana, which the port does not draw yet, and the scene's
-animation phase.
+sleep). The `latch-sleep-page18` shots differ only in the scene's animation phase.
+
+`himegari-furigana.steps` advances to SC0000 page 18 (`SC0000@0x1a5b`), whose op `0x196` draws 篝火 with the ruby
+かがりび, and opens History with a wheel-up. In the `furigana-page18` and `furigana-history` shots the text matches
+native pixel for pixel, the ruby included; the scene's wisp and the wait indicator differ by animation phase
+(`engine-re.md`, "Furigana").
 
 `himegari-menu-bar.steps` chooses the menu bar's ﾒｯｾｰｼﾞ items and ｹﾞｰﾑ > 終了 on SC0000. It saves on page 1, reads
 six pages and loads. Then:
