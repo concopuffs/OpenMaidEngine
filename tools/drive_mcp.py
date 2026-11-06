@@ -49,8 +49,8 @@ Typical use: drive_start(target), then drive_steps(target, steps=[...]) as often
 per-step results and a screenshot after the last step), drive_state(target) for the VM position, and
 drive_stop(target), which closes the game the way its own quit does. A session outlives a call, so later calls drive
 the same running game. Saves go to a sandbox (default 'fresh', emptied on every start); seed a new sandbox from
-another target's with seed='port:fresh' or 'native:fresh'. Windows stay muted, unfocused and at the bottom of the
-z-order.
+another target's with seed='port:fresh' or 'native:fresh'. Windows stay muted and at the bottom of the z-order, and
+the driver does not activate them; native AGE can still take the foreground itself when it starts.
 
 Positions read SCRIPT@offset (dword offsets, as in the disassembly and the page locator). At a text wait the pc is
 already past the wait instruction, so a page reads as the page map's next page_start_offset. The driver refuses ESC
@@ -145,7 +145,8 @@ def drive_start(target: Target, sandbox: str | None = None, seed: str | None = N
     sandbox: named save sandbox kept between runs (default 'fresh', emptied on every start).
     seed: fill a new sandbox from 'live', 'native:NAME', 'port:NAME' or a folder.
     sound: keep the profile's volume (default: muted).
-    foreground: leave the window where Windows puts it (default: bottom of the z-order, not activated).
+    foreground: leave the window where Windows puts it (default: bottom of the z-order, not activated); natively an
+        Alt or F10 key then activates AGE's window when it is not active, which may take the foreground.
     build: port only; false skips `dotnet build` of the Godot project (start takes about 30-90 s with the build).
     mods: port only; mod packages (.omp files or folders) to load in addition to the sandbox's mods/ folder.
     settings: SECTION.KEY=VALUE lines written into the sandbox SYS4REG.INI before launch (`--set`), e.g.

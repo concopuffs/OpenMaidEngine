@@ -44,7 +44,7 @@ from drive_core import DriveError  # noqa: E402
 AGENT = core.DATA / "native-agent.js"
 ENGINE_CTX_TOML = paths.VM_MAP / "engine-ctx.toml"
 CAPABILITIES = ("dialogs", "answer", "window", "menu", "detach")
-QUIET_EVENTS = {"folder", "request"}       # logged, but not sent to clients
+QUIET_EVENTS = {"folder", "request", "activated"}       # logged, but not sent to clients
 
 
 def scratch_exe(context: paths.ToolContext = paths.CONTEXT) -> Path:
@@ -197,6 +197,44 @@ class Win32(core.Windows):
         kernel32.CreateJobObjectW.restype = wintypes.HANDLE
         kernel32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
         kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+
+        class GuiThreadInfo(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("flags", wintypes.DWORD), ("hwndActive", wintypes.HWND),
+                        ("hwndFocus", wintypes.HWND), ("hwndCapture", wintypes.HWND),
+                        ("hwndMenuOwner", wintypes.HWND), ("hwndMoveSize", wintypes.HWND),
+                        ("hwndCaret", wintypes.HWND), ("rcCaret", wintypes.RECT)]
+
+        self.GuiThreadInfo = GuiThreadInfo
+        user32.GetGUIThreadInfo.argtypes = [wintypes.DWORD, ctypes.POINTER(GuiThreadInfo)]
+        user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+        user32.SetActiveWindow.argtypes = [wintypes.HWND]
+        user32.SetActiveWindow.restype = wintypes.HWND
+
+    def thread_active_window(self, hwnd: int) -> int:
+        """The active window of `hwnd`'s thread, or 0 when that thread has none."""
+        ctypes = self.ctypes
+        thread = self.user32.GetWindowThreadProcessId(hwnd, None)
+        info = self.GuiThreadInfo(cbSize=ctypes.sizeof(self.GuiThreadInfo))
+        if not thread or not self.user32.GetGUIThreadInfo(thread, ctypes.byref(info)):
+            return 0
+        return info.hwndActive or 0
+
+    def activate_in_thread(self, hwnd: int) -> bool:
+        """Make `hwnd` the active window of its own thread when that thread has none. The driver's thread joins the
+        window's input queue for the call (AttachThreadInput), so that SetActiveWindow acts on that queue. Windows
+        then makes the window the foreground one whenever it lets the driver take the foreground (measured
+        2026-11-06), so this is for sessions that allow it. True when it made the call."""
+        thread = self.user32.GetWindowThreadProcessId(hwnd, None)
+        if not thread or self.thread_active_window(hwnd):
+            return False
+        own = self.kernel32.GetCurrentThreadId()
+        if not self.user32.AttachThreadInput(own, thread, True):
+            return False
+        try:
+            self.user32.SetActiveWindow(hwnd)
+        finally:
+            self.user32.AttachThreadInput(own, thread, False)
+        return True
 
     def dialogs(self, pid: int) -> list[dict[str, Any]]:
         boxes = []
@@ -375,6 +413,7 @@ def wheel_wparam(notches: int) -> int:
 
 WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP = 0x200, 0x201, 0x202, 0x204, 0x205
 WM_KEYDOWN, WM_KEYUP, WM_MOUSEWHEEL, WM_CLOSE, BM_CLICK = 0x100, 0x101, 0x20A, 0x10, 0xF5
+WM_SYSKEYDOWN, WM_SYSKEYUP, VK_MENU, VK_F10, VK_RETURN = 0x104, 0x105, 0x12, 0x79, 0x0D
 WM_SYSCOMMAND, SC_MINIMIZE, SC_RESTORE = 0x112, 0xF020, 0xF120
 WM_COMMAND, WM_INITMENU, MF_BYCOMMAND, MF_GRAYED, MF_DISABLED, MF_CHECKED = 0x111, 0x116, 0x0, 0x1, 0x2, 0x8
 WM_ENTERMENULOOP = 0x211
@@ -633,15 +672,60 @@ class Daemon:
         win32().post_input(hwnd, up, 0, lparam(x, y))
         time.sleep(0.05)
 
-    def key(self, vk: int, hold: float) -> None:
+    def key(self, vk: int, hold: float, alt: bool = False) -> None:
+        """Post a key press as Windows delivers it: Alt, F10 and every key pressed with Alt held arrive as
+        WM_SYSKEYDOWN/WM_SYSKEYUP, with lParam bit 29 set while Alt is down. DefWindowProc reads those to enter the
+        menu bar's keyboard mode (an Alt or F10 press and release) and to raise SC_KEYMENU for Alt+key."""
         hwnd = self.require_window()
+        target = self.key_window(hwnd)
+        if (alt and vk != VK_RETURN) or (not alt and vk in (VK_MENU, VK_F10)):
+            self.require_active(target)
+        alt_down = 1 << 29
+        if alt:
+            menu_scan = win32().scan_code(VK_MENU)
+            self.api.setkey(VK_MENU, True)
+            win32().post_input(target, WM_SYSKEYDOWN, VK_MENU, 1 | (menu_scan << 16) | alt_down)
+        system = alt or vk in (VK_MENU, VK_F10)
+        context = alt_down if alt or vk == VK_MENU else 0
+        down, up = (WM_SYSKEYDOWN, WM_SYSKEYUP) if system else (WM_KEYDOWN, WM_KEYUP)
         scan = win32().scan_code(vk)
         self.api.setkey(vk, True)
-        win32().post_input(hwnd, WM_KEYDOWN, vk, 1 | (scan << 16))
+        win32().post_input(target, down, vk, 1 | (scan << 16) | context)
         time.sleep(hold)
         self.api.setkey(vk, False)
-        win32().post_input(hwnd, WM_KEYUP, vk, 1 | (scan << 16) | 0xC0000000)
+        # The press may have moved the focus: in fullscreen, Alt shows AGERC's strip, which takes the release.
+        target = self.key_window(hwnd)
+        # Releasing Alt itself clears the context bit; a key released while Alt is held keeps it.
+        win32().post_input(target, up, vk, 1 | (scan << 16) | 0xC0000000 | (alt_down if alt else 0))
+        if alt:
+            self.api.setkey(VK_MENU, False)
+            win32().post_input(target, WM_SYSKEYUP, VK_MENU, 1 | (menu_scan << 16) | 0xC0000000)
         time.sleep(0.05)
+
+    def require_active(self, target: int) -> None:
+        """Windows' keyboard menu (an Alt or F10 tap, Alt with a letter or Space) starts only in the active window of
+        AGE's thread, as the window a user types into always is. AGE comes up without one when Windows refuses it the
+        foreground at start, and a minimize clears it. The step then fails here rather than doing nothing. A session
+        started with --foreground may take the foreground, so there the driver activates the window instead."""
+        if win32().thread_active_window(target):
+            return
+        if self.arguments.foreground and win32().activate_in_thread(target):
+            self.event("activated", window=f"0x{target:x}")
+            if win32().thread_active_window(target):
+                return
+        raise DriveError(
+            "AGE's window is not active in its thread, so Windows starts no keyboard menu for this key. A user's keys "
+            "reach an active window, but AGE has none when Windows refused it the foreground at start or after a "
+            "minimize. Start the session with --foreground to let the driver activate it; that may take the "
+            "foreground")
+
+    def key_window(self, hwnd: int) -> int:
+        """The window with the keyboard focus: AGE's, or AGERC's fullscreen strip while it shows (it takes the
+        activation when it opens)."""
+        if win32().has_menu(hwnd):
+            return hwnd
+        strip = win32().menu_window(self.age_pid, hwnd)
+        return strip if strip is not None else hwnd
 
     def capture(self) -> Any:
         return win32().capture(self.require_window())
@@ -701,7 +785,10 @@ class Daemon:
             raise DriveError(core.REFUSED_KEYS[vk])
         if vk in core.LIVE_REFUSED_KEYS and self.saves.get("mode") == "live":
             raise DriveError(core.LIVE_REFUSED_KEYS[vk])
-        self.key(vk, _int(request, "hold_ms", core.DEFAULT_HOLD_MS) / 1000)
+        alt = bool(request.get("alt", False))
+        if alt and vk in core.ALT_REFUSED_KEYS:
+            raise DriveError(core.ALT_REFUSED_KEYS[vk])
+        self.key(vk, _int(request, "hold_ms", core.DEFAULT_HOLD_MS) / 1000, alt)
         return {}
 
     def op_wheel(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -994,7 +1081,8 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
                          help="write this setting into the sandbox SYS4REG.INI before launch, after the "
                               "profile's (repeatable), e.g. --set message.MessageSpeed=100")
     command.add_argument("--foreground", action="store_true",
-                         help="leave AGE's window where Windows puts it (default: the bottom of the z-order)")
+                         help="leave AGE's window where Windows puts it (default: the bottom of the z-order); "
+                              "an Alt or F10 key then activates it if it is not active")
 
 
 def check_launch_options(arguments: argparse.Namespace) -> None:

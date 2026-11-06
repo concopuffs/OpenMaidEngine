@@ -179,6 +179,17 @@ public sealed record DriveRequest(long Id, string Op, JsonElement Body)
         throw new DriveProtocolException($"'{Op}' needs a string '{name}'");
     }
 
+    public bool Bool(string name, bool fallback = false)
+    {
+        if (!Body.TryGetProperty(name, out JsonElement value)) return fallback;
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => throw new DriveProtocolException($"'{Op}' needs a boolean '{name}'"),
+        };
+    }
+
     public bool Has(string name) => Body.TryGetProperty(name, out _);
     public JsonElement Element(string name)
         => Body.TryGetProperty(name, out JsonElement value)

@@ -812,7 +812,7 @@ driving needs the Godot .NET console binary and `dotnet`.
 | `--seed live\|native:NAME\|port:NAME\|DIR` | both | fill a new sandbox from the live save folder, another sandbox of either target, or a folder (a `backups/` stamp or a plain copy). A sandbox that already exists is left as it is: the seed is skipped with only a `serve.log` note, so use a new name to re-seed. The source is read at start, so do not restart the source target in between, because that empties its `fresh` |
 | `--sound` | both | keep the sandbox's volume instead of writing `[sandbox.quiet]` |
 | `--set SECTION.KEY=VALUE` | both | write this `SYS4REG.INI` value into the sandbox before launch, after the profile's `[sandbox.settings]` and `[sandbox.quiet]` (repeatable), e.g. `--set message.MessageSpeed=100` for slow reveals. Native refuses it with `--live-saves` or `--attach` |
-| `--foreground` | both | leave the window where Windows puts it; by default it goes to the bottom of the z-order without being activated |
+| `--foreground` | both | leave the window where Windows puts it; by default it goes to the bottom of the z-order without being activated. Natively an Alt or F10 `key` step then activates AGE's window when it is not active, which may take the foreground |
 | `--timeout S` | both | seconds to wait for the game (native 90, port 180, which includes Godot's boot) |
 | `--exe PATH` | native | the AGE.EXE to spawn (default: the `native_scratch.py` copy) |
 | `--live-saves` | native | use the real save folder, after an automatic backup |
@@ -850,7 +850,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 |---|---|
 | `move X Y\|POINT` | park the cursor (hover) |
 | `click X Y\|POINT [hold=MS]`, `rclick …` | left/right click; right click opens the ADV menu |
-| `key NAME\|0xVK [hold=MS]` | press a key (`enter`, `space`, `ctrl`, arrows, `f1`…, letters). ESC is refused on both targets: it asks to close (use `close-request`). F1 saves a screenshot BMP in the sandbox Desktop; a native session on the live folders (`--live-saves`, `--attach`) refuses it, and the `menu` commands `save-screen` and `image-folder` too |
+| `key [alt+]NAME\|0xVK [hold=MS]` | press a key (`enter`, `space`, `ctrl`, `alt`, arrows, `f1`…, letters); `alt+NAME` presses it with Alt held, as a chord (`alt+m`, `alt+space`, `alt+enter`). Native gets Alt, F10 and every Alt chord as `WM_SYSKEYDOWN`/`WM_SYSKEYUP` with `lParam` bit 29 while Alt is down, so `DefWindowProc` runs the menu bar's keyboard mode; the release goes to whichever window took the focus on the press (the fullscreen strip). Natively an Alt or F10 tap, or Alt with a letter or Space, needs AGE's window to be the active window of its thread, as the window a user types into always is; `DefWindowProc` starts no keyboard menu otherwise. AGE has none when Windows refused it the foreground at start, or after a minimize. Such a step then fails with that reason, unless the session started with `--foreground`: the driver then activates the window, which may take the foreground. ESC is refused on both targets: it asks to close (use `close-request`). So is `alt+f4`, which natively posts `WM_CLOSE`. F1 saves a screenshot BMP in the sandbox Desktop; a native session on the live folders (`--live-saves`, `--attach`) refuses it, and the `menu` commands `save-screen` and `image-folder` too |
 | `wheel up\|down [N]` | wheel notches at the cursor |
 | `wait SECONDS` | sleep (in the client) |
 | `settle [timeout=S] [quiet=S] [threshold=F]` | wait until the game is idle for `quiet` seconds (0.7). Native: the frame stays within `threshold` (default 0.4 % of pixels) of one reference; typing adds up and resets the wait, the ADV wait indicator stays below the threshold, and animated menus such as the title never settle (use `wait` or a higher `threshold`). Port: an `input` or `menu` wait that is not busy |
@@ -956,6 +956,18 @@ six pages and loads. Then:
 
 Both targets match at every checkpoint. The `menu-*` shots also compare the control strip; they differ only in the
 wait indicator's phase.
+
+`himegari-menu-keyboard.steps` drives the menu bar's keyboard mode on SC0000 (`engine-re.md`, "Native menu bar",
+Keyboard mode):
+- An Alt tap selects ｹﾞｰﾑ, and a click on the game ends the loop and is eaten; the next click advances.
+- F10, `m` and Down ×3 reach ｵｰﾄﾒｯｾｰｼﾞ. Enter turns it on, and Alt+M then A turns it off, so the pair moves exactly
+  one page.
+- Alt, Left and Down open the window menu, Up wraps to Close, and Enter opens the 終了 dialog, answered ｷｬﾝｾﾙ.
+
+Both targets match at every checkpoint. Natively the scenario needs AGE's window active in its thread (the `key`
+step). When Windows refused AGE the foreground at start, the first `key alt` fails with that reason; run it in a
+`--foreground` session then. Native AGE can raise its environmental データが壊れています box when the first menu loop
+starts (the driver answers it). While that box is open, AGE takes no input.
 
 `himegari-fullscreen.steps` switches to fullscreen on the title screen with ﾌﾙｽｸﾘｰﾝ, holds the pointer on the top edge
 until the system-menu strip shows, and chooses ｳｲﾝﾄﾞｳ from the strip. Both targets pass, and both `SYS4REG.INI` files

@@ -18,6 +18,8 @@ using Godot;
 /// performs 終了, 画像の保存 (表示画面を保存, 画像の保存場所; Main.Screenshot.cs), the ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ and ｳｲﾝﾄﾞｳ
 /// (Main.ScreenMode.cs), ﾍﾙﾌﾟ's ﾊﾞｰｼﾞｮﾝ情報 and 設定 (Main.AgercDialogs.cs); it grays the commands it lacks
 /// (docs/backlog.md). Fullscreen detaches the bar, and the top-edge strip carries its own copy of the menu.</para>
+/// <para>The keyboard reaches the bar as DefWindowProc lets it reach AGE's: an Alt or F10 tap selects it, and the
+/// window menu (<see cref="WindowSystemMenu"/>) follows its last item. Op 0x10f's bit 0x200 keeps F10 out.</para>
 /// </summary>
 public partial class Main
 {
@@ -84,7 +86,11 @@ public partial class Main
         if (_menuItems == null) return;
         OffsetTop = _menuBarHeight;
         _menuBarLayer = new CanvasLayer { Layer = 101 };   // above the frozen frame (99) and the exit dim (100)
-        _menuBar = new NativeMenuBar(_menuItems);
+        _menuBar = new NativeMenuBar(_menuItems)
+        {
+            SystemMenu = WindowSystemMenu.Create(fullscreen: false),
+            IgnoreF10 = () => _vm != null && (_vm.SystemKeyDisableMask & 0x200) != 0,   // WM_SYSKEYDOWN VK_F10: return 0
+        };
         _menuBar.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _menuBar.Opened += OnMenuOpened;
         _menuBar.Closed += OnMenuClosed;
@@ -209,6 +215,19 @@ public partial class Main
                 break;
             case AgercMenu.MessageSettings or AgercMenu.SoundSettings or AgercMenu.OtherSettings or AgercMenu.SystemInfo:
                 OpenSettingsDialog(id);   // AGERC host command 9: the 設定 dialog on the command's tab
+                break;
+            // The window menu's commands reach age_main_window_proc as WM_SYSCOMMAND.
+            case WindowSystemMenu.Minimize:
+                DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized);
+                break;
+            case WindowSystemMenu.Maximize:
+                SwitchScreenMode(windowed: false, "the window menu's Maximize");   // SC_MAXIMIZE goes fullscreen
+                break;
+            case WindowSystemMenu.Close:
+                RequestUnforcedClose();   // SC_CLOSE posts WM_CLOSE: the 終了 dialog
+                break;
+            case WindowSystemMenu.Move:
+                WindowSystemMenu.StartKeyboardMove();   // DefWindowProc's keyboard move loop
                 break;
             default:
                 GD.Print($"[menu] command 0x{id:x} has no port implementation (docs/backlog.md, \"Native menu bar\")");

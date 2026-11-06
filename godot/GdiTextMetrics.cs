@@ -10,20 +10,20 @@ using System.Runtime.InteropServices;
 /// </summary>
 internal static class GdiTextMetrics
 {
-    private static readonly Dictionary<(string Face, int Height), Face?> Faces = new();
+    private static readonly Dictionary<(string Face, int Height, int Weight), Face?> Faces = new();
 
     /// <summary>The advance of <paramref name="codepoint"/> in <paramref name="face"/> at a character height of
-    /// <paramref name="pixels"/> (LOGFONT lfHeight -pixels), as GetTextExtentPoint32W measures it; null off
-    /// Windows or when GDI cannot answer.</summary>
-    public static int? Advance(string face, int pixels, int codepoint)
+    /// <paramref name="pixels"/> (LOGFONT lfHeight -pixels) and <paramref name="weight"/> (lfWeight), as
+    /// GetTextExtentPoint32W measures it; null off Windows or when GDI cannot answer.</summary>
+    public static int? Advance(string face, int pixels, int codepoint, int weight = 400)
     {
         if (!OperatingSystem.IsWindows()) return null;
         lock (Faces)
         {
-            if (!Faces.TryGetValue((face, pixels), out Face? gdi))
+            if (!Faces.TryGetValue((face, pixels, weight), out Face? gdi))
             {
-                gdi = Face.Create(face, pixels);
-                Faces[(face, pixels)] = gdi;
+                gdi = Face.Create(face, pixels, weight);
+                Faces[(face, pixels, weight)] = gdi;
             }
             return gdi?.Advance(codepoint);
         }
@@ -36,11 +36,11 @@ internal static class GdiTextMetrics
 
         private Face(IntPtr dc) => _dc = dc;
 
-        public static Face? Create(string face, int pixels)
+        public static Face? Create(string face, int pixels, int weight)
         {
             IntPtr dc = CreateCompatibleDC(IntPtr.Zero);
             if (dc == IntPtr.Zero) return null;
-            IntPtr font = CreateFontW(-pixels, 0, 0, 0, 400, 0, 0, 0, 1 /* DEFAULT_CHARSET */, 0, 0, 0, 0, face);
+            IntPtr font = CreateFontW(-pixels, 0, 0, 0, weight, 0, 0, 0, 1 /* DEFAULT_CHARSET */, 0, 0, 0, 0, face);
             if (font == IntPtr.Zero)
             {
                 DeleteDC(dc);

@@ -1399,9 +1399,47 @@ reads it as 0 because layout 3 clears every bank in full ("Layout-3 restore mech
 2026-11-05).
 
 **Menu loop.** While a menu is open, Windows runs its modal menu loop on AGE's thread, so the game stops: no
-presents, no script progress, no input reaches it. A focus loss closes the menu. A disabled item draws no highlight,
-even when the keyboard selects it. With a popup open, hovering another bar item switches to it, and pressing the
-open item's title closes it.
+presents, no script progress, no input reaches it. A focus loss closes the menu. The keyboard stops on a grayed item
+too, and Windows draws it with a gray highlight: `0xe6e6e6`, with `0xe4e4e4` over the check-mark column. That was
+measured on the window menu's grayed Restore (below); in the shipped games menu 110 has no grayed item that a
+keyboard run reached. With a popup open, hovering another bar item switches to it, and pressing the open item's
+title closes it.
+
+**Keyboard mode** (driven natively 2026-11-06, windowed and on the fullscreen strip). AGE's window procedure leaves
+`WM_SYSKEYUP`, `WM_SYSCHAR` and `SC_KEYMENU` (other than Alt+Enter's `lParam` `0xd`) to `DefWindowProc`, so the
+keyboard reaches the bar as in any Windows program:
+
+- **Entry.** Alt pressed and released with nothing between, or F10 the same way, starts the menu loop with the first
+  bar item, ｹﾞｰﾑ, selected and no dropdown. The item has the pushed look (border `0x99d1ff`, fill `0xcce8ff`, bottom
+  row `0x91c9f7`), every bar label shows its access-key underline, and the caption looks active. Bit `0x200` of op
+  `0x10f`'s mask keeps F10 out ("Op `0x10f`" below). The game holds as for any menu loop.
+- **Moving.** Left and Right cycle ｹﾞｰﾑ, 画像の保存, ﾒｯｾｰｼﾞ, 設定, ﾍﾙﾌﾟ and then a sixth position, the window menu,
+  where nothing is drawn. Underlines stay on throughout.
+- **Opening.** Down, Up or Enter opens the selected item's dropdown with its first row selected. An access key
+  (`m`) opens its own item's dropdown the same way. So does Alt plus an access key from outside the loop
+  (`SC_KEYMENU`). At the window-menu position, Down, Up or Enter opens the window menu; Alt+Space opens it from
+  outside the loop.
+- **With a dropdown open.** Left and Right pass through the same six positions, opening each dropdown with its first
+  row selected. At the window-menu position they open the window menu.
+- **The window menu** opens at window (3,25), one row above the bar, 178×145. It shows Restore, Move, Size, Minimize,
+  Maximize, a separator, and Close (bold, the default item, with Alt+F4). The labels follow the OS display language
+  (English on the capture machine), and Restore, Minimize, Maximize and Close carry Windows' glyphs in the check-mark
+  column. A window has Restore and Size grayed. The fullscreen strip's has Size and Maximize grayed. Down on it
+  selects Restore even when grayed.
+- **Leaving.** Alt or F10 ends the loop, with or without a dropdown. A click on the game ends it, and the click is
+  eaten: the next one advances. The bar then returns to plain labels. Escape cannot be driven natively (the driver
+  refuses it); by Windows' rule it closes the innermost dropdown and then the loop.
+- **Fullscreen.** The Alt press that shows the strip goes to AGE's window procedure, which shows the strip and returns
+  without calling `DefWindowProc`, so its release starts nothing. The next Alt tap, or F10, reaches the strip, whose
+  dialog procedure leaves it to `DefWindowProc`: its menu enters keyboard mode as the bar's does, with the same six
+  positions. With the strip hidden, F10 has no visible effect (Down after it opens no window menu).
+- **Activation.** The loop starts only in the active window of AGE's thread, which the window a user types into
+  always is. A thread with no active window ignores Alt, F10 and Alt+M. AGE's thread has none when Windows refused it
+  the foreground at start, and after a minimize. Measured with `GetGUIThreadInfo`: a minimized AGE restored with
+  `SW_SHOWNOACTIVATE` stays without one, and a driven Alt tap entered the loop once the window was activated. The
+  driver checks this before such a key (`docs/tools-reference.md`, `key`).
+- **Not driven.** Pointer moves during keyboard mode. The driver's posted `WM_MOUSEMOVE` does not move the selection,
+  but Windows' menu loop follows the real cursor, so that run decides nothing.
 
 **Screenshots** (native-read and driver-checked 2026-11-05). F1 and 表示画面を保存 (`0x9c46`) both reach
 `engine_save_screenshot_bmp@0x407ce0`:
@@ -1595,7 +1633,7 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
 - **Screenshots.** `godot/Main.Screenshot.cs` saves through `ScreenshotBmpStore` (`engine/Age.Engine/Persistence`).
   表示画面を保存 saves the frame frozen when the menu opened; F1 saves the current frame unless
   `VirtualMachine.SystemKeyDisableMask` (op `0x10f`) has bit 0, or a dialog is open. `--desktop-dir` replaces the
-  Desktop. The port has no F10 handling, so it only stores bit `0x200`.
+  Desktop. Bit `0x200` keeps F10 from entering the bar's keyboard mode, as natively.
 - **Image folder.** 画像の保存場所 holds the VM, freezes the frame and opens the same shell dialog
   (`godot/ScreenshotFolderDialog.cs`). The dialog runs on a thread of its own so that Godot keeps drawing, and the
   driver's `dialogs` and `answer` steps reach it as they reach native's. Other platforms use their own folder
@@ -1618,6 +1656,16 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
 - **Unimplemented commands.** The refresh grays every command the port cannot run yet.
 - **Menu loop.** While a menu is open, the port holds the VM and freezes the presented frame. The hold nests, so the
   終了 dialog can open from it.
+- **Keyboard.** `NativeMenuBar` implements keyboard mode as described above, on the bar and on the strip.
+  `godot/WindowSystemMenu.cs` supplies the window menu: native's states per mode, the labels of the port window's
+  own window menu (`GetMenuString`, so they follow the display language; English off Windows), and the four glyphs
+  captured from native. A selected grayed item draws gray. The default item uses the bold menu font
+  (`Win32DialogStyle.MenuBoldFont`, with GDI's bold advances). The window menu's commands run as AGE's
+  `WM_SYSCOMMAND` does: Minimize, Maximize (fullscreen, unless `ForceScreen`), Close (the 終了 dialog) and Move
+  (Windows' keyboard move loop on the port's window). On the strip they act as its caption buttons do; its Move does
+  nothing. A key that starts the loop counts as the window being active, since only the focused window gets keys; the
+  driver's keys reach an unfocused port as its posted messages reach native AGE. Pointer moves in keyboard mode
+  without a dropdown move the selection without opening it, which is Windows' rule but not driven natively.
 - **Text.** Labels are drawn glyph by glyph, with GDI's advances (`GdiTextMetrics`, Windows only), the font's own
   coverage check (`Win32Font.PrimaryHasChar`; Godot's `Font.HasChar` also counts fallbacks), and LCD antialiasing.
   The 終了 and script-error dialogs share this text path.
@@ -1629,10 +1677,13 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   caption's glyph filtering and the empty product ID. The 設定 pages' client areas match native's capture pixel for
   pixel, apart from 動作環境's live free space; both targets list the same texts and buttons and write the same
   `SYS4REG.INI`. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
-  state, then posts `WM_COMMAND`. Both targets refuse a grayed item.
-- **Remaining gaps.** The other commands, the right-click popup, the top-edge strip, Alt/F10 focus, and native's
-  off-window popups are listed in `docs/backlog.md`, "Native menu bar". The ﾒｯｾｰｼﾞ page's UseAntiFont check is applied
-  on OK ("AntiFont off" in the text sections).
+  state, then posts `WM_COMMAND`. Both targets refuse a grayed item. `himegari-menu-keyboard.steps` drives keyboard
+  mode on SC0000. Both targets eat the same click and move the same one page through ｵｰﾄﾒｯｾｰｼﾞ on and off. Both
+  open the 終了 dialog from the window menu's Close. Full-window captures of the six positions and the window menu
+  match native apart from ClearType fringes and the window menu's row (below).
+- **Remaining gaps.** `docs/backlog.md`, "Native menu bar", lists the look differences, including native's
+  off-window popups and the window menu's row: it opens one row above the bar natively and at the bar's top in the
+  port. The ﾒｯｾｰｼﾞ page's UseAntiFont check is applied on OK ("AntiFont off" in the text sections).
 
 ### Screen mode — ﾌﾙｽｸﾘｰﾝ, ｳｲﾝﾄﾞｳ and the top-edge strip (2026-11-06)
 
@@ -1746,8 +1797,9 @@ then reaches the game. While the strip's menu loop runs, the game holds, as it d
   and black text. Its geometry matches the capture above. The text differs from native only in ClearType fringes,
   as the windowed bar's does.
 - **The strip's behaviour.** It shows from the top-edge dwell (the screen's top two rows, 100 ms ticks) or from
-  Alt. It freezes the presented frame without holding the VM. It takes the keyboard. A click elsewhere hides it and
-  reaches the game. Its menu loop holds the VM as the bar's does.
+  Alt. It freezes the presented frame without holding the VM. It takes the keyboard. A later Alt or F10 tap starts
+  its keyboard mode ("Native menu bar", Keyboard mode). A click elsewhere hides it and reaches the game. Its menu loop
+  holds the VM as the bar's does.
 - **Persistence.** `display:ScreenMode` is written at each switch. Native writes it at exit, and the final file is
   the same.
 - **Not modelled.** The `ctx+0x55118` stamp is not modelled. The selection-fade setting is never touched, because it

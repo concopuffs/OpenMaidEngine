@@ -165,6 +165,18 @@ public class DriveControlTests
     }
 
     [Fact]
+    public void AnAltKeyChordHoldsAltAroundTheKey()
+    {
+        var backend = new FakeBackend();
+        var dispatcher = new DriveDispatcher(backend);
+        Run(dispatcher, backend, """{"id":1,"op":"key","vk":77,"hold_ms":80,"alt":true}""");
+        Assert.Equal(new[] { "0:key 0x12 down", "0:key 0x4d down", "80:key 0x4d up", "80:key 0x12 up" },
+                     backend.Events);
+        Assert.False((bool)Run(dispatcher, backend, """{"id":2,"op":"key","vk":18,"alt":true}""")["ok"]!);
+        Assert.False((bool)Run(dispatcher, backend, """{"id":3,"op":"key","vk":77,"alt":1}""")["ok"]!);
+    }
+
+    [Fact]
     public void WaitReturnsTheMatchingStateAndPokesUntilItMatches()
     {
         var backend = new FakeBackend();

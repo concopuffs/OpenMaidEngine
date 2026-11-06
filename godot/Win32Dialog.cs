@@ -166,7 +166,7 @@ public static class Win32DialogStyle
         "IPAGothic", "sans-serif",
     };
 
-    private static Win32Font? _dialogFont, _messageFont, _captionFont, _menuFont;
+    private static Win32Font? _dialogFont, _messageFont, _captionFont, _menuFont, _menuBoldFont;
 
     /// <summary>AGERC's dialog font, ＭＳ Ｐゴシック 12 px. GDI draws it from the font's 12 px bitmap strike
     /// without antialiasing; Godot does the same when the font is installed. Text sits 10 px above its
@@ -196,6 +196,13 @@ public static class Win32DialogStyle
     public static Win32Font MenuFont => _menuFont ??= Make("Segoe UI", 12, bitmapStrike: false, ascent: 12,
         height: 15, lcd: true, ("Meiryo UI", LinkedSize), ("Yu Gothic UI", LinkedSize));
 
+    /// <summary>The menu font in bold (FW_BOLD), as Windows draws a menu's default item: the window menu's Close.
+    /// </summary>
+    public static Win32Font MenuBoldFont => _menuBoldFont ??= Make("Segoe UI", 12, bitmapStrike: false, ascent: 12,
+        height: 15, lcd: true, Bold, ("Meiryo UI", LinkedSize), ("Yu Gothic UI", LinkedSize));
+
+    private const int Regular = 400, Bold = 700;   // LOGFONT lfWeight
+
     // GDI's font linking draws Segoe UI's Japanese as Meiryo UI 13 px for both the -11 and -12 heights: the
     // extents of エラーが発生しました (105 px) and 再試行：もう一度このコマンドを実行します． (233 px) match it.
     private const int LinkedSize = 13;
@@ -207,19 +214,23 @@ public static class Win32DialogStyle
 
     // lcd: subpixel antialiasing, as ClearType draws the menus.
     private static Win32Font Make(string face, int size, bool bitmapStrike, int ascent, int height, bool lcd,
-        params (string Face, int Size)[] linked)
+        params (string Face, int Size)[] linked) => Make(face, size, bitmapStrike, ascent, height, lcd, Regular, linked);
+
+    private static Win32Font Make(string face, int size, bool bitmapStrike, int ascent, int height, bool lcd,
+        int weight, params (string Face, int Size)[] linked)
     {
-        var portable = new SystemFont { FontNames = PortableJapanese };
-        if (LoadSystemFace(face) is not { } font) return new Win32Font(portable, size, 0, 0);
+        var portable = new SystemFont { FontNames = PortableJapanese, FontWeight = weight };
+        if (LoadSystemFace(face, weight) is not { } font) return new Win32Font(portable, size, 0, 0);
         Configure(font, bitmapStrike, lcd);
         font.Fallbacks = new Godot.Collections.Array<Font> { portable };
         foreach ((string name, int linkedSize) in linked)
-            if (LoadSystemFace(name) is { } link)
+            if (LoadSystemFace(name, weight) is { } link)
                 return new Win32Font(font, size, ascent, height, Configure(link, false, lcd), linkedSize)
                 {
                     GdiFace = face,
+                    GdiWeight = weight,
                 };
-        return new Win32Font(font, size, ascent, height) { GdiFace = face };
+        return new Win32Font(font, size, ascent, height) { GdiFace = face, GdiWeight = weight };
     }
 
     private static FontFile Configure(FontFile font, bool bitmapStrike, bool lcd = false)
@@ -235,9 +246,9 @@ public static class Win32DialogStyle
     /// <summary>The installed face named <paramref name="family"/>, or null. Many Windows fonts are collections
     /// (msgothic.ttc holds MS Gothic, MS PGothic and MS UI Gothic), and SystemFont loads a collection's first
     /// face, so the face is picked by name here. The index must be set before the data is.</summary>
-    private static FontFile? LoadSystemFace(string family)
+    private static FontFile? LoadSystemFace(string family, int weight = Regular)
     {
-        string path = OS.GetSystemFontPath(family);
+        string path = OS.GetSystemFontPath(family, weight);
         if (string.IsNullOrEmpty(path)) return null;
         byte[] data = Godot.FileAccess.GetFileAsBytes(path);
         if (data.Length == 0) return null;
@@ -293,6 +304,9 @@ public sealed class Win32Font
     /// <summary>The Windows face this font stands in for: on Windows, GDI measures the advances with it.</summary>
     public string? GdiFace { get; init; }
 
+    /// <summary>The GDI weight (lfWeight) of <see cref="GdiFace"/>: 400 regular, 700 bold.</summary>
+    public int GdiWeight { get; init; } = 400;
+
     public Win32Font(Font font, int size, int ascent, int height, Font? linked = null, int linkedSize = 0)
     {
         Font = font;
@@ -316,7 +330,7 @@ public sealed class Win32Font
     // GDI's advance where GDI is available (it links the faces itself), else the drawing face's.
     private float Advance(Rune rune)
     {
-        if (GdiFace != null && GdiTextMetrics.Advance(GdiFace, Size, rune.Value) is int gdi) return gdi;
+        if (GdiFace != null && GdiTextMetrics.Advance(GdiFace, Size, rune.Value, GdiWeight) is int gdi) return gdi;
         (Font font, int size) = FaceFor(rune);
         return font.GetCharSize(rune.Value, size).X;
     }

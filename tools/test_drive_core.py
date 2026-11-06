@@ -113,6 +113,13 @@ def test_keys_and_points():
     check(core.virtual_key("0x26") == 0x26 and core.virtual_key("f2") == 0x71, "hex VKs and function keys")
     check(raises(core.virtual_key, "0x1b", contains="WM_CLOSE"), "ESC is refused as a hex VK too")
     check(raises(core.virtual_key, "hyper", contains="unknown key"), "unknown key names are rejected")
+    check(core.key_chord("alt+M") == (True, 0x4D) and core.key_chord("f10") == (False, 0x79),
+          "alt+ chords hold Alt; a plain name does not")
+    check(core.key_chord("Alt+Enter") == (True, 0x0D), "the alt+ prefix ignores case")
+    check(raises(core.key_chord, "alt+f4", contains="close-request"), "Alt+F4 is refused")
+    check(raises(core.key_chord, "alt+alt", contains="already held"), "Alt+Alt is refused")
+    check(raises(core.key_chord, "alt+escape", contains="WM_CLOSE"), "ESC stays refused in a chord")
+    check(raises(core.parse_step, "key alt+f4", contains="close-request"), "step validation refuses Alt+F4")
     points = {"title.start": (400, 302)}
     check(core.resolve_point(("title.start",), points) == (400, 302), "named points resolve")
     check(core.resolve_point(("5", "6"), points) == (5, 6), "coordinates pass through")

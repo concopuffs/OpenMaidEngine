@@ -377,6 +377,22 @@ def virtual_key(name: str) -> int:
     return vk
 
 
+ALT_REFUSED_KEYS = {
+    0x73: "Alt+F4 is SC_CLOSE, which posts WM_CLOSE to native AGE and opens its 終了 dialog; use close-request",
+}
+
+
+def key_chord(name: str) -> tuple[bool, int]:
+    """A `key` step's key: (alt, vk). `alt+NAME` presses NAME with Alt held, as a chord (Alt+Enter, Alt+M)."""
+    alt = name.lower().startswith("alt+")
+    vk = virtual_key(name[4:] if alt else name)
+    if alt and vk in (0x12, 0xA4, 0xA5):
+        raise DriveError(f"key {name}: Alt is already held; press it alone with `key alt`")
+    if alt and vk in ALT_REFUSED_KEYS:
+        raise DriveError(f"key {name}: {ALT_REFUSED_KEYS[vk]}")
+    return alt, vk
+
+
 # Capabilities both targets offer (native: drive_native.CAPABILITIES; port: PortCapabilities in godot/Main.Drive.cs).
 # Committed scenarios may use these and nothing target-only.
 SHARED_CAPABILITIES = ("dialogs", "answer", "window", "menu")
@@ -421,8 +437,9 @@ STEPS = {
     "move": _spec(1, 2, "", "move X Y | move POINT          park the cursor (hover)"),
     "click": _spec(1, 2, "hold", "click X Y | click POINT [hold=MS]   left click"),
     "rclick": _spec(1, 2, "hold", "rclick X Y | rclick POINT [hold=MS] right click (opens the ADV menu)"),
-    "key": _spec(1, 1, "hold", "key NAME|0xVK [hold=MS]       press a key; ESC is refused (F1 saves a screenshot "
-                 "BMP in the sandbox Desktop)"),
+    "key": _spec(1, 1, "hold", "key [alt+]NAME|0xVK [hold=MS] press a key, alt+ with Alt held; ESC and Alt+F4 are "
+                 "refused; natively an Alt or F10 key fails unless AGE's window is active (F1 saves a screenshot BMP "
+                 "in the sandbox Desktop)"),
     "wheel": _spec(1, 2, "", "wheel up|down [N]             turn the wheel N notches at the cursor"),
     "wait": _spec(1, 1, "", "wait SECONDS"),
     "settle": _spec(0, 0, "timeout quiet threshold",
@@ -516,7 +533,7 @@ def _validate(step: Step) -> None:
     if step.name in ("move", "click", "rclick") and len(step.args) == 2:
         _coordinates(step.args)
     elif step.name == "key":
-        virtual_key(step.args[0])
+        key_chord(step.args[0])
     elif step.name == "wheel":
         if step.args[0].lower() not in ("up", "down"):
             raise DriveError("wheel takes up or down")
@@ -810,7 +827,8 @@ class Executor:
             x, y = resolve_point(step.args, self.points)
             return self.click(x, y, "right" if step.name == "rclick" else "left", hold)
         elif step.name == "key":
-            self.client.call("key", vk=virtual_key(step.args[0]), hold_ms=hold)
+            alt, vk = key_chord(step.args[0])
+            self.client.call("key", vk=vk, hold_ms=hold, **({"alt": True} if alt else {}))
         elif step.name == "wheel":
             notches = int(step.args[1]) if len(step.args) > 1 else 1
             self.client.call("wheel", notches=notches if step.args[0].lower() == "up" else -notches)

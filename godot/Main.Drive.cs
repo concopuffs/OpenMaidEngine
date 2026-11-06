@@ -163,16 +163,22 @@ public partial class Main
         public void Button(DriveButton button, bool down, int x, int y)
             => main.InjectDriveButton(button == DriveButton.Left ? MouseButton.Left : MouseButton.Right, down, x, y);
 
+        private bool _altDown;
+
+        /// <summary>A key event as Godot reports a real one: Alt held (the driver's Alt chords, or Alt itself while
+        /// pressed) sets the event's Alt modifier.</summary>
         public void Key(int virtualKey, bool down)
         {
             if (!Win32VirtualKeyTranslator.TryCreateKey(virtualKey, out Key key))
                 throw new DriveProtocolException($"vk 0x{virtualKey:x} has no Godot key");
+            if (key == Godot.Key.Alt) _altDown = down;
             Input.ParseInputEvent(new InputEventKey
             {
                 Device = DriveInputDevice,
                 Keycode = key,
                 PhysicalKeycode = key,
                 Pressed = down,
+                AltPressed = _altDown,
             });
         }
 

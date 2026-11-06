@@ -21,6 +21,11 @@ public sealed class NativeMenuItem
     public string Text { get; set; }
     public bool Enabled { get; set; }
     public bool Checked { get; set; }
+    /// <summary>MFS_DEFAULT: Windows draws the item bold (the window menu's Close).</summary>
+    public bool Default { get; init; }
+    /// <summary>The HBMMENU_POPUP_* bitmap Windows draws in the item's check-mark column (the window menu's Restore,
+    /// Minimize, Maximize and Close), or 0 for none.</summary>
+    public int Bitmap { get; init; }
 
     public NativeMenuItem(NativeMenuItemKind kind, int id, string text, bool grayed = false, bool @checked = false,
                           bool rightJustified = false, List<NativeMenuItem>? children = null)

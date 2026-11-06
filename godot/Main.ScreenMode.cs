@@ -73,25 +73,13 @@ public partial class Main
         if (items == null) return;
         AgercMenu.Prune(items, key => AgercMenu.Setting(_catalog.StartupSettings, key));
         _menuStrip = new SystemMenuStrip(items, _catalog.Title, icon) { Visible = false };
+        _menuStrip.Bar.SystemMenu = WindowSystemMenu.Create(fullscreen: true);   // the strip's: Restore, no Maximize
         _menuStrip.Bar.Opened += OnMenuOpened;
         _menuStrip.Bar.Closed += OnMenuClosed;
         _menuStrip.Bar.CommandChosen += ExecuteStripCommand;
-        _menuStrip.Minimize += () =>
-        {
-            // SC_MINIMIZE: hide, IAGEService +0x9c(1, 0), then AGE's own minimize.
-            HideMenuStrip("the minimize button");
-            DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized);
-        };
-        _menuStrip.Restore += () =>
-        {
-            HideMenuStrip("the restore button");   // SC_RESTORE: hide, then IAGEService +0x1c(1)
-            SwitchScreenMode(windowed: true, "the strip's restore button");
-        };
-        _menuStrip.CloseRequested += () =>
-        {
-            HideMenuStrip("the close button");   // IDCANCEL: PostMessage(WM_CLOSE, 0) to AGE's window, then hide
-            RequestUnforcedClose();
-        };
+        _menuStrip.Minimize += () => MinimizeFromStrip("the minimize button");
+        _menuStrip.Restore += () => RestoreFromStrip("the strip's restore button");
+        _menuStrip.CloseRequested += () => CloseFromStrip("the close button");
         _menuStripLayer = new CanvasLayer { Layer = 101 };   // with the menu bar: above the frozen frame and the dim
         _menuStripLayer.AddChild(_menuStrip);
         AddChild(_menuStripLayer);
@@ -247,6 +235,27 @@ public partial class Main
         GD.Print($"[display] system-menu strip hidden ({reason})");
     }
 
+    /// <summary>SC_MINIMIZE on the strip: hide, IAGEService +0x9c(1, 0), then AGE's own minimize.</summary>
+    private void MinimizeFromStrip(string source)
+    {
+        HideMenuStrip(source);
+        DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized);
+    }
+
+    /// <summary>SC_RESTORE on the strip: hide, then IAGEService +0x1c(1).</summary>
+    private void RestoreFromStrip(string source)
+    {
+        HideMenuStrip(source);
+        SwitchScreenMode(windowed: true, source);
+    }
+
+    /// <summary>IDCANCEL (and SC_CLOSE): PostMessage(WM_CLOSE, 0) to AGE's window, then hide.</summary>
+    private void CloseFromStrip(string source)
+    {
+        HideMenuStrip(source);
+        RequestUnforcedClose();
+    }
+
     private void RefreshStripMenu()
     {
         if (_menuStrip == null) return;
@@ -258,6 +267,22 @@ public partial class Main
     /// hides the strip before each command the port performs (表示画面を保存 after its screenshot).</summary>
     private void ExecuteStripCommand(int id)
     {
+        switch (id)
+        {
+            // The strip's window menu goes to the strip's own WM_SYSCOMMAND, as its caption buttons do.
+            case WindowSystemMenu.Minimize:
+                MinimizeFromStrip("the window menu's Minimize");
+                return;
+            case WindowSystemMenu.Restore:
+                RestoreFromStrip("the strip's window menu Restore");
+                return;
+            case WindowSystemMenu.Close:
+                CloseFromStrip("the window menu's Close");
+                return;
+            case WindowSystemMenu.Move:
+                GD.Print("[display] the strip's window menu Move: the port's strip does not move");
+                return;
+        }
         if (id != AgercMenu.SaveScreen) HideMenuStrip($"menu command 0x{id:x}");
         ExecuteMenuCommand(id);
         if (id == AgercMenu.SaveScreen) HideMenuStrip($"menu command 0x{id:x}");
@@ -283,7 +308,8 @@ public partial class Main
                 _menuStrip.HandleMouse(new InputEventMouseMotion { Position = new Vector2(-1, -1) });
                 return true;   // input polling is off while the strip shows
             case InputEventKey key:
-                if (_menuStrip.Bar.IsOpen || _menuStrip.Bar.HandleInput(key)) return true;
+                // The strip's bar takes keys first: its loop's, and Alt or F10 taps that start it.
+                if (_menuStrip.Bar.HandleInput(key) || _menuStrip.Bar.IsOpen) return true;
                 if (key.Pressed && !key.Echo)
                 {
                     if (key.Keycode == Key.Escape || (key.Keycode == Key.F4 && key.AltPressed))

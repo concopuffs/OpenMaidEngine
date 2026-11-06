@@ -14,13 +14,15 @@ it; git history keeps the record.
   画像の保存, the four ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (with the fullscreen top-edge strip), ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報 and
   the 設定 dialog's four commands as native does (`engine-re.md`, "Native menu bar" and "Screen mode"). It grays
   everything else. Still missing:
-  - Keyboard focus without a dropdown: Alt pressed and released, or F10, selects the bar; bit `0x200` of op
-    `0x10f`'s mask swallows F10. The port's keyboard access starts only from Alt with an access key, which opens
-    that dropdown.
   - Smaller look differences. Native popups may extend past the game window (the ﾍﾙﾌﾟ popup spans x 744..989), but
-    the port clamps them inside it. Latin glyphs are drawn without ClearType's exact rasterization. The 設定 tab
-    control is `TCS_HOTTRACK`, and native's hover look is neither captured nor drawn. The fullscreen strip's
-    minimize and restore buttons use Windows 10's default hover colours, not captured ones.
+    the port clamps them inside it. For the same reason, the window menu opens at the bar's top, not one row above
+    it as natively. Latin glyphs are drawn without ClearType's exact rasterization. The 設定 tab control is
+    `TCS_HOTTRACK`, and native's hover look is neither captured nor drawn. The fullscreen strip's minimize and
+    restore buttons use Windows 10's default hover colours, not captured ones.
+  - Keyboard mode's pointer moves are not driven natively: the driver's posted moves do not reach Windows' menu
+    loop. The port moves the selection without opening a dropdown, by Windows' rule. Escape in the loop is modelled
+    on Windows' rule too, since the driver refuses ESC on native AGE. The strip's window-menu Move does nothing in
+    the port; natively it would start Windows' move loop on the strip.
 
   Done when each command reaches the same native service or dialog, or is closed as out of scope. Closed as out of
   scope (2026-11-06): the 設定 radio groups, the right-click ﾒｯｾｰｼﾞ popup and 設定 page 101, which neither shipped
@@ -173,4 +175,10 @@ it; git history keeps the record.
   should show OME's name, release version, license and a pointer to `THIRD_PARTY_NOTICES.md`. Done when the dialog shows
   OME's identity beside the game's, `engine-re.md`'s port notes say so, and `himegari-version-dialog.steps` compares
   only the parts that are meant to match native.
+- **Native AGE takes the foreground when it starts.** `drive.py native start` puts AGE's window at the bottom of the
+  z-order but does not stop AGE activating it. In three sessions on 2026-11-06 the foreground window was AGE's right
+  after start, and again after a `window restore`, so the user's typing would have reached the game. When Windows
+  refuses AGE the foreground instead, its thread has no active window, and the keyboard-menu `key` steps fail
+  (`tools-reference.md`, `key`). Done when a native start leaves the user's foreground alone. The keyboard-menu steps
+  must still find an active window, or the scenarios that use them must say they need `--foreground`.
 - **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default).

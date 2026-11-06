@@ -129,7 +129,7 @@ public sealed class DriveDispatcher
                     ParseButton(request.Text("button", "left")), request.Int("hold_ms", DefaultClickHoldMs));
             case "key":
                 return new KeyOperation(request, reply, _backend, nowMs, request.Int("vk"),
-                    request.Int("hold_ms", DefaultKeyHoldMs));
+                    request.Int("hold_ms", DefaultKeyHoldMs), request.Bool("alt"));
             case "wheel":
             {
                 // x/y default to the driven cursor, which the game may have moved since the client last saw it.
@@ -299,27 +299,43 @@ public sealed class DriveDispatcher
         }
     }
 
+    /// <summary>A key press. With <c>alt</c>, Alt goes down first and up last, as a chord (Alt+Enter, Alt+M).</summary>
     private sealed class KeyOperation : Operation
     {
+        private const int VirtualKeyMenu = 0x12;   // VK_MENU, Alt
         private readonly IDriveBackend _backend;
         private readonly int _virtualKey;
+        private readonly bool _alt;
         private readonly long _releaseAt;
         private int _phase;
 
         public KeyOperation(DriveRequest request, Action<string> reply, IDriveBackend backend, long nowMs,
-                            int virtualKey, int holdMs) : base(request, reply)
+                            int virtualKey, int holdMs, bool alt) : base(request, reply)
         {
             if (virtualKey is <= 0 or > 0xff) throw new DriveProtocolException($"vk 0x{virtualKey:x} is not a key");
             if (holdMs < 0) throw new DriveProtocolException("hold_ms must not be negative");
+            if (alt && virtualKey is VirtualKeyMenu or 0xa4 or 0xa5)
+                throw new DriveProtocolException("alt holds Alt already: press Alt alone without it");
             _backend = backend;
             _virtualKey = virtualKey;
+            _alt = alt;
             _releaseAt = nowMs + holdMs;
         }
 
         public override JsonNode? Poll(long nowMs)
         {
-            if (_phase == 0) { _backend.Key(_virtualKey, true); _phase = 1; }
-            if (_phase == 1 && nowMs >= _releaseAt) { _backend.Key(_virtualKey, false); _phase = 2; }
+            if (_phase == 0)
+            {
+                if (_alt) _backend.Key(VirtualKeyMenu, true);
+                _backend.Key(_virtualKey, true);
+                _phase = 1;
+            }
+            if (_phase == 1 && nowMs >= _releaseAt)
+            {
+                _backend.Key(_virtualKey, false);
+                if (_alt) _backend.Key(VirtualKeyMenu, false);
+                _phase = 2;
+            }
             if (_phase == 2 && nowMs >= _releaseAt + ReleaseTailMs) Done = true;
             return null;
         }

@@ -11,6 +11,12 @@ using Godot;
 /// menu takes every mouse and key event. <see cref="Opened"/> and <see cref="Closed"/> bracket that loop, and a chosen
 /// command is raised through <see cref="CommandChosen"/> before <see cref="Closed"/>, as WM_COMMAND follows the loop's
 /// end. Main routes input here first (<see cref="HandleInput"/>).</para>
+/// <para>Keyboard mode is DefWindowProc's. Alt or F10 pressed and released with nothing between selects the first bar
+/// item without a dropdown, and the loop starts. Left and Right then cycle the bar items and the window-menu position
+/// (<see cref="SystemMenu"/>; nothing is drawn there). Down, Up, Enter or an access key opens a dropdown with its first
+/// item selected, as Alt plus an access key does from outside the loop. Alt+Space opens the window menu. Inside the
+/// loop, Alt or F10 ends it, and Escape closes the innermost dropdown and then the loop. Measured on native AGE on
+/// 2026-11-06 (docs/engine-re.md, "Native menu bar").</para>
 /// </summary>
 public partial class NativeMenuBar : Control
 {
@@ -43,6 +49,8 @@ public partial class NativeMenuBar : Control
     private static readonly Color SeparatorLine = Color.Color8(0xd7, 0xd7, 0xd7);
     private static readonly Color ItemHot = Color.Color8(0x91, 0xc9, 0xf7);
     private static readonly Color ItemHotGutter = Color.Color8(0x90, 0xc8, 0xf6);
+    private static readonly Color ItemGrayedHot = Color.Color8(0xe6, 0xe6, 0xe6);   // a selected grayed item
+    private static readonly Color ItemGrayedHotGutter = Color.Color8(0xe4, 0xe4, 0xe4);
     private static readonly Color CheckBox = Color.Color8(0x90, 0xc8, 0xf6);
     private static readonly Color CheckBoxHot = Color.Color8(0x56, 0xb0, 0xfa);
     private static readonly Color Glyph = Color.Color8(0x33, 0x33, 0x33);
@@ -106,13 +114,16 @@ public partial class NativeMenuBar : Control
 
     private readonly List<NativeMenuItem> _items;
     private readonly Win32Font _font = Win32DialogStyle.MenuFont;
+    private Win32Font? _boldFont;
     private readonly List<Dropdown> _dropdowns = new();
     private Rect2I[] _barRects = Array.Empty<Rect2I>();
     private int _hotBar = -1;
-    private int _openBar = -1;
+    private int _openBar = -1;       // the selected bar position while the loop runs (SystemPosition: the window menu)
     private bool _keyboardMode;
     private bool _active = true;
     private bool _swallowRelease;   // a press that ended the menu loop: its release belongs to the menu too
+    private bool _altArmed, _f10Armed;   // Alt or F10 is down with no other key or button since: its release enters
+    private Key _swallowKey = Key.None;  // the Alt or F10 that ended the loop: its release is the loop's too
     private (int Level, int Index, double Remaining)? _pendingSubmenu;
 
     /// <summary>The menu loop starts (WM_INITMENU): refresh the items, hold the game.</summary>
@@ -130,7 +141,20 @@ public partial class NativeMenuBar : Control
     }
 
     public IReadOnlyList<NativeMenuItem> Items => _items;
+
+    /// <summary>The menu loop runs: a bar position is selected, with or without a dropdown.</summary>
     public bool IsOpen => _openBar >= 0;
+
+    /// <summary>The window menu, reached after the last bar item (<see cref="WindowSystemMenu"/>); null leaves the
+    /// position out.</summary>
+    public List<NativeMenuItem>? SystemMenu { get; set; }
+
+    /// <summary>F10 does not enter the loop (op <c>0x10f</c>'s mask bit <c>0x200</c>: AGE returns 0 for it).</summary>
+    public Func<bool>? IgnoreF10 { get; set; }
+
+    private int SystemPosition => _items.Count;
+    private int PositionCount => _items.Count + (SystemMenu != null ? 1 : 0);
+    private int Neighbour(int direction) => (_openBar + direction + PositionCount) % PositionCount;
 
     /// <summary>The screen in the bar's own coordinates, which dropdowns stay inside. Null: the bar's own rectangle
     /// (the windowed bar covers the whole viewport). The fullscreen strip's bar sits below its caption.</summary>
@@ -183,6 +207,7 @@ public partial class NativeMenuBar : Control
     /// <summary>Close the menu without a command, as a cancelled menu loop does.</summary>
     public void Close()
     {
+        _altArmed = _f10Armed = false;
         if (_openBar < 0) return;
         _openBar = -1;
         _dropdowns.Clear();
@@ -233,6 +258,17 @@ public partial class NativeMenuBar : Control
             }
             return p.Y < BarHeight;
         }
+        if (_dropdowns.Count == 0)
+        {
+            // The bar is selected without a dropdown: the pointer moves the selection and opens nothing.
+            int over = p.Y < BarHeight ? BarItemAt(p) : -1;
+            if (over >= 0 && over != _openBar)
+            {
+                _openBar = over;
+                QueueRedraw();
+            }
+            return true;
+        }
         var (level, row) = DropdownAt(p);
         if (level >= 0)
         {
@@ -248,6 +284,7 @@ public partial class NativeMenuBar : Control
     private bool OnButton(InputEventMouseButton button, Vector2I p)
     {
         bool left = button.ButtonIndex == MouseButton.Left;
+        if (button.Pressed) _altArmed = _f10Armed = false;
         if (!IsOpen)
         {
             if (_swallowRelease && !button.Pressed && left)
@@ -267,10 +304,17 @@ public partial class NativeMenuBar : Control
         if (button.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown) return true;
         if (button.Pressed)
         {
+            // Dropdowns are windows above the bar (the window menu covers part of it).
+            var (level, row) = DropdownAt(p);
+            if (level >= 0)
+            {
+                if (row >= 0) Select(level, row, hover: false);
+                return true;
+            }
             int bar = p.Y < BarHeight ? BarItemAt(p) : -1;
             if (bar >= 0)
             {
-                if (bar == _openBar)
+                if (bar == _openBar && _dropdowns.Count > 0)
                 {
                     _swallowRelease = left;
                     Close();
@@ -279,12 +323,6 @@ public partial class NativeMenuBar : Control
                 {
                     OpenBar(bar, keyboard: false);
                 }
-                return true;
-            }
-            var (level, row) = DropdownAt(p);
-            if (level >= 0)
-            {
-                if (row >= 0) Select(level, row, hover: false);
                 return true;
             }
             _swallowRelease = left;
@@ -304,25 +342,134 @@ public partial class NativeMenuBar : Control
 
     private bool OnKey(InputEventKey key)
     {
-        if (!IsOpen)
+        if (!key.Pressed) return OnKeyRelease(key);
+        if (key.Echo && key.Keycode is Key.Alt or Key.F10) return IsOpen;   // a held Alt or F10 repeats: nothing new
+        if (!IsOpen) return OnKeyOutsideLoop(key);
+        if (key.Keycode is Key.Alt or Key.F10)
         {
-            // Alt+mnemonic opens that bar item's dropdown with its first item selected (WM_SYSCOMMAND SC_KEYMENU).
-            if (!key.Pressed || key.Echo || !key.AltPressed || !_active) return false;
-            char letter = KeyLetter(key);
-            int bar = letter == '\0' ? -1 : _items.FindIndex(item => item.Mnemonic == letter);
-            if (bar < 0) return false;
-            OpenBar(bar, keyboard: true);
+            _swallowKey = key.Keycode;   // the loop ends on the press, so the release enters nothing
+            Close();
             return true;
         }
-        if (!key.Pressed) return true;
         _keyboardMode = true;
+        if (_dropdowns.Count == 0) OnBarKey(key);
+        else OnDropdownKey(key);
+        return true;
+    }
+
+    /// <summary>WM_SYSKEYUP: DefWindowProc raises SC_KEYMENU, and the loop starts on the first bar item, when Alt or
+    /// F10 is released with no other key or button since its press.</summary>
+    private bool OnKeyRelease(InputEventKey key)
+    {
+        if (_swallowKey != Key.None && key.Keycode == _swallowKey)
+        {
+            _swallowKey = Key.None;
+            return true;
+        }
+        bool tapped = false;
+        if (key.Keycode == Key.Alt)
+        {
+            tapped = _altArmed;
+            _altArmed = false;
+        }
+        else if (key.Keycode == Key.F10)
+        {
+            tapped = _f10Armed;
+            _f10Armed = false;
+        }
+        if (tapped && !IsOpen)
+        {
+            SelectBar(0);
+            return true;
+        }
+        return IsOpen;
+    }
+
+    /// <summary>A press outside the loop: Alt or F10 arms the keyboard entry, any other key disarms it, and Alt with
+    /// an access key or Space starts the loop with that dropdown open (SC_KEYMENU). The game still sees the press
+    /// unless the menu takes it. A key reaches only the window with the keyboard focus, so the window counts as
+    /// active (the driver's keys reach an unfocused one, as its posted messages reach native AGE's).</summary>
+    private bool OnKeyOutsideLoop(InputEventKey key)
+    {
+        if (key.Keycode == Key.Alt)
+        {
+            _altArmed = true;
+            _f10Armed = false;
+            return false;
+        }
+        _altArmed = false;
+        if (key.Keycode == Key.F10)
+        {
+            _f10Armed = IgnoreF10?.Invoke() != true;
+            return false;
+        }
+        _f10Armed = false;
+        if (key.Echo || !key.AltPressed) return false;
+        if (key.Keycode == Key.Space && SystemMenu != null)
+        {
+            OpenBar(SystemPosition, keyboard: true);
+            return true;
+        }
+        char letter = KeyLetter(key);
+        int bar = letter == '\0' ? -1 : _items.FindIndex(item => item.Mnemonic == letter);
+        if (bar < 0) return false;
+        OpenOrChoose(bar);
+        return true;
+    }
+
+    /// <summary>Keys while a bar position is selected with no dropdown open.</summary>
+    private void OnBarKey(InputEventKey key)
+    {
+        switch (key.Keycode)
+        {
+            case Key.Escape:
+                Close();
+                break;
+            case Key.Left:
+                SelectBar(Neighbour(-1));
+                break;
+            case Key.Right:
+                SelectBar(Neighbour(1));
+                break;
+            case Key.Up:
+            case Key.Down:
+                OpenBar(_openBar, keyboard: true);
+                break;
+            case Key.Enter:
+            case Key.KpEnter:
+                OpenOrChoose(_openBar);
+                break;
+            default:
+                char letter = KeyLetter(key);
+                int bar = letter == '\0' ? -1 : _items.FindIndex(item => item.Mnemonic == letter);
+                if (bar >= 0) OpenOrChoose(bar);
+                break;
+        }
+    }
+
+    /// <summary>A bar command runs; any other position opens its dropdown with the first item selected.</summary>
+    private void OpenOrChoose(int bar)
+    {
+        if (bar < _items.Count && _items[bar].Kind == NativeMenuItemKind.Command)
+        {
+            if (_items[bar].Enabled) Choose(_items[bar].Id);
+            else SelectBar(bar);
+            return;
+        }
+        OpenBar(bar, keyboard: true);
+    }
+
+    /// <summary>Keys while a dropdown is open.</summary>
+    private void OnDropdownKey(InputEventKey key)
+    {
         Dropdown top = _dropdowns[^1];
         int level = _dropdowns.Count - 1;
         switch (key.Keycode)
         {
             case Key.Escape:
-                if (level > 0) CloseFrom(level);
-                else Close();
+                // The innermost dropdown closes; the bar's own leaves its bar item selected.
+                CloseFrom(level);
+                _pendingSubmenu = null;
                 break;
             case Key.Up:
                 Select(level, Step(top, -1), hover: false);
@@ -335,11 +482,11 @@ public partial class NativeMenuBar : Control
                     && top.Items[top.Selected].Enabled)
                     OpenSubmenu(level, top.Selected, selectFirst: true);
                 else
-                    OpenBar((_openBar + 1) % _items.Count, keyboard: true);
+                    OpenBar(Neighbour(1), keyboard: true);   // the window menu is one of the positions
                 break;
             case Key.Left:
                 if (level > 0) CloseFrom(level);
-                else OpenBar((_openBar + _items.Count - 1) % _items.Count, keyboard: true);
+                else OpenBar(Neighbour(-1), keyboard: true);
                 break;
             case Key.Enter:
             case Key.KpEnter:
@@ -359,7 +506,6 @@ public partial class NativeMenuBar : Control
                 }
                 break;
         }
-        return true;
     }
 
     private static char KeyLetter(InputEventKey key)
@@ -416,29 +562,53 @@ public partial class NativeMenuBar : Control
         return (-1, -1);
     }
 
+    /// <summary>Select bar position <paramref name="position"/> with no dropdown open, starting the loop if needed.
+    /// </summary>
+    private void SelectBar(int position)
+    {
+        if (!StartLoop(position)) return;
+        _keyboardMode = true;
+        _openBar = position;
+        _dropdowns.Clear();
+        _pendingSubmenu = null;
+        QueueRedraw();
+    }
+
+    /// <summary>The loop starts (WM_INITMENU) unless it runs. False when a handler ended it at once. The window
+    /// looks active from then on, as native's does when a key starts the loop in its inactive window; only the
+    /// window losing the focus (<see cref="SetActive"/>) grays the bar again.</summary>
+    private bool StartLoop(int position)
+    {
+        if (_openBar >= 0) return true;
+        _active = true;
+        _hotBar = -1;
+        _openBar = position;   // set first, so a handler that closes the menu sees it open
+        Opened?.Invoke();
+        if (_openBar < 0) return false;
+        SetProcess(true);
+        return true;
+    }
+
     private void OpenBar(int bar, bool keyboard)
     {
-        if (bar < 0 || bar >= _items.Count) return;
-        bool starting = _openBar < 0;
+        if (bar < 0 || bar >= PositionCount) return;
         _hotBar = -1;
         _keyboardMode = keyboard;
-        if (starting)
-        {
-            _openBar = bar;   // set first, so a handler that closes the menu sees it open
-            Opened?.Invoke();
-            if (_openBar < 0) return;
-            SetProcess(true);
-        }
+        if (!StartLoop(bar)) return;
         _openBar = bar;
         _dropdowns.Clear();
         _pendingSubmenu = null;
-        NativeMenuItem item = _items[bar];
-        if (item.Kind == NativeMenuItemKind.Popup && item.Children.Count > 0)
+        if (bar == SystemPosition)
+        {
+            // The window menu opens at the window's top-left, a row above the bar (native: window y 25, the bar 26).
+            _dropdowns.Add(Layout(SystemMenu!, new Vector2I(0, -1), null));
+        }
+        else if (_items[bar] is { Kind: NativeMenuItemKind.Popup, Children.Count: > 0 } item)
         {
             Rect2I owner = _barRects[bar];
             _dropdowns.Add(Layout(item.Children, new Vector2I(owner.Position.X, BarItemHeight), null));
-            if (keyboard) _dropdowns[0].Selected = Step(_dropdowns[0], 1);
         }
+        if (keyboard && _dropdowns.Count > 0) _dropdowns[0].Selected = Step(_dropdowns[0], 1);
         QueueRedraw();
     }
 
@@ -520,8 +690,9 @@ public partial class NativeMenuBar : Control
         foreach (NativeMenuItem item in items)
         {
             if (item.Kind == NativeMenuItemKind.Separator) continue;
-            label = Math.Max(label, (int)_font.Width(item.Label));
-            accelerator = Math.Max(accelerator, (int)_font.Width(item.Accelerator));
+            Win32Font font = FontOf(item);
+            label = Math.Max(label, (int)font.Width(item.Label));
+            accelerator = Math.Max(accelerator, (int)font.Width(item.Accelerator));
         }
         int width = label + accelerator + PopupExtraWidth;
         var tops = new int[items.Count];
@@ -598,27 +769,34 @@ public partial class NativeMenuBar : Control
                          SeparatorLine);
                 continue;
             }
-            bool hot = i == dropdown.Selected && item.Enabled;
-            if (hot)
+            // A selected item is hot; a grayed one is selected too (the keyboard stops on it) and shows gray.
+            bool selected = i == dropdown.Selected, hot = selected && item.Enabled;
+            if (selected)
             {
-                DrawRect(new Rect2(x0 + PopupInset, top, GutterWidth, RowHeight), ItemHotGutter);
+                DrawRect(new Rect2(x0 + PopupInset, top, GutterWidth, RowHeight),
+                         item.Enabled ? ItemHotGutter : ItemGrayedHotGutter);
                 DrawRect(new Rect2(x0 + PopupInset + GutterWidth, top, w - 2 * PopupInset - GutterWidth, RowHeight),
-                         ItemHot);
+                         item.Enabled ? ItemHot : ItemGrayedHot);
             }
             if (item.Checked)
             {
                 DrawRect(new Rect2(x0 + PopupInset, top, RowHeight, RowHeight), hot ? CheckBoxHot : CheckBox);
                 DrawMask(CheckMask, x0 + 9, top + 6);
             }
+            if (item.Bitmap != 0) WindowSystemMenu.DrawBitmap(this, item.Bitmap, x0 + PopupInset, top, item.Enabled);
             Color color = item.Enabled ? Text : GrayText;
-            _font.Draw(this, new Vector2(x0 + LabelLeft, top + RowTextTop), item.Label, color,
-                       mnemonic: true, underline: _keyboardMode);
+            Win32Font font = FontOf(item);
+            font.Draw(this, new Vector2(x0 + LabelLeft, top + RowTextTop), item.Label, color,
+                      mnemonic: true, underline: _keyboardMode);
             if (item.Accelerator.Length > 0)
-                _font.Draw(this, new Vector2(x0 + dropdown.AcceleratorX, top + RowTextTop), item.Accelerator, color,
-                           mnemonic: false);
+                font.Draw(this, new Vector2(x0 + dropdown.AcceleratorX, top + RowTextTop), item.Accelerator, color,
+                          mnemonic: false);
             if (item.Kind == NativeMenuItemKind.Popup) DrawMask(ArrowMask, x0 + w - 17, top + 7);
         }
     }
+
+    /// <summary>The default item (MFS_DEFAULT) is drawn bold.</summary>
+    private Win32Font FontOf(NativeMenuItem item) => item.Default ? _boldFont ??= Win32DialogStyle.MenuBoldFont : _font;
 
     private void DrawMask(byte[,] mask, int x, int y)
     {

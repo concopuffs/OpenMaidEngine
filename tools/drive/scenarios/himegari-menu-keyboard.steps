@@ -1,0 +1,51 @@
+# The menu bar's keyboard mode on SC0000 (docs/engine-re.md, "Native menu bar", "Keyboard mode"). An Alt tap selects
+# ｹﾞｰﾑ without a dropdown, and the menu loop holds the game: a click on the game ends the loop and is eaten, and the
+# next click advances. F10 enters the same way. In the loop, an access key opens its dropdown with the first item
+# selected, and the arrows and Enter run ｵｰﾄﾒｯｾｰｼﾞ (0x9c65): turned on it ends the text wait at once, and Alt+M, A
+# turns it off again, so the pair moves exactly one page. Left from ｹﾞｰﾑ is the window-menu position; Down opens the
+# window menu on Restore (grayed in a window), Up wraps to Close, and Enter sends SC_CLOSE: the 終了 dialog.
+# Run on a fresh sandbox, on both targets, and compare the states:
+#   py -3.11 -X utf8 tools/drive.py native start
+#   py -3.11 -X utf8 tools/drive.py native run tools/drive/scenarios/himegari-menu-keyboard.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+
+key alt                                 # an Alt tap: ｹﾞｰﾑ selected, the game holds
+wait 0.5
+click adv.next                          # ends the loop and is eaten
+wait 1
+expect top=SC0000@0x83f                 # still page 1
+advance                                 # the next click advances
+state                                   # page 2
+
+key f10                                 # F10 selects ｹﾞｰﾑ too
+key m                                   # ﾒｯｾｰｼﾞ's access key: its dropdown, ﾒｯｾｰｼﾞｽｷｯﾌﾟ selected
+key down
+key down
+key down                                # ｵｰﾄﾒｯｾｰｼﾞ
+key enter                               # on: the text wait ends at once
+key alt+m                               # Alt+M opens ﾒｯｾｰｼﾞ again
+key a                                   # and A turns ｵｰﾄﾒｯｾｰｼﾞ off before the next page's timer runs out
+wait 2
+settle
+state                                   # one page on
+wait 6
+state                                   # and no further without input
+
+key alt
+key left                                # the window-menu position: nothing drawn
+key down                                # the window menu, Restore (grayed) selected
+key up                                  # wraps to Close
+key enter                               # SC_CLOSE posts WM_CLOSE: the 終了 dialog
+wait 1
+dialogs
+answer ｷｬﾝｾﾙ
+wait 1
+state
