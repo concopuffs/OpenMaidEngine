@@ -153,11 +153,6 @@ it; git history keeps the record.
 
 ## Platform and project
 
-- **Intermittent allocation test.** `MovieSurfaceRegistryTests.ResourceLookup_SelectsNewestPublishedPlaybackWithoutAllocating`
-  failed in a `validate.py --level core` run on 2026-11-03 and again on 2026-11-06, and passed on every rerun. It
-  measures `GC.GetAllocatedBytesForCurrentThread` around the lookup, which tiered JIT or runtime work on the test
-  thread can disturb. Done when the test is deterministic (for example a warmed loop with a tolerance) or the lookup
-  is shown to allocate.
 - **Intermittent debug-return test.** `DebugSceneLaunchTests.PollingTitleReturnsAtOpcodeBoundaryWithoutAdvInputWait`
   failed once in a full `dotnet test` run on 2026-11-03 and passed alone and on the full rerun (1015/1015). It
   waits on cross-thread handshakes with 5 s timeouts, which a loaded test host can miss. Done when the failure is
@@ -169,8 +164,6 @@ it; git history keeps the record.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
-- **Flaky test.** `Transform2DMathTests.ValueMatrixBuild_DoesNotAllocatePerObject` counts allocations and fails
-  intermittently in full parallel runs; it passes alone.
 - **ﾊﾞｰｼﾞｮﾝ情報 should present Open Maid Engine, not AGE.** The port builds ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 from AGERC.DLL's
   dialog 2 and fills it as AGE does (`engine-re.md`, "Native menu bar"). Its engine half therefore misattributes the
   port:

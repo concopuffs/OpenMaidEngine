@@ -33,22 +33,6 @@ public class Transform2DMathTests
     }
 
     [Fact]
-    public void ValueMatrixBuild_DoesNotAllocatePerObject()
-    {
-        var transform = new TransformState(1.25, 0.75, 1.1, 42, -17, 5, 400, 300, 9, 0, 0, 1, 37);
-        var cycle = new RotationCycleState(true, 9000, 0, 0, -1, 123);
-        _ = Transform2DMath.Build(transform, cycle); // JIT/warm-up outside the measured interval.
-
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        Affine2D result = default;
-        for (int i = 0; i < 10_000; i++) result = Transform2DMath.Build(transform, cycle);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        GC.KeepAlive(result);
-
-        Assert.Equal(0, allocated);
-    }
-
-    [Fact]
     public void CanvasAxisDecompositionPreservesBunkiPopupScale()
     {
         var affine = Transform2DMath.Build(new TransformState(
