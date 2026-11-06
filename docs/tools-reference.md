@@ -818,6 +818,14 @@ driving needs the Godot .NET console binary and `dotnet`.
 | `--mod PATH` | port | load this mod package (`.omp` or folder) in addition to the sandbox's `mods/` (repeatable; the port's `--mod`) |
 | `--port-arg ARG` | port | an extra port argument after `--`, e.g. `--port-arg=--locator-hud` (repeatable) |
 
+**Port timing.** The port runs Godot's Debug configuration (`godot/.godot/mono/temp/bin/Debug`; Godot's editor
+binary loads no other), where the JIT optimizer is disabled. CPU-bound VM work therefore takes two to three times as
+long as in a release build: an AGF decode takes 10.6 ms instead of 4.4 ms (`engine-re.md`, "What a texture load
+costs"). To compare such work with native, build optimized and start without a build:
+`dotnet build godot/OME.csproj -p:Optimize=true --no-incremental`, then `drive.py port start --no-build`. Afterwards
+rebuild with `dotnet build godot/OME.csproj --no-incremental`. An incremental build does not recompile when only
+`Optimize` changes, so without `--no-incremental` the optimized assemblies stay in the Debug folder (`backlog.md`).
+
 **Output.** Everything lives in `build/games/<profile>/drive/<target>/`: `session.json` (port, token, pids; deleted
 when the session ends), `serve.log` (native daemon) or `godot.log` and `launch.json` (port), `events.jsonl` (native),
 `shots/`, `sandbox/<name>/`, and for native `backups/` and `last-session.json`. Native `session.json` names the daemon

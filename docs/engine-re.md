@@ -1992,6 +1992,40 @@ Native `gfx_object_blit_d3d9@0x4774c0` clips the explicit source rectangle and r
 `right<=left || bottom<=top`; mode-1's tiled blit likewise visits no children for an empty rectangle. The
 port now preserves that empty draw rather than leaking the complete SO005 sheet.
 
+#### What a texture load costs (2026-11-06)
+
+Op `0x1f9` loads its AGF synchronously, inside the op, in these steps:
+
+1. `asset_open_indexed_entry@0x44f390` opens the catalog entry.
+2. `asset_handle_seek_and_lock@0x44ef40` enters the entry's critical section and seeks to its offset.
+3. `gfx_surface_load_asset@0x477c40` calls `gfx_surface_decode_and_create@0x474e90`. That reads the header, then
+   inflates the information section (with the palette) and the pixel section through `lzss_4k_decompress@0x42f050`.
+   A type-2 AGF also reads its alpha plane (`agf_alpha_read_header@0x4018b0`, `agf_alpha_read_plane@0x401960`).
+   It then constructs the surface and uploads the pixels through the surface's virtual `+0x1c`.
+4. `asset_handle_close@0x44f610` unlocks the entry (`asset_handle_unlock@0x44f000`) and closes the handle.
+
+Native keeps no decoded image, so loading the same AGF again costs as much as the first time.
+
+A Frida probe timed each op with `QueryPerformanceCounter`, hooking AGE.EXE functions only. It ran on the
+`himegari-effect-waits.steps` run from boot to SC0000's page 14. The port times are `GodotAdvHost.SetTexture`'s
+decode in the same run:
+
+| Load (resource) | Native op | of which LZSS | Port, optimized | Port, Debug build |
+|---|---|---|---|---|
+| SO021 (`0x3323`, TITLE) | 14.38 ms | 7.64 ms | 15.98 ms | 50.99 ms |
+| SO013A (`0x21`) | 2.48 ms | 0.96 ms | 2.34 ms | 7.89 ms |
+| EV049AA (`0x23`) | 4.91 ms | 2.56 ms | 4.78 ms | 11.28 ms |
+| EV052CA (`0x25`) | 4.70 ms | 2.39 ms | 5.37 ms | 10.80 ms |
+| EV052DA (`0x27`, `SC0000@0x12970`) | 4.93 ms | 2.63 ms | 4.38 ms | 10.56 ms |
+| AE001D (`0x29`, `SC0000@0x126e1`) | 3.52 ms | 1.72 ms | 3.95 ms | 13.07 ms |
+| AE001D again | 3.60 ms | 1.77 ms | 0.00 ms (cached) | 0.00 ms (cached) |
+
+The port decodes an AGF on its first load (`AgfDecoder`) and caches the RGBA image by packed id
+(`GodotAdvHost.Decode`). With the JIT optimizing, each load is within about 1.6 ms of native's, and repeat loads cost
+nothing. `drive.py port` runs Godot's Debug configuration, where the JIT optimizer is disabled. There the same
+decodes take two to three times as long. A standalone benchmark of `AgfDecoder` gives the same split: EV052DA takes
+3.94 ms optimized and 9.20 ms in Debug.
+
 #### Selected retained-object range transform — opcodes `0x229`/`0x22a`/`0x22c`/`0x22d`/`0x22f` (2026-07-21; corrected 2026-08-16)
 
 `0x229` was formerly misclassified as a second per-object position setter. Native
@@ -5666,8 +5700,9 @@ With the timeline log on, the time from the click to page 14's text wait fell fr
 1661 ms. Most of the remaining 43 ms is two things:
 
 - The software renders at the wait ends.
-- Op `0x1f9` (set-texture) decoding an AGF for the first time at `0x12970` and `0x126e1`. In the port these took
-  9.4 and 10.5 ms of bursts that took 11 and 13 ms; native's bursts take 4 and 8 ms (`backlog.md`).
+- Op `0x1f9` (set-texture) decoding an AGF for the first time at `0x12970` and `0x126e1`. These took 9.4 and
+  10.5 ms in the driver's Debug build. Optimized, they take 4.4 and 4.0 ms, against native's 4.9 and 3.5 ms
+  ("What a texture load costs").
 
 `tools/drive/scenarios/himegari-effect-waits.steps` times the sequence through the driver, from the click step to
 page 14's text wait. Native takes 1.81 s. The port took 1.78–1.81 s when it waited for the final presentation and
