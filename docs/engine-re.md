@@ -5395,9 +5395,12 @@ op `0x21c` at `0x123de`.
 | The four waits, on frame time `+0xb550` | 150, 890, 150 and 300 ms |
 | Gaps between the waits | 4, 0 and 8 ms |
 | Click to page 14's show-text (`0xe04`) | 1505 ms |
-| Show-text to end-text-line and op `0x72` | 157 ms more |
+| Show-text to end-text-line and op `0x72` | 156 ms more |
 
-The reveal (about 0.3 s at the default `MessageSpeed`) finishes inside op `0x72`'s wait (`docs/backlog.md`).
+The reveal holds the script, as in the port: while run-state `0x20000000` is set the main tick runs
+`adv_text_reveal_service_tick@0x406fa0` instead of dispatching an op, and the tick clears the bit only after
+`adv_text_publish_next_glyph@0x451220` reports the last glyph. Page 14's 31 glyphs publish about 5 ms apart at the
+default `MessageSpeed`, and end-text-line and op `0x72` follow the last one at once. The port's show-text runs 160 ms.
 
 **Port.** Each wait used to lose about three frames, because of three behaviours:
 

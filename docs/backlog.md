@@ -46,13 +46,6 @@ it; git history keeps the record.
   presentation of the final sample before the script goes on: 8–10 ms at 100 Hz, 38 ms over SC0000's four
   page-13→14 waits. Native renders that sample in the tick that ends the wait. Done when the final sample is
   presented without holding the VM, or the item is closed as the cost of presenting on Godot's frames.
-- **Show-text holds the port's VM through the whole reveal.** On SC0000's page 14 (default `MessageSpeed`), native
-  runs show-text at `0xe04` and stays at `0xe09` for 157 ms. It then runs end-text-line and enters op `0x72`
-  (`op_0x72_handler@0x41e690`) while the reveal, about 0.3 s, is still drawing. The reveal finishes inside the text
-  wait, and the driver reads `SC0000@0xe0f` throughout. The port's show-text returns only when the reveal ends, so the
-  driver reads `0xe09` until then. Ops between show-text and op `0x72` (a page's later runs, voices, effects) start
-  later in the port. What ends native's 157 ms is not decoded. Done when native's dispatch rule during a reveal is
-  decoded and the port follows it, with driver positions matching on a page that reveals in several runs.
 - **`message:UseAntiFont` 0 is not rendered.** Native's 0 selects `GGO_BITMAP` glyphs instead of `GGO_GRAY4_BITMAP`
   (`engine-ctx.toml` `text_antialias_enabled`, IAGEService `+0x68`). The 設定 dialog's ﾒｯｾｰｼﾞ page writes it, but the
   port always draws grayscale glyphs (`WindowsGdiGlyphMaskRasterizer`). Done when 0 draws aliased glyphs that match a
