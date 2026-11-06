@@ -5648,13 +5648,32 @@ At 100 Hz the four waits took about 170, 910, 160 and 320 ms, and the reveal beg
   - BGM fades;
   - legacy screen transitions.
 
-The port's four waits now end 150, 890, 150 and 300 ms after they start. Each still holds the VM for one synchronized
-presentation at its end (one frame, 8–10 ms at 100 Hz), so that the final sample is shown before the next burst
-changes it. Native's tick has already rendered that sample before its poll.
+The port's four waits now end 150, 890, 150 and 300 ms after they start.
+
+**The end of the wait (2026-11-06).** Native's last tick renders the final sample before its poll ends the wait, and
+that render commits every channel it samples past its end. The port used to wait for one synchronized compositor
+presentation of that sample before the script went on: the next frame, then that frame's render.
+
+Now `WaitForForegroundTransition` samples once on the VM thread when the wait ends (`GfxState.SnapshotVisibleObjects`).
+That commits the same endpoints, or the forced ones. It then asks for a presentation without waiting for it, so the
+next frame shows the endpoints or the next burst's result.
+
+The VM can still wait for a render that has already started, because the presentation barrier keeps a burst atomic.
+On the GPU backend a render took 0.03 ms (median; at most 1.2 ms) during these waits. `--timeline-log` switches to
+the software rasterizer, which took 11–50 ms a frame here, so timeline runs still show waits of 1–17 ms at the end.
+
+With the timeline log on, the time from the click to page 14's text wait fell from 1829 ms to 1704 ms; native takes
+1661 ms. Most of the remaining 43 ms is two things:
+
+- The software renders at the wait ends.
+- Op `0x1f9` (set-texture) decoding an AGF for the first time at `0x12970` and `0x126e1`. In the port these took
+  9.4 and 10.5 ms of bursts that took 11 and 13 ms; native's bursts take 4 and 8 ms (`backlog.md`).
 
 `tools/drive/scenarios/himegari-effect-waits.steps` times the sequence through the driver, from the click step to
-page 14's text wait. Native takes 1.81 s and the port 1.83 s. Tests: `FrameClockTests`,
-`GfxAnimationTests.SeedOneShotChannels_StampsArmedVisibleChannelsOnce`.
+page 14's text wait. Native takes 1.81 s. The port took 1.78–1.81 s when it waited for the final presentation and
+1.76–1.78 s now (four runs each; the driver rounds each step to 10 ms). Tests: `FrameClockTests`,
+`GfxAnimationTests.SeedOneShotChannels_StampsArmedVisibleChannelsOnce`,
+`GfxAnimationTests.TerminalSample_CommitsChannelEndpointsAtTheWaitEnd`.
 
 ### Driving native AGE (2026-11-01)
 

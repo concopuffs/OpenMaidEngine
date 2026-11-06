@@ -68,6 +68,7 @@ public sealed partial class GodotAdvHost
     public volatile bool IsSleeping;
     public bool IsModalMovieWaiting => _modalMovieWaiting;
     private int _presentRequested = 1;
+    private readonly List<RenderObject> _terminalSample = new();   // VM thread only: WaitForForegroundTransition
     private long _transitionStartedAtMs = -1;
     public long TransitionStartedAtMs => System.Threading.Interlocked.Read(ref _transitionStartedAtMs);
 
@@ -642,9 +643,14 @@ public sealed partial class GodotAdvHost
                     });
                 }
             }
-            // Publish the natural terminal sample or the forced service-resume sample once before the
-            // following script burst mutates/releases its retained inputs.
-            RequestSynchronizedPresentation();
+            // Native renders the terminal sample in the tick that ends the wait and runs the script on in that
+            // tick. A render commits every channel it samples past its end, so sample once here on the VM thread:
+            // the next burst starts from the committed endpoints (or the forced ones), and the next compositor
+            // frame presents them or that burst's result. Waiting for that frame would hold the VM for a frame
+            // and its render (docs/engine-re.md, "Service waits end on the engine clock").
+            gfx.SnapshotVisibleObjects(_clock.NowMs, _terminalSample);
+            _terminalSample.Clear();
+            Interlocked.Exchange(ref _presentRequested, 1);
         }
         finally
         {

@@ -706,7 +706,11 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--timeline-log <jsonl>` — diagnostic-only synchronized event stream for a real Godot run. Records every
   executed script byte offset/opcode, script-frame entry/exit with depth/cause/outcome, resolved call-script
   ids/names, unknown-fallback `stub` events, virtual time/frame, VM state changes (`running`, `sleep`, `input-wait`,
-  `halted`), audio events, and changed visible-object compositor outcomes in one ordered JSONL file. Combine with
+  `halted`), audio events, and changed visible-object compositor outcomes in one ordered JSONL file. `now_ms` is the
+  frame clock as of the last main-thread frame, so it moves in frame steps; `real_ms` is the writer's own real time
+  since the log opened, at 0.01 ms, for timing VM-thread events between frames. Like `--gfx-log`, it renders with the
+  software compositor (`render_backend` 0), whose frames can take tens of milliseconds, so waits that meet a render
+  run longer than in normal play. Combine with
   `--scene SC0000 --shot-sequence ... --gfx-log ...` to distinguish control-flow stalls from retained-object/compositor
   failures at an exact bytecode boundary. Relative output paths are project-relative (`godot/`).
 
@@ -904,7 +908,8 @@ Space at the text wait. Retail never runs HIDEWIN.BIN, so both targets wait in t
 `himegari-effect-waits.steps` times SC0000's page 13→14 transition: four op-`0x21c` effect waits (150, 890, 150 and
 300 ms on native's clock), then page 14's text. Half a second after the click the frames must still be in the waits
 (`SC0000@0x123df`). Page 14's text wait (`SC0000@0xe0f`) must follow within 1.6 s. From the click step, native
-reaches it in 1.81 s and the port in 1.83 s (`engine-re.md`, "Service waits end on the engine clock").
+reaches it in 1.81 s and the port in 1.76–1.78 s (four runs; the driver rounds each step to 10 ms; `engine-re.md`,
+"Service waits end on the engine clock").
 
 `himegari-latch-sleep.steps` clicks while nothing polls, on a fresh sandbox started with
 `--set message.MessageSpeed=100`. It advances SC0000 page 17, right-clicks during the 1000 ms sleep at

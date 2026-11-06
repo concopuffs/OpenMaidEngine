@@ -52,6 +52,31 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void TerminalSample_CommitsChannelEndpointsAtTheWaitEnd()
+    {
+        // An op-0x21c wait ends when its channels pass their end, before any render has committed them. Native's
+        // last service tick renders, and that render commits them; the port samples once on the VM thread at the
+        // wait end instead of waiting for a compositor frame, so the next burst starts from the endpoints.
+        var g = new GfxState();
+        g.BindDraw(0x1000, 1, 0, 0, 1, 1, 0, 0);
+        g.SetScaleChannel(0x1000, delayMs: 0, durationMs: 300, percent: (200, 50, 100));
+        g.SetAnimatedObjectColorResolved(0x1000, delayMs: 0, durationMs: 150, alpha: 0x40, rgb: -1);
+        g.SeedOneShotChannels(500);
+        var o = g.TryGet(0x1000)!;
+
+        Assert.False(g.HasActiveTimedPresentation(800));
+        Assert.True(o.ScaleEnabled);                    // finished, not yet committed
+        Assert.True(o.OneShotColorEnabled);
+
+        g.SnapshotVisibleObjects(800, new List<RenderObject>());
+
+        Assert.False(o.ScaleEnabled);
+        Assert.False(o.OneShotColorEnabled);
+        Assert.Equal((2.0, 0.5, 1.0), o.ScaleCurrent);
+        Assert.Equal(0x40ffffffL, o.Color);
+    }
+
+    [Fact]
     public void CallerOwnedVisibleSnapshot_ReusesStorageAndPreservesHandleOrder()
     {
         var g = new GfxState();

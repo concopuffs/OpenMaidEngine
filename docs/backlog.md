@@ -44,11 +44,11 @@ it; git history keeps the record.
   "Furigana"). Kamidori runs the op 3,054 times, but its SYS4433 engine has neither of Himegari's two ruby code
   sequences (the gap division and the centring), and its SYS4INI trailer has `RUBYSHIFTMODE`. Done when Kamidori's
   ruby builder is decoded and a Kamidori furigana page and its History match native.
-- **An effect wait holds the VM for one frame at its end.** The port's op-`0x21c` waits now end when their effects
-  do (`engine-re.md`, "Service waits end on the engine clock"). Each still waits for one synchronized
-  presentation of the final sample before the script goes on: 8–10 ms at 100 Hz, 38 ms over SC0000's four
-  page-13→14 waits. Native renders that sample in the tick that ends the wait. Done when the final sample is
-  presented without holding the VM, or the item is closed as the cost of presenting on Godot's frames.
+- **First AGF decodes are slower than native's.** The port decodes an AGF on the VM thread the first time op
+  `0x1f9` (set-texture) loads it (`GodotAdvHost.Decode`, cached per asset). Between SC0000's page 13→14 effect
+  waits the loads at `0x12970` and `0x126e1` took 9.4 and 10.5 ms (2026-11-06, `--timeline-log`). Those bursts took
+  11 and 13 ms; native's took 4 and 8 ms (`engine-re.md`, "Service waits end on the engine clock"). Done when
+  native's time for those two loads is measured and the port's is within a millisecond of it.
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
   statement blocks, "Not modelled"). A static scan of both games' scripts (2026-11-04) finds a movie start inside

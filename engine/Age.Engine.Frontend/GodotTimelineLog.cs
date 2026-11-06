@@ -9,6 +9,7 @@ public sealed class GodotTimelineLog : System.IDisposable
 {
     private readonly object _lock = new();
     private readonly StreamWriter _writer;
+    private readonly System.Diagnostics.Stopwatch _real = System.Diagnostics.Stopwatch.StartNew();
     private long _sequence;
     private int _frame;
     private long _nowMs;
@@ -61,6 +62,7 @@ public sealed class GodotTimelineLog : System.IDisposable
         var row = new Dictionary<string, object?>
         {
             ["seq"] = ++_sequence, ["kind"] = kind, ["frame"] = _frame, ["now_ms"] = _nowMs,
+            ["real_ms"] = System.Math.Round(_real.Elapsed.TotalMilliseconds, 2),
             ["script"] = _script, ["offset"] = _offset < 0 ? null : $"0x{_offset:x}",
             ["opcode"] = _opcode < 0 ? null : $"0x{_opcode:x}", ["vm_state"] = _state,
         };

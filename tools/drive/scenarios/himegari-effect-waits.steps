@@ -2,7 +2,7 @@
 # effect wait (run-state 0x400): native's own clock times them at 150, 890, 150 and 300 ms, and page 14's show-text
 # runs about 1.5 s after the click. The checks are coarse, for the driver's own latency: the effects still run half a
 # second after the click, and page 14's text wait is reached within about 2.3 s of it. Both targets reveal page 14's
-# 31 glyphs in about 160 ms first: native reaches the wait 1.66 s after the click, the port about 1.72 s.
+# 31 glyphs in about 160 ms first: native reaches the wait 1.66 s after the click, the port about 1.70 s.
 #
 # Setting system:EffectSkipOnClick 0, a new profile's default, so nothing skips the effects.
 #
