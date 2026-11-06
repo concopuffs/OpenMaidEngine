@@ -255,6 +255,16 @@ def test_port_sandboxes():
         (other / "SAVE" / "SAVE01.DAT").write_bytes(b"mine")
         core.prepare_sandbox("port", "copy", "port:keep", True, profile, context)
         check((other / "SAVE" / "SAVE01.DAT").is_file(), "an existing named sandbox is kept, not re-seeded")
+        tuned, _ = core.prepare_sandbox("port", "tuned", None, False, profile, context,
+                                        settings=core.parse_settings(["message.MessageSpeed=100",
+                                                                      "display.ScreenMode=0"]))
+        check((tuned / "SYS4REG.INI").read_bytes().decode("cp932")
+              == "[display]\r\nScreenMode=0\r\n[sound]\r\nVolume0=0\r\n[message]\r\nMessageSpeed=100\r\n",
+              "--set settings are written after the profile's and win over them")
+        check(raises(core.parse_settings, ["MessageSpeed=100"], contains="SECTION.KEY=VALUE"),
+              "--set needs a section")
+        check(raises(core.parse_settings, ["message.MessageSpeed"], contains="SECTION.KEY=VALUE"),
+              "--set needs a value")
         fresh, _ = core.prepare_sandbox("port", "fresh", None, False, profile, context)
         (fresh / "junk").write_bytes(b"")
         fresh, _ = core.prepare_sandbox("port", "fresh", None, False, profile, context)

@@ -8,7 +8,10 @@ namespace Age.Engine.Vm;
 /// effect under system:EffectSkipOnClick). This latch keeps the triggers that arrive while nothing polls, which are:
 /// <list type="bullet">
 /// <item>an effect service that does not poll. That is any effect unless EffectSkipOnClick is 1, and a run-state-0x400
-/// effect while service-flags bit 0 is set. The frontend holds them with <see cref="HoldTriggers"/>;</item>
+/// effect while service-flags bit 0 is set;</item>
+/// <item>a script sleep (op 0xc8), the ops between two waits, and a hotspot callback: anywhere but a polling text wait
+/// (<see cref="IsAdvTextWaitPolling"/>) or a running reveal. The frontend holds these and the effect triggers with
+/// <see cref="HoldTriggers"/>;</item>
 /// <item>an ADV coroutine yield (handlers A and B and the hidden-window wait), through
 /// <see cref="TryLatchAdvCoroutineYieldTrigger"/>.</item>
 /// </list>
@@ -17,6 +20,7 @@ namespace Age.Engine.Vm;
 /// <item>the hidden-window wait: any trigger ends it;</item>
 /// <item>a text reveal's first tick, unless ctx+0x55108 is set: action 4 finishes it;</item>
 /// <item>a modal movie's first tick: action 4 cancels it;</item>
+/// <item>an op-0xd5 timed sequence: any trigger moves the frame to the abort pc, or is dropped when that is -1;</item>
 /// <item>a text wait resumed by op 0x7c: the triggers count as fresh input.</item>
 /// </list>
 /// These discard it:

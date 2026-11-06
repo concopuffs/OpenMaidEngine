@@ -802,6 +802,7 @@ driving needs the Godot .NET console binary and `dotnet`.
 | `--sandbox NAME` | both | persistent named save sandbox; the default `fresh` is emptied at every start |
 | `--seed live\|native:NAME\|port:NAME\|DIR` | both | fill a new sandbox from the live save folder, another sandbox of either target, or a folder (a `backups/` stamp or a plain copy). A sandbox that already exists is left as it is: the seed is skipped with only a `serve.log` note, so use a new name to re-seed. The source is read at start, so do not restart the source target in between, because that empties its `fresh` |
 | `--sound` | both | keep the sandbox's volume instead of writing `[sandbox.quiet]` |
+| `--set SECTION.KEY=VALUE` | both | write this `SYS4REG.INI` value into the sandbox before launch, after the profile's `[sandbox.settings]` and `[sandbox.quiet]` (repeatable), e.g. `--set message.MessageSpeed=100` for slow reveals. Native refuses it with `--live-saves` or `--attach` |
 | `--foreground` | both | leave the window where Windows puts it; by default it goes to the bottom of the z-order without being activated |
 | `--timeout S` | both | seconds to wait for the game (native 90, port 180, which includes Godot's boot) |
 | `--exe PATH` | native | the AGE.EXE to spawn (default: the `native_scratch.py` copy) |
@@ -905,6 +906,14 @@ Space at the text wait. Retail never runs HIDEWIN.BIN, so both targets wait in t
 (`SC0000@0x123df`). Page 14's text wait (`SC0000@0xe0f`) must follow within 1.6 s. From the click step, native
 reaches it in 1.81 s and the port in 1.83 s (`engine-re.md`, "Service waits end on the engine clock").
 
+`himegari-latch-sleep.steps` clicks while nothing polls, on a fresh sandbox started with
+`--set message.MessageSpeed=100`. It advances SC0000 page 17, right-clicks during the 1000 ms sleep at
+`SC0000@0x1345`, and left-clicks during the 750 ms sleep at `0x16cb`. 6.2 s later page 18 must already wait at
+`0x1a5b`: the held left click finished its two-run reveal at once, and the right click opened no MENU. Without the
+click the reveal still runs at that point (`engine-re.md`, "Effect skipping and the input latch", clicks during a
+sleep). The `latch-sleep-page18` shots differ in the furigana, which the port does not draw yet, and the scene's
+animation phase.
+
 `himegari-menu-bar.steps` chooses the menu bar's ﾒｯｾｰｼﾞ items and ｹﾞｰﾑ > 終了 on SC0000. It saves on page 1, reads
 six pages and loads. Then:
 - 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ fast-forwards to `SC0000@0xa18` with the control strip's read-skip cell ON.
@@ -961,6 +970,7 @@ target's sandbox can seed the other's.
   is windowed `display.ScreenMode=1`: a fresh profile starts fullscreen, which takes over the display and captures
   black.
 - It also writes `[sandbox.quiet]` (master volume 0, so the audio paths still run) unless you pass `--sound`.
+- Each `--set SECTION.KEY=VALUE` is written last, so it overrides both.
 - Port: the sandbox is the port's `--data-root`.
 - Native: `SHGetFolderPathA` points LocalAppData, AppData, Desktop, Documents and ProgramData into the sandbox, which
   covers the save root, `SYS4REG.INI`, screenshots (F1, 表示画面を保存) and the debug report. Port: the sandbox's
@@ -1000,7 +1010,7 @@ post `WM_KEYDOWN`/`WM_KEYUP`.
 
 | Tool | CLI equivalent | Returns |
 |---|---|---|
-| `drive_start(target, sandbox, seed, sound, foreground, build, mods)` | `drive.py <target> start` (`build=false` is `--no-build`, `mods` is `--mod` per path; both port only) | the CLI's output |
+| `drive_start(target, sandbox, seed, sound, foreground, build, mods, settings)` | `drive.py <target> start` (`build=false` is `--no-build`, `mods` is `--mod` per path, both port only; `settings` is `--set` per `SECTION.KEY=VALUE`) | the CLI's output |
 | `drive_steps(target, steps \| file, screenshot=true)` | `do STEP…` or `run FILE` | a summary line (`ok: …` or `FAILED at step N …`), one line per step result, and a screenshot after the last step unless `screenshot=false` or a step closed the game |
 | `drive_screenshot(target, name)` | `do "shot NAME"` | the PNG as an image, with its path and the VM position |
 | `drive_state(target)` | `status` | the session, hello, VM stack and new events, as JSON |

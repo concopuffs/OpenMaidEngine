@@ -67,6 +67,7 @@ public sealed partial class VirtualMachine
                 // look-ahead sentinel: it supplies the next deadline for the preceding event but
                 // is not itself dispatched.
                 if (_timedCallbackCursor >= _timedCallbacks.Count - 1) return pc + 1;
+                if (TryAbortTimedCallbackSequence(out int abortTarget)) return abortTarget;
 
                 var callback = _timedCallbacks[_timedCallbackCursor];
                 long elapsedMs = _host.InputClockMilliseconds - _timedCallbackStartedAtMs;
@@ -74,6 +75,7 @@ public sealed partial class VirtualMachine
                 {
                     _host.WaitForTimedCallbackDeadline(callback.DeadlineMs - elapsedMs);
                     elapsedMs = _host.InputClockMilliseconds - _timedCallbackStartedAtMs;
+                    if (TryAbortTimedCallbackSequence(out abortTarget)) return abortTarget;
                 }
 
                 bool fellBehind = _timedCallbackCursor + 1 < _timedCallbacks.Count
@@ -94,5 +96,17 @@ public sealed partial class VirtualMachine
             default:
                 throw new InvalidOperationException($"Non-timing opcode routed to timing handler: {label}");
         }
+    }
+
+    /// <summary>timed_callback_sequence_tick@0x408170 polls the input latch on every tick of run-state 0x40, which op
+    /// 0xd5 sets until its last entry. Any trigger moves the frame to the abort pc (op 0xd5's operand, recorded at
+    /// cursor 0) and clears 0x40; with no abort pc (-1: 16 of Himegari's 17 sequences, 14 of Kamidori's 15) the trigger
+    /// is dropped. The cursor stays. The port polls at each op 0xd5 step, before and after the wait for the next entry
+    /// (the literal entry intervals in both games' scripts are 33 ms at most).</summary>
+    private bool TryAbortTimedCallbackSequence(out int target)
+    {
+        target = -1;
+        if (TakeHeldTriggers() == 0 || _timedCallbackAbortOffset == -1) return false;
+        return _cur.Script.IndexByOffset.TryGetValue(_timedCallbackAbortOffset, out target);
     }
 }

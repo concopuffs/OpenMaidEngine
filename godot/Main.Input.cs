@@ -140,6 +140,14 @@ public partial class Main
                 GetViewport().SetInputAsHandled();
                 return;
             }
+            // Only a polling text wait dispatches hotspots and op-0x97 bindings (adv_input_service_poll). Elsewhere the
+            // click goes to a running reveal's poll or stays in native's input latch (RouteUnpolledTrigger).
+            if (action >= 0 && !_vm.IsAdvTextWaitPolling)
+            {
+                RouteUnpolledTrigger(1 << action);
+                GetViewport().SetInputAsHandled();
+                return;
+            }
             // AGE exposes mouse buttons twice: op 0x108 reads the raw bitmask while op 0xff translates
             // the held physical button through the script-configured logical action map.
             if (action >= 0 && _vm.TryActivateInputActions(1 << action))
@@ -178,6 +186,11 @@ public partial class Main
             {
                 GetViewport().SetInputAsHandled();
             }
+            else if (gameplayKey.Pressed && action >= 0 && !_host.IsModalMovieWaiting && !_vm.IsAdvTextWaitPolling)
+            {
+                RouteUnpolledTrigger(1 << action);
+                GetViewport().SetInputAsHandled();
+            }
             else if (gameplayKey.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))
             {
                 GetViewport().SetInputAsHandled();
@@ -208,6 +221,11 @@ public partial class Main
             }
             else if (joyButton.Pressed && _vm.TryLatchAdvCoroutineYieldTrigger(actionMask))
             {
+                GetViewport().SetInputAsHandled();
+            }
+            else if (joyButton.Pressed && actionMask != 0 && !_host.IsModalMovieWaiting && !_vm.IsAdvTextWaitPolling)
+            {
+                RouteUnpolledTrigger(actionMask);
                 GetViewport().SetInputAsHandled();
             }
             else if (joyButton.Pressed && _vm.TryActivateInputActions(actionMask))
@@ -251,6 +269,23 @@ public partial class Main
     private void RouteEffectTrigger(int actionMask)
     {
         if (!_host.TryPollEffectTriggers(actionMask, EffectSkipOnClick)) _vm.HoldTriggers(actionMask);
+    }
+
+    /// <summary>A trigger while no text wait polls (native run-state 0x80000000 clear), so no hotspot or op-0x97 binding
+    /// can take it. A running reveal polls on every tick (adv_text_reveal_service_tick@0x406fa0): action 4 finishes it
+    /// and the poll drops the rest. Otherwise nothing polls: a sleep (run-state 1), the ops between waits, a callback
+    /// script or a timed callback sequence. age_main_window_proc latches every mapped click and key whatever the run
+    /// state, so native's input latch keeps the trigger for the next service that polls: the next reveal's first tick,
+    /// the timed sequence's tick, or op 0x72's entry, which discards it (docs/engine-re.md, "Effect skipping and the
+    /// input latch").</summary>
+    private void RouteUnpolledTrigger(int actionMask)
+    {
+        if (_host.IsTextRevealing)
+        {
+            if (HasAdvanceAction(actionMask)) _host.SignalInput();
+            return;
+        }
+        _vm.HoldTriggers(actionMask);
     }
 
     private void ToggleDebugSceneLauncher()

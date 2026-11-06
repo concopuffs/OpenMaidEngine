@@ -5394,8 +5394,16 @@ trigger, so a click made while nothing polls is still there for the next poll.
 - `adv_text_view_service_tick@0x410d30`, the `REDRAWTEXTONKEY` text view (run-state `0x100000`): actions 3 and 1
   (bits tested directly, the generic wheel defaults) step the view, and action 4 activates the hit or leaves the
   view. Both games set `REDRAWTEXTONKEY` 0, so it never runs.
-- Not yet modelled by the port: `timed_callback_sequence_tick`, `input_hotspot_wait_poll` and
-  `adv_input_dispatch_callbacks` (`docs/backlog.md`).
+- `timed_callback_sequence_tick@0x408170`, the op-`0xd5` sequence (run-state `0x40`), polls on every tick. Any
+  trigger moves the frame to the abort pc (op `0xd5`'s operand, recorded at cursor 0) and clears `0x40`; the cursor
+  stays. With no abort pc (-1) the trigger is dropped. 16 of Himegari's 17 sequences pass -1 (SHOWGROW passes
+  `label_9db`), and 14 of Kamidori's 15 (one passes `0x87e`).
+- Not yet modelled by the port: `input_hotspot_wait_poll` (run-state `0x800000`) and `adv_input_dispatch_callbacks`
+  (`0x10000000`). Their ops (`0x91`, `0x92`, `0x95`, `0x96`) are unused in Himegari (`docs/backlog.md`).
+
+Nothing else polls. A script sleep (op `0xc8`, run-state 1) only tests `interval_timer_poll_elapsed_steps`, and
+`input_latch_mouse_click` tests no run state, so a click made during a sleep, while ops run, or during an effect with
+`EffectSkipOnClick` 0 waits in the latch for the next service above.
 
 **The points that discard it.**
 
@@ -5406,6 +5414,8 @@ trigger, so a click made while nothing polls is still there for the next poll.
 - Always:
   - op `0x101`;
   - `scene_context_init_reset` (op `0x9`, a root reload);
+  - `engine_reload_current_script_and_reset_input@0x42e930`, the debug BIN reload (`IAGEService` `+0x34`,
+    `iage_service_reload_current_script@0x45f550`);
   - `input_flush_action_triggers@0x405380`. Its callers are the legacy fades `0x21`–`0x25`, `0x2a`, `0x2e` and `0x36` as
     they start (not under fast-forward), op `0xd5` at cursor 0, `adv_input_service_poll` before a hotspot dispatch
     (`0x411294`), the text view's hit activation, and the skip-click cancel.
@@ -5423,6 +5433,18 @@ trigger, so a click made while nothing polls is still there for the next poll.
 setting in 設定's その他 page. The port matches every step. Its shots match native's apart from glyph edges (at most
 50 levels) and the wait indicator's animation frame.
 
+**Native-driven 2026-11-06: clicks during a sleep** (`MessageSpeed=100`). SC0000 page 17 (だが──) advances into a
+1000 ms sleep at `0x1342`, a movie, about 12 s of effects, a 750 ms sleep at `0x16c8`, and 4.2 s more effects before
+page 18 reveals its 35 glyphs in two runs around the furigana かがりび.
+
+- A left click during either sleep finishes page 18's reveal at its first tick: both runs (`0x1a44`, `0x1a50`) and
+  the furigana publish at once. Page 17 to page 18's wait took 22.97 s with the click and 26.5 s without.
+- A right click during the sleep opens no MENU: no op-`0x97` binding polls, and the reveal's poll takes action 1 and
+  drops it.
+
+`tools/drive/scenarios/himegari-latch-sleep.steps` checks both. The port matched only after `RouteUnpolledTrigger`
+(below); before, a sleep click reached the still-armed hotspots and bindings, so the right click opened MENU.
+
 **Port.**
 
 - `VirtualMachine.InputLatch` holds the triggers that arrive while nothing polls (`HoldTriggers`), and the consumers
@@ -5431,9 +5453,14 @@ setting in 設定's その他 page. The port matches every step. Its shots match
   `GodotAdvHost.TryPollEffectTriggers`. That reads `EffectSkipOnClick` from `SYS4REG.INI` at each trigger, and
   polls when it is 1 and the effect is a screen transition or a `0x400` wait without service-flags bit 0. Otherwise
   the trigger goes to the latch.
+- Only a polling text wait (`VirtualMachine.IsAdvTextWaitPolling`, native run-state `0x80000000`) dispatches hotspots
+  and op-`0x97` bindings. Any other mapped click, key or joystick trigger goes through `Main.RouteUnpolledTrigger`: a
+  running reveal's poll takes action 4 and drops the rest, and otherwise the trigger is held in the latch.
 - A held action 4 reaches the host as `IAdvHost.FinishTextRevealsUntilWait` (kept until the next text wait) or
   `IMovieHost.CancelNextModalMovie`.
-- Tests: `InputLatchTests` (synthesized).
+- Op `0xd5` polls the latch before and after each wait for the next entry (`TryAbortTimedCallbackSequence`; the
+  literal entry intervals in both games are 33 ms at most), and flushes it at cursor 0.
+- Tests: `InputLatchTests` and `TimedCallbackOpsTests` (synthesized).
 
 ### Service waits end on the engine clock (2026-11-05)
 

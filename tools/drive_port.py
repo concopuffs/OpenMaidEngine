@@ -50,6 +50,9 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
                          help="keep the sandbox profile's volume (default: the profile's [sandbox.quiet] settings)")
     command.add_argument("--foreground", action="store_true",
                          help="leave the window where Windows puts it (default: the bottom of the z-order)")
+    command.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE",
+                         help="write this setting into the sandbox SYS4REG.INI before launch, after the "
+                              "profile's (repeatable), e.g. --set message.MessageSpeed=100")
     command.add_argument("--godot", help="Godot .NET console binary (default: AGE_GODOT_CONSOLE, then PATH)")
     command.add_argument("--no-build", action="store_true", help="skip `dotnet build godot/OME.csproj`")
     command.add_argument("--mod", action="append", default=[], metavar="PATH",
@@ -75,13 +78,14 @@ def start(arguments: argparse.Namespace) -> int:
     if core.read_session("port") is not None:
         raise DriveError("a port session is already running; `drive.py port stop` first")
     session.unlink(missing_ok=True)
+    settings = core.parse_settings(arguments.set)
     godot = resolve_godot(arguments.godot)
     if not arguments.no_build:
         build()
     profile = core.load_profile()
     sandbox, profile_root = core.prepare_sandbox(
         "port", arguments.sandbox or "fresh", arguments.seed, arguments.sound, profile,
-        log=lambda message: print(f"drive port: {message}", flush=True))
+        log=lambda message: print(f"drive port: {message}", flush=True), settings=settings)
     token = secrets.token_hex(16)
     environment = {**os.environ, core.TOKEN_ENVIRONMENT: token}
     command = [str(godot), "--path", str(GODOT_PROJECT), "--",

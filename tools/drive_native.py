@@ -463,7 +463,7 @@ class Daemon:
             return None
         sandbox, profile_root = core.prepare_sandbox(
             "native", arguments.sandbox or "fresh", arguments.seed, arguments.sound, self.profile,
-            log=lambda message: self.event("sandbox", detail=message))
+            log=lambda message: self.event("sandbox", detail=message), settings=core.parse_settings(arguments.set))
         self.saves = {"mode": "sandbox", "root": str(sandbox), "profile": str(profile_root)}
         self.live_root = live
         self.live_before = core.snapshot_tree(live)
@@ -967,6 +967,9 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
                          help="keep the sandbox profile's volume (default: the profile's [sandbox.quiet] settings)")
     command.add_argument("--attach", nargs="?", const="auto",
                          help="hook an AGE that is already running (pid or auto); its saves stay live")
+    command.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE",
+                         help="write this setting into the sandbox SYS4REG.INI before launch, after the "
+                              "profile's (repeatable), e.g. --set message.MessageSpeed=100")
     command.add_argument("--foreground", action="store_true",
                          help="leave AGE's window where Windows puts it (default: the bottom of the z-order)")
 
@@ -974,6 +977,9 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
 def check_launch_options(arguments: argparse.Namespace) -> None:
     if arguments.seed and (arguments.live_saves or arguments.attach):
         raise DriveError("--seed fills a sandbox; it cannot be combined with live saves")
+    if arguments.set and (arguments.live_saves or arguments.attach):
+        raise DriveError("--set writes a sandbox's settings; it cannot be combined with live saves")
+    core.parse_settings(arguments.set)
 
 
 def start(arguments: argparse.Namespace) -> int:
@@ -989,6 +995,7 @@ def start(arguments: argparse.Namespace) -> int:
         if value is not None:
             forwarded += [f"--{flag}", str(value)]
     forwarded += [f"--{switch.replace('_', '-')}" for switch in SERVE_SWITCHES if getattr(arguments, switch)]
+    forwarded += [f"--set={setting}" for setting in arguments.set]
     token = secrets.token_hex(16)
     environment = {**os.environ, **paths.CONTEXT.subprocess_environment(), core.TOKEN_ENVIRONMENT: token}
     if arguments.inline:

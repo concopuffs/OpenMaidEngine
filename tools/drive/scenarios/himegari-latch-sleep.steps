@@ -1,0 +1,35 @@
+# Triggers that arrive while nothing polls. age_main_window_proc latches every mapped click and key whatever the run
+# state, and only a polling service takes the latch. A script sleep (op 0xc8, run-state 1) and the ops and effects
+# between two waits poll nothing (with EffectSkipOnClick 0), so a click there waits in the latch:
+# - a left click finishes the next page's reveal at its first tick, and every later run of that page (ctx+0x55108);
+# - a right click reaches no op-0x97 binding: the reveal's poll takes it and drops it, so MENU does not open.
+#
+# SC0000 page 17 (だが──): the advance sleeps 1000 ms at 0x1342, starts a movie, runs about 12 s of effects, sleeps
+# 750 ms at 0x16c8, then runs 4.2 s of effects before page 18 reveals in two runs around the furigana かがりび
+# (35 glyphs). At 100 ms a glyph that reveal takes 3.5 s, so 6.2 s after the 750 ms sleep starts the page is still
+# revealing unless a held click finished it. (Native also blocks about 4.6 s inside play-movie-to-surface at 0x13c8,
+# before the 750 ms sleep; docs/backlog.md.)
+#
+# Run on a fresh sandbox with slow reveals, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start --set message.MessageSpeed=100
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-latch-sleep.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=90  # page 1
+wait-state top=SC0000@0x133c click=adv.next every=1.5 timeout=240   # page 17
+settle
+expect top=SC0000@0x133c
+
+click adv.next
+wait-state top=SC0000@0x1345 timeout=10 # the 1000 ms sleep
+rclick 400 300 hold=20                  # latched: no binding can take it
+wait-state top=SC0000@0x16cb timeout=40 # the 750 ms sleep
+click 400 300 hold=20                   # latched for page 18's reveal
+wait 6.2
+expect top=SC0000@0x1a5b                # page 18 waits: the held click finished its reveal at once, and MENU is closed
+shot latch-sleep-page18

@@ -27,20 +27,32 @@ it; git history keeps the record.
     buttons, for `NOSETMUSIC=0`) is not drawn; both games have 3 and get page 102.
 
   Done when each command reaches the same native service or dialog, or is closed as out of scope.
-- **Input-latch cases the port does not model.** The port's latch (`VirtualMachine.InputLatch`) covers the effects
-  and the coroutine yield and every consumer and flush point that SC0000 reaches (`engine-re.md`, "Effect skipping
-  and the input latch"). Not modelled:
-  - Triggers that arrive while nothing waits: a script sleep, or the ops between two waits. Native latches them for
-    the next poll; the port drops them.
+- **Input-latch cases the port does not model.** The port's latch (`VirtualMachine.InputLatch`) covers effects,
+  sleeps, the ops between waits, the coroutine yield, and every consumer and flush point that SC0000 reaches
+  (`engine-re.md`, "Effect skipping and the input latch"). Still open:
   - A trigger held during a run-state-`0x400` effect with service-flags bit 0 set, which never polls, is not offered
     to a later effect that polls under `EffectSkipOnClick` 1. The port offers it only to the reveal, the movie, the
-    hidden-window wait and the resumed text wait.
-  - The other native consumers: `timed_callback_sequence_tick`, `input_hotspot_wait_poll` and
-    `adv_input_dispatch_callbacks` (op `0x95`/`0x96` modal waits). The port does not route held triggers to them.
-  - A page whose text reveals in several runs keeps ctx+0x55108 until op `0x72`, so a held click finishes every later
-    run of the page at once. The port implements this from the decode; no native run has shown it.
+    hidden-window wait, the timed sequence and the resumed text wait.
+  - The op-`0xd5` timed sequence's poll (`timed_callback_sequence_tick`) is implemented from the decode and
+    synthesized tests only. No native run has clicked during a sequence: HISTORY's lasts 50 ms, and the others run
+    deep in gameplay (SHOWGROW is the one Himegari sequence with an abort pc).
+  - `input_hotspot_wait_poll` and `adv_input_dispatch_callbacks` (op `0x91`/`0x92`/`0x95`/`0x96` waits) take no held
+    triggers in the port. Himegari never runs those ops; Kamidori is unchecked.
 
   Done when each case is driven natively and the port matches, or the case is shown unreachable in both games.
+- **Furigana (op `0x196` `display-furigana`) is not drawn.** The port runs the op as a no-op, so the base word and
+  its ruby are both missing: SC0000 page 18 lacks 篝火 and かがりび (9,242 pixels of its text band differ from
+  native's). Himegari's scripts run the op 279 times. Native reveals the ruby glyph by glyph at the message speed
+  (かがりび took 0.4 s at 100 ms a glyph, `SC0000@0x1a50`), and a held click publishes it with the runs around it.
+  Done when the op is decoded (`engine-re.md`) and the port draws the base text and ruby at native's positions,
+  revealed and recorded in History as native does.
+- **A reveal run ends one glyph early.** Native ends a run of n glyphs after n × the glyph delay; the port shows the
+  first glyph at once and ends after (n - 1) × delay (SC0000 page 18, `MessageSpeed=100`, traced 2026-11-06). Done
+  when the port's reveal clock matches native's for a run, including the first glyph's delay.
+- **Native blocks inside a movie start.** At `SC0000@0x13c8` native AGE stays in `play-movie-to-surface` for about
+  4.66 s (traced 2026-11-06 under the driver), while the port passes it at once. It is not known whether this is the
+  decoder's preroll, the sandboxed environment, or an engine wait. Done when the block is traced to its cause and
+  the port either models it or it is shown to be environmental.
 - **An effect wait holds the VM for one frame at its end.** The port's op-`0x21c` waits now end when their effects
   do (`engine-re.md`, "Service waits end on the engine clock"). Each still waits for one synchronized
   presentation of the final sample before the script goes on: 8–10 ms at 100 Hz, 38 ms over SC0000's four

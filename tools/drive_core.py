@@ -142,12 +142,25 @@ def resolve_seed(spec: str, context: paths.ToolContext = paths.CONTEXT) -> Path:
     return backup_contents(Path(spec))
 
 
+def parse_settings(items: Iterable[str]) -> dict[str, str]:
+    """`start --set` values: SECTION.KEY=VALUE each, later ones winning."""
+    settings: dict[str, str] = {}
+    for item in items:
+        dotted, equals, value = item.partition("=")
+        section, dot, key = dotted.strip().partition(".")
+        if not equals or not dot or not section or not key:
+            raise DriveError(f"--set {item!r} must be SECTION.KEY=VALUE")
+        settings[f"{section}.{key}"] = value.strip()
+    return settings
+
+
 def prepare_sandbox(target: str, name: str, seed: str | None, sound: bool, profile: "Profile",
                     context: paths.ToolContext = paths.CONTEXT,
-                    log: Callable[[str], None] = lambda _: None) -> tuple[Path, Path]:
+                    log: Callable[[str], None] = lambda _: None,
+                    settings: dict[str, str] | None = None) -> tuple[Path, Path]:
     """Create (or reuse) sandbox NAME and return (sandbox, profile root). 'fresh' is emptied on every start; other
     names persist. A new sandbox is filled from the seed; the profile's settings (and, unless sound, its quiet
-    settings) are written into its SYS4REG.INI on every start."""
+    settings), then the given `--set` settings, are written into its SYS4REG.INI on every start."""
     sandbox = sandbox_dir(target, name, context)
     if name == "fresh" and sandbox.exists():
         shutil.rmtree(sandbox)
@@ -168,7 +181,7 @@ def prepare_sandbox(target: str, name: str, seed: str | None, sound: bool, profi
             log(f"seeded {profile_root} from {source}")
         else:
             log(f"sandbox {name} exists; --seed applies only to a new sandbox")
-    overrides = {**profile.settings, **({} if sound else profile.quiet)}
+    overrides = {**profile.settings, **({} if sound else profile.quiet), **(settings or {})}
     if overrides:
         ini = profile_root / profile.settings_file
         text = ini.read_bytes().decode("cp932") if ini.is_file() else ""
