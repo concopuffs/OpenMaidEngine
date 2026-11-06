@@ -105,6 +105,8 @@ public sealed partial class GodotAdvHost
 
     public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
     {
+        bool cancelAtStart = _modalMovieCancelPending;
+        _modalMovieCancelPending = false;
         var asset = _res.ResolveMovie(resourceId);
         if (asset == null)
         {
@@ -112,7 +114,7 @@ public sealed partial class GodotAdvHost
             return;
         }
 
-        _modalMovieCancelled = false;
+        _modalMovieCancelled = cancelAtStart;
         _modalMovieWaiting = true;
         bool scriptSuspended = false;
         try

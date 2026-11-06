@@ -890,6 +890,16 @@ Space at the text wait. Retail never runs HIDEWIN.BIN, so both targets wait in t
   tooltip, and a click on the same spot advances to `0x913`: op `0x7c` cleared the hotspot hit.
 - The `hide-*` shots compare the hidden and restored frames, and `hide-8`/`hide-9` the tooltip.
 
+`himegari-effect-skip-on-click.steps` clicks during the hide window's two text-box fades on SC0000 pages 3–4, with
+`system:EffectSkipOnClick` 0 (a new profile's default) and then 1, set through 設定's その他 page. Its clicks hold
+20 ms so that each lands inside its 500 ms fade.
+- With 0, the fade runs out and the click stays latched. A click during the control's fade-out restores the window
+  once the fade ends (`SC0000@0x8a9`). A click during the fade-in after a Space hide advances the page (`0x8de`).
+- With 1, the click skips the fade. After the control the window stays hidden (`SC0000@0x30d`); after Space the page
+  stays.
+- The `esk-*` shots match between targets apart from glyph edges and the wait indicator's phase (`engine-re.md`,
+  "Effect skipping and the input latch").
+
 `himegari-menu-bar.steps` chooses the menu bar's ﾒｯｾｰｼﾞ items and ｹﾞｰﾑ > 終了 on SC0000. It saves on page 1, reads
 six pages and loads. Then:
 - 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ fast-forwards to `SC0000@0xa18` with the control strip's read-skip cell ON.

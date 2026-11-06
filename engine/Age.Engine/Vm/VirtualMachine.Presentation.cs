@@ -43,6 +43,7 @@ public sealed partial class VirtualMachine
             case "fade-surface-in-from-black": // 0x21: blocking black -> captured full-frame surface
             case "u00418860":
                 MarkLegacyTransitionScratchWritten();
+                DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
                 _host.FadeSurfaceWithBlack(
                     Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.FromBlack,
                     _messageSkipServiceActive || _host.IsMessageSkipActive);
@@ -50,6 +51,7 @@ public sealed partial class VirtualMachine
             case "fade-surface-out-to-black": // 0x22: blocking captured full-frame surface -> black
             case "u00418920":
                 MarkLegacyTransitionScratchWritten();
+                DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
                 _host.FadeSurfaceWithBlack(
                     Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.ToBlack,
                     _messageSkipServiceActive || _host.IsMessageSkipActive);
@@ -57,6 +59,7 @@ public sealed partial class VirtualMachine
             case "fade-surface-out-to-white": // 0x24: blocking captured full-frame surface -> white
             case "u00418A90":
                 MarkLegacyTransitionScratchWritten();
+                DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
                 _host.FadeSurfaceToWhite(
                     Gfx, (int)Read(a[0]), Read(a[1]),
                     _messageSkipServiceActive || _host.IsMessageSkipActive);
@@ -64,6 +67,7 @@ public sealed partial class VirtualMachine
             case "crossfade-surfaces": // 0x25: legacy full-frame surface alpha transition
             case "u00418B40":
                 MarkLegacyTransitionScratchWritten();
+                DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
                 _host.CrossfadeSurfaces(
                     Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]),
                     _messageSkipServiceActive || _host.IsMessageSkipActive);

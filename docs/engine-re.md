@@ -346,8 +346,8 @@ The meaningful consumer catalog is:
 | `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for active fast-forward; value 2 also launches `CALLBACK_SETTING.BIN`. See "Click cancels Skip" below. | Active ADV input behavior; port implemented (`Sys4StartupSettings.CancelMessageSkipOnClick`) |
 | `CONTROLDISIBLECURSOR` | The spelling is native. The "cursor" is the page-wait indicator. With value 0, `adv_input_service_poll` calls `adv_wait_indicator_stop@0x4051c0` (erase the indicator, clear run-state `0x40000000`) before it runs a bound-action or hover callback. Value 1 skips that call, so the indicator keeps running under the callback. | Both games set 1, which is the port's behavior (callbacks leave the indicator alone); value 0 is not modelled (2026-11-04) |
 | `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. Their only callers are IAGEService `+0x84`/`+0x88` (vtable `0x578034`, global object `0x5c5f10`), which the menu bar's ｵｰﾄﾒｯｾｰｼﾞ and ﾒｯｾｰｼﾞｽｷｯﾌﾟ call ("Native menu bar"); no opcode reaches them, and the script menus' ops `0x88`/`0x1b7` ignore the setting. | Modelled for the menu toggles (`VmOptions.CoexistMessageSkip`); inert on the script path (both shipped games have 1) |
-| `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The registered default is 0, which a new profile writes; the 設定 dialog's その他 page sets it ("Native menu bar"). When it is 1 and one of the native effect-service run-state bits `0x8`, `0x10`, `0x80`, or `0x100` is active, logical action 4 is consumed and the selected effect tick receives delta `0x10000000`, forcing its terminal frame. | Active visual-effect input policy. The port routes action 4 ahead of retained ADV hotspots while a transition service is parked, but forces the endpoint whatever the setting (`docs/backlog.md`) |
-| `REDRAWTEXTONKEY` | Value 1 lets a wheel action at an ADV text wait step the text view (`FUN_00453520` ±1) and launch `CALLBACK_TEXT.BIN` under run-state `0x100000`. | Inert: both games set 0, and the port does not model value 1 (2026-11-04) |
+| `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The registered default is 0, which a new profile writes; the 設定 dialog's その他 page sets it ("Native menu bar"). When it is 1, the effect services (run-state bits `0x8`, `0x10`, `0x80` and `0x100`, and `0x400` unless service-flags bit 0 is set) poll the input latch; logical action 4 forces the effect to its terminal frame (delta `0x10000000`, or the force-complete worker for `0x400`). With 0 nothing polls during the effect, and the click stays latched for the next service ("Effect skipping and the input latch"). | Active visual-effect input policy; the port reads it live from `SYS4REG.INI` and matches native on both settings |
+| `REDRAWTEXTONKEY` | Value 1 lets a wheel action at an ADV text wait step the text view (`FUN_00453520` ±1, serviced by `adv_text_view_service_tick@0x410d30`) and launch `CALLBACK_TEXT.BIN` under run-state `0x100000`. | Inert: both games set 0, and the port does not model value 1 (2026-11-04) |
 | `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. While an ADV text wait polls, a wheel turn raises that action instead of feeding op `0x10d`; every scene binds action 8 to History ("Mouse wheel at an ADV text wait"). The `message:WheelKey*OnTW` copies have no reader. | Active ADV input binding; port implemented (`Sys4StartupSettings.WheelKeyUpAction`, 2026-11-04) |
 | `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; the port redirects it through the shared profile-root policy |
 | `REGFILEPATH` | Supplies the Eushully/product-relative directory for native `SYS4REG.INI`. With Himegari's `USEAPPDATAFOLDER=1`, AGE resolves `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SYS4REG.INI`. | Active native engine-options path; redirected with saves while retaining the native format |
@@ -1623,8 +1623,8 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   pixel, apart from 動作環境's live free space; both targets list the same texts and buttons and write the same
   `SYS4REG.INI`. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
   state, then posts `WM_COMMAND`. Both targets refuse a grayed item.
-- **Remaining gaps.** The other commands, what the port does with `EffectSkipOnClick` and `UseAntiFont`, the
-  right-click popup, the top-edge strip,
+- **Remaining gaps.** The other commands, what the port does with `UseAntiFont`, the right-click popup, the
+  top-edge strip,
   Alt/F10 focus, and native's off-window popups are listed in `docs/backlog.md`, "Native menu bar".
 
 ### Native system-menu reentrancy guard — opcode `0x142` (2026-07-29)
@@ -1743,8 +1743,8 @@ The Godot host therefore leaves ordinary `FrameYield` non-blocking and publishes
 `0x20c`, `0x21c`, sleep, and stable input waits. `0x21c` waits for visible finite color/matrix channels plus
 `0x223`; ambient cyclic/spritesheet pulses do not block. Click forcing applies to that complete finite
 presentation set, not only `0x223`: the outer tick's run-state-`0x400` branch reads
-`system:EffectSkipOnClick`, consumes logical action 4, calls the same force-complete worker as `0x243`, and
-renders the terminal retained frame. Ordinary object color/alpha and matrix fades therefore jump to their
+`system:EffectSkipOnClick` and, when it is 1, consumes logical action 4, calls the same force-complete worker
+as `0x243`, and renders the terminal retained frame ("Effect skipping and the input latch"). Ordinary object color/alpha and matrix fades therefore jump to their
 endpoints together with type-0 surface commands. Movie-mask commands and `0x242`-detached or ambient channels
 remain outside that completion set.
 This is a native-evidenced scheduler correction, not a guessed duration sleep.
@@ -3997,10 +3997,12 @@ A calls `HIDEWIN.BIN` unconditionally, then yields again into handler B.
 - `TryRequestAdvWaitCoroutineYield` is the Space entry. `ServiceHotspotCallback` runs it before queued hotspot
   callbacks, with hotspot dispatch suspended as during any callback. Its op `0x7c` returns `HOTSPOT_RETURN` to the
   parked wait.
-- `TryLatchAdvCoroutineYieldTrigger` latches Godot's trigger edges while a yield is under way.
+- `TryLatchAdvCoroutineYieldTrigger` holds Godot's trigger edges in the input latch while a yield is under way
+  ("Effect skipping and the input latch").
   - It applies only when no nested script's raw input callbacks own input, so `HIDEWIN.BIN` keeps its own input.
   - The latch consumes the input.
-  - Op `0x199` and the Space entry clear the latch, as native clears the trigger mask.
+  - Neither op `0x199` nor the Space entry clears the latch. Op `0x199` clears only the service trigger mask
+    `ctx+0xa0ce8`, so a click an effect held before the yield still ends the hidden wait.
 - `ApplyMouseWheel` latches the WheelKey action only in the Space entry's wait.
 - Godot (`Main.Input`) no longer treats action 5 as advance. Native advances, finishes a reveal, skips an effect
   and cancels a movie on action 4 only.
@@ -5023,9 +5025,9 @@ continues including them in its visual recomposition predicate until natural com
 
 The main loop also calls this worker, now named
 `gfx_request_force_complete_and_reset_anim_clock@0x4076c0`, from the active run-state-`0x400` service.
-At `0x412408..0x41245c` it reads `system:EffectSkipOnClick`, rejects service-flags bit 0, polls the triggered
-logical-action mask, consumes action-4 bit `0x10`, clears run-state `0x400`, and requests terminal sampling
-before `gfx_render_frame`. This is the generalized native CG-fade click path. It covers the ordinary finite
+At `0x412408..0x41245c` it reads `system:EffectSkipOnClick` (nothing below runs unless it is 1), rejects
+service-flags bit 0, polls the triggered logical-action mask (taking the whole input latch), consumes
+action-4 bit `0x10`, clears run-state `0x400`, and requests terminal sampling before `gfx_render_frame`. This is the generalized native CG-fade click path. It covers the ordinary finite
 color/alpha and matrix channels serviced by `0x21c`, as well as queued type-0 surface commands; it is separate
 from the legacy run-state-bit-8 fade service.
 
@@ -5083,7 +5085,8 @@ lasts about 480 ms. The outer service's generalized skip paths are:
   the input that entered the effect from also canceling it. With `system:EffectSkipOnClick` enabled,
   `engine_main_tick_with_exception_policy@0x411840` polls
   `input_poll_triggered_action_mask@0x460880`; logical action 4 (`0x10`) is consumed and
-  `screen_transition_tick(0x10000000)` forces the active service to its endpoint.
+  `screen_transition_tick(0x10000000)` forces the active service to its endpoint. With it disabled nothing
+  polls, and a click during the fade stays latched ("Effect skipping and the input latch").
 
 The PC advances when the service begins. The handler's finalize branch is therefore the skip-at-dispatch
 path, not a re-entry after natural completion; natural and click-forced progress lives wholly in the outer
@@ -5287,6 +5290,80 @@ persistent/read-driven active Skip but cannot release a physically held key. The
 remains separate from persistent op-`0x88` Skip, so releasing the key cannot clear the user's toggle. Both
 channels share text completion, wait advance, and voice deferral.
 
+### Effect skipping and the input latch (2026-11-05)
+
+**The latch.** A mapped click (`input_latch_mouse_click@0x485e20`, `ctx+0x13e0`; on release under `CLICKONUP`) or a
+non-repeat mapped key (the key latch) stays latched until a service polls it.
+`input_poll_triggered_action_mask@0x460880` takes the whole latch at once: keys, clicks, mapped joystick inputs, and
+action 6 while Skip is on ("ADV hide window: the engine's hidden-window wait" lists the sources). Nothing ages a
+trigger, so a click made while nothing polls is still there for the next poll.
+
+**`system:EffectSkipOnClick` decides whether an effect polls.**
+
+- With 1, `engine_main_tick_with_exception_policy@0x411840` polls while an effect service runs: the legacy run-state
+  bits `0x8`, `0x10`, `0x80` and `0x100`, and `0x400` unless service-flags bit 0 is set. Action 4 forces the effect
+  to its endpoint (`screen_transition_tick(0x10000000)`, or `gfx_request_force_complete_and_reset_anim_clock@0x4076c0`
+  for `0x400`). The poll took every other trigger too, and they are lost.
+- With 0, a new profile's default, nothing polls while the effect runs. The effect runs out, and the click waits in
+  the latch.
+
+**The services that take the latch.** Each acts on what it finds and drops the rest.
+
+- `adv_text_reveal_service_tick@0x406fa0` polls on every tick, so a reveal's first tick takes what the latch holds.
+  Action 4 finishes the reveal and sets `ctx+0x55108`. Until op `0x72` clears it, the page's later reveals publish
+  at once without polling, and the latch keeps what it holds. Under fast-forward (or with action 6 held) the reveal
+  does not poll.
+- The hidden-window wait (`0x411ee6`): any trigger ends it.
+- The modal movie service, run-state `0x2000` (`0x41205d`): action 4 stops the movie. It does not read
+  `EffectSkipOnClick`.
+- `adv_input_service_poll@0x411230` at a text wait. Op `0x72`'s entry normally discards the latch first (below), so
+  the poll sees held triggers only at a wait that resumed without op `0x72`: the wait that op `0x7c` returns to after a
+  Space hide. There the triggers count as fresh input: an op-`0x97` binding, then action 5 (hide again), then action
+  4 (activate the hit, or advance the page).
+- `adv_text_view_service_tick@0x410d30`, the `REDRAWTEXTONKEY` text view (run-state `0x100000`): actions 3 and 1
+  (bits tested directly, the generic wheel defaults) step the view, and action 4 activates the hit or leaves the
+  view. Both games set `REDRAWTEXTONKEY` 0, so it never runs.
+- Not yet modelled by the port: `timed_callback_sequence_tick`, `input_hotspot_wait_poll` and
+  `adv_input_dispatch_callbacks` (`docs/backlog.md`).
+
+**The points that discard it.**
+
+- Unless run-state `0x8000000` (fast-forward) is set:
+  - op `0x72`'s entry (`op_0x72_handler@0x41e690`, which also clears `ctx+0x55108`);
+  - op `0xfa` (`op_0xfa_refresh_adv_skip_input_state@0x416de0`);
+  - a hotspot callback's `ret`, which re-runs the waiting op `0x72`.
+- Always:
+  - op `0x101`;
+  - `scene_context_init_reset` (op `0x9`, a root reload);
+  - `input_flush_action_triggers@0x405380`. Its callers are the legacy fades `0x21`–`0x25`, `0x2a`, `0x2e` and `0x36` as
+    they start (not under fast-forward), op `0xd5` at cursor 0, `adv_input_service_poll` before a hotspot dispatch
+    (`0x411294`), the text view's hit activation, and the skip-click cancel.
+- Op `0x199` clears only the service trigger mask `ctx+0xa0ce8`, not the latch.
+
+**Native-driven 2026-11-05** (slow reveals: `[message] MessageSpeed=100`):
+
+| Click during | `EffectSkipOnClick` 0 | `EffectSkipOnClick` 1 |
+|---|---|---|
+| SC0000's page 13→14 fades | the fades run out; the click finishes page 14's reveal | the click skips the fade; page 14 reveals normally |
+| the hide control's fade-out (handler A) | the window comes back after the fade | the window stays hidden |
+| the fade-in after a Space hide (handler B) | the page advances (`0x8a9` → `0x8de`) | the page stays |
+
+`tools/drive/scenarios/himegari-effect-skip-on-click.steps` checks the last two rows at both settings, switching the
+setting in 設定's その他 page. The port matches every step. Its shots match native's apart from glyph edges (at most
+50 levels) and the wait indicator's animation frame.
+
+**Port.**
+
+- `VirtualMachine.InputLatch` holds the triggers that arrive while nothing polls (`HoldTriggers`), and the consumers
+  and discard points above take or drop them. The ADV coroutine yield holds its triggers in the same latch.
+- Godot (`Main.Input`) routes a trigger that arrives during an effect wait to
+  `GodotAdvHost.TryPollEffectTriggers`. That reads `EffectSkipOnClick` from `SYS4REG.INI` at each trigger, and
+  polls when it is 1 and the effect is a screen transition or a `0x400` wait without service-flags bit 0. Otherwise
+  the trigger goes to the latch.
+- A held action 4 reaches the host as `IAdvHost.FinishTextRevealsUntilWait` (kept until the next text wait) or
+  `IMovieHost.CancelNextModalMovie`.
+- Tests: `InputLatchTests` (synthesized).
+
 ### Driving native AGE (2026-11-01)
 
 These were found while driving native AGE from a script for gate 7 and for the game driver, and they are built into
@@ -5328,6 +5405,7 @@ These were found while driving native AGE from a script for gate 7 and for the g
   (`ctx+0x408`), and its `input_poll_mouse_click_triggers@0x460320` turns each latched button into its logical action
   (slot + 4: left → 4, right → 7) at `input+0xfd8` (= `ctx+0x13e0`). Page advance, hotspot clicks, bound actions
   (right-click → `MENU.BIN`) and the movie and transition skips therefore fire on **release** in Himegari.
+  Which service takes a latched click, and which flush it, is in "Effect skipping and the input latch".
   - This matters for CHMENU. It closes on a right press it saw followed by the release (local `0x3f5` latch over op
     `0x108`). A menu opened on the press would see the button still held and close as soon as it is let go.
   - The port used to trigger on press. It opened MENU, but every open after the first (once assets were cached)

@@ -39,6 +39,7 @@ public sealed partial class VirtualMachine
                         off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack);
                     AdvTextLayoutPresentationBinding binding =
                         TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
+                    OfferHeldTriggersToReveal();
                     AdvRetainedTextRunResult? retained = _host.ShowText(
                         Gfx, binding, liveRun, _messageGlyphDelayMilliseconds);
                     // History records the drawn rows (split at wraps), so it is written after layout but

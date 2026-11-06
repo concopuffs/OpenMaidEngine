@@ -39,6 +39,8 @@ public sealed partial class GodotAdvHost
     private long _autoMessageTime1Milliseconds = Sys4RegIniStore.DefaultAutoMessageTime1;
     private Sys4RegIniStore? _messageSettingsStore;
     private bool _advTextForceComplete;
+    // ctx+0x55108: a click (or a held action 4) finished a reveal; every later reveal publishes at once until op 0x72.
+    private bool _revealsFinishedUntilWait;
     private readonly Dictionary<int, AdvWaitIndicatorConfig> _waitIndicators = new();
     private bool _waitIndicatorFollowLastGlyph;
     private readonly Dictionary<int, (
@@ -177,9 +179,9 @@ public sealed partial class GodotAdvHost
             _currentAdvLayout = run.Layout.Slot;
             _advTextStartedMs = state.StartedMs;
             _activeGlyphDelayMilliseconds = delay;
-            _advTextForceComplete = _messageSkipActive;
+            _advTextForceComplete = _messageSkipActive || _revealsFinishedUntilWait;
             IsTextRevealing =
-                revealGlyphCount > 0 && delay > 0 && !_messageSkipActive;
+                revealGlyphCount > 0 && delay > 0 && !_advTextForceComplete;
         }
         _timeline?.State("text-reveal", new()
         {

@@ -118,11 +118,11 @@ public partial class Main
                 GetViewport().SetInputAsHandled();
                 return;
             }
-            // Native blocking effect services poll logical action 4 before ADV hotspot dispatch.
-            // Consume the trigger here so a retained hotspot under the transition cannot steal it.
-            if (action == 4 && _host.IsTransitionWaiting)
+            // While an effect service parks the VM, the trigger goes to the effect's poll or to the input latch,
+            // never to a hotspot under the effect or to a page wait (RouteEffectTrigger).
+            if (_host.IsTransitionWaiting)
             {
-                _host.SignalInput();
+                if (action >= 0) RouteEffectTrigger(1 << action);
                 GetViewport().SetInputAsHandled();
                 return;
             }
@@ -165,9 +165,9 @@ public partial class Main
             && Win32VirtualKeyTranslator.TryTranslate(gameplayKey, out int virtualKey))
         {
             int action = _vm.UpdateKeyboardVirtualKeyState(virtualKey, gameplayKey.Pressed);
-            if (gameplayKey.Pressed && action == 4 && _host.IsTransitionWaiting)
+            if (gameplayKey.Pressed && action >= 0 && _host.IsTransitionWaiting)
             {
-                _host.SignalInput();
+                RouteEffectTrigger(1 << action);
                 GetViewport().SetInputAsHandled();
             }
             else if (gameplayKey.Pressed && action >= 0 && _vm.TryLatchAdvCoroutineYieldTrigger(1 << action))
@@ -201,9 +201,9 @@ public partial class Main
         if (e is InputEventJoypadButton joyButton)
         {
             int actionMask = _vm.UpdateJoystickButtonState((int)joyButton.ButtonIndex, joyButton.Pressed);
-            if (joyButton.Pressed && (actionMask & (1 << 4)) != 0 && _host.IsTransitionWaiting)
+            if (joyButton.Pressed && actionMask != 0 && _host.IsTransitionWaiting)
             {
-                _host.SignalInput();
+                RouteEffectTrigger(actionMask);
                 GetViewport().SetInputAsHandled();
             }
             else if (joyButton.Pressed && _vm.TryLatchAdvCoroutineYieldTrigger(actionMask))
@@ -237,9 +237,21 @@ public partial class Main
 
     // Native services advance, finish a reveal, skip an effect or cancel a movie on logical action 4 only. At a text
     // wait, action 5 (Space in both games) enters the coroutine yield instead: hide window (adv_input_service_poll).
-    private const int HideWindowAction = 5;
-    private static bool IsAdvanceAction(int action) => action == 4;
-    private static bool HasAdvanceAction(int mask) => (mask & (1 << 4)) != 0;
+    private const int HideWindowAction = VirtualMachine.AdvWaitCoroutineYieldAction;
+    private static bool IsAdvanceAction(int action) => action == VirtualMachine.AdvanceAction;
+    private static bool HasAdvanceAction(int mask) => (mask & (1 << VirtualMachine.AdvanceAction)) != 0;
+
+    /// <summary>system:EffectSkipOnClick, read on each trigger: the 設定 dialog's その他 page writes it.</summary>
+    private bool EffectSkipOnClick => _sys4RegIniStore?.LoadInt("system", "EffectSkipOnClick", 0) == 1;
+
+    /// <summary>A trigger while an effect service parks the VM. With EffectSkipOnClick 1 the effect polls it (action 4
+    /// skips the effect, anything else is dropped); otherwise native's input latch holds it for the next service that
+    /// polls, such as the next text reveal, which a held click finishes (docs/engine-re.md, "Effect skipping and the
+    /// input latch").</summary>
+    private void RouteEffectTrigger(int actionMask)
+    {
+        if (!_host.TryPollEffectTriggers(actionMask, EffectSkipOnClick)) _vm.HoldTriggers(actionMask);
+    }
 
     private void ToggleDebugSceneLauncher()
     {

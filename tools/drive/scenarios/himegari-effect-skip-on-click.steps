@@ -1,0 +1,70 @@
+# system:EffectSkipOnClick on SC0000 pages 3-4, through the hide window's two 500 ms text-box fades (label_1235a's op
+# 0x21c, run-state 0x400): handler A's fade-out and handler B's fade-in. The clicks hold 20 ms so that each lands inside
+# its fade (a default click takes about 0.3 s).
+#
+# Setting 0, a new profile's default. The effect runs out and native's input latch holds the click for the next
+# service that polls it:
+# - a click during the control's fade-out ends the hidden-window wait once the fade is over, so the window comes back;
+# - a click during the fade-in after a Space hide reaches the text wait that op 0x7c returns to, which advances.
+#
+# Setting 1, set with その他's check box. The effect polls the click and jumps to its end:
+# - the fade-out is cut short and the window stays hidden until the next click;
+# - the fade-in is cut short and the page stays.
+#
+# Run on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-effect-skip-on-click.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+advance 2
+expect top=SC0000@0x8a9                 # page 3
+move 400 300
+wait 1
+
+click 772 582 hold=20                   # the hide control: handler A fades the text box out
+wait 0.1
+click 400 300 hold=20                   # during the fade-out: held
+wait 2.5
+expect top=SC0000@0x8a9                 # the held click ended the hidden wait: the window came back
+shot esk-0-fadeout-click-restored
+key 0x20                                # Space hides from the wait
+wait 2
+click 400 300 hold=20                   # restore: handler B fades the text box in
+wait 0.1
+click 400 300 hold=20                   # during the fade-in: held
+wait 2
+expect top=SC0000@0x8de                 # the wait op 0x7c returned to took it: page 4
+shot esk-1-fadein-click-advanced
+
+menu other-settings
+wait 1.5
+answer エフェクト中にキー入力でエフェクトをスキップ
+wait 0.5
+answer OK                               # system:EffectSkipOnClick=1
+wait 2.5
+expect top=SC0000@0x8de
+
+click 772 582 hold=20
+wait 0.1
+click 400 300 hold=20                   # skips the fade-out; the effect's poll takes the click
+wait 2.5
+expect top=SC0000@0x30d                 # still hidden
+shot esk-2-fadeout-skipped-hidden
+click 400 300                           # restore
+wait 2.5
+expect top=SC0000@0x8de
+key 0x20
+wait 2
+click 400 300 hold=20                   # restore
+wait 0.1
+click 400 300 hold=20                   # skips the fade-in
+wait 2
+expect top=SC0000@0x8de                 # the page stays
+shot esk-3-fadein-skipped-stays

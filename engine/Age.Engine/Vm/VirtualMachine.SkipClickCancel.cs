@@ -85,6 +85,7 @@ public sealed partial class VirtualMachine
     {
         _skipClickCancelState = 0;
         Interlocked.Exchange(ref _queuedInputCallbackMask, 0);   // input_flush_action_triggers
+        TakeHeldTriggers();
         _messageSkipEnabled = false;
         _messageSkipServiceActive = false;
         _sharedProfile.ReadMessageSkipEnabled = false;

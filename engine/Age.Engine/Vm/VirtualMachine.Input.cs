@@ -17,6 +17,7 @@ public sealed partial class VirtualMachine
         {
             case "wait-for-input":
                 RefreshAdvReadSkipState();
+                DiscardHeldTriggersUnlessFastForward();   // op_0x72_handler polls the input latch and discards it
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
                 if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }
                 // Re-arm definitions that an earlier 0x93 left as a template (HotspotRegistry.Reset). Only

@@ -6,6 +6,7 @@ using Age.Engine.Hosting;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Engine.Text;
+using Age.Engine.Vm;
 
 [Flags]
 public enum HostPresentationReason
@@ -52,6 +53,7 @@ public sealed partial class GodotAdvHost
     private volatile bool _advPagePresentationSuspended;
     private volatile bool _modalMovieWaiting;
     private volatile bool _modalMovieCancelled;
+    private volatile bool _modalMovieCancelPending;   // CancelNextModalMovie: a held action 4 stops the next movie
     private GfxState? _foregroundGfx;
     private volatile bool _foregroundTransitionWaitBypassed;
     private readonly object _screenTransitionLock = new();
@@ -247,6 +249,7 @@ public sealed partial class GodotAdvHost
             _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
             _waitIndicatorStartedMs = _clock.NowMs;
             _waitIndicatorEnabled = true;
+            _revealsFinishedUntilWait = false;   // op_0x72_handler clears ctx+0x55108
         }
         IsWaiting = true;
         _timeline?.State("input-wait", new() { ["page"] = Pages });
@@ -345,7 +348,8 @@ public sealed partial class GodotAdvHost
         }
         if (IsTextRevealing)
         {
-            lock (_textLock) _advTextForceComplete = true;
+            // adv_text_reveal_service_tick@0x406fa0 sets ctx+0x55108, so the page's later reveals publish at once too.
+            lock (_textLock) _advTextForceComplete = _revealsFinishedUntilWait = true;
             _timeline?.State("text-reveal-forced-complete", new());
             _frameSignal.Set();
             return;
@@ -353,6 +357,37 @@ public sealed partial class GodotAdvHost
         if (TryForceActiveTransition("advance")) return;
         if (IsWaiting && _gate.CurrentCount == 0) _gate.Release();
     }
+
+    /// <summary>A triggered action while an effect service parks the VM (<see cref="IsTransitionWaiting"/>). With
+    /// system:EffectSkipOnClick 1 the service polls native's input latch every tick
+    /// (engine_main_tick_with_exception_policy@0x411840). The poll takes every trigger, and action 4 forces the
+    /// effect's endpoint. A run-state-0x400 effect does not poll while service-flags bit 0 is set. False when the
+    /// service does not poll: the trigger stays in the latch (VirtualMachine.HoldTriggers) for the next service that
+    /// does.</summary>
+    public bool TryPollEffectTriggers(int actionMask, bool effectSkipOnClick)
+    {
+        if (!effectSkipOnClick || !IsTransitionWaiting) return false;
+        bool polls;
+        if (_foregroundGfx is { } foreground) polls = (foreground.AnimationServiceFlags & 1) == 0;
+        else lock (_screenTransitionLock) polls = _screenTransition != null;
+        if (!polls) return false;
+        _timeline?.State("effect-input-polled", new() { ["actions"] = actionMask });
+        if ((actionMask & (1 << VirtualMachine.AdvanceAction)) != 0) TryForceActiveTransition("advance");
+        return true;
+    }
+
+    public void FinishTextRevealsUntilWait()
+    {
+        lock (_textLock) _revealsFinishedUntilWait = true;
+        _timeline?.State("text-reveal-finish-held", new());
+    }
+
+    public bool TextRevealsFinishedUntilWait
+    {
+        get { lock (_textLock) return _revealsFinishedUntilWait; }
+    }
+
+    public void CancelNextModalMovie() => _modalMovieCancelPending = true;
 
     private bool TryForceActiveTransition(string source)
     {
@@ -912,6 +947,7 @@ public sealed partial class GodotAdvHost
             _advTextX = 100;
             _advTextY = 47;
             _advTextForceComplete = false;
+            _revealsFinishedUntilWait = false;
             _waitIndicators.Clear();
             _waitIndicatorBindings.Clear();
             _retainedWaitIndicators.Clear();
@@ -933,6 +969,7 @@ public sealed partial class GodotAdvHost
         _advPagePresentationSuspended = false;
         _modalMovieCancelled = false;
         _modalMovieWaiting = false;
+        _modalMovieCancelPending = false;
         _foregroundGfx = null;
         lock (_screenTransitionLock)
         {

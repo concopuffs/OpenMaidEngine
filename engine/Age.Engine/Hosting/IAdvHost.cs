@@ -16,6 +16,12 @@ public interface IAdvHost
         ShowText(run, glyphDelayMilliseconds);
         return null;
     }
+    // ctx+0x55108: a click finished a reveal, so every later reveal publishes at once until the page's op 0x72 (or a
+    // scene reset) clears it. The VM sets it when native's input latch holds action 4 as a reveal starts; the host
+    // sets it for a click during a reveal.
+    void FinishTextRevealsUntilWait() { }
+    // Whether ctx+0x55108 is set. While it is, the reveal service publishes without polling the input latch.
+    bool TextRevealsFinishedUntilWait => false;
     // Native registers message:MessageSpeed=5 (ms per glyph) and message:MesWinAlpha=8 before SYS4REG.INI
     // loads; hosts without a settings file start from those values.
     int MessageGlyphDelayMilliseconds => Persistence.Sys4RegIniStore.DefaultMessageSpeed;

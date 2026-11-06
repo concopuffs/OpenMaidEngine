@@ -16,7 +16,6 @@ public sealed partial class VirtualMachine
     private volatile bool _coroutineYieldActive;      // _coroutineResumePc is set; read by the input thread
     private volatile bool _hiddenWindowWaiting;       // run-state 0x4000000: the engine waits for any trigger
     private volatile bool _hiddenWindowWheelTriggers; // ...with the text wait's 0x80000000, so the wheel is one
-    private int _hiddenWindowTriggerLatch;            // triggered logical actions since handler A was entered
     private int _advWaitCoroutineYieldRequested;      // logical action 5 reached a polling ADV text wait
 
     private void ResetCoroutineYield()
@@ -38,9 +37,8 @@ public sealed partial class VirtualMachine
         _coroutineYieldEntered = true;
         _coroutineResumesTextWait = resumesTextWait;
         _coroutineYieldActive = true;
-        // Op 0x199 and the text-wait poll clear the service trigger mask, and the poll before them consumed the
-        // input latches; only input after this point reaches the hidden-window wait.
-        Interlocked.Exchange(ref _hiddenWindowTriggerLatch, 0);
+        // The poll that led here took the input latch (the text wait's poll for Space, the flush before a control's
+        // callback); the latch keeps what arrived since, such as a click an effect in the callback held.
         _host.SetAdvPagePresentationSuspended(Gfx, true);
         return _cur.Script.IndexByOffset.GetValueOrDefault(_cur.CoroutineYieldHandlerA, resumePc);
     }
@@ -51,18 +49,13 @@ public sealed partial class VirtualMachine
     public bool IsAdvCoroutineYieldInputLatched
         => (_coroutineYieldActive || _hiddenWindowWaiting) && !IsRawInputCallbackActive;
 
-    /// <summary>Latch triggered logical actions (bit = 1 &lt;&lt; action) for the hidden-window wait while a yield is
-    /// under way. True means the input was consumed, as native's latch keeps it from every other consumer.</summary>
+    /// <summary>Hold triggered logical actions (bit = 1 &lt;&lt; action) in the input latch while a yield is under way
+    /// (<see cref="HoldTriggers"/>): the hidden-window wait takes them, or the text wait op 0x7c returns to. True means
+    /// the input was consumed, as native's latch keeps it from every other consumer.</summary>
     public bool TryLatchAdvCoroutineYieldTrigger(int actionMask)
     {
         if (actionMask == 0 || !IsAdvCoroutineYieldInputLatched) return false;
-        int before, after;
-        do
-        {
-            before = Volatile.Read(ref _hiddenWindowTriggerLatch);
-            after = before | actionMask;
-        } while (Interlocked.CompareExchange(ref _hiddenWindowTriggerLatch, after, before) != before);
-        _host.WakeInputCallbackService();
+        HoldTriggers(actionMask);
         return true;
     }
 
@@ -94,7 +87,7 @@ public sealed partial class VirtualMachine
             _host.WaitForServiceTrigger(() =>
             {
                 ApplyMenuToggles();   // the native menu's Skip toggle starts fast-forward, which ends this wait
-                return Interlocked.Exchange(ref _hiddenWindowTriggerLatch, 0) != 0
+                return TakeHeldTriggers() != 0
                        || _messageSkipServiceActive || _stopRequested || _rootReloadRequested;
             });
         }
@@ -159,8 +152,8 @@ public sealed partial class VirtualMachine
                 // op_0x199_yield_adv_coroutine@0x416440. Only the 0x7b handlers belong to the frame; the yield state
                 // and its owner (+0x5f6bc) are engine-wide. With no yield entered, it saves the resume pc and its
                 // owner and enters handler A, or does nothing without one. A yield while one is entered leaves for
-                // handler B, with the resume still armed. Either way it clears the service trigger mask.
-                Interlocked.Exchange(ref _hiddenWindowTriggerLatch, 0);
+                // handler B, with the resume still armed. Either way it clears the service trigger mask (ctx+0xa0ce8).
+                // The port keeps no such mask apart from the input latch, which op 0x199 leaves alone.
                 if (!_coroutineYieldEntered)
                     return _cur.CoroutineYieldHandlerA == -1
                         ? pc + 1

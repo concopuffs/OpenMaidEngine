@@ -204,6 +204,7 @@ internal class RecordingHost : IHost
     public void WaitForInput() => Waits++;
     public virtual void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
     {
+        TextRevealsFinishedUntilWait = false;   // op_0x72_handler clears ctx+0x55108
         while (serviceInputCallback()) { }
         WaitForInput();
     }
@@ -356,6 +357,16 @@ internal class RecordingHost : IHost
         => MoviePlaybackRates.Add((surfaceSlot, rate));
     public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
         => ModalMovies.Add((resourceId, surfaceSlot, movieFlags));
+    // Native's input latch handing a held click to the next reveal or modal movie (VirtualMachine.InputLatch.cs).
+    public int TextRevealFinishes;
+    public bool TextRevealsFinishedUntilWait { get; private set; }
+    public void FinishTextRevealsUntilWait()
+    {
+        TextRevealFinishes++;
+        TextRevealsFinishedUntilWait = true;
+    }
+    public int ModalMovieCancels;
+    public void CancelNextModalMovie() => ModalMovieCancels++;
 }
 
 internal sealed class MapProvider : IScriptProvider

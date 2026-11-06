@@ -27,12 +27,25 @@ it; git history keeps the record.
     buttons, for `NOSETMUSIC=0`) is not drawn; both games have 3 and get page 102.
 
   Done when each command reaches the same native service or dialog, or is closed as out of scope.
-- **`system:EffectSkipOnClick` is not honoured.** Native forces a running effect to its endpoint on a click only when
-  the setting is 1 (`engine-re.md`, run-state `0x400` and the legacy transitions). A new profile writes 0, and
-  the 設定 dialog's その他 page now sets it. The port forces the endpoint whatever the value
-  (`GodotAdvHost.TryForceActiveTransition`). With the setting off, native leaves action 4 unconsumed, and where that
-  click goes next is not traced. Done when the port reads the setting, and a native run with it off shows what a click
-  during a fade does, and the port matches.
+- **Input-latch cases the port does not model.** The port's latch (`VirtualMachine.InputLatch`) covers the effects
+  and the coroutine yield and every consumer and flush point that SC0000 reaches (`engine-re.md`, "Effect skipping
+  and the input latch"). Not modelled:
+  - Triggers that arrive while nothing waits: a script sleep, or the ops between two waits. Native latches them for
+    the next poll; the port drops them.
+  - A trigger held during a run-state-`0x400` effect with service-flags bit 0 set, which never polls, is not offered
+    to a later effect that polls under `EffectSkipOnClick` 1. The port offers it only to the reveal, the movie, the
+    hidden-window wait and the resumed text wait.
+  - The other native consumers: `timed_callback_sequence_tick`, `input_hotspot_wait_poll` and
+    `adv_input_dispatch_callbacks` (op `0x95`/`0x96` modal waits). The port does not route held triggers to them.
+  - A page whose text reveals in several runs keeps ctx+0x55108 until op `0x72`, so a held click finishes every later
+    run of the page at once. The port implements this from the decode; no native run has shown it.
+
+  Done when each case is driven natively and the port matches, or the case is shown unreachable in both games.
+- **Effect waits run long on SC0000's page 13→14 transition.** From the click that ends page 13 to the page 14
+  reveal, the port takes 1786 ms; native takes about 1.0–1.4 s, judged from shot timing, not instrumented. The
+  port's `--timeline-log` shows four op-`0x21c` waits of 183, 938, 171 and 381 ms. Three of them have no finite
+  transition (count 0, progress 1 at once), so the time goes to whatever else `0x21c` waits for. Done when a native
+  timing trace of the same sequence is captured and the port's waits match it.
 - **`message:UseAntiFont` 0 is not rendered.** Native's 0 selects `GGO_BITMAP` glyphs instead of `GGO_GRAY4_BITMAP`
   (`engine-ctx.toml` `text_antialias_enabled`, IAGEService `+0x68`). The 設定 dialog's ﾒｯｾｰｼﾞ page writes it, but the
   port always draws grayscale glyphs (`WindowsGdiGlyphMaskRasterizer`). Done when 0 draws aliased glyphs that match a

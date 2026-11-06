@@ -58,6 +58,7 @@ public sealed partial class VirtualMachine
                 // running script as the guard (+0x5f6b8) and starts the clock.
                 if (_timedCallbackCursor == 0)
                 {
+                    TakeHeldTriggers();   // input_flush_action_triggers
                     _timedCallbackStartedAtMs = _host.InputClockMilliseconds;
                     _timedCallbackAbortOffset = unchecked((int)Read(a[0]));
                     _timedCallbackGuard = _cur.Script;

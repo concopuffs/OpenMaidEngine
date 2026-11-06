@@ -1029,6 +1029,7 @@ public sealed partial class VirtualMachine
             _heldInputCallbackMask = 0;
             _queuedInputCallbackMask = 0;
         }
+        TakeHeldTriggers();   // scene_context_init_reset polls the input latch and discards it
         lock (_debugControlLock)
         {
             _debugActiveFrame = null;
@@ -1478,6 +1479,8 @@ public sealed partial class VirtualMachine
 
     private bool ServiceHotspotCallback()
     {
+        // A wait that op 0x7c resumed polls what the yield's handlers held, as fresh input.
+        RouteHeldTriggersAtTextWait();
         // adv_input_service_poll takes op-0x97 bound actions first, which Godot activates before it requests the
         // action-5 yield, so a pending request comes before the hover and click callbacks queued after it.
         if (Interlocked.Exchange(ref _advWaitCoroutineYieldRequested, 0) != 0 && ServiceAdvWaitCoroutineYield())
@@ -1506,11 +1509,14 @@ public sealed partial class VirtualMachine
         }
         if (_cur.Script.IndexByOffset.TryGetValue(target, out int pc))
         {
+            TakeHeldTriggers();   // adv_input_service_poll flushes the latch before it dispatches (0x411294)
             _cur.CallStack.Add(HOTSPOT_RETURN);
             RunWaitCallback(pc);
             // A malformed callback must not leave its sentinel in the page's ordinary local-call stack.
             int sentinel = _cur.CallStack.LastIndexOf(HOTSPOT_RETURN);
             if (sentinel >= 0) _cur.CallStack.RemoveAt(sentinel);
+            // The callback's ret re-runs the waiting op 0x72, whose entry discards what the callback's effects held.
+            DiscardHeldTriggersUnlessFastForward();
         }
         RearmAfterWaitCallback();
         return true;

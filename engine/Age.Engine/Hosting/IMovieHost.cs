@@ -38,4 +38,7 @@ public interface IMovieHost
     // reaches EOF or the player cancels it. The decoder remains asynchronous; the interactive host
     // owns the modal wait so its render loop can continue publishing frames.
     void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags) { }
+    // The modal movie service polls native's input latch on its first tick, and a held action 4 stops the movie: the
+    // next PlayModalMovieToSurface returns as cancelled at once (VirtualMachine.InputLatch.cs).
+    void CancelNextModalMovie() { }
 }

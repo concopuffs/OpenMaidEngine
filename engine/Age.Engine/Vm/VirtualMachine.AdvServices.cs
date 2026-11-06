@@ -14,6 +14,7 @@ public sealed partial class VirtualMachine
                 _messageSkipServiceActive =
                     _messageSkipEnabled || _advReadSkipState || _host.IsAdvReadSkipActive;
                 _host.SetMessageSkipActive(_messageSkipServiceActive);
+                DiscardHeldTriggersUnlessFastForward();   // it polls the input latch and discards it, as op 0x72 does
                 return pc + 1;
             case "u0041B290":
             case "set-message-skip": // 0x88: persistent all-message fast-forward service state
@@ -75,9 +76,11 @@ public sealed partial class VirtualMachine
                 _autoVoicePending = false; return pc + 1;
             case "u00415BF0":
             case "reset-message-skip-input": // 0x101 clears transient input/run bits, not op 0x88 state
-                // Native also writes the CancelMesSkipOnClick press/release state ctx+0x6da80 = 0.
+                // Native also writes the CancelMesSkipOnClick press/release state ctx+0x6da80 = 0, and polls the input
+                // latch, discarding it.
                 _skipClickCancelState = 0;
                 Interlocked.Exchange(ref _skipClickCancelTriggers, 0);
+                TakeHeldTriggers();
                 return pc + 1;
             default:
                 throw new InvalidOperationException($"Non-ADV-service opcode routed to ADV-service handler: {label}");

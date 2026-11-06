@@ -395,7 +395,9 @@ inline arrays, rectangle search and stable index sorting, bounded integer queues
 and native-style random-modulo dispatch; shared storage/address helpers remain in the coordinator.
 `engine/Age.Engine/Vm/VirtualMachine.ControlFlow.cs` owns local jumps/calls/returns, value-switch construction,
 ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch; process/root exit and cross-script
-lifecycle are routed separately. `engine/Age.Engine/Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
+lifecycle are routed separately. `engine/Age.Engine/Vm/VirtualMachine.InputLatch.cs` owns native's input latch: the
+triggers held while nothing polls (effects under `EffectSkipOnClick` 0, the ADV coroutine yield), the services that
+take them, and the discard points. `engine/Age.Engine/Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state
 remain in `VirtualMachine.cs`.
