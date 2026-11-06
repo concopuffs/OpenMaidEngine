@@ -49,6 +49,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     ├── LICENSE                               holder-neutral MIT grant for authored project work
     ├── THIRD_PARTY_NOTICES.md                 incorporated-code licenses + prior-research acknowledgment
     ├── global.json                           pins the validated .NET 8 SDK feature band
+    ├── Directory.Build.targets               makes a Debug build recompile when Optimize changes
+    │                                         (drive.py port start --optimize)
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;
     │                                         tracked source and generated references use canonical LF
     ├── .github/workflows/core-validation.yml read-only, SHA-pinned Ubuntu 24.04 source-only core gate (GitHub Actions)

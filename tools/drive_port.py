@@ -2,8 +2,9 @@
 """The port target of the driving protocol: launch the Godot port with its ``--control`` channel.
 
 The port serves the protocol itself (``engine/Age.Engine.Frontend/Control/``, ``godot/Main.Drive.cs``); this module
-only starts and stops it. ``start`` builds the Godot C# project (``--no-build`` skips that), prepares a save
-sandbox, and runs the Godot .NET console binary (``--godot``, ``AGE_GODOT_CONSOLE`` or PATH) with
+only starts and stops it. ``start`` builds the Godot C# project (``--no-build`` skips that; ``--optimize`` turns the
+JIT optimizer on), prepares a save sandbox, and runs the Godot .NET console binary (``--godot``, ``AGE_GODOT_CONSOLE``
+or PATH) with
 
     --path godot -- --game-root <install> --data-root <sandbox> --control --control-file <session.json>
 
@@ -55,15 +56,28 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
                               "profile's (repeatable), e.g. --set message.MessageSpeed=100")
     command.add_argument("--godot", help="Godot .NET console binary (default: AGE_GODOT_CONSOLE, then PATH)")
     command.add_argument("--no-build", action="store_true", help="skip `dotnet build godot/OME.csproj`")
+    command.add_argument("--optimize", action="store_true",
+                         help="build with the JIT optimizer on (-p:Optimize=true), for timing against native; "
+                              "the next start without it rebuilds unoptimized")
     command.add_argument("--mod", action="append", default=[], metavar="PATH",
                          help="load this mod package (.omp or folder) in addition to the sandbox's mods/ (repeatable)")
     command.add_argument("--port-arg", action="append", default=[], metavar="ARG",
                          help="extra argument for the port after --, e.g. --port-arg=--locator-hud (repeatable)")
 
 
-def build() -> None:
+def build_command(optimize: bool = False) -> list[str]:
+    """The `dotnet build` of the Godot project. Godot's editor binary loads only the Debug configuration, where the JIT
+    optimizer is off; `optimize` keeps that configuration and passes Optimize=true. Directory.Build.targets turns that
+    into a define, so a change of mode recompiles in either direction instead of keeping the other mode's assemblies."""
     command = ["dotnet", "build", str(GODOT_PROJECT / "OME.csproj"), "--nologo", "--verbosity", "minimal"]
-    print("drive port: " + " ".join(command[:3]), flush=True)
+    if optimize:
+        command.append("-p:Optimize=true")
+    return command
+
+
+def build(optimize: bool = False) -> None:
+    command = build_command(optimize)
+    print("drive port: " + " ".join(command[:3] + command[6:]), flush=True)
     completed = subprocess.run(command, cwd=paths.REPO, capture_output=True, text=True, encoding="utf-8",
                                errors="replace")
     if completed.returncode != 0:
@@ -79,9 +93,11 @@ def start(arguments: argparse.Namespace) -> int:
         raise DriveError("a port session is already running; `drive.py port stop` first")
     session.unlink(missing_ok=True)
     settings = core.parse_settings(arguments.set)
+    if arguments.optimize and arguments.no_build:
+        raise DriveError("--optimize is a build option; it cannot be combined with --no-build")
     godot = resolve_godot(arguments.godot)
     if not arguments.no_build:
-        build()
+        build(arguments.optimize)
     profile = core.load_profile()
     sandbox, profile_root = core.prepare_sandbox(
         "port", arguments.sandbox or "fresh", arguments.seed, arguments.sound, profile,
@@ -101,6 +117,7 @@ def start(arguments: argparse.Namespace) -> int:
     core.write_json_atomic(root / "launch.json", {
         "launcher_pid": process.pid, "command": command, "sandbox": str(sandbox), "profile_root": str(profile_root),
         "log": str(log_path), "started": core.now_text(), "foreground": bool(arguments.foreground),
+        "optimize": bool(arguments.optimize),
     })
     deadline = time.monotonic() + arguments.timeout
     while time.monotonic() < deadline:
@@ -111,7 +128,7 @@ def start(arguments: argparse.Namespace) -> int:
             with core.Client(int(info["port"]), token) as client:
                 hello = client.hello
             print(f"drive port: pid {info['pid']} on 127.0.0.1:{info['port']}, profile {hello.get('profile')}, "
-                  f"capabilities {', '.join(hello.get('capabilities', []))}")
+                  f"capabilities {', '.join(hello.get('capabilities', []))}{jit_note(hello)}")
             print(f"drive port: saves sandbox {profile_root}; log {log_path}")
             return 0
         if process.poll() is not None and core.read_session("port") is None:
@@ -119,6 +136,13 @@ def start(arguments: argparse.Namespace) -> int:
             raise DriveError(f"the port exited ({process.returncode}) before opening its control channel")
         time.sleep(0.25)
     raise DriveError(f"no control session within {arguments.timeout:.0f} s; see {log_path}")
+
+
+def jit_note(hello: dict) -> str:
+    """How the port's assemblies were compiled, from its hello (absent from ports older than the field)."""
+    if "jit_optimized" not in hello:
+        return ""
+    return "; JIT optimized" if hello["jit_optimized"] else "; JIT optimizer off (Debug build)"
 
 
 def window_placement(info: dict | None) -> Callable[[dict], None] | None:

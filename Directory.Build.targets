@@ -1,0 +1,9 @@
+<Project>
+  <!-- A Debug build with Optimize=true (drive.py port start, option optimize) shares its output folder with ordinary
+       Debug builds, because Godot's editor binary loads only .godot/mono/temp/bin/Debug. MSBuild's incremental compile
+       hashes DefineConstants but not Optimize, so this define makes a change of Optimize recompile in either direction
+       instead of leaving the other mode's assemblies in place. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug' and '$(Optimize)' == 'true'">
+    <DefineConstants>$(DefineConstants);OME_OPTIMIZED_DEBUG</DefineConstants>
+  </PropertyGroup>
+</Project>

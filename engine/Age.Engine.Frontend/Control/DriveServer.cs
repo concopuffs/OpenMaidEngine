@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -57,12 +59,21 @@ public sealed class DriveServer : IDisposable
         _dispatcher.Poll(nowMs);
     }
 
+    /// <summary>Whether the VM's assembly was compiled with the JIT optimizer on. Godot's editor binary loads only the
+    /// Debug configuration, where the optimizer is off unless the build passed Optimize=true
+    /// (<c>drive.py port start --optimize</c>). CPU-bound VM work runs two to three times slower without it, so
+    /// timings compared with native need to know.</summary>
+    public static bool JitOptimized { get; } =
+        typeof(Age.Engine.Vm.VirtualMachine).Assembly.GetCustomAttribute<DebuggableAttribute>()
+            is not { IsJITOptimizerDisabled: true };
+
     public JsonObject Hello() => new()
     {
         ["target"] = _backend.Target,
         ["profile"] = _backend.Profile,
         ["version"] = DriveProtocol.Version,
         ["capabilities"] = new JsonArray(_backend.Capabilities.Select(c => (JsonNode?)c).ToArray()),
+        ["jit_optimized"] = JitOptimized,
     };
 
     private void Serve()

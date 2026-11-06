@@ -44,13 +44,6 @@ it; git history keeps the record.
   "Furigana"). Kamidori runs the op 3,054 times, but its SYS4433 engine has neither of Himegari's two ruby code
   sequences (the gap division and the centring), and its SYS4INI trailer has `RUBYSHIFTMODE`. Done when Kamidori's
   ruby builder is decoded and a Kamidori furigana page and its History match native.
-- **Port driver runs are unoptimized.** `drive.py port` builds `godot/OME.csproj` in Debug, and Godot's editor binary
-  always loads `.godot/mono/temp/bin/Debug`, where the JIT optimizer is disabled. CPU-bound VM work therefore runs two
-  to three times slower than in a release build: an AGF decode takes 10.6 ms instead of 4.4 ms (`engine-re.md`,
-  "What a texture load costs"). That skews timing comparisons with native. Building with `-p:Optimize=true` fixes it,
-  but an incremental build does not recompile when only `Optimize` changes, so going either way needs
-  `--no-incremental`. Done when `drive.py port start` can run optimized assemblies and returns the Debug output to
-  its normal state afterwards.
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
   statement blocks, "Not modelled"). A static scan of both games' scripts (2026-11-04) finds a movie start inside
@@ -161,10 +154,10 @@ it; git history keeps the record.
 ## Platform and project
 
 - **Intermittent allocation test.** `MovieSurfaceRegistryTests.ResourceLookup_SelectsNewestPublishedPlaybackWithoutAllocating`
-  failed once in a `validate.py --level core` run on 2026-11-03 and passed on every rerun. It measures
-  `GC.GetAllocatedBytesForCurrentThread` around the lookup, which tiered JIT or runtime work on the test thread can
-  disturb. Done when the test is deterministic (for example a warmed loop with a tolerance) or the lookup is shown
-  to allocate.
+  failed in a `validate.py --level core` run on 2026-11-03 and again on 2026-11-06, and passed on every rerun. It
+  measures `GC.GetAllocatedBytesForCurrentThread` around the lookup, which tiered JIT or runtime work on the test
+  thread can disturb. Done when the test is deterministic (for example a warmed loop with a tolerance) or the lookup
+  is shown to allocate.
 - **Intermittent debug-return test.** `DebugSceneLaunchTests.PollingTitleReturnsAtOpcodeBoundaryWithoutAdvInputWait`
   failed once in a full `dotnet test` run on 2026-11-03 and passed alone and on the full rerun (1015/1015). It
   waits on cross-thread handshakes with 5 s timeouts, which a loaded test host can miss. Done when the failure is

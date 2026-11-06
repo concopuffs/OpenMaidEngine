@@ -139,7 +139,7 @@ def run(target: str, steps: list[core.Step], screenshot: bool) -> list[str | Ima
 @server.tool()
 def drive_start(target: Target, sandbox: str | None = None, seed: str | None = None, sound: bool = False,
                 foreground: bool = False, build: bool = True, mods: list[str] | None = None,
-                settings: list[str] | None = None) -> str:
+                settings: list[str] | None = None, optimize: bool = False) -> str:
     """Launch the game under the driver and return once it is up (`drive.py <target> start`).
 
     sandbox: named save sandbox kept between runs (default 'fresh', emptied on every start).
@@ -150,6 +150,8 @@ def drive_start(target: Target, sandbox: str | None = None, seed: str | None = N
     mods: port only; mod packages (.omp files or folders) to load in addition to the sandbox's mods/ folder.
     settings: SECTION.KEY=VALUE lines written into the sandbox SYS4REG.INI before launch (`--set`), e.g.
     ["message.MessageSpeed=100"].
+    optimize: port only; build with the JIT optimizer on (`--optimize`), for timing against native. The default Debug
+    build runs CPU-bound VM work two to three times slower; the next start without it rebuilds unoptimized.
     Fails if the target already has a session; drive_stop it first."""
     arguments = [target, "start"]
     if sandbox:
@@ -164,6 +166,12 @@ def drive_start(target: Target, sandbox: str | None = None, seed: str | None = N
         if target != "port":
             raise ToolError("build=false applies to the port only")
         arguments.append("--no-build")
+    if optimize:
+        if target != "port":
+            raise ToolError("optimize applies to the port only")
+        if not build:
+            raise ToolError("optimize is a build option; it needs build=true")
+        arguments.append("--optimize")
     for mod in mods or []:
         if target != "port":
             raise ToolError("mods apply to the port only; native AGE takes an `omp export`")

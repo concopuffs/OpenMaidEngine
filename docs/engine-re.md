@@ -2022,8 +2022,8 @@ decode in the same run:
 
 The port decodes an AGF on its first load (`AgfDecoder`) and caches the RGBA image by packed id
 (`GodotAdvHost.Decode`). With the JIT optimizing, each load is within about 1.6 ms of native's, and repeat loads cost
-nothing. `drive.py port` runs Godot's Debug configuration, where the JIT optimizer is disabled. There the same
-decodes take two to three times as long. A standalone benchmark of `AgfDecoder` gives the same split: EV052DA takes
+nothing. `drive.py port` runs Godot's Debug configuration, where the JIT optimizer is disabled unless it is started
+with `--optimize` (`tools-reference.md`, "Port timing"). There the same decodes take two to three times as long. A standalone benchmark of `AgfDecoder` gives the same split: EV052DA takes
 3.94 ms optimized and 9.20 ms in Debug.
 
 #### Selected retained-object range transform — opcodes `0x229`/`0x22a`/`0x22c`/`0x22d`/`0x22f` (2026-07-21; corrected 2026-08-16)

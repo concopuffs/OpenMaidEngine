@@ -815,16 +815,22 @@ driving needs the Godot .NET console binary and `dotnet`.
 | `--inline` | native | run the daemon in this process (debugging) |
 | `--godot PATH` | port | the Godot .NET console binary (default `AGE_GODOT_CONSOLE`, then PATH) |
 | `--no-build` | port | skip `dotnet build godot/OME.csproj` |
+| `--optimize` | port | build with the JIT optimizer on (`-p:Optimize=true`, still the Debug configuration), for timing against native ("Port timing" below); refused with `--no-build` |
 | `--mod PATH` | port | load this mod package (`.omp` or folder) in addition to the sandbox's `mods/` (repeatable; the port's `--mod`) |
 | `--port-arg ARG` | port | an extra port argument after `--`, e.g. `--port-arg=--locator-hud` (repeatable) |
 
 **Port timing.** The port runs Godot's Debug configuration (`godot/.godot/mono/temp/bin/Debug`; Godot's editor
 binary loads no other), where the JIT optimizer is disabled. CPU-bound VM work therefore takes two to three times as
 long as in a release build: an AGF decode takes 10.6 ms instead of 4.4 ms (`engine-re.md`, "What a texture load
-costs"). To compare such work with native, build optimized and start without a build:
-`dotnet build godot/OME.csproj -p:Optimize=true --no-incremental`, then `drive.py port start --no-build`. Afterwards
-rebuild with `dotnet build godot/OME.csproj --no-incremental`. An incremental build does not recompile when only
-`Optimize` changes, so without `--no-incremental` the optimized assemblies stay in the Debug folder (`backlog.md`).
+costs"). To compare such work with native, start with `--optimize`, which builds the same configuration with
+`-p:Optimize=true`.
+
+- MSBuild's incremental compile does not hash `Optimize`. The root `Directory.Build.targets` therefore adds the define
+  `OME_OPTIMIZED_DEBUG` to such builds, so a change of mode recompiles every project. The next start without
+  `--optimize`, or an editor build, returns to unoptimized assemblies; that rebuild takes longer than an incremental
+  one.
+- The start line ends with the mode the port reports in its `hello` (`jit_optimized`): `JIT optimized` or
+  `JIT optimizer off (Debug build)`. Check it after `--no-build`, which keeps whatever was built last.
 
 **Output.** Everything lives in `build/games/<profile>/drive/<target>/`: `session.json` (port, token, pids; deleted
 when the session ends), `serve.log` (native daemon) or `godot.log` and `launch.json` (port), `events.jsonl` (native),
@@ -1032,7 +1038,7 @@ post `WM_KEYDOWN`/`WM_KEYUP`.
 
 | Tool | CLI equivalent | Returns |
 |---|---|---|
-| `drive_start(target, sandbox, seed, sound, foreground, build, mods, settings)` | `drive.py <target> start` (`build=false` is `--no-build`, `mods` is `--mod` per path, both port only; `settings` is `--set` per `SECTION.KEY=VALUE`) | the CLI's output |
+| `drive_start(target, sandbox, seed, sound, foreground, build, mods, settings, optimize)` | `drive.py <target> start` (`build=false` is `--no-build`, `mods` is `--mod` per path, `optimize=true` is `--optimize`, all port only; `settings` is `--set` per `SECTION.KEY=VALUE`) | the CLI's output |
 | `drive_steps(target, steps \| file, screenshot=true)` | `do STEP…` or `run FILE` | a summary line (`ok: …` or `FAILED at step N …`), one line per step result, and a screenshot after the last step unless `screenshot=false` or a step closed the game |
 | `drive_screenshot(target, name)` | `do "shot NAME"` | the PNG as an image, with its path and the VM position |
 | `drive_state(target)` | `status` | the session, hello, VM stack and new events, as JSON |
@@ -1072,6 +1078,8 @@ these flags; you need them directly only to drive the port from another client.
 
 - The token comes from `OME_DRIVE_TOKEN`, or the port generates one and writes it to the session file. The first
   line must be `{"op":"hello","token":…}`.
+- The port's `hello` also carries `jit_optimized`: whether its VM assembly was compiled with the JIT optimizer on
+  (`drive.py port start --optimize`).
 - `waiting` is `input` (an ADV page or hotspot wait), `menu` (a script-polled menu), `movie`, `transition`, `sleep`
   or null. `busy` means text is still revealing or a screen transition is running. `settle` waits for `input` or
   `menu` that stays not busy for `quiet_ms`.

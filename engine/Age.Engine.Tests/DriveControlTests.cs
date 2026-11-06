@@ -341,6 +341,10 @@ public class DriveControlTests
             Assert.Equal("port", (string?)hello["result"]!["target"]);
             Assert.Equal(DriveProtocol.Version, (int)hello["result"]!["version"]!);
             Assert.Contains("waiting", hello["result"]!["capabilities"]!.AsArray().Select(c => (string?)c));
+            bool optimizerOff = typeof(Age.Engine.Vm.VirtualMachine).Assembly
+                .GetCustomAttributes(typeof(System.Diagnostics.DebuggableAttribute), false)
+                .Cast<System.Diagnostics.DebuggableAttribute>().Any(d => d.IsJITOptimizerDisabled);
+            Assert.Equal(!optimizerOff, (bool)hello["result"]!["jit_optimized"]!);
             Assert.True(server.ClientConnected);
 
             JsonObject state = Exchange(client, """{"id":2,"op":"state"}""");

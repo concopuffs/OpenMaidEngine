@@ -141,6 +141,10 @@ def test_refusals():
         check(refused("drive_steps", target="nope", steps=["state"]), "the target is native or port")
         check(refused("drive_start", "port only", target="native", build=False),
               "build=false is refused for native before anything runs")
+        check(refused("drive_start", "port only", target="native", optimize=True),
+              "optimize is refused for native")
+        check(refused("drive_start", "needs build=true", target="port", optimize=True, build=False),
+              "optimize needs the build")
 
 
 def main():

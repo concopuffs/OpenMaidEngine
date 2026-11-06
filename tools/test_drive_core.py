@@ -10,6 +10,7 @@ from pathlib import Path
 
 import drive_core as core
 import drive_native as native
+import drive_port as port
 import parse_sys4ini
 import paths
 
@@ -466,7 +467,23 @@ def test_settings_trailer():
     check(parse_sys4ini.settings_trailer(directory, len(directory)) == [], "append catalogs have no trailer")
 
 
+def test_port_build():
+    plain, optimized = port.build_command(), port.build_command(optimize=True)
+    check(plain[:2] == ["dotnet", "build"] and plain[2].endswith("OME.csproj"), "the port builds the Godot project")
+    check("-p:Optimize=true" not in plain and optimized == plain + ["-p:Optimize=true"],
+          "--optimize adds Optimize=true and keeps the Debug configuration")
+    check(not any(part.startswith(("-c", "--configuration")) for part in optimized),
+          "no configuration switch: Godot's editor binary loads only Debug")
+    check(port.jit_note({"jit_optimized": True}) == "; JIT optimized"
+          and "Debug" in port.jit_note({"jit_optimized": False}) and port.jit_note({}) == "",
+          "the start line reports the port's JIT mode when its hello has it")
+    targets = (paths.REPO / "Directory.Build.targets").read_text(encoding="utf-8")
+    check("'$(Optimize)' == 'true'" in targets and "DefineConstants" in targets,
+          "Directory.Build.targets makes an Optimize change recompile")
+
+
 def main():
+    test_port_build()
     test_step_parsing()
     test_step_files()
     test_capabilities()
