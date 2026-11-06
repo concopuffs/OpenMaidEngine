@@ -57,5 +57,10 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
 - **Archives are NOT memory-mapped.** No archive-sized region exists; the game streams them through a
   small heap **block-cache via `ReadFile`** (128 KB blocks + big reads). The earlier "memory-mapped"
   note was wrong — the 128 KB reads are the block cache, not OS paging.
+- **Some hooks make AGE report corrupted data.** It shows データが壊れています．再インストールしてください．
+  (the driver answers はい, and the game goes on). Two probes that hooked `KERNELBASE!LoadLibraryExW` raised it (one
+  also hooked AGE.EXE functions, the other `combase!CoGetClassObject`). A probe with only `combase!CoCreateInstance`
+  and a quartz vtable hook did not (2026-11-06). To time DirectShow, reach quartz through the interface pointers that
+  `CoCreateInstance` returns instead of hooking AGE's call sites.
 - **The reliable oracle is the `ReadFile` offset stream** → names via the SYS4INI index
   (`tools/parse_sys4ini.py` → `build/asset-index.json`). Native-handler hooking is blocked by the packer.

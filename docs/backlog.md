@@ -44,10 +44,6 @@ it; git history keeps the record.
   "Furigana"). Kamidori runs the op 3,054 times, but its SYS4433 engine has neither of Himegari's two ruby code
   sequences (the gap division and the centring), and its SYS4INI trailer has `RUBYSHIFTMODE`. Done when Kamidori's
   ruby builder is decoded and a Kamidori furigana page and its History match native.
-- **Native blocks inside a movie start.** At `SC0000@0x13c8` native AGE stays in `play-movie-to-surface` for about
-  4.66 s (traced 2026-11-06 under the driver), while the port passes it at once. It is not known whether this is the
-  decoder's preroll, the sandboxed environment, or an engine wait. Done when the block is traced to its cause and
-  the port either models it or it is shown to be environmental.
 - **An effect wait holds the VM for one frame at its end.** The port's op-`0x21c` waits now end when their effects
   do (`engine-re.md`, "Service waits end on the engine clock"). Each still waits for one synchronized
   presentation of the final sample before the script goes on: 8–10 ms at 100 Hz, 38 ms over SC0000's four

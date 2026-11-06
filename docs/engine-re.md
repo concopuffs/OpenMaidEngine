@@ -2359,6 +2359,21 @@ not itself block the VM. SC0000 prepares additional static layers, then reaches 
 service continues sampling the retained movie until DirectShow EOF, after which the following script
 cleanup releases it. The static preparation before `0x21c` is not a movie teardown boundary.
 
+**What the open costs (2026-11-06).** Nearly all of op `0x236`'s time is `IGraphBuilder::Render`, called at `0x46426c`
+on the async reader's output pin. That cost belongs to the DirectShow filters installed on the machine, not to AGE. A
+Frida probe hooked combase and quartz only and timed SC0000's movie at `0x13c8` (resource `0x33`):
+
+- On this machine LAV Filters is installed. Render tries LAV Splitter first (`{171252A0-8820-4AFE-9DF8-5C92B2D66B04}`),
+  whose FFmpeg stream probe ran for about 5.15 s. The graph then fell back to the Microsoft MPEG-1 Splitter, the MPEG
+  video and audio decoders and the DirectSound renderer in about 20 ms. The VM stayed at `0x13c8` for 4.66 s.
+- With LAV Filters' CLSIDs refused (`CoCreateInstance` answering `REGDB_E_CLASSNOTREG` in the game's process only),
+  Render took 3 ms. The VM left `0x13c8` after 10 ms and reached the 750 ms sleep at `0x16cb` 14.03 s after the
+  page-17 advance. The port reaches it at 14.07 s.
+- The boot movie's Render took 34 ms with LAV and 8 ms without it.
+
+The port opens the movie at once and does not model a codec pack's probe. Native timings on a machine with
+third-party DirectShow filters include their cost at every movie start.
+
 Non-modal start is deferred through `movie_play_configure@0x4625e0`: the outer tick's
 `movie_start_pending_after_sync_delay@0x4633b0` records the first service time and calls the same shared
 `IMediaControl::Run` worker once operand 4's sync delay has elapsed. A zero mask starts on the first service
