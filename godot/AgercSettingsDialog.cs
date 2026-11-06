@@ -17,6 +17,10 @@ public interface IAgercSettingsHost
     /// <summary>AGE:reg +0xc (set int).</summary>
     void SaveInt(string section, string key, int value);
 
+    /// <summary>IAGEService +0x68 (iage_service_set_antialias_enabled): write message:UseAntiFont, then apply it to
+    /// the text manager (text_set_antialias_enabled@0x4137e0).</summary>
+    void SetTextAntialias(bool enabled);
+
     /// <summary>IAGEService +0x40/+0x48/+0x50/+0x58: the live master, music, SE or voice level in basis points (10000
     /// while unconfigured).</summary>
     int Volume(int category);
@@ -252,7 +256,7 @@ public partial class AgercSettingsDialog : Win32TemplateDialog
     // agerc_settings_apply, then IAGEService +0x20 launching CALLBACK_SETTING.BIN.
     private void Apply()
     {
-        _host.SaveInt("message", "UseAntiFont", _message.IsChecked(Check0) ? 1 : 0);
+        _host.SetTextAntialias(_message.IsChecked(Check0));
         _host.SaveInt("message", "AdvanceMesOnWheel", _message.IsChecked(Check1) ? 1 : 0);
         for (int category = 1; category < 4; category++)
             _host.SetRouteEnabled(category, _sound.IsChecked(RouteCheck(category)));

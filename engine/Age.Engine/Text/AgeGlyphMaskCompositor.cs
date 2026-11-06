@@ -38,7 +38,38 @@ public static class AgeGlyphMaskCompositor
 
         DrawMask(destination, mask, cellX, baselineY, style.TextColor);
         if (style.RenderMode == 2)
-            DrawMask(destination, mask, cellX, baselineY, style.TextColor, coverageShift: 2);
+        {
+            if (mask.Monochrome)
+                DrawMask(destination, ModeTwoBitmapPass(mask), cellX, baselineY, style.TextColor);
+            else
+                DrawMask(destination, mask, cellX, baselineY, style.TextColor, coverageShift: 2);
+        }
+    }
+
+    /// <summary>
+    /// The glyph mode 2's second pass draws for an aliased glyph. text_raster_string_cached@0x45b600 builds that pass's
+    /// buffer as <c>(signed char)byte &gt;&gt; 2</c> over the cached glyph bytes. For gray-4 coverage that is a quarter of
+    /// each value; for GGO_BITMAP's packed rows it moves each byte's eight pixels two to the right and repeats the
+    /// byte's first pixel into its first two, and every set bit still draws at full coverage.
+    /// </summary>
+    public static GlyphMask ModeTwoBitmapPass(GlyphMask mask)
+    {
+        ArgumentNullException.ThrowIfNull(mask);
+        if (!mask.Monochrome) throw new ArgumentException("The mask is not an aliased glyph.", nameof(mask));
+        ReadOnlySpan<byte> source = mask.Coverage.Span;
+        var shifted = new byte[source.Length];
+        for (int row = 0; row < mask.Height; row++)
+        {
+            int start = row * mask.Stride;
+            for (int column = 0; column < mask.Width; column++)
+            {
+                int bit = column & 7;
+                shifted[start + column] = source[start + (bit < 2 ? column - bit : column - 2)];
+            }
+        }
+        return new GlyphMask(mask.Width, mask.Height, mask.Stride, mask.OriginX, mask.OriginY,
+            mask.CellAdvanceX, mask.CellAdvanceY, mask.CellWidth, mask.CellHeight, shifted, mask.Ascent,
+            monochrome: true);
     }
 
     /// <summary>
@@ -88,25 +119,33 @@ public static class AgeGlyphMaskCompositor
         return changed;
     }
 
+    /// <summary>
+    /// The effect-glyph offsets of mode 3, in AGE's draw order. text_raster_string_cached@0x45b600 steps a float angle
+    /// from 0 by <c>360 / (float)((float)sqrt((float)(ry + rx)) * 8)</c> while it is below 360 (sampling at least once),
+    /// and text_compute_outline_ellipse_offset@0x459860 turns each angle into <c>cos(a)*rx</c>, <c>sin(a)*ry</c> after
+    /// converting it with <c>a * 180 / pi</c>, the inverse of degrees to radians, so the samples fall at scattered
+    /// directions. Each value is stored as a float, moved 0.5 away from zero and truncated. For Himegari's (1,1) the
+    /// twelve samples cover six neighbours: never (+1,-1) or (-1,+1).
+    /// </summary>
     public static IReadOnlyList<(int X, int Y)> GetMode3OutlineOffsets(int radiusX, int radiusY)
     {
-        double radius = Math.Sqrt((double)radiusX * radiusX + (double)radiusY * radiusY);
-        if (radius == 0) return Array.Empty<(int, int)>();
-        int sampleCount = checked((int)Math.Ceiling(radius * 8.0));
-        var result = new (int X, int Y)[sampleCount];
-        double step = 360.0 / (radius * 8.0);
-        for (int index = 0; index < result.Length; index++)
+        float root = (float)Math.Sqrt((float)((double)radiusY + radiusX));
+        double step = 360.0 / (float)(root * 8.0);
+        var result = new List<(int X, int Y)>();
+        float angle = 0f;
+        do
         {
-            double radians = index * step * Math.PI / 180.0;
-            result[index] = (
-                RoundNearest(Math.Cos(radians) * radiusX),
-                RoundNearest(Math.Sin(radians) * radiusY));
-        }
+            double argument = angle * 180.0 / Math.PI;
+            result.Add((
+                RoundAwayFromZero((float)(Math.Cos(argument) * radiusX)),
+                RoundAwayFromZero((float)(Math.Sin(argument) * radiusY))));
+            angle = (float)(angle + step);
+        } while (angle < 360f);
         return result;
     }
 
-    private static int RoundNearest(double value)
-        => checked((int)(value < 0 ? value - 0.5 : value + 0.5));
+    private static int RoundAwayFromZero(float value)
+        => value > 0 ? (int)(float)(value + 0.5) : value < 0 ? (int)(float)(value - 0.5) : 0;
 
     private static void BlendTextPixel(
         byte[] destination, int offset, int red, int green, int blue, int alpha)

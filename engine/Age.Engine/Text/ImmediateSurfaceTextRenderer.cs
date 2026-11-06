@@ -29,16 +29,19 @@ public sealed class ImmediateSurfaceTextRenderer
         _policy = policy;
     }
 
+    /// <param name="antialias">message:UseAntiFont (text manager +0x544). draw_string_to_surface@0x450150 calls the
+    /// raster workers directly, so an aliased string keeps its position.</param>
     public ImmediateSurfaceTextResult Render(
         RgbaImage destination,
         int x,
         int y,
         string text,
-        AdvTextStyle style)
+        AdvTextStyle style,
+        bool antialias = true)
     {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(text);
-        IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(text, style, _policy);
+        IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(text, style, _policy, antialias);
         int cursorX = x;
         int cursorY = y;
         foreach (GlyphRasterRequest request in requests)
@@ -56,7 +59,8 @@ public sealed class ImmediateSurfaceTextRenderer
     public static IReadOnlyList<GlyphRasterRequest> CreateRequests(
         string text,
         AdvTextStyle style,
-        GlyphRasterPolicy policy = GlyphRasterPolicy.NativeCp932Gray4)
+        GlyphRasterPolicy policy = GlyphRasterPolicy.NativeCp932Gray4,
+        bool antialias = true)
     {
         ArgumentNullException.ThrowIfNull(text);
         int requestedHeight = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
@@ -91,7 +95,7 @@ public sealed class ImmediateSurfaceTextRenderer
             }
             requests.Add(new GlyphRasterRequest(
                 fontFace, pixelHeight, requestedWidth, weight,
-                rune.Value, cp932Code, policy));
+                rune.Value, cp932Code, policy, antialias));
         }
         return requests;
     }

@@ -8,12 +8,15 @@ using Microsoft.Win32.SafeHandles;
 namespace Age.Engine.Text.Windows;
 
 /// <summary>
-/// Exact Windows reference backend for AGE's CreateICA/CreateFontIndirectA/GetGlyphOutlineA
-/// GGO_GRAY4_BITMAP path. It is opt-in and requires the Japanese ANSI system code page.
+/// Exact Windows reference backend for AGE's CreateICA/CreateFontIndirectA/GetGlyphOutlineA path:
+/// GGO_GRAY4_BITMAP for an antialiased request, GGO_BITMAP otherwise (text_raster_string_cached@0x45b600 picks
+/// the format from text manager +0x544, message:UseAntiFont). It is opt-in and requires the Japanese ANSI system
+/// code page.
 /// </summary>
 public sealed class WindowsGdiGlyphMaskRasterizer
     : IIdentifiedGlyphMaskRasterizer, IDisposable
 {
+    private const uint GgoBitmap = 1;
     private const uint GgoGray4Bitmap = 5;
     private const uint GdiError = 0xffffffff;
     private const byte DefaultCharset = 1;
@@ -66,7 +69,8 @@ public sealed class WindowsGdiGlyphMaskRasterizer
         "Windows GDI Gray-4 (AGE reference)",
         GlyphRasterPolicy.NativeCp932Gray4,
         NativePixelExact: true,
-        Detail: "CreateICA(\"DISPLAY\") + CreateFontIndirectA + GetGlyphOutlineA(GGO_GRAY4_BITMAP), ACP 932");
+        Detail: "CreateICA(\"DISPLAY\") + CreateFontIndirectA + GetGlyphOutlineA(GGO_GRAY4_BITMAP, " +
+                "or GGO_BITMAP when UseAntiFont is 0), ACP 932");
 
     public int FontCacheCount => _fonts.Count;
     public int FontCacheCapacity => _fonts.Capacity;
@@ -76,7 +80,7 @@ public sealed class WindowsGdiGlyphMaskRasterizer
         ArgumentNullException.ThrowIfNull(request);
         if (request.Policy != GlyphRasterPolicy.NativeCp932Gray4 || request.Cp932Code == null)
             throw new ArgumentException(
-                "The Windows GDI reference backend accepts only native CP932 gray-4 requests.",
+                "The Windows GDI reference backend accepts only native CP932 requests.",
                 nameof(request));
 
         lock (_gate)
@@ -114,16 +118,18 @@ public sealed class WindowsGdiGlyphMaskRasterizer
     {
         ushort code = request.Cp932Code!.Value;
         if (code == 0) throw new ArgumentException("CP932 NUL is not a drawable glyph.", nameof(request));
+        uint format = request.Antialias ? GgoGray4Bitmap : GgoBitmap;
         Mat2 identity = Mat2.Identity;
         uint size = NativeMethods.GetGlyphOutlineA(
-            _displayIc.DangerousGetHandle(), code, GgoGray4Bitmap,
+            _displayIc.DangerousGetHandle(), code, format,
             out GlyphMetrics metrics, 0, null, ref identity);
         if (size == GdiError) ThrowWin32($"GetGlyphOutlineA query failed for CP932 0x{code:x4}");
 
         int width = checked((int)metrics.BlackBoxX);
         int height = checked((int)metrics.BlackBoxY);
-        int stride = checked((width + 3) & ~3);
-        int expectedBytes = checked(stride * height);
+        // GDI's rows: one byte per pixel padded to a DWORD (gray-4), or one bit per pixel padded to a DWORD (bitmap).
+        int gdiStride = request.Antialias ? checked((width + 3) & ~3) : checked((width + 31) / 32 * 4);
+        int expectedBytes = checked(gdiStride * height);
         // CP932 0x8140 (U+3000 IDEOGRAPHIC SPACE) is a zero-ink spacing glyph. GDI reports
         // its placement as a nominal 1x1 black box but returns a zero-byte required buffer.
         // Preserve those metrics and materialize the implied transparent mask. GDI can also
@@ -134,24 +140,28 @@ public sealed class WindowsGdiGlyphMaskRasterizer
         // outside that box are not drawable coverage and are not required to be initialized to zero.
         if (size != 0 && size < expectedBytes)
             throw new InvalidOperationException(
-                $"GDI gray-4 buffer size {size} for CP932 0x{code:x4} " +
+                $"GDI glyph buffer size {size} for CP932 0x{code:x4} " +
                 $"('{request.FontFace}', {request.PixelHeight}px, width {request.RequestedWidth}, " +
-                $"weight {request.Weight}) is smaller than its {width}x{height} metric box, " +
-                $"stride {stride} ({expectedBytes} bytes).");
+                $"weight {request.Weight}, format {format}) is smaller than its {width}x{height} metric box, " +
+                $"stride {gdiStride} ({expectedBytes} bytes).");
 
-        byte[] coverage = new byte[expectedBytes];
+        // Zero-filled past what GDI writes (the 0x8140 case above).
+        byte[] gdiBuffer = new byte[Math.Max(checked((int)size), expectedBytes)];
         if (size > 0)
         {
-            byte[] gdiBuffer = new byte[checked((int)size)];
             identity = Mat2.Identity;
             uint written = NativeMethods.GetGlyphOutlineA(
-                _displayIc.DangerousGetHandle(), code, GgoGray4Bitmap,
+                _displayIc.DangerousGetHandle(), code, format,
                 out GlyphMetrics secondMetrics, size, gdiBuffer, ref identity);
             if (written == GdiError) ThrowWin32($"GetGlyphOutlineA read failed for CP932 0x{code:x4}");
             if (written != size || !metrics.Equals(secondMetrics))
                 throw new InvalidOperationException("GDI glyph metrics changed between query and read.");
-            gdiBuffer.AsSpan(0, expectedBytes).CopyTo(coverage);
         }
+
+        int stride = checked((width + 3) & ~3);
+        byte[] coverage = request.Antialias
+            ? gdiBuffer.AsSpan(0, expectedBytes).ToArray()
+            : UnpackNativeBitmapRows(gdiBuffer, width, height, stride);
 
         // AGE's raster callers pass tmAscent (text manager +0x458) as the cell-top-to-baseline offset.
         if (!NativeMethods.GetTextMetricsA(_displayIc.DangerousGetHandle(), out TextMetricA textMetrics))
@@ -168,7 +178,31 @@ public sealed class WindowsGdiGlyphMaskRasterizer
             metrics.CellIncrementX, metrics.CellIncrementY,
             cell.Width, cell.Height,
             coverage,
-            textMetrics.Ascent);
+            textMetrics.Ascent,
+            monochrome: !request.Antialias);
+    }
+
+    /// <summary>
+    /// Expand GGO_BITMAP rows (most significant bit first) into 0/16 coverage as text_blit_glyph_bitmap@0x458c80
+    /// reads them: a set bit is full coverage. AGE steps rows by <c>(width &gt;&gt; 5) * 4 + 4</c> bytes, which is
+    /// GDI's DWORD-aligned stride except when the width is a multiple of 32; there AGE reads one DWORD more per row
+    /// than GDI wrote, so its rows skew. Bytes past GDI's buffer read as zero here (AGE's are uninitialized).
+    /// </summary>
+    public static byte[] UnpackNativeBitmapRows(ReadOnlySpan<byte> bits, int width, int height, int stride)
+    {
+        if (width < 0) throw new ArgumentOutOfRangeException(nameof(width));
+        if (height < 0) throw new ArgumentOutOfRangeException(nameof(height));
+        if (stride < width) throw new ArgumentOutOfRangeException(nameof(stride));
+        int nativeStride = checked((width >> 5) * 4 + 4);
+        var coverage = new byte[checked(stride * height)];
+        for (int row = 0; row < height; row++)
+        for (int column = 0; column < width; column++)
+        {
+            int index = row * nativeStride + (column >> 3);
+            if (index < bits.Length && (bits[index] & (0x80 >> (column & 7))) != 0)
+                coverage[row * stride + column] = 16;
+        }
+        return coverage;
     }
 
     private SafeGdiObjectHandle GetOrCreateFont(GlyphRasterRequest request)

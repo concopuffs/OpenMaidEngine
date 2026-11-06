@@ -1,0 +1,42 @@
+# message:UseAntiFont 0, set from the 設定 dialog's ﾒｯｾｰｼﾞ page (文字の縁をなめらかにする). OK applies it at once
+# through IAGEService +0x68 (text_set_antialias_enabled), and later text is drawn from GGO_BITMAP glyphs instead of
+# GGO_GRAY4_BITMAP ones. Text already drawn is not redrawn: page 1 looks the same after OK.
+#
+# With AntiFont off, the ADV text builders and History draw through text_draw_string_primary_or_ruby, which starts
+# the string at the effect offset. Himegari's mode-3 (1,1) text therefore lands one pixel right and down, and its
+# outline shows the six neighbours AGE's ellipse reaches (never (+1,-1) or (-1,+1)).
+#
+# The shots match pixel for pixel across targets (page 1's wait indicator apart). SYS4REG.INI after `close` holds
+# UseAntiFont=0 on both. Run on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-antifont-off.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle
+shot antifont-page1                     # antialiased
+
+menu message-settings
+wait 1.5
+answer 文字の縁をなめらかにする          # clears message:UseAntiFont
+wait 0.5
+answer OK
+wait 2
+dialogs                                 # none
+expect top=SC0000@0x83f
+shot antifont-page1-after               # unchanged
+
+advance
+expect top=SC0000@0x874                 # page 2
+shot antifont-off-page2                 # aliased, one pixel right and down
+
+move adv.next
+wheel up                                # History redraws pages 1 and 2 aliased
+wait 1.5
+settle
+shot antifont-off-history

@@ -1623,9 +1623,9 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   pixel, apart from 動作環境's live free space; both targets list the same texts and buttons and write the same
   `SYS4REG.INI`. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
   state, then posts `WM_COMMAND`. Both targets refuse a grayed item.
-- **Remaining gaps.** The other commands, what the port does with `UseAntiFont`, the right-click popup, the
-  top-edge strip,
-  Alt/F10 focus, and native's off-window popups are listed in `docs/backlog.md`, "Native menu bar".
+- **Remaining gaps.** The other commands, the right-click popup, the top-edge strip, Alt/F10 focus, and native's
+  off-window popups are listed in `docs/backlog.md`, "Native menu bar". The ﾒｯｾｰｼﾞ page's UseAntiFont check is applied
+  on OK ("AntiFont off" in the text sections).
 
 ### Native system-menu reentrancy guard — opcode `0x142` (2026-07-29)
 
@@ -4193,9 +4193,10 @@ The shipped effect profiles use only modes 1 and 3:
 - mode 1 draws one effect-color copy at `(x+effect_x,y+effect_y)`, then the primary glyph; all 43
   Himegari sites pair it with `(0,0)`;
 - mode 3 samples an ellipse around the glyph. `text_compute_outline_ellipse_offset@0x459860` computes
-  `cos(angle)*effect_x` / `sin(angle)*effect_y`; the caller steps by
-  `360 / (sqrt(effect_x²+effect_y²)*8)`, blits the effect-colored glyph at every rounded offset, then
-  draws the primary glyph. All 164 paired sites use `(1,1)`, producing the normal one-pixel outline.
+  `cos(a)*effect_x` / `sin(a)*effect_y`, with `a = angle*180/pi`. The caller steps the angle by
+  `360 / (sqrt(effect_x+effect_y)*8)`, blits the effect-colored glyph at every rounded offset, then draws the
+  primary glyph. All 164 paired sites use `(1,1)`, which gives a one-pixel outline over six of the eight neighbours
+  ("AntiFont off" below, which corrects the first reading).
 
 **Measured cell versus raster ink (2026-07-30).** `adv_text_build_glyph_records@0x4576c0` stores
 the `GetTextExtentPoint32A` measured cell edges in each retained record, and
@@ -4271,10 +4272,10 @@ different:
    surface, an opaque glyph or a destination with alpha zero receives the source RGB and glyph alpha
    directly. Otherwise destination alpha becomes `max(destination alpha, glyph alpha)` and each RGB
    channel becomes `(dst*(255-alpha)+src*alpha)/255`, with integer truncation.
-4. Mode 3 does not invoke a font-renderer outline. Its step is
-   `360/(sqrt(effect_x²+effect_y²)*8)`, with nearest-integer ellipse coordinates. Radius `(1,1)` makes
-   twelve calls covering the eight neighboring offsets: each cardinal offset is visited twice and each
-   diagonal once, followed by one primary-color glyph blit at the unshifted position.
+4. Mode 3 does not invoke a font-renderer outline. Its step is `360/(sqrt(effect_x+effect_y)*8)`, with
+   nearest-integer ellipse coordinates at angles converted by `180/pi`. Radius `(1,1)` makes twelve calls covering
+   six neighbouring offsets, each twice, followed by one primary-color glyph blit at the unshifted position. (The
+   first reading, eight neighbours, is corrected under "AntiFont off" below.)
 
 Mode 2 uses the same primary color for a second unshifted pass after the ordinary primary glyph, but shifts
 every cached coverage value right by two first. On a transparent destination this lower-coverage duplicate
@@ -4410,6 +4411,76 @@ state. Numbered History serialization still owns none of these pixels or records
 path reconstructs them, and a reconstruction test proves identical handle/source/destination bindings.
 Exact runs are omitted from `SnapshotLiveAdvText`, eliminating the detached always-on-top Label while the
 unavailable-backend fallback continues to use that snapshot.
+
+#### AntiFont off: `message:UseAntiFont` 0 (2026-11-06)
+
+Text manager `+0x544` (`text_antialias_enabled`) picks the glyph format.
+
+- **Startup.** `adv_text_manager_construct@0x456570` sets the flag to 0. At `0x41550b`, AGE applies `message:UseAntiFont`
+  through `text_set_antialias_enabled@0x4137e0` only when `set:EnableAntiFont` is nonzero. Himegari and Kamidori both set
+  `ENABLEANTIFONT=1` and keep the default of 1.
+- **The 設定 dialog.** The ﾒｯｾｰｼﾞ page's 文字の縁をなめらかにする (check 1000) is applied on OK through IAGEService `+0x68`.
+  That service writes the key, then calls the setter.
+- **On a change.** The setter rebuilds the font resources, which do not depend on the flag, and empties both glyph caches.
+  It does not redraw: a native capture after OK shows page 1 unchanged.
+
+With the flag clear:
+
+- **Glyph format.** `text_raster_string_cached@0x45b600` and `text_raster_string_uncached@0x459d90` call
+  `GetGlyphOutlineA` with format `(flag != 0)*4 + 1`, which is `GGO_BITMAP`. They step rows by `(w >> 5)*4 + 4` bytes.
+  That is GDI's DWORD stride, except at widths that are multiples of 32: there AGE reads one DWORD more per row than GDI
+  wrote, so the rows skew.
+- **Compositing.** `text_blit_glyph_bitmap@0x458c80` reads the bits MSB first and blits each set bit at alpha 255. An
+  aliased glyph pixel therefore replaces the destination.
+- **Route.** With the flag set, three callers reach the raster workers directly, through
+  `text_draw_antialiased_effect_string@0x45d700` and `text_draw_antialiased_plain_string@0x45a110`:
+  - the ADV glyph-record builder (`adv_text_build_glyph_records@0x4576c0`);
+  - the retained redraw;
+  - History (`text_history_render_records@0x4526c0`).
+
+  With the flag clear, they call `text_draw_string_primary_or_ruby@0x44fac0` instead. For a mode 1–3 string, that
+  function starts the cached rasterizer at `(x + effect_x, y + effect_y)`, and the rasterizer then adds its own effect
+  offsets. The records keep the measured cell. Himegari's mode-3 `(1,1)` text therefore lands one pixel right and down
+  of its antialiased position. Two kinds of text do not move: mode-0 text, and op `0x204`
+  (`draw_string_to_surface@0x450150`), which calls the workers directly.
+- **Mode 2.** Its second-pass buffer is `(signed char)byte >> 2` over the cached bytes. For packed bits, that moves each
+  byte's eight pixels two to the right and repeats the byte's first pixel into its first two. The pixels still draw
+  opaque. Neither game uses mode 2.
+
+**Mode-3 outline samples (correction).** The earlier outline description was wrong in two places. The AntiFont-off
+capture settled it, since its outline pixels are exactly `0x606060`.
+
+- **Step.** The step is `360 / ((float)sqrt((float)(effect_y + effect_x)) * 8)`: the square root of the sum, not of the
+  sum of squares. The angle is a float stepped from 0 while it stays below 360, so there is always at least one sample.
+- **Angle conversion.** `text_compute_outline_ellipse_offset@0x459860` converts the angle with `angle * 180 / pi`
+  (constants `0x5779f8` = 180.0 and `0x577fc0` = π), the inverse of degrees to radians. The samples therefore fall at
+  scattered directions.
+- **Result.** For `(1,1)` the twelve samples are (1,0), (1,1), (0,1), (−1,0), (−1,−1), (0,−1), twice over. That covers
+  six neighbours, never (+1,−1) or (−1,+1). The smallest rounding margin is 0.026, at sample 1, so x87 precision cannot
+  change the set.
+
+The port had used degrees to radians and all eight neighbours in both modes. With AntiFont on, SC0000 page 1's text
+then differed from native in 494 pixels, 54 of them by more than 24 levels; it now matches exactly.
+
+**Port.**
+
+- **Setting.** `GlyphRasterRequest.Antialias` carries the flag, so the mask cache keeps the two formats apart; AGE
+  empties its cache instead. `GodotAdvHost` holds the flag:
+  - `Sys4RegIniStore.TextAntialiasEnabled` seeds it at startup, from `EnableAntiFont` and `UseAntiFont`;
+  - the 設定 dialog's OK sets it through `IAgercSettingsHost.SetTextAntialias`.
+- **Rasterizers.** `WindowsGdiGlyphMaskRasterizer` reads `GGO_BITMAP` with AGE's row stride (`UnpackNativeBitmapRows`)
+  into a `Monochrome` mask of 0/16 coverage. The portable backend renders with `FontAntialiasing.None` and thresholds
+  the result.
+- **Layout.** `RetainedGlyphLayoutEngine` applies the effect-offset start; it lays out live ADV text and History.
+- **Compositor.** `AgeGlyphMaskCompositor.ModeTwoBitmapPass` builds the bitmap mode-2 pass, and `GetMode3OutlineOffsets`
+  follows the native samples.
+- **Check.** `tools/drive/scenarios/himegari-antifont-off.steps` turns the setting off on page 1:
+  - page 2 and History then match native pixel for pixel;
+  - page 1 is identical before and after OK on both targets;
+  - apart from the wait indicator's phase, nothing differs anywhere.
+
+  A profile started with `UseAntiFont=0` draws page 1 aliased on both targets. With AntiFont on, page 1 now matches
+  native pixel for pixel too.
 
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 

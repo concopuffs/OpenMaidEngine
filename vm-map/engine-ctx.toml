@@ -160,7 +160,7 @@ note = "primary LOGFONTA.lfWeight at text-manager+0x4dc; op 0x2bd writes 700 for
 offset = 0x14e84
 name = "text_antialias_enabled"
 type = "int"
-note = "text-manager+0x544; message:UseAntiFont selects GGO_GRAY4_BITMAP when nonzero and GGO_BITMAP when zero"
+note = "text-manager+0x544; message:UseAntiFont selects GGO_GRAY4_BITMAP when nonzero and GGO_BITMAP when zero. Constructed 0; startup applies UseAntiFont only under set:EnableAntiFont; with it 0 the ADV builders and History draw through text_draw_string_primary_or_ruby, offset by the effect offset"
 [[field]]
 offset = 0x14e88
 name = "text_antialias_version"

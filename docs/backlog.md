@@ -46,10 +46,6 @@ it; git history keeps the record.
   presentation of the final sample before the script goes on: 8–10 ms at 100 Hz, 38 ms over SC0000's four
   page-13→14 waits. Native renders that sample in the tick that ends the wait. Done when the final sample is
   presented without holding the VM, or the item is closed as the cost of presenting on Godot's frames.
-- **`message:UseAntiFont` 0 is not rendered.** Native's 0 selects `GGO_BITMAP` glyphs instead of `GGO_GRAY4_BITMAP`
-  (`engine-ctx.toml` `text_antialias_enabled`, IAGEService `+0x68`). The 設定 dialog's ﾒｯｾｰｼﾞ page writes it, but the
-  port always draws grayscale glyphs (`WindowsGdiGlyphMaskRasterizer`). Done when 0 draws aliased glyphs that match a
-  native capture.
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
   statement blocks, "Not modelled"). A static scan of both games' scripts (2026-11-04) finds a movie start inside

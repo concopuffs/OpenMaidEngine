@@ -37,7 +37,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x14e0c` | `text_primary_font_height` | `int` | primary LOGFONTA.lfHeight at text-manager+0x4cc; stored as a negative pixel height and updated by op 0x75 |
 | `0x14e10` | `text_primary_font_width` | `int` | primary LOGFONTA.lfWidth at text-manager+0x4d0; op 0x75 stores negative half the requested font size |
 | `0x14e1c` | `text_primary_font_weight` | `int` | primary LOGFONTA.lfWeight at text-manager+0x4dc; op 0x2bd writes 700 for enabled or zero for disabled |
-| `0x14e84` | `text_antialias_enabled` | `int` | text-manager+0x544; message:UseAntiFont selects GGO_GRAY4_BITMAP when nonzero and GGO_BITMAP when zero |
+| `0x14e84` | `text_antialias_enabled` | `int` | text-manager+0x544; message:UseAntiFont selects GGO_GRAY4_BITMAP when nonzero and GGO_BITMAP when zero. Constructed 0; startup applies UseAntiFont only under set:EnableAntiFont; with it 0 the ADV builders and History draw through text_draw_string_primary_or_ruby, offset by the effect offset |
 | `0x14e88` | `text_antialias_version` | `int` | text-manager+0x548 loaded from set:AntiFontVersion; Himegari SYS4INI supplies version 3 |
 | `0x14e8c` | `text_primary_color_bgr` | `uint` | text-manager+0x54c internal GDI BGR/COLORREF primary glyph color; op 0x76 converts script RGB into it |
 | `0x14e90` | `text_effect_color_bgr` | `uint` | text-manager+0x550 internal GDI BGR/COLORREF effect glyph color; op 0x77 converts script RGB into it |

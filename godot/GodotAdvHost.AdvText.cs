@@ -38,6 +38,9 @@ public sealed partial class GodotAdvHost
     private long _autoMessageTime0Milliseconds = Sys4RegIniStore.DefaultAutoMessageTime0;
     private long _autoMessageTime1Milliseconds = Sys4RegIniStore.DefaultAutoMessageTime1;
     private Sys4RegIniStore? _messageSettingsStore;
+    // Text manager +0x544 (message:UseAntiFont): GGO_GRAY4_BITMAP glyphs when set, GGO_BITMAP when clear. Both games
+    // enable it; hosts without a settings file keep that.
+    private volatile bool _textAntialias = true;
     private bool _advTextForceComplete;
     // ctx+0x55108: a click (or a held action 4) finished a reveal; every later reveal publishes at once until op 0x72.
     private bool _revealsFinishedUntilWait;
@@ -77,6 +80,21 @@ public sealed partial class GodotAdvHost
         _timeline?.Event("message-glyph-delay", new() { ["delay_ms"] = milliseconds });
     }
 
+    /// <summary>Whether glyphs are antialiased (text manager +0x544, message:UseAntiFont).</summary>
+    public bool TextAntialias => _textAntialias;
+
+    /// <summary>
+    /// text_set_antialias_enabled@0x4137e0, which IAGEService +0x68 calls after writing message:UseAntiFont: later
+    /// text rasterizes in the new format. AGE also empties its glyph caches; text already drawn is not redrawn.
+    /// The port's glyph requests carry the flag, so its cache keeps the two formats apart instead.
+    /// </summary>
+    public void SetTextAntialias(bool enabled)
+    {
+        if (_textAntialias == enabled) return;
+        _textAntialias = enabled;
+        _timeline?.Event("text-antialias", new() { ["enabled"] = enabled });
+    }
+
     public long AutoMessageTime0Milliseconds => Interlocked.Read(ref _autoMessageTime0Milliseconds);
     public long AutoMessageTime1Milliseconds => Interlocked.Read(ref _autoMessageTime1Milliseconds);
 
@@ -107,6 +125,7 @@ public sealed partial class GodotAdvHost
             Sys4RegIniStore.AutoMessageTime0Key, Sys4RegIniStore.DefaultAutoMessageTime0));
         SetAutoMessageTime(1, store.LoadMessageInt(
             Sys4RegIniStore.AutoMessageTime1Key, Sys4RegIniStore.DefaultAutoMessageTime1));
+        _textAntialias = store.TextAntialiasEnabled;
     }
 
     public void FlushMessageSettings()
@@ -274,7 +293,7 @@ public sealed partial class GodotAdvHost
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
         IReadOnlyList<GlyphRasterRequest> requests =
             ImmediateSurfaceTextRenderer.CreateRequests(
-                run.Text, run.Style, _surfaceTextBackendInfo.Policy);
+                run.Text, run.Style, _surfaceTextBackendInfo.Policy, _textAntialias);
         GlyphTextLayoutResult rendered = _retainedGlyphLayoutEngine.Render(
             updated,
             new GlyphTextLayoutOptions(
@@ -382,7 +401,7 @@ public sealed partial class GodotAdvHost
 
         var updated = new RgbaImage(
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
-        _surfaceTextPixelRenderer.Render(updated, x, y, text, style);
+        _surfaceTextPixelRenderer.Render(updated, x, y, text, style, _textAntialias);
 
         lock (_imageLock) _surfaceImages[surfaceSlot] = updated;
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);

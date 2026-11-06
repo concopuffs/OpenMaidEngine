@@ -30,6 +30,9 @@ public sealed class Sys4RegIniStore
     // message:AdvanceMesOnWheel (registered default 0): 1 makes a wheel-down advance an ADV text wait and finish a text
     // reveal (adv_input_service_poll@0x411230, the reveal service at 0x406fa0). Neither game's scripts change it.
     public const string AdvanceMesOnWheelKey = "AdvanceMesOnWheel";
+    // message:UseAntiFont (registered default 1, bound only under ENABLEANTIFONT): text manager +0x544, which picks
+    // GGO_GRAY4_BITMAP (nonzero) or GGO_BITMAP glyphs.
+    public const string UseAntiFontKey = "UseAntiFont";
     private static readonly Encoding Cp932 = CreateCp932();
     private static readonly string[] RouteKeys = ["", "Music", "SE", "Voice", "Movie"];
 
@@ -220,6 +223,13 @@ public sealed class Sys4RegIniStore
         File.WriteAllText(temporary, _document!.SerializeCanonical(BoundKeys()), Cp932);
         File.Move(temporary, _path, overwrite: true);
     }
+
+    /// <summary>
+    /// Text manager +0x544 as AGE starts (0x41550b in engine_initialize_subsystems_from_settings@0x415390): with
+    /// set:EnableAntiFont nonzero it applies message:UseAntiFont through text_set_antialias_enabled@0x4137e0; without
+    /// it the flag keeps adv_text_manager_construct's 0, and every glyph is aliased.
+    /// </summary>
+    public bool TextAntialiasEnabled => AntiFontBound && LoadMessageInt(UseAntiFontKey, 1) != 0;
 
     private bool AntiFontBound
         => int.TryParse(_startupSettings.GetValueOrDefault("ENABLEANTIFONT")?.Trim(),

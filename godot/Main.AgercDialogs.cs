@@ -136,6 +136,12 @@ public partial class Main
             }
         }
 
+        public void SetTextAntialias(bool enabled)
+        {
+            SaveInt("message", Sys4RegIniStore.UseAntiFontKey, enabled ? 1 : 0);
+            main._host?.SetTextAntialias(enabled);
+        }
+
         // The sound object starts every level at 10000; sound:VolumeN = -1 never replaces it.
         public int Volume(int category) =>
             main._audioMixerSettings.TryGetVolume(category, out int level) && level >= 0

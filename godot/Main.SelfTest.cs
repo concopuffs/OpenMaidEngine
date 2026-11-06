@@ -99,7 +99,8 @@ public partial class Main
             && outline.Contains((1, 0))
             && outline.Contains((-1, 0))
             && outline.Contains((0, 1))
-            && outline.Contains((0, -1));
+            && outline.Contains((0, -1))
+            && !outline.Contains((1, -1));
         bool fontCalibrationOk =
             ImmediateSurfaceTextRenderer.NativePixelHeight(24) == 24
             && ImmediateSurfaceTextRenderer.NativePixelHeight(25) == 24

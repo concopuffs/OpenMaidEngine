@@ -32,6 +32,111 @@ public class GlyphMaskCompositorTests
     }
 
     [Fact]
+    public void RequestsDifferByAntialias()
+    {
+        var gray = new GlyphRasterRequest(
+            "face", 24, -12, 700, 0x3042, 0x82a0, GlyphRasterPolicy.NativeCp932Gray4);
+        var aliased = new GlyphRasterRequest(
+            "face", 24, -12, 700, 0x3042, 0x82a0, GlyphRasterPolicy.NativeCp932Gray4, antialias: false);
+
+        Assert.True(gray.Antialias);
+        Assert.False(aliased.Antialias);
+        Assert.NotEqual(gray, aliased);
+        Assert.Equal(aliased, aliased with { });
+    }
+
+    [Fact]
+    public void MonochromeMaskHoldsOnlyEmptyOrFullCoverage()
+    {
+        Assert.True(new GlyphMask(2, 1, 2, 0, 1, 2, 0, 2, 1, [0, 16], monochrome: true).Monochrome);
+        Assert.Throws<ArgumentException>(
+            () => new GlyphMask(2, 1, 2, 0, 1, 2, 0, 2, 1, [0, 8], monochrome: true));
+    }
+
+    [Fact]
+    public void AliasedGlyphReplacesTheDestinationPixel()
+    {
+        // text_blit_glyph_bitmap: a set bit is alpha 255, which writes source RGB and alpha directly.
+        var destination = new RgbaImage(1, 1, [10, 20, 30, 128]);
+        var mask = new GlyphMask(1, 1, 1, 0, 1, 1, 0, 1, 1, [16], monochrome: true);
+
+        AgeGlyphMaskCompositor.DrawMask(destination, mask, 0, 1, 0x123456);
+
+        Assert.Equal(new byte[] { 0x12, 0x34, 0x56, 255 }, destination.Pixels);
+    }
+
+    [Fact]
+    public void ModeTwoSecondPassOfAnAliasedGlyphShiftsEachBytesPixels()
+    {
+        // (signed char)byte >> 2 over GGO_BITMAP rows: within each 8-pixel byte the pixels move two to the right and
+        // the first pixel fills the first two.
+        byte[] row = [16, 0, 16, 0, 0, 0, 0, 16, 16, 0, 0, 0];
+        var mask = new GlyphMask(10, 1, 12, 0, 1, 10, 0, 10, 1, row, monochrome: true);
+
+        GlyphMask pass = AgeGlyphMaskCompositor.ModeTwoBitmapPass(mask);
+
+        Assert.True(pass.Monochrome);
+        Assert.Equal(new byte[] { 16, 16, 16, 0, 16, 0, 0, 0, 16, 16, 0, 0 }, pass.Coverage.ToArray());
+        Assert.Throws<ArgumentException>(() => AgeGlyphMaskCompositor.ModeTwoBitmapPass(Mask()));
+
+        var destination = Image(10, 1);
+        AgeGlyphMaskCompositor.DrawGlyph(destination, mask, 0, 0, 1, Style(renderMode: 2));
+        Assert.Equal(
+            new byte[] { 255, 255, 255, 0, 255, 0, 0, 255, 255, 255 },
+            Enumerable.Range(0, 10).Select(x => Pixel(destination, x, 0).A).ToArray());
+    }
+
+    [Theory]
+    [InlineData(true, 1, 3, 3, 5, 4)]
+    [InlineData(false, 1, 5, 4, 7, 5)]
+    [InlineData(false, 0, 3, 3, -1, -1)]
+    public void AliasedEffectTextStartsAtTheEffectOffset(
+        bool antialias, int renderMode, int primaryX, int primaryY, int effectX, int effectY)
+    {
+        // With AntiFont off the ADV builders go through text_draw_string_primary_or_ruby@0x44fac0, which offsets a
+        // mode 1-3 string by the effect offset first. The record keeps the measured cell.
+        var mask = new GlyphMask(1, 1, 1, 0, 1, 4, 0, 4, 5, [16], ascent: 1, monochrome: !antialias);
+        var destination = Image(16, 16);
+        var engine = new RetainedGlyphLayoutEngine(new CountingRasterizer(_ => mask));
+        AdvTextStyle style = Style(renderMode) with
+        {
+            EffectOffsetX = 2, EffectOffsetY = 1, EffectColor = 0x0000ff, TextColor = 0xffffff,
+        };
+
+        GlyphTextLayoutResult result = engine.Render(
+            destination,
+            new GlyphTextLayoutOptions(3, 3, 3, 16, 16, true, style),
+            [new GlyphRasterRequest("face", 5, -2, 700, 0x3042, 0x82a0, GlyphRasterPolicy.NativeCp932Gray4,
+                antialias)]);
+
+        Assert.Equal(new AdvRetainedGlyphRecord(0, 3, 3, 7, 8), Assert.Single(result.Records));
+        Assert.Equal(((byte)255, (byte)255, (byte)255, (byte)255), Pixel(destination, primaryX, primaryY));
+        if (effectX >= 0)
+            Assert.Equal(((byte)0, (byte)0, (byte)255, (byte)255), Pixel(destination, effectX, effectY));
+        Assert.Equal(renderMode == 0 ? 1 : 2,
+            Enumerable.Range(0, 16 * 16).Count(i => destination.Pixels[i * 4 + 3] != 0));
+    }
+
+    [Fact]
+    public void SurfaceTextKeepsItsPositionWhenAliased()
+    {
+        // draw_string_to_surface@0x450150 (op 0x204) calls the raster workers directly.
+        var requests = new List<GlyphRasterRequest>();
+        var renderer = new ImmediateSurfaceTextRenderer(new CountingRasterizer(request =>
+        {
+            requests.Add(request);
+            return new GlyphMask(1, 1, 1, 0, 1, 4, 0, 4, 5, [16], ascent: 1, monochrome: !request.Antialias);
+        }));
+        AdvTextStyle style = Style(renderMode: 1) with { EffectOffsetX = 2, EffectOffsetY = 1 };
+        var destination = Image(16, 16);
+
+        renderer.Render(destination, 3, 3, "あ", style, antialias: false);
+
+        Assert.False(Assert.Single(requests).Antialias);
+        Assert.Equal(((byte)255, (byte)255, (byte)255, (byte)255), Pixel(destination, 3, 3));
+    }
+
+    [Fact]
     public void MaskOwnsValidatedNormalizedCoverage()
     {
         byte[] source = [0, 8, 16, 0];
@@ -122,22 +227,33 @@ public class GlyphMaskCompositorTests
     }
 
     [Fact]
-    public void ModeThreeRadiusOneMatchesNativeTwelveSampleEllipse()
+    public void ModeThreeRadiusOneMatchesNativeTwelveSamples()
     {
+        // AGE converts the sample angle with angle * 180 / pi, so (1,1) never reaches (+1,-1) or (-1,+1); a
+        // 2026-11-06 AntiFont-off capture of SC0000 page 2 shows exactly these six neighbours.
         IReadOnlyList<(int X, int Y)> offsets =
             AgeGlyphMaskCompositor.GetMode3OutlineOffsets(1, 1);
 
-        Assert.Equal(12, offsets.Count);
-        Assert.Equal(8, offsets.Distinct().Count());
-        Assert.Equal(2, offsets.Count(offset => offset == (1, 0)));
-        Assert.Equal(2, offsets.Count(offset => offset == (0, 1)));
-        Assert.Equal(2, offsets.Count(offset => offset == (-1, 0)));
-        Assert.Equal(2, offsets.Count(offset => offset == (0, -1)));
-        Assert.Equal(1, offsets.Count(offset => offset == (1, 1)));
-        Assert.Equal(1, offsets.Count(offset => offset == (-1, 1)));
-        Assert.Equal(1, offsets.Count(offset => offset == (-1, -1)));
-        Assert.Equal(1, offsets.Count(offset => offset == (1, -1)));
-        Assert.DoesNotContain((0, 0), offsets);
+        Assert.Equal(
+            new (int, int)[]
+            {
+                (1, 0), (1, 1), (0, 1), (-1, 0), (-1, -1), (0, -1),
+                (1, 0), (1, 1), (0, 1), (-1, 0), (-1, -1), (0, -1),
+            },
+            offsets);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 1)]     // sqrt(0): an infinite step samples angle 0 once
+    [InlineData(-1, -1, 1)]   // sqrt of a negative sum: a NaN step samples angle 0 once
+    [InlineData(2, 0, 12)]    // the step uses sqrt(rx + ry); sqrt(rx^2 + ry^2) would sample 16 times
+    public void ModeThreeSampleCountFollowsTheRadiusSum(int radiusX, int radiusY, int count)
+    {
+        IReadOnlyList<(int X, int Y)> offsets =
+            AgeGlyphMaskCompositor.GetMode3OutlineOffsets(radiusX, radiusY);
+
+        Assert.Equal(count, offsets.Count);
+        Assert.Equal((radiusX, 0), offsets[0]);
     }
 
     [Fact]

@@ -933,6 +933,16 @@ opens ﾊﾞｰｼﾞｮﾝ情報 over 設定, and sets その他's check box wi
 `close`, both targets' `SYS4REG.INI` files are identical (`AdvanceMesOnWheel=1`, `EffectSkipOnClick=1`, `SE=1`, and
 `Volume0..3` written by OK). Allow 2 s after a native `answer OK`: AGE takes over a second to close 設定.
 
+`himegari-antifont-off.steps` clears 文字の縁をなめらかにする (`message:UseAntiFont`) in 設定 on SC0000 page 1. It takes
+four shots:
+- page 1 before OK;
+- page 1 after OK, which looks the same (AGE does not redraw text already drawn);
+- page 2, drawn from `GGO_BITMAP` glyphs, one pixel right and down;
+- History, opened with a wheel-up.
+
+On both targets, each shot matches the other target's pixel for pixel apart from the wait indicator's phase. After
+`close`, both `SYS4REG.INI` files are identical, with `UseAntiFont=0` (`engine-re.md`, "AntiFont off").
+
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
 `[native.keep_polling]` and `[[native.dialog]]`. Unknown sections are refused. A profile without `[native.engine]`

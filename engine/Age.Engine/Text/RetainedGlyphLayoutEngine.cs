@@ -59,7 +59,7 @@ public sealed class RetainedGlyphLayoutEngine
         // independently of the selected face's ink/text extent (native 0x45b710).
         GlyphMask? aspectReference = options.Style.AspectMode != 0 && glyphs.Count > 0
             ? _rasterizer.Rasterize(ImmediateSurfaceTextRenderer.CreateRequests(
-                "激", options.Style with { FontFace = "ＭＳ ゴシック" }, glyphs[0].Policy)[0])
+                "激", options.Style with { FontFace = "ＭＳ ゴシック" }, glyphs[0].Policy, glyphs[0].Antialias)[0])
             : null;
 
         IReadOnlyList<int> breaks = options.LineBreaksBefore ?? [];
@@ -128,8 +128,15 @@ public sealed class RetainedGlyphLayoutEngine
             rowRight = right;
             rowBottom = bottom;
 
+            // With AntiFont off, AGE's ADV builders, retained redraw and History draw each glyph through
+            // text_draw_string_primary_or_ruby@0x44fac0, which starts an effect string (mode 1-3) at the effect
+            // offset (+0x564/+0x568) before text_raster_string_cached@0x45b600 adds its own. The ink moves; the record
+            // keeps the measured cell (Himegari's mode-3 (1,1) text lands one pixel right and down).
+            bool shiftByEffect = !request.Antialias && options.Style.RenderMode != 0;
             AgeGlyphMaskCompositor.DrawGlyph(
-                destination, mask, cursorX, cursorY,
+                destination, mask,
+                shiftByEffect ? checked(cursorX + options.Style.EffectOffsetX) : cursorX,
+                shiftByEffect ? checked(cursorY + options.Style.EffectOffsetY) : cursorY,
                 AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), options.Style);
             records.Add(new AdvRetainedGlyphRecord(0, cursorX, cursorY, right, bottom));
             cursorX = checked(cursorX + advanceX);

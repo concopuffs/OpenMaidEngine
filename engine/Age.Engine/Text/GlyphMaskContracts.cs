@@ -2,6 +2,8 @@ using System.Text;
 
 namespace Age.Engine.Text;
 
+/// <summary>Which rasterizer family a request targets. <see cref="NativeCp932Gray4"/> is AGE's GDI path; despite
+/// its name it covers both of AGE's glyph formats, which <see cref="GlyphRasterRequest.Antialias"/> selects.</summary>
 public enum GlyphRasterPolicy
 {
     NativeCp932Gray4,
@@ -11,6 +13,8 @@ public enum GlyphRasterPolicy
 /// <summary>
 /// Backend-neutral description of one requested glyph. Native-compatible requests preserve both
 /// the Unicode scalar used by authored code and the original CP932 code consumed by AGE/GDI.
+/// <see cref="Antialias"/> is AGE's text-manager+0x544 (message:UseAntiFont): true asks for GGO_GRAY4_BITMAP
+/// coverage, false for GGO_BITMAP's aliased glyphs.
 /// </summary>
 public sealed record GlyphRasterRequest
 {
@@ -21,7 +25,8 @@ public sealed record GlyphRasterRequest
         int weight,
         int unicodeScalar,
         ushort? cp932Code,
-        GlyphRasterPolicy policy)
+        GlyphRasterPolicy policy,
+        bool antialias = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fontFace);
         if (pixelHeight <= 0) throw new ArgumentOutOfRangeException(nameof(pixelHeight));
@@ -37,6 +42,7 @@ public sealed record GlyphRasterRequest
         UnicodeScalar = unicodeScalar;
         Cp932Code = cp932Code;
         Policy = policy;
+        Antialias = antialias;
     }
 
     public string FontFace { get; }
@@ -46,11 +52,13 @@ public sealed record GlyphRasterRequest
     public int UnicodeScalar { get; }
     public ushort? Cp932Code { get; }
     public GlyphRasterPolicy Policy { get; }
+    public bool Antialias { get; }
 }
 
 /// <summary>
-/// One grayscale glyph mask plus GDI-compatible placement and cell metrics. Coverage values use
-/// AGE's normalized 0..16 range, regardless of which platform rasterizer produced them.
+/// One glyph mask plus GDI-compatible placement and cell metrics. Coverage values use AGE's normalized
+/// 0..16 range, regardless of which platform rasterizer produced them. A <see cref="Monochrome"/> mask
+/// (an aliased GGO_BITMAP glyph) holds only 0 and 16.
 /// </summary>
 public sealed class GlyphMask
 {
@@ -67,7 +75,8 @@ public sealed class GlyphMask
         int cellWidth,
         int cellHeight,
         ReadOnlySpan<byte> coverage,
-        int? ascent = null)
+        int? ascent = null,
+        bool monochrome = false)
     {
         if (width < 0) throw new ArgumentOutOfRangeException(nameof(width));
         if (height < 0) throw new ArgumentOutOfRangeException(nameof(height));
@@ -82,6 +91,8 @@ public sealed class GlyphMask
             if (value > 16)
                 throw new ArgumentException("Glyph coverage values must be in AGE's 0..16 range.",
                                             nameof(coverage));
+            else if (monochrome && value is not (0 or 16))
+                throw new ArgumentException("A monochrome glyph's coverage is 0 or 16.", nameof(coverage));
 
         Width = width;
         Height = height;
@@ -93,6 +104,7 @@ public sealed class GlyphMask
         CellWidth = cellWidth;
         CellHeight = cellHeight;
         Ascent = ascent;
+        Monochrome = monochrome;
         _coverage = coverage.ToArray();
     }
 
@@ -112,6 +124,12 @@ public sealed class GlyphMask
     /// the pixel height.
     /// </summary>
     public int? Ascent { get; }
+
+    /// <summary>
+    /// An aliased glyph (GGO_BITMAP, AntiFont off): every coverage value is 0 or 16. AGE keeps such a glyph as
+    /// packed bits, which changes what its mode-2 second pass draws (<see cref="AgeGlyphMaskCompositor"/>).
+    /// </summary>
+    public bool Monochrome { get; }
 
     public ReadOnlyMemory<byte> Coverage => _coverage;
 }

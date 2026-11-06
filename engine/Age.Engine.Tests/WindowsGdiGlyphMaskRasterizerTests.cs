@@ -7,6 +7,7 @@ using Age.Engine.Text.Windows;
 
 public class WindowsGdiGlyphMaskRasterizerTests
 {
+    private const uint GgoBitmap = 1;
     private const uint GgoGray4Bitmap = 5;
     private const uint GdiError = 0xffffffff;
 
@@ -63,7 +64,8 @@ public class WindowsGdiGlyphMaskRasterizerTests
                 "Windows GDI Gray-4 (AGE reference)",
                 GlyphRasterPolicy.NativeCp932Gray4,
                 NativePixelExact: true,
-                "CreateICA(\"DISPLAY\") + CreateFontIndirectA + GetGlyphOutlineA(GGO_GRAY4_BITMAP), ACP 932"),
+                "CreateICA(\"DISPLAY\") + CreateFontIndirectA + GetGlyphOutlineA(GGO_GRAY4_BITMAP, " +
+                "or GGO_BITMAP when UseAntiFont is 0), ACP 932"),
             rasterizer.BackendInfo);
         var portable = new GlyphRasterRequest(
             "ＭＳ 明朝", 24, -12, 700, 0x3042, null, GlyphRasterPolicy.PortableUnicode);
@@ -95,6 +97,71 @@ public class WindowsGdiGlyphMaskRasterizerTests
              actual.CellWidth, actual.CellHeight));
         Assert.Equal(expected.Coverage, actual.Coverage.ToArray());
         Assert.All(actual.Coverage.ToArray(), value => Assert.InRange(value, (byte)0, (byte)16));
+    }
+
+    [Theory]
+    [InlineData("ＭＳ 明朝", 24, -12, 700, 0x59eb)] // 姫
+    [InlineData("ＭＳ 明朝", 24, -12, 700, 0x3042)] // あ
+    [InlineData("ＭＳ ゴシック", 16, -8, 0, 0x30a2)] // ア
+    public void AliasedRequestReturnsTheGgoBitmapGlyph(
+        string face, int height, int width, int weight, int scalar)
+    {
+        if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;
+        GlyphRasterRequest gray = NativeRequest(face, height, width, weight, scalar);
+        GlyphRasterRequest aliased = NativeRequest(face, height, width, weight, scalar, antialias: false);
+
+        using var rasterizer = new WindowsGdiGlyphMaskRasterizer();
+        GlyphMask actual = rasterizer.Rasterize(aliased);
+        GlyphMask grayMask = rasterizer.Rasterize(gray);
+        DirectGlyph expected = RasterizeUnicodeDirect(face, height, width, weight, scalar, GgoBitmap);
+
+        Assert.True(actual.Monochrome);
+        Assert.False(grayMask.Monochrome);
+        Assert.Equal(
+            (expected.Width, expected.Height, expected.Stride, expected.OriginX, expected.OriginY,
+             expected.CellAdvanceX, expected.CellAdvanceY, expected.CellWidth, expected.CellHeight),
+            (actual.Width, actual.Height, actual.Stride, actual.OriginX, actual.OriginY,
+             actual.CellAdvanceX, actual.CellAdvanceY, actual.CellWidth, actual.CellHeight));
+        Assert.Equal(expected.Coverage, actual.Coverage.ToArray());
+        Assert.Contains((byte)16, actual.Coverage.ToArray());
+        Assert.Equal(grayMask.Ascent, actual.Ascent);
+        Assert.Equal(grayMask.CellAdvanceX, actual.CellAdvanceX);
+        Assert.NotEqual(grayMask.Coverage.ToArray(), actual.Coverage.ToArray());
+    }
+
+    [Fact]
+    public void BitmapRowsUnpackMostSignificantBitFirstAtAgesStride()
+    {
+        // Width 10: two bytes of bits per row, padded to AGE's (10 >> 5) * 4 + 4 = 4-byte rows (GDI's too).
+        byte[] bits =
+        [
+            0b1010_0001, 0b1100_0000, 0xee, 0xee,
+            0b0000_0000, 0b0100_0000, 0xee, 0xee,
+        ];
+
+        byte[] coverage = WindowsGdiGlyphMaskRasterizer.UnpackNativeBitmapRows(bits, width: 10, height: 2, stride: 12);
+
+        Assert.Equal(new byte[]
+        {
+            16, 0, 16, 0, 0, 0, 0, 16, 16, 16, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0,
+        }, coverage);
+    }
+
+    [Fact]
+    public void BitmapRowsSkewAtWidthsOfThirtyTwoAsAgeReadsThem()
+    {
+        // GDI pads a 32-pixel row to 4 bytes; AGE steps (32 >> 5) * 4 + 4 = 8, so its second row starts in GDI's
+        // third. Past GDI's buffer the port reads zero.
+        byte[] bits = [0x80, 0, 0, 0, 0x01, 0, 0, 0, 0x40, 0, 0, 0];
+
+        byte[] coverage = WindowsGdiGlyphMaskRasterizer.UnpackNativeBitmapRows(bits, width: 32, height: 3, stride: 32);
+
+        Assert.Equal(16, coverage[0]);
+        Assert.Equal(16, coverage[32 + 1]);            // GDI's third row, not its second
+        Assert.Equal(1, coverage.Take(32).Count(value => value != 0));
+        Assert.Equal(1, coverage.Skip(32).Take(32).Count(value => value != 0));
+        Assert.All(coverage.Skip(64), value => Assert.Equal(0, value));
     }
 
     [Fact]
@@ -169,7 +236,7 @@ public class WindowsGdiGlyphMaskRasterizerTests
     }
 
     private static GlyphRasterRequest NativeRequest(
-        string face, int height, int width, int weight, int scalar)
+        string face, int height, int width, int weight, int scalar, bool antialias = true)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         byte[] encoded = Encoding.GetEncoding(
@@ -180,11 +247,11 @@ public class WindowsGdiGlyphMaskRasterizerTests
             ? encoded[0]
             : (ushort)((encoded[0] << 8) | encoded[1]);
         return new GlyphRasterRequest(
-            face, height, width, weight, scalar, cp932, GlyphRasterPolicy.NativeCp932Gray4);
+            face, height, width, weight, scalar, cp932, GlyphRasterPolicy.NativeCp932Gray4, antialias);
     }
 
     private static DirectGlyph RasterizeUnicodeDirect(
-        string face, int height, int width, int weight, int scalar)
+        string face, int height, int width, int weight, int scalar, uint format = GgoGray4Bitmap)
     {
         IntPtr dc = Native.CreateICW("DISPLAY", null, null, IntPtr.Zero);
         if (dc == IntPtr.Zero) ThrowWin32("CreateICW failed");
@@ -208,25 +275,35 @@ public class WindowsGdiGlyphMaskRasterizerTests
 
             Mat2 identity = Mat2.Identity;
             uint size = Native.GetGlyphOutlineW(
-                dc, (uint)scalar, GgoGray4Bitmap,
+                dc, (uint)scalar, format,
                 out GlyphMetrics metrics, 0, null, ref identity);
             if (size == GdiError) ThrowWin32("GetGlyphOutlineW query failed");
             int glyphWidth = checked((int)metrics.BlackBoxX);
             int glyphHeight = checked((int)metrics.BlackBoxY);
             int stride = checked((glyphWidth + 3) & ~3);
-            int expectedBytes = checked(stride * glyphHeight);
+            int rawStride = format == GgoBitmap ? checked((glyphWidth + 31) / 32 * 4) : stride;
+            int expectedBytes = checked(rawStride * glyphHeight);
             Assert.True(size >= expectedBytes);
             byte[] rawCoverage = new byte[size];
             if (size > 0)
             {
                 identity = Mat2.Identity;
                 uint written = Native.GetGlyphOutlineW(
-                    dc, (uint)scalar, GgoGray4Bitmap,
+                    dc, (uint)scalar, format,
                     out GlyphMetrics second, size, rawCoverage, ref identity);
                 Assert.Equal(size, written);
                 Assert.Equal(metrics, second);
             }
             byte[] coverage = rawCoverage.AsSpan(0, expectedBytes).ToArray();
+            if (format == GgoBitmap)
+            {
+                // GDI's own DWORD-aligned rows, MSB first, as 0/16 coverage.
+                coverage = new byte[checked(stride * glyphHeight)];
+                for (int y = 0; y < glyphHeight; y++)
+                for (int x = 0; x < glyphWidth; x++)
+                    if ((rawCoverage[y * rawStride + x / 8] & (0x80 >> (x % 8))) != 0)
+                        coverage[y * stride + x] = 16;
+            }
 
             string text = char.ConvertFromUtf32(scalar);
             if (!Native.GetTextExtentPoint32W(dc, text, text.Length, out NativeSize cell))

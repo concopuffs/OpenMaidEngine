@@ -9,7 +9,7 @@ using Godot;
 public sealed class GodotTextServerGlyphMaskRasterizer :
     IIdentifiedGlyphMaskRasterizer, IDisposable
 {
-    private readonly record struct FontKey(string RequestedFace, int Weight);
+    private readonly record struct FontKey(string RequestedFace, int Weight, bool Antialias);
 
     private readonly object _gate = new();
     private readonly PortableTextRenderingPolicy _policy;
@@ -69,7 +69,7 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
             int height = Math.Max(0, Mathf.RoundToInt(glyphSize.Y));
             byte[] coverage = width == 0 || height == 0
                 ? []
-                : ExtractCoverage(rid, sizeKey, glyph, uv, width, height);
+                : ExtractCoverage(rid, sizeKey, glyph, uv, width, height, request.Antialias);
             int advanceX = Mathf.RoundToInt(advance.X);
             return new GlyphMask(
                 width,
@@ -83,7 +83,8 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
                 request.PixelHeight,
                 coverage,
                 // AGE places the baseline at the cell top plus the font's ascent (GDI tmAscent).
-                Mathf.RoundToInt(_textServer.FontGetAscent(rid, request.PixelHeight)));
+                Mathf.RoundToInt(_textServer.FontGetAscent(rid, request.PixelHeight)),
+                monochrome: !request.Antialias);
         }
     }
 
@@ -103,7 +104,7 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
         int weight = request.Weight >= raster.BoldThreshold
             ? raster.BoldWeight
             : raster.RegularWeight;
-        var key = new FontKey(request.FontFace, weight);
+        var key = new FontKey(request.FontFace, weight, request.Antialias);
         if (_fonts.TryGetValue(key, out SystemFont? cached)) return cached;
 
         var font = new SystemFont
@@ -111,7 +112,8 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
             FontNames = _policy.ResolveFamilies(request.FontFace),
             FontWeight = weight,
             AllowSystemFallback = raster.AllowSystemFallback,
-            Antialiasing = raster.Antialiasing switch
+            // UseAntiFont 0 asks for aliased glyphs whatever the policy's antialiasing.
+            Antialiasing = !request.Antialias ? TextServer.FontAntialiasing.None : raster.Antialiasing switch
             {
                 "none" => TextServer.FontAntialiasing.None,
                 "lcd" => TextServer.FontAntialiasing.Lcd,
@@ -151,7 +153,8 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
         long glyph,
         Rect2 uv,
         int width,
-        int height)
+        int height,
+        bool antialias)
     {
         long textureIndex = _textServer.FontGetGlyphTextureIdx(rid, sizeKey, glyph);
         Image atlas = _textServer.FontGetTextureImage(rid, sizeKey, textureIndex)
@@ -169,8 +172,9 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
                 Image.Format.Rgb8 => Math.Max(pixel.R, Math.Max(pixel.G, pixel.B)),
                 _ => pixel.A,
             };
-            result[y * width + x] =
-                (byte)Math.Clamp(Mathf.RoundToInt(mask * 16f), 0, 16);
+            result[y * width + x] = antialias
+                ? (byte)Math.Clamp(Mathf.RoundToInt(mask * 16f), 0, 16)
+                : (byte)(mask >= 0.5f ? 16 : 0);
         }
         return result;
     }

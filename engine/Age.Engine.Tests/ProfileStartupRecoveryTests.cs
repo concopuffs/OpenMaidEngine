@@ -135,4 +135,32 @@ public class ProfileStartupRecoveryTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [Theory]
+    [InlineData("1", null, true)]     // Himegari and Kamidori: ENABLEANTIFONT=1, UseAntiFont at its default 1
+    [InlineData("1", "0", false)]     // the 設定 dialog's 文字の縁をなめらかにする unchecked
+    [InlineData(null, "1", false)]    // no ENABLEANTIFONT: AGE never applies UseAntiFont, so +0x544 stays 0
+    [InlineData("0", "1", false)]
+    public void TextAntialiasFollowsEnableAntiFontAndUseAntiFont(string? enable, string? use, bool expected)
+    {
+        string root = NewDirectory();
+        string path = Path.Combine(root, Sys4RegIniStore.FileName);
+        try
+        {
+            if (use != null)
+            {
+                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+                File.WriteAllText(path, $"[message]\r\nUseAntiFont={use}\r\n", Encoding.GetEncoding(932));
+            }
+            var pairs = new List<KeyValuePair<string, string>> { new("FONT", "ＭＳ 明朝") };
+            if (enable != null) pairs.Add(new("ENABLEANTIFONT", enable));
+            var startup = Sys4StartupSettings.FromPairs(pairs);
+
+            Assert.Equal(expected, Sys4RegIniStore.ForPath(startup, path).TextAntialiasEnabled);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }
