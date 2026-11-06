@@ -438,8 +438,7 @@ STEPS = {
     "click": _spec(1, 2, "hold", "click X Y | click POINT [hold=MS]   left click"),
     "rclick": _spec(1, 2, "hold", "rclick X Y | rclick POINT [hold=MS] right click (opens the ADV menu)"),
     "key": _spec(1, 1, "hold", "key [alt+]NAME|0xVK [hold=MS] press a key, alt+ with Alt held; ESC and Alt+F4 are "
-                 "refused; natively an Alt or F10 key fails unless AGE's window is active (F1 saves a screenshot BMP "
-                 "in the sandbox Desktop)"),
+                 "refused (F1 saves a screenshot BMP in the sandbox Desktop)"),
     "wheel": _spec(1, 2, "", "wheel up|down [N]             turn the wheel N notches at the cursor"),
     "wait": _spec(1, 1, "", "wait SECONDS"),
     "settle": _spec(0, 0, "timeout quiet threshold",

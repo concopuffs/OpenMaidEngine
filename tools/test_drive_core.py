@@ -304,6 +304,9 @@ def test_profiles():
           "the agent gets the profile's engine facts merged with engine-ctx.toml")
     check(config["keep_polling"] == {"setter": 0x460180, "activate_return": 0x4865F3, "gate": 0x1C28},
           "the polling keeper gets its call site and the gate offset from engine-ctx.toml")
+    check(config["background"] is True
+          and native.agent_config(profile, None, engine_ctx, background=False)["background"] is False,
+          "a spawned AGE is kept in the background unless the session asks otherwise")
     check(raises(core.parse_profile, "[native.keep_polling]\nsetter = 1\nactivate_return = 2\n",
                  contains="needs [native.engine]"), "the polling keeper needs the engine facts")
     check(raises(native.agent_config, profile, {0x1C: Path("C:/箱")}, engine_ctx, contains="ASCII"),

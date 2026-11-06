@@ -44,7 +44,7 @@ from drive_core import DriveError  # noqa: E402
 AGENT = core.DATA / "native-agent.js"
 ENGINE_CTX_TOML = paths.VM_MAP / "engine-ctx.toml"
 CAPABILITIES = ("dialogs", "answer", "window", "menu", "detach")
-QUIET_EVENTS = {"folder", "request", "activated"}       # logged, but not sent to clients
+QUIET_EVENTS = {"folder", "request", "activated", "foreground"}       # logged, but not sent to clients
 
 
 def scratch_exe(context: paths.ToolContext = paths.CONTEXT) -> Path:
@@ -66,7 +66,11 @@ def engine_ctx_offsets(toml_text: str, names: tuple[str, ...] = ENGINE_FIELDS) -
     return {name: fields[name] for name in names}
 
 
-def agent_config(profile: core.Profile, folders: dict[int, Path] | None, engine_ctx_text: str | None) -> dict[str, Any]:
+def agent_config(profile: core.Profile, folders: dict[int, Path] | None, engine_ctx_text: str | None,
+                 background: bool = True) -> dict[str, Any]:
+    """The agent's init(config). `background` keeps a spawned AGE from taking the user's foreground: its first window
+    spends the foreground permission it inherits inside its own thread, and a restore does not activate
+    (native-agent.js, keepInBackground)."""
     if folders is not None:
         for path in folders.values():
             text = str(path)
@@ -85,6 +89,7 @@ def agent_config(profile: core.Profile, folders: dict[int, Path] | None, engine_
         "folders": None if folders is None else {str(csidl): str(path) for csidl, path in folders.items()},
         "engine": engine,
         "keep_polling": keep_polling,
+        "background": background,
     }
 
 
@@ -206,9 +211,6 @@ class Win32(core.Windows):
 
         self.GuiThreadInfo = GuiThreadInfo
         user32.GetGUIThreadInfo.argtypes = [wintypes.DWORD, ctypes.POINTER(GuiThreadInfo)]
-        user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
-        user32.SetActiveWindow.argtypes = [wintypes.HWND]
-        user32.SetActiveWindow.restype = wintypes.HWND
 
     def thread_active_window(self, hwnd: int) -> int:
         """The active window of `hwnd`'s thread, or 0 when that thread has none."""
@@ -218,23 +220,6 @@ class Win32(core.Windows):
         if not thread or not self.user32.GetGUIThreadInfo(thread, ctypes.byref(info)):
             return 0
         return info.hwndActive or 0
-
-    def activate_in_thread(self, hwnd: int) -> bool:
-        """Make `hwnd` the active window of its own thread when that thread has none. The driver's thread joins the
-        window's input queue for the call (AttachThreadInput), so that SetActiveWindow acts on that queue. Windows
-        then makes the window the foreground one whenever it lets the driver take the foreground (measured
-        2026-11-06), so this is for sessions that allow it. True when it made the call."""
-        thread = self.user32.GetWindowThreadProcessId(hwnd, None)
-        if not thread or self.thread_active_window(hwnd):
-            return False
-        own = self.kernel32.GetCurrentThreadId()
-        if not self.user32.AttachThreadInput(own, thread, True):
-            return False
-        try:
-            self.user32.SetActiveWindow(hwnd)
-        finally:
-            self.user32.AttachThreadInput(own, thread, False)
-        return True
 
     def dialogs(self, pid: int) -> list[dict[str, Any]]:
         boxes = []
@@ -540,7 +525,9 @@ class Daemon:
         import frida
         device = frida.get_local_device()
         engine_ctx = ENGINE_CTX_TOML.read_text(encoding="utf-8") if ENGINE_CTX_TOML.is_file() else None
-        config = agent_config(self.profile, folders, engine_ctx)
+        # An attached AGE is the user's own; only a spawned one is kept in the background, unless --foreground.
+        background = self.arguments.attach is None and not self.arguments.foreground
+        config = agent_config(self.profile, folders, engine_ctx, background)
         source = AGENT.read_text(encoding="utf-8")
         if self.arguments.attach is not None:
             self.age_pid = self.find_running_age(device) if self.arguments.attach == "auto" else int(self.arguments.attach)
@@ -564,7 +551,7 @@ class Daemon:
         except Exception:
             device.kill(self.age_pid)         # never leave a suspended or unhooked AGE behind
             raise
-        self.event("spawned", pid=self.age_pid, exe=str(exe), hooked=self.api.hooked())
+        self.event("spawned", pid=self.age_pid, exe=str(exe), hooked=self.api.hooked(), background=background)
 
     def find_running_age(self, device: Any) -> int:
         running = [process.pid for process in device.enumerate_processes() if process.name.upper() == "AGE.EXE"]
@@ -704,20 +691,20 @@ class Daemon:
 
     def require_active(self, target: int) -> None:
         """Windows' keyboard menu (an Alt or F10 tap, Alt with a letter or Space) starts only in the active window of
-        AGE's thread, as the window a user types into always is. AGE comes up without one when Windows refuses it the
-        foreground at start, and a minimize clears it. The step then fails here rather than doing nothing. A session
-        started with --foreground may take the foreground, so there the driver activates the window instead."""
-        if win32().thread_active_window(target):
+        AGE's thread, as the window a user types into always is. A background session's AGE starts active in its
+        thread, but a minimize hands that to a hidden helper and the restore does not take it back, so the agent
+        activates the window inside AGE's thread, where it takes no foreground. A step whose window still is not
+        active fails rather than doing nothing."""
+        if win32().thread_active_window(target) == target:
             return
-        if self.arguments.foreground and win32().activate_in_thread(target):
-            self.event("activated", window=f"0x{target:x}")
-            if win32().thread_active_window(target):
-                return
-        raise DriveError(
-            "AGE's window is not active in its thread, so Windows starts no keyboard menu for this key. A user's keys "
-            "reach an active window, but AGE has none when Windows refused it the foreground at start or after a "
-            "minimize. Start the session with --foreground to let the driver activate it; that may take the "
-            "foreground")
+        self.api.activate(target)
+        self.event("activated", window=f"0x{target:x}")
+        if not self.arguments.foreground:
+            win32().send_to_bottom(self.require_window())
+        if win32().thread_active_window(target) != target:
+            raise DriveError(
+                "AGE's window cannot be made active in its thread, so Windows starts no keyboard menu for this key "
+                "(a disabled window or an open modal dialog refuses the activation)")
 
     def key_window(self, hwnd: int) -> int:
         """The window with the keyboard focus: AGE's, or AGERC's fullscreen strip while it shows (it takes the
@@ -742,7 +729,8 @@ class Daemon:
     def static_info(self) -> dict[str, Any]:
         return {"target": "native", "profile": self.context.profile_id, "version": core.PROTOCOL_VERSION,
                 "capabilities": list(CAPABILITIES), "game_pid": self.age_pid,
-                "mode": "attach" if self.arguments.attach is not None else "spawn", "saves": self.saves}
+                "mode": "attach" if self.arguments.attach is not None else "spawn", "saves": self.saves,
+                "background": self.arguments.attach is None and not self.arguments.foreground}
 
     # ops -------------------------------------------------------------------------------------------
     def op_hello(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -860,10 +848,25 @@ class Daemon:
         for box in win32().dialogs(self.age_pid):
             for handle, text in box["buttons"]:
                 if text.replace("&", "").lower() == wanted:
+                    before = self.api.clicks()
                     win32().post(handle, BM_CLICK, 0, 0)
                     self.event("dialog", text=box["text"], answered=wanted, via="answer")
+                    self.wait_click(handle, before)
                     return {"text": box["text"], "answered": text}
         raise DriveError(f"no open message box has a {button!r} button")
+
+    def wait_click(self, handle: int, before: dict[str, int] | None, seconds: float = 10) -> None:
+        """Return once AGE's thread has dispatched the BM_CLICK posted to `handle`. A busy thread takes it late, as it
+        would a user's click; the 設定 dialog's first VRAM query holds it for about 2 s."""
+        if before is None:
+            return
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            now = self.api.clicks()
+            if now["count"] != before["count"] and now["window"] == handle:
+                return
+            time.sleep(0.02)
+        raise DriveError(f"AGE did not take the button press within {seconds:g} s")
 
     def op_close(self, request: dict[str, Any]) -> dict[str, Any]:
         if self.arguments.attach is not None:
@@ -895,7 +898,7 @@ class Daemon:
         while win32().iconic(hwnd) != minimize and time.monotonic() < deadline:
             time.sleep(0.05)
         if not minimize and not self.arguments.foreground:
-            win32().send_to_bottom(hwnd)    # a restore activates the window
+            win32().send_to_bottom(hwnd)    # a restored window may come back above the user's
         return {"minimized": win32().iconic(hwnd)}
 
     def op_menu(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -1081,8 +1084,8 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
                          help="write this setting into the sandbox SYS4REG.INI before launch, after the "
                               "profile's (repeatable), e.g. --set message.MessageSpeed=100")
     command.add_argument("--foreground", action="store_true",
-                         help="leave AGE's window where Windows puts it (default: the bottom of the z-order); "
-                              "an Alt or F10 key then activates it if it is not active")
+                         help="let AGE take the foreground as it does when a user starts it (default: AGE never "
+                              "takes it and its window stays at the bottom of the z-order)")
 
 
 def check_launch_options(arguments: argparse.Namespace) -> None:

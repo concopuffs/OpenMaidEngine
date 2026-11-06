@@ -812,7 +812,7 @@ driving needs the Godot .NET console binary and `dotnet`.
 | `--seed live\|native:NAME\|port:NAME\|DIR` | both | fill a new sandbox from the live save folder, another sandbox of either target, or a folder (a `backups/` stamp or a plain copy). A sandbox that already exists is left as it is: the seed is skipped with only a `serve.log` note, so use a new name to re-seed. The source is read at start, so do not restart the source target in between, because that empties its `fresh` |
 | `--sound` | both | keep the sandbox's volume instead of writing `[sandbox.quiet]` |
 | `--set SECTION.KEY=VALUE` | both | write this `SYS4REG.INI` value into the sandbox before launch, after the profile's `[sandbox.settings]` and `[sandbox.quiet]` (repeatable), e.g. `--set message.MessageSpeed=100` for slow reveals. Native refuses it with `--live-saves` or `--attach` |
-| `--foreground` | both | leave the window where Windows puts it; by default it goes to the bottom of the z-order without being activated. Natively an Alt or F10 `key` step then activates AGE's window when it is not active, which may take the foreground |
+| `--foreground` | both | leave the window where Windows puts it, and natively let AGE take the foreground as it does when a user starts it. By default the window goes to the bottom of the z-order without being activated, and native AGE never takes the foreground ("What the native hooks do inside AGE") |
 | `--timeout S` | both | seconds to wait for the game (native 90, port 180, which includes Godot's boot) |
 | `--exe PATH` | native | the AGE.EXE to spawn (default: the `native_scratch.py` copy) |
 | `--live-saves` | native | use the real save folder, after an automatic backup |
@@ -850,7 +850,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 |---|---|
 | `move X Y\|POINT` | park the cursor (hover) |
 | `click X Y\|POINT [hold=MS]`, `rclick …` | left/right click; right click opens the ADV menu |
-| `key [alt+]NAME\|0xVK [hold=MS]` | press a key (`enter`, `space`, `ctrl`, `alt`, arrows, `f1`…, letters); `alt+NAME` presses it with Alt held, as a chord (`alt+m`, `alt+space`, `alt+enter`). Native gets Alt, F10 and every Alt chord as `WM_SYSKEYDOWN`/`WM_SYSKEYUP` with `lParam` bit 29 while Alt is down, so `DefWindowProc` runs the menu bar's keyboard mode; the release goes to whichever window took the focus on the press (the fullscreen strip). Natively an Alt or F10 tap, or Alt with a letter or Space, needs AGE's window to be the active window of its thread, as the window a user types into always is; `DefWindowProc` starts no keyboard menu otherwise. AGE has none when Windows refused it the foreground at start, or after a minimize. Such a step then fails with that reason, unless the session started with `--foreground`: the driver then activates the window, which may take the foreground. ESC is refused on both targets: it asks to close (use `close-request`). So is `alt+f4`, which natively posts `WM_CLOSE`. F1 saves a screenshot BMP in the sandbox Desktop; a native session on the live folders (`--live-saves`, `--attach`) refuses it, and the `menu` commands `save-screen` and `image-folder` too |
+| `key [alt+]NAME\|0xVK [hold=MS]` | press a key (`enter`, `space`, `ctrl`, `alt`, arrows, `f1`…, letters); `alt+NAME` presses it with Alt held, as a chord (`alt+m`, `alt+space`, `alt+enter`). Native gets Alt, F10 and every Alt chord as `WM_SYSKEYDOWN`/`WM_SYSKEYUP` with `lParam` bit 29 while Alt is down, so `DefWindowProc` runs the menu bar's keyboard mode; the release goes to whichever window took the focus on the press (the fullscreen strip). Natively an Alt or F10 tap, or Alt with a letter or Space, needs AGE's window to be the active window of its thread, as the window a user types into always is; `DefWindowProc` starts no keyboard menu otherwise. After a minimize it is not, so the agent first activates it inside AGE's thread, which takes no foreground; the step fails only when the window refuses that, as a disabled window under a modal box does. ESC is refused on both targets: it asks to close (use `close-request`). So is `alt+f4`, which natively posts `WM_CLOSE`. F1 saves a screenshot BMP in the sandbox Desktop; a native session on the live folders (`--live-saves`, `--attach`) refuses it, and the `menu` commands `save-screen` and `image-folder` too |
 | `wheel up\|down [N]` | wheel notches at the cursor |
 | `wait SECONDS` | sleep (in the client) |
 | `settle [timeout=S] [quiet=S] [threshold=F]` | wait until the game is idle for `quiet` seconds (0.7). Native: the frame stays within `threshold` (default 0.4 % of pixels) of one reference; typing adds up and resets the wait, the ADV wait indicator stays below the threshold, and animated menus such as the title never settle (use `wait` or a higher `threshold`). Port: an `input` or `menu` wait that is not busy |
@@ -861,9 +861,9 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `wait-state CONDITIONS [timeout=S] [click=POINT every=S]` | poll until `expect` would pass, clicking `POINT` every `S` seconds (default 2) meanwhile (boot: `wait-state script=TITLE click=adv.next every=3`) |
 | `point NAME X Y` | define a point for the session |
 | `speed FACTOR` | port: run the frame clock 0.05–8 times as fast |
-| `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, AGERC's dialogs and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs, the folder picker, ﾊﾞｰｼﾞｮﾝ情報 and 設定). AGERC's dialogs list every static text and button of the dialog and its pages, hidden pages included, the topmost dialog first; `answer` presses the first match from the topmost dialog down, and a check box toggles. The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
+| `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, AGERC's dialogs and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs, the folder picker, ﾊﾞｰｼﾞｮﾝ情報 and 設定). AGERC's dialogs list every static text and button of the dialog and its pages, hidden pages included, the topmost dialog first; `answer` presses the first match from the topmost dialog down, and a check box toggles. Natively the press is a posted `BM_CLICK`, which AGE's thread takes only when it next reads its queue, as it would a user's click, so `answer` returns once AGE has taken it (10 s at most). 設定's first open in a process holds AGE's thread for about 2 s with its VRAM query (`engine-re.md`, "Native menu bar", 設定). The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
 | `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
-| `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode, restoring the screen mode the game was in, and its result also reads `windowed`. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground` |
+| `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode, restoring the screen mode the game was in, and its result also reads `windowed`. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground`. Natively the restore does not activate the window ("What the native hooks do inside AGE") |
 | `menu NAME\|ID` | choose a menu-bar command as a user does. The menu refreshes first, and a grayed item fails the step. Names: `exit`, `save`, `load`, `version`, `save-screen`, `image-folder`, `fullscreen`, `windowed`, `skip`, `hide`, `auto`, `read-skip`, `sound-settings`, `message-settings`, `system-info`, `other-settings`; or a numeric `WM_COMMAND` id. The result prints the item's `label` and whether it was `checked` before. Native sends `WM_INITMENU` (AGE has AGERC refresh the items), reads the item, then posts `WM_COMMAND`; the port runs the same refresh and command on its drawn bar. In fullscreen the menu is the top-edge strip's, so the step fails unless the strip shows (hold the pointer on row 0 past op `0x149`'s delay first); native then refreshes the strip with `WM_ENTERMENULOOP` and posts `WM_COMMAND` to it |
 | `close [timeout=S]` | quit the game the way its own quit does (native `WM_CLOSE` wParam=1, which saves the shared profile), then the session ends |
 
@@ -964,10 +964,7 @@ Keyboard mode):
   one page.
 - Alt, Left and Down open the window menu, Up wraps to Close, and Enter opens the 終了 dialog, answered ｷｬﾝｾﾙ.
 
-Both targets match at every checkpoint. Natively the scenario needs AGE's window active in its thread (the `key`
-step). When Windows refused AGE the foreground at start, the first `key alt` fails with that reason; run it in a
-`--foreground` session then. Native AGE can raise its environmental データが壊れています box when the first menu loop
-starts (the driver answers it). While that box is open, AGE takes no input.
+Both targets match at every checkpoint, and the native run leaves the user's foreground alone.
 
 `himegari-fullscreen.steps` switches to fullscreen on the title screen with ﾌﾙｽｸﾘｰﾝ, holds the pointer on the top edge
 until the system-menu strip shows, and chooses ｳｲﾝﾄﾞｳ from the strip. Both targets pass, and both `SYS4REG.INI` files
@@ -1038,10 +1035,23 @@ target's sandbox can seed the other's.
 - `SetCursorPos` moves only that point. For a new point inside the client area it also posts the `WM_MOUSEMOVE`
   Windows would send, which is what re-hit-tests AGE's hotspots after the ADV callbacks' cursor nudge.
 - `joyGetPos[Ex]`/`joyGetDevCapsA` report no joystick.
-- Windowed AGE turns input polling off when its window loses activation, and a driven AGE runs inactive. Once the
+- Windowed AGE turns input polling off when its window loses activation, and a driven AGE is never the foreground
+  window. Once the
   window exists the agent ignores that call (`[native.keep_polling]`) and reopens the gate; `hello` reports the calls
   it ignored as `activations_ignored`. Without this, polled menus such as the title ignore clicks. See
   `docs/engine-re.md`, "Driving native AGE".
+- **The foreground**, in a spawned session without `--foreground`. AGE never asks for the foreground, but a process
+  started by one that may set it inherits that permission, so AGE took it at start or with its first dialog.
+  - `CreateWindowExA/W`: AGE's first visible top-level window is created under `LockSetForegroundWindow(LSFW_LOCK)`.
+    Its activation stays inside AGE's thread and spends the permission; `serve.log` reports
+    `foreground {"permission": "spent"}`. AGE's window then starts active in its thread but not in the foreground,
+    so Windows' keyboard menu works.
+  - `DefWindowProcA`: `SC_MINIMIZE` hands the thread's activation to a hidden helper window on AGE's thread, as a
+    user's minimize of the foreground window leaves none. Windows makes a restored window that is still active in
+    its thread the foreground one even without the permission. `SC_RESTORE` restores with `SW_SHOWNOACTIVATE`.
+  - The Windows rules behind this are in `docs/engine-re.md`, "Driving native AGE", The foreground.
+- `DispatchMessageA/W` and `IsDialogMessageA/W` count the `BM_CLICK`s AGE's thread takes, for `answer` (a modal
+  dialog's loop dispatches through `IsDialogMessage`, which bypasses the exported `DispatchMessage`).
 - `MessageBoxA` answers the boxes the profile's `[[native.dialog]]` policy names without showing them. Himegari's
   registration box on copied installs gets **Yes**. Other boxes are shown and reported (`dialogs`), and `answer
   BUTTON` presses one.

@@ -10,10 +10,10 @@ it; git history keeps the record.
 
 ## Engine fidelity
 
-- **Native menu bar: the remaining commands (AGERC menu 110).** The port draws the pruned bar and runs ｹﾞｰﾑ>終了,
-  画像の保存, the four ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (with the fullscreen top-edge strip), ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報 and
-  the 設定 dialog's four commands as native does (`engine-re.md`, "Native menu bar" and "Screen mode"). It grays
-  everything else. Still missing:
+- **Native menu bar: look differences and undriven cases (AGERC menu 110).** The port runs every command either game
+  can reach as native does: ｹﾞｰﾑ>終了, 画像の保存, the four ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (with the fullscreen top-edge
+  strip), ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報, the 設定 dialog's four commands and the keyboard mode (`engine-re.md`, "Native menu bar"
+  and "Screen mode"). It grays everything else, as native does. Still different:
   - Smaller look differences. Native popups may extend past the game window (the ﾍﾙﾌﾟ popup spans x 744..989), but
     the port clamps them inside it. For the same reason, the window menu opens at the bar's top, not one row above
     it as natively. Latin glyphs are drawn without ClearType's exact rasterization. The 設定 tab control is
@@ -24,9 +24,9 @@ it; git history keeps the record.
     on Windows' rule too, since the driver refuses ESC on native AGE. The strip's window-menu Move does nothing in
     the port; natively it would start Windows' move loop on the strip.
 
-  Done when each command reaches the same native service or dialog, or is closed as out of scope. Closed as out of
-  scope (2026-11-06): the 設定 radio groups, the right-click ﾒｯｾｰｼﾞ popup and 設定 page 101, which neither shipped
-  game can reach (`engine-re.md`, "Native menu bar", "Out of scope").
+  Done when each difference is matched, or accepted here as a gap. Out of scope since 2026-11-06: the 設定 radio
+  groups, the right-click ﾒｯｾｰｼﾞ popup and 設定 page 101, which neither shipped game can reach (`engine-re.md`,
+  "Native menu bar", "Out of scope").
 - **Input-latch cases the port does not model.** The port's latch (`VirtualMachine.InputLatch`) covers effects,
   sleeps, the ops between waits, the coroutine yield, and every consumer and flush point that SC0000 reaches
   (`engine-re.md`, "Effect skipping and the input latch"). Still open:
@@ -175,10 +175,4 @@ it; git history keeps the record.
   should show OME's name, release version, license and a pointer to `THIRD_PARTY_NOTICES.md`. Done when the dialog shows
   OME's identity beside the game's, `engine-re.md`'s port notes say so, and `himegari-version-dialog.steps` compares
   only the parts that are meant to match native.
-- **Native AGE takes the foreground when it starts.** `drive.py native start` puts AGE's window at the bottom of the
-  z-order but does not stop AGE activating it. In three sessions on 2026-11-06 the foreground window was AGE's right
-  after start, and again after a `window restore`, so the user's typing would have reached the game. When Windows
-  refuses AGE the foreground instead, its thread has no active window, and the keyboard-menu `key` steps fail
-  (`tools-reference.md`, `key`). Done when a native start leaves the user's foreground alone. The keyboard-menu steps
-  must still find an active window, or the scenarios that use them must say they need `--foreground`.
 - **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default).

@@ -1434,10 +1434,11 @@ keyboard reaches the bar as in any Windows program:
   dialog procedure leaves it to `DefWindowProc`: its menu enters keyboard mode as the bar's does, with the same six
   positions. With the strip hidden, F10 has no visible effect (Down after it opens no window menu).
 - **Activation.** The loop starts only in the active window of AGE's thread, which the window a user types into
-  always is. A thread with no active window ignores Alt, F10 and Alt+M. AGE's thread has none when Windows refused it
-  the foreground at start, and after a minimize. Measured with `GetGUIThreadInfo`: a minimized AGE restored with
-  `SW_SHOWNOACTIVATE` stays without one, and a driven Alt tap entered the loop once the window was activated. The
-  driver checks this before such a key (`docs/tools-reference.md`, `key`).
+  always is. A thread with no active window ignores Alt, F10 and Alt+M. Measured with `GetGUIThreadInfo`: a minimize
+  of the foreground AGE leaves its thread with none, and a restore with `SW_SHOWNOACTIVATE` does not give it one. The
+  window does not need the foreground: once activated inside AGE's thread, with another process in the foreground, a
+  driven Alt tap entered the loop (menu-mode flag `0x4`, menu owner AGE's window). The driver activates it that way
+  before such a key ("Driving native AGE", The foreground).
 - **Not driven.** Pointer moves during keyboard mode. The driver's posted `WM_MOUSEMOVE` does not move the selection,
   but Windows' menu loop follows the real cursor, so that run decides nothing.
 
@@ -1588,7 +1589,9 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   - **Memory.** `GlobalMemoryStatus`'s `dwTotalPhys` (at most 2 GiB − 1 for this 32-bit, non-large-address-aware
     AGE) / 2^20 + 1.
   - **VRAM.** IAGEService `+0x78` / 1,000,000. `+0x78` multiplies DxDiag's display memory in MB by 1,000,000 as a
-    32-bit int, so 4095 MB reads −199.
+    32-bit int, so 4095 MB reads −199. The first call in a process takes about 2.3 s (2283 ms, Frida-timed
+    2026-11-06; later opens 0 ms), so the first 設定 holds AGE's thread from about 1.2 s to 3.5 s after it opens.
+    A click in that window waits in the queue and acts afterwards.
 
   ｸﾘｯﾌﾟﾎﾞｰﾄﾞにｺﾋﾟｰ (`0x419`) copies `0x3ee`, `0x3f2`, `0x3ef`, `0x3f1`, `0x3f3` and `0x3f4` as CF_TEXT lines.
 - **OK** (`agerc_settings_apply`) writes through `AGE:reg` in this order:
@@ -5941,6 +5944,30 @@ A driver can therefore play AGE without touching the desktop's input:
 - replace those user32/winmm calls inside the process;
 - post the button and key messages for the latches;
 - capture the client area with `PrintWindow`.
+
+**The foreground** (measured 2026-11-06). AGE never calls `SetForegroundWindow`. It creates its main window visible and
+shows it, and its `WM_SYSCOMMAND` handler only adds to `SC_RESTORE`: it clears run-state `0x1000000` and resets the
+window menu (`GetSystemMenu(hwnd, TRUE)`), then calls `DefWindowProcA` (`age_main_window_proc`, `0x486b83`). Still,
+in every driven session it took the foreground at start, or with its first dialog once the start was kept in the
+background. These Windows rules explain it; the driver's agent applies them (`tools-reference.md`, "What the native
+hooks do inside AGE"):
+- **The permission.** A process started by one that may set the foreground may set it too. It keeps that permission
+  until it activates a window or the user clicks or types: a driven AGE kept it through 90 s of user idle time, and a
+  zero-distance mouse move did not cancel it. While a process has it, any window it activates becomes the foreground
+  window.
+- **Reading it without stealing.** `LockSetForegroundWindow(LSFW_LOCK)` succeeds only for a process with the
+  permission. A probe calls `LSFW_UNLOCK` right after.
+- **The lock keeps activations in-thread.** While AGE holds `LSFW_LOCK`, its activations stay inside its thread: a
+  dialog, or `SetActiveWindow` from a thread joined to AGE's input queue (`AttachThreadInput`). Such an activation
+  also spends the permission. Afterwards `LSFW_LOCK` fails, AGE's window is active in its thread, and the foreground
+  is unchanged.
+- **A restore can take the foreground without the permission.** Windows makes a restored minimized window the
+  foreground one when it is still the active window of its thread, even through `ShowWindow(SW_SHOWNOACTIVATE)` and
+  with the window disabled. Minimizing a window that is active in a background thread leaves it active (focus 0);
+  minimizing the foreground window leaves its thread with none. A restore from that inactive state does not take the
+  foreground.
+- **Deactivating.** `SetActiveWindow(NULL)` does not deactivate a window, called from a thread joined to AGE's queue.
+  Activating another window of the same thread does, even a hidden one.
 
 **Frame positions.** Each script frame's pc is a byte pointer into its code. In the innermost frame it is the resume
 point: at a text wait it is already past the wait (SC0000 page 3 waits at `0x8a6` and reads `0x8a9`). A caller frame

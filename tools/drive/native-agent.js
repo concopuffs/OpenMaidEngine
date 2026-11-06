@@ -9,6 +9,7 @@
 //           SetCursorPos      moves the driver's point, never the desktop cursor, and posts the WM_MOUSEMOVE
 //                             Windows would send for it
 //           MessageBoxA       answers boxes the profile's dialog policy names; shows and reports the rest
+//           window activation in a background session AGE never takes the foreground (keepInBackground)
 //   winmm   joy*              no joystick is connected
 //   shell32 SHGetFolderPathA  the folders in config.folders (keyed by CSIDL & 0xff) point into the sandbox
 //   AGE.EXE input polling     keeppolling() stops WM_ACTIVATE from closing the polling gate: windowed AGE ignores
@@ -48,6 +49,21 @@ function startsWith(bytes, prefix) {
     if (bytes.length < prefix.length) return false;
     for (let i = 0; i < prefix.length; i++) if (bytes[i] !== prefix[i]) return false;
     return true;
+}
+
+// Two CModule rules for the hooks below. A CModule exports a 32-bit stdcall function under its decorated name
+// (`replacement` as `_replacement@16`). Its own globals are read-only once linked, so a pointer JS fills in lives in
+// Memory.alloc storage that the C code declares extern.
+function cPointers(...names) {
+    const symbols = {};
+    for (const name of names) symbols[name] = Memory.alloc(Process.pointerSize);
+    return symbols;
+}
+
+function cFunction(module, name) {
+    const symbol = Object.keys(module).find(key => key === name || key === `_${name}` || key.startsWith(`_${name}@`));
+    if (symbol === undefined) throw new Error(`CModule has no ${name}`);
+    return module[symbol];
 }
 
 function hookUser32(module) {
@@ -108,6 +124,165 @@ function hookUser32(module) {
     }, 'int', ['int', 'int'], 'stdcall'));
 
     hookMessageBoxA(module.getExportByName('MessageBoxA'));
+    countButtonClicks(module);
+    if (config.background) keepInBackground(module);
+}
+
+// The driver presses a dialog's button by posting BM_CLICK, which AGE's thread takes only when it next dispatches a
+// posted message, as it would a user's click: the 設定 dialog's first VRAM query holds it for about 2 s. This counts
+// the BM_CLICKs AGE's thread takes, so the driver can wait for its press. A modal dialog's loop hands them to
+// IsDialogMessage, which dispatches them without the exported DispatchMessage; other loops call DispatchMessage. C,
+// since both carry every message.
+let clickCounter = null;      // keeps the CModule alive
+
+function countButtonClicks(module) {
+    const pointers = cPointers('click_count', 'click_window');
+    pointers.click_count.writeU32(0);
+    pointers.click_window.writePointer(NULL);
+    const counter = new CModule(`
+#include <gum/guminterceptor.h>
+
+typedef struct { void *window; unsigned int message; } message_head;
+extern volatile unsigned int click_count;
+extern void * volatile click_window;
+
+static void count(message_head *message)
+{
+    if (message != 0 && message->message == 0xf5) {                                  /* BM_CLICK */
+        click_window = message->window;
+        click_count++;
+    }
+}
+
+void on_dispatch(GumInvocationContext *context)                                        /* DispatchMessage(msg) */
+{
+    count(gum_invocation_context_get_nth_argument(context, 0));
+}
+
+void on_dialog_message(GumInvocationContext *context)                                  /* IsDialogMessage(dlg, msg) */
+{
+    count(gum_invocation_context_get_nth_argument(context, 1));
+}
+`, pointers);
+    for (const name of ['DispatchMessageA', 'DispatchMessageW'])
+        Interceptor.attach(module.getExportByName(name), { onEnter: cFunction(counter, 'on_dispatch') });
+    for (const name of ['IsDialogMessageA', 'IsDialogMessageW'])
+        Interceptor.attach(module.getExportByName(name), { onEnter: cFunction(counter, 'on_dialog_message') });
+    clickCounter = { counter, pointers };
+}
+
+function buttonClicks() {
+    if (clickCounter === null) return null;
+    return { count: clickCounter.pointers.click_count.readU32(),
+             window: clickCounter.pointers.click_window.readPointer().toUInt32() };
+}
+
+// A driven AGE must not take the user's foreground. AGE never asks for it: it creates its main window with WS_VISIBLE
+// and shows it, and Windows makes an activated window the foreground one when its process may set the foreground. A
+// process started by one that may set it gets that permission too, and keeps it until it activates a window or the
+// user clicks or types. Measured 2026-11-06 with LockSetForegroundWindow(LSFW_LOCK), which succeeds only with the
+// permission: a driven AGE kept it through 90 s of user idle time, took the foreground at start in three of three
+// sessions, and once that was stopped, its first dialog took it instead in four of four. In a background session:
+//   CreateWindowExA/W   a visible top-level window is created under LSFW_LOCK, which keeps its activation inside AGE's
+//                       thread and spends the permission; LSFW_UNLOCK follows. If the permission survives, the lock is
+//                       kept and retried every second until it is gone.
+//   DefWindowProcA      SC_MINIMIZE leaves the minimized window inactive in its thread, as a user's minimize of the
+//                       foreground window does: a hidden helper window on AGE's thread takes the activation. Windows
+//                       makes a restored window that is still active in its thread the foreground one even without the
+//                       permission. SC_RESTORE then restores with SW_SHOWNOACTIVATE.
+// AGE's main window is then active in its thread without being the foreground one, as for a native AGE the user has
+// switched away from, so Windows' keyboard menu works and nothing AGE does takes the foreground.
+const WS_CHILD = 0x40000000;
+const WS_VISIBLE = 0x10000000;
+const LSFW_LOCK = 1;
+const LSFW_UNLOCK = 2;
+let lockForeground = null;  // LockSetForegroundWindow
+let permission = 'unknown';  // 'none' if AGE never had it; 'held' while the lock outlives an activation; 'spent'
+let systemCommandHook = null;  // keeps the CModule alive
+
+// LSFW_LOCK succeeds only while AGE may set the foreground, so a fresh lock means the permission survives.
+function permissionSpent() {
+    lockForeground(LSFW_UNLOCK);
+    if (lockForeground(LSFW_LOCK)) return false;
+    permission = 'spent';
+    report('foreground', { permission });
+    return true;
+}
+
+function keepInBackground(module) {
+    lockForeground = new NativeFunction(module.getExportByName('LockSetForegroundWindow'), 'int', ['uint'], 'stdcall');
+
+    for (const name of ['CreateWindowExA', 'CreateWindowExW']) {
+        Interceptor.attach(module.getExportByName(name), {
+            onEnter(args) {
+                const style = args[3].toUInt32();
+                this.locked = false;
+                if (permission !== 'unknown' || (style & WS_CHILD) !== 0 || (style & WS_VISIBLE) === 0) return;
+                this.locked = lockForeground(LSFW_LOCK) !== 0;
+                if (!this.locked) {
+                    permission = 'none';
+                    report('foreground', { permission });
+                }
+            },
+            onLeave() {
+                if (!this.locked || permissionSpent()) return;
+                permission = 'held';
+                report('foreground', { permission });
+                const timer = setInterval(() => { if (permissionSpent()) clearInterval(timer); }, 1000);
+            },
+        });
+    }
+
+    // Windows' own minimize and restore run inside DefWindowProc, in the kernel, so DefWindowProcA is wrapped before
+    // they get there. AGE's window procedure has already seen the command (it clears run-state 0x1000000 on SC_RESTORE). C, not
+    // JS, since DefWindowProc carries every message and runs Windows' modal loops.
+    const pointers = cPointers('original', 'is_iconic', 'show_window', 'create_window', 'get_active', 'set_active',
+        'helper');
+    const commands = new CModule(`
+typedef long (__attribute__((stdcall)) *defproc_fn)(void *, unsigned int, unsigned int, long);
+typedef int (__attribute__((stdcall)) *iconic_fn)(void *);
+typedef int (__attribute__((stdcall)) *show_fn)(void *, int);
+typedef void *(__attribute__((stdcall)) *create_fn)(unsigned long, const char *, const char *, unsigned long, int, int,
+                                                    int, int, void *, void *, void *, void *);
+typedef void *(__attribute__((stdcall)) *active_fn)(void);
+typedef void *(__attribute__((stdcall)) *set_active_fn)(void *);
+extern defproc_fn original;
+extern iconic_fn is_iconic;
+extern show_fn show_window;
+extern create_fn create_window;
+extern active_fn get_active;
+extern set_active_fn set_active;
+extern void *helper;
+
+long __attribute__((stdcall)) replacement(void *window, unsigned int message, unsigned int wparam, long lparam)
+{
+    unsigned int command = wparam & 0xfff0;
+    if (message == 0x112 && command == 0xf020) {                                      /* WM_SYSCOMMAND SC_MINIMIZE */
+        long result = original(window, message, wparam, lparam);
+        if (is_iconic(window) && get_active() == window) {
+            if (helper == 0)                                   /* hidden WS_POPUP, WS_EX_TOOLWINDOW, on AGE's thread */
+                helper = create_window(0x80, "STATIC", "", 0x80000000, 0, 0, 0, 0, 0, 0, 0, 0);
+            if (helper != 0)
+                set_active(helper);
+        }
+        return result;
+    }
+    if (message == 0x112 && command == 0xf120 && is_iconic(window)) {                /* WM_SYSCOMMAND SC_RESTORE */
+        show_window(window, 4);                                                     /* SW_SHOWNOACTIVATE */
+        return 0;
+    }
+    return original(window, message, wparam, lparam);
+}
+`, pointers);
+    pointers.is_iconic.writePointer(module.getExportByName('IsIconic'));
+    pointers.show_window.writePointer(module.getExportByName('ShowWindow'));
+    pointers.create_window.writePointer(module.getExportByName('CreateWindowExA'));
+    pointers.get_active.writePointer(module.getExportByName('GetActiveWindow'));
+    pointers.set_active.writePointer(module.getExportByName('SetActiveWindow'));
+    pointers.helper.writePointer(NULL);
+    pointers.original.writePointer(Interceptor.replaceFast(module.getExportByName('DefWindowProcA'),
+        cFunction(commands, 'replacement')));
+    systemCommandHook = { commands, pointers };
 }
 
 // MessageBoxA's replacement is C, not a JS NativeCallback: a shown box runs its modal loop inside the call, and
@@ -130,11 +305,12 @@ function hookMessageBoxA(messageBoxA) {
     const closed = new NativeCallback((text, result) => {
         report('dialog-closed', { text: hex(cstring(text, 4096)), result });
     }, 'void', ['pointer', 'int']);
+    const pointers = cPointers('original');
     const module = new CModule(`
 typedef int (__attribute__((stdcall)) *box_fn)(void *, const char *, const char *, unsigned int);
 extern int dialog_lookup(const char *text, const char *caption, unsigned int style);
 extern void dialog_closed(const char *text, int result);
-box_fn original;
+extern box_fn original;
 
 int __attribute__((stdcall)) replacement(void *owner, const char *text, const char *caption, unsigned int style)
 {
@@ -145,9 +321,9 @@ int __attribute__((stdcall)) replacement(void *owner, const char *text, const ch
     dialog_closed(text, result);
     return result;
 }
-`, { dialog_lookup: lookup, dialog_closed: closed });
-    module.original.writePointer(Interceptor.replaceFast(messageBoxA, module.replacement));
-    messageBoxHook = { module, lookup, closed };
+`, Object.assign({ dialog_lookup: lookup, dialog_closed: closed }, pointers));
+    pointers.original.writePointer(Interceptor.replaceFast(messageBoxA, cFunction(module, 'replacement')));
+    messageBoxHook = { module, lookup, closed, pointers };
 }
 
 function hookWinmm(module) {
@@ -228,6 +404,30 @@ function keepPolling() {
     return pollingKept.count;
 }
 
+// Windows' keyboard menu starts only in the active window of AGE's thread. This joins that thread's input queue from
+// inside AGE's process and activates the window there. In a background session it runs under LSFW_LOCK, so the
+// activation stays inside AGE's thread even if AGE could still set the foreground.
+function activateInThread(window) {
+    const user32 = Process.getModuleByName('user32.dll');
+    const call = (name, ret, args) => new NativeFunction(user32.getExportByName(name), ret, args, 'stdcall');
+    const thread = call('GetWindowThreadProcessId', 'uint', ['pointer', 'pointer'])(window, NULL);
+    const own = new NativeFunction(Process.getModuleByName('kernel32.dll').getExportByName('GetCurrentThreadId'),
+        'uint', [], 'stdcall')();
+    const attach = call('AttachThreadInput', 'int', ['uint', 'uint', 'int']);
+    const locked = lockForeground !== null && lockForeground(LSFW_LOCK) !== 0;
+    try {
+        if (!thread || !attach(own, thread, 1)) return false;
+        try {
+            call('SetActiveWindow', 'pointer', ['pointer'])(window);
+        } finally {
+            attach(own, thread, 0);
+        }
+        return true;
+    } finally {
+        if (locked && permission !== 'held') lockForeground(LSFW_UNLOCK);
+    }
+}
+
 function frameState() {
     const engine = config.engine;
     const ctx = ptr(engine.ctx_global).readPointer();
@@ -258,6 +458,12 @@ rpc.exports = {
     },
     setwindow(value) {
         hwnd = ptr(value);
+    },
+    activate(value) {
+        return activateInThread(ptr(value));
+    },
+    clicks() {
+        return buttonClicks();
     },
     keeppolling() {
         return keepPolling();
