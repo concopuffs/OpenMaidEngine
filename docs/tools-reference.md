@@ -900,6 +900,11 @@ Space at the text wait. Retail never runs HIDEWIN.BIN, so both targets wait in t
 - The `esk-*` shots match between targets apart from glyph edges and the wait indicator's phase (`engine-re.md`,
   "Effect skipping and the input latch").
 
+`himegari-effect-waits.steps` times SC0000's page 13→14 transition: four op-`0x21c` effect waits (150, 890, 150 and
+300 ms on native's clock), then page 14's text. Half a second after the click the frames must still be in the waits
+(`SC0000@0x123df`). Page 14's text wait (`SC0000@0xe0f`) must follow within 1.6 s. From the click step, native
+reaches it in 1.81 s and the port in 1.83 s (`engine-re.md`, "Service waits end on the engine clock").
+
 `himegari-menu-bar.steps` chooses the menu bar's ﾒｯｾｰｼﾞ items and ｹﾞｰﾑ > 終了 on SC0000. It saves on page 1, reads
 six pages and loads. Then:
 - 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ fast-forwards to `SC0000@0xa18` with the control strip's read-skip cell ON.

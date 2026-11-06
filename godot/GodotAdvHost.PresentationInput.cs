@@ -591,9 +591,11 @@ public sealed partial class GodotAdvHost
     public void WaitForForegroundTransition(GfxState gfx)
     {
         _foregroundTransitionWaitBypassed = false;
-        int started = gfx.StartForegroundTransitions(_clock.NowMs);
+        long startedAtMs = _clock.NowMs;
+        int started = gfx.StartForegroundTransitions(startedAtMs);
+        gfx.SeedOneShotChannels(startedAtMs);   // native renders on the service's first tick
         bool hasActivePresentation =
-            gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation();
+            gfx.HasActiveTimedPresentation(startedAtMs) || HasActiveMoviePresentation();
         if (hasActivePresentation)
         {
             _foregroundGfx = gfx;
@@ -615,6 +617,11 @@ public sealed partial class GodotAdvHost
                    && (gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation())
                    && !_stopping)
             {
+                // Native's run-state-0x400 service polls every tick (Sleep(0)), so the wait ends within a
+                // millisecond of its effect. On the real-time clock this wait polls as often; a frame-stepped
+                // clock moves only with frames.
+                _frameSignal.WaitOne(_clock.IsRealTime ? 1 : 50);
+                if (_timeline == null) continue;
                 var active = gfx.SnapshotForegroundTransitions(_clock.NowMs);
                 var directional = gfx.SnapshotDirectionalBlurRangeTransitions(_clock.NowMs);
                 var radial = gfx.SnapshotRadialBlurRangeTransitions(_clock.NowMs);
@@ -628,13 +635,12 @@ public sealed partial class GodotAdvHost
                 if (bucket != lastBucket)
                 {
                     lastBucket = bucket;
-                    _timeline?.State("transition-progress", new()
+                    _timeline.State("transition-progress", new()
                     {
                         ["progress"] = progress,
                         ["forced"] = forced,
                     });
                 }
-                _frameSignal.WaitOne(50);
             }
             // Publish the natural terminal sample or the forced service-resume sample once before the
             // following script burst mutates/releases its retained inputs.
@@ -672,8 +678,10 @@ public sealed partial class GodotAdvHost
             // It does not clear first; backbuffer clearing is the separate explicit opcode 0x20e.
             _backbufferPublicationPreservesExistingPixels = true;
         }
-        int started = gfx.StartForegroundTransitions(_clock.NowMs);
-        int completed = gfx.CompleteForegroundTransitions(_clock.NowMs);
+        long nowMs = _clock.NowMs;
+        int started = gfx.StartForegroundTransitions(nowMs);
+        gfx.SeedOneShotChannels(nowMs);   // gfx_render_frame samples, so seeds, every visible channel
+        int completed = gfx.CompleteForegroundTransitions(nowMs);
         if (started > 0 || completed > 0)
             _timeline?.State("transition-skip-complete", new()
             {
@@ -815,7 +823,7 @@ public sealed partial class GodotAdvHost
                     complete = _screenTransition == null || _screenTransition.Forced
                         || _clock.NowMs - start >= duration;
                 if (complete) break;
-                _frameSignal.WaitOne(50);
+                _frameSignal.WaitOne(_clock.RealMillisecondsUntil(start + duration, 50));
             }
             // Publish the exact target endpoint before the following surface releases/root reload.
             lock (_screenTransitionLock)
@@ -1072,7 +1080,7 @@ public sealed partial class GodotAdvHost
                 if (_stopping) break;
                 // Native: once ADV fast-forward starts, the main loop dispatches ops ahead of the armed sleep timer.
                 if (_messageSkipActive) break;
-                _frameSignal.WaitOne(50);
+                _frameSignal.WaitOne(_clock.RealMillisecondsUntil(deadline, 50));
             }
         }
         finally
@@ -1092,7 +1100,7 @@ public sealed partial class GodotAdvHost
         // Keep the script-side presentation barrier held. Native run-state 0x40 advances the timer
         // and message pump but suppresses ordinary retained rendering until the callback's explicit 0x222.
         while (_clock.NowMs < deadline && !_stopping)
-            _frameSignal.WaitOne(50);
+            _frameSignal.WaitOne(_clock.RealMillisecondsUntil(deadline, 50));
         _timeline?.State("running", new() { ["timed_callback_due"] = true });
     }
 

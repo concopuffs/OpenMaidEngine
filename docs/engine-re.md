@@ -5364,6 +5364,69 @@ setting in 設定's その他 page. The port matches every step. Its shots match
   `IMovieHost.CancelNextModalMovie`.
 - Tests: `InputLatchTests` (synthesized).
 
+### Service waits end on the engine clock (2026-11-05)
+
+**Native.** Run-state `0x400`, the effect wait that op `0x21c` enters, is serviced at `0x4123d1` in
+`engine_main_tick_with_exception_policy@0x411840`. Each tick does the following:
+
+1. It samples `timeGetTime` into the retained-gfx frame time `+0xb550`.
+2. It renders when the scene is dirty.
+3. It calls `gfx_animation_service_poll@0x407640` on the manager at `ctx+0x46614`. The poll returns 1 while op
+   `0x238`'s anim-clock window runs (start `+0xb564`, duration `+0xb568`; the force at `+0xb55c` ends it). After
+   that it returns `+0xb560`, which records whether the last render found an effect still running:
+   - the channel setters (color `0x47ea8a`, scale `0x47eb5f`, rotation `0x47eca0`, translation `0x47ed7f`, source
+     rect `0x47ee4d`, the movie mask and the range transform) set it to 1;
+   - `gfx_object_apply_transform_channels@0x473d80` and the surface-command composite set it during a render while
+     something still runs;
+   - `gfx_render_frame@0x4820b0` clears it first.
+4. When the poll returns 0 and no movie surface is playing, it clears `0x400`. The movie flag is `[ebp-0x24]`, set at
+   `0x411b4f` when `surface_movie_is_playing@0x405150` holds for any surface in `ctx+0x52bd4`. Otherwise it runs the
+   `EffectSkipOnClick` check ("Effect skipping and the input latch").
+5. Either way it calls `Sleep(0)`.
+
+A tick takes about 0.17 ms here (5457 polls in an 890 ms wait), so the wait ends on the first tick after its last
+effect ends.
+
+**Measured (Frida, 2026-11-05).** The click that ends SC0000's page 13 runs `label_1235a` four times. Each run ends in
+op `0x21c` at `0x123de`.
+
+| Measurement | Native |
+|---|---|
+| The four waits, on frame time `+0xb550` | 150, 890, 150 and 300 ms |
+| Gaps between the waits | 4, 0 and 8 ms |
+| Click to page 14's show-text (`0xe04`) | 1505 ms |
+| Show-text to end-text-line and op `0x72` | 157 ms more |
+
+The reveal (about 0.3 s at the default `MessageSpeed`) finishes inside op `0x72`'s wait (`docs/backlog.md`).
+
+**Port.** Each wait used to lose about three frames, because of three behaviours:
+
+- `FrameClock` moved only in `Main._Process`, one step per rendered frame.
+- The waits woke on the frame signal.
+- A one-shot channel was seeded only by the next frame's snapshot.
+
+At 100 Hz the four waits took about 170, 910, 160 and 320 ms, and the reveal began 1620 ms after the click. Now:
+
+- `FrameClock.StartRealTime` (the Godot host's clock) reads the high-resolution timer on every `NowMs`, scaled by
+  `Speed` and monotonic. `Advance` does nothing on it. Tests keep the frame-stepped `new FrameClock()`.
+- `WaitForForegroundTransition` (op `0x21c`) seeds the one-shot channels at its start
+  (`GfxState.SeedOneShotChannels`), as native's first tick renders them. It then polls every millisecond.
+  `HasActiveTimedPresentation` counts a seeded channel as finished once the clock passes its end; the next render
+  commits it.
+- These waits wake at their deadline (`FrameClock.RealMillisecondsUntil`) instead of at the next frame:
+  - script sleeps;
+  - the timed-callback deadline;
+  - BGM fades;
+  - legacy screen transitions.
+
+The port's four waits now end 150, 890, 150 and 300 ms after they start. Each still holds the VM for one synchronized
+presentation at its end (one frame, 8–10 ms at 100 Hz), so that the final sample is shown before the next burst
+changes it. Native's tick has already rendered that sample before its poll.
+
+`tools/drive/scenarios/himegari-effect-waits.steps` times the sequence through the driver, from the click step to
+page 14's text wait. Native takes 1.81 s and the port 1.83 s. Tests: `FrameClockTests`,
+`GfxAnimationTests.SeedOneShotChannels_StampsArmedVisibleChannelsOnce`.
+
 ### Driving native AGE (2026-11-01)
 
 These were found while driving native AGE from a script for gate 7 and for the game driver, and they are built into

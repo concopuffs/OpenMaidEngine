@@ -27,6 +27,73 @@ public class FrameClockTests
         Assert.Equal(6, c.NowMs);
     }
 
+    // ---- Real-time mode: the Godot host's clock, read between frames as native reads timeGetTime. ----
+
+    [Fact]
+    public void RealTime_AdvancesWithoutFrames()
+    {
+        var c = FrameClock.StartRealTime();
+        Assert.True(c.IsRealTime);
+        System.Threading.Thread.Sleep(30);
+        Assert.InRange(c.NowMs, 20, 5_000);
+    }
+
+    [Fact]
+    public void RealTime_IgnoresAdvance()
+    {
+        var c = FrameClock.StartRealTime();
+        long before = c.NowMs;
+        c.Advance(10.0);                         // ten seconds of frames would be 10 000 ms
+        Assert.InRange(c.NowMs - before, 0, 1_000);
+    }
+
+    [Fact]
+    public void RealTime_SpeedChangeKeepsTheTimeContinuous()
+    {
+        var c = FrameClock.StartRealTime();
+        System.Threading.Thread.Sleep(20);
+        long before = c.NowMs;
+        c.Speed = 8.0;
+        long after = c.NowMs;
+        Assert.InRange(after - before, 0, 100); // no jump: the anchor is rebased, not rescaled
+        System.Threading.Thread.Sleep(20);
+        Assert.InRange(c.NowMs - after, 100, 40_000); // 20 real ms at 8x
+    }
+
+    [Fact]
+    public void RealTime_NeverGoesBackwards()
+    {
+        var c = FrameClock.StartRealTime();
+        long previous = c.NowMs;
+        for (int i = 0; i < 10_000; i++)
+        {
+            if (i == 5_000) c.Speed = 0.05;
+            long now = c.NowMs;
+            Assert.True(now >= previous);
+            previous = now;
+        }
+    }
+
+    [Fact]
+    public void RealMillisecondsUntil_FrameSteppedWaitsForFrames()
+    {
+        var c = new FrameClock();
+        c.Advance(0.100);
+        Assert.Equal(0, c.RealMillisecondsUntil(100, 50));
+        Assert.Equal(50, c.RealMillisecondsUntil(101, 50));   // only a frame moves it
+    }
+
+    [Fact]
+    public void RealMillisecondsUntil_RealTimeWakesAtTheDeadline()
+    {
+        var c = FrameClock.StartRealTime();
+        long now = c.NowMs;
+        Assert.Equal(0, c.RealMillisecondsUntil(now - 1, 50));
+        Assert.Equal(50, c.RealMillisecondsUntil(now + 10_000, 50));
+        c.Speed = 4.0;
+        Assert.InRange(c.RealMillisecondsUntil(c.NowMs + 40, 50), 1, 10);   // 40 virtual ms = 10 real
+    }
+
     [Fact]
     public void WallClockPacer_RateDoesNotDependOnRenderCallbackCount()
     {

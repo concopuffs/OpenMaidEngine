@@ -35,7 +35,8 @@ public partial class Main : Godot.Control
     private GodotAdvHost _host = null!;
     private IDisposable? _glyphRasterizerOwner;
     private Sys4ScriptProvider? _scripts;
-    private readonly Age.Engine.Hosting.FrameClock _clock = new();
+    // Real time, as native's tick reads timeGetTime: a service wait ends with its effect, not at the next frame.
+    private readonly Age.Engine.Hosting.FrameClock _clock = Age.Engine.Hosting.FrameClock.StartRealTime();
     private GodotTraceSink _trace = null!;
 
     private void ReportAssetResolutionWarning(string message)
@@ -608,7 +609,6 @@ public partial class Main : Godot.Control
                     : "FPS --";
             }
         }
-        _clock.Advance(delta);
         _timelineFrame++;
         _timeline?.SetFrame(_timelineFrame, _clock.NowMs);
         var perf = _perf;

@@ -26,6 +26,32 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void SeedOneShotChannels_StampsArmedVisibleChannelsOnce()
+    {
+        // A service wait (op 0x21c) seeds the channels at its start, as native's first tick renders them;
+        // the wait then ends when they end, not a frame later.
+        var g = new GfxState();
+        g.BindDraw(0x1000, 1, 0, 0, 1, 1, 0, 0);
+        g.BindDraw(0x1001, 1, 0, 0, 1, 1, 0, 0);
+        g.BindDraw(0x1002, 1, 0, 0, 1, 1, 0, 0);
+        g.SetScaleChannel(0x1000, delayMs: 0, durationMs: 300, percent: (200, 200, 100));
+        g.SetTranslationChannel(0x1001, delayMs: 0, durationMs: 300, target: (10, 0, 0));
+        g.SetRangeTransform(0x1000, 1, (0, 0, 0));
+        g.SetRangeScaleChannel(0, 300, (50, 50, 100));
+        g.TryGet(0x1001)!.Visible = false;       // hidden objects are not rendered, so not seeded
+
+        Assert.Equal(2, g.SeedOneShotChannels(500));   // 0x1000 and the range transform
+        Assert.Equal(500, g.TryGet(0x1000)!.OneShotStartMs);
+        Assert.Equal(-1, g.TryGet(0x1001)!.OneShotStartMs);
+        Assert.Equal(-1, g.TryGet(0x1002)!.OneShotStartMs);   // nothing armed
+        Assert.True(g.HasActiveTimedPresentation(799));
+        Assert.False(g.HasActiveTimedPresentation(800));
+
+        Assert.Equal(0, g.SeedOneShotChannels(600));   // already running: the stamp stays
+        Assert.Equal(500, g.TryGet(0x1000)!.OneShotStartMs);
+    }
+
+    [Fact]
     public void CallerOwnedVisibleSnapshot_ReusesStorageAndPreservesHandleOrder()
     {
         var g = new GfxState();

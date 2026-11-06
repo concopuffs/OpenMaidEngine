@@ -1,0 +1,31 @@
+# How long SC0000's page 13->14 transition takes. The click runs label_1235a four times, each ending in an op-0x21c
+# effect wait (run-state 0x400): native's own clock times them at 150, 890, 150 and 300 ms, and page 14's show-text
+# runs about 1.5 s after the click. The checks are coarse, for the driver's own latency: the effects still run half a
+# second after the click, and page 14's text wait is reached within about 2.3 s of it. Native reaches that wait
+# about 1.66 s after the click and finishes the reveal inside it; the port reveals first, about 1.85 s (docs/backlog.md).
+#
+# Setting system:EffectSkipOnClick 0, a new profile's default, so nothing skips the effects.
+#
+# Run on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-effect-waits.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=60  # page 1
+settle timeout=20
+advance 12
+settle timeout=20
+expect top=SC0000@0xc04                 # page 13
+move 400 300
+wait 1
+
+click adv.next hold=20                  # page 13 -> 14
+wait 0.5
+expect top=SC0000@0x123df               # still in the effect waits (the second, 890 ms)
+wait-state top=SC0000@0xe0f timeout=1.6 # page 14's text wait (op 0x72 at 0xe0c)
+shot effect-waits-page14

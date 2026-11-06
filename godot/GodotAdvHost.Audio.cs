@@ -224,7 +224,8 @@ public sealed partial class GodotAdvHost
             // Publish scene changes accumulated before the fade (notably GAMESTART -> SC0000's black
             // frame), then leave presentation ownership with the compositor for the timed wait.
             RequestSynchronizedPresentation();
-            while (_clock.NowMs < deadline && !_stopping) _frameSignal.WaitOne(50);
+            while (_clock.NowMs < deadline && !_stopping)
+                _frameSignal.WaitOne(_clock.RealMillisecondsUntil(deadline, 50));
         }
         finally
         {

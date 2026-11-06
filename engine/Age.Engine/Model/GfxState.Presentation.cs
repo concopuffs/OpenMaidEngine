@@ -225,6 +225,37 @@ public sealed partial class GfxState
         }
     }
 
+    /// <summary>Stamp the one-shot channels that no frame has sampled yet. Native seeds a channel's start from the
+    /// frame time of its first sample (gfx_object_anim_interpolate@0x473ed0). Op 0x21c's service renders on its first
+    /// tick and op 0x20c renders at once, so a channel starts with them. The compositor samples only at its next
+    /// frame, so the host stamps them when the op runs. Visible objects only: gfx_render_frame samples only
+    /// those.</summary>
+    public int SeedOneShotChannels(long nowMs)
+    {
+        lock (_lock)
+        {
+            int seeded = 0;
+            if (_rangeTransformCount > 0)
+            {
+                var r = _rangeTransform;
+                if ((r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled) && r.OneShotStartMs < 0)
+                {
+                    r.OneShotStartMs = nowMs;
+                    seeded++;
+                }
+            }
+            foreach (var o in _objects.Values)
+            {
+                if (!o.Visible || o.OneShotStartMs >= 0) continue;
+                if (!(o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled
+                      || o.SrcOneShotEnabled)) continue;
+                o.OneShotStartMs = nowMs;
+                seeded++;
+            }
+            return seeded;
+        }
+    }
+
     public bool HasActiveForegroundTransitions(long nowMs)
     {
         lock (_lock)
@@ -236,7 +267,11 @@ public sealed partial class GfxState
     }
 
     /// <summary>Native op 0x21c keeps presenting until both queued surface commands and finite one-shot
-    /// object channels have completed. Ambient cyclic/spritesheet/color pulses are deliberately excluded.</summary>
+    /// object channels have completed. Ambient cyclic/spritesheet/color pulses are deliberately excluded.
+    /// <para>A channel's enable bit clears when a render samples it past its end. Native's run-state-0x400
+    /// service renders every tick, so its wait ends on the tick its last channel does. The port renders once a
+    /// frame, so a seeded channel counts as finished once <paramref name="nowMs"/> passes its end, and the next
+    /// render commits it (docs/engine-re.md, "Service waits end on the engine clock").</para></summary>
     public bool HasActiveTimedPresentation(long nowMs)
     {
         lock (_lock)
@@ -245,11 +280,25 @@ public sealed partial class GfxState
                    _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
                    _movieMaskTransitions.Values.Any(t => !t.Completed) ||
-                   _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
-                   _rangeTransform.TranslationEnabled ||
+                   HasRunningChannels(_rangeTransform, nowMs) ||
                    _objects.Values.Any(o => o.Visible &&
                                             (o.OneShotAnimationControlFlags & 1) == 0 &&
-                                            HasBlockingChannels(o));
+                                            HasRunningChannels(o, nowMs));
+    }
+
+    /// <summary>Whether a finite one-shot channel is still running at <paramref name="nowMs"/>: enabled and either
+    /// not yet seeded by a render or short of its end, as the samplers judge it.</summary>
+    private static bool HasRunningChannels(GfxObject o, long nowMs)
+    {
+        long start = o.OneShotStartMs;
+        return Running(o.OneShotColorEnabled, o.ColorDelayMs, o.ColorDurationMs)
+               || Running(o.ScaleEnabled, o.ScaleDelayMs, o.ScaleDurationMs)
+               || Running(o.RotationChannelEnabled, o.RotationDelayMs, o.RotationDurationMs)
+               || Running(o.TranslationEnabled, o.TranslationDelayMs, o.TranslationDurationMs)
+               || Running(o.SrcOneShotEnabled, o.SrcDelayMs, o.SrcDurationMs);
+
+        bool Running(bool enabled, long delayMs, long durationMs)
+            => enabled && (start < 0 || (durationMs > 0 && nowMs - start - delayMs < durationMs));
     }
 
     /// <summary>Observe-only state for a runtime stall capture. It identifies the exact finite channels
