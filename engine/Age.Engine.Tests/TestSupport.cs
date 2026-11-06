@@ -402,3 +402,38 @@ internal sealed class RecordingTraceSink : ITraceSink
     public List<long> CallScriptIds =>
         Events.Where(e => e.Kind == TraceEventKind.CallScript).Select(e => e.Id).ToList();
 }
+
+/// <summary>Runs a VM on its own background thread for tests that hand off with it while it waits in a host call.
+/// The test drives the handshake with blocking waits on its own thread, never an await: an await resumes on xUnit's
+/// worker pool, which long synchronous tests can hold for minutes, and the VM's side of the handshake would time
+/// out meanwhile. Every timeout here is <see cref="HangGuard"/>, which only turns a hang into a failure.</summary>
+internal sealed class VmRunThread
+{
+    public static readonly TimeSpan HangGuard = TimeSpan.FromSeconds(30);
+
+    private readonly Thread _thread;
+    private System.Runtime.ExceptionServices.ExceptionDispatchInfo? _error;
+
+    public VmRunThread(Age.Engine.Vm.VirtualMachine vm)
+    {
+        _thread = new Thread(() =>
+        {
+            try { vm.Run(); }
+            catch (Exception error) { _error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error); }
+        }) { IsBackground = true, Name = "test VM" };
+        _thread.Start();
+    }
+
+    /// <summary>Wait for a signal the VM thread gives from inside a host call.</summary>
+    public static void AwaitSignal(ManualResetEventSlim signal, string what)
+    {
+        if (!signal.Wait(HangGuard)) throw new TimeoutException($"the VM never {what}");
+    }
+
+    /// <summary>Wait for the run to end, and rethrow whatever ended it abnormally.</summary>
+    public void Join()
+    {
+        if (!_thread.Join(HangGuard)) throw new TimeoutException("the VM run did not end");
+        _error?.Throw();
+    }
+}

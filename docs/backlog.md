@@ -153,14 +153,6 @@ it; git history keeps the record.
 
 ## Platform and project
 
-- **Intermittent debug-return test.** `DebugSceneLaunchTests.PollingTitleReturnsAtOpcodeBoundaryWithoutAdvInputWait`
-  failed once in a full `dotnet test` run on 2026-11-03 and passed alone and on the full rerun (1015/1015). It
-  waits on cross-thread handshakes with 5 s timeouts, which a loaded test host can miss. Done when the failure is
-  reproduced and its cause fixed, or the handshake no longer depends on wall-clock time.
-- **Intermittent root-reload test.** `RootReloadRequestTests.RequestRootReloadInterruptsAWaitAndReloadsRootWithoutTheInitialFlag`
-  failed once in a full Release `dotnet test` run on 2026-11-04 ("sleep was not interrupted", its host's
-  wall-clock timeout) and passed alone and on the full rerun (1038/1038). Done when its interrupt handshake no
-  longer depends on wall-clock time.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").

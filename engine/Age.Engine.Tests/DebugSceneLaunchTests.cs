@@ -64,7 +64,7 @@ public class DebugSceneLaunchTests
     }
 
     [Fact]
-    public async Task ParkedTitleFrameReturnsToCoordinatorWhichDispatchesSelectedScript()
+    public void ParkedTitleFrameReturnsToCoordinatorWhichDispatchesSelectedScript()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var root = ScriptAssembler.Assemble(table, "SYSTEM4.BIN", new List<(int, Operand[])>
@@ -88,8 +88,8 @@ public class DebugSceneLaunchTests
         }), sink: trace);
 
         Assert.False(vm.TryRequestDebugFrameReturn(0, new Dictionary<int, long>()));
-        Task run = Task.Run(() => vm.Run());
-        await host.WaitEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var run = new VmRunThread(vm);
+        VmRunThread.AwaitSignal(host.WaitEntered, "entered the input wait");
 
         var parked = Assert.IsType<DebugFrameSnapshot>(vm.DebugFrame);
         Assert.Equal("TITLE.BIN", parked.CurrentScript);
@@ -103,7 +103,7 @@ public class DebugSceneLaunchTests
         }));
         Assert.False(vm.TryRequestDebugFrameReturn(parked.FrameId, new Dictionary<int, long>()));
         host.SignalInput();
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        run.Join();
 
         Assert.Equal(0, vm.Globals.GetValueOrDefault(0x7100));
         Assert.Equal(1, vm.Globals[0x7101]);
@@ -116,7 +116,7 @@ public class DebugSceneLaunchTests
     }
 
     [Fact]
-    public async Task SelectedScriptExitScriptStillPerformsWholeStackRootReload()
+    public void SelectedScriptExitScriptStillPerformsWholeStackRootReload()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var initialRoot = ScriptAssembler.Assemble(table, "SYSTEM4.BIN", new List<(int, Operand[])>
@@ -144,13 +144,13 @@ public class DebugSceneLaunchTests
             [2] = selected,
         }), sink: trace);
 
-        Task run = Task.Run(() => vm.Run());
-        await host.WaitEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var run = new VmRunThread(vm);
+        VmRunThread.AwaitSignal(host.WaitEntered, "entered the input wait");
         var frame = Assert.IsType<DebugFrameSnapshot>(vm.DebugFrame);
         Assert.True(vm.TryRequestDebugFrameReturn(frame.FrameId,
             new Dictionary<int, long> { [0x699] = 2 }));
         host.SignalInput();
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        run.Join();
 
         Assert.Equal(0, vm.Globals.GetValueOrDefault(0x7200));
         Assert.Equal(1, vm.Globals[0x7201]);
@@ -160,7 +160,7 @@ public class DebugSceneLaunchTests
     }
 
     [Fact]
-    public async Task PollingTitleReturnsAtOpcodeBoundaryWithoutAdvInputWait()
+    public void PollingTitleReturnsAtOpcodeBoundaryWithoutAdvInputWait()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var root = ScriptAssembler.Assemble(table, "SYSTEM4.BIN", new List<(int, Operand[])>
@@ -182,14 +182,14 @@ public class DebugSceneLaunchTests
             [2] = selected,
         }));
 
-        Task run = Task.Run(() => vm.Run());
-        await host.SleepEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var run = new VmRunThread(vm);
+        VmRunThread.AwaitSignal(host.SleepEntered, "entered the sleep");
         var frame = Assert.IsType<DebugFrameSnapshot>(vm.DebugFrame);
         Assert.Equal(new[] { "SYSTEM4.BIN", "TITLE.BIN" }, frame.CallStack);
         Assert.True(vm.TryRequestDebugFrameReturn(frame.FrameId,
             new Dictionary<int, long> { [0x699] = 2 }));
         host.CompleteSleep();
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        run.Join();
 
         Assert.Equal(0, vm.Globals.GetValueOrDefault(0x7300));
         Assert.Equal(1, vm.Globals[0x7301]);
@@ -199,15 +199,14 @@ public class DebugSceneLaunchTests
     private sealed class BlockingWaitHost : RecordingHost
     {
         private readonly SemaphoreSlim _gate = new(0, 1);
-        public TaskCompletionSource WaitEntered { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim WaitEntered { get; } = new(false);
 
         public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
                                           Func<AdvAutoWaitState> autoWaitState)
         {
             Waits++;
-            WaitEntered.TrySetResult();
-            if (!_gate.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("test input wait timed out");
+            WaitEntered.Set();
+            if (!_gate.Wait(VmRunThread.HangGuard)) throw new TimeoutException("the test never released the input wait");
         }
 
         public void SignalInput() => _gate.Release();
@@ -216,14 +215,13 @@ public class DebugSceneLaunchTests
     private sealed class BlockingSleepHost : RecordingHost
     {
         private readonly SemaphoreSlim _gate = new(0, 1);
-        public TaskCompletionSource SleepEntered { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim SleepEntered { get; } = new(false);
 
         public override void Sleep(long duration)
         {
             SleptDurations.Add(duration);
-            SleepEntered.TrySetResult();
-            if (!_gate.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("test sleep timed out");
+            SleepEntered.Set();
+            if (!_gate.Wait(VmRunThread.HangGuard)) throw new TimeoutException("the test never released the sleep");
         }
 
         public void CompleteSleep() => _gate.Release();

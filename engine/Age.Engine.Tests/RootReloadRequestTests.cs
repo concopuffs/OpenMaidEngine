@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using System.Threading.Tasks;
 using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Engine.Vm;
@@ -17,7 +16,7 @@ public class RootReloadRequestTests
     private sealed class InterruptibleSleepHost : RecordingHost
     {
         private readonly ManualResetEventSlim _interrupted = new(false);
-        public TaskCompletionSource FirstSleepEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim FirstSleepEntered { get; } = new(false);
         public VirtualMachine? Vm;
         public long AfterWaitSeenBySecondRun = -1;
 
@@ -26,8 +25,8 @@ public class RootReloadRequestTests
             SleptDurations.Add(duration);
             if (SleptDurations.Count == 1)
             {
-                FirstSleepEntered.TrySetResult();
-                if (!_interrupted.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException("sleep was not interrupted");
+                FirstSleepEntered.Set();
+                if (!_interrupted.Wait(VmRunThread.HangGuard)) throw new TimeoutException("sleep was not interrupted");
                 return;
             }
             AfterWaitSeenBySecondRun = Vm!.Globals.GetValueOrDefault(AfterWait);
@@ -41,7 +40,7 @@ public class RootReloadRequestTests
     }
 
     [Fact]
-    public async Task RequestRootReloadInterruptsAWaitAndReloadsRootWithoutTheInitialFlag()
+    public void RequestRootReloadInterruptsAWaitAndReloadsRootWithoutTheInitialFlag()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var root = ScriptAssembler.Assemble(table, "SYSTEM4.BIN", new List<(int, Operand[])>
@@ -56,11 +55,11 @@ public class RootReloadRequestTests
             provider: new MapProvider(new Dictionary<long, Script> { [0] = root }));
         host.Vm = vm;
 
-        Task run = Task.Run(() => vm.Run());
-        await host.FirstSleepEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var run = new VmRunThread(vm);
+        VmRunThread.AwaitSignal(host.FirstSleepEntered, "entered the first sleep");
         Assert.Equal(1, vm.Globals.GetValueOrDefault(InitialFlag));
         vm.RequestRootReload();
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        run.Join();
 
         Assert.Equal(1, host.RootReloadInterrupts);
         Assert.Equal(1, host.SceneContextResets);
