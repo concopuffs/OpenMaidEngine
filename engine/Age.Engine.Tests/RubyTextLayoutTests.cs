@@ -180,6 +180,8 @@ public class RubyTextLayoutTests
 
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal(new string?[] { null, "かがりび" }, runs.Select(run => run.Ruby));
+        // Op 0x6e arms the glyph timer; op 0x196 polls the one it left.
+        Assert.Equal(new[] { true, false }, runs.Select(run => run.ArmsGlyphTimer));
         Assert.Equal(new[] { "今にも", "篝火" }, vm.Emitted.Select(line => line.Text));
         Assert.Equal(
             new (string, AdvTextHistoryRecordFlags, AdvTextHistoryRect, int, int)[]

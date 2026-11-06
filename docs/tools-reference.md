@@ -918,6 +918,11 @@ sleep). The `latch-sleep-page18` shots differ only in the scene's animation phas
 native pixel for pixel, the ruby included; the scene's wisp and the wait indicator differ by animation phase
 (`engine-re.md`, "Furigana").
 
+`himegari-reveal-clock.steps` times SC0000 page 18's three runs on a fresh sandbox started with
+`--set message.MessageSpeed=300`: op `0x6e` (8 ticks, 2.4 s), op `0x196` (4 ticks, 1.2 s) and op `0x6e` (23 ticks,
+6.9 s). Each `expect` checks the run 150 ms before it ends, so a reveal that shows its first tick at once fails
+(`engine-re.md`, "The reveal clock").
+
 `himegari-menu-bar.steps` chooses the menu bar's ﾒｯｾｰｼﾞ items and ｹﾞｰﾑ > 終了 on SC0000. It saves on page 1, reads
 six pages and loads. Then:
 - 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ fast-forwards to `SC0000@0xa18` with the control strip's read-skip cell ON.

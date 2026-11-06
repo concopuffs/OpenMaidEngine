@@ -1,0 +1,35 @@
+# The reveal clock. Op 0x6e arms the glyph timer (ctx+0x5f630) after building its run, and every tick of
+# adv_text_reveal_service_tick@0x406fa0 waits for the timer's next period before it publishes, so a run of n ticks
+# takes n delays, the first tick included. Op 0x196 never arms the timer: right after a show-text its reveal goes on
+# with the same timer (docs/engine-re.md, "The reveal clock").
+#
+# SC0000 page 18 at 300 ms a tick reveals in three runs: 今にも消えそうな (op 0x6e at 0x1a49, 8 ticks, 2.4 s),
+# 篝火 + かがりび (op 0x196 at 0x1a50, 4 ticks, 1.2 s) and の如く、… (op 0x6e at 0x1a55, 23 ticks, 6.9 s). Each expect
+# looks 150 ms before its run ends; a clock that showed the first tick at once would already have moved on.
+#
+# Run on a fresh sandbox with slow reveals, on both targets:
+#   py -3.11 -X utf8 tools/drive.py port start --set message.MessageSpeed=300
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-reveal-clock.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=90  # page 1
+wait-state top=SC0000@0x133c click=adv.next every=1.5 timeout=300   # page 17
+settle
+expect top=SC0000@0x133c
+
+click adv.next
+wait-state top=SC0000@0x1a49 timeout=60 # page 18's first run starts revealing
+wait 2.25
+expect top=SC0000@0x1a49                # 8 ticks: 2.4 s
+wait-state top=SC0000@0x1a50 timeout=1  # the furigana
+wait 1.05
+expect top=SC0000@0x1a50                # 4 ticks on the same timer: 1.2 s
+wait-state top=SC0000@0x1a55 timeout=1
+wait 6.75
+expect top=SC0000@0x1a55                # 23 ticks: 6.9 s
+wait-state top=SC0000@0x1a5b timeout=1  # the page's text wait

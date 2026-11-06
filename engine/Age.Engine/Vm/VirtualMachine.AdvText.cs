@@ -33,6 +33,7 @@ public sealed partial class VirtualMachine
             off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack)
         {
             Ruby = string.IsNullOrEmpty(ruby) ? null : ruby,
+            ArmsGlyphTimer = ruby == null,
         };
         AdvTextLayoutPresentationBinding binding =
             TextHistory.GetPresentationBinding(liveRun.Layout.Slot);

@@ -72,6 +72,10 @@ public sealed record AdvLiveTextRun(
     /// <summary>Op 0x196's ruby, drawn over <see cref="Text"/> (null for show-text).</summary>
     public string? Ruby { get; init; }
 
+    /// <summary>Whether a timed reveal of this run restarts the glyph timer (<c>ctx+0x5f630</c>). Op 0x6e arms it;
+    /// op 0x196 does not and keeps the previous run's phase (docs/engine-re.md, "The reveal clock").</summary>
+    public bool ArmsGlyphTimer { get; init; } = true;
+
     public bool BelongsToScript(string scriptName)
     {
         foreach (string frame in ScriptStack)

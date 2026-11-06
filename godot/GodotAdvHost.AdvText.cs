@@ -18,8 +18,6 @@ public sealed partial class GodotAdvHost
     private sealed class LiveTextState
     {
         public required AdvLiveTextRun Run;
-        public required long StartedMs;
-        public required int GlyphDelayMilliseconds;
         public int FirstGlyphIndex;
         public int GlyphCount;
     }
@@ -31,8 +29,8 @@ public sealed partial class GodotAdvHost
     private string _advText = "";
     private int _advTextX = 100, _advTextY = 47;
     private int _currentAdvLayout = 1; // SYSTEM4's ordinary SC0000 ADV layout
-    private long _advTextStartedMs;
-    private int _activeGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
+    // ctx+0x5f630, the reveal's glyph timer: op 0x6e arms it, op 0x196 keeps polling the previous arm.
+    private readonly PeriodTimer _glyphTimer = new();
     private int _messageGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
     private volatile int _messageWindowAlphaSetting = Sys4RegIniStore.DefaultMesWinAlpha;
     private long _autoMessageTime0Milliseconds = Sys4RegIniStore.DefaultAutoMessageTime0;
@@ -117,7 +115,6 @@ public sealed partial class GodotAdvHost
         lock (_textLock)
         {
             _messageGlyphDelayMilliseconds = System.Math.Max(0, speed);
-            _activeGlyphDelayMilliseconds = _messageGlyphDelayMilliseconds;
         }
         _messageWindowAlphaSetting = store.LoadMessageInt(
             Sys4RegIniStore.MesWinAlphaKey, Sys4RegIniStore.DefaultMesWinAlpha);
@@ -185,8 +182,6 @@ public sealed partial class GodotAdvHost
         var state = new LiveTextState
         {
             Run = run,
-            StartedMs = _clock.NowMs,
-            GlyphDelayMilliseconds = delay,
             FirstGlyphIndex = result.FirstGlyphIndex,
             GlyphCount = revealGlyphCount,
         };
@@ -198,11 +193,11 @@ public sealed partial class GodotAdvHost
             _advTextX = run.Layout.CursorX;
             _advTextY = run.Layout.CursorY;
             _currentAdvLayout = run.Layout.Slot;
-            _advTextStartedMs = state.StartedMs;
-            _activeGlyphDelayMilliseconds = delay;
+            // Read skip takes the blocking builder (no timer); a finished-until-wait reveal still arms it.
+            bool incremental = revealGlyphCount > 0 && delay > 0 && !_messageSkipActive;
+            if (incremental && run.ArmsGlyphTimer) _glyphTimer.Arm(_clock.NowMs, delay);
             _advTextForceComplete = _messageSkipActive || _revealsFinishedUntilWait;
-            IsTextRevealing =
-                revealGlyphCount > 0 && delay > 0 && !_advTextForceComplete;
+            IsTextRevealing = incremental && !_advTextForceComplete;
         }
         _timeline?.State("text-reveal", new()
         {
@@ -216,43 +211,39 @@ public sealed partial class GodotAdvHost
             ["presentation"] = "retained-glyphs",
         });
 
-        presentation.PublishThrough(
-            gfx,
-            IsTextRevealing
-                ? presentation.PublicationTarget(result.FirstGlyphIndex, revealGlyphCount, 1)
-                : checked(result.FirstGlyphIndex + revealGlyphCount));
-        Interlocked.Exchange(ref _presentRequested, 1);
         if (!IsTextRevealing)
         {
+            presentation.PublishThrough(gfx, checked(result.FirstGlyphIndex + revealGlyphCount));
+            Interlocked.Exchange(ref _presentRequested, 1);
             _timeline?.State("running", new() { ["text_reveal_complete"] = true });
             return result;
         }
 
+        // adv_text_reveal_service_tick@0x406fa0 (draw mode 1): every engine tick polls the glyph timer and publishes one
+        // tick when it succeeds, so the first tick also waits a full delay and a late poll drops missed boundaries.
+        // Presentation is requested, not awaited: a frame wait would make the poll late and drop boundaries.
         bool scriptSuspended = SuspendScriptForPresentation();
         try
         {
-            RequestSynchronizedPresentation();
+            Interlocked.Exchange(ref _presentRequested, 1);
+            int ticks = 0;
             while (IsTextRevealing && !_stopping)
             {
-                int ticks;
+                long? due;
                 lock (_textLock)
                 {
-                    ticks = _advTextForceComplete
-                        ? revealTicks
-                        : (int)System.Math.Clamp(
-                            (_clock.NowMs - state.StartedMs) / delay + 1,
-                            0, revealTicks);
+                    if (_advTextForceComplete) ticks = revealTicks;
+                    else if (_glyphTimer.Poll(_clock.NowMs) >= 0) ticks++;
                     if (ticks >= revealTicks) IsTextRevealing = false;
+                    due = _glyphTimer.NextDueMs;
                 }
                 int before = presentation.PublishedGlyphCount;
                 presentation.PublishThrough(
                     gfx, presentation.PublicationTarget(result.FirstGlyphIndex, revealGlyphCount, ticks));
                 if (presentation.PublishedGlyphCount != before)
-                {
                     Interlocked.Exchange(ref _presentRequested, 1);
-                    RequestSynchronizedPresentation();
-                }
-                if (IsTextRevealing) _frameSignal.WaitOne(50);
+                if (IsTextRevealing)
+                    _frameSignal.WaitOne(due is long deadline ? _clock.RealMillisecondsUntil(deadline, 50) : 50);
             }
         }
         finally
@@ -453,19 +444,6 @@ public sealed partial class GodotAdvHost
 
         lock (_imageLock) _surfaceImages[surfaceSlot] = updated;
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
-    }
-
-    public (string Text, int X, int Y, int VisibleGlyphs, bool Revealing) SnapshotAdvText()
-    {
-        lock (_textLock)
-        {
-            int visible = _advTextForceComplete || !IsTextRevealing
-                ? _advText.Length
-                : (int)System.Math.Clamp(
-                    (_clock.NowMs - _advTextStartedMs) / System.Math.Max(1, _activeGlyphDelayMilliseconds) + 1,
-                    0, _advText.Length);
-            return (_advText, _advTextX, _advTextY, visible, IsTextRevealing);
-        }
     }
 
     /// <summary>

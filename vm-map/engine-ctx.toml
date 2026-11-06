@@ -477,6 +477,11 @@ name = "bgm_fade_period_timer"
 type = "int"
 note = "10 ms period timer driving the run-state 0x200 BGM fade; the tick polls period_timer_poll_elapsed_periods@0x44d0f0 and feeds bgm_fade_tick@0x464960 (armed at 0x411e46 for the voice duck release)"
 [[field]]
+offset = 0x5f630
+name = "adv_glyph_reveal_timer"
+type = "int"
+note = "ADV glyph-reveal period timer (timer 29 of the 32 0x1c-byte timers from sleep_timer; constructor 0x44cfb0: period 0, index 1). Only op 0x6e arms it (sleep_timer_arm, period = glyph delay); op 0x196 never does. In draw mode 1 adv_text_reveal_service_tick@0x406fa0 publishes one tick per successful period_timer_poll_elapsed_periods@0x44d0f0, so a tick waits a full delay and late polls drop boundaries"
+[[field]]
 offset = 0x5f64c
 name = "adv_wait_indicator_timer"
 type = "int"

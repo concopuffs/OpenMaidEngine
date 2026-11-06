@@ -4546,6 +4546,55 @@ font.
 - Not checked: Kamidori. Its SYS4433 engine has neither of Himegari's two ruby code sequences, and its SYS4INI trailer
   has `RUBYSHIFTMODE` (`docs/backlog.md`).
 
+#### The reveal clock (2026-11-06)
+
+A timed reveal publishes on a period timer, not on elapsed time since the run began.
+
+**The timer.** `engine_ctx_construct` builds 32 timer objects of 0x1c bytes at `ctx+0x5f304`. Their constructor,
+`period_timer_construct@0x44cfb0`, leaves period 0 and next index 1. The reveal uses timer 29, `ctx+0x5f630`
+(`adv_glyph_reveal_timer`).
+
+- Op `0x6e` arms it with `sleep_timer_arm` after the builder, with the glyph delay (`ctx+0x14e9c`) as the period. It
+  does so only on the timed path: not with delay 0, not under read skip (`0x8000000`), and not when the builder fails.
+- Op `0x196` never arms it, and no other code does.
+
+**A tick.** `adv_text_reveal_service_tick@0x406fa0` checks input first (click, fast-forward, wheel). Then, in draw mode
+1 (`ctx+0x99290`, Himegari), it polls `period_timer_poll_elapsed_periods@0x44d0f0`. While the poll answers -1 the tick
+returns; otherwise it publishes one tick (`adv_text_publish_next_glyph`). Draw mode 0 instead calls `Sleep` with the
+delay and then publishes.
+
+- The poll succeeds once the time since the arm exceeds index × period, and then sets the index to elapsed / period +
+  1.
+- So the first tick waits a full delay, and a run of n ticks ends after n delays.
+- A late poll publishes one tick and drops the boundaries it missed; the reveal never catches up.
+
+**Op `0x196` keeps the previous phase.**
+
+- Right after a show-text the index is one past that run's last tick, so the furigana's first tick waits one more
+  delay.
+- Long after the last arm, its first poll succeeds at once, and the later ticks follow the old timer's phase.
+- Before any op `0x6e` in a session the period is 0, so the reveal waits for a click (decoded, not observed).
+
+**Native trace.** SC0000 page 18 at `MessageSpeed=100` (2026-11-06; time from each op to the next):
+
+| Run | Ticks | Native | Port before | Port now |
+|---|---|---|---|---|
+| op `0x6e` 今にも消えそうな (`0x1a49`) | 8 | 0.802 s | 0.72 s | 0.799 s |
+| op `0x196` 篝火 + かがりび (`0x1a50`) | 4 | 0.399 s | (not drawn) | 0.400 s |
+| op `0x6e` の如く、… (`0x1a55`) | 23 | 2.301 s | 2.32 s | 2.302 s |
+
+The 0.72 s is the old port's (n - 1) delays, which showed the first tick at once.
+
+**Port.**
+
+- `Age.Engine.Hosting.PeriodTimer` implements the arm and the poll.
+- `GodotAdvHost` keeps one timer. It arms it when a run with `AdvLiveTextRun.ArmsGlyphTimer` (op `0x6e`; the VM sets
+  false for op `0x196`) takes the timed path.
+- The reveal loop polls on the engine clock and wakes at the timer's next due millisecond. It requests a
+  presentation for each tick and does not wait for it, since a frame wait would make polls late and drop ticks.
+- Tests: `PeriodTimerTests`.
+- Check: `tools/drive/scenarios/himegari-reveal-clock.steps` (page 18 at 300 ms).
+
 #### ADV wait indicator -- ops `0x73` / `0x72` (2026-07-11)
 
 The small bat marker is a configured ADV-layout sprite, not a glyph or part of SO001. `SYSTEM4.BIN`

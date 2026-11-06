@@ -101,6 +101,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x5f33c` | `timed_catchup_callback_timer` | `int` | op-0xce interval timer object (same layout as sleep_timer), sampled by op 0xcf; unused in Himegari and Kamidori |
 | `0x5f3ac` | `timed_callback_timer` | `int` | elapsed timer object armed by op 0xd5 and sampled by the timed callback scheduler |
 | `0x5f400` | `bgm_fade_period_timer` | `int` | 10 ms period timer driving the run-state 0x200 BGM fade; the tick polls period_timer_poll_elapsed_periods@0x44d0f0 and feeds bgm_fade_tick@0x464960 (armed at 0x411e46 for the voice duck release) |
+| `0x5f630` | `adv_glyph_reveal_timer` | `int` | ADV glyph-reveal period timer (timer 29 of the 32 0x1c-byte timers from sleep_timer; constructor 0x44cfb0: period 0, index 1). Only op 0x6e arms it (sleep_timer_arm, period = glyph delay); op 0x196 never does. In draw mode 1 adv_text_reveal_service_tick@0x406fa0 publishes one tick per successful period_timer_poll_elapsed_periods@0x44d0f0, so a tick waits a full delay and late polls drop boundaries |
 | `0x5f64c` | `adv_wait_indicator_timer` | `int` | elapsed timer started by op 0x1ce and ADV wait setup to select the animated input-wait indicator frame |
 | `0x5f684` | `mouse_callback_target_pc` | `int` | op-0xcc callback dword offset, one engine-wide registration; -1 makes op 0xcd pop its return pc and continue. scene_context_init_reset keeps it |
 | `0x5f688` | `timed_catchup_callback_pc` | `int` | op-0xce on-time callback dword offset, dispatched by op 0xcf |

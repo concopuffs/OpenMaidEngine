@@ -44,11 +44,6 @@ it; git history keeps the record.
   "Furigana"). Kamidori runs the op 3,054 times, but its SYS4433 engine has neither of Himegari's two ruby code
   sequences (the gap division and the centring), and its SYS4INI trailer has `RUBYSHIFTMODE`. Done when Kamidori's
   ruby builder is decoded and a Kamidori furigana page and its History match native.
-- **A reveal run ends one tick early.** Native ends a run of n publication ticks after n × the glyph delay; the port
-  publishes the first tick at once and ends after (n - 1) × delay (SC0000 page 18, `MessageSpeed=100`, traced
-  2026-11-06). A tick can publish several records (`engine-re.md`, "Furigana"). Op `0x6e` arms the glyph timer
-  (`sleep_timer_arm`) and op `0x196` does not, so the two may start their first tick differently. Done when the
-  port's reveal clock matches native's for both ops, including the first tick.
 - **Native blocks inside a movie start.** At `SC0000@0x13c8` native AGE stays in `play-movie-to-surface` for about
   4.66 s (traced 2026-11-06 under the driver), while the port passes it at once. It is not known whether this is the
   decoder's preroll, the sandboxed environment, or an engine wait. Done when the block is traced to its cause and
