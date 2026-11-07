@@ -60,6 +60,21 @@ class PackageNoticesTests(unittest.TestCase):
             sources = [entry["source"] for entry in json.load(stream)["files"]]
         self.assertTrue(all(f"/{godot['release_tag']}/" in source for source in sources), sources)
 
+    def test_committed_mingw_notice_matches_its_pin_and_ships_only_in_the_windows_package(self) -> None:
+        import package_linux_x64
+        import package_windows_x64
+
+        notices = package_notices.pinned_notices(package_notices.MINGW_NOTICES)
+        self.assertEqual(["MinGW-w64-runtime-COPYING.txt"], [n.package_name for n in notices])
+        for notice in notices:
+            self.assertEqual(notice.sha256, hashlib.sha256(notice.source.read_bytes()).hexdigest(), notice.source)
+        tag = package_notices.notices_release_tag(package_notices.MINGW_NOTICES)
+        with package_notices.MINGW_NOTICES.open(encoding="utf-8") as stream:
+            sources = [entry["source"] for entry in json.load(stream)["files"]]
+        self.assertTrue(all(f"/{tag}/" in source for source in sources), sources)
+        self.assertIn("MinGW-w64-runtime-COPYING.txt", [n.package_name for n in package_windows_x64.PINNED_NOTICES])
+        self.assertNotIn("MinGW-w64-runtime-COPYING.txt", [n.package_name for n in package_linux_x64.PINNED_NOTICES])
+
     def test_copy_checks_each_pin(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

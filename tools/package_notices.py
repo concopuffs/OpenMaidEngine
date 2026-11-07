@@ -2,8 +2,10 @@
 """Third-party notices the release packages carry (THIRD_PARTY_NOTICES.md).
 
 Both packagers use this module:
-- the pinned notice texts under notices/ (Godot's LICENSE.txt and COPYRIGHT.txt for the Godot release the packages
-  are exported with), checked against their pins and copied to the package root;
+- the pinned notice texts under notices/, checked against their pins and copied to the package root: Godot's
+  LICENSE.txt and COPYRIGHT.txt for the Godot release the packages are exported with (both packages), and the
+  MinGW-w64 runtime's COPYING.MinGW-w64-runtime.txt for the runtime the Windows DLLs link statically (Windows only;
+  tools/mingw_runtime_notices.py checks the links against it);
 - the check that THIRD_PARTY_NOTICES.md names every NuGet package a publish ships, read from the publish's
   OME.deps.json. A runtime pack is named by its framework (Microsoft.NETCore.App).
 The NuGet packages' own license files reach the managed directory through the publish itself (godot/OME.csproj,
@@ -21,6 +23,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 GODOT_NOTICES = REPO / "notices/godot/notices.json"
+MINGW_NOTICES = REPO / "notices/mingw-w64/notices.json"
 DEPS_FILE = "OME.deps.json"
 _ASSET_KINDS = ("runtime", "native", "runtimeTargets", "resources")
 

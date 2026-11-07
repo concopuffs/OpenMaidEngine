@@ -6,8 +6,10 @@
 # Inputs:  ffmpeg-source.json (source pin, configure flags), dependency-linux-x64.json (glibc baseline).
 # Outputs: <output>/ome-ffmpeg-<version>-mpeg1-r<rev>-<target>-lgpl-shared.{tar.xz|zip}, its .sha256, and
 #          <output>/BUILD-CONFIG-<target>.txt. The SDK keeps the include/ lib/ bin/ LICENSE.txt layout the
-#          bootstraps consume and adds BUILD-CONFIG.txt. Linux must run in a glibc-2.28 (manylinux_2_28)
-#          environment; win64 cross-compiles with the MinGW-w64 toolchain.
+#          bootstraps consume and adds BUILD-CONFIG.txt (win64 also MinGW-w64-runtime-COPYING.txt). Linux must
+#          run in a glibc-2.28 (manylinux_2_28) environment; win64 cross-compiles with the MinGW-w64 toolchain
+#          and checks the runtime code each DLL link adds against the MinGW-w64 notice it ships
+#          (tools/mingw_runtime_notices.py).
 set -euo pipefail
 
 target="${1:-}"
@@ -78,7 +80,14 @@ configure_line=(./configure --prefix=/ome-ffmpeg "${common_flags[@]}" "${target_
 (
     cd -- "$source_tree"
     "${configure_line[@]}"
-    make -j"$(nproc)"
+    make_arguments=()
+    if [[ "$target" == win64 ]]; then
+        # Each DLL link writes lib<name>/<dll>.map for the MinGW runtime notice check (step 4). Make, not configure,
+        # takes the flag, so the configure line the libraries embed stays the manifest's.
+        configured_ldsoflags="$(sed -n 's/^LDSOFLAGS=//p' ffbuild/config.mak)"
+        make_arguments+=("LDSOFLAGS=$configured_ldsoflags -Wl,-Map=\$\$@.map")
+    fi
+    make -j"$(nproc)" "${make_arguments[@]}"
     make install DESTDIR="$stage"
 )
 
@@ -104,6 +113,8 @@ if [[ "$target" == linux-x64 ]]; then
 else
     objdump_tool="x86_64-w64-mingw32-objdump"
     command -v "$objdump_tool" >/dev/null || { echo "required command was not found: $objdump_tool" >&2; exit 1; }
+    python3 -X utf8 "$repo_root/tools/mingw_runtime_notices.py" --compiler x86_64-w64-mingw32-gcc \
+        "$source_tree"/lib*/*.dll.map
     x86_64-w64-mingw32-strip --strip-unneeded -- "$install_root"/bin/*.dll
     imports="$("$objdump_tool" -p "$install_root"/bin/*.dll | awk '/DLL Name:/ { print tolower($3) }' | sort -u)"
     allowed='^(avformat-[0-9]+|avcodec-[0-9]+|avutil-[0-9]+|swscale-[0-9]+|swresample-[0-9]+|kernel32|msvcrt|ucrtbase|bcrypt|advapi32|user32|api-ms-win-[a-z0-9-]+)\.dll$'
@@ -121,6 +132,18 @@ fi
 
 # 5. SDK layout + provenance.
 cp -- "$source_tree/$license_file" "$install_root/LICENSE.txt"
+if [[ "$target" == win64 ]]; then
+    # The DLLs carry MinGW-w64 runtime code (step 4), so the SDK ships its notice as the Windows packages do.
+    python3 -X utf8 - "$repo_root/tools" "$install_root" <<'PY'
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import package_notices
+
+package_notices.copy_pinned_notices(package_notices.pinned_notices(package_notices.MINGW_NOTICES), Path(sys.argv[2]))
+PY
+fi
 compiler="$(if [[ "$target" == win64 ]]; then x86_64-w64-mingw32-gcc --version; else ${CC:-cc} --version; fi | head -n 1)"
 build_config="$install_root/BUILD-CONFIG.txt"
 {

@@ -177,6 +177,7 @@ jobs:
           name: windows-release-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/native/win-x64/verification.json
+            build/native/win-x64/age_movie_ffmpeg.map
             build/package/windows-x64/staging/OME-windows-x64/WINDOWS-VERIFICATION.json
             build/validation/**
           if-no-files-found: ignore

@@ -67,8 +67,9 @@
 *.woff2 binary
 *.zip binary
 
-# Third-party license texts are kept byte for byte as upstream ships them (notices/*/notices.json pins each).
-notices/** text eol=lf
+# Third-party license texts are kept byte for byte as upstream ships them (notices/*/notices.json pins each),
+# trailing spaces included, so whitespace checks skip them.
+notices/** text eol=lf -whitespace
 
 # Generated references are ordinary canonical-LF text. Their whitespace
 # exceptions preserve generator-owned formatting without disabling EOL policy.

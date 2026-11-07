@@ -162,12 +162,11 @@ it; git history keeps the record.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
-- **MinGW-w64 runtime notices are unchecked.** The Windows movie shim (`age_movie_ffmpeg.dll`) and the FFmpeg DLLs are
-  built with MinGW-w64 GCC (`native/age_movie_ffmpeg/build-win64.sh`, `build-ffmpeg-sdk.sh`). They therefore statically
-  contain MinGW-w64 runtime objects: the DLL CRT startup and whatever they use from `libmingwex`, and in the shim
-  `libgcc` (`-static-libgcc`, under GCC's runtime library exception). The MinGW-w64 runtime is mostly public domain, but
-  its `COPYING.MinGW-w64-runtime.txt` lists parts under licenses that ask binary distributions to reproduce their
-  notices. Which of those parts the DLLs link is unverified, and `THIRD_PARTY_NOTICES.md` does not mention the runtime.
-  Done when the linked objects are known (for example from the linker's map in CI) and the packages carry the notices
-  they need, or the file records that none apply.
-- **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default).
+- **ﾊﾞｰｼﾞｮﾝ情報 does not name FFmpeg.** FFmpeg's license checklist (item 10, `platform-portability.md`) asks the
+  program's about box to say it uses FFmpeg under the LGPL 2.1 and where its source is. The port's ﾊﾞｰｼﾞｮﾝ情報
+  (`EngineIdentity`, `0676354`) names only `THIRD_PARTY_NOTICES.md`, which credits FFmpeg. Done when the dialog names
+  FFmpeg in the AGERC template's space, or the checklist row records why the pointer suffices.
+- **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default);
+  artifacts published before their notices existed are not backfilled, but taken down or updated if anyone asks:
+  the `v0.4.0` packages lack the Godot, .NET and MinGW-w64 notices, and the `deps-ffmpeg-ome-8.1.3-mpeg1-r1` Windows
+  SDK lacks the MinGW-w64 one. Later SDK revisions and packages carry them.

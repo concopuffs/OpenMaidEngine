@@ -50,6 +50,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     ├── THIRD_PARTY_NOTICES.md                 incorporated-code licenses + prior-research acknowledgment
     ├── notices/godot/                        Godot's LICENSE.txt + COPYRIGHT.txt for the pinned release, unmodified;
     │                                         notices.json pins each (packages ship them as Godot-*.txt)
+    ├── notices/mingw-w64/                    the MinGW-w64 runtime's COPYING.MinGW-w64-runtime.txt (v11.0.1), unmodified;
+    │                                         notices.json pins it (Windows packages ship MinGW-w64-runtime-COPYING.txt)
     ├── global.json                           pins the validated .NET 8 SDK feature band
     ├── Directory.Build.targets               makes a Debug build recompile when Optimize changes
     │                                         (drive.py port start --optimize)
@@ -78,9 +80,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── install_godot_templates.py         selective HTTP-range installer for pinned template members
     │   ├── package_linux_x64.py,
     │   │   package_windows_x64.py             target-specific export verifiers and normalized packagers
-    │   ├── package_notices.py                 shared notice checks: pinned Godot notices, NuGet packages named
+    │   ├── package_notices.py                 shared notice checks: pinned Godot/MinGW-w64 notices, NuGet packages named
+    │   ├── mingw_runtime_notices.py           MinGW link-map check: linked runtime objects covered by the shipped notices
     │   ├── test_install_godot_templates.py, test_package_notices.py, test_package_linux_x64.py,
-    │   │   test_package_windows_x64.py,
+    │   │   test_package_windows_x64.py, test_mingw_runtime_notices.py,
     │   │   test_dotnet_publish_proxy.py,
     │   │   test_publish_github_release.py, test_write_ffmpeg_source_notice.py,
     │   │   test_release_workflow.py,

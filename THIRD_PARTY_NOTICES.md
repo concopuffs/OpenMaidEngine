@@ -45,6 +45,21 @@ pinned source and configure flags are recorded in `native/age_movie_ffmpeg/ffmpe
 ships the license as `FFmpeg-LICENSE.txt` and the source location and configure line as `FFmpeg-SOURCE.txt` beside
 the libraries. The source repository itself contains no FFmpeg code.
 
+## MinGW-w64 and GCC runtimes
+
+Windows release packages' movie shim (`age_movie_ffmpeg.dll`) and FFmpeg DLLs are built with MinGW-w64 GCC 13,
+which links parts of the [MinGW-w64](https://www.mingw-w64.org/) 11.0.1 runtime into each DLL: the DLL startup code,
+the C99 `printf` and `scanf` family with David M. Gay's gdtoa number conversions, and math functions. Most of the
+runtime is public domain. The linked parts that are not are the x86 math functions and `scanf` (Copyright (c)
+2009-2011 by the mingw-w64 project, under the Zope Public License 2.1) and gdtoa (Copyright (C) 1997-2001 by Lucent
+Technologies; Copyright (C) 2004 by David M. Gay). Their notices are in the runtime's
+`COPYING.MinGW-w64-runtime.txt`, which every Windows package ships unmodified as `MinGW-w64-runtime-COPYING.txt`.
+The repository keeps that file in `notices/mingw-w64/`, pinned (`notices.json`) to the runtime's v11.0.1 tag. The
+DLLs also contain GCC's runtime helpers (`libgcc`, `crtbegin.o`, `crtend.o`; Copyright (C) Free Software
+Foundation, Inc.), under GPLv3 with the GCC Runtime Library Exception 3.1, which puts no conditions on the DLLs.
+Each MinGW build checks every runtime object it links against this list (`docs/tools-reference.md`, "Third-party
+notices"). Linux packages link no MinGW code.
+
 ## Eushully-Decompiler research
 
 Early SYS4 instruction decoding and the initial opcode ABI/catalog were informed by Kelebek's public

@@ -18,6 +18,8 @@ binary_directory="$sdk_root/bin"
 compiler="${MINGW_CC:-x86_64-w64-mingw32-gcc}"
 objdump="${MINGW_OBJDUMP:-x86_64-w64-mingw32-objdump}"
 shim="$output_directory/age_movie_ffmpeg.dll"
+# The link map lists the MinGW runtime code the link adds; packages leave it out (godot/OME.csproj takes *.dll).
+link_map="$output_directory/age_movie_ffmpeg.map"
 
 for command in "$compiler" "$objdump" python3; do
     command -v "$command" >/dev/null 2>&1 || {
@@ -43,10 +45,11 @@ done
 "$compiler" \
     -std=c11 -O2 -Wall -Wextra -static-libgcc \
     -I "$include_directory" \
-    -shared -Wl,--no-undefined -Wl,--no-insert-timestamp \
+    -shared -Wl,--no-undefined -Wl,--no-insert-timestamp -Wl,-Map="$link_map" \
     -o "$shim" "$script_dir/age_movie.c" \
     -L "$library_directory" \
     -lavformat -lavcodec -lavutil -lswscale -lswresample
+python3 -X utf8 "$repo_root/tools/mingw_runtime_notices.py" --compiler "$compiler" "$link_map"
 
 runtime_libraries=(
     avformat-62.dll

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "release_tag": "v11.0.1",
+  "files": [
+    {
+      "path": "COPYING.MinGW-w64-runtime.txt",
+      "package_name": "MinGW-w64-runtime-COPYING.txt",
+      "source": "https://raw.githubusercontent.com/mingw-w64/mingw-w64/v11.0.1/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt",
+      "sha256": "e9b2dc02451ea29092a1f25fa0f3c07207ed421f1807dffb0c4e6dce69dee7bd"
+    }
+  ]
+}
