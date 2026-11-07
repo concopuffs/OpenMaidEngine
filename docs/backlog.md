@@ -162,10 +162,6 @@ it; git history keeps the record.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
-- **ﾊﾞｰｼﾞｮﾝ情報 does not name FFmpeg.** FFmpeg's license checklist (item 10, `platform-portability.md`) asks the
-  program's about box to say it uses FFmpeg under the LGPL 2.1 and where its source is. The port's ﾊﾞｰｼﾞｮﾝ情報
-  (`EngineIdentity`, `0676354`) names only `THIRD_PARTY_NOTICES.md`, which credits FFmpeg. Done when the dialog names
-  FFmpeg in the AGERC template's space, or the checklist row records why the pointer suffices.
 - **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default);
   artifacts published before their notices existed are not backfilled, but taken down or updated if anyone asks:
   the `v0.4.0` packages lack the Godot, .NET and MinGW-w64 notices, and the `deps-ffmpeg-ome-8.1.3-mpeg1-r1` Windows

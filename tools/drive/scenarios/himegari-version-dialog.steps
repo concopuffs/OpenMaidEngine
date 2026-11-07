@@ -3,7 +3,8 @@
 # SYSTEM3 first) and OK, its only button, whose id is IDCANCEL (2). OK closes it, and the game goes on from the page it
 # held on. Both targets share the title, the game half and the button. The engine half differs on purpose: AGE names
 # itself (ARCGameEngine, its copyright, its Ogg Vorbis notice, the empty プロダクトID row); the port names Open Maid
-# Engine, its version and license and THIRD_PARTY_NOTICES.md (docs/engine-re.md, "Native menu bar", ﾊﾞｰｼﾞｮﾝ情報).
+# Engine, its version and license, FFmpeg and THIRD_PARTY_NOTICES.md (docs/engine-re.md, "Native menu bar",
+# ﾊﾞｰｼﾞｮﾝ情報).
 # Run on a fresh sandbox, on both targets:
 #   py -3.11 -X utf8 tools/drive.py port start
 #   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-version-dialog.steps

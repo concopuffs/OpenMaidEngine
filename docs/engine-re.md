@@ -1658,8 +1658,10 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
 - **ﾊﾞｰｼﾞｮﾝ情報 names the port.** The game half (icon, `set:GameName`, `set:GameVersion`, `set:Copyright`) is filled
   as AGE fills it. The engine half names Open Maid Engine instead of AGE: `EngineIdentity`
   (`engine/Age.Engine.Frontend/NativeResources`) re-texts the template's id-less labels, found by position. The name
-  replaces ARCGameEngine, "Released under the MIT License" replaces ARC Software Laboratory's copyright, and a pointer
-  to `THIRD_PARTY_NOTICES.md` replaces AGE's Ogg Vorbis notice; ｼｽﾃﾑのﾊﾞｰｼﾞｮﾝ stays. `0x400` shows "Version " and the
+  replaces ARCGameEngine, and "Released under the MIT License" replaces ARC Software Laboratory's copyright. AGE's
+  Ogg Vorbis notice becomes the FFmpeg notice FFmpeg's license checklist asks for (FFmpeg, its LGPLv2.1, and
+  `FFmpeg-SOURCE.txt` for its source; `platform-portability.md`, item 10). Xiphophorus' copyright becomes "Third-party
+  licenses: `THIRD_PARTY_NOTICES.md`". ｼｽﾃﾑのﾊﾞｰｼﾞｮﾝ stays. `0x400` shows "Version " and the
   engine's version, which the build takes from `git describe --tags --match "v[0-9]*" --dirty=+ --always`
   (`godot/OME.csproj`, target `OmeVersion`; `-p:OmeVersion=` overrides it). The dialog drops the tag's "v", puts
   "dev-" before a bare commit (a clone without tags) and shows "unknown" when the build stored none. AGE's 84-unit

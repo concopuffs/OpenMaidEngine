@@ -64,12 +64,15 @@ public class EngineIdentityTests
         Assert.Equal((104, 104, 104, 13), (port.Items[3].X, port.Items[3].Y, port.Items[3].Width, port.Items[3].Height));
         Assert.Equal(
         [
-            (EngineIdentity.Name, 44, 104), (EngineIdentity.License, 44, 114), (EngineIdentity.NoticesFile, 44, 149),
-            (EngineIdentity.NoticesPointer, 44, 131),
+            (EngineIdentity.Name, 44, 104), (EngineIdentity.License, 44, 114), (EngineIdentity.NoticesPointer, 44, 149),
+            (EngineIdentity.FfmpegNotice, 44, 131),
         ],
             port.Items.Where(i => i.ClassName == "Static" && i.Y > 100).Select(i => (i.Text, i.X, i.Y)));
         Assert.DoesNotContain(port.Items, i => i.Text.Contains("ARC") || i.Text.Contains("Vorbis")
                                                  || i.Text.Contains("Xiphophorus") || i.Text == "プロダクトID");
+
+        // FFmpeg's license checklist: the about box names FFmpeg, its license and where its source is.
+        Assert.All(["FFmpeg", "LGPLv2.1", "FFmpeg-SOURCE.txt"], part => Assert.Contains(part, EngineIdentity.FfmpegNotice));
     }
 
     [Fact]
@@ -85,8 +88,8 @@ public class EngineIdentityTests
             string[] texts = port.Items.Select(i => i.Text).ToArray();
             Assert.Contains(EngineIdentity.Name, texts);
             Assert.Contains(EngineIdentity.License, texts);
+            Assert.Contains(EngineIdentity.FfmpegNotice, texts);
             Assert.Contains(EngineIdentity.NoticesPointer, texts);
-            Assert.Contains(EngineIdentity.NoticesFile, texts);
             Assert.DoesNotContain(port.Items, i => i.Text.Contains("ARC") || i.Text.Contains("Xiphophorus"));
         }
     }
