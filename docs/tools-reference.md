@@ -1029,10 +1029,30 @@ four shots:
 On both targets, each shot matches the other target's pixel for pixel apart from the wait indicator's phase. After
 `close`, both `SYS4REG.INI` files are identical, with `UseAntiFont=0` (`engine-re.md`, "AntiFont off").
 
+Kamidori's scenarios run with `--profile kamidori`, on a fresh sandbox, on the Japanese base: the translation blanks
+every ruby. Start the port without `--overlay-root`, and rename the native scratch install's `patch/` folder. Each
+file's header gives its start commands.
+- `kamidori-furigana.steps` reaches the prologue page `SC0000@0xfa2` (はんらん over 叛乱) and opens its History. Shots
+  `kamidori-furigana-page` and `-history`; History matches native in every text pixel (`engine-re.md`, "Furigana in
+  SYS4433").
+- `kamidori-config-redraw.steps` reaches the same page, then makes two CONFIG changes from the right-click menu's
+  環境設定: 初期設定 on 基本設定, and ADV設定's 効果 縁なし. Each change runs op `0x82`, which redraws the page behind
+  CONFIG. Shots `kamidori-config-redraw-page`, `-defaults-config`, `-defaults`, `-no-outline-config` and `-no-outline`;
+  inside the text window the redrawn pages match native within 30 per channel (`engine-re.md`, "Op 0x82 redraw").
+  The `-no-outline-config` shot also shows CONFIG2's own surface text differing (`docs/backlog.md`).
+
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
-`[native.keep_polling]` and `[[native.dialog]]`. Unknown sections are refused. A profile without `[native.engine]`
-still drives native AGE; it just has no `state`.
+`[native.keep_polling]` and `[[native.dialog]]`. Unknown sections are refused, and so are unknown keys in
+`[native.engine]` and `[native.keep_polling]`. A profile without `[native.engine]` still drives native AGE; it just
+has no `state`.
+- `[native.engine]` needs `ctx_global`, `frame_stride` and `frame_count`. The frame fields `cur_ctx_index`,
+  `frame_codebase`, `frame_pc` and `frame_script_resource_id` come from `vm-map/engine-ctx.toml`, which describes
+  Himegari's engine. A profile for another engine revision names them in the table instead.
+- `[native.keep_polling]` needs `setter` and `activate_return`. Its optional `gate`, the polling gate's ctx offset,
+  likewise replaces `engine-ctx.toml`'s `input_polling_enabled`.
+- `tools/drive/kamidori.toml` gives all of them for SYS4433 (`engine-re.md`, "Driving native AGE"), so the driver
+  never reads `engine-ctx.toml` for Kamidori.
 
 **VM position.** Both targets report frames as `SCRIPT@offset`, with `offset` the dword offset of the disassembly and
 the page locator. At a text wait the pc is already **past** the wait instruction, so a page reads as the port page

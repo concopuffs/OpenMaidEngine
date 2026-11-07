@@ -82,8 +82,28 @@ Himegari's complete serialized list, in file order, is:
 | 35 | `VERREGPOS` | `70724B91-F673-40FB-9EC4-5DE21EA68367` |
 | 36 | `REGKEY` | `1886538641` |
 
-This list is the canonical serialized-data inventory. Native consumers, compiled fallbacks, settings
-that are inert under Himegari's selected renderer, and current port coverage are cataloged in
+Kamidori's trailer has 44 pairs. It keeps Himegari's 36 keys in the same order and inserts eight pairs after
+`NOSETMUSIC`:
+
+| # | Key | Value |
+|---:|---|---|
+| 12 | `OUTERFRAMEMODE` | `1` |
+| 13 | `AUTOFREETEX` | `3` |
+| 14 | `BLANKEXTENTMODE` | `1` |
+| 15 | `USEPROPORTIONALFONT` | `1` |
+| 16 | `VALIDFONTCHECKER` | `悪` |
+| 17 | `VALIDFONTCHECKER` | `ｱ` |
+| 18 | `VALIDFONTCHECKER` | `洒` |
+| 19 | `RUBYSHIFTMODE` | `1` |
+
+A repeated key is a list: AGE adds each `VALIDFONTCHECKER` value in file order. Kamidori's other values differ from
+Himegari's in `DEPENDMOVIESOUND` (`2`), `SCREENX`/`SCREENY` (`1024`/`576`), `SAVEPATH`
+(`Eushully\神採りアルケミーマイスター\SAVE`), `REGFILEPATH` (`Eushully\神採りアルケミーマイスター`), `COPYRIGHT`
+(`Copyright (c) Eushully 2011`), `SAVEVERSION` (`320`), `RCVERSION` (`29`), `VERREGPOS`
+(`41810510-3CE0-425B-BE07-B9793731737F`) and `REGKEY` (`1098974480`).
+
+These lists are the canonical serialized-data inventory. Native consumers, compiled fallbacks, settings
+that are inert under the selected renderer, and current port coverage are cataloged in
 `engine-re.md` under "SYS4INI startup-settings catalog."
 
 `SCREENX=800` and `SCREENY=600` are independently corroborated by Kamidori's `1024x576` pair, proving
@@ -93,7 +113,8 @@ save filenames remain AGE policy rather than trailer or script strings.
 
 `Sys4AssetCatalog` now parses this bounded trailer for base `S4IC` catalogs. It preserves ordered unknown
 pairs for diagnostics and offers case-insensitive, last-value-wins lookup; this is intentionally more
-permissive than AGE's fixed registry so unimplemented keys in another profile remain inspectable.
+permissive than AGE's fixed registry so unimplemented keys in another profile remain inspectable. A list key such as
+`VALIDFONTCHECKER` is read through every pair (`Sys4StartupSettings.ValidFontCheckers`).
 `Sys4LogicalCanvas` is the first semantic projection: `SCREENX` and `SCREENY` fall back independently to
 AGE's registered `640x480` defaults when absent or nonpositive/nonnumeric, while unsafe RGBA allocations
 are rejected before presentation construction. Append `S4AC` catalogs do not own startup settings.
@@ -166,6 +187,12 @@ binding order: a `[section]` line wherever the section changes, `key=value`, CRL
 It writes no unbound keys. A first run therefore leaves a 779-byte file for Himegari. `Sys4RegIniStore`
 writes the same file, and keeps any unbound keys after the bound ones; on shutdown it always rewrites the
 file, as AGE does on quit. Its output matched native's byte for byte (2026-11-03).
+
+SYS4433's loader (`0x472530`, Kamidori) binds two more keys: `display:VirtualFullScreenType` after `LimitAero`, and
+`message:AntiFontLevel` after `UseAntiFont`, likewise only under `ENABLEANTIFONT`. A native Kamidori exit writes
+both as 0. The loader also reads `message:RubyShiftMode` over SYS4INI's `RUBYSHIFTMODE`, but never binds or writes it,
+so only a hand edit puts it in the file. `Sys4RegIniStore` picks the bindings by engine ABI, and its Kamidori file
+matched native's byte for byte (2026-11-07).
 
 The `[message]` section holds two integers that scripts read and write through opcodes:
 
@@ -504,8 +531,9 @@ creation, and release do not synthesize or clear the reload flag; opcode `0x259`
 records whose reload flag is one and whose resource id is nonnegative. Flag-zero records describe
 surfaces expected to remain live across the load. The installed file is decisive: all 1,000 reload flags
 are zero, while SYSTEM4's reusable choice-frame atlas remains recorded as resource `0x3383` in slot 15.
-A separate configuration-gated path can release all 1,000 surfaces before this loop, but Himegari's
-registered `CreateObject=1`, `AutoFreeTex=0` defaults leave it inactive. A retained `0x2d4`
+A separate configuration-gated path can release all 1,000 surfaces before this loop. Himegari's trailer has no
+`AUTOFREETEX`, so the registered 0 leaves it inactive; Kamidori's `AUTOFREETEX=3` turns it on (`engine-re.md`,
+"AutoFreeTex"). A retained `0x2d4`
 record is structurally complete but not every internal graphics field is semantically named. Native
 `gfx_object_init_default` initializes six embedded 4x4 matrices (current/target scale, rotation, and
 translation) to identity, packed colors at `+0x60/+0x64/+0x240` to `0xffffffff`, and other fields to zero.

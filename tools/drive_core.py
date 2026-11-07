@@ -282,8 +282,14 @@ class Profile:
     settings: dict[str, str] = field(default_factory=dict)
     quiet: dict[str, str] = field(default_factory=dict)
     dialogs: tuple[DialogPolicy, ...] = ()
-    engine: dict[str, int] | None = None        # ctx_global, frame_stride, frame_count
-    keep_polling: dict[str, int] | None = None  # setter, activate_return
+    engine: dict[str, int] | None = None        # ctx_global, frame_stride, frame_count [, frame field offsets]
+    keep_polling: dict[str, int] | None = None  # setter, activate_return [, gate]
+
+
+# Engine field offsets a profile may give in [native.engine] / [native.keep_polling]. vm-map/engine-ctx.toml holds
+# Himegari's EngineCtx (the /v2 image); another engine revision lays the context out differently and names its own.
+ENGINE_FIELD_KEYS = ("cur_ctx_index", "frame_codebase", "frame_pc", "frame_script_resource_id")
+POLLING_GATE_KEY = "gate"
 
 
 def parse_profile(text: str) -> Profile:
@@ -309,21 +315,27 @@ def parse_profile(text: str) -> Profile:
         if answer not in DIALOG_ANSWERS or not entry.get("match"):
             raise DriveError(f"dialog policy needs match and one of {', '.join(DIALOG_ANSWERS)}: {entry}")
         dialogs.append(DialogPolicy(entry["match"], answer, entry.get("reason", "")))
-    engine = _native_table(native, "engine", ("ctx_global", "frame_stride", "frame_count"))
-    keep_polling = _native_table(native, "keep_polling", ("setter", "activate_return"))
+    engine = _native_table(native, "engine", ("ctx_global", "frame_stride", "frame_count"), ENGINE_FIELD_KEYS)
+    keep_polling = _native_table(native, "keep_polling", ("setter", "activate_return"), (POLLING_GATE_KEY,))
     if keep_polling is not None and engine is None:
         raise DriveError("[native.keep_polling] needs [native.engine] (it reopens the gate through the ctx)")
     return Profile(points, advance, sandbox.get("settings_file", ""), settings, quiet, tuple(dialogs), engine,
                    keep_polling)
 
 
-def _native_table(native: dict[str, Any], name: str, keys: tuple[str, ...]) -> dict[str, int] | None:
+def _native_table(native: dict[str, Any], name: str, keys: tuple[str, ...],
+                  optional: tuple[str, ...] = ()) -> dict[str, int] | None:
     if name not in native:
         return None
+    unknown = set(native[name]) - set(keys) - set(optional)
+    if unknown:
+        raise DriveError(f"[native.{name}] has unknown key(s): {', '.join(sorted(unknown))}")
     try:
-        return {key: int(native[name][key]) for key in keys}
+        table = {key: int(native[name][key]) for key in keys}
     except KeyError as error:
         raise DriveError(f"[native.{name}] lacks {error.args[0]}") from None
+    table.update({key: int(native[name][key]) for key in optional if key in native[name]})
+    return table
 
 
 def load_profile(context: paths.ToolContext = paths.CONTEXT) -> Profile:

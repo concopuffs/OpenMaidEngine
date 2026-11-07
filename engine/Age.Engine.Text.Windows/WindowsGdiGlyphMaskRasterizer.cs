@@ -14,8 +14,9 @@ namespace Age.Engine.Text.Windows;
 /// code page.
 /// </summary>
 public sealed class WindowsGdiGlyphMaskRasterizer
-    : IIdentifiedGlyphMaskRasterizer, IDisposable
+    : IIdentifiedGlyphMaskRasterizer, IFontMetricsProbe, IDisposable
 {
+    private const uint GgoMetrics = 0;
     private const uint GgoBitmap = 1;
     private const uint GgoGray4Bitmap = 5;
     private const uint GdiError = 0xffffffff;
@@ -86,7 +87,8 @@ public sealed class WindowsGdiGlyphMaskRasterizer
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            SafeGdiObjectHandle font = GetOrCreateFont(request);
+            SafeGdiObjectHandle font = GetOrCreateFont(new FontKey(
+                request.FontFace, request.PixelHeight, request.RequestedWidth, request.Weight));
             IntPtr previous = NativeMethods.SelectObject(
                 _displayIc.DangerousGetHandle(), font.DangerousGetHandle());
             if (previous == IntPtr.Zero || previous == new IntPtr(-1))
@@ -94,6 +96,35 @@ public sealed class WindowsGdiGlyphMaskRasterizer
             try
             {
                 return RasterizeSelectedFont(request);
+            }
+            finally
+            {
+                NativeMethods.SelectObject(_displayIc.DangerousGetHandle(), previous);
+            }
+        }
+    }
+
+    public FontProbeMetrics Measure(string faceName, int pixelHeight, int width, int weight, ushort code)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(faceName);
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            SafeGdiObjectHandle font = GetOrCreateFont(new FontKey(faceName, pixelHeight, width, weight));
+            IntPtr previous = NativeMethods.SelectObject(
+                _displayIc.DangerousGetHandle(), font.DangerousGetHandle());
+            if (previous == IntPtr.Zero || previous == new IntPtr(-1))
+                ThrowWin32("SelectObject(font) failed");
+            try
+            {
+                if (!NativeMethods.GetTextMetricsA(_displayIc.DangerousGetHandle(), out TextMetricA textMetrics))
+                    ThrowWin32("GetTextMetricsA failed");
+                Mat2 identity = Mat2.Identity;
+                if (NativeMethods.GetGlyphOutlineA(
+                        _displayIc.DangerousGetHandle(), code, GgoMetrics,
+                        out GlyphMetrics metrics, 0, null, ref identity) == GdiError)
+                    ThrowWin32($"GetGlyphOutlineA(GGO_METRICS) failed for CP932 0x{code:x4}");
+                return new FontProbeMetrics(textMetrics.AveCharWidth, metrics.BlackBoxX, metrics.CellIncrementX);
             }
             finally
             {
@@ -205,23 +236,21 @@ public sealed class WindowsGdiGlyphMaskRasterizer
         return coverage;
     }
 
-    private SafeGdiObjectHandle GetOrCreateFont(GlyphRasterRequest request)
+    private SafeGdiObjectHandle GetOrCreateFont(FontKey key)
     {
-        var key = new FontKey(
-            request.FontFace, request.PixelHeight, request.RequestedWidth, request.Weight);
         if (_fonts.TryGetValue(key, out SafeGdiObjectHandle? cached)) return cached;
 
         var logFont = new LogFontA
         {
-            Height = -request.PixelHeight,
-            Width = request.RequestedWidth,
-            Weight = request.Weight,
+            Height = -key.PixelHeight,
+            Width = key.RequestedWidth,
+            Weight = key.Weight,
             CharSet = DefaultCharset,
-            FaceName = EncodeFaceName(request.FontFace),
+            FaceName = EncodeFaceName(key.Face),
         };
         IntPtr raw = NativeMethods.CreateFontIndirectA(ref logFont);
         if (raw == IntPtr.Zero)
-            ThrowWin32($"CreateFontIndirectA failed for '{request.FontFace}'");
+            ThrowWin32($"CreateFontIndirectA failed for '{key.Face}'");
         var created = new SafeGdiObjectHandle(raw);
         _fonts.Set(key, created);
         return created;

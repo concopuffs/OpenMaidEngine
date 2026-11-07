@@ -297,9 +297,9 @@ authored logical canvas. The serialized trailer location is recorded in `sys4-fo
 
 ### SYS4INI startup-settings catalog (resolved 2026-07-28)
 
-The settings trailer is a real per-game startup profile, not a miscellaneous string appendix. The complete
-36-pair serialized inventory and physical offsets are canonical in `sys4-format-notes.md`; this section owns
-their native behavior and current port relevance.
+The settings trailer is a real per-game startup profile, not a miscellaneous string appendix. The serialized
+inventories (Himegari's 36 pairs, Kamidori's 44) and physical offsets are canonical in `sys4-format-notes.md`; this
+section owns their native behavior and current port relevance.
 
 The startup order is:
 
@@ -331,13 +331,18 @@ Most entries are direct integer/string mappings, but three transforms matter:
 
 The meaningful consumer catalog is:
 
-| Setting group | Native Himegari effect | Classification |
+| Setting group | Native effect (Himegari unless noted) | Classification |
 |---|---|---|
-| `CREATEOBJECT`, `DRAWMODE` | `CreateObject=2` selects only the retained D3D/object backend; `DrawMode=1` selects its matching draw/text path. Startup verifies that bit `1 << DrawMode` exists in the backend mask. | Active renderer selection |
+| `CREATEOBJECT`, `DRAWMODE` | `CreateObject` is a mask of the renderer backends AGE creates, bit n for DrawMode n (registered default 1). Both games set 2, the retained D3D/object backend, and `DrawMode=1` selects its draw/text path. Startup replaces a mask that lacks DrawMode's bit with 3 (SYS4433 `sys4_read_startup_settings@0x415a20`). | Active renderer selection; the port reads both (`Sys4StartupSettings.CreateObject`/`.DrawMode`) |
 | `SCREENX`, `SCREENY` | Replaces the generic `640x480` fallback with the `800x600` logical canvas before window/surface creation. The port parses and applies these dimensions to its logical canvas and default windowed client size; optional host boot arguments can vary only the physical client. | Active core profile; implemented |
 | `FONT`, `ENABLEANTIFONT`, `ANTIFONTVERSION` | Seeds MS Mincho, enables `message:UseAntiFont`, selects the grayscale glyph-outline path, and records antialias version 3. | Active text profile |
-| `DEPENDMOVIESOUND` | Supplies the default movie-audio dependency/routing policy when movie opcode flags do not force another route. | Active media policy |
-| `FULLSCREENBIT`, `ALWAYSBACKUPSURFACE` | These are read only inside the legacy `CreateObject & 1` DirectDraw branch of `engine_initialize_graphics_from_settings@0x406480`. Himegari selects only bit 2, so its 32-bit/zero values do not drive the active renderer. | Valid compatibility settings, inert for this profile |
+| `DEPENDMOVIESOUND` | The mixer route of a movie whose flags force none: 0 mute, 1 music, 2 SFX, 3 voice, 4 movie, any other value silent ("Movie-to-surface opcode 0x236"). Himegari sets 1, Kamidori 2; Kamidori's LOGO and OP pass flag `0x20000`, which forces music. | Active media policy; port implemented (`MovieSoundRoute`, 2026-11-07) |
+| `FULLSCREENBIT`, `ALWAYSBACKUPSURFACE` | These are read only inside the legacy `CreateObject & 1` DirectDraw branch of `engine_initialize_graphics_from_settings@0x406480`. Both games' `CreateObject=2` creates only the object backend, so their 32-bit/zero values do not drive the active renderer. | Valid compatibility settings, inert for both games |
+| `AUTOFREETEX` (Kamidori) | A mask, registered default 0, that acts only under `CreateObject` bit 1: bit 1 releases every surface before a numbered load restores its records, bit 0 at op `0x9`'s root reload ("AutoFreeTex"). Kamidori sets 3. | Port implemented for the numbered load (`VmOptions.AutoFreeTex`, 2026-11-07); the port's op `0x9` releases every surface whatever the setting (`docs/backlog.md`) |
+| `OUTERFRAMEMODE` (Kamidori) | Registered default 1 in SYS4433 and 0 in SYS4422; Kamidori also sets 1. When nonzero, `engine_initialize_graphics_from_settings_sys4433@0x4063e0` gives the display op `0x25a`'s black background at device creation (`display_set_background_color_mode1@0x404c20`); `sys4_read_startup_settings` does the same for a fullscreen start when it is 1 (`ctx_set_display_background_color_mode1@0x405260`). `scene_context_init_reset_sys4433@0x40c2b0` and `engine_create_main_window@0x48ec40` copy it to `ctx+0x55eb8`, which nothing reads. | Inert: `SYSTEM4@0x1f3` sets the same black background with op `0x25a` before anything draws (2026-11-07) |
+| `BLANKEXTENTMODE` (Kamidori) | Read only by SYS4433's aspect-mode glyph-string draws (`text_draw_glyph_string_plain@0x45e4e0` at `0x45e77f`/`0x45ea13`, `text_draw_glyph_string_effect@0x460250`, and the draws at `0x45ec60` and `0x460d50`). With 1, a blank (`0x20` or `0x8140`) advances by its text extent in the reference font (`0x404da0`); otherwise by the reference cell `+0x313e8`, halved for a single byte. The ADV builder (`0x45b710`) lays out its own records and never reads it. Kamidori sets 1. | Not modelled: the port's immediate surface text has none of aspect mode's rules (`docs/backlog.md`) |
+| `USEPROPORTIONALFONT`, `VALIDFONTCHECKER` (Kamidori) | Filter SYS4433's installed-font list, which ops `0x2dc`-`0x2de` read ("Font family list"). With `set:UseProportionalFont` 0 (the registered default) the list drops IPA Pゴシック, IPA P明朝 and every family that is not fixed-pitch; Kamidori sets 1. `VALIDFONTCHECKER` repeats, one character per pair (Kamidori: 悪, ｱ, 洒), and a family lacking any of them is dropped. | Port implemented (`FontFamilyCatalog`, `WindowsGdiFontFamilySource`, 2026-11-07); the port's list equals native's 37 families, in order, on this machine |
+| `RUBYSHIFTMODE` (Kamidori) | Seeds `message:RubyShiftMode`. SYS4433's `SYS4REG.INI` loader (`0x472530`) reads a value there over it but never writes one. Nonzero removes the live furigana's one-pixel drop and its render-mode-3 raise ("Furigana", SYS4433). Kamidori sets 1. | Port implemented (`RubyLayoutRules`, `Sys4RegIniStore.RubyShiftMode`, 2026-11-07) |
 | `SCREENWARNING` | Imported as `set:ScreenWarning`; no reader beyond default registration/import was found in this EXE image. | Loaded, no observed consumer |
 | `NOSETMUSIC` | Seeds the live music-route state as described above; the route starts enabled. AGERC's 設定 dialog shows ｻｳﾝﾄﾞ page 102, without `sound:Music`'s radio buttons, when it is nonzero (both games have 3). | Active audio initialization; the port picks the 設定 page the same way (`Sys4StartupSettings.NoSetMusic`) |
 | all seven `MENU_*` keys | Imported as `set:Menu_*`. AGE.EXE does not read them. AGERC.DLL does: `agerc_prune_menu_by_settings@0x10002ca0` removes items from the native menu bar when it is attached (see "Native menu bar" below). It reads `Menu_MesWinA` twice and never reads `Menu_MesSpeed`. They are not Himegari script-menu state. `MENU_USEANTIFONT` prunes only the menu's 文字表示 entries; it does **not** disable the independently enabled `message:UseAntiFont` (corrected 2026-11-05). | Native menu-bar pruning |
@@ -369,7 +374,8 @@ registry; the other keys have not yet been migrated to semantic consumers.
 The port now applies click-cancel (`CANCELMESSKIPONCLICK`) and the wheel action ids (`WHEELKEYUP`/`WHEELKEYDOWN`)
 from the trailer instead of AGE's compiled defaults. Auto/Skip coexistence, the wait-indicator policy
 (`CONTROLDISIBLECURSOR`) and the text-redraw policy (`REDRAWTEXTONKEY`) are inert or already matched for both games
-(rows above). Kamidori's extra keys remain open (`docs/backlog.md`). The port deliberately redirects each native profile beneath
+(rows above). Kamidori's six extra keys (eight pairs) are applied or shown inert (rows above, 2026-11-07). The port
+deliberately redirects each native profile beneath
 Godot `user://games/<profile-id>/`: save payloads remain under its `SAVE` child, while engine options retain
 AGE's native `SYS4REG.INI` filename and format at the profile root.
 It should not reproduce legacy DirectDraw selection or native registration/key validation.
@@ -2565,8 +2571,13 @@ queries `IGraphBuilder`, `IMediaControl`, `IMediaPosition`, `IMediaEvent`, and `
 `CMovieTextureRenderer` accepts RGB samples and copies the bottom-up frame into the retained texture.
 
 Operand 3 is retained movie mode plus sound-route policy. Bits `0x10000/0x20000/0x40000/0x80000` force
-mute/music/SE/voice routing; without an override, native setting `set:DependMovieSound` supplies the normal
-movie route. The port applies those categories through Godot audio buses. Operand 4 is stored at movie object
+mute/music/SE/voice routing. Without one, `set:DependMovieSound` (SYS4INI `DEPENDMOVIESOUND`, registered default 1)
+picks the route by the same numbering, with 4 the movie category; any value outside 1..4 is silent
+(`movie_sound_route_from_flags@0x405490`; SYS4433 `0x405200`). The movie then plays at master × that category's
+volume (`sound_route_volume@0x407950`) and is silent while the category's route is off
+(`sound_route_is_enabled@0x405420`). Himegari's 1 is music and Kamidori's 2 is SFX; Kamidori's LOGO and OP pass
+`0x20004`, so they follow music. The port resolves the same category (`MovieSoundRoute`) and plays the movie on that
+category's Godot bus; until 2026-11-07 it put every unflagged movie on the Movie category. Operand 4 is stored at movie object
 `+0x42c` as a millisecond start delay: `movie_start_pending_after_sync_delay` records `timeGetTime()` on the
 first service tick and starts the graph once `current - start >= operand4`. It is not a device mask or movie
 duration. Replacing or releasing the owning surface stops the graph and detaches the renderer. The corpus has
@@ -3535,9 +3546,7 @@ surface sets created. Which workers those are, and how the key is packed, is lis
 
 The restore loop calls `gfx_surface_load_asset` only when the saved reload flag is one and resource id is
 nonnegative. Otherwise the already-initialized surface survives. The optional all-surface release is
-separately gated by both `set:CreateObject` and `set:AutoFreeTex`; the registered defaults at
-`engine_settings_register_defaults@0x46be30` are one and zero respectively, matching Himegari's active
-path. Opcode `0x259` is also a real lifecycle operation:
+gated by `set:CreateObject` and `set:AutoFreeTex` ("AutoFreeTex" below). Opcode `0x259` is also a real lifecycle operation:
 `op_0x259_script_entry_clear_surface_persistence_flags@0x417660` clears record `+0x08` and `+0x0c`
 across both native tables at every script entry.
 Opcode `0x258` then declares the exceptions:
@@ -3549,10 +3558,25 @@ Installed slot 15 records resource `0x3383` with reload flag zero. SYSTEM4 loads
 save UI, and BUNKI cuts its reusable choice-box corners, borders, and winged top ornament from it. The
 port formerly released all 1,000 host surfaces unconditionally, so post-load BUNKI retained its black
 backing but lost the atlas decoration. Restoration now preserves live surfaces and overlays only flagged
-reload records by default, while `VmOptions.CreateObject && VmOptions.AutoFreeTextures` reproduces the
-native all-release branch. Port-authored saves emit the exact resource/reload/created fields, including
+reload records, unless `VmOptions.AutoFreeTex` selects native's all-release branch (below). Port-authored saves emit the exact resource/reload/created fields, including
 `-1` for unused records, and opcode `0x259` clears the modeled reload policy without releasing textures.
 The corrected native functions are renamed/commented in the saved `/v2` image.
+
+#### AutoFreeTex (2026-11-07)
+
+`set:AutoFreeTex` (SYS4INI `AUTOFREETEX`; registered default 0 at `engine_settings_register_defaults@0x46be30`) is a
+mask. Both bits act only under `set:CreateObject` bit 1, the object backend both games create:
+
+- **Bit 1.** `save_data_deserialize_and_begin_restore` releases all 1,000 surfaces before a numbered load restores its
+  records, so only the records flagged for reload come back.
+- **Bit 0.** Op `0x9`'s root reload (`op_0x9_reset_scene_and_reload_root_sys4433@0x423b90`) releases them as well.
+- The release worker (`retained_gfx_release_surface@0x47b6b0`) skips a slot whose guard `gfx+0xb638[slot]`
+  (`ctx+0x55ebc`) is set, but nothing writes that table, so every slot is released.
+
+Himegari's trailer has no `AUTOFREETEX`, so its initialized system textures survive a numbered load. Kamidori sets 3.
+The port's numbered load releases every surface when `(CreateObject & 2) && (AutoFreeTex & 2)`
+(`VmOptions.CreateObject`/`.AutoFreeTex`). Its op-`0x9` scene reset (`GfxState.ResetSceneContext`) releases every
+surface whatever the setting, which native Himegari does not do (`docs/backlog.md`).
 
 #### Port-authored round trips: restored frame boundary and retained-object encoding (2026-07-24)
 
@@ -3894,14 +3918,9 @@ input service's `-1/0/+1` redraw direction from `ctx+0x72078`, then
 `text_query_redraw_cursor@0x450410` returns the 8-byte entry selected by mutable text-manager cursor `+0xd70`.
 SYS4422's matching handler at `0x427140` instead calls `text_query_redraw_anchor@0x450bb0`, which reads the
 fixed latest-entry anchor at `+0xd6c`; that is a real revision distinction rather than a Kelebek-label
-difference. `0x82` then clears the selected layout and redraws the retained group at its stored coordinates:
-SYS4422 `op_0x82_redraw_retained_text_group@0x41edd0` -> `text_redraw_retained_group@0x451530`, and SYS4433
-equivalents `@0x41cec0` -> `@0x4553c0`. Both implement flag bits 1/2/4/8 for filtered-boundary traversal,
-temporary color overrides, binding suppression, and retained voice replay. Kamidori has six paired sites in
-`CONFIG1`--`CONFIG5`; they discard the direction result and pass only the current `(layout, record)` pair to
-`0x82` with flag 2. The portable path therefore returns neutral direction plus its newest retained entry and
-reuses retained host text presentation for the repaint. Direct key-driven history walking remains an input
-service feature, not an opcode compatibility stub.
+difference. `0x82` then draws the retained group again at its records' rectangles ("Op 0x82 redraw" below). The
+portable `0x83` returns a neutral direction plus its newest retained entry, which is all Kamidori's CONFIG sites use.
+Direct key-driven history walking remains an input service feature, not an opcode compatibility stub.
 
 The third port slice implements visible History presentation without moving canonical records into Godot.
 Op `0x1d1` asks `AdvTextHistory` to select one retained group, skip metadata/voice records, and build a
@@ -3990,6 +4009,69 @@ A live replay trace exposed a corrected prerequisite on that path. The clicked S
 `(type,value)` to `text_history_append_typed_metadata@0x455f00`; the helper stores value at record `+0x14`
 and type at `+0x18`. Thus SC0000's `0x1d2(2,0x11)` means type 2, character/value `0x11`, not the reverse.
 The port now writes that pair in the native order, allowing HISTORY's type-2 gate to reach voice playback.
+
+#### Op `0x82` redraw (2026-11-07)
+
+**Where it runs.** Only Kamidori runs op `0x82`, and not when CONFIG returns. Its six sites are CONFIG's setting
+handlers, so the ADV page behind the open CONFIG screen shows a change at once:
+
+- CONFIG1's 初期設定 (`label_fb6`, after `INITCONFIG`, `INITCONFIG2` and `CHECKCONFIG`);
+- every CONFIG2 change (`label_1d47`);
+- the matching CONFIG3, CONFIG4 (two sites) and CONFIG5 handlers.
+
+Each first sets the text style from the settings: the face `GS[0x279]`, bold, ruby size 8, line spacing 10, render
+mode `G[0xfd499]` and effect offset `G[0xfd49a]`. It then calls `0x83` -> `0x82` only when `G[0]` is 1 (ADV mode,
+set at `SC0000@0x660`), `G[0x4f9]` is 1 (the window is shown; MENU leaves it alone) and `G[0x306e]` is set (every line
+sets it). The call is `redraw-retained-text-group (layout) (record) 0x2 0xffffff G[0xfd498]`: flag 2, white text and
+the configured outline color.
+
+**Native.** SYS4422 `op_0x82_redraw_retained_text_group@0x41edd0` -> `text_redraw_retained_group@0x451530`; SYS4433
+`@0x41cec0` -> `@0x4553c0`, decoded below.
+
+1. On the D3D path it releases the layout's objects (`gfx_release_object_range@0x4843c0` over `layout+0x68`/`+0x6c`)
+   and clears the layout's surface. The DrawMode-1 path without D3D fills the rectangle (`0x437590`).
+2. Flag 2 takes the text and effect colors from operands 4 and 5, R and B swapped.
+3. It walks the records from the requested one:
+   - a navigation-filtered record (`+0x28` bit 1) ends the walk unless flag 1 is set;
+   - the next group start (`+0x70` bit 0) ends it;
+   - metadata records (`0x20000000`) are skipped;
+   - voice records (`0x40000000`) are replayed only under flag 8.
+4. For each text record:
+   - It restores the record's text and effect colors (`+0x14`/`+0x18`, unless flag 2), the unidentified `+0x1c`
+     (into manager `+0x558`) and the pixel height (`+0x24`). Face, weight and effect offset stay the manager's current
+     ones.
+   - It draws in the render mode the manager had on entry, not the record's `+0x20`.
+   - Each character is drawn from the record's rectangle top-left. It advances by its measured extent, or by the
+     reference cell `+0x313e8` in aspect mode (half for a single byte).
+   - A ruby record (`+0x28` bit 2) draws in the ruby font, mode 0, advancing by `+0x355d8`.
+   - It writes the drawn right/bottom back to the record.
+   - Unless flag 4 is set, it binds one object per record over the drawn rectangle
+     (`gfx_bind_object_to_surface_rect@0x4855e0`, handles counting up from `layout+0x68`).
+5. The aspect in-cell placement flag (`+0x35598`) is 1 during the walk. The style is restored at the end, and the
+   live glyph vector and the text cursor are left alone, so later text continues the page.
+
+**Port.**
+
+- `AdvTextHistory.TryBuildRedrawBatch` walks the group as native does and gives each record its draw style: the
+  current `AdvTextStyle` with the record's colors (or flag 2's) and pixel height, and mode 0 for ruby.
+- `IAdvHost.RedrawRetainedTextGroup` receives it. `GodotAdvHost` draws every record at its rectangle into a cleared
+  layout surface (`RetainedGlyphLayoutEngine.RenderRedraw`; ruby through `RubyTextLayout.DrawAt`).
+- Unless flag 4 is set, it binds the published glyphs again over the new pixels. Native binds one object per record,
+  which covers the same cells.
+- Flag 8's voice replay is not modelled (`docs/backlog.md`).
+- It is not a History presentation, which History's exit would erase.
+
+The port used to lay the whole group out again as one reflowed string through the History path. On return from
+CONFIG that duplicated the text, then left the page blank.
+
+**Check.** `tools/drive/scenarios/kamidori-config-redraw.steps` (2026-11-07) reaches the furigana page
+`SC0000@0xfa2`. It then makes two CONFIG changes, 初期設定 on 基本設定 and ADV設定's 効果 縁なし, and shoots the page
+after each. Inside the text window no pixel differs from native by more than 30 after either change, the ruby
+included. Before the changes, only the wait indicator's animation frame and 4 pixels of the window's top edge
+differ. Outside the window the background's edges differ, as on every Kamidori page compared so far
+(`docs/backlog.md`). Synthesized tests: `TextRedrawOpsTests` and
+`RubyTextLayoutTests.ARedrawDrawsThePageAgainAtItsRecords`; the latter redraws a wrapped page with ruby and gets the
+live page's pixels back.
 
 #### Timed local-callback scheduler and History smooth scrolling (2026-07-19)
 
@@ -4781,13 +4863,43 @@ font.
 - `RetainedAdvTextLayoutPresentation.AppendRun` applies the chain rule across runs. The reveal counts ticks through
   `PublicationTarget`.
 - `AdvTextHistory` keeps the flag-4 records (`AdvTextHistoryRecordFlags.Ruby`), and `TryBuildHistoryRenderBatch` turns
-  them into `AdvTextRubyAnnotation`s. Op `0x82`'s reflowed redraw leaves them out.
+  them into `AdvTextRubyAnnotation`s. Op `0x82` draws each ruby record at its own rectangle ("Op 0x82 redraw").
 - Numbered saves keep the records in native's record layout (not yet compared with a native save of a furigana page).
 - Tests: `RubyTextLayoutTests` (synthesized).
 - Check: `tools/drive/scenarios/himegari-furigana.steps`. Page 18 and its History match native pixel for pixel in
   every text row, the ruby included.
-- Not checked: Kamidori. Its SYS4433 engine has neither of Himegari's two ruby code sequences, and its SYS4INI trailer
-  has `RUBYSHIFTMODE` (`docs/backlog.md`).
+- Kamidori's engine differs: "Furigana in SYS4433" below.
+
+#### Furigana in SYS4433 (Kamidori, 2026-11-07)
+
+Kamidori's engine has neither of Himegari's two ruby code sequences. Its live ruby is
+`adv_text_draw_ruby_over_row_sys4433@0x4590d0` and its History renderer is `@0x456490`; op `0x196`'s handler is
+`0x41d3c0`. The ruby font (8 px ＭＳ ゴシック), the row split and the record layout are Himegari's. The differences:
+
+- **Spacing.** The gap divides by `(bytes + 3) >> 1` instead of `bytes / 2 + 1`. A single-byte ruby character is
+  followed by half the gap, and a control character draws as a space.
+- **Vertical placement.** The live ruby starts one pixel lower only when `set:DrawMode` is not 1 and
+  `message:RubyShiftMode` is 0. History's ruby never adds that pixel. A render-mode-3 effect raises the ruby by its y
+  offset only when `RubyShiftMode` is 0. Kamidori has DrawMode 1 and `RUBYSHIFTMODE=1`, so its ruby sits at
+  `base top + lfHeight` with no raise. With `RubyShiftMode` 0 and DrawMode 1, History's sprite publication also
+  samples its source one pixel lower. The port does not model that, since no shipped SYS4433 game runs that way.
+- **Publication.** Every ruby record gets chain flag 1, and the ruby builder resets the pending record to 0. A run's
+  whole ruby therefore publishes in one tick with the base glyph before it, and the next run starts its own tick.
+- **The glyph timer.** Op `0x196` re-arms the glyph timer as op `0x6e` does, which SYS4422's handler does not.
+
+`RUBYSHIFTMODE` comes from the SYS4INI trailer. SYS4433's `SYS4REG.INI` loader also reads `message:RubyShiftMode`
+over it, but never writes it ([sys4-format-notes.md](sys4-format-notes.md), "Native SYS4REG.INI engine options").
+
+**Port.** `RubyLayoutRules` holds each revision's rules: `Sys4422`, or `Sys4433(rubyShiftMode, drawMode)` from the
+profile's engine ABI, its SYS4INI and the loaded `SYS4REG.INI` (`RubyLayoutRules.For`). `RubyTextLayout`,
+`RetainedAdvTextLayoutPresentation.AppendRun` and the glyph timer read them.
+
+**Check.** `tools/drive/scenarios/kamidori-furigana.steps` (2026-11-07) shows the prologue page `SC0000@0xfa2`, with
+はんらん over 叛乱, and then its History. The translation blanks every ruby, so it runs on the Japanese base (the port
+without `--overlay-root`, native with the scratch install's `patch/` renamed). History matches native in every
+near-white text pixel (none of 46,144 differs by more than 30). Inside the page's text window only the wait
+indicator and 4 pixels of the window's top edge differ. Kamidori's base text first needed its own font realization and placement ("Aspect-mode font
+calibration", "Aspect-mode glyph placement").
 
 #### The reveal clock (2026-11-06)
 
@@ -4871,6 +4983,16 @@ atlas cell. Frame selection now treats the terminal value as the exclusive frame
 The retained presenter requests a new frame only when that source cell changes, preserving the static-wait
 compositor optimization. Full SYSTEM4 replay remains Phase-B work; the shortcut carries the same state in
 the meantime.
+
+**SYS4433 follow mode (2026-11-07).** Kamidori configures its indicator with op `0x2bc` and turns on follow mode with
+op `0x1b1` (`SYSTEM4@0xb7`, text manager `+0x570`); Himegari never does. In follow mode
+`adv_wait_indicator_draw_frame_sys4433@0x452730` places the indicator at the layout origin plus the configured offset
+(`+0x50`) plus the left/top of the layout's last 20-byte glyph record (`*(layout+0x30) - 0x10`). The builders always
+draw into the last record and then push the next one at the cursor, so that record is the pending one just past the
+last glyph. Op `0x6f`'s line end, op `0x7a` and a layout reset move it. The port used to anchor on the last glyph's own
+left, one cell left of native. `GodotAdvHost` now keeps each layout's cursor (`_layoutCursors`), set by every drawn run
+and by `IAdvHost.SetAdvTextCursor`, which op `0x6f` now calls too. On `SC0000@0xfa2` the indicator now lands where
+native draws it.
 
 ### SC0000 native SFX / BGM-fade family — `0xb4`/`0xb5`/`0xb6`/`0xba`/`0xc2`/`0xd9` (2026-07-11)
 
@@ -5303,8 +5425,8 @@ op `0x1d1`'s History renderer reads only the string and flags:
 > spacing. There is no wrap and no bounds check, so the rows break exactly where the ADV window wrapped.
 > Flag 2 swaps the operand colors in for the call.
 >
-> Op `0x82`'s `text_redraw_retained_group@0x451530` is different: it restores each record's retained
-> style and draws at the record rectangle.
+> Op `0x82`'s `text_redraw_retained_group@0x451530` is different: it restores each record's colors and
+> pixel height and draws at the record rectangle ("Op 0x82 redraw").
 >
 > The port builds an op-`0x1d1` batch in the VM's current `AdvTextStyle`, carrying the glyph indices of
 > the group's line-break records (`AdvTextHistory.TryBuildHistoryRenderBatch`). The Godot host lays
@@ -6064,6 +6186,20 @@ modal box owns it.
 Yes continues; No throws the exit exception. Nothing is corrupted. The box appears when AGE runs from a
 `native_scratch.py` copy, and while it is open it blocks the main loop, so no clicks reach the game until it is
 answered.
+
+**Kamidori (SYS4433, 2026-11-07).** Kamidori's engine lays out its context differently, so `engine-ctx.toml`'s
+offsets (Himegari's `/v2` image) do not apply. The profile `tools/drive/kamidori.toml` names its own:
+
+- `g_pEngineCtx` is `0x5c9bc8`.
+- The interpreter (`0x41121e`) reads `cur_ctx_index` at `ctx+0x57fa0` and the current op through `ctx+0x57fb8 +
+  curCtx * 0x78`. Each 0x78-byte frame record keeps Himegari's internal layout: codebase `+0x14`, pc `+0x18` and
+  resource id `+0x50`, so `0x57fb4`, `0x57fb8` and `0x57ff0` from the context.
+- `input_set_polling_enabled` is `0x465a60` (input manager `+0x1820`, as in Himegari, so the gate is `ctx+0x1c28`).
+  `age_main_window_proc`'s `WM_ACTIVATE` case calls it with `windowed (ctx+0x9e740) && wParam == WA_INACTIVE` on the
+  input manager at `ctx+0x408`, and the call returns to `0x48e061`.
+- A copied install raises the same データが壊れています． registration box, answered Yes.
+
+The driver uses those values in place of `engine-ctx.toml` ([tools-reference.md](tools-reference.md), "Game driver").
 
 ### ADV right-click/X system-menu path (2026-07-21)
 
@@ -6845,10 +6981,108 @@ selected-font glyph advances/extents. Mode-zero behavior stays unchanged.
 Font realization is a separate native layer: `text_create_calibrated_single_byte_font@0x451b70`
 selects `text_calibrate_mode1_glyph_font@0x451340` or
 `text_calibrate_mode2_glyph_font@0x451910`; these consult natural font metrics and
-reference glyph geometry. This change implements the proven layout rule, not full
-per-glyph font calibration or display-aspect scaling. The named functions and
-findings are annotated and saved in the SYS4433 Ghidra image. Opcode evidence lives
+reference glyph geometry. The 2026-09-21 change implemented only the layout rule. The calibration and the in-cell
+placement followed on 2026-11-07 (the sections below). Display-aspect scaling is still not modelled. The named
+functions and findings are annotated and saved in the SYS4433 Ghidra image. Opcode evidence lives
 in `vm-map/opcodes.toml`; regression/results are in `phase-a-slice-plan.md`.
+
+#### Font family list (2026-11-07)
+
+SYS4433 keeps a list of installed font families that ops `0x2dc` (count, or `-1` when empty), `0x2dd` (name) and
+`0x2de` (find) read. Kamidori's SELFONT offers it. The startup reader (`0x415a20`) builds the list once with
+`text_build_font_family_list@0x458040`:
+
+1. `EnumFontFamiliesExA` over `SHIFTJIS_CHARSET` (lfOutPrecision 8, empty face) on a display IC, in GDI's order. The
+   callback (`0x455010`) keeps a family when its FontType is not exactly `RASTER_FONTTYPE`, its `lfCharSet` is
+   `SHIFTJIS_CHARSET` and its name does not start with `@`.
+2. Every value name under `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\FontLink\SystemLink` is removed,
+   except ten Japanese families (`0x470bc0`'s table at `0x57ef7c`..`0x57eff4`). The removed ones are Latin faces with
+   linked Japanese fallbacks.
+3. With `set:UseProportionalFont` 0, IPA Pゴシック, IPA P明朝 (`0x57d124`, `0x57d118`) and every family whose pitch is
+   not `FIXED_PITCH` are removed.
+4. A family that lacks any `VALIDFONTCHECKER` character is removed. "Lacks" means `GetGlyphOutlineA(GGO_METRICS)` gives
+   a black box under 2x2 pixels in the face at lfHeight -64, lfWidth -32 and `DEFAULT_CHARSET`. The code asked for comes
+   from `text_set_valid_font_checkers@0x40b060`:
+   - a one-byte value is its byte;
+   - otherwise the first two CP932 bytes combine as `b0 * 256 + (signed)b1` in 16 bits. A trail byte of `0x80` or more
+     therefore lowers the lead byte by one: 悪 (`0x88AB`) is asked for as `0x87AB` and 洒 (`0x9FAD`) as `0x9EAD`.
+
+Removal keeps the order of the rest, and each family keeps its `lfPitchAndFamily` for the calibration below.
+
+**Port.** `FontFamilyCatalog` applies the rules over an `IFontFamilySource`. `WindowsGdiFontFamilySource` makes the
+same ANSI GDI calls on a DISPLAY information context and reads the 32-bit registry view. On this machine the port's
+list equals the one dumped from native AGE: 37 families in the same order. Tests: `FontFamilyCatalogTests`
+(synthesized font system).
+
+#### Aspect-mode font calibration (2026-11-07)
+
+`text_rebuild_primary_font_resources@0x452320` rebuilds the primary font whenever its face, size, weight or the
+aspect mode changes. `text_measure_glyph_with_aspect_mode@0x452080` picks its `lfWidth`:
+
+- With the mode off, the width is `-height / 2`, as for any AGE font. The same holds for a face missing from the font
+  family list, and for a fixed-pitch one other than IPA Pゴシック or IPA P明朝.
+- Otherwise mode 1 calibrates it from 激 (`text_calibrate_mode1_glyph_font@0x451340`). `ref` is the reference glyph:
+  ＭＳ ゴシック at the size, half width, and the weight. `nat` is the face's glyph at its natural width (lfWidth 0).
+  - When the reference black box is no wider, the width is `ref.gmBlackBoxX / nat.gmCellIncX * -nat.tmAveCharWidth`.
+  - Otherwise it is `nat.gmBlackBoxX / ref.gmCellIncX * -nat.tmAveCharWidth`.
+  - Both are truncated. Kamidori's メイリオ bold comes out at -18 for both 20 and 22 pixels.
+
+Not modelled: mode 2 (`text_calibrate_mode2_glyph_font@0x451910`), which no shipped game selects; the
+`display:AspectMode` setting, which calibrates every face when nonzero; and the separate single-byte font
+(`text_create_calibrated_single_byte_font@0x451b70`).
+
+**Port.** `AspectFontRealization` holds the rule. Its measurements come from an `IFontMetricsProbe`, which is GDI in
+the Windows text backend. ADV text, History and op `0x82` use it; immediate surface text does not ("Aspect-mode
+surface text"). Tests: `AspectFontRealizationTests` (synthesized metrics).
+
+#### Aspect-mode glyph placement (2026-11-07)
+
+In aspect mode a proportional face's glyph is placed inside its fixed reference-width cell.
+`text_draw_glyph_string_effect@0x460250` (at `0x460918`) and `text_draw_glyph_string_plain@0x45e4e0` (at `0x45e815`)
+move the glyph right of the pen when all of these hold:
+
+- the aspect mode is on;
+- the text manager's aspect-layout flag `+0x35598` is set (the ADV append, History and op `0x82` set it; immediate
+  surface text clears it);
+- the glyph is not ruby;
+- the primary face is in the font family list with its fixed-pitch bit clear (the IPA proportional faces get no
+  exception here).
+
+`text_classify_aspect_glyph@0x45c560` looks a double-byte glyph's lead and trail bytes up, with `strstr`, in two class
+strings that the text-manager constructor (`0x4588d0`) copies to `+0x31484` and `+0x31504`. In mode 1:
+
+- Class 0 is the closing brackets and 、。，．. The glyph keeps the pen.
+- Class 1 is the opening brackets. The black box's right edge goes to the reference 激's black-box width.
+- Every other glyph, and every single-byte one, is centred:
+  `trunc(size / 2 + 0.5) - trunc(gmBlackBoxX * 0.5 + 0.5) - gmptGlyphOrigin.x`, with a quarter of the size for a single
+  byte.
+
+Any other nonzero mode always centres. AGE also multiplies the size and the reference width by a display scale
+(`+0x40c->+0x4e0`, 1.0 unless `+0x488` is clear), which the port does not have.
+
+The ADV builder also raises a glyph above its cell (`adv_text_append_horizontal_glyph_records@0x45b710` at `0x45be16`,
+and History's renderer `@0x456490`). Let `d = trunc(tmAscent - ref.tmAscent - 0.5)` against the reference ＭＳ ゴシック,
+and `e = trunc(tmAscent - 激.gmptGlyphOrigin.y - 1)` for the realized font's 激 (`+0x31430`). The raise is 0 when `d`
+is 0, and otherwise the larger of `d` and `e`. A face as tall as the reference is not raised; Kamidori's メイリオ bold
+at 22 pixels is raised 3. The record keeps the cell.
+
+**Port.** `AspectGlyphPlacement.OffsetX` and `RetainedGlyphLayoutEngine.AspectGlyphRaise`. Tests:
+`AspectGlyphPlacementTests`.
+
+#### SYS4433 glyph coverage alpha (2026-11-07)
+
+`text_blit_glyph_bitmap_sys4433@0x45cff0` turns a gray-4 coverage value `c` (0..16) into alpha `c * 255 / 17`, so
+full coverage is 240 and text never fully hides what lies under it. SYS4422 uses `c * 255 >> 4`. Its GGO_GRAY8
+branch, `c * 255 / 65`, needs text manager `+0x35584` = 1, which nothing sets. An aliased glyph's set pixels are opaque
+under both. The port picks the blit by engine ABI (`AgeGlyphMaskCompositor.CoverageAlphaFor`).
+
+#### Aspect-mode surface text (not modelled)
+
+Immediate surface text (op `0x204`, `text_draw_string_to_surface_sys4433@0x44f8a0`) draws with the primary font, which
+aspect mode calibrates. It moves y by the reference `tmAscent` (`+0x313f0`) minus the font's, and advances through the
+aspect-mode glyph-string draws (including `BLANKEXTENTMODE`). The port's `ImmediateSurfaceTextRenderer` applies none of
+this. On Kamidori's CONFIG2 page (ADV設定), the port draws the 14 px font names (op `0x204`, in their own face) and
+the slider values (op `0x205`) visibly smaller and narrower than native (`docs/backlog.md`).
 
 
 ### Surface resource query 0x216 and Kamidori battle transition (2026-09-22)

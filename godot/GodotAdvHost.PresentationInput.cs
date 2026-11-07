@@ -330,8 +330,6 @@ public sealed partial class GodotAdvHost
         lock (_textLock)
         {
             _advText = "";
-            _advTextX = 100;
-            _advTextY = 47;
         }
         _main.CallDeferred("ClearPage");
     }
@@ -961,8 +959,7 @@ public sealed partial class GodotAdvHost
             _activeLiveText = null;
             _suspendedRetainedTextLayoutSlot = 0;
             _advText = "";
-            _advTextX = 100;
-            _advTextY = 47;
+            _layoutCursors.Clear();
             _advTextForceComplete = false;
             _revealsFinishedUntilWait = false;
             _waitIndicators.Clear();

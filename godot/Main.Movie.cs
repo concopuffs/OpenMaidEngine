@@ -149,14 +149,10 @@ public partial class Main
         _movieCompletionNotified.Remove(playbackId);
     }
 
-    private static MovieAudioRoute MovieAudioRouteFromFlags(long flags)
-    {
-        ulong value = unchecked((ulong)flags);
-        if ((value & 0x10000) != 0) return MovieAudioRoute.Muted;
-        if ((value & 0x20000) != 0) return MovieAudioRoute.Music;
-        if ((value & 0x40000) != 0) return MovieAudioRoute.SoundEffect;
-        if ((value & 0x80000) != 0) return MovieAudioRoute.Voice;
-        return MovieAudioRoute.Movie;
-    }
+    // The route bus carries its category's volume and route mute under Master, as native's master x route volume.
+    private MovieAudioRoute MovieAudioRouteFromFlags(long flags)
+        => Age.Engine.Model.MovieSoundRoute.Resolve(flags, _catalog.StartupSettings.DependMovieSound) is { } category
+            ? (MovieAudioRoute)(int)category
+            : MovieAudioRoute.Muted;
 
 }

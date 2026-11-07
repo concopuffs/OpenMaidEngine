@@ -136,6 +136,51 @@ public class ProfileStartupRecoveryTests
         }
     }
 
+    [Fact]
+    public void Sys4433BindsTwoMoreKeys()
+    {
+        string root = NewDirectory();
+        string path = Path.Combine(root, Sys4RegIniStore.FileName);
+        try
+        {
+            // Kamidori's SYS4INI pairs that reach SYS4REG.INI keys.
+            var startup = Sys4StartupSettings.FromPairs([
+                new("FONT", "ＭＳ 明朝"), new("ENABLEANTIFONT", "1"), new("FULLSCREENBIT", "32"),
+                new("NOSETMUSIC", "3"), new("RUBYSHIFTMODE", "1")]);
+            Sys4RegIniStore store = Sys4RegIniStore.ForPath(startup, path, "SYS4433");
+            store.SaveMessageInt(Sys4RegIniStore.MessageSpeedKey, Sys4RegIniStore.DefaultMessageSpeed);
+
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            // A native Kamidori exit's file (2026-11-07; ScreenMode and Volume0 at their defaults): Himegari's keys plus
+            // VirtualFullScreenType and AntiFontLevel, and no RubyShiftMode.
+            string[] nativeLines =
+            [
+                "[display]", "UseDirectDrawEmuration=0", "UseWideSurface=0", "ScreenMode=0", "FullScreenBit=32",
+                "UseIVideoWindow=1", "DeviceType=0", "VertexProcessing=0", "PresentInterval=0", "TextureBit=32",
+                "PixelShader=-1", "ForceScreen=0", "VirtualFullScreen=0", "AspectMode=0", "FullScreenWidth=0",
+                "FullScreenHeight=0", "LimitAero=0", "VirtualFullScreenType=0",
+                "[sound]", "Sound=1", "Music=2", "SE=1", "Voice=1", "Movie=1", "UseDirectSound=1",
+                "UseDirectSoundEmuration=1", "DirectSoundCooperativeLevel=1",
+                "Volume0=-1", "Volume1=-1", "Volume2=-1", "Volume3=-1", "Volume4=-1",
+                "MusicFadeOnVoicePlaying=1", "MusicFadeOnVoicePlayingVolume=50",
+                "[message]", "Font=ＭＳ 明朝", "RMouseEvent=0", "MessageSpeed=5", "MesWinAlpha=8", "UseAntiFont=1",
+                "AntiFontLevel=0", "AutoMessageTime0=500", "AutoMessageTime1=2000", "ReadTextSkip=0",
+                "AdvanceMesOnWheel=0",
+                "[system]", "SaveBMPPath=", "UseMMX=1", "EffectSkipOnClick=0", "OutErrorLog=0",
+            ];
+            Assert.Equal(string.Join("\r\n", nativeLines) + "\r\n", File.ReadAllText(path, Encoding.GetEncoding(932)));
+            Assert.Equal(1, store.RubyShiftMode);
+
+            // A hand-added RubyShiftMode overrides SYS4INI's.
+            File.AppendAllText(path, "[message]\r\nRubyShiftMode=0\r\n", Encoding.GetEncoding(932));
+            Assert.Equal(0, Sys4RegIniStore.ForPath(startup, path, "SYS4433").RubyShiftMode);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("1", null, true)]     // Himegari and Kamidori: ENABLEANTIFONT=1, UseAntiFont at its default 1
     [InlineData("1", "0", false)]     // the 設定 dialog's 文字の縁をなめらかにする unchecked

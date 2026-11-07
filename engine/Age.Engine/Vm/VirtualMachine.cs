@@ -1357,7 +1357,9 @@ public sealed partial class VirtualMachine
         }
 
         GfxPersistenceSnapshot gfxSnapshot = NativeGfxPersistenceCodec.Decode(state);
-        bool releaseAllSurfaces = _o.CreateObject && _o.AutoFreeTextures;
+        // save_data_deserialize_and_begin_restore: (CreateObject & 2) && (AutoFreeTex & 2) runs the release worker over
+        // every slot (docs/engine-re.md, "AutoFreeTex").
+        bool releaseAllSurfaces = (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0;
         if (releaseAllSurfaces)
         {
             Gfx.ReleaseSurfaceRange(0, 1000);
@@ -1842,7 +1844,7 @@ public sealed partial class VirtualMachine
             case "append-text-history-metadata":
             case "step-text-history":
             case "query-current-text-redraw": // 0x83: direction plus current retained entry
-            case "redraw-retained-text-group": // 0x82: ordinary ADV redraw after CONFIG returns
+            case "redraw-retained-text-group": // 0x82: ordinary ADV redraw after a CONFIG setting change
             case "render-text-history": // 0x1d1: rasterize/bind one retained group to a target layout
             case "u0041BAE0":
             case "u0041BB90":

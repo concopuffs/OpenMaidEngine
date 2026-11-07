@@ -78,11 +78,16 @@ def agent_config(profile: core.Profile, folders: dict[int, Path] | None, engine_
                 raise DriveError(f"sandbox path must be ASCII and short enough for AGE's buffers: {text}")
     engine = keep_polling = None
     if profile.engine is not None:
-        if engine_ctx_text is None:
+        # A profile that names its engine's field offsets (another engine revision) does not read engine-ctx.toml,
+        # which holds Himegari's EngineCtx.
+        fields = tuple(name for name in ENGINE_FIELDS if name not in profile.engine)
+        gate_named = profile.keep_polling is None or core.POLLING_GATE_KEY in profile.keep_polling
+        if (fields or not gate_named) and engine_ctx_text is None:
             raise DriveError("the profile reads engine state but vm-map/engine-ctx.toml is missing")
-        engine = {**profile.engine, **engine_ctx_offsets(engine_ctx_text)}
+        engine = {**(engine_ctx_offsets(engine_ctx_text, fields) if fields else {}), **profile.engine}
         if profile.keep_polling is not None:
-            gate = engine_ctx_offsets(engine_ctx_text, (POLLING_GATE_FIELD,))[POLLING_GATE_FIELD]
+            gate = (profile.keep_polling[core.POLLING_GATE_KEY] if gate_named
+                    else engine_ctx_offsets(engine_ctx_text, (POLLING_GATE_FIELD,))[POLLING_GATE_FIELD])
             keep_polling = {**profile.keep_polling, "gate": gate}
     return {
         "dialogs": [{"match": list(policy.match.encode("cp932")), "answer": policy.code} for policy in profile.dialogs],

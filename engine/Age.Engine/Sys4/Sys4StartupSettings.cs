@@ -73,6 +73,51 @@ public sealed class Sys4StartupSettings
     /// enabling one clears the other. Both shipped games set 1. Missing or non-numeric means 0.</summary>
     public bool CoexistMessageSkip => ReadInt("COEXISTMESSKIP", 0) != 0;
 
+    /// <summary>DRAWMODE (set:DrawMode, registered default 0). Both shipped games set 1, under which ADV text draws
+    /// into each layout's blank surface (slot layout + 0x14) that sprites then publish. SYS4433's ruby placement also
+    /// reads it (<see cref="Text.RubyLayoutRules"/>). Missing or non-numeric means 0.</summary>
+    public int DrawMode => ReadInt("DRAWMODE", 0);
+
+    /// <summary>CREATEOBJECT (set:CreateObject, registered default 1): the renderer backends AGE creates, bit n for
+    /// DrawMode n. Both shipped games set 2, the object backend their DrawMode 1 draws with. Startup replaces a mask
+    /// that lacks DrawMode's bit with 3 (sys4_read_startup_settings@0x415a20). Missing or non-numeric means 1.</summary>
+    public int CreateObject
+    {
+        get
+        {
+            int value = ReadInt("CREATEOBJECT", 1);
+            int drawModeBit = 1 << (DrawMode & 31);
+            return (value & drawModeBit) == drawModeBit ? value : 3;
+        }
+    }
+
+    /// <summary>DEPENDMOVIESOUND (set:DependMovieSound, registered default 1): the mixer category a movie without a
+    /// route flag follows (<see cref="Model.MovieSoundRoute"/>). Himegari sets 1 (music), Kamidori 2 (SFX). Missing or
+    /// non-numeric means 1.</summary>
+    public int DependMovieSound => ReadInt("DEPENDMOVIESOUND", 1);
+
+    /// <summary>AUTOFREETEX (set:AutoFreeTex, registered default 0): under CreateObject bit 1, bit 1 releases every
+    /// surface before a numbered load and bit 0 at op 0x9 (<see cref="Vm.VmOptions"/>). Kamidori sets 3; Himegari has
+    /// none. Missing or non-numeric means 0.</summary>
+    public int AutoFreeTex => ReadInt("AUTOFREETEX", 0);
+
+    /// <summary>USEPROPORTIONALFONT (set:UseProportionalFont, registered default 0; SYS4433). Zero removes IPA
+    /// Pゴシック, IPA P明朝 and every family that is not FIXED_PITCH from the installed-font list that ops
+    /// 0x2dc-0x2de read (<see cref="Text.FontFamilyCatalog"/>). Kamidori sets 1. Missing or non-numeric means 0.</summary>
+    public bool UseProportionalFont => ReadInt("USEPROPORTIONALFONT", 0) != 0;
+
+    /// <summary>VALIDFONTCHECKER (SYS4433), one character per pair; the key repeats, and each pair adds to the list in
+    /// file order. A family that lacks any of these characters leaves the installed-font list
+    /// (<see cref="Text.FontFamilyCatalog"/>). Kamidori lists 悪, ｱ and 洒.</summary>
+    public IReadOnlyList<string> ValidFontCheckers
+        => _pairs.Where(pair => string.Equals(pair.Key, "VALIDFONTCHECKER", StringComparison.OrdinalIgnoreCase))
+                 .Select(pair => pair.Value).ToArray();
+
+    /// <summary>RUBYSHIFTMODE (message:RubyShiftMode, registered default 0; SYS4433). Nonzero drops the furigana's
+    /// one-pixel drop and its mode-3 raise by the effect offset, in live text and History
+    /// (<see cref="Text.RubyLayoutRules"/>). Kamidori sets 1. Missing or non-numeric means 0.</summary>
+    public int RubyShiftMode => ReadInt("RUBYSHIFTMODE", 0);
+
     private int ReadInt(string key, int fallback)
         => int.TryParse(GetValueOrDefault(key)?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
                out int value) ? value : fallback;

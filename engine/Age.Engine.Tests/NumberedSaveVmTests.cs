@@ -496,8 +496,14 @@ public class NumberedSaveVmTests
         }
     }
 
-    [Fact]
-    public void DataOnlyLoadReleasesAllSurfacesWhenBothNativeSettingsEnableIt()
+    [Theory]
+    [InlineData(2, 3, true)]    // Kamidori
+    [InlineData(2, 2, true)]
+    [InlineData(2, 1, false)]   // bit 0 releases at op 0x9 only
+    [InlineData(2, 0, false)]   // Himegari
+    [InlineData(1, 3, false)]   // without the object backend's bit
+    public void DataOnlyLoadReleasesAllSurfacesWhenBothNativeSettingsEnableIt(
+        int createObject, int autoFreeTex, bool released)
     {
         string root = NewTemporaryDirectory();
         try
@@ -519,16 +525,14 @@ public class NumberedSaveVmTests
             var host = new RecordingHost();
             var vm = new VirtualMachine(
                 loader, Table, host,
-                new VmOptions(CreateObject: true, AutoFreeTextures: true),
+                new VmOptions(CreateObject: createObject, AutoFreeTex: autoFreeTex),
                 nativeDatStore: store);
             vm.Gfx.SetSurface(15, 0x3383, 0);
 
             vm.Run();
 
-            Assert.Contains((0, 1000), host.ReleasedSurfaceRanges);
-            Assert.DoesNotContain(
-                vm.Gfx.CapturePersistenceSnapshot().Surfaces,
-                item => item.Slot == 15);
+            Assert.Equal(released, host.ReleasedSurfaceRanges.Contains((0, 1000)));
+            Assert.Equal(!released, vm.Gfx.CapturePersistenceSnapshot().Surfaces.Any(item => item.Slot == 15));
             Assert.Contains(
                 vm.Gfx.CapturePersistenceSnapshot().Surfaces,
                 item => item.Slot == 3

@@ -44,16 +44,20 @@ public sealed class RetainedAdvTextLayoutPresentation
 
     /// <summary>
     /// Append one run's records in drawing order, marking which are ruby characters. AGE's builders always draw into
-    /// the layout's last (pending) record and then push the next one: the base builder pushes chain flag 0, the ruby
-    /// builder (adv_text_draw_ruby_over_row@0x456b40) chain flag 1, and a layout reset starts over with 0. A record's
-    /// chain flag is therefore 1 exactly when the record drawn before it, in this run or an earlier one, is a ruby
-    /// character, and the publisher then shows it in the same tick as that character's successor.
+    /// the layout's last (pending) record and then push the next one. In SYS4422 the base builder pushes chain flag 0,
+    /// the ruby builder (adv_text_draw_ruby_over_row@0x456b40) chain flag 1, and a layout reset starts over with 0, so a
+    /// record's chain flag is 1 exactly when the record drawn before it, in this run or an earlier one, is a ruby
+    /// character; the publisher then shows it in the same tick as that character's successor. In SYS4433
+    /// (<paramref name="chainEveryRubyRecord"/>; adv_text_draw_ruby_over_row_sys4433@0x4590d0) every ruby record has
+    /// chain flag 1 and the ruby builder resets the pending record to 0, so a record's flag is 1 exactly when it is a
+    /// ruby character.
     /// </summary>
     public int AppendRun(
         IReadOnlyList<AdvRetainedGlyphRecord> records,
         IReadOnlyList<bool> isRuby,
         int layoutOriginX,
-        int layoutOriginY)
+        int layoutOriginY,
+        bool chainEveryRubyRecord = false)
     {
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(isRuby);
@@ -62,12 +66,10 @@ public sealed class RetainedAdvTextLayoutPresentation
         int first = _glyphs.Count;
         for (int index = 0; index < records.Count; index++)
         {
-            AdvRetainedGlyphRecord record = records[index] with
-            {
-                PublicationChainFlag = _lastAppendedIsRuby ? 1 : 0,
-            };
+            bool chained = chainEveryRubyRecord ? isRuby[index] : _lastAppendedIsRuby;
+            AdvRetainedGlyphRecord record = records[index] with { PublicationChainFlag = chained ? 1 : 0 };
             _glyphs.Add(new AdvRetainedGlyphPlacement(record, layoutOriginX, layoutOriginY));
-            _lastAppendedIsRuby = isRuby[index];
+            _lastAppendedIsRuby = !chainEveryRubyRecord && isRuby[index];
         }
         return first;
     }

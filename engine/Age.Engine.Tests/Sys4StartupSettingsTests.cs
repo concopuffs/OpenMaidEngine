@@ -42,6 +42,50 @@ public class Sys4StartupSettingsTests
     }
 
     [Fact]
+    public void Sys4433FontAndRubyKeysUseTheirRegisteredDefaults()
+    {
+        Sys4StartupSettings missing = Sys4AssetCatalog.Parse(BuildCatalog()).StartupSettings;
+        Assert.Equal((0, false, 0), (missing.DrawMode, missing.UseProportionalFont, missing.RubyShiftMode));
+        Assert.Empty(missing.ValidFontCheckers);
+
+        // Kamidori's trailer: VALIDFONTCHECKER repeats, and each pair adds a character in file order.
+        Sys4StartupSettings kamidori = Sys4AssetCatalog.Parse(BuildCatalog(
+            ("DRAWMODE", "1"), ("USEPROPORTIONALFONT", "1"), ("VALIDFONTCHECKER", "悪"),
+            ("VALIDFONTCHECKER", "ｱ"), ("validfontchecker", "洒"), ("RUBYSHIFTMODE", "1"))).StartupSettings;
+        Assert.Equal((1, true, 1), (kamidori.DrawMode, kamidori.UseProportionalFont, kamidori.RubyShiftMode));
+        Assert.Equal(new[] { "悪", "ｱ", "洒" }, kamidori.ValidFontCheckers);
+    }
+
+    [Theory]
+    [InlineData(null, null, null, 1, 0)]     // registered defaults: DrawMode 0 is in CreateObject 1
+    [InlineData("1", "2", null, 2, 0)]       // Himegari
+    [InlineData("1", "2", "3", 2, 3)]        // Kamidori
+    [InlineData("1", "1", "3", 3, 3)]        // a mask without DrawMode's bit becomes 3
+    [InlineData("0", "x", null, 1, 0)]
+    public void CreateObjectHoldsTheDrawModesBit(
+        string? drawMode, string? createObject, string? autoFreeTex, int expectedCreateObject, int expectedAutoFreeTex)
+    {
+        var pairs = new List<(string, string)>();
+        if (drawMode != null) pairs.Add(("DRAWMODE", drawMode));
+        if (createObject != null) pairs.Add(("CREATEOBJECT", createObject));
+        if (autoFreeTex != null) pairs.Add(("AUTOFREETEX", autoFreeTex));
+
+        Sys4StartupSettings settings = Sys4AssetCatalog.Parse(BuildCatalog(pairs.ToArray())).StartupSettings;
+
+        Assert.Equal((expectedCreateObject, expectedAutoFreeTex), (settings.CreateObject, settings.AutoFreeTex));
+    }
+
+    [Theory]
+    [InlineData(null, 1)]   // registered default
+    [InlineData("2", 2)]    // Kamidori
+    [InlineData("x", 1)]
+    public void DependMovieSoundDefaultsToTheMusicRoute(string? value, int expected)
+    {
+        var pairs = value == null ? Array.Empty<(string, string)>() : new[] { ("DEPENDMOVIESOUND", value) };
+        Assert.Equal(expected, Sys4AssetCatalog.Parse(BuildCatalog(pairs)).StartupSettings.DependMovieSound);
+    }
+
+    [Fact]
     public void SyntheticCatalogPreservesUnknownKeysAndUsesLastCaseInsensitiveValue()
     {
         var catalog = Sys4AssetCatalog.Parse(BuildCatalog(

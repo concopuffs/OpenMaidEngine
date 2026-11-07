@@ -162,6 +162,41 @@ public class GlyphMaskCompositorTests
         Assert.Equal(new byte[] { 0x12, 0x34, 0x56, 127 }, destination.Pixels);
     }
 
+    [Theory]
+    // SYS4433 divides by 17: full coverage is 240, half is 120. An aliased glyph stays opaque.
+    [InlineData(16, false, 240)]
+    [InlineData(8, false, 120)]
+    [InlineData(16, true, 255)]
+    public void Sys4433CoverageNeverReachesOpaque(byte coverage, bool monochrome, byte alpha)
+    {
+        var destination = Image(1, 1);
+        var mask = new GlyphMask(1, 1, 1, 0, 1, 1, 0, 1, 1, [coverage], monochrome: monochrome);
+
+        AgeGlyphMaskCompositor.DrawMask(destination, mask, 0, 1, 0x123456,
+            coverageAlpha: GlyphCoverageAlpha.Seventeenths);
+
+        Assert.Equal(new byte[] { 0x12, 0x34, 0x56, alpha }, destination.Pixels);
+    }
+
+    [Fact]
+    public void Sys4433TextOverItsOutlineKeepsSomeOfTheOutline()
+    {
+        // Kamidori's mode-3 text: the 84-grey outline, then white over it, both at 240, give 244.
+        var destination = Image(1, 1);
+        AgeGlyphMaskCompositor.DrawMask(destination, Mask(), 0, 1, 0x545454,
+            coverageAlpha: GlyphCoverageAlpha.Seventeenths);
+        AgeGlyphMaskCompositor.DrawMask(destination, Mask(), 0, 1, 0xffffff,
+            coverageAlpha: GlyphCoverageAlpha.Seventeenths);
+
+        Assert.Equal(new byte[] { 244, 244, 244, 240 }, destination.Pixels);
+    }
+
+    [Theory]
+    [InlineData("SYS4433", GlyphCoverageAlpha.Seventeenths)]
+    [InlineData("SYS4422", GlyphCoverageAlpha.Sixteenths)]
+    public void EachEngineRevisionHasItsOwnBlit(string engineAbiId, GlyphCoverageAlpha expected)
+        => Assert.Equal(expected, AgeGlyphMaskCompositor.CoverageAlphaFor(engineAbiId));
+
     [Fact]
     public void ExistingDestinationUsesIntegerRgbBlendAndMaximumAlpha()
     {

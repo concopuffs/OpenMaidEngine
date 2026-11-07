@@ -125,8 +125,8 @@ public sealed record AdvTextHistoryRenderBatch(
     /// <summary>
     /// Set for op 0x1d1: the rows break only here, never at the layout's right edge. Each entry is a glyph
     /// (Unicode scalar) index into <see cref="Text"/> where a retained line-break record starts a new row at
-    /// the layout's reset x, <see cref="Style"/>'s font height plus line spacing lower. Null for op 0x82's
-    /// reflowed redraw.
+    /// the layout's reset x, <see cref="Style"/>'s font height plus line spacing lower. Null wraps at the
+    /// layout's edges as live text does.
     /// </summary>
     public IReadOnlyList<int>? RecordedLineBreaks { get; init; }
 
@@ -137,6 +137,20 @@ public sealed record AdvTextHistoryRenderBatch(
 /// <summary>A ruby drawn over glyphs <see cref="BaseFirstGlyph"/>..+<see cref="BaseGlyphCount"/> of a History
 /// batch's text (text_history_render_records@0x4526c0: consecutive flag-4 records over the preceding record).</summary>
 public readonly record struct AdvTextRubyAnnotation(int BaseFirstGlyph, int BaseGlyphCount, string Text);
+
+/// <summary>One retained record that op 0x82 draws again: <see cref="Text"/> from the cell at <see cref="Rect"/>'s
+/// top-left, in <see cref="Style"/>. A ruby record is one ruby character, drawn plain with the ruby font.</summary>
+public readonly record struct AdvTextRedrawRecord(string Text, AdvTextHistoryRect Rect, AdvTextStyle Style, bool IsRuby);
+
+/// <summary>Op 0x82's redraw of one retained group into its own layout (text_redraw_retained_group@0x451530; SYS4433
+/// @0x4553c0). The host releases the layout's objects, clears its surface, draws <see cref="Records"/> and, unless
+/// flag 4 is set, binds the objects again.</summary>
+public sealed record AdvTextRedrawBatch(
+    int LayoutSlot,
+    int FirstRecordIndex,
+    int Flags,
+    AdvTextLayoutSnapshot Layout,
+    IReadOnlyList<AdvTextRedrawRecord> Records);
 
 /// <summary>
 /// Engine-owned retained ADV backlog. Native numbered saves serialize this same model; live HISTORY.BIN
@@ -537,40 +551,39 @@ public sealed class AdvTextHistory
     }
 
     /// <summary>
-    /// Build op 0x82's redraw of one retained group: the first text record's retained style, with the
-    /// group's text reflowed through the target layout. Native text_redraw_retained_group@0x451530 instead
-    /// draws each record at its retained rectangle and style.
+    /// Build op 0x82's redraw of one retained group (text_redraw_retained_group@0x451530; SYS4433 @0x4553c0). Native
+    /// walks the group from <paramref name="firstRecordIndex"/>, stopping at a navigation-filtered record unless flag 1
+    /// is set, and draws each text record at its rectangle. A record keeps its colors (flag 2 puts the operands in their
+    /// place) and its pixel height. Face, weight, effect offsets and render mode are the text manager's current
+    /// (<paramref name="currentStyle"/>), so the redraw a CONFIG setting change runs restyles the page in place. A ruby
+    /// record draws with the current ruby font in render mode 0. Line-break, metadata and voice records draw nothing;
+    /// flag 8's voice replay is not modelled.
     /// </summary>
-    public bool TryBuildRenderBatch(int requestedLayoutSlot, int firstRecordIndex, int flags,
-                                    long overrideTextColor, long overrideEffectColor,
-                                    out AdvTextHistoryRenderBatch batch)
+    public bool TryBuildRedrawBatch(int requestedLayoutSlot, int firstRecordIndex, int flags,
+                                    long overrideTextColor, long overrideEffectColor, AdvTextStyle currentStyle,
+                                    out AdvTextRedrawBatch batch)
     {
         batch = null!;
         if ((uint)firstRecordIndex >= (uint)_records.Count) return false;
 
         int slot = ResolveLayout(requestedLayoutSlot);
-        var target = SnapshotLayout(slot);
-        var text = new System.Text.StringBuilder();
-        AdvTextStyle style = AdvTextStyle.Default;
-        bool haveStyle = false;
+        var records = new List<AdvTextRedrawRecord>();
         foreach (var record in EnumerateGroup(firstRecordIndex))
         {
             if (record.Flags.HasFlag(AdvTextHistoryRecordFlags.NavigationFiltered) && (flags & 1) == 0)
                 break;
-            // Ruby records are not reflowed into the text (docs/backlog.md, op 0x82).
-            if (record.Kind != AdvTextHistoryRecordKind.Text
-                || record.Flags.HasFlag(AdvTextHistoryRecordFlags.Ruby)) continue;
-            if (!haveStyle)
+            if (record.Kind != AdvTextHistoryRecordKind.Text || record.Text.Length == 0) continue;
+            bool ruby = record.Flags.HasFlag(AdvTextHistoryRecordFlags.Ruby);
+            AdvTextStyle style = currentStyle with
             {
-                style = record.Style;
-                haveStyle = true;
-            }
-            text.Append(record.Text);
+                TextColor = (flags & 2) != 0 ? overrideTextColor : record.Style.TextColor,
+                EffectColor = (flags & 2) != 0 ? overrideEffectColor : record.Style.EffectColor,
+                PrimaryFontSize = record.Style.PrimaryFontSize,
+                RenderMode = ruby ? 0 : currentStyle.RenderMode,
+            };
+            records.Add(new AdvTextRedrawRecord(record.Text, record.Rect, style, ruby));
         }
-
-        if ((flags & 2) != 0)
-            style = style with { TextColor = overrideTextColor, EffectColor = overrideEffectColor };
-        batch = new AdvTextHistoryRenderBatch(slot, firstRecordIndex, flags, target, text.ToString(), style);
+        batch = new AdvTextRedrawBatch(slot, firstRecordIndex, flags, SnapshotLayout(slot), records);
         return true;
     }
 

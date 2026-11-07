@@ -20,13 +20,16 @@ public sealed class ImmediateSurfaceTextRenderer
     private static readonly Encoding Cp932 = CreateCp932();
     private readonly IGlyphMaskRasterizer _rasterizer;
     private readonly GlyphRasterPolicy _policy;
+    private readonly GlyphCoverageAlpha _coverageAlpha;
 
     public ImmediateSurfaceTextRenderer(
         IGlyphMaskRasterizer rasterizer,
-        GlyphRasterPolicy policy = GlyphRasterPolicy.NativeCp932Gray4)
+        GlyphRasterPolicy policy = GlyphRasterPolicy.NativeCp932Gray4,
+        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
     {
         _rasterizer = rasterizer ?? throw new ArgumentNullException(nameof(rasterizer));
         _policy = policy;
+        _coverageAlpha = coverageAlpha;
     }
 
     /// <param name="antialias">message:UseAntiFont (text manager +0x544). draw_string_to_surface@0x450150 calls the
@@ -49,7 +52,7 @@ public sealed class ImmediateSurfaceTextRenderer
             GlyphMask mask = _rasterizer.Rasterize(request);
             AgeGlyphMaskCompositor.DrawGlyph(
                 destination, mask, cursorX, cursorY,
-                AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), style);
+                AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), style, _coverageAlpha);
             cursorX = checked(cursorX + mask.CellAdvanceX);
             cursorY = checked(cursorY + mask.CellAdvanceY);
         }
@@ -60,16 +63,18 @@ public sealed class ImmediateSurfaceTextRenderer
         string text,
         AdvTextStyle style,
         GlyphRasterPolicy policy = GlyphRasterPolicy.NativeCp932Gray4,
-        bool antialias = true)
+        bool antialias = true,
+        AspectFontRealization? realization = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         int requestedHeight = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
         int pixelHeight = NativePixelHeight(requestedHeight);
-        int requestedWidth = -(pixelHeight / 2);
         int weight = style.Bold ? 700 : 0;
         string fontFace = string.IsNullOrWhiteSpace(style.FontFace)
             ? DefaultFontFace
             : style.FontFace;
+        int requestedWidth = realization?.RequestedWidth(fontFace, pixelHeight, weight, style.AspectMode)
+                             ?? -(pixelHeight / 2);
         var requests = new List<GlyphRasterRequest>(text.Length);
 
         foreach (Rune rune in text.EnumerateRunes())

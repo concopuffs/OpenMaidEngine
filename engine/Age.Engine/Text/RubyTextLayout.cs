@@ -74,18 +74,22 @@ public static class RubyTextLayout
 
     /// <summary>
     /// Draw a ruby over a base of <paramref name="baseWidth"/> pixels whose first glyph's cell starts at
-    /// (<paramref name="baseLeft"/>, <paramref name="baseTop"/>), as adv_text_draw_ruby_over_row@0x456b40 does:
+    /// (<paramref name="baseLeft"/>, <paramref name="baseTop"/>), as adv_text_draw_ruby_over_row@0x456b40 (SYS4422) and
+    /// adv_text_draw_ruby_over_row_sys4433@0x4590d0 do, under <paramref name="rules"/>:
     /// <list type="bullet">
-    /// <item>With the ruby narrower than the base, an equal gap of <c>(base - ruby) / (n + 1)</c> goes before, between
-    /// and after its n characters (n is the CP932 length over two). Otherwise the ruby is centred and overhangs both
-    /// sides by half the difference.</item>
-    /// <item>The cells start at <c>baseTop + lfHeight + 1</c>, lfHeight being minus the ruby pixel height, and a mode-3
-    /// effect raises them by the effect's y offset.</item>
+    /// <item>With the ruby narrower than the base, an equal gap of <c>(base - ruby) / d</c> goes before, between
+    /// and after its characters, d being <c>bytes / 2 + 1</c> (SYS4422) or <c>(bytes + 3) >> 1</c> (SYS4433), bytes the
+    /// ruby's CP932 length. SYS4433 follows a single-byte character with half the gap. Otherwise the ruby is centred
+    /// and overhangs both sides by half the difference.</item>
+    /// <item>The cells start at <c>baseTop + lfHeight</c> plus the rules' top offset (live or History), lfHeight being
+    /// minus the ruby pixel height, and a mode-3 effect raises them by the effect's y offset when the rules say
+    /// so.</item>
     /// <item>Each character is drawn plain (no effect) in the text color, and its record's right/bottom are the
-    /// character's own extent.</item>
+    /// character's own extent. SYS4433 draws a control character or DEL as a space.</item>
     /// </list>
-    /// The first record's chain flag is 0 and every later one's is 1, so the first ruby character publishes alone and
-    /// the rest publish together in the next tick (adv_text_publish_next_glyph@0x451220).
+    /// SYS4422 gives the first record chain flag 0 and every later one 1, so the first ruby character publishes alone
+    /// and the rest publish together in the next tick (adv_text_publish_next_glyph@0x451220). SYS4433 gives every
+    /// record chain flag 1, so the whole ruby publishes in one tick.
     /// </summary>
     public static IReadOnlyList<AdvRetainedGlyphRecord> Draw(
         RgbaImage destination,
@@ -96,12 +100,17 @@ public static class RubyTextLayout
         string ruby,
         AdvTextStyle style,
         GlyphRasterPolicy policy,
-        bool antialias)
+        bool antialias,
+        RubyLayoutRules rules,
+        bool history = false,
+        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
     {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(rasterizer);
         ArgumentNullException.ThrowIfNull(ruby);
-        IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(ruby, style, policy, antialias);
+        ArgumentNullException.ThrowIfNull(rules);
+        string drawn = rules.Sys4433Spacing ? ControlCharactersAsSpaces(ruby) : ruby;
+        IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(drawn, style, policy, antialias);
         var masks = new GlyphMask[requests.Count];
         int rubyWidth = 0;
         for (int index = 0; index < requests.Count; index++)
@@ -113,13 +122,59 @@ public static class RubyTextLayout
         int difference = baseWidth - rubyWidth;
         int gap = 0, overhang = 0;
         if (difference > 0)
-            gap = (int)((uint)difference / (uint)(Cp932.GetByteCount(ruby) / 2 + 1));
+        {
+            int bytes = Cp932.GetByteCount(ruby);
+            int divisor = rules.Sys4433Spacing ? (bytes + 3) >> 1 : bytes / 2 + 1;
+            gap = (int)((uint)difference / (uint)divisor);
+        }
         else
             overhang = -(difference / 2);
         int x = checked(baseLeft - overhang + gap);
-        int y = checked(baseTop - PixelHeight(style.RubyFontSize) + 1);
-        if (style.RenderMode == 3) y = checked(y - style.EffectOffsetY);
+        int y = checked(baseTop - PixelHeight(style.RubyFontSize)
+                        + (history ? rules.HistoryTopOffset : rules.LiveTopOffset));
+        if (style.RenderMode == 3 && rules.RaiseByEffectInMode3) y = checked(y - style.EffectOffsetY);
 
+        return DrawCells(destination, requests, masks, x, y, gap, style, rules, coverageAlpha);
+    }
+
+    /// <summary>
+    /// Draw ruby characters side by side from the cell at (<paramref name="x"/>, <paramref name="y"/>), as op 0x82's
+    /// text_redraw_retained_group@0x451530 (SYS4433 @0x4553c0) draws a retained ruby record at its rectangle: plain, in
+    /// the ruby font, with no gap.
+    /// </summary>
+    public static IReadOnlyList<AdvRetainedGlyphRecord> DrawAt(
+        RgbaImage destination,
+        IGlyphMaskRasterizer rasterizer,
+        int x,
+        int y,
+        string ruby,
+        AdvTextStyle style,
+        GlyphRasterPolicy policy,
+        bool antialias,
+        RubyLayoutRules rules,
+        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(rasterizer);
+        ArgumentNullException.ThrowIfNull(ruby);
+        ArgumentNullException.ThrowIfNull(rules);
+        IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(
+            rules.Sys4433Spacing ? ControlCharactersAsSpaces(ruby) : ruby, style, policy, antialias);
+        GlyphMask[] masks = requests.Select(rasterizer.Rasterize).ToArray();
+        return DrawCells(destination, requests, masks, x, y, 0, style, rules, coverageAlpha);
+    }
+
+    private static List<AdvRetainedGlyphRecord> DrawCells(
+        RgbaImage destination,
+        IReadOnlyList<GlyphRasterRequest> requests,
+        GlyphMask[] masks,
+        int x,
+        int y,
+        int gap,
+        AdvTextStyle style,
+        RubyLayoutRules rules,
+        GlyphCoverageAlpha coverageAlpha)
+    {
         AdvTextStyle plain = style with { RenderMode = 0 };
         var records = new List<AdvRetainedGlyphRecord>(requests.Count);
         for (int index = 0; index < requests.Count; index++)
@@ -128,11 +183,24 @@ public static class RubyTextLayout
             int right = checked(x + mask.CellWidth);
             AgeGlyphMaskCompositor.DrawGlyph(
                 destination, mask, x, y,
-                AgeGlyphMaskCompositor.CellTopToBaseline(mask, requests[index].PixelHeight), plain);
-            records.Add(new AdvRetainedGlyphRecord(index == 0 ? 0 : 1, x, y, right, checked(y + mask.CellHeight)));
-            x = checked(right + gap);
+                AgeGlyphMaskCompositor.CellTopToBaseline(mask, requests[index].PixelHeight), plain, coverageAlpha);
+            int chain = rules.ChainEveryRubyRecord || index > 0 ? 1 : 0;
+            records.Add(new AdvRetainedGlyphRecord(chain, x, y, right, checked(y + mask.CellHeight)));
+            bool singleByte = requests[index].Cp932Code is < 0x100;
+            x = checked(right + (rules.Sys4433Spacing && singleByte ? gap / 2 : gap));
         }
         return records;
+    }
+
+    /// <summary>SYS4433 draws each ruby byte below 0x20, and DEL, as a space.</summary>
+    private static string ControlCharactersAsSpaces(string ruby)
+    {
+        if (!ruby.Any(character => character < ' ' || character == '')) return ruby;
+        return string.Create(ruby.Length, ruby, static (span, source) =>
+        {
+            for (int index = 0; index < source.Length; index++)
+                span[index] = source[index] < ' ' || source[index] == '' ? ' ' : source[index];
+        });
     }
 
     private static int SumBytes(int[] glyphBytes, int first, int count)

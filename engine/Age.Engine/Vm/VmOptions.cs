@@ -10,10 +10,13 @@ namespace Age.Engine.Vm;
 /// post-exit bytecode can be explored. Leave false for native-faithful execution.</param>
 /// <param name="NativeStringCodePage">Encoding used when an opcode measures the engine's byte-string
 /// representation. SYS4 defaults to CP932; another container frontend can select its own code page.</param>
-/// <param name="CreateObject">Native set:CreateObject profile setting. Together with
-/// <paramref name="AutoFreeTextures"/>, controls the optional all-surface release before numbered load.</param>
-/// <param name="AutoFreeTextures">Native set:AutoFreeTex profile setting. Himegari defaults this off,
-/// so initialized system textures survive a numbered load unless an explicit reload record replaces them.</param>
+/// <param name="CreateObject">Native set:CreateObject (SYS4INI CREATEOBJECT): the renderer backends AGE creates, one bit
+/// per DrawMode (<see cref="Sys4.Sys4StartupSettings.CreateObject"/>); the default, 2, is both shipped games' object
+/// backend. Bit 1 arms <paramref name="AutoFreeTex"/>.</param>
+/// <param name="AutoFreeTex">Native set:AutoFreeTex (SYS4INI AUTOFREETEX, registered default 0). Under CreateObject bit 1,
+/// bit 1 releases all 1000 surfaces before a numbered load restores its flagged records, so only those come back; bit 0
+/// releases them at op 0x9's root reload, which the port's scene reset does whatever the setting. Kamidori sets 3;
+/// Himegari has none, so its initialized system textures survive a numbered load.</param>
 /// <param name="NoSaveDat">Native set:NoSaveDat profile setting. This suppresses the clean-shutdown
 /// shared SAVE.DAT/RT.DAT flush only; successful numbered saves still flush both shared files.</param>
 /// <param name="CancelMessageSkipOnClick">Native set:CancelMesSkipOnClick (SYS4INI CANCELMESSKIPONCLICK).
@@ -28,8 +31,8 @@ namespace Age.Engine.Vm;
 /// it off, the native menu's Skip toggle clears Auto and its Auto toggle clears Skip; the script ops ignore it.</param>
 public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64,
                                bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false,
-                               int NativeStringCodePage = 932, bool CreateObject = true,
-                               bool AutoFreeTextures = false, bool NoSaveDat = false,
+                               int NativeStringCodePage = 932, int CreateObject = 2,
+                               int AutoFreeTex = 0, bool NoSaveDat = false,
                                int CancelMessageSkipOnClick = 0, int FastForwardOpMicroseconds = 0,
                                int WheelKeyUpAction = 3, int WheelKeyDownAction = 1,
                                bool CoexistMessageSkip = false)

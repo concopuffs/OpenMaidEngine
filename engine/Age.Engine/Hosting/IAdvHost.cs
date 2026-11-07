@@ -57,6 +57,13 @@ public interface IAdvHost
         RenderTextHistory(batch);
         return false;
     }
+    // Op 0x82 draws a retained group again into its own layout: release the layout's objects, clear its surface,
+    // draw each record at its rectangle and, unless flag 4 is set, bind the objects again. The layout's glyph list
+    // and cursor stay (text_redraw_retained_group@0x451530).
+    void RedrawRetainedTextGroup(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvTextRedrawBatch batch) { }
     // History render batches are transient bindings, unlike the retained backlog itself. HISTORY.BIN's
     // recording re-enable at exit ends that presentation and drops every bound target layout.
     void EndTextHistoryPresentation() { }

@@ -1,5 +1,6 @@
 using Age.Engine.Hosting;
 using Age.Engine.Model;
+using Age.Engine.Text;
 
 namespace Age.Engine.Vm;
 
@@ -33,7 +34,7 @@ public sealed partial class VirtualMachine
             off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack)
         {
             Ruby = string.IsNullOrEmpty(ruby) ? null : ruby,
-            ArmsGlyphTimer = ruby == null,
+            ArmsGlyphTimer = ruby == null || RubyLayoutRules.ForEngine(_compatibility.EngineAbiId).ArmsGlyphTimer,
         };
         AdvTextLayoutPresentationBinding binding =
             TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
@@ -64,7 +65,8 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "display-furigana": // 0x196 (layout slot, base text, ruby)
                 // op_0x196_handler@0x41f2a0 builds the base text like show-text with the ruby as the builder's third
-                // argument. Unlike op 0x6e it neither re-reads message:ReadTextSkip nor re-arms the glyph timer.
+                // argument. Unlike op 0x6e it does not re-read message:ReadTextSkip; SYS4422's handler does not re-arm
+                // the glyph timer either, SYS4433's does (RubyLayoutRules.ArmsGlyphTimer).
                 if (!ShowTextRun(ins, a, a[1], ReadStr(a[2]))) return HALT;
                 return pc + 1;
             case "define-adv-text-layout": // 0x70: configure layout and begin a logical retained group
@@ -190,7 +192,13 @@ public sealed partial class VirtualMachine
                 _host.SetMessageGlyphDelayMilliseconds(_messageGlyphDelayMilliseconds);
                 return pc + 1;
             case "end-text-line":
-                TextHistory.EndLine((int)Read(a[0]), _advTextStyle); return pc + 1;
+            {
+                // The line break moves the layout's cursor record, which the host's wait indicator can follow.
+                TextHistory.EndLine((int)Read(a[0]), _advTextStyle);
+                var layout = TextHistory.GetLayoutSnapshot((int)Read(a[0]));
+                _host.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
+                return pc + 1;
+            }
             case "set-font":
                 _advTextStyle = _advTextStyle with { FontFace = ReadStr(a[0]) }; return pc + 1;
             case "comment": case "dev_ukn":

@@ -5,6 +5,8 @@ namespace Age.Engine.Text;
 /// <param name="LineBreaksBefore">Glyph indices, ascending (repeats allowed), before which the run starts a new
 /// row: x returns to <paramref name="LineOriginX"/> and y advances by the font height plus line spacing. Native
 /// History (text_history_render_records@0x4526c0) breaks only at retained line-break records this way.</param>
+/// <param name="FontRealization">The installed-font list behind aspect mode's glyph placement
+/// (<see cref="AspectGlyphPlacement"/>). Without it, aspect-mode glyphs draw at the pen.</param>
 public readonly record struct GlyphTextLayoutOptions(
     int CursorX,
     int CursorY,
@@ -13,7 +15,8 @@ public readonly record struct GlyphTextLayoutOptions(
     int BottomBound,
     bool WrapHorizontally,
     AdvTextStyle Style,
-    IReadOnlyList<int>? LineBreaksBefore = null);
+    IReadOnlyList<int>? LineBreaksBefore = null,
+    AspectFontRealization? FontRealization = null);
 
 public sealed record GlyphTextLayoutResult(
     IReadOnlyList<AdvRetainedGlyphRecord> Records,
@@ -35,9 +38,14 @@ public sealed record GlyphTextLayoutResult(
 public sealed class RetainedGlyphLayoutEngine
 {
     private readonly IGlyphMaskRasterizer _rasterizer;
+    private readonly GlyphCoverageAlpha _coverageAlpha;
 
-    public RetainedGlyphLayoutEngine(IGlyphMaskRasterizer rasterizer)
-        => _rasterizer = rasterizer ?? throw new ArgumentNullException(nameof(rasterizer));
+    public RetainedGlyphLayoutEngine(
+        IGlyphMaskRasterizer rasterizer, GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
+    {
+        _rasterizer = rasterizer ?? throw new ArgumentNullException(nameof(rasterizer));
+        _coverageAlpha = coverageAlpha;
+    }
 
     public GlyphTextLayoutResult Render(
         RgbaImage destination,
@@ -61,6 +69,16 @@ public sealed class RetainedGlyphLayoutEngine
             ? _rasterizer.Rasterize(ImmediateSurfaceTextRenderer.CreateRequests(
                 "激", options.Style with { FontFace = "ＭＳ ゴシック" }, glyphs[0].Policy, glyphs[0].Antialias)[0])
             : null;
+        // The realized font's 激, whose ink top the aspect-mode raise compares (+0x31430).
+        GlyphMask? realizedReference = aspectReference != null
+            ? _rasterizer.Rasterize(new GlyphRasterRequest(
+                glyphs[0].FontFace, glyphs[0].PixelHeight, glyphs[0].RequestedWidth, glyphs[0].Weight,
+                '激', AspectFontRealization.ReferenceCode, glyphs[0].Policy, glyphs[0].Antialias))
+            : null;
+        bool placesInCell = aspectReference != null
+                            && options.FontRealization?.PlacesGlyphsInCell(glyphs[0].FontFace) == true;
+        int fontSize = options.Style.PrimaryFontSize > 0 ? options.Style.PrimaryFontSize
+            : glyphs.Count > 0 ? glyphs[0].PixelHeight : 0;
 
         IReadOnlyList<int> breaks = options.LineBreaksBefore ?? [];
         int nextBreak = 0;
@@ -133,11 +151,18 @@ public sealed class RetainedGlyphLayoutEngine
             // offset (+0x564/+0x568) before text_raster_string_cached@0x45b600 adds its own. The ink moves; the record
             // keeps the measured cell (Himegari's mode-3 (1,1) text lands one pixel right and down).
             bool shiftByEffect = !request.Antialias && options.Style.RenderMode != 0;
+            int raise = aspectReference != null
+                ? AspectGlyphRaise(mask, aspectReference, realizedReference!, request.PixelHeight)
+                : 0;
+            int drawX = placesInCell
+                ? checked(cursorX + AspectGlyphPlacement.OffsetX(
+                    mask, aspectReference!, fontSize, request.Cp932Code, options.Style.AspectMode))
+                : cursorX;
             AgeGlyphMaskCompositor.DrawGlyph(
                 destination, mask,
-                shiftByEffect ? checked(cursorX + options.Style.EffectOffsetX) : cursorX,
-                shiftByEffect ? checked(cursorY + options.Style.EffectOffsetY) : cursorY,
-                AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), options.Style);
+                shiftByEffect ? checked(drawX + options.Style.EffectOffsetX) : drawX,
+                checked((shiftByEffect ? cursorY + options.Style.EffectOffsetY : cursorY) - raise),
+                AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), options.Style, _coverageAlpha);
             records.Add(new AdvRetainedGlyphRecord(0, cursorX, cursorY, right, bottom));
             cursorX = checked(cursorX + advanceX);
             if (aspectReference == null) cursorY = checked(cursorY + mask.CellAdvanceY);
@@ -156,6 +181,24 @@ public sealed class RetainedGlyphLayoutEngine
     }
 
     /// <summary>
+    /// How far SYS4433's aspect mode draws a glyph above its cell (adv_text_append_horizontal_glyph_records@0x45b710
+    /// at 0x45be16, and History's renderer @0x456490): with <c>d = trunc(tmAscent - ref.tmAscent - 0.5)</c> against the
+    /// reference ＭＳ ゴシック and <c>e = trunc(tmAscent - 激.gmptGlyphOrigin.y - 1)</c> for the realized font's 激, the
+    /// raise is 0 when d is 0 and the larger of the two otherwise. A face as tall as the reference is not raised;
+    /// Kamidori's メイリオ bold at 22 pixels is raised 3. The record keeps the cell.
+    /// </summary>
+    public static int AspectGlyphRaise(GlyphMask glyph, GlyphMask reference, GlyphMask realizedReference, int pixelHeight)
+    {
+        ArgumentNullException.ThrowIfNull(glyph);
+        ArgumentNullException.ThrowIfNull(reference);
+        ArgumentNullException.ThrowIfNull(realizedReference);
+        int ascent = AgeGlyphMaskCompositor.CellTopToBaseline(glyph, pixelHeight);
+        int d = (int)(ascent - AgeGlyphMaskCompositor.CellTopToBaseline(reference, pixelHeight) - 0.5);
+        int e = (int)(ascent - realizedReference.OriginY - 1.0);
+        return d == 0 ? 0 : Math.Max(d, e);
+    }
+
+    /// <summary>
     /// Draw op 0x196's ruby over the rows <see cref="Render"/> drew for its base text, each row taking its share
     /// (<see cref="RubyTextLayout.SplitAcrossRows"/>), as adv_text_build_glyph_records@0x4576c0 does after each row.
     /// The cursor is not moved: AGE restores it to the end of the base text.
@@ -167,7 +210,8 @@ public sealed class RetainedGlyphLayoutEngine
         string ruby,
         AdvTextStyle style,
         GlyphRasterPolicy policy,
-        bool antialias)
+        bool antialias,
+        RubyLayoutRules rules)
     {
         ArgumentNullException.ThrowIfNull(rows);
         var glyphs = new List<AdvRubyGlyph>();
@@ -176,7 +220,7 @@ public sealed class RetainedGlyphLayoutEngine
         {
             AdvTextRow row = rows[index];
             IReadOnlyList<AdvRetainedGlyphRecord> records = RenderRubyOver(
-                destination, row.Left, row.Top, row.Right - row.Left, shares[index], style, policy, antialias);
+                destination, row.Left, row.Top, row.Right - row.Left, shares[index], style, policy, antialias, rules);
             int at = 0;
             foreach (System.Text.Rune rune in shares[index].EnumerateRunes())
             {
@@ -187,7 +231,8 @@ public sealed class RetainedGlyphLayoutEngine
         return glyphs;
     }
 
-    /// <summary>Draw a ruby over one base (<see cref="RubyTextLayout.Draw"/>) with this engine's rasterizer.</summary>
+    /// <summary>Draw a ruby over one base (<see cref="RubyTextLayout.Draw"/>) with this engine's rasterizer;
+    /// <paramref name="history"/> selects History's top offset.</summary>
     public IReadOnlyList<AdvRetainedGlyphRecord> RenderRubyOver(
         RgbaImage destination,
         int baseLeft,
@@ -196,7 +241,60 @@ public sealed class RetainedGlyphLayoutEngine
         string ruby,
         AdvTextStyle style,
         GlyphRasterPolicy policy,
-        bool antialias)
+        bool antialias,
+        RubyLayoutRules rules,
+        bool history = false)
         => RubyTextLayout.Draw(
-            destination, _rasterizer, baseLeft, baseTop, baseWidth, ruby, style, policy, antialias);
+            destination, _rasterizer, baseLeft, baseTop, baseWidth, ruby, style, policy, antialias, rules, history,
+            _coverageAlpha);
+
+    /// <summary>Draw ruby characters from the cell at (<paramref name="x"/>, <paramref name="y"/>)
+    /// (<see cref="RubyTextLayout.DrawAt"/>) with this engine's rasterizer.</summary>
+    public IReadOnlyList<AdvRetainedGlyphRecord> RenderRubyAt(
+        RgbaImage destination,
+        int x,
+        int y,
+        string ruby,
+        AdvTextStyle style,
+        GlyphRasterPolicy policy,
+        bool antialias,
+        RubyLayoutRules rules)
+        => RubyTextLayout.DrawAt(destination, _rasterizer, x, y, ruby, style, policy, antialias, rules, _coverageAlpha);
+
+    /// <summary>
+    /// Draw op 0x82's records into <paramref name="destination"/> (text_redraw_retained_group@0x451530; SYS4433
+    /// @0x4553c0): each text record's text from the cell at its rectangle's top-left, on one row, and each ruby record
+    /// with the ruby font. Returns the drawn cells in record order, each marked as ruby or not.
+    /// </summary>
+    public IReadOnlyList<(AdvRetainedGlyphRecord Cell, bool IsRuby)> RenderRedraw(
+        RgbaImage destination,
+        IReadOnlyList<AdvTextRedrawRecord> records,
+        GlyphRasterPolicy policy,
+        bool antialias,
+        RubyLayoutRules rules,
+        AspectFontRealization? fontRealization = null)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        var cells = new List<(AdvRetainedGlyphRecord, bool)>();
+        foreach (AdvTextRedrawRecord record in records)
+        {
+            if (record.IsRuby)
+            {
+                foreach (AdvRetainedGlyphRecord cell in RenderRubyAt(
+                             destination, record.Rect.Left, record.Rect.Top, record.Text, record.Style, policy, antialias,
+                             rules))
+                    cells.Add((cell, true));
+                continue;
+            }
+            GlyphTextLayoutResult drawn = Render(
+                destination,
+                new GlyphTextLayoutOptions(
+                    record.Rect.Left, record.Rect.Top, record.Rect.Left, int.MaxValue, int.MaxValue,
+                    WrapHorizontally: false, record.Style, FontRealization: fontRealization),
+                ImmediateSurfaceTextRenderer.CreateRequests(
+                    record.Text, record.Style, policy, antialias, fontRealization));
+            foreach (AdvRetainedGlyphRecord cell in drawn.Records) cells.Add((cell, false));
+        }
+        return cells;
+    }
 }

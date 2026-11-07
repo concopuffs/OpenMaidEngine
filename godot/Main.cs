@@ -369,7 +369,8 @@ public partial class Main : Godot.Control
             try
             {
                 _sys4RegIniStore = Sys4RegIniStore.ForPath(
-                    catalog.StartupSettings, profilePersistence.NativePaths.Sys4RegIniPath);
+                    catalog.StartupSettings, profilePersistence.NativePaths.Sys4RegIniPath,
+                    selectedProfile.Profile.EngineAbiId);
                 _audioMixerSettings = _sys4RegIniStore.Load();
                 GD.Print($"[settings] native engine options={_sys4RegIniStore.FilePath}");
             }
@@ -505,10 +506,15 @@ public partial class Main : Godot.Control
             timeline: _timeline,
             synchronizeExplicitPresentation: !_selftest,
             surfaceTextMaskCacheCapacity:
-                portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048)
+                portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048,
+            coverageAlpha: AgeGlyphMaskCompositor.CoverageAlphaFor(selectedProfile.Profile.EngineAbiId))
         {
             SleepScale = sleepScale,
             TraceOps = _gfxLogPath != null,
+            RubyRules = RubyLayoutRules.For(selectedProfile.Profile.EngineAbiId, _catalog.StartupSettings,
+                                            _sys4RegIniStore?.RubyShiftMode),
+            FontFamilySource = InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings),
+            FontMetricsProbe = surfaceTextRasterizer as IFontMetricsProbe,
         };
         if (_sys4RegIniStore != null) _host.UseMessageSettingsStore(_sys4RegIniStore);
         _trace = new GodotTraceSink(_locator, _timeline);
@@ -938,4 +944,20 @@ public partial class Main : Godot.Control
 #endif
     }
 
+    /// <summary>AGE's own installed-font list (<see cref="FontFamilyCatalog"/>) when text draws through Windows GDI, so
+    /// the names the scripts look up are the names GDI draws; otherwise null, and the host lists Godot's system
+    /// fonts.</summary>
+    private static Func<IReadOnlyList<EnumeratedFontFamily>>? InstalledFontFamilySource(
+        IGlyphMaskRasterizer rasterizer, Sys4StartupSettings settings)
+    {
+#if AGE_WINDOWS_GDI
+        if (rasterizer is WindowsGdiGlyphMaskRasterizer && OperatingSystem.IsWindows())
+            return () =>
+            {
+                using var source = new WindowsGdiFontFamilySource();
+                return FontFamilyCatalog.Build(source, settings.UseProportionalFont, settings.ValidFontCheckers);
+            };
+#endif
+        return null;
+    }
 }

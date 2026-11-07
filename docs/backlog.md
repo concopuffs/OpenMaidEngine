@@ -46,37 +46,39 @@ it; git history keeps the record.
   Seven later sessions exited 0. They covered stops in fullscreen and while windowed, and clicks in the side bars.
   Windows logged no Application Error event, and the next start overwrote `godot.log`. Done when a crash recurs with
   its log kept and is fixed, or after a period of driven runs without one.
-- **Kamidori's furigana is unverified.** The port draws op `0x196`'s ruby by Himegari's rule (`engine-re.md`,
-  "Furigana"). Kamidori runs the op 3,054 times, but its SYS4433 engine has neither of Himegari's two ruby code
-  sequences (the gap division and the centring), and its SYS4INI trailer has `RUBYSHIFTMODE`. Done when Kamidori's
-  ruby builder is decoded and a Kamidori furigana page and its History match native.
 - **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
   SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
   statement blocks, "Not modelled"). A static scan of both games' scripts (2026-11-04) finds a movie start inside
   an open block only twice, both `play-movie-mask-transition` in `DEBUG.BIN` (`0x139`, `0x1ab`), which retail never
   reaches (the port's F4 debug route does). Done when those two are modelled, or the item is closed as
   debug-only.
-- **Kamidori's extra SYS4INI trailer keys.** `OUTERFRAMEMODE`, `AUTOFREETEX`, `BLANKEXTENTMODE`,
-  `USEPROPORTIONALFONT`, `VALIDFONTCHECKER`, `RUBYSHIFTMODE` and `DEPENDMOVIESOUND=2` are not reverse-engineered
-  (`engine-re.md`, trailer catalog). The ADV keys both games share are done: the wheel ids are applied, and
-  `CONTROLDISIBLECURSOR`/`REDRAWTEXTONKEY` are matched or inert. Done when each key is reversed and either applied
-  or shown inert for Kamidori.
-- **Op `0x82` redraw reflows instead of restoring each record (unobserved).**
-  - Native `text_redraw_retained_group@0x451530` draws each retained record at its recorded rectangle, in that
-    record's retained style (pixel height, render mode, `+0x554`), and then restores the manager's style.
-  - The port's `AdvTextHistory.TryBuildRenderBatch` reflows the group's text through the target layout, in the
-    first text record's style and the current leading.
-  - Only Kamidori calls it (CONFIG1–CONFIG5 return paths, flags 2). A group recorded in a single style in that
-    same layout should come out the same, and no visible difference is known.
-  - The reflow leaves out op `0x196`'s ruby records (flag 4), which native's per-record redraw would draw again.
-  - Done when a native Kamidori CONFIG-return comparison shows whether any page differs, and the port matches if
-    one does.
-- **Calibrated font realization (unobserved).** Native builds fonts through
-  `text_create_calibrated_single_byte_font@0x451b70` and its mode-1/mode-2 calibration (found in the SYS4433 image,
-  display-aspect text). The port implements the layout rule it feeds, not the realization itself (`engine-re.md`).
-  No visible or save difference is known: glyph baselines and crops match native and the SC0000 page-3 save is byte
-  identical (`4b621ed`). Done when a native comparison shows whether it changes any glyph, and the port matches if
-  it does.
+- **Aspect-mode surface text (Kamidori).** The port's immediate surface text (op `0x204`, and op `0x205`'s numbers)
+  ignores SYS4433's aspect mode: the calibrated font width, the y shift by the reference ascent, the aspect advances
+  and `BLANKEXTENTMODE` (`engine-re.md`, "Aspect-mode surface text"). On Kamidori's CONFIG2 page (ADV設定), the font
+  names drawn in their own face at 14 px and the slider values come out visibly smaller and narrower than native's
+  (`kamidori-config-redraw-no-outline-config` shots, 2026-11-07). Done when `text_draw_string_to_surface_sys4433` and
+  its glyph-string draws are modelled and that page matches native.
+- **Aspect-mode font realization: the unmodelled parts.** The mode-1 calibration and in-cell placement are
+  implemented for ADV text, History and op `0x82` (`engine-re.md`, "Aspect-mode font calibration"). Still missing:
+  - the separate calibrated single-byte font (`text_create_calibrated_single_byte_font@0x451b70`);
+  - the `display:AspectMode` setting, which calibrates every face when nonzero;
+  - mode 2 (`text_calibrate_mode2_glyph_font@0x451910`), which no shipped game selects;
+  - the display scale on the placement (`+0x40c->+0x4e0`).
+
+  No difference has been seen. Done when a Kamidori page with single-byte ADV glyphs matches native and
+  `display:AspectMode` is modelled or shown unreachable.
+- **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
+  (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
+  pass flag 2. Done when a game that sets it is profiled and the replay matches native.
+- **Op `0x9` releases every surface in the port.** Native releases them at op `0x9`'s root reload only under
+  `(CreateObject & 2) && (AutoFreeTex & 1)` (`engine-re.md`, "AutoFreeTex"): Kamidori, not Himegari. The port's
+  `GfxState.ResetSceneContext` always clears them. Himegari's return to title still matches native (`2516aa9`), so no
+  visible difference is known. Done when the port keeps surfaces across op `0x9` unless the setting asks, and a
+  native comparison of a surface that lives across a Himegari return to title agrees.
+- **Kamidori background edges differ from native.** On every Kamidori page compared so far (`SC0000@0xee2`,
+  `SC0000@0xfa2`), the background differs from native at its edges all over the frame: mean difference 1.25-1.5 per
+  channel, up to 97 on edge pixels (`kamidori-config-redraw-*` shots, 2026-11-07). Text and UI match. Done when the
+  cause, such as how native samples or scales the background surface, is found and the port matches.
 - **Kamidori data tooling reads pre-update copies of eleven append records.** Kamidori's official update shipped
   eleven root-loose append overrides (`$1$` ALINIT, CIMES, ITINIT, ITMES, SKINIT, SKMES; `$2$` ALINIT, ITINIT,
   ITMES, SKINIT, SKMES). The English translation overwrote them, and its installer kept the Japanese originals as

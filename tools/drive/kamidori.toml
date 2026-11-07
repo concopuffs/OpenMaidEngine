@@ -1,0 +1,53 @@
+# Driving facts for Kamidori, read by tools/drive.py for both targets (native AGE and the port).
+# Points are native client pixels of the 1024x576 canvas. Kamidori's engine is SYS4433, whose EngineCtx is laid out
+# differently from Himegari's (vm-map/engine-ctx.toml describes Himegari's), so the native field offsets are given
+# here. Evidence: docs/engine-re.md, "Driving native AGE".
+
+[advance]
+point = "adv.next"        # where `advance` clicks: the middle of the canvas
+
+[points]
+"adv.next" = [512, 288]
+"title.start" = [770, 308]       # Game Start on the title screen (the middle of its scroll)
+"newgame.begin" = [735, 401]     # Begin Game on the next screen
+"menu.config" = [125, 185]        # 環境設定 in the ADV menu a right click opens (MENU.BIN, FELLOW page)
+"config.defaults" = [64, 524]     # 初期設定 on CONFIG's 基本設定 page (CONFIG1)
+"config.adv" = [95, 87]           # the ADV設定 tab (CONFIG2)
+"config.adv.no-outline" = [573, 304]   # ADV設定 > 効果: 縁なし (text render mode 0)
+
+# Settings written into a sandbox profile's SYS4REG.INI before every sandboxed launch (as for Himegari).
+[sandbox]
+settings_file = "SYS4REG.INI"
+
+[sandbox.settings]
+"display.ScreenMode" = 1
+"display.VirtualFullScreen" = 1
+
+[sandbox.quiet]
+"sound.Volume0" = 0
+
+# Native AGE only. SYS4433 (Kamidori's unpacked image, build/games/kamidori/engine-dump):
+# - g_pEngineCtx is 0x5c9bc8 (every handler reads the ctx through it);
+# - the interpreter (0x41121e) reads curCtx at ctx+0x57fa0 and the current op through ctx+0x57fb8 + curCtx*0x78;
+#   the frame record keeps Himegari's internal layout (codebase +0x14, pc +0x18, resource id +0x50 from curCtx).
+[native.engine]
+ctx_global = 0x5c9bc8
+frame_stride = 0x78
+frame_count = 20
+cur_ctx_index = 0x57fa0
+frame_codebase = 0x57fb4
+frame_pc = 0x57fb8
+frame_script_resource_id = 0x57ff0
+
+# input_set_polling_enabled is 0x465a60 (input manager +0x1820, as in Himegari). age_main_window_proc's WM_ACTIVATE
+# case calls it with (windowed ctx+0x9e740 && wParam == WA_INACTIVE) on the input manager at ctx+0x408; the call
+# returns to 0x48e061.
+[native.keep_polling]
+setter = 0x465a60
+activate_return = 0x48e061
+gate = 0x1c28
+
+[[native.dialog]]
+match = "データが壊れています．"
+answer = "yes"
+reason = "registration check (set:IsReggist == 0) on copied installs; Yes continues, No exits"

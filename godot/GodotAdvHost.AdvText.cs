@@ -27,7 +27,9 @@ public sealed partial class GodotAdvHost
     private LiveTextState? _activeLiveText;
     private int _suspendedRetainedTextLayoutSlot;
     private string _advText = "";
-    private int _advTextX = 100, _advTextY = 47;
+    // Each layout's pending record (left, top): AGE draws into the layout's last 20-byte record and pushes the next one
+    // at the cursor, which op 0x7a, op 0x6f and a reset move. The follow-last-glyph wait indicator anchors here.
+    private readonly Dictionary<int, (int X, int Y)> _layoutCursors = new();
     private int _currentAdvLayout = 1; // SYSTEM4's ordinary SC0000 ADV layout
     // ctx+0x5f630, the reveal's glyph timer: op 0x6e arms it, op 0x196 keeps polling the previous arm.
     private readonly PeriodTimer _glyphTimer = new();
@@ -190,8 +192,6 @@ public sealed partial class GodotAdvHost
             _liveText.Add(state);
             _activeLiveText = state;
             _advText = run.Text;
-            _advTextX = run.Layout.CursorX;
-            _advTextY = run.Layout.CursorY;
             _currentAdvLayout = run.Layout.Slot;
             // Read skip takes the blocking builder (no timer); a finished-until-wait reveal still arms it.
             bool incremental = revealGlyphCount > 0 && delay > 0 && !_messageSkipActive;
@@ -290,7 +290,7 @@ public sealed partial class GodotAdvHost
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
         IReadOnlyList<GlyphRasterRequest> requests =
             ImmediateSurfaceTextRenderer.CreateRequests(
-                run.Text, run.Style, _surfaceTextBackendInfo.Policy, _textAntialias);
+                run.Text, run.Style, _surfaceTextBackendInfo.Policy, _textAntialias, FontRealization);
         GlyphTextLayoutResult rendered = _retainedGlyphLayoutEngine.Render(
             updated,
             new GlyphTextLayoutOptions(
@@ -301,7 +301,8 @@ public sealed partial class GodotAdvHost
                 recordedLineBreaks == null ? run.Layout.Bottom : int.MaxValue,
                 WrapHorizontally: recordedLineBreaks == null,
                 run.Style,
-                recordedLineBreaks),
+                recordedLineBreaks,
+                FontRealization),
             requests);
 
         // Op 0x196's ruby follows each base row in AGE's drawing order; History draws its ruby runs after the text.
@@ -317,7 +318,7 @@ public sealed partial class GodotAdvHost
         {
             ruby = _retainedGlyphLayoutEngine.RenderRuby(
                 updated, run.Text, rendered.Rows, run.Ruby, run.Style,
-                _surfaceTextBackendInfo.Policy, _textAntialias);
+                _surfaceTextBackendInfo.Policy, _textAntialias, RubyRules);
             for (int row = 0; row < rendered.Rows.Count; row++)
             {
                 AdvTextRow drawn = rendered.Rows[row];
@@ -338,7 +339,7 @@ public sealed partial class GodotAdvHost
                 AdvRetainedGlyphRecord left = rendered.Records[firstBase], right = rendered.Records[lastBase];
                 foreach (AdvRetainedGlyphRecord record in _retainedGlyphLayoutEngine.RenderRubyOver(
                              updated, left.Left, left.Top, right.Right - left.Left, annotation.Text, run.Style,
-                             _surfaceTextBackendInfo.Policy, _textAntialias))
+                             _surfaceTextBackendInfo.Policy, _textAntialias, RubyRules, history: true))
                     Add(record, true);
             }
         }
@@ -379,7 +380,9 @@ public sealed partial class GodotAdvHost
                 ordered,
                 orderedIsRuby,
                 run.Layout.OriginX,
-                run.Layout.OriginY);
+                run.Layout.OriginY,
+                RubyRules.ChainEveryRubyRecord);
+            _layoutCursors[binding.LayoutSlot] = (rendered.CursorX, rendered.CursorY);
             RebuildRetainedWaitIndicator(binding.LayoutSlot);
             result = new AdvRetainedTextRunResult(
                 binding.LayoutSlot,
@@ -400,8 +403,9 @@ public sealed partial class GodotAdvHost
         lock (_textLock)
         {
             if (layoutSlot != 0) _currentAdvLayout = layoutSlot;
-            _advTextX = x;
-            _advTextY = y;
+            int slot = layoutSlot != 0 ? layoutSlot : _currentAdvLayout;
+            _layoutCursors[slot] = (x, y);
+            RebuildRetainedWaitIndicator(slot);
         }
         _timeline?.Event("text-cursor", new() { ["slot"] = layoutSlot, ["x"] = x, ["y"] = y });
     }
@@ -562,6 +566,72 @@ public sealed partial class GodotAdvHost
         return true;
     }
 
+    /// <summary>
+    /// Op 0x82 (text_redraw_retained_group@0x451530; SYS4433 @0x4553c0): release the layout's objects, clear its surface
+    /// and draw each record at its rectangle. Unless flag 4 is set, the published glyphs are bound again over the new
+    /// pixels; native binds one object per record instead, which covers the same cells. The glyph list stays, so the
+    /// wait indicator keeps its anchor and later text continues the page. This is not a History presentation, which
+    /// History's exit would erase.
+    /// </summary>
+    public void RedrawRetainedTextGroup(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvTextRedrawBatch batch)
+    {
+        if (binding.LayoutSlot != batch.LayoutSlot
+            || binding.FirstObjectHandle < 0
+            || binding.ObjectCapacity <= 0)
+            return;
+        (int width, int height) = _slotDims.TryGetValue(binding.SourceSurfaceSlot, out var dimensions)
+                                  && dimensions.W > 0 && dimensions.H > 0
+            ? (dimensions.W, dimensions.H)
+            : (batch.Layout.Width, batch.Layout.Height);
+        if (width <= 0 || height <= 0) return;
+
+        var updated = new RgbaImage(width, height, new byte[checked(width * height * 4)]);
+        IReadOnlyList<(AdvRetainedGlyphRecord Cell, bool IsRuby)> cells = _retainedGlyphLayoutEngine.RenderRedraw(
+            updated, batch.Records, _surfaceTextBackendInfo.Policy, _textAntialias, RubyRules, FontRealization);
+
+        bool bind = (batch.Flags & 4) == 0;
+        RetainedAdvTextLayoutPresentation? presentation;
+        lock (_textLock)
+        {
+            // A layout with no live text yet takes the drawn cells as its glyphs.
+            if (!_retainedTextLayouts.TryGetValue(binding.LayoutSlot, out presentation) && bind)
+            {
+                presentation = new RetainedAdvTextLayoutPresentation(binding);
+                _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
+                presentation.AppendRun(
+                    cells.Select(cell => cell.Cell).ToArray(),
+                    cells.Select(cell => cell.IsRuby).ToArray(),
+                    batch.Layout.OriginX,
+                    batch.Layout.OriginY,
+                    RubyRules.ChainEveryRubyRecord);
+                RebuildRetainedWaitIndicator(binding.LayoutSlot);
+            }
+        }
+
+        lock (_imageLock)
+            _surfaceImages[binding.SourceSurfaceSlot] = updated;
+        _slotDims[binding.SourceSurfaceSlot] = (width, height);
+        gfx.CreateSurface(binding.SourceSurfaceSlot);
+        gfx.EraseRange(binding.FirstObjectHandle, binding.ObjectCapacity);
+        if (bind && presentation != null)
+        {
+            if (presentation.PublishedGlyphCount > 0) presentation.Republish(gfx);
+            else presentation.PublishThrough(gfx, presentation.Glyphs.Count);
+        }
+        Interlocked.Exchange(ref _presentRequested, 1);
+        _timeline?.Event("text-redraw", new()
+        {
+            ["layout"] = batch.LayoutSlot,
+            ["record"] = batch.FirstRecordIndex,
+            ["flags"] = batch.Flags,
+            ["records"] = batch.Records.Count,
+            ["cells"] = cells.Count,
+        });
+    }
+
     public void EndTextHistoryPresentation(GfxState gfx)
     {
         RetainedAdvTextLayoutPresentation[] retained;
@@ -672,16 +742,12 @@ public sealed partial class GodotAdvHost
             return;
         }
 
+        // SYS4433's indicator draw (0x452730) in follow mode adds the layout's last 20-byte record's left/top, which is
+        // the pending record at the cursor, just past the last glyph.
         int anchorX = 0;
         int anchorY = 0;
-        if (_waitIndicatorFollowLastGlyph
-            && _retainedTextLayouts.TryGetValue(layoutSlot, out var textLayout)
-            && textLayout.Glyphs.Count > 0)
-        {
-            AdvRetainedGlyphRecord last = textLayout.Glyphs[^1].Record;
-            anchorX = last.Left;
-            anchorY = last.Top;
-        }
+        if (_waitIndicatorFollowLastGlyph && _layoutCursors.TryGetValue(layoutSlot, out var cursor))
+            (anchorX, anchorY) = cursor;
         _retainedWaitIndicators[layoutSlot] =
             new RetainedAdvWaitIndicatorPresentation(
                 config,

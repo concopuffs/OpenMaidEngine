@@ -14,6 +14,8 @@ public static class GodotVmOptions
         return new(
             MaxSteps: selftest ? DiagnosticMaxSteps : long.MaxValue,
             IgnoreExitRequests: ignoreExitRequests,
+            CreateObject: settings.CreateObject,
+            AutoFreeTex: settings.AutoFreeTex,
             NoSaveDat: selftest,
             CancelMessageSkipOnClick: settings.CancelMessageSkipOnClick,
             FastForwardOpMicroseconds: VmOptions.NativeFastForwardOpMicroseconds,

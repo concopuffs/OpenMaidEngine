@@ -58,24 +58,12 @@ public sealed partial class VirtualMachine
                     _host.RenderTextHistory(Gfx, TextHistory.GetPresentationBinding(batch.LayoutSlot), batch);
                 return pc + 1;
             }
-            case "redraw-retained-text-group": // 0x82: restore an ordinary ADV group at its retained layout
-            {
-                int flags = (int)Read(a[2]);
-                if ((flags & 4) == 0 && TextHistory.TryBuildRenderBatch(
-                        (int)Read(a[0]), (int)Read(a[1]), flags, Read(a[3]), Read(a[4]), out var batch))
-                {
-                    batch = batch with
-                    {
-                        // Records do not retain leading; the reflow uses the text manager's current value.
-                        Style = batch.Style with { LineSpacing = _advTextStyle.LineSpacing }
-                    };
-                    _host.RenderTextHistory(
-                        Gfx,
-                        TextHistory.GetPresentationBinding(batch.LayoutSlot),
-                        batch);
-                }
+            case "redraw-retained-text-group": // 0x82: draw an ordinary ADV group again at its records' rectangles
+                if (TextHistory.TryBuildRedrawBatch(
+                        (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), Read(a[3]), Read(a[4]), _advTextStyle,
+                        out var redraw))
+                    _host.RedrawRetainedTextGroup(Gfx, TextHistory.GetPresentationBinding(redraw.LayoutSlot), redraw);
                 return pc + 1;
-            }
             case "u0041BB90":
             case "find-text-history-value": // 0x1d3: operand 3 is accepted but ignored natively
             {

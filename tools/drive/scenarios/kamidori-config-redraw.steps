@@ -1,0 +1,55 @@
+# Kamidori's op 0x82 redraw (docs/engine-re.md, "Op 0x82 redraw"). A CONFIG setting change draws the ADV page behind
+# it again, each retained record at its rectangle (text_redraw_retained_group@0x4553c0): 初期設定 on 基本設定 redraws
+# the prologue page unchanged, ruby included, and ADV設定's 効果 縁なし redraws it without the outline. Compare the
+# kamidori-config-redraw-* shots between targets; the wait indicator's animation frame differs. Run on the Japanese
+# base like kamidori-furigana.steps, on a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port run tools/drive/scenarios/kamidori-config-redraw.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+click newgame.begin
+wait-state script=SC0000 timeout=60
+wait-state at=SC0000@0xfa2 click=adv.next every=2.5 timeout=180   # １８年前、叛乱によって王政が崩壊すると、…
+wait 3
+move adv.next
+wait 1
+shot kamidori-config-redraw-page
+
+rclick adv.next
+wait 3
+click menu.config
+wait-state script=CONFIG1 timeout=10
+wait 2
+click config.defaults
+wait 3
+shot kamidori-config-redraw-defaults-config
+rclick adv.next
+wait 3
+rclick adv.next
+wait-state top=SC0000@0xfa2 timeout=15
+move adv.next
+wait 1
+shot kamidori-config-redraw-defaults
+
+rclick adv.next
+wait 3
+click menu.config
+wait-state script=CONFIG1 timeout=10
+wait 2
+click config.adv
+wait-state script=CONFIG2 timeout=10
+wait 2
+click config.adv.no-outline
+wait 3
+shot kamidori-config-redraw-no-outline-config
+rclick adv.next
+wait 3
+rclick adv.next
+wait-state top=SC0000@0xfa2 timeout=15
+move adv.next
+wait 1
+shot kamidori-config-redraw-no-outline

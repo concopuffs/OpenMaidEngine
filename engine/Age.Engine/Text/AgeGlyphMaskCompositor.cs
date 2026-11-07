@@ -2,6 +2,20 @@ using Age.Engine.Model;
 
 namespace Age.Engine.Text;
 
+/// <summary>How an engine revision's glyph blit turns a gray-4 coverage value (0..16) into alpha. An aliased glyph's
+/// set pixels are opaque under both.</summary>
+public enum GlyphCoverageAlpha
+{
+    /// <summary>SYS4422 (Himegari; text_blit_glyph_bitmap@0x458c80): <c>c * 255 &gt;&gt; 4</c>, opaque at full
+    /// coverage.</summary>
+    Sixteenths,
+
+    /// <summary>SYS4433 (Kamidori; text_blit_glyph_bitmap_sys4433@0x45cff0): <c>c * 255 / 17</c>, so full coverage is
+    /// 240 and text never hides what lies under it. (Its GGO_GRAY8 branch, <c>c * 255 / 65</c>, needs text manager
+    /// +0x35584 = 1, which nothing sets.)</summary>
+    Seventeenths,
+}
+
 /// <summary>AGE's deterministic 32-bit glyph-mask compositor, independent of mask provenance.</summary>
 public static class AgeGlyphMaskCompositor
 {
@@ -12,13 +26,18 @@ public static class AgeGlyphMaskCompositor
     public static int CellTopToBaseline(GlyphMask mask, int pixelHeight)
         => (mask ?? throw new ArgumentNullException(nameof(mask))).Ascent ?? pixelHeight;
 
+    /// <summary>The glyph blit of a profile's engine ABI.</summary>
+    public static GlyphCoverageAlpha CoverageAlphaFor(string engineAbiId)
+        => EngineRevisions.IsSys4433(engineAbiId) ? GlyphCoverageAlpha.Seventeenths : GlyphCoverageAlpha.Sixteenths;
+
     public static void DrawGlyph(
         RgbaImage destination,
         GlyphMask mask,
         int cellX,
         int cellY,
         int topToBaseline,
-        AdvTextStyle style)
+        AdvTextStyle style,
+        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
     {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(mask);
@@ -29,20 +48,21 @@ public static class AgeGlyphMaskCompositor
             DrawMask(destination, mask,
                 checked(cellX + style.EffectOffsetX),
                 checked(baselineY + style.EffectOffsetY),
-                style.EffectColor);
+                style.EffectColor, coverageAlpha: coverageAlpha);
         else if (style.RenderMode == 3)
             foreach ((int x, int y) in GetMode3OutlineOffsets(
                          style.EffectOffsetX, style.EffectOffsetY))
                 DrawMask(destination, mask, checked(cellX + x), checked(baselineY + y),
-                         style.EffectColor);
+                         style.EffectColor, coverageAlpha: coverageAlpha);
 
-        DrawMask(destination, mask, cellX, baselineY, style.TextColor);
+        DrawMask(destination, mask, cellX, baselineY, style.TextColor, coverageAlpha: coverageAlpha);
         if (style.RenderMode == 2)
         {
             if (mask.Monochrome)
                 DrawMask(destination, ModeTwoBitmapPass(mask), cellX, baselineY, style.TextColor);
             else
-                DrawMask(destination, mask, cellX, baselineY, style.TextColor, coverageShift: 2);
+                DrawMask(destination, mask, cellX, baselineY, style.TextColor, coverageShift: 2,
+                         coverageAlpha: coverageAlpha);
         }
     }
 
@@ -74,7 +94,8 @@ public static class AgeGlyphMaskCompositor
 
     /// <summary>
     /// Draw at a GDI-style baseline. mask.OriginX moves right from the pen and mask.OriginY moves
-    /// upward from the baseline. coverageShift=2 reproduces AGE's mode-2 quarter-coverage pass.
+    /// upward from the baseline. coverageShift=2 reproduces AGE's mode-2 quarter-coverage pass, whose shifted value
+    /// goes through the same <paramref name="coverageAlpha"/>.
     /// </summary>
     public static bool DrawMask(
         RgbaImage destination,
@@ -82,7 +103,8 @@ public static class AgeGlyphMaskCompositor
         int baselineX,
         int baselineY,
         long rgb,
-        int coverageShift = 0)
+        int coverageShift = 0,
+        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
     {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(mask);
@@ -109,7 +131,9 @@ public static class AgeGlyphMaskCompositor
                 if ((uint)x >= (uint)destination.Width) continue;
                 int level = coverage[sourceRow + column] >> coverageShift;
                 if (level == 0) continue;
-                int alpha = level * 255 / 16;
+                int alpha = mask.Monochrome ? 255
+                    : coverageAlpha == GlyphCoverageAlpha.Seventeenths ? level * 255 / 17
+                    : level * 255 / 16;
                 BlendTextPixel(destination.Pixels,
                     checked((y * destination.Width + x) * 4),
                     red, green, blue, alpha);

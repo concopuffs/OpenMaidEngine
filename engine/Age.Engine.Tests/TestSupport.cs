@@ -24,6 +24,7 @@ internal class RecordingHost : IHost
     public readonly List<(AdvTextLayoutPresentationBinding Binding, AdvTextHistoryRenderBatch Batch)>
         RetainedHistoryRenders = new();
     public readonly Dictionary<int, AdvTextHistoryRenderBatch> ActiveHistoryRenders = new();
+    public readonly List<(AdvTextLayoutPresentationBinding Binding, AdvTextRedrawBatch Batch)> Redraws = new();
     public int HistoryPresentationEnds;
     public readonly List<int> ClearedTextLayouts = new();
     public readonly List<SurfaceRectFill> SurfaceFills = new();
@@ -178,6 +179,11 @@ internal class RecordingHost : IHost
         RenderTextHistory(batch);
         return false;
     }
+    public void RedrawRetainedTextGroup(
+        GfxState gfx,
+        AdvTextLayoutPresentationBinding binding,
+        AdvTextRedrawBatch batch)
+        => Redraws.Add((binding, batch));
     public void EndTextHistoryPresentation()
     {
         HistoryPresentationEnds++;

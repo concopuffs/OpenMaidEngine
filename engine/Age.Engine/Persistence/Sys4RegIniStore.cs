@@ -33,6 +33,9 @@ public sealed class Sys4RegIniStore
     // message:UseAntiFont (registered default 1, bound only under ENABLEANTIFONT): text manager +0x544, which picks
     // GGO_GRAY4_BITMAP (nonzero) or GGO_BITMAP glyphs.
     public const string UseAntiFontKey = "UseAntiFont";
+    // message:RubyShiftMode (SYS4433): the SYS4REG.INI loader 0x472530 reads it over SYS4INI's RUBYSHIFTMODE, but AGE
+    // never writes it, so only a hand edit puts it in the file.
+    public const string RubyShiftModeKey = "RubyShiftMode";
     private static readonly Encoding Cp932 = CreateCp932();
     private static readonly string[] RouteKeys = ["", "Music", "SE", "Voice", "Movie"];
 
@@ -60,6 +63,18 @@ public sealed class Sys4RegIniStore
         ("system", "SaveBMPPath", ""), ("system", "UseMMX", "1"), ("system", "EffectSkipOnClick", "0"),
         ("system", "OutErrorLog", "0"),
     ];
+
+    // SYS4433 (Kamidori; loader 0x472530) also binds display:VirtualFullScreenType after LimitAero and, with
+    // message:UseAntiFont under ENABLEANTIFONT, message:AntiFontLevel; a native Kamidori exit writes both, as 0.
+    private static readonly (string Section, string Key, string Default)[] Sys4433Bindings = NativeBindings
+        .SelectMany(binding => binding.Key switch
+        {
+            "LimitAero" => new[] { binding, ("display", "VirtualFullScreenType", "0") },
+            "UseAntiFont" => new[] { binding, ("message", "AntiFontLevel", "0") },
+            _ => new[] { binding },
+        })
+        .ToArray();
+    private readonly (string Section, string Key, string Default)[] _bindings;
     private readonly Sys4StartupSettings _startupSettings;
 
     private readonly string _path;
@@ -68,10 +83,14 @@ public sealed class Sys4RegIniStore
     private readonly int[] _routeValues = [0, 0, 1, 1, 1];
     private IniDocument? _document;
 
-    public Sys4RegIniStore(string path, int defaultMusicRouteValue, Sys4StartupSettings? startupSettings = null)
+    /// <param name="engineAbiId">The profile's engine ABI, which picks the keys AGE binds (SYS4433 binds two more).
+    /// Null means SYS4422's.</param>
+    public Sys4RegIniStore(
+        string path, int defaultMusicRouteValue, Sys4StartupSettings? startupSettings = null, string? engineAbiId = null)
     {
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Settings path is required.", nameof(path));
         _path = Path.GetFullPath(path);
+        _bindings = engineAbiId != null && Text.EngineRevisions.IsSys4433(engineAbiId) ? Sys4433Bindings : NativeBindings;
         _startupSettings = startupSettings ?? Sys4StartupSettings.Empty;
         _defaultMusicRouteValue = defaultMusicRouteValue;
         _routeValues[(int)AudioMixerCategory.Music] = defaultMusicRouteValue;
@@ -85,7 +104,8 @@ public sealed class Sys4RegIniStore
     /// </summary>
     public static Sys4RegIniStore ForPath(
         Sys4StartupSettings startupSettings,
-        string path)
+        string path,
+        string? engineAbiId = null)
     {
         ArgumentNullException.ThrowIfNull(startupSettings);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -95,7 +115,7 @@ public sealed class Sys4RegIniStore
             && noSetMusic != 0
             ? noSetMusic - 1
             : 0;
-        return new Sys4RegIniStore(path, defaultMusic, startupSettings);
+        return new Sys4RegIniStore(path, defaultMusic, startupSettings, engineAbiId);
     }
 
     public AudioMixerSettings Load()
@@ -235,19 +255,25 @@ public sealed class Sys4RegIniStore
         => int.TryParse(_startupSettings.GetValueOrDefault("ENABLEANTIFONT")?.Trim(),
             NumberStyles.Integer, CultureInfo.InvariantCulture, out int enableAntiFont) && enableAntiFont != 0;
 
+    /// <summary>message:RubyShiftMode as SYS4433 starts: the file's value when a hand edit put one there, else SYS4INI's
+    /// RUBYSHIFTMODE.</summary>
+    public int RubyShiftMode => LoadMessageInt(RubyShiftModeKey, _startupSettings.RubyShiftMode);
+
+    private static bool BoundOnlyWithAntiFont(string key) => key is "UseAntiFont" or "AntiFontLevel";
+
     private List<(string Section, string Key)> BoundKeys()
     {
         bool antiFont = AntiFontBound;
-        return NativeBindings.Where(b => b.Key != "UseAntiFont" || antiFont)
+        return _bindings.Where(b => !BoundOnlyWithAntiFont(b.Key) || antiFont)
             .Select(b => (b.Section, b.Key)).ToList();
     }
 
     private void AddMissingNativeKeys()
     {
         bool antiFont = AntiFontBound;
-        foreach ((string section, string key, string fallback) in NativeBindings)
+        foreach ((string section, string key, string fallback) in _bindings)
         {
-            if (key == "UseAntiFont" && !antiFont) continue;
+            if (BoundOnlyWithAntiFont(key) && !antiFont) continue;
             string value = key == "Music"
                 ? _defaultMusicRouteValue.ToString(CultureInfo.InvariantCulture)
                 : _startupSettings.GetValueOrDefault(key.ToUpperInvariant()) ?? fallback;
