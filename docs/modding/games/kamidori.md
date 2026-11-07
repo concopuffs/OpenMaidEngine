@@ -36,9 +36,10 @@ with, and ship two fragments if the mod should work on both.
 | translated | `sha256:54d6bc4d8cf85e32903808979d16ff851f10e62f06dcb8ab87bc8076a31c1e30` |
 | untranslated | `sha256:e8db06e1287c557533e93380084358dbc28beb684b3344f3890852514ad97f58` |
 
-The install's root also holds the translation's `$n$*.bin` append scripts. The port and native AGE load them even
-without `--overlay-root patch`, so append content shows in English either way (`../../backlog.md`). Their strings
-are partly damaged, so do not copy code from them.
+The install's root also holds the translation's `$n$*.bin` append scripts. Root-loose `$n$` files are AGE's own
+append override, not part of the translation's `patch/` hook, so the port and native AGE load them even without
+`--overlay-root patch`, and append content shows in English either way (`../../asset-resolution-re.md`). Their
+strings are partly damaged, so do not copy code from them.
 
 ## First mod values
 

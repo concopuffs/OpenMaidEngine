@@ -295,14 +295,28 @@ these measurements remain distinguishable from the official K4/K6 snapshot.
 installed Kamidori root holds 92 loose `$n$*.bin` scripts (`$1$`, `$2$`, `$3$` append-record basenames). Every one
 differs from its `APPENDnn.ALF` record and carries English text where the archive copy is Japanese (for example
 `$3$EBINIT.bin` names unit 1 "Wilfred Dion"; the archive copy names him ウィルフレド・ディオン). The installer's
-`Backup/` holds `.bak` originals for eleven of them, consistent with it adding the rest outright. Because append
-records resolve loose-basename-first inside their selected catalog (above), both native AGE and the port load
-these English append scripts even without `--overlay-root patch`. The non-`$` root `.BIN` overrides are different:
-they are Japanese, differ from `DATA1.ALF`, and none is in `Backup/`, so they are treated as the official update's
-authored files. Data tooling therefore excludes the root `$n$` files for the Kamidori profile
-(`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`) and reads append records from `extracted-kamidori/APPENDnn/`;
-`tools/init_image.py` runs the VM against a hard-link view of the install without them. The runtime is unchanged
-— it still mounts them, as native AGE would.
+`Backup/` holds `.bak` originals for eleven of them, consistent with it adding the rest outright. The root also holds
+25 translation-owned `$n$*.AGF` append graphics, which are BMPs (`BM`) like the overlay's.
+
+**Root `$n$` files are AGE's own mechanism, not the translation's hook (rechecked 2026-11-07).** The translated
+executable's trampoline sits only on the base-record branch of `asset_open_indexed_entry_SYS4433`. Append ids go to
+the unhooked `aai_open_indexed_entry_SYS4433@0x401410`, which calls `CreateFileA` on the record's own `$n$` name in
+the game root and falls back to its `APPENDnn.ALF` range, exactly as Himegari's untranslated SYS4422
+`aai_open_indexed_entry` does. The official Japanese install already used this: the eleven `Backup/` originals are
+Japanese, differ from their archive records and are larger (`$1$ITINIT` 7,208 bytes in `APPEND01.ALF`, 9,640 in the
+backup), so Kamidori's official update shipped them as root-loose append overrides. The translation overwrote those
+eleven with English builds of the updated scripts and added the other 81 scripts and the 25 graphics. `patch/`
+exists because the translation's hook reads it; the root `$n$` files need no hook. Stock and translated AGE both load
+them, and so does the port, with or without `--overlay-root patch`. The port running this install without the
+overlay is therefore stock AGE's view of a translated install: Japanese base records, English append records, and
+BMP append graphics that need `--allow-bmp-as-agf`.
+
+The non-`$` root `.BIN` overrides are different: they are Japanese, differ from `DATA1.ALF`, and none is in
+`Backup/`, so they are treated as the official update's authored files. Data tooling excludes the root `$n$` files
+for the Kamidori profile (`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`) and reads append records from
+`extracted-kamidori/APPENDnn/`; `tools/init_image.py` runs the VM against a hard-link view of the install without
+them. For the eleven records the official update replaced, that view reads the pre-update archive copies, not the
+update's (`docs/backlog.md`). The runtime is unchanged — it still mounts them, as native AGE does.
 
 ### Proposed layers
 

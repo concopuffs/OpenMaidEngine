@@ -36,6 +36,7 @@ The installed `Kamidori/` root mixes three sources:
 | `DATA1-5.ALF`, `APPEND01-03.ALF` | shipped archives | yes (via `extracted-kamidori/`) |
 | non-`$` root `*.BIN` (94: 90 differ from `DATA1.ALF`, 2 identical, plus root-only SYS4INI/SYS4RK) | official update: Japanese text, none backed up by the translation installer | yes — shadow the archive copy |
 | root `$n$*.bin` (92 scripts) | **English fan translation** replacing append records | **no** |
+| `Backup/$n$*.bin.bak` (11 scripts) | official update's root-loose append overrides, which the translation overwrote | **no**: the archive's pre-update copies are read instead (`backlog.md`) |
 | `patch/` | fan translation overlay (`--overlay-root patch`) | no |
 
 The `$n$` finding and its evidence are recorded in [`asset-resolution-re.md`](asset-resolution-re.md). The

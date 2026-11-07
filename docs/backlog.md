@@ -77,10 +77,15 @@ it; git history keeps the record.
   No visible or save difference is known: glyph baselines and crops match native and the SC0000 page-3 save is byte
   identical (`4b621ed`). Done when a native comparison shows whether it changes any glyph, and the port matches if
   it does.
-- **Kamidori translated append files load without the overlay.** Kamidori's root `$n$*.bin` files are the fan
-  translation's append replacements. Tooling ignores them (`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`), but the port
-  (like native AGE) loads them, so English append content shows even without `--overlay-root patch`. Decide whether
-  the port should require the overlay for them.
+- **Kamidori data tooling reads pre-update copies of eleven append records.** Kamidori's official update shipped
+  eleven root-loose append overrides (`$1$` ALINIT, CIMES, ITINIT, ITMES, SKINIT, SKMES; `$2$` ALINIT, ITINIT,
+  ITMES, SKINIT, SKMES). The English translation overwrote them, and its installer kept the Japanese originals as
+  `Backup/<name>.bak` (`asset-resolution-re.md`, "Root `$n$` files are AGE's own mechanism"). Tooling excludes every
+  root `$n$` file for Kamidori, so `paths.scripts()` and `init_image.py`'s pristine view fall back to the
+  `APPENDnn.ALF` records, which predate the update (`$1$ITINIT` 7,208 bytes against the update's 9,640). The item,
+  skill and alchemy tables decoded from appends 1 and 2 (`kamidori-data-tables.md`, `vm-map/globals-kamidori.toml`)
+  may therefore miss the update's changes. Done when the pristine view uses each record's `Backup/` original where
+  one exists, and the init image, the extracted tables and their documentation are rebuilt from it.
 - **The `0x90`-byte SYS4INI block.** Its meaning is unknown and no consumer is known (OMS spec §13). Revisit only if
   one appears.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,
