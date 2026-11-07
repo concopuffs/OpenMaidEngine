@@ -30,6 +30,10 @@ public sealed partial class GodotAdvHost : IHost
     /// <summary>Measures glyphs for the aspect-mode font calibration (<see cref="AspectFontRealization"/>); without
     /// one every font is created at half its height in width.</summary>
     public IFontMetricsProbe? FontMetricsProbe { get; init; }
+
+    /// <summary>SYS4INI <c>BLANKEXTENTMODE</c> = 1: an aspect-mode blank in surface text advances by its own extent in
+    /// the reference font (<see cref="ImmediateSurfaceTextRenderer"/>).</summary>
+    public bool BlankExtentMode { get; init; }
     public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
                         IGlyphMaskRasterizer surfaceTextRasterizer,

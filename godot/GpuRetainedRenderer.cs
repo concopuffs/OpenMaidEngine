@@ -7,6 +7,8 @@ using Age.Engine.Model;
 /// Godot-native presentation of AGE's sampled retained objects. Static decoded/color-key variants are
 /// uploaded once; pooled Sprite2D canvas items retain their GPU resources between presentation boundaries.
 /// GfxState remains the backend-neutral source of truth and the software compositor remains the oracle.
+/// Objects sample as native's D3D9 sprite does (docs/engine-re.md, "Object sampling"): bilinear for any
+/// transform other than an integer translation, clamped to the texture's edge rather than the source region.
 /// </summary>
 internal sealed class GpuRetainedRenderer : IDisposable
 {
@@ -93,6 +95,9 @@ internal sealed class GpuRetainedRenderer : IDisposable
         item.Texture = texture;
         item.RegionEnabled = true;
         item.RegionRect = new Rect2(srcX, srcY, clippedWidth, clippedHeight);
+        item.TextureFilter = SoftwareAffineRasterizer.IsIntegerTranslation(localToDest)
+            ? CanvasItem.TextureFilterEnum.Nearest
+            : CanvasItem.TextureFilterEnum.Linear;
         item.Transform = ToGodot(localToDest);
         item.Modulate = Modulation(tint, opacity, multiplyTint);
         item.Material = ResolveMaterial(tint, tintStrength, multiplyTint, blend);
@@ -110,6 +115,7 @@ internal sealed class GpuRetainedRenderer : IDisposable
         var item = NextItem();
         item.Texture = _whiteTexture;
         item.RegionEnabled = false;
+        item.TextureFilter = CanvasItem.TextureFilterEnum.Nearest;
         item.Transform = ToGodot(new Affine2D(
             localToDest.XX * width, localToDest.XY * width,
             localToDest.YX * height, localToDest.YY * height,
@@ -135,7 +141,8 @@ internal sealed class GpuRetainedRenderer : IDisposable
             var item = new Sprite2D
             {
                 Centered = false,
-                RegionFilterClipEnabled = true,
+                // D3D9's CLAMP addressing reads the texels just outside a source region, so do not clip there.
+                RegionFilterClipEnabled = false,
                 TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
                 Visible = false,
             };

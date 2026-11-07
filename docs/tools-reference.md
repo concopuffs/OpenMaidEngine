@@ -1037,9 +1037,9 @@ file's header gives its start commands.
   SYS4433").
 - `kamidori-config-redraw.steps` reaches the same page, then makes two CONFIG changes from the right-click menu's
   環境設定: 初期設定 on 基本設定, and ADV設定's 効果 縁なし. Each change runs op `0x82`, which redraws the page behind
-  CONFIG. Shots `kamidori-config-redraw-page`, `-defaults-config`, `-defaults`, `-no-outline-config` and `-no-outline`;
-  inside the text window the redrawn pages match native within 30 per channel (`engine-re.md`, "Op 0x82 redraw").
-  The `-no-outline-config` shot also shows CONFIG2's own surface text differing (`docs/backlog.md`).
+  CONFIG. Shots `kamidori-config-redraw-page`, `-defaults-config`, `-defaults`, `-no-outline-config` and `-no-outline`.
+  Apart from the animated wait indicator they match native within 1 per channel, CONFIG2's own surface text included
+  (`engine-re.md`, "Op 0x82 redraw", "Aspect-mode surface text").
 
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,

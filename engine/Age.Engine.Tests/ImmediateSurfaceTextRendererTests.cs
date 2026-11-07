@@ -119,9 +119,12 @@ public class ImmediateSurfaceTextRendererTests
         int rendered = RetainedSurfaceRasterizer.CompositeRange(
             destination, visible, 10, 1, _ => textSurface);
 
+        // The doubled one-pixel region covers 2x2 pixels. Objects sample bilinearly as native's D3D9 sprite does, and
+        // the texture clamp reads past the region, so each pixel takes 192/256 x 192/256 of the white texel and the
+        // rest from its transparent neighbours: alpha 143, then 71 at opacity 128, green 143 * 71 / 255 = 39.
         Assert.Equal(1, rendered);
-        Assert.Equal((0, 128, 0, 128), Pixel(destination, 3, 2));
-        Assert.Equal((0, 128, 0, 128), Pixel(destination, 4, 2));
+        Assert.Equal((0, 39, 0, 71), Pixel(destination, 3, 2));
+        Assert.Equal((0, 39, 0, 71), Pixel(destination, 4, 2));
         Assert.Equal((0, 0, 0, 0), Pixel(destination, 5, 2));
 
         RetainedSurfaceRasterizer.CompositeRange(

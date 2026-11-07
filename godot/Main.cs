@@ -515,6 +515,7 @@ public partial class Main : Godot.Control
                                             _sys4RegIniStore?.RubyShiftMode),
             FontFamilySource = InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings),
             FontMetricsProbe = surfaceTextRasterizer as IFontMetricsProbe,
+            BlankExtentMode = _catalog.StartupSettings.BlankExtentMode == 1,
         };
         if (_sys4RegIniStore != null) _host.UseMessageSettingsStore(_sys4RegIniStore);
         _trace = new GodotTraceSink(_locator, _timeline);

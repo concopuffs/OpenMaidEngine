@@ -20,7 +20,7 @@ public class SoftwareAffineRasterizerTests
         byte[] actual = (byte[])expected.Clone();
         var translation = new Affine2D(1, 0, 0, 1, tx, ty);
 
-        ReferenceBlit(expected, 6, 5, src, 5, 1, 1, 3, 2, translation,
+        ReferenceBlit(expected, 6, 5, src, 5, 4, 1, 1, 3, 2, translation,
                       0x4080c0, 0.35f, 0.6f, multiplyTint);
         SoftwareAffineRasterizer.BlitRgba(actual, 6, 5, src, 5, 4, 1, 1, 3, 2, translation,
                                           0x4080c0, 0.35f, 0.6f, multiplyTint);
@@ -46,7 +46,7 @@ public class SoftwareAffineRasterizerTests
     }
 
     [Fact]
-    public void BlitRgba_RotatesTwoPixelsClockwiseWithNearestSampling()
+    public void BlitRgba_QuarterTurnLandsOnTexelCentresAndCopiesTexels()
     {
         byte[] src = { 255,0,0,255, 0,255,0,255 };
         byte[] dst = new byte[4*4*4];
@@ -56,6 +56,49 @@ public class SoftwareAffineRasterizerTests
             world.FromLocalOrigin(1,1),0xffffff,0,1);
         Assert.Equal(new byte[] {255,0,0,255}, dst[16..20]);
         Assert.Equal(new byte[] {0,255,0,255}, dst[32..36]);
+    }
+
+    [Fact]
+    public void BlitRgba_ScaleBlendsNeighbouringTexelsWithEightBitWeights()
+    {
+        // Native draws objects through a D3D9 sprite with MIN/MAG LINEAR (gfx_object_blit_d3d9). Doubling a
+        // black/white pair samples at 0.25, 0.75, 1.25 and 1.75 texels: the outer two clamp to the image edge,
+        // the inner two take 64/256 and 192/256 of white.
+        byte[] src = { 0,0,0,255, 255,255,255,255 };
+        byte[] dst = new byte[4 * 4];
+        SoftwareAffineRasterizer.BlitRgba(dst, 4, 1, src, 2, 1, 0, 0, 2, 1,
+            new Affine2D(2, 0, 0, 1, 0, 0), 0xffffff, 0, 1);
+        Assert.Equal(new byte[] { 0,0,0,255, 64,64,64,255, 191,191,191,255, 255,255,255,255 }, dst);
+    }
+
+    [Fact]
+    public void BlitRgba_ScaledRegionBlendsTheTexelsBeyondItsEdge()
+    {
+        // D3DTADDRESS_CLAMP clamps to the texture, not the source rectangle, so a scaled one-texel region of a
+        // red/green/blue strip takes some of its red and blue neighbours.
+        byte[] src = { 255,0,0,255, 0,255,0,255, 0,0,255,255 };
+        byte[] dst = new byte[2 * 4];
+        SoftwareAffineRasterizer.BlitRgba(dst, 2, 1, src, 3, 1, 1, 0, 1, 1,
+            new Affine2D(2, 0, 0, 1, 0, 0), 0xffffff, 0, 1);
+        Assert.Equal(new byte[] { 64,191,0,255, 0,191,64,255 }, dst);
+    }
+
+    [Fact]
+    public void BlitRgba_GeneralAffineSamplesAsTheAxisAlignedPath()
+    {
+        // A rotation too small to move any centre past a texel boundary takes the general path; its samples must
+        // agree with the axis-aligned path to within the subtexel weight's rounding.
+        var random = new Random(0x47d);
+        byte[] src = new byte[7 * 5 * 4];
+        random.NextBytes(src);
+        for (int i = 3; i < src.Length; i += 4) src[i] = 255;
+        byte[] axis = new byte[12 * 9 * 4];
+        byte[] general = new byte[12 * 9 * 4];
+        SoftwareAffineRasterizer.BlitRgba(axis, 12, 9, src, 7, 5, 0, 0, 7, 5,
+            new Affine2D(1.05, 0, 0, 1.05, 0.3, 0.2), 0xffffff, 0, 1);
+        SoftwareAffineRasterizer.BlitRgba(general, 12, 9, src, 7, 5, 0, 0, 7, 5,
+            new Affine2D(1.05, 1e-12, -1e-12, 1.05, 0.3, 0.2), 0xffffff, 0, 1);
+        for (int i = 0; i < axis.Length; i++) Assert.InRange(general[i] - axis[i], -1, 1);
     }
 
     [Fact]
@@ -142,7 +185,7 @@ public class SoftwareAffineRasterizerTests
             bool multiplyTint = random.Next(2) != 0;
             BlendKind blend = blends[random.Next(blends.Length)];
 
-            ReferenceBlit(expected, dstW, dstH, src, srcW, srcX, srcY, width, height,
+            ReferenceBlit(expected, dstW, dstH, src, srcW, srcH, srcX, srcY, width, height,
                           transform, tint, tintStrength, opacity, multiplyTint, blend);
             SoftwareAffineRasterizer.BlitRgba(actual, dstW, dstH, src, srcW, srcH,
                                                srcX, srcY, width, height, transform,
@@ -204,7 +247,7 @@ public class SoftwareAffineRasterizerTests
             random.NextBytes(expected);
             byte[] actual = (byte[])expected.Clone();
 
-            ReferenceBlit(expected, dstW, dstH, src, srcW, 1, 1, srcW - 1, srcH - 1,
+            ReferenceBlit(expected, dstW, dstH, src, srcW, srcH, 1, 1, srcW - 1, srcH - 1,
                           transform, 0x6a4c2e, 0, 1, false, blend);
             SoftwareAffineRasterizer.BlitRgba(actual, dstW, dstH, src, srcW, srcH,
                                                1, 1, srcW - 1, srcH - 1, transform,
@@ -214,8 +257,10 @@ public class SoftwareAffineRasterizerTests
         }
     }
 
-    // Pre-fast-path affine algorithm retained here as an independent differential oracle.
-    private static void ReferenceBlit(byte[] dst, int dstW, int dstH, byte[] src, int srcW,
+    // Per-pixel affine algorithm, kept free of the fast paths as an independent differential oracle: each
+    // covered pixel centre is mapped back and sampled bilinearly as native's D3D9 sprite does (8-bit weights
+    // rounded to the nearest 1/256, coordinates clamped to the source image's edge).
+    private static void ReferenceBlit(byte[] dst, int dstW, int dstH, byte[] src, int srcW, int srcH,
                                       int srcX, int srcY, int width, int height, Affine2D transform,
                                       long tint, float tintStrength, float opacity, bool multiplyTint,
                                       BlendKind blend = BlendKind.Alpha)
@@ -228,14 +273,29 @@ public class SoftwareAffineRasterizerTests
         for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++)
         {
             var p = inv.Apply(x + 0.5, y + 0.5);
-            int u = (int)System.Math.Floor(p.X), v = (int)System.Math.Floor(p.Y);
-            if ((uint)u >= (uint)width || (uint)v >= (uint)height) continue;
-            int si = ((srcY + v) * srcW + (srcX + u)) * 4, di = (y * dstW + x) * 4;
-            int sa = src[si + 3] * ia / 255;
+            if (!(p.X >= 0 && p.X < width && p.Y >= 0 && p.Y < height)) continue;
+            double gx = srcX + p.X - 0.5, gy = srcY + p.Y - 0.5;
+            int ix = (int)System.Math.Floor(gx), iy = (int)System.Math.Floor(gy);
+            int fx = (int)System.Math.Round((gx - ix) * 256), fy = (int)System.Math.Round((gy - iy) * 256);
+            int[] sample = new int[4];
+            for (int channel = 0; channel < 4; channel++)
+            {
+                int sum = 0;
+                for (int corner = 0; corner < 4; corner++)
+                {
+                    int cx = System.Math.Clamp(ix + (corner & 1), 0, srcW - 1);
+                    int cy = System.Math.Clamp(iy + (corner >> 1), 0, srcH - 1);
+                    int weight = ((corner & 1) != 0 ? fx : 256 - fx) * ((corner >> 1) != 0 ? fy : 256 - fy);
+                    sum += src[(cy * srcW + cx) * 4 + channel] * weight;
+                }
+                sample[channel] = (sum + 32768) >> 16;
+            }
+            int di = (y * dstW + x) * 4;
+            int sa = sample[3] * ia / 255;
             if (sa == 0) continue;
-            int sr = multiplyTint ? src[si] * tr / 255 : (src[si] * (255 - istr) + tr * istr) / 255;
-            int sg = multiplyTint ? src[si + 1] * tg / 255 : (src[si + 1] * (255 - istr) + tg * istr) / 255;
-            int sb = multiplyTint ? src[si + 2] * tb / 255 : (src[si + 2] * (255 - istr) + tb * istr) / 255;
+            int sr = multiplyTint ? sample[0] * tr / 255 : (sample[0] * (255 - istr) + tr * istr) / 255;
+            int sg = multiplyTint ? sample[1] * tg / 255 : (sample[1] * (255 - istr) + tg * istr) / 255;
+            int sb = multiplyTint ? sample[2] * tb / 255 : (sample[2] * (255 - istr) + tb * istr) / 255;
             ReferenceBlend(dst, di, sr, sg, sb, sa, blend);
         }
     }

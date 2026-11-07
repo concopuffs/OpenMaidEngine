@@ -41,6 +41,16 @@ public class Sys4StartupSettingsTests
         Assert.Equal(expected, Sys4AssetCatalog.Parse(BuildCatalog(pairs)).StartupSettings.NoSetMusic);
     }
 
+    [Theory]
+    [InlineData(null, 0)]
+    [InlineData("1", 1)]   // Kamidori
+    [InlineData("x", 0)]
+    public void BlankExtentModeDefaultsToZero(string? value, int expected)
+    {
+        var pairs = value == null ? Array.Empty<(string, string)>() : new[] { ("BlankExtentMode", value) };
+        Assert.Equal(expected, Sys4AssetCatalog.Parse(BuildCatalog(pairs)).StartupSettings.BlankExtentMode);
+    }
+
     [Fact]
     public void Sys4433FontAndRubyKeysUseTheirRegisteredDefaults()
     {

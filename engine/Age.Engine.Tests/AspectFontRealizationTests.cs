@@ -81,6 +81,87 @@ public class AspectFontRealizationTests
         Assert.Equal(-8, new AspectFontRealization(Installed, probe).RequestedWidth("IPA Pゴシック", 22, 0, 1));
     }
 
+    /// <summary>The single-byte calibration's measurements: Kamidori's メイリオ "6" at 14 pixels regular, as native's
+    /// GetGlyphOutlineA calls returned them. At its natural width the face is 21 pixels tall, so font2 is 9 pixels
+    /// high, with tmAveCharWidth 9 and a 5-pixel black box; ＭＳ ゴシック 激 at half width has a 13-pixel one.</summary>
+    private sealed class SingleByteProbe : IFontMetricsProbe
+    {
+        public List<(string Face, int Height, int Width, int Weight, ushort Code)> Calls { get; } = new();
+        public uint SmallBlackBox { get; set; } = 5;
+
+        public FontProbeMetrics Measure(string faceName, int pixelHeight, int width, int weight, ushort code)
+        {
+            Calls.Add((faceName, pixelHeight, width, weight, code));
+            if (faceName == AspectFontRealization.ReferenceFace) return new(7, 13, 14, Height: 14);
+            return pixelHeight == 14 ? new(13, 7, 9, Height: 21) : new(9, SmallBlackBox, 6, Height: 14);
+        }
+    }
+
+    [Fact]
+    public void ASingleByteGlyphWithinHalfTheReferenceBlackBoxTakesTheSmallFontsAverageWidth()
+    {
+        var probe = new SingleByteProbe();
+        var realization = new AspectFontRealization(Installed, probe);
+
+        // font2 = trunc(14 / 21 * 14) = 9 pixels; its black box (5) is within 13 >> 1, so the width is -9.
+        Assert.Equal(-9, realization.SingleByteWidth("メイリオ", 14, 0, (ushort)'6', aspectMode: 1));
+        Assert.Equal(new (string, int, int, int, ushort)[]
+        {
+            ("メイリオ", 14, 0, 0, 0x36),
+            ("メイリオ", 9, 0, 0, 0x36),
+            ("ＭＳ ゴシック", 14, -7, 0, 0x8c83),
+        }, probe.Calls);
+
+        // Calibrated once per face, size, weight and character.
+        realization.SingleByteWidth("メイリオ", 14, 0, (ushort)'6', 1);
+        Assert.Equal(3, probe.Calls.Count);
+        realization.SingleByteWidth("メイリオ", 14, 0, (ushort)'1', 1);
+        Assert.Equal(6, probe.Calls.Count);
+    }
+
+    [Fact]
+    public void ASingleByteGlyphWiderThanHalfTheReferenceBlackBoxIsScaledToIt()
+    {
+        var probe = new SingleByteProbe { SmallBlackBox = 7 };
+
+        // (float)(13 * 0.5) / 7 * -9 = -8.36, truncated.
+        Assert.Equal(-8, new AspectFontRealization(Installed, probe).SingleByteWidth("メイリオ", 14, 0, 0x36, 1));
+    }
+
+    [Theory]
+    [InlineData("メイリオ", 0)]
+    [InlineData("ＭＳ ゴシック", 1)]
+    [InlineData("Not Installed", 1)]
+    [InlineData("メイリオ", 2)]
+    public void OtherwiseASingleByteGlyphIsHalfTheHeightWide(string face, int aspectMode)
+    {
+        var probe = new SingleByteProbe();
+
+        Assert.Equal(-7, new AspectFontRealization(Installed, probe).SingleByteWidth(face, 14, 0, 0x36, aspectMode));
+        Assert.Empty(probe.Calls);
+    }
+
+    [Fact]
+    public void OnlySingleByteCodesHaveASingleByteWidth()
+    {
+        var realization = new AspectFontRealization(Installed, new SingleByteProbe());
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => realization.SingleByteWidth("メイリオ", 14, 0, 0x8c83, 1));
+    }
+
+    [Fact]
+    public void SingleByteRequestsOutsideBlanksUseTheirOwnCalibration()
+    {
+        var realization = new AspectFontRealization(Installed, new SingleByteProbe());
+        AdvTextStyle style = AdvTextStyle.Default with { PrimaryFontSize = 14, FontFace = "メイリオ", AspectMode = 1 };
+
+        IReadOnlyList<GlyphRasterRequest> requests =
+            ImmediateSurfaceTextRenderer.CreateRequests("6 あ", style, realization: realization);
+
+        int primary = realization.RequestedWidth("メイリオ", 14, 0, 1);
+        Assert.Equal(new[] { -9, primary, primary }, requests.Select(request => request.RequestedWidth));
+    }
+
     [Fact]
     public void GlyphRequestsUseTheRealizedWidth()
     {

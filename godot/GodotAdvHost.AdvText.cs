@@ -444,7 +444,7 @@ public sealed partial class GodotAdvHost
 
         var updated = new RgbaImage(
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
-        _surfaceTextPixelRenderer.Render(updated, x, y, text, style, _textAntialias);
+        _surfaceTextPixelRenderer.Render(updated, x, y, text, style, _textAntialias, FontRealization, BlankExtentMode);
 
         lock (_imageLock) _surfaceImages[surfaceSlot] = updated;
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);

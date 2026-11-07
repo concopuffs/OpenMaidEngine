@@ -1222,14 +1222,41 @@ Native matrix oracle: handle `0xcb8e`, anchor `(700,600)`, scale current `0.9`, 
 `[0.9055,0.0134;-0.0134,0.9055]` with translation `(74.1449,47.3127)`. The port focused test matches
 those terms. In the windowed port capture, the two SC0000 `0x234` sites (periods 9000/13000 ms, Z axes
 `+1/-1`) advanced after 563 ms to integer angles `22/15`, exactly the native formula, and produced distinct
-affine PNG frames. Nearest-neighbour inverse mapping is the deliberate software raster sampling policy;
-native D3D9 subpixel filtering remains a possible pixel-level difference, not an uncertain matrix approximation.
+affine PNG frames. Objects are filtered bilinearly, as native's D3D9 sprite filters them ("Object sampling" below).
 
 **Port result (updated 2026-08-19):** `GfxState` retains scale, one-shot rotation, translation, and the
 cyclic scale/rotation/translation siblings
 with their native clocks/order. `Transform2DMath` composes the full row-vector 4×4 transform before 2D
 projection. Godot uses an inverse-mapped affine RGBA8 rasterizer for textured objects and solid fills,
 preserving colorkey/tint/opacity behavior and never deriving opacity from transform Z.
+
+##### Object sampling (2026-11-07)
+
+Both engines draw every retained object through a statically linked D3DX sprite (`ID3DXSprite`; SYS4433 creates it in
+`gfx_create_sprite@0x47d910`, at renderer `+0xa5a4`). The sprite's `Begin` sets `D3DTADDRESS_CLAMP` and filters derived
+from the device caps. Then `gfx_object_blit_d3d9@0x4774c0` (SYS4422) and `gfx_draw_surface_through_sprite@0x47dac0`
+(SYS4433) set sampler 0 themselves: `MINFILTER` and `MAGFILTER` `LINEAR`, `MIPFILTER` `NONE`. So every object is
+filtered bilinearly:
+
+- D3DX's screen projection puts pixel centres on texel centres, so a 1:1 draw at an integer position copies texels
+  exactly.
+- A scaled, rotated or subpixel-placed draw blends neighbouring texels.
+- The clamp is to the texture, not to the source rectangle, so a scaled region takes some colour from the texels just
+  outside it.
+
+Kamidori's backgrounds show the difference. On the prologue page (`kamidori-furigana.steps`) nearest sampling left
+the band above the text window up to 78 levels off native, with 12168 pixels more than 8 off. Bilinear sampling brings it
+within 1 of native on both the GPU and the software path.
+
+**Port.**
+
+- `SoftwareAffineRasterizer` covers a destination pixel when its centre `inv(x + 0.5, y + 0.5)` lies inside the source
+  rectangle. It blends the four texels around `p - 0.5` in source-image coordinates with weights `round(frac * 256)`,
+  clamps coordinates to the image, and rounds with `(sum + 32768) >> 16`. Integer translations keep the exact copy
+  path.
+- `GpuRetainedRenderer` uses Godot's linear filter for any transform other than an integer translation. It turns
+  region clipping off so that Godot also reads past the region, as the clamp does.
+- Tests: `SoftwareAffineRasterizerTests`, against an independent per-pixel bilinear oracle.
 
 ##### `anim_start`/`set_anim_clock` decoded + opening confirmed (2026-07-07, animation-slice Task 1)
 
@@ -6982,7 +7009,8 @@ Font realization is a separate native layer: `text_create_calibrated_single_byte
 selects `text_calibrate_mode1_glyph_font@0x451340` or
 `text_calibrate_mode2_glyph_font@0x451910`; these consult natural font metrics and
 reference glyph geometry. The 2026-09-21 change implemented only the layout rule. The calibration and the in-cell
-placement followed on 2026-11-07 (the sections below). Display-aspect scaling is still not modelled. The named
+placement and the surface-text draws followed on 2026-11-07 (the sections below). Display-aspect scaling is still
+not modelled. The named
 functions and findings are annotated and saved in the SYS4433 Ghidra image. Opcode evidence lives
 in `vm-map/opcodes.toml`; regression/results are in `phase-a-slice-plan.md`.
 
@@ -7027,13 +7055,29 @@ aspect mode changes. `text_measure_glyph_with_aspect_mode@0x452080` picks its `l
   - Otherwise it is `nat.gmBlackBoxX / ref.gmCellIncX * -nat.tmAveCharWidth`.
   - Both are truncated. Kamidori's メイリオ bold comes out at -18 for both 20 and 22 pixels.
 
-Not modelled: mode 2 (`text_calibrate_mode2_glyph_font@0x451910`), which no shipped game selects; the
-`display:AspectMode` setting, which calibrates every face when nonzero; and the separate single-byte font
-(`text_create_calibrated_single_byte_font@0x451b70`).
+In aspect mode, outside ruby, a single-byte glyph gets a font of its own
+(`text_create_calibrated_single_byte_font@0x451b70`). The same function's single-byte branch calibrates that font
+against that very character:
 
-**Port.** `AspectFontRealization` holds the rule. Its measurements come from an `IFontMetricsProbe`, which is GDI in
-the Windows text backend. ADV text, History and op `0x82` use it; immediate surface text does not ("Aspect-mode
-surface text"). Tests: `AspectFontRealizationTests` (synthesized metrics).
+- The size is the font size `+0x313d4` for surface text, or the primary `lfHeight` (`-+0x35590`) for the ADV layout.
+  The two are the same unless a display scale applies. The probe fonts take the primary weight (`+0x35594`, written
+  together with `+0x4e0`).
+- `font2` is the face at character height `trunc(size / nat.tmHeight * size)`, at its natural width: a cell about
+  `size` tall.
+- The width is `-font2.tmAveCharWidth`. When the character's black box in `font2` is wider than half of the stored
+  reference 激's (`+0x313d8 >> 1`), it is instead `trunc((float)(ref.gmBlackBoxX * 0.5) / font2.gmBlackBoxX *
+  -font2.tmAveCharWidth)`.
+- The font keeps `lfHeight = -size`. Kamidori's メイリオ digits at 14 pixels come out at -9, as native GDI captures
+  show.
+
+The same faces as the primary font's are calibrated; any other gets `-size / 2`.
+
+Not modelled: mode 2 (`text_calibrate_mode2_glyph_font@0x451910`), which no shipped game selects; and the
+`display:AspectMode` setting, which calibrates every face when nonzero.
+
+**Port.** `AspectFontRealization` holds the rules (`RequestedWidth`, `SingleByteWidth`). Its measurements come from an
+`IFontMetricsProbe`, which is GDI in the Windows text backend. ADV text, History, op `0x82` and immediate surface text
+use it. Tests: `AspectFontRealizationTests` (synthesized metrics).
 
 #### Aspect-mode glyph placement (2026-11-07)
 
@@ -7076,13 +7120,40 @@ full coverage is 240 and text never fully hides what lies under it. SYS4422 uses
 branch, `c * 255 / 65`, needs text manager `+0x35584` = 1, which nothing sets. An aliased glyph's set pixels are opaque
 under both. The port picks the blit by engine ABI (`AgeGlyphMaskCompositor.CoverageAlphaFor`).
 
-#### Aspect-mode surface text (not modelled)
+#### Aspect-mode surface text (2026-11-07)
 
-Immediate surface text (op `0x204`, `text_draw_string_to_surface_sys4433@0x44f8a0`) draws with the primary font, which
-aspect mode calibrates. It moves y by the reference `tmAscent` (`+0x313f0`) minus the font's, and advances through the
-aspect-mode glyph-string draws (including `BLANKEXTENTMODE`). The port's `ImmediateSurfaceTextRenderer` applies none of
-this. On Kamidori's CONFIG2 page (ADV設定), the port draws the 14 px font names (op `0x204`, in their own face) and
-the slider values (op `0x205`) visibly smaller and narrower than native (`docs/backlog.md`).
+Immediate surface text (ops `0x204` and `0x205`, `text_draw_string_to_surface_sys4433@0x44f8a0`) clears the
+aspect-layout flag `+0x35598`, so no glyph is placed inside its cell. In aspect mode 1 it moves y by the reference
+`tmAscent` (`+0x313f0`) minus the primary font's, so every glyph's baseline is `y + ref.tmAscent`; other modes keep the
+primary font's baseline.
+
+The text goes through one of two glyph-string draws:
+
+- `text_draw_glyph_string_effect@0x460250` when an effect is on (render mode `+0x55c`);
+- `text_draw_glyph_string_plain@0x45e4e0` otherwise.
+
+In both, a double-byte glyph uses the calibrated primary font, and a single-byte one gets its own font ("Aspect-mode
+font calibration"). Each glyph draws at the pen. The two draws advance differently:
+
+| Draw | Glyph | Blank (0x20, 0x8140, control byte) |
+|---|---|---|
+| plain | its own `gmCellIncX` | `BLANKEXTENTMODE` 1: its extent. Otherwise the reference 激 cell `+0x313e8`, halved for one byte |
+| effect (modes 1, 2) | `trunc(+0x313e8 / (one byte ? 2.0 : 1.0) + 0.5)`, whatever its own cell | `BLANKEXTENTMODE` 1 in mode 1: its extent. Otherwise the font size `+0x313d4`, halved for one byte |
+
+A blank's extent is `text_measure_blank_extent@0x404da0`: `GetTextExtentPoint32A` of the character in the reference
+ＭＳ ゴシック. Kamidori sets `BLANKEXTENTMODE` 1. The effect draw also keeps a glyph cache (`0x423f30`), so a glyph it
+has drawn once is not asked of GDI again.
+
+Op `0x205`'s formatter, `text_format_integer_for_draw@0x407260`, does not draw padding. It returns only the digits and
+moves x right by the skipped positions times a blank width.
+
+Kamidori's CONFIG2 page (ADV設定) draws its values in 14 px メイリオ with the outline on. Native GDI captures show each
+digit drawn at lfWidth -9 with `gmCellIncX` 6, yet each advances 7: half the reference cell of 14. The port's CONFIG2
+shot matches native's within 1 (`kamidori-config-redraw.steps`).
+
+**Port.** `ImmediateSurfaceTextRenderer.RenderAspect`, with `BLANKEXTENTMODE` from `Sys4StartupSettings.BlankExtentMode`.
+Native also measures a control byte's extent; the port gives a control byte the fallback advance instead. Tests:
+`ImmediateSurfaceAspectTextTests`.
 
 
 ### Surface resource query 0x216 and Kamidori battle transition (2026-09-22)

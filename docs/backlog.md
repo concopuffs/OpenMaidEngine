@@ -52,21 +52,17 @@ it; git history keeps the record.
   an open block only twice, both `play-movie-mask-transition` in `DEBUG.BIN` (`0x139`, `0x1ab`), which retail never
   reaches (the port's F4 debug route does). Done when those two are modelled, or the item is closed as
   debug-only.
-- **Aspect-mode surface text (Kamidori).** The port's immediate surface text (op `0x204`, and op `0x205`'s numbers)
-  ignores SYS4433's aspect mode: the calibrated font width, the y shift by the reference ascent, the aspect advances
-  and `BLANKEXTENTMODE` (`engine-re.md`, "Aspect-mode surface text"). On Kamidori's CONFIG2 page (ADV設定), the font
-  names drawn in their own face at 14 px and the slider values come out visibly smaller and narrower than native's
-  (`kamidori-config-redraw-no-outline-config` shots, 2026-11-07). Done when `text_draw_string_to_surface_sys4433` and
-  its glyph-string draws are modelled and that page matches native.
-- **Aspect-mode font realization: the unmodelled parts.** The mode-1 calibration and in-cell placement are
-  implemented for ADV text, History and op `0x82` (`engine-re.md`, "Aspect-mode font calibration"). Still missing:
-  - the separate calibrated single-byte font (`text_create_calibrated_single_byte_font@0x451b70`);
+- **Aspect mode: the unmodelled parts.** The mode-1 calibration of the primary and single-byte fonts, the in-cell
+  placement and the surface-text draws are implemented (`engine-re.md`, "Aspect-mode font calibration", "Aspect-mode
+  surface text"). Still missing:
   - the `display:AspectMode` setting, which calibrates every face when nonzero;
   - mode 2 (`text_calibrate_mode2_glyph_font@0x451910`), which no shipped game selects;
-  - the display scale on the placement (`+0x40c->+0x4e0`).
+  - the display scale on the placement (`+0x40c->+0x4e0`);
+  - a control byte's blank extent in surface text: native measures it with `GetTextExtentPoint32A`, and the port gives
+    it the fallback advance.
 
-  No difference has been seen. Done when a Kamidori page with single-byte ADV glyphs matches native and
-  `display:AspectMode` is modelled or shown unreachable.
+  No difference has been seen. Done when `display:AspectMode` and the display scale are modelled or shown
+  unreachable.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
@@ -75,10 +71,6 @@ it; git history keeps the record.
   `GfxState.ResetSceneContext` always clears them. Himegari's return to title still matches native (`2516aa9`), so no
   visible difference is known. Done when the port keeps surfaces across op `0x9` unless the setting asks, and a
   native comparison of a surface that lives across a Himegari return to title agrees.
-- **Kamidori background edges differ from native.** On every Kamidori page compared so far (`SC0000@0xee2`,
-  `SC0000@0xfa2`), the background differs from native at its edges all over the frame: mean difference 1.25-1.5 per
-  channel, up to 97 on edge pixels (`kamidori-config-redraw-*` shots, 2026-11-07). Text and UI match. Done when the
-  cause, such as how native samples or scales the background surface, is found and the port matches.
 - **Kamidori data tooling reads pre-update copies of eleven append records.** Kamidori's official update shipped
   eleven root-loose append overrides (`$1$` ALINIT, CIMES, ITINIT, ITMES, SKINIT, SKMES; `$2$` ALINIT, ITINIT,
   ITMES, SKINIT, SKMES). The English translation overwrote them, and its installer kept the Japanese originals as

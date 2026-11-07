@@ -101,6 +101,12 @@ public sealed class Sys4StartupSettings
     /// none. Missing or non-numeric means 0.</summary>
     public int AutoFreeTex => ReadInt("AUTOFREETEX", 0);
 
+    /// <summary>BLANKEXTENTMODE (set:BlankExtentMode; SYS4433). With 1, a blank in aspect-mode text (a space or 0x8140)
+    /// advances by its own extent in the reference ＭＳ ゴシック (text_measure_blank_extent@0x404da0) rather than by the
+    /// reference cell, halved for one byte (<see cref="Text.ImmediateSurfaceTextRenderer"/>). Kamidori sets 1. Missing
+    /// or non-numeric means 0.</summary>
+    public int BlankExtentMode => ReadInt("BLANKEXTENTMODE", 0);
+
     /// <summary>USEPROPORTIONALFONT (set:UseProportionalFont, registered default 0; SYS4433). Zero removes IPA
     /// Pゴシック, IPA P明朝 and every family that is not FIXED_PITCH from the installed-font list that ops
     /// 0x2dc-0x2de read (<see cref="Text.FontFamilyCatalog"/>). Kamidori sets 1. Missing or non-numeric means 0.</summary>

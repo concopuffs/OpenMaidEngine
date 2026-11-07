@@ -1,8 +1,9 @@
 namespace Age.Engine.Text;
 
-/// <summary>GDI measurements of one CP932 glyph: GetTextMetricsA's <c>tmAveCharWidth</c> and GetGlyphOutlineA
-/// (GGO_METRICS)'s <c>gmBlackBoxX</c> and <c>gmCellIncX</c>.</summary>
-public readonly record struct FontProbeMetrics(int AverageCharWidth, uint BlackBoxX, short CellIncrementX);
+/// <summary>GDI measurements of one CP932 glyph: GetTextMetricsA's <c>tmAveCharWidth</c> and <c>tmHeight</c>, and
+/// GetGlyphOutlineA (GGO_METRICS)'s <c>gmBlackBoxX</c> and <c>gmCellIncX</c>.</summary>
+public readonly record struct FontProbeMetrics(int AverageCharWidth, uint BlackBoxX, short CellIncrementX,
+                                               int Height = 0);
 
 /// <summary>Measures glyphs the way SYS4433's font calibration does.</summary>
 public interface IFontMetricsProbe
@@ -26,9 +27,9 @@ public interface IFontMetricsProbe
 /// black box is no wider, and <c>nat.gmBlackBoxX / ref.gmCellIncX * -nat.tmAveCharWidth</c> otherwise, truncated.
 /// Kamidori's メイリオ bold comes out at -18 for both 20 and 22 pixels.</item>
 /// </list>
-/// Not modelled: mode 2 (text_calibrate_mode2_glyph_font@0x451910), which no shipped game selects; the
-/// <c>display:AspectMode</c> setting, which calibrates every face when nonzero; and the separate single-byte font
-/// (text_create_calibrated_single_byte_font@0x451b70).
+/// A single-byte glyph is drawn in a font calibrated against itself (<see cref="SingleByteWidth"/>).
+/// Not modelled: mode 2 (text_calibrate_mode2_glyph_font@0x451910), which no shipped game selects; and the
+/// <c>display:AspectMode</c> setting, which calibrates every face when nonzero.
 /// </summary>
 public sealed class AspectFontRealization
 {
@@ -41,6 +42,7 @@ public sealed class AspectFontRealization
     private readonly Dictionary<string, byte> _pitchByFace = new(StringComparer.Ordinal);
     private readonly IFontMetricsProbe _probe;
     private readonly Dictionary<(string Face, int Height, int Weight), int> _calibrated = new();
+    private readonly Dictionary<(string Face, int Height, int Weight, ushort Code), int> _singleByte = new();
     private readonly object _gate = new();
 
     public AspectFontRealization(IReadOnlyList<EnumeratedFontFamily> installedFamilies, IFontMetricsProbe probe)
@@ -69,6 +71,38 @@ public sealed class AspectFontRealization
         }
     }
 
+    /// <summary>
+    /// The <c>lfWidth</c> of the font AGE draws single-byte glyph <paramref name="code"/> with in aspect mode, outside
+    /// ruby. text_create_calibrated_single_byte_font@0x451b70 calibrates the primary font against that very character
+    /// (text_calibrate_mode1_glyph_font@0x451340's single-byte branch). With <c>nat</c> the face at its natural width
+    /// and <c>ref</c> the reference 激:
+    /// <list type="bullet">
+    /// <item><c>font2</c> is the face at character height <c>trunc(size * size / nat.tmHeight)</c>, a cell about
+    /// <c>size</c> tall, at its natural width;</item>
+    /// <item>the width is <c>-font2.tmAveCharWidth</c>, unless the glyph's black box in <c>font2</c> is wider than
+    /// half of 激's: then <c>trunc((float)(ref.gmBlackBoxX * 0.5) / font2.gmBlackBoxX * -font2.tmAveCharWidth)</c>.</item>
+    /// </list>
+    /// The font keeps the height. The same faces as <see cref="RequestedWidth"/>'s are calibrated; any other gets
+    /// <c>-height / 2</c>.
+    /// </summary>
+    public int SingleByteWidth(string faceName, int pixelHeight, int weight, ushort code, int aspectMode)
+    {
+        ArgumentNullException.ThrowIfNull(faceName);
+        if (code > 0xff) throw new ArgumentOutOfRangeException(nameof(code), "Not a single-byte CP932 code.");
+        int uncalibrated = -(pixelHeight / 2);
+        if (aspectMode != 1 || !Calibrates(faceName)) return uncalibrated;
+        lock (_gate)
+        {
+            var key = (faceName, pixelHeight, weight, code);
+            if (!_singleByte.TryGetValue(key, out int width))
+            {
+                width = CalibrateSingleByteMode1(faceName, pixelHeight, weight, code) ?? uncalibrated;
+                _singleByte.Add(key, width);
+            }
+            return width;
+        }
+    }
+
     /// <summary>Whether aspect mode places this face's glyphs inside their cell (<see cref="AspectGlyphPlacement"/>):
     /// the face is in the installed-font list and its fixed-pitch bit is clear. Unlike the calibration, the IPA
     /// proportional faces get no exception.</summary>
@@ -85,6 +119,21 @@ public sealed class AspectFontRealization
     // text_find_font_family_index@0x423a50 skips one leading '@'.
     private bool TryGetPitch(string faceName, out byte pitch)
         => _pitchByFace.TryGetValue(faceName.StartsWith('@') ? faceName[1..] : faceName, out pitch);
+
+    private int? CalibrateSingleByteMode1(string faceName, int pixelHeight, int weight, ushort code)
+    {
+        FontProbeMetrics natural = _probe.Measure(faceName, pixelHeight, 0, weight, code);
+        if (natural.Height <= 0) return null;
+        // lfHeight = trunc(size / nat.tmHeight * -size): a negative (character) height.
+        int smallHeight = (int)((double)pixelHeight / natural.Height * pixelHeight);
+        if (smallHeight <= 0) return null;
+        FontProbeMetrics small = _probe.Measure(faceName, smallHeight, 0, weight, code);
+        FontProbeMetrics reference = _probe.Measure(ReferenceFace, pixelHeight, -(pixelHeight / 2), weight, ReferenceCode);
+        if (reference.BlackBoxX >> 1 >= small.BlackBoxX) return -small.AverageCharWidth;
+        // The half black box is stored as a float before the division.
+        double width = (float)(reference.BlackBoxX * 0.5) / (double)small.BlackBoxX * -small.AverageCharWidth;
+        return double.IsFinite(width) ? (int)width : null;
+    }
 
     private int? CalibrateMode1(string faceName, int pixelHeight, int weight)
     {
