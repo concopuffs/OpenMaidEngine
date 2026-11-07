@@ -5,6 +5,34 @@ project. It does not license Eushully game assets or code, and no original game 
 this repository. The repository's MIT license covers authored project work only; material identified below
 remains subject to its own terms or is acknowledged as prior research rather than relicensed here.
 
+Release packages also carry each shipped component's own license texts, named in its section below. Every NuGet
+package a release ships is named below in backticks; the packagers refuse a package that leaves one out
+(`docs/tools-reference.md`, "Third-party notices"). A package's managed directory is `data_OME_<platform>_x86_64`.
+
+## Godot Engine
+
+Release packages are exported with the official [Godot Engine](https://godotengine.org/) 4.7-stable .NET export
+templates and ship the Godot runtime and its `GodotSharp` assembly: Copyright (c) 2014-present Godot Engine
+contributors, Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur, under the MIT (Expat) License. The Godot runtime
+includes third-party components under their own licenses, among them FreeType, HarfBuzz, ENet, Mbed TLS, Brotli,
+libpng, zlib, Zstandard, and libogg and libvorbis, which play the games' Ogg Vorbis audio. Every package ships
+Godot's `LICENSE.txt` as `Godot-LICENSE.txt` and its `COPYRIGHT.txt` as `Godot-COPYRIGHT.txt`; the latter lists
+every component with its copyright holders and gives each license's full text. The repository keeps both files
+unmodified in `notices/godot/`, pinned (`notices.json`) to the release tag that `tools/godot-linux-x64.json`
+installs.
+
+Portions of this software are copyright © 1996-2025 The FreeType Project (www.freetype.org). All rights reserved.
+
+## .NET
+
+Release packages are self-contained. They include the .NET 8 runtime (the `Microsoft.NETCore.App` runtime pack)
+and the `System.Text.Encoding.CodePages` NuGet package, both Copyright (c) .NET Foundation and Contributors, under
+the MIT License. The runtime includes third-party components listed in its notices file. The publish copies each
+shipped NuGet package's own license and notice files into the managed directory as `<package id>-<file name>`:
+`Microsoft.NETCore.App.Runtime.<rid>-LICENSE.TXT` and `Microsoft.NETCore.App.Runtime.<rid>-THIRD-PARTY-NOTICES.TXT`
+for the runtime, and `System.Text.Encoding.CodePages-THIRD-PARTY-NOTICES.TXT`. That package carries no license file
+of its own; its MIT license is the runtime's.
+
 ## FFmpeg
 
 Release packages include [FFmpeg](https://ffmpeg.org/) 8.1.3 shared libraries (`libavformat`, `libavcodec`,
@@ -52,7 +80,7 @@ clean-room process.
 ## Tomlyn
 
 `engine/Age.Mods` reads mod manifests (`manifest.toml`) with the [Tomlyn](https://github.com/xoofx/Tomlyn) 2.10.1
-NuGet package, Copyright (c) Alexandre Mutel, under the BSD 2-Clause License. The package is referenced, not
+NuGet package (`Tomlyn`), Copyright (c) Alexandre Mutel, under the BSD 2-Clause License. The package is referenced, not
 vendored; builds that include `Age.Mods` ship its unmodified `Tomlyn.dll`:
 
 > Redistribution and use in source and binary forms, with or without modification, are permitted provided that

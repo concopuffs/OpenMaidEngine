@@ -497,11 +497,22 @@ reserved by the build driver. Because managed outputs are external to the PCK, t
 payload replaces that temporary staging directory only after Godot exits. The final payload verifier and
 packaged smoke test therefore validate the same complete runtime that is archived.
 
-The packager adds `LICENSE`, `README.md`, `THIRD_PARTY_NOTICES.md`, a source/dependency
+The packager adds `LICENSE`, `README.md`, `THIRD_PARTY_NOTICES.md`, Godot's notices, a source/dependency
 `BUILD-INFO.json`, and per-file `SHA256SUMS` to a stable top-level directory. It normalizes archive ownership,
 modes, ordering, and timestamps using `SOURCE_DATE_EPOCH` or the source commit time. Outputs are the loose
 export under `build/export/linux-x64/`, the staged installation and `package-smoke.log` under
 `build/package/`, and `build/package/OME-linux-x64.tar.gz`.
+
+**Third-party notices.** Both packagers copy `notices/godot/LICENSE.txt` and `COPYRIGHT.txt` to the package root
+as `Godot-LICENSE.txt` and `Godot-COPYRIGHT.txt`. They refuse either file if it differs from its SHA-256 in
+`notices/godot/notices.json` (`tools/package_notices.py`). The self-contained publish (`godot/OME.csproj`, target
+`PublishPackageNotices`) copies the root `LICENSE*`, `THIRD-PARTY-NOTICES*` and `NOTICE*` files of every NuGet
+package it ships into the managed directory as `<package id>-<file name>`, and the verifiers require the .NET
+runtime pack's two. The verifiers also read the managed directory's `OME.deps.json`. They refuse an export that
+ships a NuGet package `THIRD_PARTY_NOTICES.md` does not name in backticks. A shipped package is a package or
+runtime-pack library with runtime, native or resource assets; a runtime pack counts as its framework
+(`Microsoft.NETCore.App`). A Godot upgrade changes `release_tag` in `tools/godot-linux-x64.json`, and
+`test_package_notices.py` then fails until `notices/godot/` holds the new tag's files and pins.
 
 Before reporting success, the command launches the staged executable as
 `OME --headless -- --package-smoke`. This asset-independent mode runs before game-root discovery
@@ -535,8 +546,7 @@ exact self-contained `ExportRelease/win-x64` managed runtime, and performs the r
 release export. No produced Windows program is executed. `package_windows_x64.py` requires the Godot AMD64 EXE,
 PCK, self-contained runtime, project assemblies including `Age.Engine.Text.Windows.dll`, and FFmpeg DLL/license
 set; it rejects Linux shared objects and the legacy `Himegari.dll` name, and embeds `BUILD-INFO.json`,
-`WINDOWS-VERIFICATION.json`, notices, and a
-complete `SHA256SUMS`. The normalized output is
+`WINDOWS-VERIFICATION.json`, the notices (Third-party notices, above), and a complete `SHA256SUMS`. The normalized output is
 `build/package/windows-x64/OME-windows-x64.zip`.
 
 Focused commands are:

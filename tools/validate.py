@@ -31,6 +31,7 @@ LEVELS = ("core", "workspace", "runtime", "full")
 CORE_TESTS = (
     "test_validate.py",
     "test_install_godot_templates.py",
+    "test_package_notices.py",
     "test_package_linux_x64.py",
     "test_package_windows_x64.py",
     "test_dotnet_publish_proxy.py",

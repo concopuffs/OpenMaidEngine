@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "release_tag": "4.7-stable",
+  "files": [
+    {
+      "path": "LICENSE.txt",
+      "package_name": "Godot-LICENSE.txt",
+      "source": "https://raw.githubusercontent.com/godotengine/godot/4.7-stable/LICENSE.txt",
+      "sha256": "b0435e3b3e4e55238f05f4b306f30524a1b2e20147810d436eaa554fa6855c80"
+    },
+    {
+      "path": "COPYRIGHT.txt",
+      "package_name": "Godot-COPYRIGHT.txt",
+      "source": "https://raw.githubusercontent.com/godotengine/godot/4.7-stable/COPYRIGHT.txt",
+      "sha256": "cb1980c88089573bcacd7221d777c689bb8bbd778799f24c27fca0fe5f774d6d"
+    }
+  ]
+}

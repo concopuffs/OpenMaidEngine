@@ -8,7 +8,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import package_notices
 import package_windows_x64
+from test_package_notices import write_deps
 import verify_windows_native
 
 
@@ -37,6 +39,7 @@ def make_export(root: Path) -> Path:
     managed = export / package_windows_x64.MANAGED_DIRECTORY
     for name in (verify_windows_native.SHIM, *verify_windows_native.RUNTIME_DLLS):
         write_pe(managed / name)
+    write_deps(managed, "win-x64")
     return export
 
 
@@ -78,6 +81,15 @@ class PackageWindowsX64Tests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not AMD64"):
                 package_windows_x64.verify_export(export, "objdump")
 
+    def test_verify_requires_notices_for_every_shipped_package(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            export = make_export(temporary_root)
+            (temporary_root / "THIRD_PARTY_NOTICES.md").write_text("`GodotSharp`\n", encoding="utf-8")
+            with patch.object(package_windows_x64, "REPO", temporary_root):
+                with self.assertRaisesRegex(ValueError, "Microsoft.NETCore.App, Tomlyn"):
+                    package_windows_x64.verify_export(export, "objdump")
+
     def test_package_has_notices_reports_checksums_and_deterministic_zip(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             temporary_root = Path(temporary)
@@ -85,12 +97,20 @@ class PackageWindowsX64Tests(unittest.TestCase):
             output = temporary_root / "build/package/windows-x64"
             metadata = {"schema_version": 1, "source_commit": "fixture"}
             verification = {"schema_version": 1, "target": "win-x64"}
+            godot_license = temporary_root / "notices/LICENSE.txt"
+            godot_license.parent.mkdir()
+            godot_license.write_bytes(b"godot\n")
+            pinned = (
+                package_notices.PinnedNotice(
+                    godot_license, "Godot-LICENSE.txt", hashlib.sha256(b"godot\n").hexdigest()
+                ),
+            )
             with patch.object(package_windows_x64, "REPO", temporary_root), patch.object(
                 package_windows_x64, "PROJECT_FILES", ("LICENSE", "THIRD_PARTY_NOTICES.md")
-            ):
+            ), patch.object(package_windows_x64, "PINNED_NOTICES", pinned):
                 (temporary_root / "LICENSE").write_text("MIT\n", encoding="utf-8")
                 (temporary_root / "THIRD_PARTY_NOTICES.md").write_text(
-                    "notices\n", encoding="utf-8"
+                    "`GodotSharp`, `Microsoft.NETCore.App`, `Tomlyn`\n", encoding="utf-8"
                 )
                 package_windows_x64.create_package(
                     export, output, metadata, verification, 123456789
@@ -103,6 +123,7 @@ class PackageWindowsX64Tests(unittest.TestCase):
                 second = hashlib.sha256(archive.read_bytes()).hexdigest()
             self.assertEqual(first, second)
             self.assertTrue((package_root / "LICENSE").is_file())
+            self.assertEqual(b"godot\n", (package_root / "Godot-LICENSE.txt").read_bytes())
             self.assertTrue((package_root / "BUILD-INFO.json").is_file())
             self.assertTrue((package_root / "WINDOWS-VERIFICATION.json").is_file())
             checksums = (package_root / "SHA256SUMS").read_text(encoding="utf-8")

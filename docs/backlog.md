@@ -162,13 +162,12 @@ it; git history keeps the record.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
-- **Notices leave out Godot and .NET.** The packages ship Godot's export template (Godot Engine, MIT, with the
-  third-party components it links, among them FreeType and libogg/libvorbis, through which the port plays Ogg) and a
-  self-contained .NET runtime with GodotSharp (`coreclr.dll`, `GodotSharp.dll` in a local Windows export; .NET is MIT
-  with its own third-party notices). `THIRD_PARTY_NOTICES.md` covers only FFmpeg, the research acknowledgments and
-  Tomlyn, and no package carries a Godot or .NET license text, yet ﾊﾞｰｼﾞｮﾝ情報 points players at that file
-  (`engine-re.md`, "Native menu bar", ﾊﾞｰｼﾞｮﾝ情報 names the port). Done when the notices cover every component a
-  package ships (Godot's copyright and license texts for the pinned version, such as `Engine.get_copyright_info` and
-  `get_license_text` give, and the .NET runtime's notices), the packages carry them, and the package check fails when
-  one is missing.
+- **MinGW-w64 runtime notices are unchecked.** The Windows movie shim (`age_movie_ffmpeg.dll`) and the FFmpeg DLLs are
+  built with MinGW-w64 GCC (`native/age_movie_ffmpeg/build-win64.sh`, `build-ffmpeg-sdk.sh`). They therefore statically
+  contain MinGW-w64 runtime objects: the DLL CRT startup and whatever they use from `libmingwex`, and in the shim
+  `libgcc` (`-static-libgcc`, under GCC's runtime library exception). The MinGW-w64 runtime is mostly public domain, but
+  its `COPYING.MinGW-w64-runtime.txt` lists parts under licenses that ask binary distributions to reproduce their
+  notices. Which of those parts the DLLs link is unverified, and `THIRD_PARTY_NOTICES.md` does not mention the runtime.
+  Done when the linked objects are known (for example from the linker's map in CI) and the packages carry the notices
+  they need, or the file records that none apply.
 - **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default).

@@ -13,6 +13,8 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+import package_notices
+
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 MANAGED_DIRECTORY = "data_OME_linuxbsd_x86_64"
@@ -23,6 +25,9 @@ REQUIRED_FILES = (
     f"{MANAGED_DIRECTORY}/OME.dll",
     f"{MANAGED_DIRECTORY}/Age.Engine.dll",
     f"{MANAGED_DIRECTORY}/Age.Engine.Frontend.dll",
+    f"{MANAGED_DIRECTORY}/{package_notices.DEPS_FILE}",
+    f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.linux-x64-LICENSE.TXT",
+    f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.linux-x64-THIRD-PARTY-NOTICES.TXT",
     f"{MANAGED_DIRECTORY}/libage_movie_ffmpeg.so",
     f"{MANAGED_DIRECTORY}/libavformat.so.62",
     f"{MANAGED_DIRECTORY}/libavcodec.so.62",
@@ -39,6 +44,7 @@ FORBIDDEN_FILES = (
 )
 LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
+PINNED_NOTICES = package_notices.pinned_notices()
 
 
 def _resolved_directory(path: Path, label: str) -> Path:
@@ -59,6 +65,9 @@ def verify_export(export_directory: Path) -> Path:
     legacy = [name for name in LEGACY_FILES if (export_directory / name).exists()]
     if legacy:
         raise ValueError("Linux export contains legacy-branded files: " + ", ".join(legacy))
+    package_notices.verify_dependency_notices(
+        export_directory / MANAGED_DIRECTORY, REPO / "THIRD_PARTY_NOTICES.md"
+    )
     executable = export_directory / "OME"
     if os.name != "nt" and not os.access(executable, os.X_OK):
         raise ValueError(f"Linux export executable bit is not set: {executable}")
@@ -169,6 +178,7 @@ def create_package(
         if not source.is_file():
             raise ValueError(f"package notice file was not found: {source}")
         shutil.copy2(source, package_root / name)
+    package_notices.copy_pinned_notices(PINNED_NOTICES, package_root)
     (package_root / "BUILD-INFO.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

@@ -48,6 +48,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     ├── README.md                             navigation-only repository front door; canonical facts stay in docs/
     ├── LICENSE                               holder-neutral MIT grant for authored project work
     ├── THIRD_PARTY_NOTICES.md                 incorporated-code licenses + prior-research acknowledgment
+    ├── notices/godot/                        Godot's LICENSE.txt + COPYRIGHT.txt for the pinned release, unmodified;
+    │                                         notices.json pins each (packages ship them as Godot-*.txt)
     ├── global.json                           pins the validated .NET 8 SDK feature band
     ├── Directory.Build.targets               makes a Debug build recompile when Optimize changes
     │                                         (drive.py port start --optimize)
@@ -76,7 +78,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── install_godot_templates.py         selective HTTP-range installer for pinned template members
     │   ├── package_linux_x64.py,
     │   │   package_windows_x64.py             target-specific export verifiers and normalized packagers
-    │   ├── test_install_godot_templates.py, test_package_linux_x64.py,
+    │   ├── package_notices.py                 shared notice checks: pinned Godot notices, NuGet packages named
+    │   ├── test_install_godot_templates.py, test_package_notices.py, test_package_linux_x64.py,
     │   │   test_package_windows_x64.py,
     │   │   test_dotnet_publish_proxy.py,
     │   │   test_publish_github_release.py, test_write_ffmpeg_source_notice.py,

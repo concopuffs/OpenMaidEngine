@@ -13,6 +13,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+import package_notices
 import verify_windows_native
 
 
@@ -31,6 +32,9 @@ REQUIRED_FILES = (
     f"{MANAGED_DIRECTORY}/hostfxr.dll",
     f"{MANAGED_DIRECTORY}/hostpolicy.dll",
     f"{MANAGED_DIRECTORY}/System.Private.CoreLib.dll",
+    f"{MANAGED_DIRECTORY}/{package_notices.DEPS_FILE}",
+    f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.win-x64-LICENSE.TXT",
+    f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.win-x64-THIRD-PARTY-NOTICES.TXT",
     *(f"{MANAGED_DIRECTORY}/{name}" for name in verify_windows_native.REQUIRED_FILES),
 )
 FORBIDDEN_FILES = (
@@ -40,6 +44,7 @@ FORBIDDEN_FILES = (
 )
 LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
+PINNED_NOTICES = package_notices.pinned_notices()
 
 
 def _resolved_directory(path: Path, label: str) -> Path:
@@ -65,6 +70,9 @@ def verify_export(export_directory: Path, objdump: str) -> tuple[Path, dict[str,
     legacy = [name for name in LEGACY_FILES if (export_directory / name).exists()]
     if legacy:
         raise ValueError("Windows export contains legacy-branded files: " + ", ".join(legacy))
+    package_notices.verify_dependency_notices(
+        export_directory / MANAGED_DIRECTORY, REPO / "THIRD_PARTY_NOTICES.md"
+    )
     executable_machine = verify_windows_native.pe_machine(export_directory / "OME.exe")
     if executable_machine != verify_windows_native.PE_MACHINE_AMD64:
         raise ValueError(
@@ -189,6 +197,7 @@ def create_package(
         if not source.is_file():
             raise ValueError(f"package notice file was not found: {source}")
         shutil.copy2(source, package_root / name)
+    package_notices.copy_pinned_notices(PINNED_NOTICES, package_root)
     _write_text(
         package_root / "BUILD-INFO.json",
         json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",

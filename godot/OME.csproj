@@ -70,6 +70,32 @@
       </AssemblyAttribute>
     </ItemGroup>
   </Target>
+  <!-- A self-contained publish ships NuGet packages' files: the .NET runtime pack, System.Text.Encoding.CodePages and
+       others. Each of those packages' own license and notice files (LICENSE*, THIRD-PARTY-NOTICES*, NOTICE* at the
+       package root) is published beside them as <PackageId>-<file name>, as FFmpeg's license is
+       (THIRD_PARTY_NOTICES.md, ".NET"; the packagers require the runtime pack's). -->
+  <Target Name="PublishPackageNotices" AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(SelfContained)' == 'true'">
+    <ItemGroup>
+      <_OmeShippedPackage Include="%(ResolvedFileToPublish.NuGetPackageId)"
+                          Condition="'%(ResolvedFileToPublish.NuGetPackageId)' != ''">
+        <NuGetPackageId>%(ResolvedFileToPublish.NuGetPackageId)</NuGetPackageId>
+        <NuGetPackageVersion>%(ResolvedFileToPublish.NuGetPackageVersion)</NuGetPackageVersion>
+      </_OmeShippedPackage>
+    </ItemGroup>
+    <GetPackageDirectory Items="@(_OmeShippedPackage)" PackageFolders="@(AssetsFilePackageFolder)">
+      <Output TaskParameter="Output" ItemName="_OmeShippedPackageDirectory" />
+    </GetPackageDirectory>
+    <ItemGroup>
+      <_OmePackageNotice Include="%(_OmeShippedPackageDirectory.PackageDirectory)/LICENSE*;%(_OmeShippedPackageDirectory.PackageDirectory)/THIRD-PARTY-NOTICES*;%(_OmeShippedPackageDirectory.PackageDirectory)/NOTICE*"
+                         Condition="'%(_OmeShippedPackageDirectory.PackageDirectory)' != ''">
+        <PackageId>%(_OmeShippedPackageDirectory.NuGetPackageId)</PackageId>
+      </_OmePackageNotice>
+      <ResolvedFileToPublish Include="@(_OmePackageNotice)"
+                             RelativePath="%(_OmePackageNotice.PackageId)-%(_OmePackageNotice.Filename)%(_OmePackageNotice.Extension)"
+                             CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
   <Target Name="RequireGeneratedRuntimeMetadata" BeforeTargets="PrepareForBuild"
           Condition="!Exists('..\build\opcodes.json')">
     <Error Text="Missing generated runtime metadata '..\build\opcodes.json'. Run 'py -3.11 -X utf8 tools\opcodes_build.py --build' from age-reimpl before building Godot." />

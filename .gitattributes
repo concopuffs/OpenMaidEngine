@@ -67,6 +67,9 @@
 *.woff2 binary
 *.zip binary
 
+# Third-party license texts are kept byte for byte as upstream ships them (notices/*/notices.json pins each).
+notices/** text eol=lf
+
 # Generated references are ordinary canonical-LF text. Their whitespace
 # exceptions preserve generator-owned formatting without disabling EOL policy.
 docs/opcode-reference.md whitespace=trailing-space,space-before-tab,cr-at-eol
