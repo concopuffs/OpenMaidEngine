@@ -189,9 +189,10 @@ public sealed partial class VirtualMachine
                           INativeDatStore? nativeDatStore = null,
                           AudioMixerSettings? audioMixerSettings = null,
                           DiagnosticOutputState? diagnosticOutput = null,
-                          VmCompatibilityContext? compatibility = null)
+                          VmCompatibilityContext? compatibility = null, IPaceClock? paceClock = null)
     {
         _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
+        _paceClock = paceClock ?? new StopwatchPaceClock();
         _compatibility = compatibility ?? VmCompatibilityContext.ForTable(t);
         if (!string.Equals(_compatibility.EngineAbiId, t.AbiId, StringComparison.Ordinal))
             throw new ArgumentException(

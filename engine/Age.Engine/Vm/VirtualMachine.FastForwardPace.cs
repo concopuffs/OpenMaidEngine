@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Age.Engine.Vm;
 
 /// <summary>
@@ -12,13 +10,14 @@ namespace Age.Engine.Vm;
 /// The port reproduces it with a wall-clock deadline: op n of a fast-forward run may not start before
 /// start + n × <see cref="VmOptions.FastForwardOpMicroseconds"/>. Time the VM already spends blocked in host
 /// services (synchronized 0x20c presentation, for example) counts toward the budget, up to
-/// <see cref="FastForwardCreditCapMs"/>, so the total approaches native's ops × cost.
+/// <see cref="FastForwardCreditCapMs"/>, so the total approaches native's ops × cost. Time and waits come from the
+/// VM's <see cref="IPaceClock"/> (constructor <c>paceClock</c>; a Stopwatch and Thread.Sleep by default).
 /// </summary>
 public sealed partial class VirtualMachine
 {
     private const long FastForwardCreditCapMs = 100;
 
-    private readonly Stopwatch _fastForwardClock = new();
+    private readonly IPaceClock _paceClock;
     private bool _fastForwardPacing;
     private long _fastForwardOps;
     private double _fastForwardStartMs;
@@ -31,8 +30,7 @@ public sealed partial class VirtualMachine
             _fastForwardPacing = false;
             return;
         }
-        if (!_fastForwardClock.IsRunning) _fastForwardClock.Start();
-        double now = _fastForwardClock.Elapsed.TotalMilliseconds;
+        double now = _paceClock.NowMs;
         if (!_fastForwardPacing)
         {
             _fastForwardPacing = true;
@@ -49,6 +47,6 @@ public sealed partial class VirtualMachine
             return;
         }
         // Sleep in whole milliseconds once at least one is owed; the deadline carries the remainder.
-        if (credit <= -1.0) Thread.Sleep((int)(-credit));
+        if (credit <= -1.0) _paceClock.Sleep((int)(-credit));
     }
 }

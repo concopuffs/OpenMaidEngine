@@ -3264,8 +3264,11 @@ The port now matches this. `0xc8` returns at once while fast-forward is active, 
 in-progress sleep when fast-forward starts. `VirtualMachine.FastForwardPace.cs` paces fast-forward ops against a
 wall-clock deadline of `VmOptions.FastForwardOpMicroseconds` per op, with
 `VmOptions.NativeFastForwardOpMicroseconds = 374` in the Godot frontend and pacing off in headless tools and
-tests. Time already spent blocked in host services counts toward the budget, up to 100 ms of credit. The same
-measurement then took 5.08 s. The constant is calibrated on Himegari (SYS4422) on this machine. Native's
+tests. Time already spent blocked in host services counts toward the budget, up to 100 ms of credit. A run that
+leaves fast-forward and returns starts a new schedule. Pacing reads its time and sleeps through the VM's
+`IPaceClock` (a Stopwatch and `Thread.Sleep` by default). `FastForwardPaceTests` passes a virtual clock that moves
+only when pacing sleeps or a simulated service blocks, so it checks the schedule, the 1 ms sleep granularity, the
+credit cap and the restart exactly, without measuring wall time. The same measurement then took 5.08 s. The constant is calibrated on Himegari (SYS4422) on this machine. Native's
 per-iteration cost is CPU-bound, so it varies by machine, and Kamidori's SYS4433 loop is unmeasured.
 
 **ADV entry/exit lifecycle.** The script comments `savemesskip` and `loadmesskip` describe a temporary
