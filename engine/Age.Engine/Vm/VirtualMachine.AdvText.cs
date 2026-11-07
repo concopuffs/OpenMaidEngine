@@ -38,9 +38,22 @@ public sealed partial class VirtualMachine
         };
         AdvTextLayoutPresentationBinding binding =
             TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
+        // A reveal runs (run-state 0x20000000) unless fast-forward or a finished-until-wait page publishes at once. Its
+        // tick tests a held action 6 before it polls the latch.
+        bool reveals = _messageGlyphDelayMilliseconds > 0 && !AdvFastForwardActive
+                       && !_host.TextRevealsFinishedUntilWait;
+        if (reveals) ServicePhysicalSkipAtRevealStart();
         OfferHeldTriggersToReveal();
-        AdvRetainedTextRunResult? retained = _host.ShowText(
-            Gfx, binding, liveRun, _messageGlyphDelayMilliseconds);
+        AdvRetainedTextRunResult? retained;
+        _advTextRevealing = reveals && !AdvFastForwardActive;
+        try
+        {
+            retained = _host.ShowText(Gfx, binding, liveRun, _messageGlyphDelayMilliseconds);
+        }
+        finally
+        {
+            _advTextRevealing = false;
+        }
         // History records the drawn rows (split at wraps), so it is written after layout but
         // before the cursor moves.
         TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: retained?.Rows, ruby: retained?.Ruby);
@@ -56,7 +69,7 @@ public sealed partial class VirtualMachine
         switch (label)
         {
             case "show-text":
-                RefreshAdvReadSkipState();
+                ApplyReadTextSkip();
                 foreach (var o in a)
                 {
                     if (!IsStr(o)) continue;
@@ -90,7 +103,7 @@ public sealed partial class VirtualMachine
                 _cur.ReadMessageOffset = ins.Offset;
                 Gfx.SnapshotSurfaceRecords();   // native page snapshot that numbered saves write
                 _sharedProfile.ReadText.CommitPending();
-                RefreshAdvReadSkipState();
+                ApplyReadTextSkip();
                 return pc + 1;
             }
             case "set-adv-text-reset-cursor": // 0x79: configure cursor restored by a later 0x71

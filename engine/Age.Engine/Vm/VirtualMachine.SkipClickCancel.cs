@@ -86,10 +86,12 @@ public sealed partial class VirtualMachine
         Interlocked.Exchange(ref _queuedInputCallbackMask, 0);   // input_flush_action_triggers
         TakeHeldTriggers();
         _messageSkipEnabled = false;
+        _messageSkipInjected = false;
         _messageSkipServiceActive = false;
         _sharedProfile.ReadMessageSkipEnabled = false;
         _advReadSkipState = false;
         _host.SetMessageSkipActive(false);
+        EndPhysicalFastForward();   // run-state 0x8000000; a held action 6 restarts it at the next reveal
         if (_o.CancelMessageSkipOnClick == 2) _settingCallbackPending = true;
     }
 

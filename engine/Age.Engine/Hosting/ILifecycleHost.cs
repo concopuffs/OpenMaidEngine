@@ -14,7 +14,8 @@ public interface ILifecycleHost
 
     void FrameYield();
 
-    // Native op 0x9 resets scene-owned host services before reloading root script resource 0.
+    // Native op 0x9 resets scene-owned host services before reloading root script resource 0. It stops movies but
+    // keeps surfaces; the VM releases them afterwards when set:AutoFreeTex asks (IGraphicsHost.ReleaseSurfaceRange).
     // Global banks, engine configuration, decoded-asset caches, and persistent profile state survive.
     void ResetSceneContext() { }
 

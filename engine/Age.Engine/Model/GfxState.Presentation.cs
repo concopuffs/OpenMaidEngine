@@ -389,50 +389,69 @@ public sealed partial class GfxState
         {
             completed = 0;
             if ((AnimationServiceFlags & 1) != 0) return false;
-
-            if ((AnimationServiceFlags & 2) == 0)
-            {
-                foreach (var t in _surfaceTransitions.Values)
-                {
-                    if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
-                    t.Forced = true;
-                    completed++;
-                }
-                foreach (var t in _patternedSurfaceTransitions.Values)
-                {
-                    if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
-                    t.Forced = true;
-                    completed++;
-                }
-                foreach (var t in _radialBlurTransitions.Values)
-                {
-                    if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
-                    t.Forced = true;
-                    completed++;
-                }
-                foreach (var t in _directionalBlurTransitions.Values)
-                {
-                    if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
-                    t.Forced = true;
-                    completed++;
-                }
-
-                completed += CountOneShotChannels(_rangeTransform);
-                foreach (var o in _objects.Values)
-                {
-                    if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
-                    completed += CountOneShotChannels(o);
-                }
-                ForceCompleteOneShotChannels();
-
-                if (AnimClockDurationTicks != 0) completed++;
-                AnimClockDurationTicks = 0;
-                AnimClockGeneration++;
-            }
-
-            if (completed > 0) MarkRetainedMutation();
+            if ((AnimationServiceFlags & 2) == 0) completed = ForceCompleteTimedPresentation(nowMs);
             return true;
         }
+    }
+
+    /// <summary>ADV fast-forward's force at an op-0x21c wait. While run-state 0x08000000 is set, native's main tick
+    /// calls gfx_request_force_complete_and_reset_anim_clock after every op it dispatches (SYS4422 @0x4076c0 from
+    /// engine_main_tick_with_exception_policy@0x411840; SYS4433 @0x407a30 from its main tick @0x411a40), so the
+    /// wait 0x21c enters starts forced and ends on the next tick. Only service-flags bit 1 makes that worker a
+    /// no-op; bit 0 rejects only the EffectSkipOnClick click (<see cref="TryCompleteClickSkippableTimedPresentation"/>).
+    /// Movie masks and op-0x242-detached channels are not forced. Returns the number of endpoints completed.</summary>
+    public int ForceCompleteTimedPresentationForFastForward(long nowMs)
+    {
+        lock (_lock)
+            return (AnimationServiceFlags & 2) == 0 ? ForceCompleteTimedPresentation(nowMs) : 0;
+    }
+
+    /// <summary>The forced render the shared worker requests (force-complete +0xb55c): every running surface
+    /// command and every unprotected finite one-shot channel takes its endpoint, and the anim-clock window ends.
+    /// Caller holds the lock.</summary>
+    private int ForceCompleteTimedPresentation(long nowMs)
+    {
+        int completed = 0;
+        foreach (var t in _surfaceTransitions.Values)
+        {
+            if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
+            t.Forced = true;
+            completed++;
+        }
+        foreach (var t in _patternedSurfaceTransitions.Values)
+        {
+            if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
+            t.Forced = true;
+            completed++;
+        }
+        foreach (var t in _radialBlurTransitions.Values)
+        {
+            if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
+            t.Forced = true;
+            completed++;
+        }
+        foreach (var t in _directionalBlurTransitions.Values)
+        {
+            if (t.Forced || TransitionProgress(t, nowMs) >= 1.0) continue;
+            t.Forced = true;
+            completed++;
+        }
+
+        completed += CountOneShotChannels(_rangeTransform);
+        foreach (var o in _objects.Values)
+        {
+            if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
+            completed += CountOneShotChannels(o);
+        }
+        ForceCompleteOneShotChannels();
+
+        if (AnimClockDurationTicks != 0) completed++;
+        AnimClockDurationTicks = 0;
+        _animClockStartMs = -1;
+        AnimClockGeneration++;
+
+        if (completed > 0) MarkRetainedMutation();
+        return completed;
     }
 
     private static int CountOneShotChannels(GfxObject o)

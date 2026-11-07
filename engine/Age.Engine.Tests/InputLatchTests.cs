@@ -27,6 +27,7 @@ public class InputLatchTests
         public VirtualMachine? Vm;
         public Action<VirtualMachine>? AtWait;          // a text wait starts (after op 0x72's entry), before it polls
         public Func<VirtualMachine, bool>? HoldWhen;    // checked after each instruction until it holds once
+        public Action<VirtualMachine>? HoldInput;        // what HoldWhen holds; a click by default
         public int? HeldAtWait;
         public int EndedWaits;
         public bool RequestYieldAtWait;
@@ -48,7 +49,8 @@ public class InputLatchTests
             if (HoldWhen != null && HoldWhen(Vm!))
             {
                 HoldWhen = null;
-                Vm!.HoldTriggers(Click);   // what Godot does for a click during an effect here
+                if (HoldInput != null) HoldInput(Vm!);
+                else Vm!.HoldTriggers(Click);   // what Godot does for a click during an effect here
             }
         }
 
@@ -240,6 +242,33 @@ public class InputLatchTests
 
         Assert.Equal(1, vm.Globals.GetValueOrDefault(2));
         Assert.Equal(1, host.EndedWaits);
+        Assert.Equal(0, vm.HeldTriggers);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AFastForwardKeyHeldThroughHandlerBStartsFastForwardAtTheWaitSpaceParked(bool stillHeld)
+    {
+        // adv_input_service_poll sets run-state 0x8000000 from a triggered action 6, and the page passes. With the key
+        // already up, the next interpreter tick clears the bit: only the page passes.
+        const int fastForward = 1 << 6;
+        var (vm, host) = Start(TextWaitYield());
+        host.RequestYieldAtWait = true;
+        host.ServiceTriggerWaitStarted = () => Assert.True(vm.TryLatchAdvCoroutineYieldTrigger(Space));
+        host.HoldWhen = v => v.Globals.GetValueOrDefault(2) == 1;   // inside handler B
+        host.HoldInput = v =>
+        {
+            v.UpdateKeyboardVirtualKeyState(0x08, true);   // Backspace: action 6 by default; no wait polls here
+            Assert.False(host.PhysicalMessageSkip);
+            if (!stillHeld) v.UpdateKeyboardVirtualKeyState(0x08, false);
+            v.HoldTriggers(fastForward);                   // what Godot does for a key that nothing polls
+        };
+
+        vm.Run();
+
+        Assert.Equal(stillHeld, host.PhysicalMessageSkip);
+        Assert.Equal(stillHeld ? 0 : 1, host.EndedWaits);
         Assert.Equal(0, vm.HeldTriggers);
     }
 

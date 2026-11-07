@@ -38,6 +38,8 @@ public sealed partial class GodotAdvHost
     private readonly bool _synchronizeExplicitPresentation;
     private long _explicitPresentationRequestGeneration;
     private long _consumedPresentationRequestGeneration;
+    private long _lastSynchronizedPresentationTimestamp;   // VM thread only
+    private static readonly long FastForwardPresentationInterval = System.Diagnostics.Stopwatch.Frequency / 20;
     private readonly SemaphoreSlim _gate = new(0, 1);
     private readonly AutoResetEvent _inputCallbackSignal = new(false);
     private readonly System.Threading.AutoResetEvent _frameSignal = new(false);
@@ -162,13 +164,27 @@ public sealed partial class GodotAdvHost
     private void ResumeScriptAfterPresentation(bool suspended)
         => _presentationBarrier.ResumeScript(suspended);
 
-    private void RequestSynchronizedPresentation()
+    private long RequestPresentation()
     {
         long requested = Interlocked.Increment(ref _explicitPresentationRequestGeneration);
         Interlocked.Exchange(ref _presentRequested, 1);
+        return requested;
+    }
+
+    private void RequestSynchronizedPresentation()
+    {
+        long requested = RequestPresentation();
         if (!_synchronizeExplicitPresentation) return;
+        // Native presents without waiting for the display, and under ADV fast-forward it passes a text page in about
+        // 2.4 ms. The port's compositor takes the barrier once a display frame, so waiting at every page and op 0x20c
+        // would cost a frame each. Fast-forward waits for a frame at most every 50 ms; the boundaries between publish
+        // when the compositor next takes the barrier (docs/engine-re.md, "Fast-forward pace").
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_messageSkipActive && now - _lastSynchronizedPresentationTimestamp < FastForwardPresentationInterval)
+            return;
         while (Interlocked.Read(ref _consumedPresentationRequestGeneration) < requested && !_stopping)
             _presentationRequestConsumed.WaitOne(50);
+        _lastSynchronizedPresentationTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
     }
 
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
@@ -460,8 +476,10 @@ public sealed partial class GodotAdvHost
         });
         if (effective)
         {
+            // Not the effect wait in progress: native's main tick services run-state 0x400 (and 8) ahead of
+            // fast-forward, and those services poll only the EffectSkipOnClick click. Fast-forward reaches the next
+            // 0x21c wait (WaitForForegroundTransition).
             lock (_textLock) _advTextForceComplete = true;
-            TryForceActiveTransition("message-skip");
             _frameSignal.Set();
             _inputCallbackSignal.Set();
             return;
@@ -593,18 +611,28 @@ public sealed partial class GodotAdvHost
         long startedAtMs = _clock.NowMs;
         int started = gfx.StartForegroundTransitions(startedAtMs);
         gfx.SeedOneShotChannels(startedAtMs);   // native renders on the service's first tick
+        long serviceFlags = gfx.AnimationServiceFlags;
+        long animClockMs = gfx.AnimClockDurationTicks;
         bool hasActivePresentation =
-            gfx.HasActiveTimedPresentation(startedAtMs) || HasActiveMoviePresentation();
+            gfx.PollEffectService(startedAtMs) | HasActiveMoviePresentation();
         if (hasActivePresentation)
         {
             _foregroundGfx = gfx;
             System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, _clock.NowMs);
             IsTransitionWaiting = true;
-            _timeline?.State("transition-start", new() { ["count"] = started });
-            // Skip may already have been active before this service boundary. Native ADV script usually
-            // selects 0x243+0x20c in that case, but applying it here also covers transition helpers that
-            // enter run-state 0x400 without repeating the script-side query.
-            if (_messageSkipActive) TryForceActiveTransition("message-skip");
+            _timeline?.State("transition-start", new()
+            {
+                ["count"] = started, ["service_flags"] = serviceFlags, ["anim_clock_ms"] = animClockMs,
+            });
+            // Under ADV fast-forward native's main tick requests a forced render after every op it dispatches,
+            // 0x21c included, so this wait starts forced. Service-flags bit 1 suppresses the request; bit 0 does
+            // not (it rejects only the EffectSkipOnClick click). Whatever the force leaves running (a movie, a
+            // detached object) still holds the wait.
+            if (_messageSkipActive)
+            {
+                int completed = gfx.ForceCompleteTimedPresentationForFastForward(startedAtMs);
+                _timeline?.State("transition-fast-forward-forced", new() { ["endpoints_completed"] = completed });
+            }
         }
         bool scriptSuspended = SuspendScriptForPresentation();
         try
@@ -613,7 +641,7 @@ public sealed partial class GodotAdvHost
             if (!hasActivePresentation) return;
             int lastBucket = -1;
             while (!_foregroundTransitionWaitBypassed
-                   && (gfx.HasActiveTimedPresentation(_clock.NowMs) || HasActiveMoviePresentation())
+                   && (gfx.PollEffectService(_clock.NowMs) | HasActiveMoviePresentation())
                    && !_stopping)
             {
                 // Native's run-state-0x400 service polls every tick (Sleep(0)), so the wait ends within a
@@ -941,9 +969,10 @@ public sealed partial class GodotAdvHost
     public void ResetSceneContext()
     {
         _rootReloadInterrupt = false;
-        // scene_context_init_reset releases ordinary surface/movie bindings but keeps decoded asset
-        // caches and process-owned audio/configuration available to the reloaded SYSTEM4 root.
-        ReleaseSurfaceRange(0, 1000);
+        // scene_context_init_reset deletes every surface's movie object but keeps the surfaces, decoded asset caches
+        // and process-owned audio/configuration for the reloaded SYSTEM4 root. The VM releases the surfaces afterwards
+        // when set:AutoFreeTex asks (docs/engine-re.md, "AutoFreeTex").
+        StopSurfaceMovies(0, 1000);
         lock (_backbufferRangeLock)
         {
             _backbufferRange = GfxHandleRange.All;
@@ -952,7 +981,6 @@ public sealed partial class GodotAdvHost
         }
         lock (_textLock)
         {
-            _surfaceResources.Clear();
             _retainedHistoryLayouts.Clear();
             _liveText.Clear();
             _retainedTextLayouts.Clear();
@@ -985,11 +1013,7 @@ public sealed partial class GodotAdvHost
         _modalMovieWaiting = false;
         _modalMovieCancelPending = false;
         _foregroundGfx = null;
-        lock (_screenTransitionLock)
-        {
-            _renderTargetSnapshots.Clear();
-            _screenTransition = null;
-        }
+        lock (_screenTransitionLock) _screenTransition = null;   // a render target's snapshot stays with its surface
         IsWaiting = false;
         IsTransitionWaiting = false;
         IsSleeping = false;
@@ -998,7 +1022,7 @@ public sealed partial class GodotAdvHost
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         _main.CallDeferred("CancelScheduledSoundEffectStarts");
         _main.CallDeferred("ClearPage");
-        _timeline?.State("scene-context-reset", new());
+        _timeline?.State("scene-context-reset", new() { ["surfaces"] = LiveSurfaceSlots() });
     }
 
     // Main thread, once per rendered frame: releases a VM thread parked in Sleep or a presentation/input wait.
@@ -1069,6 +1093,10 @@ public sealed partial class GodotAdvHost
     internal static long NormalizeSleepMilliseconds(long duration, double scale)
         => (long)System.Math.Clamp(duration * scale, 1, 60_000);
 
+    // sleep_op_0xc8@0x420ec0 calls kernel32 Sleep for an operand under 10 ms and returns; only a longer sleep arms the
+    // main-loop timer. Either way native renders a dirty frame at the next loop iteration without waiting for the display.
+    internal const long NativeInlineSleepLimitMs = 10;
+
     public void Sleep(long duration)
     {
         // Native sleep_timer_arm clamps the duration to at least 1 ms. In menu poll loops, sleep(0)
@@ -1080,7 +1108,12 @@ public sealed partial class GodotAdvHost
         bool scriptSuspended = SuspendScriptForPresentation();
         try
         {
-            RequestSynchronizedPresentation();
+            // A poll loop (`get-input-type`, `sleep 1`) wakes about once a millisecond on native, so its 50 ms mouse
+            // callback fires every 50 ms. Waiting here for the compositor rounded each short sleep up to a display
+            // frame: Kamidori FIELD's callback ran every 50 or 67 ms, and its 100-call help overlay came late
+            // (docs/engine-re.md, "Short sleeps do not wait for the display").
+            if (duration < NativeInlineSleepLimitMs) RequestPresentation();
+            else RequestSynchronizedPresentation();
             while (_clock.NowMs < deadline)
             {
                 if (_stopping) break;

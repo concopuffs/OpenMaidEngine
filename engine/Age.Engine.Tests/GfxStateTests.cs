@@ -16,15 +16,38 @@ public class GfxStateTests
         Assert.Equal(0x5678, g.QueryField(0xc2));
         g.ClearRetainedObjects();
         Assert.Equal(0x5678, g.QueryField(0xc2));
-        var restored = new GfxState();
-        restored.RestorePersistenceSnapshot(g.CapturePersistenceSnapshot());
-        Assert.Equal(0x01001234, restored.QueryField(0x2b));
         g.CreateSurface(0xc2);
         Assert.Equal(-1, g.QueryField(0xc2));
         g.ReleaseSurfaceRange(0x2b, 1);
         Assert.Equal(-1, g.QueryField(0x2b));
-        restored.ResetSceneContext();
-        Assert.Equal(-1, restored.QueryField(0x2b));
+        g.SetSurface(0x30, 0x9abc, -1, rawTextureMode: true);   // op 0x249 records no resource id
+        Assert.Equal(-1, g.QueryField(0x30));
+        Assert.Equal(-1, g.QueryField(1000));
+    }
+
+    [Fact]
+    public void SceneResetClearsTheRecordsAndKeepsTheSurfaces()
+    {
+        // scene_context_init_reset reinitializes both record tables but releases no texture. Native read 2026-11-07:
+        // after a Himegari return to title, slots 5 and 14 still hold their textures and their records read -1.
+        var g = new GfxState();
+        g.SetSurface(5, 0x23, 0);
+        g.CreateSurface(21);
+        g.SetSurfacePersistenceFlags(5, 1);
+        g.SetMovieStopTime(21, 1000);
+        g.SnapshotSurfaceRecords();
+
+        g.ResetSceneContext();
+
+        Assert.Equal(-1, g.QueryField(5));
+        Assert.Equal(
+            new[] { (5, 0x23L, false, false), (21, 0L, true, false) },
+            g.CapturePersistenceSnapshot().Surfaces.Select(item =>
+                (item.Slot, item.ResourceId, item.Created, item.ReloadOnRestore)));
+        Assert.False(g.TryGetMovieStopTime(21, out _));
+        byte[] records = g.CaptureNativeSurfaceRecords();
+        Assert.Equal(-1, BitConverter.ToInt32(records, 5 * 20));
+        Assert.Equal(0, BitConverter.ToInt32(records, 5 * 20 + 8));
     }
 
     [Fact]

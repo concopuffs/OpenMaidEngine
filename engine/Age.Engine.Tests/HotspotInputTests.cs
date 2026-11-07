@@ -667,13 +667,18 @@ public class HotspotInputTests
     }
 
     [Fact]
-    public void RefreshAdvSkipInputState_ReconcilesTheExistingReadSkipChannel()
+    public void RefreshAdvSkipInputState_EndsFastForwardAndPersistentSkipRestartsItAtTheNextTextWait()
     {
+        // op_0xfa_refresh_adv_skip_input_state@0x416de0 polls the held mask, which carries no Skip injection, and
+        // starts nothing; op 0x72's wait acts on ctx+0x13dc again.
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = ScriptAssembler.Assemble(table, "REFRESH_ADV_SKIP", new List<(int, Operand[])>
         {
+            (0x88, new[] { I(1) }),
             (0xfa, Array.Empty<Operand>()),
             (0x1c7, new[] { G(0x148) }),
+            (0x72, new[] { I(0) }),
+            (0x1c7, new[] { G(0x149) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
         var host = new RecordingHost { AdvReadSkip = true };
@@ -681,9 +686,42 @@ public class HotspotInputTests
 
         vm.Run();
 
-        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x148));
-        Assert.Equal(1, host.MessageSkipChanges.Count(value => value));
-        Assert.Equal(1, host.MessageSkip ? 1 : 0);
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x148));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x149));
+        Assert.True(vm.MessageSkipEnabled);
+        Assert.Equal(new[] { true, false, true }, host.MessageSkipChanges);
+    }
+
+    [Theory]
+    [InlineData(0x71)]   // Kamidori FIELD@0x30a resets layout 1 after SYSTEM4's op 0x19b
+    [InlineData(0x72)]
+    public void APageOutsideAdvLeavesPersistentSkipSuspendedUntilOp0x19c(int op)
+    {
+        // Op 0x19b clears ctx+0x13dc and keeps the toggle (ctx+0x550fc). The read-skip block of ops 0x6e, 0x71 and 0x72
+        // never starts fast-forward from the toggle, and op 0x72 acts on ctx+0x13dc, so a later click cannot cancel a
+        // Skip that is not running (docs/engine-re.md, "Read skip and ctx+0x13dc").
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "SUSPENDED_PAGE", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19b, Array.Empty<Operand>()),
+            (op, new[] { I(1) }),
+            (0x1c7, new[] { G(0x14a) }),
+            (0x19c, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x14b) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x14a));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x14b));
+        Assert.True(vm.MessageSkipEnabled);
+        // The host is told every time; a repeated value is no change.
+        Assert.Equal(new[] { true, false, true },
+            host.MessageSkipChanges.Where((value, i) => i == 0 || value != host.MessageSkipChanges[i - 1]));
     }
 
     [Fact]

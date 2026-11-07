@@ -40,18 +40,19 @@ public static class AspectGlyphPlacement
 
     /// <summary>
     /// How far right of the pen the glyph's origin goes. Mode 1 keeps the pen for class 0, puts the black box's right
-    /// edge at the reference 激's black-box width for class 1, and otherwise centres the black box on half the font
-    /// size (a quarter for a single-byte glyph): <c>trunc(size / 2 + 0.5) - trunc(gmBlackBoxX * 0.5 + 0.5) -
-    /// gmptGlyphOrigin.x</c>. Any other nonzero mode always centres. AGE also multiplies the size and the reference
-    /// width by a display scale (+0x40c->+0x4e0, 1.0 unless +0x488 is clear), which the port does not have.
+    /// edge at the reference 激's black-box width for class 1 (<paramref name="referenceBlackBoxWidth"/>, the
+    /// GGO_METRICS box of <see cref="AspectFontRealization.ReferenceBlackBoxWidth"/>, not a raster's), and otherwise
+    /// centres the black box on half the font size (a quarter for a single-byte glyph): <c>trunc(size / 2 + 0.5) -
+    /// trunc(gmBlackBoxX * 0.5 + 0.5) - gmptGlyphOrigin.x</c>. Any other nonzero mode always centres. AGE also
+    /// multiplies the size and the reference width by a display scale (+0x40c->+0x4e0, 1.0 unless +0x488 is clear),
+    /// which the port does not have.
     /// </summary>
-    public static int OffsetX(GlyphMask glyph, GlyphMask reference, int fontSize, ushort? code, int aspectMode)
+    public static int OffsetX(GlyphMask glyph, int referenceBlackBoxWidth, int fontSize, ushort? code, int aspectMode)
     {
         ArgumentNullException.ThrowIfNull(glyph);
-        ArgumentNullException.ThrowIfNull(reference);
         int classification = aspectMode == 1 && code is { } value ? Classify(value) : -1;
         if (classification == 0) return 0;
-        if (classification == 1) return (int)(reference.Width + 0.5) - glyph.OriginX - glyph.Width;
+        if (classification == 1) return referenceBlackBoxWidth - glyph.OriginX - glyph.Width;
         float centre = fontSize / (code is null or <= 0xff ? 4.0f : 2.0f);
         return (int)(centre + 0.5) - (int)(glyph.Width * 0.5 + 0.5) - glyph.OriginX;
     }

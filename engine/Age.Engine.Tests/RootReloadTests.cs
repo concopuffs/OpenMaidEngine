@@ -82,6 +82,44 @@ public class RootReloadTests
             e.Kind == TraceEventKind.FrameExit && e.Text == "RootReload"));
     }
 
+    [Theory]
+    [InlineData(2, 0, false)]   // Himegari: no AUTOFREETEX
+    [InlineData(2, 3, true)]    // Kamidori
+    [InlineData(2, 1, true)]
+    [InlineData(2, 2, false)]   // bit 1 releases at a numbered load only
+    [InlineData(1, 3, false)]   // without the object backend's bit
+    public void ExitScriptReleasesSurfacesOnlyWhenAutoFreeTexAsks(int createObject, int autoFreeTex, bool released)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var initial = ScriptAssembler.Assemble(table, "INITIAL", new List<(int, Operand[])>
+        {
+            (0x216, new[] { G(0x210), I(5) }),
+            (0x9, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var system4 = ScriptAssembler.Assemble(table, "SYSTEM4", new List<(int, Operand[])>
+        {
+            (0x216, new[] { G(0x211), I(5) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(initial, table, host,
+            new VmOptions(CreateObject: createObject, AutoFreeTex: autoFreeTex),
+            provider: new MapProvider(new Dictionary<long, Script> { [0] = system4 }));
+        vm.Gfx.SetSurface(5, 0x23, 0);
+        vm.Gfx.CreateSurface(21);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(0x23, vm.Globals[0x210]);
+        Assert.Equal(-1, vm.Globals[0x211]);   // the reset clears the record either way
+        Assert.Equal(1, host.SceneContextResets);
+        Assert.Equal(released ? new[] { (0, 1000) } : Array.Empty<(int, int)>(), host.ReleasedSurfaceRanges);
+        Assert.Equal(
+            released ? Array.Empty<int>() : new[] { 5, 21 },
+            vm.Gfx.CapturePersistenceSnapshot().Surfaces.Select(item => item.Slot));
+    }
+
     [Fact]
     [Trait("Category", "Workspace")]
     public void HimegariRawScriptZeroIsSystem4()

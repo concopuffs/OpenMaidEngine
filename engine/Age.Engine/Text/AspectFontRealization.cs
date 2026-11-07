@@ -43,6 +43,7 @@ public sealed class AspectFontRealization
     private readonly IFontMetricsProbe _probe;
     private readonly Dictionary<(string Face, int Height, int Weight), int> _calibrated = new();
     private readonly Dictionary<(string Face, int Height, int Weight, ushort Code), int> _singleByte = new();
+    private readonly Dictionary<(int Height, int Weight), int> _referenceBlackBox = new();
     private readonly object _gate = new();
 
     public AspectFontRealization(IReadOnlyList<EnumeratedFontFamily> installedFamilies, IFontMetricsProbe probe)
@@ -98,6 +99,26 @@ public sealed class AspectFontRealization
             {
                 width = CalibrateSingleByteMode1(faceName, pixelHeight, weight, code) ?? uncalibrated;
                 _singleByte.Add(key, width);
+            }
+            return width;
+        }
+    }
+
+    /// <summary>
+    /// The reference 激's <c>gmBlackBoxX</c> at <c>+0x313d8</c>, which an opening bracket's black box ends at
+    /// (<see cref="AspectGlyphPlacement"/>). text_rebuild_reference_gothic_metrics@0x44fe00 measures it with
+    /// GGO_METRICS in ＭＳ ゴシック at the font size, half width and the primary weight, at DEFAULT_QUALITY. At the sizes
+    /// where the face has an embedded bitmap that is the bitmap's box: 19 pixels for bold at 22, where an antialiased
+    /// raster's is 21.
+    /// </summary>
+    public int ReferenceBlackBoxWidth(int pixelHeight, int weight)
+    {
+        lock (_gate)
+        {
+            if (!_referenceBlackBox.TryGetValue((pixelHeight, weight), out int width))
+            {
+                width = (int)_probe.Measure(ReferenceFace, pixelHeight, -(pixelHeight / 2), weight, ReferenceCode).BlackBoxX;
+                _referenceBlackBox.Add((pixelHeight, weight), width);
             }
             return width;
         }

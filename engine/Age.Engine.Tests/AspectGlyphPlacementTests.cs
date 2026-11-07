@@ -14,13 +14,14 @@ public class AspectGlyphPlacementTests
             => new(11, 19, 23);
     }
 
-    /// <summary>The reference ＭＳ ゴシック 激 has a 19-pixel black box and a 23-pixel advance; every other glyph is a
-    /// 4-pixel ink row whose origin sits 2 pixels right of the pen. Both share an ascent, so nothing is raised.</summary>
+    /// <summary>The reference ＭＳ ゴシック 激 rasterizes 21 pixels wide, as antialiased bold at 22 does, though its
+    /// GGO_METRICS black box (<see cref="NoProbe"/>) is 19, and advances 23; every other glyph is a 4-pixel ink row whose
+    /// origin sits 2 pixels right of the pen. Both share an ascent, so nothing is raised.</summary>
     private sealed class FakeRasterizer : IGlyphMaskRasterizer
     {
         public GlyphMask Rasterize(GlyphRasterRequest request)
             => request.FontFace == AspectFontRealization.ReferenceFace
-                ? Glyph(width: 19, originX: 1, advance: 23)
+                ? Glyph(width: 21, originX: 1, advance: 23)
                 : Glyph(width: 4, originX: 2, advance: 9);
     }
 
@@ -60,11 +61,10 @@ public class AspectGlyphPlacementTests
     [InlineData(0x8175, 2, 7)]
     public void TheOffsetFollowsTheGlyphsClass(int code, int aspectMode, int expected)
         => Assert.Equal(expected, AspectGlyphPlacement.OffsetX(
-            Glyph(width: 4, originX: 2, advance: 9), Glyph(width: 19, originX: 1, advance: 23), 22,
-            (ushort)code, aspectMode));
+            Glyph(width: 4, originX: 2, advance: 9), 19, 22, (ushort)code, aspectMode));
 
     [Theory]
-    [InlineData("メイリオ", true, new[] { 9, 38, 48 })]        // centred, right-aligned, at the pen
+    [InlineData("メイリオ", true, new[] { 9, 38, 48 })]        // centred, right-aligned to the probe's 19, at the pen
     [InlineData("ＭＳ 明朝", true, new[] { 2, 25, 48 })]       // a fixed-pitch face draws at the pen
     [InlineData("メイリオ", false, new[] { 2, 25, 48 })]       // without the installed-font list
     public void TheLayoutPlacesAProportionalFacesGlyphsInTheirCells(string face, bool withFontList, int[] inkStarts)

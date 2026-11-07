@@ -6,6 +6,11 @@ public sealed partial class GfxState
     // Retained for its opcode family; 0x21e scale and 0x220 translation use frame-time directly instead. ----
     public long AnimClockDurationTicks { get; private set; }
     public long AnimClockGeneration { get; private set; }
+    private long _animClockStartMs = -1;   // native +0xb564: 0 (here -1) until the effect-service poll seeds it
+
+    /// <summary>Native service-flags bit 16: the flags word clears itself once the effect service finds nothing
+    /// running, and when the retained objects are cleared.</summary>
+    public const long AnimationServiceFlagsOneShot = 0x10000;
     public long AnimationServiceFlags { get; private set; }
     public uint PreviousFrameTimeMilliseconds { get; private set; }
     public uint CurrentFrameTimeMilliseconds { get; private set; }
@@ -414,8 +419,35 @@ public sealed partial class GfxState
         lock (_lock)
         {
             AnimClockDurationTicks = durationTicks;
+            _animClockStartMs = -1;
             AnimClockGeneration++;
             MarkRetainedMutation();
+        }
+    }
+
+    /// <summary>One poll of the op-0x21c effect wait (run-state 0x400), as gfx_animation_service_poll (SYS4422
+    /// @0x407640, SYS4433 @0x4079b0) runs it every tick of that wait:
+    /// <list type="number">
+    /// <item>While op 0x238's window runs the wait holds. The first poll seeds its start; it ends once
+    /// <paramref name="nowMs"/> passes start + duration, or when forced.</item>
+    /// <item>Otherwise the wait holds while finite presentation runs (<see cref="HasActiveTimedPresentation"/>).
+    /// When nothing runs and service-flags bit 16 is set, the flags word clears to 0.</item>
+    /// </list>
+    /// Only this wait polls, so the window and a one-shot flags word otherwise wait for the next 0x21c.</summary>
+    public bool PollEffectService(long nowMs)
+    {
+        lock (_lock)
+        {
+            if (AnimClockDurationTicks != 0)
+            {
+                if (_animClockStartMs < 0) _animClockStartMs = nowMs;
+                if (nowMs - _animClockStartMs <= AnimClockDurationTicks) return true;
+                _animClockStartMs = -1;
+                AnimClockDurationTicks = 0;
+            }
+            bool running = HasActiveTimedPresentation(nowMs);
+            if (!running && (AnimationServiceFlags & AnimationServiceFlagsOneShot) != 0) AnimationServiceFlags = 0;
+            return running;
         }
     }
 
@@ -444,6 +476,7 @@ public sealed partial class GfxState
             if ((AnimationServiceFlags & 2) != 0) return;
             ForceCompleteOneShotChannels();
             AnimClockDurationTicks = 0;
+            _animClockStartMs = -1;
             AnimClockGeneration++;
             MarkRetainedMutation();
         }

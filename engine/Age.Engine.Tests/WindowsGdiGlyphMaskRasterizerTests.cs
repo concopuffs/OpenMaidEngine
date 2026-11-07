@@ -220,6 +220,20 @@ public class WindowsGdiGlyphMaskRasterizerTests
     }
 
     [Fact]
+    public void TheAspectReferenceBlackBoxIsTheEmbeddedBitmapsNotTheAntialiasedRasters()
+    {
+        // text_rebuild_reference_gothic_metrics@0x44fe00 measures 激 with GGO_METRICS at DEFAULT_QUALITY. At 22 pixels
+        // ＭＳ ゴシック has an embedded bitmap, and its bold box is 19 pixels where the antialiased raster's is 21; an
+        // opening bracket ends at the 19 (Kamidori SC2000@0xaf5, native drive 2026-11-07).
+        if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;
+        using var rasterizer = new WindowsGdiGlyphMaskRasterizer();
+        var realization = new AspectFontRealization([new("ＭＳ ゴシック", 49)], rasterizer);
+
+        Assert.Equal(19, realization.ReferenceBlackBoxWidth(22, 700));
+        Assert.Equal(21, rasterizer.Rasterize(NativeRequest("ＭＳ ゴシック", 22, -11, 700, 0x6fc0)).Width);
+    }
+
+    [Fact]
     public void FontHandlesUseTheSharedBoundedLruAndDisposeCleanly()
     {
         if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;

@@ -283,7 +283,7 @@ public partial class Main : Godot.Control
         double sleepScale = 1.0;                         // --sleep-scale <f>: scale explicit op-0xc8 holds
         double speed = 1.0;                              // --speed <f>: sleeps + retained presentation clocks
         long transitionClickMs = -1;                    // --transition-click-ms <n>: force active transitions after n virtual ms
-        bool holdMessageSkip = false;                    // --hold-message-skip: hold native logical action 6 for diagnostics
+        bool holdMessageSkip = false;                    // --hold-message-skip: hold native logical action 6 from boot
         string textBackend = "auto";                     // --text-backend auto|gdi|portable
         string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
         string? pageMapPath = null;                      // --page-map <jsonl>: override default build/page-map-SCxxxx.jsonl

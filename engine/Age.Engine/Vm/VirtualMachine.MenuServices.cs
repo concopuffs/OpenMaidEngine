@@ -115,9 +115,10 @@ public sealed partial class VirtualMachine
         {
             _messageSkipEnabled = false;
         }
-        if (!_advSkipServiceEnabled || !_messageSkipEnabled) return;
-        _messageSkipServiceActive = true;
-        _host.SetMessageSkipActive(true);
+        if (!_advSkipServiceEnabled) return;
+        _messageSkipInjected = _messageSkipEnabled;   // ctx+0x13dc follows only while the service is enabled
+        if (!_messageSkipEnabled) return;
+        SetScriptFastForward(true);
     }
 
     /// <summary>adv_toggle_auto_mode: flip Auto (enabling clears Skip unless set:CoexistMesSkip). Native arms its sleep
@@ -135,6 +136,7 @@ public sealed partial class VirtualMachine
         }
         _autoMessageEnabled = true;
         if (!_o.CoexistMessageSkip) _messageSkipEnabled = false;
+        if (_advSkipServiceEnabled) _messageSkipInjected = _messageSkipEnabled;
         if (_advSkipServiceEnabled && _advTextWaitPolling) _host.EndInputWait();
     }
 
@@ -169,7 +171,7 @@ public sealed partial class VirtualMachine
             _advReadSkipState = false;
             return;
         }
-        RefreshAdvReadSkipState();
+        ApplyReadTextSkip();
     }
 
     /// <summary>Run a queued CALLBACK_SETTING.BIN or CALLBACK_WINDOW.BIN from a text wait's input service, nested in

@@ -354,6 +354,143 @@ public class ForegroundTransitionTests
         Assert.True(gfx.TryGet(100)!.OneShotColorEnabled);
     }
 
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(3, false)]
+    public void FastForwardForceIgnoresServiceFlagBit0AndYieldsToBit1(long flags, bool forced)
+    {
+        var gfx = new GfxState();
+        gfx.SetSurface(4, 0x25, -1);
+        gfx.BindDraw(100, 4, 0, 0, 800, 600, 0, 0);
+        gfx.SetAnimatedObjectColorResolved(100, 0, 1000, 0, 0xffffff);
+        gfx.QueueSurfaceAlphaTransition(102, 6, 100, 1, 100, 1, 0, 1000);
+        gfx.StartForegroundTransitions(100);
+        gfx.SetAnimationServiceFlags(flags);
+
+        Assert.Equal(forced ? 2 : 0, gfx.ForceCompleteTimedPresentationForFastForward(200));
+        Assert.Equal(!forced, gfx.TryGet(100)!.OneShotColorEnabled);
+        Assert.Equal(!forced, gfx.HasActiveTimedPresentation(200));
+    }
+
+    [Fact]
+    public void FastForwardForceLeavesDetachedChannelsAndMovieMasksRunning()
+    {
+        var gfx = new GfxState();
+        gfx.SetSurface(4, 0x25, -1);
+        gfx.BindDraw(100, 4, 0, 0, 800, 600, 0, 0);
+        gfx.BindDraw(101, 4, 0, 0, 800, 600, 0, 0);
+        gfx.SetAnimatedObjectColorResolved(100, 0, 1000, 0, 0xffffff);
+        gfx.SetAnimatedObjectColorResolved(101, 0, 1000, 0, 0xffffff);
+        gfx.SetOneShotAnimationControl(101, 1);
+        gfx.QueueMovieMaskTransition(new MovieMaskTransitionRequest(
+            11, 45, 10, 1, -184, 0, 800, 600, 0, 0x325e, 0, 1000));
+        gfx.SetAnimationServiceFlags(1);
+
+        Assert.Equal(1, gfx.ForceCompleteTimedPresentationForFastForward(100));
+        Assert.False(gfx.TryGet(100)!.OneShotColorEnabled);
+        Assert.True(gfx.TryGet(101)!.OneShotColorEnabled);
+        Assert.False(gfx.SnapshotMovieMaskTransitions().Single().Completed);
+        Assert.True(gfx.HasActiveTimedPresentation(100));
+    }
+
+    [Fact]
+    public void AnimClockWindowHoldsTheEffectWaitFromItsFirstPoll()
+    {
+        var gfx = new GfxState();
+        gfx.SetAnimClock(700);
+
+        Assert.False(gfx.HasActiveTimedPresentation(1000));
+        Assert.True(gfx.PollEffectService(1000));   // seeds the window's start
+        Assert.True(gfx.PollEffectService(1700));
+        Assert.False(gfx.PollEffectService(1701));
+        Assert.Equal(0, gfx.AnimClockDurationTicks);
+        Assert.False(gfx.PollEffectService(5000));
+    }
+
+    [Fact]
+    public void FastForwardForceEndsTheAnimClockWindow()
+    {
+        var gfx = new GfxState();
+        gfx.SetAnimClock(700);
+        Assert.True(gfx.PollEffectService(100));
+
+        Assert.Equal(1, gfx.ForceCompleteTimedPresentationForFastForward(150));
+        Assert.False(gfx.PollEffectService(151));
+    }
+
+    [Fact]
+    public void OneShotServiceFlagsClearWhenThePollFindsNothingRunning()
+    {
+        // GAMESTART's fade: a 300 ms color channel, a 700 ms window and flags 0x10003, then op 0x21c.
+        var gfx = new GfxState();
+        gfx.SetSurface(4, 0x25, -1);
+        gfx.BindDraw(100, 4, 0, 0, 800, 600, 0, 0);
+        gfx.SetAnimatedObjectColorResolved(100, 0, 300, 0xff, 0xffffff);
+        gfx.SetAnimClock(700);
+        gfx.SetAnimationServiceFlags(0x10003);
+        gfx.SeedOneShotChannels(0);
+
+        Assert.True(gfx.PollEffectService(0));
+        Assert.True(gfx.PollEffectService(400));
+        Assert.Equal(0x10003, gfx.AnimationServiceFlags);
+        Assert.False(gfx.PollEffectService(701));
+        Assert.Equal(0, gfx.AnimationServiceFlags);
+    }
+
+    [Fact]
+    public void OneShotServiceFlagsWaitForTheLastRunningChannel()
+    {
+        var gfx = new GfxState();
+        gfx.SetSurface(4, 0x25, -1);
+        gfx.BindDraw(100, 4, 0, 0, 800, 600, 0, 0);
+        gfx.SetAnimatedObjectColorResolved(100, 0, 1000, 0xff, 0xffffff);
+        gfx.SetAnimationServiceFlags(0x10001);
+        gfx.SeedOneShotChannels(0);
+
+        Assert.True(gfx.PollEffectService(500));
+        Assert.Equal(0x10001, gfx.AnimationServiceFlags);
+        Assert.False(gfx.PollEffectService(1000));
+        Assert.Equal(0, gfx.AnimationServiceFlags);
+    }
+
+    [Fact]
+    public void ServiceFlagsWithoutBit16SurviveThePoll()
+    {
+        var gfx = new GfxState();
+        gfx.SetAnimationServiceFlags(3);
+
+        Assert.False(gfx.PollEffectService(0));
+        Assert.Equal(3, gfx.AnimationServiceFlags);
+    }
+
+    [Theory]
+    [InlineData(0x10003, 0)]
+    [InlineData(0x10000, 0)]
+    [InlineData(3, 3)]
+    [InlineData(1, 1)]
+    public void ObjectClearEndsTheWindowAndClearsOnlyOneShotFlags(long flags, long after)
+    {
+        var cleared = new GfxState();
+        var reset = new GfxState();
+        foreach (var gfx in new[] { cleared, reset })
+        {
+            gfx.SetAnimClock(700);
+            gfx.SetAnimationServiceFlags(flags);
+        }
+
+        cleared.ClearRetainedObjects();   // op 0x1f6
+        reset.ResetSceneContext();        // op 0x9's scene_context_init_reset
+
+        foreach (var gfx in new[] { cleared, reset })
+        {
+            Assert.Equal(after, gfx.AnimationServiceFlags);
+            Assert.Equal(0, gfx.AnimClockDurationTicks);
+            Assert.False(gfx.PollEffectService(0));
+        }
+    }
+
     [Fact]
     public void MovieMaskAcceptsWaitBypassAndContinuesAsynchronously()
     {

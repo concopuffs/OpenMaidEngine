@@ -27,21 +27,21 @@ public sealed partial class GfxState
 
     private void MarkRetainedMutation() => _mutationGeneration++;
 
-    /// <summary>Native scene_context_init_reset ownership boundary used by opcode 0x9: discard
-    /// retained objects, command/query state, surfaces, transitions, render-target selection, and the
-    /// scene animation clock while leaving VM globals and decoded host assets outside this model.</summary>
+    /// <summary>Native scene_context_init_reset ownership boundary used by opcode 0x9: discard retained objects,
+    /// command/query state, both surface-record tables, movie objects, transitions, render-target selection and the
+    /// scene animation clock. The surfaces themselves stay: native releases them only when set:AutoFreeTex asks, which
+    /// the VM decides (docs/engine-re.md, "AutoFreeTex"). VM globals and decoded host assets are outside this
+    /// model.</summary>
     public void ResetSceneContext()
     {
         lock (_lock)
         {
             _objects.Clear();
             _orderedObjectHandles.Clear();
-            _surfaces.Clear();
-            _createdSurfaces.Clear();
-            _reloadableSurfaces.Clear();
+            _reloadableSurfaces.Clear();                      // record +0x08, zeroed with the tables
             ResetSurfaceRecordTable(_surfaceRecords);         // scene_context_init_reset calls
             ResetSurfaceRecordTable(_surfaceRecordSnapshot);  // gfx_surface_record_tables_init
-            _movieStopTimesMs.Clear();
+            _movieStopTimesMs.Clear();                        // and deletes every ctx+0x52bd4 movie object
             _surfaceTransitions.Clear();
             _patternedSurfaceTransitions.Clear();
             _movieMaskTransitions.Clear();
@@ -52,9 +52,7 @@ public sealed partial class GfxState
             _rangeTransformFirst = 0;
             _rangeTransformCount = 0;
             _rangeTransform = new GfxObject();
-            AnimClockDurationTicks = 0;
-            AnimClockGeneration++;
-            AnimationServiceFlags = 0;
+            ClearAnimationServiceForObjectClear();
             PreviousFrameTimeMilliseconds = 0;
             CurrentFrameTimeMilliseconds = 0;
             _previousFrameTimeMs = 0;

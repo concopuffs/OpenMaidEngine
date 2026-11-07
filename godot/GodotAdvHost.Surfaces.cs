@@ -318,7 +318,7 @@ public sealed partial class GodotAdvHost
 
     public void ReleaseSurfaceRange(int firstSlot, int count)
     {
-        IReadOnlyList<MovieSurfaceBinding> stoppedMovies = _movieSurfaces.ReleaseRange(firstSlot, count);
+        StopSurfaceMovies(firstSlot, count);
         int end = checked(firstSlot + count);
         lock (_screenTransitionLock)
             for (int slot = firstSlot; slot < end; slot++) _renderTargetSnapshots.Remove(slot);
@@ -347,7 +347,13 @@ public sealed partial class GodotAdvHost
             _retainedHistoryLayouts.RemoveWhere(layoutSlot =>
                 !_retainedTextLayouts.ContainsKey(layoutSlot));
         }
-        foreach (MovieSurfaceBinding binding in stoppedMovies)
+        _timeline?.Event("surface-range-release", new() { ["first"] = firstSlot, ["count"] = count });
+    }
+
+    // Stop and unbind every movie on a surface in the range; the surfaces' own pixels stay.
+    private void StopSurfaceMovies(int firstSlot, int count)
+    {
+        foreach (MovieSurfaceBinding binding in _movieSurfaces.ReleaseRange(firstSlot, count))
         {
             AbandonMovieMaskPlayback(binding.PlaybackId);
             ForgetMovieMaskSurface(binding.SurfaceSlot, binding.PlaybackId);
@@ -359,7 +365,15 @@ public sealed partial class GodotAdvHost
             });
             _main.CallDeferred("StopMovie", binding.PlaybackId);
         }
-        _timeline?.Event("surface-range-release", new() { ["first"] = firstSlot, ["count"] = count });
+    }
+
+    // The slots holding a surface (pixels or a loaded resource), for the timeline.
+    private int[] LiveSurfaceSlots()
+    {
+        var slots = new SortedSet<int>();
+        lock (_imageLock) slots.UnionWith(_surfaceImages.Keys);
+        lock (_textLock) slots.UnionWith(_surfaceResources.Keys);
+        return slots.ToArray();
     }
 
     // Main-thread decoder handoff. Replacing the newest frame mirrors the native texture renderer's

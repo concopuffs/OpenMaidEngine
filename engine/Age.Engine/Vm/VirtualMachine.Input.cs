@@ -16,7 +16,11 @@ public sealed partial class VirtualMachine
         switch (label)
         {
             case "wait-for-input":
-                RefreshAdvReadSkipState();
+                ApplyReadTextSkip();
+                // op_0x72_handler clears run-state 0x8000000 unless the message is read or action 6 is held. Persistent
+                // Skip (ctx+0x13dc) sets it again as the wait polls its injected action 6, so the page still passes.
+                if (!_advReadSkipState) SetScriptFastForward(_messageSkipInjected);
+                ReconcilePhysicalFastForward();
                 DiscardHeldTriggersUnlessFastForward();   // op_0x72_handler polls the input latch and discards it
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
                 if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }
@@ -49,6 +53,7 @@ public sealed partial class VirtualMachine
                 _sharedProfile.ReadText.QueueMessage(
                     _cur.Script.PackedId, CurrentReadMessageIndex(),
                     _cur.Script.ReadMessageOffsets.Count);
+                _fastForwardPagePassed = true;   // PaceFastForwardOp charges the page if fast-forward passed it
                 return pc + 1;
             case "u0041BEB0":
             case "register-hotspot-callbacks": // 0x90: inclusive rect + enter/leave/activate local callbacks

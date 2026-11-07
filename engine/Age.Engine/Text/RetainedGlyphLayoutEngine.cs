@@ -65,10 +65,12 @@ public sealed class RetainedGlyphLayoutEngine
 
         // SYS4433 0x2db: layout uses the reference MS Gothic glyph's advance,
         // independently of the selected face's ink/text extent (native 0x45b710).
-        GlyphMask? aspectReference = options.Style.AspectMode != 0 && glyphs.Count > 0
-            ? _rasterizer.Rasterize(ImmediateSurfaceTextRenderer.CreateRequests(
-                "激", options.Style with { FontFace = "ＭＳ ゴシック" }, glyphs[0].Policy, glyphs[0].Antialias)[0])
+        GlyphRasterRequest? referenceRequest = options.Style.AspectMode != 0 && glyphs.Count > 0
+            ? ImmediateSurfaceTextRenderer.CreateRequests(
+                "激", options.Style with { FontFace = AspectFontRealization.ReferenceFace }, glyphs[0].Policy,
+                glyphs[0].Antialias)[0]
             : null;
+        GlyphMask? aspectReference = referenceRequest != null ? _rasterizer.Rasterize(referenceRequest) : null;
         // The realized font's 激, whose ink top the aspect-mode raise compares (+0x31430).
         GlyphMask? realizedReference = aspectReference != null
             ? _rasterizer.Rasterize(new GlyphRasterRequest(
@@ -77,6 +79,10 @@ public sealed class RetainedGlyphLayoutEngine
             : null;
         bool placesInCell = aspectReference != null
                             && options.FontRealization?.PlacesGlyphsInCell(glyphs[0].FontFace) == true;
+        // An opening bracket ends at the reference's GGO_METRICS black box (+0x313d8), not the raster's.
+        int referenceBlackBoxWidth = placesInCell
+            ? options.FontRealization!.ReferenceBlackBoxWidth(referenceRequest!.PixelHeight, referenceRequest.Weight)
+            : 0;
         int fontSize = options.Style.PrimaryFontSize > 0 ? options.Style.PrimaryFontSize
             : glyphs.Count > 0 ? glyphs[0].PixelHeight : 0;
 
@@ -156,7 +162,7 @@ public sealed class RetainedGlyphLayoutEngine
                 : 0;
             int drawX = placesInCell
                 ? checked(cursorX + AspectGlyphPlacement.OffsetX(
-                    mask, aspectReference!, fontSize, request.Cp932Code, options.Style.AspectMode))
+                    mask, referenceBlackBoxWidth, fontSize, request.Cp932Code, options.Style.AspectMode))
                 : cursorX;
             AgeGlyphMaskCompositor.DrawGlyph(
                 destination, mask,

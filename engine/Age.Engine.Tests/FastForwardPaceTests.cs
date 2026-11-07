@@ -63,12 +63,38 @@ public class FastForwardPaceTests
     }
 
     private static VirtualPaceClock Run(OpcodeTable table, Script script, int opMicroseconds,
-                                        (int Read, double Ms)? block = null)
+                                        (int Read, double Ms)? block = null, int pageMicroseconds = 0)
     {
         var clock = new VirtualPaceClock { Block = block };
-        new VirtualMachine(script, table, new RecordingHost(), new VmOptions(FastForwardOpMicroseconds: opMicroseconds),
+        new VirtualMachine(script, table, new RecordingHost(),
+                           new VmOptions(FastForwardOpMicroseconds: opMicroseconds,
+                                         FastForwardPageMicroseconds: pageMicroseconds),
                            paceClock: clock).Run();
         return clock;
+    }
+
+    [Fact]
+    public void ATextWaitPassedUnderFastForwardOwesThePageCost()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var wait = (0x72, new[] { I(0) });
+        VirtualPaceClock clock = Run(table, Build(table, "PACE_PAGES", skip: true, 1, wait, wait),
+                                     1000, pageMicroseconds: 3000);
+
+        // 0x88, two text waits, one probe and 0x2: each op owes 1 ms, and each text wait 3 ms more.
+        Assert.Equal(new[] { 1, 4, 4, 1, 1 }, clock.Sleeps);
+    }
+
+    [Fact]
+    public void ThePageCostAloneEnablesPacing()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var wait = (0x72, new[] { I(0) });
+        VirtualPaceClock clock = Run(table, Build(table, "PACE_PAGE_ONLY", skip: true, 2, wait), 0,
+                                     pageMicroseconds: 2000);
+
+        Assert.Equal(5, clock.Reads);
+        Assert.Equal(new[] { 2 }, clock.Sleeps);
     }
 
     [Fact]
@@ -107,7 +133,7 @@ public class FastForwardPaceTests
         VirtualPaceClock clock = Run(table, Build(table, "PACE_NATIVE", skip: true, 2000),
                                      VmOptions.NativeFastForwardOpMicroseconds);
 
-        // 2002 ops at 374 µs owe 748.748 ms. Pacing sleeps 1 ms whenever at least 1 ms is owed, so it ends less than
+        // 2002 ops at 15 µs owe 30.03 ms. Pacing sleeps 1 ms whenever at least 1 ms is owed, so it ends less than
         // 1 ms behind the schedule and never ahead of it.
         Assert.Equal(2002, clock.Reads);
         Assert.All(clock.Sleeps, sleep => Assert.Equal(1, sleep));

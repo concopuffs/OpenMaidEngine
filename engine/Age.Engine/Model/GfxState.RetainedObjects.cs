@@ -306,14 +306,14 @@ public sealed partial class GfxState
                 MarkRetainedMutation();
             }
     }
-    /// <summary>Opcode 0x216 reads the surface record's resource id, not an object field.</summary>
+    /// <summary>Opcode 0x216 reads the live surface record's resource id (owner+0x700), not an object field or the
+    /// texture. A texture kept across op 0x9 therefore reads -1 once the reset has cleared its record.</summary>
     public long QueryField(long idx)
     {
         lock (_lock)
-            return idx >= int.MinValue && idx <= int.MaxValue
-                && !_createdSurfaces.Contains((int)idx)
-                && _surfaces.TryGetValue((int)idx, out var surface)
-                    ? surface.ResId : -1;
+            return idx is >= 0 and < SurfaceRecordCount
+                ? _surfaceRecords[(int)idx * SurfaceRecordDwords + RecordResourceId]
+                : -1;
     }
 
     public void Release(long handle)
@@ -358,8 +358,19 @@ public sealed partial class GfxState
             _directionalBlurTransitions.Clear();
             _patternedSurfaceTransitions.Clear();
             CurrentObject = 0;
+            ClearAnimationServiceForObjectClear();
             MarkRetainedMutation();
         }
+    }
+
+    /// <summary>retained_gfx_objects_clear@0x47cab0 (op 0x1f6 and scene_context_init_reset): op 0x238's window
+    /// ends, and the service flags clear only when bit 16 asks. Caller holds the lock.</summary>
+    private void ClearAnimationServiceForObjectClear()
+    {
+        AnimClockDurationTicks = 0;
+        _animClockStartMs = -1;
+        AnimClockGeneration++;
+        if ((AnimationServiceFlags & AnimationServiceFlagsOneShot) != 0) AnimationServiceFlags = 0;
     }
 
     private static GfxObject CloneState(GfxObject s)

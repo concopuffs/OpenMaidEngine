@@ -337,8 +337,8 @@ noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x9_reset_scene_and_reload_root@0x418f50 clears EngineCtx+0x54ff0, disposes all 40 interpreter-frame slots with script_frame_dispose@0x40e610, aborts timed/input callback state, calls scene_context_init_reset@0x40b3b0, resets hotspot/input services, optionally releases AutoFreeTex surfaces, then calls script_frame_load_resource(...,0). The scene reset clears interpreter/ADV/input/retained-gfx state and normally releases the 1000 surface/movie slots; it does not clear the VM global bank or engine configuration. Corpus sites are terminal scene/control exits rather than ordinary local returns."
-details = "Implemented as a whole-stack root-reload boundary in the persistent VM. A request propagates through every nested call-script frame without resuming caller instructions, clears VM/host scene presentation and input state, cancels deferred SFX starts while preserving active/process-owned audio, preserves globals and process-owned host configuration/caches, then resolves raw resource 0 through the script provider and starts it at offset zero. The retained history backlog is deliberately preserved pending a separate proof of its native lifetime; recording suppression is reset."
+evidence = "Ghidra /v2: op_0x9_reset_scene_and_reload_root@0x418f50 clears EngineCtx+0x54ff0, disposes all 40 interpreter-frame slots with script_frame_dispose@0x40e610, aborts timed/input callback state, calls scene_context_init_reset@0x40b3b0, resets hotspot/input services, releases all 1000 surfaces only when (set:CreateObject & 2) && (set:AutoFreeTex & 1), then calls script_frame_load_resource(...,0). SYS4433's op_0x9_reset_scene_and_reload_root_sys4433@0x423b90 has the same gate; the registered AutoFreeTex default is 0 in both, Kamidori sets 3 and Himegari leaves it unset. The scene reset clears interpreter/ADV/input/retained-gfx state, reinitializes both surface-record tables and deletes the 1000 slots' movie objects (ctx+0x52bd4), but keeps their textures; it does not clear the VM global bank or engine configuration. A native read (2026-11-07) found SC0000's slots 5 and 14 still textured at TITLE after a Himegari return to title, with record id -1. Corpus sites are terminal scene/control exits rather than ordinary local returns."
+details = "Implemented as a whole-stack root-reload boundary in the persistent VM. A request propagates through every nested call-script frame without resuming caller instructions, clears VM/host scene presentation and input state, keeps every surface unless VmOptions.CreateObject/AutoFreeTex ask for the release (the surface records, reload flags and movies are cleared), cancels deferred SFX starts while preserving active/process-owned audio, preserves globals and process-owned host configuration/caches, then resolves raw resource 0 through the script provider and starts it at offset zero. The retained history backlog is deliberately preserved pending a separate proof of its native lifetime; recording suppression is reset."
 
 [[opcode]]
 op = 0x21
@@ -981,6 +981,7 @@ abi_source = "kelebek+decode-validated"
 name = "random-modulo"
 category = "compute"
 summary = "(destination)(bound) — write CRT rand() % bound. A bound of zero first writes zero and then raises the engine's script error."
+details = "Native draws are not reproducible: _rand@0x550fe4 is the MSVC LCG (seed * 0x343fd + 0x269ec3), seeded from the tick count by _srand@0x550fd7 (0x413b7f, 0x413c8d, 0x44e5d4), and the main tick, screen transitions, the save encoder and the catalog parse draw from the same generator. The port draws from System.Random.Shared. Kamidori's enemy movement, spawns and battle rolls therefore differ between native and the port from the first enemy phase on; compare presentation, not outcomes (docs/engine-re.md, 'Op 0x60 randomness')."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -1128,7 +1129,7 @@ abi_source = "kelebek+decode-validated"
 name = "show-text"
 category = "adv"
 summary = "(layout_slot)(text) - build and publish a retained text run in the selected ADV layout, using the current glyph delay and raster style; slot zero selects the current layout."
-details = "The live 20-byte glyph record is {chain_flag,left,top,right,bottom}; rectangle members are edges. Overflow bits use strict bound<glyph-edge comparisons. With horizontal wrapping enabled, CP932 0x8141/0x8142/0x8176 (、/。/」) remain on the preceding line. Timed publication binds first_handle+reveal_index only while reveal_index is below the configured object capacity."
+details = "The live 20-byte glyph record is {chain_flag,left,top,right,bottom}; rectangle members are edges. Overflow bits use strict bound<glyph-edge comparisons. With horizontal wrapping enabled, CP932 0x8141/0x8142/0x8176 (、/。/」) remain on the preceding line. Timed publication binds first_handle+reveal_index only while reveal_index is below the configured object capacity. Like ops 0x71 and 0x72 it runs the read-skip block (0x41e3b1): with message:ReadTextSkip on and the message read, it sets run-state 0x08000000 and adv_read_skip_state; an unread message clears adv_read_skip_state only while ctx+0x550fc is clear. The block never clears the run-state bit and never starts it from persistent Skip (docs/engine-re.md, 'Read skip and ctx+0x13dc'). Port: VirtualMachine.ApplyReadTextSkip."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -1225,7 +1226,7 @@ abi_source = "kelebek+decode-validated"
 name = "reset-adv-text-layout"
 category = "adv"
 summary = "(layout_slot) - clear/reset an ADV text layout, append a retained-history boundary when recording is enabled, snapshot the current code/text position, and commit pending ReadTextDB records. T1 entries target these structural reset sites."
-details = "The reset recreates the initial {0,reset_x,reset_y,right,bottom} layout record, clears every pixel of source surface layout_slot+0x14, and erases the complete configured glyph-object range. Port status (2026-07-24): also commits the profile-owned ReadTextDB queue, records the current T1 coordinate, and refreshes per-message read-skip state."
+details = "The reset recreates the initial {0,reset_x,reset_y,right,bottom} layout record, clears every pixel of source surface layout_slot+0x14, and erases the complete configured glyph-object range. Port status (2026-07-24): also commits the profile-owned ReadTextDB queue and records the current T1 coordinate. After the commit it runs the read-skip block shared with ops 0x6e and 0x72 (0x41e63a), so a reset outside ADV (after op 0x19b; Kamidori FIELD@0x30a) does not restart fast-forward from persistent Skip (docs/engine-re.md, 'Read skip and ctx+0x13dc'). Port: VirtualMachine.ApplyReadTextSkip (2026-11-07)."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -1248,7 +1249,7 @@ abi_source = "kelebek+decode-validated"
 name = "wait-for-input"
 category = "adv"
 summary = "(layout_slot) - arm the ADV input wait after text reveal completes; activate the configured wait indicator and, while Auto is enabled, arm the appropriate Auto-message timer."
-details = "Port status (2026-07-24): after the blocking host releases this wait, the VM queues the current packed script id, T1 message index, and T1 count; the next 0x71 commits it. Already-read waits use the same queue path after immediate host release."
+details = "Port status (2026-07-24): after the blocking host releases this wait, the VM queues the current packed script id, T1 message index, and T1 count; the next 0x71 commits it. Already-read waits use the same queue path after immediate host release. Entry runs the read-skip block (0x41e73b), then clears run-state 0x08000000 when the message is unread and the held action mask lacks 0x40 (0x41e786). The wait polls the triggered mask, into which ctx+0x13dc injects action 6, so persistent Skip starts fast-forward again at every polling wait while ctx+0x13dc holds (docs/engine-re.md, 'Read skip and ctx+0x13dc'). Port (2026-11-07): ApplyReadTextSkip, then the script channel follows _messageSkipInjected unless the message is read."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -1649,6 +1650,7 @@ abi_source = "kelebek+decode-validated"
 name = "set-message-skip"
 category = "input"
 summary = "(enabled) - set persistent all-message Skip state. Nonzero makes the interpreter inject ADV fast-forward input every tick; zero stops injection and clears the transient skip run-state bit."
+details = "ctx+0x13dc is the Skip a text wait acts on and ctx+0x550fc the toggle the menu shows: op 0x19b clears only the first, and op 0x19c and the menu's Skip toggle copy the second back. Nonzero does not set run-state 0x08000000 itself; the next polling text wait starts fast-forward from the injected action 6. The port tracks ctx+0x13dc as _messageSkipInjected and sets its script fast-forward channel at once, which differs while the service is suspended (docs/backlog.md; docs/engine-re.md, 'Read skip and ctx+0x13dc')."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -2377,12 +2379,12 @@ abi_source = "kelebek+decode-validated"
 name = "sleep"
 category = "control"
 summary = "Pause the current script for <duration> milliseconds while retained presentation continues."
-details = "Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class), and the native arm helper clamps duration to a minimum of 1 ms. ROOM's input loop deliberately uses sleep(0), making it a one-engine-tick yield rather than a no-op. The handler also records its generic 3-dword instruction length and runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for max(1, scaled duration) ms while the presentation compositor continues. Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity). While ADV fast-forward (run-state 0x08000000) is active the handler arms nothing, and the main loop dispatches ops ahead of an already-armed sleep timer; the port returns immediately and ends an in-progress host sleep when fast-forward starts."
+details = "Native handler sleep_op_0xc8 @0x420ec0 is NON-BLOCKING: it arms a timer (sleep_timer_arm @0x44cff0 at ctx+0x5f304 = active flag + start tick + duration) that the engine main loop polls, resuming the script when elapsed. Operand UNIT = MILLISECONDS (start = ms tick source DAT_0056f3d4, timeGetTime/GetTickCount class), and the native arm helper clamps duration to a minimum of 1 ms. An operand under 10 skips the timer: the handler calls kernel32 Sleep(operand) and returns, and the main loop renders a dirty frame at its next iteration without waiting for the display; ROOM's input loop's sleep(0) gives up the time slice. The handler also records its generic 3-dword instruction length and runs anti-tamper checks, neither needed host-side. Port equivalent: the Godot host parks the VM thread for max(1, scaled duration) ms while the presentation compositor continues. Under 10 ms it requests presentation without waiting for the compositor, so a sleep-1 poll loop wakes about once a millisecond and a 50 ms mouse callback keeps its period (docs/engine-re.md, 'Short sleeps do not wait for the display', 2026-11-07). Sleep is one proven presentation-capable service boundary; ordinary AE setup runs burst-fast to 0x21c and is not paced per opcode. Headless hosts no-op it (parity). While ADV fast-forward (run-state 0x08000000) is active the handler arms nothing, and the main loop dispatches ops ahead of an already-armed sleep timer; the port returns immediately and ends an in-progress host sleep when fast-forward starts."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra: dispatch ctx[0x26c93+0xc8]=0x420ec0; sleep_op_0xc8 + sleep_timer_arm decoded/annotated 2026-07-08. docs/engine-re.md sleep section."
+evidence = "Ghidra: dispatch ctx[0x26c93+0xc8]=0x420ec0; sleep_op_0xc8 + sleep_timer_arm decoded/annotated 2026-07-08. docs/engine-re.md sleep section. 2026-11-07: the under-10 branch calls kernel32 Sleep inline; AGE imports and calls timeBeginPeriod; Kamidori FIELD's 100-call idle overlay (label_c4c6) appears in the same 0.5 s sample on both targets after the port change."
 
 [[opcode.semantics.args]]
 i = 1
@@ -2652,7 +2654,8 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "reset-message-skip-input"
 category = "input"
-summary = "Reset transient message-skip/input service state after an ADV chrome action without clearing op 0x88's persistent all-message Skip flag."
+summary = "Reset transient message-skip/input service state after an ADV chrome action without clearing op 0x88's persistent all-message Skip flag; it ends fast-forward and suppresses a held logical action 6 from restarting it at a reveal until the key is released during one."
+details = "ctx+0x6da74, which it sets, is cleared only by adv_text_reveal_service_tick@0x406fa0 at a reveal tick with action 6 up (0x407101); while set, a held action 6 does not start fast-forward at a reveal. TITLE, FIELD and every control-strip callback run it, which is why a Ctrl held from Kamidori's SC0000 stops at SC2000@0xaf5 (docs/engine-re.md, \"Physical fast-forward\"). The port models it in VirtualMachine.PhysicalFastForward.cs."
 noop_headless = false
 source = "investigation"
 confidence = "med"
@@ -3774,13 +3777,13 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "suspend-adv-skip-service"
 category = "input"
-summary = "() - suspend persistent/read-driven ADV fast-forward while preserving the user's all-message Skip toggle; physically held logical action 6 is independent."
-details = "This lifecycle operation affects persistent/read-driven active Skip only. Physical logical action 6 is process input polled independently by adv_interpreter_tick and remains active while held."
+summary = "() - suspend ADV fast-forward while preserving the user's all-message Skip toggle; it also ends fast-forward that a held logical action 6 started, and the held key does not restart it at the next text wait."
+details = "It clears run-state 0x08000000 however it started. Logical action 6 sets that bit again only at a reveal tick that op 0x101 has not suppressed, or with a new key-down at a polling text wait (docs/engine-re.md, \"Physical fast-forward\"), so a Ctrl held through ADV setup stops there: Kamidori stops at SC2000@0xaf5 after this op at 0x85e. The port's VirtualMachine.PhysicalFastForward.cs ends the physical channel here."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x19b_suspend_adv_skip_service@0x416560 clears run-state bit 0x08000000, ctx+0x13dc active message skip, ctx+0x55100 ADV skip-service enable, and the click-cancel phase, but deliberately leaves ctx+0x550fc persistent all-message Skip unchanged. It does not mutate the input manager; adv_interpreter_tick@0x410fb0 polls logical action 6 (mask bit 0x40) independently of ctx+0x55100. Corpus comments call the opcode `savemesskip`; ADV-end/branch and CALLBACK_LOAD paths use it before leaving ADV presentation."
+evidence = "Ghidra /v2: op_0x19b_suspend_adv_skip_service@0x416560 clears run-state bit 0x08000000, ctx+0x13dc active message skip, ctx+0x55100 ADV skip-service enable, and the click-cancel phase, but deliberately leaves ctx+0x550fc persistent all-message Skip unchanged. It does not mutate the input manager. The bit it clears is the one held action 6 keeps on, so held Ctrl does not survive it (native drive 2026-11-07, Kamidori SC2000@0x85e). Corpus comments call the opcode `savemesskip`; ADV-end/branch and CALLBACK_LOAD paths use it before leaving ADV presentation."
 
 [[opcode]]
 op = 0x19c
@@ -3791,12 +3794,12 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "resume-adv-skip-service"
 category = "input"
-summary = "() - enable the persistent/read ADV skip service and recompute active fast-forward from all-message Skip or the live read-skip channel; physical action 6 remains independent."
+summary = "() - enable the persistent/read ADV skip service and recompute active fast-forward from all-message Skip or the live read-skip channel only; fast-forward from a held logical action 6 ends here."
 noop_headless = false
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x19c_resume_adv_skip_service@0x4165a0 sets ctx+0x55100, clears the click-cancel phase, and normally activates run-state bit 0x08000000 when ctx+0x550fc persistent all-message Skip or ctx+0x6dbd4 adv_read_skip_state is nonzero. Otherwise it clears ctx+0x13dc and the run-state bit. A separate startup fast-forward guard at ctx+0x6f86c suppresses reactivation while active. Corpus comments call it `loadmesskip`; ADV setup, branch, and CALLBACK_LOAD paths pair it with op 0x19b."
+evidence = "Ghidra /v2: op_0x19c_resume_adv_skip_service@0x4165a0 sets ctx+0x55100, clears the click-cancel phase, and normally activates run-state bit 0x08000000 when ctx+0x550fc persistent all-message Skip or ctx+0x6dbd4 adv_read_skip_state is nonzero. Otherwise it clears ctx+0x13dc and the run-state bit, whatever action 6 holds; it never polls input. A separate startup fast-forward guard at ctx+0x6f86c keeps the bit unchanged while active. Corpus comments call it `loadmesskip`; ADV setup, branch, and CALLBACK_LOAD paths pair it with op 0x19b."
 
 [[opcode]]
 op = 0x19d
@@ -4758,7 +4761,7 @@ abi_source = "kelebek+decode-validated"
 name = "set-read-message-skip"
 category = "input"
 summary = "(enabled) - set the engine setting `message:ReadTextSkip`, which skips only previously read text."
-details = "Port status (2026-07-24): implemented as profile-lifetime engine setting state. Changing it immediately refreshes the current T1 message against the shared RT.DAT-backed ReadTextDB."
+details = "Port status (2026-11-07): profile-lifetime engine setting state, written only, as native does; the next page's read-skip block (ops 0x6e, 0x71, 0x72) reads it. The menu bar's read-skip toggle (0x406cd0) runs the block itself."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -5991,7 +5994,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "query-gfx-field?"
 category = "draw"
-summary = "(out)(surface_slot) - return the packed resource id in the surface record, or -1 for an empty/created surface. Legacy mnemonic query-gfx-field? is retained for compatibility."
+summary = "(out)(surface_slot) - return the packed resource id in the live surface record: -1 for an empty or created surface, after op 0x249's raw load, and after op 0x9 reset the records, even when the texture survives. Legacy mnemonic query-gfx-field? is retained for compatibility."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -6203,7 +6206,7 @@ abi_source = "kelebek+decode-validated"
 name = "mark-frame-yield"
 category = "control"
 summary = "Set native run-state bit 0x400; in normal ADV playback this is the retained-presentation render/wait/resume boundary."
-details = "SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. When system:EffectSkipOnClick is enabled and animation-service flag bit 0 is clear, logical action 4 is consumed and run-state 0x400 is cleared before the engine requests the same forced completion as 0x243 and renders once. Wait release is independent of endpoint completion: service-flags bit 1 can suppress the force worker, while op-0x242-detached channels, ambient cycles, and movie-backed presentation can continue asynchronously after interpreter resume. With ordinary flags, the request completes finite color/scale/rotation/translation channels and type-0 surface commands together. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here."
+details = "SC0000 label_1235a reaches this when 0x1c7/0x1cc are zero. Native run-state bit 0x400 parks the interpreter while gfx_render_frame repeatedly samples finite one-shot object channels and queued surface commands; op 0x224 follows after dirty state clears. When system:EffectSkipOnClick is enabled and animation-service flag bit 0 is clear, logical action 4 is consumed and run-state 0x400 is cleared before the engine requests the same forced completion as 0x243 and renders once. Under fast-forward the main tick forces every iteration (gfx_request_force_complete_and_reset_anim_clock, unless service-flags bit 1), so a wait entered then ends at its first poll; enabling fast-forward during a wait does not end it, because run-state 0x400 is serviced ahead of the fast-forward branch (docs/engine-re.md, \"Effect waits under fast-forward\"). Wait release is independent of endpoint completion: service-flags bit 1 can suppress the force worker, while op-0x242-detached channels, ambient cycles, and movie-backed presentation can continue asynchronously after interpreter resume. With ordinary flags, the request completes finite color/scale/rotation/translation channels and type-0 surface commands together. Native trace proves AE001D bind, mode-1 0x203, and 0x202 targets complete in one 5 ms batch with no render, then first compose here."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -7007,7 +7010,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "set-anim-clock"
 category = "draw"
-summary = "(duration) — configure the separate global finite-animation service window: native ctx+0x51b78=0 (start), +0x51b7c=duration. The generic instruction length is 3 dwords. NON-BLOCKING: gfx_animation_service_poll seeds the start from the shared frame timestamp and keeps redraw active through the duration. This is not the time source or cadence for cyclic object channels, which sample ctx+0x51b64/+0x51b68 with object-local starts and periods. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift."
+summary = "(duration) — configure the separate global finite-animation service window: native ctx+0x51b78=0 (start), +0x51b7c=duration. The generic instruction length is 3 dwords. It does not block itself: gfx_animation_service_poll seeds the start from the shared frame timestamp at its first poll and returns 1 through the duration, so the window holds the next op-0x21c wait even with no channel running (Kamidori SC0000 label_1fdd1; docs/engine-re.md, \"The anim-clock window holds the effect wait\"). The fast-forward force ends it. This is not the time source or cadence for cyclic object channels, which sample ctx+0x51b64/+0x51b68 with object-local starts and periods. SC0000 opening @0x123bd/@0x13858. Handler 0x4240e0; Kelebek VA 0x422390 is drift."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -7472,7 +7475,7 @@ abi_source = "kelebek+decode-validated"
 name = "set-gfx-animation-service-flags"
 category = "draw"
 summary = "Replace the retained graphics animation-service flags with operand 1. BTL brackets combat presentation with values 1 and 0; GAMECLEAR uses 3 and 0."
-details = "Bit 0 disables the run-state-0x400 EffectSkipOnClick branch while finite retained presentation is active. Bit 1 independently suppresses opcode 0x243 and the click branch's shared force-complete/clock-reset request. BTL brackets combat presentation with 1/0 and GAMECLEAR uses 3/0, protecting those service-owned animations from ordinary ADV click completion."
+details = "Bit 0 disables the run-state-0x400 EffectSkipOnClick branch while finite retained presentation is active. Bit 1 independently suppresses opcode 0x243 and the shared force-complete/clock-reset request, from the click branch and from the main tick's per-iteration force under fast-forward. Bit 0x10000 makes the value one-shot: gfx_animation_service_poll@0x407640 (SYS4433 0x4079b0) clears the whole word once the anim-clock window has ended and nothing is running, and retained_gfx_objects_clear@0x47cab0 (op 0x1f6, scene reset) clears it only under that bit. BTL brackets combat presentation with 1/0 and GAMECLEAR uses 3/0, protecting those service-owned animations from ordinary ADV click completion; Kamidori's GAMESTART, MES, ALLMAP and GAMECLEAR use 0x10003/0x10001 (docs/engine-re.md, \"Service-flags bit 16 is one-shot\")."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -9360,8 +9363,8 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "refresh-adv-skip-input-state"
 category = "adv"
-summary = "() — reconcile held logical action 6 with transient ADV fast-forward, release the latest skip-queued voice when fast-forward ends, flush the triggered-action abort slot, and re-arm read-message skip evaluation."
-details = "Both revisions first clear a save/load-adjacent transient flag, then poll the configured action mask. If bit 0x40 (logical action 6) is absent they clear run-state fast-forward bit 0x08000000 and play/clear the latest voice retained during skip. When fast-forward is then inactive they consume the triggered-action mask into the timed-callback abort slot, set run-state bit 0x80000000 (the polling text wait's gate, which the menu bar's adv_toggle_read_skip_and_refresh@0x406cd0 checks), and clear that abort slot. The portable VM maps this onto its existing independently tracked physical/script skip channels, host-owned queued-voice release, and ReadTextDB refresh. Kamidori's only site is SHOWALLMAP@0x16a."
+summary = "() — end transient ADV fast-forward unless logical action 6 is held, release the latest skip-queued voice when it ends, and flush the triggered-action abort slot."
+details = "Both revisions first clear a save/load-adjacent transient flag, then poll the configured action mask. If bit 0x40 (logical action 6) is absent they clear run-state fast-forward bit 0x08000000 and play/clear the latest voice retained during skip. When fast-forward is then inactive they consume the triggered-action mask into the timed-callback abort slot, set run-state bit 0x80000000 (the polling text wait's gate, which the menu bar's adv_toggle_read_skip_and_refresh@0x406cd0 checks), and clear that abort slot. It re-arms nothing: the held mask carries no ctx+0x13dc injection, persistent Skip starts fast-forward again at the next polling text wait (op 0x72), and read-skip at the next page. The port reconciles its physical channel, clears the script channel unless action 6 is held, and releases the host-queued voice (docs/engine-re.md, 'Read skip and ctx+0x13dc'; 2026-11-07). Kamidori's only site is SHOWALLMAP@0x16a."
 noop_headless = false
 source = "investigation"
 confidence = "high"

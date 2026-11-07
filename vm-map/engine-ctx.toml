@@ -50,7 +50,7 @@ note = "base of physical mouse-button to logical button-slot table; op 0x10b wri
 offset = 0x13dc
 name = "message_skip_enabled"
 type = "int"
-note = "persistent all-message Skip flag; op 0x88 writes it and adv_interpreter_tick injects input bit 0x40 while nonzero"
+note = "the Skip a text wait acts on: adv_interpreter_tick and the triggered mask inject action 6 (0x40) while nonzero, so op 0x72 sets run-state 0x08000000. Op 0x88 writes it with ctx+0x550fc; op 0x19b clears it and keeps ctx+0x550fc; op 0x19c and the menu's Skip toggle copy ctx+0x550fc back into it (docs/engine-re.md, \"Read skip and ctx+0x13dc\")"
 [[field]]
 offset = 0x1428
 name = "keyboard_vk_action_map"
@@ -288,9 +288,9 @@ type = "uint"
 note = "retained_gfx_manager+0xb56c service flags; bit 1 suppresses op 0x243 force-complete/clock-reset request"
 [[field]]
 offset = 0x52bd4
-name = "surfaces"
+name = "surface_movies"
 type = "void*"
-note = "surface array base [~1000 slots]; create/set-texture (0x1f8/0x1f9) allocate"
+note = "per-surface CMovieToTexture objects [1000 slots], allocated by ops 0x20f/0x236; ops 0x1fa/0x23d and scene_context_init_reset stop and delete them. The textures live in the gfx manager (+0xa590 of ctx+0x46614)"
 [[field]]
 offset = 0x53b74
 name = "engine_version"
@@ -591,6 +591,11 @@ offset = 0x6da70
 name = "input_action_count_snapshot"
 type = "int"
 note = "op 0xff copies input_action_count here when beginning a callback poll/dispatch pass"
+[[field]]
+offset = 0x6da74
+name = "reveal_physical_skip_suppressed"
+type = "int"
+note = "op 0x101 sets it (0x4170df); while set, a held action 6 starts no fast-forward at a reveal tick. Only adv_text_reveal_service_tick clears it, at a tick with action 6 up (0x407101)"
 [[field]]
 offset = 0x6da78
 name = "message_skip_activation_guard"

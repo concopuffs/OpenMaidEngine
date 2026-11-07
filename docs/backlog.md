@@ -66,11 +66,6 @@ it; git history keeps the record.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
-- **Op `0x9` releases every surface in the port.** Native releases them at op `0x9`'s root reload only under
-  `(CreateObject & 2) && (AutoFreeTex & 1)` (`engine-re.md`, "AutoFreeTex"): Kamidori, not Himegari. The port's
-  `GfxState.ResetSceneContext` always clears them. Himegari's return to title still matches native (`2516aa9`), so no
-  visible difference is known. Done when the port keeps surfaces across op `0x9` unless the setting asks, and a
-  native comparison of a surface that lives across a Himegari return to title agrees.
 - **Kamidori data tooling reads pre-update copies of eleven append records.** Kamidori's official update shipped
   eleven root-loose append overrides (`$1$` ALINIT, CIMES, ITINIT, ITMES, SKINIT, SKMES; `$2$` ALINIT, ITINIT,
   ITMES, SKINIT, SKMES). The English translation overwrote them, and its installer kept the Japanese originals as
@@ -80,6 +75,29 @@ it; git history keeps the record.
   skill and alchemy tables decoded from appends 1 and 2 (`kamidori-data-tables.md`, `vm-map/globals-kamidori.toml`)
   may therefore miss the update's changes. Done when the pristine view uses each record's `Backup/` original where
   one exists, and the init image, the extracted tables and their documentation are rebuilt from it.
+- **Op `0x60` draws differ between native and the port.** Native's `rand()` is the MSVC LCG, seeded from the tick
+  count and also drawn by the main tick, screen transitions, the save encoder and the catalog parse. The port draws
+  from `System.Random.Shared` (`engine-re.md`, "Op 0x60 randomness"). From Kamidori's first enemy phase on, enemy
+  movement, spawns and battle rolls differ between the targets, so driven comparisons cover presentation only.
+  Accepted idea: a deterministic mode for parity tests, with a Frida hook that gives native op `0x60` a seeded
+  sequence and a port flag that draws the same one. Done when a battle scenario reaches the same outcome on both
+  targets, or the idea is dropped.
+- **Persistent Skip and read-skip cases the port does not model** (`engine-re.md`, "Read skip and ctx+0x13dc"):
+  - Op `0x88(1)` while the ADV service is suspended (after op `0x19b`). Native sets only `ctx+0x13dc`, and the next
+    polling text wait starts fast-forward. The port sets its script fast-forward channel at once.
+  - Op `0x19c`'s guard `ctx+0x6f86c`. With the guard set and nothing to restore, native keeps `ctx+0x13dc` and
+    run-state `0x08000000`. The port always clears them.
+  - Op `0x101` clears run-state `0x08000000` whatever started it (`0x4170ce`). The port ends only its physical
+    channel, so fast-forward from persistent Skip or read-skip survives the op.
+
+  Neither game has shown a difference from these. Done when each is modelled with a test, or shown unreachable.
+- **A sleep inside an open statement block may present a frame (suspected).** `GodotAdvHost.Sleep` requests
+  presentation on every sleep, which sets `_presentRequested`. `ConsumePresentationReasons` withholds the tick render
+  in an open `0x1f4` block only while no presentation is requested, so a sleep inside an open block publishes the
+  frame. Native's main loop renders nothing while a block is open, unless run-state `0x400` parks it on a transition
+  (`engine-re.md`, statement blocks). That a sleep leaves `0x400` clear is not checked. The behaviour predates the
+  2026-11-07 short-sleep change. Done when a script that sleeps inside an open block is compared with native, or a
+  scan shows that none does.
 - **The `0x90`-byte SYS4INI block.** Its meaning is unknown and no consumer is known (OMS spec §13). Revisit only if
   one appears.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,
@@ -161,6 +179,12 @@ it; git history keeps the record.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
+- **Page maps are keyed by scene only, and an unwritable one stops boot.** Editor and development runs write
+  `build/page-map-<SCENE>.jsonl` whatever the profile (`Main.DefaultPageMapPath`), so two profiles that start from
+  a same-named script share one file, and each run overwrites the other's map. `PageLocatorState` opens the file with
+  a bare `StreamWriter`. If another running port holds it, the `IOException` escapes `Main._Ready`, and boot stops
+  before the VM is created. Done when the default path includes the profile and a failed open disables the map with
+  a warning.
 - **CI actions pinned to Node.js 20 releases.** Since 2026-11-06, CI's annotations warn that `actions/checkout`
   v4.4.0, `actions/setup-dotnet` v4.3.1, `actions/upload-artifact` v4.6.2 and `actions/cache` v4.3.0 target
   Node.js 20. The runners force them onto Node.js 24 for now. `actions/download-artifact` v4.3.0 is the same

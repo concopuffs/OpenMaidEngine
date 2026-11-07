@@ -19,6 +19,7 @@ public static class GodotVmOptions
             NoSaveDat: selftest,
             CancelMessageSkipOnClick: settings.CancelMessageSkipOnClick,
             FastForwardOpMicroseconds: VmOptions.NativeFastForwardOpMicroseconds,
+            FastForwardPageMicroseconds: VmOptions.NativeFastForwardPageMicroseconds,
             WheelKeyUpAction: settings.WheelKeyUpAction,
             WheelKeyDownAction: settings.WheelKeyDownAction,
             CoexistMessageSkip: settings.CoexistMessageSkip);

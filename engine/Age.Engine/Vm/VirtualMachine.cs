@@ -88,8 +88,9 @@ public sealed partial class VirtualMachine
     private volatile bool _stopRequested;
     private volatile bool _rootReloadRequested;   // frontend 終了 dialog: タイトルに戻る
     private bool _sharedProfileShutdownHandled;
-    private volatile bool _messageSkipEnabled;
-    private volatile bool _messageSkipServiceActive;
+    private volatile bool _messageSkipEnabled;         // ctx+0x550fc message_skip_display_enabled: the Skip toggle
+    private volatile bool _messageSkipServiceActive;   // run-state 0x08000000 as scripts and the Skip toggles set it
+    private bool _messageSkipInjected;                 // ctx+0x13dc message_skip_enabled: Skip a text wait acts on
     private bool _advReadSkipState;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     private int _messageWindowAlphaSetting;
@@ -405,7 +406,7 @@ public sealed partial class VirtualMachine
     public int UpdateKeyboardVirtualKeyState(int virtualKey, bool pressed)
     {
         InputBindings.UpdateKeyboardVirtualKey(virtualKey, pressed);
-        RefreshPhysicalMessageSkipState();
+        OnPhysicalSkipInputChanged();
         _host.WakeInputCallbackService();
         return InputBindings.KeyboardAction(virtualKey);
     }
@@ -413,7 +414,7 @@ public sealed partial class VirtualMachine
     public int UpdatePhysicalMouseButtonState(int physicalButton, bool pressed)
     {
         InputBindings.UpdateMouseButton(physicalButton, pressed);
-        RefreshPhysicalMessageSkipState();
+        OnPhysicalSkipInputChanged();
         _host.WakeInputCallbackService();
         return InputBindings.MouseAction(physicalButton);
     }
@@ -421,7 +422,7 @@ public sealed partial class VirtualMachine
     public int UpdateJoystickButtonState(int physicalButton, bool pressed)
     {
         InputBindings.UpdateJoystickButton(physicalButton, pressed);
-        RefreshPhysicalMessageSkipState();
+        OnPhysicalSkipInputChanged();
         _host.WakeInputCallbackService();
         return InputBindings.JoystickButtonActionMask(physicalButton);
     }
@@ -462,16 +463,6 @@ public sealed partial class VirtualMachine
         } while (Interlocked.CompareExchange(ref field, after, before) != before);
     }
 
-    /// <summary>Mirror adv_interpreter_tick's live bit-0x40 poll. The bit is logical action 6 from the
-    /// process-owned binding map, not a hardcoded Ctrl test; Himegari also binds C and retains the
-    /// engine's default Backspace binding. Native polls this physical channel independently of the
-    /// op-0x19b/0x19c lifecycle used by persistent/read-message Skip.</summary>
-    private void RefreshPhysicalMessageSkipState()
-    {
-        bool active = (InputBindings.PollActionMask() & 0x40) != 0;
-        _host.SetPhysicalMessageSkipActive(active);
-    }
-
     private int CurrentReadMessageIndex()
     {
         if (_cur.ReadMessageOffset < 0) return -1;
@@ -480,14 +471,35 @@ public sealed partial class VirtualMachine
         return -1;
     }
 
-    private void RefreshAdvReadSkipState()
+    /// <summary>
+    /// The read-skip block that ops 0x6e, 0x71 and 0x72 share and the menu bar's read-skip toggle repeats
+    /// (op_0x71_reset_adv_text_layout@0x41e540; docs/engine-re.md, "Read skip and ctx+0x13dc"). With
+    /// message:ReadTextSkip on, a read message sets run-state 0x08000000 and adv_read_skip_state; an unread one clears
+    /// adv_read_skip_state only while persistent Skip is off. It never ends fast-forward, and never starts it from
+    /// persistent Skip, so a layout reset outside ADV (after op 0x19b) leaves it off.
+    /// </summary>
+    private void ApplyReadTextSkip()
     {
-        int messageIndex = CurrentReadMessageIndex();
-        _advReadSkipState = _sharedProfile.ReadMessageSkipEnabled
-                            && _sharedProfile.ReadText.IsMessageRead(
-                                _cur.Script.PackedId, messageIndex);
-        _messageSkipServiceActive = _messageSkipEnabled || _advReadSkipState;
-        _host.SetMessageSkipActive(_messageSkipServiceActive);
+        if (!_sharedProfile.ReadMessageSkipEnabled)
+        {
+            _advReadSkipState = false;
+            return;
+        }
+        if (_sharedProfile.ReadText.IsMessageRead(_cur.Script.PackedId, CurrentReadMessageIndex()))
+        {
+            _advReadSkipState = true;
+            SetScriptFastForward(true);
+        }
+        else if (!_messageSkipEnabled)
+        {
+            _advReadSkipState = false;
+        }
+    }
+
+    private void SetScriptFastForward(bool active)
+    {
+        _messageSkipServiceActive = active;
+        _host.SetMessageSkipActive(active);
     }
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
@@ -1048,6 +1060,7 @@ public sealed partial class VirtualMachine
         _statementBlockDepth = 0;
         _messageSkipEnabled = false;
         _messageSkipServiceActive = false;
+        _messageSkipInjected = false;
         _advReadSkipState = false;
         _skipClickCancelState = 0;
         _skipClickCancelTriggers = 0;
@@ -1062,9 +1075,16 @@ public sealed partial class VirtualMachine
         Volatile.Write(ref _systemKeyDisableMask, 0);
         TextHistory.SetRecordingEnabled(true);
         _host.SetMessageSkipActive(false);
-        _host.SetPhysicalMessageSkipActive(false);
+        EndPhysicalFastForward();   // scene_context_init_reset zeroes the run state; a held key starts nothing
         _host.ResetSceneContext();
-        RefreshPhysicalMessageSkipState();
+        // The reset keeps every surface. op_0x9_reset_scene_and_reload_root then runs the release worker over all
+        // 1,000 slots only when (CreateObject & 2) && (AutoFreeTex & 1): Kamidori, not Himegari (docs/engine-re.md,
+        // "AutoFreeTex").
+        if ((_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 1) != 0)
+        {
+            Gfx.ReleaseSurfaceRange(0, 1000);
+            _host.ReleaseSurfaceRange(0, 1000);
+        }
     }
 
     private static Stack<int>[] CreateIntegerStacks()

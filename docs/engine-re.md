@@ -338,7 +338,7 @@ The meaningful consumer catalog is:
 | `FONT`, `ENABLEANTIFONT`, `ANTIFONTVERSION` | Seeds MS Mincho, enables `message:UseAntiFont`, selects the grayscale glyph-outline path, and records antialias version 3. | Active text profile |
 | `DEPENDMOVIESOUND` | The mixer route of a movie whose flags force none: 0 mute, 1 music, 2 SFX, 3 voice, 4 movie, any other value silent ("Movie-to-surface opcode 0x236"). Himegari sets 1, Kamidori 2; Kamidori's LOGO and OP pass flag `0x20000`, which forces music. | Active media policy; port implemented (`MovieSoundRoute`, 2026-11-07) |
 | `FULLSCREENBIT`, `ALWAYSBACKUPSURFACE` | These are read only inside the legacy `CreateObject & 1` DirectDraw branch of `engine_initialize_graphics_from_settings@0x406480`. Both games' `CreateObject=2` creates only the object backend, so their 32-bit/zero values do not drive the active renderer. | Valid compatibility settings, inert for both games |
-| `AUTOFREETEX` (Kamidori) | A mask, registered default 0, that acts only under `CreateObject` bit 1: bit 1 releases every surface before a numbered load restores its records, bit 0 at op `0x9`'s root reload ("AutoFreeTex"). Kamidori sets 3. | Port implemented for the numbered load (`VmOptions.AutoFreeTex`, 2026-11-07); the port's op `0x9` releases every surface whatever the setting (`docs/backlog.md`) |
+| `AUTOFREETEX` (Kamidori) | A mask, registered default 0, that acts only under `CreateObject` bit 1: bit 1 releases every surface before a numbered load restores its records, bit 0 at op `0x9`'s root reload ("AutoFreeTex"). Kamidori sets 3. | Port implemented for the numbered load and op `0x9` (`VmOptions.AutoFreeTex`, 2026-11-07) |
 | `OUTERFRAMEMODE` (Kamidori) | Registered default 1 in SYS4433 and 0 in SYS4422; Kamidori also sets 1. When nonzero, `engine_initialize_graphics_from_settings_sys4433@0x4063e0` gives the display op `0x25a`'s black background at device creation (`display_set_background_color_mode1@0x404c20`); `sys4_read_startup_settings` does the same for a fullscreen start when it is 1 (`ctx_set_display_background_color_mode1@0x405260`). `scene_context_init_reset_sys4433@0x40c2b0` and `engine_create_main_window@0x48ec40` copy it to `ctx+0x55eb8`, which nothing reads. | Inert: `SYSTEM4@0x1f3` sets the same black background with op `0x25a` before anything draws (2026-11-07) |
 | `BLANKEXTENTMODE` (Kamidori) | Read only by SYS4433's aspect-mode glyph-string draws (`text_draw_glyph_string_plain@0x45e4e0` at `0x45e77f`/`0x45ea13`, `text_draw_glyph_string_effect@0x460250`, and the draws at `0x45ec60` and `0x460d50`). With 1, a blank (`0x20` or `0x8140`) advances by its text extent in the reference font (`0x404da0`); otherwise by the reference cell `+0x313e8`, halved for a single byte. The ADV builder (`0x45b710`) lays out its own records and never reads it. Kamidori sets 1. | Not modelled: the port's immediate surface text has none of aspect mode's rules (`docs/backlog.md`) |
 | `USEPROPORTIONALFONT`, `VALIDFONTCHECKER` (Kamidori) | Filter SYS4433's installed-font list, which ops `0x2dc`-`0x2de` read ("Font family list"). With `set:UseProportionalFont` 0 (the registered default) the list drops IPA Pゴシック, IPA P明朝 and every family that is not fixed-pitch; Kamidori sets 1. `VALIDFONTCHECKER` repeats, one character per pair (Kamidori: 悪, ｱ, 洒), and a family lacking any of them is dropped. | Port implemented (`FontFamilyCatalog`, `WindowsGdiFontFamilySource`, 2026-11-07); the port's list equals native's 37 families, in order, on this machine |
@@ -1053,7 +1053,7 @@ from this family: their shared pointer table was initially mistaken for retained
 | op | handler | words | dir | argc | contract |
 |---|---|---|---|---|---|
 | `0x1f7` | `0x422270` | 5 | erase | 2 | retained-object erase: `op2>1` → `gfx_object_erase_range(op1,op2)` erases `[op1,op1+op2)`, else `gfx_object_erase(op1)` |
-| `0x1fa` | `0x4224a0` | 3 | set | 1 | release **surface slot** `ctx+0x52bd4[op1]` (vtbl free) + `FUN_00474e40(op1)` |
+| `0x1fa` | `0x4224a0` | 3 | set | 1 | release **surface slot** op1: delete its movie object `ctx+0x52bd4[op1]` (vtbl free), then its texture (`retained_gfx_release_surface@0x474e40(op1)`) |
 | `0x1ff` | `0x4227b0` | 9 | set | 4 | 3 int→float params on obj op1 → `FUN_0047e800(op1,f2,f3,f4)` |
 | `0x202` | `0x4228d0` | 0xb | set | 5 | blit obj op1 with (op2,op3) + **packed ARGB** from op4(alpha)/op5(color) → `FUN_0047ea00` |
 | `0x203` | `0x4229a0` | 9 | set | 4 | draw obj op1 with op2 + packed color(op3/op4) → `FUN_0047e9b0` |
@@ -1089,7 +1089,7 @@ params (`0x202`/`0x203`). The native workers (`FUN_0047xxxx` = the DirectDraw/su
 modelled — only the object-record data model, so the QUERY ops return what the SET ops stored. That makes
 `0x215`/`0x216`/`0x218`/`0x21a` return correct values and the existing bytecode geometry math produces
 correct `dst`/`w`/`h`. Ancillary per-object tables observed: `ctx+0x46d14` (stride `0x14`),
-`ctx+0x52bd4` (element pointers), plus the `0x408` registry.
+`ctx+0x52bd4` (per-slot `CMovieToTexture` objects), plus the `0x408` registry.
 
 **ADV pointer-table correction (2026-07-27).** `ctx+0x14d54` is not a gfx-object table. It is
 text-manager `ctx+0x14940` plus the ADV layout pointer table at manager `+0x414`. Opcode `0x212` writes
@@ -1120,7 +1120,7 @@ lifecycle are documented under “Detached finite object animation” below.
 `wait@0x89e9`; the loader at `0x8976..0x898a` resolves resource `0x6a` to `BG004D.AGF`. The background
 was bound but composited at `(400,650)`. The remaining 550 pixels were intentional retained motion from
 BG001A; the incorrect `(400,600)` component came from the host keeping slot 0's boot-time 800x600 dimensions
-after op `0x1fa` released that surface. Native op `0x1fa` frees and nulls `ctx+0x52bd4[slot]`, so a subsequent
+after op `0x1fa` released that surface. Native op `0x1fa` releases the slot's texture, so a subsequent
 op `0x208` size query of the released slot yields no surface dimensions. Clearing the host slot resource and
 dimensions on release makes the script's existing-object geometry path compute base `(0,-500)`; after the
 retained `(0,550)` translation, BG004D lands at `(0,50)`. A synchronized run at the exact wait confirms the
@@ -2026,10 +2026,32 @@ native presentation trace proved that back-to-back retained mutations execute wi
 first published at the following `0x20c`/`0x21c`, sleep, or stable input boundary. An earlier claim that the
 opening was generally sleep-paced was inherited without execution evidence and is superseded.
 
-The native timer arm clamps every duration to at least one millisecond. This is semantically important for
-menu scripts: ROOM's steady input loop uses `sleep 0` as a one-engine-tick yield. The Godot host formerly
-allowed a zero deadline, turning that loop into a free-running burst that exhausted the VM step guard and
-showed `-end-`; it now applies the native minimum after the debug speed multiplier.
+An operand under 10 never reaches the timer: the handler calls `kernel32!Sleep` with it and returns, so ROOM's
+steady input loop's `sleep 0` gives up the time slice and the main loop goes on to its next iteration. The Godot host
+formerly allowed a zero deadline, turning that loop into a free-running burst that exhausted the VM step guard and
+showed `-end-`; it now waits at least one millisecond after the debug speed multiplier.
+
+#### Short sleeps do not wait for the display (2026-11-07)
+
+Native's main loop (`engine_main_tick_with_exception_policy@0x411840`) dispatches one op per iteration and calls
+`gfx_render_frame` at the top of the next one when the frame is dirty. It never waits for the display. The engine
+calls `timeBeginPeriod`, so `kernel32!Sleep(1)` lasts about a millisecond. A poll loop such as Kamidori FIELD's
+(`get-input-type`, `sleep 1`, `jmp`) therefore wakes about once a millisecond. Op `0xcd`
+(`op_0xcd_dispatch_mouse_callback@0x417e10`) fires the op-`0xcc` callback once `timeGetTime()` minus the last firing
+reaches the interval, and re-arms from that moment, so a 50 ms callback runs about every 50 ms.
+
+The port's `GodotAdvHost.Sleep` used to request a synchronized presentation on every sleep and wait for the
+compositor to take it, which happens once per display frame. Each `sleep 1` then lasted up to a frame (16.7 ms at
+60 Hz), and the 50 ms callback fired after three or four frames: every 50 or 67 ms. FIELD's callback
+(`label_1498`) counts its calls in local `0x2f53` while nothing is selected, and draws the help overlay (texture
+`0x41` at object `0xc350 + 0x7cf`) once the count passes 100 (`label_c4c6`). Native showed it about 5 s after the
+last input; the port showed it about half a second later.
+
+A sleep under 10 ms now requests presentation without waiting for it, and only waits its own real time. The
+compositor still publishes whenever it finds the script parked in the sleep. Longer sleeps still synchronize as
+before. Measured on Kamidori FIELD after a wheel input, sampling every 0.5 s: both targets showed the overlay in the
+same sample, in two runs. The Himegari scenarios effect-waits, save-load, hover-after-click and latch-sleep still
+pass on the port. Idle in FIELD, the port uses 9.2% of one core and native 4.7%.
 
 **Related — `present-frame` (op `0x20c`):** dispatch `param_1[0x26e9f] = gfx_op_0x20c_present_frame` →
 `gfx_render_frame`@`0x4820b0` (buffer flip). The port treats `0x20c` as an explicit retained-state publication
@@ -2054,7 +2076,7 @@ specific service boundaries.
   **Ctrl fast-forward governor lives at the per-op level**, and a click can reposition the PC (skip-to-next).
 - **Script contexts are coroutine records.** `curCtx = *(ctx+0x53d14)` indexes `0x78`-byte records at
   `ctx+0x53d60`/`ctx+0x53d2c` (PC, codebase, cmd-size). The engine multiplexes script "threads." Init/reset =
-  `scene_context_init_reset`@`0x40b3b0` (zeroes `0x53d14` + `0xa0ce4`, allocs surfaces `ctx+0x52bd4[1000]`).
+  `scene_context_init_reset`@`0x40b3b0` (zeroes `0x53d14` + `0xa0ce4`, deletes the movie objects `ctx+0x52bd4[1000]`).
 - **Advancement is gated by an interpreter run-state flags word `ctx+0xa0ce4`** (bit1 = sleeping, plus wait/
   skip/etc.), read+written by ~40 state functions. `sleep_op_0xc8` sets bit1 + arms the ms timer and returns —
   it does not block. So the outer loop consults `0xa0ce4` to decide whether to step the script this frame.
@@ -2142,7 +2164,8 @@ per-frame bytecode. Reversed + annotated in Ghidra:
   writes `matrix4_make_scale` at `obj+0x6c`.
 - **Op `0x238`** (`gfx_op_0x238_set_anim_clock`) sets a **global animation clock**, **non-blocking**:
   `ctx+0x51b78 = 0` (elapsed), `ctx+0x51b7c = duration` (the max per-object duration; SC0000 `label_1235a`
-  maxes a table to compute it). It does **not** loop/wait.
+  maxes a table to compute it). It does **not** loop/wait itself, but its window holds the next op-`0x21c` wait
+  ("The anim-clock window holds the effect wait").
 - **Frame model:** the bytecode does `configure anims (0x234/0x1fd) → set clock (0x238) → show-text →
   wait-for-input` and **continues**; the native render loop advances the clock + per-object progress each
   frame, interpolates, composites, presents. Render/present family nearby: `0x243/0x20c/0x21c/0x224`
@@ -2160,10 +2183,11 @@ canonical model** (an earlier flat "draw layers to one screen" attempt was WRONG
 and snapshotted textures at draw time; symptoms: alternating grey, glow over backgrounds, vanishing sprites).
 
 **Two distinct stores:**
-- **Surfaces** — image buffers at `ctx+0x52bd4[slot]`, indexed by slot. `gfx_op_0x1f8_create_surface`
-  (`0x4222d0`) allocates a blank one (releasing any old); `gfx_op_0x1f9_load_surface` (`0x422360`, op `0x1f9`
-  set-texture) resolves `resId` via the SYS4INI resolver (`FUN_0044f390`) and loads the file into the slot's
-  surface **with a colorkey/chromakey** (op arg 3 — never modelled before), also releasing the old surface.
+- **Surfaces** — textures in the gfx manager (`+0xa590[slot]` of `ctx+0x46614`), indexed by slot. A slot's movie
+  object lives separately at `ctx+0x52bd4[slot]`. `gfx_op_0x1f8_create_surface` (`0x4222d0`) deletes that movie
+  object and allocates a blank surface (`gfx_surface_create_blank`). `gfx_op_0x1f9_load_surface` (`0x422360`, op
+  `0x1f9` set-texture) also deletes it, resolves `resId` via the SYS4INI resolver (`FUN_0044f390`) and loads the file
+  into the slot's surface **with a colorkey/chromakey** (op arg 3 — never modelled before).
   A surface persists at its slot until the next set-texture overwrites it.
 - **Objects** — the retained-gfx `owner+0x408` registry (`EngineCtx+0x46a1c`), keyed by handle (a
   `std::map`). `gfx_op_0x1fb_draw_bind` (`0x422510`,
@@ -3249,7 +3273,8 @@ dispatch:
 
 Op `0x101` also zeroes `ctx+0x6da80`, so the Skip button's own callback leaves the machine idle until a tick
 with action 4 clear. With a nonzero setting the tick's hotspot hover/click dispatch is withheld during
-fast-forward. A held physical action 6 keeps fast-forward on after a cancel. `CALLBACK_SETTING.BIN` redraws the
+fast-forward. A held physical action 6 restarts fast-forward at the next reveal, unless op `0x101` has suppressed
+that ("Physical fast-forward" below). `CALLBACK_SETTING.BIN` redraws the
 message window and nameplate when `system_flow_request == 1` and `G[0x6bf]` is set.
 
 The port implements this in `VirtualMachine.SkipClickCancel.cs`: the machine runs at each instruction boundary
@@ -3308,8 +3333,9 @@ tests. Time already spent blocked in host services counts toward the budget, up 
 leaves fast-forward and returns starts a new schedule. Pacing reads its time and sleeps through the VM's
 `IPaceClock` (a Stopwatch and `Thread.Sleep` by default). `FastForwardPaceTests` passes a virtual clock that moves
 only when pacing sleeps or a simulated service blocks, so it checks the schedule, the 1 ms sleep granularity, the
-credit cap and the restart exactly, without measuring wall time. The same measurement then took 5.08 s. The constant is calibrated on Himegari (SYS4422) on this machine. Native's
-per-iteration cost is CPU-bound, so it varies by machine, and Kamidori's SYS4433 loop is unmeasured.
+credit cap and the restart exactly, without measuring wall time. The same measurement then took 5.08 s. That 374 µs
+constant was superseded on 2026-11-07 by a cost per op plus a cost per page, timed on both games ("Fast-forward through
+effect waits, its pace, and physical Ctrl"). Native's per-iteration cost is CPU-bound, so it varies by machine.
 
 **ADV entry/exit lifecycle.** The script comments `savemesskip` and `loadmesskip` describe a temporary
 suspension boundary, not a second saved preference. `op_0x19b_suspend_adv_skip_service@0x416560` clears
@@ -3318,7 +3344,8 @@ deliberately preserving `ctx+0x550fc`, the all-message Skip toggle returned by o
 `op_0x19c_resume_adv_skip_service@0x4165a0` sets the lifecycle gate again and reconstructs active
 fast-forward from persistent all-message Skip or `adv_read_skip_state`; the separate startup guard at
 `ctx+0x6f86c` can suppress that reactivation. SC0000 brackets ADV teardown/setup with this pair, as do
-branch transitions and `CALLBACK_LOAD.BIN`.
+branch transitions and `CALLBACK_LOAD.BIN`. Both ops clear run-state `0x08000000` however it started, so a held Ctrl
+does not survive them ("Physical fast-forward").
 
 The port therefore keeps persistent Skip separate from currently active fast-forward. Opcode `0x19b`
 deactivates the host service without changing the control-strip toggle, and `0x19c` recomputes the host
@@ -3600,10 +3627,29 @@ mask. Both bits act only under `set:CreateObject` bit 1, the object backend both
 - The release worker (`retained_gfx_release_surface@0x47b6b0`) skips a slot whose guard `gfx+0xb638[slot]`
   (`ctx+0x55ebc`) is set, but nothing writes that table, so every slot is released.
 
+The code is not a revision difference. SYS4422 registers the same default 0, and its handler
+(`op_0x9_reset_scene_and_reload_root@0x418f50`, at `0x4191de`) tests the same `(CreateObject & 2) && (AutoFreeTex & 1)`
+gate as SYS4433's. Only the setting differs between the games.
 Himegari's trailer has no `AUTOFREETEX`, so its initialized system textures survive a numbered load. Kamidori sets 3.
-The port's numbered load releases every surface when `(CreateObject & 2) && (AutoFreeTex & 2)`
-(`VmOptions.CreateObject`/`.AutoFreeTex`). Its op-`0x9` scene reset (`GfxState.ResetSceneContext`) releases every
-surface whatever the setting, which native Himegari does not do (`docs/backlog.md`).
+
+The scene reset that op `0x9` runs first (SYS4422 `scene_context_init_reset@0x40b3b0`) releases no texture. It
+reinitializes both record tables and deletes each slot's `CMovieToTexture` (`ctx+0x52bd4`), but the texture wrappers
+(SYS4422 `gfx+0xa590`) stay. A native read across a Himegari return to title (2026-11-07) agrees:
+
+- Slots 5 (`0x23`) and 14 (`0x21`), loaded by SC0000, still hold textures at TITLE.
+- Their records read resource id -1, so op `0x216` returns -1 for them.
+- Every other texture live on SC0000's first page is still live at TITLE.
+
+The port gates both releases on `VmOptions.CreateObject`/`.AutoFreeTex`:
+
+- **Numbered load:** bit 1.
+- **Op `0x9`:** bit 0, after `GfxState.ResetSceneContext` and the host's reset
+  (`VirtualMachine.ResetSceneContextForRootReload`). The reset itself keeps the surfaces and clears only the records,
+  the reload flags and the movies. Op `0x216` reads the live record (`GfxState.QueryField`).
+
+Driving the port the same way, its reset keeps every surface it holds (3, 5, 12, 14, 15, 17, 21). Its title after the
+return matches its boot title exactly. The port host never holds native's other kept slots (22-29, and the boot
+scratch surfaces 36/37) as surfaces, so the reset cannot drop them.
 
 #### Port-authored round trips: restored frame boundary and retained-object encoding (2026-07-24)
 
@@ -5976,7 +6022,8 @@ page 18 reveals its 35 glyphs in two runs around the furigana かがりび.
 2. It renders when the scene is dirty.
 3. It calls `gfx_animation_service_poll@0x407640` on the manager at `ctx+0x46614`. The poll returns 1 while op
    `0x238`'s anim-clock window runs (start `+0xb564`, duration `+0xb568`; the force at `+0xb55c` ends it). After
-   that it returns `+0xb560`, which records whether the last render found an effect still running:
+   that it returns `+0xb560`, which records whether the last render found an effect still running (when that is 0
+   and service-flags bit `0x10000` is set, it first clears the flags word):
    - the channel setters (color `0x47ea8a`, scale `0x47eb5f`, rotation `0x47eca0`, translation `0x47ed7f`, source
      rect `0x47ee4d`, the movie mask and the range transform) set it to 1;
    - `gfx_object_apply_transform_channels@0x473d80` and the surface-command composite set it during a render while
@@ -6052,6 +6099,157 @@ page 14's text wait. Native takes 1.81 s. The port took 1.78–1.81 s when it wa
 1.76–1.78 s now (four runs each; the driver rounds each step to 10 ms). Tests: `FrameClockTests`,
 `GfxAnimationTests.SeedOneShotChannels_StampsArmedVisibleChannelsOnce`,
 `GfxAnimationTests.TerminalSample_CommitsChannelEndpointsAtTheWaitEnd`.
+
+### Fast-forward through effect waits, its pace, and physical Ctrl (2026-11-07)
+
+Kamidori's prologue under held Ctrl showed four gaps against native. Each is closed below. With a 1.5 s Ctrl from
+SC0000's first page, native and the port now both pass FIELD's setup and stop at `SC2000@0xaf5`.
+
+**Effect waits under fast-forward.** The main tick (`engine_main_tick_with_exception_policy@0x411840`; SYS4433
+`engine_main_tick_sys4433@0x411a40`) services run-state `0x400`, the op-`0x21c` effect wait, at `0x4123d1`. That is
+ahead of the `0x40` and `0x08000000` (fast-forward) branch at `0x4124ba`. The fast-forward branch runs one op through
+`adv_interpreter_tick` (SYS4422 `0x410fb0`, SYS4433 `0x4110f0`). It then calls
+`gfx_request_force_complete_and_reset_anim_clock` (SYS4422 `0x4076c0` with the flags at manager `+0xb56c`, SYS4433
+`0x407a30` with `+0xb588`) on every iteration, which only service-flags bit 1 suppresses. So under fast-forward:
+
+- an op-`0x21c` wait finds its effects already forced to their endpoints. Its first poll finds nothing running, and
+  the wait ends at once. With bit 1 set, the effects run at normal speed;
+- enabling fast-forward during a `0x400` wait does not end that wait, because the force runs only in the branch the
+  wait keeps the tick from reaching.
+
+The port forces at the start of `WaitForForegroundTransition` while fast-forward is active
+(`GfxState.ForceCompleteTimedPresentationForFastForward`, which yields to bit 1, leaves detached channels and movie
+masks alone, and ends the anim-clock window). It no longer forces a wait already in progress when Skip starts
+(`SetMessageSkipChannel`).
+
+**The anim-clock window holds the effect wait.** `gfx_animation_service_poll@0x407640` (SYS4433 `0x4079b0`) is called
+only from the `0x400` service. While op `0x238`'s window runs, it returns 1. The window's start is seeded at the first
+poll and its duration is `+0xb568`. So `set-anim-clock N` followed by `0x21c` holds the script for N ms even with no
+channel running. Kamidori's per-page effect helper `SC0000@label_1fdd1` relies on this: it sets the clock to the
+longest fade, then waits with `0x21c` (under Skip it uses `0x243` and `0x20c` instead). The port's `GfxState.PollEffectService` matches.
+
+**Service-flags bit 16 is one-shot.** After the window, the poll clears the whole flags word
+(`gfx_animation_service_flags`, ctx `+0x51b80`) if bit `0x10000` is set and the last render found nothing running
+(`+0xb560`). `retained_gfx_objects_clear@0x47cab0` (op `0x1f6` and `scene_context_init_reset`; SYS4433 `0x484330`) ends
+the window, clears the force and dirty state, and clears the flags only under bit 16. The constructor
+(`0x47fa90`, 0), op `0x24e`, the poll and that clear are the only writers. Kamidori's GAMESTART, MES, ALLMAP and
+GAMECLEAR set `0x10003` or `0x10001`, so the setting lasts only until the first effect wait that finds nothing
+running. Himegari uses 1/0 and 3/0 without bit 16. The port does the same in `PollEffectService` and
+`ClearAnimationServiceForObjectClear`. Without the one-shot clear, GAMESTART's `0x10003` would stay set through the
+prologue, and bit 1 would keep the fast-forward force off.
+
+**Pace.** The pace below was measured with Frida on 2026-11-07, timing every op-`0x72` handler entry under held Ctrl.
+It fits a cost per op plus a cost per text page:
+
+| Run | Ops | Pages | Time | Per op | Per page |
+|---|---|---|---|---|---|
+| Kamidori SC0000 | 34,851 | 140 | 865 ms | 15.1 µs | 2.42 ms |
+| Himegari opening pages | | | | 12.3 µs | 2.75 ms |
+
+The 2026-11-03 figure of 374 µs per op ("Fast-forward pace" above) included stalls that are not op costs, such as
+op `0x236`'s movie graph build at Himegari `SC0000@0x13c8`. `VmOptions.NativeFastForwardOpMicroseconds` is now 15
+and `NativeFastForwardPageMicroseconds` is 2400. `VirtualMachine.FastForwardPace.cs` charges the page cost for each
+text wait that fast-forward passes.
+
+The port's synchronized presentation (`0x20c`, `RequestSynchronizedPresentation`) waits for the main thread's next
+frame, which native's cheap render does not. Under fast-forward it now presents at most once per 50 ms and returns
+at once otherwise, so the screen still updates and the op pace holds. Tests: `ForegroundTransitionTests` (the force,
+the window, bit 16, the object clear) and `FastForwardPaceTests`.
+
+**Physical fast-forward.** Logical action 6 (Ctrl, C and Backspace in both games) sets run-state `0x08000000` in two
+places only:
+
+- `adv_input_service_poll@0x411230`, at `0x411635`: a polling text wait whose triggered mask has `0x40`.
+  `input_poll_triggered_action_mask@0x460880` returns the non-repeat `WM_KEYDOWN` latch, plus `0x40` while
+  `ctx+0x13dc` (persistent Skip) is set. A key held since before the wait does not count, and op `0x72`'s entry
+  discards anything latched earlier.
+- `adv_text_reveal_service_tick@0x406fa0`: a reveal tick whose held mask has `0x40` while `ctx+0x6da74` is 0. The tick
+  sets the bit and publishes every glyph. Only op `0x101` sets `ctx+0x6da74` (`0x4170df`). Only a reveal tick with
+  action 6 up and no click clears it (`0x407101`). So after an op `0x101` (TITLE, FIELD and every control-strip
+  callback run one), a held key starts nothing until it is released during a reveal.
+
+The other setters are op `0x19c` (persistent Skip or read-skip), the ReadTextDB read-skip sets in ops `0x6e`, `0x71`
+and `0x72`, and `engine_reload_current_script_and_reset_input@0x42ea3e`. The bit is cleared by:
+
+- `adv_interpreter_tick` (`0x411039`, `0x41109f`), op `0x72` (`0x41e793`) and op `0xfa`, when action 6 is up and
+  read-skip is off;
+- op `0x19b`, op `0x19c` (which restores only persistent Skip and read-skip, or keeps the bit under the startup guard
+  `ctx+0x6f86c`), op `0x101` (`0x4170ce`) and op `0x88(0)` (`0x41f170`), however the bit started;
+- the click cancel, and `scene_context_init_reset` (`0x40b40e` zeroes the run state).
+
+Held Ctrl therefore does not carry fast-forward across ADV setup. Native with Ctrl held 4 s from SC0000's first page
+stops at `SC2000@0xaf5`:
+
+- TITLE's op `0x101` sets the reveal suppression, and SC0000's first page clears it again;
+- FIELD's op `0x101` sets it again during the fast-forward;
+- SC2000's op `0x19b` at `0x85e` ends the fast-forward;
+- the reveal of 「ここが最終試験の会場となる迷宮だ」 finds the suppression set, and its text wait sees no new key-down.
+
+The port used to follow the held state, so it skipped on into AIM. `VirtualMachine.PhysicalFastForward.cs` now
+implements both start paths, the suppression and every clear. Tests: `PhysicalFastForwardTests` and
+`InputLatchTests.AFastForwardKeyHeldThroughHandlerBStartsFastForwardAtTheWaitSpaceParked`. A latched key-down that
+op `0x7c` returns to the parked wait counts as a fresh trigger.
+
+### Read skip and ctx+0x13dc (2026-11-07)
+
+Native keeps persistent Skip in two fields, and fast-forward itself in a third:
+
+- `ctx+0x550fc` (`message_skip_display_enabled`) is the toggle the menu bar and CONFIG show.
+- `ctx+0x13dc` (`message_skip_enabled`) is the Skip a text wait acts on. While it is set, `adv_interpreter_tick` and
+  `input_poll_triggered_action_mask` inject action 6 (`0x40`), so a polling text wait starts fast-forward at
+  `0x411635`. `input_poll_action_mask@0x4608b0` (the held mask) injects nothing.
+- Run-state `0x08000000` is fast-forward. `ctx+0x6dbd4` (`adv_read_skip_state`) records that the current message
+  was read.
+
+The ops and the menu treat them as follows (/v2 addresses):
+
+| Writer | Effect |
+|---|---|
+| op `0x88` (`0x41f130`) | writes `0x13dc` and `0x550fc` alike; `0x88(0)` also clears the run-state bit |
+| op `0x19b` (`0x416560`) | clears the run-state bit, `0x13dc`, the service flag `0x55100` and the click-cancel phase; keeps `0x550fc` |
+| op `0x19c` (`0x4165a0`) | sets `0x55100`. With `0x550fc` set: `0x13dc = 1` and the run-state bit set. Else with the message read: the run-state bit set. Else, unless the guard `ctx+0x6f86c` is set: clears `0x13dc` and the run-state bit |
+| read-skip block of ops `0x6e` (`0x41e3b1`), `0x71` (`0x41e540`, `0x41e63a`), `0x72` (`0x41e73b`) and the menu's read-skip toggle (`0x406cd0`) | with `message:ReadTextSkip` off, read = 0. With it on and the message read: the run-state bit set, read = 1. Else read = 0 only while `0x550fc` is clear. It never clears the run-state bit and never starts it from the toggle |
+| op `0x72` | after that block, clears the run-state bit when read is 0 and the held mask lacks `0x40` (`0x41e786`); its own wait then starts it again from `0x13dc` |
+| op `0xfa` (`0x416de0`) | clears the run-state bit when the held mask lacks `0x40`; re-arms nothing |
+| op `0x1ca` (`0x41f880`) | writes `message:ReadTextSkip` only |
+| menu Skip toggle (`adv_toggle_skip_mode@0x406c20`) | while `0x55100` is set, `0x13dc = 0x550fc` |
+| menu Auto toggle (`adv_toggle_auto_mode@0x406b70`) | when it enables Auto with `0x55100` set, `0x13dc = 0x550fc` |
+
+So a page shown outside ADV, after op `0x19b`, runs without fast-forward even with the toggle on, and the toggle comes
+back at the next op `0x19c`. Kamidori's SYSTEM4 runs op `0x19b` before FIELD, and FIELD resets layout 1 with op
+`0x71` at `0x30a`. The port's read-skip refresh used to restart fast-forward from the toggle there. With fast-forward
+running on the field, the next click hit Kamidori's `CancelMesSkipOnClick = 2` cancel: it turned Skip off and queued
+CALLBACK_SETTING, so the port's SC2500 stopped on pages native skipped. With Skip on from the prologue, both targets
+now reach SC2500's BUNKI choice.
+
+**Port.** `VirtualMachine`: `_messageSkipEnabled` (`0x550fc`), `_messageSkipInjected` (`0x13dc`),
+`_messageSkipServiceActive` (the run-state bit), `ApplyReadTextSkip` (the shared block) and `SetScriptFastForward`.
+Ops `0x88`, `0x19b`, `0x19c`, `0x72`, `0xfa` and `0x1ca`, the menu toggles and the click cancel follow the table. Tests:
+`HotspotInputTests.RefreshAdvSkipInputState_EndsFastForwardAndPersistentSkipRestartsItAtTheNextTextWait` and
+`HotspotInputTests.APageOutsideAdvLeavesPersistentSkipSuspendedUntilOp0x19c`. The guard `ctx+0x6f86c` is not
+modelled (`docs/backlog.md`).
+
+### Op 0x60 randomness (2026-11-07)
+
+Op `0x60` (`op_0x60_handler@0x426970`) writes `rand() % bound`. `_rand@0x550fe4` is the MSVC LCG
+(`seed = seed * 0x343fd + 0x269ec3`, per-thread data `+0x14`). `_srand@0x550fd7` seeds it from the tick count at
+`0x413b7f` and `0x413c8d` (the context constructor) and `0x44e5d4`. The same generator is also drawn by:
+
+- the main tick, at entry (`0x4118af`) and, while its registration check runs, at each lapse of that timer
+  (`0x4119d1`);
+- screen transitions (`FUN_00440530`), the save encoder and the catalog parse.
+
+A native run's draws therefore depend on when it started and what ran before, and the port draws from
+`System.Random.Shared`. Kamidori's enemy scripts (MVRTN, RTN_M0xx, STAGEROUND, STAGEREADY, SETEN, ADDEN) and battle
+scripts (BTL, CALCDMG, COMMITBTL) use op `0x60`, as do FIELD, ROOM, TOWN, USEITEM and ALCHEMY. From the first enemy
+phase on, native and the port place enemies differently, and the same click can lead
+into a battle by a different path. In the 2026-11-07 sweep, native's slime attacked Wilfred, through FIELD's turn
+processing (`FIELD@0x8cec`, "Taking Action..."). The port's slime did not, and the click on the 戦闘 room took FIELD's
+direct attack (`0x3205`, cell flag `0x1` clear and `0x20100` set, then SELACT from `0x32ac`). So the 防御 row in
+SELACT is live on native, where Wilfred defends, and grayed in the port, where he attacks.
+
+Compare battle presentation, not outcomes. The SELACT Engage button, the BTL HUD's centre stats and the REWARD item
+panel matched native to within the translucency over the different backdrops.
 
 ### Driving native AGE (2026-11-01)
 
@@ -6467,7 +6665,9 @@ The following native handlers were decoded while bounding that slice:
   `EngineCtx.gfx_animation_service_flags` (`+0x51b80`). BTL brackets combat presentation with 1/0 and
   GAMECLEAR uses 3/0. Bit 0 disables the run-state-`0x400` `EffectSkipOnClick` branch; bit 1 is independently
   consumed by opcode `0x243` and the shared worker to suppress a force-complete and animation-clock-reset
-  request.
+  request, including the per-iteration force under fast-forward. Bit `0x10000` makes the setting one-shot: the effect
+  poll clears the word when it finds nothing running (Kamidori's `0x10003`/`0x10001`; "Service-flags bit 16 is
+  one-shot").
 - `op_0x207_copy_surface_rect@0x422b50` builds source/destination rectangles from
   `(source_surface, destination_surface, source_x, source_y, width, height, destination_x, destination_y)`
   and calls `gfx_copy_surface_rect@0x477da0`. The worker validates both slots, clips both rectangles while
@@ -7096,7 +7296,13 @@ move the glyph right of the pen when all of these hold:
 strings that the text-manager constructor (`0x4588d0`) copies to `+0x31484` and `+0x31504`. In mode 1:
 
 - Class 0 is the closing brackets and 、。，．. The glyph keeps the pen.
-- Class 1 is the opening brackets. The black box's right edge goes to the reference 激's black-box width.
+- Class 1 is the opening brackets. The black box's right edge goes to the reference 激's black-box width:
+  `trunc(+0x313d8 * scale + 0.5) - gmptGlyphOrigin.x - gmBlackBoxX` (`0x4609ab`). `+0x313d8` is the `gmBlackBoxX`
+  that `text_rebuild_reference_gothic_metrics@0x44fe00` (through `text_measure_reference_gothic_glyph@0x44ff60`)
+  measures with `GetGlyphOutline` format 0 (`GGO_METRICS`) on ＭＳ ゴシック at `lfHeight = -size`,
+  `lfWidth = -(size / 2)`, the primary weight, `DEFAULT_QUALITY` and `DEFAULT_CHARSET`. At small sizes that is the
+  embedded bitmap's box: 19 pixels for bold 22 px, where a `GGO_GRAY4_BITMAP` raster of the same font is 21 wide.
+  メイリオ has no embedded bitmaps, so its metrics do not depend on the format.
 - Every other glyph, and every single-byte one, is centred:
   `trunc(size / 2 + 0.5) - trunc(gmBlackBoxX * 0.5 + 0.5) - gmptGlyphOrigin.x`, with a quarter of the size for a single
   byte.
@@ -7110,8 +7316,11 @@ and `e = trunc(tmAscent - 激.gmptGlyphOrigin.y - 1)` for the realized font's �
 is 0, and otherwise the larger of `d` and `e`. A face as tall as the reference is not raised; Kamidori's メイリオ bold
 at 22 pixels is raised 3. The record keeps the cell.
 
-**Port.** `AspectGlyphPlacement.OffsetX` and `RetainedGlyphLayoutEngine.AspectGlyphRaise`. Tests:
-`AspectGlyphPlacementTests`.
+**Port.** `AspectGlyphPlacement.OffsetX` and `RetainedGlyphLayoutEngine.AspectGlyphRaise`. The class-1 width comes
+from `AspectFontRealization.ReferenceBlackBoxWidth`, which measures 激 with `GGO_METRICS` as native does, not from
+the reference raster. Tests: `AspectGlyphPlacementTests` and
+`WindowsGdiGlyphMaskRasterizerTests.TheAspectReferenceBlackBoxIsTheEmbeddedBitmapsNotTheAntialiasedRasters`. Kamidori's
+「 now lands on native's pixels.
 
 #### SYS4433 glyph coverage alpha (2026-11-07)
 
