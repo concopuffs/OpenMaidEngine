@@ -178,24 +178,34 @@ def add_self_to_syspath() -> None:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
+def _bin_files(directory: Path) -> list[Path]:
+    """The directory's ``.BIN`` files in any letter case, sorted.
+
+    AGE runs on Windows, where file names match regardless of case, and installs differ (Kamidori's
+    root carries lowercase ``$n$*.bin``), so a case-sensitive glob would miss files on Linux.
+    """
+    return sorted(path for path in directory.iterdir() if path.suffix.upper() == ".BIN" and path.is_file())
+
+
 def scripts(context: ToolContext | None = None) -> dict[str, Path]:
     """Legacy extracted/loose script map; catalog-aware scanners use ``script_corpus``.
 
     Loose files shadow extracted DATA1 copies. Extracted append catalogs
     (``<extracted>/APPENDnn/``) contribute their literal ``$n$`` record names, which loose
     ``$n$`` files shadow in turn unless the profile marks them untrusted (see
-    ``_UNTRUSTED_LOOSE_APPEND_OVERRIDES``). Archive-only scripts are not represented.
+    ``_UNTRUSTED_LOOSE_APPEND_OVERRIDES``). Archive-only scripts are not represented. Names
+    match in any letter case, as on Windows.
     """
     selected = context or CONTEXT
     files: dict[str, Path] = {}
     if selected.data1.is_dir():
-        for path in sorted(selected.data1.glob("*.BIN")):
+        for path in _bin_files(selected.data1):
             files[path.name.upper()] = path
     for append_dir in sorted(selected.extracted_root.glob("APPEND[0-9][0-9]")):
-        for path in sorted(append_dir.glob("*.BIN")):
+        for path in _bin_files(append_dir):
             files[path.name.upper()] = path
     if selected.game_root.is_dir():
-        for path in sorted(selected.game_root.glob("*.BIN")):
+        for path in _bin_files(selected.game_root):
             if path.name.startswith("$") and not selected.trusts_loose_append_overrides:
                 continue
             files[path.name.upper()] = path
