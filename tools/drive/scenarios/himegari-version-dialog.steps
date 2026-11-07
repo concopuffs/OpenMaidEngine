@@ -1,7 +1,10 @@
 # ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 (menu 0x9c45; AGERC dialog resource 2) on SC0000 page 1. The game holds and its frame stays frozen,
 # with no dim, while the dialog is open. `dialogs` lists its title, its static texts (the icon static's template name
 # SYSTEM3 first) and OK, its only button, whose id is IDCANCEL (2). OK closes it, and the game goes on from the page it
-# held on. Run on a fresh sandbox, on both targets:
+# held on. Both targets share the title, the game half and the button. The engine half differs on purpose: AGE names
+# itself (ARCGameEngine, its copyright, its Ogg Vorbis notice, the empty プロダクトID row); the port names Open Maid
+# Engine, its version and license and THIRD_PARTY_NOTICES.md (docs/engine-re.md, "Native menu bar", ﾊﾞｰｼﾞｮﾝ情報).
+# Run on a fresh sandbox, on both targets:
 #   py -3.11 -X utf8 tools/drive.py port start
 #   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-version-dialog.steps
 
@@ -16,7 +19,7 @@ settle
 
 menu version
 wait 1.5
-dialogs                                 # ﾊﾞｰｼﾞｮﾝ情報: SYSTEM3, ARCGameEngine, ... ; buttons OK
+dialogs                                 # ﾊﾞｰｼﾞｮﾝ情報: SYSTEM3, then the engine half's labels; buttons OK
 shot version-dialog
 answer OK
 wait 1

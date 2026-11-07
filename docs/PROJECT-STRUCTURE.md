@@ -225,8 +225,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       game-driving control protocol (Control/), AGERC.DLL's menu
     │                                       resource, its prune/refresh model and the 設定 dialog's
     │                                       texts (NativeMenu/), and PE
-    │                                       resource readers for dialog templates, icons and version strings
-    │                                       (NativeResources/)
+    │                                       resource readers for dialog templates and icons, with the
+    │                                       engine identity ﾊﾞｰｼﾞｮﾝ情報 shows (NativeResources/)
     │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries

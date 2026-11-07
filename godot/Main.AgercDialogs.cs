@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using Age.Engine.Frontend.NativeMenu;
 using Age.Engine.Frontend.NativeResources;
 using Age.Engine.Model;
@@ -62,7 +63,7 @@ public partial class Main
             return;
         Texture2D? icon = IconResource.Load(agerc, "IDI_ICON1") is { } image ? IconTexture(image) : null;
         var settings = _catalog.StartupSettings;
-        var dialog = new AgercVersionDialog(template, AgeExeFileVersion(), icon, _catalog.Title, GameVersion(),
+        var dialog = new AgercVersionDialog(template, EngineVersion(), icon, _catalog.Title, GameVersion(),
                                             settings.GetValueOrDefault("COPYRIGHT") ?? "");
         OpenAgercDialog(dialog, owner);
     }
@@ -185,20 +186,13 @@ public partial class Main
         return ImageTexture.CreateFromImage(image);
     }
 
-    /// <summary>agerc_exe_file_version_string: the running EXE's \StringFileInfo\041103a4\FileVersion. The port stands
-    /// in for the game's AGE.EXE, so it reads that file's.</summary>
-    private string AgeExeFileVersion()
+    /// <summary>This engine's version for ﾊﾞｰｼﾞｮﾝ情報, where AGE shows agerc_exe_file_version_string (its EXE's
+    /// FileVersion): what godot/OME.csproj's OmeVersion target stored in the assembly.</summary>
+    private static string EngineVersion()
     {
-        string? exe = FindFileIgnoringCase(_gameExecutableDirectory, "AGE.EXE");
-        if (exe == null) return "";
-        try
-        {
-            return VersionResource.QueryString(File.ReadAllBytes(exe), "041103a4", "FileVersion") ?? "";
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            return "";
-        }
+        foreach (var attribute in typeof(Main).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>())
+            if (attribute.Key == EngineIdentity.VersionMetadataKey) return EngineIdentity.DisplayVersion(attribute.Value);
+        return EngineIdentity.DisplayVersion(null);
     }
 
     /// <summary>set:GameVersion. With VERREGPOS, registration_read_install_display_version@0x46ae80 reads the

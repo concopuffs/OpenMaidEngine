@@ -462,6 +462,9 @@ at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`swee
 
 **Godot frontend** (Godot 4.7 .NET; project = `godot/`). Toolchain: `godot --headless --path godot
 --import` → `dotnet build godot/OME.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
+The build stamps the engine version that ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 shows from `git describe --tags --match "v[0-9]*"
+--dirty=+ --always` (target `OmeVersion` in `godot/OME.csproj`); `-p:OmeVersion=<version>` sets it instead, and a
+build without git or a checkout shows "unknown" (`engine-re.md`, "Native menu bar", ﾊﾞｰｼﾞｮﾝ情報 names the port).
 Plays the real bytecode with call-script execution on (subroutines run live). The game root is selected
 before catalog loading: `--game-root <directory>` wins, otherwise the directory containing the running
 executable is tried, then the current working directory. A candidate must contain `SYS4INI.BIN`; invalid
@@ -980,14 +983,15 @@ writes it at once (`engine-re.md`, "Native menu bar", Screenshots).
 
 `himegari-version-dialog.steps` opens ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 on SC0000 page 1. It lists the dialog, takes a shot, answers OK,
 and checks that no dialog is left and that the game goes on to page 2 (`SC0000@0x874`). Both targets list the same
-title, texts and button. Native's `shot` is AGE's own window, so it leaves the dialog out; the port's `version-dialog`
-shot includes it, for comparison with a capture of the native dialog.
+title, game half and button; the engine half's labels differ by design, since the port names Open Maid Engine
+(`engine-re.md`, "Native menu bar", ﾊﾞｰｼﾞｮﾝ情報 names the port). Native's `shot` is AGE's own window, so it leaves the
+dialog out; the port's `version-dialog` shot includes it, for comparison with a capture of the native dialog.
 
 `himegari-settings-dialog.steps` opens the 設定 dialog on SC0000 page 1 from each of its four menu commands. It checks
 that a wheel-down does not advance until ﾏｳｽﾎｲｰﾙでﾒｯｾｰｼﾞを進める + OK, then does. It turns 効果音 off live and cancels,
-opens ﾊﾞｰｼﾞｮﾝ情報 over 設定, and sets その他's check box with OK. Both targets list the same texts and buttons. After
-`close`, both targets' `SYS4REG.INI` files are identical (`AdvanceMesOnWheel=1`, `EffectSkipOnClick=1`, `SE=1`, and
-`Volume0..3` written by OK). Allow 2 s after a native `answer OK`: AGE takes over a second to close 設定.
+opens ﾊﾞｰｼﾞｮﾝ情報 over 設定, and sets その他's check box with OK. Both targets list the same texts and buttons, apart
+from ﾊﾞｰｼﾞｮﾝ情報's engine half. After `close`, both targets' `SYS4REG.INI` files are identical (`AdvanceMesOnWheel=1`,
+`EffectSkipOnClick=1`, `SE=1`, and `Volume0..3` written by OK). Allow 2 s after a native `answer OK`: AGE takes over a second to close 設定.
 
 `himegari-antifont-off.steps` clears 文字の縁をなめらかにする (`message:UseAntiFont`) in 設定 on SC0000 page 1. It takes
 four shots:

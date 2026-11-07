@@ -162,17 +162,13 @@ it; git history keeps the record.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
-- **ﾊﾞｰｼﾞｮﾝ情報 should present Open Maid Engine, not AGE.** The port builds ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 from AGERC.DLL's
-  dialog 2 and fills it as AGE does (`engine-re.md`, "Native menu bar"). Its engine half therefore misattributes the
-  port:
-  - the SYSTEM3 icon, the ARCGameEngine label, "Version 4.24J" (AGE.EXE's FileVersion) and ARC Software Laboratory's
-    copyright;
-  - the Xiphophorus Ogg Vorbis notice, which belongs to AGE's own decoder;
-  - the empty プロダクトID box, a copy-protection field the port has no use for.
-
-  The game half (title, game version, game copyright) comes from the game's data and stays. Decide how OME
-  identifies itself: replace the engine texts in the template-built dialog, or give OME its own about dialog. It
-  should show OME's name, release version, license and a pointer to `THIRD_PARTY_NOTICES.md`. Done when the dialog shows
-  OME's identity beside the game's, `engine-re.md`'s port notes say so, and `himegari-version-dialog.steps` compares
-  only the parts that are meant to match native.
+- **Notices leave out Godot and .NET.** The packages ship Godot's export template (Godot Engine, MIT, with the
+  third-party components it links, among them FreeType and libogg/libvorbis, through which the port plays Ogg) and a
+  self-contained .NET runtime with GodotSharp (`coreclr.dll`, `GodotSharp.dll` in a local Windows export; .NET is MIT
+  with its own third-party notices). `THIRD_PARTY_NOTICES.md` covers only FFmpeg, the research acknowledgments and
+  Tomlyn, and no package carries a Godot or .NET license text, yet ﾊﾞｰｼﾞｮﾝ情報 points players at that file
+  (`engine-re.md`, "Native menu bar", ﾊﾞｰｼﾞｮﾝ情報 names the port). Done when the notices cover every component a
+  package ships (Godot's copyright and license texts for the pinned version, such as `Engine.get_copyright_info` and
+  `get_license_text` give, and the .NET runtime's notices), the packages carry them, and the package check fails when
+  one is missing.
 - **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default).

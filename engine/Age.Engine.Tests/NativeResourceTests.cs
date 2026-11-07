@@ -5,7 +5,7 @@ using Age.Engine.Sys4;
 
 /// <summary>
 /// The PE resource readers behind the port's AGERC dialogs (docs/engine-re.md, "Native menu bar", ﾍﾙﾌﾟ): dialog
-/// templates, icons and the version resource.
+/// templates and icons.
 /// </summary>
 public class NativeResourceTests
 {
@@ -223,55 +223,13 @@ public class NativeResourceTests
         Assert.Null(IconResource.Load(pe, "IDI_ICON2"));
     }
 
-    // ---- version resource ----
-
-    private static byte[] VersionNode(string key, object? value, params byte[][] children)
-    {
-        var b = new List<byte>();
-        void Pad() { while (b.Count % 4 != 0) b.Add(0); }
-        b.AddRange(new byte[6]);
-        b.AddRange(Encoding.Unicode.GetBytes(key + "\0"));
-        Pad();
-        int valueLength = 0, type = 1;
-        if (value is string text) { b.AddRange(Encoding.Unicode.GetBytes(text + "\0")); valueLength = text.Length + 1; }
-        else if (value is byte[] binary) { b.AddRange(binary); valueLength = binary.Length; type = 0; }
-        foreach (byte[] child in children) { Pad(); b.AddRange(child); }
-        byte[] node = b.ToArray();
-        BinaryPrimitives.WriteUInt16LittleEndian(node, (ushort)node.Length);
-        BinaryPrimitives.WriteUInt16LittleEndian(node.AsSpan(2), (ushort)valueLength);
-        BinaryPrimitives.WriteUInt16LittleEndian(node.AsSpan(4), (ushort)type);
-        return node;
-    }
-
-    [Fact]
-    public void VersionResourceReadsAStringFromTheNamedTable()
-    {
-        byte[] info = VersionNode("VS_VERSION_INFO", new byte[52],
-            VersionNode("StringFileInfo", null,
-                VersionNode("040904b0", null, VersionNode("FileVersion", "9.99"))),
-            VersionNode("StringFileInfo", null,
-                VersionNode("041103a4", null, VersionNode("CompanyName", "ARC"), VersionNode("FileVersion", "4.24J"))));
-        // A second StringFileInfo is unusual; a lookup takes the first, so put the Japanese table first instead.
-        byte[] japaneseFirst = VersionNode("VS_VERSION_INFO", new byte[52],
-            VersionNode("StringFileInfo", null,
-                VersionNode("041103a4", null, VersionNode("CompanyName", "ARC"), VersionNode("FileVersion", "4.24J"))));
-        byte[] pe = Pe(new Resource(PeResource.RtVersion, 1, japaneseFirst));
-
-        Assert.Equal("4.24J", VersionResource.QueryString(pe, "041103a4", "FileVersion"));
-        Assert.Equal("ARC", VersionResource.QueryString(pe, "041103a4", "companyname"));
-        Assert.Null(VersionResource.QueryString(pe, "040904b0", "FileVersion"));
-        Assert.Null(VersionResource.QueryString(pe, "041103a4", "ProductVersion"));
-        Assert.Null(VersionResource.QueryString(Pe(new Resource(PeResource.RtVersion, 1, info)), "041103a4",
-                                                "FileVersion"));
-    }
-
     // ---- Himegari's own files ----
 
     [Fact]
-    public void HimegarisAgercVersionDialogIconAndExeVersion()
+    public void HimegarisAgercVersionDialogAndIcon()
     {
-        string agerc = Path.Combine(Paths.GameDir, "AGERC.DLL"), exe = Path.Combine(Paths.GameDir, "AGE.EXE");
-        if (!File.Exists(agerc) || !File.Exists(exe)) return;
+        string agerc = Path.Combine(Paths.GameDir, "AGERC.DLL");
+        if (!File.Exists(agerc)) return;
         byte[] dll = File.ReadAllBytes(agerc);
 
         DialogTemplate? version = DialogTemplateResource.Load(dll, 2);
@@ -308,7 +266,6 @@ public class NativeResourceTests
 
         IconImage? icon = IconResource.Load(dll, "IDI_ICON1", 32);
         Assert.Equal((32, 32), (icon!.Width, icon.Height));
-        Assert.Equal("4.24J", VersionResource.QueryString(File.ReadAllBytes(exe), "041103a4", "FileVersion"));
     }
 
     [Fact]

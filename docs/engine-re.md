@@ -1642,9 +1642,9 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   driver's `dialogs` and `answer` steps reach it as they reach native's. Other platforms use their own folder
   dialog. The port writes `SaveBMPPath` to `SYS4REG.INI` at once.
 - **AGERC dialogs.** `godot/Win32TemplateDialog.cs` builds a dialog from its AGERC.DLL template as
-  `CreateDialogIndirect` does. The readers in `engine/Age.Engine.Frontend/NativeResources` supply the template, the
-  icon and the version string (`DialogTemplateResource`, `IconResource`, `VersionResource`). The base units come from
-  the dialog font. The class also gives the dialog manager's keys and the driver's `dialogs` and `answer` steps.
+  `CreateDialogIndirect` does. The readers in `engine/Age.Engine.Frontend/NativeResources` supply the template and the
+  icon (`DialogTemplateResource`, `IconResource`). The base units come from the dialog font. The class also gives the
+  dialog manager's keys and the driver's `dialogs` and `answer` steps.
   It draws push buttons, text, icon and frame statics, check boxes, group boxes, trackbars, the tab control and
   display-only edits (with or without a client edge), and child pages (`AddPage`). Radio buttons and combo boxes are
   not drawn. `godot/AgercVersionDialog.cs` is ﾊﾞｰｼﾞｮﾝ情報's procedure. `godot/AgercSettingsDialog.cs` is 設定's,
@@ -1654,8 +1654,18 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   `CALLBACK_SETTING.BIN`. The port reads the CPU clock from the registry's `~MHz` and the VRAM from DirectX's adapter
   list (`DedicatedVideoMemory` of the adapter Godot renders with, at most 4095 MB). A dialog opened from another
   (ﾊﾞｰｼﾞｮﾝ情報 from 設定) stacks above it. `godot/Main.AgercDialogs.cs` holds the VM and freezes
-  the frame while the dialog is open, and reads `DisplayVersion` from the registry on Windows. The product ID stays
-  empty because the port has no protector.
+  the frame while the dialog is open, and reads `DisplayVersion` from the registry on Windows.
+- **ﾊﾞｰｼﾞｮﾝ情報 names the port.** The game half (icon, `set:GameName`, `set:GameVersion`, `set:Copyright`) is filled
+  as AGE fills it. The engine half names Open Maid Engine instead of AGE: `EngineIdentity`
+  (`engine/Age.Engine.Frontend/NativeResources`) re-texts the template's id-less labels, found by position. The name
+  replaces ARCGameEngine, "Released under the MIT License" replaces ARC Software Laboratory's copyright, and a pointer
+  to `THIRD_PARTY_NOTICES.md` replaces AGE's Ogg Vorbis notice; ｼｽﾃﾑのﾊﾞｰｼﾞｮﾝ stays. `0x400` shows "Version " and the
+  engine's version, which the build takes from `git describe --tags --match "v[0-9]*" --dirty=+ --always`
+  (`godot/OME.csproj`, target `OmeVersion`; `-p:OmeVersion=` overrides it). The dialog drops the tag's "v", puts
+  "dev-" before a bare commit (a clone without tags) and shows "unknown" when the build stored none. AGE's 84-unit
+  edit fits "Version 4.24J" but not a development version such as "Version 0.4.0-32-gabc2403+", so the name's label
+  narrows to its text and `0x400` starts 4 units after it, keeping AGE's right edge. The プロダクトID row (its label
+  and `0x3f0`) is left out: the port has no copy protector.
 - **Unimplemented commands.** The refresh grays every command the port cannot run yet.
 - **Menu loop.** While a menu is open, the port holds the VM and freezes the presented frame. The hold nests, so the
   終了 dialog can open from it.
@@ -1675,9 +1685,10 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
 - **Opting out.** `--no-menu-bar` restores the plain window.
 - **Checks.** `tools/drive/scenarios/himegari-menu-bar.steps` checks read skip, hide, Auto and 終了 on both
   targets, `himegari-screenshot.steps` checks the screenshots and the image folder, and
-  `himegari-version-dialog.steps` checks ﾊﾞｰｼﾞｮﾝ情報, and `himegari-settings-dialog.steps` checks 設定. On the last, both targets list the same title, texts and
-  button, close on OK and resume on the same page. Against the native capture the port's dialog differs only in the
-  caption's glyph filtering and the empty product ID. The 設定 pages' client areas match native's capture pixel for
+  `himegari-version-dialog.steps` checks ﾊﾞｰｼﾞｮﾝ情報, and `himegari-settings-dialog.steps` checks 設定. On ﾊﾞｰｼﾞｮﾝ情報,
+  both targets list the same title, game half and button, close on OK and resume on the same page; the engine half
+  differs by design (above). Against the native capture the game half differs only in the caption's glyph filtering.
+  The 設定 pages' client areas match native's capture pixel for
   pixel, apart from 動作環境's live free space; both targets list the same texts and buttons and write the same
   `SYS4REG.INI`. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
   state, then posts `WM_COMMAND`. Both targets refuse a grayed item. `himegari-menu-keyboard.steps` drives keyboard

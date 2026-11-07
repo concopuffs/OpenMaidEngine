@@ -16,7 +16,7 @@ public readonly record struct ResourceName(int? Id, string? Name)
 /// the resource directory, first language.</summary>
 public static class PeResource
 {
-    public const int RtIcon = 3, RtMenu = 4, RtDialog = 5, RtGroupIcon = 14, RtVersion = 16;
+    public const int RtIcon = 3, RtMenu = 4, RtDialog = 5, RtGroupIcon = 14;
 
     /// <summary>The resource's bytes, or null when the image has no such resource or is not a PE image.</summary>
     public static byte[]? Read(ReadOnlySpan<byte> pe, int type, ResourceName name)

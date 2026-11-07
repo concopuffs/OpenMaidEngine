@@ -49,6 +49,27 @@
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- The engine version ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 shows (Age.Engine.Frontend.NativeResources.EngineIdentity): git describe
+       of the checkout, "+" when it has uncommitted changes, unless the build passes -p:OmeVersion=... A build without
+       git or a repository stores none, which the dialog shows as "unknown". -->
+  <Target Name="OmeVersion" BeforeTargets="GetAssemblyAttributes">
+    <Exec Condition="'$(OmeVersion)' == ''" Command="git describe --tags --match &quot;v[0-9]*&quot; --dirty=+ --always"
+          WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true" IgnoreExitCode="true"
+          IgnoreStandardErrorWarningFormat="true" EchoOff="true"
+          StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_OmeDescribed" />
+      <Output TaskParameter="ExitCode" PropertyName="_OmeDescribeExit" />
+    </Exec>
+    <PropertyGroup>
+      <OmeVersion Condition="'$(OmeVersion)' == '' and '$(_OmeDescribeExit)' == '0'">$(_OmeDescribed)</OmeVersion>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(OmeVersion)' != ''">
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>OmeVersion</_Parameter1>
+        <_Parameter2>$(OmeVersion)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
   <Target Name="RequireGeneratedRuntimeMetadata" BeforeTargets="PrepareForBuild"
           Condition="!Exists('..\build\opcodes.json')">
     <Error Text="Missing generated runtime metadata '..\build\opcodes.json'. Run 'py -3.11 -X utf8 tools\opcodes_build.py --build' from age-reimpl before building Godot." />
