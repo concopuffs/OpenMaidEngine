@@ -162,6 +162,12 @@ it; git history keeps the record.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
+- **CI actions pinned to Node.js 20 releases.** Since 2026-11-06, CI's annotations warn that `actions/checkout`
+  v4.4.0, `actions/setup-dotnet` v4.3.1, `actions/upload-artifact` v4.6.2 and `actions/cache` v4.3.0 target
+  Node.js 20. The runners force them onto Node.js 24 for now. `actions/download-artifact` v4.3.0 is the same
+  generation; it runs only in tag publication, whose annotations were not read. Done when each action is SHA-pinned
+  to a release that targets Node.js 24, and the core, release-build and FFmpeg SDK workflows run green without the
+  warning.
 - **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default);
   artifacts published before their notices existed are not backfilled, but taken down or updated if anyone asks:
   the `v0.4.0` packages lack the Godot, .NET and MinGW-w64 notices, and the `deps-ffmpeg-ome-8.1.3-mpeg1-r1` Windows
