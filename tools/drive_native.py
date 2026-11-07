@@ -7,7 +7,7 @@ instruction. AGE runs in a kill-on-close job owned by the daemon, so it never ou
 serves the shared protocol (JSON lines over 127.0.0.1, token in ``hello``; spec §4) until AGE exits:
 
     state pointer click key wheel wait settle shot close     (common)
-    dialogs answer detach                                    (native capabilities)
+    dialogs answer window menu rand detach                   (native capabilities)
 
 Inside the driven AGE only:
 - GetAsyncKeyState, GetCursorPos and SetCursorPos use the driver's keys and cursor. The desktop's keyboard,
@@ -16,6 +16,7 @@ Inside the driven AGE only:
   other boxes are shown and reported, and ``answer`` presses one.
 - SHGetFolderPathA (save root, SYS4REG.INI, F1 screenshots, debug report) points into a sandbox below
   ``build/games/<profile>/drive/native/sandbox/``. ``--live-saves`` uses the real folders after a backup.
+- After the first ``rand-seed``, op 0x60 draws from the seeded per-call-site streams the port computes.
 
 Usage, steps and the port target: docs/tools-reference.md ("Game driver").
 """
@@ -43,7 +44,7 @@ from drive_core import DriveError  # noqa: E402
 
 AGENT = core.DATA / "native-agent.js"
 ENGINE_CTX_TOML = paths.VM_MAP / "engine-ctx.toml"
-CAPABILITIES = ("dialogs", "answer", "window", "menu", "detach")
+CAPABILITIES = ("dialogs", "answer", "window", "menu", "rand", "detach")
 QUIET_EVENTS = {"folder", "request", "activated", "foreground"}       # logged, but not sent to clients
 
 
@@ -94,6 +95,7 @@ def agent_config(profile: core.Profile, folders: dict[int, Path] | None, engine_
         "folders": None if folders is None else {str(csidl): str(path) for csidl, path in folders.items()},
         "engine": engine,
         "keep_polling": keep_polling,
+        "rand": profile.rand,
         "background": background,
     }
 
@@ -839,6 +841,22 @@ class Daemon:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         image.save(path)
         return {"path": path, "width": image.size[0], "height": image.size[1]}
+
+    def op_rand_seed(self, request: dict[str, Any]) -> dict[str, Any]:
+        seed = request.get("seed")
+        if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 0xFFFFFFFF):
+            raise DriveError("rand-seed takes a seed from 0 to 0xffffffff, or null")
+        if self.profile.rand is None:
+            raise DriveError("this profile has no [native.rand] section, so op 0x60's draw cannot be replaced")
+        drawn = self.api.randseed(seed)
+        sites = {}
+        for resid, offset, draws in sorted(drawn["sites"], key=lambda site: (self.script_name(site[0]), site[1])):
+            sites[f"{self.script_name(resid)}@{offset:#x}"] = draws
+        return {"seed": seed, "previous_seed": drawn["seed"], "draws": drawn["draws"], "sites": sites}
+
+    def script_name(self, resid: int) -> str:
+        name = self.names.get(str(resid))
+        return f"#{resid:#x}" if name is None else core.normalize_script(name)
 
     def op_dialogs(self, request: dict[str, Any]) -> dict[str, Any]:
         return {"dialogs": [{"title": box["title"], "text": box["text"],

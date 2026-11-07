@@ -283,6 +283,8 @@ public sealed partial class VirtualMachine
             case "random-modulo": // 0x60: native CRT rand() % bound
             case "u0041A270":
             {
+                // Native draws before it reads the bound, so a zero bound still spends a draw.
+                int drawn = DrawOp60(pc);
                 long bound = Read(a[1]);
                 if (bound == 0)
                 {
@@ -290,7 +292,7 @@ public sealed partial class VirtualMachine
                     HaltReason ??= "random-modulo-zero";
                     return HALT;
                 }
-                Write(a[0], System.Random.Shared.Next(0x8000) % bound);
+                Write(a[0], drawn % bound);
                 return pc + 1;
             }
             default:

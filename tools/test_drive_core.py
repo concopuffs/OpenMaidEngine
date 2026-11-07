@@ -65,6 +65,16 @@ def test_step_parsing():
     check(core.menu_command("Read-Skip") == 0x9c6f and core.menu_command("0x9c41") == 0x9c41,
           "menu takes AGERC names in any case, or ids")
     check(raises(core.parse_step, "speed 20", contains="between"), "speed factors are bounded like the port's")
+    check(core.rand_seed("off") is None and core.rand_seed("0x10") == 16 and core.rand_seed("4294967295") == 0xFFFFFFFF,
+          "rand-seed takes off, or a decimal or hex seed")
+    check(raises(core.parse_step, "rand-seed -1", contains="0 to 0xffffffff")
+          and raises(core.parse_step, "rand-seed 0x100000000", contains="0 to 0xffffffff")
+          and raises(core.parse_step, "rand-seed often", contains="seed or off"), "rand-seeds are checked")
+    check(core.step_capabilities(core.parse_step("rand-seed 1")) == {"rand"}, "rand-seed needs its capability")
+    check("sites=FIELD@0x940ax3 MVRTN@0x24ex1" in core.describe(
+              {"ok": True, "step": "rand-seed off", "previous_seed": 2, "draws": 4,
+               "sites": {"FIELD@0x940a": 3, "MVRTN@0x24e": 1}}),
+          "a rand-seed result lists its draws per site")
     check(core.parse_step("wait-state script=TITLE click=adv.next every=3").options["every"] == "3",
           "wait-state can click while it waits")
 
@@ -309,6 +319,12 @@ def test_profiles():
           "a spawned AGE is kept in the background unless the session asks otherwise")
     check(raises(core.parse_profile, "[native.keep_polling]\nsetter = 1\nactivate_return = 2\n",
                  contains="needs [native.engine]"), "the polling keeper needs the engine facts")
+    check(profile.rand == {"op60_rand_return": 0x4269AF} and config["rand"] == profile.rand,
+          "the agent gets where op 0x60's rand() call returns")
+    kamidori = core.parse_profile((HERE / "drive" / "kamidori.toml").read_text(encoding="utf-8"))
+    check(kamidori.rand == {"op60_rand_return": 0x42772F}, "Kamidori names its own engine's op 0x60 site")
+    check(raises(core.parse_profile, "[native.rand]\nop60_rand_return = 1\n", contains="needs [native.engine]"),
+          "the rand hook needs the engine facts to name the call site")
     check(raises(native.agent_config, profile, {0x1C: Path("C:/箱")}, engine_ctx, contains="ASCII"),
           "sandbox paths must be ASCII")
     check(raises(core.parse_profile, '[[native.dialog]]\nmatch = "x"\nanswer = "maybe"\n', contains="dialog policy"),

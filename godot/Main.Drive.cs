@@ -138,7 +138,7 @@ public partial class Main
     private sealed class PortDriveBackend(Main main) : IDriveBackend
     {
         private static readonly string[] PortCapabilities =
-            { "speed", "waiting", "dialogs", "answer", "window", "menu" };
+            { "speed", "waiting", "dialogs", "answer", "window", "menu", "rand" };
 
         public string Target => "port";
         public string Profile { get; } = main._selectedProfile.Profile.Id;
@@ -205,6 +205,9 @@ public partial class Main
         }
 
         public void SetSpeed(double factor) => main._clock.Speed = factor;
+
+        public System.Text.Json.Nodes.JsonObject RandSeed(uint? seed)
+            => DriveRandomReport.ToJson(seed, main._vm.SeedDeterministicRandom(seed));
 
         public void Close() => main.GetTree().Quit(0);
 

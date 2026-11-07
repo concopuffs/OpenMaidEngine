@@ -286,7 +286,7 @@ public partial class Main : Godot.Control
         bool holdMessageSkip = false;                    // --hold-message-skip: hold native logical action 6 from boot
         string textBackend = "auto";                     // --text-backend auto|gdi|portable
         string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
-        string? pageMapPath = null;                      // --page-map <jsonl>: override default build/page-map-SCxxxx.jsonl
+        string? pageMapPath = null;                      // --page-map <jsonl>: override default build/games/<profile>/page-map-SCxxxx.jsonl
         for (int i = 0; i < userArgs.Length; i++)
         {
             if (userArgs[i] == "--scene" && i + 1 < userArgs.Length) scene = userArgs[i + 1];
@@ -432,7 +432,8 @@ public partial class Main : Godot.Control
         if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
         if (!_selftest && pageMapPath == null)
             pageMapPath = DefaultPageMapPath(scene);
-        _locator = new PageLocatorState(scene, _selftest ? null : pageMapPath);
+        _locator = PageLocatorState.Open(scene, _selftest ? null : pageMapPath, out string? pageMapWarning);
+        if (pageMapWarning != null) GD.PushWarning($"[locator] {pageMapWarning}");
         _locatorHud.Visible = _locatorHudVisible;
         var resources = scripts != null
             ? new ResourceMap(scripts.Catalog, trackedAssetStore, ReportAssetResolutionWarning,
@@ -933,15 +934,15 @@ public partial class Main : Godot.Control
 
     private string DefaultPageMapPath(string scene)
     {
-        string fileName = $"page-map-{scene.ToUpperInvariant()}.jsonl";
 #if TOOLS
-        // Preserve the established workspace handoff for editor/development runs.
-        return System.IO.Path.Combine(Paths.Build, fileName);
+        // Editor/development runs hand the map to tools/locate_page.py through the workspace's per-profile build
+        // directory.
+        return PageLocatorState.DevelopmentMapPath(_selectedProfile.Profile.Id, scene);
 #else
         // Exports have no repository and may be installed read-only. Keep diagnostics with the
         // profile-owned Godot data instead of probing for an age-reimpl ancestor.
         return System.IO.Path.Combine(
-            _profilePersistence.DiagnosticsDirectory, "page-maps", fileName);
+            _profilePersistence.DiagnosticsDirectory, "page-maps", PageLocatorState.MapFileName(scene));
 #endif
     }
 

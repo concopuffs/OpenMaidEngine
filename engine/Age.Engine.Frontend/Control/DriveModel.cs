@@ -90,6 +90,25 @@ public sealed record DriveState(IReadOnlyList<DriveFrame> Frames, string? Waitin
     }
 }
 
+/// <summary>The reply to <c>rand-seed</c>: the seed now in force, and what op 0x60 drew since the previous
+/// <c>rand-seed</c>, in total and per call site (<c>SCRIPT@0xOFFSET</c>, as frames are named).</summary>
+public static class DriveRandomReport
+{
+    public static JsonObject ToJson(uint? seed, Age.Engine.Vm.DeterministicRandomSummary drawn)
+    {
+        var sites = new JsonObject();
+        foreach (Age.Engine.Vm.DeterministicRandomSite site in drawn.Sites)
+            sites[new DriveFrame(DriveFrame.NormalizeScript(site.Script), site.Offset).Location] = site.Draws;
+        return new JsonObject
+        {
+            ["seed"] = seed,
+            ["previous_seed"] = drawn.Seed,
+            ["draws"] = drawn.Draws,
+            ["sites"] = sites,
+        };
+    }
+}
+
 /// <summary>A wait/expect condition; every key present must match (§4 "Conditions").</summary>
 public sealed record DriveCondition(DriveFrame? At, DriveFrame? Top, string? Script, string? Waiting)
 {

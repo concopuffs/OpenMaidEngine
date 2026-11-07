@@ -2,11 +2,11 @@
 
 Usage:
   py -3.11 -X utf8 tools/locate_page.py SC0000 14
+  py -3.11 -X utf8 tools/locate_page.py --profile kamidori SC0000 14
   py -3.11 -X utf8 tools/locate_page.py SC0000 14 --map path/to/page-map.jsonl --context 10
 
-The Godot editor runtime writes build/page-map-<SCENE>.jsonl (the shared build directory, for every
-profile) at each wait-for-input. Page numbers are run-relative conveniences; wait_script + wait_offset is
-the stable bytecode coordinate.
+The Godot editor runtime writes build/games/<profile>/page-map-<SCENE>.jsonl at each wait-for-input.
+Page numbers are run-relative conveniences; wait_script + wait_offset is the stable bytecode coordinate.
 """
 from __future__ import annotations
 
@@ -33,9 +33,9 @@ def load_records(path: Path) -> list[dict]:
     return records
 
 
-def default_map_path(scene: str) -> Path:
-    """Where a Godot editor run writes the scene's map: the shared build directory, not the profile's."""
-    return paths.SHARED_BUILD / f"page-map-{scene.upper().removesuffix('.BIN')}.jsonl"
+def default_map_path(scene: str, context: paths.ToolContext | None = None) -> Path:
+    """Where a Godot editor run writes the scene's map: the profile's build directory."""
+    return (context or paths.CONTEXT).game_build / f"page-map-{scene.upper().removesuffix('.BIN')}.jsonl"
 
 
 def find_page(records: list[dict], scene: str, page: int) -> dict | None:
@@ -101,7 +101,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scene", help="root scene, e.g. SC0000")
     parser.add_argument("page", type=int, help="one-based runtime page number")
-    parser.add_argument("--map", type=Path, dest="map_path", help="page-map JSONL (default: build/page-map-SCENE.jsonl)")
+    parser.add_argument("--map", type=Path, dest="map_path", help="page-map JSONL (default: build/games/PROFILE/page-map-SCENE.jsonl)")
     parser.add_argument("--context", type=int, default=8, help="instructions on either side of the wait (default: 8)")
     args = parser.parse_args()
     scene = args.scene.upper().removesuffix(".BIN")

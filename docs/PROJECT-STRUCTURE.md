@@ -410,6 +410,8 @@ lifecycle are routed separately. `engine/Age.Engine/Vm/VirtualMachine.InputLatch
 triggers held while nothing polls (effects under `EffectSkipOnClick` 0, the ADV coroutine yield), the services that
 take them, and the discard points. `engine/Age.Engine/Vm/VirtualMachine.PhysicalFastForward.cs` owns fast-forward
 from a held action 6 (Ctrl): its two start paths, op `0x101`'s reveal suppression and the clears.
+`engine/Age.Engine/Vm/VirtualMachine.DeterministicRandom.cs` owns op `0x60`'s seeded per-call-site streams, which
+the drive step `rand-seed` turns on.
 `engine/Age.Engine/Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state
@@ -422,8 +424,8 @@ show-and-clear opcode dispatch; shared diagnostic state and native-context forma
 `engine/Age.Engine/Vm/VirtualMachine.RuntimeSettings.cs` owns message-window alpha and system-menu enable/show
 delay opcode dispatch; reset/default initialization, public menu-state accessors, and host state remain centralized.
 
-The disposable `build/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs and map
-runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
+The disposable `build/games/<profile>/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs
+and map runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
 have no repository output tree and write their automatic maps below
 `user://games/<profile-id>/diagnostics/page-maps` instead.
 

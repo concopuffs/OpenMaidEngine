@@ -75,13 +75,6 @@ it; git history keeps the record.
   skill and alchemy tables decoded from appends 1 and 2 (`kamidori-data-tables.md`, `vm-map/globals-kamidori.toml`)
   may therefore miss the update's changes. Done when the pristine view uses each record's `Backup/` original where
   one exists, and the init image, the extracted tables and their documentation are rebuilt from it.
-- **Op `0x60` draws differ between native and the port.** Native's `rand()` is the MSVC LCG, seeded from the tick
-  count and also drawn by the main tick, screen transitions, the save encoder and the catalog parse. The port draws
-  from `System.Random.Shared` (`engine-re.md`, "Op 0x60 randomness"). From Kamidori's first enemy phase on, enemy
-  movement, spawns and battle rolls differ between the targets, so driven comparisons cover presentation only.
-  Accepted idea: a deterministic mode for parity tests, with a Frida hook that gives native op `0x60` a seeded
-  sequence and a port flag that draws the same one. Done when a battle scenario reaches the same outcome on both
-  targets, or the idea is dropped.
 - **Persistent Skip and read-skip cases the port does not model** (`engine-re.md`, "Read skip and ctx+0x13dc"):
   - Op `0x88(1)` while the ADV service is suspended (after op `0x19b`). Native sets only `ctx+0x13dc`, and the next
     polling text wait starts fast-forward. The port sets its script fast-forward channel at once.
@@ -179,12 +172,6 @@ it; git history keeps the record.
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
-- **Page maps are keyed by scene only, and an unwritable one stops boot.** Editor and development runs write
-  `build/page-map-<SCENE>.jsonl` whatever the profile (`Main.DefaultPageMapPath`), so two profiles that start from
-  a same-named script share one file, and each run overwrites the other's map. `PageLocatorState` opens the file with
-  a bare `StreamWriter`. If another running port holds it, the `IOException` escapes `Main._Ready`, and boot stops
-  before the VM is created. Done when the default path includes the profile and a failed open disables the map with
-  a warning.
 - **CI actions pinned to Node.js 20 releases.** Since 2026-11-06, CI's annotations warn that `actions/checkout`
   v4.4.0, `actions/setup-dotnet` v4.3.1, `actions/upload-artifact` v4.6.2 and `actions/cache` v4.3.0 target
   Node.js 20. The runners force them onto Node.js 24 for now. `actions/download-artifact` v4.3.0 is the same

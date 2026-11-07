@@ -15,6 +15,9 @@
 //   AGE.EXE input polling     keeppolling() stops WM_ACTIVATE from closing the polling gate: windowed AGE ignores
 //                             polled buttons and the cursor while inactive, and a driven AGE always is. It is
 //                             installed once the window exists, because AGE.EXE is unpacked at run time.
+//   AGE.EXE op 0x60           randseed(seed) replaces the draw op 0x60 takes from the CRT's rand() with the seeded
+//                             per-site stream the port computes (VirtualMachine.DeterministicRandom.cs); null
+//                             gives the game its own draws back. Installed at the first seed, for the same reason.
 //
 // Facts behind each hook: docs/engine-re.md, "Where native input comes from" and "Driving native AGE".
 
@@ -404,6 +407,55 @@ function keepPolling() {
     return pollingKept.count;
 }
 
+// Op 0x60's deterministic mode (docs/engine-re.md, "Op 0x60 randomness"). Each call site, the running frame's script
+// resource id P and the op's dword offset O, draws MSVC rand() from its own state, first
+// seed ^ (P * 0x9E3779B1 + O * 0x85EBCA77) mod 2^32. The handler calls rand() before it fetches an operand, so the
+// frame's pc still holds the op's own offset; the probe sits on the instruction after that call and replaces EAX.
+let rand = null;          // { seed, draws, sites: Map("P:O" -> { resid, offset, state, draws }) } while seeded
+let randProbe = null;
+const OP60_RETURN_BYTES = [0x6a, 0x02, 0x8b, 0xce, 0xa3];   // push 2; mov ecx, esi; mov [draw], eax
+
+function randDraw() {
+    const engine = config.engine;
+    const ctx = ptr(engine.ctx_global).readPointer();
+    const frame = ctx.add(ctx.add(engine.cur_ctx_index).readU32() * engine.frame_stride);
+    const resid = frame.add(engine.frame_script_resource_id).readU32();
+    const offset = ((frame.add(engine.frame_pc).readU32() - frame.add(engine.frame_codebase).readU32()) >>> 2) >>> 0;
+    const key = `${resid}:${offset}`;
+    let site = rand.sites.get(key);
+    if (site === undefined) {
+        const mixed = (Math.imul(resid, 0x9e3779b1) + Math.imul(offset, 0x85ebca77)) >>> 0;
+        site = { resid, offset, state: (rand.seed ^ mixed) >>> 0, draws: 0 };
+        rand.sites.set(key, site);
+    }
+    site.state = (Math.imul(site.state, 0x343fd) + 0x269ec3) >>> 0;
+    site.draws += 1;
+    rand.draws += 1;
+    return (site.state >>> 16) & 0x7fff;
+}
+
+function randSeed(seed) {
+    const facts = config.rand;
+    if (facts === null || facts === undefined || config.engine === null)
+        throw new Error('the profile has no [native.rand] and [native.engine] facts');
+    const drawn = rand === null ? { seed: null, draws: 0, sites: [] }
+        : { seed: rand.seed, draws: rand.draws,
+            sites: Array.from(rand.sites.values(), site => [site.resid, site.offset, site.draws]) };
+    if (seed !== null && randProbe === null) {
+        const site = ptr(facts.op60_rand_return);
+        const found = Array.from(new Uint8Array(site.readByteArray(OP60_RETURN_BYTES.length)));
+        if (found.some((byte, index) => byte !== OP60_RETURN_BYTES[index]))
+            throw new Error(`op 0x60's rand() call does not return to the expected code at ${site}: ${hex(found)}`);
+        // A probe (a bare function), not an onEnter object: Frida would take the site for a function entry and swap
+        // [esp], which here is the handler's saved ESI, for its leave trampoline.
+        randProbe = Interceptor.attach(site, function () {
+            if (rand !== null) this.context.eax = ptr(randDraw());
+        });
+    }
+    rand = seed === null ? null : { seed: seed >>> 0, draws: 0, sites: new Map() };
+    return drawn;
+}
+
 // Windows' keyboard menu starts only in the active window of AGE's thread. This joins that thread's input queue from
 // inside AGE's process and activates the window there. In a background session it runs under LSFW_LOCK, so the
 // activation stays inside AGE's thread even if AGE could still set the foreground.
@@ -467,6 +519,9 @@ rpc.exports = {
     },
     keeppolling() {
         return keepPolling();
+    },
+    randseed(seed) {
+        return randSeed(seed);
     },
     setcursor(x, y) {
         cursor = [x, y];

@@ -47,6 +47,8 @@ public class DriveControlTests
         public JsonObject Answer(string button) { Answered = button; return new JsonObject { ["answered"] = button }; }
         public bool? Minimized;
         public JsonObject Window(bool minimize) { Minimized = minimize; return new JsonObject { ["minimized"] = minimize }; }
+        public readonly List<uint?> Seeds = new();
+        public JsonObject RandSeed(uint? seed) { Seeds.Add(seed); return new JsonObject { ["seed"] = seed }; }
         public int? Chosen;
         public JsonObject Menu(int command)
         {
@@ -208,6 +210,27 @@ public class DriveControlTests
         Assert.False((bool)reply["ok"]!);
         Assert.Contains("TITLE@0x21", (string?)reply["error"]);
         Assert.Contains("waiting=menu", (string?)reply["error"]);
+    }
+
+    [Fact]
+    public void RandSeedTakesASeedOrNullAndNeedsTheCapability()
+    {
+        var backend = new FakeBackend { Capabilities = new[] { "rand" } };
+        var dispatcher = new DriveDispatcher(backend);
+
+        Assert.Equal(7u, (uint)Run(dispatcher, backend, """{"id":1,"op":"rand-seed","seed":7}""")["result"]!["seed"]!);
+        Assert.True((bool)Run(dispatcher, backend, """{"id":2,"op":"rand-seed","seed":4294967295}""")["ok"]!);
+        Assert.True((bool)Run(dispatcher, backend, """{"id":3,"op":"rand-seed","seed":null}""")["ok"]!);
+        Assert.Equal(new uint?[] { 7, 0xffffffff, null }, backend.Seeds);
+        foreach (string bad in new[] { "-1", "4294967296", "1.5", "\"1\"" })
+            Assert.Contains("rand-seed takes a seed",
+                (string?)Run(dispatcher, backend, $$"""{"id":4,"op":"rand-seed","seed":{{bad}}}""")["error"]);
+        Assert.Contains("needs 'seed'", (string?)Run(dispatcher, backend, """{"id":5,"op":"rand-seed"}""")["error"]);
+
+        var without = new FakeBackend { Capabilities = Array.Empty<string>() };
+        Assert.Contains("'rand' is not supported", (string?)Run(new DriveDispatcher(without), without,
+            """{"id":6,"op":"rand-seed","seed":1}""")["error"]);
+        Assert.Empty(without.Seeds);
     }
 
     [Fact]

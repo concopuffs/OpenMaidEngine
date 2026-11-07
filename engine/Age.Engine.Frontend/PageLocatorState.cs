@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using Age.Engine.Sys4;
 
 /// <summary>
 /// Thread-safe bridge between the VM trace, the ADV host's page waits, and the Godot UI.
@@ -22,6 +23,32 @@ public sealed class PageLocatorState : System.IDisposable
     private string? _text;
     private string _currentDisplay;
     private bool _disposed;
+
+    /// <summary>The map's file name for <paramref name="scene"/>: <c>page-map-&lt;SCENE&gt;.jsonl</c>.</summary>
+    public static string MapFileName(string scene) => $"page-map-{NormalizeScript(scene)}.jsonl";
+
+    /// <summary>Where an editor or development run writes the map, and where <c>tools/locate_page.py</c> reads it:
+    /// the profile's build directory, <c>build/games/&lt;profile&gt;</c>, so two games' same-named scenes never share
+    /// a file.</summary>
+    public static string DevelopmentMapPath(string profileId, string scene)
+        => Path.Combine(Paths.GameBuild(profileId), MapFileName(scene));
+
+    /// <summary>A locator that writes its map to <paramref name="mapPath"/>. When the file cannot be opened (another
+    /// running port holds it, or its directory is read-only) the locator keeps no map, and <paramref name="warning"/>
+    /// says why: the map is a diagnostic and never stops a run.</summary>
+    public static PageLocatorState Open(string rootScene, string? mapPath, out string? warning)
+    {
+        warning = null;
+        try
+        {
+            return new PageLocatorState(rootScene, mapPath);
+        }
+        catch (System.Exception error) when (error is IOException or System.UnauthorizedAccessException)
+        {
+            warning = $"page map {mapPath} cannot be written, so this run keeps none: {error.Message}";
+            return new PageLocatorState(rootScene, null);
+        }
+    }
 
     public PageLocatorState(string rootScene, string? mapPath)
     {

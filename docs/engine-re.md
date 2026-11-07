@@ -6248,8 +6248,39 @@ processing (`FIELD@0x8cec`, "Taking Action..."). The port's slime did not, and t
 direct attack (`0x3205`, cell flag `0x1` clear and `0x20100` set, then SELACT from `0x32ac`). So the 防御 row in
 SELACT is live on native, where Wilfred defends, and grayed in the port, where he attacks.
 
-Compare battle presentation, not outcomes. The SELACT Engage button, the BTL HUD's centre stats and the REWARD item
-panel matched native to within the translucency over the different backdrops.
+Unseeded, compare battle presentation, not outcomes. The SELACT Engage button, the BTL HUD's centre stats and the
+REWARD item panel matched native to within the translucency over the different backdrops.
+
+#### Deterministic mode (2026-11-07)
+
+The drive step `rand-seed SEED` (`tools-reference.md`, "Game driver") makes both targets draw op `0x60` from the same
+streams; `rand-seed off` gives each its own generator back. Every call site has its own stream: the running frame's
+script, packed id `P` (native: the frame's resource id), and the op's dword offset `O`. A stream starts at
+`seed ^ (P * 0x9E3779B1 + O * 0x85EBCA77)`, mod 2^32, and steps as MSVC `rand()`:
+`state = state * 0x343FD + 0x269EC3`, value `(state >> 16) & 0x7FFF`. The op then writes `value % bound`. The k-th
+draw at a site is the same on both targets, whatever else ran. A site that one target draws more often, such as one
+in a timed loop, changes only its own later values.
+
+- Native: the agent (`tools/drive/native-agent.js`) puts a Frida probe on the instruction after the handler's
+  `rand()` call, which returns to `0x4269af` in `/v2` and `0x42772f` in SYS4433 (`op_0x60_handler@0x4276f0`,
+  `_rand@0x558368`), and replaces EAX. The handler calls `rand()` before it fetches an operand, so the frame's pc
+  still holds the op's own offset. The driver profiles name the site (`[native.rand]`), and the agent checks the
+  bytes there before it hooks. The hook must be a probe, a bare function. An `onEnter` object makes Frida take the
+  site for a function entry and swap `[esp]`, here the handler's saved ESI, for its leave trampoline. AGE then
+  faulted in the main tick reading `[esi+0xa51a0]`.
+- Port: `VirtualMachine.DeterministicRandom.cs`. Like native, the port now draws before it reads the bound, so a
+  zero bound spends a draw too.
+- The step's result counts the draws per site since the previous `rand-seed`. Equal counts mean equal values.
+
+Verified on Kamidori, from one FIELD save on both targets (turn 12, two slimes):
+
+| Run | Draws per site, both targets | Outcome, both targets |
+|---|---|---|
+| seed 1, end the turn | FIELD@0x940a ×1000, MVRTN@0x24e ×5, RTN_M002@0x5e ×3, RTN_M005@0x24a ×6 | turn 13, the slimes stay |
+| seed 2: click Wilfred, then the portal room (the turn ended); then Wilfred, the 戦闘 room and Engage | FIELD@0x940a ×2000, MVRTN@0x24e ×12, RTN_M002@0x5e ×9, RTN_M005@0x24a ×14 | turn 14, the slime moves into the 戦闘 room; then the same entry through `FIELD@0x8cec` into SELACT, and the slime at 0/12, Wilfred at 16/18, 24 EXP, 緑の液 ×1 |
+
+The frames differ only in animation phases. Himegari's site is checked statically and by the agent's byte check;
+no committed Himegari scenario reaches an op `0x60` site yet.
 
 ### Driving native AGE (2026-11-01)
 

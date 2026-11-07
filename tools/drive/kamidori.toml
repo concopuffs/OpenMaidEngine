@@ -47,6 +47,11 @@ setter = 0x465a60
 activate_return = 0x48e061
 gate = 0x1c28
 
+# The drive step rand-seed replaces op 0x60's rand() draw at the instruction its call returns to
+# (op_0x60_handler@0x4276f0 calls _rand@0x558368 before it fetches an operand).
+[native.rand]
+op60_rand_return = 0x42772f
+
 [[native.dialog]]
 match = "データが壊れています．"
 answer = "yes"

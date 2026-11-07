@@ -305,7 +305,7 @@ and the exact FIELD/DRAWMINIMAP/RESETLAND copy/fallback/restore contract.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `locate_page.py` | Resolve a run-relative ADV page number to its canonical wait script/offset, last show-text instruction, call stack, and nearby disassembly. Pure selection/window logic is tested by `test_locate_page.py`. | `py -3.11 -X utf8 tools/locate_page.py SC0000 14 [--map <jsonl>] [--context N]` | `build/page-map-<SCENE>.jsonl` + script corpus → stdout |
+| `locate_page.py` | Resolve a run-relative ADV page number to its canonical wait script/offset, last show-text instruction, call stack, and nearby disassembly. Pure selection/window logic is tested by `test_locate_page.py`. | `py -3.11 -X utf8 tools/locate_page.py [--profile <profile>] SC0000 14 [--map <jsonl>] [--context N]` | `build/games/<profile>/page-map-<SCENE>.jsonl` + script corpus → stdout |
 
 In a live Godot run, **F6** writes an observe-only stall snapshot under
 `user://games/<profile-id>/diagnostics/stall-<timestamp>.json`, prints the absolute path, and copies
@@ -796,8 +796,10 @@ with the coordinator globals queued on the VM thread, then lets SYSTEM4 perform 
 call. F4 outside TITLE prints an unavailable reason and changes no state. Cancel or Escape closes the panel.
 The launcher does not seed story/profile state, jump to byte offsets, or force-switch an active child scene.
 
-**Godot page locator:** every editor/development run recreates `build/page-map-<SCENE>.jsonl`; a packaged
-export writes the same automatic map below `user://games/<profile-id>/diagnostics/page-maps`. Each
+**Godot page locator:** every editor/development run recreates `build/games/<profile>/page-map-<SCENE>.jsonl`, so
+two games' same-named scenes keep separate maps; a packaged export writes the same automatic map below
+`user://games/<profile-id>/diagnostics/page-maps`. A map the port cannot open (another running port holds it, or
+the directory is read-only) logs a `[locator]` warning, and the run keeps no map. Each
 `wait-for-input` adds the
 run-relative page, page-start location, canonical wait script/offset, last show-text instruction and string
 offsets, text, and nested call stack. Use `--page-map <jsonl>` to override the output; pass that explicit path
@@ -805,7 +807,7 @@ to `locate_page.py --map` when resolving a map copied from an export profile. `-
 `SC0000 P014 · wait SC0000@0x… · text SC0000@0x…` at launch; **F2**
 toggles it and **F3** copies the current locator to the clipboard. The offset remains authoritative because
 branching/state can shift page ordinals between runs. Resolve a reported page with
-`py -3.11 -X utf8 tools/locate_page.py SC0000 14`.
+`py -3.11 -X utf8 tools/locate_page.py SC0000 14`, adding `--profile <profile>` for a game other than Himegari.
 
 ## Asset resolution / graphics
 
@@ -892,6 +894,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `wait-state CONDITIONS [timeout=S] [click=POINT every=S]` | poll until `expect` would pass, clicking `POINT` every `S` seconds (default 2) meanwhile (boot: `wait-state script=TITLE click=adv.next every=3`) |
 | `point NAME X Y` | define a point for the session |
 | `speed FACTOR` | port: run the frame clock 0.05–8 times as fast |
+| `rand-seed SEED\|off` | draw op `0x60` from SEED's streams (0 to `0xffffffff`, decimal or hex), one per call site and the same on both targets, until the next `rand-seed`; `off` returns to the game's own draws. Every stream restarts at each `rand-seed`. The result reports what the period that just ended drew: `previous_seed`, `draws` and `sites`, the count per `SCRIPT@0xOFFSET`. Seed both targets at the same point, for example after loading one save, then compare the counts as well as the screens. The streams are defined in `docs/engine-re.md`, "Op 0x60 randomness". Native needs the profile's `[native.rand]` |
 | `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, AGERC's dialogs and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs, the folder picker, ﾊﾞｰｼﾞｮﾝ情報 and 設定). AGERC's dialogs list every static text and button of the dialog and its pages, hidden pages included, the topmost dialog first; `answer` presses the first match from the topmost dialog down, and a check box toggles. Natively the press is a posted `BM_CLICK`, which AGE's thread takes only when it next reads its queue, as it would a user's click, so `answer` returns once AGE has taken it (10 s at most). 設定's first open in a process holds AGE's thread for about 2 s with its VRAM query (`engine-re.md`, "Native menu bar", 設定). The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
 | `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
 | `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode, restoring the screen mode the game was in, and its result also reads `windowed`. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground`. Natively the restore does not activate the window ("What the native hooks do inside AGE") |
@@ -1111,6 +1114,9 @@ target's sandbox can seed the other's.
   - Its buttons carry the Windows UI language's labels, for example `&Retry` on English Windows.
 - Mouse and key messages are not posted while AGE's window is disabled, for example under a modal box, because
   hardware input would not reach it either.
+- Op `0x60`, after the first `rand-seed`: a Frida probe on the instruction after the handler's `rand()` call
+  (`[native.rand] op60_rand_return`) replaces the draw with the seeded stream's value. The agent checks the bytes
+  there first, since AGE.EXE is unpacked only at run time.
 
 So your own mouse, keyboard and gamepad cannot disturb a run, and AGE cannot move your cursor. Clicks set the polled
 button *and* post the button messages, because the movie skip and `CLICKONUP` use the message latch. Keys likewise

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Age.Engine.Frontend.Control;
@@ -33,6 +34,9 @@ public interface IDriveBackend
     /// <summary>Choose menu-bar command <paramref name="command"/> as a user does: refresh the menu, refuse a grayed or
     /// missing item, run an enabled one; returns {command, label, enabled, checked} (capability "menu").</summary>
     JsonObject Menu(int command) => throw new DriveProtocolException("'menu' has no implementation here");
+    /// <summary>Draw op 0x60 from <paramref name="seed"/>'s per-site streams, or from the game's own generator when
+    /// null; returns what op 0x60 drew since the previous call (capability "rand").</summary>
+    JsonObject RandSeed(uint? seed) => throw new DriveProtocolException("'rand-seed' has no implementation here");
     /// <summary>The last position the game itself moved the cursor to since the previous call, if any.</summary>
     (int X, int Y)? TakeCursorWarp();
     /// <summary>Where the driven cursor is now, in native canvas pixels (the last pointer, click or warp).</summary>
@@ -174,6 +178,18 @@ public sealed class DriveDispatcher
                 if (!double.IsFinite(factor) || factor < 0.05 || factor > 8)
                     throw new DriveProtocolException("speed factor must be between 0.05 and 8");
                 return Immediate(request, reply, () => { _backend.SetSpeed(factor); return null; });
+            }
+            case "rand-seed":
+            {
+                RequireCapability("rand");
+                JsonElement value = request.Element("seed");
+                uint? seed = value.ValueKind switch
+                {
+                    JsonValueKind.Null => null,
+                    JsonValueKind.Number when value.TryGetUInt32(out uint number) => number,
+                    _ => throw new DriveProtocolException("rand-seed takes a seed from 0 to 0xffffffff, or null"),
+                };
+                return Immediate(request, reply, () => _backend.RandSeed(seed));
             }
             case "close":
                 return Immediate(request, reply, () => null);

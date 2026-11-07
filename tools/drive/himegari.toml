@@ -47,6 +47,12 @@ frame_count = 20          # records in the array; cur_ctx_index selects the runn
 setter = 0x460180            # input_set_polling_enabled(this = input manager, disable)
 activate_return = 0x4865f3   # return address of its call in the WM_ACTIVATE case
 
+# Native AGE only: the drive step rand-seed replaces op 0x60's rand() draw at the instruction its call returns to
+# (op_0x60_handler@0x426970 calls _rand@0x550fe4 before it fetches an operand; docs/engine-re.md, "Op 0x60
+# randomness").
+[native.rand]
+op60_rand_return = 0x4269af
+
 # Native AGE only: message boxes the agent answers without showing them (MessageBoxA, matched on the start of the
 # text).
 [[native.dialog]]

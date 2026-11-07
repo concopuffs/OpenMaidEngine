@@ -284,6 +284,7 @@ class Profile:
     dialogs: tuple[DialogPolicy, ...] = ()
     engine: dict[str, int] | None = None        # ctx_global, frame_stride, frame_count [, frame field offsets]
     keep_polling: dict[str, int] | None = None  # setter, activate_return [, gate]
+    rand: dict[str, int] | None = None          # op60_rand_return
 
 
 # Engine field offsets a profile may give in [native.engine] / [native.keep_polling]. vm-map/engine-ctx.toml holds
@@ -319,8 +320,11 @@ def parse_profile(text: str) -> Profile:
     keep_polling = _native_table(native, "keep_polling", ("setter", "activate_return"), (POLLING_GATE_KEY,))
     if keep_polling is not None and engine is None:
         raise DriveError("[native.keep_polling] needs [native.engine] (it reopens the gate through the ctx)")
+    rand = _native_table(native, "rand", ("op60_rand_return",))
+    if rand is not None and engine is None:
+        raise DriveError("[native.rand] needs [native.engine] (it names the call site from the running frame)")
     return Profile(points, advance, sandbox.get("settings_file", ""), settings, quiet, tuple(dialogs), engine,
-                   keep_polling)
+                   keep_polling, rand)
 
 
 def _native_table(native: dict[str, Any], name: str, keys: tuple[str, ...],
@@ -407,7 +411,7 @@ def key_chord(name: str) -> tuple[bool, int]:
 
 # Capabilities both targets offer (native: drive_native.CAPABILITIES; port: PortCapabilities in godot/Main.Drive.cs).
 # Committed scenarios may use these and nothing target-only.
-SHARED_CAPABILITIES = ("dialogs", "answer", "window", "menu")
+SHARED_CAPABILITIES = ("dialogs", "answer", "window", "menu", "rand")
 
 # AGERC.DLL's menu-bar commands (menu 110; docs/engine-re.md "Native menu bar"), by the names `menu` steps take.
 MENU_COMMANDS = {
@@ -416,6 +420,19 @@ MENU_COMMANDS = {
     "auto": 0x9c65, "sound-settings": 0x9c68, "message-settings": 0x9c6c, "system-info": 0x9c6d,
     "other-settings": 0x9c6e, "read-skip": 0x9c6f,
 }
+
+
+def rand_seed(text: str) -> int | None:
+    """A rand-seed step's seed: an integer from 0 to 0xffffffff, or None for `off`."""
+    if text.lower() == "off":
+        return None
+    try:
+        seed = int(text, 0)
+    except ValueError:
+        raise DriveError(f"rand-seed takes a seed or off, got {text!r}") from None
+    if not 0 <= seed <= 0xFFFFFFFF:
+        raise DriveError("rand-seed takes a seed from 0 to 0xffffffff")
+    return seed
 
 
 def menu_command(name: str) -> int:
@@ -466,6 +483,9 @@ STEPS = {
                         "wait until the VM matches, clicking POINT every S seconds (default 2) meanwhile"),
     "point": _spec(3, 3, "", "point NAME X Y                define a named point for this session"),
     "speed": _spec(1, 1, "", "speed FACTOR                  run the frame clock FACTOR times as fast (port)", "speed"),
+    "rand-seed": _spec(1, 1, "", "rand-seed SEED|off            draw op 0x60 from SEED's per-call-site streams, alike on "
+                       "both targets (off: the game's own draws); reports the draws per site since the last "
+                       "rand-seed", "rand"),
     "dialogs": _spec(0, 0, "", "dialogs                       list the game's open dialogs (native message boxes; "
                      "both: the 終了 dialog)", "dialogs"),
     "answer": _spec(1, 1, "", "answer BUTTON                 press a button of an open dialog (radio buttons too)",
@@ -573,6 +593,8 @@ def _validate(step: Step) -> None:
             raise DriveError(f"speed takes a factor, got {step.args[0]!r}") from None
         if not 0.05 <= factor <= 8:
             raise DriveError("speed factor must be between 0.05 and 8")
+    elif step.name == "rand-seed":
+        rand_seed(step.args[0])
     elif step.name in ("expect", "wait-state"):
         condition_of(step)
         if "every" in step.options and "click" not in step.options:
@@ -888,6 +910,8 @@ class Executor:
             self.points[step.args[0]] = _coordinates(step.args[1:])
         elif step.name == "speed":
             self.client.call("speed", factor=float(step.args[0]))
+        elif step.name == "rand-seed":
+            return self.client.call("rand-seed", seed=rand_seed(step.args[0]))
         elif step.name == "dialogs":
             return self.client.call("dialogs")
         elif step.name == "answer":
@@ -939,13 +963,15 @@ def describe(result: dict[str, Any]) -> str:
     mark = "ok  " if result.get("ok") else "FAIL"
     details = []
     for key in ("error", "path", "location", "settled", "pokes", "seconds", "answered", "exit_code",
-                "cursor_moved_to", "label", "checked"):
+                "cursor_moved_to", "label", "checked", "seed", "previous_seed", "draws"):
         if key in result and result[key] is not None:
             details.append(f"{key}={result[key]}")
     if "frames" in result:
         details.append("frames=" + describe_stack(result))
     if "dialogs" in result:
         details.append(f"dialogs={json.dumps(result['dialogs'], ensure_ascii=False)}")
+    if result.get("sites"):
+        details.append("sites=" + " ".join(f"{site}x{count}" for site, count in result["sites"].items()))
     lines = [f"{mark} {result.get('step', '')}  " + "  ".join(details)]
     lines += ["  " + describe_event(event) for event in result.get("events", [])]
     return "\n".join(lines)

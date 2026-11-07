@@ -43,9 +43,13 @@ def test_context_window():
 
 def test_default_map_path():
     path = default_map_path("sc0000.bin")
-    check(path == paths.SHARED_BUILD / "page-map-SC0000.jsonl",
-          "default map is the shared build directory, where Godot editor runs write it")
-    check(paths.SHARED_BUILD != paths.GAME_BUILD, "the shared build directory is not the profile build directory")
+    check(path == paths.GAME_BUILD / "page-map-SC0000.jsonl",
+          "default map is the profile's build directory, where Godot editor runs write it")
+    kamidori = default_map_path("SC0000", paths.ToolContext.resolve("kamidori"))
+    check(kamidori == paths.SHARED_BUILD / "games" / "kamidori" / "page-map-SC0000.jsonl",
+          "another profile's same-named scene has its own map")
+    check(kamidori != default_map_path("SC0000", paths.ToolContext.resolve("himegari")),
+          "two profiles never share a map")
 
 
 def main():
