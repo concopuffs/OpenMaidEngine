@@ -26,6 +26,24 @@ public class GfxStateTests
     }
 
     [Fact]
+    public void SurfaceResourceQueryIndexesPastTheLiveTableAsNativeDoes()
+    {
+        // Native op 0x216 has no bounds check. Slot -1 (op 0x215's "no object") reads the manager word before the
+        // live table, which is zero: Kamidori native saves keep G[0x320a]=0 from ALLMAP@0x506. Slots 1000..1999 read
+        // the page snapshot table that follows the live one.
+        var g = new GfxState();
+        Assert.Equal(0, g.QueryField(-1));
+        g.SetSurface(3, 0x4540, -1);
+        Assert.Equal(-1, g.QueryField(1003));
+        g.SnapshotSurfaceRecords();
+        g.SetSurface(3, 0x4541, -1);
+        Assert.Equal(0x4541, g.QueryField(3));
+        Assert.Equal(0x4540, g.QueryField(1003));
+        Assert.Equal(-1, g.QueryField(2000));
+        Assert.Equal(-1, g.QueryField(-2));
+    }
+
+    [Fact]
     public void SceneResetClearsTheRecordsAndKeepsTheSurfaces()
     {
         // scene_context_init_reset reinitializes both record tables but releases no texture. Native read 2026-11-07:

@@ -95,6 +95,12 @@ it; git history keeps the record.
   one appears.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,
   where the encoder's match choices differ. Matching is optional, since native reads both.
+- **Surface 0x20's created flag in Kamidori saves.** Kamidori SAVE01 and SAVE05 (k1 sandboxes, 2026-11-07), made
+  by both targets from the same history, differ in one surface record besides the op `0xd0` clock samples: slot
+  `0x20` has created `1` on the port and `0` on native. Slot `0x20` is the legacy transition scratch surface
+  ([sys4-format-notes.md](sys4-format-notes.md), "Surface-record bookkeeping"), so the port probably runs a
+  scratch write that native skips somewhere between the field and the workshop. Only saves see the flag: neither the
+  restore nor op `0x216` reads it. Done when the writer is found and matched.
 
 ## Open Maid Script
 

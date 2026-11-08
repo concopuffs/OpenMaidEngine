@@ -6256,6 +6256,38 @@ Filters' codec probe spends at `0x13c8`. The movie frames line up once that prob
 `MovieOpcodeTests.Sc0000ResumesImmediatelyAfterMovieOpcodeAtBytecodeOffset13d1` seeds the table as SYSTEM4 does,
 then checks surface 5 and a 12016 ms anim clock.
 
+#### Op 0x216 reads past the live surface table (2026-11-07)
+
+**Native.** `op_0x216_query_surface_resource` (SYS4422 `0x42a0f0`, SYS4433 `0x42b010`) returns the word at gfx
+manager `+0x700 + slot*0x14` without checking the slot. Kamidori's world map and save screen pass it -1:
+
+1. ALLMAP@`0x4fa` and SAVE@`0xbce` ask op `0x215` for object `0xcb2a`'s source slot (ADV layer 1, `G[0xfd43c]`)
+   into `G[0xfd437]`. With no such object that is -1.
+2. The `jcc` that follows skips only on zero, so op `0x216` queries slot -1 into `G[0x320a]`.
+3. A nonzero `G[0x320a]` would scan table `G[0xfec76]` for a matching background and draw its thumbnail into the save
+   image (`0xc1`/`0xc3`).
+
+Slot -1 reads manager `+0x6ec`. Neither image addresses that word (no `0x6ec` displacement, nor `ctx+0x46d00` or
+`ctx+0x4af88`), and a Frida read of Kamidori native at ALLMAP found it 0, with `G[0xfd437]=-1` and `G[0x320a]=0`. Native
+saves carry that 0. The page snapshot table follows the live one directly (manager `+0x5520`; SYS4433
+`ctx+0x4af9c+0x4e20`), so slots 1000–1999 read snapshot records.
+
+**Port.** `GfxState.QueryField` returned -1 for any slot outside 0–999, so every port save since the first world
+map held `G[0x320a]=-1`. The port then ran the thumbnail scan, which native skips on 0. No entry matched -1, so
+nothing drew. `QueryField` now returns 0 for slot -1 and snapshot ids for 1000–1999; other slots
+still return -1. After both targets loaded the same save and made the same world-map round trip, SAVE07's payloads
+differ only in native's pre-load surface-record history (below) and op `0xd0` clock samples. Test:
+`GfxStateTests.SurfaceResourceQueryIndexesPastTheLiveTableAsNativeDoes`.
+
+**Save comparison.** The decoded payloads (`NativeSaveContainerCodec.Decode`) are what to compare: the LZSS bytes
+differ by encoder choice. Two known differences remain:
+
+- A load does not copy the saved surface table back ([sys4-format-notes.md](sys4-format-notes.md),
+  "Surface-record bookkeeping"). Color keys and created flags from before the load therefore reach the next
+  op-`0x71` snapshot. A port restarted before loading lacks them.
+- Op `0xd0` samples kept in globals are `timeGetTime()` on native and the frame clock on the port. Scripts use them
+  only in pairs.
+
 ### Fast-forward through effect waits, its pace, and physical Ctrl (2026-11-07)
 
 Kamidori's prologue under held Ctrl showed four gaps against native. Each is closed below. With a 1.5 s Ctrl from

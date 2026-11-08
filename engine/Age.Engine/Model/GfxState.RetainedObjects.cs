@@ -295,13 +295,22 @@ public sealed partial class GfxState
     }
 
     /// <summary>Opcode 0x216 reads the live surface record's resource id (owner+0x700), not an object field or the
-    /// texture. A texture kept across op 0x9 therefore reads -1 once the reset has cleared its record.</summary>
+    /// texture. A texture kept across op 0x9 therefore reads -1 once the reset has cleared its record.
+    /// Both native handlers (SYS4422 0x42a0f0, SYS4433 0x42b010) index owner+0x700+slot*0x14 with no bounds check.
+    /// Scripts pass op 0x215's -1 ("no such object") straight through: Kamidori ALLMAP@0x506 and SAVE@0xbda
+    /// query object 0xcb2a's slot and test only for zero. Slot -1 reads owner+0x6ec, a word nothing writes, so
+    /// native returns 0. Slots 1000..1999 land in the page snapshot table at owner+0x5520. Any other slot reads
+    /// unrelated manager memory, which is not modeled.</summary>
     public long QueryField(long idx)
     {
         lock (_lock)
-            return idx is >= 0 and < SurfaceRecordCount
-                ? _surfaceRecords[(int)idx * SurfaceRecordDwords + RecordResourceId]
-                : -1;
+        {
+            if (idx is >= 0 and < SurfaceRecordCount)
+                return _surfaceRecords[(int)idx * SurfaceRecordDwords + RecordResourceId];
+            if (idx is >= SurfaceRecordCount and < 2 * SurfaceRecordCount)
+                return _surfaceRecordSnapshot[((int)idx - SurfaceRecordCount) * SurfaceRecordDwords + RecordResourceId];
+            return idx == -1 ? 0 : -1;
+        }
     }
 
     public void Release(long handle)
