@@ -23,6 +23,8 @@ The expected install is `Kamidori/` beside the repository, optionally with the E
 
   Kamidori has no predefined points, so define them with `point NAME X Y`. On the title screen, Game Start is at
   `700 300`; on the next screen, Begin Game is at `735 401`.
+- The install's `agerc.dll` has English dialogs, translated or not, so `dialogs` and `answer` use English labels:
+  the close dialog is Quit, with `Exit(&E)`, `'Return to title(&T)'`, `OK` and `Cancel`.
 - Registries for fragments: `py -3.11 -X utf8 tools/globals_build.py --profile kamidori --build`.
 
 ## The translation is a different base

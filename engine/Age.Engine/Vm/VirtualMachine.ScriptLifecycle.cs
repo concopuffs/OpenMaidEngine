@@ -22,8 +22,9 @@ public sealed partial class VirtualMachine
             case "exit": return FRAME_RETURN;
             case "exit-script":
                 // Native op 0x9 clears the process-initial flag, disposes every active script frame,
-                // resets scene-owned services, and loads raw script resource 0 as the new root
-                // (ResetSceneContextForRootReload, shared with the 終了 dialog's return to title).
+                // zeroes the global banks, resets scene-owned services, and loads raw script resource 0
+                // as the new root (ResetSceneContextForRootReload, shared with the 終了 dialog's return
+                // to title).
                 return ROOT_RELOAD;
             case "call-script":
             {

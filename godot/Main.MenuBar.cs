@@ -35,13 +35,15 @@ public partial class Main
         AgercMenu.MessageSettings, AgercMenu.SoundSettings, AgercMenu.OtherSettings, AgercMenu.SystemInfo,
     };
 
-    /// <summary>Read and prune the menu before the window is sized, since the bar adds rows above the game.</summary>
+    /// <summary>Read and prune the menu before the window is sized, since the bar adds rows above the game. The game's
+    /// AGERC.DLL also holds the 終了 dialog (Main.Exit.cs), which a run without the bar still opens.</summary>
     private void LoadMenuBar(string gameRoot, Sys4StartupSettings settings, string[] userArgs)
     {
         _menuItems = null;
         _menuBarHeight = 0;
-        if (Array.IndexOf(userArgs, "--no-menu-bar") >= 0) return;
         string? path = FindFileIgnoringCase(gameRoot, "AGERC.DLL");
+        _agercPath = path;
+        if (Array.IndexOf(userArgs, "--no-menu-bar") >= 0) return;
         if (path == null)
         {
             GD.Print("[menu] no AGERC.DLL in the game root: no menu bar");
@@ -63,7 +65,6 @@ public partial class Main
             return;
         }
         AgercMenu.Prune(items, key => AgercMenu.Setting(settings, key));
-        _agercPath = path;
         _menuItems = items;
         _menuBarHeight = NativeMenuBar.BarHeight;
         GD.Print($"[menu] AGERC menu {AgercMenu.ResourceId}: {string.Join(" ", items.ConvertAll(i => i.Label))}");

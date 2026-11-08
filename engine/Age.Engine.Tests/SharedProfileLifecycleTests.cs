@@ -139,7 +139,7 @@ public class SharedProfileLifecycleTests
     }
 
     [Fact]
-    public void ShutdownFlushPreservesLoadedAccumulatedPlaytimeBaseline()
+    public void ShutdownFlushWritesThisRunsPlaytimeNotTheLoadedOne()
     {
         string root = NewTemporaryDirectory();
         try
@@ -150,12 +150,16 @@ public class SharedProfileLifecycleTests
             original.Save(store, Timestamp, 777);
             var loaded = new SharedProfile();
             Assert.True(loaded.Load(store));
-            var vm = NewVm(loaded, store);
+            var clock = new ManualPlayClock { NowMs = 9_000 };
+            var vm = NewVm(loaded, store, playClock: clock);
+            clock.NowMs += 31_000;
 
             SharedProfileShutdownFlushResult result = vm.FlushSharedProfileOnShutdown();
 
+            // Native AGE: SAVE.DAT's playtime only lands in the container's pending value, so a run that loads no
+            // slot writes its own run time (31 s after 31 s at the title, 2026-11-07).
             Assert.Equal(SharedProfileShutdownFlushOutcome.Saved, result.Outcome);
-            Assert.True(store.LoadShared()!.Metadata.AccumulatedPlaySeconds >= 777);
+            Assert.Equal(31u, store.LoadShared()!.Metadata.AccumulatedPlaySeconds);
         }
         finally
         {
@@ -193,13 +197,14 @@ public class SharedProfileLifecycleTests
     private static VirtualMachine NewVm(
         SharedProfile profile,
         INativeDatStore store,
-        VmOptions? options = null)
+        VmOptions? options = null,
+        TimeProvider? playClock = null)
     {
         Script script = ScriptAssembler.Assemble(
             Table, "SHARED_SHUTDOWN.BIN", [(0x2, Array.Empty<Operand>())], []);
         return new VirtualMachine(
             script, Table, new RecordingHost(), options,
-            sharedProfile: profile, nativeDatStore: store);
+            sharedProfile: profile, nativeDatStore: store, playClock: playClock);
     }
 
     private static string NewTemporaryDirectory()

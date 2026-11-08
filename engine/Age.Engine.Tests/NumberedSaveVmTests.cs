@@ -590,6 +590,188 @@ public class NumberedSaveVmTests
         Assert.True(Assert.Single(surfaces, item => item.Slot == 16).ReloadOnRestore);
     }
 
+    // ---- playtime (save_container_encode_and_write: timeGetTime() / 1000 + base - start) ----
+
+    private static Script SaveSlotScript(string name, uint packedId, int slot, params (int Op, Operand[] Args)[] before)
+        => WithPackedId(ScriptAssembler.Assemble(Table, name,
+        [
+            .. before,
+            (0x1ad, Array.Empty<Operand>()),
+            (0x19e, [new Operand(LocalInt, 0), new Operand(Immediate, slot)]),
+            (0x2, Array.Empty<Operand>()),
+        ], []), packedId);
+
+    private static (int, Operand[]) SleepMs(int milliseconds) => (0xc8, [new Operand(Immediate, milliseconds)]);
+
+    [Theory]
+    [InlineData(5_000_123, 31_000, 31)]
+    [InlineData(1_999, 2, 1)]        // now and start are each truncated to whole seconds
+    [InlineData(2_000, 999, 0)]
+    public void AFreshRunsSavesStoreItsOwnRunTimeNotSaveDatsPlaytime(int startMs, int sleepMs, uint expected)
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            new SharedProfile().Save(store, NativeSystemTime.FromLocalDateTime(DateTime.Now), 3585);
+            var profile = new SharedProfile();
+            Assert.True(profile.Load(store));
+            var clock = new ManualPlayClock { NowMs = startMs };
+            var vm = new VirtualMachine(SaveSlotScript("SAVER.BIN", 0x77, 2, SleepMs(sleepMs)), Table,
+                                        new ClockedHost(clock), sharedProfile: profile, nativeDatStore: store,
+                                        playClock: clock);
+
+            vm.Run();
+
+            // A fresh AGE writes 31 s to SAVE.DAT after 31 s at the title of an install whose SAVE.DAT held 3585 s.
+            Assert.Equal(expected, store.QueryNumberedMetadata(2)!.AccumulatedPlaySeconds);
+            Assert.Equal(expected, store.LoadShared()!.Metadata.AccumulatedPlaySeconds);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AFullLoadCountsOnFromTheSlotsPlaytimeFromItsLastFrameRestore()
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            int callScript = Table.ByLabel("call-script")!.Value;
+            Script resumedCode = ScriptAssembler.Assemble(Table, "RESUMED.BIN",
+            [
+                SleepMs(2_000),                 // the root's prologue, after the load committed the slot's 500 s
+                (0xae, Array.Empty<Operand>()),
+                (callScript, [new Operand(Immediate, 0x89)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []);
+            Script resumed = WithTables(WithPackedId(resumedCode, 0x88),
+                                        scriptCallOffsets: [resumedCode.Instructions[2].Offset]);
+            Script child = WithPackedId(ScriptAssembler.Assemble(Table, "CHILD.BIN",
+            [
+                (0xae, Array.Empty<Operand>()),   // restoring this frame commits again, from now
+                SleepMs(7_000),
+                (callScript, [new Operand(Immediate, 0x91)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x89);
+            Script saveUi = WithPackedId(ScriptAssembler.Assemble(Table, "SAVE_UI.BIN",
+            [
+                (0x19e, [new Operand(LocalInt, 0), new Operand(Immediate, 2)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x91);
+            Script loader = WithPackedId(ScriptAssembler.Assemble(Table, "LOADER.BIN",
+            [
+                SleepMs(10_000),
+                (0x1a1, [new Operand(LocalInt, 0), new Operand(Immediate, 1)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []), 0x99);
+            NativeNumberedSaveState source = NativeNumberedSaveCodec.Empty(
+            [
+                new NativeSavedScriptFrame(-1, 0x88, [], 8, 0),
+                new NativeSavedScriptFrame(0, 0x89, [], -1, -1),
+            ]);
+            store.SaveNumberedFile(1, NativeNumberedSaveCodec.Encode(source), [],
+                                   NativeSystemTime.FromLocalDateTime(DateTime.Now), 500);
+            var clock = new ManualPlayClock { NowMs = 40_000 };
+            var host = new ClockedHost(clock);
+            var vm = new VirtualMachine(
+                loader, Table, host,
+                provider: new MapProvider(new() { [0x88] = resumed, [0x89] = child, [0x91] = saveUi }),
+                nativeDatStore: store, playClock: clock);
+
+            vm.Run();
+
+            Assert.Equal([10_000L, 2_000, 7_000], host.SleptDurations);
+            Assert.Equal(507u, store.QueryNumberedMetadata(2)!.AccumulatedPlaySeconds);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ADataOnlyLoadLeavesThePlaytimeClockRunning()
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            store.SaveNumberedFile(
+                1, NativeNumberedSaveCodec.Encode(NativeNumberedSaveCodec.Empty([new NativeSavedScriptFrame(-1, 0, [], -1, -1)])),
+                [], NativeSystemTime.FromLocalDateTime(DateTime.Now), 500);
+            var clock = new ManualPlayClock();
+            Script script = SaveSlotScript("DATA_ONLY.BIN", 0x77, 2,
+                SleepMs(10_000), (0x19f, [new Operand(LocalInt, 1), new Operand(Immediate, 1)]), SleepMs(5_000));
+            var vm = new VirtualMachine(script, Table, new ClockedHost(clock), nativeDatStore: store, playClock: clock);
+
+            vm.Run();
+
+            // Op 0x19f reads the slot's 500 s into the pending value only (restore_runtime 0 restores no frame).
+            Assert.Equal(15u, store.QueryNumberedMetadata(2)!.AccumulatedPlaySeconds);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CommitPendingPlaytimeCountsOnFromTheLastReadSlot()
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            store.SaveNumberedFile(
+                1, NativeNumberedSaveCodec.Encode(NativeNumberedSaveCodec.Empty([new NativeSavedScriptFrame(-1, 0, [], -1, -1)])),
+                [], NativeSystemTime.FromLocalDateTime(DateTime.Now), 500);
+            var clock = new ManualPlayClock();
+            Script script = SaveSlotScript("COMMIT.BIN", 0x77, 2,
+                SleepMs(10_000), (0x19f, [new Operand(LocalInt, 1), new Operand(Immediate, 1)]), SleepMs(4_000),
+                (0xad, Array.Empty<Operand>()), SleepMs(5_000));
+            var vm = new VirtualMachine(script, Table, new ClockedHost(clock), nativeDatStore: store, playClock: clock);
+
+            vm.Run();
+
+            // op_0xad_commit_pending_playtime: the data-only load's pending 500 s becomes the base at the commit.
+            Assert.Equal(505u, store.QueryNumberedMetadata(2)!.AccumulatedPlaySeconds);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ExitScriptStartsThePlaytimeOverFromZero()
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            var clock = new ManualPlayClock();
+            Script initial = ScriptAssembler.Assemble(Table, "INITIAL.BIN",
+                [SleepMs(20_000), (0x9, Array.Empty<Operand>())], []);
+            Script system4 = SaveSlotScript("SYSTEM4.BIN", 0x7, 1, SleepMs(3_000));
+            var vm = new VirtualMachine(initial, Table, new ClockedHost(clock),
+                                        provider: new MapProvider(new() { [0] = system4 }),
+                                        nativeDatStore: store, playClock: clock);
+
+            vm.Run();
+
+            // op_0x9_reset_scene_and_reload_root zeroes the container's playtime: タイトルに戻る starts it over.
+            Assert.Equal(3u, store.QueryNumberedMetadata(1)!.AccumulatedPlaySeconds);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static Script WithPackedId(Script source, uint packedId)
         => new()
         {

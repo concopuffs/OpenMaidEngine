@@ -7,11 +7,31 @@ public sealed partial class VirtualMachine
 {
     private readonly AudioMixerSettings _audioMixerSettings;
     private long _currentBgmTrackId;
+    // Run-state 0x200: the target of the op 0xc2 fade the host is running in the background, or null.
+    private int? _bgmFadeTarget;
     private readonly long[] _loadedSoundEffectResourceIds =
         new long[NativeNumberedSaveState.SoundEffectChannelCount];
 
+    /// <summary>Settle the op 0xc2 fade. Native op 0xc2 only arms it: the engine tick advances it on its own timer and
+    /// keeps dispatching ops meanwhile, and at 100 % bgm_fade_tick commits the level, a zero target releasing the source
+    /// and clearing the retained track. With <paramref name="complete"/> a running fade ends now, as ops
+    /// 0xb7/0xb8/0xb9/0xbf/0xc3 end it before they act (bgm_fade_tick(..., 100)); without it only a fade that has run its
+    /// course is settled, for readers of the retained track (op 0xc0, a save).</summary>
+    private void ServiceBgmFade(bool complete)
+    {
+        if (_bgmFadeTarget is not int target) return;
+        if (_host.IsBgmFadeActive)
+        {
+            if (!complete) return;
+            _host.CompleteBgmFade();
+        }
+        _bgmFadeTarget = null;
+        if (target == 0) _currentBgmTrackId = 0;
+    }
+
     private void RestartBgm(long requestedTrackId, int startMode)
     {
+        ServiceBgmFade(complete: true);
         if (requestedTrackId != 0)
             _currentBgmTrackId = requestedTrackId;
 
@@ -27,6 +47,7 @@ public sealed partial class VirtualMachine
         {
             case "play-bgm":
             {
+                ServiceBgmFade(complete: true);
                 long requestedTrackId = Read(a[0]);
                 // Native scripts freely reassert the stage BGM after FIELD action/event cleanup.
                 // The music facade retains the current track id, so an identical request keeps the
@@ -42,6 +63,7 @@ public sealed partial class VirtualMachine
                 RestartBgm(Read(a[0]), 1);
                 return pc + 1;
             case "stop-bgm": // 0xb8: release source and clear retained track
+                ServiceBgmFade(complete: true);
                 _currentBgmTrackId = 0;
                 _host.StopBgm();
                 return pc + 1;
@@ -49,6 +71,7 @@ public sealed partial class VirtualMachine
                 RestartBgm(Read(a[0]), 0);
                 return pc + 1;
             case "get-current-bgm-track":
+                ServiceBgmFade(complete: false);
                 Write(a[0], _currentBgmTrackId);
                 return pc + 1;
             case "play-voice":
@@ -110,16 +133,13 @@ public sealed partial class VirtualMachine
             {
                 int targetBasisPoints = (int)Read(a[0]);   // basis points: CONFIG passes setting × 100
                 long durationMs = Read(a[1]);
-                // Native op 0xc2 enters its timed run-state only during ordinary playback. An
-                // already-active ADV fast-forward applies the fade endpoint immediately; a normal
-                // advance click does not set that skip state and therefore retains the authored delay.
+                // Native op 0xc2 arms a background fade (run-state 0x200) and the script continues. An
+                // already-active ADV fast-forward applies the fade endpoint immediately; a normal advance
+                // click does not set that skip state and therefore retains the authored duration.
                 bool forceEndpoint = _messageSkipServiceActive || _host.IsMessageSkipActive;
                 _host.FadeBgm(targetBasisPoints, forceEndpoint ? 0 : durationMs);
-                if (targetBasisPoints == 0)
-                {
-                    _currentBgmTrackId = 0;
-                    _host.StopBgm();
-                }
+                _bgmFadeTarget = targetBasisPoints;
+                ServiceBgmFade(complete: false);   // a zero-length fade has already ended
                 return pc + 1;
             }
             case "get-audio-volume": // 0xc5 (category)(out basis points)

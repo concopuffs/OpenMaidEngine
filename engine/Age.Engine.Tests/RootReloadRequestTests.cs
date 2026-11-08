@@ -8,10 +8,11 @@ using Xunit;
 
 /// <summary>The 終了 dialog's タイトルに戻る (FUN_00405740 result 2): native calls op_0x9_reset_scene_and_reload_root
 /// from the window procedure. The port ends every frame at its next opcode boundary, interrupting a blocking host
-/// wait, and runs op 0x9's reset, including the initial-root-run flag SYSTEM4 reads to skip LOGO/OP.</summary>
+/// wait, and runs op 0x9's reset, including the global banks and the initial-root-run flag SYSTEM4 reads to skip
+/// LOGO/OP.</summary>
 public class RootReloadRequestTests
 {
-    private const int InitialFlag = 0x7400, AfterWait = 0x7402;
+    private const int InitialFlag = 0x7400, SceneFlag = 0x7401, AfterWait = 0x7402;
 
     private sealed class InterruptibleSleepHost : RecordingHost
     {
@@ -54,6 +55,7 @@ public class RootReloadRequestTests
         var vm = new VirtualMachine(root, table, host,
             provider: new MapProvider(new Dictionary<long, Script> { [0] = root }));
         host.Vm = vm;
+        vm.Globals[SceneFlag] = 5;
 
         var run = new VmRunThread(vm);
         VmRunThread.AwaitSignal(host.FirstSleepEntered, "entered the first sleep");
@@ -67,6 +69,7 @@ public class RootReloadRequestTests
         Assert.Equal(0, host.AfterWaitSeenBySecondRun);         // the interrupted pass stopped at the boundary
         Assert.Equal(0, vm.Globals.GetValueOrDefault(InitialFlag)); // the reloaded root is not the initial run
         Assert.Equal(1, vm.Globals.GetValueOrDefault(AfterWait));
+        Assert.False(vm.Globals.ContainsKey(SceneFlag));          // the reset zeroed the global banks
         Assert.Equal("exit", vm.HaltReason);
     }
 

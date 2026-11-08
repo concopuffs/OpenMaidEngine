@@ -30,7 +30,66 @@ public class SfxOpsTests
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal([24L, 25L, 25L], host.BgmTracks);
         Assert.Equal((0, 0L), Assert.Single(host.BgmFades));
-        Assert.Equal(1, host.BgmStops);
+        Assert.Equal(0, host.BgmStops);   // the host releases the source its zero-target fade reaches
+    }
+
+    // Native op 0xc2 sets run-state 0x200 and returns; the engine tick runs the fade while ops keep dispatching.
+    // SC0000 fades the title music out over 3000 ms at 0x7c1 and plays BGM005 at 0x7fa, which ends the fade at once.
+    [Fact]
+    public void BgmFadeRunsInTheBackgroundUntilTheNextBgmOpEndsIt()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int trackDuringFade = 0x100;
+        const int trackAfterPlay = 0x101;
+        var script = ScriptAssembler.Assemble(table, "BGM-FADE-BACKGROUND",
+            new List<(int, Operand[])>
+            {
+                (0xbf, new[] { new Operand(0, 5) }),
+                (0xc2, new[] { new Operand(0, 0), new Operand(0, 3000) }),
+                (0xc8, new[] { new Operand(0, 100) }),
+                (0xc0, new[] { new Operand(3, trackDuringFade) }),  // the fade has not ended: the track is retained
+                (0xbf, new[] { new Operand(0, 5) }),                  // ends the fade, which clears the track first
+                (0xc0, new[] { new Operand(3, trackAfterPlay) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal([100L], host.SleptDurations);
+        Assert.Equal((0, 3000L), Assert.Single(host.BgmFades));
+        Assert.Equal(1, host.BgmFadeCompletions);
+        Assert.Equal(5, vm.Globals[trackDuringFade]);
+        Assert.Equal([5L, 5L], host.BgmTracks);   // the same id starts again: the faded source was released
+        Assert.Equal(5, vm.Globals[trackAfterPlay]);
+    }
+
+    [Fact]
+    public void BgmFadeToZeroThatRanItsCourseClearsTheRetainedTrack()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int trackAfterFade = 0x100;
+        var script = ScriptAssembler.Assemble(table, "BGM-FADE-ENDED",
+            new List<(int, Operand[])>
+            {
+                (0xbf, new[] { new Operand(0, 5) }),
+                (0xc2, new[] { new Operand(0, 0), new Operand(0, 3000) }),
+                (0xc8, new[] { new Operand(0, 3000) }),
+                (0xc0, new[] { new Operand(3, trackAfterFade) }),
+                (0xbf, new[] { new Operand(0, 5) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(0, vm.Globals[trackAfterFade]);
+        Assert.Equal(0, host.BgmFadeCompletions);   // nothing was left to end
+        Assert.Equal([5L, 5L], host.BgmTracks);
     }
 
     [Fact]

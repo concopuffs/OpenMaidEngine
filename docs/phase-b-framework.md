@@ -226,8 +226,9 @@ while globals, the host, and intentional retained state remain owned by the same
 
 **Root-reload boundary implemented (2026-07-20).** Ordinary op `0x2` child exits still return to their
 calling SYSTEM4 frame. Op `0x9` is the distinct native reset path: it discards the complete active script
-stack, clears scene-owned graphics/input/ADV state, cancels deferred SFX starts while preserving active
-audio, preserves global banks and process-owned host state, and starts raw script resource zero
+stack, zeroes the global banks (corrected 2026-11-07; earlier notes kept them), clears scene-owned
+graphics/input/ADV state, cancels deferred SFX starts while preserving active audio, preserves process-owned
+host state, and starts raw script resource zero
 (`SYSTEM4.BIN`) at offset zero. The implementation propagates the boundary
 through nested calls without running any caller continuation and records the new root frame with
 `FrameCause.RootReload`. Native RE and the one intentional history-lifetime exception are documented in
@@ -1187,9 +1188,10 @@ the bounded BGM tranche lands.
 stream with logical loop and one-shot mode respectively, including zero's native alias to the retained
 track; `0xb8` stops/releases and clears that track. Ordinary `0xbf` remains idempotent for same-track
 FIELD cleanup. Godot cancels deferred fades on replacement, applies the start mode through the OGG loop
-flag, and makes stop release the stream rather than leaving a silent source. The same stop seam now closes
-`0xc2` target zero after its blocking fade, matching native source release instead of retaining a muted
-Godot stream.
+flag, and makes stop release the stream rather than leaving a silent source. The same release now closes
+`0xc2` target zero when its fade ends, matching native source release instead of retaining a muted
+Godot stream. (Since 2026-11-07 that fade runs in the background and the next BGM op ends it early, as native;
+`engine-re.md`, "BGM fades run in the background".)
 
 All five sites now dispatch, reducing the effectful-gap inventory from 12 opcodes / 16 instructions to
 9 / 11. A focused VM regression covers forced same-track restart, zero reuse, both modes, replacement,

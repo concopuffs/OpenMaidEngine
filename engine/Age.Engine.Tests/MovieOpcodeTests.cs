@@ -567,6 +567,7 @@ public class MovieOpcodeTests
         var root = ScriptAssembler.Assemble(table, "ROOT", new List<(int, Operand[])>
         {
             (0x130, new[] { new Operand(3, 0x100) }),
+            (0xc8, new[] { new Operand(3, 0x100) }),   // op 0x9 zeroes the globals, so the host records the flag
             (0x9, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
         var reloadedRoot = ScriptAssembler.Assemble(table, "SYSTEM4", new List<(int, Operand[])>
@@ -579,7 +580,7 @@ public class MovieOpcodeTests
             provider: new MapProvider(new Dictionary<long, Script> { [0] = reloadedRoot }));
 
         vm.Run();
-        Assert.Equal(1, vm.Globals[0x100]);
+        Assert.Equal(new long[] { 1 }, host.SleptDurations);
         Assert.Equal(0, vm.Globals[0x101]);
         Assert.Equal(1, host.SceneContextResets);
     }

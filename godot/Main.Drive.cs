@@ -267,7 +267,7 @@ public partial class Main
                 };
             if (main._exitConfirmation is not { } dialog || dialog.Press(button) is not { } pressed)
                 throw new DriveProtocolException($"no open dialog has a '{button}' button");
-            return new System.Text.Json.Nodes.JsonObject { ["text"] = ExitConfirmationDialog.NativeText, ["answered"] = pressed };
+            return new System.Text.Json.Nodes.JsonObject { ["text"] = dialog.Text, ["answered"] = pressed };
         }
 
         public (int X, int Y)? TakeCursorWarp()

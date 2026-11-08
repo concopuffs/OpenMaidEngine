@@ -134,10 +134,10 @@ public sealed partial class VirtualMachine
             case "begin-value-switch":
                 _valueSwitchTargets.Clear(); return pc + 1;
             case "add-value-switch-case":
-                _valueSwitchTargets[FormatSwitchValue(a[0])] = checked((int)Read(a[1])); return pc + 1;
+                _valueSwitchTargets[ReadStr(a[0])] = checked((int)Read(a[1])); return pc + 1;
             case "value-switch-jump":
             {
-                int target = _valueSwitchTargets.TryGetValue(FormatSwitchValue(a[0]), out int matched)
+                int target = _valueSwitchTargets.TryGetValue(ReadStr(a[0]), out int matched)
                     ? matched : checked((int)Read(a[1]));
                 return _cur.Script.IndexByOffset.GetValueOrDefault(target, pc + 1);
             }

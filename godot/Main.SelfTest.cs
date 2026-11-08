@@ -76,6 +76,11 @@ public partial class Main
         bool bgmOneShotModeOk = (_bgm.Stream as AudioStreamOggVorbis)?.Loop == false;
         RestartBgm(bgm.Bytes, bgm.Name, 1);
         bool bgmLoopModeOk = (_bgm.Stream as AudioStreamOggVorbis)?.Loop == true;
+        // A BGM op first ends a running op 0xc2 fade (bgm_fade_tick(..., 100)); a zero target releases the source.
+        FadeBgm(0, 100, 10.0);
+        CompleteBgmFade();
+        bool bgmFadeCompletionReleases = _bgm.Stream == null && !_bgm.Playing && _bgmFadeTween == null;
+        RestartBgm(bgm.Bytes, bgm.Name, 1);
         // Voice duck release: native fades back to full over 1 s and refuses a new duck meanwhile.
         BeginVoiceBgmDuck(1, 50);
         float duckedDb = _bgm.VolumeDb;
@@ -344,7 +349,7 @@ public partial class Main
             clearedPolicy == new BackbufferPublicationPolicy(false, false);
         ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
               && firstRiffBoundaryOk
-              && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk
+              && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk && bgmFadeCompletionReleases
               && bgmStopReleaseOk && voiceDuckReleaseFadeOk && textEffectModesOk && fontCalibrationOk
               && immediateSurfaceTextOk
               && liveRetainedTextOk
@@ -368,6 +373,7 @@ public partial class Main
                       $"first-riff-boundary={firstRiffBoundaryOk}; " +
                       $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +
                       $"bgm-one-shot={bgmOneShotModeOk}; bgm-loop={bgmLoopModeOk}; " +
+                      $"bgm-fade-completion={bgmFadeCompletionReleases}; " +
                       $"bgm-stop-release={bgmStopReleaseOk}; " +
                       $"voice-duck-release-fade={voiceDuckReleaseFadeOk}; " +
                       $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +

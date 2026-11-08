@@ -57,8 +57,14 @@ public sealed partial class VirtualMachine
     private NativeNumberedSaveState? _loadedNumberedState;
     private NativeNumberedSaveState? _retainedNativeNumberedState;
     private int _restoreFrameIndex = -1;
-    private uint _accumulatedPlaySeconds;
-    private readonly long _sessionStartTimestamp;
+    // The save container's playtime clock (docs/engine-re.md, "Playtime"): a save stores now + base - start in whole
+    // seconds. Construction and op 0x9 zero it from now; reading a save container sets only the pending value, which
+    // a full load's frame restores and op 0xad commit as the new base. Native's now is timeGetTime(), milliseconds
+    // since Windows started; TimeProvider.System's timestamp has the same origin.
+    private readonly TimeProvider _playClock;
+    private uint _playBaseSeconds;
+    private long _playStartSeconds;
+    private uint _pendingPlaySeconds;
     private ExecFrame? _debugActiveFrame;
     private long _debugActiveFrameId;
     private long _debugNextFrameId;
@@ -190,10 +196,12 @@ public sealed partial class VirtualMachine
                           INativeDatStore? nativeDatStore = null,
                           AudioMixerSettings? audioMixerSettings = null,
                           DiagnosticOutputState? diagnosticOutput = null,
-                          VmCompatibilityContext? compatibility = null, IPaceClock? paceClock = null)
+                          VmCompatibilityContext? compatibility = null, IPaceClock? paceClock = null,
+                          TimeProvider? playClock = null)
     {
         _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
         _paceClock = paceClock ?? new StopwatchPaceClock();
+        _playClock = playClock ?? TimeProvider.System;
         _compatibility = compatibility ?? VmCompatibilityContext.ForTable(t);
         if (!string.Equals(_compatibility.EngineAbiId, t.AbiId, StringComparison.Ordinal))
             throw new ArgumentException(
@@ -210,8 +218,9 @@ public sealed partial class VirtualMachine
         _messageGlyphDelayMilliseconds = System.Math.Max(0, host.MessageGlyphDelayMilliseconds);
         _autoMessageTime0Ms = host.AutoMessageTime0Milliseconds;
         _autoMessageTime1Ms = host.AutoMessageTime1Milliseconds;
-        _accumulatedPlaySeconds = _sharedProfile.AccumulatedPlaySeconds;
-        _sessionStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+        ResetPlayTime();
+        // AGE constructs the container (base 0 from now) before it reads SAVE.DAT, whose playtime only lands pending.
+        _pendingPlaySeconds = _sharedProfile.AccumulatedPlaySeconds;
     }
 
     /// <summary>Request a clean stop at the next opcode boundary.</summary>
@@ -598,6 +607,10 @@ public sealed partial class VirtualMachine
         }
     }
 
+    /// <summary>A string operand as native's read-string accessors give it (vm_operand_read_string_buffer,
+    /// vm_operand_read_std_string): text as stored, and a number formatted (itoa, floats "%lf") and then
+    /// widened by ascii_to_fullwidth_cp932_inplace, so 12 reads as "１２". Op 0x1b2's diagnostic accessor
+    /// keeps ASCII (FormatDiagnosticOperand).</summary>
     private string ReadStr(Operand op) => op.Type switch
     {
         T_STR => _cur.Script.GetString((int)op.Value),
@@ -605,8 +618,25 @@ public sealed partial class VirtualMachine
         T_GSTRPTR => Gs(GlobalStrings, GlobalStringPointer((int)op.Value)),
         T_LSTR => Gs(_cur.Locals.S, (int)op.Value),
         T_LSTRPTR => ReadStringCell(Ga(_cur.Locals.SP, (int)op.Value)),
+        T_IMM or T_GINT or T_GPTR or T_LINT or T_LPTR => AsciiToFullwidth(
+            unchecked((int)Read(op)).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        T_FLOAT or T_GFLOAT or T_LFLOAT => AsciiToFullwidth(
+            BitConverter.Int32BitsToSingle(unchecked((int)Read(op)))
+                .ToString("F6", System.Globalization.CultureInfo.InvariantCulture)),
         _ => "",
     };
+
+    /// <summary>Native ascii_to_fullwidth_cp932_inplace: digits and letters become their full-width forms,
+    /// '-' becomes '－', and anything else '？' (so a float's '.' too).</summary>
+    private static string AsciiToFullwidth(string text)
+        => string.Concat(text.Select(c => c switch
+        {
+            >= '0' and <= '9' => (char)('０' + c - '0'),
+            '-' => '－',
+            >= 'A' and <= 'Z' => (char)('Ａ' + c - 'A'),
+            >= 'a' and <= 'z' => (char)('ａ' + c - 'a'),
+            _ => '？',
+        }));
 
     private void WriteStr(Operand op, string val)
     {
@@ -668,14 +698,7 @@ public sealed partial class VirtualMachine
         }
 
         if ((flags & 0x10000) == 0)
-            text = string.Concat(text.Select(c => c switch
-            {
-                >= '0' and <= '9' => (char)('０' + c - '0'),
-                '-' => '－',
-                >= 'A' and <= 'Z' => (char)('Ａ' + c - 'A'),
-                >= 'a' and <= 'z' => (char)('ａ' + c - 'a'),
-                _ => '？',
-            }));
+            text = AsciiToFullwidth(text);
         return text;
     }
 
@@ -804,11 +827,6 @@ public sealed partial class VirtualMachine
 
     private static (VmAddressSpace Space, int Address) PointerIdentity(VmAddress address)
         => (address.Space, address.Address);
-
-    private string FormatSwitchValue(Operand operand)
-        => IsStr(operand)
-            ? ReadStr(operand)
-            : unchecked((int)Read(operand)).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private string FormatDiagnosticOperand(Operand operand)
     {
@@ -1022,7 +1040,9 @@ public sealed partial class VirtualMachine
     {
         _rootReloadRequested = false;
         _initialRootRun = false;   // op_0x9_reset_scene_and_reload_root: SYSTEM4 skips LOGO/OP from now on
+        ResetGlobalBanks();
         Gfx.ResetSceneContext();
+        ResetPlayTime();   // op_0x9: save_container_playtime_reset after the hotspot resets
         _valueSwitchTargets.Clear();
         _preloadedScriptSlots.Clear();
         ResetIntegerStacks();
@@ -1085,6 +1105,19 @@ public sealed partial class VirtualMachine
             Gfx.ReleaseSurfaceRange(0, 1000);
             _host.ReleaseSurfaceRange(0, 1000);
         }
+    }
+
+    /// <summary>op_0x9_reset_scene_and_reload_root, after disposing the frames and before scene_context_init_reset:
+    /// every integer global becomes the encoded zero, and the float, string, integer-pointer and string-pointer banks
+    /// are zeroed (both bank sets under set:EnableMemFlip). Resource 0 re-authors what it needs from the
+    /// configuration and the shared profile, so state a scene left behind (Kamidori's field flag 0x428c) is gone.</summary>
+    private void ResetGlobalBanks()
+    {
+        Globals.Clear();
+        GlobalFloats.Clear();
+        GlobalStrings.Clear();
+        GlobalPointers.Clear();
+        GlobalStringPointers.Clear();
     }
 
     private static Stack<int>[] CreateIntegerStacks()
@@ -1294,6 +1327,7 @@ public sealed partial class VirtualMachine
         NativeNumberedSaveState basis = _retainedNativeNumberedState
             ?? NativeNumberedSaveCodec.Empty(frames, gfxRecordSize);
         var gfx = NativeGfxPersistenceCodec.Capture(Gfx, gfxRecordSize);
+        ServiceBgmFade(complete: false);   // a fade to zero that has ended has cleared the retained track
         return basis with
         {
             BgmTrackId = unchecked((int)_currentBgmTrackId),
@@ -1326,7 +1360,9 @@ public sealed partial class VirtualMachine
                 file.Document.Payload, _nativeDatStore.Identity.NumberedGfxRecordSize);
             ApplyNumberedState(state);
             _retainedNativeNumberedState = state;
-            _accumulatedPlaySeconds = file.Document.Metadata.AccumulatedPlaySeconds;
+            _pendingPlaySeconds = file.Document.Metadata.AccumulatedPlaySeconds;
+            // A full load restores the root frame now (script_frame_restore_saved_layout commits); data only does not.
+            if (restoreHistory) CommitLoadedPlayTime();
             if (restoreHistory)
             {
                 if (file.HistoryTail.Length == 0) TextHistory.Clear();
@@ -1365,6 +1401,7 @@ public sealed partial class VirtualMachine
         ReplaceBank(GlobalPointers, state.PointerGlobals, value => value != 0);
         ReplaceBank(GlobalStringPointers, state.PointerStrings, value => value != 0);
 
+        ServiceBgmFade(complete: true);   // a running fade must not clear the restored track when it ends
         _currentBgmTrackId = unchecked((uint)state.BgmTrackId);
         if (_currentBgmTrackId == 0) _host.FadeBgm(0, 0);
         else _host.PlayBgm(_currentBgmTrackId);
@@ -1495,10 +1532,29 @@ public sealed partial class VirtualMachine
         return result;
     }
 
-    private uint AccumulatedPlaySeconds()
+    /// <summary>save_container_encode_and_write@0x42fac0's playtime: timeGetTime() / 1000 + base - start, each
+    /// truncated to whole seconds on its own.</summary>
+    private uint AccumulatedPlaySeconds() =>
+        unchecked((uint)(PlayClockSeconds() + _playBaseSeconds - _playStartSeconds));
+
+    private long PlayClockSeconds() => _playClock.GetTimestamp() / _playClock.TimestampFrequency;
+
+    /// <summary>save_container_playtime_reset@0x42fa80 (SYS4433 @0x4304c0), from the container's construction and op
+    /// 0x9: base and pending 0, counting from now.</summary>
+    private void ResetPlayTime()
     {
-        double elapsedSeconds = System.Diagnostics.Stopwatch.GetElapsedTime(_sessionStartTimestamp).TotalSeconds;
-        return unchecked(_accumulatedPlaySeconds + (uint)Math.Min(uint.MaxValue, elapsedSeconds));
+        _playBaseSeconds = 0;
+        _pendingPlaySeconds = 0;
+        _playStartSeconds = PlayClockSeconds();
+    }
+
+    /// <summary>save_container_playtime_commit_pending@0x4306c0 (SYS4433 @0x431090), which
+    /// script_frame_restore_saved_layout runs for each frame a full load restores (layouts 2 and 3): the loaded
+    /// playtime becomes the base, counting from now.</summary>
+    private void CommitLoadedPlayTime()
+    {
+        _playBaseSeconds = _pendingPlaySeconds;
+        _playStartSeconds = PlayClockSeconds();
     }
 
     private bool ServiceHotspotCallback()
@@ -1691,6 +1747,8 @@ public sealed partial class VirtualMachine
             case "load-numbered-slot-and-resume": // 0x1a1
                 return StepPersistence(label, a, pc);
             case "continue-save-load-stack-restore": // 0xae
+            case "commit-pending-playtime": // 0xad
+            case "u00415110": // pre-reference compatibility
             case "query-numbered-save-metadata": // 0x1a0
                 return StepPersistence(label, a, pc);
             case "delete-numbered-save": // 0x1ab

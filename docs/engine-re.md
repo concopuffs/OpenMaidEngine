@@ -511,12 +511,27 @@ loads raw script resource zero with `script_frame_load_resource(..., 0)`. Raw SY
 `SYSTEM4.BIN` in Himegari.
 
 The scene reset owns interpreter run state, ADV input/skip/auto state, retained gfx objects and command
-queues, text/render buffers, and—on the normal fresh-session path—the 1000 ordinary surface/movie slots.
-It does not clear the global VM bank or engine configuration. The port now mirrors that boundary: an `0x9`
-request propagates through every nested `call-script` frame without executing any caller continuation,
-clears scene-owned VM/Godot presentation and input state, cancels deferred SFX starts without unloading or
-stopping active channels/BGM, preserves global/external-global banks and process-owned configuration/caches,
-then begins raw script zero at offset zero in the same VM session.
+queues, text/render buffers, and the surface records and movies of the 1000 slots (their textures survive unless
+`AutoFreeTex` asks; "AutoFreeTex" below).
+
+**Op `0x9` zeroes the global banks (2026-11-07).** Between disposing the frames and `scene_context_init_reset`, the
+handler clears every global bank, once per bank set (two when `set:EnableMemFlip` is on):
+
+- every integer global (`bank_size_int_globals + 1` of them) becomes `EngineCtx.anti_tamper_b`, the encoded zero;
+- the float bank is zeroed and every global string erased;
+- the integer-pointer, string-pointer and local-pointer-scratch banks are zeroed.
+
+SYS4433's `op_0x9_reset_scene_and_reload_root_sys4433@0x423b90` does the same. Engine configuration and the shared
+profile are untouched; SYSTEM4 re-authors what it needs when it runs again. A Kamidori game over shows the effect.
+FIELD sets `G[0x428c]=1`, SC5300 ends in op `0x9`, and `INIT2@0x274` draws the map objects and unit sprites
+(DRAWOBJ/DRAWCHALL) whenever `G[0x428c]` is nonzero. A Frida read of native at TITLE after a turn-limit game over
+found `G[0x428c]` and SC5300's `G[0x19c1]`/`G[0xfd435]` back at zero, and the title clean.
+
+The port mirrors that boundary: an `0x9` request propagates through every nested `call-script` frame without
+executing any caller continuation, zeroes the global banks, clears scene-owned VM/Godot presentation and input
+state, cancels deferred SFX starts without unloading or stopping active channels/BGM, preserves process-owned
+configuration/caches, then begins raw script zero at offset zero in the same VM session. The 終了 dialog's
+タイトルに戻る runs the same reset.
 The retained ADV history backlog remains intact for now because its lifetime across this reset has not yet
 been proven; only recording suppression is reset. Focused tests cover a three-frame unwind and raw-zero
 resolution to `SYSTEM4.BIN`.
@@ -603,7 +618,13 @@ A native drive confirmed this (`tools/drive/scenarios/himegari-exit-dialog.steps
   1. holds the VM thread at its next frame yield;
   2. dims to 128/255;
   3. freezes the presented frame (see "Port appearance" below);
-  4. opens `ExitConfirmationDialog`, which has native's texts, the default choice and E/T mnemonics.
+  4. opens `ExitConfirmationDialog`, built from the game's own AGERC.DLL dialog 3 (`AgercExitDialog`, its
+     controls found by id): title, texts and control rectangles come from the template, with the default choice
+     and the radios' mnemonics. A game root without a usable dialog 3 quits without asking, since AGE cannot run
+     without AGERC's host callback. The templates differ only in text: Kamidori's install has an English
+     `agerc.dll` (Quit, `Exit(&E)`, `Return to title(&T)`, Cancel) laid out as Himegari's Japanese one, and native
+     shows it (driven 2026-11-07; until then the port showed Himegari's texts for every game). AGERC's code
+     strings (the 設定 page formats, the folder prompt) stay Japanese in both DLLs.
 - **Minimized:** `RequestUnforcedClose` first checks the window mode. A minimized window quits at once with exit
   code 0, and the shutdown flush writes `SAVE.DAT`, as native does under run-state `0x1000000`. The port reads
   the window's state instead of keeping the bit.
@@ -3491,6 +3512,35 @@ DWORD-transform specification is in `sys4-format-notes.md`. The mapped helpers a
 `save_payload_inverse_multiply_transform@0x42f4a0`, `crc32_msb_first@0x42f360`, and
 `crc32_reflected@0x42f300`.
 
+#### Playtime (2026-11-07)
+
+Every container header stores a playtime in whole seconds at `+0x118` (`sys4-format-notes.md`). Shared `SAVE.DAT`
+and each numbered `SAVE##.DAT` get it from one clock, kept in the save container object at `ctx+0x4d7c`. It has
+three fields: base `+0x40c`, start `+0x408` (in `timeGetTime()/1000` seconds) and pending `+0x410`. The same model
+holds in SYS4422 (`/v2`) and SYS4433:
+
+| Event | Native | Effect |
+|---|---|---|
+| write (`0x19e`, the shared-profile flush) | `save_container_encode_and_write@0x42fac0` | stores `timeGetTime()/1000 + base - start`; the two clock readings are each truncated to whole seconds |
+| read (boot `SAVE.DAT`, `0x19f`, `0x1a1`) | `save_container_read_and_decode@0x42ff80` | pending = the header's playtime; base and start are untouched |
+| reset (container construction, op `0x9`) | `save_container_playtime_reset@0x42fa80` (SYS4433 `0x4304c0`) | base = 0, pending = 0, start = now |
+| commit (each frame a full load restores, op `0xad`) | `save_container_playtime_commit_pending@0x4306c0` (SYS4433 `0x431090`) | base = pending, start = now |
+
+`script_frame_restore_saved_layout@0x40f2d0` (SYS4433 `0x40f0c0`) commits for layouts 2 and 3, once per restored
+frame. The deserializer calls it only when `restore_runtime` is set (`0x1a1`, not `0x19f`), and op `0xae` and op
+`0x2` call it for the frames that follow. A full load therefore counts on from the slot's playtime, starting at its
+last frame restore, while a data-only load leaves the clock running. Booting reads `SAVE.DAT` but restores no
+frame, so a fresh run counts from zero. A native Kamidori run (2026-11-07) confirmed this: after 31 s at the title
+it wrote 31 to `SAVE.DAT`, which had held 3585 before. Op `0xad` (`op_0xad_commit_pending_playtime@0x416760`,
+SYS4433 `0x416ee0`) commits on demand; no shipped script uses it.
+
+**Port:** `VirtualMachine` keeps the same three values. Its clock is a `TimeProvider`: `TimeProvider.System`'s
+timestamp counts from Windows start like `timeGetTime`, and tests pass a manual clock. `ResetPlayTime` runs at
+construction and in op `0x9`'s scene reset; `CommitLoadedPlayTime` runs for each frame a numbered load restores
+and for op `0xad`. `0x19e` and the shutdown flush both store `AccumulatedPlaySeconds()`. `NumberedSaveVmTests`
+covers the fresh run, full load, data-only load, op `0xad` and return-to-title cases;
+`SharedProfileLifecycleTests` covers the shutdown flush.
+
 #### Numbered logical state and `.STH`
 
 `context_state_serialize@0x40d320` chooses numbered logical layout 1, 2, or 3 from `SaveVersion1`;
@@ -3856,7 +3906,8 @@ across fresh VMs, and shared-profile Save/Load updates SAVE.DAT and RT.DAT as se
 Godot now requests a VM stop, releases the blocking host, waits for the VM worker to leave its opcode
 boundary, and performs one shared-profile flush before frontend teardown. Repeated exit notifications do
 not rotate backups twice; expected I/O failures are reported without crashing teardown; self-test uses
-`NoSaveDat`; and the loaded shared header's accumulated-playtime value seeds the new process baseline.
+`NoSaveDat`. (The 2026-07-24 note that the loaded shared header's playtime seeded the process baseline was wrong:
+reading `SAVE.DAT` only sets the pending value, so a run's flush stores its own run time; see "Playtime" above.)
 Focused restart coverage proves selected integer/string cells and committed read flags survive a clean
 exit without any numbered slot write. `NoSaveDat` suppresses that exit write while a successful `0x19e`
 still writes both shared files.
@@ -5186,8 +5237,9 @@ The port now implements that split directly. `IHost.RestartBgm(track,startMode)`
 resolves operand zero through `_currentBgmTrackId`; zero with no retained track calls the same idempotent
 stop path as native. `StopBgm` clears the VM track and makes Godot cancel voice ducking and any deferred
 fade, stop the player, release its stream, and restore neutral gain. Godot sets `AudioStreamOggVorbis.Loop`
-from the native start mode. The already-mapped `0xc2` target-zero endpoint now also calls this seam after
-its blocking fade, replacing the former silent-but-still-bound Godot stream with native release behavior.
+from the native start mode. A `0xc2` fade that reaches target zero releases the source the same way (since
+2026-11-07 the host does so when the background fade ends), replacing the former silent-but-still-bound Godot
+stream with native release behavior.
 A focused regression covers same-track restart, zero aliasing, loop/one-shot selection, track replacement,
 stop/clear, fade-to-zero release, and restart after stop; the threaded self-test exercises both loop modes
 and real stop/release.
@@ -5234,18 +5286,17 @@ the configured native code page, avoiding both UTF-16 indexing and accidental sp
 `0xc2` is BGM rather than SFX. During ordinary execution, `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`,
 arms the service timer, and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates
 current to target percent; durations at least 1000 ms take 100 steps, shorter durations take 10, and target
-zero releases the source. The VM is parked for the requested duration while the native main loop continues
-rendering. Active ADV fast-forward (`run_state_flags & 0x08000000`) takes a separate opcode-local branch: it
-arms the requested target, applies the terminal fade tick immediately, and never sets blocking state `0x200`.
+zero releases the source. Run-state `0x200` does not park the interpreter: the fade runs in the background
+while ops keep dispatching ("BGM fades run in the background", below; the earlier reading that the VM is parked
+for the duration was wrong). Active ADV fast-forward (`run_state_flags & 0x08000000`) takes a separate
+opcode-local branch: it arms the requested target, applies the terminal fade tick immediately, and never sets
+state `0x200`.
 A normal advance click does not take that branch. `adv_input_service_poll@0x411230` uses action bit `0x10` to
 release the preceding text wait, while only fast-forward bit `0x40` establishes `0x08000000`; once `0x200` is
 active, `engine_main_tick_with_exception_policy@0x411e8a` services only elapsed timer steps and does not poll
-click input for the BGM fade. The Godot host mirrors that ownership split: its VM worker waits on the fade
-clock only after publishing the completed
-pre-fade graphics burst and releasing the script presentation barrier. This is required at
-`SC0000@0x7c1`, where the three-second title-BGM fade begins after the New Game scene has already cleared
-to black; retaining presentation ownership during the wait incorrectly froze the last menu frame until the
-opening CG transition began. `0xd9` is adjacent startup control, not audio data: it clears
+click input for the BGM fade. (Until 2026-11-07 the Godot host parked its VM worker on the fade clock, after
+publishing the pre-fade graphics burst and releasing the script presentation barrier so that `SC0000@0x7c1`'s
+black frame showed during the wait; the port no longer waits.) `0xd9` is adjacent startup control, not audio data: it clears
 run/service bit `0x1000` in the primary and, when active, secondary context and has no VM-visible result.
 
 **Skip endpoint correction (2026-08-16).** The port initially sent every `0xc2` request through that blocking
@@ -5255,6 +5306,34 @@ followed by a BGM fade. `SYSTEM4 P046` (`wait SC0000@0x4180`) is followed by a 3
 dispatch now sends zero duration only for the same combined active ADV-skip predicate used by native endpoint
 branches. Non-skip dispatch retains the authored duration, preserving native's deliberately unskippable-click
 behavior. A focused regression covers both outcomes.
+
+**BGM fades run in the background (2026-11-07).** `engine_main_tick_with_exception_policy` services run-state
+`0x200` at `0x411e65`. It polls the fade's own period timer `ctx+0x5f400` (only op `0xc2`, the voice-duck release at
+`0x411e48` and this service use it), calls `bgm_fade_tick` with the elapsed periods and clears `0x200` when the tick
+returns 0. It then falls through to the other service tests. None of them matches `0x200` alone, so the tick reaches
+the op dispatch at `0x4125eb`: the script runs on while the fade plays. At 100 % `bgm_fade_tick` commits the level to
+`+0x420` (intermediate steps apply a level without committing it) and, for target 0, calls `bgm_stop_release`, which
+also clears the retained track. Ops `0xb7`/`0xb8`/`0xb9`/`0xbf`/`0xc3` clear `0x200` and call `bgm_fade_tick(...,100)`
+before they act. Every shipped fade site (547 in Himegari, 1497 in Kamidori) is followed by the same `0x1cf`
+duck-control choice; what comes next varies. SC0000@0x7c1 plays the next track six ops later, which cuts the
+title-music fade short at once. SC0000@0x126c goes on into the scene's presentation and text, which proceed while
+the music fades. SYS4433 is identical (`op_0xc2_bgm_fade_sys4433@0x41e550`, service at `0x4120b1`).
+
+Measured with `tools/drive.py` from the click on 始める (New Game) on a fresh sandbox:
+
+| | Native | Port, parked VM | Port, background fade |
+|---|---|---|---|
+| Position when the click returns | `SC0000@0x7fa` (`play-bgm 5`) | `SC0000@0x7c6`, `waiting=sleep` | `SC0000@0x123df` 0.2 s later |
+| First text page (`0x83f`) | 1.81 s | 5.02 s | 1.88 s |
+
+**Port.** The VM keeps the pending target (`VirtualMachine.Audio.cs`, `_bgmFadeTarget`, the analogue of `0x200`). The
+host runs the envelope and releases the source itself when it reaches a zero target. The play, force-play and stop
+ops and a numbered load first end a running fade through `IAudioHost.CompleteBgmFade`. Op `0xc0` and a numbered save
+settle a fade that has run its course (`IsBgmFadeActive` false), so a fade to zero clears the retained track when it
+ends. Godot's tween applies each step through `ApplyBgmVolume` and commits only the endpoint, so a re-armed fade starts
+from the committed level, as native's does. The 設定 dialog's music-route toggle no longer cancels a running fade:
+in native only the tick and those BGM ops clear `0x200` (every `AND …, 0xfffffdff` in the image), so the fade goes on
+whatever the route. The SYS4422 and SYS4433 profiles share this code.
 
 Opcode `0x1cf` belongs to the voice/BGM envelope rather than SFX. Handler
 `op_0x1cf_set_voice_bgm_duck_control@0x4209f0` replaces the transient mask at
@@ -5269,7 +5348,7 @@ attenuation when an unsuppressed voice begins, and restores the saved BGM level 
 or is stopped by message Skip. Godot also gives an explicit `0xc2` fade exclusive ownership of the BGM
 envelope: voice start does not duck during that fade, a new fade cancels its predecessor, and starting a
 replacement BGM cancels any still-live prior fade before restoring normal gain. The last rule closes a
-main-thread scheduling race at the TITLE-to-SC0000 boundary. The VM's blocking fade deadline begins before
+main-thread scheduling race at the TITLE-to-SC0000 boundary. The VM's fade deadline begins before
 the deferred Godot tween is created, so `BGM005` could start during the tween's final frame and then be
 overwritten to `-80 dB`; a later voice temporarily wrote the audible 50-percent duck level and restored
 the erroneous silent level afterward. This introduces no profile record, boot seed, or persistence backend.
@@ -6029,9 +6108,13 @@ page 18 reveals its 35 glyphs in two runs around the furigana かがりび.
    - `gfx_object_apply_transform_channels@0x473d80` and the surface-command composite set it during a render while
      something still runs;
    - `gfx_render_frame@0x4820b0` clears it first.
-4. When the poll returns 0 and no movie surface is playing, it clears `0x400`. The movie flag is `[ebp-0x24]`, set at
-   `0x411b4f` when `surface_movie_is_playing@0x405150` holds for any surface in `ctx+0x52bd4`. Otherwise it runs the
-   `EffectSkipOnClick` check ("Effect skipping and the input latch").
+4. When the poll returns 0 and no movie surface holds the wait, it clears `0x400`. The movie flag is `[ebp-0x24]`, set
+   at `0x411b4f` when `surface_movie_is_playing@0x405150` holds for any surface in `ctx+0x52bd4`. Otherwise it runs the
+   `EffectSkipOnClick` check ("Effect skipping and the input latch"). Despite its name, `surface_movie_is_playing`
+   does not ask DirectShow: it answers `((+0x424 ? +0x430 : +0x440) & 5) == 4`, and both words hold the movie op's
+   `movie_flags` operand (`movie_play_configure@0x4625e0` stores `+0x430`, `movie_start_modal_playback@0x463280`
+   stores `+0x440`). So only flags with bit 2 set and bit 0 clear hold the wait, and they hold it for the movie object's
+   lifetime, past the last frame until its surface is released (see "Movie flags decide the effect wait", below).
 5. Either way it calls `Sleep(0)`.
 
 A tick takes about 0.17 ms here (5457 polls in an 890 ms wait), so the wait ends on the first tick after its last
@@ -6069,7 +6152,7 @@ At 100 Hz the four waits took about 170, 910, 160 and 320 ms, and the reveal beg
 - These waits wake at their deadline (`FrameClock.RealMillisecondsUntil`) instead of at the next frame:
   - script sleeps;
   - the timed-callback deadline;
-  - BGM fades;
+  - BGM fades (until 2026-11-07, when the port stopped waiting for them: "BGM fades run in the background");
   - legacy screen transitions.
 
 The port's four waits now end 150, 890, 150 and 300 ms after they start.
@@ -6099,6 +6182,30 @@ page 14's text wait. Native takes 1.81 s. The port took 1.78–1.81 s when it wa
 1.76–1.78 s now (four runs each; the driver rounds each step to 10 ms). Tests: `FrameClockTests`,
 `GfxAnimationTests.SeedOneShotChannels_StampsArmedVisibleChannelsOnce`,
 `GfxAnimationTests.TerminalSample_CommitsChannelEndpointsAtTheWaitEnd`.
+
+#### Movie flags decide the effect wait (2026-11-07)
+
+**Native.** `surface_movie_is_playing@0x405150` (SYS4433 `0x404ec0`) answers `(flags & 5) == 4` on the flags the movie op
+stored, as step 4 above describes. Only flags with bit 2 set and bit 0 clear hold op `0x21c`'s wait, and they hold it
+for the movie object's lifetime. At a movie's end the tick's surface-movie pass (`0x411b4f` onward) does one of two
+things:
+
+- With bit 0 set (`+0x43c`), it restarts the movie: the loop flag.
+- Otherwise it detaches the movie (`movie_stop_and_detach_surface`). Unless `(flags & 3) == 2` it then clears the
+  surface (`gfx_fill_surface_rect_worker@0x4790e0`), and it frees the object.
+
+The shipped flags hold no wait through a movie itself:
+
+- Kamidori's ADDEXP, SHOWGROW and BTL movie ops all pass 0, so the script continues while the level-up and battle
+  movies play.
+- Himegari SC0000's chapter movie passes 2. Its `0x21c` still waits for the movie because op `0x238` sets the anim
+  clock to the latest layer stop time from op `0x23f` (`0x32b2`).
+
+**Port.** `MovieSurfaceRegistry.HoldsServiceWait` applies the same predicate to the flags each binding keeps from its
+movie op, until the surface is released. `GodotAdvHost.HasActiveMoviePresentation` reads it for `0x21c` and the
+foreground-transition waits. Before this, any unfinished movie held the wait. Kamidori's first-battle SHOWGROW then
+sat about 9.3 s after Engage, against native's 6.5 s; it now sits 6.3 s. SC0000's chapter wait is unchanged:
+native 1.63 s, port 1.68 s. Test: `MovieSurfaceRegistryTests.OnlyFlagsWithBit2SetAndBit0ClearHoldTheServiceWait`.
 
 ### Fast-forward through effect waits, its pace, and physical Ctrl (2026-11-07)
 
@@ -7005,8 +7112,12 @@ departure.
   references (0xd) and type 7 throw.
 - **Generic writes.** `vm_operand_write` stores int32 into integer cells and integer references, and `(float)value`
   into float cells. String destinations throw.
-- **Strings.** Numbers read as strings become full-width CP932 digits (`ascii_to_fullwidth_cp932_inplace`). The
-  only string operations are `set-string`, `concat` and string (in)equality (`0x192`–`0x195`).
+- **Strings.** Numbers read as strings become full-width CP932 (`ascii_to_fullwidth_cp932_inplace`). Integers
+  format with `_itoa_s` base 10 and floats with `%lf`; then digits and letters widen, `-` becomes `－` and anything
+  else `？`, so a float's `.` too. Op `0x1b2`'s diagnostic accessor and op `0x1c8` keep ASCII. The value-switch
+  keys (`0xa2`/`0xa3`) read the same way. The port matches since 2026-11-07 (`VirtualMachine.ReadStr`); before, it
+  kept ASCII, so Kamidori's gathering message read 「素材5個」 where native shows 「素材５個」. The only string
+  operations are `set-string`, `concat` and string (in)equality (`0x192`–`0x195`).
 - **SYS5-style vector types.** The types `0x8003`/`0x8009`/`0x8005`/`0x800b` are handled by the accessors but
   never occur in either corpus.
 

@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Age.Engine.Model;
 
-internal readonly record struct MovieSurfaceBinding(long PlaybackId, long ResourceId, int SurfaceSlot);
+internal readonly record struct MovieSurfaceBinding(long PlaybackId, long ResourceId, int SurfaceSlot,
+                                                    long MovieFlags = 0);
 internal sealed record MovieSurfaceFrame(RgbaImage Image, string Name, int AssetId);
 public sealed record MovieSurfaceDiagnostic(int SurfaceSlot, long PlaybackId, long ResourceId,
                                             bool Completed, bool HasFrame, string? Name);
@@ -23,14 +24,14 @@ internal sealed class MovieSurfaceRegistry
     private readonly HashSet<long> _knownMovieResources = new();
     private long _nextPlaybackId;
 
-    public MovieSurfaceBinding Begin(int surfaceSlot, long resourceId,
+    public MovieSurfaceBinding Begin(int surfaceSlot, long resourceId, long movieFlags,
                                      out MovieSurfaceBinding? replaced)
     {
         lock (_lock)
         {
             replaced = _bySurface.TryGetValue(surfaceSlot, out var prior) ? prior : null;
             if (replaced.HasValue) RemoveLocked(prior);
-            var binding = new MovieSurfaceBinding(++_nextPlaybackId, resourceId, surfaceSlot);
+            var binding = new MovieSurfaceBinding(++_nextPlaybackId, resourceId, surfaceSlot, movieFlags);
             _knownMovieResources.Add(resourceId);
             _bySurface[surfaceSlot] = binding;
             _byPlayback[binding.PlaybackId] = binding;
@@ -71,12 +72,19 @@ internal sealed class MovieSurfaceRegistry
         lock (_lock) return _bySurface.TryGetValue(surfaceSlot, out binding);
     }
 
-    public bool HasActivePlayback
+    /// <summary>Whether a surface movie holds AGE's effect-service wait (op 0x21c, run-state 0x400), as
+    /// surface_movie_is_playing@0x405150 (SYS4433 0x404ec0) answers for each movie in ctx+0x52bd4: the movie's
+    /// flags word has bit 2 set and bit 0 clear. That word is the op's movie-flags operand from the play op until
+    /// the surface releases the movie, whether the start is still pending or DirectShow has reached its end, so
+    /// completion does not change the answer. No shipped script passes such flags (Kamidori passes 0, Himegari's
+    /// SC0000 2 and sets the anim clock to the movie's length itself), so their movies play on while the script
+    /// continues.</summary>
+    public bool HoldsServiceWait
     {
         get
         {
             lock (_lock)
-                return _byPlayback.Keys.Any(playbackId => !_completed.Contains(playbackId));
+                return _bySurface.Values.Any(binding => (binding.MovieFlags & 5) == 4);
         }
     }
 

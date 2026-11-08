@@ -133,7 +133,7 @@ OPCODES: dict[int, tuple[str, int]] = {
     0x00aa: ('u0041C270', 2),
     0x00ab: ('u0041C330', 2),
     0x00ac: ('u0041C3E0', 9),
-    0x00ad: ('u00415110', 0),
+    0x00ad: ('commit-pending-playtime', 0),
     0x00ae: ('continue-save-load-stack-restore', 0),
     0x00af: ('u00415480', 0),
     0x00b0: ('u0041C530', 1),

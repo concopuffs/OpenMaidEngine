@@ -103,6 +103,29 @@ public class HistoryDataOpsTests
     }
 
     [Fact]
+    public void ValueSwitchKeysAreNativeStringsSoAFullwidthCaseMatchesAnInteger()
+    {
+        var script = ScriptAssembler.Assemble(Table, "VALUE_SWITCH_TEXT",
+            new List<(int, Operand[])>
+            {
+                (0xa1, Array.Empty<Operand>()),                         // 0
+                (0xa2, new[] { new Operand(2, 0), I(11) }),            // 1
+                (0xa3, new[] { G(0x100), I(19) }),                     // 6
+                (0x55, new[] { G(0x101), I(30) }),                     // 11
+                (0x8c, new[] { I(24) }),                              // 16
+                (0x55, new[] { G(0x101), I(-1) }),                     // 19
+                (0x2, Array.Empty<Operand>()),                         // 24
+            }, new[] { "３" });
+        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        vm.Globals[0x100] = 3;
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(30, unchecked((int)vm.Globals[0x101]));
+    }
+
+    [Fact]
     public void HistoryOpcodesStepFromLatestBoundaryAndQueryOneGroup()
     {
         var history = new AdvTextHistory();

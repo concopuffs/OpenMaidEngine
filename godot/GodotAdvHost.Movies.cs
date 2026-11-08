@@ -162,7 +162,7 @@ public sealed partial class GodotAdvHost
         stopTimeMs = null;
         // A playback is a surface-owned instance, not the shared resource id. BTL can schedule the same
         // asset on multiple surfaces; replacing one binding must not erase another binding's completion.
-        MovieSurfaceBinding binding = _movieSurfaces.Begin(surfaceSlot, resourceId, out var replaced);
+        MovieSurfaceBinding binding = _movieSurfaces.Begin(surfaceSlot, resourceId, movieFlags, out var replaced);
         playbackId = binding.PlaybackId;
         if (replaced is { } prior)
         {
@@ -245,8 +245,10 @@ public sealed partial class GodotAdvHost
         _frameSignal.Set();
     }
 
+    /// <summary>engine_main_tick's surface_movie_is_playing scan: only a movie whose flags have bit 2 set and bit 0
+    /// clear holds an effect wait (<see cref="MovieSurfaceRegistry.HoldsServiceWait"/>).</summary>
     private bool HasActiveMoviePresentation()
-        => _movieSurfaces.HasActivePlayback;
+        => _movieSurfaces.HoldsServiceWait;
 
     private RgbaImage CaptureRetainedRange(
         GfxState gfx, int targetSlot, long firstHandle, int count)

@@ -57,6 +57,8 @@ internal class RecordingHost : IHost
     public readonly List<(long Track, int StartMode)> BgmRestartRequests = new();
     public int BgmStops;
     public readonly List<(int Target, long Duration)> BgmFades = new();
+    public long BgmFadeRemainingMs;
+    public int BgmFadeCompletions;
     public readonly List<(int Category, int BasisPoints)> AudioVolumeChanges = new();
     public readonly List<(int Category, bool Enabled)> AudioRouteChanges = new();
     public readonly HashSet<int> PlayingSoundChannels = new();
@@ -234,7 +236,11 @@ internal class RecordingHost : IHost
     public void SetCursorResource(long resourceId) => CursorResources.Add(resourceId);
     public void ClearCursorResource() => CursorClearCount++;
     public void WarpCursor(int virtualX, int virtualY) => CursorWarps.Add((virtualX, virtualY));
-    public virtual void Sleep(long duration) => SleptDurations.Add(duration);
+    public virtual void Sleep(long duration)
+    {
+        SleptDurations.Add(duration);
+        BgmFadeRemainingMs = Math.Max(0, BgmFadeRemainingMs - duration);
+    }
     public virtual void WaitForTimedCallbackDeadline(long duration)
     {
         TimedCallbackWaitDurations.Add(duration);
@@ -333,7 +339,18 @@ internal class RecordingHost : IHost
     public void ScheduleSoundEffectStart(int channel, int startMode, long delayMs)
         => ScheduledSfxStarts.Add((channel, startMode, delayMs));
     public void ReleaseSoundEffect(int channel) => SfxReleases.Add(channel);
-    public void FadeBgm(int targetPercent, long durationMs) => BgmFades.Add((targetPercent, durationMs));
+    // An op 0xc2 fade runs in the background until the script's sleeps have spent its duration or a BGM op ends it.
+    public void FadeBgm(int targetPercent, long durationMs)
+    {
+        BgmFades.Add((targetPercent, durationMs));
+        BgmFadeRemainingMs = durationMs;
+    }
+    public bool IsBgmFadeActive => BgmFadeRemainingMs > 0;
+    public void CompleteBgmFade()
+    {
+        BgmFadeCompletions++;
+        BgmFadeRemainingMs = 0;
+    }
     public bool IsSoundChannelPlaying(int channel) => PlayingSoundChannels.Contains(channel);
     public void ApplyAudioVolume(int category, int basisPoints)
         => AudioVolumeChanges.Add((category, basisPoints));
@@ -441,5 +458,27 @@ internal sealed class VmRunThread
     {
         if (!_thread.Join(HangGuard)) throw new TimeoutException("the VM run did not end");
         _error?.Throw();
+    }
+}
+
+/// <summary>The VM's playtime clock (native timeGetTime) in milliseconds, moving only when a test moves it: by setting
+/// <see cref="NowMs"/>, or through <see cref="ClockedHost"/>'s sleeps.</summary>
+internal sealed class ManualPlayClock : TimeProvider
+{
+    public long NowMs { get; set; }
+
+    public override long TimestampFrequency => 1000;
+
+    public override long GetTimestamp() => NowMs;
+}
+
+/// <summary>A recording host whose op-0xc8 sleeps advance <paramref name="clock"/>, so a script spends exact time.
+/// </summary>
+internal sealed class ClockedHost(ManualPlayClock clock) : RecordingHost
+{
+    public override void Sleep(long duration)
+    {
+        base.Sleep(duration);
+        clock.NowMs += duration;
     }
 }

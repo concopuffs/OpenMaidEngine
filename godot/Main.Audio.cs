@@ -7,7 +7,9 @@ using Age.Engine.Persistence;
 public partial class Main
 {
     private AudioStreamPlayer _bgm = null!;                // looping background music
-    private Tween? _bgmFadeTween;
+    private Tween? _bgmFadeTween;                         // native run-state 0x200: an op 0xc2 fade or the duck release
+    private int _bgmFadeTarget;
+    private bool _bgmFadeReleasesAtZero;
     private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
     private int _bgmPlaying;
     private int _voiceQueuedGeneration;
@@ -17,8 +19,8 @@ public partial class Main
     private int _voiceBgmDuckGeneration;
     private int _voiceBgmDuckRestoreLevel = AudioMixerSettings.MaximumVolume;
     // Native bgm object +0x420: the committed BGM envelope level in basis points. The player's volume is
-    // always NativeAudioVolume.ToDecibels(level); the Master and Music buses carry the mixer settings, and
-    // decibels add where native multiplies the levels.
+    // NativeAudioVolume.ToDecibels(level) except during a fade, whose steps apply interpolated levels; the
+    // Master and Music buses carry the mixer settings, and decibels add where native multiplies the levels.
     private int _bgmLevel = AudioMixerSettings.MaximumVolume;
     private bool _voiceBgmDuckReleaseArmed;               // native voice_bgm_duck_release_armed (op 0x1bf)
     private readonly System.Collections.Generic.List<Action> _sfxStartsWithheld = new(); // statement block open
@@ -42,9 +44,9 @@ public partial class Main
         if (stream == null) { GD.Print($"OGG load failed {assetName}"); return; }
         stream.Loop = startMode != 0;
         // FadeBgm is marshalled from the VM thread and starts on the next Godot frame, while the VM's
-        // blocking deadline begins immediately. Scene startup can consequently request the replacement
-        // track just before the old fade tween reaches zero. Do not let that orphaned tween mute the new
-        // stream after this method restores its normal gain.
+        // fade deadline begins immediately, so the VM can see a fade as ended (and request the next track
+        // without CompleteBgmFade) just before the tween reaches its endpoint. Do not let that orphaned tween
+        // mute or release the new stream after this method restores its normal gain.
         CancelBgmFade();
         SetBgmLevel(AudioMixerSettings.MaximumVolume);
         _bgm.Stream = stream;
@@ -102,7 +104,8 @@ public partial class Main
         if (category == (int)AudioMixerCategory.Music)
         {
             RestoreVoiceBgmDuck();
-            CancelBgmFade();
+            // A running op 0xc2 fade goes on: native's engine tick advances it whatever the route, and the VM
+            // settles it by its own deadline, so a fade to zero must still release the source when it ends.
             if (enabled)
             {
                 if (_bgm.Stream != null)
@@ -230,26 +233,36 @@ public partial class Main
     private void SetBgmLevel(int basisPoints)
     {
         _bgmLevel = System.Math.Clamp(basisPoints, 0, AudioMixerSettings.MaximumVolume);
-        _bgm.VolumeDb = NativeAudioVolume.ToDecibels(_bgmLevel);
+        ApplyBgmVolume(_bgmLevel);
     }
 
+    // A fade step: bgm_fade_tick applies the interpolated level without committing it (+0x420 changes only at
+    // 100 %), so a fade re-armed mid-way starts again from the last committed level.
+    private void ApplyBgmVolume(int basisPoints)
+        => _bgm.VolumeDb = NativeAudioVolume.ToDecibels(
+            System.Math.Clamp(basisPoints, 0, AudioMixerSettings.MaximumVolume));
+
     // bgm_fade_tick@0x464960: the level at progress p is (from × (100 − p) + target × p) / 100, applied in
-    // whole steps; the target is committed when the fade completes.
-    private void StartBgmLevelFade(int target, int steps, double realDurationSeconds)
+    // whole steps; the target is committed when the fade completes, and an op 0xc2 fade that reaches zero
+    // releases the source (bgm_stop_release).
+    private void StartBgmLevelFade(int target, int steps, double realDurationSeconds, bool releaseAtZero = false)
     {
         int from = _bgmLevel;
         target = System.Math.Clamp(target, 0, AudioMixerSettings.MaximumVolume);
         var tween = CreateTween();
         _bgmFadeTween = tween;
+        _bgmFadeTarget = target;
+        _bgmFadeReleasesAtZero = releaseAtZero;
         tween.Finished += () =>
         {
-            if (ReferenceEquals(_bgmFadeTween, tween))
-                _bgmFadeTween = null;
+            if (!ReferenceEquals(_bgmFadeTween, tween)) return;
+            _bgmFadeTween = null;
+            CommitBgmFadeEndpoint(target, releaseAtZero);
         };
         tween.TweenMethod(Callable.From<float>(progress =>
         {
             int points = (int)System.Math.Floor(progress * steps) * (100 / steps);
-            SetBgmLevel(NativeAudioVolume.InterpolateFade(from, target, points));
+            ApplyBgmVolume(NativeAudioVolume.InterpolateFade(from, target, points));
         }), 0.0f, 1.0f, realDurationSeconds);
     }
 
@@ -378,13 +391,28 @@ public partial class Main
                 System.Threading.Volatile.Write(ref _sfxPlaying[channel], 0);
     }
 
-    // Op 0xc2 target is a level in basis points (CONFIG passes setting × 100), not a percent.
+    // Op 0xc2 target is a level in basis points (CONFIG passes setting × 100), not a percent. The fade runs in the
+    // background; the VM does not wait for it.
     public void FadeBgm(int targetBasisPoints, int steps, double realDurationSeconds)
     {
         RestoreVoiceBgmDuck();
         CancelBgmFade();
-        if (realDurationSeconds <= 0) { SetBgmLevel(targetBasisPoints); return; }
-        StartBgmLevelFade(targetBasisPoints, steps, realDurationSeconds);
+        if (realDurationSeconds <= 0) { CommitBgmFadeEndpoint(targetBasisPoints, true); return; }
+        StartBgmLevelFade(targetBasisPoints, steps, realDurationSeconds, releaseAtZero: true);
+    }
+
+    // Ops 0xb7/0xb8/0xb9/0xbf end a running fade before they act: bgm_fade_tick(..., 100) applies its endpoint.
+    public void CompleteBgmFade()
+    {
+        if (_bgmFadeTween == null) return;   // it has already ended
+        CancelBgmFade();
+        CommitBgmFadeEndpoint(_bgmFadeTarget, _bgmFadeReleasesAtZero);
+    }
+
+    private void CommitBgmFadeEndpoint(int target, bool releaseAtZero)
+    {
+        if (releaseAtZero && target <= 0) StopBgm();
+        else SetBgmLevel(target);
     }
 
     private void CancelBgmFade()

@@ -209,30 +209,28 @@ public sealed partial class GodotAdvHost
         }
     }
 
+    // The frame-clock time at which the last op 0xc2 fade ends (VM thread); long.MinValue when none runs.
+    private long _bgmFadeDeadlineMs = long.MinValue;
+
+    // Native op 0xc2 sets run-state 0x200 and returns: the engine tick advances the fade from its own timer while ops
+    // keep dispatching (engine_main_tick_with_exception_policy@0x411e65 falls through to the dispatch). Main runs the
+    // envelope as a tween and releases the source when a zero target is reached.
     public void FadeBgm(int targetBasisPoints, long durationMs)
     {
         long ms = System.Math.Clamp(durationMs, 0, 60_000);
         double realSeconds = ms / 1000.0 / System.Math.Max(0.05, _clock.Speed);
-        _timeline?.State("bgm-fade", new() { ["target_basis_points"] = targetBasisPoints, ["duration_ms"] = ms });
+        _timeline?.Event("bgm-fade", new() { ["target_basis_points"] = targetBasisPoints, ["duration_ms"] = ms });
+        System.Threading.Volatile.Write(ref _bgmFadeDeadlineMs, ms > 0 ? _clock.NowMs + ms : long.MinValue);
         _main.CallDeferred("FadeBgm", targetBasisPoints, NativeAudioVolume.FadeSteps(ms), realSeconds);
-        long deadline = _clock.NowMs + ms;
-        IsSleeping = true;
-        bool scriptSuspended = SuspendScriptForPresentation();
-        try
-        {
-            // Native parks the interpreter in its audio service while the main render loop continues.
-            // Publish scene changes accumulated before the fade (notably GAMESTART -> SC0000's black
-            // frame), then leave presentation ownership with the compositor for the timed wait.
-            RequestSynchronizedPresentation();
-            while (_clock.NowMs < deadline && !_stopping)
-                _frameSignal.WaitOne(_clock.RealMillisecondsUntil(deadline, 50));
-        }
-        finally
-        {
-            ResumeScriptAfterPresentation(scriptSuspended);
-            IsSleeping = false;
-        }
-        _timeline?.State("running", new() { ["bgm_fade_complete"] = true });
+    }
+
+    public bool IsBgmFadeActive => _clock.NowMs < System.Threading.Volatile.Read(ref _bgmFadeDeadlineMs);
+
+    public void CompleteBgmFade()
+    {
+        System.Threading.Volatile.Write(ref _bgmFadeDeadlineMs, long.MinValue);
+        _timeline?.Event("bgm-fade-complete", new());
+        _main.CallDeferred("CompleteBgmFade");
     }
 
     public void ApplyAudioVolume(int category, int basisPoints)

@@ -50,8 +50,16 @@ public interface IAudioHost
     void ScheduleSoundEffectStart(int channel, int startMode, long delayMs) { }
 
     void ReleaseSoundEffect(int channel) { }
-    // Op 0xc2: fade the BGM envelope to a level in basis points (0..10000) over durationMs.
+    // Op 0xc2: start fading the BGM envelope to a level in basis points (0..10000) over durationMs, and return. The
+    // engine tick runs the fade (run-state 0x200) while the script goes on; reaching a zero target releases the source
+    // (bgm_fade_tick -> bgm_stop_release), so a zero duration with a zero target releases it at once.
     void FadeBgm(int targetBasisPoints, long durationMs) { }
+
+    // Whether the last op 0xc2 fade is still running.
+    bool IsBgmFadeActive => false;
+
+    // Ops 0xb7/0xb8/0xb9/0xbf first end a running fade: apply its endpoint now, releasing on a zero target.
+    void CompleteBgmFade() { }
 
     // Native op 0x1be queries the common 13-slot sound manager. Observed assignments are
     // SFX 0..9, BGM 11, and voice 12; unsupported/unavailable slots report false.

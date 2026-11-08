@@ -57,6 +57,10 @@ public sealed partial class VirtualMachine
                 }
                 throw new NumberedRestoreRequestedException();
             }
+            case "commit-pending-playtime": // 0xad: op_0xad_commit_pending_playtime (no shipped script uses it)
+            case "u00415110": // pre-reference compatibility
+                CommitLoadedPlayTime();
+                return pc + 1;
             case "continue-save-load-stack-restore": // 0xae
             {
                 if (_loadedNumberedState == null || _restoreFrameIndex < 0)
@@ -78,6 +82,7 @@ public sealed partial class VirtualMachine
                 int parentIndex = _restoreFrameIndex;
                 NativeSavedScriptFrame childSaved = _loadedNumberedState.Frames[parentIndex + 1];
                 Script child = ResolveSavedScript(childSaved);
+                CommitLoadedPlayTime();   // script_frame_restore_saved_layout for the child frame
                 _restoreFrameIndex = parentIndex + 1;
                 FrameOutcome childOutcome = RunFrame(
                     CreateRestoredFrame(child, childSaved), FrameCause.SaveRestore,

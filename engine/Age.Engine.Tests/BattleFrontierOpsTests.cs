@@ -74,6 +74,34 @@ public class BattleFrontierOpsTests
     }
 
     [Fact]
+    public void StringOperandsReadNumbersAsFullwidthText()
+    {
+        // Kamidori FIELD@0x8957 builds 「素材Ｎ個を採取袋に入れた！」 with concat "素材" (local-ptr), an integer.
+        var table = Table();
+        var script = ScriptAssembler.Assemble(table, "NUMBER_TEXT", new List<(int, Operand[])>
+        {
+            (0x193, new[] { new Operand(GlobalString, 0x500), new Operand(InlineString, 0), G(0x100) }),
+            (0x193, new[] { new Operand(GlobalString, 0x501), I(-7), new Operand(InlineString, 1) }),
+            (0x192, new[] { new Operand(GlobalString, 0x502), G(0x101) }),
+            (0x193, new[] { new Operand(GlobalString, 0x503), new Operand(InlineString, 1),
+                            new Operand(1, BitConverter.SingleToInt32Bits(1.5f)) }),
+            (0x1c8, new[] { new Operand(GlobalString, 0x504), I(-7) }),
+            (0x2, Array.Empty<Operand>()),
+        }, new[] { "素材", "個" });
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+        vm.Globals[0x100] = 12;
+        vm.Globals[0x101] = 3;
+
+        vm.Run();
+
+        Assert.Equal("素材１２", vm.GlobalStrings[0x500]);
+        Assert.Equal("－７個", vm.GlobalStrings[0x501]);
+        Assert.Equal("３", vm.GlobalStrings[0x502]);
+        Assert.Equal("個１？５０００００", vm.GlobalStrings[0x503]);
+        Assert.Equal("-7", vm.GlobalStrings[0x504]); // op 0x1c8 formats ASCII itself
+    }
+
+    [Fact]
     public void MonotonicAndFrameTimeOps_StoreNativeLowDwordSamples()
     {
         var table = Table();
