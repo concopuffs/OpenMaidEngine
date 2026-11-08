@@ -28,20 +28,6 @@ public sealed partial class VirtualMachine
             {
                 long resourceId = Read(a[0]);
                 int surfaceSlot = (int)Read(a[1]);
-                // Native SC0000's warm-engine trace evaluates its one movie site (intro movie 0x33, at 0x13c8 in the
-                // shipped script) as surface 0. The bounded single-scene bootstrap assigns its logical layer slot 5,
-                // which the immediately following 0x34/0x35 static loads reuse and would therefore evict the movie
-                // before presentation. Reproduce the native assignment without changing the general surface
-                // allocator. The site is identified by what it plays, not by its code offset, so a recompiled
-                // SC0000 whose code moved keeps the quirk.
-                if (resourceId == 0x33 && _cur.Script.Name.StartsWith("SC0000", StringComparison.OrdinalIgnoreCase)
-                    && surfaceSlot != 0)
-                {
-                    int logicalLayer = (int)Globals.GetValueOrDefault(0x62450);
-                    long movieHandle = Globals.GetValueOrDefault(0x62455 + logicalLayer);
-                    Gfx.RemapObjectSurface(movieHandle, surfaceSlot, 0);
-                    surfaceSlot = 0;
-                }
                 // Graph construction is synchronous. Keep the existing created surface blank during that
                 // boundary; publishing the movie resource first would let a concurrent compositor mistake
                 // the MPEG payload's .AGF name for a still image before the host registers/decodes it.

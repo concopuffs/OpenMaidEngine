@@ -1914,10 +1914,12 @@ The handler clears the map embedded at retained-gfx owner+0x408, resets its coun
 - **semantic status:** investigated
 - **runtime implemented:** yes
 - **handler bindings:** `SYS4422` -> `age-vm-switch/0x1fa` (evidence-confirmed); `SYS4433` -> `age-vm-switch/0x1fa` (compatibility-reuse-unconfirmed-for-revision)
-- **summary:** 0x1fa (surface_slot) — release the surface at ctx+0x52bd4[slot] (virtual free, then null) and call FUN_00474e40(slot). It releases a surface slot, not a retained object handle. SC0000 feeds it the slot returned by op 0x215 after op 0x1f7 erases the associated object group.
+- **summary:** 0x1fa (surface_slot) — delete the slot's movie object ctx+0x52bd4[slot] (virtual free, then null), whether or not its movie has reached the end, then release the slot's texture with retained_gfx_release_surface@0x474e40. It releases a surface slot, not a retained object handle. SC0000 feeds it the slot returned by op 0x215 after op 0x1f7 erases the associated object group.
 - **operand access:** `1` read
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1fa`; scope=Himegari SYS4422. Ghidra handler 0x4224a0 (dispatch ctx[0x26c93+0x1fa]); frees ctx+0x52bd4[operand1*4] via vtbl, then FUN_00474e40(operand1). retained_gfx_release_surface writes only the surface record's resource id -1; the packed key and created flag stay (2026-11-03).
+
+Port (2026-11-07): MovieSurfaceRegistry.Release drops the slot's movie binding whatever its playback state, as do create-texture, set-texture and 0x249. Kamidori's FIELD@0xbbf8 waits out its chest effect on the anim clock, releases surface 0x2a here and MES recreates it for the pickup text; the port's earlier guard kept an unfinished movie bound and showed its last frame instead of the text.
 
 ### 0x1fb `draw-texture` (draw-texture, argc 8)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)

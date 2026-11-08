@@ -8,9 +8,9 @@ internal readonly record struct MovieSurfaceBinding(long PlaybackId, long Resour
 internal sealed record MovieSurfaceFrame(RgbaImage Image, string Name, int AssetId);
 public sealed record MovieSurfaceDiagnostic(int SurfaceSlot, long PlaybackId, long ResourceId,
                                             bool Completed, bool HasFrame, string? Name);
-internal enum MovieSurfaceReleaseKind { NotBound, Active, Released }
+internal enum MovieSurfaceReleaseKind { NotBound, Released }
 internal readonly record struct MovieSurfaceRelease(MovieSurfaceReleaseKind Kind,
-                                                    MovieSurfaceBinding Binding);
+                                                    MovieSurfaceBinding Binding, bool Completed);
 
 /// <summary>Instance-keyed movie/surface ownership. A resource may be played more than once concurrently;
 /// completion and frames therefore belong to a playback, never to the shared asset id.</summary>
@@ -130,16 +130,19 @@ internal sealed class MovieSurfaceRegistry
         lock (_lock) return _knownMovieResources.Contains(resourceId);
     }
 
-    public MovieSurfaceRelease ReleaseIfCompleted(int surfaceSlot)
+    /// <summary>Ops 0x1f8, 0x1f9, 0x249 and 0x1fa delete the slot's movie object (ctx+0x52bd4[slot]) before they
+    /// touch its texture, whether or not DirectShow has reached the end. Kamidori's FIELD@0xbbf8 waits out its
+    /// chest effect on the anim clock, then releases surface 0x2a, which MES recreates for its text box; a movie that
+    /// outlived the release would keep showing its last frame instead of the text.</summary>
+    public MovieSurfaceRelease Release(int surfaceSlot)
     {
         lock (_lock)
         {
             if (!_bySurface.TryGetValue(surfaceSlot, out var binding))
-                return new MovieSurfaceRelease(MovieSurfaceReleaseKind.NotBound, default);
-            if (!_completed.Contains(binding.PlaybackId))
-                return new MovieSurfaceRelease(MovieSurfaceReleaseKind.Active, binding);
+                return new MovieSurfaceRelease(MovieSurfaceReleaseKind.NotBound, default, false);
+            bool completed = _completed.Contains(binding.PlaybackId);
             RemoveLocked(binding);
-            return new MovieSurfaceRelease(MovieSurfaceReleaseKind.Released, binding);
+            return new MovieSurfaceRelease(MovieSurfaceReleaseKind.Released, binding, completed);
         }
     }
 

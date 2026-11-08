@@ -12,6 +12,8 @@ internal class RecordingHost : IHost
     public int Waits;
     public int Presents;
     public int TransitionWaits;
+    /// <summary>The anim-clock duration each op 0x21c wait starts with.</summary>
+    public readonly List<long> TransitionAnimClocks = new();
     public int InputCallbackFrames;
     public bool MessageSkip;
     public bool ScriptMessageSkip;
@@ -273,6 +275,7 @@ internal class RecordingHost : IHost
     public void WaitForForegroundTransition(GfxState gfx)
     {
         TransitionWaits++;
+        TransitionAnimClocks.Add(gfx.AnimClockDurationTicks);
         gfx.StartForegroundTransitions(100);
         gfx.CompleteForegroundTransitions(100);
     }

@@ -294,18 +294,6 @@ public sealed partial class GfxState
             return _objects.TryGetValue(handle, out var o) ? o.SourceSlot : -1;
     }
 
-    /// <summary>Rebind one retained object from one source surface to another. Used by SC0000's bounded
-    /// movie site to reproduce the native warm-engine slot assignment before the following static loaders
-    /// reuse the port's cold-bootstrap slot.</summary>
-    public void RemapObjectSurface(long handle, int fromSlot, int toSlot)
-    {
-        lock (_lock)
-            if (_objects.TryGetValue(handle, out var obj) && obj.SourceSlot == fromSlot)
-            {
-                obj.SourceSlot = toSlot;
-                MarkRetainedMutation();
-            }
-    }
     /// <summary>Opcode 0x216 reads the live surface record's resource id (owner+0x700), not an object field or the
     /// texture. A texture kept across op 0x9 therefore reads -1 once the reset has cleared its record.</summary>
     public long QueryField(long idx)

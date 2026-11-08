@@ -5241,7 +5241,8 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "gfx-elem-release"
 category = "draw"
-summary = "0x1fa (surface_slot) — release the surface at ctx+0x52bd4[slot] (virtual free, then null) and call FUN_00474e40(slot). It releases a surface slot, not a retained object handle. SC0000 feeds it the slot returned by op 0x215 after op 0x1f7 erases the associated object group."
+summary = "0x1fa (surface_slot) — delete the slot's movie object ctx+0x52bd4[slot] (virtual free, then null), whether or not its movie has reached the end, then release the slot's texture with retained_gfx_release_surface@0x474e40. It releases a surface slot, not a retained object handle. SC0000 feeds it the slot returned by op 0x215 after op 0x1f7 erases the associated object group."
+details = "Port (2026-11-07): MovieSurfaceRegistry.Release drops the slot's movie binding whatever its playback state, as do create-texture, set-texture and 0x249. Kamidori's FIELD@0xbbf8 waits out its chest effect on the anim clock, releases surface 0x2a here and MES recreates it for the pickup text; the port's earlier guard kept an unfinished movie bound and showed its last frame instead of the text."
 noop_headless = false
 source = "investigation"
 confidence = "high"

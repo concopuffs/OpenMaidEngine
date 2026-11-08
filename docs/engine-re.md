@@ -2661,7 +2661,8 @@ passed. As natively, the surface keeps its created contents until then, since a 
 
 Graph construction/open is synchronous, but playback and sample delivery are asynchronous. The handler
 returns normally and the interpreter advances one instruction: at SC0000 `0x13c8`, the native operand
-capture evaluates `(0x33, 0, 2, 0)` and the next executed bytecode is `0x13d1`. The movie therefore does
+capture evaluates `(0x33, 0, 2, 0)` and the next executed bytecode is `0x13d1`. (On a New Game from the title the
+surface is 5, not 0: see "SC0000's chapter movie plays on surface 5", 2026-11-07.) The movie therefore does
 not itself block the VM. SC0000 prepares additional static layers, then reaches `0x21c` through
 `label_1235a@0x1574`. That opcode sets run-state bit `0x400` and yields the interpreter; the presentation
 service continues sampling the retained movie until DirectShow EOF, after which the following script
@@ -2696,7 +2697,9 @@ not help because normal retained composition immediately covered it with that ca
 surfaces now bypass the static cache and publish only through the retained object. A windowed run records
 first frame 101 and stop frame 190; the user manually confirmed visible playback. The separate lower white
 textbox-area object remains outside this finding. Embedded audio was added later through the portable
-FFmpeg/audio-clock path described in `docs/platform-portability.md`.
+FFmpeg/audio-clock path described in `docs/platform-portability.md`. *Superseded 2026-11-07:* the port no longer keeps
+a movie bound past a surface release, and the movie plays on surface 5, not 0. See "A surface release deletes its
+movie" and "SC0000's chapter movie plays on surface 5" under "Movie flags decide the effect wait".
 
 The `/v2` image names/comments the handler; movie ctor/interface/open/play/volume/release workers; sound
 route helpers; renderer media-type/sample workers; and stop/detach/destructor lifecycle. The image was
@@ -6206,6 +6209,52 @@ movie op, until the surface is released. `GodotAdvHost.HasActiveMoviePresentatio
 foreground-transition waits. Before this, any unfinished movie held the wait. Kamidori's first-battle SHOWGROW then
 sat about 9.3 s after Engage, against native's 6.5 s; it now sits 6.3 s. SC0000's chapter wait is unchanged:
 native 1.63 s, port 1.68 s. Test: `MovieSurfaceRegistryTests.OnlyFlagsWithBit2SetAndBit0ClearHoldTheServiceWait`.
+*Correction (2026-11-07):* that 1.63 s wait is not the movie's. The wait that should cover the movie fell to 5 s on the
+port once the movie stopped holding it, because op `0x23f` read the wrong surface. See "SC0000's chapter movie plays
+on surface 5", below.
+
+#### A surface release deletes its movie (2026-11-07)
+
+**Native.** Ops `0x1f8` create-texture, `0x1f9` set-texture, `0x249` and `0x1fa` gfx-elem-release delete the slot's
+movie object (`ctx+0x52bd4[slot]`) before they touch its texture. Op `0x23d` does the same for slots 42–999. None of
+them asks whether the movie has reached its end.
+
+Kamidori depends on this when a unit opens a chest or gathers. FIELD's `label_bbf8` (`0xbbf8`):
+
+1. creates surface `0x2a` at 120×120 and plays the effect movie into it (local `0x542a`);
+2. sets the anim clock to the movie's stop time (op `0x23f`) and waits it out with op `0x21c`;
+3. erases the object and releases `0x2a` with op `0x1fa`.
+
+MES.BIN then creates `0x2a` again at the text's size, draws the pickup text into it with draw-string, and shows
+handle `0x13880+0x32` centered on the field.
+
+**Port.** Since 2026-07-11 the port had kept a movie bound when a release came before its decoder reported the end
+(`ReleaseIfCompleted`). At the chest the anim clock runs out first, so MES's text box showed the movie's last
+frame, a black 120×120 square, instead of 「【消費】勇壮の水・小を２個手に入れた！」. `MovieSurfaceRegistry.Release` now
+drops the binding whatever its state, and the timeline's `movie-stop` event records `completed`. Verified on
+平穏なる採取地 (the chest at tile 2,3): both targets show the text. Test:
+`MovieSurfaceRegistryTests.ReleasingASurfaceRemovesAMovieThatIsStillPlaying`.
+
+#### SC0000's chapter movie plays on surface 5 (2026-11-07)
+
+**Native.** SYSTEM4@`0x5bf` fills `adv_layer_surface_slots` (`G[0x3239]`, three slots per layer). Layer 1's first
+slot is 5. SC0000's `label_1326e` copies it to `G[0x62452]`, so op `0x236` at `0x13c8` plays CHAPTER.AGF (`0x33`, PTS
+0.39–12.37 s, stop time 12016 ms) into surface 5. A Frida probe on `op_0x236_play_movie_to_surface@0x423ee0` saw
+`ctx+0x52bd4` go from empty to `[5]`. Op `0x23f` at `0x13f0` reads the same `G[0x62452]`. It stores the stop time in
+`0x32b2[1]`, and `label_1235a` sets the anim clock to the largest such entry. The wait at `0x1574` therefore lasts the
+whole movie. The release at `0x165f` comes after the movie's end.
+
+**Port.** A 2026-07-11 special case moved this movie to surface 0. It came from a bounded bootstrap in which neither
+SYSTEM4 nor SC0000's `label_125bd` had filled the table, so the operand read 0. The special case left `G[0x62452]` at 5.
+Op `0x23f` therefore found no movie on 5 and returned -1, and the anim clock fell to the layer fades' 5000 ms.
+Until the movie flags decided the effect wait (above), the unfinished movie held the wait and hid this. After that
+change the port released the movie at `0x165f`, 5.9 s into its 12 s.
+
+With the special case removed, the movie stays on 5. The port reaches the 750 ms sleep at `0x16cb` 13.5 s after the
+page-17 advance and the next page at about 18 s. Native reaches the next page at 24 s, about 6 s of which LAV
+Filters' codec probe spends at `0x13c8`. The movie frames line up once that probe time is subtracted. Test:
+`MovieOpcodeTests.Sc0000ResumesImmediatelyAfterMovieOpcodeAtBytecodeOffset13d1` seeds the table as SYSTEM4 does,
+then checks surface 5 and a 12016 ms anim clock.
 
 ### Fast-forward through effect waits, its pace, and physical Ctrl (2026-11-07)
 

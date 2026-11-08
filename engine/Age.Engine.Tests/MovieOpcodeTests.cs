@@ -619,11 +619,15 @@ public class MovieOpcodeTests
         foreach (var name in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
             session.RunScene(Sys4Loader.Load(Paths.Scripts()[name], table), table, new CaptureHost(), provider: provider);
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
-        var host = new RecordingHost();
+        var host = new RecordingHost { MovieStopTimeMs = 12016 };   // CHAPTER.AGF's stop time
         var trace = new RecordingTraceSink { TracingSteps = true };
         var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 20_000_000), provider, trace);
         foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
+        // SYSTEM4@0x5bf fills adv_layer_surface_slots before any scene runs; this bootstrap skips SYSTEM4 and its
+        // state makes SC0000 skip its own copy at 0x50f, so seed each layer's first slot as SYSTEM4 does.
+        foreach (var (layer, slot) in new[] { (0, 4), (1, 5), (2, 6), (3, 7) })
+            vm.Globals[0x3239 + layer * 3] = slot;
 
         vm.Run();
 
@@ -632,7 +636,11 @@ public class MovieOpcodeTests
         var nextStep = trace.Events.Skip(movieStep + 1).First(e => e.Kind == TraceEventKind.Step);
         Assert.Equal(0x13c8, trace.Events[movieStep].Ins!.Offset);
         Assert.Equal(0x13d1, nextStep.Ins!.Offset);
-        Assert.Contains((0x33L, 0, 2L, 0L), host.Movies);
+        // A Frida probe on native op 0x236 (2026-11-07) saw the movie object created in ctx+0x52bd4[5], layer 1's
+        // surface from SC0000's table. Op 0x23f at 0x13f0 reads the same slot, so the scene's next effect wait runs
+        // the anim clock for the whole movie.
+        Assert.Contains((0x33L, 5, 2L, 0L), host.Movies);
+        Assert.Contains(12016L, host.TransitionAnimClocks);
     }
 
     [Fact]

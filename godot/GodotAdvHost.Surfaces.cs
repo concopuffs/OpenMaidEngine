@@ -213,9 +213,8 @@ public sealed partial class GodotAdvHost
     public void ReleaseSurface(int slot)
     {
         lock (_screenTransitionLock) _renderTargetSnapshots.Remove(slot);
-        MovieSurfaceRelease movieRelease = _movieSurfaces.ReleaseIfCompleted(slot);
-        if (movieRelease.Kind == MovieSurfaceReleaseKind.Active)
-            return; // Static surface setup before 0x21c must not evict an active movie playback.
+        // Native deletes the slot's movie object first, finished or not (MovieSurfaceRegistry.Release).
+        MovieSurfaceRelease movieRelease = _movieSurfaces.Release(slot);
         lock (_imageLock)
         {
             _surfaceImages.Remove(slot);
@@ -244,6 +243,7 @@ public sealed partial class GodotAdvHost
                 ["resource"] = binding.ResourceId,
                 ["playback"] = binding.PlaybackId,
                 ["surface"] = slot,
+                ["completed"] = movieRelease.Completed,
             });
             _main.CallDeferred("StopMovie", binding.PlaybackId);
         }
