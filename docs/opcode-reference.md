@@ -1932,6 +1932,15 @@ Port (2026-11-07): MovieSurfaceRegistry.Release drops the slot's movie binding w
 - **grounding:** source=investigation, confidence=med
 - **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1fb`; scope=Himegari SYS4422. SC0000 CG-load subroutine label_12649: `draw-texture (ptr) (slot) 0 0 (w) (h) (dstx) (dsty)`; full-screen slot-3 draws use 0x320x0x258 (800x600).
 
+### 0x1fc `gfx-reset-transform-current` (u004205F0, argc 1)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **runtime implemented:** no
+- **summary:** (handle) — get/create the retained object, clear its transform mark obj+0x68 and reset its current scale, rotation and translation matrices (obj+0x6c/+0xec/+0x16c) to identity. The current axis/angle floats obj+0x1ec..0x204 and the channel targets are left alone. Neither Himegari nor Kamidori calls it, so the port traces and skips it.
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1fc`; scope=Himegari SYS4422. Ghidra /v2: op_0x1fc_handler@0x422610 fetches operand 1 and calls gfx_object_reset_transform_current@0x47e5b0, which writes obj+0x68=0, rebuilds the three current matrices as identity and raises redraw dirty owner+0xb558. The six transform setters (0x1fd/0x1fe/0x1ff current, 0x21e/0x21f/0x220 channel) and their range-transform counterparts write the mark as 1; no gfx path reads it, but it reaches the save record (Kamidori SAVE07 objects 0xc382/0xc44b, 2026-11-08). No call in either corpus.
+
 ### 0x1fd `gfx-set-scale-current` (u00420620, argc 4)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
@@ -4483,15 +4492,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x1d9`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x1fc `u004205F0` (u004205F0, argc 1)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x1fc`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x200 `u00420800` (u00420800, argc 1)
 - **observed by:** none in recorded corpora

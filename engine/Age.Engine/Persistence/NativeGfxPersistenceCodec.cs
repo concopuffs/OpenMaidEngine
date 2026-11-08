@@ -90,6 +90,7 @@ internal static class NativeGfxPersistenceCodec
         WriteInt(raw, 0x5c, unchecked((int)value.SrcDurationMs));
         WriteInt(raw, 0x60, unchecked((int)value.Color));
         WriteInt(raw, 0x64, unchecked((int)value.OneShotColorTarget));
+        WriteInt(raw, 0x68, value.TransformMarked ? 1 : 0);
         WriteScaleMatrix(raw, 0x6c, value.ScaleCurrent);
         WriteScaleMatrix(raw, 0xac, value.ScaleTarget);
         WriteRotationMatrix(raw, 0xec, value.RotationCurrent);
@@ -168,6 +169,7 @@ internal static class NativeGfxPersistenceCodec
             Color = unchecked((uint)ReadInt(raw, 0x60)),
             HasColor = ReadInt(raw, 0x60) != -1,
             OneShotColorTarget = unchecked((uint)ReadInt(raw, 0x64)),
+            TransformMarked = ReadInt(raw, 0x68) != 0,
             ScaleCurrent = ReadScale(raw, 0x6c),
             ScaleTarget = ReadScale(raw, 0xac),
             TranslationCurrent = ReadMatrixTranslation(raw, 0x16c),

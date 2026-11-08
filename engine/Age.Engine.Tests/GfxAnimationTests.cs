@@ -77,6 +77,55 @@ public class GfxAnimationTests
     }
 
     [Fact]
+    public void FinishedMatrixChannels_ResetTheirTargetsAndTimingAsNativeDoes()
+    {
+        // gfx_object_apply_transform_channels (/v2 0x472f00) copies each finished channel's target matrix into the
+        // current one, zeroes the channel's delay and duration and resets the target matrix to identity. Kamidori's
+        // FIELD minimap indicator 0xc382 (FIELD@0xa55f, 400 ms to (45,15)) saves +0x58=0 and an identity target.
+        var g = new GfxState();
+        g.BindDraw(0xc382, 1, 0, 0, 8, 8, 0, 0);
+        g.SetScaleChannel(0xc382, delayMs: 50, durationMs: 400, percent: (200, 50, 100));
+        g.SetRotationChannel(0xc382, delayMs: 50, durationMs: 400, axis: (0, 0, 1), angleDegrees: 90);
+        g.SetTranslationChannel(0xc382, delayMs: 50, durationMs: 400, target: (45, 15, 0));
+        g.SetRangeTransform(0xc382, 1, (0, 0, 0));
+        g.SetRangeScaleChannel(0, 300, (50, 50, 100));
+        g.SeedOneShotChannels(1000);
+        var o = g.TryGet(0xc382)!;
+        // Every transform setter writes native's obj+0x68 mark; a finished motion leaves it set.
+        Assert.True(o.TransformMarked);
+        Assert.False(g.TryGet(0xc383)?.TransformMarked ?? false);
+
+        g.SnapshotVisibleObjects(1300, new List<RenderObject>());     // mid-motion: targets stay
+        Assert.Equal((45.0, 15.0, 0.0), o.TranslationTarget);
+        Assert.Equal(400, o.TranslationDurationMs);
+
+        g.SnapshotVisibleObjects(1450, new List<RenderObject>());
+        Assert.Equal((2.0, 0.5, 1.0), o.ScaleCurrent);
+        Assert.Equal((0.0, 0.0, 1.0, 90.0), o.RotationCurrent);
+        Assert.Equal((45.0, 15.0, 0.0), o.TranslationCurrent);
+        Assert.Equal((1.0, 1.0, 1.0), o.ScaleTarget);
+        Assert.Equal((0.0, 0.0, 0.0, 0.0), o.RotationTarget);
+        Assert.Equal((0.0, 0.0, 0.0), o.TranslationTarget);
+        Assert.Equal((0, 0, 0, 0, 0, 0),
+            (o.ScaleDelayMs, o.ScaleDurationMs, o.RotationDelayMs, o.RotationDurationMs,
+             o.TranslationDelayMs, o.TranslationDurationMs));
+        Assert.Equal(-1, o.OneShotStartMs);
+        Assert.True(o.TransformMarked);
+        var range = g.CapturePersistenceSnapshot().RangeTransform;
+        Assert.True(range.TransformMarked);   // owner+0x490
+        Assert.Equal((0.5, 0.5, 1.0), range.ScaleCurrent);
+        Assert.Equal((1.0, 1.0, 1.0), range.ScaleTarget);
+        Assert.Equal((0, 0), (range.ScaleDelayMs, range.ScaleDurationMs));
+
+        // A forced completion (frame-clock owner+0xb55c == 1) ends the channels the same way.
+        g.SetTranslationChannel(0xc382, delayMs: 0, durationMs: 400, target: (90, 30, 0));
+        g.ResetAnimClock();
+        Assert.Equal((90.0, 30.0, 0.0), o.TranslationCurrent);
+        Assert.Equal((0.0, 0.0, 0.0), o.TranslationTarget);
+        Assert.Equal((0, 0), (o.TranslationDelayMs, o.TranslationDurationMs));
+    }
+
+    [Fact]
     public void CallerOwnedVisibleSnapshot_RefillsTheListInHandleOrder()
     {
         var g = new GfxState();

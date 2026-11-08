@@ -10123,14 +10123,14 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u004205F0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "gfx-reset-transform-current"
+category = "draw"
+summary = "(handle) — get/create the retained object, clear its transform mark obj+0x68 and reset its current scale, rotation and translation matrices (obj+0x6c/+0xec/+0x16c) to identity. The current axis/angle floats obj+0x1ec..0x204 and the channel targets are left alone. Neither Himegari nor Kamidori calls it, so the port traces and skips it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra /v2: op_0x1fc_handler@0x422610 fetches operand 1 and calls gfx_object_reset_transform_current@0x47e5b0, which writes obj+0x68=0, rebuilds the three current matrices as identity and raises redraw dirty owner+0xb558. The six transform setters (0x1fd/0x1fe/0x1ff current, 0x21e/0x21f/0x220 channel) and their range-transform counterparts write the mark as 1; no gfx path reads it, but it reaches the save record (Kamidori SAVE07 objects 0xc382/0xc44b, 2026-11-08). No call in either corpus."
 
 [[opcode]]
 op = 0x200

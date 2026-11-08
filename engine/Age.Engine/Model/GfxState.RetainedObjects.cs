@@ -52,6 +52,9 @@ public sealed partial class GfxState
         public bool Visible;
 
         // ---- independent one-shot matrix channels (gfx_object_apply_transform_channels@0x472f00). ----
+        // obj+0x68: native's six transform setters (current and channel, scale/rotation/translation) write 1 and
+        // object init writes 0. No gfx path reads it; it reaches the save record.
+        public bool TransformMarked;
         // Scale: current obj+0x6c, target obj+0xac, delay obj+0x3c, duration obj+0x50.
         public (double X, double Y, double Z) ScaleCurrent = (1, 1, 1), ScaleTarget = (1, 1, 1);
         public long ScaleDelayMs, ScaleDurationMs;
@@ -171,6 +174,7 @@ public sealed partial class GfxState
     {
         lock (_lock)
         {
+            _rangeTransform.TransformMarked = true;   // owner+0x490, the embedded record's +0x68
             _rangeTransform.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
             MarkRetainedMutation();
         }
@@ -181,6 +185,7 @@ public sealed partial class GfxState
     {
         lock (_lock)
         {
+            _rangeTransform.TransformMarked = true;
             _rangeTransform.TranslationCurrent = translation;
             MarkRetainedMutation();
         }
@@ -191,6 +196,7 @@ public sealed partial class GfxState
     {
         lock (_lock)
         {
+            _rangeTransform.TransformMarked = true;
             _rangeTransform.ScaleDelayMs = delayMs;
             _rangeTransform.ScaleDurationMs = durationMs;
             _rangeTransform.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
@@ -206,6 +212,7 @@ public sealed partial class GfxState
     {
         lock (_lock)
         {
+            _rangeTransform.TransformMarked = true;
             _rangeTransform.RotationDelayMs = delayMs;
             _rangeTransform.RotationDurationMs = durationMs;
             _rangeTransform.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
@@ -223,6 +230,7 @@ public sealed partial class GfxState
     {
         lock (_lock)
         {
+            _rangeTransform.TransformMarked = true;
             _rangeTransform.TranslationDelayMs = delayMs;
             _rangeTransform.TranslationDurationMs = durationMs;
             _rangeTransform.TranslationTarget = target;
@@ -385,6 +393,7 @@ public sealed partial class GfxState
             SrcPeriod = s.SrcPeriod, SrcStart = s.SrcStart, SrcAnim = s.SrcAnim,
             ColorPeriod = s.ColorPeriod, ColorStart = s.ColorStart, ColorTarget = s.ColorTarget,
             ColorAnim = s.ColorAnim, SourceSlot = s.SourceSlot, SrcRect = s.SrcRect, Visible = s.Visible,
+            TransformMarked = s.TransformMarked,
             ScaleCurrent = s.ScaleCurrent, ScaleTarget = s.ScaleTarget,
             ScaleDelayMs = s.ScaleDelayMs, ScaleDurationMs = s.ScaleDurationMs, ScaleEnabled = s.ScaleEnabled,
             TranslationCurrent = s.TranslationCurrent, TranslationTarget = s.TranslationTarget,

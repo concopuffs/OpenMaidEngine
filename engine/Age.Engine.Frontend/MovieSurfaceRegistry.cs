@@ -20,12 +20,18 @@ internal sealed class MovieSurfaceRegistry
     private readonly Dictionary<int, MovieSurfaceBinding> _bySurface = new();
     private readonly Dictionary<long, MovieSurfaceBinding> _byPlayback = new();
     private readonly Dictionary<long, MovieSurfaceFrame> _frames = new();
+    private readonly Dictionary<long, MovieSurfaceFrame> _contentsBeforeFirstFrame = new();
     private readonly HashSet<long> _completed = new();
     private readonly HashSet<long> _knownMovieResources = new();
     private long _nextPlaybackId;
 
+    /// <summary>Bind a playback to a surface. Native op 0x236 requires the destination texture to exist and its renderer
+    /// copies each sample into that texture, so until the first sample the surface shows what it held at bind time.
+    /// <paramref name="surfaceContents"/> is that image (Kamidori BTL@0x431f creates a zeroed texture for each effect
+    /// movie, which its additive blend leaves invisible); <see cref="TryResolveSurface"/> serves it until
+    /// <see cref="PublishFrame"/> supplies a sample.</summary>
     public MovieSurfaceBinding Begin(int surfaceSlot, long resourceId, long movieFlags,
-                                     out MovieSurfaceBinding? replaced)
+                                     out MovieSurfaceBinding? replaced, RgbaImage? surfaceContents = null)
     {
         lock (_lock)
         {
@@ -35,6 +41,9 @@ internal sealed class MovieSurfaceRegistry
             _knownMovieResources.Add(resourceId);
             _bySurface[surfaceSlot] = binding;
             _byPlayback[binding.PlaybackId] = binding;
+            if (surfaceContents != null)
+                _contentsBeforeFirstFrame[binding.PlaybackId] = new MovieSurfaceFrame(
+                    surfaceContents, $"<surface:{surfaceSlot}>", int.MinValue + surfaceSlot);
             return binding;
         }
     }
@@ -45,6 +54,7 @@ internal sealed class MovieSurfaceRegistry
         {
             if (!_byPlayback.ContainsKey(playbackId)) return false;
             _frames[playbackId] = new MovieSurfaceFrame(image, name, assetId);
+            _contentsBeforeFirstFrame.Remove(playbackId);
             return true;
         }
     }
@@ -93,7 +103,8 @@ internal sealed class MovieSurfaceRegistry
         lock (_lock)
         {
             if (_bySurface.TryGetValue(surfaceSlot, out var binding)
-                && _frames.TryGetValue(binding.PlaybackId, out var found))
+                && (_frames.TryGetValue(binding.PlaybackId, out var found)
+                    || _contentsBeforeFirstFrame.TryGetValue(binding.PlaybackId, out found)))
             {
                 frame = found;
                 return true;
@@ -195,6 +206,7 @@ internal sealed class MovieSurfaceRegistry
         _bySurface.Remove(binding.SurfaceSlot);
         _byPlayback.Remove(binding.PlaybackId);
         _frames.Remove(binding.PlaybackId);
+        _contentsBeforeFirstFrame.Remove(binding.PlaybackId);
         _completed.Remove(binding.PlaybackId);
     }
 }

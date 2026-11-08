@@ -117,6 +117,33 @@ public class MovieSurfaceRegistryTests
         Assert.False(registry.HoldsServiceWait);          // releasing the surface removes the movie
     }
 
+    [Fact]
+    public void SurfaceShowsItsCreatedContentsUntilTheFirstSample()
+    {
+        // Kamidori BTL@0x431f creates a zeroed texture, then op 0x236 plays the battle effect movie into it after the
+        // effect's start delay. Until the first sample the surface still holds that texture. Without it the port drew
+        // the object as a surfaceless fill: a white box in the effect's 0xffffff colour.
+        var registry = new MovieSurfaceRegistry();
+        RgbaImage created = Frame(0);
+        MovieSurfaceBinding binding = registry.Begin(0x2b, 0x2af1, 0, out _, created);
+
+        Assert.True(registry.TryResolveSurface(0x2b, out MovieSurfaceFrame? before));
+        Assert.Same(created, before!.Image);
+        Assert.False(registry.Snapshot().Single().HasFrame);   // no sample has arrived yet
+        Assert.False(registry.TryResolveResource(0x2af1, out _));
+
+        RgbaImage sample = Frame(1);
+        Assert.True(registry.PublishFrame(binding.PlaybackId, sample, "MVB001.MPG", 0x2af1));
+        Assert.True(registry.TryResolveSurface(0x2b, out MovieSurfaceFrame? after));
+        Assert.Same(sample, after!.Image);
+
+        Assert.Equal(MovieSurfaceReleaseKind.Released, registry.Release(0x2b).Kind);
+        Assert.False(registry.TryResolveSurface(0x2b, out _));
+
+        registry.Begin(0x2c, 0x2af5, 0, out _);   // a surface with no image: nothing to show before the first sample
+        Assert.False(registry.TryResolveSurface(0x2c, out _));
+    }
+
     private static RgbaImage Frame(byte value)
         => new(1, 1, new[] { value, value, value, (byte)255 });
 }

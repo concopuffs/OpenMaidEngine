@@ -296,7 +296,10 @@ public class NumberedSaveVmTests
                 (0x2, Array.Empty<Operand>()),
             ], []), 0x99);
             byte[] opaqueRecord = NativeGfxRecord(3, recordSize);
-            BinaryPrimitives.WriteInt32LittleEndian(opaqueRecord.AsSpan(0x68), 0x12345678);
+            // +0x240 (the color-cycle target) is written only while a cycle runs, so an idle one carries
+            // whatever the loaded record held. +0x68 is native's transform mark, which a load keeps.
+            BinaryPrimitives.WriteInt32LittleEndian(opaqueRecord.AsSpan(0x240), 0x12345678);
+            BinaryPrimitives.WriteInt32LittleEndian(opaqueRecord.AsSpan(0x68), 1);
             NativeNumberedSaveState source = NativeNumberedSaveCodec.Empty(
             [
                 new NativeSavedScriptFrame(-1, 0x88, [], 8, 0),
@@ -329,7 +332,8 @@ public class NumberedSaveVmTests
             Assert.Equal(0, state.Frames[0].CallTargetIndex);
             Assert.Equal(
                 0x12345678,
-                ReadGfxField(Assert.Single(state.GfxObjects).Record, 0x68));
+                ReadGfxField(Assert.Single(state.GfxObjects).Record, 0x240));
+            Assert.Equal(1, ReadGfxField(Assert.Single(state.GfxObjects).Record, 0x68));
             Assert.Equal(recordSize, state.GraphicsRecordSize);
             if (recordSize == 0x2e4)
                 Assert.Equal(opaqueRecord[0x2d4..], Assert.Single(state.GfxObjects).Record[0x2d4..]);

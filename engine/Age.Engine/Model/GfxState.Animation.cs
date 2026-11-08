@@ -208,6 +208,7 @@ public sealed partial class GfxState
         if (o.ScaleEnabled)
         {
             o.ScaleCurrent = o.ScaleTarget;
+            o.ScaleTarget = IdentityScale;
             o.ScaleDelayMs = 0;
             o.ScaleDurationMs = 0;
             o.ScaleEnabled = false;
@@ -216,6 +217,7 @@ public sealed partial class GfxState
         {
             o.RotationCurrent = o.RotationTarget;
             o.EvaluatedRotationCache = RotationCache(o.RotationCurrent);
+            o.RotationTarget = default;
             o.RotationDelayMs = 0;
             o.RotationDurationMs = 0;
             o.RotationChannelEnabled = false;
@@ -223,6 +225,7 @@ public sealed partial class GfxState
         if (o.TranslationEnabled)
         {
             o.TranslationCurrent = o.TranslationTarget;
+            o.TranslationTarget = IdentityTranslation;
             o.TranslationDelayMs = 0;
             o.TranslationDurationMs = 0;
             o.TranslationEnabled = false;
@@ -238,6 +241,7 @@ public sealed partial class GfxState
         lock (_lock)
         {
             var o = GetOrCreate(handle);
+            o.TransformMarked = true;
             o.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
         }
     }
@@ -249,6 +253,7 @@ public sealed partial class GfxState
         lock (_lock)
         {
             var o = GetOrCreate(handle);
+            o.TransformMarked = true;
             o.RotationCurrent = (axis.X, axis.Y, axis.Z, angleDegrees);
             o.EvaluatedRotationCache = RotationCache(o.RotationCurrent);
         }
@@ -260,6 +265,7 @@ public sealed partial class GfxState
         lock (_lock)
         {
             var o = GetOrCreate(handle);
+            o.TransformMarked = true;
             o.V16c = translation;
             o.TranslationCurrent = translation;
         }
@@ -274,6 +280,7 @@ public sealed partial class GfxState
             // Native setters get-or-create first, then require object flag bit 0 (draw-bound/visible).
             // Pre-bind calls leave a neutral, queryable placeholder and do not queue latent motion.
             if (!o.Visible) return;
+            o.TransformMarked = true;
             o.ScaleDelayMs = delayMs; o.ScaleDurationMs = durationMs;
             o.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
             o.ScaleEnabled = durationMs > 0; o.OneShotStartMs = -1;
@@ -287,6 +294,7 @@ public sealed partial class GfxState
         {
             var o = GetOrCreate(handle);
             if (!o.Visible) return;
+            o.TransformMarked = true;
             o.TranslationDelayMs = delayMs; o.TranslationDurationMs = durationMs;
             o.TranslationTarget = target;
             o.TranslationEnabled = durationMs > 0; o.OneShotStartMs = -1;
@@ -334,6 +342,7 @@ public sealed partial class GfxState
         {
             var o = GetOrCreate(handle);
             if (!o.Visible) return;
+            o.TransformMarked = true;
             o.RotationDelayMs = delayMs; o.RotationDurationMs = durationMs;
             o.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
             o.RotationChannelEnabled = durationMs > 0; o.OneShotStartMs = -1;
@@ -520,10 +529,18 @@ public sealed partial class GfxState
             o.ColorDurationMs, start, elapsed / (double)o.ColorDurationMs, true));
     }
 
+    private static readonly (double X, double Y, double Z) IdentityScale = (1, 1, 1);
+    private static readonly (double X, double Y, double Z) IdentityTranslation = (0, 0, 0);
+
+    /// <summary>One finite matrix channel of gfx_object_apply_transform_channels (/v2 0x472f00). Through the delay it
+    /// holds current, then interpolates current -> target. At the end native copies the target matrix into current,
+    /// zeroes the channel's delay and duration and resets the target matrix to identity, so a save taken after the
+    /// motion holds no stale target or timing.</summary>
     private static (double X, double Y, double Z) SampleMatrixChannel(
         ref (double X, double Y, double Z) current,
-        (double X, double Y, double Z) target,
-        long delayMs, long durationMs, long startMs, ref bool enabled, long nowMs)
+        ref (double X, double Y, double Z) target,
+        ref long delayMs, ref long durationMs, long startMs, ref bool enabled, long nowMs,
+        (double X, double Y, double Z) identity)
     {
         if (!enabled || durationMs <= 0 || startMs < 0) return current;
         long elapsed = nowMs - startMs - delayMs;
@@ -531,6 +548,9 @@ public sealed partial class GfxState
         if (elapsed >= durationMs)
         {
             current = target;
+            target = identity;
+            delayMs = 0;
+            durationMs = 0;
             enabled = false;
             return current;
         }
@@ -544,15 +564,25 @@ public sealed partial class GfxState
         (double X, double Y, double Z, double Angle) rotation)
         => (rotation.X, rotation.Y, rotation.Z, rotation.Angle * Math.PI / 180.0);
 
+    /// <summary>The rotation channel ends as <see cref="SampleMatrixChannel"/> does; native also zeroes the target axis
+    /// and angle at obj+0x1f8..0x200/+0x208.</summary>
     private static (double X, double Y, double Z, double Angle) SampleRotationChannel(
         ref (double X, double Y, double Z, double Angle) current,
-        (double X, double Y, double Z, double Angle) target,
-        long delayMs, long durationMs, long startMs, ref bool enabled, long nowMs)
+        ref (double X, double Y, double Z, double Angle) target,
+        ref long delayMs, ref long durationMs, long startMs, ref bool enabled, long nowMs)
     {
         if (!enabled || durationMs <= 0 || startMs < 0) return current;
         long elapsed = nowMs - startMs - delayMs;
         if (elapsed <= 0) return current;
-        if (elapsed >= durationMs) { current = target; enabled = false; return current; }
+        if (elapsed >= durationMs)
+        {
+            current = target;
+            target = default;
+            delayMs = 0;
+            durationMs = 0;
+            enabled = false;
+            return current;
+        }
         double t = (double)elapsed / durationMs;
         return (current.X + (target.X - current.X) * t,
                 current.Y + (target.Y - current.Y) * t,

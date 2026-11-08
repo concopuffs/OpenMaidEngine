@@ -1217,8 +1217,9 @@ independent matrix channels, not two encodings of one vec3 property.
   shared start timestamp `obj+0x34` and retained-gfx frame-time `owner+0xb550`
   (`EngineCtx+0x51b64`), but have independent delay/duration:
   scale `obj+0x3c/+0x50`, rotation `obj+0x40/+0x54`, translation `obj+0x44/+0x58`. Each holds current through the
-  delay, linearly interpolates current→target for its duration, then commits the target and clears its own timing.
-  Neither third component is opacity.
+  delay, linearly interpolates current→target for its duration, then commits the target, clears its own timing and
+  resets the target matrix to identity (see "Finished channels reset their targets", 2026-11-08). Neither third
+  component is opacity.
 
 **Exact composition and 2D reduction (live-validated 2026-07-10).** The one-shot consumer starts from identity and
 right-multiplies `T(-V18) → scale-current → rotation-current → translation-current → T(+V18)`;
@@ -6287,6 +6288,65 @@ differ by encoder choice. Two known differences remain:
   op-`0x71` snapshot. A port restarted before loading lacks them.
 - Op `0xd0` samples kept in globals are `timeGetTime()` on native and the frame clock on the port. Scripts use them
   only in pairs.
+
+#### A movie surface shows its created texture until the first sample (2026-11-08)
+
+**Symptom.** In Kamidori battles the port drew a white box where an effect movie was about to play, for as long as the
+effect's start delay lasted. Native draws nothing there.
+
+**Native.** BTL@`0x4311`–`0x436d` plays each effect movie into a fresh texture:
+
+1. `create-texture (l 0xb) w h 0` creates a zeroed surface.
+2. `play-movie-to-surface` (op `0x236`) binds the movie to that surface with the effect's start delay.
+3. `gfx-draw-color` puts the object in mode `0x3b6e37`, an additive blend.
+
+Op `0x236` requires the destination texture to exist, and `CMovieTextureRenderer` copies each sample into it. Until
+the first sample, through the whole start delay, the object therefore shows the zeroed texture, which the additive
+blend leaves invisible.
+
+**Port.** `GodotAdvHost.StartMovie` dropped the slot's created image when it bound the movie. Before the first frame
+the object had neither a texture nor a surface resource, and `Main.Compositor` drew it as a surfaceless fill in the
+object's white tint. `MovieSurfaceRegistry.Begin` now takes the surface's contents at bind time, and
+`TryResolveSurface` serves them until `PublishFrame` supplies a sample. A movie mask keeps its own path. Test:
+`MovieSurfaceRegistryTests.SurfaceShowsItsCreatedContentsUntilTheFirstSample`. A 0.25 s capture of a 魔弾 attack
+on 木漏れ日の深緑地 (slot 009, `rand-seed 13`) shows no white box.
+
+**Battle timing.** The same battle, with the VM position sampled every 0.1 s on both targets, reaches ADDEXP at 4.67 s
+on the port and 4.70 s on native, and REWARD at 5.20 s and 5.10 s. The roughly 1 s lead seen in earlier sweeps is gone.
+Native is caught once inside op `0x236` itself, opening the effect movie; the port opens it at once (see "What the open
+costs" under "Movie-to-surface opcode `0x236`").
+
+#### Finished channels reset their targets; the transform mark `obj+0x68` (2026-11-08)
+
+**Channel end.** When a finite matrix channel ends, `gfx_object_apply_transform_channels@0x472f00` copies its target
+matrix into the current one, zeroes the channel's delay and duration, and resets the target matrix to identity. A
+rotation channel also zeroes the target axis (`+0x1f8..0x200`) and angle (`+0x208`). Forced completion (owner
+`+0xb55c == 1`, op `0x243`) ends channels the same way. The port copied the target into current but kept the target,
+delay and duration. Saves taken after a motion therefore differed. Kamidori's FIELD minimap indicator `0xc382` moves
+by `set-anim-transform-abs` (FIELD@`0xa55f`, 400 ms) and saved `+0x58 = 400` and a `(45, 15)` translation target on
+the port, against 0 and identity on native. `SampleMatrixChannel`, `SampleRotationChannel` and
+`CommitOneShotChannels` now reset as native does. Test:
+`GfxAnimationTests.FinishedMatrixChannels_ResetTheirTargetsAndTimingAsNativeDoes`.
+
+**Transform mark.** These setters write `obj+0x68 = 1`:
+
+- the immediate setters `0x1fd`/`0x1fe`/`0x1ff`, which check no visibility;
+- the channel setters `0x21e`/`0x21f`/`0x220`, inside their visible-bit gate;
+- the six range-transform setters, as owner `+0x490` (the embedded record's `+0x68`).
+
+`gfx_object_init_default` writes 0, and so does op `0x1fc` (`gfx_object_reset_transform_current@0x47e5b0`), which
+also rebuilds the three current matrices as identity. No gfx path reads the mark, but saves carry it. The port wrote 0
+for every object it created. `GfxObject.TransformMarked` now follows native, and `NativeGfxPersistenceCodec` reads
+and writes it. Neither corpus calls op `0x1fc`, so the port still skips it.
+
+**Parity.** Both targets loaded slot 009, fought the same battle and saved to 007. Every gfx record then matched
+except the start stamps (`+0x20c..0x21c`), which hold absolute clock values. The payloads still differ in three ways:
+
+- `G[0x4f2]` is the last slot saved, a shared-profile int that SAVE writes after each save. The sandboxes' histories
+  differed.
+- Two globals and one string are the save list's cache of the slot being overwritten. The two slot-007 saves held
+  different contents.
+- Op `0xd0` clock samples, as above.
 
 ### Fast-forward through effect waits, its pace, and physical Ctrl (2026-11-07)
 

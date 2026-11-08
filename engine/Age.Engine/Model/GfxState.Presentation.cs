@@ -664,15 +664,15 @@ public sealed partial class GfxState
                 var r = _rangeTransform;
                 bool hadRangeOneShot = r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled;
                 if (hadRangeOneShot && r.OneShotStartMs < 0) r.OneShotStartMs = nowMs;
-                var rangeScale = SampleMatrixChannel(ref r.ScaleCurrent, r.ScaleTarget, r.ScaleDelayMs,
-                    r.ScaleDurationMs, r.OneShotStartMs, ref r.ScaleEnabled, nowMs);
-                var rangeRotation = SampleRotationChannel(ref r.RotationCurrent, r.RotationTarget,
-                    r.RotationDelayMs, r.RotationDurationMs, r.OneShotStartMs,
+                var rangeScale = SampleMatrixChannel(ref r.ScaleCurrent, ref r.ScaleTarget, ref r.ScaleDelayMs,
+                    ref r.ScaleDurationMs, r.OneShotStartMs, ref r.ScaleEnabled, nowMs, IdentityScale);
+                var rangeRotation = SampleRotationChannel(ref r.RotationCurrent, ref r.RotationTarget,
+                    ref r.RotationDelayMs, ref r.RotationDurationMs, r.OneShotStartMs,
                     ref r.RotationChannelEnabled, nowMs);
                 r.EvaluatedRotationCache = RotationCache(rangeRotation);
-                var rangeTranslation = SampleMatrixChannel(ref r.TranslationCurrent, r.TranslationTarget,
-                    r.TranslationDelayMs, r.TranslationDurationMs, r.OneShotStartMs,
-                    ref r.TranslationEnabled, nowMs);
+                var rangeTranslation = SampleMatrixChannel(ref r.TranslationCurrent, ref r.TranslationTarget,
+                    ref r.TranslationDelayMs, ref r.TranslationDurationMs, r.OneShotStartMs,
+                    ref r.TranslationEnabled, nowMs, IdentityTranslation);
                 if (!r.ScaleEnabled && !r.RotationChannelEnabled && !r.TranslationEnabled)
                     r.OneShotStartMs = -1;
                 rangeTimeVarying = r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled;
@@ -778,15 +778,17 @@ public sealed partial class GfxState
                 }
 
                 // One-shot matrix channels: hold current through delay, then linearly sample current -> target.
-                var scale = SampleMatrixChannel(ref o.ScaleCurrent, o.ScaleTarget, o.ScaleDelayMs,
-                                                o.ScaleDurationMs, o.OneShotStartMs, ref o.ScaleEnabled, nowMs);
-                var rotation = SampleRotationChannel(ref o.RotationCurrent, o.RotationTarget,
-                                                     o.RotationDelayMs, o.RotationDurationMs,
+                var scale = SampleMatrixChannel(ref o.ScaleCurrent, ref o.ScaleTarget, ref o.ScaleDelayMs,
+                                                ref o.ScaleDurationMs, o.OneShotStartMs, ref o.ScaleEnabled, nowMs,
+                                                IdentityScale);
+                var rotation = SampleRotationChannel(ref o.RotationCurrent, ref o.RotationTarget,
+                                                     ref o.RotationDelayMs, ref o.RotationDurationMs,
                                                      o.OneShotStartMs, ref o.RotationChannelEnabled, nowMs);
                 o.EvaluatedRotationCache = RotationCache(rotation);
-                var translation = SampleMatrixChannel(ref o.TranslationCurrent, o.TranslationTarget,
-                                                      o.TranslationDelayMs, o.TranslationDurationMs,
-                                                      o.OneShotStartMs, ref o.TranslationEnabled, nowMs);
+                var translation = SampleMatrixChannel(ref o.TranslationCurrent, ref o.TranslationTarget,
+                                                      ref o.TranslationDelayMs, ref o.TranslationDurationMs,
+                                                      o.OneShotStartMs, ref o.TranslationEnabled, nowMs,
+                                                      IdentityTranslation);
                 if (!o.OneShotColorEnabled && !o.ScaleEnabled && !o.RotationChannelEnabled && !o.TranslationEnabled
                     && !o.SrcOneShotEnabled)
                 {

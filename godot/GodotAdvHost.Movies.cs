@@ -162,7 +162,13 @@ public sealed partial class GodotAdvHost
         stopTimeMs = null;
         // A playback is a surface-owned instance, not the shared resource id. BTL can schedule the same
         // asset on multiple surfaces; replacing one binding must not erase another binding's completion.
-        MovieSurfaceBinding binding = _movieSurfaces.Begin(surfaceSlot, resourceId, movieFlags, out var replaced);
+        // The renderer copies samples into the slot's texture, so the created contents stay visible until the first
+        // sample (MovieSurfaceRegistry.Begin). Without them the compositor would take the object for a surfaceless fill.
+        RgbaImage? surfaceContents = null;
+        if (movieMask == null)
+            lock (_imageLock) _surfaceImages.Remove(surfaceSlot, out surfaceContents);
+        MovieSurfaceBinding binding = _movieSurfaces.Begin(
+            surfaceSlot, resourceId, movieFlags, out var replaced, surfaceContents);
         playbackId = binding.PlaybackId;
         if (replaced is { } prior)
         {
@@ -176,11 +182,7 @@ public sealed partial class GodotAdvHost
                 _movieMasksByPlayback[playbackId] = movieMask;
                 _movieMaskPlaybackBySurface[surfaceSlot] = playbackId;
             }
-        lock (_imageLock)
-        {
-            if (movieMask == null) _surfaceImages.Remove(surfaceSlot);
-            _surfaceColorKeys.Remove(surfaceSlot);
-        }
+        lock (_imageLock) _surfaceColorKeys.Remove(surfaceSlot);
         // Movie surfaces inherit the selected game's primary size until a decoded frame supplies content.
         _slotDims[surfaceSlot] = movieMask == null
             ? (_screenWidth, _screenHeight)
