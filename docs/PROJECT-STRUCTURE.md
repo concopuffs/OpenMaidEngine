@@ -242,7 +242,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   └── Ome.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
-    │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows/Linux dependency manifests,
+    │   └── ome_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows/Linux dependency manifests,
     │                                       and native/MSVC plus Linux-hosted MinGW target bootstrap/build scripts;
     │                                       ffmpeg-source.json + build-ffmpeg-sdk.sh build the minimal LGPL FFmpeg SDK;
     │                                       write_ffmpeg_source_notice.py emits each bundle's FFmpeg-SOURCE.txt

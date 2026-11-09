@@ -29,8 +29,8 @@ if (!File.Exists(sys4Ini))
 }
 AssetLaunchOptions assetOptions = AssetLaunchOptions.Resolve(args, gameRoot);
 string nativeLibrary = Path.Combine(nativeDirectory, OperatingSystem.IsWindows()
-    ? "age_movie_ffmpeg.dll" : OperatingSystem.IsMacOS()
-        ? "libage_movie_ffmpeg.dylib" : "libage_movie_ffmpeg.so");
+    ? "ome_movie_ffmpeg.dll" : OperatingSystem.IsMacOS()
+        ? "libome_movie_ffmpeg.dylib" : "libome_movie_ffmpeg.so");
 if (!File.Exists(nativeLibrary))
 {
     Console.Error.WriteLine($"native movie shim not found: {nativeLibrary}");

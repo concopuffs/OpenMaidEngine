@@ -39,7 +39,7 @@ REQUIRED_FILES = (
 )
 FORBIDDEN_FILES = (
     "OME",
-    f"{MANAGED_DIRECTORY}/libage_movie_ffmpeg.so",
+    f"{MANAGED_DIRECTORY}/libome_movie_ffmpeg.so",
     f"{MANAGED_DIRECTORY}/libavformat.so.62",
 )
 LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
@@ -121,7 +121,7 @@ def build_metadata(epoch: int) -> dict[str, object]:
         for member in godot["templates"]["members"]
         if member["install_name"] == "windows_release_x86_64.exe"
     )
-    with (REPO / "native/age_movie_ffmpeg/dependency-win64.json").open(
+    with (REPO / "native/ome_movie_ffmpeg/dependency-win64.json").open(
         encoding="utf-8"
     ) as stream:
         ffmpeg = json.load(stream)

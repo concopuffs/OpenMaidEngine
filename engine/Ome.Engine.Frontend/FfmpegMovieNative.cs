@@ -46,7 +46,7 @@ internal sealed class FfmpegMovieSession : IFfmpegFrameSource
     {
         ArgumentNullException.ThrowIfNull(movie);
         if (FfmpegMovieNative.AbiVersion() != 3)
-            throw new InvalidOperationException("unsupported age_movie_ffmpeg ABI version");
+            throw new InvalidOperationException("unsupported ome_movie_ffmpeg ABI version");
 
         byte[] error = new byte[1024];
         int result = FfmpegMovieNative.Open(movie.Bytes, (nuint)movie.Bytes.Length,
@@ -181,7 +181,7 @@ internal static class FfmpegMovieNative
     internal const int EndOfFile = 0;
     internal const int Frame = 1;
     internal const int BufferTooSmall = -3;
-    private const string LibraryName = "age_movie_ffmpeg";
+    private const string LibraryName = "ome_movie_ffmpeg";
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct NativeInfo
@@ -207,8 +207,8 @@ internal static class FfmpegMovieNative
     {
         if (!string.Equals(libraryName, LibraryName, StringComparison.Ordinal)) return IntPtr.Zero;
         string fileName = OperatingSystem.IsWindows()
-            ? "age_movie_ffmpeg.dll"
-            : OperatingSystem.IsMacOS() ? "libage_movie_ffmpeg.dylib" : "libage_movie_ffmpeg.so";
+            ? "ome_movie_ffmpeg.dll"
+            : OperatingSystem.IsMacOS() ? "libome_movie_ffmpeg.dylib" : "libome_movie_ffmpeg.so";
         string? configured = Environment.GetEnvironmentVariable("OME_FFMPEG_NATIVE_DIR");
         string rid = RuntimeIdentifierFor(
             OperatingSystem.IsWindows(),
@@ -259,10 +259,10 @@ internal static class FfmpegMovieNative
 
     internal static uint AbiVersion() => AbiVersionNative();
 
-    [DllImport(LibraryName, EntryPoint = "age_movie_abi_version", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, EntryPoint = "ome_movie_abi_version", CallingConvention = CallingConvention.Cdecl)]
     private static extern uint AbiVersionNative();
 
-    [DllImport(LibraryName, EntryPoint = "age_movie_open", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, EntryPoint = "ome_movie_open", CallingConvention = CallingConvention.Cdecl)]
     internal static extern int Open(
         [In] byte[] bytes,
         nuint length,
@@ -271,19 +271,19 @@ internal static class FfmpegMovieNative
         [Out] byte[] errorBuffer,
         nuint errorBufferSize);
 
-    [DllImport(LibraryName, EntryPoint = "age_movie_decode_video", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, EntryPoint = "ome_movie_decode_video", CallingConvention = CallingConvention.Cdecl)]
     internal static extern int DecodeVideo(
         FfmpegMovieHandle movie,
         [Out] byte[] rgba,
         nuint rgbaSize,
         out long presentationTimeMs);
 
-    [DllImport(LibraryName, EntryPoint = "age_movie_seek", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, EntryPoint = "ome_movie_seek", CallingConvention = CallingConvention.Cdecl)]
     internal static extern int Seek(
         FfmpegMovieHandle movie,
         long positionMs);
 
-    [DllImport(LibraryName, EntryPoint = "age_movie_decode_audio", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, EntryPoint = "ome_movie_decode_audio", CallingConvention = CallingConvention.Cdecl)]
     internal static extern int DecodeAudio(
         FfmpegMovieHandle movie,
         [Out] float[] stereo,
@@ -291,9 +291,9 @@ internal static class FfmpegMovieNative
         out int frameCount,
         out long presentationTimeMs);
 
-    [DllImport(LibraryName, EntryPoint = "age_movie_last_error", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, EntryPoint = "ome_movie_last_error", CallingConvention = CallingConvention.Cdecl)]
     private static extern IntPtr LastErrorNative(FfmpegMovieHandle movie);
 
-    [DllImport(LibraryName, EntryPoint = "age_movie_close", CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, EntryPoint = "ome_movie_close", CallingConvention = CallingConvention.Cdecl)]
     internal static extern void Close(IntPtr movie);
 }

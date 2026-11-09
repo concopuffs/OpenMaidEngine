@@ -124,7 +124,7 @@ class CompilerQueryTests(unittest.TestCase):
 class CheckTests(unittest.TestCase):
     def run_check(self, text: str, version: str = "11.0.1") -> str:
         with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "age_movie_ffmpeg.map"
+            path = Path(temporary) / "ome_movie_ffmpeg.map"
             path.write_text(text, encoding="utf-8")
             with patch.object(notices, "runtime_version", return_value=version), patch.object(
                 notices, "toolchain_roots", return_value=ROOTS
@@ -138,7 +138,7 @@ class CheckTests(unittest.TestCase):
         )
 
     def test_fails_an_unreviewed_object_or_another_runtime_release(self) -> None:
-        with self.assertRaisesRegex(ValueError, r"age_movie_ffmpeg\.map: libwinpthread\.a\(thread\.o\)"):
+        with self.assertRaisesRegex(ValueError, r"ome_movie_ffmpeg\.map: libwinpthread\.a\(thread\.o\)"):
             self.run_check(link_map(f"{SYSROOT}/libwinpthread.a(thread.o)"))
         with self.assertRaisesRegex(ValueError, "runtime 12.0.0, but the shipped notice is pinned to 11.0.1"):
             self.run_check(SHIM_MAP, version="12.0.0")

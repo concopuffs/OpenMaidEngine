@@ -1169,8 +1169,8 @@ public class MovieOpcodeTests
     {
         string nativeDirectory = Environment.GetEnvironmentVariable("OME_FFMPEG_NATIVE_DIR")
             ?? Path.Combine(Paths.Build, "native", "win-x64");
-        Assert.True(File.Exists(Path.Combine(nativeDirectory, "age_movie_ffmpeg.dll")),
-            $"Build the FFmpeg shim first: native/age_movie_ffmpeg/build-win64.ps1 (expected {nativeDirectory})");
+        Assert.True(File.Exists(Path.Combine(nativeDirectory, "ome_movie_ffmpeg.dll")),
+            $"Build the FFmpeg shim first: native/ome_movie_ffmpeg/build-win64.ps1 (expected {nativeDirectory})");
         Environment.SetEnvironmentVariable("OME_FFMPEG_NATIVE_DIR", nativeDirectory);
     }
 }

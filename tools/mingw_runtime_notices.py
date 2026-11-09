@@ -2,7 +2,7 @@
 """Check that the toolchain code a MinGW link adds to a DLL is covered by the notices the Windows package ships.
 
 MinGW-w64 GCC links runtime code into every DLL it builds: the CRT startup, printf and strtod (gdtoa), math
-functions and GCC's helpers. The Windows movie shim (native/age_movie_ffmpeg/build-win64.sh) and the FFmpeg DLLs
+functions and GCC's helpers. The Windows movie shim (native/ome_movie_ffmpeg/build-win64.sh) and the FFmpeg DLLs
 (build-ffmpeg-sdk.sh win64) ask ld for a link map (-Map), which lists every object file a link loaded and every
 archive member it pulled in. This tool reads those maps and fails unless each toolchain object comes from a source
 the package covers:

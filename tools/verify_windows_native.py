@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-SHIM = "age_movie_ffmpeg.dll"
+SHIM = "ome_movie_ffmpeg.dll"
 RUNTIME_DLLS = (
     "avformat-62.dll",
     "avcodec-62.dll",
@@ -22,13 +22,13 @@ RUNTIME_DLLS = (
 )
 REQUIRED_FILES = (SHIM, *RUNTIME_DLLS, "FFmpeg-LICENSE.txt", "FFmpeg-SOURCE.txt")
 REQUIRED_EXPORTS = frozenset({
-    "age_movie_abi_version",
-    "age_movie_open",
-    "age_movie_seek",
-    "age_movie_decode_video",
-    "age_movie_decode_audio",
-    "age_movie_last_error",
-    "age_movie_close",
+    "ome_movie_abi_version",
+    "ome_movie_open",
+    "ome_movie_seek",
+    "ome_movie_decode_video",
+    "ome_movie_decode_audio",
+    "ome_movie_last_error",
+    "ome_movie_close",
 })
 FORBIDDEN_RUNTIME_IMPORTS = frozenset({"cygwin1.dll", "msys-2.0.dll"})
 PE_MACHINE_AMD64 = 0x8664

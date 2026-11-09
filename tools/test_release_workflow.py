@@ -17,12 +17,12 @@ MANAGED_SOLUTION = REPO / "godot/OME.sln"
 LINUX_BUILD = REPO / "tools/build-linux-x64.sh"
 WINDOWS_BUILD = REPO / "tools/build-windows-x64.sh"
 WINDOWS_HOSTED_EXPORT = REPO / "tools/export-linux-x64.ps1"
-LINUX_FFMPEG_MANIFEST = REPO / "native/age_movie_ffmpeg/dependency-linux-x64.json"
-WINDOWS_FFMPEG_MANIFEST = REPO / "native/age_movie_ffmpeg/dependency-win64.json"
-LINUX_FFMPEG_BOOTSTRAP = REPO / "native/age_movie_ffmpeg/bootstrap-linux-x64.sh"
-WINDOWS_FFMPEG_BOOTSTRAP = REPO / "native/age_movie_ffmpeg/bootstrap-win64.sh"
-WINDOWS_FFMPEG_BOOTSTRAP_PS1 = REPO / "native/age_movie_ffmpeg/bootstrap-win64.ps1"
-FFMPEG_SOURCE_MANIFEST = REPO / "native/age_movie_ffmpeg/ffmpeg-source.json"
+LINUX_FFMPEG_MANIFEST = REPO / "native/ome_movie_ffmpeg/dependency-linux-x64.json"
+WINDOWS_FFMPEG_MANIFEST = REPO / "native/ome_movie_ffmpeg/dependency-win64.json"
+LINUX_FFMPEG_BOOTSTRAP = REPO / "native/ome_movie_ffmpeg/bootstrap-linux-x64.sh"
+WINDOWS_FFMPEG_BOOTSTRAP = REPO / "native/ome_movie_ffmpeg/bootstrap-win64.sh"
+WINDOWS_FFMPEG_BOOTSTRAP_PS1 = REPO / "native/ome_movie_ffmpeg/bootstrap-win64.ps1"
+FFMPEG_SOURCE_MANIFEST = REPO / "native/ome_movie_ffmpeg/ffmpeg-source.json"
 
 
 def job(text: str, name: str, next_name: str | None) -> str:

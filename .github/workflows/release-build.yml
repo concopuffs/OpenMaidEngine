@@ -49,7 +49,7 @@ jobs:
             build/downloads/Godot_*_mono_linux_x86_64.zip
             build/downloads/ome-ffmpeg-*-linux-x64-lgpl-shared.tar.xz
             build/toolchains/godot-*/xdg-data/godot/export_templates/*/linux_release.x86_64
-          key: linux-release-inputs-${{ hashFiles('tools/godot-linux-x64.json', 'native/age_movie_ffmpeg/dependency-linux-x64.json') }}
+          key: linux-release-inputs-${{ hashFiles('tools/godot-linux-x64.json', 'native/ome_movie_ffmpeg/dependency-linux-x64.json') }}
 
       - name: Report toolchain
         run: |
@@ -135,7 +135,7 @@ jobs:
             build/downloads/Godot_*_mono_linux_x86_64.zip
             build/downloads/ome-ffmpeg-*-win64-lgpl-shared.zip
             build/toolchains/godot-*/xdg-data/godot/export_templates/*/windows_release_x86_64.exe
-          key: windows-release-inputs-${{ hashFiles('tools/godot-linux-x64.json', 'native/age_movie_ffmpeg/dependency-win64.json') }}
+          key: windows-release-inputs-${{ hashFiles('tools/godot-linux-x64.json', 'native/ome_movie_ffmpeg/dependency-win64.json') }}
 
       - name: Report toolchain
         run: |
@@ -177,7 +177,7 @@ jobs:
           name: windows-release-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/native/win-x64/verification.json
-            build/native/win-x64/age_movie_ffmpeg.map
+            build/native/win-x64/ome_movie_ffmpeg.map
             build/package/windows-x64/staging/OME-windows-x64/WINDOWS-VERIFICATION.json
             build/validation/**
           if-no-files-found: ignore

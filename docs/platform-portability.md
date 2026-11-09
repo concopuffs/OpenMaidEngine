@@ -23,7 +23,7 @@ The VM and content pipeline are already mostly platform-neutral:
   builds never search for an `age-reimpl` repository ancestor; their automatic page-map diagnostics live
   under `user://games/<profile-id>/diagnostics/page-maps`, while editor/development runs write them to the
   workspace's `build/games/<profile>/`.
-- `GodotTargetPlatform`, not the build host OS, selects the optional Windows GDI adapter. `AgeNativeRid`
+- `GodotTargetPlatform`, not the build host OS, selects the optional Windows GDI adapter. `OmeNativeRid`
   follows an explicit export `RuntimeIdentifier` and otherwise supplies the current x64 development default;
   mutually exclusive `win-x64` DLL and `linux-x64` shared-object groups stage to build and publish output.
   The managed FFmpeg resolver derives reserved Windows, Linux, and macOS x64/arm64 RIDs from the actual
@@ -126,7 +126,7 @@ will not execute that EXE.
 
 The Windows build command mirrors the accepted Linux entry point while keeping target checks separate. It
 regenerates opcode metadata, selectively installs the Windows template from the existing pinned Godot TPZ,
-bootstrap/hash-checks the pinned Windows FFmpeg SDK, cross-builds and inspects `age_movie_ffmpeg.dll`, performs an
+bootstrap/hash-checks the pinned Windows FFmpeg SDK, cross-builds and inspects `ome_movie_ffmpeg.dll`, performs an
 exact self-contained `ExportRelease/win-x64` publish, and runs the real Godot Windows export. The accepted Linux
 path retains its target selection and dynamic package-smoke behavior.
 
@@ -191,7 +191,7 @@ entry. The system-font-only policy remains supported until the bundled-font opti
 |---|---|---|---|
 | SYS4INI per-game startup profile | `Sys4AssetCatalog` parses and retains the bounded ordered startup trailer; `Sys4LogicalCanvas` applies `SCREENX`/`SCREENY` with AGE's independent `640x480` fallbacks. Native SYS4INI also carries text, ADV input/skip, save ABI/path, audio, legacy renderer, and Windows registration settings | Godot uses the selected canvas for content scaling, backbuffers/compositor bounds, primary surfaces, layout/input fallbacks, and the default windowed client. `--window-width`/`--window-height` vary only the physical client while preserving the canvas and letterbox policy. The port still does not source `CancelMesSkipOnClick`, `CoexistMesSkip`, cursor/redraw policy, or wheel action ids from the trailer | Validate the existing presentation policy on Linux/macOS window managers. Apply further semantic keys explicitly, translate save roots through the host, and classify DirectDraw/fullscreen-bit and registration/key settings as native compatibility metadata. Canonical inventory and consumers: `sys4-format-notes.md` and `engine-re.md` |
 | Retained graphics presentation | Backend-neutral `GfxState`; accepted default Godot `Sprite2D` GPU stage plus the retained software pixel oracle, using runtime `ImageTexture`, canvas transforms/materials, and no native graphics API | GPU backend caches static/color-key variants, updates dynamic surfaces, handles retained range transitions, and falls back whole-frame for the legacy host screen-transition path | Godot owns D3D/Vulkan/Metal/OpenGL selection; validate shader/blend/filter behavior per target rather than adding a platform renderer |
-| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED; `0x24d` movie masks) | `FfmpegMovieDecoder` is the sole factory over the project-owned `native/age_movie_ffmpeg` ABI | Windows-x64 and Linux-x64 both pass the complete 213-payload installed video/audio corpus gate. The Linux library bundle is present in a validated Godot export; Windows also passes audible LOGO/OP/CHAPTER playback and real TEST.AGF green-mask decode | Add macOS native builds, distributable source-offer packaging, and real Linux/macOS window/audio movie gates |
+| AGE movie decode (`0x236` scene movies; `0x20f` modal LOGO/OP/ED; `0x24d` movie masks) | `FfmpegMovieDecoder` is the sole factory over the project-owned `native/ome_movie_ffmpeg` ABI | Windows-x64 and Linux-x64 both pass the complete 213-payload installed video/audio corpus gate. The Linux library bundle is present in a validated Godot export; Windows also passes audible LOGO/OP/CHAPTER playback and real TEST.AGF green-mask decode | Add macOS native builds, distributable source-offer packaging, and real Linux/macOS window/audio movie gates |
 | Movie integration | Each surface owns a unique playback-instance id; `MovieRuntime` owns `IMovieDecoder` from an injected factory; video-only streams use monotonic pacing while audio-bearing streams use the Godot output clock. Opcode `0x24d` redirects decoded green bytes through the platform-neutral retained rasterizer and exact managed packed-alpha mask helper | Concurrent/restarted uses of one asset have independent frame/audio/completion/teardown state. Ordinary and mask movies share VFS/FFmpeg ownership; the mask result is a backend-neutral dynamic RGBA surface consumed by either Godot renderer. Managed code is no longer Windows-annotated, and target-aware builds stage either the win-x64 or Linux-x64 native bundle | Add macOS native builds and Linux/macOS in-engine smoke gates |
 | Movie audio | ABI v3 returns timestamped stereo float PCM; bounded managed buffering feeds a per-playback Godot `AudioStreamGenerator` and routes native movie flags to engine buses | All 29 installed audio-bearing streams decode with signal. Video follows the output-latency-compensated hardware clock; video and audio both retain the common zero-based media timeline, and completion holds the terminal image through the audibly drained graph endpoint | Manually recheck the 2026-08-11 LOGO/OP synchronization fix on Windows and Linux; treat any remaining absent, distorted, or unsynchronized audio as a runtime bug |
 | ADV font discovery/raster fidelity | `Ome.Engine.Text` remains OS-neutral. On compatible ACP-932 Windows, `auto` selects the separate exact-to-request `Ome.Engine.Text.Windows` GDI gray-4 backend. Otherwise Godot TextServer supplies Unicode masks and metrics from the selected profile's `portableTextRendering` metadata reference, falling back to the shared Japanese policy in `godot/config/japanese-text-rendering.json` when none is specified; portable rendering is explicitly not GDI pixel-exact. Immediate `0x204`/`0x205`, live ADV, retained History, and the wait atlas all enter ordinary RGBA surfaces/retained handles | Three Mincho/Gothic regular/bold samples byte-match an independent Unicode GDI oracle. A live `SC0000@0x869` trace proves that the `AGE Patch.exe`/`jprun.dll` wrapper overrides authored Mincho to MS Gothic: 13 captured masks match Gothic byte-for-byte and Mincho 0/13. This is wrapper behavior, not the true-native default, and reproducing it is outside the compatibility target. Forced exact and forced portable self-tests cover immediate, live, and History rasterization, bounded caching, complete-line materialization, retained ordering, alpha/tint/fade, transforms, clipping, capture, HIDEWIN suspension, partial erase/republication, reset, and teardown. Gameplay `Label` pools and overlay projection are gone | Select and smoke-test a redistributable Linux font-bundling policy or retain the explicit system-font prerequisite; add macOS runtime coverage and keep the GDI project out of non-Windows deliverables |
@@ -257,7 +257,7 @@ VM op 0x236 (non-modal) / op 0x20f (modal) / op 0x24d (green-mask transition)
   -> VFS-owned MoviePayload bytes
   -> IMovieDecoderFactory
      -> FfmpegMovieDecoder
-        -> FfmpegMovieSession -> age_movie C ABI
+        -> FfmpegMovieSession -> ome_movie C ABI
   -> newest due RGBA frame -> retained movie surface -> Godot compositor
      or green byte -> exact captured-range alpha mask -> dynamic scratch surface
   -> timestamped stereo float PCM -> per-playback AudioStreamGenerator
@@ -304,7 +304,7 @@ project-built SDK and the release packages:
 
 The boundary has two layers:
 
-1. A small native `age_movie` ABI owns all FFmpeg objects and version-sensitive calls. It accepts a borrowed
+1. A small native `ome_movie` ABI owns all FFmpeg objects and version-sensitive calls. It accepts a borrowed
    byte span only for the duration of `open`, copies it once into native-owned memory, and creates independent
    seekable custom `AVIOContext` views for video and audio so either stream can be pulled without duplicating the
    payload or sharing a demux cursor. ABI v2 returns immutable video/audio metadata. Sequential video decode

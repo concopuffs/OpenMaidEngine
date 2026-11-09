@@ -38,16 +38,16 @@ of its own; its MIT license is the runtime's.
 Release packages include [FFmpeg](https://ffmpeg.org/) 8.1.3 shared libraries (`libavformat`, `libavcodec`,
 `libavutil`, `libswscale`, `libswresample`), licensed under the GNU Lesser General Public License version 2.1 or
 later. The project does not own FFmpeg. The libraries are built unmodified from the official release tarball by
-`native/age_movie_ffmpeg/build-ffmpeg-sdk.sh`, configured without GPL, nonfree, version-3, or external-library
+`native/ome_movie_ffmpeg/build-ffmpeg-sdk.sh`, configured without GPL, nonfree, version-3, or external-library
 components, and the movie shim links them dynamically. The exact source tarball, both platform SDKs, and their
 build configurations are published together on this repository's `deps-ffmpeg-ome-8.1.3-mpeg1-r1` release; the
-pinned source and configure flags are recorded in `native/age_movie_ffmpeg/ffmpeg-source.json`. Every package
+pinned source and configure flags are recorded in `native/ome_movie_ffmpeg/ffmpeg-source.json`. Every package
 ships the license as `FFmpeg-LICENSE.txt` and the source location and configure line as `FFmpeg-SOURCE.txt` beside
 the libraries. The source repository itself contains no FFmpeg code.
 
 ## MinGW-w64 and GCC runtimes
 
-Windows release packages' movie shim (`age_movie_ffmpeg.dll`) and FFmpeg DLLs are built with MinGW-w64 GCC 13,
+Windows release packages' movie shim (`ome_movie_ffmpeg.dll`) and FFmpeg DLLs are built with MinGW-w64 GCC 13,
 which links parts of the [MinGW-w64](https://www.mingw-w64.org/) 11.0.1 runtime into each DLL: the DLL startup code,
 the C99 `printf` and `scanf` family with David M. Gay's gdtoa number conversions, and math functions. Most of the
 runtime is public domain. The linked parts that are not are the x86 math functions and `scanf` (Copyright (c)

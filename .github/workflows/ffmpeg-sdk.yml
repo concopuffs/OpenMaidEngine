@@ -7,8 +7,8 @@ on:
     branches:
       - "**"
     paths:
-      - native/age_movie_ffmpeg/build-ffmpeg-sdk.sh
-      - native/age_movie_ffmpeg/ffmpeg-source.json
+      - native/ome_movie_ffmpeg/build-ffmpeg-sdk.sh
+      - native/ome_movie_ffmpeg/ffmpeg-source.json
       - .github/workflows/ffmpeg-sdk.yml
   workflow_dispatch:
     inputs:
@@ -51,7 +51,7 @@ jobs:
           ldd --version | head -n 1
 
       - name: Build SDK
-        run: ./native/age_movie_ffmpeg/build-ffmpeg-sdk.sh linux-x64 build/ffmpeg-sdk-dist
+        run: ./native/ome_movie_ffmpeg/build-ffmpeg-sdk.sh linux-x64 build/ffmpeg-sdk-dist
 
       - name: Upload SDK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -84,7 +84,7 @@ jobs:
           nasm -v
 
       - name: Build SDK
-        run: ./native/age_movie_ffmpeg/build-ffmpeg-sdk.sh win64 build/ffmpeg-sdk-dist
+        run: ./native/ome_movie_ffmpeg/build-ffmpeg-sdk.sh win64 build/ffmpeg-sdk-dist
 
       - name: Upload SDK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -125,7 +125,7 @@ jobs:
 
       - name: Fetch and verify the exact source tarball
         run: |
-          read -r archive url size sha256 < <(python3 -c 'import json; d = json.load(open("native/age_movie_ffmpeg/ffmpeg-source.json")); print(d["archive"], d["url"], d["size"], d["sha256"])')
+          read -r archive url size sha256 < <(python3 -c 'import json; d = json.load(open("native/ome_movie_ffmpeg/ffmpeg-source.json")); print(d["archive"], d["url"], d["size"], d["sha256"])')
           curl --fail --location --retry 3 --output "build/release/$archive" "$url"
           test "$(wc -c < "build/release/$archive")" = "$size"
           echo "$sha256  build/release/$archive" | sha256sum --check
@@ -134,7 +134,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mirror_version="$(python3 -c 'import json; print(json.load(open("native/age_movie_ffmpeg/ffmpeg-source.json"))["mirror_version"])')"
+          mirror_version="$(python3 -c 'import json; print(json.load(open("native/ome_movie_ffmpeg/ffmpeg-source.json"))["mirror_version"])')"
           tag="deps-ffmpeg-$mirror_version"
           {
             echo "Project-built minimal FFmpeg SDK ($mirror_version) for the movie shim."

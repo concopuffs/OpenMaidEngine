@@ -3,10 +3,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <Nullable>enable</Nullable>
-    <AgeNativeRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</AgeNativeRid>
-    <AgeNativeRid Condition="'$(AgeNativeRid)' == '' and '$(GodotTargetPlatform)' == 'windows'">win-x64</AgeNativeRid>
-    <AgeNativeRid Condition="'$(AgeNativeRid)' == '' and '$(GodotTargetPlatform)' == 'linuxbsd'">linux-x64</AgeNativeRid>
-    <AgeNativeDirectory>..\build\native\$(AgeNativeRid)</AgeNativeDirectory>
+    <OmeNativeRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</OmeNativeRid>
+    <OmeNativeRid Condition="'$(OmeNativeRid)' == '' and '$(GodotTargetPlatform)' == 'windows'">win-x64</OmeNativeRid>
+    <OmeNativeRid Condition="'$(OmeNativeRid)' == '' and '$(GodotTargetPlatform)' == 'linuxbsd'">linux-x64</OmeNativeRid>
+    <OmeNativeDirectory>..\build\native\$(OmeNativeRid)</OmeNativeDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(GodotTargetPlatform)' == 'windows'">
     <DefineConstants>$(DefineConstants);OME_WINDOWS_GDI</DefineConstants>
@@ -21,30 +21,30 @@
   <ItemGroup Condition="'$(GodotTargetPlatform)' == 'windows'">
     <ProjectReference Include="..\engine\Ome.Engine.Text.Windows\Ome.Engine.Text.Windows.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(AgeNativeRid)' == 'win-x64' and Exists('$(AgeNativeDirectory)\age_movie_ffmpeg.dll')">
-    <None Include="$(AgeNativeDirectory)\*.dll"
+  <ItemGroup Condition="'$(OmeNativeRid)' == 'win-x64' and Exists('$(OmeNativeDirectory)\ome_movie_ffmpeg.dll')">
+    <None Include="$(OmeNativeDirectory)\*.dll"
           Link="%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
-    <None Include="$(AgeNativeDirectory)\FFmpeg-LICENSE.txt"
+    <None Include="$(OmeNativeDirectory)\FFmpeg-LICENSE.txt"
           Link="FFmpeg-LICENSE.txt"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
-    <None Include="$(AgeNativeDirectory)\FFmpeg-SOURCE.txt"
+    <None Include="$(OmeNativeDirectory)\FFmpeg-SOURCE.txt"
           Link="FFmpeg-SOURCE.txt"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
-  <ItemGroup Condition="'$(AgeNativeRid)' == 'linux-x64' and Exists('$(AgeNativeDirectory)\libage_movie_ffmpeg.so')">
-    <None Include="$(AgeNativeDirectory)\*.so*"
+  <ItemGroup Condition="'$(OmeNativeRid)' == 'linux-x64' and Exists('$(OmeNativeDirectory)\libome_movie_ffmpeg.so')">
+    <None Include="$(OmeNativeDirectory)\*.so*"
           Link="%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
-    <None Include="$(AgeNativeDirectory)\FFmpeg-LICENSE.txt"
+    <None Include="$(OmeNativeDirectory)\FFmpeg-LICENSE.txt"
           Link="FFmpeg-LICENSE.txt"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
-    <None Include="$(AgeNativeDirectory)\FFmpeg-SOURCE.txt"
+    <None Include="$(OmeNativeDirectory)\FFmpeg-SOURCE.txt"
           Link="FFmpeg-SOURCE.txt"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />

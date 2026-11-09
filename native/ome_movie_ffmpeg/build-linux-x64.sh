@@ -14,7 +14,7 @@ mkdir -p -- "$output_directory_input"
 output_directory="$(cd -- "$output_directory_input" && pwd)"
 include_directory="$sdk_root/include"
 library_directory="$sdk_root/lib"
-shim="$output_directory/libage_movie_ffmpeg.so"
+shim="$output_directory/libome_movie_ffmpeg.so"
 manifest="$script_dir/dependency-linux-x64.json"
 
 for command in cc readelf ldd python3 sort; do
@@ -42,7 +42,7 @@ cc \
     -std=c11 -fPIC -fvisibility=hidden -O2 -Wall -Wextra \
     -I "$include_directory" \
     -shared -Wl,-z,defs -Wl,-z,origin -Wl,--enable-new-dtags -Wl,-rpath,'$ORIGIN' \
-    -o "$shim" "$script_dir/age_movie.c" \
+    -o "$shim" "$script_dir/ome_movie.c" \
     -L "$library_directory" \
     -lavformat -lavcodec -lavutil -lswscale -lswresample
 
@@ -64,7 +64,7 @@ done
 cp -- "$sdk_root/LICENSE.txt" "$output_directory/FFmpeg-LICENSE.txt"
 python3 "$script_dir/write_ffmpeg_source_notice.py" "$manifest" "$sdk_root" "$output_directory/FFmpeg-SOURCE.txt"
 
-expected_outputs=(libage_movie_ffmpeg.so "${runtime_libraries[@]}")
+expected_outputs=(libome_movie_ffmpeg.so "${runtime_libraries[@]}")
 shopt -s nullglob
 for existing in "$output_directory"/*.so*; do
     existing_name="$(basename -- "$existing")"

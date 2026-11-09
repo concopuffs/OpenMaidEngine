@@ -1,4 +1,4 @@
-#include "age_movie.h"
+#include "ome_movie.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -16,20 +16,20 @@
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 
-#define AGE_MOVIE_ABI_VERSION 3u
-#define AGE_MOVIE_IO_BUFFER_SIZE 32768
-#define AGE_MOVIE_ERROR_SIZE 512
+#define OME_MOVIE_ABI_VERSION 3u
+#define OME_MOVIE_IO_BUFFER_SIZE 32768
+#define OME_MOVIE_ERROR_SIZE 512
 
-typedef struct age_movie_io_state {
+typedef struct ome_movie_io_state {
     const uint8_t *payload;
     size_t payload_size;
     size_t position;
-} age_movie_io_state;
+} ome_movie_io_state;
 
-struct age_movie {
+struct ome_movie {
     uint8_t *payload;
     size_t payload_size;
-    age_movie_io_state video_io_state;
+    ome_movie_io_state video_io_state;
     AVIOContext *video_io;
     AVFormatContext *video_format;
     AVCodecContext *video_codec;
@@ -46,7 +46,7 @@ struct age_movie {
     int64_t decoded_video_frame_count;
     int64_t video_fallback_origin_ms;
 
-    age_movie_io_state audio_io_state;
+    ome_movie_io_state audio_io_state;
     AVIOContext *audio_io;
     AVFormatContext *audio_format;
     AVCodecContext *audio_codec;
@@ -68,7 +68,7 @@ struct age_movie {
     int64_t stop_time_ms;
     int width;
     int height;
-    char error[AGE_MOVIE_ERROR_SIZE];
+    char error[OME_MOVIE_ERROR_SIZE];
 };
 
 static void copy_error(char *destination, size_t destination_size, const char *message) {
@@ -78,7 +78,7 @@ static void copy_error(char *destination, size_t destination_size, const char *m
     snprintf(destination, destination_size, "%s", message != NULL ? message : "unknown FFmpeg error");
 }
 
-static void set_error(age_movie *movie, const char *operation, int ffmpeg_error) {
+static void set_error(ome_movie *movie, const char *operation, int ffmpeg_error) {
     char detail[AV_ERROR_MAX_STRING_SIZE] = {0};
     if (av_strerror(ffmpeg_error, detail, sizeof(detail)) < 0) {
         snprintf(detail, sizeof(detail), "FFmpeg error %d", ffmpeg_error);
@@ -87,7 +87,7 @@ static void set_error(age_movie *movie, const char *operation, int ffmpeg_error)
 }
 
 static int read_packet(void *opaque, uint8_t *buffer, int buffer_size) {
-    age_movie_io_state *state = (age_movie_io_state *)opaque;
+    ome_movie_io_state *state = (ome_movie_io_state *)opaque;
     if (state == NULL || buffer == NULL || buffer_size <= 0) {
         return AVERROR(EINVAL);
     }
@@ -103,7 +103,7 @@ static int read_packet(void *opaque, uint8_t *buffer, int buffer_size) {
 }
 
 static int64_t seek_payload(void *opaque, int64_t offset, int whence) {
-    age_movie_io_state *state = (age_movie_io_state *)opaque;
+    ome_movie_io_state *state = (ome_movie_io_state *)opaque;
     if (state == NULL) {
         return AVERROR(EINVAL);
     }
@@ -142,14 +142,14 @@ static int64_t rescale_ms_down(int64_t value, AVRational time_base) {
         AV_ROUND_DOWN | AV_ROUND_PASS_MINMAX);
 }
 
-static int open_format_context(age_movie *movie, age_movie_io_state *state,
+static int open_format_context(ome_movie *movie, ome_movie_io_state *state,
     AVIOContext **out_io, AVFormatContext **out_format) {
     state->payload = movie->payload;
     state->payload_size = movie->payload_size;
     state->position = 0;
-    uint8_t *io_buffer = (uint8_t *)av_malloc(AGE_MOVIE_IO_BUFFER_SIZE);
+    uint8_t *io_buffer = (uint8_t *)av_malloc(OME_MOVIE_IO_BUFFER_SIZE);
     if (io_buffer == NULL) return AVERROR(ENOMEM);
-    AVIOContext *io = avio_alloc_context(io_buffer, AGE_MOVIE_IO_BUFFER_SIZE, 0,
+    AVIOContext *io = avio_alloc_context(io_buffer, OME_MOVIE_IO_BUFFER_SIZE, 0,
         state, read_packet, NULL, seek_payload);
     if (io == NULL) {
         av_free(io_buffer);
@@ -193,7 +193,7 @@ static int64_t determine_timeline_origin_ms(const AVFormatContext *format) {
     return origin_ms == INT64_MAX ? 0 : origin_ms;
 }
 
-static int determine_duration(age_movie *movie, AVStream *stream, int64_t *out_duration_ms) {
+static int determine_duration(ome_movie *movie, AVStream *stream, int64_t *out_duration_ms) {
     int64_t best_duration_ms = 0;
     if (stream->duration != AV_NOPTS_VALUE && stream->duration > 0) {
         int64_t candidate = rescale_ms_down(stream->duration, stream->time_base);
@@ -262,7 +262,7 @@ static int determine_duration(age_movie *movie, AVStream *stream, int64_t *out_d
  * ("Invalid frame dimensions 0x0") and never produces a frame. So copy the sequence header and its extension
  * from the first video packet when the demuxer left extradata empty. The quantiser matrices that may follow the
  * header hold nonzero bytes only, so the next start code ends it. */
-static int capture_sequence_header_extradata(age_movie *movie, AVStream *stream) {
+static int capture_sequence_header_extradata(ome_movie *movie, AVStream *stream) {
     AVCodecParameters *parameters = stream->codecpar;
     if (parameters->extradata_size > 0) return 0;
     if (parameters->codec_id != AV_CODEC_ID_MPEG1VIDEO && parameters->codec_id != AV_CODEC_ID_MPEG2VIDEO)
@@ -310,7 +310,7 @@ static int capture_sequence_header_extradata(age_movie *movie, AVStream *stream)
     return result == AVERROR_EOF ? 0 : result;
 }
 
-static int rewind_for_decode(age_movie *movie, AVStream *stream) {
+static int rewind_for_decode(ome_movie *movie, AVStream *stream) {
     /* MPEG video can contain decodable preroll before AVStream.start_time. DirectShow
        presents those opening frames from graph time zero; seeking to the video pin's
        later declared start skips them and advances picture relative to audio. */
@@ -332,7 +332,7 @@ static int rewind_for_decode(age_movie *movie, AVStream *stream) {
     return result;
 }
 
-static int rewind_audio_for_decode(age_movie *movie, AVStream *stream) {
+static int rewind_audio_for_decode(ome_movie *movie, AVStream *stream) {
     int64_t target = stream->start_time != AV_NOPTS_VALUE ? stream->start_time : 0;
     int result = av_seek_frame(movie->audio_format, movie->audio_stream_index, target, AVSEEK_FLAG_BACKWARD);
     if (result < 0) {
@@ -358,7 +358,7 @@ static int64_t stream_timestamp_for_position(
         AV_ROUND_DOWN | AV_ROUND_PASS_MINMAX);
 }
 
-static int seek_video_for_decode(age_movie *movie, int64_t position_ms) {
+static int seek_video_for_decode(ome_movie *movie, int64_t position_ms) {
     int64_t target = stream_timestamp_for_position(
         movie->timeline_origin_ms, position_ms, movie->video_time_base);
     int result = av_seek_frame(
@@ -380,7 +380,7 @@ static int seek_video_for_decode(age_movie *movie, int64_t position_ms) {
     return 0;
 }
 
-static int seek_audio_for_decode(age_movie *movie, int64_t position_ms) {
+static int seek_audio_for_decode(ome_movie *movie, int64_t position_ms) {
     if (movie->audio_stream_index < 0) return 0;
     int64_t target = stream_timestamp_for_position(
         movie->timeline_origin_ms, position_ms, movie->audio_time_base);
@@ -405,7 +405,7 @@ static int seek_audio_for_decode(age_movie *movie, int64_t position_ms) {
     return swr_init(movie->swr);
 }
 
-static void destroy_movie(age_movie *movie) {
+static void destroy_movie(ome_movie *movie) {
     if (movie == NULL) return;
     swr_free(&movie->swr);
     sws_freeContext(movie->sws);
@@ -430,24 +430,24 @@ static void destroy_movie(age_movie *movie) {
     free(movie);
 }
 
-uint32_t AGE_MOVIE_CALL age_movie_abi_version(void) {
-    return AGE_MOVIE_ABI_VERSION;
+uint32_t OME_MOVIE_CALL ome_movie_abi_version(void) {
+    return OME_MOVIE_ABI_VERSION;
 }
 
-int32_t AGE_MOVIE_CALL age_movie_open(const uint8_t *bytes, size_t length,
-    age_movie **out_movie, age_movie_info *out_info,
+int32_t OME_MOVIE_CALL ome_movie_open(const uint8_t *bytes, size_t length,
+    ome_movie **out_movie, ome_movie_info *out_info,
     char *error_buffer, size_t error_buffer_size) {
     if (out_movie != NULL) *out_movie = NULL;
     if (out_info != NULL) memset(out_info, 0, sizeof(*out_info));
     if (bytes == NULL || length == 0 || out_movie == NULL || out_info == NULL) {
         copy_error(error_buffer, error_buffer_size, "invalid movie open arguments");
-        return AGE_MOVIE_INVALID_ARGUMENT;
+        return OME_MOVIE_INVALID_ARGUMENT;
     }
 
-    age_movie *movie = (age_movie *)calloc(1, sizeof(*movie));
+    ome_movie *movie = (ome_movie *)calloc(1, sizeof(*movie));
     if (movie == NULL) {
         copy_error(error_buffer, error_buffer_size, "movie allocation failed");
-        return AGE_MOVIE_ERROR;
+        return OME_MOVIE_ERROR;
     }
     movie->video_stream_index = -1;
     movie->audio_stream_index = -1;
@@ -640,33 +640,33 @@ int32_t AGE_MOVIE_CALL age_movie_open(const uint8_t *bytes, size_t length,
 failure:
     copy_error(error_buffer, error_buffer_size, movie->error);
     destroy_movie(movie);
-    return AGE_MOVIE_ERROR;
+    return OME_MOVIE_ERROR;
 }
 
-int32_t AGE_MOVIE_CALL age_movie_seek(age_movie *movie, int64_t position_ms) {
-    if (movie == NULL || position_ms < 0) return AGE_MOVIE_INVALID_ARGUMENT;
+int32_t OME_MOVIE_CALL ome_movie_seek(ome_movie *movie, int64_t position_ms) {
+    if (movie == NULL || position_ms < 0) return OME_MOVIE_INVALID_ARGUMENT;
     if (movie->stop_time_ms > 0 && position_ms >= movie->stop_time_ms)
         position_ms = movie->stop_time_ms - 1;
 
     int result = seek_video_for_decode(movie, position_ms);
     if (result < 0) {
         set_error(movie, "seek MPEG video stream", result);
-        return AGE_MOVIE_ERROR;
+        return OME_MOVIE_ERROR;
     }
     result = seek_audio_for_decode(movie, position_ms);
     if (result < 0) {
         set_error(movie, "seek MPEG audio stream", result);
-        return AGE_MOVIE_ERROR;
+        return OME_MOVIE_ERROR;
     }
     return 0;
 }
 
-int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
+int32_t OME_MOVIE_CALL ome_movie_decode_video(ome_movie *movie,
     uint8_t *rgba, size_t rgba_size, int64_t *out_pts_ms) {
-    if (movie == NULL || rgba == NULL || out_pts_ms == NULL) return AGE_MOVIE_INVALID_ARGUMENT;
+    if (movie == NULL || rgba == NULL || out_pts_ms == NULL) return OME_MOVIE_INVALID_ARGUMENT;
     size_t required = (size_t)movie->width * (size_t)movie->height * 4u;
-    if (rgba_size < required) return AGE_MOVIE_BUFFER_TOO_SMALL;
-    if (movie->video_decoder_eof) return AGE_MOVIE_EOF;
+    if (rgba_size < required) return OME_MOVIE_BUFFER_TOO_SMALL;
+    if (movie->video_decoder_eof) return OME_MOVIE_EOF;
 
     for (;;) {
         int result = avcodec_receive_frame(movie->video_codec, movie->video_frame);
@@ -679,19 +679,19 @@ int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
                 SWS_BILINEAR, NULL, NULL, NULL);
             if (movie->sws == NULL) {
                 snprintf(movie->error, sizeof(movie->error), "create RGBA conversion context failed");
-                return AGE_MOVIE_ERROR;
+                return OME_MOVIE_ERROR;
             }
             result = av_frame_make_writable(movie->rgba_frame);
             if (result < 0) {
                 set_error(movie, "make aligned RGBA frame writable", result);
-                return AGE_MOVIE_ERROR;
+                return OME_MOVIE_ERROR;
             }
             result = sws_scale(movie->sws,
                 (const uint8_t * const *)movie->video_frame->data, movie->video_frame->linesize,
                 0, movie->video_frame->height, movie->rgba_frame->data, movie->rgba_frame->linesize);
             if (result != movie->height) {
                 snprintf(movie->error, sizeof(movie->error), "RGBA conversion returned %d of %d rows", result, movie->height);
-                return AGE_MOVIE_ERROR;
+                return OME_MOVIE_ERROR;
             }
             size_t row_size = (size_t)movie->width * 4u;
             for (int row = 0; row < movie->height; row++) {
@@ -709,7 +709,7 @@ int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
                     movie->video_format->streams[movie->video_stream_index], movie->video_frame);
                 if (rate.num <= 0 || rate.den <= 0) {
                     snprintf(movie->error, sizeof(movie->error), "decoded frame has no timestamp or frame rate");
-                    return AGE_MOVIE_ERROR;
+                    return OME_MOVIE_ERROR;
                 }
                 *out_pts_ms = movie->video_fallback_origin_ms
                     + av_rescale_q_rnd(movie->decoded_video_frame_count, av_inv_q(rate),
@@ -721,15 +721,15 @@ int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
             if (*out_pts_ms < 0) *out_pts_ms = 0;
             movie->decoded_video_frame_count++;
             av_frame_unref(movie->video_frame);
-            return AGE_MOVIE_FRAME;
+            return OME_MOVIE_FRAME;
         }
         if (result == AVERROR_EOF) {
             movie->video_decoder_eof = 1;
-            return AGE_MOVIE_EOF;
+            return OME_MOVIE_EOF;
         }
         if (result != AVERROR(EAGAIN)) {
             set_error(movie, "receive decoded video frame", result);
-            return AGE_MOVIE_ERROR;
+            return OME_MOVIE_ERROR;
         }
 
         if (movie->video_input_eof) {
@@ -737,13 +737,13 @@ int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
                 result = avcodec_send_packet(movie->video_codec, NULL);
                 if (result < 0 && result != AVERROR_EOF) {
                     set_error(movie, "flush MPEG-1 video decoder", result);
-                    return AGE_MOVIE_ERROR;
+                    return OME_MOVIE_ERROR;
                 }
                 movie->video_decoder_draining = 1;
                 continue;
             }
             snprintf(movie->error, sizeof(movie->error), "video decoder requested input after drain");
-            return AGE_MOVIE_ERROR;
+            return OME_MOVIE_ERROR;
         }
 
         for (;;) {
@@ -754,7 +754,7 @@ int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
             }
             if (result < 0) {
                 set_error(movie, "read MPEG video packet", result);
-                return AGE_MOVIE_ERROR;
+                return OME_MOVIE_ERROR;
             }
             if (movie->video_packet->stream_index != movie->video_stream_index) {
                 av_packet_unref(movie->video_packet);
@@ -770,29 +770,29 @@ int32_t AGE_MOVIE_CALL age_movie_decode_video(age_movie *movie,
             continue;
         if (result < 0) {
             set_error(movie, "send MPEG video packet", result);
-            return AGE_MOVIE_ERROR;
+            return OME_MOVIE_ERROR;
         }
     }
 }
 
-int32_t AGE_MOVIE_CALL age_movie_decode_audio(age_movie *movie,
+int32_t OME_MOVIE_CALL ome_movie_decode_audio(ome_movie *movie,
     float *stereo, size_t frame_capacity, int32_t *out_frame_count, int64_t *out_pts_ms) {
     if (out_frame_count != NULL) *out_frame_count = 0;
     if (movie == NULL || out_frame_count == NULL || out_pts_ms == NULL)
-        return AGE_MOVIE_INVALID_ARGUMENT;
-    if (movie->audio_stream_index < 0) return AGE_MOVIE_EOF;
-    if (movie->audio_decoder_eof) return AGE_MOVIE_EOF;
+        return OME_MOVIE_INVALID_ARGUMENT;
+    if (movie->audio_stream_index < 0) return OME_MOVIE_EOF;
+    if (movie->audio_decoder_eof) return OME_MOVIE_EOF;
 
     for (;;) {
         if (movie->audio_frame_pending) {
             int required = swr_get_out_samples(movie->swr, movie->audio_frame->nb_samples);
             if (required < 0) {
                 set_error(movie, "size stereo PCM conversion", required);
-                return AGE_MOVIE_ERROR;
+                return OME_MOVIE_ERROR;
             }
             *out_frame_count = required;
             if (stereo == NULL || frame_capacity < (size_t)required)
-                return AGE_MOVIE_BUFFER_TOO_SMALL;
+                return OME_MOVIE_BUFFER_TOO_SMALL;
 
             int64_t timestamp = movie->audio_frame->best_effort_timestamp;
             if (timestamp == AV_NOPTS_VALUE) timestamp = movie->audio_frame->pts;
@@ -813,13 +813,13 @@ int32_t AGE_MOVIE_CALL age_movie_decode_audio(age_movie *movie,
                 movie->audio_frame->nb_samples);
             if (converted < 0) {
                 set_error(movie, "convert MPEG audio to stereo PCM", converted);
-                return AGE_MOVIE_ERROR;
+                return OME_MOVIE_ERROR;
             }
             *out_frame_count = converted;
             movie->decoded_audio_sample_count += converted;
             movie->audio_frame_pending = 0;
             av_frame_unref(movie->audio_frame);
-            return AGE_MOVIE_FRAME;
+            return OME_MOVIE_FRAME;
         }
 
         int result = avcodec_receive_frame(movie->audio_codec, movie->audio_frame);
@@ -830,11 +830,11 @@ int32_t AGE_MOVIE_CALL age_movie_decode_audio(age_movie *movie,
         }
         if (result == AVERROR_EOF) {
             movie->audio_decoder_eof = 1;
-            return AGE_MOVIE_EOF;
+            return OME_MOVIE_EOF;
         }
         if (result != AVERROR(EAGAIN)) {
             set_error(movie, "receive decoded audio frame", result);
-            return AGE_MOVIE_ERROR;
+            return OME_MOVIE_ERROR;
         }
 
         if (movie->audio_input_eof) {
@@ -842,13 +842,13 @@ int32_t AGE_MOVIE_CALL age_movie_decode_audio(age_movie *movie,
                 result = avcodec_send_packet(movie->audio_codec, NULL);
                 if (result < 0 && result != AVERROR_EOF) {
                     set_error(movie, "flush MPEG audio decoder", result);
-                    return AGE_MOVIE_ERROR;
+                    return OME_MOVIE_ERROR;
                 }
                 movie->audio_decoder_draining = 1;
                 continue;
             }
             snprintf(movie->error, sizeof(movie->error), "audio decoder requested input after drain");
-            return AGE_MOVIE_ERROR;
+            return OME_MOVIE_ERROR;
         }
 
         for (;;) {
@@ -859,7 +859,7 @@ int32_t AGE_MOVIE_CALL age_movie_decode_audio(age_movie *movie,
             }
             if (result < 0) {
                 set_error(movie, "read MPEG audio packet", result);
-                return AGE_MOVIE_ERROR;
+                return OME_MOVIE_ERROR;
             }
             if (movie->audio_packet->stream_index != movie->audio_stream_index) {
                 av_packet_unref(movie->audio_packet);
@@ -875,15 +875,15 @@ int32_t AGE_MOVIE_CALL age_movie_decode_audio(age_movie *movie,
             continue;
         if (result < 0) {
             set_error(movie, "send MPEG audio packet", result);
-            return AGE_MOVIE_ERROR;
+            return OME_MOVIE_ERROR;
         }
     }
 }
 
-const char *AGE_MOVIE_CALL age_movie_last_error(const age_movie *movie) {
+const char *OME_MOVIE_CALL ome_movie_last_error(const ome_movie *movie) {
     return movie != NULL ? movie->error : "movie handle is null";
 }
 
-void AGE_MOVIE_CALL age_movie_close(age_movie *movie) {
+void OME_MOVIE_CALL ome_movie_close(ome_movie *movie) {
     destroy_movie(movie);
 }

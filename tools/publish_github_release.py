@@ -20,7 +20,7 @@ from typing import Any, Callable, Protocol
 import verify_windows_native
 
 
-FFMPEG_MANIFEST = Path(__file__).resolve().parent.parent / "native/age_movie_ffmpeg/dependency-linux-x64.json"
+FFMPEG_MANIFEST = Path(__file__).resolve().parent.parent / "native/ome_movie_ffmpeg/dependency-linux-x64.json"
 
 
 LINUX_ARCHIVE = "OME-linux-x64.tar.gz"

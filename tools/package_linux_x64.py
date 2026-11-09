@@ -28,7 +28,7 @@ REQUIRED_FILES = (
     f"{MANAGED_DIRECTORY}/{package_notices.DEPS_FILE}",
     f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.linux-x64-LICENSE.TXT",
     f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.linux-x64-THIRD-PARTY-NOTICES.TXT",
-    f"{MANAGED_DIRECTORY}/libage_movie_ffmpeg.so",
+    f"{MANAGED_DIRECTORY}/libome_movie_ffmpeg.so",
     f"{MANAGED_DIRECTORY}/libavformat.so.62",
     f"{MANAGED_DIRECTORY}/libavcodec.so.62",
     f"{MANAGED_DIRECTORY}/libavutil.so.60",
@@ -39,7 +39,7 @@ REQUIRED_FILES = (
 )
 FORBIDDEN_FILES = (
     f"{MANAGED_DIRECTORY}/Ome.Engine.Text.Windows.dll",
-    f"{MANAGED_DIRECTORY}/age_movie_ffmpeg.dll",
+    f"{MANAGED_DIRECTORY}/ome_movie_ffmpeg.dll",
     f"{MANAGED_DIRECTORY}/avformat-62.dll",
 )
 LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
@@ -96,7 +96,7 @@ def source_date_epoch() -> int:
 def build_metadata(epoch: int) -> dict[str, object]:
     with (HERE / "godot-linux-x64.json").open(encoding="utf-8") as stream:
         godot = json.load(stream)
-    with (REPO / "native/age_movie_ffmpeg/dependency-linux-x64.json").open(
+    with (REPO / "native/ome_movie_ffmpeg/dependency-linux-x64.json").open(
         encoding="utf-8"
     ) as stream:
         ffmpeg = json.load(stream)

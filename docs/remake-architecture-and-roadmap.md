@@ -1197,7 +1197,7 @@ do not mix mechanical moves with semantic changes.
    The bounded execution order is:
 
    1. **MinGW native foundation.** Add Linux-hosted bootstrap/build scripts over the existing pinned Windows
-      FFmpeg manifest and its `.dll.a` import libraries. Produce an AMD64 `age_movie_ffmpeg.dll`, copy the exact
+      FFmpeg manifest and its `.dll.a` import libraries. Produce an AMD64 `ome_movie_ffmpeg.dll`, copy the exact
       five runtime DLLs/license, and verify PE architecture, exported ABI entry points, and FFmpeg imports. Keep
       the existing MSVC path as the independent Windows-local builder.
    2. **Cross-export and package contract.** Add the Windows x86-64 Godot preset and selectively pinned template;

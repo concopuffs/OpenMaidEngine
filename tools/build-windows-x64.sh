@@ -24,8 +24,8 @@ done
 
 python3 -X utf8 "$script_dir/opcodes_build.py" --build
 godot_console="$("$script_dir/bootstrap-godot-linux-x64.sh" windows-x64)"
-ffmpeg_sdk="$("$repo_root/native/age_movie_ffmpeg/bootstrap-win64.sh")"
-"$repo_root/native/age_movie_ffmpeg/build-win64.sh" "$ffmpeg_sdk"
+ffmpeg_sdk="$("$repo_root/native/ome_movie_ffmpeg/bootstrap-win64.sh")"
+"$repo_root/native/ome_movie_ffmpeg/build-win64.sh" "$ffmpeg_sdk"
 
 # Keep the memory-heavy self-contained publish outside the resident Godot editor, as on Linux.
 expected_managed_publish_directory="$repo_root/build/managed-publish/win-x64"

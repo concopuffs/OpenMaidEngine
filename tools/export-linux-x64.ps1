@@ -17,7 +17,7 @@ if (-not (Test-Path -LiteralPath $godotConsolePath -PathType Leaf)) {
 foreach ($required in @(
     (Join-Path $projectRoot 'OME.sln'),
     (Join-Path $projectRoot 'export_presets.cfg'),
-    (Join-Path $repoRoot 'build\native\linux-x64\libage_movie_ffmpeg.so')
+    (Join-Path $repoRoot 'build\native\linux-x64\libome_movie_ffmpeg.so')
 )) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "Linux export prerequisite was not found: $required"

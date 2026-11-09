@@ -22,8 +22,8 @@ done
 
 python3 -X utf8 "$script_dir/opcodes_build.py" --build
 godot_console="$("$script_dir/bootstrap-godot-linux-x64.sh")"
-ffmpeg_sdk="$("$repo_root/native/age_movie_ffmpeg/bootstrap-linux-x64.sh")"
-"$repo_root/native/age_movie_ffmpeg/build-linux-x64.sh" "$ffmpeg_sdk"
+ffmpeg_sdk="$("$repo_root/native/ome_movie_ffmpeg/bootstrap-linux-x64.sh")"
+"$repo_root/native/ome_movie_ffmpeg/build-linux-x64.sh" "$ffmpeg_sdk"
 
 # Godot keeps the editor resident while it launches dotnet publish. On constrained CI runners, that process
 # pair can exceed the job's memory cgroup. Produce the exact ExportRelease/linux-x64 payload first, without
