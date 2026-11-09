@@ -73,8 +73,15 @@ it; git history keeps the record.
   - Presentation is both an in-window options panel and a desktop menu bar. Japanese labels stay close to AGE's
     unless that conflicts with the design.
 
-  Next is a design spec. Done when the port reads no `AGERC.DLL` at runtime and every option works on both
-  installs.
+  The design is `superpowers/specs/2026-11-09-engine-shell-design.md` (accepted 2026-11-09).
+  It also covers two engine gaps the survey found:
+  - `message:ReadTextSkip` is not persisted, so the read-skip toggle resets at every start;
+  - `VmMenuState` lacks native's choice-wait flag, so ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す is grayed at a choice where native enables
+    it.
+
+  The translated install's `agerc.dll` keeps menu 110 as MENUEX, which the port's reader rejects, so that install
+  has no menu bar either. Done when the port reads no `AGERC.DLL` at runtime and every option works on all three
+  installs (spec §9).
 - **Kamidori's Ghidra image is 4.33F.** The program `/kamidori/SYS4433/range_00400000.bin` and its annotations are
   the translation's 4.33F build. Native runs since 2026-11-08 use the clean install's 4.33G, whose code differs
   (`engine-re.md`, "Kamidori engine builds"). Kamidori addresses in the docs without a build are 4.33F's. Done when

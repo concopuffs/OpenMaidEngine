@@ -20,7 +20,7 @@
 #   .\run-godot.ps1 -Doctor     resolve and print prerequisites without building or launching
 #
 # Uses the *console* Godot build so GD.Print / DRAW logs / the selftest result show in the terminal.
-# Resolution order is explicit parameter, AGE_* environment variable, then a portable fallback.
+# Resolution order is explicit parameter, OME_* environment variable, then a portable fallback.
 param(
     [string]$GodotConsole,
     [string]$GameRoot,

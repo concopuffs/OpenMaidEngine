@@ -598,7 +598,7 @@ Each phase ends with something demonstrable. The documented side-tasks map into 
 
 ### Phase A — Prove the VM (vertical slice) — completed
 Goal: **run one ADV scene end-to-end** in the new runtime — background image + dialogue + a choice +
-a voice line — and match its `show-text` sequence to `build/text/dialogue.jsonl`.
+a voice line — and match its `show-text` sequence to `build/games/himegari/text/dialogue.jsonl`.
 Forces, and thereby de-risks, every core unknown at once:
 - Port the container parser + VM core to C#.
 - Implement the ADV effectful ops against Godot: `show-text`, `end-text-line`, `wait-for-input`,
@@ -1487,7 +1487,7 @@ mostly correctly, using it for analysis is meaningless.
 **Therefore the bootstrap order matters:**
 1. Build the VM.
 2. **Validate it against ground truth we already hold, by *independent* means** — chiefly the dialogue
-   oracle (`build/text/dialogue.jsonl`: the VM's `show-text` sequence per scene must match), plus
+   oracle (`build/games/himegari/text/dialogue.jsonl`: the VM's `show-text` sequence per scene must match), plus
    differential checks against known-correct behavior. This *external* oracle certifies the instrument.
 3. Only then use the validated core's observability to understand the *adjacent unknown* — which
    globals mean what, dispatch, effectful-op behavior. **Correctness propagates outward from validated

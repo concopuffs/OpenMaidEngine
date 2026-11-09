@@ -29,7 +29,9 @@ command needs the game options:
 - The untranslated install's `AGERC.DLL` is packed, and the port cannot read its menus and dialogs from the file.
   On that install the port has no menu bar and quits without the 終了 dialog (`../../backlog.md`). The translated
   install's `agerc.dll` has its dialogs in the file, in English: Quit, with `Exit(&E)`, `'Return to title(&T)'`,
-  `OK` and `Cancel`.
+  `OK` and `Cancel`. It keeps its menu as a MENUEX template, which the port does not read, so the port has no menu
+  bar there either. The planned engine shell (`../../superpowers/specs/2026-11-09-engine-shell-design.md`) will
+  close both gaps.
 - Registries for fragments: `py -3.11 -X utf8 tools/globals_build.py --profile kamidori --build`.
 
 ## The translation is a different base

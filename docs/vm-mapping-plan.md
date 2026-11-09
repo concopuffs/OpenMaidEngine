@@ -98,7 +98,7 @@
 > transcribed from Kelebek's table for a *later* AGE game. The opcode **number + argc** are
 > validated for Himegari (481/481 clean decode proves structure), but the **semantics are
 > not independently verified**. The ADV/text core is empirically safe — the 30,057-line
-> `build/text/dialogue.jsonl` is proof that `show-text`/`end-text-line`/the string
+> `build/games/himegari/text/dialogue.jsonl` is proof that `show-text`/`end-text-line`/the string
 > mechanism are right, and arithmetic/control-flow labels are corroborated by operand-type
 > and jump-target consistency. The exposure is the **effectful named ops you can't see in
 > text output** (`play-voice 0xc4`, `draw-texture 0x1fb`, sound/UI/draw ops) — Frida-confirm
@@ -153,7 +153,7 @@ Unicorn is a bare CPU emulator (no OS). It is the **better** tool for the *pure-
 
 - [ ] **4.0 — Stand up the validation harness *first* (before writing VM opcodes).** The
   strongest correctness oracle already exists in `build/`: for a given scene script, the VM's
-  emitted `show-text` sequence must match that file's lines in `build/text/dialogue.jsonl`.
+  emitted `show-text` sequence must match that file's lines in `build/games/himegari/text/dialogue.jsonl`.
   Wire this as an automated diff (drive one `SC####` script → collect show-text → compare to
   the 30k-line corpus filtered by `file`). This turns "is the VM right?" into a per-scene
   regression test and catches control-flow/branch bugs (wrong jcc → wrong dialogue order)

@@ -13,7 +13,7 @@ block is nested `eq`/`ne`/`and`/`jcc` on flags, ending in `mov`s to output globa
 slice can stub `call-script`** — it is not gating for running one scene's dialogue.
 
 **Correctness bootstrap (roadmap §5) drives the ordering:** the VM must be *validated-correct* before
-it is trustworthy. Our strongest oracle is `build/text/dialogue.jsonl` (the `show-text` lines per
+it is trustworthy. Our strongest oracle is `build/games/himegari/text/dialogue.jsonl` (the `show-text` lines per
 script). So the very first slice is **headless and text-only, validated by that oracle** — no Godot,
 no AGF, no audio, no dispatch registry. Only once the VM reproduces dialogue do we add rendering.
 
