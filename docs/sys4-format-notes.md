@@ -262,7 +262,7 @@ The compatibility id is `ctx+0x53b74`, the executable's engine version, which AG
 `ARCGameEngine Ver 4.24J`. Every writer stores it: shared `SAVE.DAT`, numbered saves and `RT.DAT`. It
 therefore records which build wrote a file, not a file kind. Himegari's installed numbered files carry `"422B"`
 (`0x42323234`) because the 2019 executable wrote them; files the current executable writes carry `"424J"`.
-The port's Kamidori profile still writes `"433F"`, the translation's id (`backlog.md`).
+The port's Kamidori profile writes `"433G"`, the clean install's id.
 The game id is the SYS4INI header copy at `ctx+0xa0bc0`.
 
 The packed SYS4INI `SAVEVERSION` values `310` and `320` split into these major/minor fields by quotient

@@ -55,7 +55,7 @@ public sealed class GameProfileSelectionTests
         Assert.Equal("kamidori", kamidori.PersistenceNamespace);
         Assert.True(kamidori.PersistenceWritesEnabled);
         Assert.Equal(320, kamidori.Persistence.ExpectedPackedSaveVersion);
-        Assert.Equal(0x46333334u, kamidori.Persistence.CompatibilityId);   // "433F"
+        Assert.Equal(0x47333334u, kamidori.Persistence.CompatibilityId);   // "433G", the clean install's 4.33G
         Assert.Equal("神採りアルケミーマイスター", kamidori.Persistence.GameId);
         Assert.Empty(kamidori.Persistence.LegacyGameIds);
         Assert.Equal([1037327, 1, 802, 1, 1, 1], kamidori.Persistence.BankDimensions.ToArray());

@@ -61,12 +61,6 @@ it; git history keeps the record.
   (`godot/assets/ome-icon.svg`, set at runtime), but the project sets no `application/config/icon` and the Windows
   export no `.ico`, so `OME.exe` in a package and the taskbar before startup show Godot's. Done when both exports
   carry the OME icon, built from the same SVG.
-- **Kamidori saves carry the translation's engine id.** The port's Kamidori profile writes compatibility id
-  `"433F"` (`0x46333334`, `engine/Ome.Engine/Profiles/kamidori.json`) at header `+0x04` of every save, the id of
-  the translation's 4.33F. The clean install's 4.33G writes `"433G"` (`0x47333334`): native sandbox `SAVE.DAT` and
-  `RT.DAT`, 2026-11-09. No reader checks the id (`engine-re.md`, "Save identity and native read checks"), so saves
-  load both ways, but `Ome.Cli save-diff` reports the header difference. Done when the profile writes `"433G"` and
-  `GameProfileSelectionTests` checks it.
 - **The `0x90`-byte SYS4INI block.** Its meaning is unknown and no consumer is known (OMS spec §13). Revisit only if
   one appears.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,
