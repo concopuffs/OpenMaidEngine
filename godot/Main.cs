@@ -175,7 +175,10 @@ public partial class Main : Godot.Control
         var logicalCanvas = catalog.LogicalCanvas;
         try
         {
-            _windowOptions = WindowLaunchOptions.Resolve(userArgs, logicalCanvas);
+            // OME.INI's port options (the language, the window size, the overlays) and the flags that override them.
+            LoadPortOptions(userArgs);
+            _windowOptions = WindowLaunchOptions.Resolve(userArgs, logicalCanvas, _portOptions.Effective);
+            NoteWindowSizeFlags(logicalCanvas);
         }
         catch (System.ArgumentException error)
         {
@@ -192,6 +195,7 @@ public partial class Main : Godot.Control
                         int.TryParse(catalog.StartupSettings.GetValueOrDefault("USEAPPDATAFOLDER"),
                                      out int useAppDataFolder) && useAppDataFolder == 1);
         Window rootWindow = GetTree().Root;
+        DisplayServer.SetIcon(ShellAssets.Icon(64));   // the OME icon: the game's is inside its binaries
         rootWindow.ContentScaleMode = Window.ContentScaleModeEnum.Viewport;
         rootWindow.ContentScaleAspect = Window.ContentScaleAspectEnum.Keep;
         rootWindow.ContentScaleSize = new Vector2I(_screenWidth, _screenHeight + _menuBarHeight);
@@ -200,7 +204,7 @@ public partial class Main : Godot.Control
             rootWindow.Size = new Vector2I(_windowOptions.Width, _windowOptions.Height + windowBarHeight);
         GD.Print($"[profile] SYS4INI logical canvas={_screenWidth}x{_screenHeight} menu-bar={_menuBarHeight} " +
                  $"requested window={_windowOptions.Width}x{_windowOptions.Height} " +
-                 $"source={(_windowOptions.IsOverridden ? "boot-arguments" : "logical-canvas")} " +
+                 $"source={WindowSizeSource()} " +
                  $"actual={rootWindow.Size.X}x{rootWindow.Size.Y} mode={rootWindow.Mode}");
 
         // One logical canvas that draw-texture blits into, shown behind the dialogue.
@@ -223,12 +227,13 @@ public partial class Main : Godot.Control
         AddChild(_status);
         _status.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
         _status.OffsetLeft = 40; _status.OffsetTop = -60;
+        _locatorHudVisible = _portOptions.Effective.LocatorHud;
         _locatorHud = new Label { Visible = false, MouseFilter = MouseFilterEnum.Ignore };
         _locatorHud.Position = new Vector2(8, 8);
         AddChild(_locatorHud);
         _fpsHud = new Label
         {
-            Visible = System.Array.IndexOf(userArgs, "--fps-counter") >= 0,
+            Visible = _portOptions.Effective.FpsCounter,
             Text = "FPS --",
             MouseFilter = MouseFilterEnum.Ignore,
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -314,7 +319,6 @@ public partial class Main : Godot.Control
                 textBackend = userArgs[i + 1].ToLowerInvariant();
             if (userArgs[i] == "--trace-histogram" && i + 1 < userArgs.Length) histFile = userArgs[i + 1];
             if (userArgs[i] == "--page-map" && i + 1 < userArgs.Length) pageMapPath = userArgs[i + 1];
-            if (userArgs[i] == "--locator-hud") _locatorHudVisible = true;
             if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
             {
                 var kv = userArgs[i + 1].Split('=');

@@ -75,6 +75,25 @@ class PackageNoticesTests(unittest.TestCase):
         self.assertIn("MinGW-w64-runtime-COPYING.txt", [n.package_name for n in package_windows_x64.PINNED_NOTICES])
         self.assertNotIn("MinGW-w64-runtime-COPYING.txt", [n.package_name for n in package_linux_x64.PINNED_NOTICES])
 
+    def test_committed_noto_notice_matches_its_pin_and_ships_in_both_packages(self) -> None:
+        import package_linux_x64
+        import package_windows_x64
+
+        notices = package_notices.pinned_notices(package_notices.NOTO_NOTICES)
+        self.assertEqual(["NotoSansJP-LICENSE.txt"], [n.package_name for n in notices])
+        for notice in notices:
+            self.assertEqual(notice.sha256, hashlib.sha256(notice.source.read_bytes()).hexdigest(), notice.source)
+        tag = package_notices.notices_release_tag(package_notices.NOTO_NOTICES)
+        with package_notices.NOTO_NOTICES.open(encoding="utf-8") as stream:
+            sources = [entry["source"] for entry in json.load(stream)["files"]]
+        self.assertTrue(all(f"/{tag}/" in source for source in sources), sources)
+        for package in (package_windows_x64, package_linux_x64):
+            self.assertIn("NotoSansJP-LICENSE.txt", [n.package_name for n in package.PINNED_NOTICES])
+        # The font OME.dll embeds is the file THIRD_PARTY_NOTICES.md names.
+        font = HERE.parent / "godot/assets/NotoSansJP-Regular.otf"
+        digest = hashlib.sha256(font.read_bytes()).hexdigest()
+        self.assertIn(digest, (HERE.parent / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"))
+
     def test_copy_checks_each_pin(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

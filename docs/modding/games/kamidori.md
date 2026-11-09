@@ -29,9 +29,11 @@ command needs the game options:
 - The menu bar, the fullscreen strip and the 終了 dialog are the port's own, so both installs have them. The driver
   reads and answers 終了 by its Japanese texts on the port, whatever language it shows. On native AGE, the translated
   install's `agerc.dll` shows 終了 in English: Quit, with `Exit(&E)`, `'Return to title(&T)'`, `OK` and `Cancel`.
-- The untranslated install's `AGERC.DLL` is packed, so the port cannot read its ﾊﾞｰｼﾞｮﾝ情報 and 設定 dialogs from the
-  file: on that install the 設定 commands and ﾊﾞｰｼﾞｮﾝ情報 are grayed until the engine shell's own panel
-  (`../../superpowers/specs/2026-11-09-engine-shell-design.md`, M3; `../../backlog.md`).
+- 設定, ﾊﾞｰｼﾞｮﾝ情報 and 動作環境 are the port's own options panel, so both installs have them, although the
+  untranslated install's `AGERC.DLL` is packed. While CONFIG runs (op `0x142`'s gate is 0) its ﾒｯｾｰｼﾞ, ｻｳﾝﾄﾞ and
+  その他 sections are read-only, as native's 設定 cannot open then. The port's shell is Japanese unless `OME.INI`'s
+  `ui:Language` or `--language en` picks English; native AGE on the translated install shows its `agerc.dll`'s
+  English.
 - Registries for fragments: `py -3.11 -X utf8 tools/globals_build.py --profile kamidori --build`.
 
 ## The translation is a different base

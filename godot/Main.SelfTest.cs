@@ -330,7 +330,7 @@ public partial class Main
                                   == new Vector2I(_screenWidth, _screenHeight + _menuBarHeight)
                                && _windowOptions == WindowLaunchOptions.Resolve(
                                       OS.GetCmdlineUserArgs(),
-                                      new Sys4LogicalCanvas(_screenWidth, _screenHeight));
+                                      new Sys4LogicalCanvas(_screenWidth, _screenHeight), _portOptions.Effective);
         var backbufferSnapshot = new List<RenderObject>();
         _host.PresentFrame(_vm.Gfx);
         BackbufferPublicationPolicy fullPolicy =

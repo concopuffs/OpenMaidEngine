@@ -12,7 +12,4 @@ public enum ShellSection { Message, Sound, Other, Screen, Ome, Info }
 /// </summary>
 /// <param name="Windowed">IAGEService +0x08: the game runs in a window.</param>
 /// <param name="Vm">The VM's menu state (<see cref="IVmMenuServices.MenuState"/>), which carries op 0x142's gate.</param>
-/// <param name="PanelAvailable">Whether the frontend can open the panel's sections. Until the options panel exists,
-/// the frontend shows AGERC's 設定 and ﾊﾞｰｼﾞｮﾝ情報 from the game's AGERC.DLL, and an install whose DLL lacks them
-/// grays those commands.</param>
-public readonly record struct ShellState(bool Windowed, VmMenuState Vm, bool PanelAvailable = true);
+public readonly record struct ShellState(bool Windowed, VmMenuState Vm);

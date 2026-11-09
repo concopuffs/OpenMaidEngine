@@ -50,13 +50,15 @@ public partial class Main
     }
 
     /// <summary>The strip holds its own copy of the shell's menu, pruned as the bar is (native's WM_INITDIALOG:
-    /// agerc_refresh_system_menu_state, agerc_prune_menu_by_settings). Its caption shows the game's title; the icon
-    /// beside it waits for the shell's own OME icon (engine shell spec §5.5), since the game's is inside AGERC.DLL.
-    /// </summary>
+    /// agerc_refresh_system_menu_state, agerc_prune_menu_by_settings). Its caption shows the OME icon (engine shell spec
+    /// §5.5; the game's is inside its binaries) and the game's title.</summary>
     private void CreateMenuStrip()
     {
         if (_shellMenu == null || _menuItems == null) return;
-        _menuStrip = new SystemMenuStrip(_shellMenu.CreateBar(), _catalog.Title, icon: null) { Visible = false };
+        _menuStrip = new SystemMenuStrip(_shellMenu.CreateBar(), _catalog.Title, ShellAssets.IconTexture(16))
+        {
+            Visible = false,
+        };
         _menuStrip.Bar.SystemMenu = WindowSystemMenu.Create(fullscreen: true);   // the strip's: Restore, no Maximize
         _menuStrip.Bar.Opened += OnMenuOpened;
         _menuStrip.Bar.Closed += OnMenuClosed;
@@ -110,6 +112,7 @@ public partial class Main
         Win32Dialog.GameClientOrigin = new Vector2I(0, _menuBarHeight);
         if (_exitDim != null) _exitDim.OffsetTop = _menuBarHeight;
         if (_frozenFrame != null) _frozenFrame.OffsetTop = _menuBarHeight;
+        if (_optionsPanel != null) _optionsPanel.OffsetTop = _menuBarHeight;
         if (_windowed)
         {
             DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed);
@@ -155,7 +158,7 @@ public partial class Main
 
     /// <summary>AGERC host command -1: a dialog, message box or menu of the host is open.</summary>
     private bool HostUiActive()
-        => _exitConfirmation != null || _scriptErrorDialog != null || _agercDialog != null
+        => _exitConfirmation != null || _scriptErrorDialog != null || _optionsPanel != null
            || _screenshotFolderDialog != null || _fullwidthTextEditor != null || _menuBar?.IsOpen == true
            || _debugSceneLauncher?.Visible == true;
 

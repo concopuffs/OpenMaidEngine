@@ -17,6 +17,9 @@
     <ProjectReference Include="..\engine\Ome.Mods\Ome.Mods.csproj" />
     <EmbeddedResource Include="..\build\opcodes.json"
                       LogicalName="OME.Runtime.opcodes.json" />
+    <!-- The engine shell's own assets (godot/assets/, which Godot ignores): the options panel's font and the OME icon. -->
+    <EmbeddedResource Include="assets\NotoSansJP-Regular.otf" LogicalName="OME.Assets.NotoSansJP-Regular.otf" />
+    <EmbeddedResource Include="assets\ome-icon.svg" LogicalName="OME.Assets.ome-icon.svg" />
   </ItemGroup>
   <ItemGroup Condition="'$(GodotTargetPlatform)' == 'windows'">
     <ProjectReference Include="..\engine\Ome.Engine.Text.Windows\Ome.Engine.Text.Windows.csproj" />

@@ -14,7 +14,7 @@ using Godot;
 /// freezes, and the shell refreshes the items from its state snapshot (native's WM_INITMENU). A chosen command then
 /// runs as WM_COMMAND does, through the shell's command table (<see cref="ShellCommands"/>): 終了, 画像の保存
 /// (Main.Screenshot.cs), the ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ and ｳｲﾝﾄﾞｳ (Main.ScreenMode.cs), and the 設定 and ﾍﾙﾌﾟ sections
-/// (Main.ShellHost.cs). The items the shell does not model stay grayed. Fullscreen detaches the bar, and the top-edge
+/// (the options panel, Main.OptionsPanel.cs). The items the shell does not model stay grayed. Fullscreen detaches the bar, and the top-edge
 /// strip carries its own copy of the menu.</para>
 /// <para>The keyboard reaches the bar as DefWindowProc lets it reach AGE's: an Alt or F10 tap selects it, and the
 /// window menu (<see cref="WindowSystemMenu"/>) follows its last item. Op 0x10f's bit 0x200 keeps F10 out.</para>
@@ -32,7 +32,6 @@ public partial class Main
     {
         _menuItems = null;
         _menuBarHeight = 0;
-        _agercPath = FindAgerc(gameRoot);   // only for 設定 and ﾊﾞｰｼﾞｮﾝ情報 (Main.AgercDialogs.cs)
         _shellMenu = new ShellMenu(_shellStrings, settings);
         if (Array.IndexOf(userArgs, "--no-menu-bar") >= 0) return;
         _menuItems = _shellMenu.CreateBar();
@@ -65,7 +64,7 @@ public partial class Main
     {
         if (_menuBar == null || _vm == null || _host == null || !_windowed) return false;
         if (_exitConfirmation != null || _scriptErrorDialog != null || _fullwidthTextEditor != null
-            || _screenshotFolderDialog != null || _agercDialog != null || _debugSceneLauncher?.Visible == true)
+            || _screenshotFolderDialog != null || _optionsPanel != null || _debugSceneLauncher?.Visible == true)
             return false;
         return _menuBar.HandleInput(e);
     }
@@ -106,7 +105,7 @@ public partial class Main
 
     /// <summary>The shell's state snapshot, rebuilt each time a surface opens; null before the VM exists.</summary>
     private ShellState? ShellSnapshot() =>
-        _vm == null ? null : new ShellState(_windowed, _vm.MenuState, PanelAvailable: AgercDialogsAvailable);
+        _vm == null ? null : new ShellState(_windowed, _vm.MenuState);
 
     /// <summary>A menu command, as age_main_window_proc's WM_COMMAND and AGERC's agerc_menu_command run it: the shell's
     /// commands, then the window menu's.</summary>

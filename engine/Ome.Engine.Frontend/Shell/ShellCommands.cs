@@ -30,7 +30,7 @@ public sealed class ShellCommand
     /// <summary>For the 情報 section: the diagnostics rather than the about view.</summary>
     public bool Diagnostics { get; init; }
 
-    /// <summary>The command's own enable rule; op 0x142's gate and the panel's availability apply on top.</summary>
+    /// <summary>The command's own enable rule; op 0x142's gate applies on top.</summary>
     public Func<ShellState, bool> EnabledRule { get; init; } = _ => true;
     public Func<ShellState, bool>? CheckedRule { get; init; }
     /// <summary>A label key that depends on the state, or null for <see cref="LabelKey"/>.</summary>
@@ -38,8 +38,7 @@ public sealed class ShellCommand
     public required Action<IShellHost, IVmMenuServices> Action { get; init; }
 
     public bool IsEnabled(ShellState state) =>
-        (!SystemMenuGated || state.Vm.SystemMenuEnabled) && (Section == null || state.PanelAvailable)
-        && EnabledRule(state);
+        (!SystemMenuGated || state.Vm.SystemMenuEnabled) && EnabledRule(state);
 
     public bool IsChecked(ShellState state) => CheckedRule?.Invoke(state) ?? false;
 

@@ -44,7 +44,8 @@ FORBIDDEN_FILES = (
 )
 LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
-PINNED_NOTICES = package_notices.pinned_notices()
+# Godot's notices and the license of the font OME.dll embeds.
+PINNED_NOTICES = package_notices.pinned_notices() + package_notices.pinned_notices(package_notices.NOTO_NOTICES)
 
 
 def _resolved_directory(path: Path, label: str) -> Path:

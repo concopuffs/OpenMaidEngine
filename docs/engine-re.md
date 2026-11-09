@@ -400,7 +400,7 @@ The meaningful consumer catalog is:
 | `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; the port redirects it through the shared profile-root policy |
 | `REGFILEPATH` | Supplies the Eushully/product-relative directory for native `SYS4REG.INI`. With Himegari's `USEAPPDATAFOLDER=1`, AGE resolves `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SYS4REG.INI`. | Active native engine-options path; redirected with saves while retaining the native format |
 | `SAVEVERSION` | Selects numbered-save layout 3.10 and enables the matching append-catalog persistence structures. | Active persistence ABI |
-| `GAMEVERSION`, `VERREGPOS` | Seeds `set:GameVersion` with `1.00`. A nonempty `VERREGPOS` replaces it with the `DisplayVersion` of the GUID's InstallShield uninstall key, or `1.00.0000` when that value is missing. ﾊﾞｰｼﾞｮﾝ情報 shows the result. | Version dialog text; port implemented (`Main.AgercDialogs.cs`, 2026-11-05) |
+| `GAMEVERSION`, `VERREGPOS` | Seeds `set:GameVersion` with `1.00`. A nonempty `VERREGPOS` replaces it with the `DisplayVersion` of the GUID's InstallShield uninstall key, or `1.00.0000` when that value is missing. ﾊﾞｰｼﾞｮﾝ情報 shows the result. | Version dialog text; port implemented (2026-11-05; since engine shell M3, the options panel's 情報, `Main.OptionsPanel.cs`) |
 | `REGKEY` | A nonzero value activates `registration_validate_key_file@0x46fc80`, which opens `SYS4RK.BIN`, validates its header/transformed payload and both CRC variants, and publishes the registration result. | Native registration/key validation |
 | `COPYRIGHT`, `RCVERSION` | Both are imported. AGERC's ﾊﾞｰｼﾞｮﾝ情報 shows `set:Copyright`; no consumer of `RCVERSION` was found. | Version dialog text; port implemented for `COPYRIGHT` |
 
@@ -1709,9 +1709,10 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   runs (MessageSpeed, MesWinAlpha, AutoMessageTime0/1 and, since 2026-11-09, ReadTextSkip) are written at quit, as
   AGE writes them.
 - **Classic controls.** The pages draw unthemed comctl32 controls: check boxes, group boxes, trackbars with a
-  22 px thumb, the tab control and `WS_EX_CLIENTEDGE` edits. Their measured pixel geometry is documented on the
-  port's classes (`godot/Win32ClassicCheckBox.cs`, `Win32GroupBox.cs`, `Win32Trackbar.cs`, `Win32TabControl.cs`,
-  `Win32Edit.cs`, `Win32Edges.cs`).
+  22 px thumb, the tab control and `WS_EX_CLIENTEDGE` edits. The port drew them with measured pixel geometry until
+  engine shell M3 (2026-11-09) replaced 設定 with its own panel; the classes that recorded it
+  (`godot/Win32ClassicCheckBox.cs`, `Win32GroupBox.cs`, `Win32Trackbar.cs`, `Win32TabControl.cs`, `Win32Edit.cs`,
+  `Win32Edges.cs`) remain in the history before that change.
 
 **Measured look** (native captures, 2026-11-05):
 
@@ -1734,9 +1735,8 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   sends the asking close. The four ﾒｯｾｰｼﾞ items call the VM's menu services (`RequestMenuMessageSkipToggle`,
   `…AutoMessageToggle`, `…ReadMessageSkipToggle`, `RequestMenuHideWindow`). The VM applies them at its next
   instruction boundary or text-wait service, then runs `CALLBACK_SETTING.BIN`. Ending a text wait from Auto goes
-  through `IInputHost.EndInputWait`. Until the shell's own panel (M3), 設定's section commands and ﾊﾞｰｼﾞｮﾝ情報 open
-  AGERC's dialogs, and those commands are grayed when the game's AGERC.DLL lacks dialogs 9 and 2 (the clean
-  Kamidori install's DLL is packed).
+  through `IInputHost.EndInputWait`. 設定's section commands, 動作環境 and ﾊﾞｰｼﾞｮﾝ情報 open the shell's options panel
+  (below), so every install has them; the port reads nothing from AGERC.DLL.
 - **Screenshots.** `godot/Main.Screenshot.cs` saves through `ScreenshotBmpStore` (`engine/Ome.Engine/Persistence`).
   表示画面を保存 saves the frame frozen when the menu opened; F1 saves the current frame unless
   `VirtualMachine.SystemKeyDisableMask` (op `0x10f`) has bit 0, or a dialog is open. `--desktop-dir` replaces the
@@ -1745,33 +1745,31 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   (`godot/ScreenshotFolderDialog.cs`). The dialog runs on a thread of its own so that Godot keeps drawing, and the
   driver's `dialogs` and `answer` steps reach it as they reach native's. Other platforms use their own folder
   dialog. The port writes `SaveBMPPath` to `SYS4REG.INI` at once.
-- **AGERC dialogs.** `godot/Win32TemplateDialog.cs` builds a dialog from its AGERC.DLL template as
-  `CreateDialogIndirect` does. The readers in `engine/Ome.Engine.Frontend/NativeResources` supply the template and the
-  icon (`DialogTemplateResource`, `IconResource`). The base units come from the dialog font. The class also gives the
-  dialog manager's keys and the driver's `dialogs` and `answer` steps.
-  It draws push buttons, text, icon and frame statics, check boxes, group boxes, trackbars, the tab control and
-  display-only edits (with or without a client edge), and child pages (`AddPage`). Radio buttons and combo boxes are
-  not drawn. `godot/AgercVersionDialog.cs` is ﾊﾞｰｼﾞｮﾝ情報's procedure. `godot/AgercSettingsDialog.cs` is 設定's,
-  with its four page procedures; `godot/AgercSystemInfo.cs` gathers 動作環境's values and
-  `AgercSettingsText` (`engine/Ome.Engine.Frontend/NativeMenu`) formats them. OK hands the message settings to
-  `VirtualMachine.RequestMessageSettings`, which applies them at the next safe point and runs
-  `CALLBACK_SETTING.BIN`. The port reads the CPU clock from the registry's `~MHz` and the VRAM from DirectX's adapter
-  list (`DedicatedVideoMemory` of the adapter Godot renders with, at most 4095 MB). A dialog opened from another
-  (ﾊﾞｰｼﾞｮﾝ情報 from 設定) stacks above it. `godot/Main.AgercDialogs.cs` holds the VM and freezes
-  the frame while the dialog is open, and reads `DisplayVersion` from the registry on Windows.
-- **ﾊﾞｰｼﾞｮﾝ情報 names the port.** The game half (icon, `set:GameName`, `set:GameVersion`, `set:Copyright`) is filled
-  as AGE fills it. The engine half names Open Maid Engine instead of AGE: `EngineIdentity`
-  (`engine/Ome.Engine.Frontend/NativeResources`) re-texts the template's id-less labels, found by position. The name
-  replaces ARCGameEngine, and "Released under the MIT License" replaces ARC Software Laboratory's copyright. AGE's
-  Ogg Vorbis notice becomes the FFmpeg notice FFmpeg's license checklist asks for (FFmpeg, its LGPLv2.1, and
-  `FFmpeg-SOURCE.txt` for its source; `platform-portability.md`, item 10). Xiphophorus' copyright becomes "Third-party
-  licenses: `THIRD_PARTY_NOTICES.md`". ｼｽﾃﾑのﾊﾞｰｼﾞｮﾝ stays. `0x400` shows "Version " and the
-  engine's version, which the build takes from `git describe --tags --match "v[0-9]*" --dirty=+ --always`
-  (`godot/OME.csproj`, target `OmeVersion`; `-p:OmeVersion=` overrides it). The dialog drops the tag's "v", puts
-  "dev-" before a bare commit (a clone without tags) and shows "unknown" when the build stored none. AGE's 84-unit
-  edit fits "Version 4.24J" but not a development version such as "Version 0.4.0-32-gabc2403+", so the name's label
-  narrows to its text and `0x400` starts 4 units after it, keeping AGE's right edge. The プロダクトID row (its label
-  and `0x3f0`) is left out: the port has no copy protector.
+- **Options panel** (engine shell M3, 2026-11-09; `docs/superpowers/specs/2026-11-09-engine-shell-design.md`).
+  設定, ﾊﾞｰｼﾞｮﾝ情報 and 動作環境 are one panel of the port's own (`godot/OptionsPanel.cs`, opened and committed by
+  `godot/Main.OptionsPanel.cs`), drawn in Noto Sans JP over the frozen frame while the VM holds. Its sections are
+  ﾒｯｾｰｼﾞ, ｻｳﾝﾄﾞ and その他 (設定's pages 100, 102 and 104, with their wording and every value their controls can
+  write), 画面 (the screen mode and the window size), OME (the port options in `OME.INI`) and 情報 (about and
+  diagnostics). It keeps 設定's commit model in `ShellOptionsDraft` (`engine/Ome.Engine.Frontend/Shell`): the ｻｳﾝﾄﾞ
+  volumes and routes apply live and ｷｬﾝｾﾙ restores them (routes, then volumes); 決定 applies the draft in
+  `agerc_settings_apply`'s order above and hands the message settings to `VirtualMachine.RequestMessageSettings`,
+  which applies them at the next safe point and runs `CALLBACK_SETTING.BIN`. 設定's OK applies even when nothing
+  changed and ﾊﾞｰｼﾞｮﾝ情報's never does, so the panel opened from ﾊﾞｰｼﾞｮﾝ情報 applies only an edit. While op `0x142`'s
+  gate is 0 (Kamidori's CONFIG), when native 設定 cannot open, the ﾒｯｾｰｼﾞ, ｻｳﾝﾄﾞ and その他 sections are read-only and
+  nothing of theirs commits. The driver's `dialogs` lists the panel by its Japanese texts (title 設定, the section
+  shown, its check boxes, the sections, 決定 and ｷｬﾝｾﾙ), and `answer` presses them; a read-only check box refuses.
+- **情報 names the port.** The about rows fill the game half as AGE fills ﾊﾞｰｼﾞｮﾝ情報's (`set:GameName`,
+  `set:GameVersion` by the `VERREGPOS` rule, read from the registry on Windows, and `set:Copyright`). The engine half
+  is `EngineIdentity` (`engine/Ome.Engine.Frontend/Shell`) with the OME icon: Open Maid Engine for ARCGameEngine,
+  "Released under the MIT License" for ARC Software Laboratory's copyright, the FFmpeg notice FFmpeg's license
+  checklist asks for (FFmpeg, its LGPLv2.1, and `FFmpeg-SOURCE.txt` for its source; `platform-portability.md`, item 10)
+  for AGE's Ogg Vorbis notice, and "Third-party licenses: `THIRD_PARTY_NOTICES.md`" for Xiphophorus' copyright. The
+  version is the engine's, which the build takes from `git describe --tags --match "v[0-9]*" --dirty=+ --always`
+  (`godot/OME.csproj`, target `OmeVersion`; `-p:OmeVersion=` overrides it): the tag's "v" dropped, "dev-" before a
+  bare commit (a clone without tags), "unknown" when the build stored none. The プロダクトID row is left out: the
+  port has no copy protector. 動作環境's diagnostics give the OS, the Godot version, the renderer and GPU adapter, the
+  audio output, the engine, the profile and the data paths, with a copy button whose text uses English labels.
+  Native's DirectX version, CPU clock and VRAM figures are not carried.
 - **Unimplemented commands.** The refresh grays every command the port cannot run yet.
 - **Menu loop.** While a menu is open, the port holds the VM and freezes the presented frame. The hold nests, so the
   終了 dialog can open from it.
@@ -1791,12 +1789,10 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
 - **Opting out.** `--no-menu-bar` restores the plain window.
 - **Checks.** `tools/drive/scenarios/himegari-menu-bar.steps` checks read skip, hide, Auto and 終了 on both
   targets, `himegari-screenshot.steps` checks the screenshots and the image folder, and
-  `himegari-version-dialog.steps` checks ﾊﾞｰｼﾞｮﾝ情報, and `himegari-settings-dialog.steps` checks 設定. On ﾊﾞｰｼﾞｮﾝ情報,
-  both targets list the same title, game half and button, close on OK and resume on the same page; the engine half
-  differs by design (above). Against the native capture the game half differs only in the caption's glyph filtering.
-  The 設定 pages' client areas match native's capture pixel for
-  pixel, apart from 動作環境's live free space; both targets list the same texts and buttons and write the same
-  `SYS4REG.INI`. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
+  `himegari-version-dialog.steps` checks ﾊﾞｰｼﾞｮﾝ情報, and `himegari-settings-dialog.steps` checks 設定. Until engine
+  shell M4 moves them to its `option` steps, those two (and `himegari-antifont-off.steps` and
+  `himegari-effect-skip-on-click.steps`) answer AGERC's buttons, which the port's panel does not have, so they pass
+  only natively. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
   state, then posts `WM_COMMAND`. Both targets refuse a grayed item. `himegari-menu-keyboard.steps` drives keyboard
   mode on SC0000. Both targets eat the same click and move the same one page through ｵｰﾄﾒｯｾｰｼﾞ on and off. Both
   open the 終了 dialog from the window menu's Close. Full-window captures of the six positions and the window menu

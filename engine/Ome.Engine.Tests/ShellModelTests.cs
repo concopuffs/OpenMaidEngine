@@ -98,6 +98,23 @@ public class ShellModelTests
     }
 
     [Fact]
+    public void RelabelRetextsABarBuiltInAnotherLanguage()
+    {
+        static IEnumerable<string> All(IEnumerable<MenuItem> items) =>
+            items.SelectMany(i => new[] { i.Text }.Concat(All(i.Children)));
+        Func<string, int> setting = Settings(ShippedMenuKeys);
+        List<MenuItem> bar = new ShellMenu(Ja, setting).CreateBar();
+        var english = new ShellMenu(ShellStrings.Load("en"), setting);
+
+        english.Relabel(bar);
+
+        Assert.Equal(All(english.CreateBar()), All(bar));
+        Assert.NotEqual(All(new ShellMenu(Ja, setting).CreateBar()), All(bar));
+        // A bar another profile's keys pruned has another shape.
+        Assert.Throws<InvalidOperationException>(() => english.Relabel(new ShellMenu(Ja, Settings()).CreateBar()));
+    }
+
+    [Fact]
     public void PruneFollowsAgercPositionsWhenEveryKeyButMessageIsZero()
     {
         // Both games' keys. The second ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳの透過 test reads Menu_MesWinA again, so its first removal takes
@@ -185,18 +202,6 @@ public class ShellModelTests
 
         menu.Refresh(bar, state);
         Assert.All(ShellCommands.All, c => Assert.True(MenuItem.Find(bar, c.Id)!.Enabled, c.Name));
-    }
-
-    [Fact]
-    public void WithoutThePanelTheSectionCommandsAreGrayed()
-    {
-        var menu = new ShellMenu(Ja, Settings());
-        List<MenuItem> bar = ShellMenu.Build(Ja);
-
-        menu.Refresh(bar, new ShellState(Windowed: true, TextWaitWithHandler, PanelAvailable: false));
-
-        foreach (ShellCommand command in ShellCommands.All)
-            Assert.Equal(command.Kind != ShellCommandKind.Section, MenuItem.Find(bar, command.Id)!.Enabled);
     }
 
     // ---- commands ----
@@ -288,7 +293,10 @@ public class ShellModelTests
             .Concat(["exit.title", "exit.prompt", "exit.quit", "exit.return-to-title", "dialog.ok", "dialog.cancel"])
             .Append("folder.prompt")
             .Concat(Enum.GetValues<ShellSection>().Select(s => $"section.{s.ToString().ToLowerInvariant()}"))
-            .Concat(ShellOptions.All.Select(o => o.LabelKey));
+            .Concat(ShellOptions.All.Select(o => o.LabelKey))
+            .Concat(ShellPanel.PortSwitches.Concat(ShellPanel.PortChoices).Select(ShellPanel.LabelKey))
+            .Concat(ShellPanel.Sections.SelectMany(s => s.Groups).Select(g => g.TitleKey))
+            .Concat(ShellPanel.TextKeys);
     }
 
     [Fact]

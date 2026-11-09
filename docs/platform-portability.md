@@ -295,7 +295,7 @@ project-built SDK and the release packages:
 | 7 | Tarball or zip | Met — the official `.tar.xz` release tarball. |
 | 8 | Host source beside the binary | Met — the source and the binaries are both hosted on this repository's GitHub releases. |
 | 9 | Attribution on download pages | Met — `publish_github_release.py` appends the FFmpeg credit and source link to every `v*` release description; the deps release states the license. |
-| 10 | Mention FFmpeg in the "about box" | Met — the port's about box, ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報, says "This software uses FFmpeg, licensed under the LGPLv2.1; FFmpeg-SOURCE.txt links to its source." A dialog label cannot hold a link, so it names the file that does: every package ships `FFmpeg-SOURCE.txt` beside the libraries. `README.md` credits FFmpeg too. |
+| 10 | Mention FFmpeg in the "about box" | Met — the port's about box, the options panel's 情報 (ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報), says "This software uses FFmpeg, licensed under the LGPLv2.1; FFmpeg-SOURCE.txt links to its source." The panel's text holds no link, so it names the file that does: every package ships `FFmpeg-SOURCE.txt` beside the libraries. `README.md` credits FFmpeg too. |
 | 11–14 | EULA wording | Not applicable — no EULA; the MIT-licensed project neither claims FFmpeg nor prohibits reverse engineering. |
 | 15 | Spell "FFmpeg" correctly | Met — `test_write_ffmpeg_source_notice.py` rejects misspellings in the generated notice. |
 | 16 | Do not rename the DLLs | Met — FFmpeg's own names (`avcodec-62.dll`, `libavcodec.so.62`, …). |

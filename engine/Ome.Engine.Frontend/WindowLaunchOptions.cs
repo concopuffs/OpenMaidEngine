@@ -4,8 +4,9 @@ using System.Globalization;
 using Ome.Engine.Sys4;
 
 /// <summary>
-/// Presentation-only window dimensions resolved from Godot user arguments. These never redefine the
-/// SYS4 logical canvas, VM coordinates, or AGE surface dimensions.
+/// Presentation-only window dimensions resolved from Godot user arguments, else from OME.INI's display:WindowWidth and
+/// WindowHeight, else the logical canvas. These never redefine the SYS4 logical canvas, VM coordinates, or AGE surface
+/// dimensions.
 /// </summary>
 public readonly record struct WindowLaunchOptions(
     int Width, int Height, bool WidthOverridden, bool HeightOverridden)
@@ -13,12 +14,15 @@ public readonly record struct WindowLaunchOptions(
     public const int MaximumDimension = Sys4LogicalCanvas.MaximumDimension;
     public bool IsOverridden => WidthOverridden || HeightOverridden;
 
+    /// <param name="saved">The port options file's values; its size applies when it is not the canvas's.</param>
     public static WindowLaunchOptions Resolve(
-        IReadOnlyList<string> arguments, Sys4LogicalCanvas logicalCanvas)
+        IReadOnlyList<string> arguments, Sys4LogicalCanvas logicalCanvas,
+        Ome.Engine.Frontend.Shell.PortOptions? saved = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        int width = logicalCanvas.Width;
-        int height = logicalCanvas.Height;
+        bool savedSize = saved is { CanvasWindowSize: false };
+        int width = savedSize ? saved!.WindowWidth : logicalCanvas.Width;
+        int height = savedSize ? saved!.WindowHeight : logicalCanvas.Height;
         bool widthOverridden = false;
         bool heightOverridden = false;
 

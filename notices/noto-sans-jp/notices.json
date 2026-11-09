@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "release_tag": "Sans2.004",
+  "files": [
+    {
+      "path": "LICENSE.txt",
+      "package_name": "NotoSansJP-LICENSE.txt",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE",
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+    }
+  ]
+}

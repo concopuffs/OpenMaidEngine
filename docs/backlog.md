@@ -12,13 +12,13 @@ it; git history keeps the record.
 
 - **Native menu bar: look differences and undriven cases (AGERC menu 110).** The port runs every command either game
   can reach as native does: ｹﾞｰﾑ>終了, 画像の保存, the four ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (with the fullscreen top-edge
-  strip), ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報, the 設定 dialog's four commands and the keyboard mode (`engine-re.md`, "Native menu bar"
-  and "Screen mode"). It grays everything else, as native does. Still different:
+  strip), ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報 and the 設定 commands (both the shell's options panel since engine shell M3) and the
+  keyboard mode (`engine-re.md`, "Native menu bar" and "Screen mode"). It grays everything else, as native does.
+  Still different:
   - Smaller look differences. Native popups may extend past the game window (the ﾍﾙﾌﾟ popup spans x 744..989), but
     the port clamps them inside it. For the same reason, the window menu opens at the bar's top, not one row above
-    it as natively. Latin glyphs are drawn without ClearType's exact rasterization. The 設定 tab control is
-    `TCS_HOTTRACK`, and native's hover look is neither captured nor drawn. The fullscreen strip's minimize and
-    restore buttons use Windows 10's default hover colours, not captured ones.
+    it as natively. Latin glyphs are drawn without ClearType's exact rasterization. The fullscreen strip's minimize
+    and restore buttons use Windows 10's default hover colours, not captured ones.
   - Keyboard mode's pointer moves are not driven natively: the driver's posted moves do not reach Windows' menu
     loop. The port moves the selection without opening a dropdown, by Windows' rule. Escape in the loop is modelled
     on Windows' rule too, since the driver refuses ESC on native AGE. The strip's window-menu Move does nothing in
@@ -58,11 +58,9 @@ it; git history keeps the record.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
-- **Replace AGERC with an engine-owned shell (decided 2026-11-08).** The port still reads its ﾊﾞｰｼﾞｮﾝ情報 and 設定
-  dialogs from the game's `AGERC.DLL`. Kamidori's clean install ships that DLL packed: the file holds only its icon,
-  version and manifest resources, so on that install the port has no version or 設定 dialogs: their commands are
-  grayed. Native AGE shows them, in Japanese (`docs/modding/games/kamidori.md`). `NativeResourceTests`
-  and `EngineIdentityTests` read the translated install's `agerc.dll`, which has them in the file. The user decided:
+- **Replace AGERC with an engine-owned shell (decided 2026-11-08).** Kamidori's clean install ships `AGERC.DLL`
+  packed: the file holds only its icon, version and manifest resources, so a port that read its dialogs had no
+  version or 設定 dialogs there. The user decided:
   - At runtime the port reads game data, never game binaries (`AGE.EXE`, `AGERC.DLL`).
   - AGERC is AGE's stock front end, so the port replaces it as it replaces `AGE.EXE`. The engine keeps everything
     scripts can observe at native semantics: the settings registry (`SYS4REG.INI` keys and units), the services, the
@@ -72,11 +70,16 @@ it; git history keeps the record.
   - Presentation is both an in-window options panel and a desktop menu bar. Japanese labels stay close to AGE's
     unless that conflicts with the design.
 
-  The design is `superpowers/specs/2026-11-09-engine-shell-design.md` (accepted 2026-11-09). Its M1 (the engine
-  core) and M2 (the shell model: the bar, the fullscreen strip and 終了 come from it, on every install) are done.
-  Until M3, the shell's language is fixed to Japanese, so the translated Kamidori install shows a Japanese bar and
-  終了 where native shows English, and the strip's caption icon is blank. Done when the port reads no `AGERC.DLL` at
-  runtime and every option works on all three installs (spec §9).
+  The design is `superpowers/specs/2026-11-09-engine-shell-design.md` (accepted 2026-11-09). M1 (the engine core),
+  M2 (the shell model: the bar, the fullscreen strip and 終了) and M3 (the options panel, `OME.INI`, the bundled font
+  and the OME icon) are done, and the port reads no `AGERC.DLL`. Left for M4: the driver's `option` and `options`
+  steps on both targets, moving `himegari-settings-dialog`, `-version-dialog`, `-antifont-off` and
+  `-effect-skip-on-click` to them (they answer AGERC's buttons, so they pass only natively meanwhile), and a
+  Kamidori scenario. Done when every option works on all three installs through those steps (spec §9).
+- **Packaged executables carry Godot's icon.** The window, the fullscreen strip and 情報 show the OME icon
+  (`godot/assets/ome-icon.svg`, set at runtime), but the project sets no `application/config/icon` and the Windows
+  export no `.ico`, so `OME.exe` in a package and the taskbar before startup show Godot's. Done when both exports
+  carry the OME icon, built from the same SVG.
 - **Kamidori's Ghidra image is 4.33F.** The program `/kamidori/SYS4433/range_00400000.bin` and its annotations are
   the translation's 4.33F build. Native runs since 2026-11-08 use the clean install's 4.33G, whose code differs
   (`engine-re.md`, "Kamidori engine builds"). Kamidori addresses in the docs without a build are 4.33F's. Done when

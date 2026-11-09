@@ -448,6 +448,21 @@ The user accepted the three recommendations on 2026-11-09:
    - Build the panel with all its sections, the bundled font and the OME icon.
    - Retire 設定, ﾊﾞｰｼﾞｮﾝ情報, 動作環境 and the DLL readers (§7.4).
    - Add `user://OME.INI`.
+
+   Done 2026-11-09. `godot/OptionsPanel.cs` draws `ShellPanel`'s sections in Noto Sans JP over the frozen frame, and
+   `godot/Main.OptionsPanel.cs` opens it from the section commands and commits it: `ShellOptionsDraft` keeps 設定's
+   commit model, and 決定 writes the port options the player changed to `OME.INI` (`PortOptions`, `OmeIniStore`),
+   beside the saves under `--data-root`. `--language`, `--window-width`/`--window-height`, `--fps-counter` and
+   `--locator-hud` override the file for one run. The OME icon is ours (`godot/assets/ome-icon.svg`) on the window,
+   the strip and 情報; both assets are embedded in `OME.dll`. The DLL readers, the AGERC dialogs and their classic
+   controls are gone, and `ShellState.PanelAvailable` with them. Two choices made here:
+   - 設定's OK applies (and launches `CALLBACK_SETTING.BIN`) even without a change and ﾊﾞｰｼﾞｮﾝ情報's never does, so
+     the panel opened from ﾊﾞｰｼﾞｮﾝ情報 applies only an edit.
+   - While op `0x142`'s gate is 0, the panel still opens from the ungated 情報 commands, with the script-shared
+     sections read-only.
+
+   Until M4, the driver reaches the panel through `dialogs` and `answer` (its check boxes, sections, 決定 and
+   ｷｬﾝｾﾙ), and the four scenarios that answer AGERC's buttons pass only natively.
 4. **M4 Driving and docs.**
    - Add the `option` and `options` steps on both targets.
    - Move the four scenarios to them, and add the Kamidori scenario.

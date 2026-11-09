@@ -464,9 +464,9 @@ at 2.5M lines). All observe-only → parity preserved; all on `run`/`play`/`swee
 
 **Godot frontend** (Godot 4.7 .NET; project = `godot/`). Toolchain: `godot --headless --path godot
 --import` → `dotnet build godot/OME.csproj` → `godot [--headless] --path godot [-- <userargs>]`.
-The build stamps the engine version that ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 shows from `git describe --tags --match "v[0-9]*"
+The build stamps the engine version that the options panel's 情報 shows from `git describe --tags --match "v[0-9]*"
 --dirty=+ --always` (target `OmeVersion` in `godot/OME.csproj`); `-p:OmeVersion=<version>` sets it instead, and a
-build without git or a checkout shows "unknown" (`engine-re.md`, "Native menu bar", ﾊﾞｰｼﾞｮﾝ情報 names the port).
+build without git or a checkout shows "unknown" (`engine-re.md`, "Native menu bar", 情報 names the port).
 Plays the real bytecode with call-script execution on (subroutines run live). The game root is selected
 before catalog loading: `--game-root <directory>` wins, otherwise the directory containing the running
 executable is tried, then the current working directory. A candidate must contain `SYS4INI.BIN`; invalid
@@ -530,6 +530,11 @@ file under the compiler's libgcc and MinGW-w64 directories comes from one of the
 It also fails when the compiler's MinGW-w64 version (`__MINGW64_VERSION_*` from `_mingw.h`) differs from
 `release_tag`. Anything else, such as a static winpthreads (`libpthread.a`), needs its license reviewed and its
 notice shipped before the check may accept it.
+
+Both packagers also copy `notices/noto-sans-jp/LICENSE.txt` as `NotoSansJP-LICENSE.txt`, pinned the same way
+(`notices/noto-sans-jp/notices.json`): the SIL Open Font License of the Noto Sans JP font that `OME.dll` embeds for the
+options panel (`THIRD_PARTY_NOTICES.md`, "Noto Sans JP"). `test_package_notices.py` also checks that the committed
+font's SHA-256 is the one `THIRD_PARTY_NOTICES.md` records.
 
 Before reporting success, the command launches the staged executable as
 `OME --headless -- --package-smoke`. This asset-independent mode runs before game-root discovery
@@ -699,13 +704,23 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   never initializes GDI and is the cross-platform acceptance/debug mode. The selected backend and portable
   policy id are printed at startup.
 - `--window-width <pixels>` / `--window-height <pixels>` — override only the physical windowed client
-  dimensions; each omitted dimension defaults independently to the SYS4INI logical canvas. Godot keeps
-  that logical canvas and aspect-preserving letterboxing, so these options do not change VM coordinates,
-  AGE surfaces, layout, or backbuffer allocation. Values must be integers in `1..16384`; duplicate
-  options use the last value.
+  dimensions for this run; each omitted dimension defaults independently to `OME.INI`'s window size (below), else
+  the SYS4INI logical canvas. Godot keeps that logical canvas and aspect-preserving letterboxing, so these options
+  do not change VM coordinates, AGE surfaces, layout, or backbuffer allocation. Values must be integers in
+  `1..16384`; duplicate options use the last value.
 - `--fps-counter` — show Godot's rendered FPS and corresponding average frame time in the top-right corner,
-  refreshed four times per second. The overlay observes the presentation loop only; it does not alter VM
-  timing, input, compositor selection, or opcode handling.
+  refreshed four times per second, for this run, whatever `OME.INI` says. The overlay observes the presentation loop
+  only; it does not alter VM timing, input, compositor selection, or opcode handling.
+- `--language ja|en` — the engine shell's language for this run (the menu bar, the strip, 終了, the folder picker's
+  prompt and the options panel), whatever `OME.INI` says. Any other value fails startup. The game's own text is
+  unaffected.
+- **`OME.INI`** — the port's own options, shared by every game (engine shell spec §5.6): `[ui] Language` (`ja`, the
+  default, or `en`), `[display] WindowWidth`/`WindowHeight` (the windowed game area; 0 or a missing or invalid pair is
+  the canvas), `[debug] FpsCounter` and `LocatorHud` (0/1). It lives in Godot's `user://` folder, or beside the saves
+  under `--data-root`, so a driven run reads its sandbox's and never the player's; a self-test reads none. The
+  options panel's 画面 and OME sections edit it, and its 決定 writes only the options the player changed, so a flag's
+  value never reaches the file. A write keeps unknown sections and keys but drops comments. The startup log's
+  `[options]` line names the file and the values in effect.
 - `--no-menu-bar` — leave out the menu bar. By default every game gets the engine shell's bar (AGERC's menu 110,
   pruned by the game's `SYS4INI.BIN`) above the game canvas, drawn as native's Win32 bar: the window is 20 px taller,
   and the canvas, the cursor mapping and the dialogs sit below the bar (`engine-re.md`, "Native menu bar").
@@ -804,8 +819,8 @@ the directory is read-only) logs a `[locator]` warning, and the run keeps no map
 `wait-for-input` adds the
 run-relative page, page-start location, canonical wait script/offset, last show-text instruction and string
 offsets, text, and nested call stack. Use `--page-map <jsonl>` to override the output; pass that explicit path
-to `locate_page.py --map` when resolving a map copied from an export profile. `--locator-hud` shows
-`SC0000 P014 · wait SC0000@0x… · text SC0000@0x…` at launch; **F2**
+to `locate_page.py --map` when resolving a map copied from an export profile. `--locator-hud` (or `OME.INI`'s
+`debug:LocatorHud`) shows `SC0000 P014 · wait SC0000@0x… · text SC0000@0x…` at launch; **F2**
 toggles it and **F3** copies the current locator to the clipboard. The offset remains authoritative because
 branching/state can shift page ordinals between runs. Resolve a reported page with
 `py -3.11 -X utf8 tools/locate_page.py SC0000 14`, adding `--profile <profile>` for a game other than Himegari.
@@ -896,7 +911,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `point NAME X Y` | define a point for the session |
 | `speed FACTOR` | port: run the frame clock 0.05–8 times as fast |
 | `rand-seed SEED\|off` | draw op `0x60` from SEED's streams (0 to `0xffffffff`, decimal or hex), one per call site and the same on both targets, until the next `rand-seed`; `off` returns to the game's own draws. Every stream restarts at each `rand-seed`. The result reports what the period that just ended drew: `previous_seed`, `draws` and `sites`, the count per `SCRIPT@0xOFFSET`. Seed both targets at the same point, for example after loading one save, then compare the counts as well as the screens. The streams are defined in `docs/engine-re.md`, "Op 0x60 randomness". Native needs the profile's `[native.rand]` |
-| `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, AGERC's dialogs and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs, the folder picker, ﾊﾞｰｼﾞｮﾝ情報 and 設定). AGERC's dialogs list every static text and button of the dialog and its pages, hidden pages included, the topmost dialog first; `answer` presses the first match from the topmost dialog down, and a check box toggles. Steps split like a shell, so quote a label with spaces (`answer 'Return to title(&T)'`). Natively the press is a posted `BM_CLICK`, which AGE's thread takes only when it next reads its queue, as it would a user's click, so `answer` returns once AGE has taken it (10 s at most). 設定's first open in a process holds AGE's thread for about 2 s with its VRAM query (`engine-re.md`, "Native menu bar", 設定). The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
+| `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, AGERC's dialogs and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs, the folder picker and the options panel). AGERC's dialogs list every static text and button of the dialog and its pages, hidden pages included, the topmost dialog first; `answer` presses the first match from the topmost dialog down, and a check box toggles. The port's options panel lists itself in Japanese whatever its language: title 設定, as `text` the section shown, then the section's check boxes, 情報's ｸﾘｯﾌﾟﾎﾞｰﾄﾞにｺﾋﾟｰ, the six sections, 決定 and ｷｬﾝｾﾙ. `answer` takes a Japanese or shown label, mnemonics ignored (`効果音(&S)` matches 効果音): a check box toggles (a read-only section's refuses), a section shows, and 決定 (or `OK`) and ｷｬﾝｾﾙ (or `Cancel`) end the panel. Steps split like a shell, so quote a label with spaces (`answer 'Return to title(&T)'`). Natively the press is a posted `BM_CLICK`, which AGE's thread takes only when it next reads its queue, as it would a user's click, so `answer` returns once AGE has taken it (10 s at most). 設定's first open in a process holds AGE's thread for about 2 s with its VRAM query (`engine-re.md`, "Native menu bar", 設定). The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
 | `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
 | `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode, restoring the screen mode the game was in, and its result also reads `windowed`. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground`. Natively the restore does not activate the window ("What the native hooks do inside AGE") |
 | `menu NAME\|ID` | choose a menu-bar command as a user does. The menu refreshes first, and a grayed item fails the step. Names: `exit`, `save`, `load`, `version`, `save-screen`, `image-folder`, `fullscreen`, `windowed`, `skip`, `hide`, `auto`, `read-skip`, `sound-settings`, `message-settings`, `system-info`, `other-settings`; or a numeric `WM_COMMAND` id. The result prints the item's `label` and whether it was `checked` before. Native sends `WM_INITMENU` (AGE has AGERC refresh the items), reads the item, then posts `WM_COMMAND`; the port runs the same refresh and command on its drawn bar. In fullscreen the menu is the top-edge strip's, so the step fails unless the strip shows (hold the pointer on row 0 past op `0x149`'s delay first); native then refreshes the strip with `WM_ENTERMENULOOP` and posts `WM_COMMAND` to it |
@@ -1012,6 +1027,10 @@ preselects the Desktop, so `SaveBMPPath` becomes the sandbox Desktop and `CG0000
 with the `screenshot-*` shot taken before it. On both targets they differ only in the wait indicator, and the BMP
 headers are identical. Native writes `SYS4REG.INI` when it exits, so `SaveBMPPath` shows only after `stop`; the port
 writes it at once (`engine-re.md`, "Native menu bar", Screenshots).
+
+Since engine shell M3 the port's 設定 and ﾊﾞｰｼﾞｮﾝ情報 are its options panel, which has none of AGERC's controls. The
+next four scenarios answer AGERC's buttons, so until M4 moves them to `option` steps they pass only natively, and
+the port results below describe the AGERC dialogs the port had before M3.
 
 `himegari-version-dialog.steps` opens ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 on SC0000 page 1. It lists the dialog, takes a shot, answers OK,
 and checks that no dialog is left and that the game goes on to page 2 (`SC0000@0x874`). Both targets list the same

@@ -24,10 +24,15 @@ public partial class Main
     public override void _Input(InputEvent e)
     {
         if (_selftest) return;
-        NoteInputSource(e);
         if (DropForExclusiveDrive(e))
         {
             GetViewport().SetInputAsHandled();
+            return;
+        }
+        // The options panel is modal: its keys first, then its controls as GUI input; nothing reaches the game.
+        if (_optionsPanel != null)
+        {
+            if (_optionsPanel.HandleInput(e)) GetViewport().SetInputAsHandled();
             return;
         }
         // The menu bar is the window's non-client area: its own input never reaches the game, and an open menu's

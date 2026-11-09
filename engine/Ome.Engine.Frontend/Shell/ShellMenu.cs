@@ -88,6 +88,21 @@ public sealed class ShellMenu
         return bar;
     }
 
+    /// <summary>Re-text a bar this profile's tree built in another language, as the panel's language change needs: a
+    /// fresh copy in this menu's language has the same shape, so each item takes its counterpart's text. Refresh
+    /// then re-texts the commands from the state as usual.</summary>
+    public void Relabel(IReadOnlyList<MenuItem> bar) => Copy(bar, CreateBar());
+
+    private static void Copy(IReadOnlyList<MenuItem> into, IReadOnlyList<MenuItem> from)
+    {
+        if (into.Count != from.Count) throw new InvalidOperationException("the bar is not this menu's tree");
+        for (int i = 0; i < into.Count; i++)
+        {
+            into[i].Text = from[i].Text;
+            Copy(into[i].Children, from[i].Children);
+        }
+    }
+
     /// <summary>The whole tree as menu items, before any pruning.</summary>
     public static List<MenuItem> Build(ShellStrings strings) => Build(Tree, strings);
 

@@ -28,6 +28,7 @@
 *.sh text eol=lf
 *.sln text eol=lf
 *.steps text eol=lf
+*.svg text eol=lf
 *.toml text eol=lf
 *.tscn text eol=lf
 *.tres text eol=lf

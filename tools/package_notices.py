@@ -24,6 +24,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 GODOT_NOTICES = REPO / "notices/godot/notices.json"
 MINGW_NOTICES = REPO / "notices/mingw-w64/notices.json"
+NOTO_NOTICES = REPO / "notices/noto-sans-jp/notices.json"
 DEPS_FILE = "OME.deps.json"
 _ASSET_KINDS = ("runtime", "native", "runtimeTargets", "resources")
 

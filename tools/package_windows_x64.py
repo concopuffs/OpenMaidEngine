@@ -44,9 +44,13 @@ FORBIDDEN_FILES = (
 )
 LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
-# Godot's notices, and the MinGW-w64 runtime's, which the shim and FFmpeg DLLs link statically
-# (tools/mingw_runtime_notices.py checks those links).
-PINNED_NOTICES = package_notices.pinned_notices() + package_notices.pinned_notices(package_notices.MINGW_NOTICES)
+# Godot's notices, the MinGW-w64 runtime's, which the shim and FFmpeg DLLs link statically
+# (tools/mingw_runtime_notices.py checks those links), and the license of the font OME.dll embeds.
+PINNED_NOTICES = (
+    package_notices.pinned_notices()
+    + package_notices.pinned_notices(package_notices.MINGW_NOTICES)
+    + package_notices.pinned_notices(package_notices.NOTO_NOTICES)
+)
 
 
 def _resolved_directory(path: Path, label: str) -> Path:

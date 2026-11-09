@@ -60,6 +60,16 @@ Foundation, Inc.), under GPLv3 with the GCC Runtime Library Exception 3.1, which
 Each MinGW build checks every runtime object it links against this list (`docs/tools-reference.md`, "Third-party
 notices"). Linux packages link no MinGW code.
 
+## Noto Sans JP
+
+The engine shell's options panel draws its text in [Noto Sans JP](https://github.com/notofonts/noto-cjk) Regular,
+version 2.004: © 2014-2021 Adobe (http://www.adobe.com/), under the SIL Open Font License, Version 1.1. Noto is a
+trademark of Google Inc. The font is the unmodified `Sans/SubsetOTF/JP/NotoSansJP-Regular.otf` of the noto-cjk
+repository's `Sans2.004` tag (SHA-256 `dff723ba59d57d136764a04b9b2d03205544f7cd785a711442d6d2d085ac5073`), kept in
+`godot/assets/` and embedded in `OME.dll`; its name table keeps the copyright and license records. Every package
+ships the repository's OFL text as `NotoSansJP-LICENSE.txt`. The repository keeps that file unmodified in
+`notices/noto-sans-jp/`, pinned (`notices.json`) to the same tag.
+
 ## Eushully-Decompiler research
 
 Early SYS4 instruction decoding and the initial opcode ABI/catalog were informed by Kelebek's public

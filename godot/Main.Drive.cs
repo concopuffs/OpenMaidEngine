@@ -237,8 +237,7 @@ public partial class Main
             if (main._exitConfirmation is { } exit) dialogs.Add(exit.Describe());
             if (main._scriptErrorDialog is { } error) dialogs.Add(error.Describe());
             if (main._screenshotFolderDialog?.Describe() is { } folder) dialogs.Add(folder);
-            // EnumWindows order: the newest, topmost dialog first.
-            for (int i = main._agercDialogs.Count - 1; i >= 0; i--) dialogs.Add(main._agercDialogs[i].Describe());
+            if (main._optionsPanel is { } panel) dialogs.Add(panel.Describe());
             return dialogs;
         }
 
@@ -250,15 +249,12 @@ public partial class Main
                 {
                     ["text"] = (string?)folder["text"], ["answered"] = folderButton,
                 };
-            for (int i = main._agercDialogs.Count - 1; i >= 0; i--)
+            if (main._optionsPanel is { } panel)
             {
-                Win32TemplateDialog agerc = main._agercDialogs[i];
-                System.Text.Json.Nodes.JsonObject described = agerc.Describe();
-                if (agerc.Press(button) is { } agercButton)
-                    return new System.Text.Json.Nodes.JsonObject
-                    {
-                        ["text"] = (string?)described["text"], ["answered"] = agercButton,
-                    };
+                // The section the press happened on, before a section button or 決定 changes it.
+                string? section = (string?)panel.Describe()["text"];
+                if (panel.Press(button) is { } panelButton)
+                    return new System.Text.Json.Nodes.JsonObject { ["text"] = section, ["answered"] = panelButton };
             }
             if (main._scriptErrorDialog is { } error && error.Press(button) is { } errorButton)
                 return new System.Text.Json.Nodes.JsonObject

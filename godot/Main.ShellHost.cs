@@ -1,4 +1,3 @@
-using Ome.Engine.Frontend.NativeMenu;
 using Ome.Engine.Frontend.Shell;
 
 /// <summary>
@@ -8,8 +7,8 @@ using Ome.Engine.Frontend.Shell;
 /// </summary>
 public partial class Main : IShellHost
 {
-    /// <summary>The shell's text. Japanese until the options panel's ui:Language picks the table (spec §5.6).</summary>
-    private readonly ShellStrings _shellStrings = ShellStrings.Load(ShellStrings.FallbackLanguage);
+    /// <summary>The shell's text, in OME.INI's ui:Language (spec §5.6; Main.OptionsPanel.cs).</summary>
+    private ShellStrings _shellStrings = ShellStrings.Japanese;
 
     private IShellHost Shell => this;
 
@@ -17,13 +16,8 @@ public partial class Main : IShellHost
 
     void IShellHost.RequestClose() => RequestUnforcedClose();   // PostMessage(WM_CLOSE, 0): the 終了 dialog
 
-    /// <summary>Until the options panel exists, the sections open AGERC's own dialogs from the game's AGERC.DLL
-    /// (Main.AgercDialogs.cs): 情報 is ﾊﾞｰｼﾞｮﾝ情報 (host command 2), and the rest are 設定's tabs (host command 9).</summary>
-    void IShellHost.OpenPanel(ShellSection section, bool diagnostics)
-    {
-        if (section == ShellSection.Info && !diagnostics) OpenVersionDialog();
-        else OpenSettingsDialog(AgercSettingsText.StartTab(section, diagnostics));
-    }
+    /// <summary>The options panel (Main.OptionsPanel.cs), which replaces AGERC's 設定 and ﾊﾞｰｼﾞｮﾝ情報.</summary>
+    void IShellHost.OpenPanel(ShellSection section, bool diagnostics) => OpenOptionsPanel(section, diagnostics);
 
     bool IShellHost.SwitchScreenMode(bool windowed, string source) => SwitchScreenMode(windowed, source);
 

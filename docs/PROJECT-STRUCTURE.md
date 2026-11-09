@@ -54,6 +54,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                         notices.json pins each (packages ship them as Godot-*.txt)
     ├── notices/mingw-w64/                    the MinGW-w64 runtime's COPYING.MinGW-w64-runtime.txt (v11.0.1), unmodified;
     │                                         notices.json pins it (Windows packages ship MinGW-w64-runtime-COPYING.txt)
+    ├── notices/noto-sans-jp/                 noto-cjk's OFL LICENSE (Sans2.004) as LICENSE.txt, unmodified; notices.json
+    │                                         pins it (packages ship NotoSansJP-LICENSE.txt for the embedded panel font)
     ├── global.json                           pins the validated .NET 8 SDK feature band
     ├── Directory.Build.targets               makes a Debug build recompile when Optimize changes
     │                                         (drive.py port start --optimize)
@@ -237,14 +239,13 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── Ome.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, WAV sanitization, the
-    │                                       game-driving control protocol (Control/), the 設定 dialog's
-    │                                       texts (NativeMenu/), PE resource readers for dialog
-    │                                       templates and icons, with the engine identity ﾊﾞｰｼﾞｮﾝ情報
-    │                                       shows (NativeResources/), and the engine shell's model
-    │                                       (Shell/: its commands, menu tree with prune/refresh, state,
-    │                                       options, string tables in Strings/*.json, the 終了
-    │                                       dialog's texts and IShellHost, the frontend services its
-    │                                       commands reach)
+    │                                       game-driving control protocol (Control/), and the engine
+    │                                       shell's model (Shell/: its commands, menu tree with
+    │                                       prune/refresh, state, options, string tables in
+    │                                       Strings/*.json, the 終了 dialog's texts, IShellHost (the
+    │                                       frontend services its commands reach), the options panel's
+    │                                       layout, draft and 情報 rows, the engine identity, and the
+    │                                       port options with their OME.INI store)
     │   └── Ome.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
@@ -303,12 +304,13 @@ that the bar and the `godot/Win32Dialog.cs` dialogs lay their labels out with. `
 between the window and fullscreen and runs fullscreen's top-edge strip, which `godot/SystemMenuStrip.cs` draws
 around a second `NativeMenuBar`. `godot/Main.Screenshot.cs` saves the
 F1 and 表示画面を保存 screenshot BMPs and runs 画像の保存場所 through `godot/ScreenshotFolderDialog.cs`, the shell's
-folder picker. `godot/Main.AgercDialogs.cs` opens AGERC's own dialogs, stacking one opened from another:
-`godot/Win32TemplateDialog.cs` builds one, with any child pages, from its AGERC.DLL template with the classic controls
-(`godot/Win32ClassicButton.cs`, `Win32ClassicCheckBox.cs`, `Win32GroupBox.cs`, `Win32Trackbar.cs`,
-`Win32TabControl.cs`, `Win32StaticText.cs`, `Win32Edit.cs`, `Win32StaticImage.cs`, `Win32StaticEdge.cs`, with the
-3D edges in `Win32Edges.cs`). `godot/AgercVersionDialog.cs` is ﾊﾞｰｼﾞｮﾝ情報's procedure, `godot/AgercSettingsDialog.cs`
-is 設定's with its four pages, and `godot/AgercSystemInfo.cs` gathers the 動作環境 page's values.
+folder picker. `godot/Main.OptionsPanel.cs` opens and closes the shell's options panel (設定, ﾊﾞｰｼﾞｮﾝ情報 and
+動作環境's replacement), commits its draft and the port options, loads `OME.INI`, and gathers 情報's about and
+diagnostics rows; `godot/OptionsPanel.cs` draws the panel. `godot/ShellAssets.cs` loads the shell's own assets, which
+`godot/assets/` holds (Godot ignores the folder) and `godot/OME.csproj` embeds in `OME.dll`: Noto Sans JP for the
+panel and the OME icon (`ome-icon.svg`) for the window, the strip and 情報. The 終了 dialog and the script error box are
+classic Win32 look-alikes (`godot/Win32Dialog.cs`, `Win32DialogFrame.cs`, `Win32ClassicButton.cs`,
+`Win32ClassicRadio.cs`, `Win32StaticText.cs`, `Win32DialogIcon.cs`).
 
 `engine/Ome.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
 Both `engine/OmeEngine.sln` and `godot/OME.sln` include the project; Godot and `Ome.Engine.Tests` consume it
