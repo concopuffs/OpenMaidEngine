@@ -43,6 +43,10 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
 
 ## Runtime architecture (learned 2026-07-06 — read before writing new hooks)
 
+- **Import Frida as `from frida_runtime import frida`**, never plain `import frida` (put `tools/` on `sys.path`
+  first, as the scripts here do). Each process that injects gets a `%TEMP%\frida-<id>` folder of about 53 MB, and
+  only a device-manager shutdown removes it. `tools/frida_runtime.py` registers `frida.shutdown()` at exit; before
+  it, every run left its folder (487 had piled up by 2026-11-08).
 - **Attach, don't spawn**, and **use the pid** (`frida.get_local_device().enumerate_processes()` — the
   module-level `frida.enumerate_processes()` was removed in frida 17.x). The process is `AGE.EXE`.
   Two tools spawn on purpose: `capture_global_writes.py --spawn` (captures from boot) and the game driver's native

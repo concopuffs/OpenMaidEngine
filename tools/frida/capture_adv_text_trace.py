@@ -91,7 +91,7 @@ send({kind:'ready',base:mod.base.toString()});
 
 
 def main():
-    import frida
+    from frida_runtime import frida
     seconds = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 45
     proc = sys.argv[2] if len(sys.argv) > 2 else "AGE.EXE"
     target = int(proc) if proc.isdigit() else proc

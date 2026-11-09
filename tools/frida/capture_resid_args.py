@@ -139,7 +139,7 @@ def analyze():
 
 
 def capture(proc):
-    import frida
+    from frida_runtime import frida
     offs = data2_offsets()
     js = (JS_TEMPLATE
           .replace("__OFFSETS__", json.dumps(sorted(offs.keys())))

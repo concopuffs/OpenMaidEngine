@@ -127,7 +127,7 @@ if(best){
 
 
 def scan(pid):
-    import frida
+    from frida_runtime import frida
     if not SIG.exists():
         raise SystemExit("no signature; run --build-sig first")
     sig = json.loads(SIG.read_text(encoding="utf-8"))

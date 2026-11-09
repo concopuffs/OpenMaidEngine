@@ -110,6 +110,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       language, input, screenshots, VM position, sandboxed saves
     │   ├── drive_native.py, drive_port.py      the two targets: Frida daemon for AGE; launcher for the port's
     │   │                                       --control channel
+    │   ├── frida_runtime.py                    `frida` with shutdown at exit (removes its %TEMP% folder);
+    │   │                                       every Frida tool imports Frida through it
     │   ├── drive_mcp.py (+ test_drive_mcp.py)  MCP server: the driver's operations as five agent tools
     │   ├── drive/                              the driver's data: <profile>.toml (points, sandbox settings,
     │   │                                       native engine pointer / polling / dialog policy),

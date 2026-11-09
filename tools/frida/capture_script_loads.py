@@ -107,7 +107,7 @@ def analyze(out_path: Path = OUT) -> int:
 
 
 def capture(seconds: int) -> int:
-    import frida
+    from frida_runtime import frida
 
     names = resource_names()
     count = 0

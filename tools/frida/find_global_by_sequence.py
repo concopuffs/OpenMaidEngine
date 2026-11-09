@@ -97,7 +97,7 @@ send({ready:true});
 
 
 def main():
-    import frida
+    from frida_runtime import frida
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     proc = args[0] if args else "AGE.EXE"
     js = JS_TEMPLATE.replace("__OFF2FN__", json.dumps(data2_off2fn()))

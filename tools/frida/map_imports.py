@@ -94,7 +94,7 @@ send({kind: 'alldone'});
 
 def collect():
     """Attach to the live game; return (exports_list, module_base_va, module_bytes)."""
-    import frida
+    from frida_runtime import frida
     exports = []
     state = {"base": None, "size": 0, "done": False}
     mem = bytearray()

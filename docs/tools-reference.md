@@ -1183,8 +1183,15 @@ these flags; you need them directly only to drive the port from another client.
 
 ## Runtime capture (Frida)
 
+Every Frida tool imports Frida as `from frida_runtime import frida` (`tools/frida_runtime.py`). Frida unpacks its
+injector, about 53 MB of `frida-helper-*.exe` and per-architecture `frida-agent.dll`, into a new
+`%TEMP%\frida-<id>` folder in each process that injects, and removes that folder only when the device manager
+closes. The module calls `frida.shutdown()` at exit. Before it existed, every capture run and native driving
+session left one folder behind. A process that is killed still leaves its folder.
+
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
+| `tools/frida_runtime.py` | The `frida` module with `frida.shutdown()` registered at exit, so a run removes its `%TEMP%\frida-<id>` injector folder. Every Frida tool and `drive_native.py` import Frida through it. | *(imported)* | — |
 | `tools/frida/capture_graphics.py` | Attach Frida to the running game; log archive reads/opens (ground-truth for asset resolution). See `tools/frida/README.md`. | `py -3.11 -u -X utf8 tools/frida/capture_graphics.py [AGE.EXE]` | running game → `build/frida-reads.log`, `build/frida-opens.log` |
 | `tools/frida/capture_load_order.py` | **Primary asset-resolution capture:** recover a scene's per-asset load order from exact-start `ReadFile` reads → names via the index; confirms `resId==file_number`. Attach; replay scene; `--analyze`. | `py -3.11 -u -X utf8 tools/frida/capture_load_order.py [pid]` · `--analyze` | running game + index → `build/frida-load-order.jsonl`, `…-result.json` |
 | `tools/frida/locate_resource_load.py` | Phase-1 locator: back-traces asset-opens to find the native AGF load chain (`0x16d5d7→0x74f1f`). | `py -3.11 -u -X utf8 tools/frida/locate_resource_load.py [pid]` · `--aggregate` | running game → `build/frida-resource-bt.jsonl` |

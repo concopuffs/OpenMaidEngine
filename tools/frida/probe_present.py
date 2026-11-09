@@ -103,7 +103,7 @@ setInterval(() => { send({ kind:'tick', t: Date.now(), cnt: cnt, hasctx: ctx!==n
 
 
 def capture(seconds, proc):
-    import frida
+    from frida_runtime import frida
     OUT.parent.mkdir(parents=True, exist_ok=True)
     ticks = []
 

@@ -132,7 +132,7 @@ send({kind:'ready', base:mod.base.toString(),
 
 
 def main():
-    import frida
+    from frida_runtime import frida
 
     args = sys.argv[1:]
     seconds = 20

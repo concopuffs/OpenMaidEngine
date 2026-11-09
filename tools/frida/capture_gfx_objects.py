@@ -56,7 +56,7 @@ send({kind:'ready', base: mod.base.toString(), opfetch: OPFETCH.toString()});
 
 
 def main():
-    import frida
+    from frida_runtime import frida
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     proc = args[0] if args else "AGE.EXE"
     secs = int(args[1]) if len(args) > 1 else 20

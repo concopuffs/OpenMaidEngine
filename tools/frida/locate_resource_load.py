@@ -123,7 +123,7 @@ send({ready: true});
 
 
 def capture(proc):
-    import frida
+    from frida_runtime import frida
     offsets = load_data2_offsets()
     js = JS_TEMPLATE.replace("__OFFSETS__", json.dumps(sorted(offsets.keys())))
     OUT.parent.mkdir(parents=True, exist_ok=True)

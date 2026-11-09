@@ -11,10 +11,11 @@ build/frida-reads.log as `path<TAB>offset<TAB>size`.
 
 Usage: py -3.11 -u -X utf8 tools/frida_capture_graphics.py [process_name]   (default AGE.EXE)
 """
-import frida, sys, time
+import sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import paths
+from frida_runtime import frida
 
 proc = sys.argv[1] if len(sys.argv) > 1 else "AGE.EXE"
 OUT = paths.BUILD / "frida-reads.log"

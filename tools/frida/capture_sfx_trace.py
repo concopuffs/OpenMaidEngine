@@ -62,7 +62,7 @@ install();
 """
 
 def main():
-    import frida
+    from frida_runtime import frida
     args = sys.argv[1:]
     numbers = [int(a) for a in args if a.isdigit()]
     seconds = numbers[0] if numbers else 30

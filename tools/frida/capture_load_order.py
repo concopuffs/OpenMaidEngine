@@ -121,7 +121,7 @@ def analyze():
 
 
 def capture(proc):
-    import frida
+    from frida_runtime import frida
     OUT.parent.mkdir(parents=True, exist_ok=True)
     log = open(OUT, "w", encoding="utf-8")
     exact, _ = index_by_archive()

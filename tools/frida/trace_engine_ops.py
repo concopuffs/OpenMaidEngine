@@ -70,7 +70,7 @@ rpc.exports = { stats(){ return total; }, flush(){ flush(); return total; } };
 
 
 def capture(hook, seconds, proc):
-    import frida
+    from frida_runtime import frida
     OUT.parent.mkdir(parents=True, exist_ok=True)
     hook_off = TICK_OFF if hook == "tick" else OPFETCH_OFF
     dedupe = 1 if hook == "operand" else 0

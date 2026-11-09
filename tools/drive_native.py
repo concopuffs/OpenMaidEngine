@@ -529,7 +529,7 @@ class Daemon:
 
     # AGE -------------------------------------------------------------------------------------------
     def launch(self, folders: dict[int, Path] | None) -> None:
-        import frida
+        from frida_runtime import frida
         device = frida.get_local_device()
         engine_ctx = ENGINE_CTX_TOML.read_text(encoding="utf-8") if ENGINE_CTX_TOML.is_file() else None
         # An attached AGE is the user's own; only a spawned one is kept in the background, unless --foreground.
@@ -1221,7 +1221,7 @@ def restore(folder: str) -> int:
         raise DriveError(f"{source} does not look like a save folder copy (no SAVE\\ or SYS4REG.INI)")
     if core.read_session("native") is not None:
         raise DriveError("stop the running native session first")
-    import frida
+    from frida_runtime import frida
     if any(process.name.upper() == "AGE.EXE" for process in frida.get_local_device().enumerate_processes()):
         raise DriveError("close AGE before restoring its saves")
     live = core.live_root()

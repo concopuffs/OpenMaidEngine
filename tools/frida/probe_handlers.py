@@ -13,6 +13,9 @@ Usage: py -3.11 -u -X utf8 tools/frida/probe_handlers.py [pid|AGE.EXE]
 """
 import sys
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 JS = r"""
 const mod = Process.getModuleByName('AGE.EXE');
@@ -33,7 +36,7 @@ send({kind:'ready', base: mod.base.toString()});
 
 
 def main():
-    import frida
+    from frida_runtime import frida
     proc = next((a for a in sys.argv[1:] if not a.startswith("-")), "AGE.EXE")
 
     def on_message(msg, data):

@@ -163,7 +163,7 @@ def build_manifest(
 
 
 def capture(proc: str, *, overwrite: bool = False) -> int:
-    import frida
+    from frida_runtime import frida
 
     provenance = profile_provenance()
     OUTDIR.mkdir(parents=True, exist_ok=True)

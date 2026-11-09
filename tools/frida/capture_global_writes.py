@@ -97,7 +97,7 @@ rpc.exports = { flush(){ flush(); return total; }, stats(){ return total; } };
 
 
 def run(mode, seconds, exe):
-    import frida
+    from frida_runtime import frida
     RAW.parent.mkdir(parents=True, exist_ok=True)
     raw = open(RAW, "w", encoding="utf-8")
     n = {"rows": 0}
