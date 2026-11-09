@@ -3,7 +3,7 @@
 
 Hooks ``script_frame_load_resource@0x40e980`` after AGE.EXE unpacks.  Its third
 argument is the packed SYS4 resource id; base-table ids resolve directly through
-``build/asset-index.json``.  The resulting ordered log is the Phase-B0 answer key
+``build/games/<profile>/asset-index.json``.  The resulting ordered log is the Phase-B0 answer key
 for boot, title, New Game, and top-level scene handoffs.
 
     py -3.11 -u -X utf8 tools/frida/capture_script_loads.py 30

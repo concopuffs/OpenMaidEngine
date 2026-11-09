@@ -14,7 +14,7 @@ SetDIBitsToDevice). Report each candidate's call rate; the one that sits at a st
 
 Run (game running, sitting in / actively playing an ADV scene):
     py -3.11 -X utf8 tools/frida/probe_present.py [seconds]
-Just play normally (no Ctrl needed — frame rate is mode-independent). Writes build/frida-present.jsonl.
+Just play normally (no Ctrl needed — frame rate is mode-independent). Writes build/games/<profile>/frida-present.jsonl.
 """
 import json
 import statistics

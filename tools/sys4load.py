@@ -48,7 +48,7 @@ except ImportError:
     SEMANTICS = {}
 
 # Global-variable labels (optional): annotate global operands from the merged registry
-# build/globals.json (curated vm-map/globals.toml over the auto shape map), produced by
+# build/games/<profile>/globals.json (curated vm-map/globals.toml over the auto shape map), produced by
 # tools/globals_build.py --build. Curated entries show their name+category; the auto tail
 # keeps only high/med confidence to stay readable. Degrades to {} if the file is absent.
 GLOBAL_ATYPES = {3, 4, 5, 6, 8}          # global-int/float/string/ptr/string-ptr
@@ -84,7 +84,7 @@ GLOBAL_LABELS = _load_global_labels()
 
 def _load_callscript_names() -> dict:
     """id -> script name. `call-script <id>` (op 0x03) is a raw index into the SYS4INI file
-    table; build/callscript-names.json maps every id to its script name (see docs/engine-re.md)."""
+    table; build/games/<profile>/callscript-names.json maps every id to its script name (see docs/engine-re.md)."""
     try:
         p = paths.BUILD / "callscript-names.json"
         data = json.loads(p.read_text(encoding="utf-8"))

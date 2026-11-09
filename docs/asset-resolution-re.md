@@ -29,12 +29,12 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
   `0x23`'s file is not obvious from the name space alone — resolution is required.
 - **Asset name spaces:** DATA2 = `EV*`/`EVM*` stills (985). DATA5 = `MVB*`/`OP`/`ED` movies (210).
   DATA3 = `.OGG` audio (`BGM*`, `ANA*` voice).
-- **The resolution chain is opaque statically.** `CGINIT` (`build/data/CGINIT.json`) is a
+- **The resolution chain is opaque statically.** `CGINIT` (`build/games/himegari/data/CGINIT.json`) is a
   925-column *numeric* record table (row-major, sparse) — **not** an id→filename map.
   **`SYS4INI.BIN` (magic `S4IC422`) is the authoritative asset index** the game + `BinExtractALF`
   use (name ↔ archive ↔ offset ↔ size). Filenames aren't plain ASCII because the whole directory
   is **LZSS-compressed** (not encrypted). **DONE (2026-07-06):** `tools/parse_sys4ini.py` parses it
-  → `build/asset-index.json` (13206 entries). See step 1 below.
+  → `build/games/himegari/asset-index.json` (13206 entries). See step 1 below.
 - **Frida file-I/O is noisy.** `ReadFile` hooks on `DATA2.ALF` capture reads during the opening, but
   the offsets/spans don't line up with extracted AGF sizes → the game likely **memory-maps** the
   archives (so `ReadFile` offsets are OS paging, not clean per-asset loads) and/or uses async reads.
@@ -43,7 +43,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
 ## The RE plan (ordered)
 
 1. **Parse `SYS4INI` (S4IC422) → an asset index** `{name, archive, offset, size}`. **✅ DONE
-   (2026-07-06).** `tools/parse_sys4ini.py` → `build/asset-index.json`: 5 archives (DATA1–5),
+   (2026-07-06).** `tools/parse_sys4ini.py` → `build/games/himegari/asset-index.json`: 5 archives (DATA1–5),
    13206 real entries (2 `@` placeholders skipped). **Format:** `uint32 packed_size @0x134`, then an
    LZSS stream at `0x138` running to EOF (GARbro-style: 0x1000 zero-filled ring buffer, init pos
    0xFEE, control bits LSB→MSB, 1=literal / 0=two-byte backref `off=(hi&0xf0)<<4|lo`, `len=3+(hi&0xf)`).
@@ -82,7 +82,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    catalog construction/order, but they do not describe runtime resolution. SC0000 starting at zero hid
    the mistake, while later large ids often fell outside the invented scene range and happened to reach the
    port's former raw fallback. Low raw ids used from later scripts could instead be silently misresolved.
-   `tools/resolve_asset.py` and `build/asset-sections.json` are therefore correlation/manifest-inventory
+   `tools/resolve_asset.py` and `build/games/himegari/asset-sections.json` are therefore correlation/manifest-inventory
    diagnostics only; they must not drive runtime lookup.
 
    `0x1f9` and `0x249` also do not represent scene-local versus raw addressing. Both pass the same packed
@@ -146,10 +146,10 @@ rendering what the executed bytecode + the map produce (never a hardcoded image)
 ## Status
 
 A2b-background: **steps 1–3 landed; step 2's packed resolver was corrected 2026-07-21.** Step 1 =
-`build/asset-index.json`. Step 2 originally normalized through inferred per-scene sections; native RE proved
+`build/games/himegari/asset-index.json`. Step 2 originally normalized through inferred per-scene sections; native RE proved
 runtime operands are already universal packed ids, and every typed runtime facade now uses that contract.
 `tools/resolve_asset.py` and
-`build/asset-sections.json` remain grouping/correlation diagnostics, not runtime inputs. Step 3 = **first-pass
+`build/games/himegari/asset-sections.json` remain grouping/correlation diagnostics, not runtime inputs. Step 3 = **first-pass
 render** (ResourceMap + GodotAdvHost texture ops → TextureRect compositing): the full-screen event-CG
 layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphics geometry/blend
 subsystem** — native geometry ops (`0x208` + sprite position/animation) so sprites/`BG*` position, plus
@@ -200,7 +200,7 @@ loads that result through `AudioStreamWav.LoadFromBuffer` without seek errors.
 
 ## Runtime asset-VFS track (VFS-A/B/C complete 2026-07-11)
 
-The pre-extracted tree and `build/textures/*.BMP` pipeline were a Phase-A bootstrap, not the desired final
+The pre-extracted tree and `build/games/himegari/textures/*.BMP` pipeline were a Phase-A bootstrap, not the desired final
 runtime. The native-compatible target is a read-only virtual filesystem that preserves AGE's translation/mod
 behavior:
 
@@ -329,8 +329,8 @@ translated runs (`run-godot.cmd -Kamidori -TranslationPatch`).
    at the indexed offset/size. Before that fallback, probe the configured loose override roots by the record's
    exact basename. `Sys4AssetStore` opens a separate read-only file handle per request and constrains archive
    seek/read operations to the record range. `Sys4ScriptProvider` now loads both root scenes and nested
-   `call-script` targets through this seam; `ResourceMap` uses the same live catalog. `build/asset-index.json`,
-   `build/asset-sections.json`, `build/callscript-names.json`, and `extracted/` are validation/temporary
+   `call-script` targets through this seam; `ResourceMap` uses the same live catalog. `build/games/himegari/asset-index.json`,
+   `build/games/himegari/asset-sections.json`, `build/games/himegari/callscript-names.json`, and `extracted/` are validation/temporary
    graphics-audio artifacts, not script-runtime dependencies.
 2. **AAI append mount (VFS-B DONE).** `Sys4AssetCatalog` also parses the installed `APPEND01.AAI`
    (`S4AC422`) and mounts its paired `APPEND01.ALF`. This is a separate selector-keyed catalog, not a
@@ -389,7 +389,7 @@ translated runs (`run-godot.cmd -Kamidori -TranslationPatch`).
    retains bytecode operands unchanged instead of asking the host for scene normalization. Godot caches
    decoded RGBA and movie identities by the full packed id, preserving AAI selectors rather than colliding
    with equal low indexes in the base catalog. It supplies synchronous dimensions to opcode `0x208` and no
-   longer reads `build/textures/*.BMP`. BGM remains direct-name. Focused regressions cover SC0010's low
+   longer reads `build/games/himegari/textures/*.BMP`. BGM remains direct-name. Focused regressions cover SC0010's low
    `0x21` texture and `0x120..0x122` voices plus append-pack identity. Extraction, grouping, and conversion
    tools remain diagnostics.
 
@@ -405,7 +405,7 @@ translated runs (`run-godot.cmd -Kamidori -TranslationPatch`).
 - AGF: a sample matrix covers compressed/uncompressed sections, 4/8/24-bit source pixels, type 1/2, and
   alpha/no-alpha. Decoded dimensions and RGBA hashes/pixels match GARbro or `AGF2BMP2AGF`; `SO001.AGF`
   specifically decodes as 800×300 with its alpha plane intact.
-- End to end: SC0000 can run without consulting `extracted/` or `build/textures`; slot 17 receives SO001,
+- End to end: SC0000 can run without consulting `extracted/` or `build/games/himegari/textures`; slot 17 receives SO001,
   the translucent textbox/button chrome appears, root `.BIN` overrides still win, and the standard VM/Godot
   validation matrix remains green.
 
@@ -423,8 +423,8 @@ VFS-C passes its bounded gates in `AgfDecoderTests`: synthesized fixtures cover 
 Five installed assets spanning raw/compressed metadata and pixel/alpha combinations match the existing
 `AGF2BMP2AGF` BMP oracle pixel-for-pixel. SO001 resolves through universal raw id `0x337e`, decodes to
 800×300 with intermediate alpha values, and is inherited in surface slot 17 before SC0000. A windowed
-page-1 capture with `build/textures/` moved aside showed the translucent textbox edge and bottom-right
-controls. Texture runtime no longer consults `extracted/` or `build/textures/`.
+page-1 capture with `build/games/himegari/textures/` moved aside showed the translucent textbox edge and bottom-right
+controls. Texture runtime no longer consults `extracted/` or `build/games/himegari/textures/`.
 
 Audio byte migration passes its bounded gate in `Sys4AssetStoreTests`: archive-only SC0000 reads identify
 `BGM005.OGG` and `MAN999.OGG` as Ogg streams and `E0808.WAV` as RIFF/WAVE without consulting `extracted/`.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert AGF images to BMP via AGF2BMP2AGF.exe, into build/textures/.
+"""Convert AGF images to BMP via AGF2BMP2AGF.exe, into build/games/<profile>/textures/.
 
   py -3.11 -X utf8 tools/convert_agf.py EV052CA.AGF BG030A.AGF ...   # named assets
   py -3.11 -X utf8 tools/convert_agf.py --scene SC0000               # all .AGF in the scene's

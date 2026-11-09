@@ -2,7 +2,7 @@
 """Engine op-path tracer for the differential offset-path oracle (docs/engine-re.md).
 
 Attaches to the running game and, per executed op, reads the current coroutine's PC + codebase from the
-engine ctx and emits (codebase, offset=(pc-codebase)/4) to build/engine-optrace.jsonl in execution order.
+engine ctx and emits (codebase, offset=(pc-codebase)/4) to build/games/<profile>/engine-optrace.jsonl in execution order.
 Diffed against the VM's trace (Ome.Cli trace --trace-json) by tools/diff_optrace.py — the first divergence
 is the opcode/branch we modeled wrong.
 

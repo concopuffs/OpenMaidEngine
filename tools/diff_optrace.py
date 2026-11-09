@@ -8,8 +8,8 @@ Both run the same bytecode, so the opcode at each script offset is static (from 
 went the other way, an opcode length we got wrong, or a native context (coroutine) the VM doesn't model.
 
 Inputs (both under build/, disposable):
-  build/engine-optrace.jsonl  — {"codebase":int,"offset":int} per executed op, in order (trace_engine_ops.py)
-  build/vm-optrace.json       — {"scene":"SC0000","offsets":[int,...]}  (Ome.Cli trace --trace-json)
+  build/games/<profile>/engine-optrace.jsonl  — {"codebase":int,"offset":int} per executed op, in order (trace_engine_ops.py)
+  build/games/<profile>/vm-optrace.json       — {"scene":"SC0000","offsets":[int,...]}  (Ome.Cli trace --trace-json)
 
     py -3.11 -X utf8 tools/diff_optrace.py SC0000 [--engine PATH] [--vm PATH]
 

@@ -11,7 +11,7 @@ with the asset it produced and find which argument carries the resId (== 37 for 
 Once identified, that argument IS the resId->name mapping at the source. Read-only.
 
 Flow: game running -> this attaches -> replay the opening CGs -> Ctrl-C -> --analyze.
-Output: build/frida-resid-args.jsonl (ordered events).
+Output: build/games/<profile>/frida-resid-args.jsonl (ordered events).
 """
 import json
 import sys

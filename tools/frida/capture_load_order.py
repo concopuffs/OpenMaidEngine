@@ -8,11 +8,11 @@ the slot, and resId indexes within that type. So we must watch EVERY DATA*.ALF, 
 
 Hooks ReadFile on all DATA*.ALF; each asset load begins with header reads at its exact archive
 offset, so exact-start reads give the ordered load list -> resolved to (archive, name, prefix,
-file_number) via build/asset-index.json. Feed the result to tools/correlate_scope.py to align
+file_number) via build/games/<profile>/asset-index.json. Feed the result to tools/correlate_scope.py to align
 with the VM's set-texture(resId) trace and learn the type/scope rule.
 
 Flow: game running -> attach -> replay a scene -> Ctrl-C -> --analyze.
-Output: build/frida-load-order.jsonl, build/frida-load-order-result.json.
+Output: build/games/<profile>/frida-load-order.jsonl, build/games/<profile>/frida-load-order-result.json.
 """
 import json
 import re
@@ -116,7 +116,7 @@ def analyze():
            "reads_per_archive": per_arc}
     (paths.BUILD / "frida-load-order-result.json").write_text(
         json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
-    print("\n-> build/frida-load-order-result.json")
+    print(f"\n-> {paths.BUILD / 'frida-load-order-result.json'}")
     return 0
 
 

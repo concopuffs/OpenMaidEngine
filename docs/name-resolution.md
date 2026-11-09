@@ -21,7 +21,7 @@ resolver `FUN_0044f390`, which does `record = table_base + id*0x50` over the 80-
 **Statically confirmed:** all 297/297 distinct corpus `call-script` ids resolve to a `.BIN` script with
 a semantically-exact name (`0x1ab→ADDITEM`, `0x2ae7→MES`, `0x143→BUNKI`), 0 out-of-range. Full
 mechanism in `engine-re.md` (“op 0x03 (call-script)…”). Tooling: `parse_sys4ini.py` →
-`build/callscript-names.json` (id→name); `sys4load` renders `call-script 0x1ab =ADDITEM.BIN`; the
+`build/games/<profile>/callscript-names.json` (id→name); `sys4load` renders `call-script 0x1ab =ADDITEM.BIN`; the
 `build/games/himegari/disasm/*.asm` call graph now reads by name. The one caveat: index the RAW SYS4INI records
 (*including* the 2 `@` placeholders) — `asset-index.json` carries each entry's `raw_index` (= the id)
 for exactly this. **Runtime (VFS-A):** `Sys4AssetCatalog` now reads that raw table directly and
@@ -86,7 +86,7 @@ scripts *use* each global. Nothing declares "0x152616 is the current unit."
 free handholds — several of which we've already built:
 
 1. **The `*INIT` scripts are the writers, and we already extracted them.** `EBINIT`/`ITINIT`/
-   `SKINIT`/`CGINIT`/`MPINIT` populate global arrays with names and data (`build/data/*.json`).
+   `SKINIT`/`CGINIT`/`MPINIT` populate global arrays with names and data (`build/games/<profile>/data/*.json`).
    The base address `EBINIT` writes 277 unit names into *is* the unit-name table. Each JSON's
    `name_array_base`, `desc_array_bases`, `field_columns`, and `record_field_columns` are literally
    global addresses and access shapes we can label by which table wrote them.
@@ -103,8 +103,8 @@ free handholds — several of which we've already built:
 now, statically, from methods 1–3. A *complete* map needs Frida for the tail. It's incremental:
 label the ~dozen hottest globals first (biggest readability payoff), grow the rest on demand.
 
-**Partial map — BUILT (v1, refreshed 2026-07-22).** `tools/global_map.py` → `build/global-var-map.json`
-(all evidence) + `build/global-var-map.md` (labelled subset). It ingests `build/data/*.json`
+**Partial map — BUILT (v1, refreshed 2026-07-22).** `tools/global_map.py` → `build/games/<profile>/global-var-map.json`
+(all evidence) + `build/games/<profile>/global-var-map.md` (labelled subset). It ingests `build/games/<profile>/data/*.json`
 (name/desc/field bases), scans the 481-script corpus for each global's **access shape**
 (2D-table base + stride, 1D-array base, row-index, scalar), and ranks "current entity" index
 pointers by purity. **Current result: 4,960 of 41,611 distinct globals labelled** —
@@ -125,7 +125,7 @@ pointers by purity. **Current result: 4,960 of 41,611 distinct globals labelled*
 `lookup-array-2d p0 (global-int 0x4e11b =rec[s14]) (global-int 0x152616 =current-entity-index?) …`.
 Labels are prefixed `=` to mark them as inferred aliases. Regenerate the `.asm` corpus with
 `tools/extract_phase2.py` after refreshing the map. Turn it off by deleting/renaming
-`build/global-var-map.json` (the loader degrades gracefully).
+`build/games/<profile>/global-var-map.json` (the loader degrades gracefully).
 
 Confidence is marked per entry; labels ending `?` are low-confidence guesses.
 
@@ -151,7 +151,7 @@ Semantic recovery is an evidence ladder, cheapest and strongest first:
    promoting guesses. Use dynamic observation only for fields that remain ambiguous after static consumers.
 
 `tools/init_table_profile.py ITINIT --build` materializes steps 1–2 in
-`build/data/ITINIT-field-profile.{json,md}`. The initial pass names thirteen parallel arrays: catalog sort
+`build/games/<profile>/data/ITINIT-field-profile.{json,md}`. The initial pass names thirteen parallel arrays: catalog sort
 key, random-item tier, item category, icon id, shared ITMES handler id, attack and defense elements, weapon
 class, granted skill id, minimum/maximum range, essence recovery, and an equipment sex mask. The strongest
 joins are independently human-readable: attack/defense values index AFINIT's Japanese attribute strings,
@@ -281,7 +281,7 @@ text/horizontal-anchor/row-offset ABI, although no direct producer populates tha
 shipped scripts.
 
 Confirmed row-column meanings are no longer prose-only. The relevant `globals.toml` entries carry a
-machine-readable `columns` map; `globals_build.py` preserves it in `build/globals.json`, and
+machine-readable `columns` map; `globals_build.py` preserves it in `build/games/<profile>/globals.json`, and
 `extract_init.py` emits a top-level `field_semantics` mapping while retaining raw address/stride/column keys
 as provenance. Generated profiles therefore render names such as
 `item_stat_modifiers.critical_chance` and `skill_status_levels.paralysis` directly.
@@ -441,7 +441,7 @@ state with stat caps, installs positive skill awards into the first three skill 
 updated applied-state row, and reveals the awarded skills. ADDEXP calls CALCCC after level growth and
 uses the same outputs to construct title, cost, and learned/replaced-skill notifications.
 
-`extract_init.py` detects this fifth shape as `rules` and writes `build/data/CCINIT.json`. Each source-order
+`extract_init.py` detects this fifth shape as `rules` and writes `build/games/<profile>/data/CCINIT.json`. Each source-order
 record keeps its bytecode guard offset and raw output keys alongside `unit_id`/EBINIT `unit_name`,
 `minimum_level`, zero-based `class_change_slot_index`, `title`, named `stat_bonuses`,
 `deployment_cost_delta`, joined one-based `skill_awards`, and `state_flag_indices_set`. The common
@@ -465,7 +465,7 @@ The chapter meaning is independently supported rather than inferred from the sma
 SCINIT's source order consists of contiguous 1-through-9 runs followed by a `-1` unassigned run, and
 844 of the 847 decision ids emitted by decoded SCJUMP end with the same chapter. The three mismatches
 are retained as legacy/stale authoring metadata. `extract_init.py` detects this sixth shape as
-`dispatch`; `build/data/SCINIT.json` is the single join from decision id to packed resource id,
+`dispatch`; `build/games/<profile>/data/SCINIT.json` is the single join from decision id to packed resource id,
 resolved script name, authored chapter, SCJUMP chapters, overwrite history, and raw column keys.
 `field_semantics`/`semantic_fields` resolves those raw keys through `vm-map/globals.toml`.
 
@@ -489,7 +489,7 @@ entity's pre-rolled 0..99 step value against bank 11's activation percentage, an
 required/forbidden story-flag convention in banks 18/19. Bank 12 is an RTN_B004 parameter; banks 13..17
 are reserved/empty. Only fourteen shipped battle steps are populated.
 
-`extract_init.py` detects this seventh shape as `banked` and writes `build/data/RTINIT.json`. Each record
+`extract_init.py` detects this seventh shape as `banked` and writes `build/games/<profile>/data/RTINIT.json`. Each record
 keeps its raw `base/20/slot` fields and complete offset-tagged assignment history while adding joined
 `movement_steps`/`battle_steps` with provider script names. The bank layout explicitly includes all six
 empty reserved banks. Structural and consumer-proven meanings live in `vm-map/globals.toml`; the generic
@@ -651,7 +651,7 @@ offensive and healing range masks, the offensive element tables,
 
 ### The curated registry — `vm-map/globals.toml` (2026-07-07)
 
-The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover branch-flag
+The v1 auto map (`build/games/<profile>/global-var-map.json`) infers *shapes* but cannot recover branch-flag
 *meaning* — and is sometimes wrong (it labels `0xa57`, the Lily form-A story flag, as a
 "string-table"). The curated registry fixes this, modelled exactly on `vm-map/opcodes.toml`:
 
@@ -660,9 +660,9 @@ The v1 auto map (`build/global-var-map.json`) infers *shapes* but cannot recover
   `choice-output`/`counter`/`unknown`), `type`, optional row-table `columns`, `value_domain`, `usage`, and provenance
   (`source`/`confidence`/`depends_on`).
 - **`tools/globals_build.py --build`** merges curated entries *over* the auto map →
-  `build/globals.json` (machine) + `docs/global-reference.md` (generated human view). `--lint`
+  `build/games/<profile>/globals.json` (machine) + `docs/global-reference.md` (generated human view). `--lint`
   checks vocabulary, the auto-shape≠high rule, and dangling `depends_on`. `sys4load` reads
-  `build/globals.json` for operand labels (curated names win, shown as `name(category)`; the auto
+  `build/games/<profile>/globals.json` for operand labels (curated names win, shown as `name(category)`; the auto
   tail is kept only at high/med confidence). Regenerate the `.asm` corpus with
   `tools/extract_phase2.py` to pick up new labels.
 
@@ -675,7 +675,7 @@ is a 100% static miner: it flags a global as a candidate when it feeds a compari
 index in the shape map. Per candidate it records compared-against constants (→ value domain), the
 writer set (progression-written but scene-read = strong story flag), total- and scene-reach, and
 near-universal (ADV-chrome) status → an auto category + confidence. Output:
-`build/story-flags-candidates.json` (review surface: 1261 branch-read globals, **205 story-flag
+`build/games/<profile>/story-flags-candidates.json` (review surface: 1261 branch-read globals, **205 story-flag
 candidates**); `--bootstrap` seeds high-signal skeletons (med-confidence, non-chrome) into
 `globals.toml` for human naming. Dynamic confirmation of a flag's reach stays separate —
 `Ome.Cli sweep 0xADDR=VAL`.
@@ -733,9 +733,9 @@ The v1 map labels *shapes and tables*; the next increments add *meaning*, cheape
    `field@X = "HP"`. Reserve for the fields that matter; this is the last mile.
 
 **Append semantic coverage (2026-07-24).** The ordinary `paths.scripts()` corpus still represents DATA1
-plus loose root overrides, so generated `build/data/EBINIT.json` remains the base/loose table. For focused
+plus loose root overrides, so generated `build/games/<profile>/data/EBINIT.json` remains the base/loose table. For focused
 inspection, `extract_init.py EBINIT --packed-id 0x01000001` now loads `$1$EBINIT.BIN` directly through its
-AAI/ALF catalog coordinates and writes the separate `build/data/APPEND01-EBINIT.json`. It applies the
+AAI/ALF catalog coordinates and writes the separate `build/games/<profile>/data/APPEND01-EBINIT.json`. It applies the
 canonical base EBINIT geometry rather than re-inferring a misleading seven-row layout, preserves packed-id
 and fragment-layout provenance, and gives all additive rows the existing EBINIT semantic field names.
 `init_table_profile.py APPEND01-EBINIT --record ID_OR_NAME` renders one row as semantic
@@ -801,7 +801,7 @@ iterations to enemy stats; it does not alter the stored `entity_levels` value us
 does not directly select an experience percentage.
 
 Re-run `tools/global_map.py` after each increment; `sys4load` picks up the new labels
-automatically (it reads `build/global-var-map.json` at load).
+automatically (it reads `build/games/<profile>/global-var-map.json` at load).
 
 ---
 

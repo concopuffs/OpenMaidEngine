@@ -13,7 +13,7 @@ Read-only Frida (enumerateModules/enumerateExports + memory reads) — the safe 
 
 Usage:
     py -3.11 -u -X utf8 tools/frida/map_imports.py --recon   # report clustering (THE GATE); writes nothing
-    py -3.11 -u -X utf8 tools/frida/map_imports.py           # write build/import-map.json (Task 2)
+    py -3.11 -u -X utf8 tools/frida/map_imports.py           # write build/games/himegari/import-map.json (Task 2)
 """
 import struct
 import sys

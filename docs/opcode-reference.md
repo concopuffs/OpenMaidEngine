@@ -1200,7 +1200,7 @@ Native mechanism (dispatch table `handler(op)=ctx[0x26c93+op]`, op 0x03 -> FUN_0
      low 24 bits. The base corpus has 0/297 explicit high-byte call-script operands; INIT2 op 0x143
      supplies mounted record-zero ids dynamically.
 Companion op 0x8f `call` is INTRA-script (a local JSR), not cross-script -- see its entry.
-This also names the whole call graph statically (build/callscript-names.json).
+This also names the whole call graph statically (build/games/<profile>/callscript-names.json).
 
 
 ### 0x5 `ret` (ret, argc 0)

@@ -120,7 +120,7 @@ public class Sys4AssetStoreTests
     public void RuntimeCatalogMatchesDiagnosticCatalogAndSceneViews()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
-        using var index = JsonDocument.Parse(File.ReadAllText(Paths.AssetIndexJson));
+        using var index = JsonDocument.Parse(File.ReadAllText(Paths.AssetIndexJson("himegari")));
         var expected = index.RootElement;
 
         Assert.Equal(expected.GetProperty("magic").GetString(), catalog.Magic);
@@ -151,7 +151,7 @@ public class Sys4AssetStoreTests
         Assert.Null(catalog.ResolveRaw(-1));
         Assert.Null(catalog.ResolveRaw(catalog.RawSlots.Count));
 
-        using var sections = JsonDocument.Parse(File.ReadAllText(Paths.AssetSectionsJson));
+        using var sections = JsonDocument.Parse(File.ReadAllText(Paths.AssetSectionsJson("himegari")));
         foreach (var scene in sections.RootElement.GetProperty("scene_base").EnumerateObject())
         {
             int start = scene.Value.GetInt32();

@@ -3,7 +3,7 @@
 
 Start the native game at the title screen, arm this probe, then choose New Game and click through
 the first voiced page (SC0000 0x9b2/0x9d3). Output is written to
-``build/native-adv-text-trace.jsonl``. The probe is read-only.
+``build/games/<profile>/native-adv-text-trace.jsonl``. The probe is read-only.
 
     py -3.11 -u -X utf8 tools/frida/capture_adv_text_trace.py 45
 """

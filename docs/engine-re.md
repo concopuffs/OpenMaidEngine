@@ -67,12 +67,12 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
   winmm 20, gdi32 17, advapi32/ole/oleaut/version/ntdll), 0 clobbers. **Validated:** `FUN_0044f390` now reads
   `(*imp_kernel32_CreateFileA)` / `(*imp_kernel32_SetFilePointer)` at its resolver I/O; `sleep_timer_arm` reads
   `(*imp_winmm_timeGetTime)()` — pinning the long-standing `DAT_0056f3d4` = **timeGetTime**. Tool:
-  `tools/frida/map_imports.py [--recon]` → `build/import-map.json`; plan
+  `tools/frida/map_imports.py [--recon]` → `build/games/himegari/import-map.json`; plan
   `docs/superpowers/plans/2026-07-09-frida-import-map.md`.
   **Known limit (by design):** only the module-resident IAT is labelable. `d3d9`/`shell32`/`dsound`/CRT are
   `GetProcAddress`-resolved into HEAP (not in the `0x400000` dump), so they aren't labeled — and D3D9 is used
   via COM vtables (`Present` = device vtable slot 17, see `probe_present.py`), not an import thunk, so this
-  costs us nothing on the render path. 29 isolated singleton matches were set aside (`build/import-map-singletons.json`),
+  costs us nothing on the render path. 29 isolated singleton matches were set aside (`build/games/himegari/import-map-singletons.json`),
   not auto-applied.
 
 ---
@@ -264,9 +264,9 @@ general fix for VA drift project-wide. To find op `N`'s handler: read `ctx[0x26c
 
 The table is no longer resolved op-by-op by hand — it is **extracted once and applied to the whole
 image**. `tools/ghidra_handler_map.py` parses the override stores in `FUN_00413860` (dump at
-`build/engine-dump/FUN_00413860.disasm.txt`) → **`build/op-handler-map.json`** (`{op → handler VA}`,
+`build/games/himegari/engine-dump/FUN_00413860.disasm.txt`) → **`build/games/himegari/op-handler-map.json`** (`{op → handler VA}`,
 **420 overrides**). Regenerate: `py -3.11 -X utf8 tools/ghidra_handler_map.py
-build/engine-dump/FUN_00413860.disasm.txt --check`. The `--check` diffs the derived handlers against the
+build/games/himegari/engine-dump/FUN_00413860.disasm.txt --check`. The `--check` diffs the derived handlers against the
 handler VAs mentioned in `vm-map/opcodes.toml` prose and found **0 real drift** — the only 7 flags are
 ops whose toml text records the *worker* VA, not the handler (`0x20c→0x4174a0`, and the `0x21c–0x243`
 cluster entries), each already matching the recon tables below.
@@ -509,7 +509,7 @@ placeholders). There is **no separate on-disk id→code registry**; SYS4INI *is*
 already had it. **Statically confirmed:** all **297/297** distinct corpus `call-script` ids resolve to
 a `.BIN` script with a semantically-exact name (`0x1ab→ADDITEM`, `0x2ae7→MES`, `0x143→BUNKI`,
 `0x329d→CALCREVISE`, `0x2add→CALCBTPARAM`), 0 out-of-range, 0 pack-branch. Tooling:
-`parse_sys4ini.py` emits `build/callscript-names.json` (id→name); `sys4load` annotates
+`parse_sys4ini.py` emits `build/games/himegari/callscript-names.json` (id→name); `sys4load` annotates
 `call-script 0x1ab =ADDITEM.BIN`; the whole `build/games/himegari/disasm/*.asm` call graph now reads by name. See
 `name-resolution.md §1`.
 
@@ -4646,7 +4646,7 @@ furigana interaction. Treat any such discrepancy as debt in the text renderer, n
 `0x204`, or the ADV scheduler coordinates are inherently wrong. A future fidelity pass can replace the
 Label backend with decoded glyph surfaces/retained glyph records behind the existing VM/host contract.
 
-Matching evidence: `build/native-adv-text-trace.jsonl` and Godot timeline captures at `0x834`, `0x9b2`,
+Matching evidence: `build/games/himegari/native-adv-text-trace.jsonl` and Godot timeline captures at `0x834`, `0x9b2`,
 `0x9d3`, and `0xa0d`. Windowed page-1 pixels place glyphs at x=100 and native y=477; voiced page 7 has
 non-overlapping name/dialogue bands at y=447–468, 478–500, and 507–530. A manual run progressed 14 pages:
 11 clicks completed active reveals and 14 later clicks released 14 distinct waits through `0xe0c`.
@@ -5211,7 +5211,7 @@ transient Godot decoder copy, leaving the archive/VFS payload untouched. The sav
 the WAV decoder constructor, open/close, buffer-fill, rewind, and query methods, and records this boundary
 contract on the dispatcher and parser.
 
-The native trace in `build/native-sfx-trace.jsonl` captures SC0000's first pair: `0xb4@0xc29` resolves
+The native trace in `build/games/himegari/native-sfx-trace.jsonl` captures SC0000's first pair: `0xb4@0xc29` resolves
 raw catalog id `0x28` to `E0808.WAV`, loads channel 0, and `0xb5@0xc2e` starts it in the same millisecond. The next
 `0xb4@0xc31` preloads the same WAV into engine-owned secondary channel 4 for a later service start. The
 channel comes from `G[0x6242d]`.
@@ -7212,7 +7212,7 @@ named and plate-commented in both `/v2` and `/kamidori/SYS4433`:
 | cell | `vm_operand_lvalue@0x415f30` | `0x4166b0` | 1 | global-integer cell index (types 3/6/0xc) |
 
 `tools/operand_access.py` derives every opcode's operand contract from this family without Ghidra. It reads
-the dispatch table from the constructor's immediate stores. For SYS4422 this reproduces `build/op-handler-map.json`
+the dispatch table from the constructor's immediate stores. For SYS4422 this reproduces `build/games/himegari/op-handler-map.json`
 exactly, 420 of 420 handlers; SYS4433 has 437. The tool then walks each handler and two callee levels, and records
 every accessor call with its constant operand index. MSVC hoists argument pushes above conditional branches, so the
 backward argument scan follows branch predecessors. SYS4433's accessors were mapped by aligning same-opcode

@@ -14,7 +14,7 @@ asset_open_indexed_entry applies no section base. Do not use this tool's scene-r
 runtime code; see docs/asset-resolution-re.md.
 
 Usage:
-  py -3.11 -X utf8 tools/resolve_asset.py --build            # emit build/asset-sections.json
+  py -3.11 -X utf8 tools/resolve_asset.py --build            # emit build/games/<profile>/asset-sections.json
   py -3.11 -X utf8 tools/resolve_asset.py <SCENE> [resId]    # inspect one correlation, or dump a group
 """
 from __future__ import annotations

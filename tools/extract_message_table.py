@@ -231,7 +231,7 @@ def main() -> int:
     )
     print(
         f"{name}: selector={meta['selector_global']}, {len(records)} messages "
-        f"-> build/data/{outname}.json"
+        f"-> {outpath}"
     )
     return 0
 

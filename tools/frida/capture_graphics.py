@@ -7,7 +7,7 @@ persistent handles, so CreateFile never fires during play; we hook ReadFile and 
 handle -> path via GetFinalPathNameByHandleW (cached), capturing the read offset.
 
 Flow: game running -> run this (attach) -> replay SC0000's opening -> stop this. Log lands in
-build/frida-reads.log as `path<TAB>offset<TAB>size`.
+build/games/<profile>/frida-reads.log as `path<TAB>offset<TAB>size`.
 
 Usage: py -3.11 -u -X utf8 tools/frida_capture_graphics.py [process_name]   (default AGE.EXE)
 """

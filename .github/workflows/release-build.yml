@@ -91,7 +91,7 @@ jobs:
           name: linux-release-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/package/package-smoke.log
-            build/validation/**
+            build/games/*/validation/**
           if-no-files-found: ignore
           retention-days: 7
 
@@ -179,7 +179,7 @@ jobs:
             build/native/win-x64/verification.json
             build/native/win-x64/ome_movie_ffmpeg.map
             build/package/windows-x64/staging/OME-windows-x64/WINDOWS-VERIFICATION.json
-            build/validation/**
+            build/games/*/validation/**
           if-no-files-found: ignore
           retention-days: 7
 

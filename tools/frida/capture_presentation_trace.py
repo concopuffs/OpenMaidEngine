@@ -11,7 +11,7 @@ entry.  Stop after the first dialogue page:
 
     py -3.11 -u -X utf8 tools/frida/capture_presentation_trace.py 30
 
-Output: build/native-presentation-trace.jsonl.  No values are patched and the game is never slowed.
+Output: build/games/<profile>/native-presentation-trace.jsonl.  No values are patched and the game is never slowed.
 """
 import json
 import sys

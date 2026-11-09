@@ -7,7 +7,7 @@ Idea: to issue a ReadFile at an asset's exact archive offset the game must have 
 resolved resId -> (archive, offset) inside its native load-by-id / set-texture (op 0x1f9)
 handler. So at each asset-start read, a stack backtrace passes straight through that handler.
 We backtrace only on reads whose offset EXACTLY equals a DATA2 asset offset (from
-build/asset-index.json), resolve the offset -> asset name, and log module-relative frames.
+build/games/<profile>/asset-index.json), resolve the offset -> asset name, and log module-relative frames.
 Frames are AGE.EXE-relative (base subtracted) so they're stable across runs despite ASLR.
 
 Offline, `aggregate` ranks the AGE.EXE return addresses that recur across the MOST distinct
@@ -21,7 +21,7 @@ Flow (see tools/frida/README.md):
   3. Start a new game so the SC0000 opening auto-plays; let a dozen CGs load.
   4. Ctrl-C. Then: py -3.11 -X utf8 tools/frida/locate_resource_load.py --aggregate
 
-Output: build/frida-resource-bt.jsonl  ({name, offset, size, frames:[...]} per asset-open).
+Output: build/games/<profile>/frida-resource-bt.jsonl  ({name, offset, size, frames:[...]} per asset-open).
 """
 import json
 import sys

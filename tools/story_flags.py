@@ -3,7 +3,7 @@
 branch conditions (comparisons / jcc), gathers evidence, classifies candidates, and emits a
 ranked review surface. 100% static -- no runtime, no sweep. See
 docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md.
-  (no flag)     -> build/story-flags-candidates.json
+  (no flag)     -> build/games/<profile>/story-flags-candidates.json
   --bootstrap   append skeleton [[global]] entries to the profile registry (vm-map/globals[-<profile>].toml) (Task 5)"""
 from __future__ import annotations
 import os, sys, re, json, argparse, collections

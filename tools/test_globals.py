@@ -672,7 +672,7 @@ def test_merge_precedence():
 
 def test_sys4load_labels_from_registry():
     import importlib, sys4load
-    importlib.reload(sys4load)   # re-run _load_global_labels against current build/globals.json
+    importlib.reload(sys4load)   # re-run _load_global_labels against current build/games/<profile>/globals.json
     lbl = sys4load.GLOBAL_LABELS.get(0x3234, "")
     check("chapter_mode" in lbl, f"sys4load labels 0x3234 with curated name (got {lbl!r})")
     lbl2 = sys4load.GLOBAL_LABELS.get(0xa57, "")

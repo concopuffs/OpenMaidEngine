@@ -5,9 +5,9 @@ asset-resolution scope selector (docs/asset-resolution-re.md step 2, scope-selec
 Inputs:
   build/settex-<SCENE>.json          our VM's ordered set-texture(resId) trace + bytecode offsets
                                      (produce with: py -3.11 -X utf8 tools/vm0.py --settex <SCENE>)
-  build/frida-load-order-result.json the game's ordered (name, file_number=resId) loads
+  build/games/<profile>/frida-load-order-result.json the game's ordered (name, file_number=resId) loads
                                      (produce with tools/frida/capture_load_order.py --analyze)
-  build/asset-index.json             for segmenting DATA2 into packages
+  build/games/<profile>/asset-index.json             for segmenting DATA2 into packages
 
 Method: `resId == file_number`, and each loaded file belongs to exactly one DATA2 "package"
 (a monotonic-file_number run). So the game's load order is a readout of the active package over

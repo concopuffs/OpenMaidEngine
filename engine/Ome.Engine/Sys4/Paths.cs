@@ -13,18 +13,23 @@ public static class Paths
     public static string KamidoriTranslatedDir => Path.Combine(Workspace, "Kamidori_Translated");
     public static string Build => Path.Combine(Repo, "build");
     public static string OpcodesJson => Path.Combine(Build, "opcodes.json");
-    public static string AssetSectionsJson => Path.Combine(Build, "asset-sections.json");
-    public static string AssetIndexJson => Path.Combine(Build, "asset-index.json");
-    public static string CallscriptNamesJson => Path.Combine(Build, "callscript-names.json");
     /// <summary>Per-profile generated build output, <c>build/games/&lt;profile&gt;</c>.</summary>
     public static string GameBuild(string profileId) => Path.Combine(Build, "games", profileId);
+    /// <summary>A profile's diagnostic asset index (<c>tools/parse_sys4ini.py</c>).</summary>
+    public static string AssetIndexJson(string profileId) => Path.Combine(GameBuild(profileId), "asset-index.json");
+    /// <summary>A profile's scene section bases (<c>tools/resolve_asset.py --build</c>).</summary>
+    public static string AssetSectionsJson(string profileId) =>
+        Path.Combine(GameBuild(profileId), "asset-sections.json");
+    /// <summary>A profile's extracted *INIT tables (<c>tools/extract_init.py</c>).</summary>
+    public static string GameData(string profileId) => Path.Combine(GameBuild(profileId), "data");
     /// <summary>A profile's generated global registry view (<c>globals_build.py --build</c>).</summary>
     public static string GlobalsJson(string profileId) => Path.Combine(GameBuild(profileId), "globals.json");
     /// <summary>Generated named patch points (tools/patch_points_build.py --build; mod loader spec §5).</summary>
     public static string PatchPointsJson(string profileId) => Path.Combine(GameBuild(profileId), "patch-points.json");
     /// <summary>A profile's hand-written Open Maid Script source modules, <c>oms/&lt;profile&gt;</c>.</summary>
     public static string OmsModules(string profileId) => Path.Combine(Repo, "oms", profileId);
-    public static string Textures => Path.Combine(Build, "textures");
+    /// <summary>A profile's converter BMPs (<c>tools/convert_agf.py</c>), the AGF decoder's pixel oracle.</summary>
+    public static string Textures(string profileId) => Path.Combine(GameBuild(profileId), "textures");
     public static string Sys4Ini => Path.Combine(GameDir, "SYS4INI.BIN");
     public static string Append01Aai => Path.Combine(GameDir, "APPEND01.AAI");
     public static string BinExtractAlf => Path.Combine(Repo, "bin", "BinExtractALF.exe");

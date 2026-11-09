@@ -2,12 +2,12 @@
 """Partial global-variable map — label raw global offsets by evidence (static, read-only).
 
 Combines three static signals (see docs/name-resolution.md #2):
-  1. *INIT writers   — build/data/*.json name/desc/field bases ARE labelable global addresses.
+  1. *INIT writers   — build/games/<profile>/data/*.json name/desc/field bases ARE labelable global addresses.
   2. string anchors  — set-string targets across the corpus = string tables.
   3. access shape    — how each global is used: 2D-table base (+stride), 1D-array base,
                        row-index (=> "current entity" pointer), or scalar.
 
-Emits build/global-var-map.json (all evidence) + build/global-var-map.md (labelled subset).
+Emits build/games/<profile>/global-var-map.json (all evidence) + build/games/<profile>/global-var-map.md (labelled subset).
 Usage: py -3.11 -X utf8 tools/global_map.py
 """
 from __future__ import annotations
@@ -151,7 +151,7 @@ def main() -> int:
 
     labeled = {k: v for k, v in entries.items() if v["label"]}
     out = {
-        "generated_from": f"extracted/DATA1 ({nscr} scripts) + build/data/*.json",
+        "generated_from": f"extracted/DATA1 ({nscr} scripts) + build/games/<profile>/data/*.json",
         "note": "Static partial map. Labels ending '?' are low-confidence. Column addresses "
                 "are raw engine globals; Frida can confirm the ambiguous ones (see docs/name-resolution.md).",
         "totals": {"distinct_globals_seen": len(all_addrs), "labelled": len(labeled),
@@ -164,7 +164,7 @@ def main() -> int:
 
     # readable markdown of the labelled subset
     md = ["# Partial global-variable map", "",
-          f"Static map from {nscr} scripts + `build/data/*.json`. "
+          f"Static map from {nscr} scripts + `build/games/<profile>/data/*.json`. "
           f"**{len(labeled)} of {len(all_addrs)} distinct globals labelled.** "
           "Regenerate: `py -3.11 -X utf8 tools/global_map.py`. See `docs/name-resolution.md`.", "",
           "## 'Current entity' index globals (dominant 2D row-index)", "",
@@ -191,7 +191,7 @@ def main() -> int:
           f"({len(init_labels)} from *INIT)")
     print(f"top 'current entity' index globals: " +
           ", ".join(f"{c['addr']}({c['used_as_row_index']})" for c in current_idx[:5]))
-    print(f"-> build/global-var-map.json, build/global-var-map.md")
+    print(f"-> {OUT / 'global-var-map.json'}, {OUT / 'global-var-map.md'}")
     return 0
 
 

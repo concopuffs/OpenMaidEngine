@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse SYS4INI.BIN (Eushully AGE asset index) -> build/asset-index.json.
+"""Parse SYS4INI.BIN (Eushully AGE asset index) -> build/games/<profile>/asset-index.json.
 
 SYS4INI.BIN is the authoritative directory the game (and BinExtractALF, which is
 based on asmodean's exs4alf) uses to locate every asset inside the DATA*.ALF

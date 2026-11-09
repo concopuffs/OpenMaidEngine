@@ -300,7 +300,7 @@ public class SharedProfileTests
         Assert.True(profile.IsCatalogResourceUnlocked(0x3324)); // ED.AGF
 
         using var cgDocument = System.Text.Json.JsonDocument.Parse(
-            File.ReadAllBytes(Path.Combine(Paths.Build, "data", "CGINIT.json")));
+            File.ReadAllBytes(Path.Combine(Paths.GameData("himegari"), "CGINIT.json")));
         uint[] cgIds = cgDocument.RootElement.GetProperty("records").EnumerateArray()
             .Select(record => record.GetProperty("gallery_image_asset_id").GetUInt32())
             .ToArray();
@@ -309,7 +309,7 @@ public class SharedProfileTests
             profile.IsCatalogResourceUnlocked(id), $"CG resource 0x{id:x} should be unlocked"));
 
         using var hDocument = System.Text.Json.JsonDocument.Parse(
-            File.ReadAllBytes(Path.Combine(Paths.Build, "data", "SPINIT.json")));
+            File.ReadAllBytes(Path.Combine(Paths.GameData("himegari"), "SPINIT.json")));
         uint[] hSceneIds = hDocument.RootElement.GetProperty("records").EnumerateArray()
             .SelectMany(page => page.GetProperty("script_resource_ids").EnumerateArray())
             .Select(id => id.GetUInt32())

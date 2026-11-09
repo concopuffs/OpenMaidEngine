@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Task 2 of the frida import-map slice: write build/import-map.json from the live scan.
+"""Task 2 of the frida import-map slice: write build/games/himegari/import-map.json from the live scan.
 
 Splits the pointer matches into (a) those inside a contiguous in-module import-table run
-(>= min_run) -> auto-apply, written to build/import-map.json; and (b) isolated singletons
-(more likely a coincidental DWORD) -> build/import-map-singletons.json for review, NOT
+(>= min_run) -> auto-apply, written to build/games/himegari/import-map.json; and (b) isolated singletons
+(more likely a coincidental DWORD) -> build/games/himegari/import-map-singletons.json for review, NOT
 auto-applied. Invoked by `map_imports.py` default mode (no --recon).
 
 See docs/superpowers/plans/2026-07-09-frida-import-map.md (Task 2) and the design spec.
@@ -35,8 +35,8 @@ def build():
     table, singles = select_table_matches(matches, runs)
     (BUILD / "import-map.json").write_text(json.dumps(table, indent=2) + "\n", encoding="utf-8")
     (BUILD / "import-map-singletons.json").write_text(json.dumps(singles, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {len(table)} table imports -> build/import-map.json; "
-          f"{len(singles)} singletons -> build/import-map-singletons.json (review, not applied)")
+    print(f"wrote {len(table)} table imports -> {BUILD / 'import-map.json'}; "
+          f"{len(singles)} singletons -> {BUILD / 'import-map-singletons.json'} (review, not applied)")
 
 
 if __name__ == "__main__":

@@ -10,9 +10,9 @@ default handler 0x4162b0, then overrides specific opcodes with
 names encode handler VAs from *Kelebek's* build, which DRIFT in ours; this map is the
 general fix -- it resolves the real handler for every opcode in *our* image.
 
-Input: a text dump of FUN_00413860's disassembly (see build/engine-dump/FUN_00413860.disasm.txt,
+Input: a text dump of FUN_00413860's disassembly (see build/games/himegari/engine-dump/FUN_00413860.disasm.txt,
 produced by the ghidra-mcp `disassemble_function(0x413860)` call).
-Output: build/op-handler-map.json  ({ "0x1ac": {"handler": "0x427fb0"}, ... }).
+Output: build/games/himegari/op-handler-map.json  ({ "0x1ac": {"handler": "0x427fb0"}, ... }).
 
 Usage:
     py -3.11 -X utf8 tools/ghidra_handler_map.py <disasm.txt>            # build the map

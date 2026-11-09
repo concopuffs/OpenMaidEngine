@@ -19,7 +19,7 @@ the normal and the fast-forward cadence.
 Run (game running, sitting in an ADV scene, e.g. SC0000 line 1):
     py -3.11 -X utf8 tools/frida/probe_frame_cadence.py [seconds] [proc]
 Protocol: let it play NORMALLY the first half, then HOLD Ctrl the rest. Auto-buckets by Ctrl state.
-Writes build/frida-frame-cadence.jsonl.
+Writes build/games/<profile>/frida-frame-cadence.jsonl.
 """
 import json
 import statistics

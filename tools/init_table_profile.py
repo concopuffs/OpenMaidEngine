@@ -12,7 +12,7 @@ Usage:
   py -3.11 -X utf8 tools/init_table_profile.py ITINIT --build
   py -3.11 -X utf8 tools/init_table_profile.py ITINIT --limit 80
 
-With --build, writes build/data/<TABLE>-field-profile.{json,md}.
+With --build, writes build/games/<profile>/data/<TABLE>-field-profile.{json,md}.
 """
 from __future__ import annotations
 

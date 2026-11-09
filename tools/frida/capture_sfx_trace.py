@@ -2,7 +2,7 @@
 """Capture native SC0000 SFX op/worker/DirectSound timing (read-only).
 
 Start at the title, arm this probe, then choose New Game.  The opening reaches the first
-load/start pair at 0xc29 without input.  Output: build/native-sfx-trace.jsonl.
+load/start pair at 0xc29 without input.  Output: build/games/<profile>/native-sfx-trace.jsonl.
 """
 import json
 import sys

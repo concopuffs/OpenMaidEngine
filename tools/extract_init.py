@@ -6887,7 +6887,7 @@ def attach_stage_enemy_spawns(records: list[dict]) -> None:
 
 
 def write_data_index(data_dir: Path) -> None:
-    """Regenerate the disposable build/data index from current table JSONs."""
+    """Regenerate the disposable build/games/<profile>/data index from current table JSONs."""
     tables = []
     for path in sorted(data_dir.glob("*.json")):
         if path.name.endswith("-field-profile.json"):

@@ -12,7 +12,7 @@ sees the one-shot composition; the composite hook's leave captures the final mat
 Run while the game is already at an ADV passage, then drive the relevant animation manually:
   py -3.11 -u -X utf8 tools/frida/capture_native_transforms.py [seconds] [pid|AGE.EXE] [--handle 0xHANDLE]
 
-Writes build/native-transform-trace.jsonl. Read-only state capture; it does not patch values or alter speed.
+Writes build/games/<profile>/native-transform-trace.jsonl. Read-only state capture; it does not patch values or alter speed.
 """
 import json
 import sys

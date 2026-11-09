@@ -59,7 +59,7 @@ one-based runtime ids over fixed reserved array spans, not a new record whenever
 decreases. The corrected extractor finds SKINIT 131 skills (span 300), ITINIT 287 items (span 1000), and
 EBINIT 277 units (span 1000). In particular, the earlier ITINIT JSON's 189 records were invalid: it collapsed
 items 1–101 into the first record and treated consecutive item names as descriptions. Generated table state
-and counts are indexed in `build/data/README.md`; field semantics are curated in `vm-map/globals.toml` and
+and counts are indexed in `build/games/himegari/data/README.md`; field semantics are curated in `vm-map/globals.toml` and
 described by the workflow in `docs/name-resolution.md`.
 
 The same audit found that linked row-major writes must not be normalized as independent parallel arrays.
@@ -284,7 +284,7 @@ SBUNKI. Full data-flow details live in `name-resolution.md`.
 (id = the entry's `raw_index` = its global position in SYS4INI). This is the resolved call-graph
 registry — there is no separate id→code table; SYS4INI is it. Mechanism: `engine-re.md` (op 0x03
 section); the runtime source is `Sys4AssetCatalog` over SYS4INI, while the mechanically generated
-`build/callscript-names.json` feeds `sys4load` diagnostics. The regenerated `build/games/himegari/disasm/*.asm` corpus renders targets by name
+`build/games/himegari/callscript-names.json` feeds `sys4load` diagnostics. The regenerated `build/games/himegari/disasm/*.asm` corpus renders targets by name
 (`call-script 0x1ab =ADDITEM.BIN`). **297 distinct scripts are called** across the corpus (3002 sites);
 the hottest are `HISTORY` (backlog), `MENU`, `HIDEWIN`, `BUNKI` (branch), `MES` (message), `ADDITEM`,
 `ADDEN`, `LOOK`, `RENDERMAP`. Scenes (`SCxxxx.BIN`) load through the *same* id-indexed loader.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve Frida archive-read offsets -> asset names via build/asset-index.json.
+"""Resolve Frida archive-read offsets -> asset names via build/games/<profile>/asset-index.json.
 
 The runtime capture (tools/frida/capture_graphics.py) logs raw ReadFile spans on the
 DATA*.ALF archives as `<path>\t<offset>\t<size>` lines. On their own those offsets are
@@ -15,7 +15,7 @@ the asset's archive offset (delta 0), then one bulk read of the payload. Uniform
 ordered, de-duplicated sequence of those is the load order.
 
 Usage: py -3.11 -X utf8 tools/resolve_frida_reads.py [reads.log] [-o out.json]
-  default reads.log = build/frida-reads.log ; default out = build/frida-asset-loads.json
+  default reads.log = build/games/<profile>/frida-reads.log ; default out = build/games/<profile>/frida-asset-loads.json
 """
 from __future__ import annotations
 import bisect

@@ -49,7 +49,7 @@ coincidentally adjacent.
 
 ## What we tried (chronological, with outcomes)
 
-1. **Flat-int32 signature scan** — `tools/frida/find_globals_base.py` (+ `build/globals-signature.json`,
+1. **Flat-int32 signature scan** — `tools/frida/find_globals_base.py` (+ `build/games/himegari/globals-signature.json`,
    15,481 distinctive `(addr,value)` pairs from `*INIT` `mov (global-int A) IMM`; 215-dword contiguous
    anchor @`0x631a9`). **Result: 0 hits** at any anchor length, in the opening AND in the first dungeon
    (ruling out load-timing). Diagnostic: the individual values occur (coincidentally); no stride in
@@ -84,7 +84,7 @@ coincidentally adjacent.
 ## Tools built (kept for resumption)
 
 All under `tools/frida/` (see `tools/frida/README.md` and `docs/tools-reference.md`):
-- `find_globals_base.py` — `--build-sig` builds `build/globals-signature.json`; scan mode does the
+- `find_globals_base.py` — `--build-sig` builds `build/games/himegari/globals-signature.json`; scan mode does the
   flat-int32 signature scan (robust prefix ladder + verify). *Currently finds nothing → layout isn't flat.*
 - `find_global_by_sequence.py` — differential resId scan with stability filter. *Finds stack proxies;
   transient globals elude it.*

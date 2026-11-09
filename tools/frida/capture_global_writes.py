@@ -19,8 +19,8 @@ pre-scene boundary.
     py -3.11 -u -X utf8 tools/frida/capture_global_writes.py --attach [seconds]   # partial (from now)
 
 --spawn launches AGE.EXE under Frida so hooks are live before instruction 0 (captures TITLE etc.);
---attach hooks the running game (misses everything before attach). Writes build/global-writes.jsonl
-(raw, ordered) + build/scene-entry-state.json (last-write-wins GameSession snapshot, loadable via
+--attach hooks the running game (misses everything before attach). Writes build/games/<profile>/global-writes.jsonl
+(raw, ordered) + build/games/<profile>/scene-entry-state.json (last-write-wins GameSession snapshot, loadable via
 `Ome.Cli ... --state`).
 """
 import json
@@ -44,7 +44,7 @@ PC_BASE   = 0x53d2c     # frame_pc
 CB_BASE   = 0x53d28     # frame_codebase
 STRIDE    = 0x78
 
-# vm_operand_write's SEH prologue (from build/engine-dump): push -1; push 0x56a836; mov eax,fs:[0].
+# vm_operand_write's SEH prologue (from build/games/himegari/engine-dump): push -1; push 0x56a836; mov eax,fs:[0].
 # AGE.EXE is PACKED and unpacks in-place, so at --spawn time these bytes are still packed and Frida
 # CANNOT intercept ("unable to intercept function at 00425FB0"). We poll until the real prologue appears
 # (unpack done) THEN attach — for --attach (already unpacked) the very first poll matches, a no-op cost.

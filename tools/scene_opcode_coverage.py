@@ -25,7 +25,7 @@ Usage:
   py -3.11 -X utf8 tools/scene_opcode_coverage.py SC0240 SP0062   # specific scenes
   py -3.11 -X utf8 tools/scene_opcode_coverage.py --build         # regen the SC0000 report doc
 
-Writes build/scene-opcode-coverage/<SCENE>.md and prints a summary to stdout.
+Writes build/games/<profile>/scene-opcode-coverage/<SCENE>.md and prints a summary to stdout.
 """
 from __future__ import annotations
 import sys

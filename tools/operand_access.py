@@ -66,7 +66,6 @@ class EngineFacts:
     constructor: int
     table_offset: int
     accessors: dict[int, Accessor]
-    legacy_dump: bool = False
 
 
 # Himegari SYS4422 (/v2 image). Each accessor reads frame_pc (ctx+0x53d2c) and indexes the current
@@ -105,7 +104,7 @@ _KAMIDORI_ACCESSORS = {
 
 REFERENCE_PROFILE = "himegari"
 ENGINES: dict[str, EngineFacts] = {
-    "himegari": EngineFacts(0x413860, 0x9B24C, _HIMEGARI_ACCESSORS, legacy_dump=True),
+    "himegari": EngineFacts(0x413860, 0x9B24C, _HIMEGARI_ACCESSORS),
     # SYS4433, AGE 4.33G (the clean install's AGE.EXE; docs/engine-re.md, "Kamidori engine builds"): the ctx
     # constructor at 0x413e70 fills ctx+0x9f704; accessors read frame_pc at ctx+0x57fb8. First pinned on the
     # translation's 4.33F (constructor 0x413e50, table ctx+0x9f700) from --align-accessors (every alignment
@@ -117,15 +116,11 @@ ENGINES: dict[str, EngineFacts] = {
 
 
 def dump_path(profile_id: str) -> Path:
-    candidates = [paths.SHARED_BUILD / "games" / profile_id / "engine-dump" / "range_00400000.bin"]
-    if ENGINES[profile_id].legacy_dump:
-        candidates.append(paths.SHARED_BUILD / "engine-dump" / "range_00400000.bin")
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
+    candidate = paths.SHARED_BUILD / "games" / profile_id / "engine-dump" / "range_00400000.bin"
+    if candidate.is_file():
+        return candidate
     raise FileNotFoundError(
-        f"{profile_id}: no unpacked engine dump; run tools/frida/dump_engine.py "
-        f"(looked in {', '.join(str(c) for c in candidates)})")
+        f"{profile_id}: no unpacked engine dump at {candidate}; run tools/frida/dump_engine.py")
 
 
 class Image:

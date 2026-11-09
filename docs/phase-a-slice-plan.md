@@ -188,8 +188,8 @@ just-enough `call-script`/state (unlocks richer scenes).
 
 ### A2b-Background — FIRST-PASS RENDER LANDED (2026-07-06)
 Resolution solved (`docs/asset-resolution-re.md`: `resId → files[section_base(scene)+resId]`) and wired
-into a live render. **Shipped:** `Ome.Engine/Sys4/ResourceMap.cs` (loads `build/asset-index.json` +
-`build/asset-sections.json`; `Resolve(scene,resId) → AssetEntry`; `TexturePath` → pre-converted BMP);
+into a live render. **Shipped:** `Ome.Engine/Sys4/ResourceMap.cs` (loads `build/games/himegari/asset-index.json` +
+`build/games/himegari/asset-sections.json`; `Resolve(scene,resId) → AssetEntry`; `TexturePath` → pre-converted BMP);
 `GodotAdvHost` implements `create/set/draw-texture` (slot → `TextureRect` composited behind the dialogue
 in a `_stage` layer); `IHost.DrawTexture` + VM dispatch extended to pass the destination x/y (draw-texture
 args 7/8); `project.godot` window = 800×600; `convert_agf.py` searches all archives + `--scene` batch.
@@ -319,7 +319,7 @@ static opcodes and classifies each against the C# VM: **impl** (VM has a handler
 no-op like `set-font`), **safe-noop** (no arm, but `opcodes.toml` marks it `noop_headless` — a statement /
 block marker, correct to skip), or **GAP** (no arm and effectful → the VM silently `pc+1`s past it). The
 implemented set is parsed from `VirtualMachine.cs`'s `case` arms (single source of truth, no drift); output is
-`build/scene-opcode-coverage/<SCENE>.md`. This makes a half-rendered scene legible: *"N ops still stubbed"*,
+`build/games/himegari/scene-opcode-coverage/<SCENE>.md`. This makes a half-rendered scene legible: *"N ops still stubbed"*,
 not *"something's wrong and we thought everything ran."*
 
 **SC0000 baseline:** 129 distinct opcodes / 16257 instrs. Instruction-weighted the VM already covers **~94.8%**
@@ -475,7 +475,7 @@ Spec `docs/superpowers/specs/2026-07-07-callscript-vm-execution-design.md`; plan
 `call-script <id>` is a raw SYS4INI file index (`docs/engine-re.md`).
 
 **Shipped (engine 25/25 green):**
-- **`IScriptProvider`** (Hosting) + **`Sys4ScriptProvider`** (Sys4): `id → build/callscript-names.json →
+- **`IScriptProvider`** (Hosting) + **`Sys4ScriptProvider`** (Sys4): `id → build/games/himegari/callscript-names.json →
   name → Paths.Scripts() → Sys4Loader.Load`, cached. Injected into the VM so `Vm` never references `Sys4`.
 - **`ExecFrame` refactor** of `VirtualMachine`: per-script state (script, pc, locals, intra-call stack,
   per-frame emit-guard) moved into `ExecFrame`, run by a recursive `RunFrame`. Globals/Emitted/Steps stay
@@ -1058,7 +1058,7 @@ separate slices. No implementation commit was made.
 
 This is an optional high-leverage detour before movie `0x236` or SFX. It replaces the Phase-A
 pre-extracted/pre-converted asset bootstrap with the native loose-override/archive-fallback model and removes
-the runtime dependency on `extracted/` plus `build/textures/`. Canonical format/architecture detail and source
+the runtime dependency on `extracted/` plus `build/games/himegari/textures/`. Canonical format/architecture detail and source
 references live in `docs/asset-resolution-re.md` §“Runtime asset-VFS track”; this section defines
 slice boundaries only.
 
@@ -1079,7 +1079,7 @@ SC0000 textbox/chrome payoff, or A→B→C when complete base+append archive mou
    code with a focused LZSS primitive, palette/truecolor expansion, stride/orientation handling, and optional
    ACIF alpha. Replace BMP-path texture loading with decoded pixel surfaces. Gate: codec sample matrix plus
    exact SO001 dimensions/alpha, then windowed SC0000 textbox/button pixels with `extracted/` and
-   `build/textures/` unavailable to the runtime.
+   `build/games/himegari/textures/` unavailable to the runtime.
 
 After those gates, move OGG/WAV consumers onto the same byte store as a small follow-up. That prepares SFX
 without conflating its channel/timing semantics with archive access. Movie `0x236` may likewise consume raw
@@ -1102,7 +1102,7 @@ placeholders), 13206 real/name records, bounded scene sections, and universal ra
 per-open file handles, and a seek/read boundary. `Sys4ScriptProvider` and all CLI/Godot root-script paths use
 store bytes; `ResourceMap` consumes the live catalog instead of generated asset JSON.
 
-Validation: 116 engine tests; every field against `build/asset-index.json`; all 136 generated scene views;
+Validation: 116 engine tests; every field against `build/games/himegari/asset-index.json`; all 136 generated scene views;
 all 13206 archive ranges; representative bytes across DATA1..5 against `extracted/`; synthetic precedence,
 range, traversal, and concurrency tests; CLI SC0000 run; Godot build/selftest. The installed root has 49
 archive-backed script overrides and two root-only BIN engine files, not the historically reported 52
@@ -1122,7 +1122,7 @@ with non-binary per-pixel alpha.
 then decodes through the loose-first VFS. Godot and the CLI no longer use `BmpHeader`, `TexturePath`, or
 pre-converted BMPs. SYSTEM4's inherited SO001 surface is seeded into slot `0x11` before SC0000, allowing
 the existing callback-window crops to render the textbox and control icons. Windowed page-1 validation
-passed with `build/textures/` temporarily unavailable; source alpha produced the translucent upper edge
+passed with `build/games/himegari/textures/` temporarily unavailable; source alpha produced the translucent upper edge
 and the bottom-right control row was visible.
 
 Validation: 124/124 engine tests, CLI/Godot builds, Godot threaded selftest, pixel parity for five installed
@@ -1178,7 +1178,7 @@ and parks BGM fades on the unified virtual clock. ALF/AAI/AGF VFS work and movie
 
 Ghidra `/v2` now names/comments all five handlers plus the asset-open, decode, DirectSound start/refill/stop/
 volume/release, and BGM fade workers; the program is saved. Evidence is
-`build/native-sfx-trace.jsonl` and `godot/build/sfx-port-timeline4.jsonl` (the latter is the final rebuilt
+`build/games/himegari/native-sfx-trace.jsonl` and `godot/build/sfx-port-timeline4.jsonl` (the latter is the final rebuilt
 channel-4 trace; earlier diagnostic reruns captured the missing external-state mismatch).
 
 **Automated validation:** engine **111/111**; corpus sweep unchanged at **284 exit / 13 STEP-LIMIT**;
@@ -3391,7 +3391,7 @@ layout, or the software backbuffer.
 - Do not add the window-width/window-height boot parameters early.
 - Do not turn Himegari-authored `800x600` operands, asset dimensions, or test fixtures into profile
   variables merely because they contain the same numbers.
-- Do not add a second SYS4INI decoder or read the generated `build/asset-index.json` at runtime.
+- Do not add a second SYS4INI decoder or read the generated `build/games/himegari/asset-index.json` at runtime.
 
 ### Design
 

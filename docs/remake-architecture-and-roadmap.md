@@ -1524,7 +1524,7 @@ the first game did not use.
 **data-table layouts** (each game's `*INIT` differs), assets, and any game-specific effectful behavior.
 The **call-script registry is no longer a per-game long pole** — it's a raw index into that game's
 SYS4INI file table, parsed directly by the runtime catalog (and exported by `parse_sys4ini.py` as
-`build/callscript-names.json` for tooling); the resolver is generic. So the remaining long pole is really just the **global-var map**. Process: point
+`build/games/<profile>/callscript-names.json` for tooling); the resolver is generic. So the remaining long pole is really just the **global-var map**. Process: point
 the toolchain at the new game's archives, re-run extraction, rebuild its global map, author a profile.
 **This is the core payoff of the VM approach:** the *engine* cost amortizes across all AGE games; only
 content-mapping recurs — far less than re-coding each game's logic bespoke.

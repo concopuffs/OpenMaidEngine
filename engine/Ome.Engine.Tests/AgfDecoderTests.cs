@@ -102,7 +102,7 @@ public class AgfDecoderTests
     [InlineData("SO001.AGF")]
     public void InstalledAssetMatchesExistingConverterPixels(string name)
     {
-        string bmpPath = Path.Combine(Paths.Textures, Path.ChangeExtension(name, ".BMP"));
+        string bmpPath = Path.Combine(Paths.Textures("himegari"), Path.ChangeExtension(name, ".BMP"));
         if (!File.Exists(bmpPath)) return;
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var store = new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir);

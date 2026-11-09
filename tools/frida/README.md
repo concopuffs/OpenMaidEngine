@@ -28,11 +28,11 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
   canonical usage and I/O live in `docs/tools-reference.md`.
 - **`capture_load_order.py`** — ★ the working asset-resolution capture. Hooks `ReadFile` on
   `DATA2.ALF`; each asset load starts with header reads **at its exact archive offset**, so exact-start
-  reads give the clean per-asset **load order** (→ names via `build/asset-index.json`). `--analyze`
+  reads give the clean per-asset **load order** (→ names via `build/games/<profile>/asset-index.json`). `--analyze`
   prints the order + file_number. This **confirmed `resId == SYS4INI file_number`** (the load order
   matches our engine's `set-texture(resId)` order 1:1). Attach by pid, replay the scene, Ctrl-C, `--analyze`.
 - `capture_graphics.py` — original `ReadFile` logger for `DATA2/DATA5` (`path<TAB>offset<TAB>size` →
-  `build/frida-reads.log`); pair with `tools/resolve_frida_reads.py`.
+  `build/games/<profile>/frida-reads.log`); pair with `tools/resolve_frida_reads.py`.
 - `locate_resource_load.py` — phase-1 locator (back-trace asset-opens → native load chain).
 - `capture_resid_args.py` — phase-2 probe (decoder args/context; showed the loader carries only offsets).
 - `find_globals_base.py`, `find_global_by_sequence.py` — **runtime global-variable RE (SHELVED)**. Full
@@ -67,4 +67,4 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
   and a quartz vtable hook did not (2026-11-06). To time DirectShow, reach quartz through the interface pointers that
   `CoCreateInstance` returns instead of hooking AGE's call sites.
 - **The reliable oracle is the `ReadFile` offset stream** → names via the SYS4INI index
-  (`tools/parse_sys4ini.py` → `build/asset-index.json`). Native-handler hooking is blocked by the packer.
+  (`tools/parse_sys4ini.py` → `build/games/<profile>/asset-index.json`). Native-handler hooking is blocked by the packer.

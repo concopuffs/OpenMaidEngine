@@ -19,7 +19,7 @@ readable, VM-verified table.
 `scjump_decode.py` walks the CFG with a guarded DFS (a guard stack + a local→symbolic-value map, so
 `mov local, global ; cmp local, imm` resolves back to a real global condition) and emits, per site,
 `(chapter, path-condition guards) → decision`. Output (generated, disposable):
-`build/scjump-decisions.json` (machine) and `build/scjump-decisions.md` (human, globals rendered by
+`build/games/himegari/scjump-decisions.json` (machine) and `build/games/himegari/scjump-decisions.md` (human, globals rendered by
 their `vm-map/globals.toml` registry names). Regenerate: `py -3.11 -X utf8 tools/scjump_decode.py`.
 
 ### Native-gated decisions (a key finding)
@@ -57,12 +57,12 @@ FIELD, SALLY, and TRAIN consume the same table for their scene transitions.
 two equally indexed 10,000-cell arrays:
 
 - `G[0x87a57 + decision]` is the packed SYS4INI script resource id. Its 135 distinct shipped values all
-  resolve to numbered `SCxxxx.BIN` scripts through `build/callscript-names.json`.
+  resolve to numbered `SCxxxx.BIN` scripts through `build/games/himegari/callscript-names.json`.
 - `G[0x8a167 + decision]` is authored chapter metadata. Source assignments form contiguous runs for
   chapters 1 through 9, followed by an unassigned `-1` run.
 
 Repeated assignments leave 1,209 final decision rows. `tools/extract_init.py SCINIT` preserves every
-source-ordered overwrite and emits the final registry to `build/data/SCINIT.json`, including resolved
+source-ordered overwrite and emits the final registry to `build/games/himegari/data/SCINIT.json`, including resolved
 script names and the independent SCJUMP chapter join. SCJUMP currently emits 847 distinct decision ids;
 all have SCINIT rows, and 844 final authored chapter tags agree with the decoded control-flow chapter.
 The three mismatches (250, 1001, and 1005) remain explicit as legacy/stale metadata rather than being

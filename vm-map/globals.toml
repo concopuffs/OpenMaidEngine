@@ -1,12 +1,12 @@
 # vm-map/globals.toml -- CANONICAL living global-variable registry (hand-edited).
-# Generated artifacts (build/globals.json, docs/global-reference.md) come from this file via
+# Generated artifacts (build/games/himegari/globals.json, docs/global-reference.md) come from this file via
 # tools/globals_build.py --build. Do not edit those. Skeletons are appended by
 # tools/story_flags.py --bootstrap; enrich each entry as we investigate.
 # The type implies the bank: `string...` entries are string-bank cells (GS), everything else integer cells (G).
 # The two banks have separate address spaces, so G 0x0 and GS 0x0 are different globals.
 # See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md.
 [meta]
-note = "Curated global addresses override the auto shape-inference map (build/global-var-map.json)."
+note = "Curated global addresses override the auto shape-inference map (build/games/himegari/global-var-map.json)."
 
 [[global]]
 address = "0x0"
@@ -2426,7 +2426,7 @@ name = "class_change_rule_script_ids"
 category = "data-table"
 type = "int[32]"
 value_domain = "packed SYS4 script ids; zero means unused"
-usage = "CALCCC iterates these 32 cells and call-scripts every positive entry to evaluate class-change providers. CCINIT is the shipped rule program decoded into build/data/CCINIT.json."
+usage = "CALCCC iterates these 32 cells and call-scripts every positive entry to evaluate class-change providers. CCINIT is the shipped rule program decoded into build/games/himegari/data/CCINIT.json."
 source = "investigation"
 confidence = "high"
 
