@@ -1773,6 +1773,24 @@ SYS4433 maps selector 0..4 to native pattern modes 4..8. Modes 4/5 divide the ac
 
 SYS4433 maps selector 0..4 to native pattern modes 8..12. The worker implements modes 8/9 as staggered equal-width strips revealed from the left/right and modes 10/11 as staggered equal-height strips revealed from the top/bottom. Each strip starts one timer step after its predecessor; completion takes `(divisions - 1 + strip thickness)` timer steps. Selector 4 reaches the worker's invalid-mode error for mode 12. ADV fast-forward or a nonpositive division count publishes the target endpoint immediately. Kamidori has 192 calls across 47 scripts; every call targets surface 2 with 64 divisions, uses a 10 or 15 ms interval, and selects one of modes 8..11. This is proven for SYS4433 only.
 
+### 0x2a `legacy-transition-black-scratch` (u00418E60, argc 4)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **runtime implemented:** no
+- **summary:** (surface_slot)(duration_ms)(parameter)(style) — start a blocking legacy screen transition in mode 5 + style; style must be 0-2, otherwise a script error. Under DRAWMODE=1 the begin creates scratch surface 0x20 and fills it black. With fast-forward set at dispatch it finalizes on the surface instead. Neither Himegari nor Kamidori calls it, so the port traces and skips it.
+- **grounding:** source=investigation, confidence=med
+- **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2a`; scope=Himegari SYS4422. Ghidra SYS4433 (Kamidori): dispatch slot 0x2a (ctx+0x9f7a8) resolves to op_0x2a_legacy_transition_modes_5_to_7@0x41b230. For style 0-2 it calls screen_transition_begin@0x43a780 (surface, -1, 5 + style, parameter, 0), sets run-state bit 8 and arms the sleep timer with operand 2, or with run-state 0x8000000 calls screen_transition_finalize@0x43a3d0(surface, 0). No call in either corpus.
+
+### 0x2e `legacy-transition-asset-mask` (u004194B0, argc 5)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **runtime implemented:** no
+- **summary:** (mask_asset)(source_surface)(target_surface)(duration_ms)(parameter) — start a blocking legacy screen transition in mode 8 with an indexed asset as its mask. Under DRAWMODE=1 the begin does nothing for mode 8. With fast-forward set it finalizes on the target. Neither Himegari nor Kamidori calls it, so the port traces and skips it.
+- **grounding:** source=investigation, confidence=med
+- **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x2e`; scope=Himegari SYS4422. Ghidra SYS4433 (Kamidori): dispatch slot 0x2e (ctx+0x9f7b8) resolves to op_0x2e_legacy_transition_asset_mask@0x41b890. It opens operand 1 through asset_open_indexed_entry_SYS4433 and calls screen_transition_begin@0x43a780(source, target, 8, asset data, operand 5); when the begin succeeds it sets run-state bit 8 and arms the sleep timer with operand 4, or with run-state 0x8000000 calls screen_transition_finalize@0x43a3d0(target, 0). The begin builds the mask object only in draw mode 0. No call in either corpus.
+
 ### 0x32 `scale-copy-surface-rect` (scale-copy-surface-rect, argc 10)
 - **observed by:** kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
@@ -1785,6 +1803,15 @@ SYS4433 maps selector 0..4 to native pattern modes 8..12. The worker implements 
 - **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433`; site=`vm-map/opcodes.toml opcode 0x32`; scope=matching scaled surface-copy handlers, workers, and Kamidori corpus. SYS4422 op_0x32_scale_copy_surface_rect@0x41db20 -> gfx_scale_copy_surface_rect@0x47c6c0 and SYS4433 op_0x32_scale_copy_surface_rect@0x41bbc0 -> gfx_scale_copy_surface_rect@0x483410 have the same ten-operand contract. Both workers proportionally clip paired rectangles, mark the destination dirty, select direct/down/up scaling by the relative dimensions, and use scratch surface 0x20 when the two axes require different directions. SYS4433's two corpus sites are ALLMAP@0x4e2 and SAVE@0xbb6, both immediate 1024x576 -> 384x216 copies.
 
 Both revision handlers convert origin/extent operands into paired edge rectangles, validate the two surfaces, mark the destination dirty, and dispatch to direct copy, area-weighted shrink, interpolating enlargement, or a two-pass mixed-axis route through scratch surface 0x20. Kamidori's only two calls, ALLMAP@0x4e2 and SAVE@0xbb6, downsample the full 1024x576 surface 2 into a 384x216 thumbnail on surfaces 193 and 195. The portable host implements that observed shrink contract with an area-weighted RGBA sampler; equal-sized rectangles continue through the established exact-copy path.
+
+### 0x36 `legacy-transition-two-surface` (u00419C00, argc 3)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **runtime implemented:** no
+- **summary:** (source_surface)(target_surface)(duration_ms) — start a blocking legacy screen transition in mode 9 between two surfaces. Under DRAWMODE=1 the begin copies them to surfaces 0x24 and 0x25 and creates scratch 0x20 blank. With fast-forward set it finalizes on the target. Neither Himegari nor Kamidori calls it, so the port traces and skips it.
+- **grounding:** source=investigation, confidence=med
+- **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x36`; scope=Himegari SYS4422. Ghidra SYS4433 (Kamidori): dispatch slot 0x36 (ctx+0x9f7d8) resolves to op_0x36_legacy_transition_two_surface@0x41c0d0. It sets run-state bit 8, arms the sleep timer with operand 3 and calls screen_transition_begin@0x43a780(source, target, 9, 0xa0, 0), or with run-state 0x8000000 calls screen_transition_finalize@0x43a3d0(target, 0). No call in either corpus.
 
 ### 0x80 `set-default-gfx-object-slot` (u0041AF00, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2788,7 +2815,7 @@ Operand 1 selects one of eleven style records. Operands 2..6 match opcode 0x13a:
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x88`; scope=Himegari SYS4422. Ghidra /v2: op_0x88_set_message_skip@0x41f130 writes operand 1 to ctx+0x13dc and ctx+0x550fc; nonzero also sets ctx+0x6da78=1, while zero clears run-state bit 0x08000000. adv_interpreter_tick injects input bit 0x40 on every tick while ctx+0x13dc is nonzero. engine_settings_register_defaults@0x46be30 initializes set:CancelMesSkipOnClick to 0; only a nonzero override enables its press/release cancellation path. All 301 ADV button callbacks pass 1; CALLBACK_LOAD.BIN is the sole corpus 0x88(0) reset.
 
-ctx+0x13dc is the Skip a text wait acts on and ctx+0x550fc the toggle the menu shows: op 0x19b clears only the first, and op 0x19c and the menu's Skip toggle copy the second back. Nonzero does not set run-state 0x08000000 itself; the next polling text wait starts fast-forward from the injected action 6. The port tracks ctx+0x13dc as _messageSkipInjected and sets its script fast-forward channel at once, which differs while the service is suspended (docs/backlog.md; docs/engine-re.md, 'Read skip and ctx+0x13dc').
+ctx+0x13dc is the Skip a text wait acts on and ctx+0x550fc the toggle the menu shows: op 0x19b clears only the first, and op 0x19c and the menu's Skip toggle copy the second back. Nonzero does not set run-state 0x08000000 itself; the next polling text wait starts fast-forward from the injected action 6. So SC0000's strip Skip button still sleeps its 100 ms, and fast-forward starts when its callback returns into op 0x72. The port tracks ctx+0x13dc as _messageSkipInjected, and op 0x72's entry (VirtualMachine.EnterTextWait, run again after a hotspot callback) starts fast-forward from it (docs/engine-re.md, 'Read skip and ctx+0x13dc').
 
 ### 0x90 `register-hotspot-callbacks` (u0041BEB0, argc 7)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2975,7 +3002,7 @@ Once due, the handler restarts the timer and pushes the following pc; a -1 targe
 - **grounding:** source=investigation, confidence=med
 - **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x101`; scope=Himegari SYS4422. Ghidra /v2: op_0x101_reset_message_skip_input@0x4170a0 resets the input state rooted at ctx+0xa0ce8, clears run-state bit 0x08000000, zeroes ctx+0xa0ce8, and writes ctx+0x6da74=1 / ctx+0x6da80=0. It does not touch ctx+0x13dc or ctx+0x550fc, so adv_interpreter_tick re-injects Skip on the following tick while persistent state remains enabled. The Auto, Message-skip, Read-skip, and Hide-window callbacks invoke it after their 100 ms cursor re-arm sequence.
 
-ctx+0x6da74, which it sets, is cleared only by adv_text_reveal_service_tick@0x406fa0 at a reveal tick with action 6 up (0x407101); while set, a held action 6 does not start fast-forward at a reveal. TITLE, FIELD and every control-strip callback run it, which is why a Ctrl held from Kamidori's SC0000 stops at SC2000@0xaf5 (docs/engine-re.md, "Physical fast-forward"). The port models it in VirtualMachine.PhysicalFastForward.cs.
+ctx+0x6da74, which it sets, is cleared only by adv_text_reveal_service_tick@0x406fa0 at a reveal tick with action 6 up (0x407101); while set, a held action 6 does not start fast-forward at a reveal. TITLE, FIELD and every control-strip callback run it, which is why a Ctrl held from Kamidori's SC0000 stops at SC2000@0xaf5 (docs/engine-re.md, "Physical fast-forward"). It ends fast-forward however it started (0x4170ce), persistent Skip and read-skip included; op 0x72's entry starts it again, also when the calling callback returns into the wait. The port models it in VirtualMachine.PhysicalFastForward.cs and op 0x101's handler.
 
 ### 0x106 `get-joystick-button-count` (get-joystick-button-count, argc 1)
 - **observed by:** kamidori (SYS4433)
@@ -3530,15 +3557,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x26`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
-### 0x2a `u00418E60` (u00418E60, argc 4)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2a`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
 ### 0x2b `u00418F30` (u00418F30, argc 5)
 - **observed by:** none in recorded corpora
 - **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
@@ -3565,15 +3583,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e `u004194B0` (u004194B0, argc 5)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2f `u004195A0` (u004195A0, argc 4)
 - **observed by:** none in recorded corpora
@@ -3628,15 +3637,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x35`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x36 `u00419C00` (u00419C00, argc 3)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **runtime implemented:** no
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x36`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x37 `u00419C90` (u00419C90, argc 11)
 - **observed by:** none in recorded corpora

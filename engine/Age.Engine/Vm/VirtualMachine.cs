@@ -505,6 +505,18 @@ public sealed partial class VirtualMachine
         }
     }
 
+    /// <summary>The entry of op_0x72_handler, which also runs when a hotspot callback's ret re-runs the waiting op: the
+    /// read-skip block, then run-state 0x8000000 cleared unless the message is read or action 6 is held. Persistent
+    /// Skip (ctx+0x13dc) sets it again as the wait polls its injected action 6, so the page still passes. Last, it
+    /// polls the input latch and discards it.</summary>
+    private void EnterTextWait()
+    {
+        ApplyReadTextSkip();
+        if (!_advReadSkipState) SetScriptFastForward(_messageSkipInjected);
+        ReconcilePhysicalFastForward();
+        DiscardHeldTriggersUnlessFastForward();
+    }
+
     private void SetScriptFastForward(bool active)
     {
         _messageSkipServiceActive = active;
@@ -1595,8 +1607,9 @@ public sealed partial class VirtualMachine
             // A malformed callback must not leave its sentinel in the page's ordinary local-call stack.
             int sentinel = _cur.CallStack.LastIndexOf(HOTSPOT_RETURN);
             if (sentinel >= 0) _cur.CallStack.RemoveAt(sentinel);
-            // The callback's ret re-runs the waiting op 0x72, whose entry discards what the callback's effects held.
-            DiscardHeldTriggersUnlessFastForward();
+            // The callback's ret re-runs the waiting op 0x72. Its entry discards what the callback's effects held and
+            // restarts fast-forward from persistent Skip or read-skip (a strip button's op 0x88 or 0x101 changed them).
+            EnterTextWait();
         }
         RearmAfterWaitCallback();
         return true;

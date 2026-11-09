@@ -142,6 +142,9 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x6dbf8` | `message_skip_queued_voice_arg` | `int` | second argument retained with message_skip_queued_voice_id; Himegari op 0xc4 stores zero |
 | `0x6ddac` | `opcode_debug_metadata_table` | `void*` | base of 512 optional per-opcode debug-metadata pointers; Himegari's release image zero-initializes the table and has no writer, so diagnostic COMMAND names render as '-' |
 | `0x6f798` | `script_source_line_table` | `void*` | base of 41 optional per-frame source-line-map pointers; Himegari's release image zero-initializes the table and has no writer, so diagnostic LINE values render as -1 |
+| `0x6f86c` | `debug_reload_resume_active` | `int` | engine_reload_current_script_and_reset_input@0x42e930 (the debug menu's BIN reload) sets it with a resume line; op 0x19c keeps ctx+0x13dc and run-state 0x8000000 while it is set and nothing else restores them. The resume line comes from script_source_line_table, which release images never fill, so the reload clears it again: unreachable in Himegari and Kamidori. The constructor and scene_context_init_reset clear it |
+| `0x6f870` | `debug_reload_resume_line` | `int` | the debug reload's resume source line, 10 before the current one (0 cancels the resume) |
+| `0x6f874` | `debug_reload_resume_frame` | `int` | the frame index (cur_ctx_index) the debug reload resumes in |
 | `0x6f880` | `diagnostic_text_buffer` | `int` | base of an embedded 28-byte MSVC string accumulator; op 0x1b2 appends formatted operand text, op 0x1b3 appends CRLF, and op 0x1b4 presents then clears it |
 | `0x6f89c` | `script_launch_queue` | `int` | embedded integer FIFO used for engine-level auxiliary/root script launches; data pointer and queue indices follow |
 | `0x6f8a0` | `script_launch_queue_data` | `void*` | dword storage for packed script ids or negative frame-resume ids |

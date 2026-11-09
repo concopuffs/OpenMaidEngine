@@ -18,11 +18,17 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "u0041B290":
             case "set-message-skip": // 0x88: persistent all-message fast-forward service state
+                // op_0x88_set_message_skip@0x41f130 writes ctx+0x13dc and ctx+0x550fc alike. Enabling sets no run-state
+                // bit: the next polling text wait starts fast-forward from the injected action 6, so SC0000's Skip button
+                // still sleeps its 100 ms and the page passes once the callback returns into op 0x72. Disabling clears
+                // run-state 0x8000000.
                 _messageSkipEnabled = Read(a[0]) != 0;
-                _messageSkipInjected = _messageSkipEnabled;   // it writes ctx+0x13dc and ctx+0x550fc alike
-                _messageSkipServiceActive = _messageSkipEnabled;
-                _host.SetMessageSkipActive(_messageSkipServiceActive);
-                if (!_messageSkipEnabled) EndPhysicalFastForward();   // op_0x88_set_message_skip clears run-state 0x8000000
+                _messageSkipInjected = _messageSkipEnabled;
+                if (!_messageSkipEnabled)
+                {
+                    SetScriptFastForward(false);
+                    EndPhysicalFastForward();
+                }
                 return pc + 1;
             case "u00414E50": // 0x19a: persistent state used by the SO001 active overlay
                 Write(a[0], _messageSkipEnabled ? 1 : 0); return pc + 1;
@@ -88,8 +94,10 @@ public sealed partial class VirtualMachine
                 _skipClickCancelState = 0;
                 Interlocked.Exchange(ref _skipClickCancelTriggers, 0);
                 TakeHeldTriggers();
-                // It clears run-state 0x8000000 and sets ctx+0x6da74, so a held action 6 starts no reveal's fast-forward
-                // until a reveal runs with it released.
+                // It clears run-state 0x8000000 (0x4170ce), however it started, and sets ctx+0x6da74, so a held action 6
+                // starts no reveal's fast-forward until a reveal runs with it released. Persistent Skip and read-skip start
+                // it again at the next text wait, or when the callback that ran this op returns into op 0x72.
+                SetScriptFastForward(false);
                 EndPhysicalFastForward();
                 lock (_physicalFastForwardLock) _revealPhysicalSkipSuppressed = true;
                 return pc + 1;

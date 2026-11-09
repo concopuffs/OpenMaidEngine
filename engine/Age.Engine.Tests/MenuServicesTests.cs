@@ -124,7 +124,8 @@ public class MenuServicesTests
     {
         // Native clears the persistent flag and ctx+0x13dc but not run-state 0x08000000; op 0xfa recomputes it.
         var (vm, host) = Start(Build("MENU_SKIP_OFF",
-            [(0x88, new[] { I(1) }), .. Probes(0, 4), (0xfa, Array.Empty<Operand>()), .. Probes(4, 1)]));
+            [(0x88, new[] { I(1) }), (0x19c, Array.Empty<Operand>()), .. Probes(0, 4), (0xfa, Array.Empty<Operand>()),
+             .. Probes(4, 1)]));
         host.AtYield[3] = v => v.RequestMenuMessageSkipToggle();
 
         vm.Run();

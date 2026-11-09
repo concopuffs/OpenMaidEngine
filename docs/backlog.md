@@ -36,8 +36,6 @@ it; git history keeps the record.
   - The op-`0xd5` timed sequence's poll (`timed_callback_sequence_tick`) is implemented from the decode and
     synthesized tests only. No native run has clicked during a sequence: HISTORY's lasts 50 ms, and the others run
     deep in gameplay (SHOWGROW is the one Himegari sequence with an abort pc).
-  - `input_hotspot_wait_poll` and `adv_input_dispatch_callbacks` (op `0x91`/`0x92`/`0x95`/`0x96` waits) take no held
-    triggers in the port. Himegari never runs those ops; Kamidori is unchecked.
 
   Done when each case is driven natively and the port matches, or the case is shown unreachable in both games.
 - **One unexplained port crash on exit (2026-11-06).** A driven port exited with `0xC0000005` on `drive.py port
@@ -46,12 +44,6 @@ it; git history keeps the record.
   Seven later sessions exited 0. They covered stops in fullscreen and while windowed, and clicks in the side bars.
   Windows logged no Application Error event, and the next start overwrote `godot.log`. Done when a crash recurs with
   its log kept and is fixed, or after a period of driven runs without one.
-- **Statement-block movie and modal gating.** Open `0x1f4`/`0x1f5` blocks withhold the tick render and delayed
-  SFX/voice starts in the port, but not delayed movie starts or the `0x2000` modal movie service (`engine-re.md`,
-  statement blocks, "Not modelled"). A static scan of both games' scripts (2026-11-04) finds a movie start inside
-  an open block only twice, both `play-movie-mask-transition` in `DEBUG.BIN` (`0x139`, `0x1ab`), which retail never
-  reaches (the port's F4 debug route does). Done when those two are modelled, or the item is closed as
-  debug-only.
 - **Aspect mode: the unmodelled parts.** The mode-1 calibration of the primary and single-byte fonts, the in-cell
   placement and the surface-text draws are implemented (`engine-re.md`, "Aspect-mode font calibration", "Aspect-mode
   surface text"). Still missing:
@@ -66,41 +58,32 @@ it; git history keeps the record.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
-- **Kamidori data tooling reads pre-update copies of eleven append records.** Kamidori's official update shipped
-  eleven root-loose append overrides (`$1$` ALINIT, CIMES, ITINIT, ITMES, SKINIT, SKMES; `$2$` ALINIT, ITINIT,
-  ITMES, SKINIT, SKMES). The English translation overwrote them, and its installer kept the Japanese originals as
-  `Backup/<name>.bak` (`asset-resolution-re.md`, "Root `$n$` files are AGE's own mechanism"). Tooling excludes every
-  root `$n$` file for Kamidori, so `paths.scripts()` and `init_image.py`'s pristine view fall back to the
-  `APPENDnn.ALF` records, which predate the update (`$1$ITINIT` 7,208 bytes against the update's 9,640). The item,
-  skill and alchemy tables decoded from appends 1 and 2 (`kamidori-data-tables.md`, `vm-map/globals-kamidori.toml`)
-  may therefore miss the update's changes. Done when the pristine view uses each record's `Backup/` original where
-  one exists, and the init image, the extracted tables and their documentation are rebuilt from it.
-- **Persistent Skip and read-skip cases the port does not model** (`engine-re.md`, "Read skip and ctx+0x13dc"):
-  - Op `0x88(1)` while the ADV service is suspended (after op `0x19b`). Native sets only `ctx+0x13dc`, and the next
-    polling text wait starts fast-forward. The port sets its script fast-forward channel at once.
-  - Op `0x19c`'s guard `ctx+0x6f86c`. With the guard set and nothing to restore, native keeps `ctx+0x13dc` and
-    run-state `0x08000000`. The port always clears them.
-  - Op `0x101` clears run-state `0x08000000` whatever started it (`0x4170ce`). The port ends only its physical
-    channel, so fast-forward from persistent Skip or read-skip survives the op.
-
-  Neither game has shown a difference from these. Done when each is modelled with a test, or shown unreachable.
-- **A sleep inside an open statement block may present a frame (suspected).** `GodotAdvHost.Sleep` requests
-  presentation on every sleep, which sets `_presentRequested`. `ConsumePresentationReasons` withholds the tick render
-  in an open `0x1f4` block only while no presentation is requested, so a sleep inside an open block publishes the
-  frame. Native's main loop renders nothing while a block is open, unless run-state `0x400` parks it on a transition
-  (`engine-re.md`, statement blocks). That a sleep leaves `0x400` clear is not checked. The behaviour predates the
-  2026-11-07 short-sleep change. Done when a script that sleeps inside an open block is compared with native, or a
-  scan shows that none does.
+- **Rebase Kamidori on a clean install.** The Kamidori install in use carries the English fan translation
+  (`patch/`, a translated `AGE.EXE`, 92 root `$n$*.bin` scripts and 25 BMP `$n$*.AGF` graphics;
+  `asset-resolution-re.md`, "Kamidori English-translation overlay") beside 94 Japanese non-`$` root `.BIN`
+  overrides whose origin is not established. Tooling works around the translation by excluding root `$n$` files
+  (`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`), and native runs use the translated executable. The user is getting
+  a clean install (2026-11-08). Done when the Kamidori game root is that install with only official files: the
+  archives are re-extracted, the init image, tables, registries and their docs are rebuilt from it, the docs
+  describe its loose files from evidence, the untrusted-override exception is dropped if nothing needs it, and
+  the native driving sandboxes are re-seeded.
 - **The `0x90`-byte SYS4INI block.** Its meaning is unknown and no consumer is known (OMS spec §13). Revisit only if
   one appears.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,
   where the encoder's match choices differ. Matching is optional, since native reads both.
-- **Surface 0x20's created flag in Kamidori saves.** Kamidori SAVE01 and SAVE05 (k1 sandboxes, 2026-11-07), made
-  by both targets from the same history, differ in one surface record besides the op `0xd0` clock samples: slot
-  `0x20` has created `1` on the port and `0` on native. Slot `0x20` is the legacy transition scratch surface
-  ([sys4-format-notes.md](sys4-format-notes.md), "Surface-record bookkeeping"), so the port probably runs a
-  scratch write that native skips somewhere between the field and the workshop. Only saves see the flag: neither the
-  restore nor op `0x216` reads it. Done when the writer is found and matched.
+- **Resume the Kamidori fidelity sweep.** Since 2026-11-03 the sweep has driven native AGE and the port through
+  the same steps (`tools/drive.py`, `rand-seed` before battles) and compared screenshots, VM positions and decoded
+  saves. It paused on 2026-11-08 at 木漏れ日の深緑地, turn 4, with every difference so far fixed or listed above.
+  Covered at parity:
+  - the title, prologue and first map and battle;
+  - 平穏なる採取地 to its clear (採取, DIG, STAGECLEAR) and the chapter scenes that follow;
+  - the world map, town, church shop, tavern and workshop scenes, an alchemy craft and the SC1250 delivery;
+  - 木漏れ日の深緑地's first four turns, three battles in all.
+
+  Saves on both targets compare by decoded payload (`Age.Cli save-diff`, `tools-reference.md`). Clock
+  samples, gfx start stamps and save-history globals are expected to differ (`engine-re.md`, "Op 0x216 reads past
+  the live surface table" and "Finished channels reset their targets"). Done when the story has been driven to its
+  ending on both targets, with each difference fixed or listed here.
 
 ## Open Maid Script
 
@@ -131,10 +114,6 @@ it; git history keeps the record.
   (`oms/<profile>/`), globals and patch points (`build/games/<profile>/`). An exported port without the repository
   links only mods that need none of them (`tools-reference.md`, port `--mod`). Done when an export carries or
   embeds these files and a fragment mod links in an exported build.
-- **Warn when record 0 is not meant to autorun.** A mod's first `[scripts].names` entry is its append catalog's
-  record 0, which native op `0x143` runs at INIT2. A mod whose first script is a scene hangs native AGE at boot. Done
-  when `omp check`/`omp build` warn if record 0 waits for input or otherwise looks like a scene
-  (`docs/modding/new-scenes.md` documents the rule meanwhile).
 - **Mod-owned globals.** `global` declarations must pin a cell (`@ address`). The linker-allocated and `saved`
   globals of the language design (OMS spec §5.2, §9.2) are not implemented, and which cells are free (and which a
   save keeps) is open (§13). Mods pick unused cells by hand meanwhile (`docs/modding/oms-language.md`). Done when

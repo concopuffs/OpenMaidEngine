@@ -11,9 +11,10 @@ public class SurfaceRecordTableTests
 {
     private static Operand I(long value) => new(0, value);
 
-    private static GfxState Run(params (int, Operand[])[] ops)
+    private static GfxState Run(params (int, Operand[])[] ops) => RunOn(OpcodeTableJson.Load(Paths.OpcodesJson), ops);
+
+    private static GfxState RunOn(OpcodeTable table, params (int, Operand[])[] ops)
     {
-        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var list = new List<(int, Operand[])>(ops) { (0x2, Array.Empty<Operand>()) };
         var vm = new VirtualMachine(
             ScriptAssembler.Assemble(table, "SURFACES", list, Array.Empty<string>()), table, new RecordingHost());
@@ -53,6 +54,39 @@ public class SurfaceRecordTableTests
         Assert.Equal([-1, 0, 0, 0, 0], Record(gfx, 999));
         Assert.Equal([-1, 0, 0, 0, 1], Record(gfx, 0x24));   // boot-created composite scratch
         Assert.Equal([-1, 0, 0, 0, 1], Record(gfx, 0x25));
+    }
+
+    // Persistent Skip on, then an ADV entry starts fast-forward (run-state 0x8000000).
+    private static readonly (int, Operand[])[] FastForward = [(0x88, [I(1)]), (0x19c, [])];
+
+    public static TheoryData<string, bool, int, long[], int> LegacyTransitions => new()
+    {
+        // Under DRAWMODE=1 the black and white fades fill scratch surface 0x20; the crossfade and the patterned reveals
+        // never touch it; under fast-forward only a negative surface (black or white) makes finalize fill it.
+        { "SYS4422", false, 0x21, [1, 30], 1 },
+        { "SYS4422", true, 0x21, [1, 30], 0 },
+        { "SYS4422", false, 0x22, [1, 30], 1 },
+        { "SYS4422", true, 0x22, [1, 30], 1 },
+        { "SYS4422", false, 0x25, [1, 2, 8], 0 },
+        { "SYS4422", true, 0x25, [1, 2, 8], 0 },
+        { "SYS4433", false, 0x24, [1, 80], 1 },
+        { "SYS4433", false, 0x27, [2, 40, 64, 3], 0 },
+        { "SYS4433", false, 0x28, [2, 10, 64, 0], 0 },
+        { "SYS4433", true, 0x28, [2, 10, 64, 0], 0 },
+    };
+
+    [Theory]
+    [MemberData(nameof(LegacyTransitions))]
+    public void LegacyTransitionsMarkScratch0x20OnlyWhereNativeFillsIt(string abi, bool fastForward, int op,
+                                                                       long[] operands, int created)
+    {
+        var ops = new List<(int, Operand[])>();
+        if (fastForward) ops.AddRange(FastForward);
+        ops.Add((op, Array.ConvertAll(operands, I)));
+        GfxState gfx = RunOn(OpcodeTableJson.Load(Paths.OpcodesJson, abi), ops.ToArray());
+        gfx.SnapshotSurfaceRecords();
+
+        Assert.Equal(created, Record(gfx, 0x20)[4]);
     }
 
     [Fact]

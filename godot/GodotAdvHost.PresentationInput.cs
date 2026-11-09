@@ -1097,6 +1097,16 @@ public sealed partial class GodotAdvHost
     // main-loop timer. Either way native renders a dirty frame at the next loop iteration without waiting for the display.
     internal const long NativeInlineSleepLimitMs = 10;
 
+    internal enum SleepPresentation { None, Immediate, Synchronized }
+
+    /// <summary>What a sleep asks of the compositor. The sleep sets no run-state 0x400, so inside an open statement
+    /// block engine_main_tick renders nothing while it runs: Himegari's control-strip callbacks sleep 100 ms inside a
+    /// block and native shows their pressed icon only at the close (docs/engine-re.md, "Statement blocks").</summary>
+    internal static SleepPresentation SleepPresentationFor(long duration, bool statementBlockActive)
+        => statementBlockActive ? SleepPresentation.None
+           : duration < NativeInlineSleepLimitMs ? SleepPresentation.Immediate
+           : SleepPresentation.Synchronized;
+
     public void Sleep(long duration)
     {
         // Native sleep_timer_arm clamps the duration to at least 1 ms. In menu poll loops, sleep(0)
@@ -1112,8 +1122,11 @@ public sealed partial class GodotAdvHost
             // callback fires every 50 ms. Waiting here for the compositor rounded each short sleep up to a display
             // frame: Kamidori FIELD's callback ran every 50 or 67 ms, and its 100-call help overlay came late
             // (docs/engine-re.md, "Short sleeps do not wait for the display").
-            if (duration < NativeInlineSleepLimitMs) RequestPresentation();
-            else RequestSynchronizedPresentation();
+            switch (SleepPresentationFor(duration, StatementBlockActive))
+            {
+                case SleepPresentation.Immediate: RequestPresentation(); break;
+                case SleepPresentation.Synchronized: RequestSynchronizedPresentation(); break;
+            }
             while (_clock.NowMs < deadline)
             {
                 if (_stopping) break;

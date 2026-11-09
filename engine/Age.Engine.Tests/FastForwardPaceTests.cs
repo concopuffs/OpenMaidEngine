@@ -43,7 +43,8 @@ public class FastForwardPaceTests
         }
     }
 
-    private static readonly (int, Operand[]) SkipOn = (0x88, new[] { I(1) });
+    // Op 0x88(1) only sets persistent Skip; op 0x19c (an ADV scene's entry) starts fast-forward from it.
+    private static readonly (int, Operand[])[] SkipOn = { (0x88, new[] { I(1) }), (0x19c, Array.Empty<Operand>()) };
     private static readonly (int, Operand[]) SkipOff = (0x88, new[] { I(0) });
 
     private static IEnumerable<(int, Operand[])> Probes(int count, int first = 0) =>
@@ -56,7 +57,7 @@ public class FastForwardPaceTests
     private static Script Build(OpcodeTable table, string name, bool skip, int probes, params (int, Operand[])[] extra)
     {
         var ops = new List<(int, Operand[])>();
-        if (skip) ops.Add(SkipOn);
+        if (skip) ops.AddRange(SkipOn);
         ops.AddRange(extra);
         ops.AddRange(Probes(probes));
         return Assemble(table, name, ops);
@@ -81,7 +82,7 @@ public class FastForwardPaceTests
         VirtualPaceClock clock = Run(table, Build(table, "PACE_PAGES", skip: true, 1, wait, wait),
                                      1000, pageMicroseconds: 3000);
 
-        // 0x88, two text waits, one probe and 0x2: each op owes 1 ms, and each text wait 3 ms more.
+        // 0x19c, two text waits, one probe and 0x2: each op owes 1 ms, and each text wait 3 ms more.
         Assert.Equal(new[] { 1, 4, 4, 1, 1 }, clock.Sleeps);
     }
 
@@ -120,8 +121,8 @@ public class FastForwardPaceTests
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         VirtualPaceClock clock = Run(table, Build(table, "PACE", skip: true, 60), 2000);
 
-        // 0x88, 60 probes and the closing 0x2 are paced, each after it runs. With no other time passing, each owes
-        // its whole 2 ms.
+        // 0x19c, 60 probes and the closing 0x2 are paced, each after it runs (0x88 runs before fast-forward starts).
+        // With no other time passing, each owes its whole 2 ms.
         Assert.Equal(62, clock.Reads);
         Assert.Equal(Enumerable.Repeat(2, 62), clock.Sleeps);
     }
@@ -157,9 +158,9 @@ public class FastForwardPaceTests
     public void TimeOutsideFastForwardIsNotBankedAsCredit()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
-        // Fast-forward for 0x88 and 20 probes, off for 20 probes, then on again for 0x88, 20 probes and 0x2.
+        // Fast-forward for 0x19c and 20 probes, off for 20 probes, then on again for 0x19c, 20 probes and 0x2.
         Script script = Assemble(table, "PACE_RESUME",
-            new[] { SkipOn }.Concat(Probes(20)).Append(SkipOff).Concat(Probes(20, 20)).Append(SkipOn)
+            SkipOn.Concat(Probes(20)).Append(SkipOff).Concat(Probes(20, 20)).Concat(SkipOn)
                 .Concat(Probes(20, 40)));
         // The unpaced stretch takes 500 ms, which pacing first sees on the resumed run's first read.
         VirtualPaceClock clock = Run(table, script, 2000, block: (22, 500));

@@ -16,12 +16,7 @@ public sealed partial class VirtualMachine
         switch (label)
         {
             case "wait-for-input":
-                ApplyReadTextSkip();
-                // op_0x72_handler clears run-state 0x8000000 unless the message is read or action 6 is held. Persistent
-                // Skip (ctx+0x13dc) sets it again as the wait polls its injected action 6, so the page still passes.
-                if (!_advReadSkipState) SetScriptFastForward(_messageSkipInjected);
-                ReconcilePhysicalFastForward();
-                DiscardHeldTriggersUnlessFastForward();   // op_0x72_handler polls the input latch and discards it
+                EnterTextWait();
                 // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
                 if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }
                 // Re-arm definitions that an earlier 0x93 left as a template (HotspotRegistry.Reset). Only

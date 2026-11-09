@@ -86,9 +86,11 @@ public sealed partial class VirtualMachine
         {
             _host.WaitForServiceTrigger(() =>
             {
-                ApplyMenuToggles();   // the native menu's Skip toggle starts fast-forward, which ends this wait
+                // input_poll_triggered_action_mask@0x460880 adds action 6 while persistent Skip (ctx+0x13dc) is set, so
+                // op 0x88(1) or the native menu's Skip toggle ends this wait. Fast-forward alone (read-skip) does not.
+                ApplyMenuToggles();
                 return TakeHeldTriggers() != 0
-                       || _messageSkipServiceActive || _stopRequested || _rootReloadRequested;
+                       || _messageSkipInjected || _stopRequested || _rootReloadRequested;
             });
         }
         finally

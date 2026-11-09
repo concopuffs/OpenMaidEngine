@@ -5859,6 +5859,47 @@ compatibility fix tried an SC section and then a type-checked base-catalog fallb
 proved there is no first stage: ROOM and SC scripts alike pass an already absolute packed id directly to
 the catalog opener. SC0000's `0x24 -> MAN999.OGG` works because that scene's inferred group begins at zero.
 
+#### Legacy transitions and scratch surface `0x20` (2026-11-08)
+
+Kamidori saves made on the port recorded surface `0x20` as created where native's had it clear (slots 01, 05,
+09, 200 and 204 of the sweep, compared with `Age.Cli save-diff`). The port marked the slot for every legacy
+transition. Native writes it only for some modes, and Kamidori's scripts mostly use the two that never do: the
+crossfade `0x25` (65 sites) and the strip reveal `0x28` (192 sites).
+
+Under `DRAWMODE=1`, which both games run, `screen_transition_begin` (SYS4422 `0x439da0`, SYS4433 `0x43a780`)
+treats the scratch slot by mode. A blank create or a fill sets the record's created flag (see
+[sys4-format-notes.md](sys4-format-notes.md), "Surface-record bookkeeping").
+
+| mode | op (SYS4433 handler) | scratch `0x20` |
+|---|---|---|
+| 0, 2 | `0x21` (`0x41aa70`), `0x23` (`0x41ac80`) | created, filled black (0) or white (2) and drawn over the frame |
+| 1, 3 | `0x22` (`0x41ab80`), `0x24` (`0x41ad80`) | the captured surface is drawn, then `0x20` is created and filled black (1) or white (3) |
+| 4 | `0x25` (`0x41ae80`) | untouched: source and target are composited directly |
+| 5–7 | `0x2a` (`0x41b230`): mode `5 + style`, style 0–2 | created and filled black |
+| 8 | `0x2e` (`0x41b890`): an asset mask | untouched in draw mode 1 (draw mode 0 builds the mask object) |
+| 9 | `0x36` (`0x41c0d0`) | created blank; the two surfaces are copied to `0x24` and `0x25` |
+
+The strip reveals `0x27`/`0x28` do not use this manager. Their begin and tick (SYS4433 `0x43ce80` and
+`0x43d6b0`) never write `0x20`.
+
+Every handler takes `screen_transition_finalize` (SYS4422 `0x4399c0`, SYS4433 `0x43a3d0`) when fast-forward
+(run-state `0x8000000`) is set at dispatch. Finalize publishes its surface operand directly and fills `0x20`
+only when that operand is negative, which is the black or white endpoint:
+
+| op | fast-forward off | fast-forward on |
+|---|---|---|
+| `0x21` | begin mode 0: `0x20` written | `finalize(surface, 0)`: written only for a negative surface |
+| `0x22` | begin mode 1: written | `finalize(-1, 0)`: written |
+| `0x24` | begin mode 3: written | `finalize(-1, 0xffffff)`: written |
+| `0x25` | begin mode 4: not written | `finalize(target, 0)`: written only for a negative target |
+| `0x27`/`0x28` | strip reveal: not written | `finalize(surface, 0)`, also when the division count is ≤ 0: written only for a negative surface |
+
+The port follows these tables in `VirtualMachine.Presentation.cs` (`MarkLegacyTransitionScratchWritten`,
+`MarkScratchIfFinalizeFills`). Ops `0x23`, `0x2a`, `0x2e` and `0x36` appear in neither corpus, so the port
+still traces and skips them. Test: `SurfaceRecordTableTests.LegacyTransitionsMarkScratch0x20OnlyWhereNativeFillsIt`.
+Live check: the port loaded slot 008, entered 木漏れ日の深緑地 (SC0500 and the SC2000 tutorial) and saved. The save
+records `0x20` with created 0, as native's slot 009 does; before the fix the port recorded 1.
+
 ---
 
 ### Startup string predicate and unit-data block copy — `0x194` / `0x1b0` (2026-07-21)
@@ -6032,8 +6073,10 @@ trigger, so a click made while nothing polls is still there for the next poll.
   trigger moves the frame to the abort pc (op `0xd5`'s operand, recorded at cursor 0) and clears `0x40`; the cursor
   stays. With no abort pc (-1) the trigger is dropped. 16 of Himegari's 17 sequences pass -1 (SHOWGROW passes
   `label_9db`), and 14 of Kamidori's 15 (one passes `0x87e`).
-- Not yet modelled by the port: `input_hotspot_wait_poll` (run-state `0x800000`) and `adv_input_dispatch_callbacks`
-  (`0x10000000`). Their ops (`0x91`, `0x92`, `0x95`, `0x96`) are unused in Himegari (`docs/backlog.md`).
+- Not modelled by the port, being unreachable: `input_hotspot_wait_poll` (run-state `0x800000`) and
+  `adv_input_dispatch_callbacks` (`0x10000000`). Their ops (`0x91`, `0x92`, `0x95`, `0x96`) occur in neither game's
+  scripts (both catalogs' opcode coverage, checked 2026-11-08), and the port stops on them as unsupported opcodes
+  ("Modal hotspot waits").
 
 Nothing else polls. A script sleep (op `0xc8`, run-state 1) only tests `interval_timer_poll_elapsed_steps`, and
 `input_latch_mouse_click` tests no run state, so a click made during a sleep, while ops run, or during an effect with
@@ -6453,15 +6496,27 @@ The ops and the menu treat them as follows (/v2 addresses):
 
 | Writer | Effect |
 |---|---|
-| op `0x88` (`0x41f130`) | writes `0x13dc` and `0x550fc` alike; `0x88(0)` also clears the run-state bit |
+| op `0x88` (`0x41f130`) | writes `0x13dc` and `0x550fc` alike. `0x88(1)` sets `message_skip_activation_guard` (`ctx+0x6da78`) and no run-state bit; `0x88(0)` clears the run-state bit |
+| op `0x101` (`0x4170ce`) | clears the run-state bit however it started; keeps `0x13dc` and `0x550fc` |
 | op `0x19b` (`0x416560`) | clears the run-state bit, `0x13dc`, the service flag `0x55100` and the click-cancel phase; keeps `0x550fc` |
 | op `0x19c` (`0x4165a0`) | sets `0x55100`. With `0x550fc` set: `0x13dc = 1` and the run-state bit set. Else with the message read: the run-state bit set. Else, unless the guard `ctx+0x6f86c` is set: clears `0x13dc` and the run-state bit |
+| op `0x72`'s entry, again when a hotspot callback's `ret` re-runs the waiting op | the read-skip block below, then the clear below |
 | read-skip block of ops `0x6e` (`0x41e3b1`), `0x71` (`0x41e540`, `0x41e63a`), `0x72` (`0x41e73b`) and the menu's read-skip toggle (`0x406cd0`) | with `message:ReadTextSkip` off, read = 0. With it on and the message read: the run-state bit set, read = 1. Else read = 0 only while `0x550fc` is clear. It never clears the run-state bit and never starts it from the toggle |
 | op `0x72` | after that block, clears the run-state bit when read is 0 and the held mask lacks `0x40` (`0x41e786`); its own wait then starts it again from `0x13dc` |
 | op `0xfa` (`0x416de0`) | clears the run-state bit when the held mask lacks `0x40`; re-arms nothing |
 | op `0x1ca` (`0x41f880`) | writes `message:ReadTextSkip` only |
 | menu Skip toggle (`adv_toggle_skip_mode@0x406c20`) | while `0x55100` is set, `0x13dc = 0x550fc` |
 | menu Auto toggle (`adv_toggle_auto_mode@0x406b70`) | when it enables Auto with `0x55100` set, `0x13dc = 0x550fc` |
+
+Op `0x88(1)` therefore starts nothing by itself. SC0000's strip Skip button (`0x25d`) runs it, sleeps its 100 ms
+without fast-forward and returns into op `0x72`, whose wait starts fast-forward from the injected action 6. A strip
+callback's op `0x101` ends a running fast-forward the same way, and the re-run op `0x72` restarts it from persistent
+Skip or a read message.
+
+The guard `ctx+0x6f86c` (`debug_reload_resume_active`) is unreachable in release images. Only the debug menu's BIN
+reload (`engine_reload_current_script_and_reset_input`, Himegari `0x42e930`, Kamidori `0x42f3e0`) sets it, with a
+resume line 10 before the current source line. That line comes from `script_source_line_table`, which the constructor
+zeroes and nothing writes. So it is always -1, the resume line clamps to 0, and the reload clears the guard again.
 
 So a page shown outside ADV, after op `0x19b`, runs without fast-forward even with the toggle on, and the toggle comes
 back at the next op `0x19c`. Kamidori's SYSTEM4 runs op `0x19b` before FIELD, and FIELD resets layout 1 with op
@@ -6472,10 +6527,17 @@ now reach SC2500's BUNKI choice.
 
 **Port.** `VirtualMachine`: `_messageSkipEnabled` (`0x550fc`), `_messageSkipInjected` (`0x13dc`),
 `_messageSkipServiceActive` (the run-state bit), `ApplyReadTextSkip` (the shared block) and `SetScriptFastForward`.
-Ops `0x88`, `0x19b`, `0x19c`, `0x72`, `0xfa` and `0x1ca`, the menu toggles and the click cancel follow the table. Tests:
-`HotspotInputTests.RefreshAdvSkipInputState_EndsFastForwardAndPersistentSkipRestartsItAtTheNextTextWait` and
-`HotspotInputTests.APageOutsideAdvLeavesPersistentSkipSuspendedUntilOp0x19c`. The guard `ctx+0x6f86c` is not
-modelled (`docs/backlog.md`).
+Ops `0x88`, `0x101`, `0x19b`, `0x19c`, `0x72`, `0xfa` and `0x1ca`, the menu toggles and the click cancel follow the
+table. `EnterTextWait` is op `0x72`'s entry, and `ServiceHotspotCallback` runs it again after a callback returns. The
+hidden-window wait ends on `_messageSkipInjected`, the injected action 6, rather than on fast-forward. Until
+2026-11-08, op `0x88(1)` started fast-forward at once, which skipped the Skip button's 100 ms sleep, and op `0x101`
+left a script-started fast-forward running. No sweep had reported either. The guard is not modelled, being
+unreachable. Tests:
+- `HotspotInputTests.Op0x88EnablesSkipWithoutStartingFastForwardUntilATextWait`
+- `HotspotInputTests.MessageSkipToggleSurvivesOp0x101_WhichEndsFastForwardUntilTheNextTextWait`
+- `HotspotInputTests.Sc0000MessageSkipButton_EnablesPersistentServiceState` (the 100 ms sleep runs)
+- `HotspotInputTests.RefreshAdvSkipInputState_EndsFastForwardAndPersistentSkipRestartsItAtTheNextTextWait`
+- `HotspotInputTests.APageOutsideAdvLeavesPersistentSkipSuspendedUntilOp0x19c`
 
 ### Op 0x60 randomness (2026-11-07)
 
@@ -7236,8 +7298,21 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
     `0x400` equivalent). Retained changes stay pending for the next present.
   - **Live check.** The timeline event `statement-block-presentation` brackets each withheld stretch. Each Auto
     click on SC0000 withholds about 90 ms at `0x21b`. The save/load scenario passes.
-  - **Not modelled.** Movie starts and the `0x2000` modal service (no block contains op `0x236` on the observed
-    paths); the unused `0xd8` timer. Script launches run synchronously in the port.
+  - **Sleeps (2026-11-08).** `sleep_op_0xc8@0x420ec0` never sets run-state `0x400`: under 10 ms it calls kernel32
+    `Sleep` inline, and from 10 ms it sets run-state bit 1 and arms the timer. So native renders nothing while a
+    sleep inside a block runs. `GodotAdvHost.Sleep` used to request a presentation on every sleep, which the render
+    withholding lets through, so a strip button's new icon showed during its 100 ms sleep instead of at the close.
+    It now requests none while a block is open (`GodotAdvHost.SleepPresentationFor`, checked by the Godot
+    self-test). A scan of both games' disassembly (2026-11-08) finds sleeps lexically inside a block only in
+    Himegari: the four strip buttons (`sleep 0x64`, no present) in 301 scenes, and one `sleep 0x10` in ADDEXP that a
+    `present-frame` follows. Kamidori has none. Blocks that span a call (ADDEXP into MES.BIN) are tracked at run
+    time, so their sleeps follow the same rule.
+  - **Movie starts (2026-11-08).** The same scan finds a movie start inside a block only in `DEBUG.BIN` (`0x139`,
+    `0x1ab`, both `play-movie-mask-transition`), and Kamidori has none. Each is followed directly by op `0x21c`,
+    which parks the interpreter at run-state `0x400`, so native's tick starts the movie and renders as it would
+    outside a block. The port does not withhold movie starts and lets presentation through while it parks, so it
+    matches. Op `0x236`, whose `0x2000` modal service a block would withhold, is in no block in either game.
+  - **Not modelled.** The unused `0xd8` timer. Script launches run synchronously in the port.
 - **`0x21b`.** The value is stored, and op `0x247` reads it back. The port has no draw-mode-1 tick render gate.
 
 ### VM value, array and call semantics relevant to compilation (2026-10-06)

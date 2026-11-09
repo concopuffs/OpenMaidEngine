@@ -39,6 +39,13 @@ public partial class Main
         launcherSmoke.Free();
         bool sleepMinimumOk = GodotAdvHost.NormalizeSleepMilliseconds(0, 1.0) == 1
                               && GodotAdvHost.NormalizeSleepMilliseconds(100, 1.0) == 100;
+        // A sleep inside an open statement block presents nothing; outside one, a short sleep presents without
+        // waiting for the display and a longer one waits for it.
+        bool sleepPresentationOk =
+            GodotAdvHost.SleepPresentationFor(100, true) == GodotAdvHost.SleepPresentation.None
+            && GodotAdvHost.SleepPresentationFor(1, true) == GodotAdvHost.SleepPresentation.None
+            && GodotAdvHost.SleepPresentationFor(1, false) == GodotAdvHost.SleepPresentation.Immediate
+            && GodotAdvHost.SleepPresentationFor(100, false) == GodotAdvHost.SleepPresentation.Synchronized;
         bool inputTranslationOk = Win32VirtualKeyTranslator.TryTranslate(
                                       new InputEventKey { PhysicalKeycode = Key.Z }, out int zVk) && zVk == 0x5a
                                   && Win32VirtualKeyTranslator.TryTranslate(
@@ -347,7 +354,7 @@ public partial class Main
                 _vm.Gfx, _clock.NowMs, backbufferSnapshot);
         backbufferPreservationOk &=
             clearedPolicy == new BackbufferPublicationPolicy(false, false);
-        ok &= launcherOk && sleepMinimumOk && inputTranslationOk && cp932WavMetadataOk
+        ok &= launcherOk && sleepMinimumOk && sleepPresentationOk && inputTranslationOk && cp932WavMetadataOk
               && firstRiffBoundaryOk
               && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk && bgmFadeCompletionReleases
               && bgmStopReleaseOk && voiceDuckReleaseFadeOk && textEffectModesOk && fontCalibrationOk
@@ -369,6 +376,7 @@ public partial class Main
                          $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
+                      $"sleep-presentation={sleepPresentationOk}; " +
                       $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}; " +
                       $"first-riff-boundary={firstRiffBoundaryOk}; " +
                       $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +

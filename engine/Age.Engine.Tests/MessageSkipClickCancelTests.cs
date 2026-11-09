@@ -31,6 +31,7 @@ public class MessageSkipClickCancelTests
         {
             (0x1ca, new[] { I(1) }),   // message:ReadTextSkip on
             (0x88, new[] { I(1) }),    // all-message Skip on
+            (0x19c, Array.Empty<Operand>()),   // ADV entry: fast-forward starts from it
         };
         if (block) ops.Add((0x1f4, Array.Empty<Operand>()));
         for (int i = 0; i < probes; i++) ops.Add((0x1c7, new[] { G(Probe + i) }));
@@ -57,10 +58,10 @@ public class MessageSkipClickCancelTests
         var host = new ClickHost();
         var vm = new VirtualMachine(script, table, host, new VmOptions(CancelMessageSkipOnClick: 1));
         host.Vm = vm;
-        // Yield n follows instruction n-1. Skip is on from boundary 2 (state 1); the press is held at
-        // boundary 3 (state 2) and released before boundary 5, which cancels before probe 3 runs.
-        host.AtYield[3] = v => v.UpdatePhysicalMouseButtonState(0, true);
-        host.AtYield[5] = v => v.UpdatePhysicalMouseButtonState(0, false);
+        // Yield n follows instruction n-1. Fast-forward is on from boundary 3 (state 1); the press is held at
+        // boundary 4 (state 2) and released before boundary 6, which cancels before probe 3 runs.
+        host.AtYield[4] = v => v.UpdatePhysicalMouseButtonState(0, true);
+        host.AtYield[6] = v => v.UpdatePhysicalMouseButtonState(0, false);
 
         vm.Run();
 
@@ -81,7 +82,7 @@ public class MessageSkipClickCancelTests
         var vm = new VirtualMachine(script, table, host, new VmOptions(CancelMessageSkipOnClick: 1));
         host.Vm = vm;
         bool latched = false;
-        host.AtYield[3] = v => latched = v.TryLatchMessageSkipCancelClick();
+        host.AtYield[4] = v => latched = v.TryLatchMessageSkipCancelClick();
 
         vm.Run();
 
@@ -101,8 +102,8 @@ public class MessageSkipClickCancelTests
         var vm = new VirtualMachine(script, table, host);
         host.Vm = vm;
         bool latched = true;
-        host.AtYield[3] = v => { latched = v.TryLatchMessageSkipCancelClick(); v.UpdatePhysicalMouseButtonState(0, true); };
-        host.AtYield[5] = v => v.UpdatePhysicalMouseButtonState(0, false);
+        host.AtYield[4] = v => { latched = v.TryLatchMessageSkipCancelClick(); v.UpdatePhysicalMouseButtonState(0, true); };
+        host.AtYield[6] = v => v.UpdatePhysicalMouseButtonState(0, false);
 
         vm.Run();
 
@@ -119,9 +120,11 @@ public class MessageSkipClickCancelTests
         var script = ScriptAssembler.Assemble(table, "CANCEL_RESET", new List<(int, Operand[])>
         {
             (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),
             (0x1c7, new[] { G(Probe) }),
             (0x1c7, new[] { G(Probe + 1) }),   // press held at the next boundary: state 2
-            (0x101, Array.Empty<Operand>()),   // native ctx+0x6da80 = 0
+            (0x101, Array.Empty<Operand>()),   // native ctx+0x6da80 = 0; it also ends fast-forward
+            (0x19c, Array.Empty<Operand>()),   // fast-forward starts again from persistent Skip
             (0x1c7, new[] { G(Probe + 2) }),   // released here: state 0 only re-arms to 1
             (0x1c7, new[] { G(Probe + 3) }),
             (0x2, Array.Empty<Operand>()),
@@ -129,11 +132,14 @@ public class MessageSkipClickCancelTests
         var host = new ClickHost();
         var vm = new VirtualMachine(script, table, host, new VmOptions(CancelMessageSkipOnClick: 1));
         host.Vm = vm;
-        host.AtYield[2] = v => v.UpdatePhysicalMouseButtonState(0, true);
-        host.AtYield[4] = v => v.UpdatePhysicalMouseButtonState(0, false);
+        host.AtYield[3] = v => v.UpdatePhysicalMouseButtonState(0, true);
+        // Released once fast-forward runs again, where state 2 would have cancelled.
+        host.AtYield[6] = v => v.UpdatePhysicalMouseButtonState(0, false);
 
         vm.Run();
 
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(Probe + 1));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(Probe + 2));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(Probe + 3));
         Assert.True(vm.MessageSkipEnabled);
     }
@@ -149,11 +155,11 @@ public class MessageSkipClickCancelTests
         var host = new ClickHost();
         var vm = new VirtualMachine(script, table, host, new VmOptions(CancelMessageSkipOnClick: 2), provider);
         host.Vm = vm;
-        // Instructions: 0x1ca, 0x88, 0x1f4, six probes, 0x1f5, ...; cancel lands inside the block.
-        host.AtYield[4] = v => v.UpdatePhysicalMouseButtonState(0, true);
-        host.AtYield[6] = v => v.UpdatePhysicalMouseButtonState(0, false);
+        // Instructions: 0x1ca, 0x88, 0x19c, 0x1f4, six probes, 0x1f5, ...; cancel lands inside the block.
+        host.AtYield[5] = v => v.UpdatePhysicalMouseButtonState(0, true);
+        host.AtYield[7] = v => v.UpdatePhysicalMouseButtonState(0, false);
         int probesBeforeCallback = -1;
-        host.AtYield[10] = v => probesBeforeCallback = (int)v.Globals.GetValueOrDefault(0x311);
+        host.AtYield[11] = v => probesBeforeCallback = (int)v.Globals.GetValueOrDefault(0x311);
 
         vm.Run();
 

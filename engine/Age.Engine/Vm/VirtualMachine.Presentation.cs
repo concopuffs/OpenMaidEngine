@@ -5,9 +5,17 @@ namespace Age.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
-    // screen_transition_begin@0x439da0, _tick@0x43a7a0 and _finalize@0x4399c0 draw through scratch
-    // surface 0x20, which sets that record's created flag.
+    // Under DRAWMODE=1 (both games), screen_transition_begin@0x439da0 creates scratch surface 0x20 for the black and
+    // white fades (modes 0-3) and for modes 5-7 and 9, which sets that record's created flag. The crossfade (mode 4)
+    // and the strip reveals 0x27/0x28 composite their surfaces directly. screen_transition_finalize@0x4399c0, the
+    // fast-forward path, fills 0x20 only for a negative surface, the black or white endpoint (docs/engine-re.md,
+    // "Legacy transitions and scratch surface 0x20").
     private void MarkLegacyTransitionScratchWritten() => Gfx.MarkSurfaceContentWritten(0x20);
+
+    private void MarkScratchIfFinalizeFills(long surface)
+    {
+        if (surface < 0) MarkLegacyTransitionScratchWritten();
+    }
 
     private int StepPresentation(string label, IReadOnlyList<Operand> a, int pc)
     {
@@ -42,7 +50,9 @@ public sealed partial class VirtualMachine
                 _host.PresentFrame(Gfx); return pc + 1;
             case "fade-surface-in-from-black": // 0x21: blocking black -> captured full-frame surface
             case "u00418860":
-                MarkLegacyTransitionScratchWritten();
+                // Begin (mode 0) fills 0x20 with black; under fast-forward the handler finalizes on the surface instead.
+                if (AdvFastForwardActive) MarkScratchIfFinalizeFills(Read(a[0]));
+                else MarkLegacyTransitionScratchWritten();
                 DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
                 _host.FadeSurfaceWithBlack(
                     Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.FromBlack,
@@ -50,7 +60,7 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "fade-surface-out-to-black": // 0x22: blocking captured full-frame surface -> black
             case "u00418920":
-                MarkLegacyTransitionScratchWritten();
+                MarkLegacyTransitionScratchWritten();   // begin (mode 1) or, under fast-forward, finalize(-1) fills 0x20
                 DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
                 _host.FadeSurfaceWithBlack(
                     Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.ToBlack,
@@ -58,7 +68,7 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "fade-surface-out-to-white": // 0x24: blocking captured full-frame surface -> white
             case "u00418A90":
-                MarkLegacyTransitionScratchWritten();
+                MarkLegacyTransitionScratchWritten();   // begin (mode 3) or, under fast-forward, finalize(-1) fills 0x20
                 DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
                 _host.FadeSurfaceToWhite(
                     Gfx, (int)Read(a[0]), Read(a[1]),
@@ -66,7 +76,8 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "crossfade-surfaces": // 0x25: legacy full-frame surface alpha transition
             case "u00418B40":
-                MarkLegacyTransitionScratchWritten();
+                // Mode 4 never touches 0x20; under fast-forward the handler finalizes on the target.
+                if (AdvFastForwardActive) MarkScratchIfFinalizeFills(Read(a[1]));
                 DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
                 _host.CrossfadeSurfaces(
                     Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]),
@@ -74,7 +85,10 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "u00418CC0": // SYS4433 0x27 upstream ABI label
             case "reveal-surface-striped":
-                MarkLegacyTransitionScratchWritten();
+                // pattern_surface_transition_begin/_tick draw the surface itself; with a valid selector but no divisions
+                // or under fast-forward, the handler finalizes on the surface.
+                if (Read(a[3]) is >= 0 and <= 4 && (AdvFastForwardActive || Read(a[2]) <= 0))
+                    MarkScratchIfFinalizeFills(Read(a[0]));
                 _host.RevealSurfaceWithPattern(
                     Gfx,
                     new SurfacePatternTransitionRequest(
@@ -84,7 +98,8 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "u00418D90": // SYS4433 0x28 upstream ABI label
             case "reveal-surface-staggered-strips":
-                MarkLegacyTransitionScratchWritten();
+                if (Read(a[3]) is >= 0 and <= 4 && (AdvFastForwardActive || Read(a[2]) <= 0))
+                    MarkScratchIfFinalizeFills(Read(a[0]));
                 _host.RevealSurfaceWithPattern(
                     Gfx,
                     new SurfacePatternTransitionRequest(

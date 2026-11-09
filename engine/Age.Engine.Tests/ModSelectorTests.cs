@@ -184,6 +184,30 @@ public sealed class ModSelectorTests : IDisposable
     }
 
     [Fact]
+    public void ARecordZeroThatWaitsForThePlayerLinksWithAWarning()
+    {
+        ModPackage scene = Mod("example.scene", "[scripts]\nnames = [\"SCENE\", \"AUTO\"]\n", new Dictionary<string, string>
+        {
+            ["scripts/SCENE.oms"] = Script("show_text(0x0, \"hello\")\nwait_for_input(0x0)\nexit"),
+            ["scripts/AUTO.oms"] = Script("wait_for_input(0x0)\nexit"),
+        });
+        ModPackage boot = Mod("example.boot", "[scripts]\nnames = [\"AUTO\", \"SCENE\"]\n", new Dictionary<string, string>
+        {
+            ["scripts/AUTO.oms"] = Script("G[0x100] = 7\nexit"),
+            ["scripts/SCENE.oms"] = Script("show_text(0x0, \"hello\")\nwait_for_input(0x0)\nexit"),
+        });
+
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), [scene, boot], []);
+
+        Assert.True(result.Succeeded, result.Report.Render());
+        ModReportLine warning = Assert.Single(result.Report.Lines, line => line.Message.Contains("record 0"));
+        Assert.Equal(ModReportClass.Note, warning.Class);
+        Assert.Equal(["example.scene"], warning.Mods);
+        Assert.Equal($"${Selector(result, "example.scene")}$SCENE.BIN", warning.Script);
+        Assert.Contains("uses show-text, wait-for-input;", warning.Message);
+    }
+
+    [Fact]
     public void AnAssetOnlyModGetsAStubRecordZeroAndAssetsAreClassifiedAgainstTheBase()
     {
         ModPackage assets = Mod("example.art", "[assets]\nnames = [\"NEW.AGF\"]\n", new Dictionary<string, string>

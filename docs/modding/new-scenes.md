@@ -24,8 +24,10 @@ When the engine starts (INIT2, after the game's data tables are built), it runs 
 in selector order. This is your mod's entry point. Record 0 is the first name in `[scripts].names`.
 
 **Record 0 must be a short script that ends with `exit`.** It runs during boot, before the title screen. A record 0
-that shows text or waits for input hangs native AGE at boot. If your mod's real content is a scene, put a small
-boot script first:
+that shows text or waits for input hangs native AGE at boot. `omp build`, `omp check` and the port's link report warn
+when record 0 shows text or waits for the player itself (a `note` line that starts `warning: record 0 runs at
+boot`). They do not follow a `run` from record 0 into another script. If your mod's real content is a scene, put a
+small boot script first:
 
 ```toml
 [scripts]

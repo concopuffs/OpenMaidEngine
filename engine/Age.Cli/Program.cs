@@ -9,9 +9,12 @@ using Age.Engine.Vm;
 
 if (args.Length == 0)
 {
-    Console.WriteLine("usage: run <file> | trace <out.json> | catalog-scan [--profile ID] [--game-root PATH] [--overlay-root PATH] [--allow-bmp-as-agf] [--output report.json]");
+    Console.WriteLine("usage: run <file> | trace <out.json> | catalog-scan [--profile ID] [--game-root PATH] [--overlay-root PATH] [--allow-bmp-as-agf] [--output report.json] | save-diff A.DAT B.DAT [--profile ID] [--section NAME] [--limit N]");
     return 1;
 }
+
+// save-diff reads only the two save files, so it runs before the game catalog loads.
+if (args[0] == "save-diff") return SaveDiffCommand.Run(args);
 
 string? OptionValue(string name)
 {

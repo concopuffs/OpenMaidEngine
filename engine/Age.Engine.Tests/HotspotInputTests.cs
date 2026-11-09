@@ -592,18 +592,51 @@ public class HotspotInputTests
     }
 
     [Fact]
-    public void MessageSkipOpcodes_RetainStateAcrossTransientResetUntilExplicitlyDisabled()
+    public void Op0x88EnablesSkipWithoutStartingFastForwardUntilATextWait()
     {
+        // op_0x88_set_message_skip@0x41f130 writes ctx+0x13dc and ctx+0x550fc and sets no run-state bit; the text wait
+        // starts fast-forward from the injected action 6.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP_ON", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19a, new[] { G(0x13c) }),
+            (0x1c7, new[] { G(0x13d) }),
+            (0x72, new[] { I(0) }),
+            (0x1c7, new[] { G(0x13e) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x13c));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x13d));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x13e));
+        Assert.Equal(new[] { true }, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void MessageSkipToggleSurvivesOp0x101_WhichEndsFastForwardUntilTheNextTextWait()
+    {
+        // Op 0x101 clears run-state 0x8000000 however it started (0x4170ce) and leaves both Skip fields; op 0x88(0)
+        // clears them.
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP", new List<(int, Operand[])>
         {
             (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),
             (0x19a, new[] { G(0x140) }),
             (0x1c7, new[] { G(0x141) }),
             (0x101, Array.Empty<Operand>()),
             (0x1c7, new[] { G(0x142) }),
+            (0x19a, new[] { G(0x144) }),
+            (0x72, new[] { I(0) }),
+            (0x1c7, new[] { G(0x145) }),
             (0x88, new[] { I(0) }),
             (0x19a, new[] { G(0x143) }),
+            (0x1c7, new[] { G(0x146) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
         var host = new RecordingHost();
@@ -613,10 +646,13 @@ public class HotspotInputTests
 
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x140));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x141));
-        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x142));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x142));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x144));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x145));
         Assert.Equal(0, vm.Globals.GetValueOrDefault(0x143));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x146));
         Assert.False(vm.MessageSkipEnabled);
-        Assert.Equal(new[] { true, false }, host.MessageSkipChanges);
+        Assert.Equal(new[] { true, false, true, false }, host.MessageSkipChanges);
     }
 
     [Fact]
@@ -626,6 +662,7 @@ public class HotspotInputTests
         var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP_LIFECYCLE", new List<(int, Operand[])>
         {
             (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),
             (0x19b, Array.Empty<Operand>()),
             (0x19a, new[] { G(0x144) }),
             (0x1c7, new[] { G(0x145) }),
@@ -675,6 +712,7 @@ public class HotspotInputTests
         var script = ScriptAssembler.Assemble(table, "REFRESH_ADV_SKIP", new List<(int, Operand[])>
         {
             (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),
             (0xfa, Array.Empty<Operand>()),
             (0x1c7, new[] { G(0x148) }),
             (0x72, new[] { I(0) }),
@@ -704,6 +742,7 @@ public class HotspotInputTests
         var script = ScriptAssembler.Assemble(table, "SUSPENDED_PAGE", new List<(int, Operand[])>
         {
             (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),
             (0x19b, Array.Empty<Operand>()),
             (op, new[] { I(1) }),
             (0x1c7, new[] { G(0x14a) }),
@@ -738,6 +777,9 @@ public class HotspotInputTests
         Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
 
         Assert.True(vm.MessageSkipEnabled);
+        // Op 0x88 starts no fast-forward, so the callback still sleeps its 100 ms (a sleep under fast-forward
+        // returns at once); its return into op 0x72 starts it.
+        Assert.Contains(100L, host.SleptDurations);
         Assert.True(host.MessageSkip);
         Assert.Contains(true, host.MessageSkipChanges);
     }
@@ -920,6 +962,7 @@ public class HotspotInputTests
         var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP_CADENCE", new List<(int, Operand[])>
         {
             (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),   // starts fast-forward from the Skip op 0x88 set
             (0x55, new[] { G(0x150), I(1) }),
             (0x55, new[] { G(0x151), I(1) }),
             (0x88, new[] { I(0) }),

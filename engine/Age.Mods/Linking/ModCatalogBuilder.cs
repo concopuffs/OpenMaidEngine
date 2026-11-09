@@ -1,3 +1,4 @@
+using Age.Engine.Model;
 using Age.Engine.Sys4;
 using Age.Mods.Packages;
 using Age.Script.Compile;
@@ -34,6 +35,24 @@ public sealed record LinkedCatalog(string ModId, int Selector, IReadOnlyList<Lin
 public static class ModCatalogBuilder
 {
     public const string StubName = "OMPSTUB";
+
+    /// <summary>Ops that mark a script as a scene: text display and the waits for the player (input, hotspot menus,
+    /// the choice table, the ADV coroutine yield). Record 0 runs inside INIT2 (native op 0x143), before the title
+    /// screen, and native AGE hangs at boot on any of them.</summary>
+    private static readonly HashSet<string> SceneOps = new(StringComparer.Ordinal)
+    {
+        "show-text", "wait-for-input", "arm-hotspot-wait", "wait-hotspot-menu", "wait-hotspot-menu-with-poll-callback",
+        "wait-choice-table", "yield-adv-coroutine",
+    };
+
+    /// <summary>The scene ops <paramref name="script"/> uses, by name, in first-use order.</summary>
+    public static IReadOnlyList<string> SceneOpsUsed(IrScript script, OpcodeTable table)
+        => script.Code
+            .Select(instruction => table.TryGetDefinition(instruction.Opcode, out OpcodeDefinition definition)
+                ? definition.CanonicalLabel : "")
+            .Where(SceneOps.Contains)
+            .Distinct()
+            .ToList();
 
     /// <summary>The record layout of a mod, before anything is compiled: the names its references resolve to.</summary>
     public static IReadOnlyList<(string Name, bool IsScript)> Layout(ModPackage mod)
@@ -74,6 +93,12 @@ public static class ModCatalogBuilder
                     Module, warnings, scope);
                 compiled = compiled.ResolveResources(resolve);
                 foreach (OmsWarning warning in warnings) report.Add(ModReportClass.Note, mod.Id, catalogName, warning.ToString());
+                if (ReferenceEquals(script, mod.Layout.Scripts[0]) && SceneOpsUsed(compiled, linkBase.Table) is { Count: > 0 } sceneOps)
+                    report.Add(ModReportClass.Note, mod.Id, catalogName,
+                        $"warning: record 0 runs at boot (INIT2), but scripts/{script.Name}.oms uses "
+                        + $"{string.Join(", ", sceneOps)}; native AGE hangs at boot on a record 0 that shows text or "
+                        + "waits for the player. Put a short boot script that ends with exit first in [scripts].names "
+                        + "(docs/modding/new-scenes.md, \"Record 0 runs at boot\")");
                 records.Add(new LinkedRecord(catalogName, script.Name, true, false, IrEncoder.Encode(compiled)));
             }
             catch (Exception error) when (error is OmsSyntaxException or OmsCompileException or InvalidDataException

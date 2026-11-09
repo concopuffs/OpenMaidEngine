@@ -682,6 +682,21 @@ name = "script_source_line_table"
 type = "void*"
 note = "base of 41 optional per-frame source-line-map pointers; Himegari's release image zero-initializes the table and has no writer, so diagnostic LINE values render as -1"
 [[field]]
+offset = 0x6f86c
+name = "debug_reload_resume_active"
+type = "int"
+note = "engine_reload_current_script_and_reset_input@0x42e930 (the debug menu's BIN reload) sets it with a resume line; op 0x19c keeps ctx+0x13dc and run-state 0x8000000 while it is set and nothing else restores them. The resume line comes from script_source_line_table, which release images never fill, so the reload clears it again: unreachable in Himegari and Kamidori. The constructor and scene_context_init_reset clear it"
+[[field]]
+offset = 0x6f870
+name = "debug_reload_resume_line"
+type = "int"
+note = "the debug reload's resume source line, 10 before the current one (0 cancels the resume)"
+[[field]]
+offset = 0x6f874
+name = "debug_reload_resume_frame"
+type = "int"
+note = "the frame index (cur_ctx_index) the debug reload resumes in"
+[[field]]
 offset = 0x6f880
 name = "diagnostic_text_buffer"
 type = "int"

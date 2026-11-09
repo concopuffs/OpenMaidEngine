@@ -1650,7 +1650,7 @@ abi_source = "kelebek+decode-validated"
 name = "set-message-skip"
 category = "input"
 summary = "(enabled) - set persistent all-message Skip state. Nonzero makes the interpreter inject ADV fast-forward input every tick; zero stops injection and clears the transient skip run-state bit."
-details = "ctx+0x13dc is the Skip a text wait acts on and ctx+0x550fc the toggle the menu shows: op 0x19b clears only the first, and op 0x19c and the menu's Skip toggle copy the second back. Nonzero does not set run-state 0x08000000 itself; the next polling text wait starts fast-forward from the injected action 6. The port tracks ctx+0x13dc as _messageSkipInjected and sets its script fast-forward channel at once, which differs while the service is suspended (docs/backlog.md; docs/engine-re.md, 'Read skip and ctx+0x13dc')."
+details = "ctx+0x13dc is the Skip a text wait acts on and ctx+0x550fc the toggle the menu shows: op 0x19b clears only the first, and op 0x19c and the menu's Skip toggle copy the second back. Nonzero does not set run-state 0x08000000 itself; the next polling text wait starts fast-forward from the injected action 6. So SC0000's strip Skip button still sleeps its 100 ms, and fast-forward starts when its callback returns into op 0x72. The port tracks ctx+0x13dc as _messageSkipInjected, and op 0x72's entry (VirtualMachine.EnterTextWait, run again after a hotspot callback) starts fast-forward from it (docs/engine-re.md, 'Read skip and ctx+0x13dc')."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -2655,7 +2655,7 @@ abi_source = "kelebek+decode-validated"
 name = "reset-message-skip-input"
 category = "input"
 summary = "Reset transient message-skip/input service state after an ADV chrome action without clearing op 0x88's persistent all-message Skip flag; it ends fast-forward and suppresses a held logical action 6 from restarting it at a reveal until the key is released during one."
-details = "ctx+0x6da74, which it sets, is cleared only by adv_text_reveal_service_tick@0x406fa0 at a reveal tick with action 6 up (0x407101); while set, a held action 6 does not start fast-forward at a reveal. TITLE, FIELD and every control-strip callback run it, which is why a Ctrl held from Kamidori's SC0000 stops at SC2000@0xaf5 (docs/engine-re.md, \"Physical fast-forward\"). The port models it in VirtualMachine.PhysicalFastForward.cs."
+details = "ctx+0x6da74, which it sets, is cleared only by adv_text_reveal_service_tick@0x406fa0 at a reveal tick with action 6 up (0x407101); while set, a held action 6 does not start fast-forward at a reveal. TITLE, FIELD and every control-strip callback run it, which is why a Ctrl held from Kamidori's SC0000 stops at SC2000@0xaf5 (docs/engine-re.md, \"Physical fast-forward\"). It ends fast-forward however it started (0x4170ce), persistent Skip and read-skip included; op 0x72's entry starts it again, also when the calling callback returns into the wait. The port models it in VirtualMachine.PhysicalFastForward.cs and op 0x101's handler."
 noop_headless = false
 source = "investigation"
 confidence = "med"
@@ -8200,14 +8200,14 @@ argc = 4
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00418E60"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "legacy-transition-black-scratch"
+category = "draw"
+summary = "(surface_slot)(duration_ms)(parameter)(style) — start a blocking legacy screen transition in mode 5 + style; style must be 0-2, otherwise a script error. Under DRAWMODE=1 the begin creates scratch surface 0x20 and fills it black. With fast-forward set at dispatch it finalizes on the surface instead. Neither Himegari nor Kamidori calls it, so the port traces and skips it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "med"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra SYS4433 (Kamidori): dispatch slot 0x2a (ctx+0x9f7a8) resolves to op_0x2a_legacy_transition_modes_5_to_7@0x41b230. For style 0-2 it calls screen_transition_begin@0x43a780 (surface, -1, 5 + style, parameter, 0), sets run-state bit 8 and arms the sleep timer with operand 2, or with run-state 0x8000000 calls screen_transition_finalize@0x43a3d0(surface, 0). No call in either corpus."
 
 [[opcode]]
 op = 0x2b
@@ -8264,14 +8264,14 @@ argc = 5
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u004194B0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "legacy-transition-asset-mask"
+category = "draw"
+summary = "(mask_asset)(source_surface)(target_surface)(duration_ms)(parameter) — start a blocking legacy screen transition in mode 8 with an indexed asset as its mask. Under DRAWMODE=1 the begin does nothing for mode 8. With fast-forward set it finalizes on the target. Neither Himegari nor Kamidori calls it, so the port traces and skips it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "med"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra SYS4433 (Kamidori): dispatch slot 0x2e (ctx+0x9f7b8) resolves to op_0x2e_legacy_transition_asset_mask@0x41b890. It opens operand 1 through asset_open_indexed_entry_SYS4433 and calls screen_transition_begin@0x43a780(source, target, 8, asset data, operand 5); when the begin succeeds it sets run-state bit 8 and arms the sleep timer with operand 4, or with run-state 0x8000000 calls screen_transition_finalize@0x43a3d0(target, 0). The begin builds the mask object only in draw mode 0. No call in either corpus."
 
 [[opcode]]
 op = 0x2f
@@ -8455,14 +8455,14 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00419C00"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "legacy-transition-two-surface"
+category = "draw"
+summary = "(source_surface)(target_surface)(duration_ms) — start a blocking legacy screen transition in mode 9 between two surfaces. Under DRAWMODE=1 the begin copies them to surfaces 0x24 and 0x25 and creates scratch 0x20 blank. With fast-forward set it finalizes on the target. Neither Himegari nor Kamidori calls it, so the port traces and skips it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+source = "investigation"
+confidence = "med"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = "Ghidra SYS4433 (Kamidori): dispatch slot 0x36 (ctx+0x9f7d8) resolves to op_0x36_legacy_transition_two_surface@0x41c0d0. It sets run-state bit 8, arms the sleep timer with operand 3 and calls screen_transition_begin@0x43a780(source, target, 9, 0xa0, 0), or with run-state 0x8000000 calls screen_transition_finalize@0x43a3d0(target, 0). No call in either corpus."
 
 [[opcode]]
 op = 0x37

@@ -199,6 +199,7 @@ public class SfxOpsTests
             new List<(int, Operand[])>
             {
                 (0x88, new[] { new Operand(0, 1) }),
+                (0x19c, Array.Empty<Operand>()),   // ADV entry starts fast-forward from persistent Skip
                 (0xc2, new[] { new Operand(0, 0), new Operand(0, 3000) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());

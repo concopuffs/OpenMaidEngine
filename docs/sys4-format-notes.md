@@ -570,7 +570,9 @@ as follows:
   missing `0x223`/`0x24f` target, and `0x24`/`0x25` at boot.
 - **Release** (`0x1fa`, `0x23d`): only id `-1`. The key and created flag stay.
 - **Drawing into a surface**: created `1`. This covers fill (`0x20b`/`0x210`), copy, scale-copy, `0x33`,
-  `0x35`, `0x237` and the legacy transition scratch slot `0x20`.
+  `0x35`, `0x237` and the legacy transition scratch slot `0x20`. Only some transitions write `0x20`; the
+  crossfade `0x25` and the strip reveals `0x27`/`0x28` never do (engine-re.md, "Legacy transitions and
+  scratch surface `0x20`").
 
 The restore does not copy the saved table back. It only reopens records flagged in `+0x08`.
 

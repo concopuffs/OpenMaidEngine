@@ -208,7 +208,8 @@ public class PhysicalFastForwardTests
     [Fact]
     public void ReleasingTheKeyDoesNotClearPersistentSkip()
     {
-        var (vm, host) = Start((0x19c, Array.Empty<Operand>()), (0x88, new[] { I(1) }));
+        // Persistent Skip on, then an ADV entry starts fast-forward from it.
+        var (vm, host) = Start((0x88, new[] { I(1) }), (0x19c, Array.Empty<Operand>()));
         vm.Run();
 
         Press(vm);

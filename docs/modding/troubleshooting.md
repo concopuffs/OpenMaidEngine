@@ -25,7 +25,7 @@ omp check: does not link: 2 mods; 0 errors, 1 conflicts, 0 interactions, 0 overr
 | `conflict` | Two mods cannot load together: overlapping edits, two replacements of one script, a declared `[[conflicts]]`, a missing dependency. | yes |
 | `interaction` | Several mods insert at the same site. They all apply, in the order shown. | no |
 | `override` | Several mods supply the same asset or script. The winner is named. | no |
-| `note` | Information. Examples: a fragment compiled at load time, a stray file in a package, or a table entry that now points at replacement code. | no |
+| `note` | Information. Examples: a fragment compiled at load time, a stray file in a package, a table entry that now points at replacement code, or a record 0 that would hang native AGE at boot (`warning: record 0 runs at boot …`). | no |
 
 In the port, a report with errors or conflicts stops startup with exit code 2. `--skip-failed-mods` drops the mods
 involved and starts with the rest, naming what it dropped.
@@ -79,6 +79,8 @@ most emoji and many accented letters are not in CP932, while straight quotes and
 
 **Native AGE hangs at boot, before the title.** Your record 0, the first `[scripts].names` entry, shows text or waits
 for input. Record 0 runs during boot. Put a short boot script that ends with `exit` first ([new-scenes.md](new-scenes.md)).
+`omp check` warns about this when record 0 itself shows text or waits; a `run` from record 0 into a scene hangs the
+same way without the warning.
 
 **"エラーが発生しました" with "Depth が不正です SCRIPT != OWNER".** This is the engine's "invalid depth" error. A click
 reached a handler that belongs to the scene `OWNER` while the script `SCRIPT`, which the scene called with `run`, was
