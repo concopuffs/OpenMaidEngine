@@ -284,7 +284,7 @@ SBUNKI. Full data-flow details live in `name-resolution.md`.
 (id = the entry's `raw_index` = its global position in SYS4INI). This is the resolved call-graph
 registry — there is no separate id→code table; SYS4INI is it. Mechanism: `engine-re.md` (op 0x03
 section); the runtime source is `Sys4AssetCatalog` over SYS4INI, while the mechanically generated
-`build/callscript-names.json` feeds `sys4load` diagnostics. The regenerated `build/disasm/*.asm` corpus renders targets by name
+`build/callscript-names.json` feeds `sys4load` diagnostics. The regenerated `build/games/himegari/disasm/*.asm` corpus renders targets by name
 (`call-script 0x1ab =ADDITEM.BIN`). **297 distinct scripts are called** across the corpus (3002 sites);
 the hottest are `HISTORY` (backlog), `MENU`, `HIDEWIN`, `BUNKI` (branch), `MES` (message), `ADDITEM`,
 `ADDEN`, `LOOK`, `RENDERMAP`. Scenes (`SCxxxx.BIN`) load through the *same* id-indexed loader.

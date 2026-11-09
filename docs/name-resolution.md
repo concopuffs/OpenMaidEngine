@@ -1,7 +1,7 @@
 # Name resolution — recovering what the compiler stripped
 
 The disassembler reads the SYS4 bytecode's **operations and control flow** cleanly (see any
-`build/disasm/*.asm`). What it can't show is the two kinds of *names* the AGE compiler
+`build/games/himegari/disasm/*.asm`). What it can't show is the two kinds of *names* the AGE compiler
 discarded: **which function a call targets** (#1) and **what a global variable means** (#2).
 Both are data-labeling problems, not decoding problems. This note records what each is, what
 we found, and how tractable it is.
@@ -22,7 +22,7 @@ resolver `FUN_0044f390`, which does `record = table_base + id*0x50` over the 80-
 a semantically-exact name (`0x1ab→ADDITEM`, `0x2ae7→MES`, `0x143→BUNKI`), 0 out-of-range. Full
 mechanism in `engine-re.md` (“op 0x03 (call-script)…”). Tooling: `parse_sys4ini.py` →
 `build/callscript-names.json` (id→name); `sys4load` renders `call-script 0x1ab =ADDITEM.BIN`; the
-`build/disasm/*.asm` call graph now reads by name. The one caveat: index the RAW SYS4INI records
+`build/games/himegari/disasm/*.asm` call graph now reads by name. The one caveat: index the RAW SYS4INI records
 (*including* the 2 `@` placeholders) — `asset-index.json` carries each entry's `raw_index` (= the id)
 for exactly this. **Runtime (VFS-A):** `Sys4AssetCatalog` now reads that raw table directly and
 `Sys4ScriptProvider` opens the selected record through loose-first/bounded-ALF storage; generated JSON is

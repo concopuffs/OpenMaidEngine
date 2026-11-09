@@ -15,7 +15,7 @@ time. We greedily align each Frida load to the next same-resId set-texture in th
 pins it to a bytecode offset. Where the active package CHANGES between consecutive loads, some
 instruction in the bytecode span between their offsets flipped the scope -- the scope selector.
 This report lists the aligned loads, flags package transitions, and points at the byte spans to
-inspect (dump them with the disassembly in build/disasm/<SCENE>.asm).
+inspect (dump them with the disassembly in build/games/<profile>/disasm/<SCENE>.asm).
 
 Usage: py -3.11 -X utf8 tools/correlate_scope.py <SCENE>   (e.g. SC0000)
 """
@@ -54,7 +54,7 @@ NOISE = {"mov", "add", "sub", "mul", "div", "mod", "and", "or", "sar", "shl", "x
 
 
 def disasm_map(scene):
-    """offset(int) -> stripped disasm line, from build/disasm/<SCENE>.asm."""
+    """offset(int) -> stripped disasm line, from build/games/<profile>/disasm/<SCENE>.asm."""
     path = paths.BUILD / "disasm" / f"{scene}.asm"
     out = {}
     if not path.exists():

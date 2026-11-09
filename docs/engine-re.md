@@ -510,7 +510,7 @@ already had it. **Statically confirmed:** all **297/297** distinct corpus `call-
 a `.BIN` script with a semantically-exact name (`0x1ab→ADDITEM`, `0x2ae7→MES`, `0x143→BUNKI`,
 `0x329d→CALCREVISE`, `0x2add→CALCBTPARAM`), 0 out-of-range, 0 pack-branch. Tooling:
 `parse_sys4ini.py` emits `build/callscript-names.json` (id→name); `sys4load` annotates
-`call-script 0x1ab =ADDITEM.BIN`; the whole `build/disasm/*.asm` call graph now reads by name. See
+`call-script 0x1ab =ADDITEM.BIN`; the whole `build/games/himegari/disasm/*.asm` call graph now reads by name. See
 `name-resolution.md §1`.
 
 **Companion — op `0x8f` (`call`) is INTRA-script, not cross-script.** Its handler **`FUN_0041fba0`**
