@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
-using Ome.Engine.Frontend.NativeMenu;
+using Ome.Engine.Frontend.Shell;
 using Godot;
 
 /// <summary>
-/// AGERC's fullscreen system-menu strip (host command 4, agerc_system_menu_strip_dialog_proc@0x10003c20;
+/// The fullscreen system-menu strip, as AGERC's (host command 4, agerc_system_menu_strip_dialog_proc@0x10003c20;
 /// docs/engine-re.md "Screen mode"): a maximized captioned popup at the top of the screen holding the game's title and
-/// icon, the minimize, restore and close buttons, and the pruned menu bar. It is SM_CXSCREEN wide and
+/// an icon, the minimize, restore and close buttons, and the shell's pruned menu bar. It is SM_CXSCREEN wide and
 /// SM_CYCAPTION + 2 × SM_CYFIXEDFRAME + SM_CYMENU (49) tall, and Windows 10 draws its frame's outer 2 px on the left,
 /// right and bottom transparent. The port draws it in game pixels over the top of the game, as native's default
 /// fullscreen (an 800×600 display mode, where SM_CXSCREEN is the canvas width) shows it. Layout and glyphs come from a
@@ -75,7 +75,7 @@ public partial class SystemMenuStrip : Control
 
     public NativeMenuBar Bar { get; }
 
-    public SystemMenuStrip(List<NativeMenuItem> items, string title, Texture2D? icon)
+    public SystemMenuStrip(List<MenuItem> items, string title, Texture2D? icon)
     {
         _title = title;
         _icon = icon;

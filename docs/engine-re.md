@@ -661,13 +661,12 @@ A native drive confirmed this (`tools/drive/scenarios/himegari-exit-dialog.steps
   1. holds the VM thread at its next frame yield;
   2. dims to 128/255;
   3. freezes the presented frame (see "Port appearance" below);
-  4. opens `ExitConfirmationDialog`, built from the game's own AGERC.DLL dialog 3 (`AgercExitDialog`, its
-     controls found by id): title, texts and control rectangles come from the template, with the default choice
-     and the radios' mnemonics. A game root without a usable dialog 3 quits without asking, since AGE cannot run
-     without AGERC's host callback. The templates differ only in text: Kamidori's install has an English
-     `agerc.dll` (Quit, `Exit(&E)`, `Return to title(&T)`, Cancel) laid out as Himegari's Japanese one, and native
-     shows it (driven 2026-11-07; until then the port showed Himegari's texts for every game). AGERC's code
-     strings (the 設定 page formats, the folder prompt) stay Japanese in both DLLs.
+  4. opens `ExitConfirmationDialog`, the shell's own 終了 dialog (since 2026-11-09, engine shell M2): dialog 3's
+     layout in client pixels, with its texts from the shell's string table (`ShellExitDialog`,
+     `engine/Ome.Engine.Frontend/Shell`) in the player's language, not read from the DLL. Every game root gets it,
+     whatever its AGERC.DLL holds. Natively the templates differ only in text: the translated Kamidori install has an
+     English `agerc.dll` (Quit, `Exit(&E)`, `Return to title(&T)`, Cancel) laid out as Himegari's Japanese one (driven
+     2026-11-07), and AGERC's code strings (the 設定 page formats, the folder prompt) stay Japanese in both DLLs.
 - **Minimized:** `RequestUnforcedClose` first checks the window mode. A minimized window quits at once with exit
   code 0, and the shutdown flush writes `SAVE.DAT`, as native does under run-state `0x1000000`. The port reads
   the window's state instead of keeping the bit.
@@ -1726,13 +1725,18 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
 
 **Port** (2026-11-05). `godot/Main.MenuBar.cs` draws menu 110 above the game:
 
-- **Data and geometry.** `NativeMenuResource` reads menu 110 from the installed AGERC.DLL. `AgercMenu.Prune` and
-  `AgercMenu.Refresh` model op 1 and op 0. `godot/NativeMenuBar.cs` draws the bar and the popups with the measured
-  geometry. The window grows by the bar's height; shots, the cursor mapping and the dialogs place the game below it.
-- **Commands.** 終了 sends the asking close. The four ﾒｯｾｰｼﾞ items call `VirtualMachine.MenuServices`
-  (`RequestMenuMessageSkipToggle`, `…AutoMessageToggle`, `…ReadMessageSkipToggle`, `RequestMenuHideWindow`). The VM
-  applies them at its next instruction boundary or text-wait service, then runs `CALLBACK_SETTING.BIN`. Ending a
-  text wait from Auto goes through `IInputHost.EndInputWait`.
+- **Data and geometry.** Since engine shell M2 (2026-11-09) the bar comes from the shell's model, not the DLL:
+  `ShellMenu` (`engine/Ome.Engine.Frontend/Shell`) holds menu 110's tree, labelled from the shell's string table,
+  and models op 1 (`Prune`) and op 0 (`Refresh`). `godot/NativeMenuBar.cs` draws the bar and the popups with the
+  measured geometry. The window grows by the bar's height; shots, the cursor mapping and the dialogs place the game
+  below it.
+- **Commands.** `ShellCommands` names each command id and runs it through `IShellHost` and `IVmMenuServices`. 終了
+  sends the asking close. The four ﾒｯｾｰｼﾞ items call the VM's menu services (`RequestMenuMessageSkipToggle`,
+  `…AutoMessageToggle`, `…ReadMessageSkipToggle`, `RequestMenuHideWindow`). The VM applies them at its next
+  instruction boundary or text-wait service, then runs `CALLBACK_SETTING.BIN`. Ending a text wait from Auto goes
+  through `IInputHost.EndInputWait`. Until the shell's own panel (M3), 設定's section commands and ﾊﾞｰｼﾞｮﾝ情報 open
+  AGERC's dialogs, and those commands are grayed when the game's AGERC.DLL lacks dialogs 9 and 2 (the clean
+  Kamidori install's DLL is packed).
 - **Screenshots.** `godot/Main.Screenshot.cs` saves through `ScreenshotBmpStore` (`engine/Ome.Engine/Persistence`).
   表示画面を保存 saves the frame frozen when the menu opened; F1 saves the current frame unless
   `VirtualMachine.SystemKeyDisableMask` (op `0x10f`) has bit 0, or a dialog is open. `--desktop-dir` replaces the
@@ -1911,11 +1915,13 @@ then reaches the game. While the strip's menu loop runs, the game holds, as it d
 - **The strip's drawing.** The port draws the strip in game pixels over the top of the canvas, as native's default
   800×600 fullscreen shows it (`SM_CXSCREEN` is then the canvas width). It uses the active look: frame `0x191919`
   and black text. Its geometry matches the capture above. The text differs from native only in ClearType fringes,
-  as the windowed bar's does.
+  as the windowed bar's does. The caption's icon is left blank until the shell has its own (engine shell spec §5.5),
+  since the game's is inside AGERC.DLL.
 - **The strip's behaviour.** It shows from the top-edge dwell (the screen's top two rows, 100 ms ticks) or from
   Alt. It freezes the presented frame without holding the VM. It takes the keyboard. A later Alt or F10 tap starts
   its keyboard mode ("Native menu bar", Keyboard mode). A click elsewhere hides it and reaches the game. Its menu loop
-  holds the VM as the bar's does.
+  holds the VM as the bar's does. A command chosen from it keeps the frame frozen across the hide, so the strip is
+  not in the frame 終了 dims.
 - **Persistence.** `display:ScreenMode` is written at each switch. Native writes it at exit, and the final file is
   the same.
 - **Not modelled.** The `ctx+0x55118` stamp is not modelled. The selection-fade setting is never touched, because it

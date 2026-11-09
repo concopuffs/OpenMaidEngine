@@ -12,13 +12,16 @@ using Godot;
 /// <summary>
 /// AGERC's own dialogs (docs/engine-re.md, "Native menu bar"), built from the game's AGERC.DLL templates
 /// (<see cref="Win32TemplateDialog"/>). The dialog's modal loop runs on AGE's thread, so the game holds and its frame
-/// stays frozen while it is open, with no dim (fullscreen also brackets it in IAGEService +0x14/+0x18). The port
-/// opens ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 (0x9c45) and 設定 (0x9c6c, 0x9c68, 0x9c6e, 0x9c6d), whose ﾊﾞｰｼﾞｮﾝ情報 button opens that
-/// dialog over it; the open dialogs form a stack, the newest on top.
+/// stays frozen while it is open, with no dim (fullscreen also brackets it in IAGEService +0x14/+0x18). The shell's
+/// panel sections open them (<see cref="IShellHost.OpenPanel"/>): ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 (0x9c45) and 設定 (0x9c6c, 0x9c68,
+/// 0x9c6e, 0x9c6d), whose ﾊﾞｰｼﾞｮﾝ情報 button opens that dialog over it; the open dialogs form a stack, the newest on
+/// top. These are the port's last reads of AGERC.DLL, until the shell's options panel replaces them (engine shell spec,
+/// M3); an install whose DLL lacks them (the clean Kamidori install's is packed) has those commands grayed.
 /// </summary>
 public partial class Main
 {
     private string? _agercPath;
+    private bool? _agercDialogsAvailable;
     private readonly List<Win32TemplateDialog> _agercDialogs = new();
     /// <summary>Whether the last key or button input came from the keyboard, which decides a new dialog's keyboard
     /// cues (WM_CHANGEUISTATE UIS_INITIALIZE).</summary>
@@ -47,6 +50,23 @@ public partial class Main
         }
     }
 
+    /// <summary>Whether the game's AGERC.DLL holds 設定 (dialog 9) and ﾊﾞｰｼﾞｮﾝ情報 (dialog 2), read once.</summary>
+    private bool AgercDialogsAvailable => _agercDialogsAvailable ??= ReadAgerc() is { } agerc
+        && DialogTemplateResource.Load(agerc, AgercSettingsDialog.ResourceId) != null
+        && DialogTemplateResource.Load(agerc, AgercVersionDialog.ResourceId) != null;
+
+    /// <summary>The game root's AGERC.DLL, whatever its case, or null.</summary>
+    private static string? FindAgerc(string gameRoot)
+    {
+        try
+        {
+            foreach (string file in Directory.EnumerateFiles(gameRoot))
+                if (string.Equals(Path.GetFileName(file), "AGERC.DLL", StringComparison.OrdinalIgnoreCase)) return file;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+        return null;
+    }
+
     private DialogTemplate? AgercTemplate(byte[] agerc, int id)
     {
         DialogTemplate? template = DialogTemplateResource.Load(agerc, id);
@@ -70,7 +90,7 @@ public partial class Main
 
     /// <summary>Menus 0x9c6c, 0x9c68, 0x9c6e and 0x9c6d: agerc_dispatch_host_command's command 9,
     /// DialogBoxParamA(9, agerc_settings_dialog_proc) on tab 0..3.</summary>
-    private void OpenSettingsDialog(int menuCommand)
+    private void OpenSettingsDialog(int startTab)
     {
         if (_agercDialog != null || ReadAgerc() is not { } agerc
             || AgercTemplate(agerc, AgercSettingsDialog.ResourceId) is not { } template)
@@ -79,7 +99,7 @@ public partial class Main
         try
         {
             dialog = new AgercSettingsDialog(template, id => AgercTemplate(agerc, id), new AgercSettingsHost(this),
-                                             AgercSettingsText.StartTab(menuCommand));
+                                             startTab);
         }
         catch (InvalidOperationException error)
         {

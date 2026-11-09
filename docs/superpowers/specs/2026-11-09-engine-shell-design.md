@@ -430,6 +430,20 @@ The user accepted the three recommendations on 2026-11-09:
    - Write the model tests.
 
    After M2, the clean Kamidori install has its bar, strip and 終了.
+
+   Done 2026-11-09. `Ome.Engine.Frontend.Shell` holds the commands (`ShellCommands`), the menu 110 tree with its
+   prune and refresh (`ShellMenu`), the state (`ShellState`), the options (`ShellOptions`), the string tables
+   (`ShellStrings`, `Strings/ja.json` and `en.json`) and the 終了 texts (`ShellExitDialog`). The bar, the strip and
+   終了 come from it, and the port no longer reads menu 110 or dialog 3; `ShellModelTests` checks the model. Both
+   Kamidori installs now have the bar, the strip and 終了. Until M3:
+   - The language is fixed to `ja`, since `ui:Language` comes with `OME.INI`. The translated Kamidori install shows
+     a Japanese bar and 終了 where native shows English.
+   - The section commands and ﾊﾞｰｼﾞｮﾝ情報 still open AGERC's dialogs. They are grayed when the game's `AGERC.DLL`
+     lacks dialogs 9 and 2, as the clean Kamidori install's packed DLL does.
+   - The strip's caption icon is blank until the OME icon.
+
+   A strip command now keeps the frame frozen across the strip's hide, so the frame 終了 dims no longer shows the
+   strip.
 3. **M3 Options panel.**
    - Build the panel with all its sections, the bundled font and the OME icon.
    - Retire 設定, ﾊﾞｰｼﾞｮﾝ情報, 動作環境 and the DLL readers (§7.4).

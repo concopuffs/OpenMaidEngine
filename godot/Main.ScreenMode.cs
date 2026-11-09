@@ -1,7 +1,5 @@
 using System;
-using System.IO;
-using Ome.Engine.Frontend.NativeMenu;
-using Ome.Engine.Frontend.NativeResources;
+using Ome.Engine.Frontend.Shell;
 using Godot;
 
 /// <summary>
@@ -51,28 +49,14 @@ public partial class Main
         ApplyScreenLayout();
     }
 
-    /// <summary>The strip holds its own copy of menu 110, pruned as the bar is (WM_INITDIALOG:
-    /// agerc_refresh_system_menu_state, agerc_prune_menu_by_settings).</summary>
+    /// <summary>The strip holds its own copy of the shell's menu, pruned as the bar is (native's WM_INITDIALOG:
+    /// agerc_refresh_system_menu_state, agerc_prune_menu_by_settings). Its caption shows the game's title; the icon
+    /// beside it waits for the shell's own OME icon (engine shell spec §5.5), since the game's is inside AGERC.DLL.
+    /// </summary>
     private void CreateMenuStrip()
     {
-        if (_agercPath == null || _menuItems == null) return;
-        System.Collections.Generic.List<NativeMenuItem>? items;
-        Texture2D? icon = null;
-        try
-        {
-            byte[] agerc = File.ReadAllBytes(_agercPath);
-            items = NativeMenuResource.Load(agerc, AgercMenu.ResourceId);
-            // The caption's small icon: Windows shrinks WM_SETICON's IDI_ICON1 through its 16 px image.
-            if (IconResource.Load(agerc, "IDI_ICON1", 16) is { } image) icon = IconTexture(image);
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            GD.PushWarning($"[display] reading {_agercPath} for the fullscreen strip failed: {error.Message}");
-            return;
-        }
-        if (items == null) return;
-        AgercMenu.Prune(items, key => AgercMenu.Setting(_catalog.StartupSettings, key));
-        _menuStrip = new SystemMenuStrip(items, _catalog.Title, icon) { Visible = false };
+        if (_shellMenu == null || _menuItems == null) return;
+        _menuStrip = new SystemMenuStrip(_shellMenu.CreateBar(), _catalog.Title, icon: null) { Visible = false };
         _menuStrip.Bar.SystemMenu = WindowSystemMenu.Create(fullscreen: true);   // the strip's: Restore, no Maximize
         _menuStrip.Bar.Opened += OnMenuOpened;
         _menuStrip.Bar.Closed += OnMenuClosed;
@@ -283,9 +267,13 @@ public partial class Main
                 GD.Print("[display] the strip's window menu Move: the port's strip does not move");
                 return;
         }
-        if (id != AgercMenu.SaveScreen) HideMenuStrip($"menu command 0x{id:x}");
+        // The strip's own hold froze the frame it opened over. Keep that frame through the hide and the command, so a
+        // dialog the command opens (終了) freezes the game's frame, not the last rendered one with the strip on it.
+        FreezePresentedFrame(true);
+        if (id != ShellCommands.SaveScreen) HideMenuStrip($"menu command 0x{id:x}");
         ExecuteMenuCommand(id);
-        if (id == AgercMenu.SaveScreen) HideMenuStrip($"menu command 0x{id:x}");
+        if (id == ShellCommands.SaveScreen) HideMenuStrip($"menu command 0x{id:x}");
+        FreezePresentedFrame(false);
     }
 
     /// <summary>Input while the strip shows. True when the strip took the event; false lets it reach the game, as a

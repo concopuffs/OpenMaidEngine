@@ -3,13 +3,21 @@ namespace Ome.Engine.Frontend.Shell;
 /// <summary>
 /// The frontend services the engine shell's commands reach (docs/superpowers/specs/2026-11-09-engine-shell-design.md,
 /// §4.1). These run on the frontend's main thread: the screen mode, the screenshot and its folder, quitting, returning
-/// to the title, and holding the VM. VM services such as the message toggles and the message settings are not here:
-/// they keep their own queues on the VM, so a toggle still applies on the VM thread.
+/// to the title, holding the VM, and opening the shell's own surfaces. VM services such as the message toggles and the
+/// message settings are not here (<see cref="Ome.Engine.Vm.IVmMenuServices"/>): they keep their own queues on the VM,
+/// so a toggle still applies on the VM thread.
 /// </summary>
 public interface IShellHost
 {
     /// <summary>True while the game runs in a window (IAGEService +0x08).</summary>
     bool Windowed { get; }
+
+    /// <summary>An unforced close, as native's WM_CLOSE(0): the 終了 dialog asks, unless the game is minimized.</summary>
+    void RequestClose();
+
+    /// <summary>Open the options panel at <paramref name="section"/>; for <see cref="ShellSection.Info"/>,
+    /// <paramref name="diagnostics"/> picks the diagnostics over the about view.</summary>
+    void OpenPanel(ShellSection section, bool diagnostics = false);
 
     /// <summary>Switch to a window or to fullscreen as IAGEService +0x1c does (display_toggle_screen_mode_and_menu_bar),
     /// which queues CALLBACK_WINDOW.BIN. False when the game is already in that mode or display:ForceScreen keeps the

@@ -1,23 +1,21 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using Ome.Engine.Frontend.Control;
-using Ome.Engine.Frontend.NativeMenu;
-using Ome.Engine.Persistence;
+using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Sys4;
-using Ome.Engine.Vm;
 using Godot;
 
 /// <summary>
-/// The windowed AGE's menu bar (AGERC.DLL menu 110; docs/engine-re.md "Native menu bar"). The port reads the menu
-/// from the game's own AGERC.DLL, prunes it by <c>set:Menu_*</c> as AGERC does when AGE attaches it, and draws it above
-/// the game (<see cref="NativeMenuBar"/>), so the viewport is the game plus <see cref="_menuBarHeight"/> rows and the
-/// game's client area starts below them. A game without AGERC.DLL, or a run with <c>--no-menu-bar</c>, has no bar.
+/// The windowed game's menu bar: the engine shell's menu (<see cref="ShellMenu"/>; menu 110's tree as AGERC held it,
+/// docs/engine-re.md "Native menu bar"), pruned by <c>set:Menu_*</c> as AGERC prunes it when AGE attaches it, and drawn
+/// above the game (<see cref="NativeMenuBar"/>), so the viewport is the game plus <see cref="_menuBarHeight"/> rows and
+/// the game's client area starts below them. Every game has it; a run with <c>--no-menu-bar</c> does not.
 /// <para>Opening a menu starts native's modal menu loop: the game holds at its next opcode boundary, its frame
-/// freezes, and AGERC refreshes the items (WM_INITMENU). A chosen command then runs as WM_COMMAND does. The port
-/// performs 終了, 画像の保存 (表示画面を保存, 画像の保存場所; Main.Screenshot.cs), the ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ and ｳｲﾝﾄﾞｳ
-/// (Main.ScreenMode.cs), ﾍﾙﾌﾟ's ﾊﾞｰｼﾞｮﾝ情報 and 設定 (Main.AgercDialogs.cs); it grays the commands it lacks
-/// (docs/backlog.md). Fullscreen detaches the bar, and the top-edge strip carries its own copy of the menu.</para>
+/// freezes, and the shell refreshes the items from its state snapshot (native's WM_INITMENU). A chosen command then
+/// runs as WM_COMMAND does, through the shell's command table (<see cref="ShellCommands"/>): 終了, 画像の保存
+/// (Main.Screenshot.cs), the ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ and ｳｲﾝﾄﾞｳ (Main.ScreenMode.cs), and the 設定 and ﾍﾙﾌﾟ sections
+/// (Main.ShellHost.cs). The items the shell does not model stay grayed. Fullscreen detaches the bar, and the top-edge
+/// strip carries its own copy of the menu.</para>
 /// <para>The keyboard reaches the bar as DefWindowProc lets it reach AGE's: an Alt or F10 tap selects it, and the
 /// window menu (<see cref="WindowSystemMenu"/>) follows its last item. Op 0x10f's bit 0x200 keeps F10 out.</para>
 /// </summary>
@@ -25,60 +23,21 @@ public partial class Main
 {
     private NativeMenuBar? _menuBar;
     private CanvasLayer? _menuBarLayer;
-    private List<NativeMenuItem>? _menuItems;
+    private ShellMenu? _shellMenu;
+    private List<MenuItem>? _menuItems;
     private int _menuBarHeight;
 
-    private static readonly HashSet<int> PortMenuCommands = new()
-    {
-        AgercMenu.Exit, AgercMenu.SaveScreen, AgercMenu.ImageFolder, AgercMenu.MessageSkip, AgercMenu.ReadMessageSkip,
-        AgercMenu.HideWindow, AgercMenu.AutoMessage, AgercMenu.FullScreen, AgercMenu.Windowed, AgercMenu.VersionInfo,
-        AgercMenu.MessageSettings, AgercMenu.SoundSettings, AgercMenu.OtherSettings, AgercMenu.SystemInfo,
-    };
-
-    /// <summary>Read and prune the menu before the window is sized, since the bar adds rows above the game. The game's
-    /// AGERC.DLL also holds the 終了 dialog (Main.Exit.cs), which a run without the bar still opens.</summary>
+    /// <summary>Build and prune the menu before the window is sized, since the bar adds rows above the game.</summary>
     private void LoadMenuBar(string gameRoot, Sys4StartupSettings settings, string[] userArgs)
     {
         _menuItems = null;
         _menuBarHeight = 0;
-        string? path = FindFileIgnoringCase(gameRoot, "AGERC.DLL");
-        _agercPath = path;
+        _agercPath = FindAgerc(gameRoot);   // only for 設定 and ﾊﾞｰｼﾞｮﾝ情報 (Main.AgercDialogs.cs)
+        _shellMenu = new ShellMenu(_shellStrings, settings);
         if (Array.IndexOf(userArgs, "--no-menu-bar") >= 0) return;
-        if (path == null)
-        {
-            GD.Print("[menu] no AGERC.DLL in the game root: no menu bar");
-            return;
-        }
-        List<NativeMenuItem>? items;
-        try
-        {
-            items = NativeMenuResource.Load(File.ReadAllBytes(path), AgercMenu.ResourceId);
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            GD.PushWarning($"[menu] reading {path} failed: {error.Message}");
-            return;
-        }
-        if (items == null)
-        {
-            GD.Print($"[menu] {path} has no menu {AgercMenu.ResourceId}: no menu bar");
-            return;
-        }
-        AgercMenu.Prune(items, key => AgercMenu.Setting(settings, key));
-        _menuItems = items;
+        _menuItems = _shellMenu.CreateBar();
         _menuBarHeight = NativeMenuBar.BarHeight;
-        GD.Print($"[menu] AGERC menu {AgercMenu.ResourceId}: {string.Join(" ", items.ConvertAll(i => i.Label))}");
-    }
-
-    private static string? FindFileIgnoringCase(string directory, string name)
-    {
-        try
-        {
-            foreach (string file in Directory.EnumerateFiles(directory))
-                if (string.Equals(Path.GetFileName(file), name, StringComparison.OrdinalIgnoreCase)) return file;
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
-        return null;
+        GD.Print($"[menu] shell menu: {string.Join(" ", _menuItems.ConvertAll(i => i.Label))}");
     }
 
     /// <summary>Create the bar once the scene exists. Main itself moves below it.</summary>
@@ -133,90 +92,35 @@ public partial class Main
         Shell.HoldVm(false);
     }
 
-    /// <summary>agerc_refresh_system_menu_state, then gray the commands the port does not perform: the bar's menu
-    /// and the fullscreen strip's.</summary>
+    /// <summary>The shell's refresh (native's WM_INITMENU) of the bar's menu and the fullscreen strip's.</summary>
     private void RefreshMenu()
     {
         if (_menuItems != null) RefreshMenuItems(_menuItems);
         if (_menuStrip != null) RefreshMenuItems(_menuStrip.Bar.Items);
     }
 
-    private void RefreshMenuItems(IReadOnlyList<NativeMenuItem> items)
+    private void RefreshMenuItems(IReadOnlyList<MenuItem> items)
     {
-        if (_vm == null || items is not List<NativeMenuItem> list) return;
-        VmMenuState vm = _vm.MenuState;
-        Sys4RegIniStore? reg = _sys4RegIniStore;
-        AgercMenu.Refresh(list, new AgercMenuState
-        {
-            Windowed = _windowed,
-            MessageSkip = vm.MessageSkip,
-            ReadTextSkip = vm.ReadTextSkip,
-            AutoMessage = vm.AutoMessage,
-            HiddenWindow = vm.HiddenWindow,
-            TextWait = vm.TextWait,
-            YieldHandler = vm.YieldHandler,
-            SystemMenuEnabled = vm.SystemMenuEnabled,
-            RMouseEvent = reg?.LoadMessageInt("RMouseEvent", 0) ?? 0,
-            UseAntiFont = reg?.LoadMessageInt("UseAntiFont", 1) ?? 1,
-            MessageSpeed = reg?.LoadMessageInt(Sys4RegIniStore.MessageSpeedKey, Sys4RegIniStore.DefaultMessageSpeed)
-                           ?? Sys4RegIniStore.DefaultMessageSpeed,
-            MesWinAlpha = reg?.LoadMessageInt(Sys4RegIniStore.MesWinAlphaKey, Sys4RegIniStore.DefaultMesWinAlpha)
-                          ?? Sys4RegIniStore.DefaultMesWinAlpha,
-            SoundSe = reg?.LoadInt("sound", "SE", 1) ?? 1,
-            SoundMusic = reg?.LoadInt("sound", "Music", 0) ?? 0,
-        });
-        GrayUnperformed(list);
+        if (ShellSnapshot() is { } state) _shellMenu?.Refresh(items, state);
     }
 
-    private static void GrayUnperformed(List<NativeMenuItem> items)
-    {
-        foreach (NativeMenuItem item in items)
-        {
-            if (item.Kind == NativeMenuItemKind.Command && !PortMenuCommands.Contains(item.Id)) item.Enabled = false;
-            if (item.Kind == NativeMenuItemKind.Popup) GrayUnperformed(item.Children);
-        }
-    }
+    /// <summary>The shell's state snapshot, rebuilt each time a surface opens; null before the VM exists.</summary>
+    private ShellState? ShellSnapshot() =>
+        _vm == null ? null : new ShellState(_windowed, _vm.MenuState, PanelAvailable: AgercDialogsAvailable);
 
-    /// <summary>A menu command, as age_main_window_proc's WM_COMMAND and AGERC's agerc_menu_command run it.</summary>
+    /// <summary>A menu command, as age_main_window_proc's WM_COMMAND and AGERC's agerc_menu_command run it: the shell's
+    /// commands, then the window menu's.</summary>
     private void ExecuteMenuCommand(int id)
     {
         GD.Print($"[menu] command 0x{id:x}");
         if (_vm == null) return;
+        if (ShellCommands.Find(id) is { } command)
+        {
+            command.Run(Shell, _vm);
+            return;
+        }
         switch (id)
         {
-            case AgercMenu.Exit:
-                RequestUnforcedClose();   // PostMessage(WM_CLOSE, 0): the 終了 dialog
-                break;
-            case AgercMenu.SaveScreen:
-                Shell.SaveScreenshot();   // IAGEService +0xa4: engine_save_screenshot_bmp
-                break;
-            case AgercMenu.ImageFolder:
-                Shell.ChooseImageFolder();   // agerc_choose_screenshot_folder: SHBrowseForFolder
-                break;
-            case AgercMenu.MessageSkip:
-                _vm.RequestMenuMessageSkipToggle();
-                break;
-            case AgercMenu.AutoMessage:
-                _vm.RequestMenuAutoMessageToggle();
-                break;
-            case AgercMenu.ReadMessageSkip:
-                _vm.RequestMenuReadMessageSkipToggle();
-                break;
-            case AgercMenu.HideWindow:
-                _vm.RequestMenuHideWindow();
-                break;
-            case AgercMenu.FullScreen:
-                Shell.SwitchScreenMode(windowed: false, "menu ﾌﾙｽｸﾘｰﾝ");   // IAGEService +0x1c(0)
-                break;
-            case AgercMenu.Windowed:
-                Shell.SwitchScreenMode(windowed: true, "menu ｳｲﾝﾄﾞｳ");   // IAGEService +0x1c(1)
-                break;
-            case AgercMenu.VersionInfo:
-                OpenVersionDialog();   // AGERC host command 2: the ﾊﾞｰｼﾞｮﾝ情報 dialog (Main.AgercDialogs.cs)
-                break;
-            case AgercMenu.MessageSettings or AgercMenu.SoundSettings or AgercMenu.OtherSettings or AgercMenu.SystemInfo:
-                OpenSettingsDialog(id);   // AGERC host command 9: the 設定 dialog on the command's tab
-                break;
             // The window menu's commands reach age_main_window_proc as WM_SYSCOMMAND.
             case WindowSystemMenu.Minimize:
                 DisplayServer.WindowSetMode(DisplayServer.WindowMode.Minimized);
@@ -231,32 +135,36 @@ public partial class Main
                 WindowSystemMenu.StartKeyboardMove();   // DefWindowProc's keyboard move loop
                 break;
             default:
-                GD.Print($"[menu] command 0x{id:x} has no port implementation (docs/backlog.md, \"Native menu bar\")");
+                GD.Print($"[menu] command 0x{id:x} is not a shell command (docs/backlog.md, \"Native menu bar\")");
                 break;
         }
     }
 
-    /// <summary>The driver's <c>menu</c> step: refresh the menu as opening it does, refuse a grayed or missing
-    /// command, and run an enabled one. In fullscreen the menu is the top-edge strip's, which must be showing.
-    /// </summary>
+    /// <summary>The driver's <c>menu</c> step: resolve the command through the shell's table, refresh the menu as
+    /// opening it does, refuse a grayed or missing command, and run an enabled one. In fullscreen the menu is the
+    /// top-edge strip's, which must be showing. The label is the Japanese one, whatever the player's language, as the
+    /// native driver reads it.</summary>
     private System.Text.Json.Nodes.JsonObject ChooseMenuCommand(int id)
     {
         if (_menuItems == null) throw new DriveProtocolException("this run has no menu bar");
         if (!_windowed && (_menuStrip == null || !_menuStripShown))
             throw new DriveProtocolException(
                 "fullscreen detaches the menu bar: show the top-edge strip first (hold the pointer on the top edge)");
-        List<NativeMenuItem> items = _windowed ? _menuItems : (List<NativeMenuItem>)_menuStrip!.Bar.Items;
+        IReadOnlyList<MenuItem> items = _windowed ? _menuItems : _menuStrip!.Bar.Items;
         RefreshMenu();
-        if (NativeMenuItem.Find(items, id) is not { Kind: NativeMenuItemKind.Command } item)
-            throw new DriveProtocolException($"the menu bar has no command 0x{id:x}");
+        if (ShellCommands.Find(id) is not { } command || ShellSnapshot() is not { } state)
+            throw new DriveProtocolException($"the shell has no command 0x{id:x}");
+        if (MenuItem.Find(items, id) is not { Kind: MenuItemKind.Command } item)
+            throw new DriveProtocolException($"the menu bar has no command 0x{id:x} ({command.Name})");
+        string label = command.Text(ShellStrings.Japanese, state);
         var result = new System.Text.Json.Nodes.JsonObject
         {
             ["command"] = id,
-            ["label"] = item.Text,
+            ["label"] = label,
             ["enabled"] = item.Enabled,
             ["checked"] = item.Checked,
         };
-        if (!item.Enabled) throw new DriveProtocolException($"menu command 0x{id:x} ({item.Text}) is grayed");
+        if (!item.Enabled) throw new DriveProtocolException($"menu command 0x{id:x} ({label}) is grayed");
         if (_windowed) ExecuteMenuCommand(id);
         else ExecuteStripCommand(id);
         return result;

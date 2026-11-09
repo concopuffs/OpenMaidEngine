@@ -8,26 +8,29 @@ using Godot;
 /// <summary>
 /// AGERC's 画像の保存場所 (menu 0x9c47, agerc_choose_screenshot_folder@0x10002bc0; docs/engine-re.md, "Native menu
 /// bar"). Native opens the shell's own folder picker, SHBrowseForFolder rooted at the desktop with
-/// BIF_RETURNONLYFSDIRS, the prompt below and the folder screenshots would go to preselected. OK stores the folder
-/// as system:SaveBMPPath; Cancel changes nothing.
+/// BIF_RETURNONLYFSDIRS, a prompt (the shell's <c>folder.prompt</c>; AGERC's 画像を保存するフォルダを選択してください) and
+/// the folder screenshots would go to preselected. OK stores the folder as system:SaveBMPPath; Cancel changes nothing.
 /// <para>On Windows the port opens the same dialog, owned by the game window, on a thread of its own: the game window
 /// is disabled while it is open, as native's is, but Godot keeps presenting the frozen frame and the driver can list
 /// and answer it as it does a native dialog. Elsewhere it uses the platform's folder dialog.</para>
 /// </summary>
 public sealed class ScreenshotFolderDialog
 {
-    public const string Prompt = "画像を保存するフォルダを選択してください";
-
+    private readonly string _prompt;
     private readonly Action<string?> _completed;
     private IntPtr _hwnd;
 
-    private ScreenshotFolderDialog(Action<string?> completed) => _completed = completed;
+    private ScreenshotFolderDialog(string prompt, Action<string?> completed)
+    {
+        _prompt = prompt;
+        _completed = completed;
+    }
 
     /// <summary>Open the dialog. <paramref name="completed"/> runs on the main thread with the chosen folder, or
     /// null for Cancel or a failure.</summary>
-    public static ScreenshotFolderDialog Open(string initialFolder, Action<string?> completed)
+    public static ScreenshotFolderDialog Open(string prompt, string initialFolder, Action<string?> completed)
     {
-        var dialog = new ScreenshotFolderDialog(completed);
+        var dialog = new ScreenshotFolderDialog(prompt, completed);
         if (OperatingSystem.IsWindows())
         {
             long owner = DisplayServer.WindowGetNativeHandle(DisplayServer.HandleType.WindowHandle);
@@ -41,7 +44,7 @@ public sealed class ScreenshotFolderDialog
         }
         else if (DisplayServer.HasFeature(DisplayServer.Feature.NativeDialogFile))
         {
-            DisplayServer.FileDialogShow(Prompt, initialFolder, "", false, DisplayServer.FileDialogMode.OpenDir,
+            DisplayServer.FileDialogShow(prompt, initialFolder, "", false, DisplayServer.FileDialogMode.OpenDir,
                 Array.Empty<string>(),
                 Callable.From((bool ok, string[] paths, long _) =>
                     dialog._completed(ok && paths.Length > 0 ? paths[0] : null)));
@@ -116,7 +119,7 @@ public sealed class ScreenshotFolderDialog
             {
                 hwndOwner = owner,
                 pszDisplayName = displayName,
-                lpszTitle = Prompt,
+                lpszTitle = _prompt,
                 ulFlags = BIF_RETURNONLYFSDIRS,
                 lpfn = callback,
             };

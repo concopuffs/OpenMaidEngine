@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
-using Ome.Engine.Frontend.NativeMenu;
+using Ome.Engine.Frontend.Shell;
 using Godot;
 
 /// <summary>
-/// AGE's windowed menu bar (AGERC menu 110), drawn as Windows 10 draws it for AGE: the bar above the game's client
-/// area, its dropdowns and their submenus, the hot and pushed states, check marks and the dropdown shadow. Values come
-/// from PrintWindow and screen captures of the native bar (2026-11-05, docs/engine-re.md "Native menu bar").
+/// The windowed menu bar: the shell's menu tree (<see cref="ShellMenu"/>, menu 110's as AGERC held it), drawn as
+/// Windows 10 draws AGE's: the bar above the game's client area, its dropdowns and their submenus, the hot and pushed
+/// states, check marks and the dropdown shadow. Values come from PrintWindow and screen captures of the native bar
+/// (2026-11-05, docs/engine-re.md "Native menu bar").
 /// <para>While a dropdown is open, native runs Windows' modal menu loop: the game neither ticks nor presents, and the
 /// menu takes every mouse and key event. <see cref="Opened"/> and <see cref="Closed"/> bracket that loop, and a chosen
 /// command is raised through <see cref="CommandChosen"/> before <see cref="Closed"/>, as WM_COMMAND follows the loop's
@@ -103,16 +104,16 @@ public partial class NativeMenuBar : Control
 
     private sealed class Dropdown
     {
-        public required List<NativeMenuItem> Items { get; init; }
+        public required List<MenuItem> Items { get; init; }
         public required Rect2I Rect { get; init; }
         public required int[] RowTops { get; init; }
         public required int AcceleratorX { get; init; }
         public int Selected = -1;
         public int RowHeightOf(int index) =>
-            Items[index].Kind == NativeMenuItemKind.Separator ? SeparatorHeight : RowHeight;
+            Items[index].Kind == MenuItemKind.Separator ? SeparatorHeight : RowHeight;
     }
 
-    private readonly List<NativeMenuItem> _items;
+    private readonly List<MenuItem> _items;
     private readonly Win32Font _font = Win32DialogStyle.MenuFont;
     private Win32Font? _boldFont;
     private readonly List<Dropdown> _dropdowns = new();
@@ -133,21 +134,21 @@ public partial class NativeMenuBar : Control
     /// <summary>The menu loop ended.</summary>
     public event Action? Closed;
 
-    public NativeMenuBar(List<NativeMenuItem> items)
+    public NativeMenuBar(List<MenuItem> items)
     {
         _items = items;
         MouseFilter = MouseFilterEnum.Ignore;
         SetProcess(false);
     }
 
-    public IReadOnlyList<NativeMenuItem> Items => _items;
+    public IReadOnlyList<MenuItem> Items => _items;
 
     /// <summary>The menu loop runs: a bar position is selected, with or without a dropdown.</summary>
     public bool IsOpen => _openBar >= 0;
 
     /// <summary>The window menu, reached after the last bar item (<see cref="WindowSystemMenu"/>); null leaves the
     /// position out.</summary>
-    public List<NativeMenuItem>? SystemMenu { get; set; }
+    public List<MenuItem>? SystemMenu { get; set; }
 
     /// <summary>F10 does not enter the loop (op <c>0x10f</c>'s mask bit <c>0x200</c>: AGE returns 0 for it).</summary>
     public Func<bool>? IgnoreF10 { get; set; }
@@ -197,7 +198,7 @@ public partial class NativeMenuBar : Control
         QueueRedraw();
     }
 
-    private int BarItemWidth(NativeMenuItem item) => (int)_font.Width(item.Label) + 2 * BarItemPadding;
+    private int BarItemWidth(MenuItem item) => (int)_font.Width(item.Label) + 2 * BarItemPadding;
 
     public override void _Notification(int what)
     {
@@ -333,9 +334,9 @@ public partial class NativeMenuBar : Control
         var (releaseLevel, releaseRow) = DropdownAt(p);
         if (releaseLevel >= 0 && releaseRow >= 0)
         {
-            NativeMenuItem item = _dropdowns[releaseLevel].Items[releaseRow];
-            if (item.Kind == NativeMenuItemKind.Command && item.Enabled) Choose(item.Id);
-            else if (item.Kind == NativeMenuItemKind.Popup && item.Enabled) OpenSubmenu(releaseLevel, releaseRow, false);
+            MenuItem item = _dropdowns[releaseLevel].Items[releaseRow];
+            if (item.Kind == MenuItemKind.Command && item.Enabled) Choose(item.Id);
+            else if (item.Kind == MenuItemKind.Popup && item.Enabled) OpenSubmenu(releaseLevel, releaseRow, false);
         }
         return true;
     }
@@ -450,7 +451,7 @@ public partial class NativeMenuBar : Control
     /// <summary>A bar command runs; any other position opens its dropdown with the first item selected.</summary>
     private void OpenOrChoose(int bar)
     {
-        if (bar < _items.Count && _items[bar].Kind == NativeMenuItemKind.Command)
+        if (bar < _items.Count && _items[bar].Kind == MenuItemKind.Command)
         {
             if (_items[bar].Enabled) Choose(_items[bar].Id);
             else SelectBar(bar);
@@ -478,7 +479,7 @@ public partial class NativeMenuBar : Control
                 Select(level, Step(top, 1), hover: false);
                 break;
             case Key.Right:
-                if (top.Selected >= 0 && top.Items[top.Selected].Kind == NativeMenuItemKind.Popup
+                if (top.Selected >= 0 && top.Items[top.Selected].Kind == MenuItemKind.Popup
                     && top.Items[top.Selected].Enabled)
                     OpenSubmenu(level, top.Selected, selectFirst: true);
                 else
@@ -519,10 +520,10 @@ public partial class NativeMenuBar : Control
     private void Activate(int level, int row)
     {
         if (row < 0) return;
-        NativeMenuItem item = _dropdowns[level].Items[row];
+        MenuItem item = _dropdowns[level].Items[row];
         if (!item.Enabled) return;
-        if (item.Kind == NativeMenuItemKind.Command) Choose(item.Id);
-        else if (item.Kind == NativeMenuItemKind.Popup) OpenSubmenu(level, row, selectFirst: true);
+        if (item.Kind == MenuItemKind.Command) Choose(item.Id);
+        else if (item.Kind == MenuItemKind.Popup) OpenSubmenu(level, row, selectFirst: true);
     }
 
     private static int Step(Dropdown dropdown, int direction)
@@ -532,7 +533,7 @@ public partial class NativeMenuBar : Control
         for (int i = 0; i < count; i++)
         {
             index = index < 0 ? (direction > 0 ? 0 : count - 1) : (index + direction + count) % count;
-            if (dropdown.Items[index].Kind != NativeMenuItemKind.Separator) return index;
+            if (dropdown.Items[index].Kind != MenuItemKind.Separator) return index;
         }
         return dropdown.Selected;
     }
@@ -603,7 +604,7 @@ public partial class NativeMenuBar : Control
             // The window menu opens at the window's top-left, a row above the bar (native: window y 25, the bar 26).
             _dropdowns.Add(Layout(SystemMenu!, new Vector2I(0, -1), null));
         }
-        else if (_items[bar] is { Kind: NativeMenuItemKind.Popup, Children.Count: > 0 } item)
+        else if (_items[bar] is { Kind: MenuItemKind.Popup, Children.Count: > 0 } item)
         {
             Rect2I owner = _barRects[bar];
             _dropdowns.Add(Layout(item.Children, new Vector2I(owner.Position.X, BarItemHeight), null));
@@ -615,8 +616,8 @@ public partial class NativeMenuBar : Control
     private void OpenSubmenu(int level, int row, bool selectFirst)
     {
         Dropdown parent = _dropdowns[level];
-        NativeMenuItem item = parent.Items[row];
-        if (item.Kind != NativeMenuItemKind.Popup || item.Children.Count == 0) return;
+        MenuItem item = parent.Items[row];
+        if (item.Kind != MenuItemKind.Popup || item.Children.Count == 0) return;
         CloseFrom(level + 1);
         parent.Selected = row;
         var at = new Vector2I(parent.Rect.End.X - SubmenuOverlap,
@@ -651,7 +652,7 @@ public partial class NativeMenuBar : Control
             _pendingSubmenu = null;
             return;
         }
-        if (row >= 0 && dropdown.Items[row].Kind == NativeMenuItemKind.Popup && dropdown.Items[row].Enabled)
+        if (row >= 0 && dropdown.Items[row].Kind == MenuItemKind.Popup && dropdown.Items[row].Enabled)
         {
             if (!hover) OpenSubmenu(level, row, selectFirst: false);
             else if (_pendingSubmenu is not { } pending || pending.Level != level || pending.Index != row)
@@ -684,12 +685,12 @@ public partial class NativeMenuBar : Control
         else if (_dropdowns[pending.Level].Selected == pending.Index) OpenSubmenu(pending.Level, pending.Index, false);
     }
 
-    private Dropdown Layout(List<NativeMenuItem> items, Vector2I at, Rect2I? parent)
+    private Dropdown Layout(List<MenuItem> items, Vector2I at, Rect2I? parent)
     {
         int label = 0, accelerator = 0;
-        foreach (NativeMenuItem item in items)
+        foreach (MenuItem item in items)
         {
-            if (item.Kind == NativeMenuItemKind.Separator) continue;
+            if (item.Kind == MenuItemKind.Separator) continue;
             Win32Font font = FontOf(item);
             label = Math.Max(label, (int)font.Width(item.Label));
             accelerator = Math.Max(accelerator, (int)font.Width(item.Accelerator));
@@ -700,7 +701,7 @@ public partial class NativeMenuBar : Control
         for (int i = 0; i < items.Count; i++)
         {
             tops[i] = y;
-            y += items[i].Kind == NativeMenuItemKind.Separator ? SeparatorHeight : RowHeight;
+            y += items[i].Kind == MenuItemKind.Separator ? SeparatorHeight : RowHeight;
         }
         int height = y + PopupInset;
         // The port's window is the screen: a dropdown that would leave it moves back inside, and a submenu that
@@ -761,9 +762,9 @@ public partial class NativeMenuBar : Control
         DrawRect(new Rect2(x0 + PopupInset, y0 + PopupInset, GutterWidth, h - 2 * PopupInset), Gutter);
         for (int i = 0; i < dropdown.Items.Count; i++)
         {
-            NativeMenuItem item = dropdown.Items[i];
+            MenuItem item = dropdown.Items[i];
             int top = y0 + dropdown.RowTops[i];
-            if (item.Kind == NativeMenuItemKind.Separator)
+            if (item.Kind == MenuItemKind.Separator)
             {
                 DrawRect(new Rect2(x0 + PopupInset + GutterWidth, top + 3, w - 2 * PopupInset - GutterWidth, 1),
                          SeparatorLine);
@@ -791,12 +792,12 @@ public partial class NativeMenuBar : Control
             if (item.Accelerator.Length > 0)
                 font.Draw(this, new Vector2(x0 + dropdown.AcceleratorX, top + RowTextTop), item.Accelerator, color,
                           mnemonic: false);
-            if (item.Kind == NativeMenuItemKind.Popup) DrawMask(ArrowMask, x0 + w - 17, top + 7);
+            if (item.Kind == MenuItemKind.Popup) DrawMask(ArrowMask, x0 + w - 17, top + 7);
         }
     }
 
     /// <summary>The default item (MFS_DEFAULT) is drawn bold.</summary>
-    private Win32Font FontOf(NativeMenuItem item) => item.Default ? _boldFont ??= Win32DialogStyle.MenuBoldFont : _font;
+    private Win32Font FontOf(MenuItem item) => item.Default ? _boldFont ??= Win32DialogStyle.MenuBoldFont : _font;
 
     private void DrawMask(byte[,] mask, int x, int y)
     {

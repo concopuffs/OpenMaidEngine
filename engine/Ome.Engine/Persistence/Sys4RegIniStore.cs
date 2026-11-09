@@ -269,8 +269,12 @@ public sealed class Sys4RegIniStore
     /// </summary>
     public bool TextAntialiasEnabled => AntiFontBound && LoadMessageInt(UseAntiFontKey, 1) != 0;
 
-    private bool AntiFontBound
-        => int.TryParse(_startupSettings.GetValueOrDefault("ENABLEANTIFONT")?.Trim(),
+    private bool AntiFontBound => BindsAntiFont(_startupSettings);
+
+    /// <summary>Whether AGE binds message:UseAntiFont (and SYS4433's AntiFontLevel): set:EnableAntiFont is nonzero.
+    /// </summary>
+    public static bool BindsAntiFont(Sys4StartupSettings settings)
+        => int.TryParse(settings.GetValueOrDefault("ENABLEANTIFONT")?.Trim(),
             NumberStyles.Integer, CultureInfo.InvariantCulture, out int enableAntiFont) && enableAntiFont != 0;
 
     /// <summary>message:RubyShiftMode as SYS4433 starts: the file's value when a hand edit put one there, else SYS4INI's

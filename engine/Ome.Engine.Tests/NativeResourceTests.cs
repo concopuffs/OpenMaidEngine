@@ -150,55 +150,6 @@ public class NativeResourceTests
         Assert.Null(DialogTemplateResource.Load(Pe(new Resource(PeResource.RtDialog, 2, template)), 3));
     }
 
-    private static Control[] ExitDialogControls(string prompt, string quit, string title, string ok, string cancel) =>
-    [
-        new(0x404, 0x82, "SYSTEM3", 0x50000003, 7, 20, 20, 20),
-        new(-1, 0x82, prompt, 0x50020000, 46, 16, 134, 11),
-        new(0x3ea, 0x80, quit, 0x50020009, 46, 34, 134, 10),
-        new(0x3eb, 0x80, title, 0x50000009, 46, 48, 134, 12),
-        new(1, 0x80, ok, 0x50010001, 74, 72, 50, 14),
-        new(2, 0x80, cancel, 0x50010000, 130, 72, 50, 14),
-    ];
-
-    [Fact]
-    public void ExitDialogTakesItsTextsFromTheTemplatesControlsById()
-    {
-        // A translated AGERC.DLL keeps dialog 3's ids and layout and changes only what the controls say.
-        byte[] template = DialogEx("Quit", 0x80c808c0, (0, 0, 187, 93), 9, "ＭＳ Ｐゴシック",
-            ExitDialogControls("Would you like to quit?", "Exit(&E)", "Return to title(&T)", "OK", "Cancel"));
-
-        var dialog = Ome.Engine.Frontend.NativeMenu.AgercExitDialog.Load(
-            Pe(new Resource(PeResource.RtDialog, 3, template)));
-
-        Assert.NotNull(dialog);
-        Assert.Equal("Quit", dialog.Title);
-        Assert.Equal("Would you like to quit?", dialog.Prompt.Text);
-        Assert.Equal(("Exit(&E)", "Return to title(&T)"), (dialog.Quit.Text, dialog.ReturnToTitle.Text));
-        Assert.Equal(DialogStyles.BsDefPushButton, dialog.Ok.TypeBits);
-        // What the native driver's dialogs step reads: the statics' texts, then every Button control's.
-        Assert.Equal("SYSTEM3\nWould you like to quit?", dialog.Text);
-        Assert.Equal(["Exit(&E)", "Return to title(&T)", "OK", "Cancel"], dialog.Buttons);
-        Assert.Equal(['E', 'T'], new[] { dialog.Quit.Text, dialog.ReturnToTitle.Text }
-                         .Select(t => Ome.Engine.Frontend.NativeMenu.AgercExitDialog.Mnemonic(t)!.Value));
-
-        // A template without one of the controls the dialog procedure addresses is not the 終了 dialog.
-        Control[] noTitle = ExitDialogControls("?", "Exit(&E)", "Return(&T)", "OK", "Cancel")
-            .Where(c => c.Id != 0x3eb).ToArray();
-        Assert.Null(Ome.Engine.Frontend.NativeMenu.AgercExitDialog.Load(Pe(new Resource(PeResource.RtDialog, 3,
-            DialogEx("Quit", 0x80c808c0, (0, 0, 187, 93), 9, "ＭＳ Ｐゴシック", noTitle)))));
-        Assert.Null(Ome.Engine.Frontend.NativeMenu.AgercExitDialog.Load(Pe(new Resource(PeResource.RtDialog, 2,
-            template))));
-    }
-
-    [Theory]
-    [InlineData("Exit(&E)", 'E')]
-    [InlineData("タイトルに戻る(&t)", 'T')]
-    [InlineData("A && B", null)]
-    [InlineData("A && &B", 'B')]
-    [InlineData("OK", null)]
-    public void MnemonicIsTheCharacterAfterASingleAmpersand(string text, char? expected) =>
-        Assert.Equal(expected, Ome.Engine.Frontend.NativeMenu.AgercExitDialog.Mnemonic(text));
-
     [Fact]
     public void BaseUnitsConvertEachCoordinateAsMulDivRounds()
     {
@@ -384,33 +335,5 @@ public class NativeResourceTests
         Assert.Equal(DialogStyles.TbsVert | DialogStyles.TbsBoth, sound.Item(0x414)!.Style & 0xf);
         Assert.Equal(DialogStyles.TbsBoth, sound.Item(0x418)!.Style & 0xf);
         Assert.Equal(0u, DialogTemplateResource.Load(dll, 100)!.Item(0x414)!.Style & 0xf);
-    }
-
-    // AGE's 終了 dialog as the native driver reads it (2026-11-04 Himegari, 2026-11-07 Kamidori): the title, the statics'
-    // texts and the Button controls' texts, in a 327×140 client with the controls on the same pixels in both games.
-    [Theory]
-    [InlineData("Himegari_Game", "AGERC.DLL", "終了", "次の方法で終了しますか？",
-                new[] { "プログラムを終了する(&E)", "タイトルに戻る(&T)", "OK", "ｷｬﾝｾﾙ" })]
-    // The clean Kamidori install's AGERC.DLL is packed: its dialogs are not in the file (backlog.md).
-    [InlineData("Kamidori_Translated", "agerc.dll", "Quit", "Would you like to quit?",
-                new[] { "Exit(&E)", "Return to title(&T)", "OK", "Cancel" })]
-    public void AGamesExitDialogIsItsOwnAgercDialog3(string gameDir, string dllName, string title, string prompt,
-                                                      string[] buttons)
-    {
-        string agerc = Path.Combine(Paths.Workspace, gameDir, dllName);
-        if (!File.Exists(agerc)) return;
-
-        var dialog = Ome.Engine.Frontend.NativeMenu.AgercExitDialog.Load(File.ReadAllBytes(agerc));
-
-        Assert.NotNull(dialog);
-        Assert.Equal(title, dialog.Title);
-        Assert.Equal("SYSTEM3\n" + prompt, dialog.Text);
-        Assert.Equal(buttons, dialog.Buttons);
-        var units = new DialogBaseUnits(7, 12);
-        Assert.Equal((327, 140), (units.ToPixelsX(dialog.Template.Width), units.ToPixelsY(dialog.Template.Height)));
-        (int, int, int, int) Px(DialogItem item) => units.ToPixels(item.X, item.Y, item.Width, item.Height);
-        Assert.Equal((12, 30), (Px(dialog.Icon).Item1, Px(dialog.Icon).Item2));   // SS_ICON: 32×32 once it has its icon
-        Assert.Equal([(81, 24, 235, 17), (81, 51, 235, 15), (81, 72, 235, 18), (130, 108, 88, 21), (228, 108, 88, 21)],
-                     new[] { dialog.Prompt, dialog.Quit, dialog.ReturnToTitle, dialog.Ok, dialog.Cancel }.Select(Px));
     }
 }

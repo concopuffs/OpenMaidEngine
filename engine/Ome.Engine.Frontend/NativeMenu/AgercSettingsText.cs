@@ -1,4 +1,5 @@
 using System.Text;
+using Ome.Engine.Frontend.Shell;
 
 namespace Ome.Engine.Frontend.NativeMenu;
 
@@ -12,13 +13,14 @@ public static class AgercSettingsText
     /// 1 (0x9c68 ｻｳﾝﾄﾞ設定), 2 (0x9c6e その他の設定) or 3 (0x9c6d このｺﾝﾋﾟｭｰﾀの動作環境).</summary>
     public static readonly string[] Tabs = ["ﾒｯｾｰｼﾞ", "ｻｳﾝﾄﾞ", "その他", "動作環境"];
 
-    /// <summary>The tab a menu command opens the dialog on, or -1.</summary>
-    public static int StartTab(int menuCommand) => menuCommand switch
+    /// <summary>The tab a shell section opens the dialog on, or -1 (情報's about view is the ﾊﾞｰｼﾞｮﾝ情報 dialog,
+    /// and its diagnostics are tab 3).</summary>
+    public static int StartTab(ShellSection section, bool diagnostics = false) => section switch
     {
-        AgercMenu.MessageSettings => 0,
-        AgercMenu.SoundSettings => 1,
-        AgercMenu.OtherSettings => 2,
-        AgercMenu.SystemInfo => 3,
+        ShellSection.Message => 0,
+        ShellSection.Sound => 1,
+        ShellSection.Other => 2,
+        ShellSection.Info when diagnostics => 3,
         _ => -1,
     };
 

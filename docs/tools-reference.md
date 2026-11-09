@@ -706,9 +706,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--fps-counter` — show Godot's rendered FPS and corresponding average frame time in the top-right corner,
   refreshed four times per second. The overlay observes the presentation loop only; it does not alter VM
   timing, input, compositor selection, or opcode handling.
-- `--no-menu-bar` — leave out the native menu bar. By default a game whose install has AGERC.DLL gets AGERC's menu
-  110 above the game canvas, drawn as native's Win32 bar: the window is 20 px taller, and the canvas, the cursor
-  mapping and the dialogs sit below the bar (`engine-re.md`, "Native menu bar").
+- `--no-menu-bar` — leave out the menu bar. By default every game gets the engine shell's bar (AGERC's menu 110,
+  pruned by the game's `SYS4INI.BIN`) above the game canvas, drawn as native's Win32 bar: the window is 20 px taller,
+  and the canvas, the cursor mapping and the dialogs sit below the bar (`engine-re.md`, "Native menu bar").
 - `--windowed` — start in a window whatever `display:ScreenMode` says. The port otherwise starts in the mode it
   names, and a new profile's 0 is fullscreen: a borderless window over the monitor with the canvas scaled to fit
   (`engine-re.md`, "Screen mode"). A run without `SYS4REG.INI` (self-test, read-only persistence) also starts

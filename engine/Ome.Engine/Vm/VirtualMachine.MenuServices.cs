@@ -12,12 +12,23 @@ public readonly record struct VmMenuState(bool MessageSkip, bool AutoMessage, bo
 public readonly record struct VmMessageSettings(int MessageSpeed, int MesWinAlpha, long AutoMessageTime0,
                                                 long AutoMessageTime1);
 
+/// <summary>The VM's side of the shell's message commands (AGE:IAGEService): the state a menu refresh reads and the
+/// requests the commands make. <see cref="VirtualMachine"/> implements it; the shell model's tests fake it.</summary>
+public interface IVmMenuServices
+{
+    VmMenuState MenuState { get; }
+    void RequestMenuMessageSkipToggle();
+    void RequestMenuAutoMessageToggle();
+    void RequestMenuReadMessageSkipToggle();
+    bool RequestMenuHideWindow();
+}
+
 /// <summary>
 /// The AGE:IAGEService calls behind AGERC's native menu commands (docs/engine-re.md, "Native menu bar"). The menu runs
 /// on the frontend thread; the toggles queue here and apply at the VM's next safe point (an instruction boundary, or
 /// the input service of a text wait), followed by CALLBACK_SETTING.BIN as AGERC's command handler launches it.
 /// </summary>
-public sealed partial class VirtualMachine
+public sealed partial class VirtualMachine : IVmMenuServices
 {
     private enum MenuToggle { MessageSkip, AutoMessage, ReadMessageSkip, MessageSettings, ScreenModeSwitched }
 

@@ -1,4 +1,4 @@
-using Ome.Engine.Frontend.NativeMenu;
+using Ome.Engine.Frontend.Shell;
 using Godot;
 
 /// <summary>
@@ -9,13 +9,14 @@ using Godot;
 /// reason "exit-request" and quits here.</item>
 /// <item>An unforced close (the window's close button, ESC, the menu bar's ｹﾞｰﾑ > 終了 command 0x9c41) runs
 /// wm_close_confirm_exit_or_title@0x405740: the screen dims to alpha 0x80 and the modal 終了 dialog (AGERC host
-/// command 3, the game's AGERC.DLL dialog 3: <see cref="ExitConfirmationDialog"/>) asks. Quit (1) blackens the screen and closes; タイトルに戻る (2) restores the screen, waits 250 ms
-/// and calls op_0x9_reset_scene_and_reload_root; Cancel (0) restores the screen.</item>
+/// command 3, dialog 3; the port's is the shell's own, <see cref="ExitConfirmationDialog"/>) asks. Quit (1) blackens
+/// the screen and closes; タイトルに戻る (2) restores the screen, waits 250 ms and calls
+/// op_0x9_reset_scene_and_reload_root; Cancel (0) restores the screen.</item>
 /// <item>Run-state 0x1000000 skips the dialog and quits. For a windowed game WM_SYSCOMMAND SC_MINIMIZE sets it
 /// and SC_RESTORE clears it, so closing the minimized game (from the taskbar) quits at once. The port reads the
 /// window's minimized state when the close arrives.</item>
 /// </list>
-/// The port's AGERC menu bar (Main.MenuBar.cs) sends 0x9c41 here as an unforced close.
+/// The shell's 終了 command (Main.MenuBar.cs) sends 0x9c41 here as an unforced close.
 /// An accepted close saves the shared profile unless set:NoSaveDat (_ExitTree's shutdown flush).
 /// <para>Native's dialogs are modal: their message loop runs inside AGE's main loop, so the game window keeps the
 /// last presented frame until the dialog closes. The port shows a snapshot of that frame meanwhile
@@ -75,19 +76,10 @@ public partial class Main
             return;
         }
 
-        if (ReadAgerc() is not { } agerc || AgercExitDialog.Load(agerc) is not { } template)
-        {
-            // AGE cannot run without AGERC's host callback; a port game root without its dialog 3 has nothing to ask.
-            GD.Print($"[exit] {_agercPath ?? "no AGERC.DLL"} has no usable dialog {AgercExitDialog.ResourceId}: "
-                     + "quitting without asking");
-            GetTree().Quit(0);
-            return;
-        }
-
         Shell.HoldVm(true);
         FreezePresentedFrame(true);
         SetExitDim(128 / 255.0f);
-        var dialog = new ExitConfirmationDialog(template);
+        var dialog = new ExitConfirmationDialog(ShellExitDialog.For(_shellStrings));
         _exitConfirmation = dialog;
         dialog.Completed += choice =>
         {

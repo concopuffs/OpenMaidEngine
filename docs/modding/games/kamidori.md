@@ -26,12 +26,12 @@ command needs the game options:
   the next screen); define others with `point NAME X Y`.
 - Native AGE on the untranslated install shows Japanese dialogs, so `dialogs` and `answer` use Japanese labels:
   the close dialog is 終了, with `プログラムを終了する(&E)`, `タイトルに戻る(&T)`, `OK` and `ｷｬﾝｾﾙ`.
-- The untranslated install's `AGERC.DLL` is packed, and the port cannot read its menus and dialogs from the file.
-  On that install the port has no menu bar and quits without the 終了 dialog (`../../backlog.md`). The translated
-  install's `agerc.dll` has its dialogs in the file, in English: Quit, with `Exit(&E)`, `'Return to title(&T)'`,
-  `OK` and `Cancel`. It keeps its menu as a MENUEX template, which the port does not read, so the port has no menu
-  bar there either. The planned engine shell (`../../superpowers/specs/2026-11-09-engine-shell-design.md`) will
-  close both gaps.
+- The menu bar, the fullscreen strip and the 終了 dialog are the port's own, so both installs have them. The driver
+  reads and answers 終了 by its Japanese texts on the port, whatever language it shows. On native AGE, the translated
+  install's `agerc.dll` shows 終了 in English: Quit, with `Exit(&E)`, `'Return to title(&T)'`, `OK` and `Cancel`.
+- The untranslated install's `AGERC.DLL` is packed, so the port cannot read its ﾊﾞｰｼﾞｮﾝ情報 and 設定 dialogs from the
+  file: on that install the 設定 commands and ﾊﾞｰｼﾞｮﾝ情報 are grayed until the engine shell's own panel
+  (`../../superpowers/specs/2026-11-09-engine-shell-design.md`, M3; `../../backlog.md`).
 - Registries for fragments: `py -3.11 -X utf8 tools/globals_build.py --profile kamidori --build`.
 
 ## The translation is a different base

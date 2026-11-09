@@ -1,5 +1,6 @@
 using System.Text;
 using Ome.Engine.Frontend.NativeMenu;
+using Ome.Engine.Frontend.Shell;
 
 /// <summary>
 /// The texts AGERC's 設定 dialog writes into its pages (docs/engine-re.md, "設定 dialog"), as its wsprintfA formats
@@ -8,14 +9,14 @@ using Ome.Engine.Frontend.NativeMenu;
 public class AgercSettingsTextTests
 {
     [Fact]
-    public void EachSettingsMenuCommandOpensItsTab()
+    public void EachSettingsSectionOpensItsTab()
     {
         Assert.Equal(["ﾒｯｾｰｼﾞ", "ｻｳﾝﾄﾞ", "その他", "動作環境"], AgercSettingsText.Tabs);
-        Assert.Equal(0, AgercSettingsText.StartTab(AgercMenu.MessageSettings));   // 0x9c6c
-        Assert.Equal(1, AgercSettingsText.StartTab(AgercMenu.SoundSettings));     // 0x9c68
-        Assert.Equal(2, AgercSettingsText.StartTab(AgercMenu.OtherSettings));     // 0x9c6e
-        Assert.Equal(3, AgercSettingsText.StartTab(AgercMenu.SystemInfo));        // 0x9c6d
-        Assert.Equal(-1, AgercSettingsText.StartTab(AgercMenu.Exit));
+        Assert.Equal(0, AgercSettingsText.StartTab(ShellSection.Message));                  // 0x9c6c
+        Assert.Equal(1, AgercSettingsText.StartTab(ShellSection.Sound));                    // 0x9c68
+        Assert.Equal(2, AgercSettingsText.StartTab(ShellSection.Other));                    // 0x9c6e
+        Assert.Equal(3, AgercSettingsText.StartTab(ShellSection.Info, diagnostics: true));  // 0x9c6d
+        Assert.Equal(-1, AgercSettingsText.StartTab(ShellSection.Info));                    // ﾊﾞｰｼﾞｮﾝ情報's own dialog
     }
 
     [Fact]

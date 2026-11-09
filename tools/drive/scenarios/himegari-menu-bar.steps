@@ -1,4 +1,4 @@
-# The menu bar (AGERC.DLL menu 110) on SC0000. Each `menu` step refreshes the menu as opening it does and fails on a
+# The menu bar (AGERC's menu 110; the port's is the engine shell's) on SC0000. Each `menu` step refreshes the menu as opening it does and fails on a
 # grayed item, as a user cannot choose one. ﾒｯｾｰｼﾞ > 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ (0x9c6f) on a read page fast-forwards to the
 # first unread one. ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す (0x9c64) at a text wait hides the window as Space does; the item then reads
 # ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを表示する and brings it back. Turning ｵｰﾄﾒｯｾｰｼﾞ (0x9c65) on ends the text wait at once, so on and

@@ -1,57 +1,58 @@
 using System;
-using Ome.Engine.Frontend.NativeMenu;
-using Ome.Engine.Frontend.NativeResources;
+using Ome.Engine.Frontend.Shell;
 using Godot;
 
 /// <summary>
-/// Godot presentation of AGE's close confirmation: AGERC.DLL dialog resource 3 (<see cref="AgercExitDialog"/>; 終了 in
-/// Himegari's), opened by host command 3 from wm_close_confirm_exit_or_title@0x405740 when the window receives an
-/// unforced WM_CLOSE (close button, ESC, system-menu command 0x9c41). Radio 0x3ea (プログラムを終了する, checked by
-/// WM_INITDIALOG) answers 1, radio 0x3eb (タイトルに戻る) answers 2, and Cancel answers 0.
-/// <para>Drawn as the native dialog looks on Windows 10 (<see cref="Win32Dialog"/>): its title, texts and control
-/// rectangles are the game's template at MapDialogRect's pixels (<see cref="Win32TemplateDialog.BaseUnits"/>), which
-/// reproduce the rectangles captured from AGE (327×140 client, 2026-11-04). The SS_ICON static takes its 32×32 icon's
-/// size.</para>
+/// The shell's 終了 dialog (docs/superpowers/specs/2026-11-09-engine-shell-design.md, §7.3): AGE's close confirmation,
+/// which wm_close_confirm_exit_or_title@0x405740 opens through AGERC's dialog 3 when the window receives an unforced
+/// WM_CLOSE (close button, ESC, menu command 0x9c41). The first radio (プログラムを終了する, checked at open) answers 1,
+/// the second (タイトルに戻る) answers 2, and ｷｬﾝｾﾙ answers 0.
+/// <para>Drawn as the native dialog looks on Windows 10 (<see cref="Win32Dialog"/>). The texts come from the shell's
+/// string table (<see cref="ShellExitDialog"/>), and the layout is dialog 3's: a 187×93 DLU template in ＭＳ Ｐゴシック
+/// 9 pt, at the pixels MapDialogRect gives it (base units 7×12), which match the rectangles captured from AGE (a
+/// 327×140 client, 2026-11-04; the clean Kamidori install's translated dialog has the same layout). The driver reads
+/// and answers it by its Japanese texts, whatever language it shows.</para>
 /// </summary>
 public partial class ExitConfirmationDialog : Win32Dialog
 {
     public enum Choice { Cancel = 0, Quit = 1, ReturnToTitle = 2 }
 
-    private const int IconSize = 32;
+    // Dialog 3's controls in client pixels: the SS_ICON static at its 32×32 icon's size, the prompt, the two radios,
+    // then OK (the default push button) and ｷｬﾝｾﾙ.
+    private static readonly Vector2I ClientSize = new(327, 140);
+    private static readonly Rect2I IconRect = new(12, 30, 32, 32);
+    private static readonly Rect2I PromptRect = new(81, 24, 235, 17);
+    private static readonly Rect2I QuitRect = new(81, 51, 235, 15);
+    private static readonly Rect2I ReturnToTitleRect = new(81, 72, 235, 18);
+    private static readonly Rect2I OkRect = new(130, 108, 88, 21);
+    private static readonly Rect2I CancelRect = new(228, 108, 88, 21);
 
-    private readonly AgercExitDialog _template;
-    private readonly Vector2I _clientSize;
     private readonly Win32ClassicRadio _quit;
     private readonly Win32ClassicRadio _title;
     private readonly Win32ClassicButton _ok;
     private readonly Win32ClassicButton _cancel;
     private readonly char? _quitKey;
     private readonly char? _titleKey;
+    private readonly ShellExitDialog _shown;
     private bool _completed;
 
     public event Action<Choice>? Completed;
 
-    public ExitConfirmationDialog(AgercExitDialog template)
-        : this(template, Win32TemplateDialog.ClientSizeOf(template.Template)) { }
-
-    private ExitConfirmationDialog(AgercExitDialog template, Vector2I clientSize)
-        : base(template.Title, clientSize, closeEnabled: (template.Template.Style & DialogStyles.WsSysMenu) != 0)
+    /// <param name="shown">The texts in the player's language.</param>
+    public ExitConfirmationDialog(ShellExitDialog shown)
+        : base(shown.Title, ClientSize, closeEnabled: true)   // dialog 3 has WS_SYSMENU
     {
-        _template = template;
-        _clientSize = clientSize;
+        _shown = shown;
         Win32Font font = Win32DialogStyle.DialogFont;
-        (int iconX, int iconY, _, _) = Rect(template.Icon);
-        Place(new Win32DialogIcon(Win32DialogIcon.Kind.Asterisk), (iconX, iconY, IconSize, IconSize));
-        (_, _, int promptWidth, _) = Rect(template.Prompt);
-        Place(new Win32StaticText(template.Prompt.Text, font, promptWidth), Rect(template.Prompt));
+        Place(new Win32DialogIcon(Win32DialogIcon.Kind.Asterisk), IconRect);
+        Place(new Win32StaticText(shown.Prompt, font, PromptRect.Size.X), PromptRect);
         var group = new ButtonGroup();
-        _quit = Place(new Win32ClassicRadio(template.Quit.Text, group), Rect(template.Quit));
-        _title = Place(new Win32ClassicRadio(template.ReturnToTitle.Text, group), Rect(template.ReturnToTitle));
-        _ok = Place(new Win32ClassicButton(template.Ok.Text, font)
-                    { IsDefault = template.Ok.TypeBits == DialogStyles.BsDefPushButton }, Rect(template.Ok));
-        _cancel = Place(new Win32ClassicButton(template.Cancel.Text, font), Rect(template.Cancel));
-        _quitKey = AgercExitDialog.Mnemonic(template.Quit.Text);
-        _titleKey = AgercExitDialog.Mnemonic(template.ReturnToTitle.Text);
+        _quit = Place(new Win32ClassicRadio(shown.Quit, group), QuitRect);
+        _title = Place(new Win32ClassicRadio(shown.ReturnToTitle, group), ReturnToTitleRect);
+        _ok = Place(new Win32ClassicButton(shown.Ok, font) { IsDefault = true }, OkRect);
+        _cancel = Place(new Win32ClassicButton(shown.Cancel, font), CancelRect);
+        _quitKey = MenuItem.MnemonicOf(shown.Quit);
+        _titleKey = MenuItem.MnemonicOf(shown.ReturnToTitle);
 
         _ok.Pressed += () => Complete(SelectedChoice);
         _cancel.Pressed += () => Complete(Choice.Cancel);
@@ -59,13 +60,10 @@ public partial class ExitConfirmationDialog : Win32Dialog
         WindowInput += OnWindowInput;
     }
 
-    private static (int X, int Y, int Width, int Height) Rect(DialogItem item) =>
-        Win32TemplateDialog.BaseUnits.ToPixels(item.X, item.Y, item.Width, item.Height);
-
-    private T Place<T>(T control, (int X, int Y, int Width, int Height) rect) where T : Control
+    private T Place<T>(T control, Rect2I rect) where T : Control
     {
-        control.Position = new Vector2(rect.X, rect.Y);
-        control.Size = new Vector2(rect.Width, rect.Height);
+        control.Position = rect.Position;
+        control.Size = rect.Size;
         Client.AddChild(control);
         return control;
     }
@@ -77,13 +75,13 @@ public partial class ExitConfirmationDialog : Win32Dialog
     {
         _completed = false;
         _quit.ButtonPressed = true;
-        PopupCenteredOnAgeWindow(client, _clientSize);
+        PopupCenteredOnAgeWindow(client, ClientSize);
         _quit.GrabFocus();
     }
 
-    // The dialog's keys, as Win32's dialog manager handles them: a radio's mnemonic (E and T in both templates here)
-    // selects it, the arrows move within the radio group, Tab cycles the checked radio, OK and Cancel, Enter presses
-    // the focused push button (else OK, the default), and Escape is Cancel.
+    // The dialog's keys, as Win32's dialog manager handles them: a radio's mnemonic (E and T in both languages) selects
+    // it, the arrows move within the radio group, Tab cycles the checked radio, OK and Cancel, Enter presses the focused
+    // push button (else OK, the default), and Escape is Cancel.
     private void OnWindowInput(InputEvent e)
     {
         if (e is not InputEventKey { Pressed: true } key) return;
@@ -126,27 +124,30 @@ public partial class ExitConfirmationDialog : Win32Dialog
         radio.GrabFocus();
     }
 
-    /// <summary>The texts the driver's <c>dialogs</c> step reads from the native dialog.</summary>
-    public string Text => _template.Text;
+    /// <summary>The texts the driver's <c>dialogs</c> step reads from the native dialog, in Japanese.</summary>
+    public string Text => ShellExitDialog.Japanese.DriveText;
 
-    /// <summary>The dialog as the drive protocol lists it, with the template's control texts.</summary>
+    /// <summary>The dialog as the drive protocol lists it: its Japanese texts, as the native driver reads dialog 3.
+    /// </summary>
     public System.Text.Json.Nodes.JsonObject Describe()
     {
+        ShellExitDialog ja = ShellExitDialog.Japanese;
         var buttons = new System.Text.Json.Nodes.JsonArray();
-        foreach (string text in _template.Buttons) buttons.Add(text);
+        foreach (string text in ja.Buttons) buttons.Add(text);
         return new System.Text.Json.Nodes.JsonObject
         {
-            ["title"] = _template.Title, ["text"] = Text, ["buttons"] = buttons,
+            ["title"] = ja.Title, ["text"] = ja.DriveText, ["buttons"] = buttons,
         };
     }
 
-    /// <summary>Press a control by its native text (ampersands and case ignored), as BM_CLICK does natively.
-    /// Returns the control's text, or null when no control matches.</summary>
+    /// <summary>Press a control by its text, Japanese or as shown (ampersands and case ignored), as BM_CLICK does
+    /// natively. Returns the control's Japanese text, or null when no control matches.</summary>
     public string? Press(string button)
     {
-        string wanted = button.Replace("&", "").ToLowerInvariant();
-        DialogItem[] controls = { _template.Quit, _template.ReturnToTitle, _template.Ok, _template.Cancel };
-        int index = Array.FindIndex(controls, item => item.Text.Replace("&", "").ToLowerInvariant() == wanted);
+        string wanted = Normalize(button);
+        ShellExitDialog ja = ShellExitDialog.Japanese;
+        int index = IndexOf(ja.Buttons, wanted);
+        if (index < 0) index = IndexOf(_shown.Buttons, wanted);
         switch (index)
         {
             case 0: _quit.ButtonPressed = true; break;
@@ -155,7 +156,16 @@ public partial class ExitConfirmationDialog : Win32Dialog
             case 3: Complete(Choice.Cancel); break;
             default: return null;
         }
-        return controls[index].Text;
+        return ja.Buttons[index];
+    }
+
+    private static string Normalize(string text) => text.Replace("&", "").ToLowerInvariant();
+
+    private static int IndexOf(System.Collections.Generic.IReadOnlyList<string> texts, string wanted)
+    {
+        for (int i = 0; i < texts.Count; i++)
+            if (Normalize(texts[i]) == wanted) return i;
+        return -1;
     }
 
     private void Complete(Choice choice)

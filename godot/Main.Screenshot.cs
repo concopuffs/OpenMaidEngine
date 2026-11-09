@@ -93,7 +93,7 @@ public partial class Main
         _host?.SetFrontendModalHold(true);
         FreezePresentedFrame(true);
         GD.Print($"[menu] screenshot folder dialog opens at {initial}");
-        _screenshotFolderDialog = ScreenshotFolderDialog.Open(initial, OnScreenshotFolderChosen);
+        _screenshotFolderDialog = ScreenshotFolderDialog.Open(_shellStrings["folder.prompt"], initial, OnScreenshotFolderChosen);
     }
 
     private void OnScreenshotFolderChosen(string? folder)

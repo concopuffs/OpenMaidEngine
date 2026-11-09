@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using Ome.Engine.Frontend.NativeMenu;
+using Ome.Engine.Frontend.Shell;
 using Godot;
 
 /// <summary>
@@ -40,19 +40,19 @@ public static class WindowSystemMenu
 
     /// <summary>The window menu with native's states: a window's (<paramref name="fullscreen"/> false), or the
     /// fullscreen strip's.</summary>
-    public static List<NativeMenuItem> Create(bool fullscreen)
+    public static List<MenuItem> Create(bool fullscreen)
     {
         _labels ??= ReadLabels();
-        var items = new List<NativeMenuItem>();
+        var items = new List<MenuItem>();
         foreach ((int id, string english, int bitmap) in Layout)
         {
             if (id == 0)
             {
-                items.Add(new NativeMenuItem(NativeMenuItemKind.Separator, 0, ""));
+                items.Add(new MenuItem(MenuItemKind.Separator, 0, ""));
                 continue;
             }
             bool grayed = id == Size || id == (fullscreen ? Maximize : Restore);
-            items.Add(new NativeMenuItem(NativeMenuItemKind.Command, id, _labels.GetValueOrDefault(id, english), grayed)
+            items.Add(new MenuItem(MenuItemKind.Command, id, _labels.GetValueOrDefault(id, english), grayed)
             {
                 Default = id == Close,
                 Bitmap = bitmap,

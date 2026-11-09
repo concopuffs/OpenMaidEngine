@@ -10,4 +10,9 @@
     <ProjectReference Include="..\Ome.Engine\Ome.Engine.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The shell's string tables (Shell/ShellStrings.cs). -->
+    <EmbeddedResource Include="Shell\Strings\*.json" LogicalName="Ome.Engine.Frontend.Shell.Strings.%(Filename).json" />
+  </ItemGroup>
+
 </Project>

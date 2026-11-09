@@ -58,12 +58,11 @@ it; git history keeps the record.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
-- **Replace AGERC with an engine-owned shell (decided 2026-11-08).** The port reads its menu bar, 終了, ﾊﾞｰｼﾞｮﾝ情報
-  and 設定 dialogs and the fullscreen strip's resources from the game's `AGERC.DLL`. Kamidori's clean install ships
-  that DLL packed: the file holds only its icon, version and manifest resources, so on that install the port has no
-  menu bar, quits without the 終了 dialog, and has no version or 設定 dialogs. Native AGE shows them, in Japanese
-  (`docs/modding/games/kamidori.md`). `NativeResourceTests` and `EngineIdentityTests` read the translated install's
-  `agerc.dll`, which has them in the file. The user decided:
+- **Replace AGERC with an engine-owned shell (decided 2026-11-08).** The port still reads its ﾊﾞｰｼﾞｮﾝ情報 and 設定
+  dialogs from the game's `AGERC.DLL`. Kamidori's clean install ships that DLL packed: the file holds only its icon,
+  version and manifest resources, so on that install the port has no version or 設定 dialogs: their commands are
+  grayed. Native AGE shows them, in Japanese (`docs/modding/games/kamidori.md`). `NativeResourceTests`
+  and `EngineIdentityTests` read the translated install's `agerc.dll`, which has them in the file. The user decided:
   - At runtime the port reads game data, never game binaries (`AGE.EXE`, `AGERC.DLL`).
   - AGERC is AGE's stock front end, so the port replaces it as it replaces `AGE.EXE`. The engine keeps everything
     scripts can observe at native semantics: the settings registry (`SYS4REG.INI` keys and units), the services, the
@@ -73,12 +72,11 @@ it; git history keeps the record.
   - Presentation is both an in-window options panel and a desktop menu bar. Japanese labels stay close to AGE's
     unless that conflicts with the design.
 
-  The design is `superpowers/specs/2026-11-09-engine-shell-design.md` (accepted 2026-11-09); its M1 (the engine
-  core) is done.
-
-  The translated install's `agerc.dll` keeps menu 110 as MENUEX, which the port's reader rejects, so that install
-  has no menu bar either. Done when the port reads no `AGERC.DLL` at runtime and every option works on all three
-  installs (spec §9).
+  The design is `superpowers/specs/2026-11-09-engine-shell-design.md` (accepted 2026-11-09). Its M1 (the engine
+  core) and M2 (the shell model: the bar, the fullscreen strip and 終了 come from it, on every install) are done.
+  Until M3, the shell's language is fixed to Japanese, so the translated Kamidori install shows a Japanese bar and
+  終了 where native shows English, and the strip's caption icon is blank. Done when the port reads no `AGERC.DLL` at
+  runtime and every option works on all three installs (spec §9).
 - **Kamidori's Ghidra image is 4.33F.** The program `/kamidori/SYS4433/range_00400000.bin` and its annotations are
   the translation's 4.33F build. Native runs since 2026-11-08 use the clean install's 4.33G, whose code differs
   (`engine-re.md`, "Kamidori engine builds"). Kamidori addresses in the docs without a build are 4.33F's. Done when
