@@ -47,7 +47,7 @@ it; git history keeps the record.
   placement and the surface-text draws are implemented (`engine-re.md`, "Aspect-mode font calibration", "Aspect-mode
   surface text"). Still missing:
   - the `display:AspectMode` setting, which calibrates every face when nonzero;
-  - mode 2 (`text_calibrate_mode2_glyph_font@0x451910`), which no shipped game selects;
+  - mode 2 (`text_calibrate_mode2_glyph_font@0x451840`), which no shipped game selects;
   - the display scale on the placement (`+0x40c->+0x4e0`);
   - a control byte's blank extent in surface text: native measures it with `GetTextExtentPoint32A`, and the port gives
     it the fallback advance.
@@ -61,11 +61,12 @@ it; git history keeps the record.
   (`godot/assets/ome-icon.svg`, set at runtime), but the project sets no `application/config/icon` and the Windows
   export no `.ico`, so `OME.exe` in a package and the taskbar before startup show Godot's. Done when both exports
   carry the OME icon, built from the same SVG.
-- **Kamidori's Ghidra image is 4.33F.** The program `/kamidori/SYS4433/range_00400000.bin` and its annotations are
-  the translation's 4.33F build. Native runs since 2026-11-08 use the clean install's 4.33G, whose code differs
-  (`engine-re.md`, "Kamidori engine builds"). Kamidori addresses in the docs without a build are 4.33F's. Done when
-  a 4.33G program (from `build/games/kamidori/engine-dump/`) carries the annotations over, and new Kamidori
-  findings name 4.33G addresses.
+- **Kamidori saves carry the translation's engine id.** The port's Kamidori profile writes compatibility id
+  `"433F"` (`0x46333334`, `engine/Ome.Engine/Profiles/kamidori.json`) at header `+0x04` of every save, the id of
+  the translation's 4.33F. The clean install's 4.33G writes `"433G"` (`0x47333334`): native sandbox `SAVE.DAT` and
+  `RT.DAT`, 2026-11-09. No reader checks the id (`engine-re.md`, "Save identity and native read checks"), so saves
+  load both ways, but `Ome.Cli save-diff` reports the header difference. Done when the profile writes `"433G"` and
+  `GameProfileSelectionTests` checks it.
 - **The `0x90`-byte SYS4INI block.** Its meaning is unknown and no consumer is known (OMS spec §13). Revisit only if
   one appears.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,

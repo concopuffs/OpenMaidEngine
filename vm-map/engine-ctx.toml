@@ -295,7 +295,7 @@ note = "per-surface CMovieToTexture objects [1000 slots], allocated by ops 0x20f
 offset = 0x53b74
 name = "engine_version"
 type = "uint"
-note = "AGE.EXE four-character engine version (Himegari '424J', read as 0x4a343234; its 2019 exe wrote '422B'; Kamidori '433F'; the constructor copies it from 0x571218, which the packed exe's /v2 dump shows as placeholder '000 '); engine_initialize_subsystems_from_settings prints it as ARCGameEngine Ver %c.%c%c%c; every save writer (shared_profile_save, op 0x19e, RT.DAT) stores it as header +0x04 compatibility id, which no reader checks; engine_load_sys4ini_and_mount_append_catalogs compares its first three characters with sys4ini_required_engine_version"
+note = "AGE.EXE four-character engine version (Himegari '424J', read as 0x4a343234; its 2019 exe wrote '422B'; Kamidori's clean 4.33G '433G', the translation's 4.33F '433F'; the constructor copies it from 0x571218, which the packed exe's /v2 dump shows as placeholder '000 '); engine_initialize_subsystems_from_settings prints it as ARCGameEngine Ver %c.%c%c%c; every save writer (shared_profile_save, op 0x19e, RT.DAT) stores it as header +0x04 compatibility id, which no reader checks; engine_load_sys4ini_and_mount_append_catalogs compares its first three characters with sys4ini_required_engine_version"
 [[field]]
 offset = 0x53c7c
 name = "bank_size_int_globals"

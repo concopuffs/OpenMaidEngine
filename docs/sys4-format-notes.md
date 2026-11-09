@@ -255,12 +255,14 @@ Observed profile identities are:
 | Profile | Game id | Version | Compatibility id written by the current executable |
 |---|---|---:|---:|
 | Himegari | `姫狩りダンジョンマイスター` | 3.10 | `"424J"` = `0x4a343234` |
-| Kamidori | `神採りアルケミーマイスター` | 3.20 | `"433F"` = `0x46333334` |
+| Kamidori | `神採りアルケミーマイスター` | 3.20 | `"433G"` = `0x47333334` (clean install, 4.33G) |
+| Kamidori, English translation | `神採りアルケミーマイスター` | 3.20 | `"433F"` = `0x46333334` (4.33F) |
 
 The compatibility id is `ctx+0x53b74`, the executable's engine version, which AGE prints as
 `ARCGameEngine Ver 4.24J`. Every writer stores it: shared `SAVE.DAT`, numbered saves and `RT.DAT`. It
 therefore records which build wrote a file, not a file kind. Himegari's installed numbered files carry `"422B"`
 (`0x42323234`) because the 2019 executable wrote them; files the current executable writes carry `"424J"`.
+The port's Kamidori profile still writes `"433F"`, the translation's id (`backlog.md`).
 The game id is the SYS4INI header copy at `ctx+0xa0bc0`.
 
 The packed SYS4INI `SAVEVERSION` values `310` and `320` split into these major/minor fields by quotient

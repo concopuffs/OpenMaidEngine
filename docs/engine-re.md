@@ -6,7 +6,9 @@
 > `5c80a3a8c5b2e755647247c2195446385c5f1920db422bcb35cfd41cd77b5ee6`; the unpacked Ghidra program
 > `/v2/range_00400000.bin` is 2,490,368 bytes with SHA-256
 > `3d7543ba97e0fd3d59db05d387096dd3afa912b8ec8bcb3c916d9dd313496476`. Do not apply these offsets
-> to Kamidori or another AGE executable without separately matching that executable and image.
+> to Kamidori or another AGE executable without separately matching that executable and image. The program's
+> listing restores the packer's API sites (Runbook, "Packer API sites"), so its bytes differ from the dump file
+> at those 228 places.
 
 Static RE of the **unpacked** `AGE.EXE` engine image, driving Ghidra 12.1.2 via the
 bethington/ghidra-mcp bridge. This is the home for decompiled native-op findings — the class of logic
@@ -75,6 +77,47 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
   costs us nothing on the render path. 29 isolated singleton matches were set aside (`build/games/himegari/import-map-singletons.json`),
   not auto-applied.
 
+  **Reading the labels.** They name the export each slot held at run time, so a forwarded API carries its
+  target's name: kernel32's critical-section calls are `imp_ntdll_Rtl*CriticalSection`, HeapReAlloc is
+  `imp_ntdll_RtlReAllocateHeap`, DefWindowProcA is `imp_ntdll_NtdllDefWindowProc_A`, and COM calls are
+  `imp_combase_*`. Two exports at one address get one name: `imp_user32_RegisterClipboardFormatA` is the
+  RegisterWindowMessageA slot. The protector hooks GetProcAddress, so its slot `0x56f0c4` held a protector address
+  and was named from its callers, as was `0x56f294` (SHGetSpecialFolderPathA, the one shell32 import).
+
+**Packer API sites (restored 2026-11-09).** The protector rewrote API calls in both packed builds, Himegari's
+`AGE.EXE` and Kamidori's 4.33G. Such a site is a `call rel32` into the protector's stub area (`/v2`: 198 `call
+0x2750000`, 29 calls to a stub page `+4`) and one junk byte. The stub calls the API and returns to the site + 6. At
+some sites the protector also took the next instruction into its stub (a `jmp short`, `mov reg, eax` or `jmp
+rel32` of length L): the junk is then 1 + L bytes and the code resumes at the site + 6 + L. It did so at only some
+of the sites that have such an instruction (4.33G: 9 of the 13 calls followed by a `jmp short`). A tail call `jmp
+[IAT]` takes the same form (`/v2` `0x4063c6` in `engine_message_box`). `/v2`'s `__EH_prolog` was moved out whole,
+leaving `jmp 0x2790000` and 26 junk bytes at `0x554810`. A linear decoder loses sync at the junk.
+
+The Ghidra programs restore each site in their listing; the dump files are unchanged. The site's bytes become
+`call [slot]` (`ff15`) or `jmp [slot]` (`ff25`) plus any stolen instruction. Its EOL comment, `Packer restore …`,
+keeps the original bytes and the evidence, and a `Packer restore` bookmark names the API.
+
+- `/kamidori/4.33G` (224 sites) was restored from the translation's unpacked 4.33F, which has the same code with
+  `call [IAT]` and the same IAT layout.
+- `/v2` (227 sites and `__EH_prolog`) has no unpacked twin, so every API there is inferred; treat it as such. 128
+  come from matching the 16 instructions around the site against 4.33G's `call [API]` sites. A match was accepted
+  at 12 of 16 with a margin of 2, at 11 with a margin of 4, or at 8 with a margin of 4 when `/v2` never calls the
+  slot directly. Tried on `/v2`'s own direct calls, the first two rules chose no wrong API and the third, without
+  the slot condition, chose 1 wrong in 759. The other 99, including the 13 sites whose stolen instruction was
+  restored, were read by hand from their arguments and strings, the matching 4.33G routine, or the VC2005 CRT's
+  source. Each comment says which.
+
+**Typed imports (2026-11-09).** In `/v2`, `/kamidori/4.33G` and `/kamidori/SYS4433` every `imp_` slot is a pointer
+to the API's function definition from Ghidra's `windows_vs12_32.gdt` (forwarder names folded as above;
+Direct3DCreate9, absent from the archive, defined by hand). The decompiler therefore shows API arguments, and an
+API's stack cleanup no longer depends on analysis guesses.
+
+**Script gotchas (ghidra-mcp).** `run_ghidra_script` takes a full script path, copies the script into
+`~/ghidra_scripts` and splits its arguments on spaces with no quoting, so pass paths without spaces. Its result
+carries the compiler output for every script in that folder; print the script's own lines with a marker and
+filter for it. `run_script_inline` wraps its body in a generated class, so code that needs imports or declares a
+class must go in a file. A script that throws keeps the changes it made before the exception.
+
 ---
 
 ## Kamidori engine builds: 4.33F and 4.33G (2026-11-08)
@@ -113,14 +156,27 @@ Both builds place their sections at the same addresses (`.text` `0x401000..0x574
   0x2750000` at `0x429eb1`). A linear decoder loses sync at the junk byte; `operand_access.py` resumes past it,
   which also recovered Himegari op `0x14a`'s operand-1 write at `0x429ebc`.
 
-**What this means.** The Ghidra program `/kamidori/SYS4433/range_00400000.bin` (next section) and every Kamidori
-address this document gives without a build are 4.33F's. Since 2026-11-08 native Kamidori runs use the clean
-install's 4.33G, and `tools/drive/kamidori.toml` holds 4.33G values. Behavior compared against native before
-2026-11-08 was 4.33F's. Rebasing the Ghidra annotations on 4.33G is open work (`backlog.md`).
+**What this means.** Native Kamidori runs use the clean install's 4.33G since 2026-11-08, and
+`tools/drive/kamidori.toml` holds 4.33G values. Behavior compared against native before then was 4.33F's.
+
+**The 4.33G image (2026-11-09).** `/kamidori/4.33G/range_00400000.bin` is the clean build's dump
+(`build/games/kamidori/engine-dump/`), imported like `/v2`. Its packer sites are restored (Runbook, "Packer API
+sites") and its imports typed. The 4.33F image's names, plates and EOL comments were ported to it through a
+function alignment of the two builds, with their 4.33F addresses translated; each ported plate ends with a
+`[Ported from …]` note. Names were then borrowed from `/v2` where the code is identical or at least 90 % alike
+(174, each plate noting `[Name borrowed from Himegari /v2 …]`), and 107 opcode handlers that kept a placeholder
+name were named from the opcode registry's labels. `/kamidori/SYS4433` stays as the 4.33F reference.
+
+Kamidori addresses this document and `vm-map/opcodes.toml` give without a build are 4.33G's since 2026-11-09,
+except in the next section, which describes the 4.33F image. They were converted through the same alignment and
+checked against the function names at both ends. `build/games/kamidori/f2g-address-conversion.tsv` lists every
+converted value. The context struct moved too: 4.33G adds a dword before the opcode table, so Kamidori `ctx`
+offsets from `0x9f700` up are 4 higher in 4.33G, and lower offsets are the same in both builds.
 
 ## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
 
-This image is the English fan translation's 4.33F build (see "Kamidori engine builds" above).
+This image is the English fan translation's 4.33F build (see "Kamidori engine builds" above), and the addresses
+and `ctx` offsets in this section are 4.33F's. `/kamidori/4.33G` has the same names at its own addresses.
 Kamidori was captured independently rather than treating Himegari's `/v2` image as a SYS4 baseline.
 `tools/frida/dump_engine.py` recorded the installed 2,183,936-byte `AGE.EXE` (not packed: its `.text` equals the
 live dump's, checked 2026-11-08) with SHA-256
@@ -376,13 +432,13 @@ The meaningful consumer catalog is:
 
 | Setting group | Native effect (Himegari unless noted) | Classification |
 |---|---|---|
-| `CREATEOBJECT`, `DRAWMODE` | `CreateObject` is a mask of the renderer backends AGE creates, bit n for DrawMode n (registered default 1). Both games set 2, the retained D3D/object backend, and `DrawMode=1` selects its draw/text path. Startup replaces a mask that lacks DrawMode's bit with 3 (SYS4433 `sys4_read_startup_settings@0x415a20`). | Active renderer selection; the port reads both (`Sys4StartupSettings.CreateObject`/`.DrawMode`) |
+| `CREATEOBJECT`, `DRAWMODE` | `CreateObject` is a mask of the renderer backends AGE creates, bit n for DrawMode n (registered default 1). Both games set 2, the retained D3D/object backend, and `DrawMode=1` selects its draw/text path. Startup replaces a mask that lacks DrawMode's bit with 3 (SYS4433 `sys4_read_startup_settings@0x415a40`). | Active renderer selection; the port reads both (`Sys4StartupSettings.CreateObject`/`.DrawMode`) |
 | `SCREENX`, `SCREENY` | Replaces the generic `640x480` fallback with the `800x600` logical canvas before window/surface creation. The port parses and applies these dimensions to its logical canvas and default windowed client size; optional host boot arguments can vary only the physical client. | Active core profile; implemented |
 | `FONT`, `ENABLEANTIFONT`, `ANTIFONTVERSION` | Seeds MS Mincho, enables `message:UseAntiFont`, selects the grayscale glyph-outline path, and records antialias version 3. | Active text profile |
 | `DEPENDMOVIESOUND` | The mixer route of a movie whose flags force none: 0 mute, 1 music, 2 SFX, 3 voice, 4 movie, any other value silent ("Movie-to-surface opcode 0x236"). Himegari sets 1, Kamidori 2; Kamidori's LOGO and OP pass flag `0x20000`, which forces music. | Active media policy; port implemented (`MovieSoundRoute`, 2026-11-07) |
 | `FULLSCREENBIT`, `ALWAYSBACKUPSURFACE` | These are read only inside the legacy `CreateObject & 1` DirectDraw branch of `engine_initialize_graphics_from_settings@0x406480`. Both games' `CreateObject=2` creates only the object backend, so their 32-bit/zero values do not drive the active renderer. | Valid compatibility settings, inert for both games |
 | `AUTOFREETEX` (Kamidori) | A mask, registered default 0, that acts only under `CreateObject` bit 1: bit 1 releases every surface before a numbered load restores its records, bit 0 at op `0x9`'s root reload ("AutoFreeTex"). Kamidori sets 3. | Port implemented for the numbered load and op `0x9` (`VmOptions.AutoFreeTex`, 2026-11-07) |
-| `OUTERFRAMEMODE` (Kamidori) | Registered default 1 in SYS4433 and 0 in SYS4422; Kamidori also sets 1. When nonzero, `engine_initialize_graphics_from_settings_sys4433@0x4063e0` gives the display op `0x25a`'s black background at device creation (`display_set_background_color_mode1@0x404c20`); `sys4_read_startup_settings` does the same for a fullscreen start when it is 1 (`ctx_set_display_background_color_mode1@0x405260`). `scene_context_init_reset_sys4433@0x40c2b0` and `engine_create_main_window@0x48ec40` copy it to `ctx+0x55eb8`, which nothing reads. | Inert: `SYSTEM4@0x1f3` sets the same black background with op `0x25a` before anything draws (2026-11-07) |
+| `OUTERFRAMEMODE` (Kamidori) | Registered default 1 in SYS4433 and 0 in SYS4422; Kamidori also sets 1. When nonzero, `engine_initialize_graphics_from_settings_sys4433@0x4063e0` gives the display op `0x25a`'s black background at device creation (`display_set_background_color_mode1@0x404c20`); `sys4_read_startup_settings` does the same for a fullscreen start when it is 1 (`ctx_set_display_background_color_mode1@0x405260`). `scene_context_init_reset_sys4433@0x40c2b0` and `engine_create_main_window@0x48ec20` copy it to `ctx+0x55eb8`, which nothing reads. | Inert: `SYSTEM4@0x1f3` sets the same black background with op `0x25a` before anything draws (2026-11-07) |
 | `BLANKEXTENTMODE` (Kamidori) | Read only by SYS4433's aspect-mode glyph-string draws (`text_draw_glyph_string_plain@0x45e4e0` at `0x45e77f`/`0x45ea13`, `text_draw_glyph_string_effect@0x460250`, and the draws at `0x45ec60` and `0x460d50`). With 1, a blank (`0x20` or `0x8140`) advances by its text extent in the reference font (`0x404da0`); otherwise by the reference cell `+0x313e8`, halved for a single byte. The ADV builder (`0x45b710`) lays out its own records and never reads it. Kamidori sets 1. | Not modelled: the port's immediate surface text has none of aspect mode's rules (`docs/backlog.md`) |
 | `USEPROPORTIONALFONT`, `VALIDFONTCHECKER` (Kamidori) | Filter SYS4433's installed-font list, which ops `0x2dc`-`0x2de` read ("Font family list"). With `set:UseProportionalFont` 0 (the registered default) the list drops IPA Pゴシック, IPA P明朝 and every family that is not fixed-pitch; Kamidori sets 1. `VALIDFONTCHECKER` repeats, one character per pair (Kamidori: 悪, ｱ, 洒), and a family lacking any of them is dropped. | Port implemented (`FontFamilyCatalog`, `WindowsGdiFontFamilySource`, 2026-11-07); the port's list equals native's 37 families, in order, on this machine |
 | `RUBYSHIFTMODE` (Kamidori) | Seeds `message:RubyShiftMode`. SYS4433's `SYS4REG.INI` loader (`0x472530`) reads a value there over it but never writes one. Nonzero removes the live furigana's one-pixel drop and its render-mode-3 raise ("Furigana", SYS4433). Kamidori sets 1. | Port implemented (`RubyLayoutRules`, `Sys4RegIniStore.RubyShiftMode`, 2026-11-07) |
@@ -564,7 +620,7 @@ handler clears every global bank, once per bank set (two when `set:EnableMemFlip
 - the float bank is zeroed and every global string erased;
 - the integer-pointer, string-pointer and local-pointer-scratch banks are zeroed.
 
-SYS4433's `op_0x9_reset_scene_and_reload_root_sys4433@0x423b90` does the same. Engine configuration and the shared
+SYS4433's `op_0x9_reset_scene_and_reload_root_sys4433@0x423b50` does the same. Engine configuration and the shared
 profile are untouched; SYSTEM4 re-authors what it needs when it runs again. A Kamidori game over shows the effect.
 FIELD sets `G[0x428c]=1`, SC5300 ends in op `0x9`, and `INIT2@0x274` draws the map objects and unit sprites
 (DRAWOBJ/DRAWCHALL) whenever `G[0x428c]` is nonzero. A Frida read of native at TITLE after a turn-limit game over
@@ -2360,7 +2416,7 @@ post-multiplies an object's normal matrix by this shared matrix only when its ha
 - `0x22d`: delayed/duration scale target, using the embedded object's ordinary one-shot scale channel;
 - `0x22e`: delayed/duration axis-angle target. SYS4422 handler
   `op_0x22e_set_gfx_range_rotation_target@0x423a40` uses integer operand fetches, while SYS4433
-  `@0x421940` uses its float-aware reader for axis/angle; both call the matching
+  `@0x421970` uses its float-aware reader for axis/angle; both call the matching
   `gfx_range_transform_set_rotation_target` worker and arm the embedded object's shared one-shot clock;
 - `0x22f`: delayed/duration translation target. Its handler loads ECX with retained-gfx owner
   `ctx+0x46614`, and worker `gfx_range_transform_set_translation_target@0x472e90` writes the embedded
@@ -2528,7 +2584,7 @@ of the immediate and delayed one-shot scale fields.
 **Cyclic-translation follow-up (2026-08-19):** opcode `0x235` is the fifth cyclic channel, not an
 unknown SYS4433 addition. The independently inspected handlers have the same five-operand contract in
 Himegari SYS4422 (`op_0x235_handler@0x423e40`) and Kamidori SYS4433
-(`op_0x235_set_translation_cycle@0x421ce0`): `(handle, period_ms, x, y, z)`. Their workers
+(`op_0x235_set_translation_cycle@0x421d10`): `(handle, period_ms, x, y, z)`. Their workers
 (`gfx_object_set_translation_cycle@0x47f110` and `@0x485f80`) clear lazy start `obj+0x218`, store period
 at `obj+0x22c`, and build a target translation matrix at `obj+0x290`. SYS4433
 `gfx_object_compose_animated_transform@0x47a400` uses the same exact triangular blend as cyclic scale,
@@ -2806,7 +2862,7 @@ Native AGE's DirectShow behavior remains relevant evidence for opcode semantics;
 ### Movie playback-rate opcode `0x246` (2026-08-19)
 
 The exact ABI is `set-movie-playback-rate(surface_slot, rate_percent)`. Independent dispatch-table recovery
-finds matching handlers in Himegari SYS4422 (`0x424a80`) and Kamidori SYS4433 (`0x4228a0`). Each records a
+finds matching handlers in Himegari SYS4422 (`0x424a80`) and Kamidori SYS4433 (`0x4228d0`). Each records a
 five-dword instruction, fetches the surface slot, and returns without effect if the corresponding
 `EngineCtx` surface pointer is null. Otherwise it fetches operand 2, divides the signed integer by the
 double constant `100.0`, dereferences `CMovieToTexture+0x414`, and calls vtable slot `+0x38` with the
@@ -2838,8 +2894,8 @@ writes failure zero and returns the stored **current** axis-angle fields at obje
 Himegari SYS4422 installs `op_0x227_query_rotation_current@0x42a2e0`, which calls
 `gfx_object_query_rotation_current@0x47cd20`, explicitly converts each returned float toward zero with
 `__ftol2_sse`, and passes the integer to the ordinary operand writer. Kamidori SYS4433 installs the same
-logical handler/worker at `0x42b230`/`0x484510`, but writes the values through the revision's separate
-`vm_operand_write_float@0x426ca0`. That helper preserves a float for float destinations and performs the
+logical handler/worker at `0x42b1a0`/`0x484510`, but writes the values through the revision's separate
+`vm_operand_write_float@0x426c00`. That helper preserves a float for float destinations and performs the
 conversion when the destination is an integer. This is a concrete SYS subrevision implementation/ABI
 detail even though it does not alter any observed game result: all twelve Kamidori sites use global-integer
 destinations, while Himegari has no decoded call site.
@@ -2853,7 +2909,7 @@ fractional truncation, and the missing-object contract.
 ### Retained graphics-object swap opcode `0x214` (2026-08-19)
 
 Opcode `0x214` takes two retained graphics-object handles and exchanges their complete records. Matching
-handlers are `op_0x214_swap_gfx_objects@0x423170` in Himegari SYS4422 and `@0x421190` in Kamidori
+handlers are `op_0x214_swap_gfx_objects@0x423170` in Himegari SYS4422 and `@0x4211c0` in Kamidori
 SYS4433. Their workers (`gfx_object_swap_records@0x47e310` and `@0x485000`) implement the same four
 presence cases:
 
@@ -3573,8 +3629,8 @@ holds in SYS4422 (`/v2`) and SYS4433:
 |---|---|---|
 | write (`0x19e`, the shared-profile flush) | `save_container_encode_and_write@0x42fac0` | stores `timeGetTime()/1000 + base - start`; the two clock readings are each truncated to whole seconds |
 | read (boot `SAVE.DAT`, `0x19f`, `0x1a1`) | `save_container_read_and_decode@0x42ff80` | pending = the header's playtime; base and start are untouched |
-| reset (container construction, op `0x9`) | `save_container_playtime_reset@0x42fa80` (SYS4433 `0x4304c0`) | base = 0, pending = 0, start = now |
-| commit (each frame a full load restores, op `0xad`) | `save_container_playtime_commit_pending@0x4306c0` (SYS4433 `0x431090`) | base = pending, start = now |
+| reset (container construction, op `0x9`) | `save_container_playtime_reset@0x42fa80` (SYS4433 `0x430430`) | base = 0, pending = 0, start = now |
+| commit (each frame a full load restores, op `0xad`) | `save_container_playtime_commit_pending@0x4306c0` (SYS4433 `0x430fe0`) | base = pending, start = now |
 
 `script_frame_restore_saved_layout@0x40f2d0` (SYS4433 `0x40f0c0`) commits for layouts 2 and 3, once per restored
 frame. The deserializer calls it only when `restore_runtime` is set (`0x1a1`, not `0x19f`), and op `0xae` and op
@@ -3582,7 +3638,7 @@ frame. The deserializer calls it only when `restore_runtime` is set (`0x1a1`, no
 last frame restore, while a data-only load leaves the clock running. Booting reads `SAVE.DAT` but restores no
 frame, so a fresh run counts from zero. A native Kamidori run (2026-11-07) confirmed this: after 31 s at the title
 it wrote 31 to `SAVE.DAT`, which had held 3585 before. Op `0xad` (`op_0xad_commit_pending_playtime@0x416760`,
-SYS4433 `0x416ee0`) commits on demand; no shipped script uses it.
+SYS4433 `0x416f00`) commits on demand; no shipped script uses it.
 
 **Port:** `VirtualMachine` keeps the same three values. Its clock is a `TimeProvider`: `TimeProvider.System`'s
 timestamp counts from Windows start like `timeGetTime`, and tests pass a manual clock. `ResetPlayTime` runs at
@@ -3723,7 +3779,7 @@ mask. Both bits act only under `set:CreateObject` bit 1, the object backend both
 
 - **Bit 1.** `save_data_deserialize_and_begin_restore` releases all 1,000 surfaces before a numbered load restores its
   records, so only the records flagged for reload come back.
-- **Bit 0.** Op `0x9`'s root reload (`op_0x9_reset_scene_and_reload_root_sys4433@0x423b90`) releases them as well.
+- **Bit 0.** Op `0x9`'s root reload (`op_0x9_reset_scene_and_reload_root_sys4433@0x423b50`) releases them as well.
 - The release worker (`retained_gfx_release_surface@0x47b6b0`) skips a slot whose guard `gfx+0xb638[slot]`
   (`ctx+0x55ebc`) is set, but nothing writes that table, so every slot is released.
 
@@ -4087,9 +4143,9 @@ the native helpers. History's remaining work is therefore presentation and inter
 data access.
 
 The ordinary ADV redraw pair `0x83` -> `0x82` uses the same retained index and 0x48-byte record vectors but
-is distinct from HISTORY's reflow path. In SYS4433, `op_0x83_query_text_redraw_state@0x427eb0` writes the
+is distinct from HISTORY's reflow path. In SYS4433, `op_0x83_query_text_redraw_state@0x427e10` writes the
 input service's `-1/0/+1` redraw direction from `ctx+0x72078`, then
-`text_query_redraw_cursor@0x450410` returns the 8-byte entry selected by mutable text-manager cursor `+0xd70`.
+`text_query_redraw_cursor@0x450340` returns the 8-byte entry selected by mutable text-manager cursor `+0xd70`.
 SYS4422's matching handler at `0x427140` instead calls `text_query_redraw_anchor@0x450bb0`, which reads the
 fixed latest-entry anchor at `+0xd6c`; that is a real revision distinction rather than a Kelebek-label
 difference. `0x82` then draws the retained group again at its records' rectangles ("Op 0x82 redraw" below). The
@@ -4200,10 +4256,10 @@ sets it). The call is `redraw-retained-text-group (layout) (record) 0x2 0xffffff
 the configured outline color.
 
 **Native.** SYS4422 `op_0x82_redraw_retained_text_group@0x41edd0` -> `text_redraw_retained_group@0x451530`; SYS4433
-`@0x41cec0` -> `@0x4553c0`, decoded below.
+`@0x41cef0` -> `@0x4553c0`, decoded below.
 
 1. On the D3D path it releases the layout's objects (`gfx_release_object_range@0x4843c0` over `layout+0x68`/`+0x6c`)
-   and clears the layout's surface. The DrawMode-1 path without D3D fills the rectangle (`0x437590`).
+   and clears the layout's surface. The DrawMode-1 path without D3D fills the rectangle (`0x4374e0`).
 2. Flag 2 takes the text and effect colors from operands 4 and 5, R and B swapped.
 3. It walks the records from the requested one:
    - a navigation-filtered record (`+0x28` bit 1) ends the walk unless flag 1 is set;
@@ -5160,7 +5216,7 @@ the meantime.
 
 **SYS4433 follow mode (2026-11-07).** Kamidori configures its indicator with op `0x2bc` and turns on follow mode with
 op `0x1b1` (`SYSTEM4@0xb7`, text manager `+0x570`); Himegari never does. In follow mode
-`adv_wait_indicator_draw_frame_sys4433@0x452730` places the indicator at the layout origin plus the configured offset
+`adv_wait_indicator_draw_frame_sys4433@0x4526d0` places the indicator at the layout origin plus the configured offset
 (`+0x50`) plus the left/top of the layout's last 20-byte glyph record (`*(layout+0x30) - 0x10`). The builders always
 draw into the last record and then push the next one at the cursor, so that record is the pending one just past the
 last glyph. Op `0x6f`'s line end, op `0x7a` and a layout reset move it. The port used to anchor on the last glyph's own
@@ -5367,7 +5423,7 @@ also clears the retained track. Ops `0xb7`/`0xb8`/`0xb9`/`0xbf`/`0xc3` clear `0x
 before they act. Every shipped fade site (547 in Himegari, 1497 in Kamidori) is followed by the same `0x1cf`
 duck-control choice; what comes next varies. SC0000@0x7c1 plays the next track six ops later, which cuts the
 title-music fade short at once. SC0000@0x126c goes on into the scene's presentation and text, which proceed while
-the music fades. SYS4433 is identical (`op_0xc2_bgm_fade_sys4433@0x41e550`, service at `0x4120b1`).
+the music fades. SYS4433 is identical (`op_0xc2_bgm_fade_sys4433@0x41e580`, service at `0x4120bb`).
 
 Measured with `tools/drive.py` from the click on 始める (New Game) on a fresh sandbox:
 
@@ -5912,23 +5968,23 @@ Kamidori saves made on the port recorded surface `0x20` as created where native'
 transition. Native writes it only for some modes, and Kamidori's scripts mostly use the two that never do: the
 crossfade `0x25` (65 sites) and the strip reveal `0x28` (192 sites).
 
-Under `DRAWMODE=1`, which both games run, `screen_transition_begin` (SYS4422 `0x439da0`, SYS4433 `0x43a780`)
+Under `DRAWMODE=1`, which both games run, `screen_transition_begin` (SYS4422 `0x439da0`, SYS4433 `0x43a6d0`)
 treats the scratch slot by mode. A blank create or a fill sets the record's created flag (see
 [sys4-format-notes.md](sys4-format-notes.md), "Surface-record bookkeeping").
 
 | mode | op (SYS4433 handler) | scratch `0x20` |
 |---|---|---|
-| 0, 2 | `0x21` (`0x41aa70`), `0x23` (`0x41ac80`) | created, filled black (0) or white (2) and drawn over the frame |
-| 1, 3 | `0x22` (`0x41ab80`), `0x24` (`0x41ad80`) | the captured surface is drawn, then `0x20` is created and filled black (1) or white (3) |
-| 4 | `0x25` (`0x41ae80`) | untouched: source and target are composited directly |
-| 5–7 | `0x2a` (`0x41b230`): mode `5 + style`, style 0–2 | created and filled black |
-| 8 | `0x2e` (`0x41b890`): an asset mask | untouched in draw mode 1 (draw mode 0 builds the mask object) |
-| 9 | `0x36` (`0x41c0d0`) | created blank; the two surfaces are copied to `0x24` and `0x25` |
+| 0, 2 | `0x21` (`0x41aaa0`), `0x23` (`0x41acb0`) | created, filled black (0) or white (2) and drawn over the frame |
+| 1, 3 | `0x22` (`0x41abb0`), `0x24` (`0x41adb0`) | the captured surface is drawn, then `0x20` is created and filled black (1) or white (3) |
+| 4 | `0x25` (`0x41aeb0`) | untouched: source and target are composited directly |
+| 5–7 | `0x2a` (`0x41b260`): mode `5 + style`, style 0–2 | created and filled black |
+| 8 | `0x2e` (`0x41b8c0`): an asset mask | untouched in draw mode 1 (draw mode 0 builds the mask object) |
+| 9 | `0x36` (`0x41c100`) | created blank; the two surfaces are copied to `0x24` and `0x25` |
 
-The strip reveals `0x27`/`0x28` do not use this manager. Their begin and tick (SYS4433 `0x43ce80` and
-`0x43d6b0`) never write `0x20`.
+The strip reveals `0x27`/`0x28` do not use this manager. Their begin and tick (SYS4433 `0x43cdd0` and
+`0x43d600`) never write `0x20`.
 
-Every handler takes `screen_transition_finalize` (SYS4422 `0x4399c0`, SYS4433 `0x43a3d0`) when fast-forward
+Every handler takes `screen_transition_finalize` (SYS4422 `0x4399c0`, SYS4433 `0x43a320`) when fast-forward
 (run-state `0x8000000`) is set at dispatch. Finalize publishes its surface operand directly and fills `0x20`
 only when that operand is negative, which is the black or white endpoint:
 
@@ -6348,7 +6404,7 @@ then checks surface 5 and a 12016 ms anim clock.
 
 #### Op 0x216 reads past the live surface table (2026-11-07)
 
-**Native.** `op_0x216_query_surface_resource` (SYS4422 `0x42a0f0`, SYS4433 `0x42b010`) returns the word at gfx
+**Native.** `op_0x216_query_surface_resource` (SYS4422 `0x42a0f0`, SYS4433 `0x42af80`) returns the word at gfx
 manager `+0x700 + slot*0x14` without checking the slot. Kamidori's world map and save screen pass it -1:
 
 1. ALLMAP@`0x4fa` and SAVE@`0xbce` ask op `0x215` for object `0xcb2a`'s source slot (ADV layer 1, `G[0xfd43c]`)
@@ -6560,7 +6616,7 @@ callback's op `0x101` ends a running fast-forward the same way, and the re-run o
 Skip or a read message.
 
 The guard `ctx+0x6f86c` (`debug_reload_resume_active`) is unreachable in release images. Only the debug menu's BIN
-reload (`engine_reload_current_script_and_reset_input`, Himegari `0x42e930`, Kamidori `0x42f3e0`) sets it, with a
+reload (`engine_reload_current_script_and_reset_input`, Himegari `0x42e930`, Kamidori `0x42f350`) sets it, with a
 resume line 10 before the current source line. That line comes from `script_source_line_table`, which the constructor
 zeroes and nothing writes. So it is always -1, the resume line clamps to 0, and the reload clears the guard again.
 
@@ -6618,7 +6674,7 @@ draw at a site is the same on both targets, whatever else ran. A site that one t
 in a timed loop, changes only its own later values.
 
 - Native: the agent (`tools/drive/native-agent.js`) puts a Frida probe on the instruction after the handler's
-  `rand()` call, which returns to `0x4269af` in `/v2` and `0x42772f` in SYS4433 (`op_0x60_handler@0x4276f0`,
+  `rand()` call, which returns to `0x4269af` in `/v2` and `0x42768f` in SYS4433 (`op_0x60_handler@0x427650`,
   `_rand@0x558368`), and replaces EAX. The handler calls `rand()` before it fetches an operand, so the frame's pc
   still holds the op's own offset. The driver profiles name the site (`[native.rand]`), and the agent checks the
   bytes there before it hooks. The hook must be a probe, a bare function. An `onEnter` object makes Frida take the
@@ -7086,7 +7142,7 @@ Opcode `0x32` is the scaled sibling of `0x207`, with independent source and dest
 `(source_surface, destination_surface, source_x, source_y, source_width, source_height, destination_x,
 destination_y, destination_width, destination_height)`. The SYS4422 handler
 `op_0x32_scale_copy_surface_rect@0x41db20` calls `gfx_scale_copy_surface_rect@0x47c6c0`; SYS4433 uses the
-matching pair at `0x41bbc0` and `0x483410`. Both workers validate the two surface slots, proportionally clip
+matching pair at `0x41bbf0` and `0x483410`. Both workers validate the two surface slots, proportionally clip
 the paired rectangles, mark the destination dirty, and select a direct copy when the extents match. When
 both axes shrink they use an area-weighted sampler; when both grow they use the enlargement sampler; mixed
 directions are handled in two passes through scratch surface `0x20`.
@@ -7100,7 +7156,7 @@ their Ghidra programs; both programs were saved.
 
 ### Alternate-fill point-in-polygon -- opcode `0x147` (2026-08-19)
 
-SYS4422 `op_0x147_point_in_polygon@0x429b10` and SYS4433's matching handler at `0x42a9f0` implement
+SYS4422 `op_0x147_point_in_polygon@0x429b10` and SYS4433's matching handler at `0x42a960` implement
 `(out_inside, point_x, point_y, vertex_x_array, vertex_y_array, vertex_count)`. Each resolves the two
 parallel signed-dword arrays, materializes Win32 `POINT` records, calls `CreatePolygonRgn` with fill mode
 `ALTERNATE`, queries `PtInRegion`, normalizes the output to 0/1, and destroys the temporary region. There is
@@ -7115,7 +7171,7 @@ through local pointers. Both revision handlers are renamed/commented in their Gh
 ### ADV skip/input-state refresh -- opcode `0xfa` (2026-08-19)
 
 The zero-operand SYS4422 handler `op_0xfa_refresh_adv_skip_input_state@0x416de0` and SYS4433 equivalent
-at `0x417560` reconcile one input-service boundary. They poll the configured held-action mask; when logical
+at `0x417580` reconcile one input-service boundary. They poll the configured held-action mask; when logical
 action 6 (`0x40`) is absent they clear transient fast-forward and play/clear the latest voice queued during
 message skip. If fast-forward is then inactive, they consume the triggered-action mask into the timed-
 callback abort slot, set run-state `0x80000000`, and clear the abort slot. That high bit is the polling text
@@ -7129,7 +7185,7 @@ voice helpers are renamed/commented in Ghidra, and both programs were saved.
 
 ### Joystick physical-button capability -- opcode `0x106` (2026-08-20)
 
-SYS4422 `op_0x106_get_joystick_button_count@0x428b30` and SYS4433's equivalent at `0x429a40` directly
+SYS4422 `op_0x106_get_joystick_button_count@0x428b30` and SYS4433's equivalent at `0x4299a0` directly
 write the input manager's active-device physical button count (`EngineCtx+0x898`) to operand 1. Kamidori's
 only call is `CONFIG@0x12`, storing the result in global `0xfd49b` for controller configuration. The
 portable contract exposes this as an optional input-host capability; headless and hosts without device
@@ -7198,21 +7254,21 @@ concrete combat discrepancies observed in that run rather than from movement sea
 Handlers never read operand dwords directly. Each asks one of a small accessor family for "operand N"
 of the current instruction. The family reads `frame_pc` (SYS4422 `ctx+0x53d2c`, SYS4433 `ctx+0x57fb8`)
 and indexes the instruction's `(type, value)` pairs by its operand-index argument. Every accessor below is
-named and plate-commented in both `/v2` and `/kamidori/SYS4433`:
+named and plate-commented in `/v2`, `/kamidori/SYS4433` and `/kamidori/4.33G`; the SYS4433 column gives 4.33G addresses:
 
 | Access kind | SYS4422 | SYS4433 | Index arg | Behavior |
 |---|---|---|---|---|
-| read | `vm_operand_fetch@0x41b940` | `0x4198d0` | 1 | int32 value of any operand form (see value semantics below) |
-| read-float | — | `vm_operand_fetch_float@0x419c30` | 1 | float value; integer forms convert and strings use `atof` |
-| read-string | `vm_operand_read_string_buffer@0x418860`, `vm_operand_read_std_string@0x41b480`, `vm_operand_format_as_string@0x41af90` | `0x418ff0`, `0x425750`, `0x419360` | 1 (`std_string`: 2, after the hidden return) | text; numbers become full-width CP932 digits |
-| write | `vm_operand_write@0x425fb0` | `0x426750` | 1 | int32 store |
-| write-string | `vm_operand_write_string@0x42b5b0` | `0x42c600` | 1 | string store (types 5/8/0xb/0xe) |
-| write-float | — | `vm_operand_write_float@0x426ca0` | 1 | float store, converted for integer destinations |
-| bind | `vm_pointer_operand_bind_element@0x416180`, `vm_pointer_operand_write@0x416090` | `0x416900`, `0x416810` | 1 | rebinds a reference variable (types 6/8/0xc/0xe) |
-| address | `vm_operand_resolve_address@0x425a50` | `0x4261a0` | 1 | backing-cell address; a reference yields its target |
-| string-cell | `vm_operand_global_string_cell@0x415fe0` | `0x416760` | 1 | global string cell index of a global string or string reference; local strings throw |
-| ref-slot | `vm_pointer_operand_slot@0x415eb0` | `0x416630` | 1 | address of a reference variable's own slot (types 6/0xc only) |
-| cell | `vm_operand_lvalue@0x415f30` | `0x4166b0` | 1 | global-integer cell index (types 3/6/0xc) |
+| read | `vm_operand_fetch@0x41b940` | `0x419900` | 1 | int32 value of any operand form (see value semantics below) |
+| read-float | — | `vm_operand_fetch_float@0x419c60` | 1 | float value; integer forms convert and strings use `atof` |
+| read-string | `vm_operand_read_string_buffer@0x418860`, `vm_operand_read_std_string@0x41b480`, `vm_operand_format_as_string@0x41af90` | `0x419020`, `0x425640`, `0x419390` | 1 (`std_string`: 2, after the hidden return) | text; numbers become full-width CP932 digits |
+| write | `vm_operand_write@0x425fb0` | `0x4266b0` | 1 | int32 store |
+| write-string | `vm_operand_write_string@0x42b5b0` | `0x42c570` | 1 | string store (types 5/8/0xb/0xe) |
+| write-float | — | `vm_operand_write_float@0x426c00` | 1 | float store, converted for integer destinations |
+| bind | `vm_pointer_operand_bind_element@0x416180`, `vm_pointer_operand_write@0x416090` | `0x416920`, `0x416830` | 1 | rebinds a reference variable (types 6/8/0xc/0xe) |
+| address | `vm_operand_resolve_address@0x425a50` | `0x426100` | 1 | backing-cell address; a reference yields its target |
+| string-cell | `vm_operand_global_string_cell@0x415fe0` | `0x416780` | 1 | global string cell index of a global string or string reference; local strings throw |
+| ref-slot | `vm_pointer_operand_slot@0x415eb0` | `0x416650` | 1 | address of a reference variable's own slot (types 6/0xc only) |
+| cell | `vm_operand_lvalue@0x415f30` | `0x4166d0` | 1 | global-integer cell index (types 3/6/0xc) |
 
 `tools/operand_access.py` derives every opcode's operand contract from this family without Ghidra. It reads
 the dispatch table from the constructor's immediate stores. For SYS4422 this reproduces `build/games/himegari/op-handler-map.json`
@@ -7229,7 +7285,7 @@ Results, recorded in `vm-map/opcodes.toml` as `access`/`access_by_abi`:
 - **No literal store operands:** no immediate or inline string ever occupies a write, bind, address, or cell
   position in either corpus.
 - **One operand without native access:** `0x1a7` (`comment`). Its handlers (SYS4422 `op_0x1a7_comment@0x416630`,
-  SYS4433 `0x416db0`) only set the instruction length. The operand is an editor comment compiled into the bytecode
+  SYS4433 `0x416dd0`) only set the instruction length. The operand is an editor comment compiled into the bytecode
   (2,086 Himegari and 3,672 Kamidori string-literal uses).
 - **Value-dependent calls:** three fetches use a value-dependent index. In `0xc6` and `0x1ba`, operand 1 is compared
   with 2 and that value is then passed as the index. Unobserved `0x14c` reads operand 3 although the Kelebek argc is
@@ -7606,15 +7662,15 @@ cursor X use the same half/full reference advance. Record bottom is cursor Y plu
 requested font size, plus effect Y when render mode is nonzero. Thus overflow
 height and the published glyph rectangle height are distinct.
 
-`text_rebuild_reference_gothic_metrics@0x44fe00` and
-`text_measure_reference_gothic_glyph@0x44ff60` measure CP932 `0x8c83` (激) using
+`text_rebuild_reference_gothic_metrics@0x44fd30` and
+`text_measure_reference_gothic_glyph@0x44fe90` measure CP932 `0x8c83` (激) using
 ＭＳ ゴシック, negative requested size, negative half-width, and current weight.
 The port now uses that reference for nonzero-mode retained layout instead of
 selected-font glyph advances/extents. Mode-zero behavior stays unchanged.
 
-Font realization is a separate native layer: `text_create_calibrated_single_byte_font@0x451b70`
-selects `text_calibrate_mode1_glyph_font@0x451340` or
-`text_calibrate_mode2_glyph_font@0x451910`; these consult natural font metrics and
+Font realization is a separate native layer: `text_create_calibrated_single_byte_font@0x451aa0`
+selects `text_calibrate_mode1_glyph_font@0x451270` or
+`text_calibrate_mode2_glyph_font@0x451840`; these consult natural font metrics and
 reference glyph geometry. The 2026-09-21 change implemented only the layout rule. The calibration and the in-cell
 placement and the surface-text draws followed on 2026-11-07 (the sections below). Display-aspect scaling is still
 not modelled. The named
@@ -7624,7 +7680,7 @@ in `vm-map/opcodes.toml`; regression/results are in `phase-a-slice-plan.md`.
 #### Font family list (2026-11-07)
 
 SYS4433 keeps a list of installed font families that ops `0x2dc` (count, or `-1` when empty), `0x2dd` (name) and
-`0x2de` (find) read. Kamidori's SELFONT offers it. The startup reader (`0x415a20`) builds the list once with
+`0x2de` (find) read. Kamidori's SELFONT offers it. The startup reader (`0x415a40`) builds the list once with
 `text_build_font_family_list@0x458040`:
 
 1. `EnumFontFamiliesExA` over `SHIFTJIS_CHARSET` (lfOutPrecision 8, empty face) on a display IC, in GDI's order. The
@@ -7651,19 +7707,19 @@ list equals the one dumped from native AGE: 37 families in the same order. Tests
 
 #### Aspect-mode font calibration (2026-11-07)
 
-`text_rebuild_primary_font_resources@0x452320` rebuilds the primary font whenever its face, size, weight or the
-aspect mode changes. `text_measure_glyph_with_aspect_mode@0x452080` picks its `lfWidth`:
+`text_rebuild_primary_font_resources@0x4522c0` rebuilds the primary font whenever its face, size, weight or the
+aspect mode changes. `text_measure_glyph_with_aspect_mode@0x452020` picks its `lfWidth`:
 
 - With the mode off, the width is `-height / 2`, as for any AGE font. The same holds for a face missing from the font
   family list, and for a fixed-pitch one other than IPA Pゴシック or IPA P明朝.
-- Otherwise mode 1 calibrates it from 激 (`text_calibrate_mode1_glyph_font@0x451340`). `ref` is the reference glyph:
+- Otherwise mode 1 calibrates it from 激 (`text_calibrate_mode1_glyph_font@0x451270`). `ref` is the reference glyph:
   ＭＳ ゴシック at the size, half width, and the weight. `nat` is the face's glyph at its natural width (lfWidth 0).
   - When the reference black box is no wider, the width is `ref.gmBlackBoxX / nat.gmCellIncX * -nat.tmAveCharWidth`.
   - Otherwise it is `nat.gmBlackBoxX / ref.gmCellIncX * -nat.tmAveCharWidth`.
   - Both are truncated. Kamidori's メイリオ bold comes out at -18 for both 20 and 22 pixels.
 
 In aspect mode, outside ruby, a single-byte glyph gets a font of its own
-(`text_create_calibrated_single_byte_font@0x451b70`). The same function's single-byte branch calibrates that font
+(`text_create_calibrated_single_byte_font@0x451aa0`). The same function's single-byte branch calibrates that font
 against that very character:
 
 - The size is the font size `+0x313d4` for surface text, or the primary `lfHeight` (`-+0x35590`) for the ADV layout.
@@ -7679,7 +7735,7 @@ against that very character:
 
 The same faces as the primary font's are calibrated; any other gets `-size / 2`.
 
-Not modelled: mode 2 (`text_calibrate_mode2_glyph_font@0x451910`), which no shipped game selects; and the
+Not modelled: mode 2 (`text_calibrate_mode2_glyph_font@0x451840`), which no shipped game selects; and the
 `display:AspectMode` setting, which calibrates every face when nonzero.
 
 **Port.** `AspectFontRealization` holds the rules (`RequestedWidth`, `SingleByteWidth`). Its measurements come from an
@@ -7705,7 +7761,7 @@ strings that the text-manager constructor (`0x4588d0`) copies to `+0x31484` and 
 - Class 0 is the closing brackets and 、。，．. The glyph keeps the pen.
 - Class 1 is the opening brackets. The black box's right edge goes to the reference 激's black-box width:
   `trunc(+0x313d8 * scale + 0.5) - gmptGlyphOrigin.x - gmBlackBoxX` (`0x4609ab`). `+0x313d8` is the `gmBlackBoxX`
-  that `text_rebuild_reference_gothic_metrics@0x44fe00` (through `text_measure_reference_gothic_glyph@0x44ff60`)
+  that `text_rebuild_reference_gothic_metrics@0x44fd30` (through `text_measure_reference_gothic_glyph@0x44fe90`)
   measures with `GetGlyphOutline` format 0 (`GGO_METRICS`) on ＭＳ ゴシック at `lfHeight = -size`,
   `lfWidth = -(size / 2)`, the primary weight, `DEFAULT_QUALITY` and `DEFAULT_CHARSET`. At small sizes that is the
   embedded bitmap's box: 19 pixels for bold 22 px, where a `GGO_GRAY4_BITMAP` raster of the same font is 21 wide.
@@ -7738,7 +7794,7 @@ under both. The port picks the blit by engine ABI (`AgeGlyphMaskCompositor.Cover
 
 #### Aspect-mode surface text (2026-11-07)
 
-Immediate surface text (ops `0x204` and `0x205`, `text_draw_string_to_surface_sys4433@0x44f8a0`) clears the
+Immediate surface text (ops `0x204` and `0x205`, `text_draw_string_to_surface_sys4433@0x44f7d0`) clears the
 aspect-layout flag `+0x35598`, so no glyph is placed inside its cell. In aspect mode 1 it moves y by the reference
 `tmAscent` (`+0x313f0`) minus the primary font's, so every glyph's baseline is `y + ref.tmAscent`; other modes keep the
 primary font's baseline.
@@ -7757,7 +7813,7 @@ font calibration"). Each glyph draws at the pen. The two draws advance different
 | effect (modes 1, 2) | `trunc(+0x313e8 / (one byte ? 2.0 : 1.0) + 0.5)`, whatever its own cell | `BLANKEXTENTMODE` 1 in mode 1: its extent. Otherwise the font size `+0x313d4`, halved for one byte |
 
 A blank's extent is `text_measure_blank_extent@0x404da0`: `GetTextExtentPoint32A` of the character in the reference
-ＭＳ ゴシック. Kamidori sets `BLANKEXTENTMODE` 1. The effect draw also keeps a glyph cache (`0x423f30`), so a glyph it
+ＭＳ ゴシック. Kamidori sets `BLANKEXTENTMODE` 1. The effect draw also keeps a glyph cache (`0x423ef0`), so a glyph it
 has drawn once is not asked of GDI again.
 
 Op `0x205`'s formatter, `text_format_integer_for_draw@0x407260`, does not draw padding. It returns only the digits and
@@ -7776,7 +7832,7 @@ Native also measures a control byte's extent; the port gives a control byte the 
 
 The legacy mnemonic `query-gfx-field?` actually queries a surface's resource id.
 `op_0x216_query_surface_resource@0x42a0f0` (SYS4422) reads the inline record word at
-ctx+0x46d14+slot*0x14; SYS4433's corresponding handler is 0x42b010, with base
+ctx+0x46d14+slot*0x14; SYS4433's corresponding handler is 0x42af80, with base
 ctx+0x4af9c. This supersedes the earlier per-object/independent-table interpretation.
 The existing native surface-record lifetime findings above identify its producers.
 
