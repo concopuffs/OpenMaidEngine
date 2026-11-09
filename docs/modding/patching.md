@@ -21,7 +21,7 @@ before site 0x1234 {
 Your game guide has complete, working fragments ([games/README.md](games/README.md)).
 
 - **Header:** the script's catalog file name and the SHA-256 of its bytes. Print it with
-  `Age.Cli oms-patch --fingerprint SCRIPT.BIN <game options>`. If the installed bytes differ, compilation and loading both fail and print the real fingerprint.
+  `Ome.Cli oms-patch --fingerprint SCRIPT.BIN <game options>`. If the installed bytes differ, compilation and loading both fail and print the real fingerprint.
 - **Declarations:** `use`, `const`, `enum`, `global`, `local`, `table`, `inline`, and any `sub`s the operations call.
 - **Operations:** one or more `before`, `after` or `replace` blocks. Code outside an operation is an error.
 
@@ -129,5 +129,5 @@ the fingerprint differs. To see the patched result directly, compile fragments w
 patched scripts:
 
 ```text
-Age.Cli oms-patch --source patches/opening.oms --output-dir build/patched
+Ome.Cli oms-patch --source patches/opening.oms --output-dir build/patched
 ```

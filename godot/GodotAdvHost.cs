@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Age.Engine.Hosting;
-using Age.Engine.Model;
-using Age.Engine.Sys4;
-using Age.Engine.Text;
+using Ome.Engine.Hosting;
+using Ome.Engine.Model;
+using Ome.Engine.Sys4;
+using Ome.Engine.Text;
 
 public sealed partial class GodotAdvHost : IHost
 {
@@ -13,7 +13,7 @@ public sealed partial class GodotAdvHost : IHost
     private readonly string _rootScene;
     private readonly int _screenWidth;
     private readonly int _screenHeight;
-    private readonly Age.Engine.Hosting.FrameClock _clock;
+    private readonly Ome.Engine.Hosting.FrameClock _clock;
     private readonly GodotTimelineLog? _timeline;
     private readonly PageLocatorState _locator;
     private readonly Lazy<EnumeratedFontFamily[]> _fontFamilies;
@@ -34,7 +34,7 @@ public sealed partial class GodotAdvHost : IHost
     /// <summary>SYS4INI <c>BLANKEXTENTMODE</c> = 1: an aspect-mode blank in surface text advances by its own extent in
     /// the reference font (<see cref="ImmediateSurfaceTextRenderer"/>).</summary>
     public bool BlankExtentMode { get; init; }
-    public GodotAdvHost(Main main, ResourceMap res, string scene, Age.Engine.Hosting.FrameClock clock,
+    public GodotAdvHost(Main main, ResourceMap res, string scene, Ome.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
                         IGlyphMaskRasterizer surfaceTextRasterizer,
                         GodotTimelineLog? timeline = null,

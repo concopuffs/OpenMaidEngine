@@ -5,7 +5,7 @@ patch points) is generated in [README.md](README.md#himegari-dungeon-meister).
 
 ## Install and options
 
-- Expected install: `Himegari_Game/` beside the repository. `Age.Cli` uses it by default, so Himegari commands need
+- Expected install: `Himegari_Game/` beside the repository. `Ome.Cli` uses it by default, so Himegari commands need
   no game options. Pass `--game-root DIR` for another location.
 - Port: `.\run-godot.cmd`, with `-Mod PATH` for a mod.
 - Driver: `py -3.11 -X utf8 tools/drive.py port start --mod PATH` (`native` for AGE). Named points such as

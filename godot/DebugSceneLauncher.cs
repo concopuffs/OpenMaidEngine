@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Age.Engine.Diagnostics;
+using Ome.Engine.Diagnostics;
 using Godot;
 
 /// <summary>Godot-only developer overlay. Runtime transition policy remains in Main/VirtualMachine.</summary>

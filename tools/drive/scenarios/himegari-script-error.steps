@@ -3,7 +3,7 @@
 # hotspot owner check ("Depth が不正です"). DETOUR waits at 0x2f (3 dwords); 0x32 is end-text-line; 0x35 exits.
 # 再試行 re-executes nothing; 無視 adds the wait's length to the pc, skipping end-text-line. Both targets:
 #   port:   py -3.11 -X utf8 tools/drive.py port start --mod oms/examples/mods/example.depth-error
-#   native: engine> dotnet run --project Age.Cli -- omp export --output-dir ../build/depth-export
+#   native: engine> dotnet run --project Ome.Cli -- omp export --output-dir ../build/depth-export
 #                       --mod ../oms/examples/mods/example.depth-error
 #           py -3.11 -X utf8 tools/native_scratch.py --replace --overlay build/depth-export/SC0000.BIN
 #               --overlay build/depth-export/APPEND02.AAI --overlay build/depth-export/APPEND02.ALF

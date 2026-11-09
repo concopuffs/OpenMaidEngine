@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
-using Age.Engine.Model;
+using Ome.Engine.Model;
 
 /// <summary>
 /// Godot-native presentation of AGE's sampled retained objects. Static decoded/color-key variants are
@@ -55,11 +55,11 @@ internal sealed class GpuRetainedRenderer : IDisposable
             Code = """
                 shader_type canvas_item;
                 render_mode blend_mix, unshaded;
-                uniform vec3 age_tint = vec3(1.0);
-                uniform float age_strength = 0.0;
+                uniform vec3 ome_tint = vec3(1.0);
+                uniform float ome_strength = 0.0;
                 void fragment() {
                     vec4 source = texture(TEXTURE, UV);
-                    source.rgb = mix(source.rgb, age_tint, age_strength);
+                    source.rgb = mix(source.rgb, ome_tint, ome_strength);
                     COLOR = source * COLOR;
                 }
                 """
@@ -219,11 +219,11 @@ internal sealed class GpuRetainedRenderer : IDisposable
             if (!_lerpMaterials.TryGetValue(key, out var material))
             {
                 material = new ShaderMaterial { Shader = _lerpShader };
-                material.SetShaderParameter("age_tint", new Vector3(
+                material.SetShaderParameter("ome_tint", new Vector3(
                     ((tint >> 16) & 0xff) / 255f,
                     ((tint >> 8) & 0xff) / 255f,
                     (tint & 0xff) / 255f));
-                material.SetShaderParameter("age_strength", tintStrength / 255f);
+                material.SetShaderParameter("ome_strength", tintStrength / 255f);
                 // LERP-tint objects observed so far use source-over. If an additive LERP mode appears,
                 // keep the frame on the software oracle until it has a dedicated shader blend variant.
                 _lerpMaterials.Add(key, material);

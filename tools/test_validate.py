@@ -21,7 +21,7 @@ class EnvironmentResolutionTests(unittest.TestCase):
             explicit.write_bytes(b"")
             with mock.patch.object(validate.shutil, "which", return_value=str(root / "path-godot")):
                 resolved = validate.resolve_godot(
-                    str(explicit), {"AGE_GODOT_CONSOLE": str(root / "env-godot")}
+                    str(explicit), {"OME_GODOT_CONSOLE": str(root / "env-godot")}
                 )
             self.assertEqual(explicit.resolve(), resolved)
 
@@ -53,7 +53,7 @@ class EnvironmentResolutionTests(unittest.TestCase):
                 candidate.mkdir()
                 (candidate / "SYS4INI.BIN").write_bytes(b"SYS4")
             resolved = validate.resolve_game_root(
-                str(explicit), {"AGE_GAME_ROOT": str(environment)}, conventional
+                str(explicit), {"OME_GAME_ROOT": str(environment)}, conventional
             )
             self.assertEqual(explicit.resolve(), resolved)
 
@@ -77,7 +77,7 @@ class GatePlanTests(unittest.TestCase):
         self.assertIn("python-test_sys4load", keys)
         self.assertNotIn("sys4-corpus-validate", keys)
         self.assertNotIn("godot-selftest", keys)
-        self.assertNotIn("age-cli-sweep", keys)
+        self.assertNotIn("ome-cli-sweep", keys)
         engine = next(gate for gate in validate.build_gate_plan("core") if gate.key == "engine-tests")
         self.assertIn("Category!=Workspace", engine.command)
         self.assertIn("--no-restore", engine.command)
@@ -88,13 +88,13 @@ class GatePlanTests(unittest.TestCase):
             engine.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
         )
         self.assertIn(
-            "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
+            "engine/Ome.Engine.Tests/Ome.Engine.Tests.csproj",
             engine.command,
         )
         cli = next(
             gate for gate in validate.build_gate_plan("core") if gate.key == "engine-cli-build"
         )
-        self.assertIn("engine/Age.Cli/Age.Cli.csproj", cli.command)
+        self.assertIn("engine/Ome.Cli/Ome.Cli.csproj", cli.command)
         self.assertIn("--no-restore", cli.command)
         self.assertIn("-m:1", cli.command)
         self.assertEqual(
@@ -163,7 +163,7 @@ class GatePlanTests(unittest.TestCase):
         keys = {gate.key for gate in plan}
         self.assertIn("catalog-corpus-scan", keys)
         self.assertIn("godot-selftest", keys)
-        self.assertIn("age-cli-sweep", keys)
+        self.assertIn("ome-cli-sweep", keys)
         self.assertEqual("diff-check", plan[-1].key)
         selftest = next(gate for gate in plan if gate.key == "godot-selftest")
         self.assertIn(str(state_root / "godot.log"), selftest.command)
@@ -181,7 +181,7 @@ class GatePlanTests(unittest.TestCase):
 
         keys = {gate.key for gate in plan}
         self.assertIn("natural-boot-acceptance", keys)
-        self.assertNotIn("age-cli-sweep", keys)
+        self.assertNotIn("ome-cli-sweep", keys)
         acceptance = next(gate for gate in plan if gate.key == "natural-boot-acceptance")
         self.assertIn(
             "FullyQualifiedName=NaturalBootIntegrationTests."

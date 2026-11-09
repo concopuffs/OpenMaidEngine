@@ -9,17 +9,17 @@
     <AgeNativeDirectory>..\build\native\$(AgeNativeRid)</AgeNativeDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(GodotTargetPlatform)' == 'windows'">
-    <DefineConstants>$(DefineConstants);AGE_WINDOWS_GDI</DefineConstants>
+    <DefineConstants>$(DefineConstants);OME_WINDOWS_GDI</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\engine\Age.Engine\Age.Engine.csproj" />
-    <ProjectReference Include="..\engine\Age.Engine.Frontend\Age.Engine.Frontend.csproj" />
-    <ProjectReference Include="..\engine\Age.Mods\Age.Mods.csproj" />
+    <ProjectReference Include="..\engine\Ome.Engine\Ome.Engine.csproj" />
+    <ProjectReference Include="..\engine\Ome.Engine.Frontend\Ome.Engine.Frontend.csproj" />
+    <ProjectReference Include="..\engine\Ome.Mods\Ome.Mods.csproj" />
     <EmbeddedResource Include="..\build\opcodes.json"
                       LogicalName="OME.Runtime.opcodes.json" />
   </ItemGroup>
   <ItemGroup Condition="'$(GodotTargetPlatform)' == 'windows'">
-    <ProjectReference Include="..\engine\Age.Engine.Text.Windows\Age.Engine.Text.Windows.csproj" />
+    <ProjectReference Include="..\engine\Ome.Engine.Text.Windows\Ome.Engine.Text.Windows.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(AgeNativeRid)' == 'win-x64' and Exists('$(AgeNativeDirectory)\age_movie_ffmpeg.dll')">
     <None Include="$(AgeNativeDirectory)\*.dll"
@@ -49,7 +49,7 @@
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
-  <!-- The engine version ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 shows (Age.Engine.Frontend.NativeResources.EngineIdentity): git describe
+  <!-- The engine version ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 shows (Ome.Engine.Frontend.NativeResources.EngineIdentity): git describe
        of the checkout, "+" when it has uncommitted changes, unless the build passes -p:OmeVersion=... A build without
        git or a repository stores none, which the dialog shows as "unknown". -->
   <Target Name="OmeVersion" BeforeTargets="GetAssemblyAttributes">

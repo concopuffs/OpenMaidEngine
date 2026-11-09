@@ -1,8 +1,8 @@
 using System;
 using System.Text;
-using Age.Engine.Frontend.NativeMenu;
-using Age.Engine.Frontend.NativeResources;
-using Age.Engine.Vm;
+using Ome.Engine.Frontend.NativeMenu;
+using Ome.Engine.Frontend.NativeResources;
+using Ome.Engine.Vm;
 using Godot;
 
 /// <summary>What the 設定 dialog reads and changes: AGE:IAGEService and the AGE:reg settings registry.</summary>

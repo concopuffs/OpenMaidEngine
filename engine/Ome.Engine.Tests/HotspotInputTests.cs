@@ -1,0 +1,1201 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Ome.Engine.Hosting;
+using Ome.Engine.Model;
+using Ome.Engine.Sys4;
+using Ome.Engine.Vm;
+using Xunit;
+
+public class HotspotInputTests
+{
+    private sealed class StopAtFirstWaitException : Exception { }
+
+    private sealed class InteractiveHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public bool ClickConsumed;
+        public bool SecondClickConsumed;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+
+            // Width/height are added to x/y, so the native rectangle includes (30,40).
+            Vm.UpdatePointer(30, 40);
+            while (serviceInputCallback()) { }
+            Assert.Equal(1, Vm.Globals.GetValueOrDefault(0x100));
+
+            Vm.UpdatePointer(31, 40);
+            while (serviceInputCallback()) { }
+            Assert.Equal(1, Vm.Globals.GetValueOrDefault(0x101));
+
+            Vm.UpdatePointer(30, 40);
+            while (serviceInputCallback()) { }
+            ClickConsumed = Vm.TryActivatePointer(30, 40);
+            while (serviceInputCallback()) { }
+            SecondClickConsumed = Vm.TryActivatePointer(30, 40);
+            while (serviceInputCallback()) { }
+        }
+    }
+
+    private sealed class BoundActionHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public bool Consumed;
+        public bool DuplicateConsumed;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+            Assert.False(Vm.TryActivateInputActions(1 << 6));
+            Consumed = Vm.TryActivateInputActions(1 << 7);
+            DuplicateConsumed = Vm.TryActivateInputActions(1 << 7);
+            while (serviceInputCallback()) { }
+        }
+    }
+
+    private sealed class Sc0000MenuHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public bool MenuActionConsumed;
+        public bool ParentHotspotsRearmed;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            MenuActionConsumed = Vm.TryActivateInputActions(1 << 7);
+            while (serviceInputCallback()) { }
+            // Consuming the same binding again without advancing the page proves the parent registry
+            // was restored after MENU returned. Do not service it: this test ends at that boundary.
+            ParentHotspotsRearmed = Vm.TryActivateInputActions(1 << 7);
+            throw new StopAtFirstWaitException();
+        }
+    }
+
+    private sealed class ReturnMenuOnEntrySink : Ome.Engine.Diagnostics.ITraceSink
+    {
+        public VirtualMachine Vm = null!;
+        public bool MenuEntered;
+        public bool MenuReturnRequested;
+        private bool _childReturnRequested;
+        public bool TracingSteps => true;
+
+        public void Emit(in Ome.Engine.Diagnostics.TraceEvent e)
+        {
+            if (e.Kind == Ome.Engine.Diagnostics.TraceEventKind.FrameEnter
+                && string.Equals(e.Name, "MENU.BIN", StringComparison.OrdinalIgnoreCase))
+            {
+                MenuEntered = true;
+                return;
+            }
+            if (!MenuEntered || MenuReturnRequested || e.Kind != Ome.Engine.Diagnostics.TraceEventKind.Step) return;
+            var frame = Assert.IsType<DebugFrameSnapshot>(Vm.DebugFrame);
+            // MENU opens CHMENU first. Return CHMENU when it reaches its slot selector (CHMENU@0x3): step events
+            // come before execution, so op 0x80 still runs and the request is consumed at its next boundary. Then
+            // return MENU at its next opcode, so SC0000's callback re-registers its records (label_8c) without
+            // running either menu's input loop.
+            if (!_childReturnRequested && e.Opcode == 0x80)
+            {
+                Assert.True(Vm.TryRequestDebugFrameReturn(frame.FrameId, new Dictionary<int, long>()));
+                _childReturnRequested = true;
+            }
+            else if (_childReturnRequested
+                     && string.Equals(frame.CurrentScript, "MENU.BIN", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.True(Vm.TryRequestDebugFrameReturn(frame.FrameId, new Dictionary<int, long>()));
+                MenuReturnRequested = true;
+            }
+        }
+    }
+
+    private sealed class Sc0000HoverHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public bool SawHistoryHover;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Vm.UpdatePointer(684, 572);
+            while (serviceInputCallback()) { }
+            SawHistoryHover = Vm.Globals.GetValueOrDefault(0x6c9) == 1;
+            throw new StopAtFirstWaitException();
+        }
+    }
+
+    private sealed class Sc0000MessageSkipHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+                                          Func<AdvAutoWaitState> autoWaitState)
+        {
+            Vm.UpdatePointer(728, 572);
+            while (serviceInputCallback()) { }
+            Assert.True(Vm.TryActivatePointer(728, 572));
+            while (serviceInputCallback()) { }
+            throw new StopAtFirstWaitException();
+        }
+    }
+
+    private sealed class AutoStateHost : RecordingHost
+    {
+        public AdvAutoWaitState State;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+                                          Func<AdvAutoWaitState> autoWaitState)
+        {
+            while (serviceInputCallback()) { }
+            State = autoWaitState();
+            Waits++;
+        }
+    }
+
+    private sealed class MessageSkipCadenceHost : RecordingHost
+    {
+        public int ActiveSkipYields;
+        public override void FrameYield()
+        {
+            if (MessageSkip) ActiveSkipYields++;
+        }
+    }
+
+    // Retail hide window (G[0x62425] = 0): the x=772 control or Space enters handler A, which skips HIDEWIN.BIN and
+    // leaves the frame in the engine's hidden-window wait. A click ends it; handler B restores the page.
+    private sealed class Sc0000RetailHideHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public bool UseSpace;
+        public VmFrameLocation? AtWait;
+        public VmFrameLocation? HiddenAt;
+        public long HoverFlagAfterRestore = -1;
+        public bool? SameSpotClickConsumed;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Vm.UpdatePointer(772, 582);
+            while (serviceInputCallback()) { }
+            AtWait = Vm.CaptureFrameLocations()[^1];
+            if (UseSpace) Assert.True(Vm.TryRequestAdvWaitCoroutineYield());
+            else
+            {
+                Vm.UpdateMouseButtonState(0x1, true);
+                Assert.True(Vm.TryActivatePointer(772, 582));
+                Vm.UpdateMouseButtonState(0x1, false);
+            }
+            while (serviceInputCallback()) { }
+            HoverFlagAfterRestore = Vm.Globals.GetValueOrDefault(0x6cd);
+            SameSpotClickConsumed = Vm.TryActivatePointer(772, 582); // the pointer never moved
+            throw new StopAtFirstWaitException();
+        }
+
+        public override void WaitForServiceTrigger(Func<bool> triggered)
+        {
+            HiddenAt = Vm.CaptureFrameLocations()[^1];
+            Assert.True(Vm.TryLatchAdvCoroutineYieldTrigger(1 << 4)); // a left click
+            base.WaitForServiceTrigger(triggered);
+        }
+    }
+
+    private sealed class Sc0000HideWindowHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        private long _now;
+        public int HideLoopSleeps;
+        public bool HideReturned;
+        public override long InputClockMilliseconds => _now;
+
+        public override void Sleep(long duration)
+        {
+            base.Sleep(duration);
+            _now += System.Math.Max(16, duration);
+            if (duration <= 1 && ++HideLoopSleeps == 2)
+            {
+                Vm.UpdateMouseButtonState(0x1, false); // release the x=772 activation click
+                Vm.QueueInputCallback(10);             // common release callback arms HIDEWIN input
+            }
+            else if (duration <= 1 && HideLoopSleeps == 3)
+            {
+                Vm.UpdateMouseButtonState(0x1, true);  // next primary click is generic action index 4
+                Vm.QueueInputCallback(4);
+            }
+            else if (duration <= 1 && HideLoopSleeps == 4)
+            {
+                Vm.UpdateMouseButtonState(0x1, false);
+                Vm.QueueInputCallback(10);
+            }
+        }
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Vm.UpdatePointer(772, 572);
+            while (serviceInputCallback()) { }
+            Vm.UpdateMouseButtonState(0x1, true);
+            Assert.True(Vm.TryActivatePointer(772, 572));
+            while (serviceInputCallback()) { }
+            HideReturned = true;
+            throw new StopAtFirstWaitException();
+        }
+    }
+
+    [Fact]
+    public void ArmedHotspot_DispatchesHoverAndConsumesActivationWithoutAdvancingPage()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        // Main code ends at dword 20. Activation also exercises an ordinary local call beneath the
+        // VM's temporary callback return sentinel.
+        const int enterTarget = 20, leaveTarget = 26, activateTarget = 32;
+        var script = ScriptAssembler.Assemble(table, "HOTSPOT", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(enterTarget), I(leaveTarget), I(activateTarget) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x100), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x101), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+            (0x8f, new[] { I(36) }),
+            (0x5, Array.Empty<Operand>()),
+            (0x1b7, new[] { I(1) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new InteractiveHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.True(host.ClickConsumed);
+        Assert.True(host.SecondClickConsumed);
+        Assert.True(vm.AutoMessageEnabled);
+        Assert.Equal(1, host.Waits);
+        // enter, leave, enter, activate, activate: the hovered record survives each activation, so the
+        // re-arm under the still pointer fires no second enter (native, driven 2026-11-04).
+        Assert.Equal(5, host.InputCallbackFrames);
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.False(vm.TryActivatePointer(30, 40)); // the script frame has exited, so no hotspot remains active
+    }
+
+    private sealed class HoverAfterClickHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public readonly List<long> EntersAfterStep = new();
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+            void Step(Action action)
+            {
+                action();
+                while (serviceInputCallback()) { }
+                EntersAfterStep.Add(Vm.Globals.GetValueOrDefault(0x120));
+            }
+            Step(() => Vm.UpdatePointer(20, 30));                 // enter
+            Step(() => Assert.True(Vm.TryActivatePointer(20, 30))); // click: callback, then re-arm
+            Step(() => Vm.UpdatePointer(21, 30));                 // move within the hotspot
+            Step(() => Vm.UpdatePointer(50, 60));                 // leave
+            Step(() => Vm.UpdatePointer(20, 30));                 // enter again
+        }
+    }
+
+    [Fact]
+    public void ActivatedHotspot_StaysHoveredUntilThePointerLeaves()
+    {
+        // Native ADV control strip, driven 2026-11-04: after a click on read-skip the tooltip (its enter
+        // callback's redraw) does not come back while the pointer rests or moves inside the control; it
+        // returns once the pointer has left and re-entered.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int enterTarget = 20, leaveTarget = 27, activateTarget = 28;
+        var script = ScriptAssembler.Assemble(table, "HOTSPOT", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(enterTarget), I(leaveTarget), I(activateTarget) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+            (0x50, new[] { G(0x120), G(0x120), I(1) }),  // enter: count it
+            (0x5, Array.Empty<Operand>()),
+            (0x5, Array.Empty<Operand>()),                // leave
+            (0x5, Array.Empty<Operand>()),                // activate
+        }, Array.Empty<string>());
+        var host = new HoverAfterClickHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal(new long[] { 1, 1, 1, 1, 2 }, host.EntersAfterStep);
+    }
+
+    [Fact]
+    public void BoundActionArmedByACallerFrame_IsANativeDepthErrorInTheCalleesWait()
+    {
+        // Native keeps one hotspot table owned by the script that registered it; a script called from that
+        // scene cannot take its bindings: AGE stops with "Depth が不正です <running> != <owner>" (FUN_004079b0).
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int activateTarget = 30; // 0x90 (15) + 0x97 (11) + 0x94 (1) + call-script (3)
+        var outer = ScriptAssembler.Assemble(table, "OUTER", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(-1), I(-1), I(activateTarget) }),
+            (0x97, new[] { I(10), I(20), I(20), I(20), I(7) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x3, new[] { I(5) }),
+            (0x55, new[] { G(0x110), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var inner = ScriptAssembler.Assemble(table, "INNER", new List<(int, Operand[])>
+        {
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new BoundActionHost();
+        var vm = new VirtualMachine(outer, table, host, provider: new MapProvider(new() { [5] = inner }));
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.True(host.Consumed);
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x110)); // the caller's callback never ran in the callee
+        Assert.Equal("script-error: Depth が不正です INNER != OUTER", vm.HaltReason);
+        DiagnosticMessage shown = Assert.Single(host.Diagnostics);
+        Assert.Equal(vm.ScriptError, shown);
+        Assert.Equal("エラーが発生しました", shown.Caption);
+        Assert.StartsWith("Depth が不正です INNER != OUTER\n\nデバック情報：\nFILE=INNER ADDRESS=3 LINE=-1 COMMAND=-(2) DEPTH=1\n",
+                          shown.Text);
+        Assert.Contains("中止：プログラムを終了します．", shown.Text);
+    }
+
+    /// <summary>The Depth error's box answered 再試行 or 無視 (driven natively 2026-11-04). The callee waits at
+    /// offset 0 (3 dwords); its successor at 3 is a 3-dword call-script whose target sets G[0x111]; at 6 a mov sets
+    /// G[0x112]. 再試行 keeps waiting and then runs both. 無視 adds the wait's length to the resume point, so the
+    /// call-script is skipped unexecuted.</summary>
+    [Theory]
+    [InlineData(ScriptErrorChoice.Retry, 1)]
+    [InlineData(ScriptErrorChoice.Ignore, 0)]
+    public void DepthErrorRetryKeepsWaitingAndIgnoreSkipsTheWaitsLengthPastIt(ScriptErrorChoice answer, long marker)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var outer = ScriptAssembler.Assemble(table, "OUTER", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(-1), I(-1), I(30) }),
+            (0x97, new[] { I(10), I(20), I(20), I(20), I(7) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x3, new[] { I(5) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var inner = ScriptAssembler.Assemble(table, "INNER", new List<(int, Operand[])>
+        {
+            (0x72, new[] { I(1) }),               // 0: the wait the right click interrupts
+            (0x3, new[] { I(6) }),                // 3: skipped by 無視
+            (0x55, new[] { G(0x112), I(1) }),     // 6
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var markerScript = ScriptAssembler.Assemble(table, "MARKER", new List<(int, Operand[])>
+        {
+            (0x55, new[] { G(0x111), I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new BoundActionHost();
+        host.ScriptErrorAnswers.Enqueue(answer);
+        var vm = new VirtualMachine(outer, table, host,
+            provider: new MapProvider(new() { [5] = inner, [6] = markerScript }));
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.True(host.Consumed);
+        Assert.Single(host.Diagnostics);
+        Assert.Null(vm.ScriptError);                  // only 中止 ends the run
+        Assert.Equal(marker, vm.Globals.GetValueOrDefault(0x111));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x112));
+        Assert.Equal("exit", vm.HaltReason);
+    }
+
+    private sealed class TwoClickHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public readonly List<bool> Activations = new();
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            for (int click = 0; click < 2; click++)
+            {
+                Activations.Add(Vm.TryActivateInputActions(1 << 7));
+                while (serviceInputCallback()) { }
+            }
+        }
+    }
+
+    [Fact]
+    public void DepthErrorAnsweredRetryLeavesTheBindingArmedForTheNextClick()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var outer = ScriptAssembler.Assemble(table, "OUTER", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(-1), I(-1), I(30) }),
+            (0x97, new[] { I(10), I(20), I(20), I(20), I(7) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x3, new[] { I(5) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var inner = ScriptAssembler.Assemble(table, "INNER", new List<(int, Operand[])>
+        {
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new TwoClickHost();
+        host.ScriptErrorAnswers.Enqueue(ScriptErrorChoice.Retry);
+        host.ScriptErrorAnswers.Enqueue(ScriptErrorChoice.Retry);
+        var vm = new VirtualMachine(outer, table, host, provider: new MapProvider(new() { [5] = inner }));
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal(new[] { true, true }, host.Activations);
+        Assert.Equal(2, host.Diagnostics.Count);
+        Assert.Equal("exit", vm.HaltReason);
+    }
+
+    [Fact]
+    public void ArmedHotspot_DispatchesBoundLogicalActionThroughOrdinaryActivationCallback()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int activateTarget = 31;
+        var script = ScriptAssembler.Assemble(table, "HOTSPOT_ACTION", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(-1), I(-1), I(activateTarget) }),
+            (0x97, new[] { I(10), I(20), I(20), I(20), I(7) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x110), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new BoundActionHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.True(host.Consumed);
+        Assert.False(host.DuplicateConsumed);
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x110));
+        Assert.Equal(1, host.Waits);
+        Assert.Equal("exit", vm.HaltReason);
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void Sc0000AdvChromeBootstrap_VisitsAllFiveVisibleButtonRegistrations()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
+        var trace = new RecordingTraceSink { TracingSteps = true };
+        var vm = new VirtualMachine(script, table, new RecordingHost(),
+            new VmOptions(HaltAtWaitForInput: true), sink: trace);
+        vm.Globals[0x6c1] = 1; // inherited SYSTEM4 adv_chrome_enabled state seeded by Godot Main
+
+        vm.Run();
+
+        Assert.Equal(new[] { 0x94, 0xa3, 0xb2, 0xc1, 0xd0 }, trace.Events
+            .Where(e => e.Kind == Ome.Engine.Diagnostics.TraceEventKind.Step
+                     && e.Opcode == 0x90 && e.Ins!.Offset < 0xdf)
+            .Select(e => e.Ins!.Offset).ToArray());
+        Assert.Equal("wait-for-input", vm.HaltReason);
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void Sc0000FirstWait_DispatchesRealHistoryHoverCallback()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
+        var host = new Sc0000HoverHost();
+        var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 1_000_000));
+        host.Vm = vm;
+        vm.Globals[0x6c1] = 1;
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.True(host.InputCallbackFrames > 0);
+        Assert.True(host.SawHistoryHover);
+    }
+
+    [Fact]
+    public void AutoMessageOpcodes_RoundTripVmServiceState()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "AUTO", new List<(int, Operand[])>
+        {
+            (0x1b7, new[] { I(1) }),
+            (0x1b6, new[] { G(0x120) }),
+            (0x1b7, new[] { I(0) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x120));
+        Assert.False(vm.AutoMessageEnabled);
+    }
+
+    [Fact]
+    public void AutoMessageTimeOpcodes_ConfigureWaitSchedulerState()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "AUTO_TIMES", new List<(int, Operand[])>
+        {
+            (0x1b9, new[] { I(0), I(750) }),
+            (0x1b9, new[] { I(1), I(2250) }),
+            (0x1b8, new[] { I(0), G(0x130) }),
+            (0x1b8, new[] { I(1), G(0x131) }),
+            (0x1b7, new[] { I(1) }),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new AutoStateHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(750, vm.Globals.GetValueOrDefault(0x130));
+        Assert.Equal(2250, vm.Globals.GetValueOrDefault(0x131));
+        Assert.Equal(new AdvAutoWaitState(true, false, 750, 2250), host.State);
+        Assert.Equal(1, host.Waits);
+    }
+
+    [Fact]
+    public void VoicePlayback_MarksAutoWaitUntilBlockMarkResetsIt()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var voiced = ScriptAssembler.Assemble(table, "AUTO_VOICE", new List<(int, Operand[])>
+        {
+            (0xc4, new[] { I(12) }),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var reset = ScriptAssembler.Assemble(table, "AUTO_VOICE_RESET", new List<(int, Operand[])>
+        {
+            (0xc4, new[] { I(12) }),
+            (0x1bc, Array.Empty<Operand>()),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var voicedHost = new AutoStateHost();
+        var resetHost = new AutoStateHost();
+
+        new VirtualMachine(voiced, table, voicedHost).Run();
+        new VirtualMachine(reset, table, resetHost).Run();
+
+        Assert.True(voicedHost.State.VoicePending);
+        Assert.False(resetHost.State.VoicePending);
+    }
+
+    [Fact]
+    public void Op0x88EnablesSkipWithoutStartingFastForwardUntilATextWait()
+    {
+        // op_0x88_set_message_skip@0x41f130 writes ctx+0x13dc and ctx+0x550fc and sets no run-state bit; the text wait
+        // starts fast-forward from the injected action 6.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP_ON", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19a, new[] { G(0x13c) }),
+            (0x1c7, new[] { G(0x13d) }),
+            (0x72, new[] { I(0) }),
+            (0x1c7, new[] { G(0x13e) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x13c));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x13d));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x13e));
+        Assert.Equal(new[] { true }, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void MessageSkipToggleSurvivesOp0x101_WhichEndsFastForwardUntilTheNextTextWait()
+    {
+        // Op 0x101 clears run-state 0x8000000 however it started (0x4170ce) and leaves both Skip fields; op 0x88(0)
+        // clears them.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),
+            (0x19a, new[] { G(0x140) }),
+            (0x1c7, new[] { G(0x141) }),
+            (0x101, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x142) }),
+            (0x19a, new[] { G(0x144) }),
+            (0x72, new[] { I(0) }),
+            (0x1c7, new[] { G(0x145) }),
+            (0x88, new[] { I(0) }),
+            (0x19a, new[] { G(0x143) }),
+            (0x1c7, new[] { G(0x146) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x140));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x141));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x142));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x144));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x145));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x143));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x146));
+        Assert.False(vm.MessageSkipEnabled);
+        Assert.Equal(new[] { true, false, true, false }, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void AdvSkipService_SuspendsAndRestoresPersistentMessageSkip()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP_LIFECYCLE", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),
+            (0x19b, Array.Empty<Operand>()),
+            (0x19a, new[] { G(0x144) }),
+            (0x1c7, new[] { G(0x145) }),
+            (0x19c, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x146) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x144));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x145));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x146));
+        Assert.True(vm.MessageSkipEnabled);
+        Assert.Equal(new[] { true, false, true }, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void AdvSkipService_RestoreIncludesLiveReadSkipChannel()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "READ_SKIP_LIFECYCLE", new List<(int, Operand[])>
+        {
+            (0x19b, Array.Empty<Operand>()),
+            (0x19c, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x147) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost { AdvReadSkip = true };
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x147));
+        Assert.False(vm.MessageSkipEnabled);
+        Assert.Equal(new[] { false, true }, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void RefreshAdvSkipInputState_EndsFastForwardAndPersistentSkipRestartsItAtTheNextTextWait()
+    {
+        // op_0xfa_refresh_adv_skip_input_state@0x416de0 polls the held mask, which carries no Skip injection, and
+        // starts nothing; op 0x72's wait acts on ctx+0x13dc again.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "REFRESH_ADV_SKIP", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),
+            (0xfa, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x148) }),
+            (0x72, new[] { I(0) }),
+            (0x1c7, new[] { G(0x149) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost { AdvReadSkip = true };
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x148));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x149));
+        Assert.True(vm.MessageSkipEnabled);
+        Assert.Equal(new[] { true, false, true }, host.MessageSkipChanges);
+    }
+
+    [Theory]
+    [InlineData(0x71)]   // Kamidori FIELD@0x30a resets layout 1 after SYSTEM4's op 0x19b
+    [InlineData(0x72)]
+    public void APageOutsideAdvLeavesPersistentSkipSuspendedUntilOp0x19c(int op)
+    {
+        // Op 0x19b clears ctx+0x13dc and keeps the toggle (ctx+0x550fc). The read-skip block of ops 0x6e, 0x71 and 0x72
+        // never starts fast-forward from the toggle, and op 0x72 acts on ctx+0x13dc, so a later click cannot cancel a
+        // Skip that is not running (docs/engine-re.md, "Read skip and ctx+0x13dc").
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "SUSPENDED_PAGE", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),
+            (0x19b, Array.Empty<Operand>()),
+            (op, new[] { I(1) }),
+            (0x1c7, new[] { G(0x14a) }),
+            (0x19c, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x14b) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x14a));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x14b));
+        Assert.True(vm.MessageSkipEnabled);
+        // The host is told every time; a repeated value is no change.
+        Assert.Equal(new[] { true, false, true },
+            host.MessageSkipChanges.Where((value, i) => i == 0 || value != host.MessageSkipChanges[i - 1]));
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void Sc0000MessageSkipButton_EnablesPersistentServiceState()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
+        var host = new Sc0000MessageSkipHost();
+        var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 1_000_000));
+        host.Vm = vm;
+        vm.Globals[0x6c1] = 1;
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.True(vm.MessageSkipEnabled);
+        // Op 0x88 starts no fast-forward, so the callback still sleeps its 100 ms (a sleep under fast-forward
+        // returns at once); its return into op 0x72 starts it.
+        Assert.Contains(100L, host.SleptDurations);
+        Assert.True(host.MessageSkip);
+        Assert.Contains(true, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void CursorOpcodes_ForwardResourceAndClearToHost()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "CURSOR", new List<(int, Operand[])>
+        {
+            (0x86, new[] { I(0x3318) }),
+            (0x87, Array.Empty<Operand>()),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+
+        new VirtualMachine(script, table, host).Run();
+
+        Assert.Equal(new long[] { 0x3318 }, host.CursorResources);
+        Assert.Equal(1, host.CursorClearCount);
+    }
+
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Sc0000HideWindow_RetailWaitsInTheEngineAndAClickRestoresThePage(bool useSpace)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scene = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
+        var hide = Sys4Loader.Load(Paths.Scripts()["HIDEWIN.BIN"], table);
+        var provider = new MapProvider(new Dictionary<long, Script> { [0x20] = hide });
+        var trace = new RecordingTraceSink { TracingSteps = true };
+        var host = new Sc0000RetailHideHost { UseSpace = useSpace };
+        var vm = new VirtualMachine(scene, table, host, new VmOptions(MaxSteps: 1_000_000), provider, trace);
+        host.Vm = vm;
+        InputBindingBootstrap.Apply(
+            Sys4Loader.Load(Paths.Scripts()["SYSTEM4.BIN"], table), vm.InputBindings);
+        vm.Globals[0x6c1] = 1;
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.DoesNotContain(trace.Events, e => e.Kind == Ome.Engine.Diagnostics.TraceEventKind.FrameEnter
+                                              && e.Name?.EndsWith("HIDEWIN.BIN", StringComparison.OrdinalIgnoreCase) == true);
+        Assert.Equal(1, host.ServiceTriggerWaits);
+        Assert.True(host.LastServiceTriggerWaitTriggered);
+        // Native, driven 2026-11-05: the control leaves the frame at SC0000@0x30d, Space at the text wait itself.
+        Assert.Equal(useSpace ? host.AtWait!.ResumeOffset : 0x30d, host.HiddenAt!.ResumeOffset);
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x3233)); // handler B (label_41e) ran
+        Assert.Equal(new[] { true, false }, host.AdvPagePresentationSuspended);
+        // Handler B's op 0x7c clears the hotspot hit. From the control, the callback's one-pixel cursor nudge (op 0x10a)
+        // is a pointer move that hits the control again, so a click on the same spot hides the window again. From
+        // Space nothing moves: the wait's poll leaves the control (label_2f8 clears its tooltip flag G[0x6cd]) and a
+        // click on the same spot advances the page (native, driven 2026-11-05).
+        Assert.Equal(0, host.HoverFlagAfterRestore);
+        Assert.Equal(!useSpace, host.SameSpotClickConsumed);
+    }
+
+    private sealed class ResumeClearsHitHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public readonly List<(long Enters, long Leaves)> AfterStep = new();
+        public bool? StillClickConsumed;
+        public bool? MovedClickConsumed;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            void Step(Action action)
+            {
+                action();
+                while (serviceInputCallback()) { }
+                AfterStep.Add((Vm.Globals.GetValueOrDefault(0x120), Vm.Globals.GetValueOrDefault(0x121)));
+            }
+            Step(() => Vm.UpdatePointer(20, 30));                                // enter
+            Step(() => Assert.True(Vm.TryRequestAdvWaitCoroutineYield()));       // hide and restore: op 0x7c
+            Step(() => StillClickConsumed = Vm.TryActivatePointer(20, 30));     // same point: no hit
+            Step(() => Vm.UpdatePointer(21, 30));                                // a move inside: enter again
+            Step(() => MovedClickConsumed = Vm.TryActivatePointer(21, 30));
+        }
+
+        public override void WaitForServiceTrigger(Func<bool> triggered)
+        {
+            Assert.True(Vm.TryLatchAdvCoroutineYieldTrigger(1 << 5));
+            base.WaitForServiceTrigger(triggered);
+        }
+    }
+
+    [Fact]
+    public void CoroutineResume_ClearsTheHitSoAStillPointerLeavesAndItsClickIsNotConsumed()
+    {
+        // op_0x7c_handler@0x417cb0 sets the hotspot hit (ctx+0xc6f8) to -1 and keeps the hovered record. The wait's
+        // next poll therefore runs the leave callback, and only a pointer move to a new point hits the record again.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int enter = 25, leave = 33, activate = 41, handlerA = 47, handlerB = 48;
+        var script = ScriptAssembler.Assemble(table, "HOTSPOT", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(enter), I(leave), I(activate) }), // 0
+            (0x7b, new[] { I(handlerA), I(handlerB) }),   // 15
+            (0x94, Array.Empty<Operand>()),               // 20
+            (0x72, new[] { I(1) }),                       // 21
+            (0x2, Array.Empty<Operand>()),                // 24
+            (0x50, new[] { G(0x120), G(0x120), I(1) }),  // 25: enter
+            (0x5, Array.Empty<Operand>()),                // 32
+            (0x50, new[] { G(0x121), G(0x121), I(1) }),  // 33: leave
+            (0x5, Array.Empty<Operand>()),                // 40
+            (0x55, new[] { G(0x122), I(1) }),             // 41: activate
+            (0x5, Array.Empty<Operand>()),                // 46
+            (0x7c, Array.Empty<Operand>()),               // 47: handler A, then the hidden-window wait
+            (0x7c, Array.Empty<Operand>()),               // 48: handler B, back to the text wait
+        }, Array.Empty<string>());
+        var host = new ResumeClearsHitHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal(new (long, long)[] { (1, 0), (1, 1), (1, 1), (2, 1), (2, 1) }, host.AfterStep);
+        Assert.False(host.StillClickConsumed);
+        Assert.True(host.MovedClickConsumed);
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x122));
+        Assert.Equal("exit", vm.HaltReason);
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void Sc0000HideWindowButton_RunsRealHidewinAndReturnsToAdvWait()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scene = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
+        var hide = Sys4Loader.Load(Paths.Scripts()["HIDEWIN.BIN"], table);
+        var provider = new MapProvider(new Dictionary<long, Script> { [0x20] = hide });
+        var trace = new RecordingTraceSink { TracingSteps = true };
+        var host = new Sc0000HideWindowHost();
+        var vm = new VirtualMachine(scene, table, host, new VmOptions(MaxSteps: 1_000_000), provider, trace);
+        host.Vm = vm;
+        InputBindingBootstrap.Apply(
+            Sys4Loader.Load(Paths.Scripts()["SYSTEM4.BIN"], table), vm.InputBindings);
+        vm.Globals[0x6c1] = 1;
+        vm.Globals[0x62425] = 1; // the HIDEWIN.BIN branch; retail leaves it 0 (Sc0000HideWindowButton_RetailWaits...)
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.True(host.HideLoopSleeps >= 4,
+            $"hide sleeps={host.HideLoopSleeps}; halt={vm.HaltReason}; frames={string.Join(',', trace.Events.Where(e => e.Kind == Ome.Engine.Diagnostics.TraceEventKind.FrameEnter).Select(e => e.Name))}; tail={string.Join(',', trace.Events.Where(e => e.Kind == Ome.Engine.Diagnostics.TraceEventKind.Step).TakeLast(30).Select(e => $"{e.Ins!.Offset:x}:{e.Opcode:x}"))}");
+        Assert.Contains(trace.Events, e => e.Kind == Ome.Engine.Diagnostics.TraceEventKind.FrameEnter
+                                        && e.Name?.EndsWith("HIDEWIN.BIN", StringComparison.OrdinalIgnoreCase) == true);
+        Assert.True(host.HideReturned);
+        Assert.Equal(new[] { true, false }, host.AdvPagePresentationSuspended);
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void Sc0000ActionSeven_EntersRealMenuAndRestoresParentAdvHotspots()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scripts = Sys4ScriptProvider.Load(table);
+        var scene = scripts.RequireByName("SC0000.BIN");
+        var host = new Sc0000MenuHost();
+        var sink = new ReturnMenuOnEntrySink();
+        var vm = new VirtualMachine(scene, table, host, new VmOptions(MaxSteps: 1_000_000), scripts, sink);
+        host.Vm = vm;
+        sink.Vm = vm;
+        InputBindingBootstrap.Apply(scripts.RequireByName("SYSTEM4.BIN"), vm.InputBindings);
+        vm.Globals[0x6c1] = 1;
+        vm.Globals[0x62425] = 1;
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.True(host.MenuActionConsumed);
+        Assert.True(sink.MenuEntered);
+        Assert.True(sink.MenuReturnRequested);
+        Assert.Equal(8, vm.Gfx.DefaultObjectSlot); // CHMENU's entry selector ran before the controlled returns.
+        Assert.True(host.ParentHotspotsRearmed);
+    }
+
+    [Fact]
+    public void MessageSkipState_ReachesHostBeforeFollowingOpcodeCadenceYields()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "MESSAGE_SKIP_CADENCE", new List<(int, Operand[])>
+        {
+            (0x88, new[] { I(1) }),
+            (0x19c, Array.Empty<Operand>()),   // starts fast-forward from the Skip op 0x88 set
+            (0x55, new[] { G(0x150), I(1) }),
+            (0x55, new[] { G(0x151), I(1) }),
+            (0x88, new[] { I(0) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new MessageSkipCadenceHost();
+
+        new VirtualMachine(script, table, host).Run();
+
+        Assert.Equal(3, host.ActiveSkipYields);
+    }
+
+    [Fact]
+    public void AdvCoroutineYield_RunsHandlerAThenHandlerBAndResumesAfterOpcode()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int handlerA = 17, handlerB = 23;
+        var script = ScriptAssembler.Assemble(table, "ADV_COROUTINE", new List<(int, Operand[])>
+        {
+            (0x7b, new[] { I(handlerA), I(handlerB) }),
+            (0x55, new[] { G(0x160), I(1) }),
+            (0x199, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x163), I(1) }),
+            (0x2, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x161), I(1) }),
+            (0x199, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x162), I(1) }),
+            (0x7c, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x160));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x161));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x162));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x163));
+        Assert.Equal(new[] { true, false }, host.AdvPagePresentationSuspended);
+        Assert.Equal("exit", vm.HaltReason);
+    }
+
+    [Fact]
+    public void BitSetAndReset_UseBitIndicesRatherThanLiteralMasks()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "BIT_INDEX", new List<(int, Operand[])>
+        {
+            (0x135, new[] { G(0x168), I(1) }),
+            (0x135, new[] { G(0x168), I(4) }),
+            (0x136, new[] { G(0x168), I(1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal(0x10, vm.Globals.GetValueOrDefault(0x168));
+    }
+
+    [Fact]
+    public void BitSet_RejectsNativeOutOfRangeIndex()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "BIT_RANGE", new List<(int, Operand[])>
+        {
+            (0x135, new[] { G(0x169), I(32) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal("bit-index-out-of-range:32", vm.HaltReason);
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x169));
+    }
+
+    [Fact]
+    public void MouseCallback_UsesLivePointerAndButtonState()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int callback = 7;
+        var script = ScriptAssembler.Assemble(table, "MOUSE_CALLBACK", new List<(int, Operand[])>
+        {
+            (0xcc, new[] { I(0), I(callback) }),
+            (0xcd, Array.Empty<Operand>()),
+            (0x2, Array.Empty<Operand>()),
+            (0x109, new[] { G(0x170), G(0x171) }),
+            (0x108, new[] { G(0x172) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+        vm.UpdatePointer(321, 456);
+        vm.UpdateMouseButtonState(0x1, true);
+
+        vm.Run();
+
+        Assert.Equal(321, vm.Globals.GetValueOrDefault(0x170));
+        Assert.Equal(456, vm.Globals.GetValueOrDefault(0x171));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x172));
+    }
+
+    [Fact]
+    public void JoyCallbackTable_DispatchesHeldInput()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int callback = 8;
+        var script = ScriptAssembler.Assemble(table, "JOY_CALLBACK", new List<(int, Operand[])>
+        {
+            (0xfb, new[] { I(0), I(callback) }),
+            (0xff, Array.Empty<Operand>()),
+            (0x100, Array.Empty<Operand>()),
+            (0x2, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x180), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+        vm.UpdateInputCallbackState(0, true);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x180));
+    }
+
+    /// <summary>Right-click the way Godot's _Input does: raw button bit, physical-to-logical action, then the
+    /// bound-hotspot bridge on press.</summary>
+    private sealed class Sc0000MenuReopenHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        private long _now;
+        public int MenuSleeps;
+        public bool Opened;
+        public bool MenuReturned;
+        public bool Reopened;
+        public string Trail = "";
+        public override long InputClockMilliseconds => _now;
+
+        private bool InMenu => Vm.CaptureFrameLocations().Any(
+            frame => frame.Script.StartsWith("MENU", StringComparison.OrdinalIgnoreCase));
+
+        private bool RightButton(bool down)
+        {
+            Vm.UpdateMouseButtonState(0x2, down);
+            int action = Vm.UpdatePhysicalMouseButtonState(1, down);
+            return down && action >= 0 && Vm.TryActivateInputActions(1 << action);
+        }
+
+        public override void Sleep(long duration)
+        {
+            base.Sleep(duration);
+            _now += Math.Max(16, duration);
+            if (!InMenu) return;
+            MenuSleeps++;
+            if (MenuSleeps == 4) RightButton(false);       // release the opening click inside the menu
+            else if (MenuSleeps == 40) Trail += $"close-press:{RightButton(true)};";
+            else if (MenuSleeps == 46) RightButton(false);
+        }
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Opened = RightButton(true);
+            while (serviceInputCallback()) { }
+            MenuReturned = !InMenu;
+            Reopened = Vm.TryActivateInputActions(1 << 7);
+            throw new StopAtFirstWaitException();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void Sc0000RightClick_ReopensMenuAfterRightClickClosesIt()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var scripts = Sys4ScriptProvider.Load(table);
+        var host = new Sc0000MenuReopenHost();
+        var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), table, host,
+            new VmOptions(MaxSteps: 5_000_000), scripts);
+        host.Vm = vm;
+        InputBindingBootstrap.Apply(scripts.RequireByName("SYSTEM4.BIN"), vm.InputBindings);
+        vm.Globals[0x6c1] = 1;
+        vm.Globals[0x62425] = 1;
+
+        Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
+
+        Assert.True(host.Opened);
+        Assert.True(host.MenuSleeps > 40, $"menu sleeps={host.MenuSleeps} halt={vm.HaltReason} {host.Trail}");
+        Assert.True(host.MenuReturned, host.Trail);
+        Assert.True(host.Reopened, host.Trail);
+    }
+
+    private sealed class CallbackLocationHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public IReadOnlyList<VmFrameLocation>? AfterCallback;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+            Assert.True(Vm.TryActivatePointer(30, 40));
+            while (serviceInputCallback()) { }
+            AfterCallback = Vm.CaptureFrameLocations();
+        }
+    }
+
+    [Fact]
+    public void HotspotCallback_ReturnsTheFrameToItsWaitingInstruction()
+    {
+        // SC0000's right-click handler runs MENU inside the page wait; once it returns, saves and the driving
+        // protocol must see the page wait again, not the callback's last instruction.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int hoverTarget = 20, activateTarget = 21;
+        var script = ScriptAssembler.Assemble(table, "HOTSPOT_PC", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(hoverTarget), I(hoverTarget), I(activateTarget) }),
+            (0x94, Array.Empty<Operand>()),
+            (0x72, new[] { I(1) }),
+            (0x2, Array.Empty<Operand>()),
+            (0x5, Array.Empty<Operand>()),
+            (0x55, new[] { G(0x100), I(1) }),
+            (0x5, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new CallbackLocationHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x100));
+        VmFrameLocation frame = Assert.Single(host.AfterCallback!);
+        Assert.Equal(script.Instructions[2].Offset, frame.CurrentOffset);
+        Assert.Equal(script.Instructions[3].Offset, frame.ResumeOffset);
+    }
+
+    private static Operand I(long value) => new(0, value);
+    private static Operand G(long address) => new(3, address);
+}

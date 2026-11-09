@@ -1,0 +1,61 @@
+using Ome.Engine.Model;
+using Ome.Engine.Sys4;
+using Xunit;
+
+public class Sys4CorpusScannerTests
+{
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "himegari")]
+    [Fact]
+    public void InstalledHimegariCatalogCorpusDecodesThroughRuntimeStore()
+        => AssertInstalledCorpus("himegari", "Himegari_Game", "SYS4422");
+
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    [Fact]
+    public void InstalledKamidoriCatalogCorpusDecodesThroughRuntimeStore()
+        => AssertInstalledCorpus("kamidori", "Kamidori", "SYS4433");
+
+    private static void AssertInstalledCorpus(
+        string profileId, string directoryName, string abiId)
+    {
+        string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT")
+            ?? Path.Combine(Paths.Workspace, directoryName);
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"{profileId} install not found at {gameRoot}");
+
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, abiId);
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var provider = new Sys4ScriptProvider(
+            table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
+
+        Sys4CorpusScanResult scan = Sys4CorpusScanner.Scan(catalog, provider);
+
+        Assert.True(scan.ScriptCount > 0);
+        Assert.Equal(scan.ScriptCount, scan.BaseScriptCount + scan.AppendScriptCount);
+        Assert.True(scan.InstructionCount > 0);
+        Assert.True(scan.OpcodeOccurrences.Count > 0);
+        Assert.Empty(scan.Failures);
+        OpcodeCorpusObservation observation = table.Observations[profileId];
+        Assert.Equal(abiId, observation.ScriptRevision);
+        Assert.Equal(abiId, observation.EngineAbiId);
+        Assert.Equal(scan.ScriptCount, observation.ScriptCount);
+        Assert.Equal(scan.InstructionCount, observation.InstructionCount);
+        Assert.Equal(
+            observation.Opcodes.Order(),
+            scan.OpcodeOccurrences.Keys.Order());
+        Assert.Equal(scan.OpcodeOccurrences.Keys.Order(), scan.OperandTypeOccurrences.Keys.Order());
+        foreach ((int opcode, IReadOnlyList<IReadOnlyDictionary<int, long>> positions)
+                 in scan.OperandTypeOccurrences)
+        {
+            Assert.Equal(table.Argc(opcode), positions.Count);
+            foreach (IReadOnlyDictionary<int, long> position in positions)
+                Assert.Equal(scan.OpcodeOccurrences[opcode], position.Values.Sum());
+        }
+        if (profileId == "kamidori")
+        {
+            Assert.True(scan.AppendScriptCount > 0);
+            Assert.True(scan.OpcodeOccurrences.ContainsKey(0x1be));
+        }
+    }
+}

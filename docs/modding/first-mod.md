@@ -5,25 +5,25 @@ it in the port, and export it for the original engine. The steps are the same fo
 differ per game (options, the page, the site, the fingerprint) are in your game's guide, under "First mod values"
 ([games/README.md](games/README.md)). Each game also ships the finished result in `oms/examples/mods/`.
 
-Commands run from `age-reimpl/` unless a step says otherwise. `Age.Cli` is the command-line tool:
+Commands run from `age-reimpl/` unless a step says otherwise. `Ome.Cli` is the command-line tool:
 
 ```text
-dotnet run --project engine/Age.Cli -- <command> [options]
+dotnet run --project engine/Ome.Cli -- <command> [options]
 ```
 
-The examples below shorten that to `Age.Cli <command>`, and write `<game options>` for the options your game guide
+The examples below shorten that to `Ome.Cli <command>`, and write `<game options>` for the options your game guide
 lists (empty for the default game).
 
 ## 0. Prerequisites
 
 - .NET 8 SDK, Python 3.11 and Godot 4.7 .NET, as for the port itself (`../../README.md`).
 - The game install in its expected place (your game guide says where), or `--game-root DIR`.
-- One build: `dotnet build engine/AgeEngine.sln`.
+- One build: `dotnet build engine/OmeEngine.sln`.
 - The generated registries, which fragments that `use <profile>.globals` need. Run
   `py -3.11 -X utf8 tools/globals_build.py --profile <profile> --build`, and
   `py -3.11 -X utf8 tools/patch_points_build.py --profile <profile> --build` if the game has patch points.
 
-Every `Age.Cli` command selects the game with its game options: `--profile`, `--game-root`, and `--overlay-root`
+Every `Ome.Cli` command selects the game with its game options: `--profile`, `--game-root`, and `--overlay-root`
 for an install with a translation layer. A translation that replaces scripts changes the base your fragment edits,
 so use the same options for every step.
 
@@ -56,7 +56,7 @@ To insert a new page before an existing one, attach it to the instruction that s
 A fragment names the exact bytes it edits. Print the header line for the script:
 
 ```text
-Age.Cli oms-patch --fingerprint SC0000.BIN <game options>
+Ome.Cli oms-patch --fingerprint SC0000.BIN <game options>
 ```
 
 It prints a line such as `patch "SC0000.BIN" fingerprint "sha256:…"` to paste into the fragment. Use the full file
@@ -108,7 +108,7 @@ speaker and voice the same way the decompiled scenes do (`oms-language.md`, "Dia
 ## 4. Check that it links
 
 ```text
-Age.Cli omp check --mod my.first-line <game options>
+Ome.Cli omp check --mod my.first-line <game options>
 ```
 
 A good result ends with `omp check: links: 1 mods; 0 errors, …`. The note "compiled … at load time (no stored
@@ -135,7 +135,7 @@ To keep a mod installed rather than passing `-Mod` each time, copy its folder (o
 Native AGE cannot read mods, so export the linked result as game files:
 
 ```text
-Age.Cli omp export --output-dir build/my-export --mod my.first-line <game options>
+Ome.Cli omp export --output-dir build/my-export --mod my.first-line <game options>
 ```
 
 For this mod that writes one file, the patched `SC0000.BIN`. Native AGE reads loose `.BIN` files beside `AGE.EXE`
@@ -151,7 +151,7 @@ That builds `build/games/<profile>/native-scratch/` with your files added. Run i
 ## 7. Package it
 
 ```text
-Age.Cli omp build my.first-line <game options>
+Ome.Cli omp build my.first-line <game options>
 ```
 
 `omp build` compiles every fragment against the base and writes `my.first-line-1.0.0.omp` beside the folder. The

@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Godot;
-using Age.Engine.Model;
-using Age.Engine.Persistence;
-using Age.Engine.Profiles;
-using Age.Engine.Sys4;
-using Age.Mods.Launch;
-using Age.Mods.Linking;
+using Ome.Engine.Model;
+using Ome.Engine.Persistence;
+using Ome.Engine.Profiles;
+using Ome.Engine.Sys4;
+using Ome.Mods.Launch;
+using Ome.Mods.Linking;
 
 /// <summary>Startup linking of the profile's mods (mod loader spec §6.1, §6.5, §8, §9).</summary>
 public partial class Main

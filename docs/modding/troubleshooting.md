@@ -3,7 +3,7 @@
 Start with `omp check`. It runs the same link the port runs at startup and prints the whole report:
 
 ```text
-Age.Cli omp check --mod path\to\my.mod [--mod other …]
+Ome.Cli omp check --mod path\to\my.mod [--mod other …]
 ```
 
 In the port, the last report is `diagnostics/mod-link.txt` in the profile root ([cli.md](cli.md)).

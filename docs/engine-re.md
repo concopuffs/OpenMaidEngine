@@ -1731,7 +1731,7 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   (`RequestMenuMessageSkipToggle`, `…AutoMessageToggle`, `…ReadMessageSkipToggle`, `RequestMenuHideWindow`). The VM
   applies them at its next instruction boundary or text-wait service, then runs `CALLBACK_SETTING.BIN`. Ending a
   text wait from Auto goes through `IInputHost.EndInputWait`.
-- **Screenshots.** `godot/Main.Screenshot.cs` saves through `ScreenshotBmpStore` (`engine/Age.Engine/Persistence`).
+- **Screenshots.** `godot/Main.Screenshot.cs` saves through `ScreenshotBmpStore` (`engine/Ome.Engine/Persistence`).
   表示画面を保存 saves the frame frozen when the menu opened; F1 saves the current frame unless
   `VirtualMachine.SystemKeyDisableMask` (op `0x10f`) has bit 0, or a dialog is open. `--desktop-dir` replaces the
   Desktop. Bit `0x200` keeps F10 from entering the bar's keyboard mode, as natively.
@@ -1740,14 +1740,14 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   driver's `dialogs` and `answer` steps reach it as they reach native's. Other platforms use their own folder
   dialog. The port writes `SaveBMPPath` to `SYS4REG.INI` at once.
 - **AGERC dialogs.** `godot/Win32TemplateDialog.cs` builds a dialog from its AGERC.DLL template as
-  `CreateDialogIndirect` does. The readers in `engine/Age.Engine.Frontend/NativeResources` supply the template and the
+  `CreateDialogIndirect` does. The readers in `engine/Ome.Engine.Frontend/NativeResources` supply the template and the
   icon (`DialogTemplateResource`, `IconResource`). The base units come from the dialog font. The class also gives the
   dialog manager's keys and the driver's `dialogs` and `answer` steps.
   It draws push buttons, text, icon and frame statics, check boxes, group boxes, trackbars, the tab control and
   display-only edits (with or without a client edge), and child pages (`AddPage`). Radio buttons and combo boxes are
   not drawn. `godot/AgercVersionDialog.cs` is ﾊﾞｰｼﾞｮﾝ情報's procedure. `godot/AgercSettingsDialog.cs` is 設定's,
   with its four page procedures; `godot/AgercSystemInfo.cs` gathers 動作環境's values and
-  `AgercSettingsText` (`engine/Age.Engine.Frontend/NativeMenu`) formats them. OK hands the message settings to
+  `AgercSettingsText` (`engine/Ome.Engine.Frontend/NativeMenu`) formats them. OK hands the message settings to
   `VirtualMachine.RequestMessageSettings`, which applies them at the next safe point and runs
   `CALLBACK_SETTING.BIN`. The port reads the CPU clock from the registry's `~MHz` and the VRAM from DirectX's adapter
   list (`DedicatedVideoMemory` of the adapter Godot renders with, at most 4095 MB). A dialog opened from another
@@ -1755,7 +1755,7 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   the frame while the dialog is open, and reads `DisplayVersion` from the registry on Windows.
 - **ﾊﾞｰｼﾞｮﾝ情報 names the port.** The game half (icon, `set:GameName`, `set:GameVersion`, `set:Copyright`) is filled
   as AGE fills it. The engine half names Open Maid Engine instead of AGE: `EngineIdentity`
-  (`engine/Age.Engine.Frontend/NativeResources`) re-texts the template's id-less labels, found by position. The name
+  (`engine/Ome.Engine.Frontend/NativeResources`) re-texts the template's id-less labels, found by position. The name
   replaces ARCGameEngine, and "Released under the MIT License" replaces ARC Software Laboratory's copyright. AGE's
   Ogg Vorbis notice becomes the FFmpeg notice FFmpeg's license checklist asks for (FFmpeg, its LGPLv2.1, and
   `FFmpeg-SOURCE.txt` for its source; `platform-portability.md`, item 10). Xiphophorus' copyright becomes "Third-party
@@ -2041,7 +2041,7 @@ This is a native-evidenced scheduler correction, not a guessed duration sleep.
 ##### The opening render path is RETAINED, not immediate-mode (2026-07-08, ground-truth correction)
 
 A working note in the animation slice mis-called the SC0000 opening a set of "immediate-mode slot-0 blits." That
-was **wrong**, and it came from trusting our own `Age.Cli gfx` oracle (which executes our VM and mis-labeled the
+was **wrong**, and it came from trusting our own `Ome.Cli gfx` oracle (which executes our VM and mis-labeled the
 CG draws as "slot 0"). Verified against native code + the raw bytecode:
 
 - **`draw-texture` (op `0x1fb`, handler `gfx_op_0x1fb_draw_bind`@`0x422510`) is a RETAINED bind, not a blit.** It
@@ -2203,7 +2203,7 @@ collapsed onto object `0` and its geometry accumulated. Those handles are set by
 (mov `0x62455=0xcb20 … 0x6245c=0xcbc0`), which is call-scripted by the real entrypoint **`SYSTEM4.BIN`**
 (`LOADCONFIG → INITCONFIG → INIT2 → LOGO → OP → INIT → TITLE → …`). Our harness teleports straight into
 SC0000, skipping that boot. **Fix:** run the system-boot state prefix (`INITCONFIG/INIT2/INIT`, skipping the
-UI scripts) before the scene — `Age.Cli gfx --boot` and, until 2026-11-05, Godot `--boot` (both via
+UI scripts) before the scene — `Ome.Cli gfx --boot` and, until 2026-11-05, Godot `--boot` (both via
 `GameSession`; Godot direct-scene runs are now hosted by SYSTEM4 itself). With boot,
 the CGs **de-collapse and render correctly** (screenshot-confirmed). **This is the synthesis of the old
 (a)-vs-(b) debate: the drift needed BOTH the native gfx ops (b) AND boot state (a) — specifically INIT2's
@@ -3047,7 +3047,7 @@ Diagnosed with the new `--gfx-log` compositor/op trace (docs/tools-reference.md)
    Objects live-reference their slot, so loading the effect **evicts** the BG → grey; and the effect is
    drawn full-screen from slot 0 (its object `src=(0,0 800x600)`) → the whole sheet (blob grid) covers the
    screen. ⇒ The layering failure is a **slot-assignment** problem. **CONFIRMED CAUSE (2026-07-08, live
-   `AGE_DIAG_SETTEX` trace):** every `set-texture` slot = `G[0x62452]`, written by `query-gfx-object?`
+   `OME_DIAG_SETTEX` trace):** every `set-texture` slot = `G[0x62452]`, written by `query-gfx-object?`
    (`0x215`) which returns **-1** for the (correctly-unregistered) CG/effect handles → the fallback at
    SC0000 `label_12649` does `G[0x62452] = lookup-array-2d(rec[s3]=G[0x3239], G[0x62450], 3, 0)` = **0**
    because the slot table `rec[s3]`/`G[0x3239]` is **empty**. That table is filled by `call label_125bd`
@@ -3055,7 +3055,7 @@ Diagnosed with the new `--gfx-log` compositor/op trace (docs/tools-reference.md)
    `G[0xaba5c]` gate (`0x450`) + op `0x140` (`u0041F9C0`, coroutine LABEL/yield `"LABEL" "J"` @ `0x46d`).
    **Fixed by the bounded scene-coroutine host model:** `0x140` runs the setup body once, `label_125bd`
    fills the eight slot records, and SC0000 resource `0x23` loads into assigned slot 5 instead of slot 0.
-   This was not a compositor/z-order/blend bug. Diagnostics: `AGE_DIAG_SETTEX=1` env → VM logs each `set-texture`
+   This was not a compositor/z-order/blend bug. Diagnostics: `OME_DIAG_SETTEX=1` env → VM logs each `set-texture`
    slot operand + `query-gfx-object?` result.
 
 ### Differential offset-path oracle — engine-vs-VM control-flow diff (2026-07-09)
@@ -3064,7 +3064,7 @@ Diagnosed with the new `--gfx-log` compositor/op trace (docs/tools-reference.md)
 VM and diff the **executed script-offset path**. Both run the same bytecode, so the opcode at each offset
 is static (from disasm); the first place the two offset sequences differ is exactly the branch/opcode/state
 we modeled wrong — cheaper and higher-signal than diffing effects, and precisely where the render-drift
-walk-backs lived. Tools: `tools/frida/trace_engine_ops.py` (engine capture) · `Age.Cli trace <SCENE>
+walk-backs lived. Tools: `tools/frida/trace_engine_ops.py` (engine capture) · `Ome.Cli trace <SCENE>
 --boot --trace-json` (VM capture) · `tools/diff_optrace.py` (align + first-divergence). Spec/plan:
 `docs/superpowers/{specs,plans}/2026-07-09-differential-oracle*`.
 
@@ -3608,7 +3608,7 @@ a profile/save service so extended mode can later add JSON inspection/export, na
 or a friendlier editor without changing compatibility-mode opcode semantics or the native import/export path.
 
 **Port correspondence (2026-07-24):**
-`Age.Engine.Persistence.NativeSaveContainerCodec` now reads and writes the common header, Shift-JIS game id,
+`Ome.Engine.Persistence.NativeSaveContainerCodec` now reads and writes the common header, Shift-JIS game id,
 SYSTEMTIME/playtime/version metadata, both CRC layers, version-2 compression wrapper, and exact reversible
 DWORD transform. `Sys4.LzssEncoder` emits the same 4 KiB-ring token dialect already consumed by
 `LzssDecoder`, falling back to native verbatim storage when compression does not shrink. The
@@ -4798,7 +4798,7 @@ substitutions/defaults remain deferred to the broader runtime configuration desi
 and acceptance gates live in `docs/remake-architecture-and-roadmap.md` under “AGE-exact glyph-mask text
 renderer.”
 
-The platform-neutral half of that correction landed on 2026-07-30 under `Age.Engine.Text`.
+The platform-neutral half of that correction landed on 2026-07-30 under `Ome.Engine.Text`.
 `GlyphRasterRequest` carries face, positive pixel height, native requested width, weight, Unicode scalar,
 optional original CP932 code, and an explicit native/portable policy. `GlyphMask` owns normalized 0..16
 coverage plus stride, GDI-style origin, cell extent, and advance. `AgeGlyphMaskCompositor` implements the
@@ -4813,7 +4813,7 @@ callbacks for future native font handles; `CachedGlyphMaskRasterizer` applies th
 core now drives immediate surface strings, live ADV, and retained History.
 
 The independent Windows reference backend landed alongside, but outside, the neutral engine as
-`Age.Engine.Text.Windows.WindowsGdiGlyphMaskRasterizer`. It holds one `CreateICA("DISPLAY")` information
+`Ome.Engine.Text.Windows.WindowsGdiGlyphMaskRasterizer`. It holds one `CreateICA("DISPLAY")` information
 context and selects bounded, safely disposed `CreateFontIndirectA` objects carrying the requested negative
 height/width, weight, `DEFAULT_CHARSET`, and raw CP932 face bytes. Each request preserves the original one-
 or two-byte CP932 code for `GetGlyphOutlineA(GGO_GRAY4_BITMAP)` and `GetTextExtentPoint32A`; returned masks
@@ -5028,7 +5028,7 @@ font.
 **Port.**
 
 - `VirtualMachine` runs op `0x196` through `ShowTextRun`, as op `0x6e` does, with `AdvLiveTextRun.Ruby`.
-- `Age.Engine.Text.RubyTextLayout` holds the font, the row split and the layout. `RetainedGlyphLayoutEngine.RenderRuby`
+- `Ome.Engine.Text.RubyTextLayout` holds the font, the row split and the layout. `RetainedGlyphLayoutEngine.RenderRuby`
   draws a run's ruby and `RenderRubyOver` History's.
 - `GodotAdvHost` appends each row's base glyphs and then its ruby, in AGE's order.
 - `RetainedAdvTextLayoutPresentation.AppendRun` applies the chain rule across runs. The reveal counts ticks through
@@ -5113,7 +5113,7 @@ The 0.72 s is the old port's (n - 1) delays, which showed the first tick at once
 
 **Port.**
 
-- `Age.Engine.Hosting.PeriodTimer` implements the arm and the poll.
+- `Ome.Engine.Hosting.PeriodTimer` implements the arm and the poll.
 - `GodotAdvHost` keeps one timer. It arms it when a run with `AdvLiveTextRun.ArmsGlyphTimer` (op `0x6e`; the VM sets
   false for op `0x196`) takes the timed path.
 - The reveal loop polls on the engine clock and wakes at the timer's next due millisecond. It requests a
@@ -5450,7 +5450,7 @@ level 0 is −10000 mB (silence), otherwise `trunc((ln(level) × 14.427 − 132.
 - `movie_audio_apply_volume@0x462610` for movies.
 
 Before this the port scaled amplitude linearly, so a 50% setting played at −6 dB instead of −10 dB, and the
-CONFIG reset values (music 6500, SFX 5000, voice 8000) were all too loud. `Age.Engine.Model.NativeAudioVolume`
+CONFIG reset values (music 6500, SFX 5000, voice 8000) were all too loud. `Ome.Engine.Model.NativeAudioVolume`
 now holds the curve. Godot sets every bus with it; because the curve is logarithmic, the Master and category
 buses' decibels add exactly where native multiplies the levels (up to native's integer truncation). Levels 1..9
 would compute below −10000 mB, which DirectSound and DirectShow reject (the previous volume stays); the port
@@ -5505,7 +5505,7 @@ can't leave a suspended windowless orphan. (First bug hit: `SIG` hex without `0x
 SyntaxError → resume never ran → orphaned suspended game.)
 
 **Validated:** a real boot→New-Game→SC0000 capture (34,008 globals incl. `G[0x6c1]=1`, `G[0x62424]=0x23`
-the resId) loaded via `Age.Cli trace SC0000 --state <snap> --trace-json` seeds the VM to match the engine's
+the resId) loaded via `Ome.Cli trace SC0000 --state <snap> --trace-json` seeds the VM to match the engine's
 **entire opening** (542 ops, no non-realignable fork) with ZERO manual seeding — confirming the
 pre-scene-state theory and giving a general auto-seed for single-scene fidelity. **Residual:** a 2-op color
 detour (`0x202/0x203` @ `0x122d0`, writing `G[0x62451]`) the full state does NOT fix = a real branch/op
@@ -5905,7 +5905,7 @@ the catalog opener. SC0000's `0x24 -> MAN999.OGG` works because that scene's inf
 #### Legacy transitions and scratch surface `0x20` (2026-11-08)
 
 Kamidori saves made on the port recorded surface `0x20` as created where native's had it clear (slots 01, 05,
-09, 200 and 204 of the sweep, compared with `Age.Cli save-diff`). The port marked the slot for every legacy
+09, 200 and 204 of the sweep, compared with `Ome.Cli save-diff`). The port marked the slot for every legacy
 transition. Native writes it only for some modes, and Kamidori's scripts mostly use the two that never do: the
 crossfade `0x25` (65 sites) and the strip reveal `0x28` (192 sites).
 

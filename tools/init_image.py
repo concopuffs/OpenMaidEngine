@@ -2,7 +2,7 @@
 """Runtime global image of a profile's data-table boot, per script and per append layer.
 
 Static INIT extraction (tools/extract_init.py) infers layouts from write shapes. This tool is the
-execution oracle beside it: the C# VM (`Age.Cli init-image`) runs every data-table script in native
+execution oracle beside it: the C# VM (`Ome.Cli init-image`) runs every data-table script in native
 boot order -- INIT2's base initializer calls, then each mounted append catalog's AUTORUN fragment
 calls in ascending selector order (docs/asset-resolution-re.md) -- through one session and records
 each script's global-bank delta (new or changed int/string cells).
@@ -68,7 +68,7 @@ def build() -> int:
     root = paths.GAME_DIR
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     command = [
-        "dotnet", "run", "--project", str(paths.REPO / "engine" / "Age.Cli"), "-c", "Release", "--",
+        "dotnet", "run", "--project", str(paths.REPO / "engine" / "Ome.Cli"), "-c", "Release", "--",
         "init-image", str(OUTPUT), *sequence,
         "--profile", paths.CONTEXT.profile_id, "--game-root", str(root),
     ]

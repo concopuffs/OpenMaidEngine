@@ -26,11 +26,11 @@ class DotnetPublishProxyTests(unittest.TestCase):
                 "-p:GodotTargetPlatform=linuxbsd",
             ])
             staged = dotnet_publish_proxy.stage_publish(request, {
-                "AGE_PUBLISH_PROJECT": str(project),
-                "AGE_PREPUBLISHED_OUTPUT": str(source),
-                "AGE_PUBLISH_OUTPUT_ROOT": str(output_root),
-                "AGE_PUBLISH_ASSEMBLY": "OME.dll",
-                "AGE_PUBLISH_RUNTIME": "linux-x64",
+                "OME_PUBLISH_PROJECT": str(project),
+                "OME_PREPUBLISHED_OUTPUT": str(source),
+                "OME_PUBLISH_OUTPUT_ROOT": str(output_root),
+                "OME_PUBLISH_ASSEMBLY": "OME.dll",
+                "OME_PUBLISH_RUNTIME": "linux-x64",
             })
             self.assertEqual(output.resolve(), staged)
             self.assertEqual(b"managed", (staged / "OME.dll").read_bytes())
@@ -45,11 +45,11 @@ class DotnetPublishProxyTests(unittest.TestCase):
             source.mkdir()
             (source / "OME.dll").write_bytes(b"managed")
             environment = {
-                "AGE_PUBLISH_PROJECT": str(project),
-                "AGE_PREPUBLISHED_OUTPUT": str(source),
-                "AGE_PUBLISH_OUTPUT_ROOT": str(root / "reserved"),
-                "AGE_PUBLISH_ASSEMBLY": "OME.dll",
-                "AGE_PUBLISH_RUNTIME": "linux-x64",
+                "OME_PUBLISH_PROJECT": str(project),
+                "OME_PREPUBLISHED_OUTPUT": str(source),
+                "OME_PUBLISH_OUTPUT_ROOT": str(root / "reserved"),
+                "OME_PUBLISH_ASSEMBLY": "OME.dll",
+                "OME_PUBLISH_RUNTIME": "linux-x64",
             }
             wrong_runtime = dotnet_publish_proxy.PublishRequest(
                 project, "ExportRelease", "win-x64", "true", root / "reserved/output"
@@ -75,11 +75,11 @@ class DotnetPublishProxyTests(unittest.TestCase):
                 project, "ExportRelease", "win-x64", "true", output
             )
             staged = dotnet_publish_proxy.stage_publish(request, {
-                "AGE_PUBLISH_PROJECT": str(project),
-                "AGE_PREPUBLISHED_OUTPUT": str(source),
-                "AGE_PUBLISH_OUTPUT_ROOT": str(root / "reserved"),
-                "AGE_PUBLISH_ASSEMBLY": "OME.dll",
-                "AGE_PUBLISH_RUNTIME": "win-x64",
+                "OME_PUBLISH_PROJECT": str(project),
+                "OME_PREPUBLISHED_OUTPUT": str(source),
+                "OME_PUBLISH_OUTPUT_ROOT": str(root / "reserved"),
+                "OME_PUBLISH_ASSEMBLY": "OME.dll",
+                "OME_PUBLISH_RUNTIME": "win-x64",
             })
             self.assertEqual(output.resolve(), staged)
 

@@ -96,7 +96,7 @@ it; git history keeps the record.
   - the world map, town, church shop, tavern and workshop scenes, an alchemy craft and the SC1250 delivery;
   - 木漏れ日の深緑地's first four turns, three battles in all.
 
-  Saves on both targets compare by decoded payload (`Age.Cli save-diff`, `tools-reference.md`). Clock
+  Saves on both targets compare by decoded payload (`Ome.Cli save-diff`, `tools-reference.md`). Clock
   samples, gfx start stamps and save-history globals are expected to differ (`engine-re.md`, "Op 0x216 reads past
   the live surface table" and "Finished channels reset their targets"). Done when the story has been driven to its
   ending on both targets, with each difference fixed or listed here.

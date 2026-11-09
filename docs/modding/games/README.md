@@ -47,6 +47,6 @@ Use the profile id wherever a guide writes `<profile>`.
 
 ## Adding a game
 
-A new profile manifest (`engine/Age.Engine/Profiles/<id>.json`) adds a row and an identity block here when
+A new profile manifest (`engine/Ome.Engine/Profiles/<id>.json`) adds a row and an identity block here when
 this page is regenerated. Write its guide as `games/<id>.md`, following the existing ones, and keep game
 facts out of the generic guides.

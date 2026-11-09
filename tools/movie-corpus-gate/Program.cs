@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Age.Engine.Sys4;
+using Ome.Engine.Sys4;
 
 static string? Option(string[] arguments, string name)
 {
@@ -36,7 +36,7 @@ if (!File.Exists(nativeLibrary))
     Console.Error.WriteLine($"native movie shim not found: {nativeLibrary}");
     return 2;
 }
-Environment.SetEnvironmentVariable("AGE_FFMPEG_NATIVE_DIR", nativeDirectory);
+Environment.SetEnvironmentVariable("OME_FFMPEG_NATIVE_DIR", nativeDirectory);
 
 var catalog = Sys4AssetCatalog.Load(sys4Ini);
 var store = new Sys4AssetStore(catalog, gameRoot, assetOptions.LooseRoots.ToArray());

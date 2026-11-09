@@ -23,7 +23,7 @@ WORKSPACE = REPO.parent
 VM_MAP = REPO / "vm-map"
 BIN = REPO / "bin"
 SHARED_BUILD = REPO / "build"
-PROFILE_MANIFEST_DIR = REPO / "engine" / "Age.Engine" / "Profiles"
+PROFILE_MANIFEST_DIR = REPO / "engine" / "Ome.Engine" / "Profiles"
 
 _CONVENTIONAL_GAME_ROOTS = {
     "himegari": WORKSPACE / "Himegari_Game",
@@ -95,9 +95,9 @@ class ToolContext:
     def subprocess_environment(self) -> dict[str, str]:
         """Environment that preserves this exact context in child Python tools."""
         return {
-            "AGE_PROFILE": self.profile_id,
-            "AGE_GAME_ROOT": str(self.game_root),
-            "AGE_EXTRACTED_ROOT": str(self.extracted_root),
+            "OME_PROFILE": self.profile_id,
+            "OME_GAME_ROOT": str(self.game_root),
+            "OME_EXTRACTED_ROOT": str(self.extracted_root),
         }
 
     @classmethod
@@ -109,7 +109,7 @@ class ToolContext:
         environ: Mapping[str, str] | None = None,
     ) -> "ToolContext":
         env = os.environ if environ is None else environ
-        selected = profile_id or env.get("AGE_PROFILE") or "himegari"
+        selected = profile_id or env.get("OME_PROFILE") or "himegari"
         profiles = available_profiles()
         if selected not in profiles:
             raise ValueError(
@@ -118,13 +118,13 @@ class ToolContext:
 
         selected_game_root = (
             game_root
-            or env.get("AGE_GAME_ROOT")
+            or env.get("OME_GAME_ROOT")
             or _CONVENTIONAL_GAME_ROOTS.get(selected)
             or WORKSPACE / selected
         )
         selected_extracted_root = (
             extracted_root
-            or env.get("AGE_EXTRACTED_ROOT")
+            or env.get("OME_EXTRACTED_ROOT")
             or _CONVENTIONAL_EXTRACTED_ROOTS.get(selected)
             or WORKSPACE / f"extracted-{selected}"
         )

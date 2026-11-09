@@ -6,7 +6,7 @@ patch points) is generated in [README.md](README.md#kamidori-alchemy-meister).
 ## Install and options
 
 The expected install is `Kamidori/` beside the repository: the game with its official updates applied. The English
-fan translation is a separate install, `Kamidori_Translated/`, with its overlay in `patch/`. Every `Age.Cli`
+fan translation is a separate install, `Kamidori_Translated/`, with its overlay in `patch/`. Every `Ome.Cli`
 command needs the game options:
 
 | Install | Options |

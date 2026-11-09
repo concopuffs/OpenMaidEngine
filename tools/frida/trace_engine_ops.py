@@ -3,7 +3,7 @@
 
 Attaches to the running game and, per executed op, reads the current coroutine's PC + codebase from the
 engine ctx and emits (codebase, offset=(pc-codebase)/4) to build/engine-optrace.jsonl in execution order.
-Diffed against the VM's trace (Age.Cli trace --trace-json) by tools/diff_optrace.py — the first divergence
+Diffed against the VM's trace (Ome.Cli trace --trace-json) by tools/diff_optrace.py — the first divergence
 is the opcode/branch we modeled wrong.
 
 READ-ONLY (Interceptor + memory reads; no patching), following probe_frame_cadence.py / capture_gfx_objects.py.

@@ -2,7 +2,7 @@
 #
 # A point gives fragments a stable site name: `before site himegari.experience.after_calculation { ... }`.
 # Each [[point.at]] entry is one revision of the script: the SHA-256 of its bytes as the catalog serves them
-# (`Age.Cli oms-patch --fingerprint NAME.BIN`) and the original dword offset of the instruction the point names.
+# (`Ome.Cli oms-patch --fingerprint NAME.BIN`) and the original dword offset of the instruction the point names.
 # The point's description says what holds when control reaches that instruction.
 #
 # Source data. Run `py -3.11 -X utf8 tools/patch_points_build.py --build` after editing; it validates every entry

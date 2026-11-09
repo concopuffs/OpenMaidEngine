@@ -26,9 +26,9 @@ class ToolContextTests(unittest.TestCase):
                 root / "game",
                 root / "extract",
                 {
-                    "AGE_PROFILE": "himegari",
-                    "AGE_GAME_ROOT": str(root / "wrong-game"),
-                    "AGE_EXTRACTED_ROOT": str(root / "wrong-extract"),
+                    "OME_PROFILE": "himegari",
+                    "OME_GAME_ROOT": str(root / "wrong-game"),
+                    "OME_EXTRACTED_ROOT": str(root / "wrong-extract"),
                 },
             )
             self.assertEqual("kamidori", context.profile_id)

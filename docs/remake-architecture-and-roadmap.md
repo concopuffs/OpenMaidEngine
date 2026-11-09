@@ -376,7 +376,7 @@ discard 99.99% themselves.
 ### 3.6 Open Maid Pack (`.omp`)
 
 > **Design (2026-11-03):** the version-1 loader, its package format and its native export are specified in
-> `docs/superpowers/specs/2026-11-03-mod-loader-design.md` and implemented (`engine/Age.Mods`, `Age.Cli omp`; all
+> `docs/superpowers/specs/2026-11-03-mod-loader-design.md` and implemented (`engine/Ome.Mods`, `Ome.Cli omp`; all
 > six acceptance gates passed 2026-11-03). This section remains the direction it implements; Lua, `text/`, `config/`
 > and port-only targets are beyond version 1.
 
@@ -758,146 +758,146 @@ do not mix mechanical moves with semantic changes.
    host decomposition is complete; runtime validation remains green.
 
    The first bounded `GfxState` split moved its public render, transition, diagnostic, persistence, animation,
-   numeric-glyph, and handle-range value contracts into `engine/Age.Engine/Model/GfxState.Contracts.cs`.
+   numeric-glyph, and handle-range value contracts into `engine/Ome.Engine/Model/GfxState.Contracts.cs`.
    `GfxState` remains the same sealed runtime type, and every moved declaration is textually unchanged; runtime
    validation remains green.
 
    The second bounded `GfxState` split converted the sealed runtime type to a sealed partial class and moved
    surface resource/color-key state, created/reloadable classification, movie stop-time metadata,
    render-target/tile configuration, and surface lifecycle operations into
-   `engine/Age.Engine/Model/GfxState.Surfaces.cs`. Reset, persistence, retained-object sampling, and transition
+   `engine/Ome.Engine/Model/GfxState.Surfaces.cs`. Reset, persistence, retained-object sampling, and transition
    teardown retain direct access through the partial class; runtime validation remains green.
 
    The third bounded `GfxState` split moved the retained-object record and registry/index, range-transform
    state and operations, object creation/query/clone/erase and draw binding, and numeric-glyph object generation
-   into `engine/Age.Engine/Model/GfxState.RetainedObjects.cs`. Cross-domain reset/persistence, animation, and
+   into `engine/Ome.Engine/Model/GfxState.RetainedObjects.cs`. Cross-domain reset/persistence, animation, and
    presentation sampling retain direct access through the sealed partial class; runtime validation remains green.
 
    The fourth bounded `GfxState` split moved shared animation-clock state, object color/source-cell/matrix/cyclic
    channels, animation control and forced completion, and interpolation helpers into
-   `engine/Age.Engine/Model/GfxState.Animation.cs`. Presentation diagnostics, dirty-reason accounting, transition
+   `engine/Ome.Engine/Model/GfxState.Animation.cs`. Presentation diagnostics, dirty-reason accounting, transition
    queues, and visible-scene sampling consume the moved state through the sealed partial class; runtime validation
    remains green.
 
    The fifth bounded `GfxState` split moved surface/movie transition queues, presentation activity and click-skip
    handling, presentation diagnostics and dirty-reason accounting, and visible retained-scene snapshots into
-   `engine/Age.Engine/Model/GfxState.Presentation.cs`. `GfxState.cs` now retains only cross-domain mutation
+   `engine/Ome.Engine/Model/GfxState.Presentation.cs`. `GfxState.cs` now retains only cross-domain mutation
    accounting, scene reset, persistence, and locking. The planned `GfxState` decomposition is complete; runtime
    validation remains green.
 
    The first bounded `VirtualMachine.Step` extraction converted the sealed VM type to a sealed partial class and
    moved VM-owned audio state, BGM restart semantics, and the existing BGM/voice/SFX/mixer case bodies into
-   `engine/Age.Engine/Vm/VirtualMachine.Audio.cs`. The top-level dispatcher retains the exact opcode labels and
+   `engine/Ome.Engine/Vm/VirtualMachine.Audio.cs`. The top-level dispatcher retains the exact opcode labels and
    routes only that family through `StepAudio`; public VM behavior and case-body logic remain unchanged. Runtime
    validation remains green.
 
    The second bounded `VirtualMachine.Step` extraction moved modal, asynchronous, and positioned movie playback,
    movie surface stop-time/activity queries, and movie-mask transition case bodies into
-   `engine/Age.Engine/Vm/VirtualMachine.Movie.cs`. The top-level dispatcher retains all movie labels at their
+   `engine/Ome.Engine/Vm/VirtualMachine.Movie.cs`. The top-level dispatcher retains all movie labels at their
    existing positions and routes them through `StepMovie`; the original instruction remains available for the
    two bytecode-offset compatibility paths. Runtime validation remains green.
 
    The third bounded `VirtualMachine.Step` extraction moved surface allocation/loading, texture binding and
    sizing, mutable surface fill/copy, render-target control, and transient-surface release into
-   `engine/Age.Engine/Vm/VirtualMachine.Surface.cs`. The top-level dispatcher retains these labels at their
+   `engine/Ome.Engine/Vm/VirtualMachine.Surface.cs`. The top-level dispatcher retains these labels at their
    existing positions, including the separate routing groups around numeric-glyph and retained-object cases;
    public VM behavior and case-body logic remain unchanged. Runtime validation remains green.
 
    The fourth bounded `VirtualMachine.Step` extraction moved retained-object registry queries, default-slot and
    geometry mutation, direct and embedded-range transforms, clone, and erase dispatch into
-   `engine/Age.Engine/Vm/VirtualMachine.RetainedObjects.cs`. The top-level dispatcher retains all labels at their
+   `engine/Ome.Engine/Vm/VirtualMachine.RetainedObjects.cs`. The top-level dispatcher retains all labels at their
    existing positions and routes the separated groups through `StepRetainedObject`; timed/cyclic animation,
    color, surface release, ADV binding, and presentation behavior remain outside this handler. Runtime validation
    remains green.
 
    The fifth bounded `VirtualMachine.Step` extraction moved retained spritesheet and color channels, timed and
    cyclic transforms, per-object animation control, frame-time sampling, and shared animation-clock dispatch into
-   `engine/Age.Engine/Vm/VirtualMachine.Animation.cs`. The top-level dispatcher retains all labels at their
+   `engine/Ome.Engine/Vm/VirtualMachine.Animation.cs`. The top-level dispatcher retains all labels at their
    existing positions and routes the separated groups through `StepAnimation`; presentation transitions and movie
    masking remain outside the guarded handler. Runtime validation remains green.
 
    The sixth bounded `VirtualMachine.Step` extraction moved queued surface-alpha transitions, frame and object-
    range publication, skip-aware blocking fades/crossfades, foreground-transition waits, and graphics command-
-   queue clear into `engine/Age.Engine/Vm/VirtualMachine.Presentation.cs`. The top-level dispatcher retains all
+   queue clear into `engine/Ome.Engine/Vm/VirtualMachine.Presentation.cs`. The top-level dispatcher retains all
    labels and aliases at their existing positions and routes them through guarded `StepPresentation`; movie-mask
    transition dispatch remains with the movie handler. Runtime validation remains green.
 
    The seventh bounded `VirtualMachine.Step` extraction moved live ADV text emission, layout/cursor/wait-indicator
    state, text style and glyph-delay control, direct surface-string and retained numeric-glyph rendering, and
-   retained text/wait-object bindings into `engine/Age.Engine/Vm/VirtualMachine.AdvText.cs`. The top-level
+   retained text/wait-object bindings into `engine/Ome.Engine/Vm/VirtualMachine.AdvText.cs`. The top-level
    dispatcher retains all labels at their existing positions and routes the separated groups through guarded
    `StepAdvText`; the complete instruction remains available for emission and layout-reset bytecode offsets.
    Text-history and input/skip/auto services remain outside the handler. Runtime validation remains green.
 
    The eighth bounded `VirtualMachine.Step` extraction moved text-history recording control, metadata append and
    navigation, retained history rendering, metadata/voice lookup, and backlog clearing into
-   `engine/Age.Engine/Vm/VirtualMachine.TextHistory.cs`. The top-level dispatcher retains all labels and aliases
+   `engine/Ome.Engine/Vm/VirtualMachine.TextHistory.cs`. The top-level dispatcher retains all labels and aliases
    at their existing positions and routes them through guarded `StepTextHistory`; live ADV text remains with
    `StepAdvText`, while skip/auto-message services remain outside both handlers. Runtime validation remains green.
 
    The ninth bounded `VirtualMachine.Step` extraction moved persistent/active message-skip control, read-skip
    settings and queries, auto-message state/timing, and per-message voice/skip reset dispatch into
-   `engine/Age.Engine/Vm/VirtualMachine.AdvServices.cs`. The top-level dispatcher retains all labels and aliases
+   `engine/Ome.Engine/Vm/VirtualMachine.AdvServices.cs`. The top-level dispatcher retains all labels and aliases
    at their existing positions and routes them through guarded `StepAdvService`; shared state and refresh helpers
    remain in the VM coordinator because live-text and input paths also consume them. Runtime validation remains
    green.
 
    The tenth bounded `VirtualMachine.Step` extraction moved blocking ADV waits, hotspot registration/arming,
    cursor resources and virtual position, raw mouse/joystick callback registration and dispatch, action polling,
-   and physical-input mapping into `engine/Age.Engine/Vm/VirtualMachine.Input.cs`. The top-level dispatcher
+   and physical-input mapping into `engine/Ome.Engine/Vm/VirtualMachine.Input.cs`. The top-level dispatcher
    retains all labels and aliases at their existing positions and routes them through guarded `StepInput`; public
    host-thread input entry points, shared synchronization, and callback service helpers remain in the coordinator.
    Runtime validation remains green.
 
    The eleventh bounded `VirtualMachine.Step` extraction moved the monotonic-time query, host sleep, relative
    timed-callback schedule construction, deadline/catch-up selection, and callback resumption into
-   `engine/Age.Engine/Vm/VirtualMachine.Timing.cs`. The top-level dispatcher retains all labels and aliases at
+   `engine/Ome.Engine/Vm/VirtualMachine.Timing.cs`. The top-level dispatcher retains all labels and aliases at
    their existing positions and routes the separated groups through guarded `StepTiming`; animation-frame
    sampling remains with `StepAnimation`. Runtime validation remains green.
 
    The twelfth bounded `VirtualMachine.Step` extraction moved catalog-unlock lookup, numbered save/load and
    nested restore continuation, metadata/copy/delete, thumbnail persistence, and shared-profile integer/string
-   dispatch into `engine/Age.Engine/Vm/VirtualMachine.Persistence.cs`. The top-level dispatcher retains all
+   dispatch into `engine/Ome.Engine/Vm/VirtualMachine.Persistence.cs`. The top-level dispatcher retains all
    labels at their existing positions and routes them through guarded `StepPersistence`; capture/apply helpers
    and persistent coordinator state remain in `VirtualMachine.cs`. Runtime validation remains green.
 
    The thirteenth bounded `VirtualMachine.Step` extraction moved string byte length, addressed lookup/copy,
    inline arrays, rectangle search and stable index sorting, bounded integer queues/stacks, bit/range operations,
    and native-style random-modulo dispatch into
-   `engine/Age.Engine/Vm/VirtualMachine.MemoryCollections.cs`. The top-level dispatcher retains all labels and
+   `engine/Ome.Engine/Vm/VirtualMachine.MemoryCollections.cs`. The top-level dispatcher retains all labels and
    aliases at their existing positions and routes them through guarded `StepMemoryCollection`; shared storage and
    address-resolution helpers remain in the coordinator. Runtime validation remains green.
 
    The fourteenth bounded `VirtualMachine.Step` extraction moved local jumps/calls/returns, value-switch
    construction, ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch into
-   `engine/Age.Engine/Vm/VirtualMachine.ControlFlow.cs`. The top-level dispatcher retains all labels and aliases
+   `engine/Ome.Engine/Vm/VirtualMachine.ControlFlow.cs`. The top-level dispatcher retains all labels and aliases
    at their existing positions and routes them through guarded `StepControlFlow`; the complete instruction remains
    available for labeled-yield opcode/offset diagnostics. Process/root exit and cross-script lifecycle remain in
    the coordinator. Runtime validation remains green.
 
    The fifteenth bounded `VirtualMachine.Step` extraction moved process/frame/root exit, ordinary cross-script
    calls, mounted append autoruns, and preloaded script-slot load/call dispatch into
-   `engine/Age.Engine/Vm/VirtualMachine.ScriptLifecycle.cs`. The top-level dispatcher retains all labels and
+   `engine/Ome.Engine/Vm/VirtualMachine.ScriptLifecycle.cs`. The top-level dispatcher retains all labels and
    aliases at their existing positions and routes them through guarded `StepScriptLifecycle`; frame execution,
    provider access, call-depth enforcement, and shared lifecycle state remain in the coordinator. Runtime
    validation remains green.
 
    The sixteenth bounded `VirtualMachine.Step` extraction moved integer arithmetic, bitwise and comparison
    operations, string comparison/concatenation/conversion/move, native byte-length and CP932 operations, and
-   the host-backed fullwidth string editor into `engine/Age.Engine/Vm/VirtualMachine.Values.cs`. The top-level
+   the host-backed fullwidth string editor into `engine/Ome.Engine/Vm/VirtualMachine.Values.cs`. The top-level
    dispatcher retains all labels at their existing positions and routes the two groups around the timing query
    through guarded `StepValue`; shared operand storage, addressing, and native-string encoding remain in the
    coordinator. Runtime validation remains green.
 
    The seventeenth bounded `VirtualMachine.Step` extraction moved diagnostic operand/newline accumulation and
-   synchronous show-and-clear prompt dispatch into `engine/Age.Engine/Vm/VirtualMachine.Diagnostics.cs`. The
+   synchronous show-and-clear prompt dispatch into `engine/Ome.Engine/Vm/VirtualMachine.Diagnostics.cs`. The
    top-level dispatcher retains all labels and aliases at their existing positions and passes the complete
    instruction through guarded `StepDiagnostic`; shared accumulator state and native-context formatting remain
    in the coordinator. Runtime validation remains green.
 
    The eighteenth bounded `VirtualMachine.Step` extraction moved message-window alpha get/set, system-menu
    enable state, and system-menu show-delay get/set into
-   `engine/Age.Engine/Vm/VirtualMachine.RuntimeSettings.cs`. The top-level dispatcher retains all labels and
+   `engine/Ome.Engine/Vm/VirtualMachine.RuntimeSettings.cs`. The top-level dispatcher retains all labels and
    aliases at their existing positions and routes them through guarded `StepRuntimeSetting`; reset/default
    initialization, public menu-state accessors, and host state remain centralized. Runtime validation remains
    green.
@@ -984,33 +984,33 @@ do not mix mechanical moves with semantic changes.
    validation remains green.
 
 4. **Make the build graph express source ownership.** Stop linking production `.cs` files from `godot/` and
-   `tools/movie-corpus-gate/` into `Age.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
+   `tools/movie-corpus-gate/` into `Ome.Engine.Tests`. Extract the platform-neutral frontend/movie/diagnostic
    code into a small production project referenced by Godot, tests, and the corpus gate. Retain both existing
    solution files because Godot export requires the frontend-local solution.
 
    **Progress (2026-08-03):** the first bounded build-graph slice introduced the platform-neutral
-   `Age.Engine.Frontend` production project and added it to both existing solutions. Page locator, timeline/trace
+   `Ome.Engine.Frontend` production project and added it to both existing solutions. Page locator, timeline/trace
    and step-limit diagnostics, VM/window launch options, and performance-frame logging moved unchanged from
-   `godot/` into the new owner. Godot and `Age.Engine.Tests` now use project references, eliminating seven direct
+   `godot/` into the new owner. Godot and `Ome.Engine.Tests` now use project references, eliminating seven direct
    test source links without changing public types, namespaces, behavior, or export configuration. Both solution
    builds and runtime validation remain green.
 
    The second bounded build-graph slice moved the unchanged internal movie decoder boundary/runtime, audio
-   alignment policy, movie-surface registry, and RIFF/WAVE sanitizer from `godot/` into `Age.Engine.Frontend`.
+   alignment policy, movie-surface registry, and RIFF/WAVE sanitizer from `godot/` into `Ome.Engine.Frontend`.
    Five more direct test source links are gone. Explicit friend access is limited to `Himegari` and
-   `Age.Engine.Tests`, so the move preserves the intentionally internal API instead of widening it; FFmpeg remains
+   `Ome.Engine.Tests`, so the move preserves the intentionally internal API instead of widening it; FFmpeg remains
    in Godot while implementing the moved boundary through that friend access. Both solution builds and runtime
    validation remain green.
 
    The third bounded build-graph slice moved the unchanged FFmpeg native interop and asynchronous/paced decoder
-   from `godot/` into `Age.Engine.Frontend`. The two remaining movie test source links and the corpus tool's native
-   source link were replaced by project references. Friend access now also names only the `Age.MovieCorpusGate`
+   from `godot/` into `Ome.Engine.Frontend`. The two remaining movie test source links and the corpus tool's native
+   source link were replaced by project references. Friend access now also names only the `Ome.MovieCorpusGate`
    assembly required by the native frame-source seam; native ABI resolution, decoder pacing, seek/audio behavior,
    failure handling, and teardown remain unchanged. Engine, Godot, and corpus-gate builds plus runtime validation
    remain green.
 
    The fourth bounded build-graph slice moved the unchanged reusable movie-corpus discovery, decode-gate, and
-   report implementation from `tools/movie-corpus-gate/` into `Age.Engine.Frontend`. The tool retains only its
+   report implementation from `tools/movie-corpus-gate/` into `Ome.Engine.Frontend`. The tool retains only its
    command-line entry point and consumes the internal gate through its existing friend/project boundary; tests use
    the same production implementation through their project reference. The final cross-project production `.cs`
    source link is gone, completing the planned build-graph ownership cleanup. Engine, Godot, and corpus-gate
@@ -1347,7 +1347,7 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    `AdvRetainedTextContract` and focused engine tests pin the platform-neutral record, overflow, punctuation,
    capacity, SYSTEM4 binding, and restore boundaries before presentation changes.
 2. **Land the backend-neutral mask and compositor core.** Completed 2026-07-30 without changing live
-   presentation. `Age.Engine.Text` now owns immutable `GlyphRasterRequest`/`GlyphMask` contracts and the
+   presentation. `Ome.Engine.Text` now owns immutable `GlyphRasterRequest`/`GlyphMask` contracts and the
    `IGlyphMaskRasterizer` seam outside the VM. Requests preserve Unicode scalar plus optional original CP932
    code and explicitly select native-CP932 or portable-Unicode policy; results normalize every backend to
    0..16 coverage, stride, GDI-style origin, cell extent, and cell advance. `AgeGlyphMaskCompositor`
@@ -1359,7 +1359,7 @@ primitive, which cannot be made equivalent by choosing another embolden constant
    mode-2 quarter coverage, mode-3 sampling/overlap, wrapping, punctuation, vertical overflow, cursor results,
    and cache eviction.
 3. **Add the independent Windows GDI reference backend.** Completed 2026-07-30 as the separate
-   `Age.Engine.Text.Windows` library; the VM and platform-neutral `Age.Engine` still call no OS APIs.
+   `Ome.Engine.Text.Windows` library; the VM and platform-neutral `Ome.Engine` still call no OS APIs.
    `WindowsGdiGlyphMaskRasterizer` owns a `CreateICA("DISPLAY")` information context, bounded/safely disposed
    `CreateFontIndirectA` handles, CP932 `GetTextExtentPoint32A`, identity `MAT2`, and
    `GetGlyphOutlineA(GGO_GRAY4_BITMAP)`. It accepts only explicit native-CP932 requests and reports backend id,
@@ -1465,12 +1465,12 @@ separate investigations:
   state is just variable banks + a program counter, cheap **snapshot / rewind** (time-travel
   debugging nearly falls out of the design).
 - **State-divergence differ** *(backlog — the payoff consumer of the trace facility).* Builds on the
-  landed diagnostics seam (`Age.Engine/Diagnostics/ITraceSink`; spec/plan `docs/superpowers/{specs,
+  landed diagnostics seam (`Ome.Engine/Diagnostics/ITraceSink`; spec/plan `docs/superpowers/{specs,
   plans}/2026-07-07-engine-diagnostics*`): align our per-scene trace against a reference stream (a Frida
   capture of the real engine's pc/branch sequence, a known-good seeded run, or the same scene ±a
   candidate seed) and report the **first instruction where control forks** plus the **global that fed
   the branch** — turning "the opening loops/​drifts somewhere in state" into "fork at `jcc g[0x…]`; seed
-  this flag." The fine-grained successor to `Age.Cli sweep 0xADDR=VAL` (which only reports *which* scenes
+  this flag." The fine-grained successor to `Ome.Cli sweep 0xADDR=VAL` (which only reports *which* scenes
   change ±seed, not *where/why*); it directly attacks the state-divergence root cause behind the 13
   STEP-LIMIT scenes, the gfx geometry drift, and the form-gated silences. Requires: `--trace-steps`
   granularity (have it), robust sequence alignment (LCS-style, not naive zip — the real work), and
@@ -1629,7 +1629,7 @@ than leaving it only as roadmap prose.
 the opcode table, VM options, frontend hosts, diagnostics, or persistence services. It records whether selection
 was automatic or explicit and whether the detected install identity matched, without allowing auto-detection to
 override an explicit user choice. The runtime reads only SYS4INI's fixed identity header before selection.
-Built-in manifests are embedded in `Age.Engine`; Kamidori, probe runs, and explicit identity mismatches remain
+Built-in manifests are embedded in `Ome.Engine`; Kamidori, probe runs, and explicit identity mismatches remain
 read-only under the K1 persistence contract.
 
 ##### Phase K1 — make persistence safe before normal Kamidori execution
@@ -1759,14 +1759,14 @@ the debug-scene coordinator as diagnostic-only profile fixtures. `SYS4422` resol
 snapshot and `SYS4433` a direct 269-contract snapshot. Neither composes a claimed base. The canonical layer
 schema and runtime loader support evidence-backed parents, additions, full contract/handler replacements, and
 removals later; every effective contract and handler binding retains its supplying layer. Both snapshots may
-bind `age-vm-switch/0x...` implementations while reporting semantic evidence independently, so code reuse is
+bind `ome-vm-switch/0x...` implementations while reporting semantic evidence independently, so code reuse is
 not a cross-revision claim.
 
 Himegari's `0xaba5c` scene-entry gate, `0x62425` native-service value, direct-scene SYSTEM4/INIT/resource
 bootstrap, SC0000 external SFX value, and debug-launch coordinator writes now live only in the Himegari
 manifest. Kamidori's corresponding runtime and diagnostic policies are empty, persistence remains profile-owned
 and read-only, and a normal Kamidori boot receives none of those values. Portable text resolves the selected
-profile reference or the neutral Japanese fallback. `Age.Cli` asset diagnostics now use the selected
+profile reference or the neutral Japanese fallback. `Ome.Cli` asset diagnostics now use the selected
 catalog/store, and policy-less diagnostic `--boot` requests fail instead of borrowing Himegari's two bootstrap
 lists. The Godot self-test uses synthetic WAV fixtures, a profile-selected OGG, and catalog-neutral launcher
 checks; direct Himegari and Kamidori runs pass. Native RE and all 122 `EngineCtx` fields are pinned to

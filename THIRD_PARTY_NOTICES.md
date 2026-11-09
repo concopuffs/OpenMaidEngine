@@ -74,7 +74,7 @@ clean-room process.
 
 ## GARbro AGF decoding algorithm
 
-`engine/Age.Engine/Sys4/AgfDecoder.cs` ports the AGF decoding algorithm from GARbro's
+`engine/Ome.Engine/Sys4/AgfDecoder.cs` ports the AGF decoding algorithm from GARbro's
 `ArcFormats/Eushully/ImageAGF.cs`, Copyright (c) 2014-2020 morkt, under the MIT License:
 
 > Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
@@ -94,9 +94,9 @@ clean-room process.
 
 ## Tomlyn
 
-`engine/Age.Mods` reads mod manifests (`manifest.toml`) with the [Tomlyn](https://github.com/xoofx/Tomlyn) 2.10.1
+`engine/Ome.Mods` reads mod manifests (`manifest.toml`) with the [Tomlyn](https://github.com/xoofx/Tomlyn) 2.10.1
 NuGet package (`Tomlyn`), Copyright (c) Alexandre Mutel, under the BSD 2-Clause License. The package is referenced, not
-vendored; builds that include `Age.Mods` ship its unmodified `Tomlyn.dll`:
+vendored; builds that include `Ome.Mods` ship its unmodified `Tomlyn.dll`:
 
 > Redistribution and use in source and binary forms, with or without modification, are permitted provided that
 > the following conditions are met:

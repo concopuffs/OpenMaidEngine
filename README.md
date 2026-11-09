@@ -18,7 +18,7 @@ release packages as unmodified, dynamically linked shared libraries; see
 
 Prerequisites for the current Windows development workflow are Python 3.11, the .NET 8 SDK, Godot 4.7
 .NET, and a Himegari install containing `SYS4INI.BIN`. Pass paths explicitly or configure
-`AGE_GODOT_CONSOLE` and `AGE_GAME_ROOT`.
+`OME_GODOT_CONSOLE` and `OME_GAME_ROOT`.
 
 ```powershell
 # Verify and display the resolved development environment without launching.

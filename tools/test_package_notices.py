@@ -26,7 +26,7 @@ def write_deps(directory: Path, rid: str = "linux-x64") -> Path:
                 "Godot.SourceGenerators/4.7.0": {},
                 "GodotSharp/4.7.0": {"runtime": {"lib/net8.0/GodotSharp.dll": {}}},
                 "Tomlyn/2.10.1": {"runtime": {"lib/net8.0/Tomlyn.dll": {}}},
-                "Age.Engine/1.0.0": {"runtime": {"Age.Engine.dll": {}}},
+                "Ome.Engine/1.0.0": {"runtime": {"Ome.Engine.dll": {}}},
             }
         },
         "libraries": {
@@ -35,7 +35,7 @@ def write_deps(directory: Path, rid: str = "linux-x64") -> Path:
             "Godot.SourceGenerators/4.7.0": {"type": "package", "serviceable": True, "sha512": "x"},
             "GodotSharp/4.7.0": {"type": "package", "serviceable": True, "sha512": "x"},
             "Tomlyn/2.10.1": {"type": "package", "serviceable": True, "sha512": "x"},
-            "Age.Engine/1.0.0": {"type": "project", "serviceable": False, "sha512": ""},
+            "Ome.Engine/1.0.0": {"type": "project", "serviceable": False, "sha512": ""},
         },
     }
     path = directory / package_notices.DEPS_FILE

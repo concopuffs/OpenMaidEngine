@@ -9,7 +9,7 @@ went the other way, an opcode length we got wrong, or a native context (coroutin
 
 Inputs (both under build/, disposable):
   build/engine-optrace.jsonl  — {"codebase":int,"offset":int} per executed op, in order (trace_engine_ops.py)
-  build/vm-optrace.json       — {"scene":"SC0000","offsets":[int,...]}  (Age.Cli trace --trace-json)
+  build/vm-optrace.json       — {"scene":"SC0000","offsets":[int,...]}  (Ome.Cli trace --trace-json)
 
     py -3.11 -X utf8 tools/diff_optrace.py SC0000 [--engine PATH] [--vm PATH]
 
@@ -235,7 +235,7 @@ def main(argv=None):
         return 1
     if not vm_path.exists():
         print(f"[!] VM trace not found: {vm_path}\n    Produce it first: "
-              f"dotnet run --project engine/Age.Cli -- trace {scene}.BIN --boot --trace-json {vm_path}")
+              f"dotnet run --project engine/Ome.Cli -- trace {scene}.BIN --boot --trace-json {vm_path}")
         return 1
 
     entries = _load_engine(engine_path)

@@ -90,7 +90,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    surface mode: `0x1f9` creates ordinary mode 0, while `0x249` creates the tiled large-image mode 1 wrapper.
    FIELD's `0x32da..0x32dd` map sheets and SYSTEM4's `0x337e` SO001 are ordinary examples of the universal
    base indexes used throughout the corpus, not special fallback cases.
-3. **Wire the backend.** **✅ FIRST-PASS RENDER LANDED (2026-07-06).** `Age.Engine/Sys4/ResourceMap.cs`
+3. **Wire the backend.** **✅ FIRST-PASS RENDER LANDED (2026-07-06).** `Ome.Engine/Sys4/ResourceMap.cs`
    (Resolve + BMP path) + `GodotAdvHost` texture ops → `TextureRect` compositing behind the dialogue;
    `IHost.DrawTexture` extended with dst x/y; 800×600 window; `convert_agf.py --scene` pre-converts a
    scene's manifest AGFs → BMP. The full-screen **event-CG layer renders end-to-end** from the executed
@@ -131,7 +131,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    Lily silent = correct (form-gated on `G[0xa57/0xa58/0xa59]`, unseeded). SFX WAV entries use universal
    packed catalog ids through the same byte store while retaining the existing channel lifecycle. See
    `docs/phase-a-slice-plan.md`.
-   Diagnostic: `Age.Cli audio <SCENE>`.
+   Diagnostic: `Ome.Cli audio <SCENE>`.
 5. **Movies** (`OP`/`MVB`, MPEG) — `0x236` and `0x20f` receive universal packed resource ids and read the
    selected payload through `IAssetStore`; see the movie sections below.
 
@@ -375,7 +375,7 @@ translated runs (`run-godot.cmd -Kamidori -TranslationPatch`).
    executes the scripts serially through normal VM frames. Natural SYSTEM4 boot regression-proves
    `BTANINIT2 -> $1$AUTORUN.BIN -> $1$EBINIT.BIN -> TUNE.BIN`; VFS mounting and append patch application
    are therefore both active. Native queue/frame details are canonical in `docs/engine-re.md`.
-3. **AGF decoder (VFS-C DONE).** `Age.Engine/Sys4/AgfDecoder.cs` decodes an opened AGF payload directly
+3. **AGF decoder (VFS-C DONE).** `Ome.Engine/Sys4/AgfDecoder.cs` decodes an opened AGF payload directly
    to a tightly packed, top-down width/height + RGBA8 surface. The MIT-licensed GARbro
    `ArcFormats/Eushully/ImageAGF.cs` provides a compact reference: `ACGF` (or zero) signature, type 1/2,
    LZSS-or-raw header section, 4/8/truecolor source pixels, LZSS-or-raw pixel section, bottom-up row/stride

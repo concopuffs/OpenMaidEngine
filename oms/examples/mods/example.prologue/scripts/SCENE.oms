@@ -3,7 +3,7 @@ oms 1
 // shipped scene, so the ADV menu, saving and loading work inside it. AUTO (record 0) registers it as New Game's
 // scene (SCJUMP decision 0); when it ends it clears that row, so the next pass falls back to SC0000.
 //
-// The skeleton is the shipped append scene $1$SC1260's, from `Age.Cli oms-decompile --level idiomatic`: the ADV
+// The skeleton is the shipped append scene $1$SC1260's, from `Ome.Cli oms-decompile --level idiomatic`: the ADV
 // yield handlers, the hotspots, the save-resume mark, the load-restore rendezvous, and the per-pass setup and
 // teardown. Only the content (sub scene_content, SC1260's label_71b) and the scene's own id are the mod's.
 script "SCENE"

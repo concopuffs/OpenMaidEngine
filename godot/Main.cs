@@ -6,18 +6,18 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
-using Age.Engine.Diagnostics;
-using Age.Engine.Hosting;
-using Age.Engine.Model;
-using Age.Engine.Persistence;
-using Age.Engine.Profiles;
-using Age.Engine.Sys4;
-using Age.Engine.Text;
-#if AGE_WINDOWS_GDI
-using Age.Engine.Text.Windows;
+using Ome.Engine.Diagnostics;
+using Ome.Engine.Hosting;
+using Ome.Engine.Model;
+using Ome.Engine.Persistence;
+using Ome.Engine.Profiles;
+using Ome.Engine.Sys4;
+using Ome.Engine.Text;
+#if OME_WINDOWS_GDI
+using Ome.Engine.Text.Windows;
 #endif
-using Age.Engine.Vm;
-using Script = Age.Engine.Model.Script;   // disambiguate from Godot.Script
+using Ome.Engine.Vm;
+using Script = Ome.Engine.Model.Script;   // disambiguate from Godot.Script
 
 public partial class Main : Godot.Control
 {
@@ -36,7 +36,7 @@ public partial class Main : Godot.Control
     private IDisposable? _glyphRasterizerOwner;
     private Sys4ScriptProvider? _scripts;
     // Real time, as native's tick reads timeGetTime: a service wait ends with its effect, not at the next frame.
-    private readonly Age.Engine.Hosting.FrameClock _clock = Age.Engine.Hosting.FrameClock.StartRealTime();
+    private readonly Ome.Engine.Hosting.FrameClock _clock = Ome.Engine.Hosting.FrameClock.StartRealTime();
     private GodotTraceSink _trace = null!;
 
     private void ReportAssetResolutionWarning(string message)
@@ -48,9 +48,9 @@ public partial class Main : Godot.Control
         GD.PushWarning(message);
     }
 
-    private Age.Engine.Diagnostics.HistogramTraceSink? _hist;   // --trace-histogram: profile the real run
+    private Ome.Engine.Diagnostics.HistogramTraceSink? _hist;   // --trace-histogram: profile the real run
     private string? _histFile;
-    private Age.Engine.Model.OpcodeTable? _table;
+    private Ome.Engine.Model.OpcodeTable? _table;
     private bool _histDumped;
     private volatile bool _done;
     private bool _ended;
@@ -445,7 +445,7 @@ public partial class Main : Godot.Control
         string? exactUnavailable = null;
         try
         {
-#if AGE_WINDOWS_GDI
+#if OME_WINDOWS_GDI
             if (textBackend != "portable")
             {
                 if (WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out string availability))
@@ -525,9 +525,9 @@ public partial class Main : Godot.Control
         // diverges — wait-for-input is a no-op there — so this is the only way to profile the live path).
         _table = table;
         _histFile = histFile;
-        Age.Engine.Diagnostics.ITraceSink sink = _trace;
-        if (histFile != null) { _hist = new Age.Engine.Diagnostics.HistogramTraceSink();
-                                 sink = new Age.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
+        Ome.Engine.Diagnostics.ITraceSink sink = _trace;
+        if (histFile != null) { _hist = new Ome.Engine.Diagnostics.HistogramTraceSink();
+                                 sink = new Ome.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
         _vm = new VirtualMachine(script, table, _host,
             GodotVmOptions.Create(_selftest, nativeDebugMenu, _catalog.StartupSettings),
             provider, sink,
@@ -952,7 +952,7 @@ public partial class Main : Godot.Control
     private static Func<IReadOnlyList<EnumeratedFontFamily>>? InstalledFontFamilySource(
         IGlyphMaskRasterizer rasterizer, Sys4StartupSettings settings)
     {
-#if AGE_WINDOWS_GDI
+#if OME_WINDOWS_GDI
         if (rasterizer is WindowsGdiGlyphMaskRasterizer && OperatingSystem.IsWindows())
             return () =>
             {

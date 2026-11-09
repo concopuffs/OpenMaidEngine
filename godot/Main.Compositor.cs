@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
-using Age.Engine.Model;
+using Ome.Engine.Model;
 
 public partial class Main
 {
@@ -451,7 +451,7 @@ public partial class Main
         LegacyScreenTransitionSnapshot transition,
         System.Collections.Generic.Dictionary<long, string>? decisions)
     {
-        int alpha = Age.Engine.Model.LegacyScreenTransitionComposite.Alpha(transition.Progress);
+        int alpha = Ome.Engine.Model.LegacyScreenTransitionComposite.Alpha(transition.Progress);
         if (alpha == 0) return;
         if (_transitionSourcePixels.Length != _screenPixels.Length)
             _transitionSourcePixels = new byte[_screenPixels.Length];
@@ -460,7 +460,7 @@ public partial class Main
         FillQuad(0, 0, _screenWidth, _screenHeight, transition.OverlayRgb, 1f);
         CompositeVisibleObjects(transition.Target, 1f, decisions);
         if (alpha < 256)
-            Age.Engine.Model.LegacyScreenTransitionComposite.BlendTargetOverSource(
+            Ome.Engine.Model.LegacyScreenTransitionComposite.BlendTargetOverSource(
                 _screenPixels, _transitionSourcePixels, alpha);
     }
 
@@ -482,7 +482,7 @@ public partial class Main
                 continue;
             }
             var t = v.Transform;
-            var affine = Age.Engine.Model.Transform2DMath.Build(t, v.Rotation, v.ScaleCycle, v.TranslationCycle);
+            var affine = Ome.Engine.Model.Transform2DMath.Build(t, v.Rotation, v.ScaleCycle, v.TranslationCycle);
             var localToDest = affine.FromLocalOrigin(v.DstX, v.DstY);
             if (v.RangeTransform is { } rangeTransform)
                 localToDest = localToDest.Then(rangeTransform);
@@ -544,7 +544,7 @@ public partial class Main
                 // A colored object with no bound surface = a fade/flash fill (e.g. fade-to-black). Its presence
                 // is the tint STRENGTH (0=absent, 255=solid), scaled by any object opacity. Uncolored surfaceless
                 // objects are render targets — still skipped (slice C).
-                if (v.Blend != Age.Engine.Model.BlendKind.Opaque)
+                if (v.Blend != Ome.Engine.Model.BlendKind.Opaque)
                 {
                     int baseW = v.W > 0 ? v.W : _screenWidth;
                     int baseH = v.H > 0 ? v.H : _screenHeight;
@@ -599,7 +599,7 @@ public partial class Main
         }
     }
 
-    private static string ColorTimeline(Age.Engine.Model.ColorTransitionState? state)
+    private static string ColorTimeline(Ome.Engine.Model.ColorTransitionState? state)
         => state is { } c
             ? $" color=0x{c.Current:x8}->0x{c.Target:x8} colorProgress={c.Progress:0.000}"
             : "";
@@ -773,7 +773,7 @@ public partial class Main
     // Mode 0 uses tintStrength to LERP texel RGB toward tint. Mode 1 uses packed RGB modulation and
     // SRCALPHA/ONE additive composition; black source pixels therefore contribute nothing.
     private void BlitLayer(RgbaImage decoded, int assetId, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
-                           Age.Engine.Model.Affine2D localToDest, float alpha = 1f, bool multiplyTint = false,
+                           Ome.Engine.Model.Affine2D localToDest, float alpha = 1f, bool multiplyTint = false,
                            bool dynamic = false, BlendKind blend = BlendKind.Alpha)
     {
         // Native gfx_object_blit_d3d9 clips the explicit source rectangle and returns without drawing when
@@ -792,7 +792,7 @@ public partial class Main
             sourceWidth = decoded.Width;
             sourceHeight = decoded.Height;
             sourcePixels = decoded.Pixels;
-            if (Age.Engine.Model.BlendMath.HasColorKey(colorKey))
+            if (Ome.Engine.Model.BlendMath.HasColorKey(colorKey))
             {
                 sourcePixels = (byte[])sourcePixels.Clone();
                 BakeColorKey(sourcePixels, colorKey);
@@ -803,7 +803,7 @@ public partial class Main
             if (!_pixelCache.TryGetValue(cacheKey, out var cached))
             {
                 byte[] pixels = decoded.Pixels;
-                if (Age.Engine.Model.BlendMath.HasColorKey(colorKey))
+                if (Ome.Engine.Model.BlendMath.HasColorKey(colorKey))
                 {
                     pixels = (byte[])pixels.Clone();
                     BakeColorKey(pixels, colorKey);
@@ -824,17 +824,17 @@ public partial class Main
         _perf?.RecordSourcePrepAllocation(PerformanceFrameLog.AllocatedBytes() - sourcePrepAllocated);
         if (sw <= 0 || sh <= 0) return;
         long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        Age.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
+        Ome.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
             _screenPixels, _screenWidth, _screenHeight, sourcePixels, sourceWidth, sourceHeight,
             srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha, multiplyTint, blend);
         _perf?.RecordRaster(sw, sh, localToDest, _screenWidth, _screenHeight, dynamic, blend,
                             PerformanceFrameLog.Timestamp() - rasterStarted);
     }
 
-    private void FillAffineQuad(int w, int h, Age.Engine.Model.Affine2D localToDest, long tint, float alpha)
+    private void FillAffineQuad(int w, int h, Ome.Engine.Model.Affine2D localToDest, long tint, float alpha)
     {
         long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        Age.Engine.Model.SoftwareAffineRasterizer.FillRgba(
+        Ome.Engine.Model.SoftwareAffineRasterizer.FillRgba(
             _screenPixels, _screenWidth, _screenHeight, w, h, localToDest, tint, alpha);
         _perf?.RecordRaster(w, h, localToDest, _screenWidth, _screenHeight, false, BlendKind.Alpha,
                             PerformanceFrameLog.Timestamp() - rasterStarted);
@@ -872,7 +872,7 @@ public partial class Main
     private static void BakeColorKey(byte[] px, long colorKey)
     {
         for (int i = 0; i < px.Length; i += 4)
-            if (Age.Engine.Model.BlendMath.ColorKeyMatches(px[i], px[i + 1], px[i + 2], colorKey))
+            if (Ome.Engine.Model.BlendMath.ColorKeyMatches(px[i], px[i + 1], px[i + 2], colorKey))
                 px[i + 3] = 0;
     }
 

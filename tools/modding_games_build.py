@@ -3,7 +3,7 @@
 
 Every fact on the page comes from a repository source, so the page does not depend on which game installs exist:
 
-  engine/Age.Engine/Profiles/<id>.json       profile id, titles, engine ABI, catalog revision, boot script, saves
+  engine/Ome.Engine/Profiles/<id>.json       profile id, titles, engine ABI, catalog revision, boot script, saves
   tools/paths.py                             the conventional install directory
   vm-map/globals[-<id>].toml  [[table]]      the OMS tables and their record counts
   vm-map/patch-points-<id>.toml              named patch points
@@ -141,7 +141,7 @@ def render() -> str:
     lines += [
         "## Adding a game",
         "",
-        "A new profile manifest (`engine/Age.Engine/Profiles/<id>.json`) adds a row and an identity block here when",
+        "A new profile manifest (`engine/Ome.Engine/Profiles/<id>.json`) adds a row and an identity block here when",
         "this page is regenerated. Write its guide as `games/<id>.md`, following the existing ones, and keep game",
         "facts out of the generic guides.",
         "",

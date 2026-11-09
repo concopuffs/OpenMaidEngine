@@ -70,7 +70,7 @@ function Resolve-ConfiguredFile {
         if ($command) { return $command.Source }
     }
 
-    throw "$Description not found. Pass -GodotConsole, set AGE_GODOT_CONSOLE, or add Godot to PATH."
+    throw "$Description not found. Pass -GodotConsole, set OME_GODOT_CONSOLE, or add Godot to PATH."
 }
 
 function Resolve-ConfiguredGameRoot {
@@ -88,7 +88,7 @@ function Resolve-ConfiguredGameRoot {
         $ConventionalValue
     }
     if (-not (Test-Path -LiteralPath $configured -PathType Container)) {
-        throw "Game root not found: $configured. Pass -GameRoot or set AGE_GAME_ROOT."
+        throw "Game root not found: $configured. Pass -GameRoot or set OME_GAME_ROOT."
     }
     $resolved = (Resolve-Path -LiteralPath $configured).Path
     if (-not (Test-Path -LiteralPath (Join-Path $resolved 'SYS4INI.BIN') -PathType Leaf)) {
@@ -99,7 +99,7 @@ function Resolve-ConfiguredGameRoot {
 
 $godotArguments = @{
     ExplicitValue = $GodotConsole
-    EnvironmentValue = $env:AGE_GODOT_CONSOLE
+    EnvironmentValue = $env:OME_GODOT_CONSOLE
     PathCommands = @('godot4', 'godot', 'godot-mono')
     Description = 'Godot .NET console executable'
 }
@@ -118,7 +118,7 @@ if ($Kamidori) {
 $conventionalInstallName = if ($Profile -eq 'kamidori') { 'Kamidori' } else { 'Himegari_Game' }
 $gameRootArguments = @{
     ExplicitValue = $GameRoot
-    EnvironmentValue = $env:AGE_GAME_ROOT
+    EnvironmentValue = $env:OME_GAME_ROOT
     ConventionalValue = Join-Path (Split-Path $repo -Parent) $conventionalInstallName
 }
 $resolvedGameRoot = Resolve-ConfiguredGameRoot @gameRootArguments

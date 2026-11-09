@@ -678,7 +678,7 @@ near-universal (ADV-chrome) status → an auto category + confidence. Output:
 `build/story-flags-candidates.json` (review surface: 1261 branch-read globals, **205 story-flag
 candidates**); `--bootstrap` seeds high-signal skeletons (med-confidence, non-chrome) into
 `globals.toml` for human naming. Dynamic confirmation of a flag's reach stays separate —
-`Age.Cli sweep 0xADDR=VAL`.
+`Ome.Cli sweep 0xADDR=VAL`.
 
 **Reading the catalog:** `reach_scenes > 0` = the flag changes SC/SP scene dialogue directly (e.g.
 `0xa57` Lily form, scene-reach 78). `reach_scenes = 0` with progression writers = a

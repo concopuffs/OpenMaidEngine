@@ -23,8 +23,8 @@ REQUIRED_FILES = (
     "OME",
     "OME.pck",
     f"{MANAGED_DIRECTORY}/OME.dll",
-    f"{MANAGED_DIRECTORY}/Age.Engine.dll",
-    f"{MANAGED_DIRECTORY}/Age.Engine.Frontend.dll",
+    f"{MANAGED_DIRECTORY}/Ome.Engine.dll",
+    f"{MANAGED_DIRECTORY}/Ome.Engine.Frontend.dll",
     f"{MANAGED_DIRECTORY}/{package_notices.DEPS_FILE}",
     f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.linux-x64-LICENSE.TXT",
     f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.linux-x64-THIRD-PARTY-NOTICES.TXT",
@@ -38,7 +38,7 @@ REQUIRED_FILES = (
     f"{MANAGED_DIRECTORY}/FFmpeg-SOURCE.txt",
 )
 FORBIDDEN_FILES = (
-    f"{MANAGED_DIRECTORY}/Age.Engine.Text.Windows.dll",
+    f"{MANAGED_DIRECTORY}/Ome.Engine.Text.Windows.dll",
     f"{MANAGED_DIRECTORY}/age_movie_ffmpeg.dll",
     f"{MANAGED_DIRECTORY}/avformat-62.dll",
 )

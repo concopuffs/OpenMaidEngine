@@ -156,8 +156,8 @@ roadmap; GDScript is too slow for the loop). A0 is the reference: differential-t
 Python prototype's traces on the same scenes. Port the container parser too (or load via a shared
 spec). Deliverable: headless C# VM reproducing A0's results.
 
-**Result:** `engine/` .NET 8 solution (`Age.Engine` classlib w/ `Model`/`Vm`/`Sys4`/`Hosting` seams +
-`Age.Cli` + xUnit tests). RECOVER passes; the C# `trace` is **byte-identical to `vm0.py --trace` across
+**Result:** `engine/` .NET 8 solution (`Ome.Engine` classlib w/ `Model`/`Vm`/`Sys4`/`Hosting` seams +
+`Ome.Cli` + xUnit tests). RECOVER passes; the C# `trace` is **byte-identical to `vm0.py --trace` across
 all 297 SC/SP scenes** (offsets+halt+steps). *(Historical: this parity held while call-script was
 stubbed; once call-script execution landed [2026-07-07], vm0.py was retired from oracle duty and
 `TraceDiffTests` removed — see the call-script EXECUTION section.)* Version-neutral `Script` contract enforced (VM core never
@@ -172,7 +172,7 @@ hand-set the preconditions). Deliverable: **the chosen scene playable in Godot**
 a choice + voice — matching A0's text.
 
 ### A2a — Interactive dialogue loop ✅ DONE (2026-07-06)
-Godot 4.7 (.NET, `S:/Godot/Godot_v4.7-stable_mono_win64`) project in `godot/` referencing `Age.Engine`
+Godot 4.7 (.NET, `S:/Godot/Godot_v4.7-stable_mono_win64`) project in `godot/` referencing `Ome.Engine`
 in-process. VM gained one hook (`IHost.WaitForInput`, opcode 0x72); suspend/resume via a worker thread +
 blocking `SemaphoreSlim` in `GodotAdvHost`, UI marshalled with `CallDeferred`. Plays SC0000 page-by-page,
 pauses at wait-for-input, resumes on click/Enter. **Headless self-test** (`--headless -- --selftest`)
@@ -188,7 +188,7 @@ just-enough `call-script`/state (unlocks richer scenes).
 
 ### A2b-Background — FIRST-PASS RENDER LANDED (2026-07-06)
 Resolution solved (`docs/asset-resolution-re.md`: `resId → files[section_base(scene)+resId]`) and wired
-into a live render. **Shipped:** `Age.Engine/Sys4/ResourceMap.cs` (loads `build/asset-index.json` +
+into a live render. **Shipped:** `Ome.Engine/Sys4/ResourceMap.cs` (loads `build/asset-index.json` +
 `build/asset-sections.json`; `Resolve(scene,resId) → AssetEntry`; `TexturePath` → pre-converted BMP);
 `GodotAdvHost` implements `create/set/draw-texture` (slot → `TextureRect` composited behind the dialogue
 in a `_stage` layer); `IHost.DrawTexture` + VM dispatch extended to pass the destination x/y (draw-texture
@@ -246,7 +246,7 @@ interrupt-on-new). Headless run: 0 OGG-load failures, selftest byte-parity OK.
   by seeding: `audio SC0000.BIN 0xa57=1` → 35 LILA clips fire in order (form B→LILB, C→LILC). Left unseeded
   by user choice (no dummy state); Lily stays silent until real cross-scene state flow (Phase B) exists.
 
-**Diagnostic tool added:** `Age.Cli audio <SCENE.BIN> [0xADDR=VAL ...]` — runs a scene and dumps executed
+**Diagnostic tool added:** `Ome.Cli audio <SCENE.BIN> [0xADDR=VAL ...]` — runs a scene and dumps executed
 `play-bgm`/`play-voice` ops in order (BGM direct-name, voice manifest), optional global seeding. Used for all
 of the above. **Watch-items:** BGM looping is whole-file for now (Eushully OGGs may carry `LOOPSTART`/
 `LOOPLENGTH` Vorbis comments — refine later); `play-sound-effect`(0xb4, argc 2) left stubbed (arg roles
@@ -263,7 +263,7 @@ the two output globals); non-Godot hosts return `(0,0)` so trace/selftest parity
 immediate-mode blit compositor** (`Main.BlitSlot`: `_screen.BlitRect(src rect → dst)` in execution order,
 one displayed `TextureRect`; source dims read from the pre-converted BMP header on the VM thread via
 `BmpHeader.ReadDims`, so the bytecode's geometry math sees real sizes synchronously). New diagnostics:
-`Age.Cli gfx <SCENE>` (headless numeric oracle — dumps per-draw resolved file + computed geometry) and
+`Ome.Cli gfx <SCENE>` (headless numeric oracle — dumps per-draw resolved file + computed geometry) and
 `godot … -- --shot <png> [--shot-page N]` (page-gated screenshot capture). **The opening event-CG sequence
 renders correctly** — full-screen CG at `(0,0)` with dialogue over it (verified by screenshot, SC0000
 pages 1/3).
@@ -295,12 +295,12 @@ script-context records for gfx objects — was wrong: it observed the wrong stru
 SECOND half"; don't duplicate here):
 1. **Native gfx ops (b):** the retained-object command-buffer ops (`0x1f7`,`0x1fa`,`0x1ff`,`0x202`,`0x203`,
    `0x212`,`0x213`,`0x215`–`0x21a`) were reversed + implemented against a host-side `GfxState` (VM execution
-   state; `engine/Age.Engine/Model/GfxState.cs`). `0x215` now returns distinct per-object slots. **Correction
+   state; `engine/Ome.Engine/Model/GfxState.cs`). `0x215` now returns distinct per-object slots. **Correction
    (2026-07-20):** `0x1a2` never belonged to this family; it is the shared `SAVE.DAT` integer-store half
    paired with `0x1a3`, and its inert `GfxState` approximation has been removed. See `docs/engine-re.md`.
 2. **Missing system-boot state (a):** the CG handle array `G[0x62455..]` is set by boot script **INIT2**
    (via entrypoint `SYSTEM4.BIN`), which a cold single-scene run skips → all CGs collapsed onto object 0.
-   Supplied via **`Age.Cli gfx --boot`** and **Godot `--boot`** (run `INITCONFIG/INIT2/INIT` through
+   Supplied via **`Ome.Cli gfx --boot`** and **Godot `--boot`** (run `INITCONFIG/INIT2/INIT` through
    `GameSession` first). So the drift needed BOTH — not story flags, and not native-ops-alone.
 
 **Result: with `--boot`, the opening event CGs render correctly** — screenshot-verified live in Godot
@@ -484,7 +484,7 @@ Spec `docs/superpowers/specs/2026-07-07-callscript-vm-execution-design.md`; plan
   caller at `pc+1`. `exit`/`exit-script` and empty-stack `ret` return from the frame (top frame → HALT).
   Depth-capped (`VmOptions.CallDepthCap=64`; native limit 38). Shared globals are the return channel;
   per-call locals are discarded on return.
-- **Product paths** (`Age.Cli run/play/sweep`, `GameSession.RunScene`) inject the provider. `trace` +
+- **Product paths** (`Ome.Cli run/play/sweep`, `GameSession.RunScene`) inject the provider. `trace` +
   the `audio`/`gfx` diagnostics stay provider-less (base-ISA oracle / built against stub behavior).
 
 **Design decision (refines the spec):** a VM with **no provider** falls back to the prior stub
@@ -507,7 +507,7 @@ not the depth cap → recursion is bounded correctly).
 - **Godot play path** gets `Sys4ScriptProvider`, so subroutines execute live on screen (and the
   headless input-wait loops break on real player input, which is why headless-only scenes STEP-LIMIT).
 - **Testing principle (user-directed): synthesize test data; never disable a feature to keep a real
-  scene matching a frozen number.** New `Age.Engine/Sys4/ScriptAssembler` (code+strings → `Script`;
+  scene matching a frozen number.** New `Ome.Engine/Sys4/ScriptAssembler` (code+strings → `Script`;
   also Phase-D modding-assembler groundwork). `SyntheticSceneTests` runs an assembled scene (show-text
   + wait-for-input + real nested call-script + shared-global return) with full handling and asserts its
   exact output. `WaitForInputTests` reworked onto a synthesized two-page scene. `RecoverTests` keeps its
@@ -575,7 +575,7 @@ Executed the "Next (open)" list above (option 3: a per-frame yield/sync point). 
 `docs/superpowers/plans/2026-07-08-frame-stepped-vm.md`; merged to `main` (`74a4221`).
 
 **What landed (3 TDD tasks):**
-1. `engine/Age.Engine/Hosting/FrameClock.cs` — pure, threadless virtual clock: `NowMs`, `Speed` (field,
+1. `engine/Ome.Engine/Hosting/FrameClock.cs` — pure, threadless virtual clock: `NowMs`, `Speed` (field,
    1.0), `OpsPerFrame` (30), `Advance(realΔseconds)`, `EffectiveBudget` (= `OpsPerFrame*Speed`, min 1).
 2. `IHost.FrameYield()` — the VM (`VirtualMachine.RunFrame`) calls it **once per executed opcode** (right
    after `Step`). **No-op in all 9 headless hosts** (`CaptureHost`, the CLI trace hosts, every test host) →
@@ -614,7 +614,7 @@ Spec `docs/superpowers/specs/2026-07-08-blend-transparency-design.md`, plan
 sweep exit=284/STEP-LIMIT=13 parity, `SELFTEST OK`).
 
 **Landed (hybrid: engine resolves, host blits):**
-- `Age.Engine/Model/BlendMath.cs` — pure colorkey match + ARGB unpack (colorkey format reversed:
+- `Ome.Engine/Model/BlendMath.cs` — pure colorkey match + ARGB unpack (colorkey format reversed:
   op arg 3 `<0` = none, else `0xRRGGBB` exact-match, `0` = key black; baked at surface-load, see
   engine-re.md §Blend).
 - `RenderObject` gains `Alpha`/`Tint`/`Blend` (`BlendKind` Opaque|Alpha|Additive); `GfxObject.HasColor`;
@@ -1086,7 +1086,7 @@ without conflating its channel/timing semantics with archive access. Movie `0x23
 AGF/MPEG bytes later, but video decoding remains explicitly outside this track.
 
 Expected authored seams (names provisional): `Sys4AssetCatalog`, `IAssetStore`/`Sys4AssetStore`, bounded
-archive stream/reader, `LzssDecoder`, and `AgfDecoder`; focused tests belong in `Age.Engine.Tests`. Runtime
+archive stream/reader, `LzssDecoder`, and `AgfDecoder`; focused tests belong in `Ome.Engine.Tests`. Runtime
 caches should key decoded assets by catalog identity plus loose-file timestamp, while tests use synthetic
 fixtures and installed-game integration checks rather than committing proprietary assets.
 

@@ -15,7 +15,7 @@ Three tiers per opcode:
                skips (default stub, pc+1). THESE are the completeness holes.
 
 Single sources of truth (no hand-maintained duplicate list):
-  - implemented labels  <- parsed from engine/Age.Engine/Vm/VirtualMachine.cs
+  - implemented labels  <- parsed from engine/Ome.Engine/Vm/VirtualMachine.cs
                            (every `case "label":` arm)
   - opcode metadata     <- build/opcodes.json  (label/name/category/noop_headless)
   - scene opcodes       <- sys4load.load(<SCENE>.BIN).instructions (canonical loader)
@@ -38,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import paths
 import sys4load
 
-VM_SRC   = paths.REPO / "engine" / "Age.Engine" / "Vm" / "VirtualMachine.cs"
+VM_SRC   = paths.REPO / "engine" / "Ome.Engine" / "Vm" / "VirtualMachine.cs"
 OPCODES  = paths.SHARED_BUILD / "opcodes.json"
 CALLNAME = paths.BUILD / "callscript-names.json"
 OUT_DIR  = paths.BUILD / "scene-opcode-coverage"

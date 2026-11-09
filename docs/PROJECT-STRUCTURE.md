@@ -197,32 +197,32 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── opcodes.json                        GENERATED from opcodes.toml (machine view for the C# VM)
     │   └── manifest.json, opcode-coverage.md   (opcode-coverage.md GENERATED from opcodes.toml)
     │
-    ├── engine/                              DELIVERABLE — the .NET VM/runtime projects and tests (AgeEngine.sln)
-    │   ├── Age.Engine/Profiles/             embedded content-free game manifests plus immutable catalog-
+    ├── engine/                              DELIVERABLE — the .NET VM/runtime projects and tests (OmeEngine.sln)
+    │   ├── Ome.Engine/Profiles/             embedded content-free game manifests plus immutable catalog-
     │                                       identity selection, persistence, runtime seeds, and diagnostic policy
-    │   ├── Age.Engine/Model/                composable ABI-layer/opcode definitions plus retained graphics state and
+    │   ├── Ome.Engine/Model/                composable ABI-layer/opcode definitions plus retained graphics state and
     │                                       separately navigable render, transition, diagnostic, and persistence contracts
-    │   ├── Age.Engine/Sys4/                 runtime game-root selection, catalog/parser and structured opcode-
+    │   ├── Ome.Engine/Sys4/                 runtime game-root selection, catalog/parser and structured opcode-
     │                                       decode failures, loose-first bounded ALF asset store, script provider,
     │                                       explicit overlay/codec launch policy, AGF/LZSS/BMP and Windows CUR
     │                                       decoders, and resource facade
-    │   ├── Age.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
+    │   ├── Ome.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
     │                                       compositor/layout, retained live/History glyph and wait-atlas
     │                                       publication, and bounded font/glyph cache primitives
-    │   ├── Age.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
+    │   ├── Ome.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       screenshot BMP naming, profile-owned state, identity, and
     │                                       serialized bank dimensions
-    │   ├── Age.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
+    │   ├── Ome.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
     │                                       open-maid-script-design.md): operand contracts, intrinsics (Abi/), intermediate
     │                                       form and byte-exact decoder/encoder (Ir/), lexer/parser/AST (Syntax/),
     │                                       compiler, template expander, expression lowering, temporary allocator and canonical
     │                                       layout rules (Compile/), layout sidecar
     │                                       (Layout/), generated and source modules (Modules/), raw, core and idiomatic decompilers
     │                                       with library/template patterns (Text/), and fragment plans, their compiler,
-    │                                       applier and gate-7 probe (Patch/); referenced by Age.Cli and the tests,
+    │                                       applier and gate-7 probe (Patch/); referenced by Ome.Cli and the tests,
     │                                       not by the Godot runtime
-    │   ├── Age.Mods/                        mod loader (docs/superpowers/specs/2026-11-03-mod-loader-design.md):
+    │   ├── Ome.Mods/                        mod loader (docs/superpowers/specs/2026-11-03-mod-loader-design.md):
     │                                       Open Maid Pack containers (.omp ZIP or folder) with path and size checks,
     │                                       package hash and layout classification (Packages/), manifest.toml reader
     │                                       on Tomlyn plus semantic versions and ranges (Manifest/), and the linker:
@@ -230,8 +230,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       spec §7 report, selector allocation, per-mod append catalogs, asset
     │                                       overrides and the link cache (Linking/), startup discovery, flags and
     │                                       save stamps (Launch/), and the omp commands (Tools/); referenced by
-    │                                       Age.Cli, the Godot port (godot/Main.Mods.cs) and the tests
-    │   ├── Age.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
+    │                                       Ome.Cli, the Godot port (godot/Main.Mods.cs) and the tests
+    │   ├── Ome.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
     │                                       audio alignment, surface registry, WAV sanitization, the
     │                                       game-driving control protocol (Control/), AGERC.DLL's menu
@@ -239,7 +239,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       texts (NativeMenu/), and PE
     │                                       resource readers for dialog templates and icons, with the
     │                                       engine identity ﾊﾞｰｼﾞｮﾝ情報 shows (NativeResources/)
-    │   └── Age.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
+    │   └── Ome.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
     │   └── age_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows/Linux dependency manifests,
@@ -248,7 +248,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       write_ffmpeg_source_notice.py emits each bundle's FFmpeg-SOURCE.txt
     │                                       (outputs stay under disposable build/)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
-    └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Age.Engine
+    └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Ome.Engine
                                             plus the optional exact Windows text adapter). Its assembly embeds
                                             generated build/opcodes.json through OmeRuntimeMetadata, so
                                             exports do not need repository discovery. Also contains the portable
@@ -265,9 +265,9 @@ Native runs live there too: `native-scratch/` (the copied install), and `drive/<
 `drive/` folder holds the driver session, its logs and screenshots, and `sandbox/<name>/` (native: redirected
 LocalAppData/Desktop with the game's saves and `SYS4REG.INI`; port: the `--data-root` profile in the same layout).
 `drive/native/backups/` holds copies of the live save folder.
-`engine/Age.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
-`engine/Age.Cli` exposes it as `catalog-scan` for validation and diagnostic reports, and exposes the
-`Age.Script` round trips as `oms-roundtrip` (with `oms-residue` for its literal leftovers and `oms-temps` for its
+`engine/Ome.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
+`engine/Ome.Cli` exposes it as `catalog-scan` for validation and diagnostic reports, and exposes the
+`Ome.Script` round trips as `oms-roundtrip` (with `oms-residue` for its literal leftovers and `oms-temps` for its
 temporary-allocator residue), decompiled source as `oms-decompile`, and fragments (spec §10) as `oms-patch`. The source modules in `oms/<profile>/` are
 authored, like `vm-map/`, not derived: the compiler links them, and `--level idiomatic` lifts their library subs
 and templates.
@@ -302,14 +302,14 @@ folder picker. `godot/Main.AgercDialogs.cs` opens AGERC's own dialogs, stacking 
 3D edges in `Win32Edges.cs`). `godot/AgercVersionDialog.cs` is ﾊﾞｰｼﾞｮﾝ情報's procedure, `godot/AgercSettingsDialog.cs`
 is 設定's with its four pages, and `godot/AgercSystemInfo.cs` gathers the 動作環境 page's values.
 
-`engine/Age.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
-Both `engine/AgeEngine.sln` and `godot/OME.sln` include the project; Godot and `Age.Engine.Tests` consume it
+`engine/Ome.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
+Both `engine/OmeEngine.sln` and `godot/OME.sln` include the project; Godot and `Ome.Engine.Tests` consume it
 through project references rather than compiling duplicate linked sources. The first owned cluster contains
 `PageLocatorState`, `GodotTimelineLog`, `GodotTraceSink`, `StepLimitDiagnosticFormatter`, `GodotVmOptions`,
 `PerformanceFrameLog`, and `WindowLaunchOptions`. It also owns the internal movie decoder boundary/runtime,
 audio-timeline alignment, movie-surface registry, and RIFF/WAVE sanitizer; only the `Himegari` and
-`Age.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg native interop and the
-asynchronous/paced decoder also live here; the `Age.MovieCorpusGate` tool receives friend access to the native
+`Ome.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg native interop and the
+asynchronous/paced decoder also live here; the `Ome.MovieCorpusGate` tool receives friend access to the native
 frame-source seam and references this project rather than compiling source links. Reusable movie-corpus discovery,
 decode-gate, and report contracts live here as well; `tools/movie-corpus-gate/Program.cs` remains only the
 command-line entry point and output writer. `Control/` holds the game-driving protocol
@@ -329,105 +329,105 @@ transitions, diagnostic snapshots, frame/completion publication, and mask teardo
 control, and the background BGM fade's deadline and completion; presentation/input retains the message-skip, reset, and frame-pulse consumers
 of that state through the sealed partial class.
 
-`engine/Age.Engine/Hosting/IHost.cs` remains the aggregate runtime host accepted by the VM and existing host
-implementations. `engine/Age.Engine/Hosting/IDiagnosticHost.cs` owns recoverable-warning and modal-diagnostic
-reporting contracts, while `engine/Age.Engine/Hosting/ILifecycleHost.cs` owns script-context entry/exit, sleep and
-timed-deadline waiting, frame yield, and scene reset. `engine/Age.Engine/Hosting/IAudioHost.cs` owns BGM, voice,
+`engine/Ome.Engine/Hosting/IHost.cs` remains the aggregate runtime host accepted by the VM and existing host
+implementations. `engine/Ome.Engine/Hosting/IDiagnosticHost.cs` owns recoverable-warning and modal-diagnostic
+reporting contracts, while `engine/Ome.Engine/Hosting/ILifecycleHost.cs` owns script-context entry/exit, sleep and
+timed-deadline waiting, frame yield, and scene reset. `engine/Ome.Engine/Hosting/IAudioHost.cs` owns BGM, voice,
 SFX, fade, volume, and route-control contracts, including the compatibility overload/default chains used by
-simple hosts. `engine/Age.Engine/Hosting/IMovieHost.cs` owns ordinary, positioned, mask-transition, activity-query,
-and modal movie playback contracts. `engine/Age.Engine/Hosting/IGraphicsHost.cs` owns mutable surfaces,
+simple hosts. `engine/Ome.Engine/Hosting/IMovieHost.cs` owns ordinary, positioned, mask-transition, activity-query,
+and modal movie playback contracts. `engine/Ome.Engine/Hosting/IGraphicsHost.cs` owns mutable surfaces,
 retained-range/frame presentation, transitions, texture lifecycle, pixel capture/replace, draw, and size
-contracts. `engine/Age.Engine/Hosting/IInputHost.cs` owns modal fullwidth entry, ADV waits/callback servicing,
-input clock, cursor resources, and skip-state interaction. `engine/Age.Engine/Hosting/IAdvHost.cs` owns live and
+contracts. `engine/Ome.Engine/Hosting/IInputHost.cs` owns modal fullwidth entry, ADV waits/callback servicing,
+input clock, cursor resources, and skip-state interaction. `engine/Ome.Engine/Hosting/IAdvHost.cs` owns live and
 surface text, history presentation, ADV layout publication, message presentation settings, wait indicators, and
 page-presentation suspension. `IHost` inherits all seven focused contracts; every required member and
 overload/default chain remains unchanged. The neutral
-`engine/Age.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie mask work between the VM, host, and
+`engine/Ome.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie mask work between the VM, host, and
 retained graphics without making `Model` depend on `Hosting`.
-`engine/Age.Engine/Model/RgbaImage.cs` owns the format-independent packed RGBA image transported between SYS4
+`engine/Ome.Engine/Model/RgbaImage.cs` owns the format-independent packed RGBA image transported between SYS4
 decoders, host surfaces, renderers, persistence, and tests; consumers do not depend on `Sys4` merely to exchange
 decoded pixels.
-`engine/Age.Engine/Model/SurfaceContracts.cs` owns neutral surface fill/copy requests and the black-fade direction
+`engine/Ome.Engine/Model/SurfaceContracts.cs` owns neutral surface fill/copy requests and the black-fade direction
 shared by VM presentation, graphics hosts, Godot, and tests.
-`engine/Age.Engine/Model/InputContracts.cs` owns neutral ADV auto-wait state and fullwidth text-edit request/result
+`engine/Ome.Engine/Model/InputContracts.cs` owns neutral ADV auto-wait state and fullwidth text-edit request/result
 records shared by input hosts, timing policy, VM dispatch, Godot, and tests.
-`engine/Age.Engine/Model/AdvPresentationContracts.cs` owns neutral ADV wait-indicator configuration shared by VM
-dispatch, retained presentation, hosts, Godot, and tests. `engine/Age.Engine/Model/DiagnosticContracts.cs` owns
+`engine/Ome.Engine/Model/AdvPresentationContracts.cs` owns neutral ADV wait-indicator configuration shared by VM
+dispatch, retained presentation, hosts, Godot, and tests. `engine/Ome.Engine/Model/DiagnosticContracts.cs` owns
 the neutral synchronous diagnostic message transported between VM dispatch, diagnostic hosts, Godot, and tests.
 
-`engine/Age.Engine/Model/GfxState.cs` retains cross-domain retained-graphics coordination.
-`engine/Age.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,
-animation, numeric-glyph, and handle-range contracts. `engine/Age.Engine/Model/GfxState.Surfaces.cs` owns surface
+`engine/Ome.Engine/Model/GfxState.cs` retains cross-domain retained-graphics coordination.
+`engine/Ome.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,
+animation, numeric-glyph, and handle-range contracts. `engine/Ome.Engine/Model/GfxState.Surfaces.cs` owns surface
 resource/color-key state, created/reloadable classification, movie stop-time metadata, render-target/tile
-configuration, and surface lifecycle operations. `engine/Age.Engine/Model/GfxState.RetainedObjects.cs` owns the
+configuration, and surface lifecycle operations. `engine/Ome.Engine/Model/GfxState.RetainedObjects.cs` owns the
 retained-object record and registry/index, range-transform state, object creation/query/clone/erase and draw
-binding, plus numeric-glyph object generation. `engine/Age.Engine/Model/GfxState.Animation.cs` owns the shared
+binding, plus numeric-glyph object generation. `engine/Ome.Engine/Model/GfxState.Animation.cs` owns the shared
 animation clock, object color/source-cell/matrix/cyclic channels, animation control and forced completion, and
-the interpolation helpers consumed by retained-scene sampling. `engine/Age.Engine/Model/GfxState.Presentation.cs`
+the interpolation helpers consumed by retained-scene sampling. `engine/Ome.Engine/Model/GfxState.Presentation.cs`
 owns surface/movie transition queues, presentation activity and click-skip logic, diagnostics and dirty-reason
 accounting, and visible retained-scene snapshots.
 
-`engine/Age.Engine/Vm/VirtualMachine.cs` retains VM execution lifecycle, cross-domain state, and the proven
+`engine/Ome.Engine/Vm/VirtualMachine.cs` retains VM execution lifecycle, cross-domain state, and the proven
 top-level opcode dispatcher; `Step` now contains only label grouping, domain routing, strict compatibility
 failure, and an internal coverage/dispatcher consistency guard. `OpcodeRuntimeCoverage.cs` owns runtime
 implementation membership independently of ABI-table membership and corpus observation;
 `VmCompatibilityContext.cs` owns selected-profile execution context and structured unsupported-op diagnostics.
-Its partial-class companion `engine/Age.Engine/Vm/VirtualMachine.Audio.cs` owns VM audio
+Its partial-class companion `engine/Ome.Engine/Vm/VirtualMachine.Audio.cs` owns VM audio
 state, BGM restart semantics, and the BGM/voice/SFX/mixer opcode handler; `Step` retains the audio labels and
-routes that family into the handler. `engine/Age.Engine/Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/
+routes that family into the handler. `engine/Ome.Engine/Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/
 positioned movie playback, movie surface metadata/activity queries, and movie-mask transition dispatch; `Step`
-likewise retains and routes the movie labels. `engine/Age.Engine/Vm/VirtualMachine.Surface.cs` owns per-script
+likewise retains and routes the movie labels. `engine/Ome.Engine/Vm/VirtualMachine.Surface.cs` owns per-script
 reload-policy reset/configuration, surface allocation/loading, texture binding and sizing, mutable surface
 fill/copy, render-target control, and individual/transient surface release; its labels remain at their existing
 dispatcher positions around the retained numeric-glyph and object cases.
-`engine/Age.Engine/Vm/VirtualMachine.RetainedObjects.cs` owns retained-object registry queries,
+`engine/Ome.Engine/Vm/VirtualMachine.RetainedObjects.cs` owns retained-object registry queries,
 default-slot and geometry mutation, direct and range transforms, clone, and erase dispatch; animation, surface,
 ADV-binding, and presentation labels remain in their respective dispatcher groups.
-`engine/Age.Engine/Vm/VirtualMachine.Animation.cs` owns retained spritesheet and color channels, timed and cyclic
+`engine/Ome.Engine/Vm/VirtualMachine.Animation.cs` owns retained spritesheet and color channels, timed and cyclic
 transforms, per-object animation control, frame-time sampling, and the shared animation-clock opcode handler.
-`engine/Age.Engine/Vm/VirtualMachine.Presentation.cs` owns queued surface-alpha transitions, frame and object-range
+`engine/Ome.Engine/Vm/VirtualMachine.Presentation.cs` owns queued surface-alpha transitions, frame and object-range
 publication, skip-aware blocking fades/crossfades, foreground-transition waits, and graphics command-queue clear.
-`engine/Age.Engine/Vm/VirtualMachine.AdvText.cs` owns live ADV text emission, layout/cursor/wait-indicator state,
+`engine/Ome.Engine/Vm/VirtualMachine.AdvText.cs` owns live ADV text emission, layout/cursor/wait-indicator state,
 text style and glyph-delay control, direct surface-string and retained numeric-glyph rendering, and retained
 text/wait-object bindings; text history and input/skip/auto services remain separate.
-`engine/Age.Engine/Vm/VirtualMachine.TextHistory.cs` owns history recording control, metadata append/navigation,
+`engine/Ome.Engine/Vm/VirtualMachine.TextHistory.cs` owns history recording control, metadata append/navigation,
 retained history rendering, metadata/voice lookup, and history backlog clearing.
-`engine/Age.Engine/Vm/VirtualMachine.AdvServices.cs` owns persistent/active message-skip control, read-skip
+`engine/Ome.Engine/Vm/VirtualMachine.AdvServices.cs` owns persistent/active message-skip control, read-skip
 settings and queries, auto-message state/timing, and per-message voice/skip reset opcode dispatch; shared state
 and refresh helpers remain in the VM coordinator because live text and input paths also consume them.
-`engine/Age.Engine/Vm/VirtualMachine.Input.cs` owns blocking ADV waits, hotspot registration/arming, cursor
+`engine/Ome.Engine/Vm/VirtualMachine.Input.cs` owns blocking ADV waits, hotspot registration/arming, cursor
 resources and virtual position, raw mouse/joystick callback registration and dispatch, action polling, and
 physical-input mapping; public host-thread input entry points and shared synchronization remain in the coordinator.
-`engine/Age.Engine/Vm/VirtualMachine.Timing.cs` owns the monotonic-time query, host sleep, relative timed-callback
+`engine/Ome.Engine/Vm/VirtualMachine.Timing.cs` owns the monotonic-time query, host sleep, relative timed-callback
 schedule construction, deadline/catch-up selection, and callback resumption opcode handler.
-`engine/Age.Engine/Vm/VirtualMachine.Persistence.cs` owns catalog-unlock lookup, numbered save/load and nested
+`engine/Ome.Engine/Vm/VirtualMachine.Persistence.cs` owns catalog-unlock lookup, numbered save/load and nested
 restore continuation, metadata/copy/delete, thumbnail persistence, and shared-profile integer/string opcode
 dispatch; capture/apply helpers and persistent coordinator state remain in `VirtualMachine.cs`.
-`engine/Age.Engine/Persistence/NativeGfxSaveLayout.cs` owns the supported native graphics-record layouts
+`engine/Ome.Engine/Persistence/NativeGfxSaveLayout.cs` owns the supported native graphics-record layouts
 used by the shared numbered-payload and semantic graphics codecs. The profile selects the layout through
 `NativeSaveIdentity`, including first-time saves; exact format details live in
 [SYS4 format notes](sys4-format-notes.md#kamidori-320-layout).
-`engine/Age.Engine/Vm/VirtualMachine.MemoryCollections.cs` owns string byte length, addressed lookup/copy,
+`engine/Ome.Engine/Vm/VirtualMachine.MemoryCollections.cs` owns string byte length, addressed lookup/copy,
 inline arrays, rectangle search and stable index sorting, bounded integer queues/stacks, bit/range operations,
 and native-style random-modulo dispatch; shared storage/address helpers remain in the coordinator.
-`engine/Age.Engine/Vm/VirtualMachine.ControlFlow.cs` owns local jumps/calls/returns, value-switch construction,
+`engine/Ome.Engine/Vm/VirtualMachine.ControlFlow.cs` owns local jumps/calls/returns, value-switch construction,
 ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch; process/root exit and cross-script
-lifecycle are routed separately. `engine/Age.Engine/Vm/VirtualMachine.InputLatch.cs` owns native's input latch: the
+lifecycle are routed separately. `engine/Ome.Engine/Vm/VirtualMachine.InputLatch.cs` owns native's input latch: the
 triggers held while nothing polls (effects under `EffectSkipOnClick` 0, the ADV coroutine yield), the services that
-take them, and the discard points. `engine/Age.Engine/Vm/VirtualMachine.PhysicalFastForward.cs` owns fast-forward
+take them, and the discard points. `engine/Ome.Engine/Vm/VirtualMachine.PhysicalFastForward.cs` owns fast-forward
 from a held action 6 (Ctrl): its two start paths, op `0x101`'s reveal suppression and the clears.
-`engine/Age.Engine/Vm/VirtualMachine.DeterministicRandom.cs` owns op `0x60`'s seeded per-call-site streams, which
+`engine/Ome.Engine/Vm/VirtualMachine.DeterministicRandom.cs` owns op `0x60`'s seeded per-call-site streams, which
 the drive step `rand-seed` turns on.
-`engine/Age.Engine/Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
+`engine/Ome.Engine/Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state
 remain in `VirtualMachine.cs`.
-`engine/Age.Engine/Vm/VirtualMachine.Values.cs` owns integer arithmetic, bitwise and comparison operations,
+`engine/Ome.Engine/Vm/VirtualMachine.Values.cs` owns integer arithmetic, bitwise and comparison operations,
 string comparison/concatenation/conversion/move, native byte-length and CP932 operations, and the host-backed
 fullwidth string editor; shared operand storage, addressing, and native-string encoding remain in the coordinator.
-`engine/Age.Engine/Vm/VirtualMachine.Diagnostics.cs` owns diagnostic value/newline accumulation and synchronous
+`engine/Ome.Engine/Vm/VirtualMachine.Diagnostics.cs` owns diagnostic value/newline accumulation and synchronous
 show-and-clear opcode dispatch; shared diagnostic state and native-context formatting remain in the coordinator.
-`engine/Age.Engine/Vm/VirtualMachine.RuntimeSettings.cs` owns message-window alpha and system-menu enable/show
+`engine/Ome.Engine/Vm/VirtualMachine.RuntimeSettings.cs` owns message-window alpha and system-menu enable/show
 delay opcode dispatch; reset/default initialization, public menu-state accessors, and host state remain centralized.
 
 The disposable `build/games/<profile>/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs
@@ -476,7 +476,7 @@ spec §6.2–§6.5.
   override the auto shape map (`build/global-var-map.json`). Discover story-flag candidates with `tools/story_flags.py`.
 - **Named patch points are edited ONLY in `vm-map/patch-points-<profile>.toml`.** Run
   `tools/patch_points_build.py [--profile ID] --build` to validate them against the installed base and regenerate
-  `build/games/<profile>/patch-points.json` (read by `Age.Cli oms-patch`) and `docs/patch-point-reference[-<profile>].md`.
+  `build/games/<profile>/patch-points.json` (read by `Ome.Cli oms-patch`) and `docs/patch-point-reference[-<profile>].md`.
 - **Encoding:** all generated text is UTF-8 (source strings are cp932/Shift-JIS, decoded on
   extraction). Run Python as `py -3.11 -X utf8`.
 - **The game install is a runnable unit** — do not relocate `AGE.EXE`/`*.ALF`/DLLs relative to each

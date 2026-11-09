@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The port target of the driving protocol: launch the Godot port with its ``--control`` channel.
 
-The port serves the protocol itself (``engine/Age.Engine.Frontend/Control/``, ``godot/Main.Drive.cs``); this module
+The port serves the protocol itself (``engine/Ome.Engine.Frontend/Control/``, ``godot/Main.Drive.cs``); this module
 only starts and stops it. ``start`` builds the Godot C# project (``--no-build`` skips that; ``--optimize`` turns the
-JIT optimizer on), prepares a save sandbox, and runs the Godot .NET console binary (``--godot``, ``AGE_GODOT_CONSOLE``
+JIT optimizer on), prepares a save sandbox, and runs the Godot .NET console binary (``--godot``, ``OME_GODOT_CONSOLE``
 or PATH) with
 
     --path godot -- --game-root <install> --data-root <sandbox> --control --control-file <session.json>
@@ -37,7 +37,7 @@ GODOT_PROJECT = paths.REPO / "godot"
 
 
 def resolve_godot(explicit: str | None) -> Path:
-    from validate import resolve_godot as resolve   # the one resolution rule (--godot, AGE_GODOT_CONSOLE, PATH)
+    from validate import resolve_godot as resolve   # the one resolution rule (--godot, OME_GODOT_CONSOLE, PATH)
     try:
         return resolve(explicit)
     except ValueError as error:
@@ -54,7 +54,7 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
     command.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE",
                          help="write this setting into the sandbox SYS4REG.INI before launch, after the "
                               "profile's (repeatable), e.g. --set message.MessageSpeed=100")
-    command.add_argument("--godot", help="Godot .NET console binary (default: AGE_GODOT_CONSOLE, then PATH)")
+    command.add_argument("--godot", help="Godot .NET console binary (default: OME_GODOT_CONSOLE, then PATH)")
     command.add_argument("--no-build", action="store_true", help="skip `dotnet build godot/OME.csproj`")
     command.add_argument("--optimize", action="store_true",
                          help="build with the JIT optimizer on (-p:Optimize=true), for timing against native; "

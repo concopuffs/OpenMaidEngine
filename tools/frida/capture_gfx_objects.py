@@ -11,7 +11,7 @@ helper at module +0x1b940 (thiscall; ecx = the engine context 'esi') — grab th
 then POLL the object-record array directly: [esi + 0x53d64], stride 120 (0x78) bytes/object, command-
 type field at record+0x24, current index at [esi + 0x53d14]. No dependence on fragile handler offsets.
 
-Decode offline + correlate with `Age.Cli gfx SC0000.BIN` (objects load EV049AA/EV052*/BG030A/... with
+Decode offline + correlate with `Ome.Cli gfx SC0000.BIN` (objects load EV049AA/EV052*/BG030A/... with
 slots 4..13 per the 0x3239 record table). Poll snapshots over time show how records change per scene.
 
 Flow: attach while a scene is up (or replay the opening) -> polls ~2/s -> Ctrl-C -> build/gfx-objects.jsonl.

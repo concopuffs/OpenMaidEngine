@@ -98,9 +98,9 @@ def _python_tool(relative: str, *arguments: str) -> tuple[str, ...]:
 
 
 def resolve_godot(explicit: str | None, environ: dict[str, str] | None = None) -> Path:
-    """Resolve explicit value, AGE_GODOT_CONSOLE, then known PATH commands."""
+    """Resolve explicit value, OME_GODOT_CONSOLE, then known PATH commands."""
     env = os.environ if environ is None else environ
-    configured = explicit or env.get("AGE_GODOT_CONSOLE")
+    configured = explicit or env.get("OME_GODOT_CONSOLE")
     if configured:
         candidate = Path(configured).expanduser()
         if not candidate.is_file():
@@ -111,7 +111,7 @@ def resolve_godot(explicit: str | None, environ: dict[str, str] | None = None) -
             return Path(found).resolve()
     raise ValueError(
         "Godot .NET console executable not found; pass --godot, set "
-        "AGE_GODOT_CONSOLE, or add godot4/godot/godot-mono to PATH"
+        "OME_GODOT_CONSOLE, or add godot4/godot/godot-mono to PATH"
     )
 
 
@@ -120,10 +120,10 @@ def resolve_game_root(
     environ: dict[str, str] | None = None,
     conventional: Path | None = None,
 ) -> Path:
-    """Resolve explicit value, AGE_GAME_ROOT, then the conventional sibling install."""
+    """Resolve explicit value, OME_GAME_ROOT, then the conventional sibling install."""
     env = os.environ if environ is None else environ
     candidate = Path(
-        explicit or env.get("AGE_GAME_ROOT") or conventional or paths.GAME_DIR
+        explicit or env.get("OME_GAME_ROOT") or conventional or paths.GAME_DIR
     ).expanduser()
     if not candidate.is_dir():
         raise ValueError(f"game root not found: {candidate}")
@@ -182,7 +182,7 @@ def build_gate_plan(
             "engine-restore",
             ".NET engine restore",
             (
-                "dotnet", "restore", "engine/AgeEngine.sln", "--nologo",
+                "dotnet", "restore", "engine/OmeEngine.sln", "--nologo",
                 "--verbosity", "minimal", "--disable-parallel",
                 "-p:RestoreDisableParallel=true",
             ),
@@ -195,7 +195,7 @@ def build_gate_plan(
             "engine-cli-build",
             ".NET engine CLI build",
             (
-                "dotnet", "build", "engine/Age.Cli/Age.Cli.csproj", "--no-restore", "--nologo",
+                "dotnet", "build", "engine/Ome.Cli/Ome.Cli.csproj", "--no-restore", "--nologo",
                 "--verbosity", "minimal", "-m:1", "-p:UseSharedCompilation=false",
                 "-p:BuildInParallel=false", "-p:DebugType=None", "-p:DebugSymbols=false",
             ),
@@ -208,7 +208,7 @@ def build_gate_plan(
             "engine-tests",
             ".NET engine core tests",
             (
-                "dotnet", "test", "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
+                "dotnet", "test", "engine/Ome.Engine.Tests/Ome.Engine.Tests.csproj",
                 "--no-restore", "--nologo",
                 "--verbosity", "minimal", "--filter", "Category!=Workspace", "-m:1",
                 "-p:UseSharedCompilation=false", "-p:BuildInParallel=false",
@@ -229,7 +229,7 @@ def build_gate_plan(
             "engine-workspace-tests",
             f".NET installed-data tests ({context.profile_id})",
             (
-                "dotnet", "test", "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
+                "dotnet", "test", "engine/Ome.Engine.Tests/Ome.Engine.Tests.csproj",
                 "--no-restore", "--nologo", "--verbosity", "minimal",
                 "--filter", workspace_filter, "-m:1", "-p:UseSharedCompilation=false",
                 "-p:BuildInParallel=false", "-p:DebugType=None", "-p:DebugSymbols=false",
@@ -241,7 +241,7 @@ def build_gate_plan(
             "oms-canonical-rebuild",
             f"Open Maid Script canonical rebuild, VM-trace-equivalent scenes ({context.profile_id})",
             (
-                "dotnet", "run", "--project", "engine/Age.Cli/Age.Cli.csproj",
+                "dotnet", "run", "--project", "engine/Ome.Cli/Ome.Cli.csproj",
                 "--no-build", "--", "oms-rebuild", "--profile", context.profile_id,
                 "--game-root", str(game_root or context.game_root),
             ),
@@ -255,7 +255,7 @@ def build_gate_plan(
                 "oms-idiomatic-rebuild",
                 f"Open Maid Script idiomatic rebuild, VM-trace-equivalent scenes ({context.profile_id})",
                 (
-                    "dotnet", "run", "--project", "engine/Age.Cli/Age.Cli.csproj",
+                    "dotnet", "run", "--project", "engine/Ome.Cli/Ome.Cli.csproj",
                     "--no-build", "--", "oms-rebuild", "--profile", context.profile_id, "--level", "idiomatic",
                     "--game-root", str(game_root or context.game_root),
                 ),
@@ -266,7 +266,7 @@ def build_gate_plan(
             "catalog-corpus-scan",
             f"Catalog/store corpus decode ({context.profile_id})",
             (
-                "dotnet", "run", "--project", "engine/Age.Cli/Age.Cli.csproj",
+                "dotnet", "run", "--project", "engine/Ome.Cli/Ome.Cli.csproj",
                 "--no-build", "--", "catalog-scan", "--profile", context.profile_id,
                 "--game-root", str(game_root or context.game_root), "--output",
                 str(context.game_build / "catalog-opcode-coverage.json"),
@@ -329,10 +329,10 @@ def build_gate_plan(
         if context.profile_id == "himegari":
             gates.append(
                 Gate(
-                    "age-cli-sweep",
+                    "ome-cli-sweep",
                     "C# VM scene sweep",
                     (
-                        "dotnet", "run", "--project", "engine/Age.Cli", "--configuration", "Debug",
+                        "dotnet", "run", "--project", "engine/Ome.Cli", "--configuration", "Debug",
                         "--", "sweep", "--boot", "--halt-at-wait",
                         "--profile", context.profile_id,
                         "--game-root", str(game_root or context.game_root),
@@ -347,7 +347,7 @@ def build_gate_plan(
                     "natural-boot-acceptance",
                     f"C# natural boot/ADV acceptance ({context.profile_id})",
                     (
-                        "dotnet", "test", "engine/Age.Engine.Tests/Age.Engine.Tests.csproj",
+                        "dotnet", "test", "engine/Ome.Engine.Tests/Ome.Engine.Tests.csproj",
                         "--no-restore", "--nologo", "--verbosity", "minimal",
                         "--filter",
                         "FullyQualifiedName=NaturalBootIntegrationTests."

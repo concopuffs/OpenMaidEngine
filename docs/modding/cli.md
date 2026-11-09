@@ -3,7 +3,7 @@
 This page is the reference for the mod commands, the port's mod options, and where installed mods live. Run commands
 from `age-reimpl/`.
 
-`Age.Cli` is `dotnet run --project engine/Age.Cli -- <command>`. Every `Age.Cli` command takes the game options:
+`Ome.Cli` is `dotnet run --project engine/Ome.Cli -- <command>`. Every `Ome.Cli` command takes the game options:
 
 | Option | Meaning |
 |---|---|
@@ -96,7 +96,7 @@ native AGE.
 Native AGE has no mod loader. Export the stack and install the files into a **copy** of the game:
 
 ```text
-Age.Cli omp export --output-dir build/my-export --mod path\to\my.mod <game options>
+Ome.Cli omp export --output-dir build/my-export --mod path\to\my.mod <game options>
 py -3.11 -X utf8 tools/native_scratch.py --profile <profile> --replace --overlay build/my-export/SC0000.BIN --overlay build/my-export/APPENDnn.AAI --overlay build/my-export/APPENDnn.ALF
 ```
 

@@ -1,6 +1,6 @@
 # Example mods (mod loader gates 2, 4, 5 and 6)
 
-Three Himegari mods that patch `SC0000.BIN` (mod loader spec §13, gate 2; `Age.Engine.Tests/ModLinkerTests.cs`):
+Three Himegari mods that patch `SC0000.BIN` (mod loader spec §13, gate 2; `Ome.Engine.Tests/ModLinkerTests.cs`):
 
 - `example.sc0000-page3` inserts a line before the third page (site 0x877, as the gate 7 fragment does);
 - `example.sc0000-page4` inserts a line before the fourth page (site 0x8ac);
@@ -19,11 +19,11 @@ The first two compose.
   for text while SC0000's ADV bindings are armed, so a right click there is "Depth が不正です".
   `tools/drive/scenarios/himegari-script-error*.steps` answer the box on both targets.
 
-Gate 5 exported `example.prologue`, `example.sc0000-page3` and `example.sc0000-page4` with `Age.Cli omp export` and
+Gate 5 exported `example.prologue`, `example.sc0000-page3` and `example.sc0000-page4` with `Ome.Cli omp export` and
 ran the same scenarios on native AGE.
 
 - `example.kamidori-prologue-line` (gate 6) targets Kamidori with the translation overlay: it inserts a line before
   the first page of the translated `patch/SC0000.bin` (site 0xd0a, fingerprinted on the translated bytes).
   `NaturalBootIntegrationTests.KamidoriTranslatedPrologueFragmentIsTheFirstAdvPage` boots a new game into it.
 
-Each folder is an unpacked Open Maid Pack; `Age.Cli omp build DIR` packs one into a `.omp` with stored plans.
+Each folder is an unpacked Open Maid Pack; `Ome.Cli omp build DIR` packs one into a `.omp` with stored plans.

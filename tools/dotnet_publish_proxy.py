@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage an exact prepublished payload for Godot's redundant export-time publish.
 
-All non-publish dotnet commands are delegated to AGE_REAL_DOTNET. A publish is
+All non-publish dotnet commands are delegated to OME_REAL_DOTNET. A publish is
 accepted only when its configuration, RID, self-contained flag, project, output
 root, and prepublished assembly match the values supplied by the build driver.
 """
@@ -72,11 +72,11 @@ def _is_within(path: Path, root: Path) -> bool:
 
 
 def stage_publish(request: PublishRequest, environ: dict[str, str]) -> Path:
-    expected_project = Path(environ["AGE_PUBLISH_PROJECT"]).resolve()
-    source = Path(environ["AGE_PREPUBLISHED_OUTPUT"]).resolve()
-    output_root = Path(environ["AGE_PUBLISH_OUTPUT_ROOT"]).resolve()
-    assembly = environ["AGE_PUBLISH_ASSEMBLY"]
-    expected_runtime = environ["AGE_PUBLISH_RUNTIME"]
+    expected_project = Path(environ["OME_PUBLISH_PROJECT"]).resolve()
+    source = Path(environ["OME_PREPUBLISHED_OUTPUT"]).resolve()
+    output_root = Path(environ["OME_PUBLISH_OUTPUT_ROOT"]).resolve()
+    assembly = environ["OME_PUBLISH_ASSEMBLY"]
+    expected_runtime = environ["OME_PUBLISH_RUNTIME"]
     output = request.output.resolve()
 
     if request.project.resolve() != expected_project:
@@ -106,9 +106,9 @@ def stage_publish(request: PublishRequest, environ: dict[str, str]) -> Path:
 
 def main(arguments: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if arguments is None else arguments)
-    real_dotnet = os.environ.get("AGE_REAL_DOTNET")
+    real_dotnet = os.environ.get("OME_REAL_DOTNET")
     if not real_dotnet:
-        raise ValueError("AGE_REAL_DOTNET is required")
+        raise ValueError("OME_REAL_DOTNET is required")
     if not args or args[0] != "publish":
         os.execv(real_dotnet, [real_dotnet, *args])
     request = parse_publish(args)

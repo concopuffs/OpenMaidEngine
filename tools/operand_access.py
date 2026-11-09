@@ -10,7 +10,7 @@ storage address. This tool:
 2. walks each handler's control flow, plus two levels of callees, and records every accessor call
    with its constant operand index (``push imm`` or a register loaded from an immediate);
 3. optionally cross-checks the result against the corpus operand-type census written by
-   ``Age.Cli catalog-scan`` (``operand_type_occurrences``).
+   ``Ome.Cli catalog-scan`` (``operand_type_occurrences``).
 
 Accessor identities for the reference profile (Himegari SYS4422) are proven facts recorded below;
 another revision's accessors are pinned in ``ENGINES`` after ``--align-accessors`` maps them by
@@ -341,7 +341,7 @@ def corpus_census(profile_id: str) -> dict[int, list[dict[int, int]]]:
     report = json.loads(path.read_text(encoding="utf-8"))
     census = report.get("operand_type_occurrences")
     if census is None:
-        raise SystemExit(f"{path}: no operand_type_occurrences; rerun Age.Cli catalog-scan")
+        raise SystemExit(f"{path}: no operand_type_occurrences; rerun Ome.Cli catalog-scan")
     return {int(op, 16): [{int(t, 16): n for t, n in position.items()} for position in positions]
             for op, positions in census.items()}
 

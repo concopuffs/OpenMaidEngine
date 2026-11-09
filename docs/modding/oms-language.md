@@ -8,7 +8,7 @@ write mods. The full grammar and the exact lowering rules are in the language de
 The best way to learn the language is to decompile a script you want to change and read it:
 
 ```text
-Age.Cli oms-decompile --script SC0000.BIN --level idiomatic --output build/SC0000.oms <game options>
+Ome.Cli oms-decompile --script SC0000.BIN --level idiomatic --output build/SC0000.oms <game options>
 ```
 
 Use the game options from your game guide ([games/README.md](games/README.md)). `--level idiomatic` names globals, scripts, library subroutines and dialogue lines. Without `--output` the source

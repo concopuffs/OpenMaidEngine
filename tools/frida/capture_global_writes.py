@@ -21,7 +21,7 @@ pre-scene boundary.
 --spawn launches AGE.EXE under Frida so hooks are live before instruction 0 (captures TITLE etc.);
 --attach hooks the running game (misses everything before attach). Writes build/global-writes.jsonl
 (raw, ordered) + build/scene-entry-state.json (last-write-wins GameSession snapshot, loadable via
-`Age.Cli ... --state`).
+`Ome.Cli ... --state`).
 """
 import json
 import sys

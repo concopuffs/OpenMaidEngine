@@ -227,7 +227,7 @@ def _handler_evidence_status(opcode: M.Opcode, revision: str) -> str:
 def load_runtime_coverage() -> frozenset[int]:
     """Read the engine-owned implementation set without making it opcode-registry source data."""
     source = (
-        paths.REPO / "engine" / "Age.Engine" / "Vm" / "OpcodeRuntimeCoverage.cs"
+        paths.REPO / "engine" / "Ome.Engine" / "Vm" / "OpcodeRuntimeCoverage.cs"
     ).read_text(encoding="utf-8")
     match = re.search(
         r"ImplementedOpcodes\s*=\s*new HashSet<int>\s*\{(?P<body>.*?)\}\s*\.ToFrozenSet",
@@ -369,7 +369,7 @@ def emit_json(model: M.Model, runtime_implemented: frozenset[int] = frozenset())
              "handler_bindings": [
                  {
                      "layer_id": revision,
-                     "implementation_id": f"age-vm-switch/0x{op:x}",
+                     "implementation_id": f"ome-vm-switch/0x{op:x}",
                      "semantic_evidence_status": _handler_evidence_status(oc, revision),
                  }
                  for revision in sorted(oc.observed_revisions)
@@ -457,7 +457,7 @@ def emit_reference_md(
             L.append(f"- **runtime implemented:** {'yes' if op in runtime_implemented else 'no'}")
             if op in runtime_implemented and oc.observed_revisions:
                 bindings = "; ".join(
-                    f"`{revision}` -> `age-vm-switch/0x{op:x}` "
+                    f"`{revision}` -> `ome-vm-switch/0x{op:x}` "
                     f"({_handler_evidence_status(oc, revision)})"
                     for revision in sorted(oc.observed_revisions)
                 )
