@@ -135,12 +135,12 @@ it; git history keeps the record.
 
 ## Localization
 
-- **Brainstorm a localization framework (not started; user request 2026-11-04).** There are two layers:
-  - **Engine-owned text.** This is the strings that AGE.EXE and AGERC.DLL draw themselves, which the port reproduces
-    in Japanese, for example:
-    - the 終了 dialog (`godot/ExitConfirmationDialog.cs`);
-    - the エラーが発生しました box (`VirtualMachine.DiagnosticCaption`);
-    - other native message boxes.
+- **Brainstorm a localization framework (user request 2026-11-04).** There are two layers:
+  - **Engine-owned text.** This is the strings that AGE.EXE and AGERC.DLL draw themselves. The engine shell's (the
+    menu bar, the strip, 終了 and the options panel) already come from keyed tables, `Shell/Strings/ja.json` and
+    `en.json`, which `OME.INI`'s `ui:Language` picks (`superpowers/specs/2026-11-09-engine-shell-design.md`, §6).
+    Still fixed Japanese: the エラーが発生しました box (`VirtualMachine.DiagnosticCaption`) and other native message
+    boxes.
   - **Game text.** This is script dialogue, CG text and system graphics. Mods and translation packs carry it.
 
   The engine's concern is the first layer. The goal is a framework, not a one-off English translation. Questions
@@ -150,9 +150,11 @@ it; git history keeps the record.
   - Per-profile overrides: games differ in wording.
   - How mods ship and override both layers through the loader.
   - Fonts and glyph coverage.
-  - Keeping the drive protocol's native control texts (`dialogs`/`answer`) stable whatever locale is shown.
+  - Keeping the drive protocol's native control texts (`dialogs`/`answer`) stable whatever locale is shown. The
+    shell settled this for its own controls: they report their Japanese texts whatever `ui:Language` shows (spec §8).
 
-  Done when a design is agreed (a spec under `superpowers/specs/`) and the engine-owned strings go through it.
+  Done when a design is agreed (a spec under `superpowers/specs/`) and the remaining engine-owned strings go through
+  it.
 
 ## Platform and project
 
