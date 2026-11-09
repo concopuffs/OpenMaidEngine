@@ -56,6 +56,13 @@ public class DriveControlTests
             Chosen = command;
             return new JsonObject { ["command"] = command, ["enabled"] = true };
         }
+        public (string Name, int Value)? Set;
+        public JsonObject Option(string name, int value)
+        {
+            Set = (name, value);
+            return new JsonObject { ["option"] = name, ["value"] = value, ["section"] = "message" };
+        }
+        public JsonObject Options() => new() { ["options"] = new JsonArray(new JsonObject { ["name"] = "se" }) };
     }
 
     private static DriveState At(string location, string? waiting = null, bool busy = false, params string[] outer)
@@ -293,6 +300,25 @@ public class DriveControlTests
         var without = new FakeBackend { Capabilities = Array.Empty<string>() };
         Assert.Contains("'menu' is not supported",
             (string?)Run(new DriveDispatcher(without), without, """{"id":4,"op":"menu","command":40035}""")["error"]);
+    }
+
+    [Fact]
+    public void OptionAndOptionsGoToTheBackendAndNeedTheOptionsCapability()
+    {
+        var backend = new FakeBackend { Capabilities = new[] { "options" } };
+        var dispatcher = new DriveDispatcher(backend);
+        var set = Run(dispatcher, backend, """{"id":1,"op":"option","name":"message-speed","value":40}""");
+        Assert.Equal(("message-speed", 40), backend.Set);
+        Assert.Equal(40, (int)set["result"]!["value"]!);
+        var listed = Run(dispatcher, backend, """{"id":2,"op":"options"}""");
+        Assert.Equal("se", (string?)listed["result"]!["options"]![0]!["name"]);
+        Assert.False((bool)Run(dispatcher, backend, """{"id":3,"op":"option","name":"se"}""")["ok"]!);
+
+        var without = new FakeBackend { Capabilities = Array.Empty<string>() };
+        Assert.Contains("'options' is not supported",
+            (string?)Run(new DriveDispatcher(without), without, """{"id":4,"op":"option","name":"se","value":0}""")["error"]);
+        Assert.Contains("'options' is not supported",
+            (string?)Run(new DriveDispatcher(without), without, """{"id":5,"op":"options"}""")["error"]);
     }
 
     [Fact]

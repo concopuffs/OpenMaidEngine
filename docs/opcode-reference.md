@@ -3103,7 +3103,7 @@ Both native handlers directly return the input manager field populated from the 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x10f`; scope=Himegari SYS4422. Ghidra /v2: op_0x10f_set_system_key_disable_mask@0x4217a0 stores operand 1 at EngineCtx+0x6da7c; scene_context_init_reset@0x40b3b0 and the EngineCtx constructor zero it. age_main_window_proc@0x486320 calls engine_save_screenshot_bmp(0) on WM_KEYDOWN VK_F1 only while bit 0 is clear, and returns without DefWindowProc for WM_SYSKEYDOWN VK_F10 while bit 0x200 is set. No Himegari or Kamidori script calls it.
 
-Port status (2026-11-05): implemented as VirtualMachine.SystemKeyDisableMask, cleared by the scene reset. The Godot frontend's F1 screenshot honours bit 0; the menu bar has no F10 focus yet (docs/backlog.md, "Native menu bar"). Neither shipped corpus calls the op.
+Port status (2026-11-05): implemented as VirtualMachine.SystemKeyDisableMask, cleared by the scene reset. The Godot frontend's F1 screenshot honours bit 0, and the menu bar's keyboard mode ignores F10 under bit 0x200 (Main.MenuBar.cs, IgnoreF10). Neither shipped corpus calls the op.
 
 ### 0x12e `find-hit-rectangle` (find-hit-rectangle, argc 8)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)

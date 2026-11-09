@@ -161,4 +161,9 @@ public static class ShellCommands
     public static ShellCommand? Find(int id) => ById.GetValueOrDefault(id);
 
     public static ShellCommand? Find(string name) => ByName.GetValueOrDefault(name);
+
+    /// <summary>The command that opens <paramref name="section"/> (for 情報, its about view): the 設定 command whose tab
+    /// the driver's <c>option</c> step opens.</summary>
+    public static ShellCommand? OpenerOf(ShellSection section) =>
+        All.FirstOrDefault(c => c.Kind == ShellCommandKind.Section && c.Section == section && !c.Diagnostics);
 }

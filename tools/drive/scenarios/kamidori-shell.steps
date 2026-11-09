@@ -1,0 +1,40 @@
+# The engine shell on Kamidori's clean install (Kamidori/), whose AGERC.DLL is packed: the port's 終了 and options
+# panel come from the shell, native's from AGERC (docs/superpowers/specs/2026-11-09-engine-shell-design.md, §8).
+# 終了 over the title cancels; on the prologue page `option` steps set a ﾒｯｾｰｼﾞ, a ｻｳﾝﾄﾞ and an その他 option, then
+# 終了's タイトルに戻る resets the scene and SYSTEM4 reloads back to TITLE. Compare SYS4REG.INI after `close` on both
+# targets: MessageSpeed=30, MusicFadeOnVoicePlayingVolume=20, EffectSkipOnClick=1. On a fresh sandbox, on both
+# targets:
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port run tools/drive/scenarios/kamidori-shell.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+close-request                           # 終了 over the title
+wait 1
+dialogs
+answer ｷｬﾝｾﾙ
+wait 1
+expect script=TITLE
+
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+click newgame.begin
+wait-state script=SC0000 timeout=60
+wait-state at=SC0000@0xfa2 click=adv.next every=2.5 timeout=180   # １８年前、叛乱によって王政が崩壊すると、…
+wait 3
+options                                 # the sandbox's values
+option message-speed 30
+option lower-bgm-level 20
+option effect-skip on
+wait 1
+options                                 # the values set above
+expect at=SC0000@0xfa2
+
+close-request
+wait 1
+answer タイトルに戻る(&T)
+answer OK
+wait-state script=TITLE click=adv.next every=3 timeout=120   # SYSTEM4 reloads: logos, then the title
+wait 2
+state

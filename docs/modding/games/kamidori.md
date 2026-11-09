@@ -33,7 +33,8 @@ command needs the game options:
   untranslated install's `AGERC.DLL` is packed. While CONFIG runs (op `0x142`'s gate is 0) its ﾒｯｾｰｼﾞ, ｻｳﾝﾄﾞ and
   その他 sections are read-only, as native's 設定 cannot open then. The port's shell is Japanese unless `OME.INI`'s
   `ui:Language` or `--language en` picks English; native AGE on the translated install shows its `agerc.dll`'s
-  English.
+  English. The driver's `option` and `options` steps set and list them on both targets without labels, and
+  `tools/drive/scenarios/kamidori-shell.steps` checks 終了 and three options on the clean install.
 - Registries for fragments: `py -3.11 -X utf8 tools/globals_build.py --profile kamidori --build`.
 
 ## The translation is a different base

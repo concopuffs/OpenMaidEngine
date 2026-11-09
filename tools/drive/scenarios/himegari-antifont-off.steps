@@ -1,6 +1,7 @@
-# message:UseAntiFont 0, set from the 設定 dialog's ﾒｯｾｰｼﾞ page (文字の縁をなめらかにする). OK applies it at once
-# through IAGEService +0x68 (text_set_antialias_enabled), and later text is drawn from GGO_BITMAP glyphs instead of
-# GGO_GRAY4_BITMAP ones. Text already drawn is not redrawn: page 1 looks the same after OK.
+# message:UseAntiFont 0, set with `option smooth-text off`: natively 設定's ﾒｯｾｰｼﾞ tab (文字の縁をなめらかにする),
+# on the port the options panel's ﾒｯｾｰｼﾞ section. OK (決定) applies it at once through IAGEService +0x68
+# (text_set_antialias_enabled), and later text is drawn from GGO_BITMAP glyphs instead of GGO_GRAY4_BITMAP ones. Text
+# already drawn is not redrawn: page 1 looks the same after OK.
 #
 # With AntiFont off, the ADV text builders and History draw through text_draw_string_primary_or_ruby, which starts
 # the string at the effect offset. Himegari's mode-3 (1,1) text therefore lands one pixel right and down, and its
@@ -21,12 +22,8 @@ wait-state top=SC0000@0x83f timeout=60  # page 1
 settle
 shot antifont-page1                     # antialiased
 
-menu message-settings
-wait 1.5
-answer 文字の縁をなめらかにする          # clears message:UseAntiFont
-wait 0.5
-answer OK
-wait 2
+option smooth-text off                  # clears message:UseAntiFont, then OK
+wait 1
 dialogs                                 # none
 expect top=SC0000@0x83f
 shot antifont-page1-after               # unchanged

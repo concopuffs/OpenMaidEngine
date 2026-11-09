@@ -527,6 +527,31 @@ public partial class OptionsPanel : Control
         return null;
     }
 
+    /// <summary>The driver's <c>option</c> step: the draft takes <paramref name="value"/> as the option's control would
+    /// set it, and the section redraws. Returns the value the draft holds, or null when the section shown has no
+    /// usable control for the option (another section's, one the profile hides, or a read-only section's).</summary>
+    public int? SetOption(ShellOption option, int value)
+    {
+        if (option.Section != _section || !_context.Draft.Set(option, value)) return null;
+        ShowSection(_section);
+        return _context.Draft.Value(option);
+    }
+
+    /// <summary>The driver's <c>options</c> step: the native options the profile shows, with the draft's values.
+    /// </summary>
+    public JsonArray ListOptions()
+    {
+        var options = new JsonArray();
+        foreach (ShellOption option in _context.Draft.Visible)
+            options.Add(new JsonObject
+            {
+                ["name"] = option.Name, ["section"] = option.Section.ToString().ToLowerInvariant(),
+                ["value"] = _context.Draft.Value(option), ["min"] = option.Min, ["max"] = option.Max,
+                ["step"] = option.Step, ["applies"] = option.Apply == ShellOptionApply.Live ? "live" : "ok",
+            });
+        return options;
+    }
+
     /// <summary>A label without its mnemonic: "効果音(&amp;S)" and "&amp;Sound" read as 効果音 and sound.</summary>
     private static string Normalize(string text)
     {

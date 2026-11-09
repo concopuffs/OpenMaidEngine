@@ -44,7 +44,7 @@ from drive_core import DriveError  # noqa: E402
 
 AGENT = core.DATA / "native-agent.js"
 ENGINE_CTX_TOML = paths.VM_MAP / "engine-ctx.toml"
-CAPABILITIES = ("dialogs", "answer", "window", "menu", "rand", "detach")
+CAPABILITIES = ("dialogs", "answer", "window", "menu", "rand", "options", "detach")
 QUIET_EVENTS = {"folder", "request", "activated", "foreground"}       # logged, but not sent to clients
 
 
@@ -251,6 +251,51 @@ class Win32(core.Windows):
     def post(self, hwnd: int, message: int, wparam: int, lparam: int) -> None:
         self.user32.PostMessageW(hwnd, message, wparam, lparam)
 
+    def send(self, hwnd: int, message: int, wparam: int, lparam: int, seconds: float = 10) -> int:
+        """SendMessage across processes, as a control's own notifications arrive. AGE's thread takes it when it next
+        pumps messages; the first 設定 of a process holds that thread for about 2 s."""
+        ctypes, wintypes, user32 = self.ctypes, self.wintypes, self.user32
+        user32.SendMessageTimeoutW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+                                               wintypes.UINT, wintypes.UINT, ctypes.c_void_p]
+        result = ctypes.c_size_t()
+        abort_if_hung = 0x2
+        if not user32.SendMessageTimeoutW(hwnd, message, wparam, lparam, abort_if_hung, int(seconds * 1000),
+                                          ctypes.byref(result)):
+            raise DriveError(f"AGE did not take message 0x{message:x} within {seconds:g} s")
+        return result.value
+
+    def dialog_item(self, hwnd: int, control: int) -> int:
+        self.user32.GetDlgItem.argtypes = [self.wintypes.HWND, self.ctypes.c_int]
+        self.user32.GetDlgItem.restype = self.wintypes.HWND
+        return self.user32.GetDlgItem(hwnd, control) or 0
+
+    def child_dialogs(self, hwnd: int) -> list[int]:
+        """The dialog's DS_CONTROL pages: its direct #32770 children."""
+        self.user32.GetParent.argtypes = [self.wintypes.HWND]
+        self.user32.GetParent.restype = self.wintypes.HWND
+        found: list[int] = []
+
+        def child(handle, _):
+            if self._class(handle) == "#32770" and self.user32.GetParent(handle) == hwnd:
+                found.append(handle)
+            return True
+
+        self.user32.EnumChildWindows(hwnd, self.WNDENUMPROC(child), 0)
+        return found
+
+    def style(self, hwnd: int) -> int:
+        self.user32.GetWindowLongW.argtypes = [self.wintypes.HWND, self.ctypes.c_int]
+        self.user32.GetWindowLongW.restype = self.ctypes.c_long
+        return self.user32.GetWindowLongW(hwnd, GWL_STYLE) & 0xFFFFFFFF
+
+    def usable(self, hwnd: int) -> bool:
+        """Whether a user could work the control: it and its page show, and it is enabled."""
+        return bool(self.user32.IsWindowVisible(hwnd) and self.user32.IsWindowEnabled(hwnd))
+
+    def exists(self, hwnd: int) -> bool:
+        self.user32.IsWindow.argtypes = [self.wintypes.HWND]
+        return bool(self.user32.IsWindow(hwnd))
+
     def has_menu(self, hwnd: int) -> bool:
         self.user32.GetMenu.argtypes = [self.wintypes.HWND]
         self.user32.GetMenu.restype = self.wintypes.HMENU
@@ -409,6 +454,30 @@ WM_SYSKEYDOWN, WM_SYSKEYUP, VK_MENU, VK_F10, VK_RETURN = 0x104, 0x105, 0x12, 0x7
 WM_SYSCOMMAND, SC_MINIMIZE, SC_RESTORE = 0x112, 0xF020, 0xF120
 WM_COMMAND, WM_INITMENU, MF_BYCOMMAND, MF_GRAYED, MF_DISABLED, MF_CHECKED = 0x111, 0x116, 0x0, 0x1, 0x2, 0x8
 WM_ENTERMENULOOP = 0x211
+WM_HSCROLL, WM_VSCROLL, TB_THUMBPOSITION, TB_ENDTRACK, TBS_VERT = 0x114, 0x115, 4, 8, 0x2
+TBM_GETPOS, TBM_SETPOS, BM_GETCHECK, IDOK, IDCANCEL, GWL_STYLE = 0x400, 0x405, 0xF0, 1, 2, -16
+
+# 設定's control for each `option` (dialog 9; docs/engine-re.md, "設定"): its page, its control id and, for a
+# trackbar, the position a value sits at and the value a position reads as. The ﾒｯｾｰｼﾞ page's trackbars are
+# horizontal and the ｻｳﾝﾄﾞ page's vertical; a check box's checked state is the value.
+SETTINGS_CONTROLS = {
+    "message-speed": ("message", 0x414, lambda v: 100 - v, lambda p: 100 - p),
+    "window-opacity": ("message", 0x415, lambda v: 16 - v, lambda p: 16 - p),
+    "auto-wait-voice": ("message", 0x416, lambda v: v // 100, lambda p: p * 100),
+    "auto-wait-text": ("message", 0x417, lambda v: v // 100, lambda p: p * 100),
+    "smooth-text": ("message", 1000, None, None),
+    "wheel-advance": ("message", 0x3E9, None, None),
+    "master-volume": ("sound", 0x414, lambda v: 100 - v // 100, lambda p: (100 - p) * 100),
+    "bgm-volume": ("sound", 0x415, lambda v: 100 - v // 100, lambda p: (100 - p) * 100),
+    "se-volume": ("sound", 0x416, lambda v: 100 - v // 100, lambda p: (100 - p) * 100),
+    "voice-volume": ("sound", 0x417, lambda v: 100 - v // 100, lambda p: (100 - p) * 100),
+    "bgm": ("sound", 1000, None, None),
+    "se": ("sound", 0x3E9, None, None),
+    "voice": ("sound", 0x3ED, None, None),
+    "lower-bgm-on-voice": ("sound", 0x3EA, None, None),
+    "lower-bgm-level": ("sound", 0x418, lambda v: v, lambda p: p),
+    "effect-skip": ("other", 1000, None, None),
+}
 
 
 # --------------------------------------------------------------------------------------------- requests
@@ -928,7 +997,117 @@ class Daemon:
         """Choose a menu-bar command as a user does: the menu refreshes, a grayed item cannot be chosen, and an
         enabled one sends WM_COMMAND (AGE hands AGERC's ids to its _OperateMenu command handler). In fullscreen the
         menu is the top-edge strip's, which must be showing; its WM_COMMAND goes to the strip."""
-        command = _int(request, "command", 0)
+        return self.choose_menu(_int(request, "command", 0))
+
+    def op_option(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Set one option in AGERC's 設定 as a user does, and press OK: the section's menu command opens 設定 at
+        that tab, a trackbar moves with TBM_SETPOS and the scroll notification its page receives (the ｻｳﾝﾄﾞ page
+        applies a volume on it), and a check box takes a BM_CLICK. OK runs agerc_settings_apply and launches
+        CALLBACK_SETTING.BIN; the step returns once 設定 has closed."""
+        name, value = request.get("name"), request.get("value")
+        if not isinstance(name, str) or not isinstance(value, int) or isinstance(value, bool):
+            raise DriveError("'option' needs a string 'name' and an integer 'value'")
+        name, value = core.option_value(name, str(value))
+        section = core.OPTIONS[name][0]
+        dialog, pages = self.open_settings(section)
+        try:
+            control = self.settings_control(pages, name)
+            set_to = self.set_settings_control(pages, name, control, value)
+            if set_to != value:
+                raise DriveError(f"設定's control for {name} reads {set_to} after setting {value}")
+        except BaseException:
+            self.end_settings(dialog, IDCANCEL)
+            raise
+        self.end_settings(dialog, IDOK)
+        return {"option": name, "value": set_to, "section": section}
+
+    def op_options(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Every option 設定 shows, read from its controls (each page exists, shown or not), then ｷｬﾝｾﾙ."""
+        dialog, pages = self.open_settings(core.OPTIONS_SECTION)
+        try:
+            listed = []
+            for name, (section, low, high, step, live) in core.OPTIONS.items():
+                control = win32().dialog_item(pages[section], SETTINGS_CONTROLS[name][1])
+                if not control or not win32().user32.IsWindowEnabled(control) or not (
+                        win32().style(control) & 0x10000000):   # WS_VISIBLE: a hidden page's controls keep it
+                    continue
+                listed.append({"name": name, "section": section, "value": self.read_settings_control(name, control),
+                               "min": low, "max": high, "step": step, "applies": "live" if live else "ok"})
+        finally:
+            self.end_settings(dialog, IDCANCEL)
+        return {"options": listed}
+
+    def open_settings(self, section: str, seconds: float = 15) -> tuple[int, dict[str, int]]:
+        """Open 設定 at `section`'s tab from its menu command; returns the dialog and its pages by section."""
+        self.choose_menu(core.MENU_COMMANDS[core.SECTION_COMMANDS[section]])
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            for hwnd in win32().top_windows(self.age_pid):
+                tabs = win32().dialog_item(hwnd, 0x417)
+                if win32()._class(hwnd) != "#32770" or not tabs or win32()._class(tabs) != "SysTabControl32":
+                    continue
+                pages = self.settings_pages(hwnd)
+                if section in pages and win32().user32.IsWindowVisible(pages[section]):
+                    return hwnd, pages
+            time.sleep(0.05)
+        raise DriveError(f"設定 did not open at its {section} tab within {seconds:g} s")
+
+    @staticmethod
+    def settings_pages(dialog: int) -> dict[str, int]:
+        """設定's pages by the controls only each has: 動作環境's copy button 0x419, ｻｳﾝﾄﾞ's trackbar 0x418,
+        ﾒｯｾｰｼﾞ's 0x415, and その他's lone check 1000."""
+        pages = {}
+        for page in win32().child_dialogs(dialog):
+            for kind, control in (("system", 0x419), ("sound", 0x418), ("message", 0x415), ("other", 1000)):
+                if win32().dialog_item(page, control):
+                    pages.setdefault(kind, page)
+                    break
+        return pages
+
+    def settings_control(self, pages: dict[str, int], name: str) -> int:
+        section, control_id, _, _ = SETTINGS_CONTROLS[name]
+        control = win32().dialog_item(pages[section], control_id)
+        if not control or not win32().usable(control):
+            raise DriveError(f"設定's {section} tab shows no usable control for {name}")
+        return control
+
+    def read_settings_control(self, name: str, control: int) -> int:
+        _, _, _, value_at = SETTINGS_CONTROLS[name]
+        if value_at is None:
+            return 1 if win32().send(control, BM_GETCHECK, 0, 0) == 1 else 0
+        return value_at(win32().send(control, TBM_GETPOS, 0, 0))
+
+    def set_settings_control(self, pages: dict[str, int], name: str, control: int, value: int) -> int:
+        section, _, position_of, _ = SETTINGS_CONTROLS[name]
+        if position_of is None:
+            if self.read_settings_control(name, control) != value:
+                before = self.api.clicks()
+                win32().post(control, BM_CLICK, 0, 0)
+                self.wait_click(control, before)
+        else:
+            position = position_of(value)
+            page = pages[section]
+            scroll = WM_VSCROLL if win32().style(control) & TBS_VERT else WM_HSCROLL
+            win32().send(control, TBM_SETPOS, 1, position)
+            win32().send(page, scroll, TB_THUMBPOSITION | position << 16, control)
+            win32().send(page, scroll, TB_ENDTRACK, control)
+        return self.read_settings_control(name, control)
+
+    def end_settings(self, dialog: int, button: int, seconds: float = 15) -> None:
+        """Press 設定's OK or ｷｬﾝｾﾙ and wait until it has closed."""
+        if not win32().exists(dialog):
+            return
+        handle = win32().dialog_item(dialog, button)
+        before = self.api.clicks()
+        win32().post(handle, BM_CLICK, 0, 0)
+        self.wait_click(handle, before, seconds)
+        deadline = time.monotonic() + seconds
+        while win32().exists(dialog):
+            if time.monotonic() > deadline:
+                raise DriveError(f"設定 did not close within {seconds:g} s")
+            time.sleep(0.05)
+
+    def choose_menu(self, command: int) -> dict[str, Any]:
         if command in core.LIVE_REFUSED_MENU_COMMANDS and self.saves.get("mode") == "live":
             raise DriveError(core.LIVE_REFUSED_MENU_COMMANDS[command])
         hwnd = self.require_window()

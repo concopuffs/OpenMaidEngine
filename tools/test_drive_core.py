@@ -484,6 +484,51 @@ def test_menu_step():
     check(all(r["id"] != r["command"] for r in server.requests[1:]), "the request id stays the request's own")
 
 
+def test_option_step():
+    check(core.parse_step("option wheel-advance on").args == ("wheel-advance", "on"), "option takes a name and a value")
+    check(core.option_value("SE", "off") == ("se", 0) and core.option_value("se-volume", "0x1388") == ("se-volume", 5000),
+          "names ignore case, switches take on/off, values take hex")
+    check(raises(core.parse_step, "option se-volume 5050", contains="steps of 100"), "off-step values are refused")
+    check(raises(core.parse_step, "option window-opacity 17", contains="0..16"), "out-of-range values are refused")
+    check(raises(core.parse_step, "option message-speed on", contains="an integer"), "on/off is only for switches")
+    check(raises(core.parse_step, "option fps-counter 1", contains="option takes one of"),
+          "port-only options are not option names")
+    check(raises(core.parse_step, "option se", contains="takes 2..2"), "option needs a value")
+    check(core.step_capabilities(core.parse_step("options")) == {"options"}, "options needs the options capability")
+    check(set(core.SECTION_COMMANDS.values()) <= set(core.MENU_COMMANDS)
+          and {section for section, *_ in core.OPTIONS.values()} == set(core.SECTION_COMMANDS),
+          "every option's section opens from a menu command")
+
+    # The native driver's 設定 controls: every option has one, and each trackbar's position map inverts its value map
+    # on every value the option takes, within the trackbar's 0..100 (0..16 for MesWinAlpha).
+    check(set(native.SETTINGS_CONTROLS) == set(core.OPTIONS), "every option has a 設定 control")
+    for name, (section, low, high, step, _) in core.OPTIONS.items():
+        page, _, position_of, value_at = native.SETTINGS_CONTROLS[name]
+        check(page == section, f"{name}'s control is on its section's page")
+        if position_of is None:
+            check((low, high) == (0, 1), f"{name} is a check box")
+            continue
+        positions = [position_of(value) for value in range(low, high + 1, step)]
+        check(all(value_at(position_of(value)) == value for value in range(low, high + 1, step))
+              and all(0 <= position <= 100 for position in positions) and len(set(positions)) == len(positions),
+              f"{name}'s trackbar positions round-trip")
+    check(native.SETTINGS_CONTROLS["message-speed"][2](30) == 70 and native.SETTINGS_CONTROLS["se-volume"][2](2500) == 75,
+          "inverted trackbars sit at 100 - value")
+
+    replies = {"option": {"option": "se", "value": 0, "section": "sound"},
+               "options": {"options": [{"name": "se", "value": 1}]}}
+    server = FakeServer(lambda request: {"ok": True, "result": replies.get(request.get("op"), {})})
+    with tempfile.TemporaryDirectory() as directory:
+        with core.Client(server.port, "secret") as client:
+            executor = core.Executor(client, core.Profile(points={}), Path(directory))
+            results = []
+            ok = executor.run(core.parse_steps(["option se off", "options"]), results.append)
+    check(ok and [(r["op"], r.get("name"), r.get("value")) for r in server.requests[1:]]
+          == [("option", "se", 0), ("options", None, None)], "option sends the name and the integer value")
+    check("option=se" in core.describe(results[0]) and "options=se=1" in core.describe(results[1]),
+          "option results describe the option and the listed values")
+
+
 def test_settings_trailer():
     pairs = [("USEAPPDATAFOLDER", "1"), ("SAVEPATH", "Eushully\\姫\\SAVE")]
     strings = b"".join(key.encode("ascii") + b"\0" + value.encode("cp932") + b"\0" for key, value in pairs)
@@ -524,6 +569,7 @@ def main():
     test_client_and_executor()
     test_window_step()
     test_menu_step()
+    test_option_step()
     test_settings_trailer()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0

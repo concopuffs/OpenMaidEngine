@@ -1788,16 +1788,15 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   The 終了 and script-error dialogs share this text path.
 - **Opting out.** `--no-menu-bar` restores the plain window.
 - **Checks.** `tools/drive/scenarios/himegari-menu-bar.steps` checks read skip, hide, Auto and 終了 on both
-  targets, `himegari-screenshot.steps` checks the screenshots and the image folder, and
-  `himegari-version-dialog.steps` checks ﾊﾞｰｼﾞｮﾝ情報, and `himegari-settings-dialog.steps` checks 設定. Until engine
-  shell M4 moves them to its `option` steps, those two (and `himegari-antifont-off.steps` and
-  `himegari-effect-skip-on-click.steps`) answer AGERC's buttons, which the port's panel does not have, so they pass
-  only natively. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
+  targets, `himegari-screenshot.steps` checks the screenshots and the image folder,
+  `himegari-version-dialog.steps` checks ﾊﾞｰｼﾞｮﾝ情報, and `himegari-settings-dialog.steps` checks 設定 through the
+  driver's `option` steps, which set AGERC's controls by id natively and the panel's draft on the port; both
+  targets' `SYS4REG.INI` files come out identical. The driver's `menu` step chooses an item as a user does. Natively it sends `WM_INITMENU`, reads the item
   state, then posts `WM_COMMAND`. Both targets refuse a grayed item. `himegari-menu-keyboard.steps` drives keyboard
   mode on SC0000. Both targets eat the same click and move the same one page through ｵｰﾄﾒｯｾｰｼﾞ on and off. Both
   open the 終了 dialog from the window menu's Close. Full-window captures of the six positions and the window menu
   match native apart from ClearType fringes and the window menu's row (below).
-- **Remaining gaps.** `docs/backlog.md`, "Native menu bar", lists the look differences, including native's
+- **Remaining gaps.** `docs/backlog.md`, "Engine shell menu bar", lists the optional look differences, including native's
   off-window popups and the window menu's row: it opens one row above the bar natively and at the bar's top in the
   port. The ﾒｯｾｰｼﾞ page's UseAntiFont check is applied on OK ("AntiFont off" in the text sections).
 

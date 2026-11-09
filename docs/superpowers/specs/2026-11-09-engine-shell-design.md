@@ -468,3 +468,18 @@ The user accepted the three recommendations on 2026-11-09:
    - Move the four scenarios to them, and add the Kamidori scenario.
    - Update `tools-reference.md`, `docs/modding/games/kamidori.md` and the backlog: close the shell item and
      rewrite the menu-bar look item.
+
+   Done 2026-11-09. `option NAME VALUE` and `options` share `OPTIONS` in `tools/drive_core.py`, which a model test
+   holds to `ShellOptions`. Both targets open 設定 from the option's section command, so a grayed command fails the
+   step: native sets AGERC's control by id (`TBM_SETPOS` and the page's scroll notification, or `BM_CLICK`) and
+   presses OK; the port sets the panel's draft and presses 決定. `himegari-settings-dialog` and `-antifont-off`
+   and `-effect-skip-on-click` set their options with it; `-version-dialog` keeps `answer OK`, which the panel
+   takes as 決定. `kamidori-shell` cancels 終了, sets three options and returns to the title. Acceptance:
+   - Every one of these scenarios leaves identical `SYS4REG.INI` files on both targets and reaches the same
+     positions. Only an idle loop reads differently (Kamidori's title: native's `sleep`, the port's
+     `present-frame`).
+   - `NoRuntimeSourceNamesAgercDll` checks every string literal of the runtime sources. A port run of
+     `himegari-settings-dialog` and `-menu-bar` from a copy of the install without `AGERC.DLL` passed with the same
+     `SYS4REG.INI`.
+   - On the translated Kamidori install the port's English bar, panel and 終了 work and the steps pass. The native
+     driver runs a scratch copy of the clean install, so native translated was not driven.

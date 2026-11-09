@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using Ome.Engine.Frontend.Control;
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Model;
 using Ome.Engine.Persistence;
@@ -120,6 +121,48 @@ public partial class Main
         _optionsPanelLayer = null;
         FreezePresentedFrame(false);
         Shell.HoldVm(false);
+    }
+
+    /// <summary>The driver's <c>option</c> step (capability "options"), as the native driver drives 設定: the option's
+    /// section command opens the panel (a grayed one fails the step), the option's control takes the value, and
+    /// 決定 commits, CALLBACK_SETTING.BIN included.</summary>
+    private System.Text.Json.Nodes.JsonObject DriveOption(string name, int value)
+    {
+        ShellOption option = ShellOptions.Find(name) ?? throw new DriveProtocolException($"there is no option '{name}'");
+        if (option.Snap(value) != value)
+            throw new DriveProtocolException(
+                $"option {option.Name} takes {option.Min}..{option.Max} in steps of {option.Step}, got {value}");
+        OptionsPanel panel = OpenPanelForDriver(option.Section);
+        if (panel.SetOption(option, value) is not { } set)
+        {
+            panel.Press("cancel");
+            throw new DriveProtocolException(
+                $"the options panel's {option.Section} section has no usable control for {option.Name}");
+        }
+        panel.Press("ok");
+        return new System.Text.Json.Nodes.JsonObject
+        {
+            ["option"] = option.Name, ["value"] = set, ["section"] = option.Section.ToString().ToLowerInvariant(),
+        };
+    }
+
+    /// <summary>The driver's <c>options</c> step: open ﾒｯｾｰｼﾞ from its command, list the options, and cancel, as the
+    /// native driver reads 設定's pages.</summary>
+    private System.Text.Json.Nodes.JsonObject DriveOptions()
+    {
+        OptionsPanel panel = OpenPanelForDriver(ShellSection.Message);
+        System.Text.Json.Nodes.JsonArray options = panel.ListOptions();
+        panel.Press("cancel");
+        return new System.Text.Json.Nodes.JsonObject { ["options"] = options };
+    }
+
+    private OptionsPanel OpenPanelForDriver(ShellSection section)
+    {
+        if (_optionsPanel != null) throw new DriveProtocolException("the options panel is already open");
+        ShellCommand command = ShellCommands.OpenerOf(section)
+                               ?? throw new DriveProtocolException($"no command opens the {section} section");
+        ChooseMenuCommand(command.Id);
+        return _optionsPanel ?? throw new DriveProtocolException($"{command.Name} did not open the options panel");
     }
 
     /// <summary>The port options the player changed: OME.INI takes them (a flag's value never reaches it), and this

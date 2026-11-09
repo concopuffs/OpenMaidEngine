@@ -10,23 +10,22 @@ it; git history keeps the record.
 
 ## Engine fidelity
 
-- **Native menu bar: look differences and undriven cases (AGERC menu 110).** The port runs every command either game
-  can reach as native does: ｹﾞｰﾑ>終了, 画像の保存, the four ﾒｯｾｰｼﾞ toggles, ﾌﾙｽｸﾘｰﾝ/ｳｲﾝﾄﾞｳ (with the fullscreen top-edge
-  strip), ﾍﾙﾌﾟ>ﾊﾞｰｼﾞｮﾝ情報 and the 設定 commands (both the shell's options panel since engine shell M3) and the
-  keyboard mode (`engine-re.md`, "Native menu bar" and "Screen mode"). It grays everything else, as native does.
-  Still different:
-  - Smaller look differences. Native popups may extend past the game window (the ﾍﾙﾌﾟ popup spans x 744..989), but
-    the port clamps them inside it. For the same reason, the window menu opens at the bar's top, not one row above
-    it as natively. Latin glyphs are drawn without ClearType's exact rasterization. The fullscreen strip's minimize
-    and restore buttons use Windows 10's default hover colours, not captured ones.
+- **Engine shell menu bar: undriven cases, and optional look differences.** The bar, the fullscreen strip and 終了
+  come from the shell model, and 設定, ﾊﾞｰｼﾞｮﾝ情報 and 動作環境 are the options panel
+  (`superpowers/specs/2026-11-09-engine-shell-design.md`). Every command either game can reach does what native's
+  does, the rest are grayed as natively, and the `option` scenarios leave the same `SYS4REG.INI` on both targets
+  (`engine-re.md`, "Native menu bar" and "Screen mode"). Still open:
   - Keyboard mode's pointer moves are not driven natively: the driver's posted moves do not reach Windows' menu
     loop. The port moves the selection without opening a dropdown, by Windows' rule. Escape in the loop is modelled
     on Windows' rule too, since the driver refuses ESC on native AGE. The strip's window-menu Move does nothing in
     the port; natively it would start Windows' move loop on the strip.
 
-  Done when each difference is matched, or accepted here as a gap. Out of scope since 2026-11-06: the 設定 radio
-  groups, the right-click ﾒｯｾｰｼﾞ popup and 設定 page 101, which neither shipped game can reach (`engine-re.md`,
-  "Native menu bar", "Out of scope").
+  Done when each case is driven natively and the port matches, or is accepted here as a gap. Optional, since the
+  spec makes pixel parity of the chrome a non-goal (§10): native popups may extend past the game window (the ﾍﾙﾌﾟ
+  popup spans x 744..989) where the port clamps them inside it, and so opens the window menu at the bar's top rather
+  than one row above; Latin glyphs lack ClearType's exact rasterization; the strip's minimize and restore buttons use
+  Windows 10's default hover colours. Out of scope since 2026-11-06: the 設定 radio groups, the right-click ﾒｯｾｰｼﾞ
+  popup and 設定 page 101, which neither shipped game can reach (`engine-re.md`, "Native menu bar", "Out of scope").
 - **Input-latch cases the port does not model.** The port's latch (`VirtualMachine.InputLatch`) covers effects,
   sleeps, the ops between waits, the coroutine yield, and every consumer and flush point that SC0000 reaches
   (`engine-re.md`, "Effect skipping and the input latch"). Still open:
@@ -58,24 +57,6 @@ it; git history keeps the record.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
-- **Replace AGERC with an engine-owned shell (decided 2026-11-08).** Kamidori's clean install ships `AGERC.DLL`
-  packed: the file holds only its icon, version and manifest resources, so a port that read its dialogs had no
-  version or 設定 dialogs there. The user decided:
-  - At runtime the port reads game data, never game binaries (`AGE.EXE`, `AGERC.DLL`).
-  - AGERC is AGE's stock front end, so the port replaces it as it replaces `AGE.EXE`. The engine keeps everything
-    scripts can observe at native semantics: the settings registry (`SYS4REG.INI` keys and units), the services, the
-    callback scripts (`CALLBACK_SETTING.BIN` after a settings change) and the script-set gates (ops `0x142`, `0x10f`,
-    `0x148`/`0x149`). The option set and its presentation are the port's own, configured only by `SYS4INI.BIN`
-    keys.
-  - Presentation is both an in-window options panel and a desktop menu bar. Japanese labels stay close to AGE's
-    unless that conflicts with the design.
-
-  The design is `superpowers/specs/2026-11-09-engine-shell-design.md` (accepted 2026-11-09). M1 (the engine core),
-  M2 (the shell model: the bar, the fullscreen strip and 終了) and M3 (the options panel, `OME.INI`, the bundled font
-  and the OME icon) are done, and the port reads no `AGERC.DLL`. Left for M4: the driver's `option` and `options`
-  steps on both targets, moving `himegari-settings-dialog`, `-version-dialog`, `-antifont-off` and
-  `-effect-skip-on-click` to them (they answer AGERC's buttons, so they pass only natively meanwhile), and a
-  Kamidori scenario. Done when every option works on all three installs through those steps (spec §9).
 - **Packaged executables carry Godot's icon.** The window, the fullscreen strip and 情報 show the OME icon
   (`godot/assets/ome-icon.svg`, set at runtime), but the project sets no `application/config/icon` and the Windows
   export no `.ico`, so `OME.exe` in a package and the taskbar before startup show Godot's. Done when both exports

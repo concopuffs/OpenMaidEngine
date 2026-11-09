@@ -7,7 +7,7 @@
 # - a click during the control's fade-out ends the hidden-window wait once the fade is over, so the window comes back;
 # - a click during the fade-in after a Space hide reaches the text wait that op 0x7c returns to, which advances.
 #
-# Setting 1, set with その他's check box. The effect polls the click and jumps to its end:
+# Setting 1, set with `option effect-skip on` (その他's check box). The effect polls the click and jumps to its end:
 # - the fade-out is cut short and the window stays hidden until the next click;
 # - the fade-in is cut short and the page stays.
 #
@@ -43,12 +43,8 @@ wait 2
 expect top=SC0000@0x8de                 # the wait op 0x7c returned to took it: page 4
 shot esk-1-fadein-click-advanced
 
-menu other-settings
-wait 1.5
-answer エフェクト中にキー入力でエフェクトをスキップ
-wait 0.5
-answer OK                               # system:EffectSkipOnClick=1
-wait 2.5
+option effect-skip on                   # system:EffectSkipOnClick=1, then OK
+wait 1
 expect top=SC0000@0x8de
 
 click 772 582 hold=20

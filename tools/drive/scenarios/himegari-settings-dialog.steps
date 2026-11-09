@@ -1,14 +1,17 @@
-# AGERC's 設定 dialog (dialog resource 9) on SC0000 page 1, opened from the menu on each of its tabs. The game holds and
-# its frame stays frozen while it is open. `dialogs` lists every static text and Button control of the dialog and its
-# four pages (hidden pages included, in creation order 動作環境, その他, ｻｳﾝﾄﾞ, ﾒｯｾｰｼﾞ).
+# 設定 on SC0000 page 1, through the `option` steps (docs/superpowers/specs/2026-11-09-engine-shell-design.md, §8).
+# Each `option` opens 設定 at its option's tab from that tab's menu command, sets one control and presses OK, so
+# agerc_settings_apply and CALLBACK_SETTING.BIN run after each: natively AGERC's dialog 9 (TBM_SETPOS and the page's
+# scroll notification for a trackbar, BM_CLICK for a check box), on the port the options panel. The game holds while
+# 設定 is open and goes on from the page it held on.
 #
-# - ﾏｳｽﾎｲｰﾙでﾒｯｾｰｼﾞを進める + OK writes message:AdvanceMesOnWheel=1, so a wheel-down at the text wait then advances.
-# - 効果音 turns the SE route off live, and ｷｬﾝｾﾙ turns it back on.
-# - ﾊﾞｰｼﾞｮﾝ情報 opens that dialog over 設定 (both listed, the newer first).
-# - その他's check box + OK writes system:EffectSkipOnClick=1.
+# - `options` lists every option's value: first the sandbox's (Volume0=0 from the driver's quiet seed), last the ones
+#   set here.
+# - wheel-advance on writes message:AdvanceMesOnWheel=1, so a wheel-down at the text wait then advances.
+# - 効果音 turns the SE route off live, and ｷｬﾝｾﾙ turns it back on (the dialog's own check box and button).
+# - 動作環境 opens and cancels.
 #
-# Compare SYS4REG.INI after `close` on both targets: AdvanceMesOnWheel=1, EffectSkipOnClick=1, SE=1, Volume0..3 written
-# by OK (Volume0=0 from the driver's quiet seed, 10000 for the rest). Run on a fresh sandbox, on both targets:
+# Compare SYS4REG.INI after `close` on both targets: the message, sound and system keys set below, SE=1, and
+# Volume0..3 written by each OK. Run on a fresh sandbox, on both targets:
 #   py -3.11 -X utf8 tools/drive.py port start
 #   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-settings-dialog.steps
 
@@ -26,15 +29,10 @@ wheel down                              # AdvanceMesOnWheel=0: the wheel does no
 wait 1
 expect top=SC0000@0x83f
 
-menu message-settings
-wait 1.5
-dialogs                                 # 設定 with every page's texts and buttons
-shot settings-message
-answer ﾏｳｽﾎｲｰﾙでﾒｯｾｰｼﾞを進める
-wait 0.5
-answer OK
-wait 2
-dialogs                                 # none
+options                                 # the sandbox's values
+dialogs                                 # none: options cancels 設定
+option wheel-advance on
+wait 1
 expect top=SC0000@0x83f
 wheel down                              # now the wheel advances
 wait 1.5
@@ -45,22 +43,22 @@ wait 1.5
 shot settings-sound
 answer 効果音(&S)                       # SE route off, live
 wait 0.5
-answer ﾊﾞｰｼﾞｮﾝ情報
-wait 1.5
-dialogs                                 # ﾊﾞｰｼﾞｮﾝ情報, then 設定
-answer OK                               # the version dialog's OK
-wait 1
 answer ｷｬﾝｾﾙ                            # SE back on
 wait 2
 dialogs                                 # none
 
-menu other-settings
-wait 1.5
-shot settings-other
-answer エフェクト中にキー入力でエフェクトをスキップ
-wait 0.5
-answer OK
-wait 2
+option message-speed 40
+option window-opacity 10
+option auto-wait-voice 1500
+option auto-wait-text 2500
+option bgm-volume 6000
+option voice-volume 8000
+option lower-bgm-on-voice off
+option lower-bgm-level 30
+option effect-skip on
+wait 1
+options                                 # the values set above
+expect top=SC0000@0x874
 
 menu system-info
 wait 2
@@ -69,3 +67,5 @@ answer ｷｬﾝｾﾙ
 wait 2
 dialogs                                 # none
 expect top=SC0000@0x874
+advance                                 # the game goes on at message speed 40
+expect top=SC0000@0x8a9                 # page 3

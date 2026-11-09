@@ -259,6 +259,71 @@ public class ShellModelTests
     }
 
     [Fact]
+    public void OptionNamesAndDomainsAreTheDriversOptions()
+    {
+        // tools/drive_core.py's OPTIONS and SECTION_COMMANDS: the option step takes the same names, domains and steps
+        // on both targets and opens each through the same 設定 command (spec §8).
+        string source = File.ReadAllText(Path.Combine(Paths.Repo, "tools", "drive_core.py"));
+        string table = Regex.Match(source, @"^OPTIONS = \{(.*?)^\}", RegexOptions.Singleline | RegexOptions.Multiline)
+            .Groups[1].Value;
+        var driver = Regex.Matches(table, @"""([a-z-]+)"":\s*\(""([a-z]+)"",\s*(\d+),\s*(\d+),\s*(\d+),\s*(True|False)\)")
+            .Select(m => (Name: m.Groups[1].Value, Section: m.Groups[2].Value, Min: int.Parse(m.Groups[3].Value),
+                          Max: int.Parse(m.Groups[4].Value), Step: int.Parse(m.Groups[5].Value),
+                          Live: m.Groups[6].Value == "True"))
+            .ToList();
+
+        Assert.Equal(ShellOptions.All.Select(o => o.Name), driver.Select(d => d.Name));
+        foreach (ShellOption option in ShellOptions.All)
+        {
+            var entry = driver.Single(d => d.Name == option.Name);
+            Assert.Equal((option.Section.ToString().ToLowerInvariant(), option.Min, option.Max, option.Step,
+                          option.Apply == ShellOptionApply.Live),
+                         (entry.Section, entry.Min, entry.Max, entry.Step, entry.Live));
+        }
+
+        string sections = Regex.Match(source, @"^SECTION_COMMANDS = \{(.*?)\}", RegexOptions.Multiline).Groups[1].Value;
+        Dictionary<string, string> commands = Regex.Matches(sections, @"""([a-z]+)"":\s*""([a-z-]+)""")
+            .ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value);
+        foreach (ShellSection section in ShellOptions.All.Select(o => o.Section).Distinct())
+        {
+            ShellCommand opener = ShellCommands.OpenerOf(section)!;
+            Assert.True(opener.SystemMenuGated);
+            Assert.Equal(opener.Name, commands[section.ToString().ToLowerInvariant()]);
+        }
+        Assert.Equal("version", ShellCommands.OpenerOf(ShellSection.Info)!.Name);
+    }
+
+    [Fact]
+    public void NoRuntimeSourceNamesAgercDll()
+    {
+        // Spec §9: the port opens no AGERC.DLL. Every string literal of the runtime projects, the Godot frontend and
+        // the native shim is checked; comments may still cite AGERC's functions.
+        var literal = new Regex(@"@""(?:[^""]|"""")*""|""(?:[^""\\\n]|\\.)*""");
+        string[] roots =
+        [
+            Path.Combine(Paths.Repo, "engine"), Path.Combine(Paths.Repo, "godot"), Path.Combine(Paths.Repo, "native"),
+        ];
+        string[] extensions = [".cs", ".c", ".cpp", ".h"];
+        var offenders = new List<string>();
+        int files = 0;
+        foreach (string root in roots)
+        foreach (string file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(Paths.Repo, file).Replace('\\', '/');
+            if (!extensions.Contains(Path.GetExtension(file)) || relative.Contains("/bin/")
+                || relative.Contains("/obj/") || relative.Contains("/.godot/")
+                || relative.StartsWith("engine/Ome.Engine.Tests/", StringComparison.Ordinal))
+                continue;
+            files++;
+            foreach (Match match in literal.Matches(File.ReadAllText(file)))
+                if (match.Value.Contains("agerc", StringComparison.OrdinalIgnoreCase))
+                    offenders.Add($"{relative}: {match.Value}");
+        }
+        Assert.True(files > 100, $"only {files} runtime sources were found");
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
     public void CommandNamesAndIdsAreTheDriversMenuNames()
     {
         // tools/drive_core.py's MENU_COMMANDS: the same names on both targets (spec §8). Its ｾｰﾌﾞ and ﾛｰﾄﾞ are the

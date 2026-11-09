@@ -851,7 +851,7 @@ driving needs the Godot .NET console binary and `dotnet`.
 | `drive_port.py` | The port target: builds `godot/OME.csproj`, prepares the sandbox, and launches the port with `--control` (the port serves the protocol itself; see "Port control channel" below). | *(through `drive.py port`)* | `godot/` |
 | `drive_mcp.py` | MCP server (stdio) for agents: `drive_start`, `drive_steps`, `drive_screenshot`, `drive_state`, `drive_stop`, each taking `target`. A thin client over `drive.py` (below, "MCP server"). Needs the optional `mcp` package, 2.x. | `drive_mcp.py [--profile ID]` (an agent launches it) | as `drive.py` |
 | `test_drive_mcp.py` | The MCP tools called in-process through the SDK against the fake protocol server: listing, step results with the final screenshot as an image, failures, `.steps` files, `close`, state, refusals. Fails without `mcp`; run by hand (not in `validate.py`, since no layer requires `mcp`). | `test_drive_mcp.py` | — |
-| `test_drive_core.py` | Platform-independent tests: step parsing, refusals and capabilities, locations, conditions and native frame decoding, the settle rule, INI updates, save roots, backups and port sandboxes, the Himegari profile, the SYS4INI settings trailer, the client and executor against a fake server, and every committed scenario. | `test_drive_core.py` | — |
+| `test_drive_core.py` | Platform-independent tests: step parsing, refusals and capabilities, locations, conditions and native frame decoding, the settle rule, INI updates, save roots, backups and port sandboxes, the Himegari profile, the SYS4INI settings trailer, the client and executor against a fake server, the `option` step and the native driver's 設定 control table (every option's trackbar positions round-trip), and every committed scenario. | `test_drive_core.py` | — |
 
 **Start options.**
 
@@ -915,6 +915,8 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
 | `window minimize\|restore` | minimize or restore the game window, as its title-bar and taskbar buttons do; the result reads `minimized`. Native posts `WM_SYSCOMMAND` `SC_MINIMIZE`/`SC_RESTORE` and waits for `IsIconic` to match; the port sets Godot's window mode, restoring the screen mode the game was in, and its result also reads `windowed`. After a restore, both put the window back at the bottom of the z-order unless the session started with `--foreground`. Natively the restore does not activate the window ("What the native hooks do inside AGE") |
 | `menu NAME\|ID` | choose a menu-bar command as a user does. The menu refreshes first, and a grayed item fails the step. Names: `exit`, `save`, `load`, `version`, `save-screen`, `image-folder`, `fullscreen`, `windowed`, `skip`, `hide`, `auto`, `read-skip`, `sound-settings`, `message-settings`, `system-info`, `other-settings`; or a numeric `WM_COMMAND` id. The result prints the item's `label` and whether it was `checked` before. Native sends `WM_INITMENU` (AGE has AGERC refresh the items), reads the item, then posts `WM_COMMAND`; the port runs the same refresh and command on its drawn bar. In fullscreen the menu is the top-edge strip's, so the step fails unless the strip shows (hold the pointer on row 0 past op `0x149`'s delay first); native then refreshes the strip with `WM_ENTERMENULOOP` and posts `WM_COMMAND` to it |
+| `option NAME VALUE` | set one 設定 option and commit it as OK does (engine shell spec §8). The option's section command (`message-settings`, `sound-settings` or `other-settings`) opens 設定 at that tab as `menu` does, so a grayed command fails the step (while op `0x142`'s gate is 0). Names and domains (`OPTIONS` in `drive_core.py`, the port's `ShellOptions`): `message-speed` 0–100 (ms per glyph), `window-opacity` 0–16, `auto-wait-voice` and `auto-wait-text` 0–10000 in steps of 100 (ms), `smooth-text`, `wheel-advance`, `master-volume`, `bgm-volume`, `se-volume` and `voice-volume` 0–10000 in steps of 100 (basis points), `bgm`, `se`, `voice`, `lower-bgm-on-voice`, `lower-bgm-level` 0–100 (%), `effect-skip`. VALUE is the registry's value; a switch also takes `on`/`off`, and an out-of-range or off-step value fails before anything runs. Native drives AGERC's dialog 9: a trackbar takes `TBM_SETPOS` and its page the `WM_HSCROLL`/`WM_VSCROLL` notification (`TB_THUMBPOSITION`, then `TB_ENDTRACK`), so a volume applies live as a drag does; a check box takes a posted `BM_CLICK` when it differs. The step reads the control back, presses OK and returns once 設定 has closed, so `agerc_settings_apply` and `CALLBACK_SETTING.BIN` run after every `option`. The port opens the options panel the same way, sets the option in its draft and presses 決定. The result reads `option`, `value` and `section` |
+| `options` | list every option 設定 shows, with `name`, `section`, `value`, `min`, `max`, `step` and `applies` (`live` or `ok`). Both targets open 設定 at ﾒｯｾｰｼﾞ from its command and cancel it; native reads each page's controls, hidden pages included, and the port its draft. `smooth-text` is listed only where `ENABLEANTIFONT` binds it |
 | `close [timeout=S]` | quit the game the way its own quit does (native `WM_CLOSE` wParam=1, which saves the shared profile), then the session ends |
 
 A failing step stops the request, and `do`/`run` exit 1. Results also carry what the game did meanwhile: a script
@@ -965,7 +967,7 @@ Space at the text wait. Retail never runs HIDEWIN.BIN, so both targets wait in t
 - The `hide-*` shots compare the hidden and restored frames, and `hide-8`/`hide-9` the tooltip.
 
 `himegari-effect-skip-on-click.steps` clicks during the hide window's two text-box fades on SC0000 pages 3–4, with
-`system:EffectSkipOnClick` 0 (a new profile's default) and then 1, set through 設定's その他 page. Its clicks hold
+`system:EffectSkipOnClick` 0 (a new profile's default) and then 1, set with `option effect-skip on`. Its clicks hold
 20 ms so that each lands inside its 500 ms fade.
 - With 0, the fade runs out and the click stays latched. A click during the control's fade-out restores the window
   once the fade ends (`SC0000@0x8a9`). A click during the fade-in after a Space hide advances the page (`0x8de`).
@@ -1028,24 +1030,24 @@ with the `screenshot-*` shot taken before it. On both targets they differ only i
 headers are identical. Native writes `SYS4REG.INI` when it exits, so `SaveBMPPath` shows only after `stop`; the port
 writes it at once (`engine-re.md`, "Native menu bar", Screenshots).
 
-Since engine shell M3 the port's 設定 and ﾊﾞｰｼﾞｮﾝ情報 are its options panel, which has none of AGERC's controls. The
-next four scenarios answer AGERC's buttons, so until M4 moves them to `option` steps they pass only natively, and
-the port results below describe the AGERC dialogs the port had before M3.
+The port's 設定, ﾊﾞｰｼﾞｮﾝ情報 and 動作環境 are its options panel (engine shell M3), so the scenarios below set options
+with `option` steps, which drive AGERC's controls natively and the panel on the port, and answer only the buttons
+both share: 設定's own check boxes, OK and ｷｬﾝｾﾙ.
 
 `himegari-version-dialog.steps` opens ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 on SC0000 page 1. It lists the dialog, takes a shot, answers OK,
-and checks that no dialog is left and that the game goes on to page 2 (`SC0000@0x874`). Both targets list the same
-title, game half and button; the engine half's labels differ by design, since the port names Open Maid Engine
-(`engine-re.md`, "Native menu bar", ﾊﾞｰｼﾞｮﾝ情報 names the port). Native's `shot` is AGE's own window, so it leaves the
-dialog out; the port's `version-dialog` shot includes it, for comparison with a capture of the native dialog.
+and checks that no dialog is left and that the game goes on to page 2 (`SC0000@0x874`). Natively it is AGERC's
+dialog 2; on the port the options panel at 情報, where `OK` presses 決定, which applies nothing without an edit, as
+AGERC's OK does (`engine-re.md`, "Native menu bar", 情報 names the port). Native's `shot` is AGE's own window, so it
+leaves the dialog out; the port's `version-dialog` shot includes the panel.
 
-`himegari-settings-dialog.steps` opens the 設定 dialog on SC0000 page 1 from each of its four menu commands. It checks
-that a wheel-down does not advance until ﾏｳｽﾎｲｰﾙでﾒｯｾｰｼﾞを進める + OK, then does. It turns 効果音 off live and cancels,
-opens ﾊﾞｰｼﾞｮﾝ情報 over 設定, and sets その他's check box with OK. Both targets list the same texts and buttons, apart
-from ﾊﾞｰｼﾞｮﾝ情報's engine half. After `close`, both targets' `SYS4REG.INI` files are identical (`AdvanceMesOnWheel=1`,
-`EffectSkipOnClick=1`, `SE=1`, and `Volume0..3` written by OK). Allow 2 s after a native `answer OK`: AGE takes over a second to close 設定.
+`himegari-settings-dialog.steps` drives 設定 on SC0000 page 1. `options` lists the sandbox's values. A wheel-down does
+not advance until `option wheel-advance on`, then does. It turns 効果音 off live from the ｻｳﾝﾄﾞ tab and cancels, sets
+eight more options, lists them again, opens and cancels 動作環境, and advances to page 3 (`SC0000@0x8a9`). Both
+targets reach the same positions and list the same values. After `close` their `SYS4REG.INI` files are identical
+(2026-11-09): the options set, `SE=1`, and `Volume0..3` written by every OK.
 
-`himegari-antifont-off.steps` clears 文字の縁をなめらかにする (`message:UseAntiFont`) in 設定 on SC0000 page 1. It takes
-four shots:
+`himegari-antifont-off.steps` clears 文字の縁をなめらかにする (`message:UseAntiFont`) with `option smooth-text off` on SC0000
+page 1. It takes four shots:
 - page 1 before OK;
 - page 1 after OK, which looks the same (AGE does not redraw text already drawn);
 - page 2, drawn from `GGO_BITMAP` glyphs, one pixel right and down;
@@ -1064,6 +1066,11 @@ default for both targets; the fan translation blanks every ruby). Each file's he
   CONFIG. Shots `kamidori-config-redraw-page`, `-defaults-config`, `-defaults`, `-no-outline-config` and `-no-outline`.
   Apart from the animated wait indicator they match native within 1 per channel, CONFIG2's own surface text included
   (`engine-re.md`, "Op 0x82 redraw", "Aspect-mode surface text").
+- `kamidori-shell.steps` cancels 終了 over the title, sets `message-speed`, `lower-bgm-level` and `effect-skip` with
+  `option` on the prologue page, then returns to the title through 終了's タイトルに戻る. The clean install's
+  `AGERC.DLL` is packed, so the port's 終了 and panel come from the shell. Both targets list the same `options`,
+  reach `SC0000@0xfa2` and leave identical `SYS4REG.INI` files (2026-11-09). It is for the clean install: the
+  translated scripts have other offsets, and native's translated 終了 is English.
 
 **Profiles.** `tools/drive/<profile>.toml` holds the facts for both targets: `[advance]`, `[points]`, `[sandbox]`
 (`settings_file`, `[sandbox.settings]`, `[sandbox.quiet]`), and native-only `[native.engine]`,
@@ -1083,7 +1090,9 @@ the page locator. At a text wait the pc is already **past** the wait instruction
 map's *next* `page_start_offset`. Example: SC0000 page 3 waits at `0x8a6` and reads `0x8a9`. Caller frames stay
 **on** their `call-script` instruction (`SYSTEM4@0x477`, not the following `0x47a`), also after a load. Native AGE
 reads the frame stack through `g_pEngineCtx@0x5c6020` and the `engine-ctx.toml` frame fields; `waiting` is not
-available there.
+available there. An idle loop reads wherever each target is when asked: Kamidori's title loop reads `TITLE@0xf8`, its
+`sleep 0x1`, natively and `TITLE@0x9ab`, after `present-frame`, on the port, so scenarios check such loops with
+`script=`.
 
 **Saves.** Both targets keep the native profile layout (`SYS4REG.INI`, `SAVE\`) in `sandbox/<name>/`, so one
 target's sandbox can seed the other's.

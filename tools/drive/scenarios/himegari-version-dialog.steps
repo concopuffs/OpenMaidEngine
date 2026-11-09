@@ -1,10 +1,9 @@
-# ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 (menu 0x9c45; AGERC dialog resource 2) on SC0000 page 1. The game holds and its frame stays frozen,
-# with no dim, while the dialog is open. `dialogs` lists its title, its static texts (the icon static's template name
-# SYSTEM3 first) and OK, its only button, whose id is IDCANCEL (2). OK closes it, and the game goes on from the page it
-# held on. Both targets share the title, the game half and the button. The engine half differs on purpose: AGE names
-# itself (ARCGameEngine, its copyright, its Ogg Vorbis notice, the empty プロダクトID row); the port names Open Maid
-# Engine, its version and license, FFmpeg and THIRD_PARTY_NOTICES.md (docs/engine-re.md, "Native menu bar",
-# ﾊﾞｰｼﾞｮﾝ情報).
+# ﾍﾙﾌﾟ > ﾊﾞｰｼﾞｮﾝ情報 (menu 0x9c45) on SC0000 page 1. The game holds and its frame stays frozen, with no dim, while it is
+# open, and OK closes it: the game goes on from the page it held on. Natively it is AGERC's dialog resource 2:
+# `dialogs` lists its title, its static texts (the icon static's template name SYSTEM3 first) and OK, its only button,
+# whose id is IDCANCEL (2). On the port it is the options panel at 情報, which names Open Maid Engine, the game and
+# its diagnostics (docs/engine-re.md, "Native menu bar", 情報 names the port); `dialogs` lists the panel, and `answer
+# OK` presses 決定, which applies nothing from ﾊﾞｰｼﾞｮﾝ情報 without an edit, as AGERC's OK does.
 # Run on a fresh sandbox, on both targets:
 #   py -3.11 -X utf8 tools/drive.py port start
 #   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/himegari-version-dialog.steps
@@ -20,7 +19,7 @@ settle
 
 menu version
 wait 1.5
-dialogs                                 # ﾊﾞｰｼﾞｮﾝ情報: SYSTEM3, then the engine half's labels; buttons OK
+dialogs                                 # native: SYSTEM3, then the engine half's labels, OK; port: the panel at 情報
 shot version-dialog
 answer OK
 wait 1

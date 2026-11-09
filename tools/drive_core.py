@@ -411,7 +411,7 @@ def key_chord(name: str) -> tuple[bool, int]:
 
 # Capabilities both targets offer (native: drive_native.CAPABILITIES; port: PortCapabilities in godot/Main.Drive.cs).
 # Committed scenarios may use these and nothing target-only.
-SHARED_CAPABILITIES = ("dialogs", "answer", "window", "menu", "rand")
+SHARED_CAPABILITIES = ("dialogs", "answer", "window", "menu", "rand", "options")
 
 # AGERC.DLL's menu-bar commands (menu 110; docs/engine-re.md "Native menu bar"), by the names `menu` steps take.
 MENU_COMMANDS = {
@@ -420,6 +420,51 @@ MENU_COMMANDS = {
     "auto": 0x9c65, "sound-settings": 0x9c68, "message-settings": 0x9c6c, "system-info": 0x9c6d,
     "other-settings": 0x9c6e, "read-skip": 0x9c6f,
 }
+
+
+# The options `option` sets (docs/superpowers/specs/2026-11-09-engine-shell-design.md §5.3; the port's ShellOptions):
+# name -> (section, min, max, step, live). Values are the registry's: ms per glyph, ms, basis points, percent, 0/1. A
+# live option applies while 設定 is open (the ｻｳﾝﾄﾞ volumes and routes); the rest apply on OK.
+OPTIONS = {
+    "message-speed": ("message", 0, 100, 1, False),
+    "window-opacity": ("message", 0, 16, 1, False),
+    "auto-wait-voice": ("message", 0, 10000, 100, False),
+    "auto-wait-text": ("message", 0, 10000, 100, False),
+    "smooth-text": ("message", 0, 1, 1, False),
+    "wheel-advance": ("message", 0, 1, 1, False),
+    "master-volume": ("sound", 0, 10000, 100, True),
+    "bgm-volume": ("sound", 0, 10000, 100, True),
+    "se-volume": ("sound", 0, 10000, 100, True),
+    "voice-volume": ("sound", 0, 10000, 100, True),
+    "bgm": ("sound", 0, 1, 1, True),
+    "se": ("sound", 0, 1, 1, True),
+    "voice": ("sound", 0, 1, 1, True),
+    "lower-bgm-on-voice": ("sound", 0, 1, 1, False),
+    "lower-bgm-level": ("sound", 0, 100, 1, False),
+    "effect-skip": ("other", 0, 1, 1, False),
+}
+
+# The menu command that opens each section's 設定 tab, and the section the `options` step opens.
+SECTION_COMMANDS = {"message": "message-settings", "sound": "sound-settings", "other": "other-settings"}
+OPTIONS_SECTION = "message"
+
+
+def option_value(name: str, text: str) -> tuple[str, int]:
+    """An `option` step's name and value: a value in the option's domain and on its step (on/off for a switch)."""
+    key = name.lower()
+    if key not in OPTIONS:
+        raise DriveError(f"option takes one of {', '.join(OPTIONS)}, got {name!r}")
+    _, low, high, step, _ = OPTIONS[key]
+    switch = (low, high) == (0, 1)
+    if switch and text.lower() in ("on", "off"):
+        return key, int(text.lower() == "on")
+    try:
+        value = int(text, 0)
+    except ValueError:
+        raise DriveError(f"option {key} takes {'on, off or ' if switch else ''}an integer, got {text!r}") from None
+    if not low <= value <= high or (value - low) % step:
+        raise DriveError(f"option {key} takes {low}..{high}{f' in steps of {step}' if step > 1 else ''}, got {value}")
+    return key, value
 
 
 def rand_seed(text: str) -> int | None:
@@ -497,6 +542,11 @@ STEPS = {
     "menu": _spec(1, 1, "", "menu NAME|ID                  choose a menu-bar command as a user does: the menu "
                   "refreshes, a grayed item fails the step (AGE: WM_INITMENU, then WM_COMMAND); names: skip, "
                   "read-skip, auto, hide, exit, windowed, …", "menu"),
+    "option": _spec(2, 2, "", "option NAME VALUE             set one 設定 option and commit it as OK does (the "
+                    "section's menu command opens 設定; a grayed one fails the step); VALUE in the registry's units, "
+                    "on/off for a switch; names: message-speed, wheel-advance, se, effect-skip, …", "options"),
+    "options": _spec(0, 0, "", "options                       list the 設定 options with their values and domains "
+                     "(opens 設定 and cancels it)", "options"),
     "close": _spec(0, 0, "timeout", "close [timeout=S]             quit the game and end the session"),
 }
 NUMERIC_OPTIONS = {"hold", "timeout", "quiet", "threshold", "every"}
@@ -575,6 +625,8 @@ def _validate(step: Step) -> None:
             raise DriveError("window takes minimize or restore")
     elif step.name == "menu":
         menu_command(step.args[0])
+    elif step.name == "option":
+        option_value(*step.args)
     elif step.name == "wait":
         try:
             float(step.args[0])
@@ -925,6 +977,11 @@ class Executor:
             return result
         elif step.name == "menu":
             return self.client.call("menu", command=menu_command(step.args[0]))
+        elif step.name == "option":
+            name, value = option_value(*step.args)
+            return self.client.call("option", name=name, value=value)
+        elif step.name == "options":
+            return self.client.call("options")
         elif step.name == "close":
             timeout = float(options.get("timeout", 20))
             result = self.client.call("close", timeout=timeout + REPLY_MARGIN_S, timeout_ms=int(timeout * 1000))
@@ -963,7 +1020,8 @@ def describe(result: dict[str, Any]) -> str:
     mark = "ok  " if result.get("ok") else "FAIL"
     details = []
     for key in ("error", "path", "location", "settled", "pokes", "seconds", "answered", "exit_code",
-                "cursor_moved_to", "label", "checked", "seed", "previous_seed", "draws"):
+                "cursor_moved_to", "label", "checked", "seed", "previous_seed", "draws", "option", "value",
+                "section"):
         if key in result and result[key] is not None:
             details.append(f"{key}={result[key]}")
     if "frames" in result:
@@ -972,6 +1030,8 @@ def describe(result: dict[str, Any]) -> str:
         details.append(f"dialogs={json.dumps(result['dialogs'], ensure_ascii=False)}")
     if result.get("sites"):
         details.append("sites=" + " ".join(f"{site}x{count}" for site, count in result["sites"].items()))
+    if "options" in result:
+        details.append("options=" + " ".join(f"{entry['name']}={entry['value']}" for entry in result["options"]))
     lines = [f"{mark} {result.get('step', '')}  " + "  ".join(details)]
     lines += ["  " + describe_event(event) for event in result.get("events", [])]
     return "\n".join(lines)

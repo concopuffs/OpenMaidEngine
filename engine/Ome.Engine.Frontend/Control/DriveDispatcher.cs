@@ -34,6 +34,12 @@ public interface IDriveBackend
     /// <summary>Choose menu-bar command <paramref name="command"/> as a user does: refresh the menu, refuse a grayed or
     /// missing item, run an enabled one; returns {command, label, enabled, checked} (capability "menu").</summary>
     JsonObject Menu(int command) => throw new DriveProtocolException("'menu' has no implementation here");
+    /// <summary>Set one 設定 option and commit it as OK does: the section's menu command opens it, a grayed one fails;
+    /// returns {option, value, section} (capability "options").</summary>
+    JsonObject Option(string name, int value) => throw new DriveProtocolException("'option' has no implementation here");
+    /// <summary>The 設定 options shown, opened from ﾒｯｾｰｼﾞ and cancelled: {options: [{name, section, value, min, max,
+    /// step, applies}]} (capability "options").</summary>
+    JsonObject Options() => throw new DriveProtocolException("'options' has no implementation here");
     /// <summary>Draw op 0x60 from <paramref name="seed"/>'s per-site streams, or from the game's own generator when
     /// null; returns what op 0x60 drew since the previous call (capability "rand").</summary>
     JsonObject RandSeed(uint? seed) => throw new DriveProtocolException("'rand-seed' has no implementation here");
@@ -222,6 +228,16 @@ public sealed class DriveDispatcher
                 if (command is <= 0 or > 0xffff) throw new DriveProtocolException("menu command ids are 1..0xffff");
                 return Immediate(request, reply, () => _backend.Menu(command));
             }
+            case "option":
+            {
+                RequireCapability("options");
+                string name = request.Text("name");
+                int value = request.Int("value");
+                return Immediate(request, reply, () => _backend.Option(name, value));
+            }
+            case "options":
+                RequireCapability("options");
+                return Immediate(request, reply, () => _backend.Options());
             default:
                 throw new DriveProtocolException(
                     $"unknown op '{request.Op}' (the {_backend.Target} supports state, pointer, click, key, wheel, " +
