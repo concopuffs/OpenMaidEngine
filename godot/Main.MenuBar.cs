@@ -121,7 +121,7 @@ public partial class Main
     private void OnMenuOpened()
     {
         GD.Print("[menu] menu loop starts");
-        _host?.SetFrontendModalHold(true);
+        Shell.HoldVm(true);
         FreezePresentedFrame(true);
         RefreshMenu();
     }
@@ -130,7 +130,7 @@ public partial class Main
     {
         GD.Print("[menu] menu loop ends");
         FreezePresentedFrame(false);
-        _host?.SetFrontendModalHold(false);
+        Shell.HoldVm(false);
     }
 
     /// <summary>agerc_refresh_system_menu_state, then gray the commands the port does not perform: the bar's menu
@@ -188,10 +188,10 @@ public partial class Main
                 RequestUnforcedClose();   // PostMessage(WM_CLOSE, 0): the 終了 dialog
                 break;
             case AgercMenu.SaveScreen:
-                SaveScreenshotFromMenu();   // IAGEService +0xa4: engine_save_screenshot_bmp
+                Shell.SaveScreenshot();   // IAGEService +0xa4: engine_save_screenshot_bmp
                 break;
             case AgercMenu.ImageFolder:
-                ChooseScreenshotFolder();   // agerc_choose_screenshot_folder: SHBrowseForFolder
+                Shell.ChooseImageFolder();   // agerc_choose_screenshot_folder: SHBrowseForFolder
                 break;
             case AgercMenu.MessageSkip:
                 _vm.RequestMenuMessageSkipToggle();
@@ -206,10 +206,10 @@ public partial class Main
                 _vm.RequestMenuHideWindow();
                 break;
             case AgercMenu.FullScreen:
-                SwitchScreenMode(windowed: false, "menu ﾌﾙｽｸﾘｰﾝ");   // IAGEService +0x1c(0)
+                Shell.SwitchScreenMode(windowed: false, "menu ﾌﾙｽｸﾘｰﾝ");   // IAGEService +0x1c(0)
                 break;
             case AgercMenu.Windowed:
-                SwitchScreenMode(windowed: true, "menu ｳｲﾝﾄﾞｳ");   // IAGEService +0x1c(1)
+                Shell.SwitchScreenMode(windowed: true, "menu ｳｲﾝﾄﾞｳ");   // IAGEService +0x1c(1)
                 break;
             case AgercMenu.VersionInfo:
                 OpenVersionDialog();   // AGERC host command 2: the ﾊﾞｰｼﾞｮﾝ情報 dialog (Main.AgercDialogs.cs)

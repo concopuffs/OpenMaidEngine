@@ -84,7 +84,7 @@ public partial class Main
             return;
         }
 
-        _host.SetFrontendModalHold(true);
+        Shell.HoldVm(true);
         FreezePresentedFrame(true);
         SetExitDim(128 / 255.0f);
         var dialog = new ExitConfirmationDialog(template);
@@ -105,7 +105,7 @@ public partial class Main
         {
             case ExitConfirmationDialog.Choice.Quit:
                 SetExitDim(1.0f);
-                GetTree().Quit(0);   // _ExitTree stops the VM and runs the shared-profile shutdown flush
+                Shell.Quit();
                 break;
             case ExitConfirmationDialog.Choice.ReturnToTitle:
                 SetExitDim(0.0f);
@@ -113,14 +113,14 @@ public partial class Main
                 {
                     // FUN_00405740 sleeps 250 ms inside the modal handler, so the frame stays frozen until then.
                     FreezePresentedFrame(false);
-                    _vm?.RequestRootReload();
-                    _host?.SetFrontendModalHold(false);
+                    Shell.ReturnToTitle();
+                    Shell.HoldVm(false);
                 };
                 break;
             default:
                 SetExitDim(0.0f);
                 FreezePresentedFrame(false);
-                _host?.SetFrontendModalHold(false);
+                Shell.HoldVm(false);
                 break;
         }
     }

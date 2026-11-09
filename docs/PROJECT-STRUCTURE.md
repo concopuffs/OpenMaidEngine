@@ -241,7 +241,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       resource, its prune/refresh model and the 設定 dialog's
     │                                       texts (NativeMenu/), and PE
     │                                       resource readers for dialog templates and icons, with the
-    │                                       engine identity ﾊﾞｰｼﾞｮﾝ情報 shows (NativeResources/)
+    │                                       engine identity ﾊﾞｰｼﾞｮﾝ情報 shows (NativeResources/), and
+    │                                       the engine shell that replaces them (Shell/: so far
+    │                                       IShellHost, the frontend services its commands reach)
     │   └── Ome.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
     ├── native/                              authored native runtime boundaries
@@ -291,7 +293,8 @@ surface-transition drawing, raster helpers, and compositor decision logging. `go
 Godot input routing, locator/debug hotkeys, debug-scene dispatch, cursor control, native alerts, and
 full-width text entry. `godot/Main.Drive.cs` owns the `--control` driving backend: the control server's lifetime,
 injected input events, exclusive input, and the port side of the protocol (state, screenshots, speed, close).
-`godot/Main.MenuBar.cs` attaches the native menu bar (AGERC menu 110) above the game canvas and runs its commands;
+`godot/Main.MenuBar.cs` attaches the native menu bar (AGERC menu 110) above the game canvas and runs its commands,
+reaching the frontend's services through `godot/Main.ShellHost.cs`, Main's `IShellHost`;
 `godot/NativeMenuBar.cs` draws the bar and its popups and runs its keyboard mode, `godot/WindowSystemMenu.cs`
 supplies the window menu at the end of its keyboard cycle, and `godot/GdiTextMetrics.cs` supplies the GDI advances
 that the bar and the `godot/Win32Dialog.cs` dialogs lay their labels out with. `godot/Main.ScreenMode.cs` switches

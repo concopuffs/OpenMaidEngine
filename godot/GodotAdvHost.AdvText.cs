@@ -106,8 +106,8 @@ public sealed partial class GodotAdvHost
 
     /// <summary>
     /// Seed MessageSpeed, MesWinAlpha and AutoMessageTime0/1 from SYS4REG.INI [message] (native defaults when
-    /// absent). Changes are written back by <see cref="FlushMessageSettings"/> at shutdown, as AGE rewrites
-    /// SYS4REG.INI when it quits; MAMES/ITMES/SKMES/INFOMES briefly set the delay to 0 per description, so no
+    /// absent). Changes are written back by <see cref="FlushMessageSettings"/> at shutdown, with ReadTextSkip, as AGE
+    /// rewrites SYS4REG.INI when it quits; MAMES/ITMES/SKMES/INFOMES briefly set the delay to 0 per description, so no
     /// per-op write. Call before the VM is constructed: it reads them once.
     /// </summary>
     public void UseMessageSettingsStore(Sys4RegIniStore store)
@@ -127,7 +127,8 @@ public sealed partial class GodotAdvHost
         _textAntialias = store.TextAntialiasEnabled;
     }
 
-    public void FlushMessageSettings()
+    /// <param name="readTextSkip">message:ReadTextSkip, which the shared profile carried while the game ran.</param>
+    public void FlushMessageSettings(bool readTextSkip)
     {
         // Unconditional, like AGE on quit: the write also leaves every key AGE binds (Sys4RegIniStore).
         if (_messageSettingsStore == null) return;
@@ -140,6 +141,7 @@ public sealed partial class GodotAdvHost
                                                  unchecked((int)AutoMessageTime0Milliseconds));
             _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.AutoMessageTime1Key,
                                                  unchecked((int)AutoMessageTime1Milliseconds));
+            _messageSettingsStore.SaveReadTextSkip(readTextSkip);
         }
         catch (Exception error) when (
             error is System.IO.IOException or UnauthorizedAccessException or System.IO.InvalidDataException)

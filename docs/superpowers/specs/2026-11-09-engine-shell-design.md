@@ -99,16 +99,17 @@ These follow from them:
 
 ### 4.1 Engine core
 
-Most of this layer exists. The changes are two gaps and one interface.
+Most of this layer exists. The changes are one gap and one interface.
 
 - **Registry.** `Persistence/Sys4RegIniStore.cs` already holds the native keys, defaults, `SYS4INI.BIN` overrides and
   the canonical rewrite (`sys4-format-notes.md`).
   - **Gap: read-skip is not persisted.** `SharedProfile.ReadMessageSkipEnabled` holds `message:ReadTextSkip`, but
     nothing loads it from the file or writes it back, so the port forgets the toggle at every start. Native
     persists it.
-  - **Write timing.** The port writes a changed key at once. AGE writes the file only when it quits
-    (`engine-re.md`, "設定"). The port keeps writing at once, which survives a crash, because after the same actions
-    both files end up identical.
+  - **Write timing.** AGE writes the file only when it quits (`engine-re.md`, "設定"). The port writes most keys at
+    once (the sound keys, `display:ScreenMode`, the 設定 dialog's other keys), which survives a crash. The `[message]`
+    values the VM holds while it runs (MessageSpeed, MesWinAlpha, AutoMessageTime0/1 and ReadTextSkip) are written at
+    quit, as AGE writes them. After the same actions both files end up identical.
 - **Services.** These already exist:
   - the VM's menu services (`VirtualMachine.MenuServices.cs`): the Skip, Auto, read-skip and hide toggles, and
     `RequestMessageSettings`;
@@ -119,8 +120,10 @@ Most of this layer exists. The changes are two gaps and one interface.
   The shell reaches services that run on the frontend thread through a new interface, `IShellHost`. Godot's `Main`
   implements it with: switch the screen mode, save a screenshot, choose the image folder, quit, return to title, and
   hold or release the VM. VM services keep their existing queues, so a toggle still applies on the VM thread.
-  - **Gap: ChoiceWait.** `VmMenuState` has no field for IAGEService `+0xc0`, the op-`0x95` choice wait. Without it,
-    ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す is grayed at a choice whose frame has an op-`0x7b` handler, where native enables it.
+  - **No choice-wait gap.** The hide command's enable rule reads IAGEService `+0xc0`, run-state `0x10000000`, which
+    only op `0x95` sets. Neither game uses op `0x95`, and the port stops at it as unsupported (`engine-re.md`), so
+    the term is false on both targets and `VmMenuState` needs no field for it. (The survey listed this as a gap; M1
+    withdrew it on 2026-11-09.)
 - **Callback scripts.** No change:
   - `CALLBACK_SETTING.BIN` runs after each toggle and after the options panel applies (§5.3);
   - `CALLBACK_WINDOW.BIN` runs after a screen-mode switch;
@@ -380,8 +383,7 @@ the strip use them.
 - The unchanged scenarios in §8 still pass on both targets.
 - The `option` scenarios leave identical `SYS4REG.INI` files on both targets and reach the same VM positions. The
   same positions show that `CALLBACK_SETTING.BIN` ran.
-- `message:ReadTextSkip` survives a restart on both targets, and ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す is enabled at a choice wait with
-  an op-`0x7b` handler.
+- `message:ReadTextSkip` survives a restart on both targets.
 - Model tests cover:
   - the `Menu_*` pruning and the refresh rules;
   - the op-`0x142` behaviour, including read-only sections in an open panel;
@@ -416,9 +418,12 @@ The user accepted the three recommendations on 2026-11-09:
 
 1. **M1 Engine core.**
    - Persist `message:ReadTextSkip`.
-   - Add ChoiceWait to `VmMenuState`.
    - Add `IShellHost`.
-   - Write the tests for all three.
+   - Write the tests.
+
+   Done 2026-11-09. The read-skip toggle loads from `SYS4REG.INI` and is written back at quit, and the menu bar's
+   frontend commands and the 終了 dialog's outcomes go through `IShellHost`. The planned ChoiceWait field was
+   dropped (§4.1).
 2. **M2 Shell model and menu.**
    - Build `Ome.Engine.Frontend.Shell`: commands, tree, options, state, string tables.
    - Feed the bar, the strip and 終了 from it, and stop reading the DLL for them.

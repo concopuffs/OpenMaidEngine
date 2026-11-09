@@ -73,11 +73,8 @@ it; git history keeps the record.
   - Presentation is both an in-window options panel and a desktop menu bar. Japanese labels stay close to AGE's
     unless that conflicts with the design.
 
-  The design is `superpowers/specs/2026-11-09-engine-shell-design.md` (accepted 2026-11-09).
-  It also covers two engine gaps the survey found:
-  - `message:ReadTextSkip` is not persisted, so the read-skip toggle resets at every start;
-  - `VmMenuState` lacks native's choice-wait flag, so ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳを消す is grayed at a choice where native enables
-    it.
+  The design is `superpowers/specs/2026-11-09-engine-shell-design.md` (accepted 2026-11-09); its M1 (the engine
+  core) is done.
 
   The translated install's `agerc.dll` keeps menu 110 as MENUEX, which the port's reader rejects, so that install
   has no menu bar either. Done when the port reads no `AGERC.DLL` at runtime and every option works on all three

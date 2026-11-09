@@ -1705,8 +1705,10 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   - `system:EffectSkipOnClick`;
   - `mk:mksh` through `+0x14`, from a control page 104 lacks, so always 0. It is not persisted.
 
-  AGE writes `SYS4REG.INI` only when it quits. The port's store writes at once, and after
-  `himegari-settings-dialog.steps` both targets' files are identical.
+  AGE writes `SYS4REG.INI` only when it quits. The port's store writes most keys at once, and after
+  `himegari-settings-dialog.steps` both targets' files are identical. The `[message]` values the VM holds while it
+  runs (MessageSpeed, MesWinAlpha, AutoMessageTime0/1 and, since 2026-11-09, ReadTextSkip) are written at quit, as
+  AGE writes them.
 - **Classic controls.** The pages draw unthemed comctl32 controls: check boxes, group boxes, trackbars with a
   22 px thumb, the tab control and `WS_EX_CLIENTEDGE` edits. Their measured pixel geometry is documented on the
   port's classes (`godot/Win32ClassicCheckBox.cs`, `Win32GroupBox.cs`, `Win32Trackbar.cs`, `Win32TabControl.cs`,

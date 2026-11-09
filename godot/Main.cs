@@ -372,6 +372,8 @@ public partial class Main : Godot.Control
                     catalog.StartupSettings, profilePersistence.NativePaths.Sys4RegIniPath,
                     selectedProfile.Profile.EngineAbiId);
                 _audioMixerSettings = _sys4RegIniStore.Load();
+                // SYS4REG.INI holds 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ; the shared profile carries it while the game runs.
+                sharedProfile.ReadMessageSkipEnabled = _sys4RegIniStore.LoadReadTextSkip();
                 GD.Print($"[settings] native engine options={_sys4RegIniStore.FilePath}");
             }
             catch (Exception error) when (
@@ -865,7 +867,7 @@ public partial class Main : Godot.Control
             }
             else
             {
-                _host?.FlushMessageSettings();
+                _host?.FlushMessageSettings(_vm.MenuState.ReadTextSkip);
                 SharedProfileShutdownFlushResult flush = _vm.FlushSharedProfileOnShutdown();
                 if (flush.Outcome == SharedProfileShutdownFlushOutcome.Saved)
                     GD.Print("[persistence] clean shutdown wrote SAVE.DAT and RT.DAT");

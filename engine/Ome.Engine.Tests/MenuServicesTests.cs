@@ -187,6 +187,28 @@ public class MenuServicesTests
     }
 
     [Fact]
+    public void ReadSkipStartsFromTheSavedSettingAndTheMenuStateFollowsTheToggle()
+    {
+        // The frontend seeds the shared profile from SYS4REG.INI's message:ReadTextSkip before the VM starts and
+        // writes MenuState.ReadTextSkip back at shutdown (godot/Main.cs), as AGE binds the key and writes it on quit.
+        var profile = new Ome.Engine.Persistence.SharedProfile { ReadMessageSkipEnabled = true };
+        var host = new MenuHost();
+        var vm = new VirtualMachine(Build("MENU_READ_SKIP_SAVED",
+                [(0x1cb, new[] { G(ReadSkipBefore) }), .. Probes(0, 3), (0x1cb, new[] { G(ReadSkipAfter) })]),
+            Table, host, new VmOptions(), SettingCallback(), sharedProfile: profile);
+        host.Vm = vm;
+        host.AtYield[2] = v => v.RequestMenuReadMessageSkipToggle();
+        Assert.True(vm.MenuState.ReadTextSkip);
+
+        vm.Run();
+
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(ReadSkipBefore));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(ReadSkipAfter));
+        Assert.False(vm.MenuState.ReadTextSkip);
+        Assert.False(profile.ReadMessageSkipEnabled);
+    }
+
+    [Fact]
     public void WithoutAMenuCommandTheSettingCallbackDoesNotRun()
     {
         var (vm, _) = Start(Build("MENU_NONE", Probes(0, 3)));

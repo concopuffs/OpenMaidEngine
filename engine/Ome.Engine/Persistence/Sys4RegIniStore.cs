@@ -30,6 +30,10 @@ public sealed class Sys4RegIniStore
     // message:AdvanceMesOnWheel (registered default 0): 1 makes a wheel-down advance an ADV text wait and finish a text
     // reveal (adv_input_service_poll@0x411230, the reveal service at 0x406fa0). Neither game's scripts change it.
     public const string AdvanceMesOnWheelKey = "AdvanceMesOnWheel";
+    // message:ReadTextSkip (registered default 0): 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ, which SharedProfile.ReadMessageSkipEnabled holds
+    // while the game runs. Menu 0x9c6f (adv_toggle_read_skip_and_refresh@0x406cd0) writes !current, op 0x1ca writes
+    // its operand, and a click cancel clears it; AGE writes the file when it quits.
+    public const string ReadTextSkipKey = "ReadTextSkip";
     // message:UseAntiFont (registered default 1, bound only under ENABLEANTIFONT): text manager +0x544, which picks
     // GGO_GRAY4_BITMAP (nonzero) or GGO_BITMAP glyphs.
     public const string UseAntiFontKey = "UseAntiFont";
@@ -223,6 +227,20 @@ public sealed class Sys4RegIniStore
     }
 
     public void SaveMessageInt(string key, int value) => SaveInt(MessageSection, key, value);
+
+    /// <summary>message:ReadTextSkip as AGE binds it at startup: nonzero is on.</summary>
+    public bool LoadReadTextSkip() => LoadMessageInt(ReadTextSkipKey, 0) != 0;
+
+    /// <summary>Write message:ReadTextSkip back as AGE's quit does. A setting whose on/off state is unchanged keeps
+    /// the file's value (AGE's toggle writes 1 or 0, so only a hand edit leaves another nonzero value).</summary>
+    public void SaveReadTextSkip(bool enabled)
+    {
+        lock (_lock)
+        {
+            if (LoadReadTextSkip() == enabled) return;
+            SaveMessageInt(ReadTextSkipKey, enabled ? 1 : 0);
+        }
+    }
 
     /// <summary>Set an integer of any section and write the file.</summary>
     public void SaveInt(string section, string key, int value)

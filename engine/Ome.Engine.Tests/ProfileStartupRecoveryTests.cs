@@ -86,6 +86,42 @@ public class ProfileStartupRecoveryTests
     }
 
     [Fact]
+    public void ReadTextSkipRoundTripsAndKeepsAnUnchangedValue()
+    {
+        string root = NewDirectory();
+        string path = Path.Combine(root, Sys4RegIniStore.FileName);
+        try
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            Encoding cp932 = Encoding.GetEncoding(932);
+            Assert.False(new Sys4RegIniStore(path, defaultMusicRouteValue: 2).LoadReadTextSkip());   // registered 0
+
+            new Sys4RegIniStore(path, defaultMusicRouteValue: 2).SaveReadTextSkip(true);
+            Assert.Contains("AutoMessageTime1=2000\r\nReadTextSkip=1\r\nAdvanceMesOnWheel=0\r\n",
+                            File.ReadAllText(path, cp932));
+            var restarted = new Sys4RegIniStore(path, defaultMusicRouteValue: 2);
+            Assert.True(restarted.LoadReadTextSkip());
+            restarted.SaveReadTextSkip(false);
+            Assert.Contains("ReadTextSkip=0\r\n", File.ReadAllText(path, cp932));
+            Assert.False(new Sys4RegIniStore(path, defaultMusicRouteValue: 2).LoadReadTextSkip());
+
+            // AGE's toggle writes 1 or 0, so another nonzero value is a hand edit; it stays while the setting stays on.
+            File.WriteAllText(path, "[message]\r\nReadTextSkip=2\r\n", cp932);
+            var edited = new Sys4RegIniStore(path, defaultMusicRouteValue: 2);
+            Assert.True(edited.LoadReadTextSkip());
+            edited.SaveReadTextSkip(true);
+            edited.SaveMessageInt(Sys4RegIniStore.MessageSpeedKey, Sys4RegIniStore.DefaultMessageSpeed);
+            Assert.Contains("ReadTextSkip=2\r\n", File.ReadAllText(path, cp932));
+            edited.SaveReadTextSkip(false);
+            Assert.Contains("ReadTextSkip=0\r\n", File.ReadAllText(path, cp932));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void WritingAFreshSettingsFileProducesAgesCompleteKeySet()
     {
         string root = NewDirectory();
