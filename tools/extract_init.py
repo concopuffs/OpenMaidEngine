@@ -861,10 +861,7 @@ def resolve(name: str) -> Path:
 def resolve_append(name: str, selector: int) -> Path:
     """Resolve an append catalog's literal `$n$NAME` record: loose root first, then extracted."""
     record = f"${selector}${name}.BIN"
-    candidates = [paths.EXTRACTED / f"APPEND{selector:02d}" / record]
-    if paths.CONTEXT.trusts_loose_append_overrides:
-        candidates.insert(0, paths.GAME_DIR / record)
-    for cand in candidates:
+    for cand in (paths.GAME_DIR / record, paths.EXTRACTED / f"APPEND{selector:02d}" / record):
         if cand.exists():
             return cand
     raise SystemExit(f"not found: {record}")

@@ -322,7 +322,7 @@ def test_profiles():
     check(profile.rand == {"op60_rand_return": 0x4269AF} and config["rand"] == profile.rand,
           "the agent gets where op 0x60's rand() call returns")
     kamidori = core.parse_profile((HERE / "drive" / "kamidori.toml").read_text(encoding="utf-8"))
-    check(kamidori.rand == {"op60_rand_return": 0x42772F}, "Kamidori names its own engine's op 0x60 site")
+    check(kamidori.rand == {"op60_rand_return": 0x42768F}, "Kamidori names its own engine's op 0x60 site (4.33G)")
     check(raises(core.parse_profile, "[native.rand]\nop60_rand_return = 1\n", contains="needs [native.engine]"),
           "the rand hook needs the engine facts to name the call site")
     check(raises(native.agent_config, profile, {0x1C: Path("C:/箱")}, engine_ctx, contains="ASCII"),

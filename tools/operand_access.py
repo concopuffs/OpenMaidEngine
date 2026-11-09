@@ -47,7 +47,7 @@ ACCESS_KINDS = tuple(kind for kind in M.ACCESS_KINDS if kind != "ignored")
 # Operands proven untouched by their handler (no accessor call, handler fully read). The registry
 # records them as "ignored"; any other operand without native access is an extraction gap.
 VERIFIED_IGNORED = {
-    (0x1A7, 1),   # comment: handler only sets the instruction length (SYS4422 0x416630, SYS4433 0x416db0)
+    (0x1A7, 1),   # comment: handler only sets the instruction length (SYS4422 0x416630, SYS4433 4.33G 0x416dd0)
 }
 TYPE_NAMES = {0x0: "imm", 0x1: "float", 0x2: "string", 0x3: "g-int", 0x4: "g-float",
               0x5: "g-str", 0x6: "g-ptr", 0x8: "g-str-ptr", 0x9: "l-int", 0xa: "l-float",
@@ -87,29 +87,32 @@ _HIMEGARI_ACCESSORS = {
 }
 
 _KAMIDORI_ACCESSORS = {
-    0x4198D0: Accessor("read", 1, "vm_operand_fetch"),
-    0x419C30: Accessor("read-float", 1, "vm_operand_fetch_float"),
-    0x418FF0: Accessor("read-string", 1, "vm_operand_read_string_buffer"),
-    0x425750: Accessor("read-string", 2, "vm_operand_read_std_string"),
-    0x419360: Accessor("read-string", 1, "vm_operand_format_as_string"),
-    0x426750: Accessor("write", 1, "vm_operand_write"),
-    0x42C600: Accessor("write-string", 1, "vm_operand_write_string"),
-    0x426CA0: Accessor("write-float", 1, "vm_operand_write_float"),
-    0x416900: Accessor("bind", 1, "vm_pointer_operand_bind_element"),
-    0x416810: Accessor("bind", 1, "vm_pointer_operand_write"),
-    0x4261A0: Accessor("address", 1, "vm_operand_resolve_address"),
-    0x416760: Accessor("string-cell", 1, "vm_operand_global_string_cell"),
-    0x416630: Accessor("ref-slot", 1, "vm_pointer_operand_slot"),
-    0x4166B0: Accessor("cell", 1, "vm_operand_lvalue"),
+    0x419900: Accessor("read", 1, "vm_operand_fetch"),
+    0x419C60: Accessor("read-float", 1, "vm_operand_fetch_float"),
+    0x419020: Accessor("read-string", 1, "vm_operand_read_string_buffer"),
+    0x425640: Accessor("read-string", 2, "vm_operand_read_std_string"),
+    0x419390: Accessor("read-string", 1, "vm_operand_format_as_string"),
+    0x4266B0: Accessor("write", 1, "vm_operand_write"),
+    0x42C570: Accessor("write-string", 1, "vm_operand_write_string"),
+    0x426C00: Accessor("write-float", 1, "vm_operand_write_float"),
+    0x416920: Accessor("bind", 1, "vm_pointer_operand_bind_element"),
+    0x416830: Accessor("bind", 1, "vm_pointer_operand_write"),
+    0x426100: Accessor("address", 1, "vm_operand_resolve_address"),
+    0x416780: Accessor("string-cell", 1, "vm_operand_global_string_cell"),
+    0x416650: Accessor("ref-slot", 1, "vm_pointer_operand_slot"),
+    0x4166D0: Accessor("cell", 1, "vm_operand_lvalue"),
 }
 
 REFERENCE_PROFILE = "himegari"
 ENGINES: dict[str, EngineFacts] = {
     "himegari": EngineFacts(0x413860, 0x9B24C, _HIMEGARI_ACCESSORS, legacy_dump=True),
-    # SYS4433: engine_ctx_construct_SYS4433@0x413e50 fills ctx+0x9f700; accessors read frame_pc at
-    # ctx+0x57fb8. Pinned from --align-accessors (every alignment unanimous, 2026-10-06), except the
-    # SYS4433-only float accessors, identified from their bodies (fild/float store).
-    "kamidori": EngineFacts(0x413E50, 0x9F700, _KAMIDORI_ACCESSORS),
+    # SYS4433, AGE 4.33G (the clean install's AGE.EXE; docs/engine-re.md, "Kamidori engine builds"): the ctx
+    # constructor at 0x413e70 fills ctx+0x9f704; accessors read frame_pc at ctx+0x57fb8. First pinned on the
+    # translation's 4.33F (constructor 0x413e50, table ctx+0x9f700) from --align-accessors (every alignment
+    # unanimous, 2026-10-06), except the SYS4433-only float accessors, identified from their bodies (fild/float
+    # store). Moved to 4.33G on 2026-11-08 by aligning same-opcode handlers of the two builds (unanimous), and the
+    # derived contracts are the same for both builds.
+    "kamidori": EngineFacts(0x413E70, 0x9F704, _KAMIDORI_ACCESSORS),
 }
 
 
@@ -171,7 +174,7 @@ class Image:
                         work.append(target.imm)
                     if i.mnemonic == "jmp":
                         break
-                va = i.address + i.size
+                va = self.next_address(i)
         return [seen[key] for key in sorted(seen)]
 
     def call_target(self, i) -> int | None:
@@ -179,11 +182,23 @@ class Image:
             return None
         return i.operands[0].imm
 
+    def next_address(self, i) -> int:
+        """Where execution continues after i when it does not branch.
+
+        A packed image (Kamidori's AGE 4.33G) calls each Windows API through `call rel32` into a stub outside the
+        module, followed by one junk byte that the stub skips on return (docs/engine-re.md, "Kamidori engine
+        builds"). Decoding resumes past that byte.
+        """
+        target = self.call_target(i)
+        junk = 1 if target is not None and not self.contains(target) else 0
+        return i.address + i.size + junk
+
 
 class Body:
     """One walked function in address order, with branch predecessors for backward scans."""
 
     def __init__(self, image: Image, insns: list):
+        self.image = image
         self.insns = insns
         self.preds: dict[int, list[int]] = collections.defaultdict(list)
         for k, i in enumerate(insns):
@@ -199,7 +214,7 @@ class Body:
         i = self.insns[k]
         if k > 0:
             prior = self.insns[k - 1]
-            falls_through = (prior.address + prior.size == i.address
+            falls_through = (self.image.next_address(prior) == i.address
                              and prior.mnemonic not in ("jmp", "ret", "int3"))
             if falls_through:
                 return k - 1

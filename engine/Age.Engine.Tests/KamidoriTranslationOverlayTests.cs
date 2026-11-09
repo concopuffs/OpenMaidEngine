@@ -11,7 +11,7 @@ public sealed class KamidoriTranslationOverlayTests
     [Trait("Profile", "kamidori")]
     public void InstalledTranslationOverlaySelectsTranslatedTitleAndDecodesBmpGraphics()
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriTranslatedDir;
         string patchRoot = Path.Combine(gameRoot, "patch");
         Assert.True(File.Exists(Path.Combine(gameRoot, "SYS4INI.BIN")));
         Assert.True(Directory.Exists(patchRoot));
@@ -43,7 +43,7 @@ public sealed class KamidoriTranslationOverlayTests
     [Trait("Profile", "kamidori")]
     public void InstalledTranslationSc2310UsesReusableDynamicSpeakerNameEmitter()
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriTranslatedDir;
         string patchRoot = Path.Combine(gameRoot, "patch");
         Assert.True(File.Exists(Path.Combine(patchRoot, "SC2310.BIN")));
 
@@ -66,7 +66,7 @@ public sealed class KamidoriTranslationOverlayTests
     [Trait("Profile", "kamidori")]
     public void InstalledTranslationAimUsesSys4433RadialBlurConditionReveal()
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriTranslatedDir;
         string patchRoot = Path.Combine(gameRoot, "patch");
         Assert.True(File.Exists(Path.Combine(patchRoot, "AIM.BIN")));
 

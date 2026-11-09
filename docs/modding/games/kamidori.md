@@ -5,26 +5,31 @@ patch points) is generated in [README.md](README.md#kamidori-alchemy-meister).
 
 ## Install and options
 
-The expected install is `Kamidori/` beside the repository, optionally with the English fan translation in
-`Kamidori/patch/`. Every `Age.Cli` command needs the game options:
+The expected install is `Kamidori/` beside the repository: the game with its official updates applied. The English
+fan translation is a separate install, `Kamidori_Translated/`, with its overlay in `patch/`. Every `Age.Cli`
+command needs the game options:
 
 | Install | Options |
 |---|---|
 | untranslated | `--profile kamidori --game-root ../Kamidori` |
-| translated | `--profile kamidori --game-root ../Kamidori --overlay-root patch` |
+| translated | `--profile kamidori --game-root ../Kamidori_Translated --overlay-root patch` |
 
-- Port: `.\run-godot.cmd -Kamidori`, or `.\run-godot.cmd -Kamidori -TranslationPatch` for the translation. Add
-  `-Mod PATH` for a mod.
+- Port: `.\run-godot.cmd -Kamidori`, or `.\run-godot.cmd -Kamidori -TranslationPatch` for the translated install.
+  Add `-Mod PATH` for a mod.
 - Driver, translated:
 
   ```text
-  py -3.11 -X utf8 tools/drive.py --profile kamidori port start --mod PATH --port-arg=--overlay-root --port-arg=<absolute path to Kamidori\patch> --port-arg=--allow-bmp-as-agf
+  py -3.11 -X utf8 tools/drive.py --profile kamidori --game-root ../Kamidori_Translated port start --mod PATH --port-arg=--overlay-root --port-arg=<absolute path to Kamidori_Translated\patch> --port-arg=--allow-bmp-as-agf
   ```
 
-  Kamidori has no predefined points, so define them with `point NAME X Y`. On the title screen, Game Start is at
-  `700 300`; on the next screen, Begin Game is at `735 401`.
-- The install's `agerc.dll` has English dialogs, translated or not, so `dialogs` and `answer` use English labels:
-  the close dialog is Quit, with `Exit(&E)`, `'Return to title(&T)'`, `OK` and `Cancel`.
+  The profile's points include `title.start` (Game Start on the title screen) and `newgame.begin` (Begin Game on
+  the next screen); define others with `point NAME X Y`.
+- Native AGE on the untranslated install shows Japanese dialogs, so `dialogs` and `answer` use Japanese labels:
+  the close dialog is 終了, with `プログラムを終了する(&E)`, `タイトルに戻る(&T)`, `OK` and `ｷｬﾝｾﾙ`.
+- The untranslated install's `AGERC.DLL` is packed, and the port cannot read its menus and dialogs from the file.
+  On that install the port has no menu bar and quits without the 終了 dialog (`../../backlog.md`). The translated
+  install's `agerc.dll` has its dialogs in the file, in English: Quit, with `Exit(&E)`, `'Return to title(&T)'`,
+  `OK` and `Cancel`.
 - Registries for fragments: `py -3.11 -X utf8 tools/globals_build.py --profile kamidori --build`.
 
 ## The translation is a different base
@@ -38,10 +43,12 @@ with, and ship two fragments if the mod should work on both.
 | translated | `sha256:54d6bc4d8cf85e32903808979d16ff851f10e62f06dcb8ab87bc8076a31c1e30` |
 | untranslated | `sha256:e8db06e1287c557533e93380084358dbc28beb684b3344f3890852514ad97f58` |
 
-The install's root also holds the translation's `$n$*.bin` append scripts. Root-loose `$n$` files are AGE's own
-append override, not part of the translation's `patch/` hook, so the port and native AGE load them even without
-`--overlay-root patch`, and append content shows in English either way (`../../asset-resolution-re.md`). Their
-strings are partly damaged, so do not copy code from them.
+Both installs hold loose `$n$*.BIN` append records in their root. AGE loads a root-loose `$n$` file in place of
+the append catalog's record of that name, and so does the port, with or without `--overlay-root patch`. The
+untranslated install has 17 of them, its official data updates (ITINIT, SKINIT, SCJUMP and others); fingerprint and
+decompile those records from the root file. The translated install replaces 11 of the 17 and adds 75 more, so
+append content shows in English there with or without the overlay (`../../asset-resolution-re.md`). The translated
+records' strings are partly damaged, so do not copy code from them.
 
 ## First mod values
 

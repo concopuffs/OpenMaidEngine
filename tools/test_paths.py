@@ -73,28 +73,17 @@ class ToolContextTests(unittest.TestCase):
         (root / "game" / "ITINIT.BIN").write_bytes(b"official update")
         (root / "game" / "$1$EBINIT.bin").write_bytes(b"loose append")
 
-    def test_scripts_include_append_catalogs_with_trusted_loose_shadowing(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self._script_layout(root)
-            context = paths.ToolContext.resolve("himegari", root / "game", root / "extract", {})
-            scripts = paths.scripts(context)
-            self.assertEqual(root.resolve() / "extract/DATA1/EBINIT.BIN", scripts["EBINIT.BIN"])
-            self.assertEqual(root.resolve() / "game/ITINIT.BIN", scripts["ITINIT.BIN"])
-            self.assertEqual(root.resolve() / "game/$1$EBINIT.bin", scripts["$1$EBINIT.BIN"])
-
-    def test_untrusted_loose_append_replacements_are_ignored(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self._script_layout(root)
-            context = paths.ToolContext.resolve("kamidori", root / "game", root / "extract", {})
-            self.assertFalse(context.trusts_loose_append_overrides)
-            scripts = paths.scripts(context)
-            self.assertEqual(
-                root.resolve() / "extract/APPEND01/$1$EBINIT.BIN", scripts["$1$EBINIT.BIN"]
-            )
-            # Non-`$` loose files remain authored overrides for every profile.
-            self.assertEqual(root.resolve() / "game/ITINIT.BIN", scripts["ITINIT.BIN"])
+    def test_scripts_include_append_catalogs_with_loose_shadowing(self) -> None:
+        for profile in ("himegari", "kamidori"):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self._script_layout(root)
+                context = paths.ToolContext.resolve(profile, root / "game", root / "extract", {})
+                scripts = paths.scripts(context)
+                self.assertEqual(root.resolve() / "extract/DATA1/EBINIT.BIN", scripts["EBINIT.BIN"])
+                self.assertEqual(root.resolve() / "game/ITINIT.BIN", scripts["ITINIT.BIN"])
+                # Root-loose `$n$` files shadow their append records, as native AGE mounts them.
+                self.assertEqual(root.resolve() / "game/$1$EBINIT.bin", scripts["$1$EBINIT.BIN"])
 
 
 if __name__ == "__main__":

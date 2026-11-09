@@ -29,18 +29,19 @@ SHINIT, SIINIT, AMINIT, CDINIT and BTANINIT.
 
 ## Which files are authored data
 
-The installed `Kamidori/` root mixes three sources:
+`Kamidori/` is a clean install with the official updates and appends applied (2026-11-08). Everything in it is
+authored data, and data tooling reads it the way native AGE mounts it:
 
-| files | origin | used by data tooling |
+| files | what they are | used by data tooling |
 |---|---|---|
-| `DATA1-5.ALF`, `APPEND01-03.ALF` | shipped archives | yes (via `extracted-kamidori/`) |
-| non-`$` root `*.BIN` (94: 90 differ from `DATA1.ALF`, 2 identical, plus root-only SYS4INI/SYS4RK) | official update: Japanese text, none backed up by the translation installer | yes — shadow the archive copy |
-| root `$n$*.bin` (92 scripts) | **English fan translation** replacing append records | **no** |
-| `Backup/$n$*.bin.bak` (11 scripts) | official update's root-loose append overrides, which the translation overwrote | **no**: the archive's pre-update copies are read instead (`backlog.md`) |
-| `patch/` | fan translation overlay (`--overlay-root patch`) | no |
+| `DATA1-5.ALF`, `APPEND01-03.ALF` | the archives | yes (via `extracted-kamidori/`) |
+| non-`$` root `*.BIN` (94: 90 differ from `DATA1.ALF`, 2 identical, plus root-only SYS4INI/SYS4RK) | loose updates of base records | yes — shadow the archive copy |
+| root `$n$*.BIN` (17 scripts: `$1$` ALINIT, CGINIT, CIMES, COINIT, IMINIT, ITINIT, ITMES, SCJUMP, SKINIT, SKMES; `$2$` ALINIT, IMINIT, ITINIT, ITMES, SCJUMP, SKINIT, SKMES) | loose updates of append records | yes — shadow the append record |
 
-The `$n$` finding and its evidence are recorded in [`asset-resolution-re.md`](asset-resolution-re.md). The
-Python tooling enforces it through `paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`.
+The loose updates add data the archive records lack: for example `$1$ITINIT` has 25 items where the
+`APPEND01.ALF` record has 19. The table counts below include them. The English fan translation is a separate
+install (`Kamidori_Translated/`, used only by the port's translation tests); it replaces eleven of the 17 `$n$`
+scripts and adds 75 more, all in English ([`asset-resolution-re.md`](asset-resolution-re.md)).
 
 ## Tooling workflow
 
@@ -74,7 +75,7 @@ stub). EBINIT uses the generic name mode. Every other table has a Kamidori speci
 | table | holds | runs | records: base [$1$ / $2$ / $3$] |
 |---|---|---|---|
 | AFINIT | species, affinity scale, susceptibility, costume-enhancement catalog, progression constants | boot | 6 [– / – / –] |
-| ALINIT | alchemy recipes | boot | 369 [8 / 7 / 103] |
+| ALINIT | alchemy recipes | boot | 369 [11 / 9 / 103] |
 | AMINIT | world-area state hook | on demand | 26 [2 / – / 5] |
 | AMINIT2 | world areas | boot | 26 [2 / – / 5] |
 | ARINIT | arena battles | boot | 38 [– / – / 3] |
@@ -97,8 +98,8 @@ stub). EBINIT uses the generic name mode. Every other table has a Kamidori speci
 | FAINIT | chapter objectives | boot | 203 [– / – / –] |
 | HAINIT | dungeon hall art | boot | 121 [15 / 2 / 11] |
 | ILINIT | conditions | boot | 28 [– / – / –] |
-| IMINIT | equipment growth | boot | 35 [– / – / 26] |
-| ITINIT | items | boot | 993 [19 / 20 / 288] |
+| IMINIT | equipment growth | boot | 35 [3 / 1 / 26] |
+| ITINIT | items | boot | 993 [25 / 22 / 288] |
 | LAINIT | terrain | boot | 26 [– / – / 5] |
 | MPINIT | dungeon floor maps (hook) | on demand | 145 [11 / 2 / 14] |
 | OBINIT | map object types | boot | 44 [2 / 1 / 3] |
@@ -107,7 +108,7 @@ stub). EBINIT uses the generic name mode. Every other table has a Kamidori speci
 | SCINIT | scene dispatch | boot | 1545 [78 / 21 / 153] |
 | SHINIT | shop catalogue (hook) | on demand | 16 [– / 8 / 10] |
 | SIINIT | town sites (hook) | on demand | 5 [– / – / –] |
-| SKINIT | skills | boot | 376 [11 / 2 / 63] |
+| SKINIT | skills | boot | 376 [14 / 3 / 63] |
 | SPINIT | H-scene replays | boot | 46 [3 / 1 / 2] |
 | STINIT | per-stage loader (hook) | on demand | 181 [11 / 5 / 20] |
 | STINIT2 | stage catalog | boot | 181 [11 / 2 / 15] |
@@ -338,9 +339,9 @@ column) and the growth stones hard-coded in USEITEM@`0x16` prove both layouts.
 
 ### Items (ITINIT)
 
-ITINIT is a fixed-layout table with 2000 ids. It has 1,310 named items: 992 base, 19 `$1$`, 20 `$2$`, 279
+ITINIT is a fixed-layout table with 2000 ids. It has 1,318 named items: 992 base, 25 `$1$`, 22 `$2$`, 279
 `$3$`. The appends only add ids. There are 42 parallel arrays and 7 row tables, packed from `0x2d2848`, and every
-one of the 15,838 cells is classified.
+one of the 15,963 cells is classified.
 
 **Strings:** names at `0x4228+id`; one-line summaries such as `弓 物理 射程2` at `0x49f8+id`.
 
@@ -411,7 +412,7 @@ one of the 15,838 cells is classified.
 
 ### Skills (SKINIT)
 
-SKINIT has 1000 ids and 448 skills: 376 base, 11 `$1$`, 2 `$2$`, 59 `$3$`. Names are at `0x5998+id` and
+SKINIT has 1000 ids and 452 skills: 376 base, 14 `$1$`, 3 `$2$`, 59 `$3$`. Names are at `0x5998+id` and
 summaries at `0x5d80+id`; descriptions come from SKMES.
 
 | address | stride | field |
@@ -581,13 +582,13 @@ and the appends only add new ones.
 Two conventions apply to every table in this section:
 
 - Flag ids are 1-based story flags; scripts test global `0x50d + id − 1`.
-- Append layers only add data. The pristine `$1$`/`$2$` SIINIT and IMINIT files and every `$n$BUINIT` are empty
-  stubs.
+- Append layers only add data. The `$1$`/`$2$` SIINIT files and every `$n$BUINIT` are empty stubs, and so are the
+  archives' `$1$`/`$2$` IMINIT records; the loose updates of those two IMINIT records carry data.
 
 ### Recipes (ALINIT)
 
 ALINIT is a sparse **2000-slot recipe registry**. It is 24 arrays laid out back to back (`0x38c8d9..0x3a0929`)
-and holds 487 recipes: 369 base, 8 `$1$`, 7 `$2$`, 103 `$3$`, with ids 1..1921. Its 240 strings are unlock
+and holds 492 recipes: 369 base, 11 `$1$`, 9 `$2$`, 103 `$3$`, with ids 1..1921. Its 240 strings are unlock
 hints such as `クエスト『…』`, `店舗LV3　知識30` and `周回`. Generic name mode treated those hints as record
 names, which is why it misread the table.
 
@@ -660,7 +661,7 @@ The current room levels are `0x7ea4b..0x7ea4e`, stored 0-based.
 
 ### Equipment growth (IMINIT)
 
-IMINIT is keyed by ITINIT item id. It covers 61 items: 35 base and 26 in `$3$`.
+IMINIT is keyed by ITINIT item id. It covers 65 items: 35 base, 3 in `$1$`, 1 in `$2$` and 26 in `$3$`.
 
 | field | address |
 |---|---|

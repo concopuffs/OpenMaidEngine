@@ -77,10 +77,53 @@ Related: `docs/scjump-progression.md` (the SCJUMP decoder that hit this wall), `
 
 ---
 
+## Kamidori engine builds: 4.33F and 4.33G (2026-11-08)
+
+Kamidori has two engine builds in the workspace, and they are different code, not one build with and without the
+translation's hook:
+
+| install | `AGE.EXE` | version | live module | dump |
+|---|---|---|---|---|
+| `Kamidori/`, clean, official updates applied | packed, 1,204,736 bytes, SHA-256 `52151686545215f350d2453febab91259450cf3fa79bfb218142765ce3f8842e` | 4.33G (4.33.7.0) | `0x400000`, 2,990,080 bytes | `build/games/kamidori/engine-dump/` (SHA-256 `eed00b04279566d1cb990208c144f470da4587d7e42256d1aa02298d59ffbc14`, captured from an unhooked AGE) |
+| `Kamidori_Translated/`, English fan translation | unpacked plus a `.patch` section, 2,183,936 bytes, SHA-256 `977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4` | 4.33F (4.33.6.0) | `0x400000`, 2,294,528 bytes | `build/games/kamidori/engine-dump-translated/` |
+
+Both builds place their sections at the same addresses (`.text` `0x401000..0x574000`, then `.rdata`, `.data`,
+`.rsrc`), but the code differs. Comparing the two dumps:
+
+- Unchanged: `g_pEngineCtx` `0x5c9bc8`, the interpreter at `0x41121e` and its frame offsets,
+  `input_set_polling_enabled` `0x465a60`, and `_rand` `0x558368`.
+- Moved: op `0x60`'s handler (4.33F `0x4276f0`, 4.33G `0x427650`), the WM_ACTIVATE polling call's return
+  (`0x48e061` → `0x48e041`), and many call targets (by `0xb0` near `0x44d8xx`). `0x41ac80`, where 4.33F's op `0x23`
+  handler starts, lies inside another function in 4.33G.
+- The opcode table moved by 4 bytes: 4.33G's constructor at `0x413e70` (4.33F `0x413e50`) fills it at
+  `ctx+0x9f704`, and the interpreter dispatches through `mov edx, [esi+eax*4+0x9f704]` at `0x41123f` (4.33F
+  `+0x9f700`). Read at that base, both builds register the same 437 opcodes, and 4.33G's op `0x60` is the rand
+  handler at `0x427650`. Read at 4.33F's base, 4.33G's table looks shifted by one opcode.
+- Other context offsets moved too: the function at `0x404f30` reads `ctx+0xa5198` in 4.33F and `ctx+0xa519c` in
+  4.33G.
+- The operand accessors moved, for example fetch-value `0x4198d0` → `0x419900`, write `0x426750` → `0x4266b0`,
+  address `0x4261a0` → `0x426100`, and bind `0x416900` → `0x416920`. All 14 accessors map one to one when
+  same-opcode handlers of the two builds are aligned. `tools/operand_access.py` pins 4.33G's, and the operand
+  contracts it derives from 4.33G equal those from 4.33F for all 437 handlers.
+- The drive step `rand-seed` works on 4.33G with the probe at `0x42768f`. A 魔弾 battle drew op `0x60` 20 times
+  at `COMMITBTL@0x928` once its reward screen closed, and the next turn end drew 1,000 times at `FIELD@0x940a`.
+  This is the same pattern 4.33F showed.
+- 4.33G's packer leaves its API calls as `call rel32` into a stub area plus one junk byte, where the translation's
+  unpacked 4.33F has `call [IAT]`. Himegari's dump has the same pattern (198 such calls, for example `call
+  0x2750000` at `0x429eb1`). A linear decoder loses sync at the junk byte; `operand_access.py` resumes past it,
+  which also recovered Himegari op `0x14a`'s operand-1 write at `0x429ebc`.
+
+**What this means.** The Ghidra program `/kamidori/SYS4433/range_00400000.bin` (next section) and every Kamidori
+address this document gives without a build are 4.33F's. Since 2026-11-08 native Kamidori runs use the clean
+install's 4.33G, and `tools/drive/kamidori.toml` holds 4.33G values. Behavior compared against native before
+2026-11-08 was 4.33F's. Rebasing the Ghidra annotations on 4.33G is open work (`backlog.md`).
+
 ## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
 
+This image is the English fan translation's 4.33F build (see "Kamidori engine builds" above).
 Kamidori was captured independently rather than treating Himegari's `/v2` image as a SYS4 baseline.
-`tools/frida/dump_engine.py` recorded the installed 2,183,936-byte packed `AGE.EXE` with SHA-256
+`tools/frida/dump_engine.py` recorded the installed 2,183,936-byte `AGE.EXE` (not packed: its `.text` equals the
+live dump's, checked 2026-11-08) with SHA-256
 `977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4`; the live module is based at
 `0x400000`, spans 2,294,528 bytes, and its gap-free dump has SHA-256
 `a071ca0fcc3f5955492d070c02e79d8f4ea8c54530d0a2bd1164811e07865a87`. The separate Ghidra program is
@@ -6753,16 +6796,19 @@ Yes continues; No throws the exit exception. Nothing is corrupted. The box appea
 `native_scratch.py` copy, and while it is open it blocks the main loop, so no clicks reach the game until it is
 answered.
 
-**Kamidori (SYS4433, 2026-11-07).** Kamidori's engine lays out its context differently, so `engine-ctx.toml`'s
-offsets (Himegari's `/v2` image) do not apply. The profile `tools/drive/kamidori.toml` names its own:
+**Kamidori (SYS4433, 2026-11-07; 4.33G values since 2026-11-08).** Kamidori's engine lays out its context
+differently, so `engine-ctx.toml`'s offsets (Himegari's `/v2` image) do not apply. The profile
+`tools/drive/kamidori.toml` names its own, for the clean install's 4.33G build ("Kamidori engine builds"):
 
 - `g_pEngineCtx` is `0x5c9bc8`.
 - The interpreter (`0x41121e`) reads `cur_ctx_index` at `ctx+0x57fa0` and the current op through `ctx+0x57fb8 +
   curCtx * 0x78`. Each 0x78-byte frame record keeps Himegari's internal layout: codebase `+0x14`, pc `+0x18` and
   resource id `+0x50`, so `0x57fb4`, `0x57fb8` and `0x57ff0` from the context.
 - `input_set_polling_enabled` is `0x465a60` (input manager `+0x1820`, as in Himegari, so the gate is `ctx+0x1c28`).
-  `age_main_window_proc`'s `WM_ACTIVATE` case calls it with `windowed (ctx+0x9e740) && wParam == WA_INACTIVE` on the
-  input manager at `ctx+0x408`, and the call returns to `0x48e061`.
+  `age_main_window_proc`'s `WM_ACTIVATE` case calls it with `windowed && wParam == WA_INACTIVE` on the input manager
+  at `ctx+0x408`, and the call returns to `0x48e041` (4.33F: windowed flag `ctx+0x9e740`, return `0x48e061`).
+- Op `0x60`'s handler (`0x427650`) calls `_rand@0x558368`, which returns to `0x42768f` (4.33F: `0x4276f0`,
+  `0x42772f`); the drive step `rand-seed` replaces the draw there.
 - A copied install raises the same データが壊れています． registration box, answered Yes.
 
 The driver uses those values in place of `engine-ctx.toml` ([tools-reference.md](tools-reference.md), "Game driver").

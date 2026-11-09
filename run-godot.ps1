@@ -10,7 +10,8 @@
 #   .\run-godot.ps1 -FpsCounter  show live rendered FPS and frame time in the top-right corner
 #   .\run-godot.ps1 -SoftwareRenderer  use the retained software correctness oracle
 #   .\run-godot.ps1 -Kamidori  launch the conventional ../Kamidori install with its profile
-#   .\run-godot.ps1 -Kamidori -TranslationPatch  enable its patch/ English overlay and BMP assets
+#   .\run-godot.ps1 -Kamidori -TranslationPatch  launch the translated ../Kamidori_Translated install with its
+#                                               patch/ English overlay and BMP assets
 #   .\run-godot.ps1 -OverlayRoot <dir> -AllowBmpAsAgf  select generic asset compatibility options
 #   .\run-godot.ps1 -Mod <mod folder or .omp> [-Mod ...]  also load these mods (docs/modding/cli.md)
 #   .\run-godot.ps1 -NoMods    start without any mod, even those in the profile's mods/ folder
@@ -109,7 +110,9 @@ if ($Kamidori) {
     }
     $Profile = 'kamidori'
     if (-not $PSBoundParameters.ContainsKey('GameRoot')) {
-        $GameRoot = Join-Path (Split-Path $repo -Parent) 'Kamidori'
+        # The workspace keeps the clean install in Kamidori/ and the English fan translation's in Kamidori_Translated/.
+        $installName = if ($TranslationPatch) { 'Kamidori_Translated' } else { 'Kamidori' }
+        $GameRoot = Join-Path (Split-Path $repo -Parent) $installName
     }
 }
 $conventionalInstallName = if ($Profile -eq 'kamidori') { 'Kamidori' } else { 'Himegari_Game' }

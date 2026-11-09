@@ -391,7 +391,8 @@ public class NativeResourceTests
     [Theory]
     [InlineData("Himegari_Game", "AGERC.DLL", "終了", "次の方法で終了しますか？",
                 new[] { "プログラムを終了する(&E)", "タイトルに戻る(&T)", "OK", "ｷｬﾝｾﾙ" })]
-    [InlineData("Kamidori", "agerc.dll", "Quit", "Would you like to quit?",
+    // The clean Kamidori install's AGERC.DLL is packed: its dialogs are not in the file (backlog.md).
+    [InlineData("Kamidori_Translated", "agerc.dll", "Quit", "Would you like to quit?",
                 new[] { "Exit(&E)", "Return to title(&T)", "OK", "Cancel" })]
     public void AGamesExitDialogIsItsOwnAgercDialog3(string gameDir, string dllName, string title, string prompt,
                                                       string[] buttons)

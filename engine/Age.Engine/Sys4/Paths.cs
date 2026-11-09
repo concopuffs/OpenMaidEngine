@@ -6,6 +6,11 @@ public static class Paths
     public static string Extracted => Path.Combine(Workspace, "extracted");
     public static string Data1 => Path.Combine(Extracted, "DATA1");
     public static string GameDir => Path.Combine(Workspace, "Himegari_Game");
+    /// <summary>The clean Kamidori install.</summary>
+    public static string KamidoriDir => Path.Combine(Workspace, "Kamidori");
+    /// <summary>A Kamidori install with the English fan translation (patch/, translated AGE.EXE and agerc.dll, root
+    /// <c>$n$</c> scripts and BMP graphics), kept beside the clean one for the translation-support tests.</summary>
+    public static string KamidoriTranslatedDir => Path.Combine(Workspace, "Kamidori_Translated");
     public static string Build => Path.Combine(Repo, "build");
     public static string OpcodesJson => Path.Combine(Build, "opcodes.json");
     public static string AssetSectionsJson => Path.Combine(Build, "asset-sections.json");

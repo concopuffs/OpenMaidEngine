@@ -1,9 +1,9 @@
 # Kamidori furigana (op 0x196). The prologue page at SC0000@0xfa2 shows 叛乱 with the ruby はんらん: 8 px MS Gothic
 # over the base word, drawn by SYS4433's rule (adv_text_draw_ruby_over_row_sys4433@0x4590d0; docs/engine-re.md,
 # "Furigana"). History redraws the ruby over the same word. Compare the kamidori-furigana-* shots between targets.
-# The translation blanks every ruby, so run on the Japanese base: the port without --overlay-root, and native AGE
-# with the scratch install's patch/ folder renamed. On a fresh sandbox, on both targets:
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start --port-arg=--allow-bmp-as-agf
+# The English fan translation blanks every ruby, so run on the clean install (Kamidori/), as both targets do by
+# default. On a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start
 #   py -3.11 -X utf8 tools/drive.py --profile kamidori port run tools/drive/scenarios/kamidori-furigana.steps
 
 wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie

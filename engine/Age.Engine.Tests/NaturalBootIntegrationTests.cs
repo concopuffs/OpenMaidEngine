@@ -241,11 +241,11 @@ public class NaturalBootIntegrationTests
     public void KamidoriSystem4Root_NewGameSelectionNaturallyCallsFirstAdvScene(
         bool translationOverlay)
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = translationOverlay ? Paths.KamidoriTranslatedDir : Paths.KamidoriDir;
         string[] looseRoots = translationOverlay
             ? [Path.Combine(gameRoot, "patch"), gameRoot]
             : [gameRoot];
-        var (reachedAdv, entered) = RunKamidoriNewGameToFirstAdvPage(looseRoots);
+        var (reachedAdv, entered) = RunKamidoriNewGameToFirstAdvPage(gameRoot, looseRoots);
         Assert.Contains("TITLE.BIN", entered);
         Assert.Contains("GAMESTART.BIN", entered);
         Assert.Equal("SC0000.BIN", reachedAdv.ScriptName);
@@ -262,9 +262,9 @@ public class NaturalBootIntegrationTests
     [Trait("Profile", "kamidori")]
     public void KamidoriTranslatedPrologueFragmentIsTheFirstAdvPage()
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriTranslatedDir;
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
-        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+        Assert.True(File.Exists(sys4Ini), $"translated Kamidori install not found at {gameRoot}");
         string[] baseRoots = [Path.Combine(gameRoot, "patch"), gameRoot];
         GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("kamidori")!;
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, profile.EngineAbiId);
@@ -283,7 +283,7 @@ public class NaturalBootIntegrationTests
         try
         {
             File.WriteAllBytes(Path.Combine(layer, "SC0000.BIN"), link.Scripts["SC0000.BIN"].Bytes);
-            var (reachedAdv, _) = RunKamidoriNewGameToFirstAdvPage([layer, ..baseRoots]);
+            var (reachedAdv, _) = RunKamidoriNewGameToFirstAdvPage(gameRoot, [layer, ..baseRoots]);
             Assert.Equal("[OMS] A mod inserted this line before the prologue's first page.", reachedAdv.Text);
         }
         finally
@@ -293,9 +293,8 @@ public class NaturalBootIntegrationTests
     }
 
     private static (ReachedKamidoriAdvPageException Reached, List<string> Entered) RunKamidoriNewGameToFirstAdvPage(
-        string[] looseRoots)
+        string gameRoot, string[] looseRoots)
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
 

@@ -29,12 +29,6 @@ _CONVENTIONAL_GAME_ROOTS = {
     "himegari": WORKSPACE / "Himegari_Game",
     "kamidori": WORKSPACE / "Kamidori",
 }
-# Profiles whose installed root carries loose `$n$` append-record replacements that are NOT
-# authored game data. Kamidori's install has the English fan translation's `$n$*.bin` script
-# replacements beside AGE.EXE (all 92 differ from APPENDnn.ALF and carry English text, while the
-# Japanese non-`$` root overrides are official updates). Data tooling reads those records from the
-# pristine extracted append catalogs instead. The runtime still mounts them as native AGE would.
-_UNTRUSTED_LOOSE_APPEND_OVERRIDES = {"kamidori"}
 
 _CONVENTIONAL_EXTRACTED_ROOTS = {
     "himegari": WORKSPACE / "extracted",
@@ -74,10 +68,6 @@ class ToolContext:
     @property
     def data1(self) -> Path:
         return self.extracted_root / "DATA1"
-
-    @property
-    def trusts_loose_append_overrides(self) -> bool:
-        return self.profile_id not in _UNTRUSTED_LOOSE_APPEND_OVERRIDES
 
     @property
     def globals_toml(self) -> Path:
@@ -181,8 +171,9 @@ def add_self_to_syspath() -> None:
 def _bin_files(directory: Path) -> list[Path]:
     """The directory's ``.BIN`` files in any letter case, sorted.
 
-    AGE runs on Windows, where file names match regardless of case, and installs differ (Kamidori's
-    root carries lowercase ``$n$*.bin``), so a case-sensitive glob would miss files on Linux.
+    AGE runs on Windows, where file names match regardless of case, and installs differ in letter case
+    (a fan translation of Kamidori ships lowercase ``$n$*.bin``), so a case-sensitive glob would miss
+    files on Linux.
     """
     return sorted(path for path in directory.iterdir() if path.suffix.upper() == ".BIN" and path.is_file())
 
@@ -192,9 +183,8 @@ def scripts(context: ToolContext | None = None) -> dict[str, Path]:
 
     Loose files shadow extracted DATA1 copies. Extracted append catalogs
     (``<extracted>/APPENDnn/``) contribute their literal ``$n$`` record names, which loose
-    ``$n$`` files shadow in turn unless the profile marks them untrusted (see
-    ``_UNTRUSTED_LOOSE_APPEND_OVERRIDES``). Archive-only scripts are not represented. Names
-    match in any letter case, as on Windows.
+    ``$n$`` files shadow in turn, as native AGE mounts them. Archive-only scripts are not
+    represented. Names match in any letter case, as on Windows.
     """
     selected = context or CONTEXT
     files: dict[str, Path] = {}
@@ -206,7 +196,5 @@ def scripts(context: ToolContext | None = None) -> dict[str, Path]:
             files[path.name.upper()] = path
     if selected.game_root.is_dir():
         for path in _bin_files(selected.game_root):
-            if path.name.startswith("$") and not selected.trusts_loose_append_overrides:
-                continue
             files[path.name.upper()] = path
     return files

@@ -610,8 +610,9 @@ contract, and no game-specific AIM branch was added.
 ### Kamidori no-implementation opcode catalog (2026-08-19)
 
 A complete `catalog-scan` of all 732 scripts (542 base and 190 append) provides the static backlog rather
-than relying only on whichever opcode strict execution reaches next. The official root/archive corpus has
-2,126,378 instructions; the translated overlay has 2,161,326. Both decode with zero failures, use the same
+than relying only on whichever opcode strict execution reaches next. The root/archive corpus has
+2,126,378 instructions (that root was the translated install's; the clean install's has 2,123,406,
+2026-11-08); the translated overlay has 2,161,326. Both decode with zero failures, use the same
 269 distinct opcodes, and produce the same missing-opcode distribution. After implementing `0x2d8`, the
 initial catalog contained 17 gaps. The following `0x27`/`0x28` patterned surface-reveal slice removed 193
 calls across 47 scripts. Implementing the retained directional-blur command `0x250` then removed another

@@ -78,7 +78,8 @@ public class EngineIdentityTests
     [Fact]
     public void InstalledGamesVersionDialogsHaveEveryEngineLabel()
     {
-        foreach (string root in new[] { Paths.GameDir, Path.Combine(Paths.Workspace, "Kamidori") })
+        // The clean Kamidori install's AGERC.DLL is packed: its dialogs are not in the file (backlog.md).
+        foreach (string root in new[] { Paths.GameDir, Paths.KamidoriTranslatedDir })
         {
             string agerc = Path.Combine(root, "AGERC.DLL");
             if (!File.Exists(agerc)) continue;

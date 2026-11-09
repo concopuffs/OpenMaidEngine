@@ -31,17 +31,19 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
 │   └── DATA1/ … DATA5/                         DATA1 = 481 .BIN scripts (the corpus we parse)
 │                                               + AGF/BMP/WAV in the others.
 │
-├── Kamidori/                                ← SOURCE — Kamidori install (read-only). Its root also carries
-│                                               the English fan translation (`patch/`, translated AGE.EXE,
-│                                               and 92 loose `$n$*.bin` append replacements; see
-│                                               docs/asset-resolution-re.md). Non-`$` root .BIN = official updates.
+├── Kamidori/                                ← SOURCE — clean Kamidori install with the official updates and
+│                                               appends (read-only; AGE 4.33G). Root .BIN files, 17 `$n$`
+│                                               append records included, are the updates' loose records.
+│
+├── Kamidori_Translated/                     ← SOURCE — Kamidori with the English fan translation (read-only;
+│                                               `patch/`, AGE 4.33F, English `$n$*.bin`). Used only by the
+│                                               port's translation tests and translated runs
+│                                               (docs/asset-resolution-re.md).
 │
 ├── extracted-kamidori/                      ← DERIVED — Kamidori archives (~4.5 GB), regenerable with
 │   │                                          `bin/BinExtractALF.exe SYS4INI.BIN <dir>` / `APPENDnn.AAI <dir>`.
 │   ├── DATA1/ … DATA5/                         DATA1 = 542 base .BIN scripts + AGF/WAV/CUR
-│   ├── APPEND01/ … APPEND03/                   append catalogs, literal `$n$NAME` record names
-│   └── pristine-root/                          hard-link view of Kamidori/ minus the translation's `$n$`
-│                                               files; game root for tools/init_image.py
+│   └── APPEND01/ … APPEND03/                   append catalogs, literal `$n$NAME` record names
 │
 └── age-reimpl/                              ← OUR WORK (everything we made lives here)
     │
@@ -185,6 +187,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── scripts-json/                      machine-readable full dumps (on demand via --json)
     │   ├── textures/                          AGF-to-BMP stills (convert_agf.py) - diagnostic pixel oracle only
     │   ├── games/<profile-id>/engine-dump/    profile-scoped UNPACKED engine dump: hashed ranges + provenance manifest
+    │   │                                       (Kamidori also keeps engine-dump-translated/, the translation's 4.33F
+    │   │                                       dump that Ghidra's /kamidori image came from)
     │   ├── asset-index.json, asset-sections.json   asset resolver data (parse_sys4ini / resolve_asset)
     │   ├── global-var-map.{json,md}           partial global-variable name map (auto shape inference; feeds globals.toml merge)
     │   ├── globals.json                        GENERATED from globals.toml merged over global-var-map (sys4load labels + C# VM)

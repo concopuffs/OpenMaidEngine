@@ -10,10 +10,6 @@ each script's global-bank delta (new or changed int/string cells).
   py -3.11 -X utf8 tools/init_image.py --profile kamidori            # build the image
   py -3.11 -X utf8 tools/init_image.py --profile kamidori --summary  # per-script cell counts
 
-Profiles whose installed root carries untrusted loose `$n$` append replacements (see
-paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES) run against `<extracted>/pristine-root/`, a hard-link view
-of the install without those files, so the image holds authored data only.
-
 Writes build/games/<profile>/init-image.json:
   {profile, game_root, scripts: [{script, packed_id, halt, steps, ints:{addr: v}, strings:{addr: s}}]}
 Deltas omit writes that store a cell's existing value.
@@ -67,32 +63,9 @@ def boot_sequence() -> list[str]:
     return sequence
 
 
-def pristine_root() -> Path:
-    """Game root for the run: the install, or a hard-link view without untrusted `$n$` files."""
-    if paths.CONTEXT.trusts_loose_append_overrides:
-        return paths.GAME_DIR
-    view = paths.EXTRACTED / "pristine-root"
-    view.mkdir(parents=True, exist_ok=True)
-    wanted = {
-        path.name: path for path in paths.GAME_DIR.iterdir()
-        if path.is_file() and not path.name.startswith("$")
-    }
-    for existing in view.iterdir():
-        if existing.name not in wanted:
-            existing.unlink()
-    for name, source in wanted.items():
-        target = view / name
-        if target.exists() and os.path.samefile(target, source):
-            continue
-        if target.exists():
-            target.unlink()
-        os.link(source, target)
-    return view
-
-
 def build() -> int:
     sequence = boot_sequence()
-    root = pristine_root()
+    root = paths.GAME_DIR
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     command = [
         "dotnet", "run", "--project", str(paths.REPO / "engine" / "Age.Cli"), "-c", "Release", "--",

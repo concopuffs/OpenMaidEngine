@@ -103,6 +103,29 @@ def test_synthetic_x86():
     check(unresolved == [], "every synthetic call resolves")
 
 
+PACKED_HANDLER, API_STUB = 0x401600, 0x2750000
+
+
+def test_packer_stub_junk_byte():
+    """A packed image calls an API through `call rel32` into a stub outside the module, then one junk byte."""
+    try:
+        import capstone  # noqa: F401
+    except ImportError:
+        print("  skip packer stub test (capstone not installed)")
+        return
+    image = bytearray(synthetic_image())
+    h = Asm(PACKED_HANDLER)
+    h.call(API_STUB).emit(b"\xBA")                     # junk 0xBA would decode as mov edx, imm32 over the pushes
+    h.emit(b"\x50", b"\x6A\x01", b"\x8B\xCE").call(WRITE)   # write(1, eax)
+    h.call(API_STUB).emit(b"\xFF")                     # junk 0xFF would not decode at all
+    h.emit(b"\x6A\x02", b"\x8B\xCE").call(FETCH)        # fetch(2)
+    h.emit(b"\xC3")
+    image[PACKED_HANDLER - BASE:PACKED_HANDLER - BASE + len(h.code)] = h.code
+    found = A.accesses(A.Image(bytes(image)), FACTS.accessors, PACKED_HANDLER)
+    check([(r["access"], r["arg"]) for r in found] == [("write", 1), ("read", 2)],
+          "decoding resumes past the junk byte after an API stub call")
+
+
 # --------------------------------------------------------------------------- registry folding/apply
 def test_contracts_reject_out_of_range():
     by_arg, unresolved = A.contracts([{"arg": 4, "access": "read"}, {"arg": None, "access": "write"},
@@ -160,6 +183,7 @@ def test_apply_to_registry():
 
 def main():
     test_synthetic_x86()
+    test_packer_stub_junk_byte()
     test_contracts_reject_out_of_range()
     test_apply_to_registry()
     print("FAILURES:", len(FAILS))

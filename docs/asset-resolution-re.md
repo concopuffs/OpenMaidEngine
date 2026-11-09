@@ -235,12 +235,13 @@ handle, current position, and readable length in the FileDB stream table.
 ### Kamidori English-translation overlay (investigated 2026-08-19)
 
 The different Kamidori title screens produced by native AGE and the reimplementation are not a title-script
-branch, SYS4433 opcode difference, or append-catalog selection. This installation contains a translation-owned
-`patch/` overlay that the translated executable probes ahead of AGE's normal root-loose/archive path. The
-installed `AGE.EXE` is version 4.33F, SHA-256
-`977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4`; the installer's preserved
-`Backup/age.exe.bak` is a distinct version 4.33G binary, SHA-256
-`52151686545215f350d2453febab91259450cf3fa79bfb218142765ce3f8842e`.
+branch, SYS4433 opcode difference, or append-catalog selection. The translated installation (in the workspace,
+`Kamidori_Translated/` since 2026-11-08) contains a translation-owned `patch/` overlay that the translated
+executable probes ahead of AGE's normal root-loose/archive path. The translated `AGE.EXE` is version 4.33F, SHA-256
+`977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4`. A clean install with the official updates
+(`Kamidori/`) runs version 4.33G, SHA-256 `52151686545215f350d2453febab91259450cf3fa79bfb218142765ce3f8842e`. The
+two are different engine builds, not one build with and without the hook ([`engine-re.md`](engine-re.md),
+"Kamidori engine builds").
 
 In the translated SYS4433 runtime image, `asset_open_indexed_entry_SYS4433@0x44eab0` has a patched jump at
 `0x44ec20` to the injected `translation_patch_try_open_overlay_trampoline@0x630000`. With `ECX` pointing at
@@ -265,8 +266,7 @@ The title evidence is exact:
   `.BIN` scripts and 207 `.AGF`-named graphics. All 207 graphics actually begin with the BMP `BM` signature,
   rather than `ACGF`. The translated native runtime demonstrably accepts those replacement payloads. A BMP
   reader also exists in the independently captured Himegari SYS4422 image, so BMP capability is not evidence
-  for a SYS4433 dialect; whether the translation changed the stock Kamidori resource-format dispatch has not
-  yet been isolated from its preserved packed backup.
+  for a SYS4433 dialect. Whether 4.33G's resource-format dispatch also accepts them has not been checked.
 
 Support landed on 2026-08-19 at the general asset boundary, without changing opcode dispatch or assigning the
 patch to the Kamidori profile. Godot and asset-aware CLI commands accept repeatable, ordered
@@ -284,39 +284,41 @@ silent compatibility expansion. The local `-Kamidori -TranslationPatch` launcher
 
 Installed-data acceptance proves the overlay's `TITLE.BIN` hash, the 720×700 translucent `SO004` menu atlas,
 the opaque 1024×576 `SO005` background, and natural SYSTEM4 → TITLE → New Game → first-ADV-page execution under
-both the official and translated script corpora. A real 300-frame Godot capture reproduced the translated
+both the root script corpus and the translated overlay. A real 300-frame Godot capture reproduced the translated
 executable's English title composition. A production-store scan of the selected overlay decodes the same 732
 catalog scripts with zero failures: 2,161,326 instructions and the same 269 distinct opcode observations as the
-official 2,126,378-instruction corpus. The +34,948 executed corpus instructions are patch-script provenance,
-not evidence of a different opcode set. Diagnostic JSON records the selected overlay roots and BMP option so
-these measurements remain distinguishable from the official K4/K6 snapshot.
+2,126,378-instruction root corpus without the overlay. That root was the translated install's, with the
+translation's loose `$n$` records; the clean install's corpus has 2,123,406 instructions (2026-11-08). The +34,948
+executed corpus instructions are patch-script provenance, not evidence of a different opcode set. Diagnostic JSON
+records the selected overlay roots and BMP option so these measurements remain distinguishable from the K4/K6
+snapshot.
 
-**The translation also replaced root-loose append records (found 2026-10-06).** Separately from `patch/`, the
-installed Kamidori root holds 92 loose `$n$*.bin` scripts (`$1$`, `$2$`, `$3$` append-record basenames). Every one
-differs from its `APPENDnn.ALF` record and carries English text where the archive copy is Japanese (for example
-`$3$EBINIT.bin` names unit 1 "Wilfred Dion"; the archive copy names him ウィルフレド・ディオン). The installer's
-`Backup/` holds `.bak` originals for eleven of them, consistent with it adding the rest outright. The root also holds
-25 translation-owned `$n$*.AGF` append graphics, which are BMPs (`BM`) like the overlay's.
+**The translation also replaced root-loose append records (found 2026-10-06; compared with a clean install
+2026-11-08).** Separately from `patch/`, the translated root holds 92 loose `$n$*.bin` scripts (`$1$`, `$2$`, `$3$`
+append-record basenames). Every one differs from its `APPENDnn.ALF` record. The clean install with the official
+updates holds 17 of them as Japanese `$n$*.BIN` (`$1$` ALINIT, CGINIT, CIMES, COINIT, IMINIT, ITINIT, ITMES, SCJUMP,
+SKINIT, SKMES; `$2$` ALINIT, IMINIT, ITINIT, ITMES, SCJUMP, SKINIT, SKMES): the update's loose append records,
+which add content the archive records lack (for example `$1$ITINIT` has 25 items, `APPEND01.ALF`'s record 19). The
+translation overwrote 11 of those 17 with English builds, left 6 unchanged, and added the other 75 (for example
+`$3$EBINIT.bin` names unit 1 "Wilfred Dion"; the archive copy names him ウィルフレド・ディオン). It also added 25
+`$n$*.AGF` append graphics, which are BMPs (`BM`) like the overlay's, and replaced `AGERC.DLL` (English dialogs)
+and `SO009.AGF`. Every other file, archives included, is byte-identical between the two installs, except
+`SYS4RK.BIN` (144 bytes in both, different contents; the clean install's copy is dated 2026-11-08, the day it was installed).
 
 **Root `$n$` files are AGE's own mechanism, not the translation's hook (rechecked 2026-11-07).** The translated
 executable's trampoline sits only on the base-record branch of `asset_open_indexed_entry_SYS4433`. Append ids go to
 the unhooked `aai_open_indexed_entry_SYS4433@0x401410`, which calls `CreateFileA` on the record's own `$n$` name in
 the game root and falls back to its `APPENDnn.ALF` range, exactly as Himegari's untranslated SYS4422
-`aai_open_indexed_entry` does. The official Japanese install already used this: the eleven `Backup/` originals are
-Japanese, differ from their archive records and are larger (`$1$ITINIT` 7,208 bytes in `APPEND01.ALF`, 9,640 in the
-backup), so Kamidori's official update shipped them as root-loose append overrides. The translation overwrote those
-eleven with English builds of the updated scripts and added the other 81 scripts and the 25 graphics. `patch/`
-exists because the translation's hook reads it; the root `$n$` files need no hook. Stock and translated AGE both load
-them, and so does the port, with or without `--overlay-root patch`. The port running this install without the
-overlay is therefore stock AGE's view of a translated install: Japanese base records, English append records, and
-BMP append graphics that need `--allow-bmp-as-agf`.
+`aai_open_indexed_entry` does. `patch/` exists because the translation's hook reads it; the root `$n$` files need
+no hook. Stock and translated AGE both load them, and so does the port, with or without `--overlay-root patch`. The
+port running this install without the overlay is therefore stock AGE's view of a translated install: Japanese base
+records, English append records, and BMP append graphics that need `--allow-bmp-as-agf`.
 
-The non-`$` root `.BIN` overrides are different: they are Japanese, differ from `DATA1.ALF`, and none is in
-`Backup/`, so they are treated as the official update's authored files. Data tooling excludes the root `$n$` files
-for the Kamidori profile (`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`) and reads append records from
-`extracted-kamidori/APPENDnn/`; `tools/init_image.py` runs the VM against a hard-link view of the install without
-them. For the eleven records the official update replaced, that view reads the pre-update archive copies, not the
-update's (`docs/backlog.md`). The runtime is unchanged — it still mounts them, as native AGE does.
+The clean install's 94 non-`$` root `.BIN` files (90 differ from `DATA1.ALF`, 2 match it, plus root-only
+`SYS4INI.BIN`/`SYS4RK.BIN`) are the official update's loose base records; the translated install has the same files.
+Since 2026-11-08 the Kamidori game root is the clean install, and data tooling reads every root file, `$n$` records
+included, the way native AGE mounts them. The translated install serves only the port's translation tests and
+translated runs (`run-godot.cmd -Kamidori -TranslationPatch`).
 
 ### Proposed layers
 

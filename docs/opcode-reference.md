@@ -6,7 +6,7 @@
 Observation proves presence in that exact script revision; it does not prove a base SYS4 definition, revision ancestry, or absence from any unscanned game.
 
 - **himegari:** 248 opcodes in 520 scripts / 1522942 instructions; catalog `S4IC422`, scripts `SYS4422`, artifact `build/games/himegari/catalog-opcode-coverage.json`
-- **kamidori:** 269 opcodes in 732 scripts / 2126378 instructions; catalog `S4IC433`, scripts `SYS4433`, artifact `build/games/kamidori/catalog-opcode-coverage.json`
+- **kamidori:** 269 opcodes in 732 scripts / 2123406 instructions; catalog `S4IC433`, scripts `SYS4433`, artifact `build/games/kamidori/catalog-opcode-coverage.json`
 
 ## ABI snapshots and composition
 

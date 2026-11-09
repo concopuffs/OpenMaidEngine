@@ -1693,7 +1693,8 @@ shared. Installed validation can select either game independently. Its corpus ga
 `Sys4AssetStore`, and script provider, so archive, append, and loose-override behavior is exercised without an
 extracted tree. In the current installs, Himegari decodes 520 catalog scripts (481 base + 39 append), 1,522,942
 instructions, and 248 distinct opcodes with no decode failures; Kamidori decodes 732 scripts (542 base + 190
-append), 2,126,378 instructions, and 269 distinct opcodes with no decode failures. Kamidori currently has 27
+append), 2,126,378 instructions, and 269 distinct opcodes with no decode failures (that install was the
+translated one; the clean install, the game root since 2026-11-08, has 2,123,406 instructions and the same 269). Kamidori currently has 27
 recognized opcodes without runtime handlers. K4 subsequently promoted those profile-scoped measurements into
 the canonical observation/provenance model without treating either game as a base SYS4 definition.
 

@@ -26,7 +26,9 @@ settings_file = "SYS4REG.INI"
 [sandbox.quiet]
 "sound.Volume0" = 0
 
-# Native AGE only. SYS4433 (Kamidori's unpacked image, build/games/kamidori/engine-dump):
+# Native AGE only, for the clean install's AGE.EXE: AGE 4.33G (4.33.7.0), SYS4433; its unpacked image is
+# build/games/kamidori/engine-dump. The English fan translation ships AGE 4.33F (4.33.6.0), an older build whose
+# hook addresses differ (docs/engine-re.md, "Kamidori engine builds").
 # - g_pEngineCtx is 0x5c9bc8 (every handler reads the ctx through it);
 # - the interpreter (0x41121e) reads curCtx at ctx+0x57fa0 and the current op through ctx+0x57fb8 + curCtx*0x78;
 #   the frame record keeps Himegari's internal layout (codebase +0x14, pc +0x18, resource id +0x50 from curCtx).
@@ -40,17 +42,18 @@ frame_pc = 0x57fb8
 frame_script_resource_id = 0x57ff0
 
 # input_set_polling_enabled is 0x465a60 (input manager +0x1820, as in Himegari). age_main_window_proc's WM_ACTIVATE
-# case calls it with (windowed ctx+0x9e740 && wParam == WA_INACTIVE) on the input manager at ctx+0x408; the call
-# returns to 0x48e061.
+# case calls it with (windowed && wParam == WA_INACTIVE) on the input manager at ctx+0x408; the call returns to
+# 0x48e041 (4.33F: 0x48e061).
 [native.keep_polling]
 setter = 0x465a60
-activate_return = 0x48e061
+activate_return = 0x48e041
 gate = 0x1c28
 
 # The drive step rand-seed replaces op 0x60's rand() draw at the instruction its call returns to
-# (op_0x60_handler@0x4276f0 calls _rand@0x558368 before it fetches an operand).
+# (op 0x60's handler at 0x427650 calls _rand@0x558368 before it fetches an operand; 4.33F: handler 0x4276f0,
+# return 0x42772f).
 [native.rand]
-op60_rand_return = 0x42772f
+op60_rand_return = 0x42768f
 
 [[native.dialog]]
 match = "データが壊れています．"

@@ -349,7 +349,7 @@ public class SaveUiIntegrationTests
     [InlineData(true)]
     public void InstalledKamidoriSaveResumesNativeAndTranslatedScripts(bool translation)
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = translation ? Paths.KamidoriTranslatedDir : Paths.KamidoriDir;
         string saveRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Eushully", "神採りアルケミーマイスター", "SAVE");
         Assert.True(File.Exists(Path.Combine(saveRoot, "SAVE00.DAT")));

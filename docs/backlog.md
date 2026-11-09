@@ -58,15 +58,28 @@ it; git history keeps the record.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
-- **Rebase Kamidori on a clean install.** The Kamidori install in use carries the English fan translation
-  (`patch/`, a translated `AGE.EXE`, 92 root `$n$*.bin` scripts and 25 BMP `$n$*.AGF` graphics;
-  `asset-resolution-re.md`, "Kamidori English-translation overlay") beside 94 Japanese non-`$` root `.BIN`
-  overrides whose origin is not established. Tooling works around the translation by excluding root `$n$` files
-  (`paths._UNTRUSTED_LOOSE_APPEND_OVERRIDES`), and native runs use the translated executable. The user is getting
-  a clean install (2026-11-08). Done when the Kamidori game root is that install with only official files: the
-  archives are re-extracted, the init image, tables, registries and their docs are rebuilt from it, the docs
-  describe its loose files from evidence, the untrusted-override exception is dropped if nothing needs it, and
-  the native driving sandboxes are re-seeded.
+- **Replace AGERC with an engine-owned shell (decided 2026-11-08).** The port reads its menu bar, 終了, ﾊﾞｰｼﾞｮﾝ情報
+  and 設定 dialogs and the fullscreen strip's resources from the game's `AGERC.DLL`. Kamidori's clean install ships
+  that DLL packed: the file holds only its icon, version and manifest resources, so on that install the port has no
+  menu bar, quits without the 終了 dialog, and has no version or 設定 dialogs. Native AGE shows them, in Japanese
+  (`docs/modding/games/kamidori.md`). `NativeResourceTests` and `EngineIdentityTests` read the translated install's
+  `agerc.dll`, which has them in the file. The user decided:
+  - At runtime the port reads game data, never game binaries (`AGE.EXE`, `AGERC.DLL`).
+  - AGERC is AGE's stock front end, so the port replaces it as it replaces `AGE.EXE`. The engine keeps everything
+    scripts can observe at native semantics: the settings registry (`SYS4REG.INI` keys and units), the services, the
+    callback scripts (`CALLBACK_SETTING.BIN` after a settings change) and the script-set gates (ops `0x142`, `0x10f`,
+    `0x148`/`0x149`). The option set and its presentation are the port's own, configured only by `SYS4INI.BIN`
+    keys.
+  - Presentation is both an in-window options panel and a desktop menu bar. Japanese labels stay close to AGE's
+    unless that conflicts with the design.
+
+  Next is a design spec. Done when the port reads no `AGERC.DLL` at runtime and every option works on both
+  installs.
+- **Kamidori's Ghidra image is 4.33F.** The program `/kamidori/SYS4433/range_00400000.bin` and its annotations are
+  the translation's 4.33F build. Native runs since 2026-11-08 use the clean install's 4.33G, whose code differs
+  (`engine-re.md`, "Kamidori engine builds"). Kamidori addresses in the docs without a build are 4.33F's. Done when
+  a 4.33G program (from `build/games/kamidori/engine-dump/`) carries the annotations over, and new Kamidori
+  findings name 4.33G addresses.
 - **The `0x90`-byte SYS4INI block.** Its meaning is unknown and no consumer is known (OMS spec §13). Revisit only if
   one appears.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,
@@ -74,6 +87,9 @@ it; git history keeps the record.
 - **Resume the Kamidori fidelity sweep.** Since 2026-11-03 the sweep has driven native AGE and the port through
   the same steps (`tools/drive.py`, `rand-seed` before battles) and compared screenshots, VM positions and decoded
   saves. It paused on 2026-11-08 at 木漏れ日の深緑地, turn 4, with every difference so far fixed or listed above.
+  Everything below was driven on the translated install's 4.33F build. Since then the game root is the clean
+  install (4.33G, Japanese UI). Its native AGE loads the turn-4 save and runs a battle and a turn end, with
+  `rand-seed` drawing as before. Re-check the port against it on the clean install before going further.
   Covered at parity:
   - the title, prologue and first map and battle;
   - 平穏なる採取地 to its clear (採取, DIG, STAGECLEAR) and the chapter scenes that follow;
