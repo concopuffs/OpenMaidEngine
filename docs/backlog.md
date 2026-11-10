@@ -68,8 +68,8 @@ it; git history keeps the record.
 - **Resume the Kamidori fidelity sweep.** Since 2026-11-03 the sweep has driven native AGE and the port through
   the same steps (`tools/drive.py`, `rand-seed` before battles) and compared screenshots, VM positions and decoded
   saves, with every difference so far fixed or listed above. Until 2026-11-08 it ran on the translated install's
-  4.33F build; since 2026-11-09 it runs on the clean install (4.33G, Japanese UI). It stands in 一陣の訓練地, the
-  second mine stage, at turn 15 with two of its three Earthmen left. Covered at parity:
+  4.33F build; since 2026-11-09 it runs on the clean install (4.33G, Japanese UI). It stands in ウィルの工房 after
+  the clear of 一陣の訓練地, the second mine stage. Covered at parity:
   - the title, prologue and first map and battle;
   - 平穏なる採取地 to its clear (採取, DIG, STAGECLEAR) and the chapter scenes that follow;
   - the world map, town, church shop, tavern and workshop scenes, an alchemy craft and the SC1250 delivery;
@@ -80,9 +80,11 @@ it; git history keeps the record.
     until SYS4433's op `0x215` rule, fixed 2026-11-09);
   - the town's 広場 event (SC1060), ウィルの工房's events (SC1000 with its 開業成績 settlement, SC6050, SC6100), the
     増築&家具配置 screens and the departure scene (SC1490), 2026-11-10;
-  - 一陣の訓練地 turns 1-15: the SC0500 and SC2000 openings, trap and 採取 cards, two vortex seals, a locked door,
-    battles with a level-up and enemy-phase counters, healing support, the Earthman scenes (SC4000, SC4510) and
-    magic attacks. Battles end about 0.26 s sooner on the port (the "Kamidori battles end" item below).
+  - 一陣の訓練地 to its clear on turn 23: the SC0500 and SC2000 openings, trap and 採取 cards, two vortex seals, a
+    locked door, battles with a level-up and enemy-phase counters, healing support, the Earthman scenes (SC4000,
+    SC4510), magic attacks, STAGECLEAR, the 素材袋鑑定 appraisal and SC0500's closing scene. Battles end about
+    0.26 s sooner on the port (the "Kamidori battles end" item below);
+  - back in town, the next ウィルの工房 event (SC1000 from `0x8364`) and its 開業成績 settlement, 2026-11-10.
 
   Saves on both targets compare by decoded payload (`Ome.Cli save-diff`, `tools-reference.md`). Clock
   samples, gfx start stamps and save-history globals are expected to differ (`engine-re.md`, "Op 0x216 reads past
