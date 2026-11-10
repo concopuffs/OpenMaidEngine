@@ -68,8 +68,8 @@ it; git history keeps the record.
 - **Resume the Kamidori fidelity sweep.** Since 2026-11-03 the sweep has driven native AGE and the port through
   the same steps (`tools/drive.py`, `rand-seed` before battles) and compared screenshots, VM positions and decoded
   saves, with every difference so far fixed or listed above. Until 2026-11-08 it ran on the translated install's
-  4.33F build; since 2026-11-09 it runs on the clean install (4.33G, Japanese UI). It stands in ウィルの工房 after
-  the clear of 一陣の訓練地, the second mine stage. Covered at parity:
+  4.33F build; since 2026-11-09 it runs on the clean install (4.33G, Japanese UI). It stands on turn 5 of
+  蒼月の南湖畔 at シセティカ湖, the third stage, after the water-spirit event. Covered at parity:
   - the title, prologue and first map and battle;
   - 平穏なる採取地 to its clear (採取, DIG, STAGECLEAR) and the chapter scenes that follow;
   - the world map, town, church shop, tavern and workshop scenes, an alchemy craft and the SC1250 delivery;
@@ -84,7 +84,10 @@ it; git history keeps the record.
     locked door, battles with a level-up and enemy-phase counters, healing support, the Earthman scenes (SC4000,
     SC4510), magic attacks, STAGECLEAR, the 素材袋鑑定 appraisal and SC0500's closing scene. Battles end about
     0.26 s sooner on the port (the "Kamidori battles end" item below);
-  - back in town, the next ウィルの工房 event (SC1000 from `0x8364`) and its 開業成績 settlement, 2026-11-10.
+  - back in town, the next ウィルの工房 event (SC1000 from `0x8364`) and its 開業成績 settlement, 2026-11-10;
+  - the town's next 広場 event (SC1050) and 裏路地 event (`$1$SC2600`, with SHOWALLMAP), ウィルの工房's SC1020
+    event, and 蒼月の南湖畔 turns 1-5: the SC0500 and SC2000 openings, the SC5500 stage events, enemy-phase
+    counters with level-ups, attacks, healing support, and money and healing cards, 2026-11-10.
 
   Saves on both targets compare by decoded payload (`Ome.Cli save-diff`, `tools-reference.md`). Clock
   samples, gfx start stamps and save-history globals are expected to differ (`engine-re.md`, "Op 0x216 reads past
@@ -191,15 +194,28 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
   and a two-mod test shows it.
 - **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12):
   - a launcher;
-  - runtime scripting (Lua);
+  - runtime scripting (Lua): design drafted, see the next item;
   - mod-owned sites (patching another mod's inserted code);
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
+- **Runtime scripting (Lua): design draft under review.** The port runs no mod code of its own: mods change
+  behaviour only through bytecode (patches and scripts). The roadmap plans Lua beside the VM
+  (`remake-architecture-and-roadmap.md` §3.8, and §3.10 step 7 for the runtime boundary and the spike).
+  - **Draft (2026-11-10, not accepted):** `lua-scripting-design-2026-11-10.md` at the workspace root, outside this
+    repository. It covers the runtime choice, hooks declared in the manifest, the engine API (`maid.vm` and the
+    rest), per-game base mods that hold every game-specific name, mod state beside the save, and the validation
+    gates. Its §19 lists the questions still open.
+  - It raises the package manifest to `omp = 2`, as the localization draft does. The two must share one format
+    change, whichever is built first.
+
+  Done when the draft is accepted (moved to `superpowers/specs/2026-11-10-lua-scripting-design.md` with its row in
+  the canonical documents map) and this item is replaced by its milestones. The first of those is the runtime
+  spike (draft §5).
 
 ## Localization
 
-- **Brainstorm a localization framework (user request 2026-11-04).** There are two layers:
+- **Localization framework: design draft under review (user request 2026-11-04).** There are two layers:
   - **Engine-owned text.** This is the strings that AGE.EXE and AGERC.DLL draw themselves. The engine shell's (the
     menu bar, the strip, 終了 and the options panel) already come from keyed tables, `Shell/Strings/ja.json` and
     `en.json`, which `OME.INI`'s `ui:Language` picks (`superpowers/specs/2026-11-09-engine-shell-design.md`, §6).
@@ -217,8 +233,16 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
   - Keeping the drive protocol's native control texts (`dialogs`/`answer`) stable whatever locale is shown. The
     shell settled this for its own controls: they report their Japanese texts whatever `ui:Language` shows (spec §8).
 
-  Done when a design is agreed (a spec under `superpowers/specs/`) and the remaining engine-owned strings go through
-  it.
+  **Draft (2026-11-10, not accepted):** `localization-framework-design-2026-11-10.md` at the workspace root, outside
+  this repository. It proposes an answer to each question above. It also goes further than "the engine's concern is
+  the first layer": the engine applies game-text translations when text is drawn, from catalogs that packages
+  carry, and the scripts and the strings the VM holds stay Japanese. Its first milestone converts the fan
+  translation in `Kamidori_Translated/` into a catalog as an offline check, before any engine change (draft §18.1).
+  Its §20 lists the questions still open. Lua text filters are left to the Lua item under "Mod loader and modding".
+
+  Done when the draft is accepted (moved to `superpowers/specs/2026-11-10-localization-design.md` with its row in
+  the canonical documents map), this item is replaced by its milestones, and the remaining engine-owned strings go
+  through the framework.
 
 ## Platform and project
 
