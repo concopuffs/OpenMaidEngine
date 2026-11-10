@@ -39,6 +39,8 @@ public sealed partial class VirtualMachine
     private readonly IHost _host;
     private readonly VmOptions _o;
     private readonly VmCompatibilityContext _compatibility;
+    // Op 0x215 on SYS4433 reads an object draw-texture has not bound as absent (GfxState.QuerySlot).
+    private readonly bool _queryUnboundGfxObjectsAsAbsent;
     private readonly Encoding _nativeStringEncoding;
     private readonly IScriptProvider? _provider;
     private readonly SharedProfile _sharedProfile;
@@ -209,6 +211,7 @@ public sealed partial class VirtualMachine
             throw new ArgumentException(
                 $"VM compatibility ABI '{_compatibility.EngineAbiId}' does not match opcode table ABI '{t.AbiId}'",
                 nameof(compatibility));
+        _queryUnboundGfxObjectsAsAbsent = Text.EngineRevisions.IsSys4433(_compatibility.EngineAbiId);
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         _nativeStringEncoding = Encoding.GetEncoding(_o.NativeStringCodePage);
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();

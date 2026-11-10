@@ -933,12 +933,13 @@ The decisive caller/callee detail is the owner pointer. Op `0x215`'s handler pas
 `obj+4`. Therefore:
 
 - absent handle → `0x215` returns `0xffffffff` (-1);
-- geometry-only/unbound object → its default source slot is -1;
+- geometry-only/unbound object → slot 0 on SYS4422, whose `gfx_object_init_default` zeroes `obj+4` (page-58
+  correction below), and -1 on SYS4433 (next subsection);
 - draw-bound object → `0x215` returns the live source slot from `obj+4`.
 
 The earlier “op `0x215` reads a registry populated only by `0x1a2`” conclusion was wrong: it conflated
 the retained-object `std::map` with `0x1a2`'s open-addressing shared-profile integer table. The useful part of
-the earlier fix remains: `GetOrCreate` must not fabricate a slot. A fresh object stays unbound (-1) until
+the earlier fix remains: `GetOrCreate` must not fabricate a slot. A fresh object keeps the default slot until
 `draw-texture` supplies its real source slot.
 
 This also explains the reported magic-circle retention end-to-end. `AE001H.AGF` (resource `0x37`) is
@@ -957,6 +958,33 @@ past it, so every fresh CG is assigned slot `0`. It doesn't break the *opening* 
 at a time, so sharing slot 0 is harmless and the fresh-branch geometry is correct regardless), but a scene
 with several simultaneous distinct-slot objects would need the setup to run. Tracked as the scene-coroutine
 work, separate from this fix.
+
+#### SYS4433 reads a draw-unbound object as absent (2026-11-09)
+
+**Native.** Kamidori's op `0x215` handler (4.33G `0x42af40`) passes owner `ctx+0x4a884` to worker `0x486120`
+(`gfx_object_query_bound_source_slot`). After the map lookup the worker tests bit 0 of the record's first dword and
+returns `obj+4` only when it is set; otherwise it returns -1, as for an absent handle. Bit 0 is the draw-bound bit
+that `draw-texture` sets (the port's `GfxObject.Visible`). 4.33F has the same test at the same address. SYS4422's
+`gfx_object_query_source_slot@0x47f280` has no such test.
+
+**Where it shows.** SC1250 (Kamidori's tavern event) shows EV021AA twice. Between them `label_fcb3` (called at
+`0x97a1`) erases layer 1's object `0xcb2a` (`G[0xfd43c]`) with `gfx-elem-erase fd43c 0xa` at `0xfe93` and releases
+surfaces 5/44/52. Then `0x98aa` runs `gfx-blit-color (fd43c) 0 0x37a 0 -1`. Op `0x202`'s worker (`0x485740`) calls
+`gfx_object_get_or_create` (`0x484b40`), which inserts an unbound default record, `obj+4 = 0`. The next CG call
+reaches `label_f63f`, which queries the layer object with op `0x215`:
+
+- `< 0` → the fresh-object branch (`0xf3ec`): a new object anchored at (512,576) that fades in. Native takes it.
+- `>= 0` → the crossfade branch (`0xf681`): it reads the old texture's size with op `0x208` on the returned slot and
+  positions the new CG from it. The port took it with slot 0. Surface 0 was released, so op `0x208` (worker
+  `0x47ba80`, the size of the surface at manager `+0xa5a8[slot]`, 0,0 when empty) gave 0x0, and EV021AA was drawn
+  at (-512,-576): a black screen through pages 13-16.
+
+**Port.** `GfxState.QuerySlot(handle, unboundReadsAbsent)` returns -1 for an object whose `Visible` is clear when
+asked as SYS4433 does. `VirtualMachine` asks so on SYS4433 (`EngineRevisions.IsSys4433`). With it the SC1250 route's
+states 37-72 match native and the shots differ only in the animated wait indicator. Tests:
+`GfxStateTests.QueryReadsAnUnboundObjectAsAbsentWhenAskedAsSys4433Does`,
+`GfxCommandBufferTests.QueryOfAnObjectAColorFadeCreated_FollowsTheEngineRevision`. The 4.33G workers are renamed and
+commented in Ghidra (`/kamidori/4.33G`).
 
 #### ADV layer surface-slot registry (`G[0x3239]`, closed 2026-07-23)
 

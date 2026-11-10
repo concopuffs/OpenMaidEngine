@@ -45,8 +45,9 @@ public sealed partial class GfxState
         public long ColorPeriod, ColorStart = -1, ColorTarget;
         public bool ColorAnim;
         // draw-texture bind (gfx_object_bind_draw): the surface to draw + its source rect + the visible flag.
-        // Native gfx_object_init_default zeroes obj+4. Querying an object created by a geometry/animation
+        // Native gfx_object_init_default zeroes obj+4. On SYS4422, querying an object created by a geometry/animation
         // setter therefore returns slot 0 even before draw-texture binds it; only an absent object returns -1.
+        // SYS4433's query also returns -1 until draw-texture sets Visible (QuerySlot).
         public int SourceSlot;
         public (int X, int Y, int W, int H) SrcRect;
         public bool Visible;
@@ -295,11 +296,15 @@ public sealed partial class GfxState
     public GfxObject? TryGet(long handle) => _objects.TryGetValue(handle, out var o) ? o : null;
 
     /// <summary>Op 0x215: look up <paramref name="handle"/> in the retained gfx-object map and return obj+4,
-    /// the live source-surface slot written by draw-texture, or -1 when absent/unbound.</summary>
-    public int QuerySlot(long handle)
+    /// the live source-surface slot written by draw-texture, or -1 when the object is absent.
+    /// <paramref name="unboundReadsAbsent"/> selects SYS4433's worker (Kamidori 4.33F/4.33G 0x486120). It also
+    /// returns -1 when flag bit 0 (<see cref="GfxObject.Visible"/>, set by draw-texture) is clear, as on an
+    /// object a color or geometry setter created. SYS4422's gfx_object_query_source_slot@0x47f280 returns obj+4,
+    /// slot 0 by default, for any present object.</summary>
+    public int QuerySlot(long handle, bool unboundReadsAbsent = false)
     {
         lock (_lock)
-            return _objects.TryGetValue(handle, out var o) ? o.SourceSlot : -1;
+            return _objects.TryGetValue(handle, out var o) && (o.Visible || !unboundReadsAbsent) ? o.SourceSlot : -1;
     }
 
     /// <summary>Opcode 0x216 reads the live surface record's resource id (owner+0x700), not an object field or the

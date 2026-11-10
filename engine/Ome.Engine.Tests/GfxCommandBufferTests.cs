@@ -56,6 +56,30 @@ public class GfxCommandBufferTests
         Assert.Equal(6, vm.Globals[11]);
     }
 
+    [Theory]
+    [InlineData("himegari", "SYS4422", 0)]
+    [InlineData("kamidori", "SYS4433", -1)]
+    public void QueryOfAnObjectAColorFadeCreated_FollowsTheEngineRevision(string profile, string abi, long unboundSlot)
+    {
+        // Kamidori SC1250 label_fcb3 erases layer 1's object 0xcb2a, and 0x98aa then fades it with op 0x202, which
+        // get-or-creates it unbound. SYS4433's op 0x215 (0x486120) reads an object whose flag bit 0 is clear as
+        // absent, so the next CG (label_f63f) takes the fresh-object branch. SYS4422 (0x47f280) returns its slot 0.
+        var t = OpcodeTableJson.Load(Paths.OpcodesJson, abi);
+        var scene = ScriptAssembler.Assemble(t, "GFX", new List<(int, Operand[])>
+        {
+            MovGI(1, 0xcb2a), MovGI(2, 0), MovGI(3, 0x37a), MovGI(4, -1), MovGI(5, 5), MovGI(6, 200),
+            BlitColor(1, 2, 3, 2, 4),
+            Query(10, 1),
+            (0x1fb, new[] { G(1), G(5), I(0), I(0), G(6), G(6), G(2), G(2) }),
+            Query(11, 1), Exit(),
+        }, System.Array.Empty<string>());
+        var vm = new VirtualMachine(scene, t, new RecordingHost(), compatibility: new(profile, abi));
+        vm.Run();
+        Assert.NotNull(vm.Gfx.TryGet(0xcb2a));
+        Assert.Equal(unboundSlot, vm.Globals[10]);
+        Assert.Equal(5, vm.Globals[11]);
+    }
+
     private static (int, Operand[]) BlitColor(int h, int x, int y, int alpha, int color)
         => (0x202, new[] { G(h), G(x), G(y), G(alpha), G(color) });
 

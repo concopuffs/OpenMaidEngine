@@ -11,13 +11,14 @@ public sealed partial class VirtualMachine
             case "clear-retained-gfx-objects": // 0x1f6: erase object records, but preserve surfaces
                 Gfx.ClearRetainedObjects(); return pc + 1;
             case "query-gfx-object?":   // 0x215 (out)(handle) -> slot | -1
+            {
+                long handle = Read(a[1]);
+                int slot = Gfx.QuerySlot(handle, unboundReadsAbsent: _queryUnboundGfxObjectsAsAbsent);
                 if (_diagSetTexture)   // reuse the flag: show what the slot query returns (grey-BG slot dig)
-                {
-                    long h = Read(a[1]);
-                    System.Console.Error.WriteLine($"[query] handle=0x{h:x} handleOp=(type={a[1].Type} val=0x{a[1].Value:x}) " +
-                        $"-> QuerySlot={Gfx.QuerySlot(h)} objectPresent={Gfx.TryGet(h) != null}");
-                }
-                Write(a[0], Gfx.QuerySlot(Read(a[1]))); return pc + 1;
+                    System.Console.Error.WriteLine($"[query] handle=0x{handle:x} handleOp=(type={a[1].Type} val=0x{a[1].Value:x}) " +
+                        $"-> QuerySlot={slot} objectPresent={Gfx.TryGet(handle) != null}");
+                Write(a[0], slot); return pc + 1;
+            }
             case "query-gfx-field?":    // 0x216 (out)(surface slot) -> packed resource id or -1
                 Write(a[0], Gfx.QueryField(Read(a[1]))); return pc + 1;
             case "get-gfx-geom3?":      // 0x218 (handle)(outA)(outB)(outC) <- V18

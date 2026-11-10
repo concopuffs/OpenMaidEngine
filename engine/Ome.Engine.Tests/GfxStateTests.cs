@@ -83,6 +83,20 @@ public class GfxStateTests
     }
 
     [Fact]
+    public void QueryReadsAnUnboundObjectAsAbsentWhenAskedAsSys4433Does()
+    {
+        // SYS4433's op 0x215 worker returns obj+4 only when flag bit 0, set by draw-texture, is set.
+        var g = new GfxState();
+        g.GetOrCreate(0xcb2a).V18 = (512, 576, 0);
+        Assert.Equal(-1, g.QuerySlot(0xcb2a, unboundReadsAbsent: true));
+        Assert.Equal(0, g.QuerySlot(0xcb2a));
+
+        g.BindDraw(0xcb2a, 5, 0, 0, 1024, 576, 0, 0);
+        Assert.Equal(5, g.QuerySlot(0xcb2a, unboundReadsAbsent: true));
+        Assert.Equal(-1, g.QuerySlot(0x9999, unboundReadsAbsent: true));
+    }
+
+    [Fact]
     public void UnboundMatrixSetterCreatesQueryableObjectForCleanupBeforeReuse()
     {
         // Native matrix setters create a neutral placeholder even when they ignore the channel because it is

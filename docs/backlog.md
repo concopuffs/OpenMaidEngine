@@ -68,14 +68,16 @@ it; git history keeps the record.
 - **Resume the Kamidori fidelity sweep.** Since 2026-11-03 the sweep has driven native AGE and the port through
   the same steps (`tools/drive.py`, `rand-seed` before battles) and compared screenshots, VM positions and decoded
   saves, with every difference so far fixed or listed above. Until 2026-11-08 it ran on the translated install's
-  4.33F build; since 2026-11-09 it runs on the clean install (4.33G, Japanese UI). It stands at SC0010@0xd08, the
-  page after the world map shows シセティカ湖 opening. Covered at parity:
+  4.33F build; since 2026-11-09 it runs on the clean install (4.33G, Japanese UI). It stands in TOWN after the
+  領主の館 and 酒場 events that follow シセティカ湖's opening; ウィルの工房 still has an event marker. Covered at parity:
   - the title, prologue and first map and battle;
   - 平穏なる採取地 to its clear (採取, DIG, STAGECLEAR) and the chapter scenes that follow;
   - the world map, town, church shop, tavern and workshop scenes, an alchemy craft and the SC1250 delivery;
   - 木漏れ日の深緑地 from turn 4 to its clear on the clean install: battles, both 採取 points, the Shinigami
     event, STAGECLEAR, the rewards, SC0000's chapter scenes and SC0010 through SHOWALLMAP (op `0xfa`'s click wait,
-    fixed 2026-11-09).
+    fixed 2026-11-09);
+  - the town's 領主の館 event (SC1150) and 酒場 event (SC1250; its second event-CG display was black on the port
+    until SYS4433's op `0x215` rule, fixed 2026-11-09).
 
   Saves on both targets compare by decoded payload (`Ome.Cli save-diff`, `tools-reference.md`). Clock
   samples, gfx start stamps and save-history globals are expected to differ (`engine-re.md`, "Op 0x216 reads past
