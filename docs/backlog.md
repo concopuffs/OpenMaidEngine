@@ -83,6 +83,19 @@ it; git history keeps the record.
   samples, gfx start stamps and save-history globals are expected to differ (`engine-re.md`, "Op 0x216 reads past
   the live surface table" and "Finished channels reset their targets"). Done when the story has been driven to its
   ending on both targets, with each difference fixed or listed here.
+- **Triage the opcode revision diff.** `tools/revision_diff.py himegari kamidori` lists 125 differing opcodes and
+  26 differing shared helpers (`build/revision-diff/himegari-kamidori.md`), and `kamidori arterial` lists 36
+  (`engine-re.md`, "Comparing engine builds"). Only `0x215` (fixed), `0x202` (the same in both) and the 4.33F/4.33G
+  pair have been read. Each remaining row is a SYS4 revision change, an engine change outside the opcodes, or tool
+  noise. The same triage is the first step for every game added later: diff its engine against the nearest
+  profile's instead of playing it through. Revision changes need a decision: model them per ABI as op `0x215` is, or record that the port's games
+  never reach them. Done when every Himegari–Kamidori row is triaged, with port changes made or listed here and
+  native engine changes documented in `engine-re.md`.
+- **Revision diff: identify API calls and object layouts.** Windows API calls are facts without identity, so they
+  are weak; `tools/frida/map_imports.py`'s RVA→name map (Himegari only so far) could name them per build. Object
+  fields are weak because each struct's layout moves on its own; typing the base register (which struct a pointer
+  holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
+  (one differing opcode).
 
 ## Open Maid Script
 
@@ -164,6 +177,13 @@ it; git history keeps the record.
   generation; it runs only in tag publication, whose annotations were not read. Done when each action is SHA-pinned
   to a release that targets Node.js 24, and the core, release-build and FFmpeg SDK workflows run green without the
   warning.
+- **Keep the game installs in one folder.** The workspace root holds each install under its own name:
+  `Himegari_Game/`, `Kamidori/`, `Kamidori_Translated/` and `Arterial/創刻のアテリアル/` (added 2026-11-09 for
+  native-engine comparison only). Every tool that finds them has its own table of those names:
+  `tools/paths.py` (`_CONVENTIONAL_GAME_ROOTS`, `REFERENCE_INSTALLS`), `engine/Ome.Engine/Sys4/Paths.cs`,
+  `engine/Ome.Cli/Program.cs`, `run-godot.ps1`, and about 25 engine tests. Done when the installs sit under one
+  games folder, every table resolves a game's install from that folder, and the docs naming the old locations
+  (`PROJECT-STRUCTURE.md`, `AGENTS.md`'s three-way separation, the modding game pages) follow.
 - **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default);
   artifacts published before their notices existed are not backfilled, but taken down or updated if anyone asks:
   the `v0.4.0` packages lack the Godot, .NET and MinGW-w64 notices, and the `deps-ffmpeg-ome-8.1.3-mpeg1-r1` Windows

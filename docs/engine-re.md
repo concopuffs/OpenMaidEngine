@@ -171,7 +171,86 @@ Kamidori addresses this document and `vm-map/opcodes.toml` give without a build 
 except in the next section, which describes the 4.33F image. They were converted through the same alignment and
 checked against the function names at both ends. `build/games/kamidori/f2g-address-conversion.tsv` lists every
 converted value. The context struct moved too: 4.33G adds a dword before the opcode table, so Kamidori `ctx`
-offsets from `0x9f700` up are 4 higher in 4.33G, and lower offsets are the same in both builds.
+offsets from `0x9f700` up are 4 higher in 4.33G, and lower offsets are the same in both builds. That dword defers
+a screen-mode present during a save restore ("Comparing engine builds" below).
+
+## Comparing engine builds (2026-11-09)
+
+`tools/revision_diff.py` compares the native code behind every opcode two engine dumps share (usage and report
+format: `docs/tools-reference.md`, "Opcode revision diff"). Its purpose is a high-level list of what a new game's
+engine changed, read before any playthrough, so a new game needs no full native-vs-port sweep to find its
+revision changes; a sweep then checks the rows that matter. Four builds have dumps and pinned facts in
+`tools/operand_access.py` `ENGINES`:
+
+| Engine id | Game | AGE.EXE | ctx constructor | Opcode table | Handlers | C runtime starts |
+|---|---|---|---|---|---:|---|
+| `himegari` | Himegari (EU10) | 4.22 | `0x413860` | `ctx+0x9b24c` | 420 | `0x54f3de` |
+| `kamidori` | Kamidori (EU12), clean install | 4.33G | `0x413e70` | `ctx+0x9f704` | 437 | `0x556878` |
+| `kamidori-433f` | Kamidori, the English translation | 4.33F | `0x413e50` | `ctx+0x9f700` | 437 | `0x556878` |
+| `arterial` | 創刻のアテリアル (EU13) | 4.38D | `0x414e10` | `ctx+0xa4b9c` | 473 | `0x583dd8` |
+
+**Arterial.** `Arterial/創刻のアテリアル/` is a reference install with no port profile (`paths.REFERENCE_INSTALLS`),
+kept only for engine comparison. Its packed `AGE.EXE` (1,294,848 bytes, SHA-256
+`c6d4b8d03c834350c996832479ec1faf48b5f7c0ec763a101ec5cd601f76d421`, catalog `S4IC438`) was dumped from a
+`native_scratch.py --reference arterial` copy by `dump_engine.py --reference arterial --spawn`, with the shell
+folders redirected into the dump sandbox. The install checked unchanged afterwards, and the real saves under
+`%LOCALAPPDATA%` were not touched. The module is based at `0x400000` and spans 3,227,648 bytes
+(`build/engines/arterial/engine-dump/`). The dispatch-table finder (`lea edi,[reg+table]; mov ecx,0x400;
+rep stosd`) located the constructor, and `operand_access.py --engine arterial --align-accessors --align-to
+kamidori` aligned all 14 accessors unanimously. The Ghidra image is `/arterial/4.38D/range_00400000.bin`.
+Function ID names start at `0x566214` (the NFM compression library). The DirectShow base classes follow, and the C
+runtime begins at the `operator new[]` thunk `0x583dd8` (150 callers; `__security_check_cookie` at `0x5843fe`).
+Unlike 4.22 and 4.33, most of 4.38D's engine code from about `0x4a0000` on is not 16-aligned, so alignment does
+not mark where the runtime starts.
+
+**Method.** Same-opcode handlers pair exactly. Aligning their instruction streams, and then their callees', votes
+on which functions, context fields and globals correspond. Each function becomes a multiset of behavior facts, and
+an opcode's facts are those of its handler and three callee levels. Compiler and layout idioms are weak facts:
+object-field offsets, container element counts and `max_size` checks, record copy sizes, shift counts, pointer
+strides, `std::string`'s small-buffer checks, the C++ library's exception messages and unidentified Windows API
+calls. Register reuse, a constant changing role, code inlined just past the depth limit or into a shared helper,
+and a call to a function the other build inlined do not count either. The tool's docstring lists every rule.
+Known limits:
+- Object layouts move per struct, which one offset map cannot follow. A change that only reads another object field
+  is therefore reported as `minor`.
+- API calls are not identified.
+- Code no opcode reaches (frame loop, renderer, input) is compared only where a shared helper covers it.
+
+**Noise floor: 4.33F against 4.33G.** 431 opcodes are `same`, 5 `minor`, 1 `differs`, and one shared helper
+differs. Each one is a real code change:
+- 4.33G's new dword `ctx+0x9f700` is set to 1 by `save_data_deserialize_and_begin_restore@0x40faa0` (reached from
+  the numbered save and load ops `0xab`, `0x190`, `0x19f` and `0x1a1`, the `minor` ones). While it is set,
+  `display_toggle_screen_mode_and_menu_bar@0x4130f0` (op `0x2cf`) only sets bit 1 when the mode is 2 and does not
+  present. `op_0x20c_present_frame` (also `minor`) presents and then clears the dword. 4.33F always presents and
+  tail-jumps into the present worker `0x489c40`.
+- The helper `0x44ea00` (4.33F `0x44eab0`, used by 34 opcodes) reports `%s を開くことが出来ません．…ERROR CODE = %d`
+  through the Windows API when a file does not open. 4.33F has no such path.
+
+Before the tool learned tail jumps, import thunks, jump tables behind a no-return call, pointer-shaped strings and
+context offsets computed by `add reg, imm`, the same pair showed 36 differing opcodes.
+
+**Himegari against Kamidori (tuning pair).** 193 `same`, 102 `minor`, 125 `differs`; helpers 44 / 31 / 26, and 8
+unpaired. The differences include:
+- op `0x215`, scored 4 for its one `+bit 1`: the SYS4433 bit-0 test found by hand earlier ("SYS4433 reads a
+  draw-unbound object as absent");
+- the float operands of about 22 gfx opcodes (`operand N read` against `read-float`, with `fconst 0.5` rounding);
+- new settings keys: `display:VirtualFullScreenType` (`0x10a`), `set:BlankExtentMode` (`0x221`, `0x8a`),
+  `display:AspectMode` and `set:UseProportionalFont` (`0x9`);
+- effect-parameter names (`Alpha`, `Angle`, `CenterU`, `SlideBlur`, …) loaded in the screen-mode switch;
+- Himegari's inline Shift-JIS layout code in the text opcodes, which Kamidori restructured.
+
+Op `0x202`'s alpha clamp to `0..255` is in both builds (`minor`). These rows are not triaged yet.
+
+**Held out: Arterial.** Arterial was compared without retuning. Kamidori against Arterial gives 358 `same`, 43
+`minor` and 36 `differs`; Himegari against Arterial gives 194 / 103 / 123. The verdicts agree across the three
+pairs: no opcode is `same` in Himegari–Kamidori and in Kamidori–Arterial but `differs` in Himegari–Arterial. Nine
+of 420 break the pattern another way, and each of those rests on one context field or one helper call (scores up
+to 6), the noise class the report flags. Kamidori–Arterial's largest differences are new:
+- `AGE Extend` and window-position keys (`set:SaveWinPos`, `set:WinPosLeft`, `set:WinPosTop`) in the
+  screen-mode switch;
+- vertex-buffer render paths (`CalcDiffuse`, `RenderPolygon`, `CopyScene`) under `0x20c`, `0x222` and `0x21d`;
+- `message:AutoMessage*` settings in op `0x72`;
+- op `0x2c7`'s substring, which now writes a string operand and warns when it cuts a full-width character.
 
 ## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
 

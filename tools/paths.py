@@ -35,6 +35,21 @@ _CONVENTIONAL_EXTRACTED_ROOTS = {
     "kamidori": WORKSPACE / "extracted-kamidori",
 }
 
+# Installs kept only for native-engine RE, with no port profile: reference id -> pristine install. Their scratch
+# copies and engine dumps live in ENGINES_BUILD/<id>/ (tools/native_scratch.py and tools/frida/dump_engine.py
+# take ``--reference ID``).
+REFERENCE_INSTALLS = {
+    "arterial": WORKSPACE / "Arterial" / "創刻のアテリアル",
+}
+ENGINES_BUILD = SHARED_BUILD / "engines"
+
+
+def reference_install(reference_id: str) -> Path:
+    """The pristine install of a reference-only game (REFERENCE_INSTALLS)."""
+    if reference_id not in REFERENCE_INSTALLS:
+        raise ValueError(f"unknown reference install '{reference_id}'; known: {', '.join(REFERENCE_INSTALLS)}")
+    return REFERENCE_INSTALLS[reference_id]
+
 
 def available_profiles() -> tuple[str, ...]:
     """Return authored profile ids from the same embedded manifests used by the runtime."""

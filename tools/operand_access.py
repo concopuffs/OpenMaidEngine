@@ -16,9 +16,13 @@ Accessor identities for the reference profile (Himegari SYS4422) are proven fact
 another revision's accessors are pinned in ``ENGINES`` after ``--align-accessors`` maps them by
 aligning same-opcode handlers against the reference image. No Ghidra session is required.
 
+``ENGINES`` is keyed by engine id: a profile id, or a dump with no port profile (``--engine ID``): the
+translation's 4.33F build of Kamidori, or a reference-only install from ``paths.REFERENCE_INSTALLS``.
+
 Usage:
   py -3.11 -X utf8 tools/operand_access.py [--profile ID] [--check-corpus]
   py -3.11 -X utf8 tools/operand_access.py --profile kamidori --align-accessors
+  py -3.11 -X utf8 tools/operand_access.py --engine arterial --align-accessors --align-to kamidori
 
 Output: build/games/<profile>/operand-access.json
 See docs/tools-reference.md ("Native operand access") and docs/engine-re.md.
@@ -66,6 +70,11 @@ class EngineFacts:
     constructor: int
     table_offset: int
     accessors: dict[int, Accessor]
+    # First function of the statically linked C runtime (operator new, then type_info, _memset and the EH
+    # helpers, as Ghidra's Function ID names them). revision_diff.py treats calls at or above it as leaves.
+    runtime_start: int = 0
+    version: str = ""            # the AGE.EXE file version
+    dump: str | None = None      # dump directory below build/ when it is not games/<id>/ or engines/<id>/
 
 
 # Himegari SYS4422 (/v2 image). Each accessor reads frame_pc (ctx+0x53d2c) and indexes the current
@@ -85,6 +94,24 @@ _HIMEGARI_ACCESSORS = {
     0x415F30: Accessor("cell", 1, "vm_operand_lvalue"),
 }
 
+# The English fan translation's AGE 4.33F (Kamidori_Translated/), pinned 2026-10-06 before Kamidori moved to 4.33G.
+_KAMIDORI_433F_ACCESSORS = {
+    0x4198D0: Accessor("read", 1, "vm_operand_fetch"),
+    0x419C30: Accessor("read-float", 1, "vm_operand_fetch_float"),
+    0x418FF0: Accessor("read-string", 1, "vm_operand_read_string_buffer"),
+    0x425750: Accessor("read-string", 2, "vm_operand_read_std_string"),
+    0x419360: Accessor("read-string", 1, "vm_operand_format_as_string"),
+    0x426750: Accessor("write", 1, "vm_operand_write"),
+    0x42C600: Accessor("write-string", 1, "vm_operand_write_string"),
+    0x426CA0: Accessor("write-float", 1, "vm_operand_write_float"),
+    0x416900: Accessor("bind", 1, "vm_pointer_operand_bind_element"),
+    0x416810: Accessor("bind", 1, "vm_pointer_operand_write"),
+    0x4261A0: Accessor("address", 1, "vm_operand_resolve_address"),
+    0x416760: Accessor("string-cell", 1, "vm_operand_global_string_cell"),
+    0x416630: Accessor("ref-slot", 1, "vm_pointer_operand_slot"),
+    0x4166B0: Accessor("cell", 1, "vm_operand_lvalue"),
+}
+
 _KAMIDORI_ACCESSORS = {
     0x419900: Accessor("read", 1, "vm_operand_fetch"),
     0x419C60: Accessor("read-float", 1, "vm_operand_fetch_float"),
@@ -102,25 +129,60 @@ _KAMIDORI_ACCESSORS = {
     0x4166D0: Accessor("cell", 1, "vm_operand_lvalue"),
 }
 
+# 創刻のアテリアル AGE 4.38D, from --align-accessors against kamidori (every alignment unanimous, 2026-11-09; against
+# himegari too, where 0x41b2c0 aligns as the integer fetch that SYS4422 uses for the operands SYS4433 reads as floats).
+_ARTERIAL_ACCESSORS = {
+    0x41AF60: Accessor("read", 1, "vm_operand_fetch"),
+    0x41B2C0: Accessor("read-float", 1, "vm_operand_fetch_float"),
+    0x41A650: Accessor("read-string", 1, "vm_operand_read_string_buffer"),
+    0x4275A0: Accessor("read-string", 2, "vm_operand_read_std_string"),
+    0x41A9C0: Accessor("read-string", 1, "vm_operand_format_as_string"),
+    0x4286F0: Accessor("write", 1, "vm_operand_write"),
+    0x42F160: Accessor("write-string", 1, "vm_operand_write_string"),
+    0x428C40: Accessor("write-float", 1, "vm_operand_write_float"),
+    0x417F40: Accessor("bind", 1, "vm_pointer_operand_bind_element"),
+    0x417E10: Accessor("bind", 1, "vm_pointer_operand_write"),
+    0x4280E0: Accessor("address", 1, "vm_operand_resolve_address"),
+    0x417D60: Accessor("string-cell", 1, "vm_operand_global_string_cell"),
+    0x417C30: Accessor("ref-slot", 1, "vm_pointer_operand_slot"),
+    0x417CB0: Accessor("cell", 1, "vm_operand_lvalue"),
+}
+
 REFERENCE_PROFILE = "himegari"
 ENGINES: dict[str, EngineFacts] = {
-    "himegari": EngineFacts(0x413860, 0x9B24C, _HIMEGARI_ACCESSORS),
+    "himegari": EngineFacts(0x413860, 0x9B24C, _HIMEGARI_ACCESSORS, runtime_start=0x54F3DE, version="4.22"),
     # SYS4433, AGE 4.33G (the clean install's AGE.EXE; docs/engine-re.md, "Kamidori engine builds"): the ctx
     # constructor at 0x413e70 fills ctx+0x9f704; accessors read frame_pc at ctx+0x57fb8. First pinned on the
     # translation's 4.33F (constructor 0x413e50, table ctx+0x9f700) from --align-accessors (every alignment
     # unanimous, 2026-10-06), except the SYS4433-only float accessors, identified from their bodies (fild/float
     # store). Moved to 4.33G on 2026-11-08 by aligning same-opcode handlers of the two builds (unanimous), and the
     # derived contracts are the same for both builds.
-    "kamidori": EngineFacts(0x413E70, 0x9F704, _KAMIDORI_ACCESSORS),
+    "kamidori": EngineFacts(0x413E70, 0x9F704, _KAMIDORI_ACCESSORS, runtime_start=0x556878, version="4.33G"),
+    "kamidori-433f": EngineFacts(0x413E50, 0x9F700, _KAMIDORI_433F_ACCESSORS, runtime_start=0x556878,
+                                 version="4.33F", dump="games/kamidori/engine-dump-translated"),
+    # 創刻のアテリアル (paths.REFERENCE_INSTALLS, no port profile), AGE 4.38D, dumped 2026-11-09. The ctx constructor
+    # at 0x414e10 fills the opcode table at ctx+0xa4b9c. The C runtime starts at the operator new[] thunk 0x583dd8
+    # (much of this build's engine code is not 16-aligned, so alignment does not mark the runtime).
+    "arterial": EngineFacts(0x414E10, 0xA4B9C, _ARTERIAL_ACCESSORS, runtime_start=0x583DD8, version="4.38D"),
 }
 
 
-def dump_path(profile_id: str) -> Path:
-    candidate = paths.SHARED_BUILD / "games" / profile_id / "engine-dump" / "range_00400000.bin"
+def engine_build(engine_id: str) -> Path:
+    """Where an engine's derived outputs go: build/games/<id>/ for a profile, else build/engines/<id>/."""
+    if engine_id in paths.available_profiles():
+        return paths.SHARED_BUILD / "games" / engine_id
+    return paths.ENGINES_BUILD / engine_id
+
+
+def dump_path(engine_id: str) -> Path:
+    facts = ENGINES.get(engine_id)
+    directory = (paths.SHARED_BUILD / facts.dump if facts is not None and facts.dump
+                 else engine_build(engine_id) / "engine-dump")
+    candidate = directory / "range_00400000.bin"
     if candidate.is_file():
         return candidate
     raise FileNotFoundError(
-        f"{profile_id}: no unpacked engine dump at {candidate}; run tools/frida/dump_engine.py")
+        f"{engine_id}: no unpacked engine dump at {candidate}; run tools/frida/dump_engine.py")
 
 
 class Image:
@@ -366,10 +428,10 @@ def corpus_findings(opcodes: dict[int, dict], census: dict[int, list[dict[int, i
             "operand_without_native_access": silent}
 
 
-def align_accessors(profile_id: str) -> dict[int, collections.Counter]:
+def align_accessors(profile_id: str, reference: str = REFERENCE_PROFILE) -> dict[int, collections.Counter]:
     """Map a revision's accessor VAs by aligning its handlers with the reference image's."""
-    ref_facts, facts = ENGINES[REFERENCE_PROFILE], ENGINES[profile_id]
-    ref = Image(dump_path(REFERENCE_PROFILE).read_bytes())
+    ref_facts, facts = ENGINES[reference], ENGINES[profile_id]
+    ref = Image(dump_path(reference).read_bytes())
     image = Image(dump_path(profile_id).read_bytes())
     ref_table, table = dispatch_table(ref, ref_facts), dispatch_table(image, facts)
 
@@ -572,15 +634,19 @@ def main(argv=None) -> int:
     parser.add_argument("--apply", action="store_true",
                         help="write access contracts from every profile's report into vm-map/opcodes.toml")
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--engine", choices=sorted(ENGINES),
+                        help="an engine dump other than the selected profile's (ENGINES key)")
+    parser.add_argument("--align-to", default=REFERENCE_PROFILE, choices=sorted(ENGINES),
+                        help="the image --align-accessors aligns against (default himegari)")
     args = parser.parse_args(argv)
     if args.apply:
         return apply_main()
-    profile_id = paths.CONTEXT.profile_id
+    profile_id = args.engine or paths.CONTEXT.profile_id
     if profile_id not in ENGINES:
         raise SystemExit(f"{profile_id}: no engine facts recorded in tools/operand_access.py")
 
     if args.align_accessors:
-        for va, names in sorted(align_accessors(profile_id).items()):
+        for va, names in sorted(align_accessors(profile_id, args.align_to).items()):
             total = sum(names.values())
             name, count = names.most_common(1)[0]
             print(f"0x{va:x}  {name:36s} {count}/{total} aligned handler calls")
@@ -593,7 +659,7 @@ def main(argv=None) -> int:
         report["corpus_findings"] = corpus_findings(used, census)
         report["corpus_unmapped_opcodes"] = sorted(
             f"0x{op:x}" for op in census if f"0x{op:x}" not in report["opcodes"])
-    output = args.output or paths.SHARED_BUILD / "games" / profile_id / "operand-access.json"
+    output = args.output or engine_build(profile_id) / "operand-access.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     unresolved = sum(len(r["unresolved_calls"]) for r in report["opcodes"].values())

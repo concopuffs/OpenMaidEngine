@@ -6,10 +6,17 @@ unpacked itself in memory. Launch the selected game to its title screen, then at
 ``--profile``/``--game-root`` options are consumed by ``tools/paths.py`` before this parser runs.
 
 Output is profile-scoped and provenance-bearing:
-``build/games/<profile>/engine-dump/{manifest.json,range_<base>.bin}``.
+``build/games/<profile>/engine-dump/{manifest.json,range_<base>.bin}``. A reference-only install (no port profile;
+``paths.REFERENCE_INSTALLS``) is dumped with ``--reference ID`` into ``build/engines/<id>/engine-dump/``.
 
 Usage:
   py -3.11 -u -X utf8 tools/frida/dump_engine.py --profile kamidori --game-root PATH PID
+  py -3.11 -u -X utf8 tools/frida/dump_engine.py --reference arterial PID
+  py -3.11 -u -X utf8 tools/frida/dump_engine.py --reference arterial --spawn
+
+``--spawn`` starts the native_scratch.py copy itself instead of attaching: SHGetFolderPathA (save root, SYS4REG.INI,
+screenshots) points into a disposable ``dump-sandbox/`` beside the copy, so the real save folders are never touched.
+After ``--wait`` seconds (AGE has unpacked itself by then) it dumps and ends the process.
 """
 from __future__ import annotations
 
@@ -24,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import paths
 
-OUTDIR = paths.BUILD / "engine-dump"
+OUTDIR = paths.BUILD / "engine-dump"   # main() points it at build/engines/<id>/engine-dump for --reference
 CHUNK = 2 * 1024 * 1024
 
 # A landmark is only a convenience check after its RVA has been proven for that exact executable.
@@ -135,6 +142,72 @@ def profile_provenance() -> dict[str, object]:
     }
 
 
+# The folders native AGE asks SHGetFolderPathA for (CSIDL & 0xff), as tools/drive_core.py SANDBOX_FOLDERS.
+SPAWN_FOLDERS = {0x1C: "LocalAppData", 0x1A: "AppData", 0x10: "Desktop", 0x05: "Documents", 0x23: "ProgramData"}
+
+SPAWN_JS = r"""
+const folders = %s;
+function hookShell32(module){
+    const target = module.findExportByName('SHGetFolderPathA');
+    if (target === null) return;
+    Interceptor.attach(target, {
+        onEnter(args){ this.csidl = args[1].toInt32(); this.out = args[4]; },
+        onLeave(result){
+            const folder = folders[String(this.csidl & 0xff)];
+            if (folder === undefined || this.out.isNull()) return;
+            this.out.writeUtf8String(folder);
+            result.replace(ptr(0));
+        },
+    });
+    send({kind:'hooked', module:module.name});
+}
+let hooked = false;
+Process.attachModuleObserver({ onAdded(module){
+    if (!hooked && module.name.toLowerCase() === 'shell32.dll'){ hooked = true; hookShell32(module); }
+}});
+"""
+
+
+def spawn_sandboxed(exe: Path, sandbox: Path):
+    """Start exe suspended, redirect its shell folders into sandbox, resume. Returns (device, pid, session)."""
+    from frida_runtime import frida
+
+    folders = {}
+    for csidl, name in SPAWN_FOLDERS.items():
+        folder = sandbox / name
+        folder.mkdir(parents=True, exist_ok=True)
+        if not str(folder).isascii() or len(str(folder)) > 200:
+            raise ValueError(f"sandbox path must be ASCII and short enough for AGE's buffers: {folder}")
+        folders[str(csidl)] = str(folder)
+    device = frida.get_local_device()
+    pid = device.spawn([str(exe)], cwd=str(exe.parent))
+    session = device.attach(pid)
+    script = session.create_script(SPAWN_JS % json.dumps(folders))
+    script.on("message", lambda message, data: print("[spawn]", message.get("payload", message)))
+    script.load()
+    device.resume(pid)
+    print(f"[spawn] {exe} pid={pid}; shell folders -> {sandbox}")
+    return device, pid, session
+
+
+def reference_provenance(reference_id: str) -> dict[str, object]:
+    """Provenance of a reference-only install: no profile, so no frontend or ABI id."""
+    install = paths.reference_install(reference_id)
+    executable = install / "AGE.EXE"
+    if not executable.is_file():
+        raise ValueError(f"reference install executable does not exist: {executable}")
+    return {
+        "reference_id": reference_id,
+        **read_catalog_identity(install / "SYS4INI.BIN"),
+        "game_root": str(install),
+        "packed_executable": {
+            "name": executable.name,
+            "size": executable.stat().st_size,
+            "sha256": sha256_file(executable),
+        },
+    }
+
+
 def build_manifest(
     provenance: dict[str, object],
     runtime: dict[str, object],
@@ -162,10 +235,10 @@ def build_manifest(
     }
 
 
-def capture(proc: str, *, overwrite: bool = False) -> int:
+def capture(proc: str, *, overwrite: bool = False, reference: str | None = None) -> int:
     from frida_runtime import frida
 
-    provenance = profile_provenance()
+    provenance = reference_provenance(reference) if reference else profile_provenance()
     OUTDIR.mkdir(parents=True, exist_ok=True)
     existing = [OUTDIR / "manifest.json", *OUTDIR.glob("range_*.bin")]
     existing = [path for path in existing if path.exists()]
@@ -211,8 +284,9 @@ def capture(proc: str, *, overwrite: bool = False) -> int:
             runtime["landmark_bytes"] = data.hex() if data else None
             landmark = runtime["landmark_bytes"] or "not configured"
             print(f"[frida] AGE.EXE base={payload['age_base']} size=0x{payload['age_size']:x}")
-            print(f"[frida] profile={provenance['profile_id']} abi={provenance['engine_abi_id']} "
-                  f"landmark={landmark}")
+            identity = (f"reference={provenance['reference_id']}" if "reference_id" in provenance
+                        else f"profile={provenance['profile_id']} abi={provenance['engine_abi_id']}")
+            print(f"[frida] {identity} landmark={landmark}")
             print(f"[frida] r-x ranges: {len(payload['rx'])}  rw- ranges: {len(payload['rw'])}")
         elif kind == "chunk":
             stream = range_file(payload["base"])
@@ -245,7 +319,7 @@ def capture(proc: str, *, overwrite: bool = False) -> int:
         print("        Launch the selected game to the title screen, then attach by PID.")
         return 2
 
-    landmark_rva = PROFILE_LANDMARK_RVAS.get(paths.CONTEXT.profile_id, -1)
+    landmark_rva = -1 if reference else PROFILE_LANDMARK_RVAS.get(paths.CONTEXT.profile_id, -1)
     script = session.create_script(JS % (CHUNK, landmark_rva))
     script.on("message", on_message)
     script.load()
@@ -287,9 +361,31 @@ def main() -> int:
         "--overwrite", action="store_true",
         help="replace an existing dump in the selected profile's disposable build directory",
     )
+    parser.add_argument(
+        "--reference", choices=sorted(paths.REFERENCE_INSTALLS),
+        help="dump a reference-only install (paths.REFERENCE_INSTALLS) into build/engines/<id>/engine-dump",
+    )
+    parser.add_argument("--spawn", action="store_true",
+                        help="start the native_scratch.py copy with sandboxed shell folders instead of attaching")
+    parser.add_argument("--wait", type=float, default=20.0, help="seconds between --spawn and the dump")
     arguments = parser.parse_args()
+    global OUTDIR
+    build_root = paths.ENGINES_BUILD / arguments.reference if arguments.reference else paths.BUILD
+    OUTDIR = build_root / "engine-dump"
     try:
-        return capture(arguments.target, overwrite=arguments.overwrite)
+        if not arguments.spawn:
+            return capture(arguments.target, overwrite=arguments.overwrite, reference=arguments.reference)
+        exe = build_root / "native-scratch" / "AGE.EXE"
+        if not exe.is_file():
+            parser.error(f"no {exe}; build it with tools/native_scratch.py first")
+        device, pid, session = spawn_sandboxed(exe, build_root / "dump-sandbox")
+        try:
+            time.sleep(arguments.wait)
+            return capture(str(pid), overwrite=arguments.overwrite, reference=arguments.reference)
+        finally:
+            session.detach()
+            device.kill(pid)
+            print(f"[spawn] ended pid={pid}")
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
         parser.error(str(error))
 

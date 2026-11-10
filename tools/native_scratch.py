@@ -9,6 +9,7 @@ is written beside the scratch copy; ``--check`` compares the install against it 
 
     py -3.11 -X utf8 tools/native_scratch.py --profile himegari --overlay build/.../SC0000.BIN --overlay ...
     py -3.11 -X utf8 tools/native_scratch.py --profile himegari --check
+    py -3.11 -X utf8 tools/native_scratch.py --reference arterial      (a reference-only install, paths.py)
 
 Native AGE keeps saves under %LOCALAPPDATA% (docs/engine-re.md, "Save-root resolution"), shared with the real
 install. Drive the copy with `tools/drive.py native`, which redirects them into a sandbox, or back that folder up
@@ -29,12 +30,23 @@ import paths  # noqa: E402
 HARD_LINKED = {".alf"}
 
 
+REFERENCE: str | None = None   # set by --reference: a reference-only install instead of the profile's
+
+
+def install_root() -> Path:
+    return paths.reference_install(REFERENCE) if REFERENCE else paths.GAME_DIR
+
+
+def _build_root() -> Path:
+    return paths.ENGINES_BUILD / REFERENCE if REFERENCE else paths.GAME_BUILD
+
+
 def scratch_root() -> Path:
-    return paths.GAME_BUILD / "native-scratch"
+    return _build_root() / "native-scratch"
 
 
 def manifest_path() -> Path:
-    return paths.GAME_BUILD / "native-scratch-manifest.json"
+    return _build_root() / "native-scratch-manifest.json"
 
 
 def snapshot(root: Path) -> dict[str, list[int]]:
@@ -46,7 +58,7 @@ def snapshot(root: Path) -> dict[str, list[int]]:
 
 
 def build(overlays: list[Path], replace: bool) -> int:
-    install, scratch = paths.GAME_DIR, scratch_root()
+    install, scratch = install_root(), scratch_root()
     if not (install / "SYS4INI.BIN").is_file():
         print(f"native_scratch: no install at {install}", file=sys.stderr)
         return 1
@@ -97,7 +109,12 @@ def main(argv: list[str] | None = None) -> int:
                         help="file copied into the scratch root (loose script, AAI/ALF)")
     parser.add_argument("--replace", action="store_true", help="rebuild an existing scratch copy")
     parser.add_argument("--check", action="store_true", help="verify the install against the recorded manifest")
+    parser.add_argument("--reference", choices=sorted(paths.REFERENCE_INSTALLS),
+                        help="a reference-only install (paths.REFERENCE_INSTALLS) instead of the profile's; "
+                             "the copy goes to build/engines/<id>/native-scratch")
     arguments = parser.parse_args(argv)
+    global REFERENCE
+    REFERENCE = arguments.reference
     return check() if arguments.check else build(arguments.overlay, arguments.replace)
 
 
