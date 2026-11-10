@@ -68,8 +68,8 @@ it; git history keeps the record.
 - **Resume the Kamidori fidelity sweep.** Since 2026-11-03 the sweep has driven native AGE and the port through
   the same steps (`tools/drive.py`, `rand-seed` before battles) and compared screenshots, VM positions and decoded
   saves, with every difference so far fixed or listed above. Until 2026-11-08 it ran on the translated install's
-  4.33F build; since 2026-11-09 it runs on the clean install (4.33G, Japanese UI). It stands in TOWN after the
-  領主の館 and 酒場 events that follow シセティカ湖's opening; ウィルの工房 still has an event marker. Covered at parity:
+  4.33F build; since 2026-11-09 it runs on the clean install (4.33G, Japanese UI). It stands in 一陣の訓練地, the
+  second mine stage, at turn 15 with two of its three Earthmen left. Covered at parity:
   - the title, prologue and first map and battle;
   - 平穏なる採取地 to its clear (採取, DIG, STAGECLEAR) and the chapter scenes that follow;
   - the world map, town, church shop, tavern and workshop scenes, an alchemy craft and the SC1250 delivery;
@@ -77,7 +77,12 @@ it; git history keeps the record.
     event, STAGECLEAR, the rewards, SC0000's chapter scenes and SC0010 through SHOWALLMAP (op `0xfa`'s click wait,
     fixed 2026-11-09);
   - the town's 領主の館 event (SC1150) and 酒場 event (SC1250; its second event-CG display was black on the port
-    until SYS4433's op `0x215` rule, fixed 2026-11-09).
+    until SYS4433's op `0x215` rule, fixed 2026-11-09);
+  - the town's 広場 event (SC1060), ウィルの工房's events (SC1000 with its 開業成績 settlement, SC6050, SC6100), the
+    増築&家具配置 screens and the departure scene (SC1490), 2026-11-10;
+  - 一陣の訓練地 turns 1-15: the SC0500 and SC2000 openings, trap and 採取 cards, two vortex seals, a locked door,
+    battles with a level-up and enemy-phase counters, healing support, the Earthman scenes (SC4000, SC4510) and
+    magic attacks. Battles end about 0.26 s sooner on the port (the "Kamidori battles end" item below).
 
   Saves on both targets compare by decoded payload (`Ome.Cli save-diff`, `tools-reference.md`). Clock
   samples, gfx start stamps and save-history globals are expected to differ (`engine-re.md`, "Op 0x216 reads past
@@ -91,6 +96,17 @@ it; git history keeps the record.
   profile's instead of playing it through. Revision changes need a decision: model them per ABI as op `0x215` is, or record that the port's games
   never reach them. Done when every Himegari–Kamidori row is triaged, with port changes made or listed here and
   native engine changes documented in `engine-re.md`.
+- **Kamidori battles end about 0.26 s sooner on the port.** In 一陣の訓練地 (2026-11-10, sandbox k1clean) a battle
+  took 10.92 s from 決定 to COMMITBTL on native and 10.66 s on the port. Timed in segments: click to BTL's
+  timed sequence (`BTL@0x3c93`) 2.62 s against 2.52 s; from there to COMMITBTL 6.47 s against 6.31 s; COMMITBTL to
+  REWARD 0.91 s against 0.89 s. SHOWGROW's level-up fill was visibly later on native too. The sequence itself cannot
+  drift: native's `timed_callback_sequence_tick@0x408170` uses absolute `timeGetTime` deadlines, as the port does.
+  Both gaps sit around the battle-effect movies: BTL opens them with op `0x236` before the sequence, and after it
+  loops on `query-movie-surface-active` (`BTL@0x3d01`) until they end. This machine has LAV Filters installed, whose
+  probe native pays on every movie open ("What the open costs" in `engine-re.md`). The probable cause is therefore
+  the native environment, not the port. Done when the native driver can refuse third-party DirectShow filters
+  (a `combase!CoCreateInstance` refusal of LAV's CLSIDs, as the 2026-11-06 probe did) and a battle timed with it
+  either matches or shows a port gap to fix.
 - **Revision diff: identify API calls and object layouts.** Windows API calls are facts without identity, so they
   are weak; `tools/frida/map_imports.py`'s RVA→name map (Himegari only so far) could name them per build. Object
   fields are weak because each struct's layout moves on its own; typing the base register (which struct a pointer
