@@ -772,7 +772,7 @@ public sealed partial class GfxState
                 else if (o.SrcAnim && o.SrcPeriod > 0 && o.SrcFrameCount >= 1)
                 {
                     if (o.SrcStart < 0) o.SrcStart = nowMs;
-                    long cell = ((nowMs - o.SrcStart) / o.SrcPeriod) % o.SrcFrameCount;
+                    long cell = SourceCellAt(o, nowMs);   // clamps a start stamp later than now (a restored clock)
                     srcX = o.SrcRect.X + (int)(cell % o.SrcColumns) * o.SrcRect.W;
                     srcY = o.SrcRect.Y + (int)(cell / o.SrcColumns) * o.SrcRect.H;
                 }

@@ -158,6 +158,8 @@ internal sealed class GpuRetainedRenderer : IDisposable
         return result;
     }
 
+    // Each upload's Image is disposed at once: the texture holds its own copy of the pixels, and a movie uploads one
+    // per frame, so leaving them to the GC lets native image memory pile up.
     private Texture2D ResolveTexture(RgbaImage source, int assetId, long colorKey, bool dynamic, long dynamicKey)
     {
         // One movie resource may play concurrently on multiple surfaces. Static assets share one upload;
@@ -166,7 +168,7 @@ internal sealed class GpuRetainedRenderer : IDisposable
         if (!_textures.TryGetValue(key, out var cached))
         {
             byte[] pixels = PreparePixels(source.Pixels, colorKey);
-            var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8, pixels);
+            using var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8, pixels);
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
             var texture = ImageTexture.CreateFromImage(image);
             _textureUploadTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started;
@@ -184,7 +186,7 @@ internal sealed class GpuRetainedRenderer : IDisposable
                              cached.Width != source.Width || cached.Height != source.Height))
         {
             byte[] pixels = PreparePixels(source.Pixels, colorKey);
-            var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8, pixels);
+            using var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8, pixels);
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
             if (cached.Width == source.Width && cached.Height == source.Height)
                 cached.Texture.Update(image);

@@ -71,8 +71,9 @@ Unknown keys are errors, so a misspelled setting cannot be silently ignored.
   selector allocation, save stamps and the link report. Changing it makes it a different mod.
 - **`version`:** semantic version `MAJOR.MINOR.PATCH` (semver 2.0, so `1.0.0-beta.1` is allowed). Dependents
   match it with a range: comma-separated comparators that must all hold, each `>=`, `>`, `<=`, `<`, `=` or a bare
-  version (exact), such as `">=1.0, <2"`. Missing minor and patch numbers count as zero. `*` or an empty range
-  accepts any version.
+  version, such as `">=1.0, <2"`. Missing minor and patch numbers count as zero, except in a bare or `=` version:
+  `1.2` accepts every 1.2.x release and `1` every 1.x.y release, while `1.2.0` accepts only 1.2.0. `<2` rejects
+  2.0.0's prereleases (2.0.0-rc.1) as well as 2.0.0. `*` or an empty range accepts any version.
 
 ### `[game]`
 

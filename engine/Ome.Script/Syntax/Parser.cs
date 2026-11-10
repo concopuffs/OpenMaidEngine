@@ -12,6 +12,18 @@ public sealed class Parser
     /// <summary>The records of the enclosing <c>with</c> blocks; the innermost binds <c>.field</c>.</summary>
     private readonly Stack<NamedElementExpr> _records = new();
 
+    /// <summary>The deepest nesting accepted, counting blocks, parentheses, unary operators and the operators of one
+    /// binary chain. The compiler and the decompiler walk the tree recursively, and a stack overflow ends the process
+    /// (the port links mods at launch), so deeper input is a syntax error. An if/else-if chain does not count.</summary>
+    public const int MaxNesting = 200;
+    private int _nesting;
+
+    private void Enter(SourceSpan span)
+    {
+        if (++_nesting > MaxNesting)
+            throw new OmsSyntaxException(span, $"nested more than {MaxNesting} levels deep; split the expression or the block");
+    }
+
     private Parser(List<Token> tokens) => _tokens = tokens;
 
     public static ScriptUnit ParseScript(string source, string file = "<source>")
@@ -453,7 +465,10 @@ public sealed class Parser
         {
             // Only the leading dimension may be open (name[][27]): an array of unknown length.
             if (dimensions.Count == 0 && Accept(TokenKind.Punct, "]")) { dimensions.Add(0); continue; }
-            dimensions.Add((int)Expect(TokenKind.Integer).Integer);
+            Token size = Expect(TokenKind.Integer);
+            if (size.Integer > int.MaxValue)
+                throw new OmsSyntaxException(size.Span, $"array dimension {size.Integer} is larger than {int.MaxValue}");
+            dimensions.Add((int)size.Integer);
             Expect(TokenKind.Punct, "]");
         }
         uint? address = Accept(TokenKind.Punct, "@") ? Expect(TokenKind.Integer).Integer : null;
@@ -637,16 +652,24 @@ public sealed class Parser
 
     private IReadOnlyList<Statement> ParseBlock()
     {
-        Expect(TokenKind.Punct, "{");
-        SkipNewlines();
-        var body = new List<Statement>();
-        while (!Peek().Is(TokenKind.Punct, "}"))
+        Token open = Expect(TokenKind.Punct, "{");
+        Enter(open.Span);
+        try
         {
-            if (Peek().Kind == TokenKind.End) throw new OmsSyntaxException(Peek().Span, "unterminated block");
-            body.Add(ParseStatement());
+            SkipNewlines();
+            var body = new List<Statement>();
+            while (!Peek().Is(TokenKind.Punct, "}"))
+            {
+                if (Peek().Kind == TokenKind.End) throw new OmsSyntaxException(Peek().Span, "unterminated block");
+                body.Add(ParseStatement());
+            }
+            Next();
+            return body;
         }
-        Next();
-        return body;
+        finally
+        {
+            _nesting--;
+        }
     }
 
     // ------------------------------------------------------------------------------------- expressions
@@ -668,12 +691,22 @@ public sealed class Parser
     {
         if (level == BinaryLevels.Length) return ParseUnary();
         Expr left = ParseBinary(level + 1);
-        while (Peek().Kind == TokenKind.Punct && BinaryLevels[level].Contains(Peek().Text))
+        int chained = 0;   // each operator of a chain adds a level to the left-nested tree
+        try
         {
-            Token op = Next();
-            left = new BinaryExpr(op.Span, op.Text, left, ParseBinary(level + 1));
+            while (Peek().Kind == TokenKind.Punct && BinaryLevels[level].Contains(Peek().Text))
+            {
+                Token op = Next();
+                Enter(op.Span);
+                chained++;
+                left = new BinaryExpr(op.Span, op.Text, left, ParseBinary(level + 1));
+            }
+            return left;
         }
-        return left;
+        finally
+        {
+            _nesting -= chained;
+        }
     }
 
     private Expr ParseUnary()
@@ -683,18 +716,34 @@ public sealed class Parser
         {
             Next();
             Token number = Next();
-            return new OperandExpr(token.Span, new RawInteger(token.Span, unchecked((uint)-(long)number.Integer)));
+            return new OperandExpr(token.Span, new RawInteger(token.Span, Negate(token, number.Integer)));
         }
         if (token.Kind == TokenKind.Punct && token.Text is "-" or "!" or "~")
         {
             Next();
-            return new UnaryExpr(token.Span, token.Text, ParseUnary());
+            Enter(token.Span);
+            try
+            {
+                return new UnaryExpr(token.Span, token.Text, ParseUnary());
+            }
+            finally
+            {
+                _nesting--;
+            }
         }
         if (Accept(TokenKind.Punct, "("))
         {
-            Expr inner = ParseExpression();
-            Expect(TokenKind.Punct, ")");
-            return inner;
+            Enter(token.Span);
+            try
+            {
+                Expr inner = ParseExpression();
+                Expect(TokenKind.Punct, ")");
+                return inner;
+            }
+            finally
+            {
+                _nesting--;
+            }
         }
         if (token.Kind == TokenKind.Identifier && StorageBanks.TypeByBank.ContainsKey(token.Text)
             && Peek(1).Is(TokenKind.Punct, "["))
@@ -767,7 +816,7 @@ public sealed class Parser
         {
             Next();
             Token number = Expect(TokenKind.Integer);
-            return new RawInteger(token.Span, unchecked((uint)-(long)number.Integer));
+            return new RawInteger(token.Span, Negate(token, number.Integer));
         }
         switch (token.Kind)
         {
@@ -835,8 +884,16 @@ public sealed class Parser
 
     private uint ParseSignedInteger()
     {
+        Token sign = Peek();
         bool negative = Accept(TokenKind.Punct, "-");
         uint value = Expect(TokenKind.Integer).Integer;
-        return negative ? unchecked((uint)-(long)value) : value;
+        return negative ? Negate(sign, value) : value;
     }
+
+    /// <summary><c>-N</c> as a 32-bit cell: N may be at most 2^31 (<c>-2147483648</c>); a larger magnitude would wrap
+    /// to an unrelated positive value.</summary>
+    private static uint Negate(Token minus, uint magnitude)
+        => magnitude <= 0x80000000u
+            ? unchecked((uint)-(long)magnitude)
+            : throw new OmsSyntaxException(minus.Span, "negative integer does not fit in 32 bits");
 }

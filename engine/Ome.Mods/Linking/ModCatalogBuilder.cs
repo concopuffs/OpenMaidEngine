@@ -102,7 +102,7 @@ public static class ModCatalogBuilder
                 records.Add(new LinkedRecord(catalogName, script.Name, true, false, IrEncoder.Encode(compiled)));
             }
             catch (Exception error) when (error is OmsSyntaxException or OmsCompileException or InvalidDataException
-                                              or KeyNotFoundException)
+                                              or KeyNotFoundException or ModPackageException)
             {
                 report.Add(ModReportClass.Error, mod.Id, catalogName, $"scripts/{script.Name}.oms: {error.Message}");
                 failed = true;

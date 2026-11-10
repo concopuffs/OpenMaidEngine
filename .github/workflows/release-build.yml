@@ -219,13 +219,17 @@ jobs:
           path: build/release-assets/windows
 
       - name: Create or resume GitHub release
+        # Context values reach the script as environment variables, never as text spliced into it.
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TARGET: ${{ github.sha }}
         run: |
           python -X utf8 tools/publish_github_release.py \
-            --repository "${{ github.repository }}" \
-            --tag "${{ github.ref_name }}" \
-            --target "${{ github.sha }}" \
+            --repository "$RELEASE_REPOSITORY" \
+            --tag "$RELEASE_TAG" \
+            --target "$RELEASE_TARGET" \
             --linux-artifact-directory build/release-assets/linux \
             --windows-artifact-directory build/release-assets/windows \
             --output-directory build/release-assets/prepared

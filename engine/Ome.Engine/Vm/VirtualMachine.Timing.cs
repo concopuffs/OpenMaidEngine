@@ -41,6 +41,11 @@ public sealed partial class VirtualMachine
             {
                 long intervalMs = Read(a[0]);
                 int count = System.Math.Max(0, unchecked((int)Read(a[1])));
+                if (count > MaxScriptRunLength - _timedCallbacks.Count)
+                {
+                    HaltReason ??= $"timed-callback-count-too-large:{count}";
+                    return HALT;
+                }
                 int primaryOffset = unchecked((int)Read(a[2]));
                 int catchUpOffset = unchecked((int)Read(a[3]));
                 long deadlineMs = _timedCallbacks.Count == 0 ? 0 : _timedCallbacks[^1].DeadlineMs;

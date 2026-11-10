@@ -962,6 +962,14 @@ public sealed partial class VirtualMachine
     private sealed class NumberedRestoreRequestedException : Exception { }
     private sealed class ProcessExitRequestedException : Exception { }
     private sealed class ScriptErrorException : Exception { }
+
+    /// <summary>Ends the run from below a frame's step loop, where returning HALT would only end a nested loop (a
+    /// wait's callback, a callback script, a restore). The halting op has set <see cref="HaltReason"/>, or
+    /// <paramref name="reason"/> gives it; <see cref="Run"/> records the halt once.</summary>
+    private sealed class VmHaltException(string? reason = null) : Exception(reason)
+    {
+        public string? Reason { get; } = reason;
+    }
     private sealed record DebugFrameReturnRequest(ExecFrame Frame, IReadOnlyDictionary<int, long> GlobalWrites);
     private sealed record PreloadedScriptSlot(long ScriptId, ExecFrame Frame);
     private enum FrameOutcome { Returned, DebugReturned, RootReload, ExitRequested, Halted, RanOff }
@@ -975,6 +983,7 @@ public sealed partial class VirtualMachine
         while (true)
         {
             FrameOutcome outcome;
+            bool restoreRequested = false;
             try
             {
                 ExecFrame rootFrame = restoredRootFrame == null
@@ -985,45 +994,65 @@ public sealed partial class VirtualMachine
             }
             catch (ScriptErrorException)
             {
-                outcome = FrameOutcome.Halted;
+                break;
+            }
+            catch (VmHaltException halt)
+            {
+                HaltReason ??= halt.Reason ?? "halt";
                 break;
             }
             catch (NumberedRestoreRequestedException)
             {
                 if (_loadedNumberedState == null) throw;
-                // Native also arms the yield from the engine (adv_input_dispatch_callbacks, adv_input_service_poll and
-                // engine_main_tick set the resume and its owner to the running frame), which the port does not model.
-                // The port's restored scenes take op 0x7c's cold path, so a yield saved before the load must not
-                // survive it.
-                ResetCoroutineYield();
-                Script? callback = _provider?.GetByName("CALLBACK_LOAD.BIN");
-                if (callback != null)
+                restoreRequested = true;
+                outcome = FrameOutcome.Halted;
+            }
+            if (restoreRequested)
+            {
+                // Outside the catch block, so a failure while restoring (CALLBACK_LOAD's script error, a saved script
+                // that is no longer installed) ends the run as a halt like any other.
+                try
                 {
-                    int callbackEntry = callback.IndexByOffset.TryGetValue(0, out int ci) ? ci : 0;
-                    FrameOutcome callbackOutcome = RunFrame(
-                        new ExecFrame(callback, callbackEntry), FrameCause.SaveRestore, callback.PackedId);
-                    if (callbackOutcome is FrameOutcome.Halted or FrameOutcome.ExitRequested)
+                    // Native also arms the yield from the engine (adv_input_dispatch_callbacks, adv_input_service_poll
+                    // and engine_main_tick set the resume and its owner to the running frame), which the port does not
+                    // model. The port's restored scenes take op 0x7c's cold path, so a yield saved before the load must
+                    // not survive it.
+                    ResetCoroutineYield();
+                    Script? callback = _provider?.GetByName("CALLBACK_LOAD.BIN");
+                    if (callback != null)
                     {
-                        outcome = callbackOutcome;
-                        break;
+                        int callbackEntry = callback.IndexByOffset.TryGetValue(0, out int ci) ? ci : 0;
+                        FrameOutcome callbackOutcome = RunFrame(
+                            new ExecFrame(callback, callbackEntry), FrameCause.SaveRestore, callback.PackedId);
+                        if (callbackOutcome == FrameOutcome.ExitRequested) HaltReason ??= "exit-request";
+                        if (callbackOutcome is FrameOutcome.Halted or FrameOutcome.ExitRequested) break;
+                        if (callbackOutcome == FrameOutcome.RootReload)
+                        {
+                            _loadedNumberedState = null;
+                            Script? reloadedRoot = ReloadRootOrNull();
+                            if (reloadedRoot == null) break;
+                            root = reloadedRoot;
+                            rootEntry = root.IndexByOffset.TryGetValue(0, out int lri) ? lri : 0;
+                            cause = FrameCause.RootReload;
+                            continue;
+                        }
                     }
-                    if (callbackOutcome == FrameOutcome.RootReload)
-                    {
-                        _loadedNumberedState = null;
-                        Script? reloadedRoot = ReloadRootOrNull();
-                        if (reloadedRoot == null) break;
-                        root = reloadedRoot;
-                        rootEntry = root.IndexByOffset.TryGetValue(0, out int lri) ? lri : 0;
-                        cause = FrameCause.RootReload;
-                        continue;
-                    }
+                    root = ResolveSavedScript(_loadedNumberedState!.Frames[0]);
+                    rootEntry = 0;
+                    _restoreFrameIndex = 0;
+                    restoredRootFrame = _loadedNumberedState.Frames[0];
+                    cause = FrameCause.SaveRestore;
+                    continue;
                 }
-                root = ResolveSavedScript(_loadedNumberedState.Frames[0]);
-                rootEntry = 0;
-                _restoreFrameIndex = 0;
-                restoredRootFrame = _loadedNumberedState.Frames[0];
-                cause = FrameCause.SaveRestore;
-                continue;
+                catch (ScriptErrorException)
+                {
+                    break;
+                }
+                catch (VmHaltException halt)
+                {
+                    HaltReason ??= halt.Reason ?? "halt";
+                    break;
+                }
             }
             if (outcome == FrameOutcome.RootReload)
             {
@@ -1375,15 +1404,21 @@ public sealed partial class VirtualMachine
             if (file == null) return false;
             NativeNumberedSaveState state = NativeNumberedSaveCodec.Decode(
                 file.Document.Payload, _nativeDatStore.Identity.NumberedGfxRecordSize);
-            ApplyNumberedState(state);
+            // Decode all of it before changing anything, so a damaged graphics record or history tail fails the load
+            // with the live globals, audio and history untouched.
+            GfxPersistenceSnapshot gfxSnapshot = NativeGfxPersistenceCodec.Decode(state);
+            NativeTextHistoryCodec.Decoded? history = restoreHistory && file.HistoryTail.Length != 0
+                ? NativeTextHistoryCodec.Decode(file.HistoryTail)
+                : null;
+            ApplyNumberedState(state, gfxSnapshot);
             _retainedNativeNumberedState = state;
             _pendingPlaySeconds = file.Document.Metadata.AccumulatedPlaySeconds;
             // A full load restores the root frame now (script_frame_restore_saved_layout commits); data only does not.
             if (restoreHistory) CommitLoadedPlayTime();
             if (restoreHistory)
             {
-                if (file.HistoryTail.Length == 0) TextHistory.Clear();
-                else NativeTextHistoryCodec.DecodeInto(file.HistoryTail, TextHistory);
+                if (history == null) TextHistory.Clear();
+                else TextHistory.RestorePersistenceSnapshot(history.Entries, history.Records);
                 _loadedNumberedState = state;
             }
             else
@@ -1403,7 +1438,7 @@ public sealed partial class VirtualMachine
         }
     }
 
-    private void ApplyNumberedState(NativeNumberedSaveState state)
+    private void ApplyNumberedState(NativeNumberedSaveState state, GfxPersistenceSnapshot gfxSnapshot)
     {
         // Layout 3 of save_data_deserialize_and_begin_restore@0x40fd10 zeroes each global bank in full, to its live
         // size (ctx+0x53c7c..0x53c90; Himegari 1419442 integers and 18180 strings), and only then copies the saved
@@ -1430,7 +1465,6 @@ public sealed partial class VirtualMachine
             if (resourceId != 0) _host.LoadSoundEffect(resourceId, channel);
         }
 
-        GfxPersistenceSnapshot gfxSnapshot = NativeGfxPersistenceCodec.Decode(state);
         // save_data_deserialize_and_begin_restore: (CreateObject & 2) && (AutoFreeTex & 2) runs the release worker over
         // every slot (docs/engine-re.md, "AutoFreeTex").
         bool releaseAllSurfaces = (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0;
@@ -1469,16 +1503,14 @@ public sealed partial class VirtualMachine
     {
         if (_s.PackedId == frame.ScriptId) return _s;
         Script? script = _provider?.GetById(frame.ScriptId);
-        return script ?? throw new InvalidDataException(
-            $"Numbered save references unresolved script 0x{frame.ScriptId:x}.");
+        return script ?? throw new VmHaltException($"restore-unresolved-script:0x{frame.ScriptId:x}");
     }
 
     private static int FindRestoreRendezvous(Script script)
     {
         for (int i = 0; i < script.Instructions.Count; i++)
             if (script.Instructions[i].Opcode == 0xae) return i;
-        throw new InvalidDataException(
-            $"Saved script {script.Name} has no opcode 0xae restore rendezvous.");
+        throw new VmHaltException($"restore-no-rendezvous:{script.Name}");
     }
 
     private static ExecFrame CreateRestoredFrame(Script script, NativeSavedScriptFrame saved)
@@ -1652,19 +1684,28 @@ public sealed partial class VirtualMachine
         _advTextWaitPolling = false;
         try
         {
+            // The callback's ops run through the same per-op services as a frame's (native runs them from its main
+            // tick); a halt anywhere in it ends the run, which the waiting op would otherwise outlive.
             while (pc >= 0 && pc < _cur.Script.Instructions.Count)
             {
                 if (_stopRequested) break;
                 if (_rootReloadRequested) throw new RootReloadRequestedException();
-                if (Steps >= _o.MaxSteps) { HaltReason ??= "STEP-LIMIT"; break; }
+                if (Steps >= _o.MaxSteps) throw new VmHaltException("STEP-LIMIT");
                 Steps++;
                 _cur.Pc = pc;
+                switch (ServiceInstructionBoundary())
+                {
+                    case FrameOutcome.RootReload: throw new RootReloadRequestedException();
+                    case FrameOutcome.ExitRequested: throw new ProcessExitRequestedException();
+                    case FrameOutcome.Halted: throw new VmHaltException();
+                }
                 if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, _cur.Script.Instructions[pc], _depth));
-                int next = Step(_cur.Script.Instructions[pc], pc);
+                int next = ApplyIgnoredDwords(_cur, Step(_cur.Script.Instructions[pc], pc));
                 _host.FrameYield();
+                PaceFastForwardOp();
                 if (next == ROOT_RELOAD) throw new RootReloadRequestedException();
                 if (next == HOTSPOT_RETURN || next == FRAME_RETURN) break;
-                if (next == HALT) break;
+                if (next == HALT) throw new VmHaltException();
                 pc = next;
             }
         }
@@ -1688,7 +1729,40 @@ public sealed partial class VirtualMachine
         _host.InputCallbackCompleted(Gfx);
     }
 
+    /// <summary>Per-opcode executability: 1 yes, -1 no, 0 not resolved yet. The table never changes for a VM, so
+    /// each opcode is resolved once instead of on every step.</summary>
+    private readonly sbyte[] _opcodeExecutable = new sbyte[0x1000];
+
+    private bool IsExecutable(int op)
+    {
+        if ((uint)op < (uint)_opcodeExecutable.Length && _opcodeExecutable[op] != 0) return _opcodeExecutable[op] > 0;
+        bool executable = OpcodeRuntimeCoverage.TryResolve(_t, op, out OpcodeHandlerResolution handler)
+                          && handler.IsExecutable;
+        if ((uint)op < (uint)_opcodeExecutable.Length) _opcodeExecutable[op] = executable ? (sbyte)1 : (sbyte)-1;
+        return executable;
+    }
+
+    /// <summary>The longest run of cells or entries one instruction may write from a script-controlled count. Native
+    /// would fault or exhaust memory long before; the port halts instead of looping for minutes.</summary>
+    internal const int MaxScriptRunLength = 1 << 20;
+
+    /// <summary>Run one instruction. An operand that overflows a checked address or count halts the VM with the
+    /// instruction's location rather than ending the VM thread with an exception.</summary>
     private int Step(Instruction ins, int pc)
+    {
+        Script script = _cur.Script;
+        try
+        {
+            return StepInstruction(ins, pc);
+        }
+        catch (OverflowException)
+        {
+            HaltReason ??= $"operand-overflow:{script.Name}@0x{ins.Offset:x}:op 0x{ins.Opcode:x}";
+            return HALT;
+        }
+    }
+
+    private int StepInstruction(Instruction ins, int pc)
     {
         int op = ins.Opcode;
         var a = ins.Args;
@@ -1698,8 +1772,7 @@ public sealed partial class VirtualMachine
             return HALT;
         }
         string label = definition.Label;
-        if (!OpcodeRuntimeCoverage.TryResolve(_t, op, out OpcodeHandlerResolution handler)
-            || !handler.IsExecutable)
+        if (!IsExecutable(op))
         {
             var diagnostic = new UnsupportedOpcodeDiagnostic(
                 _compatibility.ProfileId,

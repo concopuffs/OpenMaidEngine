@@ -138,6 +138,28 @@ public class GfxStateTests
         Assert.Equal(-1, g.QuerySlot(0x10));
     }
 
+    // The presentation thread's read of obj+4: present objects report their slot (0 included), absent ones nothing.
+    [Fact]
+    public void TryGetSourceSlotReportsPresentObjectsOnly()
+    {
+        var g = new GfxState();
+        g.BindDraw(0x10, 4, 0, 0, 10, 10, 0, 0);
+        g.BindDraw(0x11, 0, 0, 0, 10, 10, 0, 0);
+
+        Assert.True(g.TryGetSourceSlot(0x10, out int slot));
+        Assert.Equal(4, slot);
+        Assert.True(g.TryGetSourceSlot(0x11, out slot));
+        Assert.Equal(0, slot);
+        Assert.False(g.TryGetSourceSlot(0x12, out slot));
+        Assert.Equal(0, slot);
+
+        g.BindDraw(0x10, 6, 0, 0, 10, 10, 0, 0);
+        Assert.True(g.TryGetSourceSlot(0x10, out slot));
+        Assert.Equal(6, slot);
+        g.Release(0x10);
+        Assert.False(g.TryGetSourceSlot(0x10, out _));
+    }
+
     [Fact]
     public void PackColorPacksArgb()
         => Assert.Equal(0x80_112233L, GfxState.PackColor(0x80, 0x112233));

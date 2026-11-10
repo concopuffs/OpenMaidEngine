@@ -25,7 +25,8 @@ const held = new Set();
 let hwnd = ptr(0);
 let cursor = null;               // the driver's client point [x, y]; null parks the cursor off-screen
 let config = null;
-const hooked = new Set();
+const hooked = new Set();       // modules whose hooks are in place (hooked() reports these)
+const attempted = new Set();    // modules tried once: a hook that failed is reported as hook-error, not retried
 let warps = { count: 0, last: null };   // SetCursorPos calls since the driver last asked
 const OFFSCREEN = -32000;
 
@@ -350,7 +351,11 @@ function hookWinmm(module) {
 
 function hookShell32(module) {
     const target = module.findExportByName('SHGetFolderPathA');
-    if (target === null) return;
+    if (target === null) {
+        // Unhooked, AGE would keep its saves in the real folders: say so now, not as a leak found at shutdown.
+        if (config.folders !== null) throw new Error('SHGetFolderPathA is not exported; the save sandbox cannot redirect AGE');
+        return;
+    }
     Interceptor.attach(target, {
         onEnter(args) {
             this.csidl = args[1].toInt32();
@@ -374,10 +379,11 @@ const HOOKS = { 'user32.dll': hookUser32, 'winmm.dll': hookWinmm, 'shell32.dll':
 function hookModule(module) {
     const name = module.name.toLowerCase();
     const hook = HOOKS[name];
-    if (hook === undefined || hooked.has(name) || config === null) return;
-    hooked.add(name);
+    if (hook === undefined || attempted.has(name) || config === null) return;
+    attempted.add(name);
     try {
         hook(module);
+        hooked.add(name);
         report('hooked', { module: module.name });
     } catch (error) {
         report('hook-error', { module: module.name, error: String(error) });

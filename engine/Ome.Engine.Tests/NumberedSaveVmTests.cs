@@ -429,6 +429,125 @@ public class NumberedSaveVmTests
         }
     }
 
+    /// <summary>LOADER.BIN: full-load slot 1 into L[0], copy the result to G[0x602], then G[0x603] = 1 and exit.
+    /// A load that succeeds never comes back here; one that fails reports 1.</summary>
+    private static Script FullLoadScript()
+        => WithPackedId(ScriptAssembler.Assemble(Table, "LOADER.BIN",
+        [
+            (0x1a1, [new Operand(LocalInt, 0), new Operand(Immediate, 1)]),
+            (Table.ByLabel("mov")!.Value, [new Operand(GlobalInt, 0x602), new Operand(LocalInt, 0)]),
+            (Table.ByLabel("mov")!.Value, [new Operand(GlobalInt, 0x603), new Operand(Immediate, 1)]),
+            (0x2, Array.Empty<Operand>()),
+        ], []), 0x99);
+
+    // A save names its frames' scripts by packed id. One that is not installed (a removed mod's script) or that has no
+    // op 0xae to rendezvous at cannot be restored: the run halts with the reason instead of an exception escaping Run.
+    [Theory]
+    [InlineData(false, false, "restore-unresolved-script:0x88")]
+    [InlineData(true, false, "restore-no-rendezvous:NO_RENDEZVOUS.BIN")]
+    [InlineData(true, true, "restore-unresolved-script:0x89")]
+    public void AFullLoadOfAScriptThatCannotBeRestoredHaltsWithAReason(
+        bool rootInstalled, bool savedChild, string reason)
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            int callScript = Table.ByLabel("call-script")!.Value;
+            int move = Table.ByLabel("mov")!.Value;
+            Script resumed = savedChild
+                ? WithTables(WithPackedId(ScriptAssembler.Assemble(Table, "RESUMED.BIN",
+                [
+                    (0xae, Array.Empty<Operand>()),
+                    (callScript, [new Operand(Immediate, 0x89)]),
+                    (move, [new Operand(GlobalInt, 0x600), new Operand(Immediate, 1)]),
+                    (0x2, Array.Empty<Operand>()),
+                ], []), 0x88), scriptCallOffsets: [1])
+                : WithPackedId(ScriptAssembler.Assemble(Table, "NO_RENDEZVOUS.BIN",
+                [
+                    (move, [new Operand(GlobalInt, 0x600), new Operand(Immediate, 1)]),
+                    (0x2, Array.Empty<Operand>()),
+                ], []), 0x88);
+            NativeSavedScriptFrame[] frames = savedChild
+                ? [new NativeSavedScriptFrame(-1, 0x88, [], -1, 0), new NativeSavedScriptFrame(0, 0x89, [], -1, -1)]
+                : [new NativeSavedScriptFrame(-1, 0x88, [], -1, -1)];
+            store.SaveNumberedFile(
+                1, NativeNumberedSaveCodec.Encode(NativeNumberedSaveCodec.Empty(frames)), [],
+                NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
+            var installed = new Dictionary<long, Script>();
+            if (rootInstalled) installed[0x88] = resumed;   // 0x89 is never installed
+            var vm = new VirtualMachine(FullLoadScript(), Table, new RecordingHost(),
+                                        provider: new MapProvider(installed), nativeDatStore: store);
+
+            vm.Run();
+
+            Assert.Equal(reason, vm.HaltReason);
+            Assert.False(vm.Globals.ContainsKey(0x600));   // nothing of the saved scripts ran past the failure
+            Assert.False(vm.Globals.ContainsKey(0x603));   // and the loader did not resume either
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    // The history tail is outside the container checksum. A full load decodes it, with the graphics records, before
+    // applying anything, so a damaged tail fails the load (op 0x1a1 reports 1) with the live state untouched.
+    [Fact]
+    public void AFullLoadWithADamagedHistoryTailLeavesTheLiveStateUntouched()
+    {
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            NativeNumberedSaveState state = NativeNumberedSaveCodec.Empty(
+                [new NativeSavedScriptFrame(-1, 0x88, [], -1, -1)]) with
+            {
+                BgmTrackId = 24,
+                SoundEffectResourceIds = [0, 0x3321, 0, 0, 0, 0, 0, 0, 0, 0],
+                IntegerGlobals = DenseIntBank(0x124, (0x123, 456)),
+                StringGlobals = ["saved"],
+                SurfaceRecords = NativeSurfaceRecords(3, 0x1234, 0xff00ff),
+            };
+            // A verbatim logical stream whose entry count (1000) needs 8000 bytes; 4 follow.
+            byte[] damagedTail = new byte[20];
+            BinaryPrimitives.WriteInt32LittleEndian(damagedTail, 8);
+            BinaryPrimitives.WriteInt32LittleEndian(damagedTail.AsSpan(4), 8);
+            BinaryPrimitives.WriteInt32LittleEndian(damagedTail.AsSpan(8), 8);
+            BinaryPrimitives.WriteInt32LittleEndian(damagedTail.AsSpan(12), 1000);
+            store.SaveNumberedFile(1, NativeNumberedSaveCodec.Encode(state), damagedTail,
+                                   NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
+            var history = new AdvTextHistory();
+            history.DefineLayout(1, 100, 50, 0, 0);
+            history.AppendText(1, 0, "live", AdvTextStyle.Default);
+            var host = new RecordingHost();
+            var vm = new VirtualMachine(FullLoadScript(), Table, host, textHistory: history, nativeDatStore: store);
+            vm.Globals[0x10] = 999;
+            vm.Globals[0x123] = 999;
+            vm.GlobalStrings[0] = "live";
+            vm.Gfx.SetSurface(15, 0x3383, 0);
+
+            vm.Run();
+
+            Assert.Equal(1, vm.Globals[0x602]);            // the load failed
+            Assert.Equal(1, vm.Globals[0x603]);
+            Assert.Equal("exit", vm.HaltReason);
+            Assert.Equal(999, vm.Globals[0x10]);           // a load zeroes every bank before copying the saved prefix
+            Assert.Equal(999, vm.Globals[0x123]);
+            Assert.Equal("live", vm.GlobalStrings[0]);
+            Assert.Empty(host.BgmTracks);
+            Assert.Empty(host.SfxLoads);
+            Assert.Empty(host.SfxReleases);
+            Assert.Equal("live", Assert.Single(history.Records).Text);
+            GfxSurfacePersistenceState surface = Assert.Single(vm.Gfx.CapturePersistenceSnapshot().Surfaces);
+            Assert.Equal((15, 0x3383L), (surface.Slot, surface.ResourceId));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private sealed class FrameCapturingHost : RecordingHost
     {
         public VirtualMachine Vm = null!;

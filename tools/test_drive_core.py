@@ -252,6 +252,53 @@ def test_save_roots_and_backups():
               "restores accept our backups and plain folder copies")
 
 
+def test_restore_target_outside_the_install():
+    install = Path("/games/Himegari")
+    check(raises(core.check_restore_target, install, install, contains="is the game install"),
+          "a live root that is the install (REGFILEPATH=.) is not replaced")
+    check(raises(core.check_restore_target, install / "SAVEDATA", install, contains="lies inside"),
+          "a live root inside the install (USEAPPDATAFOLDER=0) is not replaced")
+    check(raises(core.check_restore_target, install.parent, install, contains="contains"),
+          "a live root containing the install is not replaced")
+    core.check_restore_target(Path("/local/Eushully/Himegari"), install)
+    core.check_restore_target(Path("/games/Himegari2"), install)
+    check(True, "a live root beside the install (a name prefix is not containment) is accepted")
+
+
+def test_session_identity():
+    with tempfile.TemporaryDirectory() as directory:
+        context = paths.ToolContext("himegari", Path(directory) / "game", Path(directory) / "x",
+                                    shared_build=Path(directory) / "build")
+        path = core.session_file("native", context)
+
+        def session(created, alive=True, recorded=1234):
+            core.write_json_atomic(path, {"pid": 42, "port": 1, "token": "t", "pid_created": recorded})
+            return core.read_session("native", context, alive=lambda _: alive, created=lambda _: created)
+
+        check(session(1234) is not None and path.is_file(), "a live server with its recorded creation time is kept")
+        check(session(5678) is None and not path.is_file(),
+              "a pid that now names a later process is a stale session, and its file is removed")
+        check(session(None) is None, "a pid whose creation time cannot be read is not the recorded server")
+        check(session(None, recorded=None) is not None, "a session that records no creation time is checked by pid")
+        check(session(1234, alive=False) is None, "a server that has gone is a stale session")
+    if sys.platform == "win32":
+        import subprocess
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+        try:
+            windows = core.windows()
+            created = windows.created(child.pid)
+            check(isinstance(created, int) and created > 0 and core.pid_created(child.pid) == created,
+                  "Windows reports a process's creation time")
+            check(not windows.terminate(child.pid, created=created + 1) and child.poll() is None,
+                  "terminate leaves a process created at another time alone")
+            check(windows.terminate(child.pid, created=created) and child.wait(10) == 1,
+                  "terminate ends the process created at the recorded time")
+            check(windows.created(child.pid) is None or child.poll() is not None, "an ended process has no identity")
+        finally:
+            if child.poll() is None:
+                child.kill()
+
+
 def test_port_sandboxes():
     profile = core.Profile(settings_file="SYS4REG.INI", settings={"display.ScreenMode": "1"},
                            quiet={"sound.Volume0": "0"})
@@ -554,6 +601,26 @@ def test_port_build():
           "Directory.Build.targets makes an Optimize change recompile")
 
 
+def test_port_terminates_only_the_recorded_process():
+    calls = []
+
+    class FakeWindows:
+        def terminate(self, pid, created=None):
+            calls.append((pid, created))
+            return created == 7
+
+    real = core.windows
+    core.windows = lambda: FakeWindows()
+    try:
+        port.terminate_recorded(42, None, "the port")
+        check(calls == [], "the port driver never terminates a pid with no recorded creation time")
+        port.terminate_recorded(42, 7, "the port")
+        port.terminate_recorded(43, 8, "the port's launcher")
+        check(calls == [(42, 7), (43, 8)], "the port driver terminates through the recorded creation time")
+    finally:
+        core.windows = real
+
+
 def main():
     test_port_build()
     test_step_parsing()
@@ -564,6 +631,9 @@ def main():
     test_settle()
     test_ini_update()
     test_save_roots_and_backups()
+    test_restore_target_outside_the_install()
+    test_session_identity()
+    test_port_terminates_only_the_recorded_process()
     test_port_sandboxes()
     test_profiles()
     test_client_and_executor()

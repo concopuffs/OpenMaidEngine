@@ -85,6 +85,23 @@ public class SharedProfileTests
         Assert.Equal("abc", decoded.StringCells[0xd2]);
     }
 
+    // A name typed into the port can hold a character CP932 lacks. The save writes it by the code page's standard
+    // fallback, as the numbered-save codec does, instead of failing.
+    [Fact]
+    public void SharedPayloadWritesAnUnencodableCharacterInsteadOfFailing()
+    {
+        var metadata = new NativeSaveMetadata(
+            NativeSaveMagic.S4SD, 1, "test", Timestamp, 0, 1, 1);
+        byte[] logical = SharedProfilePayloadCodec.Encode(
+            new SharedProfilePayload(stringCells: new Dictionary<int, string> { [0xd2] = "リリ\U0001F600" }),
+            metadata);
+
+        SharedProfilePayload decoded = SharedProfilePayloadCodec.Decode(logical, metadata);
+
+        Assert.StartsWith("リリ", decoded.StringCells[0xd2]);
+        Assert.DoesNotContain("\U0001F600", decoded.StringCells[0xd2]);
+    }
+
     [Fact]
     public void SharedProfilePersistsSelectedCellsThroughNativeDirectoryStore()
     {

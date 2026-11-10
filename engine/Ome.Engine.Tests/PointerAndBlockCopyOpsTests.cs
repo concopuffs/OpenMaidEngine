@@ -10,6 +10,53 @@ public class PointerAndBlockCopyOpsTests
     private const int Immediate = 0, InlineString = 2, GlobalInt = 3, GlobalString = 5,
                       LocalInt = 9, LocalPointer = 12, LocalStringPointer = 14;
 
+    /// <summary>VirtualMachine.MaxScriptRunLength (internal to Ome.Engine): the most cells one instruction writes.</summary>
+    private const int MaxScriptRunLength = 1 << 20;
+
+    // A script-controlled count above the run limit halts instead of looping over (or allocating) millions of cells.
+    [Theory]
+    [InlineData(0x1b0, "copy-dwords-count-too-large:1048577")]
+    [InlineData(0x2d8, "fill-int-array-count-too-large:1048577")]
+    public void ARunCountAboveTheLimitHaltsBeforeWritingAnything(int opcode, string reason)
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        Operand[] operands = opcode == 0x1b0
+            ? new[] { new Operand(GlobalInt, 0x700), new Operand(GlobalInt, 0x800), new Operand(Immediate, MaxScriptRunLength + 1) }
+            : new[] { new Operand(GlobalInt, 0x800), new Operand(Immediate, 7), new Operand(Immediate, MaxScriptRunLength + 1) };
+        var script = ScriptAssembler.Assemble(table, "RUN_LIMIT", new List<(int, Operand[])>
+        {
+            (opcode, operands),
+            (table.ByLabel("mov")!.Value, new[] { new Operand(GlobalInt, 0x900), new Operand(Immediate, 1) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal(reason, vm.HaltReason);
+        Assert.False(vm.Globals.ContainsKey(0x800));
+        Assert.False(vm.Globals.ContainsKey(0x900));
+    }
+
+    [Fact]
+    public void AFillOfExactlyTheRunLimitStillRuns()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "RUN_LIMIT", new List<(int, Operand[])>
+        {
+            (0x2d8, new[] { new Operand(GlobalInt, 0x800), new Operand(Immediate, 7), new Operand(Immediate, MaxScriptRunLength) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(7, vm.Globals[0x800]);
+        Assert.Equal(7, vm.Globals[0x800 + MaxScriptRunLength - 1]);
+        Assert.False(vm.Globals.ContainsKey(0x800 + MaxScriptRunLength));
+    }
+
     [Fact]
     public void TakeAddressAndCopyDwords_PreserveLocalAndGlobalAddressDomains()
     {

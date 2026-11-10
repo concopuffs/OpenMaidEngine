@@ -17,8 +17,9 @@ public sealed partial class GodotAdvHost
     private readonly Dictionary<int, long> _surfaceColorKeys = new();
     private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> packed catalog id
     // slot -> dimensions of the currently allocated surface. Slot 0 begins as the selected game's
-    // logical canvas, but op 0x1fa releases it like any other slot; subsequent queries return 0x0.
-    private readonly Dictionary<int, (int W, int H)> _slotDims = new();
+    // logical canvas, but op 0x1fa releases it like any other slot; subsequent queries return 0x0. Concurrent: the VM
+    // thread allocates and releases surfaces while the main thread publishes masked movie captures.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (int W, int H)> _slotDims = new();
 
     public void FillSurfaceRect(SurfaceRectFill fill)
     {
@@ -232,7 +233,7 @@ public sealed partial class GodotAdvHost
                 _retainedHistoryLayouts.Remove(layoutSlot);
             }
         }
-        _slotDims.Remove(slot);
+        _slotDims.TryRemove(slot, out _);
         if (movieRelease.Kind == MovieSurfaceReleaseKind.Released)
         {
             var binding = movieRelease.Binding;
@@ -259,8 +260,11 @@ public sealed partial class GodotAdvHost
         {
             lock (_imageLock)
             {
+                // A fresh buffer rather than an in-place clear, as every other surface write: the GPU texture cache
+                // sees a changed dynamic surface by its pixel array's identity, and the main thread may be reading
+                // the published one.
                 if (_surfaceImages.TryGetValue(surfaceSlot, out var image))
-                    System.Array.Clear(image.Pixels);
+                    _surfaceImages[surfaceSlot] = new RgbaImage(image.Width, image.Height, new byte[image.Pixels.Length]);
                 else if (_slotDims.TryGetValue(surfaceSlot, out var dimensions)
                          && dimensions.W > 0 && dimensions.H > 0)
                     _surfaceImages[surfaceSlot] = new RgbaImage(
@@ -292,9 +296,8 @@ public sealed partial class GodotAdvHost
             destination, visible, firstHandle, count,
             item =>
             {
-                var raw = gfx.TryGet(item.Handle);
-                var resolved = raw != null
-                    ? ResolveSurfaceTexture(raw.SourceSlot, item.SurfaceResId)
+                var resolved = gfx.TryGetSourceSlot(item.Handle, out int sourceSlot)
+                    ? ResolveSurfaceTexture(sourceSlot, item.SurfaceResId)
                     : ResolveResIdTexture(item.SurfaceResId);
                 return resolved == null
                     ? null
@@ -328,7 +331,7 @@ public sealed partial class GodotAdvHost
             {
                 _surfaceImages.Remove(slot);
                 _surfaceColorKeys.Remove(slot);
-                _slotDims.Remove(slot);
+                _slotDims.TryRemove(slot, out _);
             }
         }
         lock (_textLock)

@@ -22,13 +22,16 @@ public sealed partial record SemanticVersion(int Major, int Minor, int Patch, st
         return true;
     }
 
-    /// <summary>A version in a range comparator, where missing minor and patch numbers are zero (<c>&lt;2</c>).</summary>
-    internal static bool TryParsePartial(string text, out SemanticVersion version)
+    /// <summary>A version in a range comparator, where missing minor and patch numbers are zero (<c>&lt;2</c>);
+    /// <paramref name="parts"/> is how many numbers were written (1-3).</summary>
+    internal static bool TryParsePartial(string text, out SemanticVersion version, out int parts)
     {
         version = new SemanticVersion(0, 0, 0);
+        parts = 0;
         Match match = Partial().Match(text);
         if (!match.Success || !TryNumbers(match, out int major, out int minor, out int patch)) return false;
         version = new SemanticVersion(major, minor, patch, match.Groups[4].Value);
+        parts = match.Groups[3].Success ? 3 : match.Groups[2].Success ? 2 : 1;
         return true;
     }
 
@@ -72,14 +75,17 @@ public sealed partial record SemanticVersion(int Major, int Minor, int Patch, st
 
 /// <summary>
 /// A version range: comma-separated comparators that must all hold, each <c>&gt;=</c>, <c>&gt;</c>, <c>&lt;=</c>,
-/// <c>&lt;</c>, <c>=</c> or a bare version (exact). <c>*</c> or an empty range admits every version.
+/// <c>&lt;</c>, <c>=</c> or a bare version. Missing minor and patch numbers count as zero, except that a bare or
+/// <c>=</c> version written with fewer than three numbers admits every release starting with them (<c>1.2</c>:
+/// 1.2.x). <c>&lt;X</c> for a release X admits no prerelease of X (<c>&lt;2</c> rejects 2.0.0-rc.1). <c>*</c> or an
+/// empty range admits every version.
 /// </summary>
 public sealed class VersionRange
 {
-    private readonly IReadOnlyList<(string Operator, SemanticVersion Version)> _comparators;
+    private readonly IReadOnlyList<(string Operator, SemanticVersion Version, int Parts)> _comparators;
     public string Text { get; }
 
-    private VersionRange(string text, IReadOnlyList<(string, SemanticVersion)> comparators)
+    private VersionRange(string text, IReadOnlyList<(string, SemanticVersion, int)> comparators)
     {
         Text = text;
         _comparators = comparators;
@@ -93,19 +99,19 @@ public sealed class VersionRange
         reason = null;
         string trimmed = text.Trim();
         if (trimmed is "" or "*") return true;
-        var comparators = new List<(string, SemanticVersion)>();
+        var comparators = new List<(string, SemanticVersion, int)>();
         foreach (string part in trimmed.Split(','))
         {
             string item = part.Trim();
             string op = item.StartsWith(">=") ? ">=" : item.StartsWith("<=") ? "<=" : item.StartsWith('>') ? ">"
                 : item.StartsWith('<') ? "<" : item.StartsWith('=') ? "=" : "";
             string versionText = item[op.Length..].Trim();
-            if (!SemanticVersion.TryParsePartial(versionText, out SemanticVersion version))
+            if (!SemanticVersion.TryParsePartial(versionText, out SemanticVersion version, out int parts))
             {
                 reason = $"'{item}' is not a version comparator";
                 return false;
             }
-            comparators.Add((op.Length == 0 ? "=" : op, version));
+            comparators.Add((op.Length == 0 ? "=" : op, version, parts));
         }
         range = new VersionRange(trimmed, comparators);
         return true;
@@ -113,13 +119,19 @@ public sealed class VersionRange
 
     public bool Contains(SemanticVersion version) => _comparators.All(comparator =>
     {
-        int order = version.CompareTo(comparator.Version);
+        SemanticVersion bound = comparator.Version;
+        int order = version.CompareTo(bound);
+        bool sameRelease = version.Major == bound.Major && version.Minor == bound.Minor && version.Patch == bound.Patch;
         return comparator.Operator switch
         {
             ">=" => order >= 0,
             ">" => order > 0,
             "<=" => order <= 0,
-            "<" => order < 0,
+            // A prerelease of the release bound sorts below it but is that release, which the range excludes.
+            "<" => order < 0 && !(sameRelease && bound.Prerelease.Length == 0 && version.Prerelease.Length > 0),
+            _ when comparator.Parts < 3 && bound.Prerelease.Length == 0 =>
+                version.Prerelease.Length == 0 && version.Major == bound.Major
+                && (comparator.Parts < 2 || version.Minor == bound.Minor),
             _ => order == 0,
         };
     });

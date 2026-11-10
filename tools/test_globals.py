@@ -670,6 +670,27 @@ def test_merge_precedence():
     check(auto_only is not None and merged[int(auto_only, 16)]["provenance"] == "auto",
           "auto-only address retained with provenance=auto")
 
+def test_check_reports_a_stale_reference():
+    import contextlib, io, json, tempfile
+    registry = ('[[global]]\naddress = "0x10"\nname = "flag"\ncategory = "story-flag"\n'
+                'source = "investigation"\nconfidence = "high"\n')
+    auto = {"globals": {"0x20": {"label": "array-1d", "kind": "array-1d", "type": "int[4]"}}}
+    with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
+        root = Path(directory)
+        toml, auto_map, doc = root / "globals.toml", root / "global-var-map.json", root / "global-reference.md"
+        toml.write_text(registry, encoding="utf-8")
+        missing_map = G.check(toml, auto_map, doc)
+        auto_map.write_text(json.dumps(auto), encoding="utf-8")
+        missing_doc = G.check(toml, auto_map, doc)
+        curated, _ = G.load_toml(toml)
+        doc.write_text(G.emit_reference_md(G.merge(curated, auto), []), encoding="utf-8")
+        current = G.check(toml, auto_map, doc)
+        toml.write_text(registry.replace('name = "flag"', 'name = "renamed_flag"'), encoding="utf-8")
+        stale = G.check(toml, auto_map, doc)
+    check(missing_map == 1, "--check refuses to compare without the auto map")
+    check(missing_doc == 1 and current == 0 and stale == 1,
+          "--check passes a current reference and fails a missing or stale one")
+
 def test_sys4load_labels_from_registry():
     import importlib, sys4load
     importlib.reload(sys4load)   # re-run _load_global_labels against current build/games/<profile>/globals.json
@@ -726,6 +747,7 @@ if __name__ == "__main__":
     test_unit_stat_growth_fractions_evidence()
     test_battle_experience_evidence()
     test_merge_precedence()
+    test_check_reports_a_stale_reference()
     test_sys4load_labels_from_registry()
     test_miner_finds_known_flags()
     test_bootstrap_is_additive_and_idempotent()

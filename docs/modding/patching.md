@@ -23,6 +23,8 @@ Your game guide has complete, working fragments ([games/README.md](games/README.
 - **Header:** the script's catalog file name and the SHA-256 of its bytes. Print it with
   `Ome.Cli oms-patch --fingerprint SCRIPT.BIN <game options>`. If the installed bytes differ, compilation and loading both fail and print the real fingerprint.
 - **Declarations:** `use`, `const`, `enum`, `global`, `local`, `table`, `inline`, and any `sub`s the operations call.
+  New subs are appended after the original's code, so the patched script must not be able to run off its end into
+  them: a `replace` of the script's last instruction has to end with `goto`, `return` or `exit` too.
 - **Operations:** one or more `before`, `after` or `replace` blocks. Code outside an operation is an error.
 
 ## Sites
@@ -54,7 +56,9 @@ Your code falls through to whatever follows the site. Inside a block:
 - labels and subs of the decompiled original work as `goto` and call targets;
 - the prelude's library subs are shared with the original if it already uses them, and added otherwise;
 - `local int x @ 0x3` names a slot the original uses. A local without `@`, and every temporary the compiler needs,
-  goes into a fresh slot above all of the original's, so your code cannot clobber the original's values.
+  goes into a fresh slot above all of the original's, so your code cannot clobber the original's values. Another
+  mod patching the same script gets the same fresh slots, so do not keep a value in such a local across code another
+  mod may insert (`../backlog.md` tracks this).
 
 ## Choosing a site
 

@@ -114,6 +114,17 @@ def live_root(context: paths.ToolContext = paths.CONTEXT) -> Path:
     return live_profile_root(parse_sys4ini.read_settings(context.sys4ini), local_app_data(), context.game_root)
 
 
+def check_restore_target(live: Path, game_root: Path) -> None:
+    """Refuse a live save root that is the install, lies inside it or contains it. With USEAPPDATAFOLDER=0 the root
+    resolves against the game directory (live_profile_root), and replacing it would delete or rewrite the pristine
+    install's own files."""
+    live, install = Path(live).resolve(), Path(game_root).resolve()
+    if live == install or live.is_relative_to(install) or install.is_relative_to(live):
+        relation = "is" if live == install else "lies inside" if live.is_relative_to(install) else "contains"
+        raise DriveError(f"the live save root {live} {relation} the game install {install} (USEAPPDATAFOLDER=0); "
+                         "it is the install's own folder, so it is not replaced")
+
+
 def native_profile_in_sandbox(sandbox: Path, live: Path, appdata: Path) -> Path:
     """Where native AGE's profile root lands inside a sandbox: the live root's path below LOCALAPPDATA, re-rooted at
     the sandbox's LocalAppData folder."""
@@ -834,9 +845,20 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
+def pid_created(pid: int) -> int | None:
+    """When the process was created (a Windows FILETIME), or None when that cannot be read (gone, not Windows). With
+    the pid it names one process: a later process that reuses the pid has a later creation time."""
+    if sys.platform != "win32":
+        return None
+    return windows().created(pid)
+
+
 def read_session(target: str, context: paths.ToolContext = paths.CONTEXT,
-                 alive: Callable[[int], bool] = pid_alive) -> dict[str, Any] | None:
-    """The target's session file, or None (a file whose server process has gone is removed)."""
+                 alive: Callable[[int], bool] = pid_alive,
+                 created: Callable[[int], int | None] = pid_created) -> dict[str, Any] | None:
+    """The target's session file, or None. A file whose server process has gone is removed, and so is one whose pid
+    now names another process: a server that records its creation time (``pid_created``) must still match it, since
+    a server that died hard leaves its file behind and Windows reuses pids."""
     path = session_file(target, context)
     if not path.is_file():
         return None
@@ -844,7 +866,8 @@ def read_session(target: str, context: paths.ToolContext = paths.CONTEXT,
         info = json.loads(path.read_text(encoding="utf-8"))
     except ValueError:
         return None
-    if not alive(int(info.get("pid", 0))):
+    pid, recorded = int(info.get("pid", 0)), info.get("pid_created")
+    if not alive(pid) or (recorded is not None and created(pid) != recorded):
         path.unlink(missing_ok=True)
         return None
     return info
@@ -1067,6 +1090,8 @@ class Windows:
         kernel32.WaitForSingleObject.restype = wintypes.DWORD
         kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
         kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+        kernel32.GetProcessTimes.restype = wintypes.BOOL
 
     # windows ---------------------------------------------------------------------------------------
     def _pid(self, hwnd: int) -> int:
@@ -1133,10 +1158,34 @@ class Windows:
     def alive(self, pid: int) -> bool:
         return pid > 0 and self.wait_exit(pid, 0) is None
 
-    def terminate(self, pid: int) -> None:
-        process = self.kernel32.OpenProcess(0x0001, False, pid)
-        if process:
-            self.kernel32.TerminateProcess(process, 1)
+    def _created(self, process: int) -> int | None:
+        times = [self.wintypes.FILETIME() for _ in range(4)]   # creation, exit, kernel, user
+        if not self.kernel32.GetProcessTimes(process, *(self.ctypes.byref(time) for time in times)):
+            return None
+        return times[0].dwHighDateTime << 32 | times[0].dwLowDateTime
+
+    def created(self, pid: int) -> int | None:
+        """The process's creation time (FILETIME, 100 ns units), or None when it cannot be opened."""
+        process = self.kernel32.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+        if not process:
+            return None
+        try:
+            return self._created(process)
+        finally:
+            self.kernel32.CloseHandle(process)
+
+    def terminate(self, pid: int, created: int | None = None) -> bool:
+        """Terminate pid. Given `created`, only the process created then: the time is checked on the handle that
+        terminates, so a process that reused the pid is left alone. Returns whether it was terminated."""
+        access = 0x0001 if created is None else 0x1001             # PROCESS_TERMINATE (| QUERY_LIMITED_INFORMATION)
+        process = self.kernel32.OpenProcess(access, False, pid)
+        if not process:
+            return False
+        try:
+            if created is not None and self._created(process) != created:
+                return False
+            return bool(self.kernel32.TerminateProcess(process, 1))
+        finally:
             self.kernel32.CloseHandle(process)
 
 

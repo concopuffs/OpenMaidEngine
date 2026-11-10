@@ -62,11 +62,7 @@ public static class OmsPatchApplier
 
     /// <summary>Whether control can continue to the next instruction: not a terminator, and not a conditional jump
     /// with both targets given.</summary>
-    public static bool CanFallThrough(IrInstruction instruction)
-        => !OmsCompiler.IsTerminator(instruction.Opcode)
-           && !(instruction.Opcode == OmsCompiler.Jcc && instruction.Operands.Count == 3
-                && instruction.Operands[1].Kind == IrOperandKind.CodeLabel
-                && instruction.Operands[2].Kind == IrOperandKind.CodeLabel);
+    public static bool CanFallThrough(IrInstruction instruction) => OmsCompiler.CanFallThrough(instruction);
 
     public static OmsPatchResult Apply(IrScript baseScript, string fingerprint, IReadOnlyList<OmsPatchPlan> plans,
                                        OpcodeTable? table = null, IReadOnlyList<string>? planNames = null)
@@ -279,9 +275,6 @@ public static class OmsPatchApplier
                         : $"conflict: {Plan(plan)}: {what} names {Where(index)}, inside the region {Plan(owner)} replaces "
                           + $"at {Where(s)}");
         }
-        bool appends = plans.Any(plan => plan.Append is int a && a >= 0 && a < plan.Blocks.Count && plan.Blocks[a].Count > 0);
-        if (appends && n > 0 && (CanFallThrough(code[n - 1]) || incoming.Any(pair => pair.To == n)))
-            errors.Add($"{baseScript.Name} can reach the end of its code, where appended code would run");
         if (errors.Count > 0) throw new OmsPatchException(string.Join(Environment.NewLine, errors.Distinct()));
 
         foreach (var (kind, inserts) in new[] { ("before", before), ("after", after) })
@@ -362,6 +355,30 @@ public static class OmsPatchApplier
                     instructions[i].Operands.Select(operand => Resolve(operand, plan)).ToArray());
         }
         List<IrInstruction> patched = output.Select(instruction => instruction!).ToList();
+
+        // Appended code starts where the patched code ends, so nothing before it may fall or jump into it (a call to an
+        // appended sub is how it is meant to be reached). This is checked on the patched code: a block inserted after
+        // the base's last instruction, or one replacing it, decides whether the end is reachable, not the base alone.
+        int appendStart = position[n];
+        if (appendStart < patched.Count)
+        {
+            string Describe(int index) => provenance[index] switch
+            {
+                { Origin: OmsPatchOrigin.Base } p => $"base instruction {Where(p.BaseIndex)}",
+                var p => $"{Plan(p.Plan)}'s {p.Origin.ToString().ToLowerInvariant()} block at {Where(p.BaseIndex)}",
+            };
+            var reach = new List<string>();
+            if (appendStart > 0 && CanFallThrough(patched[appendStart - 1]))
+                reach.Add($"{Describe(appendStart - 1)} falls through");
+            for (int k = 0; k < appendStart; k++)
+                if (patched[k].Opcode is OmsCompiler.Jmp or OmsCompiler.Jcc)
+                    foreach (IrOperand operand in patched[k].Operands)
+                        if (operand.Kind == IrOperandKind.CodeLabel && operand.Value == appendStart)
+                            reach.Add($"{Describe(k)} jumps there");
+            if (reach.Count > 0)
+                throw new OmsPatchException($"{baseScript.Name} can reach the end of its code, where appended code would run: "
+                                            + string.Join("; ", reach.Distinct()));
+        }
         var data = new List<IrDataItem>(baseScript.Data);
         foreach (OmsPatchPlan plan in plans) data.AddRange(plan.Data.Select(item => item.ToIr()));
         // A base item whose every reference a patch removed is dropped: readers that find the end of the code at the

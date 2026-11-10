@@ -82,6 +82,8 @@ public sealed partial class GodotAdvHost
             ["caption"] = message.Caption,
             ["text"] = message.Text,
         });
+        // A root reload's WakeAllWaits may have left the event set with no dialog waiting: drop it before showing.
+        _diagnosticMessageCompleted.Reset();
         _main.CallDeferred("ShowAgeDiagnostic", message.Text, message.Caption);
         while (!_stopping && !_diagnosticMessageCompleted.WaitOne(50)) { }
     }
@@ -98,6 +100,7 @@ public sealed partial class GodotAdvHost
             ["caption"] = message.Caption,
             ["text"] = message.Text,
         });
+        _scriptErrorCompleted.Reset();
         _main.CallDeferred("ShowAgeScriptError", message.Text, message.Caption);
         while (!_stopping && !_scriptErrorCompleted.WaitOne(50)) { }
         if (_stopRequested) return ScriptErrorChoice.Abort;
@@ -121,6 +124,7 @@ public sealed partial class GodotAdvHost
             ["current"] = request.CurrentText,
             ["initial"] = request.InitialText,
         });
+        _fullwidthTextEditCompleted.Reset();
         _main.CallDeferred("ShowAgeFullwidthTextEditor", request.InitialText);
         while (!_stopping && !_fullwidthTextEditCompleted.WaitOne(50)) { }
         lock (_fullwidthTextEditLock) return _fullwidthTextEditResult;
@@ -891,6 +895,15 @@ public sealed partial class GodotAdvHost
         _timeline?.State("running", new() { ["screen_transition_complete"] = true });
     }
 
+    /// <summary>Whether a screen transition is pending, without consuming a forced one (the path that draws it
+    /// takes it through <see cref="TrySnapshotScreenTransition"/>).</summary>
+    public bool HasScreenTransition
+    {
+        get { lock (_screenTransitionLock) return _screenTransition != null; }
+    }
+
+    /// <summary>The pending screen transition. A forced (completed) one is handed out once: its terminal frame is
+    /// drawn by this caller, so only the path that draws calls this.</summary>
     public bool TrySnapshotScreenTransition(out LegacyScreenTransitionSnapshot snapshot)
     {
         lock (_screenTransitionLock)
@@ -1010,6 +1023,10 @@ public sealed partial class GodotAdvHost
         }
         while (_gate.Wait(0)) { }
         _inputCallbackSignal.WaitOne(0);
+        // WakeAllWaits set these for a dialog that may not have been open; a stale signal would answer the next one.
+        _diagnosticMessageCompleted.Reset();
+        _scriptErrorCompleted.Reset();
+        _fullwidthTextEditCompleted.Reset();
         lock (_messageSkipLock)
         {
             _scriptMessageSkipActive = false;

@@ -139,6 +139,53 @@ public class NativeNumberedSaveCodecTests
         Assert.Equal(AdvTextHistoryRecordFlags.LineBreak, restored.Records[1].Flags);
     }
 
+    /// <summary>A history tail stored verbatim (stored length = logical length) holding <paramref name="logical"/>.</summary>
+    private static byte[] VerbatimHistoryTail(params int[] logical)
+    {
+        byte[] tail = new byte[12 + logical.Length * 4];
+        BinaryPrimitives.WriteInt32LittleEndian(tail, logical.Length * 4);
+        BinaryPrimitives.WriteInt32LittleEndian(tail.AsSpan(4), logical.Length * 4);
+        BinaryPrimitives.WriteInt32LittleEndian(tail.AsSpan(8), logical.Length * 4);
+        for (int i = 0; i < logical.Length; i++) BinaryPrimitives.WriteInt32LittleEndian(tail.AsSpan(12 + i * 4), logical[i]);
+        return tail;
+    }
+
+    // The tail is outside the container checksum, so its counts are untrusted: each must fit in the bytes after it
+    // (entries 8 bytes, records 44, string dwords 4) before anything is allocated from it.
+    [Theory]
+    [InlineData("entry", new[] { 1 })]                              // one entry needs 8 bytes; none follow
+    [InlineData("entry", new[] { int.MaxValue, 0, 0 })]
+    [InlineData("record", new[] { 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 })]   // 40 bytes follow, a record is 44
+    [InlineData("record", new[] { 0, 0x10000000, 0 })]
+    [InlineData("string blob dword", new[] { 0, 0, 2, 0 })]         // two blob dwords, one present
+    public void HistoryTailCountsLargerThanTheDataLeftAreInvalid(string name, int[] logical)
+    {
+        var error = Assert.Throws<InvalidDataException>(() => NativeTextHistoryCodec.Decode(VerbatimHistoryTail(logical)));
+        Assert.Contains($"{name} count", error.Message);
+        Assert.Contains("exceeds the data", error.Message);
+
+        // DecodeInto rejects it before changing the history it was given.
+        var live = new AdvTextHistory();
+        live.DefineLayout(1, 400, 120, 75, 340);
+        live.AppendText(1, 0x40, "live", AdvTextStyle.Default);
+        Assert.Throws<InvalidDataException>(() => NativeTextHistoryCodec.DecodeInto(VerbatimHistoryTail(logical), live));
+        Assert.Equal("live", Assert.Single(live.Records).Text);
+    }
+
+    [Fact]
+    public void HistoryTailCountsThatExactlyFillTheDataDecode()
+    {
+        // One entry, one text record and a one-dword string blob holding "" (a NUL, inverted as stored).
+        NativeTextHistoryCodec.Decoded decoded = NativeTextHistoryCodec.Decode(VerbatimHistoryTail(
+            1, 1, 0,                                // entry count, then layout slot 1 from record 0
+            1, 1, 1, 2, 3, 4, 0, 0, 0, 0, 24, 0,    // record count, then slot, rect, colors, +0x554, mode, size, flags
+            1, ~0));                                // string blob dwords, then "" (one NUL dword, inverted)
+        Assert.Equal(new AdvTextHistoryEntry(1, 0), Assert.Single(decoded.Entries));
+        AdvTextHistoryRecord record = Assert.Single(decoded.Records);
+        Assert.Equal("", record.Text);
+        Assert.Equal(new AdvTextHistoryRect(1, 2, 3, 4), record.Rect);
+    }
+
     [Fact]
     public void HistoryTailRestorePreservesInitializedLiveLayoutBindings()
     {

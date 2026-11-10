@@ -7,14 +7,19 @@ using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 
+const string CommandList = "save-diff, omp, oms-compile, oms-append, oms-patch, oms-rebuild, oms-temps, oms-roundtrip, "
+                          + "oms-decompile, oms-residue, catalog-scan, run, audio, gfx, init-image, play, sweep, trace";
 if (args.Length == 0)
 {
-    Console.WriteLine("usage: run <file> | trace <out.json> | catalog-scan [--profile ID] [--game-root PATH] [--overlay-root PATH] [--allow-bmp-as-agf] [--output report.json] | save-diff A.DAT B.DAT [--profile ID] [--section NAME] [--limit N]");
-    return 1;
+    Console.Error.WriteLine("usage: Ome.Cli COMMAND [options] (docs/tools-reference.md); commands: " + CommandList);
+    return 2;
 }
 
+// The command is the first argument; an option value that happens to equal a command name never selects it.
+string command = args[0];
+
 // save-diff reads only the two save files, so it runs before the game catalog loads.
-if (args[0] == "save-diff") return SaveDiffCommand.Run(args);
+if (command == "save-diff") return SaveDiffCommand.Run(args);
 
 string? OptionValue(string name)
 {
@@ -48,7 +53,7 @@ Script ScriptByName(string name) => provider.RequireByName(name);
 // --trace-ops <csv> (only these mnemonics/hex, tagged with their script), --trace-histogram (op +
 // call-site execution counts, dumped after the run), --trace-file <path> (write to a file, else console).
 
-if (args.Contains("oms-residue"))
+if (command == "oms-residue")
 {
     OmsInspect.LiteralResidue(
         catalog.EnumerateScripts().Select(packed => (
@@ -74,7 +79,7 @@ List<Ome.Script.Modules.GameModule> OmsModules()
     return omsModules;
 }
 
-if (args.Length > 0 && args[0] == "omp")
+if (command == "omp")
 {
     // Mod loader spec §10: omp build DIR [--output FILE.omp] [--mod DEP …] | omp check [--data-root DIR] [--mod PATH …]
     // [--skip-failed-mods] | omp explain NAME [--data-root DIR] [--mod PATH …]. --data-root is a port profile root
@@ -108,20 +113,30 @@ if (args.Length > 0 && args[0] == "omp")
     }
 }
 
-if (args.Contains("oms-compile"))
+if (command == "oms-compile")
 {
     // Compile one OMS source file to a SYS4 script. A sidecar next to the source (<file>.omslayout.json) is applied
     // unless --no-layout asks for the canonical layout; warnings go to stderr.
     string sourcePath = OptionValue("--source") ?? throw new ArgumentException("--source FILE.oms is required");
     string layoutPath = OptionValue("--layout") ?? Path.ChangeExtension(sourcePath, ".omslayout.json");
     string binaryPath = OptionValue("--output") ?? Path.ChangeExtension(sourcePath, ".BIN");
-    Ome.Script.Layout.OmsLayout? sidecar = !args.Contains("--no-layout") && File.Exists(layoutPath)
-        ? Ome.Script.Layout.OmsLayout.FromJson(File.ReadAllText(layoutPath)) : null;
     var compileModules = OmsModules();
     var warnings = new List<Ome.Script.Compile.OmsWarning>();
     try
     {
-        var unit = Ome.Script.Syntax.Parser.ParseScript(File.ReadAllText(sourcePath), sourcePath);
+        string sourceText = File.ReadAllText(sourcePath);
+        Ome.Script.Layout.OmsLayout? sidecar = !args.Contains("--no-layout") && File.Exists(layoutPath)
+            ? Ome.Script.Layout.OmsLayout.FromJson(File.ReadAllText(layoutPath)) : null;
+        // A sidecar records the layout of the text it was decompiled with; applied to an edited source it would put
+        // the old data back (an edited line that shared a slot keeps the old text), so it is set aside.
+        if (sidecar?.SourceFingerprint is { } fingerprint
+            && fingerprint != Ome.Script.Layout.OmsLayout.SourceFingerprintOf(sourceText))
+        {
+            Console.Error.WriteLine($"warning: {sourcePath} changed since {layoutPath} was written; compiling the "
+                                    + "canonical layout without it (the original byte layout is not kept)");
+            sidecar = null;
+        }
+        var unit = Ome.Script.Syntax.Parser.ParseScript(sourceText, sourcePath);
         var compiled = Ome.Script.Compile.OmsCompiler.Compile(unit, table.AbiId, table, sidecar,
             new Ome.Script.Abi.IntrinsicCatalog(table, Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson)),
             name => compileModules.FirstOrDefault(module => module.Name == name), warnings);
@@ -133,7 +148,7 @@ if (args.Contains("oms-compile"))
         return 0;
     }
     catch (Exception error) when (error is Ome.Script.Syntax.OmsSyntaxException or Ome.Script.Compile.OmsCompileException
-                                      or InvalidDataException)
+                                      or InvalidDataException or System.Text.Json.JsonException)
     {
         foreach (var warning in warnings) Console.Error.WriteLine(warning);
         Console.Error.WriteLine($"error: {error.Message}");
@@ -141,7 +156,7 @@ if (args.Contains("oms-compile"))
     }
 }
 
-if (args.Contains("oms-append"))
+if (command == "oms-append")
 {
     // Spec §9.3: compile OMS scripts into a new S4AC append catalog for the selected profile. Each --script is one
     // record, in order; record 0 is the script native op 0x143 runs at INIT2. A script's name is its `script "..."`
@@ -194,7 +209,7 @@ if (args.Contains("oms-append"))
     return 0;
 }
 
-if (args.Contains("oms-patch"))
+if (command == "oms-patch")
 {
     // Spec §10: compile fragments (patch units) into transform plans against the mounted catalog's scripts, and apply
     // plans, in the order given, to produce patched scripts as loose overrides.
@@ -293,7 +308,7 @@ if (args.Contains("oms-patch"))
     }
 }
 
-if (args.Contains("oms-rebuild"))
+if (command == "oms-rebuild")
 {
     // Open Maid Script gate 3: canonical rebuild (no sidecar) must be VM-trace-equivalent on the scenes.
     // Scenes default to every SC/SP scene, walked page by page (--halt-at-wait stops at the first prompt);
@@ -325,7 +340,7 @@ if (args.Contains("oms-rebuild"))
         dumpDirectory: OptionValue("--dump"));
 }
 
-if (args.Contains("oms-temps"))
+if (command == "oms-temps")
 {
     OmsInspect.TemporaryResidue(
         catalog.EnumerateScripts().Select(packed => (
@@ -336,7 +351,7 @@ if (args.Contains("oms-temps"))
     return 0;
 }
 
-if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
+if (command == "oms-roundtrip" && OptionValue("--level") is { } sourceLevel)
 {
     // Open Maid Script gate 2 at the raw level: bytes -> OMS source + sidecar -> bytes.
     Ome.Script.OmsSourceRoundTripReport source = Ome.Script.OmsSourceRoundTrip.Run(
@@ -390,7 +405,7 @@ if (args.Contains("oms-roundtrip") && OptionValue("--level") is { } sourceLevel)
     return source.Passed ? 0 : 1;
 }
 
-if (args.Contains("oms-decompile"))
+if (command == "oms-decompile")
 {
     // Print one catalog script as OMS source (and its sidecar when non-empty), or write every script to a directory.
     var omsContracts = Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
@@ -419,7 +434,10 @@ if (args.Contains("oms-decompile"))
     {
         File.WriteAllText(path, decompiled.Source);
         if (!decompiled.Layout.IsEmpty)
+        {
+            decompiled.Layout.SourceFingerprint = Ome.Script.Layout.OmsLayout.SourceFingerprintOf(decompiled.Source);
             File.WriteAllText(Path.ChangeExtension(path, ".omslayout.json"), decompiled.Layout.ToJson());
+        }
     }
     if (OptionValue("--output-dir") is { } decompileDirectory)
     {
@@ -449,7 +467,7 @@ if (args.Contains("oms-decompile"))
     return 0;
 }
 
-if (args.Contains("oms-roundtrip"))
+if (command == "oms-roundtrip")
 {
     // Open Maid Script gate 1: every catalog script -> intermediate form -> bytes, compared byte for byte.
     var contracts = Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
@@ -496,7 +514,7 @@ if (args.Contains("oms-roundtrip"))
     return roundTrip.Passed ? 0 : 1;
 }
 
-if (args.Contains("catalog-scan"))
+if (command == "catalog-scan")
 {
     Sys4CorpusScanResult scan = Sys4CorpusScanner.Scan(catalog, provider);
     int[] unsupportedOpcodes = scan.OpcodeOccurrences
@@ -613,7 +631,7 @@ if (args.Contains("catalog-scan"))
     return scan.Failures.Count == 0 ? 0 : 1;
 }
 
-if (args[0] == "run")
+if (command == "run")
 {
     var script = Sys4Loader.Load(args[1], table);
     var runHost = new CaptureHost();
@@ -631,7 +649,7 @@ if (args[0] == "run")
     return 0;
 }
 
-if (args[0] == "audio")
+if (command == "audio")
 {
     // audio <SCENE.BIN> — run the scene and dump executed play-bgm/play-voice ops in order,
     // each resolved via ResourceMap (same rule as the Godot host). Diagnostic only.
@@ -656,7 +674,7 @@ if (args[0] == "audio")
     return 0;
 }
 
-if (args[0] == "gfx")
+if (command == "gfx")
 {
     // gfx [--boot] <SCENE.BIN> [0xADDR=VAL ...] — run the scene and dump executed texture ops with resolved
     // file + computed geometry. --boot first runs SYSTEM4's state-setup prefix (INITCONFIG/INIT2/INIT,
@@ -706,7 +724,7 @@ if (args[0] == "gfx")
     return 0;
 }
 
-if (args[0] == "init-image")
+if (command == "init-image")
 {
     // init-image <out.json> <SCRIPT.BIN...> — run data-table scripts in order through one session and
     // record each script's global-bank delta (new or changed cells). Names match catalog records
@@ -759,7 +777,7 @@ if (args[0] == "init-image")
     return 0;
 }
 
-if (args[0] == "play")
+if (command == "play")
 {
     // play [--boot] [--show N] <SCENE.BIN...> [0xADDR=VAL ...] — run a sequence of scenes carrying persistent global
     // state across them (optional up-front seeds). --boot first runs the data-table *INIT scripts so scenes
@@ -808,7 +826,7 @@ if (args[0] == "play")
     return 0;
 }
 
-if (args[0] == "sweep")
+if (command == "sweep")
 {
     // sweep [--boot] — run every SC/SP scene through GameSession (each from a fresh or booted-from-snapshot
     // baseline) and report halt distribution + line counts. Validates the VM + state substrate at scale and
@@ -885,7 +903,7 @@ if (args[0] == "sweep")
     return 0;
 }
 
-if (args[0] == "trace")
+if (command == "trace")
 {
     // --trace-json <path>: single-scene per-op offset trace for the differential oracle (docs/engine-re.md).
     // Emits EVERY instruction offset the scene executes, in order (not just show-text lines), filtered to the
@@ -952,7 +970,7 @@ if (args[0] == "trace")
     Console.WriteLine($"trace: {trace.Count} scenes -> {args[1]}");
     return 0;
 }
-Console.WriteLine("unknown command"); return 1;
+Console.Error.WriteLine($"unknown command '{command}'; commands: {CommandList}"); return 2;
 
 // Assembles the diagnostic sink from CLI flags and owns the file writer + the post-run histogram dump.
 // Inert (NullTraceSink) unless a --trace* flag is present, so normal runs are untouched (parity).

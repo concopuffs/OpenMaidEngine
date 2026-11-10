@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -15,6 +16,13 @@ namespace Ome.Engine.Frontend.Control;
 public sealed class DriveServer : IDisposable
 {
     private sealed record Call(DriveRequest Request, TaskCompletionSource<string> Reply);
+
+    /// <summary>How long a new connection has to send its hello.</summary>
+    public const int HelloTimeoutMs = 10_000;
+    /// <summary>The longest hello line read; a token request is far shorter.</summary>
+    public const int HelloMaxChars = 4096;
+    /// <summary>The longest request line read after the hello.</summary>
+    public const int RequestMaxChars = 1 << 20;
 
     private readonly IDriveBackend _backend;
     private readonly DriveDispatcher _dispatcher;
@@ -113,6 +121,31 @@ public sealed class DriveServer : IDisposable
         }
     }
 
+    /// <summary>One line without its terminator (LF or CRLF), or null at end of stream; an overlong line ends the
+    /// connection (<see cref="IOException"/>) rather than growing without bound.</summary>
+    internal static string? ReadLineBounded(TextReader reader, int maxChars)
+    {
+        // The limit is on the line without its ending, so a CR is held back until the next character shows whether it
+        // ends the line (CRLF) or is text.
+        var text = new StringBuilder();
+        bool heldCarriageReturn = false;
+        while (true)
+        {
+            int next = reader.Read();
+            if (next == '\n') return text.ToString();
+            if (heldCarriageReturn) AppendBounded(text, '\r', maxChars);
+            heldCarriageReturn = next == '\r';
+            if (next < 0) return text.Length == 0 ? null : text.ToString();
+            if (!heldCarriageReturn) AppendBounded(text, (char)next, maxChars);
+        }
+    }
+
+    private static void AppendBounded(StringBuilder text, char next, int maxChars)
+    {
+        if (text.Length >= maxChars) throw new IOException($"a request line is longer than {maxChars} characters");
+        text.Append(next);
+    }
+
     private void Converse(TcpClient client)
     {
         client.NoDelay = true;
@@ -120,7 +153,10 @@ public sealed class DriveServer : IDisposable
         using var reader = new StreamReader(stream, new UTF8Encoding(false));
         using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
 
-        string? first = reader.ReadLine();
+        // The server takes one client at a time, so a connection that never authenticates must not hold it: the hello
+        // has a deadline and a size limit, and only an authenticated client may idle.
+        stream.ReadTimeout = HelloTimeoutMs;
+        string? first = ReadLineBounded(reader, HelloMaxChars);
         if (first == null) return;
         DriveRequest hello;
         try
@@ -138,11 +174,12 @@ public sealed class DriveServer : IDisposable
             return;
         }
         _connected = true;
+        stream.ReadTimeout = Timeout.Infinite;
         writer.WriteLine(DriveReply.Ok(hello.Id, Hello()));
 
         while (!_stopping.IsCancellationRequested)
         {
-            string? line = reader.ReadLine();
+            string? line = ReadLineBounded(reader, RequestMaxChars);
             if (line == null) return;
             if (line.Trim().Length == 0) continue;
             DriveRequest request;
@@ -199,12 +236,47 @@ public sealed class DriveServer : IDisposable
         _thread?.Join(TimeSpan.FromSeconds(2));
     }
 
+    /// <summary>A process's creation time as a Windows FILETIME (100 ns units since 1601, UTC), or null off Windows or
+    /// when it cannot be read. With the pid it names one process: the driver drops a session whose pid now belongs to
+    /// a process created at another time and terminates only a process whose time still matches, since Windows
+    /// reuses the pid of a server that died hard.</summary>
+    internal static long? ProcessCreationTime(int pid)
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        IntPtr process = OpenProcess(ProcessQueryLimitedInformation, false, pid);
+        if (process == IntPtr.Zero) return null;
+        try
+        {
+            return GetProcessTimes(process, out long created, out _, out _, out _) ? created : null;
+        }
+        finally
+        {
+            CloseHandle(process);
+        }
+    }
+
+    private const uint ProcessQueryLimitedInformation = 0x1000;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, int pid);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetProcessTimes(IntPtr process, out long creation, out long exit, out long kernel,
+                                               out long user);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr handle);
+
     /// <summary>Write the session file a launcher waits for (§4 "Session file"): written whole, then renamed into
-    /// place, so a reader never sees half a file.</summary>
+    /// place, so a reader never sees half a file. On Windows it records the server's creation time
+    /// (<c>pid_created</c>).</summary>
     public void WriteSessionFile(string path, int pid, string token, string? log = null)
     {
         JsonObject session = Hello();
         session["pid"] = pid;
+        if (ProcessCreationTime(pid) is long created) session["pid_created"] = created;
         session["port"] = Port;
         session["token"] = token;
         session["started"] = DateTimeOffset.Now.ToString("O");

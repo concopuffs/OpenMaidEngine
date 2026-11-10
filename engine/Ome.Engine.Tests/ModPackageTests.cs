@@ -281,4 +281,45 @@ public sealed class ModPackageTests : IDisposable
         Assert.Equal(0, versions[7].CompareTo(new SemanticVersion(1, 0, 0, "", "build.5")));
         Assert.False(SemanticVersion.TryParse("01.0.0", out _));
     }
+
+    // docs/modding/packages.md, `version`: missing minor and patch numbers count as zero, except in a bare or `=`
+    // version, where `1.2` accepts every 1.2.x release and `1` every 1.x.y release, while `1.2.0` accepts only 1.2.0.
+    // `<2` rejects 2.0.0's prereleases as well as 2.0.0.
+    [Theory]
+    [InlineData("1.2", "1.2.0", true)]
+    [InlineData("1.2", "1.2.5", true)]
+    [InlineData("1.2", "1.3.0", false)]
+    [InlineData("1.2", "1.1.9", false)]
+    [InlineData("1.2", "2.2.0", false)]
+    [InlineData("=1.2", "1.2.5", true)]
+    [InlineData("= 1.2", "1.3.0", false)]
+    [InlineData("1", "1.0.0", true)]
+    [InlineData("1", "1.9.3", true)]
+    [InlineData("=1", "1.4.0", true)]
+    [InlineData("1", "2.0.0", false)]
+    [InlineData("1", "0.9.0", false)]
+    [InlineData("1.2.0", "1.2.0", true)]
+    [InlineData("1.2.0", "1.2.5", false)]
+    [InlineData("=1.2.0", "1.2.1", false)]
+    [InlineData("1.2.0", "1.2.0+build.7", true)]
+    [InlineData("<2", "1.9.9", true)]
+    [InlineData("<2", "1.9.9-rc.1", true)]
+    [InlineData("<2", "2.0.0", false)]
+    [InlineData("<2", "2.0.0-rc.1", false)]
+    [InlineData("<2", "2.0.0-rc1", false)]
+    [InlineData("<2.0.0", "2.0.0-alpha", false)]
+    [InlineData(">=1.0, <2", "1.4.2", true)]
+    [InlineData(">=1.0, <2", "2.0.0-rc.1", false)]
+    [InlineData(">=1.0", "1.0.0", true)]
+    [InlineData(">1", "1.0.1", true)]
+    [InlineData("<=1.2", "1.2.0", true)]
+    [InlineData("<=1.2", "1.2.1", false)]
+    [InlineData("*", "0.0.1-dev", true)]
+    [InlineData("", "9.9.9", true)]
+    public void VersionRangesFollowTheDocumentedRules(string range, string version, bool contained)
+    {
+        Assert.True(VersionRange.TryParse(range, out VersionRange parsed, out string? reason), reason);
+        Assert.True(SemanticVersion.TryParse(version, out SemanticVersion candidate), version);
+        Assert.Equal(contained, parsed.Contains(candidate));
+    }
 }

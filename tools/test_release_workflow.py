@@ -25,6 +25,27 @@ WINDOWS_FFMPEG_BOOTSTRAP_PS1 = REPO / "native/ome_movie_ffmpeg/bootstrap-win64.p
 FFMPEG_SOURCE_MANIFEST = REPO / "native/ome_movie_ffmpeg/ffmpeg-source.json"
 
 
+def run_scripts(text: str) -> list[str]:
+    """Every step's `run:` script: an inline value, or a block scalar's lines indented past the key."""
+    scripts = []
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        match = re.match(r"^(\s*)(?:- )?run:\s*(.*)$", line)
+        if not match:
+            continue
+        indent, value = len(match.group(1)), match.group(2)
+        if value not in ("|", ">", "|-", ">-"):
+            scripts.append(value)
+            continue
+        block = []
+        for following in lines[index + 1:]:
+            if following.strip() and len(following) - len(following.lstrip()) <= indent:
+                break
+            block.append(following)
+        scripts.append("\n".join(block))
+    return scripts
+
+
 def job(text: str, name: str, next_name: str | None) -> str:
     start = text.index(f"  {name}:\n")
     end = len(text) if next_name is None else text.index(f"  {next_name}:\n", start + 1)
@@ -179,8 +200,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertRegex(self.publish, r"(?m)^    permissions:\n(?:      #.*\n)*      contents: write$")
         self.assertIn("GITHUB_TOKEN: ${{ github.token }}", self.publish)
         self.assertIn("tools/publish_github_release.py", self.publish)
-        self.assertIn('--tag "${{ github.ref_name }}"', self.publish)
-        self.assertIn('--target "${{ github.sha }}"', self.publish)
+        self.assertIn("RELEASE_TAG: ${{ github.ref_name }}", self.publish)
+        self.assertIn("RELEASE_TARGET: ${{ github.sha }}", self.publish)
+        self.assertIn('--tag "$RELEASE_TAG"', self.publish)
+        self.assertIn('--target "$RELEASE_TARGET"', self.publish)
         self.assertNotIn("--server", self.publish)
         self.assertIn("OME-linux-x64-${{ github.sha }}", self.publish)
         self.assertIn("OME-windows-x64-${{ github.sha }}", self.publish)
@@ -190,6 +213,16 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("--windows-artifact-directory build/release-assets/windows", self.publish)
         self.assertIn("--output-directory build/release-assets/prepared", self.publish)
         self.assertNotIn("--asset", self.publish)
+
+    def test_no_run_script_interpolates_an_expression(self) -> None:
+        # An expression in run: is spliced into the shell text before it runs; values go through env: instead.
+        workflows = sorted(WORKFLOW_DIRECTORY.glob("*.yml"))
+        for workflow in workflows:
+            scripts = run_scripts(workflow.read_text(encoding="utf-8"))
+            self.assertTrue(scripts, workflow.name)
+            for script in scripts:
+                self.assertNotIn("${{", script, workflow.name)
+        self.assertTrue(any("$RELEASE_TAG" in script for script in run_scripts(self.text)))
 
     def test_all_workflows_pin_actions_and_runner_image(self) -> None:
         workflows = sorted(WORKFLOW_DIRECTORY.glob("*.yml"))

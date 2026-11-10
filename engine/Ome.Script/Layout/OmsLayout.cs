@@ -58,6 +58,15 @@ public sealed class OmsLayout
     /// <summary>Where linked library subroutines sit, by name and first instruction index, when they are not all at the
     /// end in canonical link order (spec §6.3).</summary>
     [JsonPropertyName("library")] public SortedDictionary<string, int>? Library { get; set; }
+    /// <summary>The fingerprint (<see cref="SourceFingerprintOf"/>) of the source text this sidecar was written
+    /// beside. A sidecar describes that text's layout only; <c>oms-compile</c> ignores it for an edited source.</summary>
+    [JsonPropertyName("source")] public string? SourceFingerprint { get; set; }
+
+    /// <summary><c>sha256:</c> and the hex digest of the source's UTF-8 text with CRLF read as LF, so an editor's
+    /// line-ending change is not an edit.</summary>
+    public static string SourceFingerprintOf(string source)
+        => "sha256:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(source.Replace("\r\n", "\n")))).ToLowerInvariant();
 
     [JsonIgnore]
     public bool IsEmpty => Magic == null && Field6 == null && LocalCounts == null && Data == null

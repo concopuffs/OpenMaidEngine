@@ -38,6 +38,16 @@ public sealed record ModLinkBase
     /// profile's opcode table, preludes and patch points.</summary>
     public string ToolchainStamp { get; init; } = "";
 
+    /// <summary>The opcode table's content (each opcode's label, operand count and semantic name), for the stamp.</summary>
+    private static string TableFingerprint(OpcodeTable table)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (OpcodeDefinition entry in table.Entries.OrderBy(entry => entry.Opcode))
+            text.Append(entry.Opcode).Append(':').Append(entry.Label).Append(':').Append(entry.Argc).Append(':')
+                .Append(entry.SemanticName).Append('\n');
+        return OmsPatchPlan.FingerprintOf(System.Text.Encoding.UTF8.GetBytes(text.ToString()));
+    }
+
     /// <summary>
     /// The base of an installed game: the mounted catalog and its asset store (overlay roots included), with the
     /// profile's generated globals, its OMS source modules (which also give the idioms that name base labels) and its
@@ -53,6 +63,10 @@ public sealed record ModLinkBase
             typeof(Ome.Script.Compile.OmsCompiler).Assembly.ManifestModule.ModuleVersionId.ToString(),
             typeof(ModLinkBase).Assembly.ManifestModule.ModuleVersionId.ToString(),
             table.AbiId,
+            // The table's content, not only its ABI id: opcodes_build.py can change framing or a contract under the
+            // same id, and a link compiled against the old registry must not be mounted.
+            TableFingerprint(table),
+            contracts.Fingerprint(),
         };
         foreach (string? file in new[] { globalsJson, patchPointsJson })
             if (file != null && File.Exists(file)) stamp.Add(OmsPatchPlan.FingerprintOf(File.ReadAllBytes(file)));

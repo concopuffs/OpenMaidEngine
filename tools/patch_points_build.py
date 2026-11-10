@@ -5,8 +5,10 @@ Source: vm-map/patch-points-<profile>.toml (hand-edited). Generates
   build/games/<profile>/patch-points.json      read by the OMS fragment compiler (`site a.b.c`)
   docs/patch-point-reference[-<profile>].md    the human reference (Himegari's has no suffix)
 
-  --build   validate, then write both outputs; exit nonzero on errors
-  --check   validate only
+  --build            validate, then write both outputs; exit nonzero on errors
+  --check            validate only
+  --check-reference  validate the registry without the install (names, fingerprints, sites), then exit nonzero if
+                     the reference doc differs from what --build would write (a content-free validation gate)
 
 Validation: names are dotted lowercase identifiers led by the profile id; the script is in the installed
 catalog; every [[point.at]] fingerprint is well formed and listed once; for the installed revision of the
@@ -63,11 +65,12 @@ def instruction_offsets(data: bytes, name: str) -> set[int]:
     return {ins.offset for ins in sys4load.load_bytes(data, name).instructions}
 
 
-def validate(points: list[dict], read_script: Callable[[str], bytes | None],
+def validate(points: list[dict], read_script: Callable[[str], bytes | None] | None,
              decode: Callable[[bytes, str], set[int]] = instruction_offsets,
              profile: str = PROFILE) -> tuple[list[dict], list[str], list[str]]:
     """Returns the normalized points, the errors and the warnings. `read_script` returns a script's bytes as the
-    catalog serves them, or None when the catalog has no such script; `decode` returns its instruction offsets."""
+    catalog serves them, or None when the catalog has no such script; `decode` returns its instruction offsets.
+    With no `read_script` the installed catalog is not consulted: only the registry's own form is checked."""
     errors: list[str] = []
     warnings: list[str] = []
     normalized: list[dict] = []
@@ -100,7 +103,7 @@ def validate(points: list[dict], read_script: Callable[[str], bytes | None],
             errors.append(f"{where}: description must be a string")
 
         installed = decoded.get(script)
-        if installed is None:
+        if installed is None and read_script is not None:
             data = read_script(script)
             if data is None:
                 errors.append(f"{where}: {script} is not in the installed catalog")
@@ -154,16 +157,43 @@ def render_reference(points: list[dict], source: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _shown(path: Path) -> str:
+    """A path as messages show it: repository-relative when it lies in the repository."""
+    return path.relative_to(paths.REPO).as_posix() if path.is_relative_to(paths.REPO) else str(path)
+
+
+def check_reference(registry: list[dict], source: str, reference_doc: Path = REFERENCE_DOC) -> int:
+    """The content-free half of --check plus the staleness of the tracked reference: the rendering needs only the
+    registry, so this runs without the install (core validation)."""
+    points, errors, _ = validate(registry, None)
+    for error in errors:
+        print(f"error: {error}")
+    if errors:
+        return 1
+    current = reference_doc.read_text(encoding="utf-8") if reference_doc.is_file() else None
+    if current != render_reference(points, source):
+        print(f"stale: {_shown(reference_doc)}; run patch_points_build.py "
+              f"--profile {PROFILE} --build")
+        return 1
+    print(f"check: {_shown(reference_doc)} is current ({len(points)} points)")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--build", action="store_true", help="validate and write the generated outputs")
     parser.add_argument("--check", action="store_true", help="validate only")
+    parser.add_argument("--check-reference", action="store_true",
+                        help="without the install: validate the registry's form and fail if the reference doc is stale")
     args = parser.parse_args(argv)
-    if not (args.build or args.check):
-        parser.error("choose --build or --check")
+    if sum((args.build, args.check, args.check_reference)) != 1:
+        parser.error("choose one of --build, --check or --check-reference")
     if not REGISTRY.exists():
         print(f"no registry at {REGISTRY}; nothing to do")
         return 0
+    source = f"vm-map/{REGISTRY.name}"
+    if args.check_reference:
+        return check_reference(load_registry(REGISTRY), source)
 
     scripts = installed_scripts()
     points, errors, warnings = validate(
@@ -176,7 +206,6 @@ def main(argv=None) -> int:
         return 1
     print(f"{REGISTRY.name}: {len(points)} points valid")
     if args.build:
-        source = f"vm-map/{REGISTRY.name}"
         OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
         document = {"generated_from": source, "note": "DO NOT EDIT -- generated by tools/patch_points_build.py --build",
                     "profile": PROFILE, "points": points}

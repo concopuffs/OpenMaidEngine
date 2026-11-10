@@ -1,5 +1,8 @@
 namespace Ome.Engine.Vm;
 
+/// <param name="EmitCap">Headless runaway-line guard: the VM halts (<c>LOOP:line@…</c>) when one frame shows the same
+/// authored inline string more than this many times. Native AGE has no such limit; the interactive session passes
+/// <see cref="int.MaxValue"/> (GodotVmOptions).</param>
 /// <param name="HaltAtWaitForInput">When true, the VM halts (reason "wait-for-input") at op 0x72, and at op 0xfa
 /// when it would wait, instead of calling the host and continuing. This is the FAITHFUL headless semantics: with no player to click,
 /// "the scene is waiting for input" means stop here — not pretend the click already happened and plow on

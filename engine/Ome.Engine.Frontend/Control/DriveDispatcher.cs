@@ -89,9 +89,9 @@ public sealed class DriveDispatcher
         {
             _active = Create(request, nowMs, reply);
         }
-        catch (DriveProtocolException error)
+        catch (Exception error)
         {
-            reply(DriveReply.Error(request.Id, error.Message));
+            reply(DriveReply.Error(request.Id, Describe(error)));
             return;
         }
         Poll(nowMs);
@@ -114,14 +114,19 @@ public sealed class DriveDispatcher
             if (!active.Done) return;
             line = DriveReply.Ok(active.Request.Id, result);
         }
-        catch (DriveProtocolException error)
+        catch (Exception error)
         {
-            line = DriveReply.Error(active.Request.Id, error.Message);
+            // Any failure ends the request with an error reply: an operation that threw is not retried each frame,
+            // and the client is not left waiting on a server that stays busy.
+            line = DriveReply.Error(active.Request.Id, Describe(error));
         }
         _active = null;
         if (active.Request.Op == "close") _closeAtMs = nowMs + CloseDelayMs;
         active.Reply(line);
     }
+
+    private static string Describe(Exception error)
+        => error is DriveProtocolException ? error.Message : $"{error.GetType().Name}: {error.Message}";
 
     private Operation Create(DriveRequest request, long nowMs, Action<string> reply)
     {

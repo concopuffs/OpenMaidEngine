@@ -113,7 +113,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       *INIT / ID-dispatched message parsers (Kamidori
     │   │                                       specializations: init_kamidori_<domain>.py),
     │   │                                       global-var map builder
-    │   ├── native_scratch.py                   gate-6 scratch install (hard-linked archives) + pristine check
+    │   ├── native_scratch.py (+ test_native_scratch.py)  gate-6 scratch install (hard-linked archives) + pristine check
     │   ├── revision_diff.py                    compare two engine builds' native code opcode by opcode (+ test_revision_diff.py)
     │   ├── drive.py, drive_core.py (+ test_drive_core.py)  game driver for native AGE and the port: one step
     │   │                                       language, input, screenshots, VM position, sandboxed saves

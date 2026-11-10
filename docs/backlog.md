@@ -115,6 +115,35 @@ it; git history keeps the record.
   holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
   (one differing opcode).
 
+## Robustness
+
+Gaps the 2026-11-10 codebase review found and the fixes that followed it left open. None affects retail scripts.
+
+- **Integer cells are not normalised to 32 bits when written.** Native cells are 32-bit. The port's are `long`:
+  immediates load zero-extended (`Sys4Loader`), C# writes and loaded saves sign-extended, and `Write` stores
+  whatever it is given (`VirtualMachine.cs`, `Read`/`Write`). Since 2026-11-10 arithmetic wraps and compares take
+  the signed low 32 bits (`VirtualMachine.Values.cs`, `I32`), so `bit-set g,31` then `lt g,0` gives native's 1.
+  Values that only move between cells (packed ids, colours) still keep whichever extension they arrived with, and
+  consumers that compare or index with the wide value could still differ. Neither disassembled corpus has a high-bit
+  immediate in an arithmetic or compare op, so this is latent for retail scripts and live for mod bytecode. Done
+  when every integer cell holds one canonical form (the review's `VmMemory` in Part 3 is the natural place) and a
+  test round-trips a high-bit value through an immediate, a write, a save and a load.
+- **The port's image and texture caches never evict.** `GodotAdvHost._images` (`godot/GodotAdvHost.Surfaces.cs`),
+  `Main._pixelCache` (`Main.Compositor.cs`) and `GpuRetainedRenderer`'s `_textures` and `_lerpMaterials` keep every
+  entry for the session: about 1.9 MB of RAM per 800×600 image, and again in VRAM. A long session grows without
+  bound. Done when each cache has a bound or a release point (a scene change, a released surface) and a long
+  driven session shows flat memory.
+- **Unknown launch flags are ignored.** Flags are parsed across `Main._Ready`, `AssetLaunchOptions`,
+  `GameProfileSelection`, `WindowLaunchOptions`, mod linking, screenshots and the port options, each by its own
+  lookup, so a misspelt flag is silently ignored. Since 2026-11-10 `--seed`, `--speed` and `--sleep-scale` reject a
+  bad value with a warning. Done when one table lists every flag with its arity, startup warns on any argument it does
+  not name, and `tools-reference.md` is generated from or checked against it.
+- **The movie shim configures audio resampling once.** `native/ome_movie_ffmpeg/ome_movie.c` sets up swr when the
+  movie opens, from the audio decoder's channel layout, sample format and rate, and a seek only re-initialises that
+  setup. A stream whose layout or format changes mid-stream would be converted with the old setup, which can read a
+  missing plane. This is inferred from FFmpeg's behaviour; no shipped movie is known to change layout. Done when the shim reconfigures swr when a frame's layout, rate or format differs from the
+  last, with a synthesized test stream that changes layout.
+
 ## Open Maid Script
 
 - **Record keys and field values by name.** Tables index by number (`unit[761]`). The design goal is
@@ -153,6 +182,13 @@ it; git history keeps the record.
   scenes' skeletons, plays and saves on native AGE.
 - **Kamidori named patch points.** `vm-map/patch-points-himegari.toml` has one point. Kamidori has no registry yet,
   so Kamidori fragments name sites by offset only.
+- **Two mods' unpinned fragment locals share slots.** A fragment's unpinned `local` takes the first slot above the
+  base's highest (`OmsCompiler` patch mode, `UsePatchBase`), and the applier keeps each plan's slots as compiled
+  (`OmsPatchApplier`), so two mods patching one script get the same slots. If one mod's code runs while the other's
+  local is live (an inserted block between the other's set and use, or a call into it), they overwrite each other,
+  and no conflict is reported. Spec §10.2 does not cover it. Done when the design picks a rule (the applier
+  relocates each plan's unpinned locals above the previous plan's, or the linker reports overlapping live ranges)
+  and a two-mod test shows it.
 - **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12):
   - a launcher;
   - runtime scripting (Lua);

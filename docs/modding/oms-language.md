@@ -71,6 +71,11 @@ local int exp @ 0x1                      // a name for an existing local slot (u
 enum mood { calm = 0, angry = 1 }        // named constants
 ```
 
+A declaration names its cell or value for the whole script, wherever you write it: a `local` declared inside an `if`
+or a loop is the same slot everywhere. A template body cannot hold a declaration, since a template may expand many
+times; declare the name at the top level. A label or sub cannot share its name with a registry global or with a name
+a used module declares.
+
 A `global` always needs its cell (`@ address`). The engine has no allocator for mod-owned globals yet, so you choose
 a cell no shipped script uses. Your game guide names the cells its examples use, and the range its saves keep.
 `../backlog.md` tracks finding free cells safely.
@@ -107,10 +112,14 @@ are numbers for now; naming them (`unit[<unit name>]`) is in `../backlog.md`.
 
 ## Expressions
 
-- Arithmetic and bitwise: `+ - * / % & | << >>`; comparisons: `== != < <= > >=`; logic: `! && ||`; unary `-`
-  and `~`.
+- Arithmetic and bitwise: `+ - * / % & | ^ << >>`; comparisons: `== != < <= > >=`; logic: `! && ||`; unary `-`
+  and `~`. Integer arithmetic wraps at 32 bits, and comparisons are signed, as in the engine.
+- `^` compiles to `(a | b) - (a & b)`, which computes both operands twice, so the code doubles with each nested
+  `^`. Nesting deeper than 8 is an error; assign part of the expression to a `local` first.
 - Integers in decimal, `0x` hex or `0b` binary; floats like `1.5`; strings in `"…"` with `\"`, `\\`, `\n`, `\t`,
-  `\uXXXX`.
+  `\uXXXX`. An integer must fit in 32 bits: up to `0xffffffff`, and down to `-2147483648`.
+- Blocks, parentheses, unary operators and the operators of one chain nest at most 200 deep. An `else if` chain does
+  not count.
 - **`&&` and `||` always evaluate both sides.** The VM has no short-circuit. To guard the second operand (against
   dividing by zero, for example), nest two `if`s.
 - Expressions have no side effects, because no call returns a value inside an expression.
@@ -145,7 +154,8 @@ A parameter binds to one cell: a raw cell (`L[…]`, `G[…]`) or the name of a 
 slot of the base script's frame, so choose one the base does not use.
 
 **Templates** are `inline name(params) { … }`. They expand in place wherever they are used. The dialogue line
-template below is one.
+template below is one. A `cell` parameter can be indexed: in `inline clear(a: cell) { a[i] = 0 }`, `clear(my_table)`
+writes `my_table[i]`, and `clear(G[0x2000])` writes `G[0x2000][i]`.
 
 ## Intrinsics
 

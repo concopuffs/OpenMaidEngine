@@ -170,4 +170,26 @@ public class TimedCallbackOpsTests
         Assert.Equal(2, vm.Globals[0x100]);
         Assert.Equal(0, vm.Globals.GetValueOrDefault(0x102));
     }
+
+    /// <summary>VirtualMachine.MaxScriptRunLength (internal to Ome.Engine): the most entries the schedule holds.</summary>
+    private const int MaxScriptRunLength = 1 << 20;
+
+    // The schedule holds at most the run limit: one append past it, or appends that together pass it, halt.
+    [Theory]
+    [InlineData(new[] { MaxScriptRunLength + 1 }, "timed-callback-count-too-large:1048577")]
+    [InlineData(new[] { MaxScriptRunLength / 2, MaxScriptRunLength / 2, 1 }, "timed-callback-count-too-large:1")]
+    public void AppendsPastTheRunLimitHalt(int[] counts, string reason)
+    {
+        var ops = new List<(int, Operand[])> { (0xd3, Array.Empty<Operand>()) };
+        foreach (int count in counts) ops.Add((0xd4, new[] { I(10), I(count), I(0), I(0) }));
+        ops.Add((0x55, new[] { G(0x103), I(1) }));
+        ops.Add((0x2, Array.Empty<Operand>()));
+        var vm = new VirtualMachine(ScriptAssembler.Assemble(Table, "TIMED_LIMIT", ops, Array.Empty<string>()), Table,
+                                    new ClockHost());
+
+        vm.Run();
+
+        Assert.Equal(reason, vm.HaltReason);
+        Assert.False(vm.Globals.ContainsKey(0x103));
+    }
 }

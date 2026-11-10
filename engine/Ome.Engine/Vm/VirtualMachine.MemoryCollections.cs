@@ -50,6 +50,11 @@ public sealed partial class VirtualMachine
                     HaltReason ??= $"copy-dwords-negative-count:{count}";
                     return HALT;
                 }
+                if (count > MaxScriptRunLength)
+                {
+                    HaltReason ??= $"copy-dwords-count-too-large:{count}";
+                    return HALT;
+                }
                 VmAddress source = BaseAddr(a[0]);
                 VmAddress destination = BaseAddr(a[1]);
                 var values = new long[count];
@@ -64,6 +69,11 @@ public sealed partial class VirtualMachine
                 VmAddress destination = BaseAddr(a[0]);
                 int value = unchecked((int)Read(a[1]));
                 int count = unchecked((int)Read(a[2]));
+                if (count > MaxScriptRunLength)
+                {
+                    HaltReason ??= $"fill-int-array-count-too-large:{count}";
+                    return HALT;
+                }
                 for (int i = 0; i < count; i++)
                     WriteIntCell(destination.Offset(i), value);
                 return pc + 1;
@@ -264,13 +274,13 @@ public sealed partial class VirtualMachine
             {
                 long bit = Read(a[1]);
                 if ((ulong)bit >= 32) { HaltReason ??= $"bit-index-out-of-range:{bit}"; return HALT; }
-                Write(a[0], Read(a[0]) | (1L << (int)bit)); return pc + 1;
+                Write(a[0], I32(Read(a[0]) | (1L << (int)bit))); return pc + 1;
             }
             case "bit-reset":
             {
                 long bit = Read(a[1]);
                 if ((ulong)bit >= 32) { HaltReason ??= $"bit-index-out-of-range:{bit}"; return HALT; }
-                Write(a[0], Read(a[0]) & ~(1L << (int)bit)); return pc + 1;
+                Write(a[0], I32(Read(a[0]) & ~(1L << (int)bit))); return pc + 1;
             }
             case "check-bit": Write(a[0], (Read(a[1]) >> (int)(Read(a[2]) & 31)) & 1); return pc + 1;
             case "zero-int-range":

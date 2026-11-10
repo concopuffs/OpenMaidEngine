@@ -115,7 +115,7 @@ def start(arguments: argparse.Namespace) -> int:
     process = subprocess.Popen(command, cwd=paths.REPO, stdout=log, stderr=subprocess.STDOUT,
                                stdin=subprocess.DEVNULL, env=environment, creationflags=flags)
     core.write_json_atomic(root / "launch.json", {
-        "launcher_pid": process.pid, "command": command, "sandbox": str(sandbox), "profile_root": str(profile_root),
+        "launcher_pid": process.pid, "launcher_created": core.pid_created(process.pid), "command": command, "sandbox": str(sandbox), "profile_root": str(profile_root),
         "log": str(log_path), "started": core.now_text(), "foreground": bool(arguments.foreground),
         "optimize": bool(arguments.optimize),
     })
@@ -160,16 +160,29 @@ def window_placement(info: dict | None) -> Callable[[dict], None] | None:
 
 
 def wait_exit(info: dict, timeout: float) -> int | None:
-    """Wait for the port's process (and the console launcher in front of it) to exit; terminate stragglers."""
-    code = core.windows().wait_exit(int(info["pid"]), timeout)
+    """Wait for the port's process (and the console launcher in front of it) to exit; terminate stragglers. A
+    straggler is terminated only when its recorded creation time still matches (`pid_created` in the session,
+    `launcher_created` in launch.json), so a process that reused the pid is left alone."""
+    pid = int(info["pid"])
+    code = core.windows().wait_exit(pid, timeout)
     if code is None:
-        core.windows().terminate(int(info["pid"]))
+        terminate_recorded(pid, info.get("pid_created"), "the port")
     launch = core.drive_root("port") / "launch.json"
     if launch.is_file():
-        launcher = int(json.loads(launch.read_text(encoding="utf-8")).get("launcher_pid", 0))
+        record = json.loads(launch.read_text(encoding="utf-8"))
+        launcher = int(record.get("launcher_pid", 0))
         if launcher and core.windows().wait_exit(launcher, 5) is None:
-            core.windows().terminate(launcher)
+            terminate_recorded(launcher, record.get("launcher_created"), "the port's launcher")
     return code
+
+
+def terminate_recorded(pid: int, created: int | None, what: str) -> None:
+    """Terminate pid only if it is still the process created at `created`; with no recorded time, leave it."""
+    if created is None:
+        print(f"drive port: {what} (pid {pid}) did not exit, and no creation time was recorded to confirm the pid "
+              "is still it; not terminating", file=sys.stderr)
+    elif not core.windows().terminate(pid, created=created):
+        print(f"drive port: pid {pid} is no longer {what}; left alone", file=sys.stderr)
 
 
 def stop(timeout: float) -> int:
@@ -183,5 +196,6 @@ def stop(timeout: float) -> int:
     except DriveError as error:
         print(f"drive port: {error}", file=sys.stderr)
     code = wait_exit(info, timeout)
-    print(f"drive port: the port exited ({code})" if code is not None else "drive port: terminated the port")
+    print(f"drive port: the port exited ({code})" if code is not None
+          else "drive port: the port did not exit in time; see above for whether it was terminated")
     return 0

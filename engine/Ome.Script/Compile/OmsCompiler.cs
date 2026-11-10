@@ -41,6 +41,14 @@ public static class OmsCompiler
 
     /// <summary>Instructions after which control cannot fall through.</summary>
     public static bool IsTerminator(int opcode) => opcode is Ret or Exit or Jmp or Resume or ThrowExit;
+
+    /// <summary>Whether control can reach the next instruction: not a terminator, and not a conditional jump with both
+    /// a then and an else target.</summary>
+    public static bool CanFallThrough(IrInstruction instruction)
+        => !IsTerminator(instruction.Opcode)
+           && !(instruction.Opcode == Jcc && instruction.Operands.Count == 3
+                && instruction.Operands[1].Kind == IrOperandKind.CodeLabel
+                && instruction.Operands[2].Kind == IrOperandKind.CodeLabel);
     private const uint NoTarget = 0xFFFFFFFF;
 
     /// <param name="modules">Resolves <c>use</c> module names, such as <c>himegari.globals</c>.</param>
@@ -54,7 +62,7 @@ public static class OmsCompiler
     {
         ArgumentNullException.ThrowIfNull(unit);
         var generator = new CodeGenerator(table, intrinsics, layout, modules, warnings, null, false, resources: resources);
-        generator.EmitAll(unit.Body);
+        generator.EmitAll(unit.Body, unit.Span);
         generator.ResolveLabels();
         return generator.Build(unit.Name, abiId);
     }
@@ -67,7 +75,7 @@ public static class OmsCompiler
     {
         ArgumentNullException.ThrowIfNull(unit);
         var generator = new CodeGenerator(table, intrinsics, layout, modules, null, null, linkAll);
-        generator.EmitAll(unit.Body);
+        generator.EmitAll(unit.Body, unit.Span);
         generator.ResolveLabels();
         IrScript script = generator.Build(unit.Name, abiId);
         return new OmsImage(script, generator.Labels, generator.Linked);
@@ -87,7 +95,7 @@ public static class OmsCompiler
         ArgumentNullException.ThrowIfNull(unit);
         ArgumentNullException.ThrowIfNull(reference);
         var generator = new CodeGenerator(table, intrinsics, layout, modules, null, reference, false);
-        generator.EmitAll(unit.Body);
+        generator.EmitAll(unit.Body, unit.Span);
         generator.ResolveLabels();
         temps = generator.Fitted;
         derivedTempBase = generator.DerivedTempBase;
@@ -107,7 +115,7 @@ public static class OmsCompiler
         ArgumentNullException.ThrowIfNull(patchBase);
         if (!unit.IsPatch) throw new OmsCompileException(unit.Span, "not a patch unit");
         var generator = new CodeGenerator(table, intrinsics, null, modules, warnings, null, false, patchBase, resources);
-        generator.EmitAll(unit.Body);
+        generator.EmitAll(unit.Body, unit.Span);
         generator.ResolveLabels();
         IrScript built = generator.Build(unit.Name, abiId);
         return generator.ToPlan(built, unit, abiId);
@@ -185,10 +193,16 @@ public static class OmsCompiler
         private readonly List<Occurrence> _occurrences = new();
         private readonly Dictionary<string, int> _labels = new(StringComparer.Ordinal);
         private readonly HashSet<string> _userLabels = new(StringComparer.Ordinal);
+        /// <summary>Where each of the script's own labels and subs is defined, for diagnostics.</summary>
+        private readonly Dictionary<string, SourceSpan> _userLabelSpans = new(StringComparer.Ordinal);
         private readonly List<(string Key, SourceSpan Span)> _pendingLabels = new();
         private const uint PendingTag = 0x80000000;
         private readonly Stack<(string Break, string Continue)> _loops = new();
         private int _internal;
+        /// <summary>How many <c>^</c> the expression being lowered sits inside (see <see cref="MaxXorNesting"/>).</summary>
+        private int _xorDepth;
+        /// <summary>The deepest <c>^</c> nesting lowered: 2^8 copies of the innermost operands.</summary>
+        private const int MaxXorNesting = 8;
         private uint _tempBase;
         private readonly Dictionary<string, SubStatement> _subs = new(StringComparer.Ordinal);
         private Dictionary<string, RawStorage>? _parameters;
@@ -234,8 +248,12 @@ public static class OmsCompiler
                 throw new OmsCompileException(span, $"label '{key}' is defined twice");
         }
 
-        public void EmitAll(IReadOnlyList<Statement> statements)
+        /// <summary>The unit's own span, for errors that belong to no statement (the sidecar, the patch base).</summary>
+        private SourceSpan _unitSpan;
+
+        public void EmitAll(IReadOnlyList<Statement> statements, SourceSpan unitSpan)
         {
+            _unitSpan = unitSpan;
             CollectUserLabels(statements);
             List<Statement> declarations = DeclarationsIn(statements);
             var visited = new HashSet<string>(StringComparer.Ordinal);
@@ -249,6 +267,12 @@ public static class OmsCompiler
                     highest[local.Bank] = Math.Max(highest.GetValueOrDefault(local.Bank, -1), local.Index);
             if (patchBase != null) UsePatchBase(highest);
             Declare(declarations, highest);
+            // An operand names a cell or a constant before a label, so an imported name (a registry global, a module's
+            // global or constant) that is also one of the script's labels or subs would compile to the cell.
+            foreach (var (label, span) in _userLabelSpans)
+                if (_names.ContainsKey(label) || _constants.ContainsKey(label))
+                    throw new OmsCompileException(span,
+                        $"'{label}' names both a label or sub of this script and an imported {(_names.ContainsKey(label) ? "cell" : "constant")}");
             foreach (var (bank, slot) in highest) _declaredLocals[StorageBanks.TypeByBank[bank]] = slot;
             DerivedTempBase = (uint)(highest.GetValueOrDefault("L", -1) + 1);
             _tempBase = layout?.TempBase ?? DerivedTempBase;
@@ -265,7 +289,7 @@ public static class OmsCompiler
             PlaceLibrary();
             LinkLibrary();
             if (layout?.Library?.Keys.FirstOrDefault(name => !_placed.Contains(name)) is { } unplaced)
-                throw new OmsCompileException(default, $"the sidecar places library sub '{unplaced}', which is not linked at that index");
+                throw new OmsCompileException(_unitSpan, $"the layout sidecar places library sub '{unplaced}', which is not linked at that index");
         }
 
         /// <summary>Declarations anywhere outside templates: <c>use</c>, <c>const</c>, <c>global</c>, <c>local</c> and
@@ -287,6 +311,14 @@ public static class OmsCompiler
                         case AtomicStatement atomic: pending.Push(atomic.Body); break;
                         case WithStatement with: pending.Push(with.Body); break;
                         case SiteStatement site: pending.Push(site.Body); break;
+                        case IfStatement branch:
+                            pending.Push(branch.Then);
+                            if (branch.Else != null) pending.Push(branch.Else);
+                            break;
+                        case LoopStatement loop: pending.Push(loop.Body); break;
+                        case WhileStatement loop: pending.Push(loop.Body); break;
+                        case DoWhileStatement loop: pending.Push(loop.Body); break;
+                        case ForStatement loop: pending.Push(loop.Body); break;
                     }
             return declarations;
         }
@@ -617,10 +649,14 @@ public static class OmsCompiler
             foreach (Statement statement in statements)
                 switch (statement)
                 {
-                    case LabelStatement label: _userLabels.Add(label.Name); break;
+                    case LabelStatement label:
+                        _userLabels.Add(label.Name);
+                        _userLabelSpans.TryAdd(label.Name, label.Span);
+                        break;
                     case SubStatement sub:
                         if (!_userLabels.Add(sub.Name) || !_subs.TryAdd(sub.Name, sub))
                             throw new OmsCompileException(sub.Span, $"'{sub.Name}' is defined twice");
+                        _userLabelSpans.TryAdd(sub.Name, sub.Span);
                         CollectUserLabels(sub.Body);
                         break;
                     case IfStatement s:
@@ -949,8 +985,22 @@ public static class OmsCompiler
                 case BinaryExpr { Op: "&&" or "||" } logical:
                     return new LBinary(logical.Op == "&&" ? 0x56 : 0x57, Boolean(logical.Left), Boolean(logical.Right));
                 case BinaryExpr { Op: "^" } xor:
-                    return new LBinary(0x51, new LBinary(0x57, ToL(xor.Left), ToL(xor.Right)),
-                        new LBinary(0x56, ToL(xor.Left), ToL(xor.Right)));
+                {
+                    // (a | b) - (a & b) evaluates each operand twice, so nesting doubles the code at every level.
+                    if (_xorDepth >= MaxXorNesting)
+                        throw new OmsCompileException(xor.Span,
+                            $"'^' nested more than {MaxXorNesting} deep: each '^' evaluates both operands twice; assign part of the expression to a local first");
+                    _xorDepth++;
+                    try
+                    {
+                        return new LBinary(0x51, new LBinary(0x57, ToL(xor.Left), ToL(xor.Right)),
+                            new LBinary(0x56, ToL(xor.Left), ToL(xor.Right)));
+                    }
+                    finally
+                    {
+                        _xorDepth--;
+                    }
+                }
                 case BinaryExpr binary when BinaryOpcodes.TryGetValue(binary.Op, out int opcode):
                     if (binary.Op is "/" or "%" && binary.Right is OperandExpr { Operand: RawInteger { Value: 0 } })
                         Warn(binary.Span, $"'{binary.Op}' by a constant zero (the VM does not guard it)");
@@ -1125,7 +1175,7 @@ public static class OmsCompiler
         {
             if (sub.Guarded)
                 Add(Exit, []);
-            else if (_code.Count > 0 && _code[^1].Opcode != BoundaryOpcode && (!IsTerminator(_code[^1].Opcode) || LabelAt(_code.Count)))
+            else if (_code.Count > 0 && _code[^1].Opcode != BoundaryOpcode && (CanFallThrough(_code[^1]) || LabelAt(_code.Count)))
                 throw new OmsCompileException(sub.Span,
                     $"control falls into {(sub.Coroutine ? "coroutine" : "sub")} '{sub.Name}'; end the code before it with goto, return or exit");
             var parameters = new Dictionary<string, RawStorage>(StringComparer.Ordinal);
@@ -1144,7 +1194,7 @@ public static class OmsCompiler
             _parameters = outerParameters;
             _currentSub = outerSub;
             foreach (var loop in outerLoops.Reverse()) _loops.Push(loop);
-            bool fallsOff = _code.Count == start || !IsTerminator(_code[^1].Opcode) || LabelAt(_code.Count);
+            bool fallsOff = _code.Count == start || CanFallThrough(_code[^1]) || LabelAt(_code.Count);
             if (sub.Coroutine)
             {
                 if (fallsOff || _code[^1].Opcode != Resume)
@@ -1404,7 +1454,8 @@ public static class OmsCompiler
             var fragmentLabels = new HashSet<string>(_userLabels, StringComparer.Ordinal);
             foreach (string label in fragmentLabels)
                 if (BaseLabelName.IsMatch(label) && !_moduleNames.ContainsKey(label))
-                    throw new OmsCompileException(default, $"'{label}' is reserved: label_<hex> names a base instruction");
+                    throw new OmsCompileException(_userLabelSpans.GetValueOrDefault(label, _unitSpan),
+                        $"'{label}' is reserved: label_<hex> names a base instruction");
             var libraryLabels = new HashSet<string>(StringComparer.Ordinal);
             foreach (LibrarySub library in _library)
             {
@@ -1421,9 +1472,10 @@ public static class OmsCompiler
             {
                 if (libraryLabels.Contains(name)) continue;
                 if (_moduleNames.TryGetValue(name, out string? owner))
-                    throw new OmsCompileException(default, $"'{name}' is a label of the base and a name of module {owner}");
+                    throw new OmsCompileException(_unitSpan, $"'{name}' is a label of the base and a name of module {owner}");
                 if (fragmentLabels.Contains(name))
-                    throw new OmsCompileException(default, $"label '{name}' is defined by the base script; choose another name");
+                    throw new OmsCompileException(_userLabelSpans.GetValueOrDefault(name, _unitSpan),
+                        $"label '{name}' is defined by the base script; choose another name");
                 _labels[name] = SiteTag + index;
                 _userLabels.Add(name);
             }
@@ -1638,6 +1690,12 @@ public static class OmsCompiler
                         {
                             if (r < 0 || r >= occurrences.Count || seen[r])
                                 throw new InvalidDataException($"layout data slot names invalid or repeated occurrence {r}");
+                            // One slot holds one content: occurrences that no longer agree (a line edited after the
+                            // sidecar was written) cannot share it, and the first one's text would silently win.
+                            if (!SameContent(occurrences[r].Item, occurrences[refs[0]].Item))
+                                throw new InvalidDataException(
+                                    $"layout data slot shares occurrences {refs[0]} and {r}, whose contents now differ; "
+                                    + "the source was edited after its layout sidecar was written (compile without it)");
                             seen[r] = true;
                             slotOfOccurrence[r] = data.Count;
                         }
@@ -1677,6 +1735,11 @@ public static class OmsCompiler
             };
         }
     }
+
+    /// <summary>False only for two texts that differ: an original script may read one slot through occurrences of
+    /// different kinds or sizes, which a decompiled source reproduces, but never as two different strings.</summary>
+    private static bool SameContent(IrDataItem a, IrDataItem b)
+        => a.Text == null || b.Text == null || a.Text == b.Text;
 
     private static IrDataItem EncodeText(string text, SourceSpan span)
     {

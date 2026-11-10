@@ -128,10 +128,28 @@ public sealed class OmsPatchPlan
 
     public string ToJson() => JsonSerializer.Serialize(this, Options);
 
+    /// <summary>Reads a stored plan. Every way a plan can be malformed throws <see cref="JsonException"/> or
+    /// <see cref="InvalidDataException"/>, which the linker reports against the mod.</summary>
     public static OmsPatchPlan FromJson(string json)
     {
-        OmsPatchPlan plan = JsonSerializer.Deserialize<OmsPatchPlan>(json, Options)
-            ?? throw new InvalidDataException("empty transform plan");
+        OmsPatchPlan? parsed;
+        try
+        {
+            parsed = JsonSerializer.Deserialize<OmsPatchPlan>(json, Options);
+        }
+        catch (Exception error) when (error is InvalidOperationException or FormatException or KeyNotFoundException)
+        {
+            throw new InvalidDataException($"malformed transform plan: {error.Message}", error);
+        }
+        OmsPatchPlan plan = parsed ?? throw new InvalidDataException("empty transform plan");
+        // Required properties may still be JSON null, and lists may hold nulls.
+        if (plan.Script is null || plan.Fingerprint is null || plan.Abi is null)
+            throw new InvalidDataException("a transform plan needs script, fingerprint and abi");
+        if (plan.LocalCounts is null || plan.Operations is null || plan.Blocks is null || plan.Data is null
+            || plan.Operations.Any(operation => operation is null)
+            || plan.Blocks.Any(block => block is null || block.Any(instruction => instruction?.Operands is null))
+            || plan.Data.Any(item => item?.Dwords is null))
+            throw new InvalidDataException("a transform plan holds a null list or entry");
         if (plan.Version is not (CurrentVersion or ResourceVersion))
             throw new InvalidDataException($"unsupported transform plan version {plan.Version}");
         bool usesResources = plan.Blocks.SelectMany(block => block).SelectMany(instruction => instruction.Operands)
@@ -173,7 +191,9 @@ internal sealed class OmsPatchOperandConverter : JsonConverter<OmsPatchOperand>
     {
         using JsonDocument document = JsonDocument.ParseValue(ref reader);
         JsonElement root = document.RootElement;
-        int type = root.GetProperty("t").GetInt32();
+        if (!root.TryGetProperty("t", out JsonElement typeElement))
+            throw new JsonException("a plan operand needs its type \"t\"");
+        int type = typeElement.GetInt32();
         if (root.TryGetProperty("lit", out JsonElement literal)) return OmsPatchOperand.Literal(type, literal.GetUInt32());
         if (root.TryGetProperty("data", out JsonElement data)) return OmsPatchOperand.Data(type, data.GetInt32());
         if (root.TryGetProperty("site", out JsonElement site)) return OmsPatchOperand.Site(type, site.GetInt32());

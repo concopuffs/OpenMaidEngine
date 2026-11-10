@@ -1,3 +1,5 @@
+using Ome.Engine.Vm;
+
 public class GodotVmOptionsTests
 {
     [Fact]
@@ -7,10 +9,12 @@ public class GodotVmOptionsTests
         var selftest = GodotVmOptions.Create(selftest: true, ignoreExitRequests: false);
 
         Assert.Equal(long.MaxValue, interactive.MaxSteps);
+        Assert.Equal(int.MaxValue, interactive.EmitCap);
         Assert.True(interactive.IgnoreExitRequests);
         Assert.False(interactive.NoSaveDat);
 
         Assert.Equal(GodotVmOptions.DiagnosticMaxSteps, selftest.MaxSteps);
+        Assert.Equal(new VmOptions().EmitCap, selftest.EmitCap);
         Assert.False(selftest.IgnoreExitRequests);
         Assert.True(selftest.NoSaveDat);
     }

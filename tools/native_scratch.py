@@ -4,7 +4,8 @@
 The pristine install is never modified or run in place. The scratch copy hard-links the large ``*.ALF`` archives
 (AGE only reads them) and copies every other file, so nothing the native game or an experiment writes can reach
 the originals through a shared link. Overlay files (loose script overrides, generated ``APPENDnn.AAI``/``.ALF``
-catalogs) are copied into the scratch root last. A manifest of the pristine install (name, size, modification time)
+catalogs) are copied into the scratch root last, replacing any hard link of the same name rather than writing
+through it. A manifest of the pristine install (name, size, modification time)
 is written beside the scratch copy; ``--check`` compares the install against it after a native run.
 
     py -3.11 -X utf8 tools/native_scratch.py --profile himegari --overlay build/.../SC0000.BIN --overlay ...
@@ -81,7 +82,11 @@ def build(overlays: list[Path], replace: bool) -> int:
             shutil.copy2(source, target)
             copied += 1
     for overlay in overlays:
-        shutil.copy2(overlay, scratch / overlay.name)
+        target = scratch / overlay.name
+        # An overlay named like an install archive lands on its hard link: copying onto the link would write through
+        # it into the pristine install, so the link is removed and the overlay becomes a file of its own.
+        target.unlink(missing_ok=True)
+        shutil.copy2(overlay, target)
     print(f"native_scratch: {scratch}: {linked} archives hard-linked, {copied} files copied, "
           f"{len(overlays)} overlays ({', '.join(overlay.name for overlay in overlays) or 'none'})")
     print(f"native_scratch: launch {scratch / 'AGE.EXE'}")

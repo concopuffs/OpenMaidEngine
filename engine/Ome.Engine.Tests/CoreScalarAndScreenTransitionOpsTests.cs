@@ -31,6 +31,50 @@ public class CoreScalarAndScreenTransitionOpsTests
         Assert.All(Enumerable.Range(0x2e49, 3), address => Assert.Equal(0, vm.Globals[address]));
     }
 
+    // Cell addresses are checked 32-bit sums. One that passes int.MaxValue halts the run with the instruction's
+    // location, where the overflow used to end the VM thread with an exception.
+    [Fact]
+    public void AnIndexedAddressPastInt32MaxHaltsWithTheInstructionLocation()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var ops = new List<(int, Operand[])>
+        {
+            (0x55, new[] { new Operand(GlobalInt, 0x100), new Operand(Imm, 1) }),
+            // zero-int-range: the second cell of G[0x7fffffff] is int.MaxValue + 1.
+            (0x6c, new[] { new Operand(GlobalInt, int.MaxValue), new Operand(Imm, 2) }),
+            (0x55, new[] { new Operand(GlobalInt, 0x101), new Operand(Imm, 1) }),
+            (0x2, Array.Empty<Operand>()),
+        };
+        Script script = ScriptAssembler.Assemble(table, "OVERFLOW.BIN", ops, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal($"operand-overflow:OVERFLOW.BIN@0x{script.Instructions[1].Offset:x}:op 0x6c", vm.HaltReason);
+        Assert.Equal(1, vm.Globals[0x100]);
+        Assert.False(vm.Globals.ContainsKey(0x101));
+    }
+
+    // A count past int.MaxValue in an op that converts it checked (copy-dwords) halts the same way.
+    [Fact]
+    public void ACheckedCountPastInt32MaxHaltsWithTheInstructionLocation()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var ops = new List<(int, Operand[])>
+        {
+            (0x1b0, new[] { new Operand(GlobalInt, 0x100), new Operand(GlobalInt, 0x200), new Operand(Imm, 0x80000000L) }),
+            (0x55, new[] { new Operand(GlobalInt, 0x101), new Operand(Imm, 1) }),
+            (0x2, Array.Empty<Operand>()),
+        };
+        Script script = ScriptAssembler.Assemble(table, "OVERFLOW.BIN", ops, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+
+        vm.Run();
+
+        Assert.Equal($"operand-overflow:OVERFLOW.BIN@0x{script.Instructions[0].Offset:x}:op 0x1b0", vm.HaltReason);
+        Assert.False(vm.Globals.ContainsKey(0x101));
+    }
+
     // Native 0x53/0x54 are CDQ+IDIV: the quotient truncates toward zero and the remainder takes the
     // dividend's sign. Kamidori SETTOOLBOX computes an empty category's page length as ((0-1) mod 18)+1,
     // which must be 0; a floored remainder (17) fills a full page with zero-id items.
@@ -62,6 +106,45 @@ public class CoreScalarAndScreenTransitionOpsTests
 
         Assert.Equal(quotient, vm.Globals[0x100]);
         Assert.Equal(remainder, vm.Globals[0x101]);
+    }
+
+    // Native cells are 32-bit: arithmetic wraps and compares are signed. A port cell is wider, so a result past
+    // 2^31 must come back as the negative value native holds.
+    [Fact]
+    public void IntegerArithmeticWrapsAndComparesAt32Bits()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        Operand L(int slot) => new(LocalInt, slot);
+        Operand G(int address) => new(GlobalInt, address);
+        Operand I(long value) => new(Imm, value);
+        var ops = new List<(int, Operand[])>
+        {
+            (0x55, new[] { L(1), I(0x7fffffff) }),
+            (0x50, new[] { G(0x100), L(1), I(1) }),            // add wraps to int.MinValue
+            (0x5c, new[] { G(0x101), G(0x100), I(0) }),        // lt: the wrapped sum is negative
+            (0x55, new[] { L(2), I(0) }),
+            (0x135, new[] { L(2), I(31) }),                    // bit-set 31: the sign bit
+            (0x5c, new[] { G(0x102), L(2), I(0) }),
+            (0x59, new[] { G(0x103), I(1), I(31) }),           // shl 1,31 is int.MinValue
+            (0x58, new[] { G(0x104), G(0x103), I(31) }),       // sar keeps the sign: -1
+            (0x52, new[] { G(0x105), I(0x10000), I(0x10000) }),// mul wraps to 0
+            (0x5a, new[] { G(0x106), I(0xffffffffL), G(0x104) }), // an unsigned immediate equals -1
+            (0x5e, new[] { G(0x107), I(0x80000000L), I(0) }),  // and is less than zero as a cell value
+            (0x2, Array.Empty<Operand>()),
+        };
+
+        var vm = new VirtualMachine(ScriptAssembler.Assemble(table, "WRAP32", ops, Array.Empty<string>()), table,
+                                    new RecordingHost());
+        vm.Run();
+
+        Assert.Equal(int.MinValue, vm.Globals[0x100]);
+        Assert.Equal(1, vm.Globals[0x101]);
+        Assert.Equal(1, vm.Globals[0x102]);
+        Assert.Equal(int.MinValue, vm.Globals[0x103]);
+        Assert.Equal(-1, vm.Globals[0x104]);
+        Assert.Equal(0, vm.Globals[0x105]);
+        Assert.Equal(1, vm.Globals[0x106]);
+        Assert.Equal(0, vm.Globals[0x107]);
     }
 
     [Fact]

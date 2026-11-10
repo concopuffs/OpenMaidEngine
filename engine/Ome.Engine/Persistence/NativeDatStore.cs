@@ -241,7 +241,7 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         byte[] encoded = NativeSaveContainerCodec.Encode(
             payload, _identity.CreateMetadata(timestamp, accumulatedPlaySeconds));
         Directory.CreateDirectory(_root);
-        WriteThrough(Path.Combine(_root, NumberedFileName(slot)), encoded);
+        WriteReplacing(Path.Combine(_root, NumberedFileName(slot)), encoded);
     }
 
     public void SaveNumberedFile(
@@ -257,7 +257,7 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         container.CopyTo(encoded, 0);
         historyTail.CopyTo(encoded.AsSpan(container.Length));
         Directory.CreateDirectory(_root);
-        WriteThrough(Path.Combine(_root, NumberedFileName(slot)), encoded);
+        WriteReplacing(Path.Combine(_root, NumberedFileName(slot)), encoded);
     }
 
     public int DeleteNumberedPair(int slot)
@@ -288,7 +288,7 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
     public void SaveNumberedThumbnail(int slot, ReadOnlySpan<byte> data)
     {
         Directory.CreateDirectory(_root);
-        WriteThrough(Path.Combine(_root, NumberedThumbnailFileName(slot)), data);
+        WriteReplacing(Path.Combine(_root, NumberedThumbnailFileName(slot)), data);
     }
 
     public static string NumberedFileName(int slot)
@@ -331,6 +331,15 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
+    }
+
+    /// <summary>Write <paramref name="path"/> through a sibling temporary and replace it in one move, so a crash
+    /// mid-save leaves the slot's previous file (native writes in place; the bytes written are the same).</summary>
+    private static void WriteReplacing(string path, ReadOnlySpan<byte> data)
+    {
+        string temporary = path + ".tmp";
+        WriteThrough(temporary, data);
+        File.Move(temporary, path, overwrite: true);
     }
 
     private static void WriteThrough(string path, ReadOnlySpan<byte> data)

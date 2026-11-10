@@ -1237,6 +1237,75 @@ public class HotspotInputTests
         Assert.Equal(script.Instructions[3].Offset, frame.ResumeOffset);
     }
 
+    private sealed class ClickOnceHost : RecordingHost
+    {
+        public VirtualMachine Vm = null!;
+        public bool ServiceReturned;
+
+        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        {
+            Waits++;
+            Assert.True(Vm.TryActivatePointer(30, 40));
+            while (serviceInputCallback()) { }
+            ServiceReturned = true;
+        }
+    }
+
+    /// <summary>A page that waits with one hotspot whose activation runs <paramref name="callback"/> at dword 25; after
+    /// the wait, G[0x130] = 1 marks that the page went on.</summary>
+    private static Script PageWithClickCallback(OpcodeTable table, params (int, Operand[])[] callback)
+        => ScriptAssembler.Assemble(table, "HALT_IN_CALLBACK", new List<(int, Operand[])>
+        {
+            (0x90, new[] { I(10), I(20), I(20), I(20), I(-1), I(-1), I(25) }),   // 0
+            (0x94, Array.Empty<Operand>()),                                       // 15
+            (0x72, new[] { I(1) }),                                               // 16
+            (0x55, new[] { G(0x130), I(1) }),                                     // 19
+            (0x2, Array.Empty<Operand>()),                                        // 24
+        }.Concat(callback).ToList(), Array.Empty<string>());
+
+    // A halt inside a wait's callback ends the run, as one in the frame's own loop does: before, the callback loop
+    // stopped and the waiting op went on with the page.
+    [Fact]
+    public void AHaltingOpInAWaitCallbackEndsTheRunWithItsReason()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = PageWithClickCallback(table,
+            (0x2d8, new[] { G(0x200), I(7), I((1 << 20) + 1) }),   // 25: fill-int-array, count past the run limit
+            (0x55, new[] { G(0x131), I(1) }),                      // 32
+            (0x5, Array.Empty<Operand>()));                        // 37
+        var host = new ClickOnceHost();
+        var vm = new VirtualMachine(script, table, host);
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal("fill-int-array-count-too-large:1048577", vm.HaltReason);
+        Assert.Equal(1, host.Waits);
+        Assert.False(host.ServiceReturned);
+        Assert.False(vm.Globals.ContainsKey(0x131));
+        Assert.False(vm.Globals.ContainsKey(0x130));
+        Assert.False(vm.Globals.ContainsKey(0x200));
+    }
+
+    [Fact]
+    public void TheStepLimitInsideAWaitCallbackEndsTheRun()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = PageWithClickCallback(table,
+            (0x50, new[] { G(0x131), G(0x131), I(1) }),   // 25: count the callback's turns
+            (0x8c, new[] { I(25) }));                     // 32: forever
+        var host = new ClickOnceHost();
+        var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 1_000));
+        host.Vm = vm;
+
+        vm.Run();
+
+        Assert.Equal("STEP-LIMIT", vm.HaltReason);
+        Assert.False(host.ServiceReturned);
+        Assert.InRange(vm.Globals[0x131], 400, 1_000);
+        Assert.False(vm.Globals.ContainsKey(0x130));
+    }
+
     private static Operand I(long value) => new(0, value);
     private static Operand G(long address) => new(3, address);
 }

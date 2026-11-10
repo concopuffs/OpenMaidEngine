@@ -34,6 +34,14 @@ public static class NativeTextHistoryCodec
     public static void DecodeInto(ReadOnlySpan<byte> source, AdvTextHistory history)
     {
         ArgumentNullException.ThrowIfNull(history);
+        Decoded decoded = Decode(source);
+        history.RestorePersistenceSnapshot(decoded.Entries, decoded.Records);
+    }
+
+    /// <summary>The history tail's entries and records, without touching a live history, so a load can reject a
+    /// damaged tail (it is outside the container checksum) before it changes anything.</summary>
+    public static Decoded Decode(ReadOnlySpan<byte> source)
+    {
         if (source.Length < HeaderSize) throw new InvalidDataException("Native text-history tail is truncated.");
         int logicalLength = ReadNonNegative(source, 0, "logical length");
         int duplicateLength = ReadNonNegative(source, 4, "duplicate logical length");
@@ -46,8 +54,10 @@ public static class NativeTextHistoryCodec
         byte[] logical = storedLength == logicalLength
             ? stored.ToArray()
             : LzssDecoder.Decode(stored, logicalLength, "native text history");
-        DecodeLogical(logical, history);
+        return DecodeLogical(logical);
     }
+
+    public sealed record Decoded(IReadOnlyList<AdvTextHistoryEntry> Entries, IReadOnlyList<AdvTextHistoryRecord> Records);
 
     private static byte[] EncodeLogical(AdvTextHistory history)
     {
@@ -101,24 +111,22 @@ public static class NativeTextHistoryCodec
         return stream.ToArray();
     }
 
-    private static void DecodeLogical(ReadOnlySpan<byte> source, AdvTextHistory history)
+    private static Decoded DecodeLogical(ReadOnlySpan<byte> source)
     {
         int at = 0;
-        int entryCount = ReadCount(source, ref at, "entry");
+        int entryCount = ReadCount(source, ref at, "entry", elementBytes: 8);
         var entries = new AdvTextHistoryEntry[entryCount];
         for (int i = 0; i < entryCount; i++)
             entries[i] = new AdvTextHistoryEntry(ReadNext(source, ref at), ReadNext(source, ref at));
 
-        int recordCount = ReadCount(source, ref at, "record");
+        int recordCount = ReadCount(source, ref at, "record", elementBytes: RecordDwords * 4);
         var raw = new int[recordCount, RecordDwords];
         for (int i = 0; i < recordCount; i++)
             for (int dword = 0; dword < RecordDwords; dword++)
                 raw[i, dword] = ReadNext(source, ref at);
 
-        int stringDwords = ReadCount(source, ref at, "string blob dword");
-        int stringBytes = checked(stringDwords * 4);
-        if (at > source.Length - stringBytes)
-            throw new InvalidDataException("Native text-history string blob is truncated.");
+        int stringDwords = ReadCount(source, ref at, "string blob dword", elementBytes: 4);
+        int stringBytes = stringDwords * 4;
         byte[] blob = source.Slice(at, stringBytes).ToArray();
         for (int i = 0; i < blob.Length; i += 4)
         {
@@ -153,7 +161,7 @@ public static class NativeTextHistoryCodec
                 TextManager554 = text ? raw[i, 7] : 0,
             };
         }
-        history.RestorePersistenceSnapshot(entries, records);
+        return new Decoded(entries, records);
     }
 
     // Script colors are RGB; the text manager keeps GDI COLORREFs (BGR), as ops 0x76/0x77 convert them.
@@ -183,10 +191,14 @@ public static class NativeTextHistoryCodec
         return result;
     }
 
-    private static int ReadCount(ReadOnlySpan<byte> source, ref int at, string name)
+    /// <summary>A count of <paramref name="elementBytes"/>-byte elements that must fit in the bytes left, checked before
+    /// anything is allocated from it.</summary>
+    private static int ReadCount(ReadOnlySpan<byte> source, ref int at, string name, int elementBytes)
     {
         int value = ReadNext(source, ref at);
         if (value < 0) throw new InvalidDataException($"Native text-history {name} count is negative.");
+        if (value > (source.Length - at) / elementBytes)
+            throw new InvalidDataException($"Native text-history {name} count {value} exceeds the data.");
         return value;
     }
 

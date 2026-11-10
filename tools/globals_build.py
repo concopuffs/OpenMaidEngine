@@ -6,6 +6,7 @@ vm-map/globals-<profile>.toml -> docs/global-reference-<profile>.md.
   --build   merge curated over build/games/<profile>/global-var-map.json -> build/games/<profile>/globals.json
             + the profile's generated reference doc
   --lint    run the linter, print errors/warnings, exit nonzero on errors
+  --check   lint, then exit nonzero if the reference doc differs from what --build would write (needs the auto map)
 A registry may also declare `[[table]]` entries: Open Maid Script tables (record views over parallel
 arrays, design spec §5.3), emitted to the JSON's `tables` list and the reference doc.
 See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md."""
@@ -323,7 +324,8 @@ def emit_reference_md(merged: Registry, tables: list[dict] = ()) -> str:
     return "\n".join(L).rstrip("\n") + "\n"
 
 
-def build(tp: Path, auto_map: Path = AUTO_MAP) -> int:
+def _linted_merge(tp: Path, auto_map: Path) -> tuple[Registry, dict, list[dict]] | None:
+    """Lint the registry against itself and the auto map, then merge; None (errors printed) when it does not lint."""
     curated, meta = load_toml(tp)
     auto = load_auto(auto_map)
     all_addrs = curated.addresses() | {int(a, 16) for a in auto.get("globals", {})}
@@ -333,8 +335,40 @@ def build(tp: Path, auto_map: Path = AUTO_MAP) -> int:
     for m in warnings: print("warn:", m)
     if errors:
         for m in errors: print("error:", m)
+        return None
+    return merge(curated, auto), meta, tables
+
+
+def _shown(path: Path) -> str:
+    """A path as messages show it: repository-relative when it lies in the repository."""
+    return path.relative_to(paths.REPO).as_posix() if path.is_relative_to(paths.REPO) else str(path)
+
+
+def check(tp: Path, auto_map: Path = AUTO_MAP, reference_doc: Path = REFERENCE_DOC) -> int:
+    """Lint, then exit nonzero if the tracked reference doc differs from what --build would write. The doc merges
+    the auto map, a workspace-derived input (global_map.py), so a missing map is an error, not an empty merge."""
+    if not Path(auto_map).is_file():
+        print(f"error: auto map {auto_map} not found; build it with global_map.py (the reference doc merges it)")
         return 1
-    merged = merge(curated, auto)
+    prepared = _linted_merge(tp, auto_map)
+    if prepared is None:
+        return 1
+    merged, _, tables = prepared
+    expected = emit_reference_md(merged, tables)
+    current = reference_doc.read_text(encoding="utf-8") if reference_doc.is_file() else None
+    if current != expected:
+        print(f"stale: {_shown(reference_doc)}; run globals_build.py "
+              f"--profile {paths.CONTEXT.profile_id} --build")
+        return 1
+    print(f"check: {_shown(reference_doc)} is current ({len(merged)} globals)")
+    return 0
+
+
+def build(tp: Path, auto_map: Path = AUTO_MAP) -> int:
+    prepared = _linted_merge(tp, auto_map)
+    if prepared is None:
+        return 1
+    merged, meta, tables = prepared
     paths.BUILD.mkdir(parents=True, exist_ok=True)
     (paths.BUILD / "globals.json").write_text(emit_json(merged, meta, tables), encoding="utf-8", newline="\n")
     REFERENCE_DOC.write_text(emit_reference_md(merged, tables), encoding="utf-8", newline="\n")
@@ -347,6 +381,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--build", action="store_true")
     ap.add_argument("--lint", action="store_true")
+    ap.add_argument("--check", action="store_true",
+                    help="lint, then fail if the profile's reference doc differs from what --build would write")
     ap.add_argument("--toml", default=str(TOML_DEFAULT))
     ap.add_argument("--auto-map", default=str(AUTO_MAP),
                     help="profile-specific global-var-map.json input")
@@ -360,9 +396,11 @@ def main(argv=None):
         for m in errors: print("error:", m)
         print(f"lint: {len(errors)} errors, {len(warnings)} warnings")
         return 1 if errors else 0
+    if args.check:
+        return check(tp, Path(args.auto_map))
     if args.build:
         return build(tp, Path(args.auto_map))
-    ap.error("no action (expected --build/--lint)")
+    ap.error("no action (expected --build/--check/--lint)")
 
 
 if __name__ == "__main__":

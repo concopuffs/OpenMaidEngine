@@ -23,15 +23,15 @@ public static class Sys4Loader
         for (int k = 0; k < nbody; k++) dw[k] = BitConverter.ToUInt32(data, BodyOff + k * 4);
 
         var header = new ScriptHeader(fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]);
-        var (instrs, idxByOff, strings) = DecodeCode(
-            dw, fields, nbody, table, engineRevision, name, packedId);
+        // F8 is both the T1 table's offset and the end of code, so it is checked before the code is decoded.
         int messageCount = fields[7];
         int messageTableOffset = fields[8];
         if (messageCount < 0 || messageTableOffset < 0
             || messageTableOffset > nbody || messageCount > nbody - messageTableOffset)
             throw new InvalidDataException($"{name}: invalid T1 read-message table");
-        int[] messageOffsets = dw.AsSpan(messageTableOffset, messageCount)
-            .ToArray().Select(value => checked((int)value)).ToArray();
+        var (instrs, idxByOff, strings) = DecodeCode(
+            dw, fields, nbody, table, engineRevision, name, packedId);
+        int[] messageOffsets = ReadOffsetTable(dw, messageCount, messageTableOffset, nbody, name, "T1 read-message");
         int[] scriptCallOffsets = ReadOffsetTable(dw, fields[9], fields[10], nbody, name, "T2 script-call");
         int[] localCallOffsets = ReadOffsetTable(dw, fields[11], fields[12], nbody, name, "T3 local-call");
         return new Script
@@ -55,8 +55,14 @@ public static class Sys4Loader
     {
         if (count < 0 || offset < 0 || offset > bodyLength || count > bodyLength - offset)
             throw new InvalidDataException($"{name}: invalid {tableName} table");
-        return body.AsSpan(offset, count).ToArray()
-            .Select(value => checked((int)value)).ToArray();
+        int[] offsets = new int[count];
+        for (int k = 0; k < count; k++)
+        {
+            uint value = body[offset + k];
+            if (value > int.MaxValue) throw new InvalidDataException($"{name}: invalid {tableName} table entry {k}");
+            offsets[k] = (int)value;
+        }
+        return offsets;
     }
 
     private static (List<Instruction>, Dictionary<int, int>, Dictionary<int, string>)

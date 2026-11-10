@@ -192,7 +192,11 @@ public sealed class TemplateExpander
         {
             Arguments = dialogue.Arguments.Select(argument => argument with { Value = Expression(argument.Value) }).ToArray(),
         },
-        ReturnStatement or ExitStatement or ResumeStatement or UseStatement or ConstStatement or StorageDeclaration => statement,
+        ReturnStatement or ExitStatement or ResumeStatement => statement,
+        // A declaration names one slot or value for the whole script, and a template may expand many times.
+        UseStatement or ConstStatement or StorageDeclaration or EnumStatement or TableStatement or TemplateStatement
+            => throw new OmsCompileException(statement.Span,
+                "a declaration (use, const, enum, table, global, local or inline) cannot appear in a template body; declare it at the top level of the script"),
         _ => throw new OmsCompileException(statement.Span, $"{statement.GetType().Name} cannot appear in a template"),
     };
 
@@ -207,6 +211,7 @@ public sealed class TemplateExpander
         OperandExpr { Operand: RawLabelRef name } when _labels.ContainsKey(name.Name)
             => new OperandExpr(expression.Span, name with { Name = Label(name.Name) }),
         OperandExpr => expression,
+        NamedElementExpr named when _arguments.TryGetValue(named.Name, out Expr? argument) => Indexed(named, argument),
         NamedElementExpr named => named with
         {
             Indices = named.Indices.Select(Expression).ToArray(),
@@ -217,6 +222,30 @@ public sealed class TemplateExpander
         UnaryExpr unary => unary with { Operand = Expression(unary.Operand) },
         _ => expression,
     };
+
+    /// <summary><c>p[i]</c> where <c>p</c> is a parameter: the element of the array or cell its argument names. A
+    /// declared name keeps the element form (rows, columns and table fields included); a raw cell takes one index,
+    /// as <c>G[…][i]</c> does.</summary>
+    private Expr Indexed(NamedElementExpr named, Expr argument)
+    {
+        Expr[] indices = named.Indices.Select(Expression).ToArray();
+        switch (argument)
+        {
+            case OperandExpr { Operand: RawLabelRef name }:
+                return named with
+                {
+                    Name = name.Name,
+                    Indices = indices,
+                    FieldIndices = named.FieldIndices?.Select(Expression).ToArray(),
+                };
+            case OperandExpr { Operand: RawStorage cell } when indices.Length == 1 && named.Column == null
+                                                             && named.FieldIndices == null:
+                return new ElementExpr(named.Span, cell, null, indices);
+            default:
+                throw new OmsCompileException(named.Span,
+                    $"'{named.Name}' of '{_template.Name}' cannot be indexed that way: its argument is not a named array or a single raw cell");
+        }
+    }
 
     /// <summary>A parameter in a raw <c>@op</c> operand must stand for a raw operand form.</summary>
     private RawOperand RawOperandOf(RawOperand operand)

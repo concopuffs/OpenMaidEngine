@@ -12,6 +12,9 @@ public static class GodotVmOptions
     {
         Sys4StartupSettings settings = startupSettings ?? Sys4StartupSettings.Empty;
         return new(
+            // The emit cap is a headless runaway-line guard; native has none, and a script may show one authored line
+            // any number of times in a frame (a menu loop's prompt), so the interactive session never halts on it.
+            EmitCap: selftest ? new VmOptions().EmitCap : int.MaxValue,
             MaxSteps: selftest ? DiagnosticMaxSteps : long.MaxValue,
             IgnoreExitRequests: ignoreExitRequests,
             CreateObject: settings.CreateObject,

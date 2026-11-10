@@ -401,11 +401,13 @@ public sealed class Sys4RegIniStore
 
         public void SetValue(string section, string key, string value) => SetString(section, key, value);
 
+        /// <summary>A hand-edited file can repeat a section. Reads take a key's last occurrence across every block of
+        /// the section, so a write replaces every occurrence, and a new key goes at the end of the section's last
+        /// block, where a read finds it.</summary>
         private void SetString(string section, string key, string rendered)
         {
-            int sectionStart = -1;
-            int sectionEnd = _lines.Count;
-            string? currentSection = null;
+            int insertAt = -1;   // after the last non-blank line of the section's last block
+            bool inSection = false;
             bool replaced = false;
 
             for (int index = 0; index < _lines.Count; index++)
@@ -413,19 +415,13 @@ public sealed class Sys4RegIniStore
                 string line = _lines[index];
                 if (TryParseSection(line, out string? parsedSection))
                 {
-                    if (sectionStart >= 0)
-                    {
-                        sectionEnd = index;
-                        break;
-                    }
-                    currentSection = parsedSection;
-                    if (string.Equals(currentSection, section, StringComparison.OrdinalIgnoreCase))
-                        sectionStart = index;
+                    inSection = string.Equals(parsedSection, section, StringComparison.OrdinalIgnoreCase);
+                    if (inSection) insertAt = index + 1;
                     continue;
                 }
-                if (sectionStart < 0
-                    || !string.Equals(currentSection, section, StringComparison.OrdinalIgnoreCase)
-                    || !TryParseKey(line, out string? parsedKey, out _)
+                if (!inSection) continue;
+                if (line.Trim().Length != 0) insertAt = index + 1;
+                if (!TryParseKey(line, out string? parsedKey, out _)
                     || !string.Equals(parsedKey, key, StringComparison.OrdinalIgnoreCase))
                     continue;
                 int equals = line.IndexOf('=');
@@ -436,15 +432,14 @@ public sealed class Sys4RegIniStore
             if (replaced) return;
             // Like AGE's own file: new sections follow directly, and new keys go after the section's
             // last key rather than after trailing blank lines.
-            if (sectionStart < 0)
+            if (insertAt < 0)
             {
                 _lines.Add($"[{section}]");
                 _lines.Add($"{key}={rendered}");
             }
             else
             {
-                while (sectionEnd - 1 > sectionStart && _lines[sectionEnd - 1].Trim().Length == 0) sectionEnd--;
-                _lines.Insert(sectionEnd, $"{key}={rendered}");
+                _lines.Insert(insertAt, $"{key}={rendered}");
             }
         }
 
@@ -483,10 +478,14 @@ public sealed class Sys4RegIniStore
             List<(string Key, string Line)> KeysOf(string section)
                 => sections.Find(s => string.Equals(s.Name, section, StringComparison.OrdinalIgnoreCase)).Keys
                    ?? new List<(string Key, string Line)>();
+            // A key repeated in a hand-edited file is written once, with its last value, as reads take it.
+            IEnumerable<string> LastLines(List<(string Key, string Line)> keys)
+                => keys.Select(k => k.Key).Distinct(StringComparer.OrdinalIgnoreCase)
+                       .Select(key => keys.Last(k => string.Equals(k.Key, key, StringComparison.OrdinalIgnoreCase)).Line);
             void WriteUnbound(string section)
             {
-                foreach ((string key, string line) in KeysOf(section))
-                    if (written.Add(Id(section, key))) output.Add(line);
+                foreach (string line in LastLines(KeysOf(section)))
+                    if (TryParseKey(line, out string? key, out _) && written.Add(Id(section, key!))) output.Add(line);
             }
 
             string? open = null;
@@ -508,8 +507,8 @@ public sealed class Sys4RegIniStore
             {
                 if (bound.Any(b => string.Equals(b.Section, name, StringComparison.OrdinalIgnoreCase))) continue;
                 output.Add($"[{name}]");
-                foreach ((string key, string line) in keys)
-                    if (written.Add(Id(name, key))) output.Add(line);
+                foreach (string line in LastLines(keys))
+                    if (TryParseKey(line, out string? key, out _) && written.Add(Id(name, key!))) output.Add(line);
             }
             return string.Join("\r\n", output) + "\r\n";
         }

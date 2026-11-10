@@ -63,24 +63,31 @@ public sealed class GameSession
 
         vm.Run();
 
-        // Each native bank is shared by the session; last write wins within that bank.
-        foreach (var kv in vm.Globals) Globals[kv.Key] = kv.Value;
-        foreach (var kv in vm.GlobalFloats) GlobalFloats[kv.Key] = kv.Value;
-        foreach (var kv in vm.GlobalStrings) GlobalStrings[kv.Key] = kv.Value;
-        foreach (var kv in vm.GlobalPointers) GlobalPointers[kv.Key] = kv.Value;
-        foreach (var kv in vm.GlobalStringPointers) GlobalStringPointers[kv.Key] = kv.Value;
+        // The VM started from every session cell, so its final banks are the whole state: a cell the scene removed
+        // (op 0x9 clears the banks) must not come back from the session's copy.
+        Replace(Globals, vm.Globals);
+        Replace(GlobalFloats, vm.GlobalFloats);
+        Replace(GlobalStrings, vm.GlobalStrings);
+        Replace(GlobalPointers, vm.GlobalPointers);
+        Replace(GlobalStringPointers, vm.GlobalStringPointers);
 
         return new SceneResult(vm.Emitted.ToList(), vm.HaltReason, vm.Steps);
     }
 
-    /// <summary>Serialize the persistent global banks to JSON, keyed by decimal address.
+    private static void Replace<T>(Dictionary<int, T> session, Dictionary<int, T> final)
+    {
+        session.Clear();
+        foreach (var kv in final) session[kv.Key] = kv.Value;
+    }
+
+    /// <summary>Serialize the persistent global banks (integer, float, string, pointer and string pointer) to JSON,
+    /// keyed by decimal address.
     /// Lets an expensive booted state be snapshotted and reused. Live <see cref="TextHistory"/> is
     /// intentionally excluded until the unified save/profile architecture defines its lifecycle.</summary>
     public string ToJson()
     {
         var snap = new StateSnapshot(
-            Globals.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
-            GlobalStrings.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value));
+            Keyed(Globals), Keyed(GlobalStrings), Keyed(GlobalFloats), Keyed(GlobalPointers), Keyed(GlobalStringPointers));
         return JsonSerializer.Serialize(snap,
             new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
     }
@@ -90,12 +97,28 @@ public sealed class GameSession
     {
         var s = new GameSession();
         var snap = JsonSerializer.Deserialize<StateSnapshot>(json) ?? new StateSnapshot(new(), new());
-        foreach (var kv in snap.Globals) s.Globals[int.Parse(kv.Key)] = kv.Value;
-        foreach (var kv in snap.Strings) s.GlobalStrings[int.Parse(kv.Key)] = kv.Value;
+        Unkeyed(snap.Globals, s.Globals);
+        Unkeyed(snap.Strings, s.GlobalStrings);
+        Unkeyed(snap.Floats, s.GlobalFloats);
+        Unkeyed(snap.Pointers, s.GlobalPointers);
+        Unkeyed(snap.StringPointers, s.GlobalStringPointers);
         return s;
     }
 
-    private sealed record StateSnapshot(Dictionary<string, long> Globals, Dictionary<string, string> Strings);
+    private static Dictionary<string, T> Keyed<T>(Dictionary<int, T> bank)
+        => bank.ToDictionary(kv => kv.Key.ToString(System.Globalization.CultureInfo.InvariantCulture), kv => kv.Value);
+
+    private static void Unkeyed<T>(Dictionary<string, T>? keyed, Dictionary<int, T> bank)
+    {
+        if (keyed == null) return;
+        foreach (var kv in keyed)
+            bank[int.Parse(kv.Key, System.Globalization.CultureInfo.InvariantCulture)] = kv.Value;
+    }
+
+    /// <summary>A snapshot from before the float and pointer banks were saved has only the first two.</summary>
+    private sealed record StateSnapshot(Dictionary<string, long> Globals, Dictionary<string, string> Strings,
+                                        Dictionary<string, long>? Floats = null, Dictionary<string, int>? Pointers = null,
+                                        Dictionary<string, int>? StringPointers = null);
 }
 
 /// <summary>The observable result of running one scene into a <see cref="GameSession"/>.</summary>

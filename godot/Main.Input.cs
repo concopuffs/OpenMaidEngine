@@ -23,7 +23,9 @@ public partial class Main
     // reach _UnhandledInput, so clicks were swallowed while keyboard ui_accept still got through.
     public override void _Input(InputEvent e)
     {
-        if (_selftest) return;
+        // _Ready returns before creating the VM when startup fails (no game root, a bad flag); the window stays up
+        // until the quit lands, and input meanwhile has nothing to drive.
+        if (_selftest || _vm == null) return;
         if (DropForExclusiveDrive(e))
         {
             GetViewport().SetInputAsHandled();
@@ -70,7 +72,7 @@ public partial class Main
         }
         if (e is InputEventKey diagnosticKey && diagnosticKey.Keycode == Key.F6)
         {
-            if (diagnosticKey.Pressed && !diagnosticKey.Echo) CaptureStallDiagnostic();
+            if (diagnosticKey.Pressed && !diagnosticKey.Echo) CaptureStallDiagnostic(copyToClipboard: true);
             GetViewport().SetInputAsHandled();
             return;
         }

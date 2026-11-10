@@ -6,6 +6,11 @@ public static class LzssDecoder
     public static byte[] Decode(ReadOnlySpan<byte> source, int expectedSize, string name = "LZSS")
     {
         if (expectedSize < 0) throw new InvalidDataException($"{name}: negative expanded size");
+        // A control byte and eight 2-byte back-references expand to at most 8 x 18 = 144 bytes per 17 read, so a size
+        // above 9 x the input is a damaged or hostile header: refuse it before allocating.
+        if (expectedSize > (long)source.Length * 9)
+            throw new InvalidDataException(
+                $"{name}: expanded size {expectedSize} exceeds what {source.Length} bytes can encode");
         var frame = new byte[0x1000];
         var result = new byte[expectedSize];
         int framePos = 0xfee, input = 0, output = 0;

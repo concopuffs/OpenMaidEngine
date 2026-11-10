@@ -105,6 +105,53 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void SnapshotKeepsTheFloatAndPointerBanks()
+    {
+        var s = new GameSession();
+        s.GlobalFloats[0x11] = System.BitConverter.SingleToInt32Bits(1.5f);
+        s.GlobalPointers[0x12] = 0x400;
+        s.GlobalStringPointers[0x13] = 0x40;
+        var t = GameSession.FromJson(s.ToJson());
+        Assert.Equal(s.GlobalFloats[0x11], t.GlobalFloats[0x11]);
+        Assert.Equal(0x400, t.GlobalPointers[0x12]);
+        Assert.Equal(0x40, t.GlobalStringPointers[0x13]);
+    }
+
+    [Fact]
+    public void SnapshotWithoutTheNewerBanksStillLoads()
+    {
+        var t = GameSession.FromJson("""{"Globals":{"16":42},"Strings":{"48":"x"}}""");
+        Assert.Equal(42, t.Globals[0x10]);
+        Assert.Equal("x", t.GlobalStrings[0x30]);
+        Assert.Empty(t.GlobalFloats);
+        Assert.Empty(t.GlobalPointers);
+    }
+
+    [Fact]
+    public void GlobalsAResetSceneClearedDoNotComeBackFromTheSession()
+    {
+        // Op 0x9 clears every bank before reloading resource 0; the session must not merge its stale copy back.
+        var reset = ScriptAssembler.Assemble(Table, "RESET", new List<(int, Operand[])>
+        {
+            (0x9, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var root = ScriptAssembler.Assemble(Table, "ROOT", new List<(int, Operand[])>
+        {
+            (0x55, new[] { new Operand(T_GINT, 0x20), new Operand(T_IMM, 5) }),
+            (0x2, System.Array.Empty<Operand>()),
+        }, System.Array.Empty<string>());
+        var s = new GameSession();
+        s.Seed(0x10, 1);
+        s.SeedString(0x30, "stale");
+
+        s.RunScene(reset, Table, new RecordingHost(), provider: new MapProvider(new Dictionary<long, Script> { [0] = root }));
+
+        Assert.False(s.Globals.ContainsKey(0x10));
+        Assert.False(s.GlobalStrings.ContainsKey(0x30));
+        Assert.Equal(5, s.Globals[0x20]);
+    }
+
+    [Fact]
     [Trait("Category", "Workspace")]
     public void BootedStateSurvivesSnapshot()
     {

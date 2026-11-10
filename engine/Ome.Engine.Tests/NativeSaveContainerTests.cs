@@ -30,6 +30,23 @@ public class NativeSaveContainerTests
         Assert.Equal(incompressible, LzssEncoder.EncodeOrVerbatim(incompressible));
     }
 
+    // A control byte of eight back-references, each the longest (18 bytes), is the densest stream: 17 bytes expand to
+    // 144. It decodes; a header claiming more than 9 bytes per input byte is refused before anything is allocated.
+    [Fact]
+    public void LzssDecoderRefusesAnExpandedSizeNoStreamCanEncode()
+    {
+        byte[] densest = new byte[17];
+        for (int reference = 0; reference < 8; reference++) densest[2 + reference * 2] = 0x0f;   // length 3 + 15
+        Assert.Equal(new byte[144], LzssDecoder.Decode(densest, 144, "densest"));
+
+        var error = Assert.Throws<InvalidDataException>(() => LzssDecoder.Decode(densest, 17 * 9 + 1, "header"));
+        Assert.Contains("exceeds what 17 bytes can encode", error.Message);
+        Assert.Contains("exceeds", Assert.Throws<InvalidDataException>(
+            () => LzssDecoder.Decode(new byte[4], int.MaxValue, "hostile")).Message);
+        Assert.Contains("exceeds", Assert.Throws<InvalidDataException>(
+            () => LzssDecoder.Decode(ReadOnlySpan<byte>.Empty, 1, "empty")).Message);
+    }
+
     [Fact]
     public void VersionTwoContainerWritesNativeHeaderFrameAndRoundTrips()
     {
@@ -218,6 +235,43 @@ public class NativeSaveContainerTests
             Assert.True(File.Exists(Path.Combine(root, "SAVE04.DAT")));
             Assert.Equal(numbered, store.LoadNumbered(4)!.Payload);
             Assert.Null(store.LoadNumbered(5));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    // Numbered saves and thumbnails are written beside the slot and moved over it, so the slot always holds a whole
+    // file; the temporary does not survive the write.
+    [Fact]
+    public void DirectoryStoreReplacesNumberedFilesAndThumbnailsWithoutLeavingATemporary()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "ome-native-replace-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, new NativeSaveIdentity(NativeSaveMagic.S4SD, 123, "replace-test", 3, 2));
+            byte[] first = Enumerable.Repeat((byte)0x11, 64).ToArray();
+            byte[] second = Enumerable.Repeat((byte)0x22, 96).ToArray();
+
+            store.SaveNumbered(4, first, Timestamp, 1);
+            store.SaveNumbered(4, second, Timestamp, 2);
+            Assert.Equal(second, store.LoadNumbered(4)!.Payload);
+            Assert.Equal(2u, store.QueryNumberedMetadata(4)!.AccumulatedPlaySeconds);
+
+            store.SaveNumberedFile(4, first, [1, 2, 3, 4], Timestamp, 3);
+            NativeNumberedSaveFile replaced = store.LoadNumberedFile(4)!;
+            Assert.Equal(first, replaced.Document.Payload);
+            Assert.Equal([1, 2, 3, 4], replaced.HistoryTail);
+
+            store.SaveNumberedThumbnail(4, [0x42, 0x4d, 1]);
+            store.SaveNumberedThumbnail(4, [0x42, 0x4d, 2, 2]);
+            Assert.Equal([0x42, 0x4d, 2, 2], store.LoadNumberedThumbnail(4));
+
+            Assert.Equal(
+                [DirectoryNativeDatStore.NumberedFileName(4), DirectoryNativeDatStore.NumberedThumbnailFileName(4)],
+                Directory.GetFiles(root).Select(Path.GetFileName).Order(StringComparer.OrdinalIgnoreCase));
+            Assert.Empty(Directory.GetFiles(root, "*.tmp"));
         }
         finally
         {

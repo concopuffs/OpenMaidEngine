@@ -214,7 +214,7 @@ public sealed partial class GodotAdvHost
         {
             AbandonMovieMaskPlayback(playbackId);
             _movieSurfaces.Abandon(playbackId, out _);
-            _slotDims.Remove(surfaceSlot);
+            _slotDims.TryRemove(surfaceSlot, out _);
             stopTimeMs = 0;
             Godot.GD.Print($"movie read failed {asset.Name}: {e.Message}");
             return false;
@@ -265,9 +265,8 @@ public sealed partial class GodotAdvHost
             captured, visible, firstHandle, System.Math.Max(0, count),
             item =>
             {
-                var raw = gfx.TryGet(item.Handle);
-                var resolved = raw != null
-                    ? ResolveSurfaceTexture(raw.SourceSlot, item.SurfaceResId)
+                var resolved = gfx.TryGetSourceSlot(item.Handle, out int sourceSlot)
+                    ? ResolveSurfaceTexture(sourceSlot, item.SurfaceResId)
                     : ResolveResIdTexture(item.SurfaceResId);
                 return resolved == null
                     ? null

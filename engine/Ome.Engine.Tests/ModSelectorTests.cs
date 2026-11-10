@@ -269,6 +269,118 @@ public sealed class ModSelectorTests : IDisposable
                      && Directory.EnumerateFileSystemEntries(Path.Combine(fresh, ModLinkCache.FolderName)).Any());
     }
 
+    // A launch that skips failed mods caches its link under the whole stack's marked key, so the same launch again is
+    // a cache hit; a launch that does not skip failures never mounts that entry. Both orders of the ids are tried,
+    // since the dropped mod's selector comes before or after the kept one's.
+    [Theory]
+    [InlineData("a.good", "z.bad", false)]
+    [InlineData("z.good", "a.bad", false)]
+    [InlineData("a.good", "z.bad", true)]
+    [InlineData("z.good", "a.bad", true)]
+    public void ALinkThatSkippedFailedModsIsACacheHitForTheSameLaunch(string goodId, string badId, bool missingDependency)
+    {
+        ModPackage good = ScriptMod(goodId);
+        ModPackage bad = missingDependency
+            ? Mod(badId, "[scripts]\nnames = [\"BAD\"]\n[[requires]]\nid = \"missing.mod\"\n",
+                  new Dictionary<string, string> { ["scripts/BAD.oms"] = Script("exit") })   // fails in resolution
+            : ScriptMod(badId, "BAD", "this is not oms");                                      // fails in the link
+        string mods = Path.Combine(_root, "mods");
+        ModLinkBase linkBase = SyntheticBase();
+
+        ModStackResult first = ModStack.Prepare(linkBase, [good, bad], [], mods, skipFailedMods: true);
+        Assert.True(first.Succeeded, first.Report.Render());
+        Assert.False(first.FromCache);
+        Assert.Equal([badId], first.Report.Dropped);
+        Assert.Equal([goodId], first.Layer!.Manifest.Order.Select(entry => entry.Id));
+
+        ModStackResult second = ModStack.Prepare(linkBase, [good, bad], [], mods, skipFailedMods: true);
+        Assert.True(second.FromCache, second.Report.Render());
+        Assert.Equal(first.Layer.Key, second.Layer!.Key);
+
+        ModStackResult strict = ModStack.Prepare(linkBase, [good, bad], [], mods);
+        Assert.False(strict.Succeeded);
+        Assert.False(strict.FromCache);
+    }
+
+    // ------------------------------------------------------------------------------------------- cache pruning
+
+    /// <summary>A cache directory holding one file, last written <paramref name="age"/> ago.</summary>
+    private static string CacheEntry(string cacheRoot, string name, TimeSpan age)
+    {
+        string directory = Path.Combine(cacheRoot, name);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, MountedModLayer.ManifestFile), "{}");
+        Directory.SetLastWriteTimeUtc(directory, DateTime.UtcNow - age);
+        return directory;
+    }
+
+    private static List<string> CacheNames(string cacheRoot)
+        => Directory.GetDirectories(cacheRoot).Select(path => Path.GetFileName(path)).Order(StringComparer.Ordinal).ToList();
+
+    [Fact]
+    public void PruneKeepsTheGivenEntryAndTheSevenNewestOthers()
+    {
+        string cache = Path.Combine(_root, "cache");
+        string keep = CacheEntry(cache, "keep", TimeSpan.FromHours(30));   // the oldest of all, kept all the same
+        for (int i = 0; i < 12; i++) CacheEntry(cache, $"e{i:00}", TimeSpan.FromHours(2) + TimeSpan.FromMinutes(i));
+
+        ModLinkCache.Prune(cache, keep);
+
+        Assert.Equal(8, ModLinkCache.KeptEntries);
+        Assert.Equal(["e00", "e01", "e02", "e03", "e04", "e05", "e06", "keep"], CacheNames(cache));
+        ModLinkCache.Prune(Path.Combine(_root, "absent"), keep);    // no cache yet: nothing to do
+    }
+
+    [Fact]
+    public void PruneNeverRemovesAnEntryYoungerThanTheMinimumAge()
+    {
+        string cache = Path.Combine(_root, "cache");
+        string keep = CacheEntry(cache, "keep", TimeSpan.Zero);
+        for (int i = 0; i < 10; i++) CacheEntry(cache, $"young{i}", TimeSpan.FromMinutes(5 + i));
+        for (int i = 0; i < 3; i++) CacheEntry(cache, $"old{i}", ModLinkCache.PruneMinimumAge + TimeSpan.FromHours(2 + i));
+
+        ModLinkCache.Prune(cache, keep);
+
+        // Only seven fit beside the kept entry, but the three surplus young entries may be another instance's.
+        Assert.Equal(Enumerable.Range(0, 10).Select(i => $"young{i}").Append("keep").Order(StringComparer.Ordinal),
+                     CacheNames(cache));
+    }
+
+    [Fact]
+    public void PruneRemovesStaleWriteLeftoversWithoutCountingThemAsEntries()
+    {
+        string cache = Path.Combine(_root, "cache");
+        string keep = CacheEntry(cache, "keep", TimeSpan.Zero);
+        for (int i = 0; i < 7; i++) CacheEntry(cache, $"e{i}", TimeSpan.FromHours(2));
+        CacheEntry(cache, "k1.tmp-0001", TimeSpan.FromHours(2));
+        CacheEntry(cache, "k2.old-0001", TimeSpan.FromHours(2));
+        CacheEntry(cache, "k3.tmp-0002", TimeSpan.FromMinutes(1));   // a write in progress elsewhere
+        CacheEntry(cache, "k4.old-0002", TimeSpan.FromMinutes(1));
+
+        ModLinkCache.Prune(cache, keep);
+
+        Assert.Equal(["e0", "e1", "e2", "e3", "e4", "e5", "e6", "k3.tmp-0002", "k4.old-0002", "keep"], CacheNames(cache));
+    }
+
+    [Fact]
+    public void ACacheHitRefreshesTheEntrySoTheNextWriteKeepsIt()
+    {
+        ModLinkBase linkBase = SyntheticBase();
+        ModLinkResult linked = ModLinker.Link(linkBase, [ScriptMod("example.one")], []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        string cache = Path.Combine(_root, "cache");
+        MountedModLayer hit = ModLinkCache.Write(cache, "hit", linkBase, linked);
+        Directory.SetLastWriteTimeUtc(hit.Directory, DateTime.UtcNow - TimeSpan.FromHours(5));
+        for (int i = 0; i < 8; i++) CacheEntry(cache, $"e{i}", TimeSpan.FromHours(2) + TimeSpan.FromMinutes(i));
+
+        Assert.NotNull(ModLinkCache.TryOpen(cache, "hit"));
+        Assert.True(Directory.GetLastWriteTimeUtc(hit.Directory) > DateTime.UtcNow - TimeSpan.FromMinutes(5));
+
+        // The write keeps its own entry and the seven most recent others: "hit", used just now, and e0..e5.
+        ModLinkCache.Write(cache, "fresh", linkBase, linked);
+        Assert.Equal(["e0", "e1", "e2", "e3", "e4", "e5", "fresh", "hit"], CacheNames(cache));
+    }
+
     [Fact]
     [Trait("Category", "Workspace")]
     public void Gate3TheMountedLayerRunsBothRecordZerosAtInit2InSelectorOrder()

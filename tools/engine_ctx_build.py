@@ -2,6 +2,7 @@
 
     py -3.11 -X utf8 tools/engine_ctx_build.py --build   # -> build/engine-ctx.json + docs/engine-ctx-reference.md
     py -3.11 -X utf8 tools/engine_ctx_build.py --lint     # checks only (overlap / out-of-bounds / dup name / type)
+    py -3.11 -X utf8 tools/engine_ctx_build.py --check    # lint, then fail if docs/engine-ctx-reference.md is stale
 
 The struct is APPLIED only to the provenance-identified Himegari Ghidra /v2 image via
 run_script_inline reading build/engine-ctx.json (see vm-map/engine-ctx.toml). ctx = engine context
@@ -15,6 +16,7 @@ import tomllib
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
+REFERENCE_DOC = REPO / "docs" / "engine-ctx-reference.md"
 TYPE_SIZES = {"int": 4, "uint": 4, "void*": 4}
 
 
@@ -90,8 +92,18 @@ def emit_reference_md(model):
     return "\n".join(lines) + "\n"
 
 
+def check(model, reference_doc=REFERENCE_DOC):
+    """0 when the tracked reference matches what --build would write, else 1 (the model has already linted)."""
+    current = reference_doc.read_text(encoding="utf-8") if reference_doc.is_file() else None
+    if current != emit_reference_md(model):
+        print(f"stale: {reference_doc.name}; run engine_ctx_build.py --build")
+        return 1
+    print(f"check: {reference_doc.name} is current ({len(model['fields'])} fields)")
+    return 0
+
+
 def main():
-    text = (REPO / "vm-map" / "engine-ctx.toml").read_text(encoding="utf-8")
+    text =(REPO / "vm-map" / "engine-ctx.toml").read_text(encoding="utf-8")
     model = load(text)
     errs = lint(model)
     if errs:
@@ -102,10 +114,12 @@ def main():
     if "--lint" in sys.argv[1:]:
         print(f"lint clean: {len(model['fields'])} fields")
         return 0
+    if "--check" in sys.argv[1:]:
+        return check(model)
     if "--build" in sys.argv[1:]:
         (REPO / "build" / "engine-ctx.json").write_text(
             json.dumps(emit_json(model), indent=2) + "\n", encoding="utf-8", newline="\n")
-        (REPO / "docs" / "engine-ctx-reference.md").write_text(emit_reference_md(model), encoding="utf-8", newline="\n")
+        REFERENCE_DOC.write_text(emit_reference_md(model), encoding="utf-8", newline="\n")
         print(f"built {len(model['fields'])} fields -> build/engine-ctx.json + docs/engine-ctx-reference.md")
         return 0
     print(__doc__)

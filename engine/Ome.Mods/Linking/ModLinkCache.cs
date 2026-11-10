@@ -98,7 +98,8 @@ public static class ModLinkCache
                 if (patch.Plan is { } plan) target = OmsPatchPlan.FromJson(mod.ReadText(plan)).Script;
                 else if (patch.Source is { } source) target = Parser.ParseScript(mod.ReadText(source), source.Path).Name;
             }
-            catch (Exception error) when (error is JsonException or InvalidDataException or OmsSyntaxException) { }
+            catch (Exception error) when (error is JsonException or InvalidDataException or OmsSyntaxException
+                                              or ModPackageException) { }
             if (target != null) yield return target.ToUpperInvariant();
         }
     }
@@ -119,12 +120,57 @@ public static class ModLinkCache
             foreach (var (name, source) in manifest.Files)
                 if (!File.Exists(Path.Combine(source.Kind == "catalog" ? layer.CatalogDirectory : layer.LooseRoot, name)))
                     return null;
+            // A hit counts as recent use, so pruning keeps the entries that are actually launched.
+            try
+            {
+                Directory.SetLastWriteTimeUtc(directory, DateTime.UtcNow);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
             return layer;
         }
         catch (Exception error) when (error is JsonException or IOException or NotSupportedException)
         {
             return null;
         }
+    }
+
+    /// <summary>How many link entries the cache keeps; older ones are removed after each write.</summary>
+    public const int KeptEntries = 8;
+    /// <summary>Leftovers of an interrupted write (<c>.tmp-</c>, <c>.old-</c>) and surplus entries younger than this
+    /// stay, in case another running instance is writing or has one mounted.</summary>
+    public static readonly TimeSpan PruneMinimumAge = TimeSpan.FromHours(1);
+
+    /// <summary>Removes interrupted-write leftovers and all but the <see cref="KeptEntries"/> most recently written
+    /// entries, each only when older than <see cref="PruneMinimumAge"/>; <paramref name="keep"/> always stays.</summary>
+    public static void Prune(string cacheRoot, string keep)
+    {
+        DateTime cutoff = DateTime.UtcNow - PruneMinimumAge;
+        DirectoryInfo[] directories;
+        try
+        {
+            directories = new DirectoryInfo(cacheRoot).GetDirectories();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+        bool IsLeftover(DirectoryInfo directory) => directory.Name.Contains(".tmp-") || directory.Name.Contains(".old-");
+        foreach (DirectoryInfo leftover in directories.Where(IsLeftover).Where(item => item.LastWriteTimeUtc < cutoff))
+            TryDeleteDirectory(leftover.FullName);
+        foreach (DirectoryInfo surplus in directories.Where(item => !IsLeftover(item))
+                     .Where(item => !string.Equals(item.FullName, Path.GetFullPath(keep), StringComparison.OrdinalIgnoreCase))
+                     .OrderByDescending(item => item.LastWriteTimeUtc).Skip(KeptEntries - 1)
+                     .Where(item => item.LastWriteTimeUtc < cutoff))
+            TryDeleteDirectory(surplus.FullName);
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
     }
 
     /// <summary>Writes a successful link as the cache directory of <paramref name="key"/> and returns it mounted.</summary>
@@ -181,8 +227,17 @@ public static class ModLinkCache
                               new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(temporary, MountedModLayer.ReportFile), report, new UTF8Encoding(false));
 
-            if (Directory.Exists(final)) Directory.Delete(final, recursive: true);
+            // An existing entry (incomplete, or TryOpen would have used it) is moved aside before the new one moves in,
+            // so the key's directory is never missing while a whole entry exists.
+            string? previous = null;
+            if (Directory.Exists(final))
+            {
+                previous = Path.Combine(cacheRoot, $"{key}.old-{Guid.NewGuid():N}");
+                Directory.Move(final, previous);
+            }
             Directory.Move(temporary, final);
+            if (previous != null) TryDeleteDirectory(previous);
+            Prune(cacheRoot, keep: final);
             return new MountedModLayer(final, manifest, report);
         }
         catch

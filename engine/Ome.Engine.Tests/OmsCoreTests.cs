@@ -907,10 +907,47 @@ public class OmsCoreTests
     [Theory]
     [InlineData("L[1] = G[1][2][3]\n", "needs a row stride")]
     [InlineData("L[1] = G[1:3][2]\n", "takes exactly [row][col]")]
+    [InlineData("G[1] = 99999999999999999999999\n", "does not fit in 32 bits")]
+    [InlineData("G[1] = 0x10000000000000000\n", "does not fit in 32 bits")]
+    [InlineData("G[1] = -4294967295\n", "negative integer does not fit in 32 bits")]
+    [InlineData("const BIG = -2147483649\n", "negative integer does not fit in 32 bits")]
+    [InlineData("local int big[4294967295]\n", "is larger than 2147483647")]
     public void ElementSyntaxErrorsNameTheProblem(string body, string expected)
     {
         var error = Assert.Throws<OmsSyntaxException>(() => Compile(body));
         Assert.Contains(expected, error.Message);
+    }
+
+    // The compiler and the decompiler walk the tree recursively; input deep enough to overflow the stack is refused.
+    [Fact]
+    public void DeepNestingIsASyntaxErrorNotAStackOverflow()
+    {
+        string parentheses = "G[1] = " + new string('(', 5000) + "1" + new string(')', 5000) + "\n";
+        Assert.Contains("nested more than", Assert.Throws<OmsSyntaxException>(() => Compile(parentheses)).Message);
+        string chain = "G[1] = 1" + string.Concat(Enumerable.Repeat(" + 1", 5000)) + "\n";
+        Assert.Contains("nested more than", Assert.Throws<OmsSyntaxException>(() => Compile(chain)).Message);
+        string blocks = string.Concat(Enumerable.Repeat("if G[1] {\n", 500)) + string.Concat(Enumerable.Repeat("}\n", 500));
+        Assert.Contains("nested more than", Assert.Throws<OmsSyntaxException>(() => Compile(blocks)).Message);
+        Assert.Equal(-2147483648, unchecked((int)Assert.Single(Compile("G[1] = -2147483648\n").Code).Operands[1].Value));
+    }
+
+    [Fact]
+    public void ADeclarationInsideABlockIsDeclared()
+    {
+        IrScript inside = Compile("if G[1] {\n local int x\n x = 7\n}\nexit\n");
+        IrScript outside = Compile("local int x\nif G[1] {\n x = 7\n}\nexit\n");
+        Assert.Equal(Shape(outside), Shape(inside));
+    }
+
+    [Fact]
+    public void AnIndexedCellParameterStandsForTheArgumentsArray()
+    {
+        IrScript viaTemplate = Compile("use test.globals\ninline clear(a: cell) {\n a[L[0]] = 0\n}\nclear(unit_level)\nexit\n");
+        IrScript direct = Compile("use test.globals\nunit_level[L[0]] = 0\nexit\n");
+        Assert.Equal(Shape(direct), Shape(viaTemplate));
+        IrScript rawCell = Compile("inline clear(a: cell) {\n a[L[0]] = 0\n}\nclear(G[0x40])\nexit\n");
+        IrScript rawDirect = Compile("G[0x40][L[0]] = 0\nexit\n");
+        Assert.Equal(Shape(rawDirect), Shape(rawCell));
     }
 
     // ------------------------------------------------------------------------------------------- gate 5
@@ -1080,6 +1117,11 @@ public class OmsCoreTests
     [InlineData("inline bad(v: const = none) {\n G[1] = v\n}\nbad()\n", "'none' has no value here")]
     [InlineData("inline bad(v: const) {\n static if v == G[1] {\n exit\n }\n}\nbad(1)\n", "static if condition may use only")]
     [InlineData("loop {\n leave()\n}\ninline leave() {\n break\n}\n", "'break' outside a loop")]
+    [InlineData("inline bad() {\n local int x\n}\nbad()\n", "cannot appear in a template body")]
+    [InlineData("use test.globals\nflow_request:\nexit\n", "names both a label or sub of this script and an imported cell")]
+    [InlineData("use test.globals\nexit\nsub unit_level {\n return\n}\n", "names both a label or sub of this script and an imported cell")]
+    [InlineData("G[1] = G[2] ^ G[3] ^ G[4] ^ G[5] ^ G[6] ^ G[7] ^ G[8] ^ G[9] ^ G[10] ^ G[11]\n", "'^' nested more than 8 deep")]
+    [InlineData("inline f(a: cell) {\n a[1][2] = 0\n}\nf(G[4])\n", "cannot be indexed that way")]
     public void TemplateErrorsNameTheProblem(string body, string expected)
     {
         var error = Assert.Throws<OmsCompileException>(() => Compile(body));

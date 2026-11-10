@@ -2,9 +2,13 @@
 
 Run: py -3.11 -X utf8 tools/test_engine_ctx.py   (plain runner, no pytest).
 """
+import contextlib
+import io
 import sys
+import tempfile
+from pathlib import Path
 
-from engine_ctx_build import load, lint, emit_json
+from engine_ctx_build import load, lint, emit_json, emit_reference_md, check as check_reference
 
 FAILS = []
 
@@ -61,12 +65,25 @@ def test_lint_requires_executable_provenance():
           "lint prevents unscoped EngineCtx offsets")
 
 
+def test_check_reports_a_stale_reference():
+    model = load(GOOD)
+    with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
+        doc = Path(directory) / "engine-ctx-reference.md"
+        missing = check_reference(model, doc)
+        doc.write_text(emit_reference_md(model), encoding="utf-8")
+        current = check_reference(model, doc)
+        stale = check_reference(load(GOOD.replace('name="b"', 'name="renamed"')), doc)
+    check(missing == 1 and current == 0 and stale == 1,
+          "--check passes a current reference and fails a missing or stale one")
+
+
 def main():
     test_load_and_emit()
     test_lint_clean()
     test_lint_catches_overlap()
     test_lint_catches_oob_and_dupname()
     test_lint_requires_executable_provenance()
+    test_check_reports_a_stale_reference()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

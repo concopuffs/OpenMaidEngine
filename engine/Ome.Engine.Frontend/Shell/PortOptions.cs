@@ -152,7 +152,7 @@ public sealed class OmeIniStore(string path)
     {
         string? previous = File.Exists(FilePath) ? File.ReadAllText(FilePath, Encoding.UTF8) : null;
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        string temporary = FilePath + ".tmp";
+        string temporary = $"{FilePath}.tmp-{Guid.NewGuid():N}";   // unique, so two writers never share one
         File.WriteAllText(temporary, options.Serialize(previous), new UTF8Encoding(false));
         File.Move(temporary, FilePath, overwrite: true);
     }

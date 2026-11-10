@@ -117,7 +117,7 @@ public sealed class SelectorStore
     public void Save(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        string temporary = path + ".tmp";
+        string temporary = $"{path}.tmp-{Guid.NewGuid():N}";   // unique, so two writers never share one
         File.WriteAllText(temporary, ToToml(), new UTF8Encoding(false));
         File.Move(temporary, path, overwrite: true);
     }

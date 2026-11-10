@@ -131,8 +131,11 @@ jobs:
           echo "$sha256  build/release/$archive" | sha256sum --check
 
       - name: Create draft release
+        # Context values reach the script as environment variables, never as text spliced into it.
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_TARGET: ${{ github.sha }}
         run: |
           mirror_version="$(python3 -c 'import json; print(json.load(open("native/ome_movie_ffmpeg/ffmpeg-source.json"))["mirror_version"])')"
           tag="deps-ffmpeg-$mirror_version"
@@ -147,6 +150,6 @@ jobs:
             echo
             cat build/release/BUILD-CONFIG-win64.txt
           } > build/release-notes.md
-          gh release create "$tag" --repo "${{ github.repository }}" --draft --latest=false \
-            --target "${{ github.sha }}" --title "FFmpeg SDK ($mirror_version)" \
+          gh release create "$tag" --repo "$RELEASE_REPOSITORY" --draft --latest=false \
+            --target "$RELEASE_TARGET" --title "FFmpeg SDK ($mirror_version)" \
             --notes-file build/release-notes.md build/release/*

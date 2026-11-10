@@ -1,5 +1,7 @@
 """Plain tests for patch_points_build.py: validation with synthesized scripts (no game content)."""
 import sys
+import tempfile
+from pathlib import Path
 
 import patch_points_build as build
 
@@ -67,11 +69,30 @@ def test_reference_lists_each_revision():
     check("| `0x9a` |" in text and "## `himegari.experience.after_calculation`" in text, "the reference lists the site")
 
 
+def test_reference_check_needs_no_install():
+    points, errors, warnings = build.validate([point(script="MISSING.BIN")], None, profile="himegari")
+    check(not errors and not warnings, "without a catalog no script is looked up")
+    check(points[0]["script"] == "MISSING.BIN", "without a catalog points are still normalized")
+    errors = build.validate([point(at=[{"fingerprint": "S4IC422", "site": 1}])], None, profile="himegari")[1]
+    check(any("is not sha256:<64 lowercase hex>" in error for error in errors),
+          "without a catalog the registry's own form is still checked")
+    source = "vm-map/patch-points-himegari.toml"
+    with tempfile.TemporaryDirectory() as directory:
+        doc = Path(directory) / "patch-point-reference.md"
+        check(build.check_reference([point()], source, doc) == 1, "a missing reference is stale")
+        doc.write_text(build.render_reference(build.validate([point()], None)[0], source), encoding="utf-8")
+        check(build.check_reference([point()], source, doc) == 0, "a reference matching the registry is current")
+        moved = point(at=[{"fingerprint": build.fingerprint(SCRIPT), "site": 0x9b}])
+        check(build.check_reference([moved], source, doc) == 1, "a site edit without a rebuild is stale")
+        check(build.check_reference([point(name="experience")], source, doc) == 1, "a malformed registry fails")
+
+
 def main():
     test_valid_point()
     test_rejections()
     test_other_revisions_are_a_warning()
     test_reference_lists_each_revision()
+    test_reference_check_needs_no_install()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

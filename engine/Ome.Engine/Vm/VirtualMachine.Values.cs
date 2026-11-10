@@ -6,21 +6,26 @@ namespace Ome.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
+    /// <summary>A native integer cell's value: the low 32 bits, sign-extended. Native arithmetic wraps at 32 bits and
+    /// compares signed 32-bit values; the port's cells are wider, and an immediate or a loaded save can hold either
+    /// extension of the same 32 bits, so arithmetic results and compare operands go through this.</summary>
+    private static long I32(long value) => unchecked((int)value);
+
     private int StepValue(string label, IReadOnlyList<Operand> a, int pc)
     {
         switch (label)
         {
-            case "add": Write(a[0], Read(a[1]) + Read(a[2])); return pc + 1;
-            case "sub": Write(a[0], Read(a[1]) - Read(a[2])); return pc + 1;
-            case "mul": Write(a[0], Read(a[1]) * Read(a[2])); return pc + 1;
-            case "div": Write(a[0], NativeDiv(Read(a[1]), Read(a[2]))); return pc + 1;
-            case "mod": Write(a[0], NativeMod(Read(a[1]), Read(a[2]))); return pc + 1;
-            case "and": Write(a[0], Read(a[1]) & Read(a[2])); return pc + 1;
-            case "or":  Write(a[0], Read(a[1]) | Read(a[2])); return pc + 1;
-            case "sar": Write(a[0], Read(a[1]) >> (int)(Read(a[2]) & 31)); return pc + 1;
-            case "shl": Write(a[0], Read(a[1]) << (int)(Read(a[2]) & 31)); return pc + 1;
-            case "eq":  Write(a[0], Read(a[1]) == Read(a[2]) ? 1 : 0); return pc + 1;
-            case "ne":  Write(a[0], Read(a[1]) != Read(a[2]) ? 1 : 0); return pc + 1;
+            case "add": Write(a[0], I32(Read(a[1]) + Read(a[2]))); return pc + 1;
+            case "sub": Write(a[0], I32(Read(a[1]) - Read(a[2]))); return pc + 1;
+            case "mul": Write(a[0], I32(Read(a[1]) * Read(a[2]))); return pc + 1;
+            case "div": Write(a[0], I32(NativeDiv(I32(Read(a[1])), I32(Read(a[2]))))); return pc + 1;
+            case "mod": Write(a[0], I32(NativeMod(I32(Read(a[1])), I32(Read(a[2]))))); return pc + 1;
+            case "and": Write(a[0], I32(Read(a[1]) & Read(a[2]))); return pc + 1;
+            case "or":  Write(a[0], I32(Read(a[1]) | Read(a[2]))); return pc + 1;
+            case "sar": Write(a[0], I32(Read(a[1])) >> (int)(Read(a[2]) & 31)); return pc + 1;
+            case "shl": Write(a[0], I32(Read(a[1]) << (int)(Read(a[2]) & 31))); return pc + 1;
+            case "eq":  Write(a[0], I32(Read(a[1])) == I32(Read(a[2])) ? 1 : 0); return pc + 1;
+            case "ne":  Write(a[0], I32(Read(a[1])) != I32(Read(a[2])) ? 1 : 0); return pc + 1;
             case "string-equals":
                 Write(a[0], string.Equals(ReadStr(a[1]), ReadStr(a[2]), StringComparison.Ordinal) ? 1 : 0);
                 return pc + 1;
@@ -44,10 +49,10 @@ public sealed partial class VirtualMachine
                 Write(a[0], unchecked((value ^ sign) - sign));
                 return pc + 1;
             }
-            case "lt":  Write(a[0], Read(a[1]) <  Read(a[2]) ? 1 : 0); return pc + 1;
-            case "lte": Write(a[0], Read(a[1]) <= Read(a[2]) ? 1 : 0); return pc + 1;
-            case "gr":  Write(a[0], Read(a[1]) >  Read(a[2]) ? 1 : 0); return pc + 1;
-            case "gre": Write(a[0], Read(a[1]) >= Read(a[2]) ? 1 : 0); return pc + 1;
+            case "lt":  Write(a[0], I32(Read(a[1])) <  I32(Read(a[2])) ? 1 : 0); return pc + 1;
+            case "lte": Write(a[0], I32(Read(a[1])) <= I32(Read(a[2])) ? 1 : 0); return pc + 1;
+            case "gr":  Write(a[0], I32(Read(a[1])) >  I32(Read(a[2])) ? 1 : 0); return pc + 1;
+            case "gre": Write(a[0], I32(Read(a[1])) >= I32(Read(a[2])) ? 1 : 0); return pc + 1;
             case "mov":
             case "set-string":
                 if (IsStr(a[0]) || IsStr(a[1])) WriteStr(a[0], ReadStr(a[1]));

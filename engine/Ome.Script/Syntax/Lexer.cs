@@ -166,10 +166,14 @@ public static class Lexer
             while (i < source.Length && (hex ? char.IsAsciiHexDigit(source[i]) : source[i] is '0' or '1' or '_')) i++;
             string body = source[digits..i].Replace("_", "");
             if (body.Length == 0) throw new OmsSyntaxException(span, "missing digits");
-            ulong value = hex ? ulong.Parse(body, NumberStyles.HexNumber, CultureInfo.InvariantCulture)
-                              : Convert.ToUInt64(body, 2);
-            if (value > uint.MaxValue) throw new OmsSyntaxException(span, "integer does not fit in 32 bits");
-            return new Token(TokenKind.Integer, source[start..i], (uint)value, 0, span);
+            // Leading zeros aside, more than 8 hex or 32 binary digits cannot fit; checked before parsing, which
+            // would overflow on a long literal.
+            string significant = body.TrimStart('0');
+            if (significant.Length > (hex ? 8 : 32)) throw new OmsSyntaxException(span, "integer does not fit in 32 bits");
+            uint value = significant.Length == 0 ? 0
+                : hex ? uint.Parse(significant, NumberStyles.HexNumber, CultureInfo.InvariantCulture)
+                : Convert.ToUInt32(significant, 2);
+            return new Token(TokenKind.Integer, source[start..i], value, 0, span);
         }
         while (i < source.Length && char.IsAsciiDigit(source[i])) i++;
         bool isFloat = false;
@@ -194,8 +198,8 @@ public static class Lexer
         string text = source[start..i];
         if (isFloat)
             return new Token(TokenKind.Float, text, 0, float.Parse(text, CultureInfo.InvariantCulture), span);
-        ulong integer = ulong.Parse(text, CultureInfo.InvariantCulture);
-        if (integer > uint.MaxValue) throw new OmsSyntaxException(span, "integer does not fit in 32 bits");
-        return new Token(TokenKind.Integer, text, (uint)integer, 0, span);
+        if (!uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out uint integer))
+            throw new OmsSyntaxException(span, "integer does not fit in 32 bits");
+        return new Token(TokenKind.Integer, text, integer, 0, span);
     }
 }

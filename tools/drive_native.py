@@ -1223,7 +1223,8 @@ class Daemon:
             threading.Thread(target=self.watch_window, daemon=True).start()
             threading.Thread(target=self.watch_exit, daemon=True).start()
             core.write_json_atomic(session, {
-                **self.static_info(), "pid": os.getpid(), "port": self.server.getsockname()[1], "token": self.token,
+                **self.static_info(), "pid": os.getpid(), "pid_created": core.pid_created(os.getpid()),
+                "port": self.server.getsockname()[1], "token": self.token,
                 "started": core.now_text(), "log": str(self.root / "serve.log"), "events": str(self.events_path),
             })
             self.serve()
@@ -1343,6 +1344,13 @@ def start(arguments: argparse.Namespace) -> int:
                 print(f"drive native: AGE pid {info['game_pid']} ({info['mode']}), window {hello.get('window')}, "
                       f"saves {saves['mode']}: {saves.get('profile') or saves['root']}")
                 print(f"drive native: hooked {', '.join(hello.get('hooked', []))}; log {root / 'serve.log'}")
+                for event in seen:
+                    if event["kind"] in ("hook-error", "agent-error"):
+                        print(f"drive native: {event['kind']}: {event.get('module') or 'agent'}: "
+                              f"{event.get('error') or event.get('detail')}")
+                        if event.get("module", "").lower() == "shell32.dll" and saves["mode"] == "sandbox":
+                            print("drive native: the save sandbox is not in effect, so AGE may write the live "
+                                  "saves; stop the session")
                 for event in dialogs:
                     print(f"drive native: AGE shows a message box: {event['text']!r} {event['buttons']} "
                           f"-> answer with `drive.py native do \"answer BUTTON\"`")
@@ -1370,7 +1378,15 @@ def stop(timeout: float) -> int:
         print(f"drive native: {error}", file=sys.stderr)
         code = 1
     if win32().wait_exit(info["pid"], timeout) is None:
-        win32().terminate(info["pid"])
+        # read_session matched the pid to the daemon's recorded creation time; terminate checks it again on its own
+        # handle, so a process that reused the pid of a daemon that died meanwhile is never killed.
+        created = info.get("pid_created")
+        if created is None:
+            print(f"drive native: the daemon (pid {info['pid']}) did not exit, and its session records no creation "
+                  "time to confirm the pid is still it; not terminating", file=sys.stderr)
+            code = 1
+        elif not win32().terminate(info["pid"], created=created):
+            print(f"drive native: pid {info['pid']} is no longer the daemon; left alone", file=sys.stderr)
     root = core.drive_root("native")
     events = root / "events.jsonl"
     if events.is_file():
@@ -1398,12 +1414,13 @@ def restore(folder: str) -> int:
     source = core.backup_contents(Path(folder))
     if not (source / "SAVE").is_dir() and not (source / "SYS4REG.INI").is_file():
         raise DriveError(f"{source} does not look like a save folder copy (no SAVE\\ or SYS4REG.INI)")
+    live = core.live_root()
+    core.check_restore_target(live, paths.CONTEXT.game_root)   # USEAPPDATAFOLDER=0 puts it in the install
     if core.read_session("native") is not None:
         raise DriveError("stop the running native session first")
     from frida_runtime import frida
     if any(process.name.upper() == "AGE.EXE" for process in frida.get_local_device().enumerate_processes()):
         raise DriveError("close AGE before restoring its saves")
-    live = core.live_root()
     if live.is_dir():
         safety, _ = core.backup_tree(live, core.drive_root("native") / "backups")
         print(f"drive native: current live saves kept in {safety}")

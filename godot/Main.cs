@@ -311,8 +311,16 @@ public partial class Main : Godot.Control
                 else GD.PushWarning($"unknown --render-backend '{userArgs[i + 1]}'; using gpu");
             }
             if (userArgs[i] == "--frames" && i + 1 < userArgs.Length) int.TryParse(userArgs[i + 1], out _seqFrames);
-            if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out sleepScale);
-            if (userArgs[i] == "--speed" && i + 1 < userArgs.Length) double.TryParse(userArgs[i + 1], out speed);
+            if (userArgs[i] == "--sleep-scale" && i + 1 < userArgs.Length)
+            {
+                if (TryParseLaunchDouble(userArgs[i + 1], out double parsed)) sleepScale = parsed;
+                else GD.PushWarning($"[startup] ignoring --sleep-scale '{userArgs[i + 1]}': not a number");
+            }
+            if (userArgs[i] == "--speed" && i + 1 < userArgs.Length)
+            {
+                if (TryParseLaunchDouble(userArgs[i + 1], out double parsed)) speed = parsed;
+                else GD.PushWarning($"[startup] ignoring --speed '{userArgs[i + 1]}': not a number");
+            }
             if (userArgs[i] == "--transition-click-ms" && i + 1 < userArgs.Length) long.TryParse(userArgs[i + 1], out transitionClickMs);
             if (userArgs[i] == "--hold-message-skip") holdMessageSkip = true;
             if (userArgs[i] == "--text-backend" && i + 1 < userArgs.Length)
@@ -322,12 +330,11 @@ public partial class Main : Godot.Control
             if (userArgs[i] == "--seed" && i + 1 < userArgs.Length)
             {
                 var kv = userArgs[i + 1].Split('=');
-                if (kv.Length == 2)
-                {
-                    int k = kv[0].StartsWith("0x") ? System.Convert.ToInt32(kv[0], 16) : int.Parse(kv[0]);
-                    long v = kv[1].StartsWith("0x") ? System.Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
-                    seeds.Add((k, v));
-                }
+                if (kv.Length == 2 && TryParseLaunchInteger(kv[0], out long k) && k is >= 0 and <= int.MaxValue
+                    && TryParseLaunchInteger(kv[1], out long v))
+                    seeds.Add(((int)k, v));
+                else
+                    GD.PushWarning($"[startup] ignoring --seed '{userArgs[i + 1]}': expected ADDRESS=VALUE (decimal or 0x hex)");
             }
         }
 
@@ -747,8 +754,10 @@ public partial class Main : Godot.Control
         finally { perf?.EndFrame(); }
     }
 
+    /// <summary>Write a diagnostic snapshot. Only the user's F6 copies its locator and path to the clipboard; a
+    /// snapshot the port takes on its own (worker failure, halt, step limit) leaves the clipboard alone.</summary>
     private void CaptureStallDiagnostic(GodotTraceSnapshot? traceOverride = null,
-                                        string snapshotKind = "stall")
+                                        string snapshotKind = "stall", bool copyToClipboard = false)
     {
         try
         {
@@ -832,9 +841,15 @@ public partial class Main : Godot.Control
             string coordinate = trace.CurrentOffset >= 0
                 ? $"{System.IO.Path.GetFileNameWithoutExtension(trace.CurrentScript).ToUpperInvariant()}@0x{trace.CurrentOffset:x}"
                 : trace.CurrentScript;
-            string clipboard = $"{coordinate} · {snapshotKind} snapshot {path}";
-            DisplayServer.ClipboardSet(clipboard);
-            _status.Text = $"Diagnostic saved: {coordinate} (path copied)";
+            if (copyToClipboard)
+            {
+                DisplayServer.ClipboardSet($"{coordinate} · {snapshotKind} snapshot {path}");
+                _status.Text = $"Diagnostic saved: {coordinate} (path copied)";
+            }
+            else
+            {
+                _status.Text = $"Diagnostic saved: {coordinate}";
+            }
             GD.Print($"[diagnostic] {snapshotKind} snapshot {coordinate} -> {path}");
         }
         catch (System.Exception exception)
@@ -843,6 +858,22 @@ public partial class Main : Godot.Control
             GD.Print($"[diagnostic] stall snapshot failed: {exception}");
         }
     }
+
+    /// <summary>A launch-flag number, read the same in every locale (a comma-decimal culture would read "1.5" as 15).</summary>
+    private static bool TryParseLaunchDouble(string text, out double value)
+        => double.TryParse(text, System.Globalization.NumberStyles.Float,
+                           System.Globalization.CultureInfo.InvariantCulture, out value);
+
+    /// <summary>A launch-flag integer: decimal, or hex after <c>0x</c>.</summary>
+    private static bool TryParseLaunchInteger(string text, out long value)
+        => text.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            ? long.TryParse(text.AsSpan(2), System.Globalization.NumberStyles.AllowHexSpecifier,
+                            System.Globalization.CultureInfo.InvariantCulture, out value)
+            : long.TryParse(text, System.Globalization.NumberStyles.AllowLeadingSign,
+                            System.Globalization.CultureInfo.InvariantCulture, out value);
+
+    /// <summary>The exit code when the VM thread does not stop at shutdown and the port exits without teardown.</summary>
+    private const int VmStopTimeoutExitCode = 3;
 
     public override void _ExitTree()
     {
@@ -863,21 +894,25 @@ public partial class Main : Godot.Control
             }
         }
 
+        if (!vmStopped)
+        {
+            // The VM thread may still be using the glyph rasterizer and the movie decoders, and disposing native
+            // resources under it can fault. Leave everything to process exit, with a nonzero code to show the stall.
+            string message = "[vm] the VM did not stop within 5 seconds; exiting without teardown or the shared-profile flush";
+            GD.PushError(message);
+            System.Console.Error.WriteLine(message);
+            System.Console.Error.Flush();
+            System.Environment.Exit(VmStopTimeoutExitCode);
+        }
+
         if (!_selftest && _vm != null)
         {
-            if (!vmStopped)
-            {
-                GD.PushWarning("[persistence] VM did not stop within 5 seconds; skipped concurrent shared-profile flush");
-            }
-            else
-            {
-                _host?.FlushMessageSettings(_vm.MenuState.ReadTextSkip);
-                SharedProfileShutdownFlushResult flush = _vm.FlushSharedProfileOnShutdown();
-                if (flush.Outcome == SharedProfileShutdownFlushOutcome.Saved)
-                    GD.Print("[persistence] clean shutdown wrote SAVE.DAT and RT.DAT");
-                else if (flush.Outcome == SharedProfileShutdownFlushOutcome.Failed)
-                    GD.PushWarning($"[persistence] clean-shutdown shared-profile write failed: {flush.Error}");
-            }
+            _host?.FlushMessageSettings(_vm.MenuState.ReadTextSkip);
+            SharedProfileShutdownFlushResult flush = _vm.FlushSharedProfileOnShutdown();
+            if (flush.Outcome == SharedProfileShutdownFlushOutcome.Saved)
+                GD.Print("[persistence] clean shutdown wrote SAVE.DAT and RT.DAT");
+            else if (flush.Outcome == SharedProfileShutdownFlushOutcome.Failed)
+                GD.PushWarning($"[persistence] clean-shutdown shared-profile write failed: {flush.Error}");
         }
 
         DumpHistogram(); _timeline?.Dispose(); _locator?.Dispose();

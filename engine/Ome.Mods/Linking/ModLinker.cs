@@ -213,7 +213,8 @@ public static class ModLinker
             {
                 stored = OmsPatchPlan.FromJson(mod.ReadText(planEntry));
             }
-            catch (Exception error) when (error is System.Text.Json.JsonException or InvalidDataException)
+            catch (Exception error) when (error is System.Text.Json.JsonException or InvalidDataException
+                                              or ModPackageException)
             {
                 report.Add(ModReportClass.Error, mod.Id, null, $"{planEntry.Path}: not a readable transform plan: {error.Message}");
                 return null;
@@ -225,7 +226,7 @@ public static class ModLinker
             {
                 unit = Parser.ParseScript(mod.ReadText(sourceEntry), $"{mod.Id}/{sourceEntry.Path}");
             }
-            catch (OmsSyntaxException error)
+            catch (Exception error) when (error is OmsSyntaxException or ModPackageException)
             {
                 report.Add(ModReportClass.Error, mod.Id, null, error.Message);
                 return null;

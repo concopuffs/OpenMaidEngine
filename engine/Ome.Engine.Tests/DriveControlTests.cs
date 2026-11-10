@@ -39,7 +39,14 @@ public class DriveControlTests
         public void SetSpeed(double factor) => Speed = factor;
         public void Close() => Closes++;
         public (int X, int Y)? TakeCursorWarp() { var warp = Warp; Warp = null; return warp; }
-        public (int X, int Y) PointerPosition { get; set; } = (0, 0);
+        private (int X, int Y) _pointerPosition;
+        /// <summary>When set, reading <see cref="PointerPosition"/> throws it (a backend failing mid-request).</summary>
+        public Exception? PointerFailure;
+        public (int X, int Y) PointerPosition
+        {
+            get => PointerFailure is { } failure ? throw failure : _pointerPosition;
+            set => _pointerPosition = value;
+        }
         public int CloseRequests;
         public string? Answered;
         public void RequestClose() => CloseRequests++;
@@ -372,6 +379,84 @@ public class DriveControlTests
         dispatcher.Poll(300);
         Assert.Equal(1, backend.Closes);
         Assert.True(dispatcher.CloseRequested);
+    }
+
+    // A backend that throws something other than a protocol error ends the request with an error reply naming the
+    // exception, whether it throws while the request starts (wheel reads the pointer there) or on a later poll (state
+    // and wait read the VM there); the dispatcher is then free for the next request.
+    [Fact]
+    public void ABackendExceptionIsAnErrorReplyAndFreesTheDispatcher()
+    {
+        var backend = new FakeBackend();
+        var dispatcher = new DriveDispatcher(backend);
+
+        backend.State = () => throw new InvalidOperationException("the VM is gone");
+        var state = Run(dispatcher, backend, """{"id":1,"op":"state"}""");
+        Assert.False((bool)state["ok"]!);
+        Assert.Equal(1, (long)state["id"]!);
+        Assert.Equal("InvalidOperationException: the VM is gone", (string?)state["error"]);
+        Assert.False(dispatcher.Busy);
+
+        int polls = 0;
+        backend.State = () => ++polls < 3 ? At("TITLE@0x21") : throw new IOException("pipe closed");
+        var wait = Run(dispatcher, backend, """{"id":2,"op":"wait","until":{"script":"SC0000"}}""");
+        Assert.False((bool)wait["ok"]!);
+        Assert.Equal("IOException: pipe closed", (string?)wait["error"]);
+        Assert.Equal(3, polls);                    // not polled again after it threw
+        Assert.False(dispatcher.Busy);
+
+        backend.PointerFailure = new NullReferenceException("no cursor");
+        var wheel = Run(dispatcher, backend, """{"id":3,"op":"wheel","notches":1}""");
+        Assert.Equal("NullReferenceException: no cursor", (string?)wheel["error"]);
+        Assert.False(dispatcher.Busy);
+        Assert.DoesNotContain(backend.Events, e => e.Contains("wheel"));
+
+        // A protocol error keeps its own message, and the next request is served.
+        backend.PointerFailure = null;
+        backend.Capabilities = new[] { "menu" };
+        Assert.Equal("menu command ids are 1..0xffff",
+            (string?)Run(dispatcher, backend, """{"id":4,"op":"menu","command":0}""")["error"]);
+        backend.State = () => At("SC0000@0x8a9");
+        Assert.Equal("SC0000@0x8a9", (string?)Run(dispatcher, backend, """{"id":5,"op":"state"}""")["result"]!["location"]);
+    }
+
+    // ------------------------------------------------------------------------------------------- bounded lines
+
+    [Fact]
+    public void BoundedLinesEndAtLfOrCrlfAndAtTheEndOfTheStream()
+    {
+        var reader = new StringReader("first\nsecond\r\n\nin\rside\nlast");
+        Assert.Equal("first", DriveServer.ReadLineBounded(reader, 16));
+        Assert.Equal("second", DriveServer.ReadLineBounded(reader, 16));
+        Assert.Equal("", DriveServer.ReadLineBounded(reader, 16));
+        Assert.Equal("in\rside", DriveServer.ReadLineBounded(reader, 16));   // a CR not before LF is text
+        Assert.Equal("last", DriveServer.ReadLineBounded(reader, 16));       // a partial line at the end of the stream
+        Assert.Null(DriveServer.ReadLineBounded(reader, 16));
+
+        Assert.Null(DriveServer.ReadLineBounded(new StringReader(""), 16));
+        var single = new StringReader("only\n");
+        Assert.Equal("only", DriveServer.ReadLineBounded(single, 16));
+        Assert.Null(DriveServer.ReadLineBounded(single, 16));
+    }
+
+    [Fact]
+    public void ABoundedLineLongerThanTheLimitThrows()
+    {
+        string limit = new('x', 8);
+        Assert.Equal(limit, DriveServer.ReadLineBounded(new StringReader(limit + "\n"), 8));
+        Assert.Equal(limit, DriveServer.ReadLineBounded(new StringReader(limit), 8));
+        Assert.Contains("longer than 8 characters", Assert.Throws<IOException>(
+            () => DriveServer.ReadLineBounded(new StringReader(limit + "x\n"), 8)).Message);
+        Assert.Throws<IOException>(() => DriveServer.ReadLineBounded(new StringReader(limit + "x"), 8));
+        Assert.Throws<IOException>(() => DriveServer.ReadLineBounded(new StringReader(new string('y', 10_000)), 8));
+    }
+
+    // The limit is on the line, which excludes its terminator, so the line ending does not change what is accepted.
+    [Fact]
+    public void ACrlfLineOfExactlyTheLimitIsNotTooLong()
+    {
+        string limit = new('x', 8);
+        Assert.Equal(limit, DriveServer.ReadLineBounded(new StringReader(limit + "\r\n"), 8));
     }
 
     // ------------------------------------------------------------------------------------------- server

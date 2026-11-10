@@ -48,6 +48,7 @@ CORE_TESTS = (
     "test_init_table_profile.py",
     "test_locate_page.py",
     "test_drive_core.py",
+    "test_native_scratch.py",
     "test_compiler_census.py",
     "test_opcodes.py",
     "test_operand_access.py",
@@ -63,11 +64,10 @@ WORKSPACE_TESTS = (
     "test_globals.py",
     "test_scjump.py",
 )
-WORKSPACE_GENERATED_INPUTS = (
-    paths.BUILD / "global-var-map.json",
-    paths.BUILD / "callscript-names.json",
-    paths.BUILD / "scjump-decisions.json",
-)
+# Workspace-derived inputs in the selected profile's game build: every profile's global reference merges its auto
+# shape map (global_map.py); Himegari's Python workspace tests read the other two.
+WORKSPACE_AUTO_MAP = "global-var-map.json"
+HIMEGARI_WORKSPACE_INPUTS = ("callscript-names.json", "scjump-decisions.json")
 LOW_MEMORY_DOTNET_ENVIRONMENT = (
     ("DOTNET_CLI_USE_MSBUILD_SERVER", "0"),
     ("MSBUILDDISABLENODEREUSE", "1"),
@@ -116,16 +116,11 @@ def resolve_godot(explicit: str | None, environ: dict[str, str] | None = None) -
     )
 
 
-def resolve_game_root(
-    explicit: str | None,
-    environ: dict[str, str] | None = None,
-    conventional: Path | None = None,
-) -> Path:
-    """Resolve explicit value, OME_GAME_ROOT, then the conventional sibling install."""
-    env = os.environ if environ is None else environ
-    candidate = Path(
-        explicit or env.get("OME_GAME_ROOT") or conventional or paths.GAME_DIR
-    ).expanduser()
+def resolve_game_root(root: Path) -> Path:
+    """Check the selected install. paths.py resolves it once (--game-root, OME_GAME_ROOT, then the conventional
+    sibling install) and consumes --game-root from the command line, so validation never resolves it again: a second
+    resolver would see only OME_GAME_ROOT and could disagree with the root the gates' children inherit."""
+    candidate = Path(root).expanduser()
     if not candidate.is_dir():
         raise ValueError(f"game root not found: {candidate}")
     resolved = candidate.resolve()
@@ -147,6 +142,27 @@ def selected_phases(level: str) -> set[str]:
     return phases
 
 
+def registry_gates() -> list[Gate]:
+    """Content-free gates over every profile's registries, whichever profile is selected: each global registry is
+    linted, and each patch-point registry is checked and its generated reference compared with what --build writes.
+    (A global reference merges the workspace auto map, so its staleness gate is in the workspace phase.)"""
+    gates = []
+    for profile_id in paths.available_profiles():
+        if paths.ToolContext.resolve(profile_id, environ={}).globals_toml.is_file():
+            gates.append(Gate(
+                f"globals-lint-{profile_id}",
+                f"Global registry lint ({profile_id})",
+                _python_tool("globals_build.py", "--profile", profile_id, "--lint"),
+            ))
+        if (paths.VM_MAP / f"patch-points-{profile_id}.toml").is_file():
+            gates.append(Gate(
+                f"patch-points-reference-{profile_id}",
+                f"Patch-point registry and generated reference ({profile_id})",
+                _python_tool("patch_points_build.py", "--profile", profile_id, "--check-reference"),
+            ))
+    return gates
+
+
 def build_gate_plan(
     level: str,
     godot: Path | None = None,
@@ -162,8 +178,12 @@ def build_gate_plan(
         # The check runs before the build so stale tracked files are reported, not silently rewritten.
         Gate("opcodes-check", "Generated opcode references", _python_tool("opcodes_build.py", "--check")),
         Gate("opcodes-build", "Opcode metadata build", _python_tool("opcodes_build.py", "--build")),
-        Gate("globals-lint", "Global registry lint", _python_tool("globals_build.py", "--lint")),
-        Gate("engine-ctx-lint", "Engine context lint", _python_tool("engine_ctx_build.py", "--lint")),
+        *registry_gates(),
+        Gate(
+            "engine-ctx-check",
+            "Engine context lint and generated reference",
+            _python_tool("engine_ctx_build.py", "--check"),
+        ),
         Gate(
             "modding-games-check",
             "Generated modding games page",
@@ -275,6 +295,13 @@ def build_gate_plan(
             300,
             profile_environment,
         ))
+        # The check runs before the build so a stale tracked reference is reported, not silently rewritten.
+        gates.append(Gate(
+            "globals-check",
+            f"Generated global reference ({context.profile_id})",
+            _python_tool("globals_build.py", "--check"),
+            environment=profile_environment,
+        ))
         if context.profile_id == "himegari":
             gates.append(Gate(
                 "globals-build", "Global registry build",
@@ -379,15 +406,17 @@ def validate_prerequisites(
     if "workspace" in phases:
         if not context.sys4ini.is_file():
             errors.append(f"selected game install is unavailable: {context.game_root}")
+        required_inputs = [context.game_build / WORKSPACE_AUTO_MAP]
         if context.profile_id == "himegari":
             if not context.data1.is_dir():
                 errors.append(f"extracted DATA1 corpus not found: {context.data1}")
-            for required in WORKSPACE_GENERATED_INPUTS:
-                if not required.is_file():
-                    errors.append(
-                        f"workspace-derived prerequisite not found: {required} "
-                        "(rebuild it with the owning tool in docs/tools-reference.md)"
-                    )
+            required_inputs += [context.game_build / name for name in HIMEGARI_WORKSPACE_INPUTS]
+        for required in required_inputs:
+            if not required.is_file():
+                errors.append(
+                    f"workspace-derived prerequisite not found: {required} "
+                    "(rebuild it with the owning tool in docs/tools-reference.md)"
+                )
     return errors
 
 
@@ -525,28 +554,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--level", choices=LEVELS, default="full")
     parser.add_argument("--godot", help="Godot 4.7 .NET console executable")
+    # paths.py consumes --profile, --game-root and --extracted-root at import (paths.CONTEXT); they are listed here
+    # for --help only, and validation reads the context, never these values.
     parser.add_argument("--profile", default=paths.CONTEXT.profile_id,
                         help="game profile id (common tool-context option)")
-    parser.add_argument("--game-root", help="AGE install containing SYS4INI.BIN")
+    parser.add_argument("--game-root", help="AGE install containing SYS4INI.BIN (common tool-context option)")
     parser.add_argument("--extracted-root", help="optional extracted DATA1..DATA5 root")
     parser.add_argument("--verbose", action="store_true", help="stream successful gate output")
     parser.add_argument("--fail-fast", action="store_true", help="stop after the first failed gate")
     return parser.parse_args(argv)
 
 
+def resolve_selected_paths(
+    level: str, godot_argument: str | None, context: paths.ToolContext
+) -> tuple[Path | None, Path | None, list[str]]:
+    """Godot (runtime levels) and the game root (workspace and runtime levels), or the errors resolving them. The
+    game root is the context's, the one every gate's child process inherits."""
+    phases = selected_phases(level)
+    godot = game_root = None
+    errors = []
+    if "runtime" in phases or "workspace" in phases:
+        try:
+            if "runtime" in phases:
+                godot = resolve_godot(godot_argument)
+            game_root = resolve_game_root(context.game_root)
+        except ValueError as error:
+            errors.append(str(error))
+    return godot, game_root, errors
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = parse_args(argv)
     context = paths.CONTEXT
     prerequisite_errors = validate_prerequisites(arguments.level, context)
-    phases = selected_phases(arguments.level)
-    godot = game_root = None
-    if "runtime" in phases or "workspace" in phases:
-        try:
-            if "runtime" in phases:
-                godot = resolve_godot(arguments.godot)
-            game_root = resolve_game_root(arguments.game_root)
-        except ValueError as error:
-            prerequisite_errors.append(str(error))
+    godot, game_root, resolution_errors = resolve_selected_paths(arguments.level, arguments.godot, context)
+    prerequisite_errors += resolution_errors
     if prerequisite_errors:
         print("Validation prerequisites failed:", file=sys.stderr)
         for error in prerequisite_errors:

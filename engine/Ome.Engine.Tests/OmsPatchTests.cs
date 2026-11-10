@@ -373,6 +373,39 @@ public class OmsPatchTests
         Assert.Contains("can reach the end of its code", error.Message);
     }
 
+    // The patched code decides whether the end is reachable: a block replacing the base's final exit can fall into
+    // the appended code, and a block replacing a base that falls off its end can close it.
+    [Fact]
+    public void AReplacementOfTheLastExitCanReachAppendedCode()
+    {
+        Base base_ = Compile("G[1] = 1\nexit\n");
+        var error = Assert.Throws<OmsCompileException>(() => Plan(base_, """
+            sub extra {
+                G[2] = 1
+            }
+            replace site 5 {
+                extra()
+            }
+            """ + "\n"));
+        Assert.Contains("region block", error.Message);
+        Assert.Contains("falls through", error.Message);
+    }
+
+    [Fact]
+    public void AReplacementThatEndsTheCodeAllowsAppendedCode()
+    {
+        Base base_ = Compile("G[1] = 1\n");
+        Plan(base_, """
+            sub extra {
+                G[2] = 1
+            }
+            replace site 0 {
+                extra()
+                exit
+            }
+            """ + "\n");
+    }
+
     // ------------------------------------------------------------------------------------------- plan format
 
     [Fact]
@@ -399,6 +432,120 @@ public class OmsPatchTests
         Assert.Equal(Apply(base_, plan).Bytes, Apply(base_, read).Bytes);
         Assert.Contains("unsupported transform plan version", Assert.Throws<InvalidDataException>(() =>
             OmsPatchPlan.FromJson(json.Replace("\"oms_patch\": 1", "\"oms_patch\": 3"))).Message);
+    }
+
+    /// <summary>A stored plan with one operation, one block of one instruction (two operands) and one data item, as
+    /// JSON to damage.</summary>
+    private static System.Text.Json.Nodes.JsonObject StoredPlanJson()
+    {
+        Base base_ = Compile("G[1] = 1\nexit\n");
+        OmsPatchPlan plan = Plan(base_, "before site 0 {\n    @op(0x6e, 0, \"new\")\n}\n");
+        var json = System.Text.Json.Nodes.JsonNode.Parse(plan.ToJson())!.AsObject();
+        Assert.Single(json["operations"]!.AsArray());
+        Assert.Equal(2, json["blocks"]![0]![0]!["args"]!.AsArray().Count);
+        Assert.Single(json["data"]!.AsArray());
+        return json;
+    }
+
+    // A plan is mod content. Every way it can be malformed fails as an error the linker reports against the mod
+    // (FromJson's contract: JsonException or InvalidDataException), never as a NullReferenceException,
+    // KeyNotFoundException or InvalidOperationException out of the reader.
+    [Theory]
+    [InlineData("script missing")]
+    [InlineData("fingerprint missing")]
+    [InlineData("abi missing")]
+    [InlineData("script null")]
+    [InlineData("abi null")]
+    [InlineData("script a number")]
+    [InlineData("oms_patch a string")]
+    [InlineData("local_counts null")]
+    [InlineData("operations null")]
+    [InlineData("operation null")]
+    [InlineData("operation kind unknown")]
+    [InlineData("operation site missing")]
+    [InlineData("blocks null")]
+    [InlineData("block null")]
+    [InlineData("instruction null")]
+    [InlineData("args null")]
+    [InlineData("args missing")]
+    [InlineData("operand without t")]
+    [InlineData("operand t a string")]
+    [InlineData("operand without a value")]
+    [InlineData("operand label not an array")]
+    [InlineData("operand lit negative")]
+    [InlineData("operand null")]
+    [InlineData("data null")]
+    [InlineData("data item null")]
+    [InlineData("data dwords null")]
+    [InlineData("whole plan an array")]
+    [InlineData("whole plan null")]
+    public void AMalformedStoredPlanIsInvalidDataOrJson(string damage)
+    {
+        System.Text.Json.Nodes.JsonObject plan = StoredPlanJson();
+        System.Text.Json.Nodes.JsonObject operand = plan["blocks"]![0]![0]!["args"]![0]!.AsObject();
+        string? whole = null;
+        switch (damage)
+        {
+            case "script missing": plan.Remove("script"); break;
+            case "fingerprint missing": plan.Remove("fingerprint"); break;
+            case "abi missing": plan.Remove("abi"); break;
+            case "script null": plan["script"] = null; break;
+            case "abi null": plan["abi"] = null; break;
+            case "script a number": plan["script"] = 5; break;
+            case "oms_patch a string": plan["oms_patch"] = "1"; break;
+            case "local_counts null": plan["local_counts"] = null; break;
+            case "operations null": plan["operations"] = null; break;
+            case "operation null": plan["operations"]![0] = null; break;
+            case "operation kind unknown": plan["operations"]![0]!["kind"] = "sideways"; break;
+            case "operation site missing": plan["operations"]![0]!.AsObject().Remove("site"); break;
+            case "blocks null": plan["blocks"] = null; break;
+            case "block null": plan["blocks"]![0] = null; break;
+            case "instruction null": plan["blocks"]![0]![0] = null; break;
+            case "args null": plan["blocks"]![0]![0]!["args"] = null; break;
+            case "args missing": plan["blocks"]![0]![0]!.AsObject().Remove("args"); break;
+            case "operand without t": operand.Remove("t"); break;
+            case "operand t a string": operand["t"] = "imm"; break;
+            case "operand without a value": operand.Remove("lit"); break;
+            case "operand label not an array": operand.Remove("lit"); operand["label"] = 5; break;
+            case "operand lit negative": operand["lit"] = -1; break;
+            case "operand null": plan["blocks"]![0]![0]!["args"]![0] = null; break;
+            case "data null": plan["data"] = null; break;
+            case "data item null": plan["data"]![0] = null; break;
+            case "data dwords null": plan["data"]![0]!["dwords"] = null; break;
+            case "whole plan an array": whole = "[]"; break;
+            case "whole plan null": whole = "null"; break;
+            default: throw new ArgumentException(damage);
+        }
+        Assert.True(operand.ContainsKey("lit") || damage.StartsWith("operand"), "the first operand is a literal");
+
+        Exception? error = Record.Exception(() => OmsPatchPlan.FromJson(whole ?? plan.ToJsonString()));
+
+        Assert.NotNull(error);
+        Assert.True(error is System.Text.Json.JsonException or InvalidDataException,
+                    $"{damage}: {error.GetType().FullName}: {error.Message}");
+    }
+
+    // JSON nulls the deserializer accepts in required members and lists, which the plan cannot hold, are
+    // InvalidDataException naming the problem. (Wrong-typed values fail in System.Text.Json as JsonException.)
+    [Theory]
+    [InlineData("script null", "needs script, fingerprint and abi")]
+    [InlineData("operation null", "holds a null list or entry")]
+    [InlineData("args null", "holds a null list or entry")]
+    [InlineData("data dwords null", "holds a null list or entry")]
+    public void ANullPlanValueIsInvalidData(string damage, string message)
+    {
+        System.Text.Json.Nodes.JsonObject plan = StoredPlanJson();
+        switch (damage)
+        {
+            case "script null": plan["script"] = null; break;
+            case "operation null": plan["operations"]![0] = null; break;
+            case "args null": plan["blocks"]![0]![0]!["args"] = null; break;
+            case "data dwords null": plan["data"]![0]!["dwords"] = null; break;
+            default: throw new ArgumentException(damage);
+        }
+
+        var error = Assert.Throws<InvalidDataException>(() => OmsPatchPlan.FromJson(plan.ToJsonString()));
+        Assert.Contains(message, error.Message);
     }
 
     // ------------------------------------------------------------------------------------------- syntax

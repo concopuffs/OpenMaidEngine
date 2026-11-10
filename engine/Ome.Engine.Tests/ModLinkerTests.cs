@@ -200,6 +200,83 @@ public sealed class ModLinkerTests : IDisposable
         Assert.Contains("dropped: bad", lenient.Report.Render());
     }
 
+    // A stored plan the reader refuses is an error against its mod, not an exception out of the link or the cache
+    // key, which leaves the plan's target out.
+    [Theory]
+    [InlineData("""{"oms_patch": 1, "script": "T.BIN", "fingerprint": "sha256:00", "abi": "SYS4422", "operations": [null]}""")]
+    [InlineData("""{"oms_patch": 1, "script": "T.BIN", "fingerprint": "sha256:00", "abi": "SYS4422", "blocks": [[{"op": 2}]]}""")]
+    [InlineData("""{"oms_patch": 1, "script": null, "fingerprint": "sha256:00", "abi": "SYS4422"}""")]
+    [InlineData("""{"oms_patch": 1, "script": "T.BIN", "fingerprint": "sha256:00", "abi": "SYS4422", "blocks": [[{"op": 2, "args": [{"lit": 1}]}]]}""")]
+    public void AStoredPlanThatCannotBeReadIsAnErrorAgainstItsMod(string plan)
+    {
+        ModPackage mod = ModWithTables("bad.plan", "", new Dictionary<string, string> { ["patches/fix.omspatch.json"] = plan });
+
+        Assert.Empty(ModLinkCache.TouchedScripts(mod));
+        ModLinkResult result = ModLinker.Link(SyntheticBase("T.BIN"), [mod], []);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Report.Lines, line => line.Stops && line.Mods.SequenceEqual(["bad.plan"])
+                                                     && line.Message.StartsWith("patches/fix.omspatch.json: not a readable transform plan"));
+        Assert.Equal(["bad.plan"], result.Report.FailedMods);
+    }
+
+    // ------------------------------------------------------------------------------------------- toolchain stamp
+
+    private static OpcodeTable StampTable(string label = "mov", int argc = 2, string? semanticName = null)
+        => new(new Dictionary<int, OpcodeDefinition>
+        {
+            [0x2] = new(0x2, "exit", 0, new HashSet<string>()),
+            [0x55] = new(0x55, label, argc, new HashSet<string>(), semanticName),
+        }, "TEST-ABI");
+
+    private static OpcodeContracts StampContracts(int jumpTarget = 1, string? semanticName = null)
+        => OpcodeContracts.FromParts(new Dictionary<int, int[]> { [0x8c] = [jumpTarget] },
+            new Dictionary<(int Opcode, int Operand), string[]>(),
+            semanticName == null ? new Dictionary<int, string>() : new Dictionary<int, string> { [0x55] = semanticName });
+
+    [Fact]
+    public void TheContractsFingerprintIsDeterministicAndCoversEachContract()
+    {
+        Assert.Equal(StampContracts().Fingerprint(), StampContracts().Fingerprint());
+        Assert.Matches("^sha256:[0-9a-f]{64}$", StampContracts().Fingerprint());
+        Assert.NotEqual(StampContracts().Fingerprint(), StampContracts(jumpTarget: 2).Fingerprint());
+        Assert.NotEqual(StampContracts().Fingerprint(), StampContracts(semanticName: "assign").Fingerprint());
+        Assert.NotEqual(StampContracts().Fingerprint(), Contracts.Fingerprint());
+    }
+
+    // A registry rebuilt under the same ABI id (framing, label, semantic name or a contract changed) is another
+    // toolchain, so a link compiled against the old one is a different cache key.
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void TheToolchainStampFollowsTheOpcodeTableAndContractsUnderOneAbiId()
+    {
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var store = new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir);
+        ModLinkBase Base(OpcodeTable table, OpcodeContracts contracts)
+            => ModLinkBase.ForInstall("himegari", Paths.Sys4Ini, catalog, store, table, contracts);
+        static string KeyOf(ModLinkBase linkBase) => ModLinkCache.ComputeKey(linkBase, [], new Dictionary<string, int>());
+
+        ModLinkBase reference = Base(StampTable(), StampContracts());
+        ModLinkBase same = Base(StampTable(), StampContracts());
+        Assert.Equal(reference.ToolchainStamp, same.ToolchainStamp);
+        Assert.Equal(KeyOf(reference), KeyOf(same));
+
+        var changed = new (string What, ModLinkBase Base)[]
+        {
+            ("argc", Base(StampTable(argc: 3), StampContracts())),
+            ("label", Base(StampTable(label: "move"), StampContracts())),
+            ("table semantic name", Base(StampTable(semanticName: "assign"), StampContracts())),
+            ("code target", Base(StampTable(), StampContracts(jumpTarget: 2))),
+            ("contract semantic name", Base(StampTable(), StampContracts(semanticName: "assign"))),
+        };
+        foreach (var (what, linkBase) in changed)
+        {
+            Assert.Equal(reference.Table.AbiId, linkBase.Table.AbiId);
+            Assert.True(reference.ToolchainStamp != linkBase.ToolchainStamp, $"{what}: the stamp did not change");
+            Assert.True(KeyOf(reference) != KeyOf(linkBase), $"{what}: the cache key did not change");
+        }
+    }
+
     // ------------------------------------------------------------------------------------------- gate 2
 
     private static string Examples => Path.Combine(Paths.Repo, "oms", "examples", "mods");

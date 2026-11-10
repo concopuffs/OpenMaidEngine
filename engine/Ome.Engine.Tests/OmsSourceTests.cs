@@ -123,6 +123,60 @@ public class OmsSourceTests
         Assert.Equal(original, rebuilt);
     }
 
+    // A shared slot holds one content. Once one of its occurrences is edited, the sidecar no longer describes the
+    // source, and compiling with it would silently keep the first occurrence's text for both: it is refused.
+    [Fact]
+    public void ASharedDataSlotWhoseOccurrencesNowDifferIsRefused()
+    {
+        IrScript script = Canonical();
+        script.Code.Insert(3, Op(0x6e, Imm(1), IrOperand.Data(2, 0)));     // a second reference to item 0
+        for (int k = 0; k < script.Code.Count; k++)
+            script.Code[k] = script.Code[k] with
+            {
+                Operands = script.Code[k].Operands.Select(o => o.Kind == IrOperandKind.CodeLabel && o.Value >= 3
+                    ? IrOperand.Label(0, (int)o.Value + 1) : o).ToArray(),
+            };
+        var (original, _, decompiled) = RoundTrip(script);
+        OmsLayout sidecar = OmsLayout.FromJson(decompiled.Layout.ToJson());
+        Assert.Equal([0, 1], sidecar.Data![0].Refs!);
+        IrScript Recompile(string source)
+            => OmsCompiler.Compile(Parser.ParseScript(source, "t.oms"), Abi, Table, sidecar, new IntrinsicCatalog(Table, Contracts));
+
+        Assert.Equal(original, IrEncoder.Encode(Recompile(decompiled.Source)));
+
+        string[] lines = decompiled.Source.Split('\n');
+        int second = Array.FindIndex(lines, line => line.TrimStart().StartsWith("@op(0x6e, 0x1, ", StringComparison.Ordinal));
+        Assert.True(second >= 0, decompiled.Source);
+        lines[second] = lines[second][..lines[second].IndexOf('@')] + "@op(0x6e, 0x1, \"edited\")";
+        var error = Assert.Throws<InvalidDataException>(() => Recompile(string.Join('\n', lines)));
+        Assert.Contains("layout data slot shares occurrences 0 and 1, whose contents now differ", error.Message);
+    }
+
+    // The sidecar records which source it describes: the text's SHA-256, with CRLF read as LF so an editor's
+    // line-ending change is not an edit.
+    [Fact]
+    public void TheSourceFingerprintIgnoresLineEndingsAndRoundTripsInTheSidecar()
+    {
+        var (_, _, decompiled) = RoundTrip(Canonical());
+        string source = decompiled.Source.Replace("\r\n", "\n");
+        string fingerprint = OmsLayout.SourceFingerprintOf(source);
+
+        Assert.Matches("^sha256:[0-9a-f]{64}$", fingerprint);
+        Assert.Equal(fingerprint, OmsLayout.SourceFingerprintOf(source.Replace("\n", "\r\n")));
+        Assert.Equal(fingerprint, OmsLayout.SourceFingerprintOf(source));
+        Assert.NotEqual(fingerprint, OmsLayout.SourceFingerprintOf(source.Replace("label_0:", "label_0: ")));
+        Assert.NotEqual(fingerprint, OmsLayout.SourceFingerprintOf(source + "\n"));
+        Assert.NotEqual(fingerprint, OmsLayout.SourceFingerprintOf(source.Replace("\n", "\r")));   // a bare CR is not LF
+
+        var sidecar = new OmsLayout { Magic = "SYS4424 ", SourceFingerprint = fingerprint };
+        string json = sidecar.ToJson();
+        Assert.Contains($"\"source\": \"{fingerprint}\"", json);
+        OmsLayout read = OmsLayout.FromJson(json);
+        Assert.Equal(fingerprint, read.SourceFingerprint);
+        Assert.Equal("SYS4424 ", read.Magic);
+        Assert.Null(OmsLayout.FromJson(new OmsLayout { Magic = "SYS4424 " }.ToJson()).SourceFingerprint);
+    }
+
     [Theory]
     [InlineData("script \"X\"\n    @op(0x8c, nowhere)\n", "unknown label")]
     [InlineData("script \"X\"\na:\na:\n    @op(0x05)\n", "defined twice")]

@@ -76,13 +76,18 @@ class FakeApi:
         self.published = True
         return self.release
 
-    def add_asset(self, name: str, size: int, state: str = "uploaded") -> None:
-        self.assets.append({"id": self.next_asset_id, "name": name, "size": size, "state": state})
+    def add_asset(
+        self, name: str, size: int, state: str = "uploaded", digest: str | None = None
+    ) -> None:
+        self.assets.append(
+            {"id": self.next_asset_id, "name": name, "size": size, "state": state, "digest": digest}
+        )
         self.next_asset_id += 1
 
     def upload(self, release_id: int, asset: Path) -> dict[str, Any]:
+        # GitHub computes a digest for every asset uploaded since it introduced the field.
         self.events.append(f"upload:{asset.name}")
-        self.add_asset(asset.name, asset.stat().st_size)
+        self.add_asset(asset.name, asset.stat().st_size, digest=f"sha256:{sha256(asset)}")
         return dict(self.assets[-1])
 
 
@@ -100,6 +105,10 @@ def draft_release() -> dict[str, Any]:
 
 def published_release() -> dict[str, Any]:
     return dict(draft_release(), draft=False)
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def json_bytes(value: dict[str, Any]) -> bytes:
@@ -199,6 +208,19 @@ def promote(api: FakeApi, root: Path, upload: Any = None) -> dict[str, Any]:
     )
 
 
+def prepared_artifacts(root: Path) -> tuple[tuple[Path, Path, Path], dict[str, tuple[int, str]]]:
+    """Artifacts prepared once, with each release asset's size and digest. The archives embed timestamps, so a
+    resumed run that must match a digest promotes these same files."""
+    root.mkdir(parents=True, exist_ok=True)
+    directories = create_artifacts(root)
+    assets = publish_github_release.prepare_release_assets(TAG, TARGET, *directories)
+    return directories, {asset.name: (asset.stat().st_size, f"sha256:{sha256(asset)}") for asset in assets}
+
+
+def promote_prepared(api: FakeApi, directories: tuple[Path, Path, Path]) -> dict[str, Any]:
+    return publish_github_release.promote_release(api, api.upload, TAG, TARGET, *directories)
+
+
 def prepared_sizes(root: Path) -> dict[str, int]:
     root.mkdir(parents=True, exist_ok=True)
     linux, windows, prepared = create_artifacts(root)
@@ -239,15 +261,57 @@ class PublishGithubReleaseTests(unittest.TestCase):
 
     def test_resumes_draft_and_uploads_only_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            sizes = prepared_sizes(Path(temporary) / "sizes")
+            directories, verified = prepared_artifacts(Path(temporary))
+            size, digest = verified[publish_github_release.LINUX_ARCHIVE]
             api = FakeApi(draft_release())
-            api.add_asset(publish_github_release.LINUX_ARCHIVE, sizes[publish_github_release.LINUX_ARCHIVE])
-            promote(api, Path(temporary) / "run")
+            api.add_asset(publish_github_release.LINUX_ARCHIVE, size, digest=digest)
+            promote_prepared(api, directories)
             uploads = [event for event in api.events if event.startswith("upload:")]
             self.assertNotIn(f"upload:{publish_github_release.LINUX_ARCHIVE}", uploads)
             self.assertEqual(2, len(uploads))
+            self.assertEqual([], api.deleted)
             self.assertIsNone(api.created_payload)
             self.assertTrue(api.published)
+
+    def test_resumed_asset_without_a_digest_is_replaced_not_trusted_by_size(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directories, verified = prepared_artifacts(Path(temporary))
+            size, _ = verified[publish_github_release.LINUX_ARCHIVE]
+            api = FakeApi(draft_release())
+            api.add_asset(publish_github_release.LINUX_ARCHIVE, size)          # digest: null
+            promote_prepared(api, directories)
+            self.assertEqual([100], api.deleted)
+            delete_at = api.events.index("delete:100")
+            upload_at = api.events.index(f"upload:{publish_github_release.LINUX_ARCHIVE}")
+            self.assertLess(delete_at, upload_at)
+            self.assertEqual(3, sum(event.startswith("upload:") for event in api.events))
+            self.assertTrue(api.published)
+
+    def test_refuses_resumed_asset_of_equal_size_and_other_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directories, verified = prepared_artifacts(Path(temporary))
+            size, _ = verified[publish_github_release.WINDOWS_ARCHIVE]
+            api = FakeApi(draft_release())
+            api.add_asset(publish_github_release.WINDOWS_ARCHIVE, size, digest="sha256:" + "0" * 64)
+            with self.assertRaisesRegex(ValueError, "differs in content and will not be overwritten"):
+                promote_prepared(api, directories)
+            self.assertEqual([], api.deleted)
+            self.assertNotIn(f"upload:{publish_github_release.WINDOWS_ARCHIVE}", api.events)
+            self.assertFalse(api.published)
+
+    def test_refuses_published_release_whose_digest_differs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            directories, verified = prepared_artifacts(Path(temporary))
+            api = FakeApi(published_release())
+            for name, (size, digest) in verified.items():
+                wrong = name == publish_github_release.RELEASE_CHECKSUMS
+                api.add_asset(name, size, digest="sha256:" + "f" * 64 if wrong else digest)
+            with self.assertRaisesRegex(RuntimeError, "content differs from the verified asset"):
+                promote_prepared(api, directories)
+            api = FakeApi(published_release())
+            for name, (size, digest) in verified.items():
+                api.add_asset(name, size, digest=digest)
+            self.assertFalse(promote_prepared(api, directories)["draft"])
 
     def test_replaces_incomplete_upload_placeholder_on_draft(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

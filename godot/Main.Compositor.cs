@@ -29,6 +29,9 @@ public partial class Main
     private readonly System.Collections.Generic.Dictionary<(int AssetId, long Key), CachedPixels> _pixelCache = new();
     private readonly System.Collections.Generic.List<RenderObject> _visibleSnapshot = new(1024);
 
+    /// <summary>A retained object's live source slot, read under the gfx lock (the VM thread changes the object).</summary>
+    private int? SourceSlotOf(long handle) => _vm.Gfx.TryGetSourceSlot(handle, out int slot) ? slot : null;
+
     private void Recomposite()
     {
         bool gpuSnapshotCaptured = false;
@@ -54,7 +57,7 @@ public partial class Main
 
         long phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         long allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-        if (_host.TrySnapshotScreenTransition(out _)) return false; // P4: whole-screen offscreen targets
+        if (_host.HasScreenTransition) return false; // P4: whole-screen offscreen targets, drawn by the software path
         publicationPolicy =
             _host.SnapshotBackbufferObjects(_vm.Gfx, _clock.NowMs, _visibleSnapshot);
         snapshotCaptured = true;
@@ -104,15 +107,15 @@ public partial class Main
             float opacity = v.Alpha / 255f;
             workStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
             workAllocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            var rawObject = _vm.Gfx.TryGet(v.Handle);
+            int? rawSlot = SourceSlotOf(v.Handle);
             _perf?.RecordGpuObjectLookup(PerformanceFrameLog.Timestamp() - workStarted,
                 PerformanceFrameLog.AllocatedBytes() - workAllocated);
             long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            var texture = rawObject != null
-                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, v.SurfaceResId)
+            var texture = rawSlot != null
+                ? _host.ResolveSurfaceTexture(rawSlot.Value, v.SurfaceResId)
                 : null;
             _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+            bool movieSurfaceBound = rawSlot != null && _host.IsMovieSurfaceBound(rawSlot.Value);
 
             if (v.DirectionalBlurTransition is { } directionalBlur)
             {
@@ -167,7 +170,7 @@ public partial class Main
                     bool drawn = _gpuRenderer.DrawTexture(resolved.Image, resolved.AssetId, v.ColorKey,
                         v.SrcX, v.SrcY, v.W, v.H, affine, v.Tint, v.TintStrength,
                         opacity, v.MultiplyTint, resolved.IsDynamic,
-                        rawObject?.SourceSlot ?? v.Handle, v.Blend);
+                        rawSlot ?? v.Handle, v.Blend);
                     if (drawn)
                         _perf?.RecordGpuLayer(v.W, v.H, affine, _screenWidth, _screenHeight,
                                               resolved.IsDynamic, v.Blend);
@@ -200,13 +203,13 @@ public partial class Main
                 .FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform) affine = affine.Then(rangeTransform);
             float opacity = source.Alpha / 255f * (float)transition.Progress;
-            var rawObject = _vm.Gfx.TryGet(source.Handle);
+            int? rawSlot = SourceSlotOf(source.Handle);
             long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            var texture = rawObject != null
-                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
+            var texture = rawSlot != null
+                ? _host.ResolveSurfaceTexture(rawSlot.Value, source.SurfaceResId)
                 : null;
             _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+            bool movieSurfaceBound = rawSlot != null && _host.IsMovieSurfaceBound(rawSlot.Value);
 
             if (source.SurfaceResId == 0 && texture == null)
             {
@@ -243,7 +246,7 @@ public partial class Main
             if (_gpuRenderer.DrawTexture(resolved.Image, resolved.AssetId, source.ColorKey,
                 source.SrcX, source.SrcY, source.W, source.H, affine, source.Tint, source.TintStrength,
                 opacity, source.MultiplyTint, resolved.IsDynamic,
-                rawObject?.SourceSlot ?? source.Handle, source.Blend))
+                rawSlot ?? source.Handle, source.Blend))
             {
                 _perf?.RecordGpuLayer(source.W, source.H, affine, _screenWidth, _screenHeight,
                                       resolved.IsDynamic, source.Blend);
@@ -303,13 +306,13 @@ public partial class Main
                 .FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform)
                 baseAffine = baseAffine.Then(rangeTransform);
-            var rawObject = _vm.Gfx.TryGet(source.Handle);
+            int? rawSlot = SourceSlotOf(source.Handle);
             long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            var texture = rawObject != null
-                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
+            var texture = rawSlot != null
+                ? _host.ResolveSurfaceTexture(rawSlot.Value, source.SurfaceResId)
                 : null;
             _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+            bool movieSurfaceBound = rawSlot != null && _host.IsMovieSurfaceBound(rawSlot.Value);
             if (source.SurfaceResId == 0 && texture == null)
             {
                 if (source.Blend == BlendKind.Opaque) { _perf?.RecordSkippedLayer(); continue; }
@@ -343,7 +346,7 @@ public partial class Main
                     resolved.Image, resolved.AssetId, source.ColorKey,
                     source.SrcX, source.SrcY, source.W, source.H, affine,
                     source.Tint, source.TintStrength, opacity, source.MultiplyTint,
-                    resolved.IsDynamic, rawObject?.SourceSlot ?? source.Handle, BlendKind.Alpha))
+                    resolved.IsDynamic, rawSlot ?? source.Handle, BlendKind.Alpha))
                 {
                     _perf?.RecordGpuLayer(source.W, source.H, affine, _screenWidth, _screenHeight,
                                           resolved.IsDynamic, BlendKind.Alpha);
@@ -491,13 +494,13 @@ public partial class Main
             int dstY = (int)System.Math.Round(projected.Y);
             float opacity = v.Alpha / 255f * globalOpacity;  // transform Z is never opacity
             float strength = v.TintStrength / 255f;          // tint-blend / fill strength
-            var rawObject = _vm.Gfx.TryGet(v.Handle);
+            int? rawSlot = SourceSlotOf(v.Handle);
             long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            var surfaceTexture = rawObject != null
-                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, v.SurfaceResId)
+            var surfaceTexture = rawSlot != null
+                ? _host.ResolveSurfaceTexture(rawSlot.Value, v.SurfaceResId)
                 : null;
             _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+            bool movieSurfaceBound = rawSlot != null && _host.IsMovieSurfaceBound(rawSlot.Value);
             // These strings exist only for --gfx-log/timeline diagnostics. DEBUGMAP visits roughly one
             // thousand retained objects per composition, so formatting them unconditionally creates
             // several megabytes of short-lived garbage even in an ordinary run.
@@ -585,12 +588,12 @@ public partial class Main
                     BlitLayer(texture.Value.Image, texture.Value.AssetId, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
                               localToDest, opacity, v.MultiplyTint, texture.Value.IsDynamic, v.Blend);
                     if (decisions != null)
-                        outcome = $"slot={rawObject?.SourceSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
+                        outcome = $"slot={rawSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
                                   $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
                                   $"anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) dst=({dstX},{dstY}) " +
                                   $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
                                   $"rot=({t.RotationAngleDegrees:0.0}+{v.Rotation.AngleDegrees:0.0}) " +
-                                  $"mode={rawObject?.StaticColorMode} op={opacity:0.00} tintStr={strength:0.00}" +
+                                  $"mode={_vm.Gfx.TryGet(v.Handle)?.StaticColorMode} op={opacity:0.00} tintStr={strength:0.00}" +
                                   ColorTimeline(v.ColorTransition);
                 }
             }
@@ -622,13 +625,13 @@ public partial class Main
             if (source.RangeTransform is { } rangeTransform)
                 affine = affine.Then(rangeTransform);
             float opacity = source.Alpha / 255f * (float)transition.Progress;
-            var rawObject = _vm.Gfx.TryGet(source.Handle);
+            int? rawSlot = SourceSlotOf(source.Handle);
             long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            var texture = rawObject != null
-                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
+            var texture = rawSlot != null
+                ? _host.ResolveSurfaceTexture(rawSlot.Value, source.SurfaceResId)
                 : null;
             _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+            bool movieSurfaceBound = rawSlot != null && _host.IsMovieSurfaceBound(rawSlot.Value);
             if (source.SurfaceResId == 0 && texture == null)
             {
                 if (source.Blend == BlendKind.Opaque)
@@ -696,13 +699,13 @@ public partial class Main
                 .FromLocalOrigin(source.DstX, source.DstY);
             if (source.RangeTransform is { } rangeTransform)
                 baseAffine = baseAffine.Then(rangeTransform);
-            var rawObject = _vm.Gfx.TryGet(source.Handle);
+            int? rawSlot = SourceSlotOf(source.Handle);
             long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            var texture = rawObject != null
-                ? _host.ResolveSurfaceTexture(rawObject.SourceSlot, source.SurfaceResId)
+            var texture = rawSlot != null
+                ? _host.ResolveSurfaceTexture(rawSlot.Value, source.SurfaceResId)
                 : null;
             _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-            bool movieSurfaceBound = rawObject != null && _host.IsMovieSurfaceBound(rawObject.SourceSlot);
+            bool movieSurfaceBound = rawSlot != null && _host.IsMovieSurfaceBound(rawSlot.Value);
             if (source.SurfaceResId == 0 && texture == null)
             {
                 if (source.Blend == BlendKind.Opaque) { _perf?.RecordSkippedLayer(); continue; }

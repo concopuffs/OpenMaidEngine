@@ -32,6 +32,9 @@ public static class OmsCanonical
                 int bank = Array.IndexOf(StorageBanks.LocalBankTypes, operand.Type);
                 if (bank >= 0) highest[bank] = Math.Max(highest[bank], operand.Value);
             }
-        return highest.Select(h => h < 0 ? 1 : checked((int)h + 2)).ToArray();
+        return highest.Select((h, bank) => h < 0 ? 1
+            : h <= int.MaxValue - 2 ? (int)h + 2
+            : throw new InvalidDataException(
+                $"local slot {h} of operand type 0x{StorageBanks.LocalBankTypes[bank]:x} is too large for a script header")).ToArray();
     }
 }

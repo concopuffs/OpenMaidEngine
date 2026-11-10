@@ -109,6 +109,34 @@ public sealed class OpcodeContracts
         return contracts;
     }
 
+    /// <summary>A deterministic digest of every contract held (code targets and their kinds, operand access per ABI,
+    /// semantic names, observed revisions, code values), for caches whose output depends on them.</summary>
+    public string Fingerprint()
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var (op, positions) in _codeTargets.OrderBy(pair => pair.Key))
+            text.Append("t ").Append(op).Append(':').AppendJoin(',', positions.Order()).Append('\n');
+        foreach (var (op, kind) in _codeTargetKinds.OrderBy(pair => pair.Key))
+            text.Append("k ").Append(op).Append(':').Append(kind).Append('\n');
+        foreach (var (key, access) in _access.OrderBy(pair => pair.Key.Opcode).ThenBy(pair => pair.Key.Operand))
+        {
+            text.Append("a ").Append(key.Opcode).Append('.').Append(key.Operand).Append(':');
+            if (access.Common != null) text.AppendJoin(',', access.Common);
+            if (access.ByAbi != null)
+                foreach (var (abi, kinds) in access.ByAbi.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                    text.Append(';').Append(abi).Append('=').AppendJoin(',', kinds);
+            text.Append('\n');
+        }
+        foreach (var (op, name) in _semanticNames.OrderBy(pair => pair.Key))
+            text.Append("n ").Append(op).Append(':').Append(name).Append('\n');
+        foreach (var (op, revisions) in _observedRevisions.OrderBy(pair => pair.Key))
+            text.Append("r ").Append(op).Append(':').AppendJoin(',', revisions.Order(StringComparer.Ordinal)).Append('\n');
+        foreach (var (op, operand) in _codeValues.Order())
+            text.Append("v ").Append(op).Append('.').Append(operand).Append('\n');
+        return "sha256:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(text.ToString()))).ToLowerInvariant();
+    }
+
     /// <summary>Whether the one-based operand position holds a code offset.</summary>
     public bool IsCodeTarget(int opcode, int operand)
         => _codeTargets.TryGetValue(opcode, out HashSet<int>? positions) && positions.Contains(operand);

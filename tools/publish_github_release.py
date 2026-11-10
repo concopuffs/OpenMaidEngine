@@ -46,6 +46,7 @@ WINDOWS_PACKAGE_ROOT = "OME-windows-x64"
 SMOKE_MARKER = "PACKAGE SMOKE OK: opcodes=548 ffmpeg-abi=3"
 TAG_PATTERN = re.compile(r"v[0-9][0-9A-Za-z.+-]*\Z")
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
+DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9._-]+\Z")
 MAX_EVIDENCE_SIZE = 1024 * 1024
 
@@ -475,7 +476,25 @@ def _asset_index(assets: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return indexed
 
 
-def _require_exact_assets(assets: list[dict[str, Any]], sizes: dict[str, int], label: str) -> None:
+def _remote_digest(asset: dict[str, Any]) -> str | None:
+    """The asset's content digest as GitHub reports it (`sha256:<hex>`), or None when it reports none: assets
+    uploaded before GitHub computed digests have `digest: null`."""
+    digest = asset.get("digest")
+    return digest if isinstance(digest, str) and DIGEST_PATTERN.fullmatch(digest) else None
+
+
+def _asset_id(asset: dict[str, Any], name: str) -> int:
+    asset_id = asset.get("id")
+    if not isinstance(asset_id, int) or asset_id <= 0:
+        raise ValueError(f"release asset has no valid numeric id: {name}")
+    return asset_id
+
+
+def _require_exact_assets(
+    assets: list[dict[str, Any]], sizes: dict[str, int], digests: dict[str, str], label: str
+) -> None:
+    """Exactly the expected assets, uploaded, each of the verified size and, where GitHub reports a digest, of the
+    verified content."""
     indexed = _asset_index(assets)
     if set(indexed) != EXPECTED_RELEASE_ASSETS:
         raise RuntimeError(f"{label} does not hold exactly the verified assets: {sorted(indexed)}")
@@ -483,6 +502,9 @@ def _require_exact_assets(assets: list[dict[str, Any]], sizes: dict[str, int], l
         asset = indexed[name]
         if asset.get("size") != size or asset.get("state") != "uploaded":
             raise RuntimeError(f"{label} asset verification failed: {name}")
+        remote = _remote_digest(asset)
+        if remote is not None and remote != digests[name]:
+            raise RuntimeError(f"{label} asset content differs from the verified asset: {name}")
 
 
 def ffmpeg_release_notice(manifest_path: Path = FFMPEG_MANIFEST) -> str:
@@ -520,13 +542,14 @@ def promote_release(
     if tag_commit != target:
         raise ValueError(f"release tag {tag} points at {tag_commit}, not the promoted target {target}")
     sizes = {asset.name: asset.stat().st_size for asset in assets}
+    digests = {asset.name: f"sha256:{_hash(asset)}" for asset in assets}
     title = f"Open Maid Engine {tag}"
 
     published = api.get_release(tag)
     if published is not None:
         # A published release cannot be repaired without unpublishing; accept only a completed re-run.
         release_id = _validate_release(published, tag, title, draft=False)
-        _require_exact_assets(api.list_assets(release_id), sizes, "published GitHub release")
+        _require_exact_assets(api.list_assets(release_id), sizes, digests, "published GitHub release")
         return published
 
     drafts = api.find_draft_releases(tag)
@@ -560,22 +583,29 @@ def promote_release(
         existing = existing_assets.get(asset.name)
         if existing is not None and existing.get("state") != "uploaded":
             # An interrupted upload leaves a placeholder that blocks the name; drafts can safely drop it.
-            asset_id = existing.get("id")
-            if not isinstance(asset_id, int) or asset_id <= 0:
-                raise ValueError(f"incomplete release asset has no valid numeric id: {asset.name}")
-            api.delete_asset(asset_id)
+            api.delete_asset(_asset_id(existing, asset.name))
             existing = None
         if existing is not None:
             if existing.get("size") != sizes[asset.name]:
                 raise ValueError(
                     f"existing release asset differs in size and will not be overwritten: {asset.name}"
                 )
-            continue
+            remote = _remote_digest(existing)
+            if remote == digests[asset.name]:
+                continue
+            if remote is not None:
+                raise ValueError(
+                    f"existing release asset differs in content and will not be overwritten: {asset.name}"
+                )
+            # An equal size is no evidence of equal content: without a digest the draft's copy is replaced.
+            api.delete_asset(_asset_id(existing, asset.name))
         uploaded = upload(release_id, asset)
         if uploaded.get("name") != asset.name or uploaded.get("size") != sizes[asset.name]:
             raise RuntimeError(f"GitHub reported an unexpected uploaded asset: {asset.name}")
+        if _remote_digest(uploaded) not in (None, digests[asset.name]):
+            raise RuntimeError(f"GitHub reported a different digest for the uploaded asset: {asset.name}")
 
-    _require_exact_assets(api.list_assets(release_id), sizes, "draft GitHub release")
+    _require_exact_assets(api.list_assets(release_id), sizes, digests, "draft GitHub release")
     release = api.publish_release(release_id)
     _validate_release(release, tag, title, draft=False)
     return release

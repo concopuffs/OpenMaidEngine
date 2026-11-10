@@ -199,6 +199,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
             {
                 case FrameOutcome.RootReload: throw new RootReloadRequestedException();
                 case FrameOutcome.ExitRequested: throw new ProcessExitRequestedException();
+                case FrameOutcome.Halted: throw new VmHaltException();
             }
         }
         finally

@@ -43,28 +43,42 @@ class EnvironmentResolutionTests(unittest.TestCase):
             ):
                 self.assertEqual(found.resolve(), validate.resolve_godot(None, {}))
 
-    def test_game_root_precedence_and_sys4ini_validation(self) -> None:
+    def test_game_root_requires_a_directory_with_sys4ini(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            explicit = root / "explicit"
-            environment = root / "environment"
-            conventional = root / "conventional"
-            for candidate in (explicit, environment, conventional):
+            with self.assertRaisesRegex(ValueError, "not found"):
+                validate.resolve_game_root(root / "missing")
+            with self.assertRaisesRegex(ValueError, "SYS4INI.BIN"):
+                validate.resolve_game_root(root)
+            (root / "SYS4INI.BIN").write_bytes(b"SYS4")
+            self.assertEqual(root.resolve(), validate.resolve_game_root(root))
+
+    def test_selected_game_root_is_the_contexts_not_ome_game_root(self) -> None:
+        # paths.py consumed --game-root into the context; OME_GAME_ROOT naming another install must not win.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selected, environment = root / "selected", root / "environment"
+            for candidate in (selected, environment):
                 candidate.mkdir()
                 (candidate / "SYS4INI.BIN").write_bytes(b"SYS4")
-            resolved = validate.resolve_game_root(
-                str(explicit), {"OME_GAME_ROOT": str(environment)}, conventional
+            context = validate.paths.ToolContext.resolve(
+                "himegari", selected, root / "extract", environ={}
             )
-            self.assertEqual(explicit.resolve(), resolved)
+            with mock.patch.dict(os.environ, {"OME_GAME_ROOT": str(environment)}):
+                godot, game_root, errors = validate.resolve_selected_paths("workspace", None, context)
+            self.assertEqual([], errors)
+            self.assertIsNone(godot)
+            self.assertEqual(selected.resolve(), game_root)
+            plan = validate.build_gate_plan("workspace", game_root=game_root, tool_context=context)
+            scan = next(gate for gate in plan if gate.key == "catalog-corpus-scan")
+            self.assertIn(str(selected.resolve()), scan.command)
+            self.assertIn(("OME_GAME_ROOT", str(context.game_root)), scan.environment)
 
-    def test_invalid_explicit_game_root_does_not_fall_through(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            conventional = root / "conventional"
-            conventional.mkdir()
-            (conventional / "SYS4INI.BIN").write_bytes(b"SYS4")
-            with self.assertRaisesRegex(ValueError, "not found"):
-                validate.resolve_game_root(str(root / "missing"), {}, conventional)
+    def test_core_resolves_no_game_root(self) -> None:
+        context = validate.paths.ToolContext.resolve(
+            "himegari", Path("missing-game"), Path("missing-extract"), environ={}
+        )
+        self.assertEqual((None, None, []), validate.resolve_selected_paths("core", None, context))
 
 
 class GatePlanTests(unittest.TestCase):
@@ -109,6 +123,37 @@ class GatePlanTests(unittest.TestCase):
             validate.LOW_MEMORY_DOTNET_ENVIRONMENT,
             restore.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
         )
+
+    def test_core_lints_every_profiles_registries_and_checks_generated_references(self) -> None:
+        plan = validate.build_gate_plan("core")
+        by_key = {gate.key: gate for gate in plan}
+        for profile_id in validate.paths.available_profiles():
+            registry = validate.paths.ToolContext.resolve(profile_id, environ={}).globals_toml
+            if registry.is_file():
+                lint = by_key[f"globals-lint-{profile_id}"]
+                self.assertEqual(("--profile", profile_id, "--lint"), lint.command[-3:])
+            if (validate.paths.VM_MAP / f"patch-points-{profile_id}.toml").is_file():
+                points = by_key[f"patch-points-reference-{profile_id}"]
+                self.assertEqual(("--profile", profile_id, "--check-reference"), points.command[-3:])
+        self.assertIn("globals-lint-kamidori", by_key)          # vm-map/globals-kamidori.toml
+        self.assertIn("patch-points-reference-himegari", by_key)
+        self.assertEqual("--check", by_key["engine-ctx-check"].command[-1])
+        self.assertNotIn("globals-check", by_key)                # merges the workspace auto map
+
+    def test_workspace_checks_the_selected_global_reference_before_rebuilding_it(self) -> None:
+        keys = [gate.key for gate in validate.build_gate_plan("workspace")]
+        self.assertLess(keys.index("globals-check"), keys.index("globals-build"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            context = validate.paths.ToolContext.resolve(
+                "kamidori", root / "game", root / "extract", environ={}
+            )
+            plan = validate.build_gate_plan("workspace", game_root=context.game_root, tool_context=context)
+            check = next(gate for gate in plan if gate.key == "globals-check")
+            self.assertIn(("OME_PROFILE", "kamidori"), check.environment)
+            errors = validate.validate_prerequisites("workspace", context)
+            self.assertTrue(any(str(context.game_build / "global-var-map.json") in error for error in errors)
+                            or (context.game_build / "global-var-map.json").is_file())
 
     def test_workspace_extends_core(self) -> None:
         core = {gate.key for gate in validate.build_gate_plan("core")}

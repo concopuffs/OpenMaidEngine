@@ -244,4 +244,30 @@ public class ProfileStartupRecoveryTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    // A hand-edited SYS4REG.INI can repeat a section. Reads take a key's last occurrence, so a write must change
+    // the value a read sees, and an unbound key must keep its last value when the file is rewritten.
+    [Fact]
+    public void RepeatedSectionsReadAndWriteTheSameOccurrence()
+    {
+        string root = NewDirectory();
+        string path = Path.Combine(root, Sys4RegIniStore.FileName);
+        try
+        {
+            File.WriteAllText(path,
+                "[message]\r\nMessageSpeed=3\r\nNote=first\r\n[sound]\r\nBGM=1\r\n[message]\r\nMessageSpeed=7\r\nNote=last\r\n");
+            var store = new Sys4RegIniStore(path, defaultMusicRouteValue: 2);
+            Assert.Equal(7, store.LoadMessageInt(Sys4RegIniStore.MessageSpeedKey, Sys4RegIniStore.DefaultMessageSpeed));
+
+            store.SaveMessageInt(Sys4RegIniStore.MessageSpeedKey, 9);
+
+            var reloaded = new Sys4RegIniStore(path, defaultMusicRouteValue: 2);
+            Assert.Equal(9, reloaded.LoadMessageInt(Sys4RegIniStore.MessageSpeedKey, Sys4RegIniStore.DefaultMessageSpeed));
+            Assert.Equal("last", reloaded.LoadString("message", "Note", ""));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }

@@ -293,7 +293,27 @@ public sealed partial class GfxState
         }
     }
 
-    public GfxObject? TryGet(long handle) => _objects.TryGetValue(handle, out var o) ? o : null;
+    /// <summary>The live object, for the VM thread. Another thread must use <see cref="TryGetSourceSlot"/>: the
+    /// object's fields change under the VM.</summary>
+    public GfxObject? TryGet(long handle)
+    {
+        lock (_lock) return _objects.TryGetValue(handle, out var o) ? o : null;
+    }
+
+    /// <summary>A present object's source slot (obj+4), read under the lock; safe from the presentation thread.</summary>
+    public bool TryGetSourceSlot(long handle, out int slot)
+    {
+        lock (_lock)
+        {
+            if (_objects.TryGetValue(handle, out var o))
+            {
+                slot = o.SourceSlot;
+                return true;
+            }
+            slot = 0;
+            return false;
+        }
+    }
 
     /// <summary>Op 0x215: look up <paramref name="handle"/> in the retained gfx-object map and return obj+4,
     /// the live source-surface slot written by draw-texture, or -1 when the object is absent.
