@@ -194,14 +194,16 @@ public class PhysicalFastForwardTests
     }
 
     [Fact]
-    public void Op0xfaKeepsFastForwardWhileTheKeyIsHeld()
+    public void Op0xfaKeepsFastForwardAndPollsNothingWhileTheKeyIsHeld()
     {
+        // With run-state 0x08000000 kept, op 0xfa sets no 0x80000000: its input poll does not run.
         var (vm, host) = Start((0x72, new[] { I(0) }), (0xfa, Array.Empty<Operand>()), (0x1c7, new[] { G(0x140) }));
         host.AtWait = (v, _) => Press(v);
 
         vm.Run();
 
         Assert.True(host.PhysicalMessageSkip);
+        Assert.Empty(host.AdvInputPolls);
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x140));
     }
 

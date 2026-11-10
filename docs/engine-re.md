@@ -1539,7 +1539,7 @@ it calls `+0x20` `launch_script_by_name("CALLBACK_SETTING.BIN")`, which the laun
 
 | Id | Service | Native function | Effect |
 |---|---|---|---|
-| `0x9c63` ﾒｯｾｰｼﾞｽｷｯﾌﾟ | `+0x88` | `adv_toggle_skip_mode@0x406c20` | Flips the persistent Skip; enabling clears Auto unless `set:CoexistMesSkip`. With the skip service on (`ctx+0x55100`, set by scene reset and op `0x19c`, cleared by op `0x19b`), enabling starts fast-forward at once. Disabling leaves run-state `0x08000000` until the page's op `0xfa` recomputes it. |
+| `0x9c63` ﾒｯｾｰｼﾞｽｷｯﾌﾟ | `+0x88` | `adv_toggle_skip_mode@0x406c20` | Flips the persistent Skip; enabling clears Auto unless `set:CoexistMesSkip`. With the skip service on (`ctx+0x55100`, set by scene reset and op `0x19c`, cleared by op `0x19b`), enabling starts fast-forward at once. Disabling leaves run-state `0x08000000` for `adv_interpreter_tick@0x410fb0` to clear: each tick clears it while action 6 is up (no longer injected) and `adv_read_skip_state` is 0 (corrected 2026-11-09; this row named op `0xfa`, which Himegari never runs). |
 | `0x9c65` ｵｰﾄﾒｯｾｰｼﾞ | `+0x84` | `adv_toggle_auto_mode@0x406b70` | Enabling sets `0x55104`, clears Skip unless `CoexistMesSkip`, and arms the sleep timer with `AutoMessageTime1` (100 if unset) unless a voice is pending. With the skip service on it clears run-state `0x80000000`: the polling text wait ends at once, so the page advances immediately. Disabling only clears `0x55104`. |
 | `0x9c6f` 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ | `+0xd8` (thunk `0x45f8b0`) | `adv_toggle_read_skip_and_refresh@0x406cd0` | Toggles `message:ReadTextSkip` first. At a text wait, turning it off clears `adv_read_skip_state` (`0x6dbd4`); turning it on checks ReadTextDB: a read message starts fast-forward (run-state `0x08000000`, `0x6dbd4` = 1, indicator stopped); an unread one clears `0x6dbd4` only if Skip is off. |
 | `0x9c64` | `+0x8c` | `iage_service_request_hide_window@0x45f700` | ORs `0x80000000` into the trigger mask while hidden (any trigger ends that wait), else bit `0x20` (action 5), which a polling text wait takes as Space's hide ("ADV hide window" below). |
@@ -4032,7 +4032,7 @@ reads six pages, reloads the save and turns on Read-message Skip. Native AGE and
 the read pages and stop at `SC0000@0xa18`, the page shown but not yet advanced past, with the control showing ON.
 The port's refresh is simpler than the check in `adv_toggle_read_skip_and_refresh@0x406cd0`, whose only caller is
 the menu bar's 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ toggle (2026-11-05). That check evaluates only while run-state
-`0x80000000` is set (op `0xfa` sets it when fast-forward is inactive), clears that gate when a read page starts
+`0x80000000` is set (an ADV wait's input poll: op `0x72`, or op `0xfa` when fast-forward is inactive), clears that gate when a read page starts
 fast-forward, and on an unread page clears `adv_read_skip_state` only while the all-message toggle `ctx+0x550fc`
 is off. The port recomputes at each text/wait boundary. No visible difference followed from this in the run.
 
@@ -6605,7 +6605,7 @@ The ops and the menu treat them as follows (/v2 addresses):
 | op `0x72`'s entry, again when a hotspot callback's `ret` re-runs the waiting op | the read-skip block below, then the clear below |
 | read-skip block of ops `0x6e` (`0x41e3b1`), `0x71` (`0x41e540`, `0x41e63a`), `0x72` (`0x41e73b`) and the menu's read-skip toggle (`0x406cd0`) | with `message:ReadTextSkip` off, read = 0. With it on and the message read: the run-state bit set, read = 1. Else read = 0 only while `0x550fc` is clear. It never clears the run-state bit and never starts it from the toggle |
 | op `0x72` | after that block, clears the run-state bit when read is 0 and the held mask lacks `0x40` (`0x41e786`); its own wait then starts it again from `0x13dc` |
-| op `0xfa` (`0x416de0`) | clears the run-state bit when the held mask lacks `0x40`; re-arms nothing |
+| op `0xfa` (`0x416de0`) | clears the run-state bit when the held mask lacks `0x40`, even on a read message. With it then clear, the op's input poll starts it again at once from `0x13dc` (opcode `0xfa` section) |
 | op `0x1ca` (`0x41f880`) | writes `message:ReadTextSkip` only |
 | menu Skip toggle (`adv_toggle_skip_mode@0x406c20`) | while `0x55100` is set, `0x13dc = 0x550fc` |
 | menu Auto toggle (`adv_toggle_auto_mode@0x406b70`) | when it enables Auto with `0x55100` set, `0x13dc = 0x550fc` |
@@ -6630,7 +6630,7 @@ now reach SC2500's BUNKI choice.
 **Port.** `VirtualMachine`: `_messageSkipEnabled` (`0x550fc`), `_messageSkipInjected` (`0x13dc`),
 `_messageSkipServiceActive` (the run-state bit), `ApplyReadTextSkip` (the shared block) and `SetScriptFastForward`.
 Ops `0x88`, `0x101`, `0x19b`, `0x19c`, `0x72`, `0xfa` and `0x1ca`, the menu toggles and the click cancel follow the
-table. `EnterTextWait` is op `0x72`'s entry, and `ServiceHotspotCallback` runs it again after a callback returns. The
+table (op `0xfa` since 2026-11-09; before then the port had it end fast-forward with no poll after it). `EnterTextWait` is op `0x72`'s entry, and `ServiceHotspotCallback` runs it again after a callback returns. The
 hidden-window wait ends on `_messageSkipInjected`, the injected action 6, rather than on fast-forward. Until
 2026-11-08, op `0x88(1)` started fast-forward at once, which skipped the Skip button's 100 ms sleep, and op `0x101`
 left a script-started fast-forward running. No sweep had reported either. The guard is not modelled, being
@@ -7168,20 +7168,49 @@ right edges are outside. The standard half-open even-odd crossing rule reproduce
 Windows dependency. Kamidori's only calls are `ARRANGE@0x4c6` and `STUDIO@0x525`; both use four vertices
 through local pointers. Both revision handlers are renamed/commented in their Ghidra programs and saved.
 
-### ADV skip/input-state refresh -- opcode `0xfa` (2026-08-19)
+### ADV skip/input-state refresh -- opcode `0xfa` (2026-08-19; corrected 2026-11-09)
 
 The zero-operand SYS4422 handler `op_0xfa_refresh_adv_skip_input_state@0x416de0` and SYS4433 equivalent
-at `0x417580` reconcile one input-service boundary. They poll the configured held-action mask; when logical
-action 6 (`0x40`) is absent they clear transient fast-forward and play/clear the latest voice queued during
-message skip. If fast-forward is then inactive, they consume the triggered-action mask into the timed-
-callback abort slot, set run-state `0x80000000`, and clear the abort slot. That high bit is the polling text
-wait's gate, which the menu bar's `adv_toggle_read_skip_and_refresh@0x406cd0` checks before consulting
-`message:ReadTextSkip` and ReadTextDB.
+at `0x417580` end fast-forward and then wait for input. Step by step:
 
-The portable VM maps this onto its existing split physical/script skip channels, host-owned latest-voice
-queue, and ReadTextDB refresh rather than retaining native bitfields. Kamidori's only call is
-`SHOWALLMAP@0x16a`; there is no map-specific behavior. Both handlers and the newly resolved SYS4433 input/
-voice helpers are renamed/commented in Ghidra, and both programs were saved.
+1. They set the frame's instruction length to 1 and clear `ctx+0x5510c` (4.33G `0x59398`). Op `0xae` sets that
+   field after a load, scene reset clears it, and no instruction reads it at a 32-bit displacement.
+2. They poll the held action mask, which carries no `ctx+0x13dc` injection. When logical action 6 (`0x40`) is
+   absent they clear fast-forward (run-state `0x08000000`), even on a read message, and play/clear the latest voice
+   queued during message skip.
+3. If fast-forward is then off, they poll and discard the input latch and set run-state `0x80000000`.
+
+Run-state `0x80000000` is the wait op `0x72` enters. `adv_interpreter_tick@0x410fb0` advances the pc by the length
+the op set, and the engine then runs `adv_input_service_poll@0x411230` instead of the interpreter until the poll
+clears the bit. So the script holds after op `0xfa` until one of these:
+
+- a click;
+- persistent Skip's injected action 6, which ends the poll at once and starts fast-forward again;
+- Auto;
+- a hotspot callback.
+
+Unlike op `0x72`, op `0xfa` publishes no wait indicator and arms no Auto timer: Auto polls the shared timer
+(`ctx+0x5f304`, also op `0xc8`'s) that an earlier page or sleep armed. That timer has normally expired, so an
+unvoiced Auto ends the poll at its first tick. No page is shown either. The menu bar's
+`adv_toggle_read_skip_and_refresh@0x406cd0` also reads the bit, as at a text wait.
+
+Kamidori's only call is `SHOWALLMAP@0x16a`, the world-map reveal after a new area opens. The map stays on screen,
+pc at `0x16b`, until the player clicks; the reveal's crossfade back and SC0010 then follow. This section said until
+2026-11-09 that the op re-armed nothing and that the map had no special behavior. The Kamidori sweep found native
+holding the map for more than 6.5 s while the port ran on to SC0010's next page (2026-11-09). With the port fixed,
+the same route replayed from a save (k1clean slot 011, turn 25 of 木漏れ日の深緑地) holds both targets at `0x16b`
+with identical shots until one click takes both through `SC0010@0xb424` to `SC0010@0xd08`.
+
+**Port.** `VirtualMachine` runs op `0xfa`'s entry (`RefreshAdvSkipInputState`). With fast-forward off it enters the
+same poll as op `0x72` (`WaitAtAdvInputPoll`) through `IInputHost.WaitForAdvInputPoll`, starting fast-forward first
+when persistent Skip is injected. The Godot host runs the text wait's loop for it without a page break, locator page,
+wait indicator or text clear. Its Auto timer is due at once unless a voice is pending (`AdvAutoAdvanceTimer`'s
+`unvoicedDeadlineDue`). A hotspot callback's `ret` after op `0xfa`'s poll would land 3 dwords back, inside the
+previous instruction. Only hotspots that SHOWALLMAP registered itself could reach that, and it registers none, so the
+port runs op `0xfa`'s entry again instead. A headless run with `HaltAtWaitForInput` halts there as at op `0x72`. Tests:
+`HotspotInputTests.RefreshAdvSkipInputState_*`, `PhysicalFastForwardTests.Op0xfaKeepsFastForwardAndPollsNothingWhileTheKeyIsHeld`,
+`AdvAutoAdvanceTimerTests.AWaitWithNoTimerOfItsOwn_IsDueAtOnceUnlessAVoiceIsPending`. Both handlers are
+renamed/commented in Ghidra (`/v2`, `/kamidori/SYS4433`, `/kamidori/4.33G`).
 
 ### Joystick physical-button capability -- opcode `0x106` (2026-08-20)
 

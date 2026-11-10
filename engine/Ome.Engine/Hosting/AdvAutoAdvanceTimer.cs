@@ -8,9 +8,14 @@ namespace Ome.Engine.Hosting;
 /// </summary>
 public sealed class AdvAutoAdvanceTimer
 {
+    private readonly bool _unvoicedDeadlineDue;
     private bool _armed;
     private bool _waitingForVoice;
     private long _deadlineMs;
+
+    /// <param name="unvoicedDeadlineDue">The wait arms no timer of its own (op 0xfa): an unvoiced wait is due at its
+    /// first poll. A pending voice still waits for its end and AutoMessageTime0.</param>
+    public AdvAutoAdvanceTimer(bool unvoicedDeadlineDue = false) => _unvoicedDeadlineDue = unvoicedDeadlineDue;
 
     public void Reset()
     {
@@ -32,8 +37,9 @@ public sealed class AdvAutoAdvanceTimer
             _armed = true;
             _waitingForVoice = state.VoicePending && voiceActive;
             if (!_waitingForVoice)
-                _deadlineMs = nowMs + EffectiveDelay(
-                    state.VoicePending ? state.PostVoiceDelayMs : state.UnvoicedDelayMs);
+                _deadlineMs = !state.VoicePending && _unvoicedDeadlineDue
+                    ? nowMs
+                    : nowMs + EffectiveDelay(state.VoicePending ? state.PostVoiceDelayMs : state.UnvoicedDelayMs);
         }
 
         if (_waitingForVoice)

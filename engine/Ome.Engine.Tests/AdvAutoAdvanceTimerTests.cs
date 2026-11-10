@@ -29,6 +29,21 @@ public class AdvAutoAdvanceTimerTests
     }
 
     [Fact]
+    public void AWaitWithNoTimerOfItsOwn_IsDueAtOnceUnlessAVoiceIsPending()
+    {
+        // Op 0xfa arms no Auto timer: its poll reads the shared timer an earlier page armed, so an unvoiced wait is due
+        // at the first poll, and a pending voice still waits for its end and AutoMessageTime0.
+        var unvoiced = new AdvAutoAdvanceTimer(unvoicedDeadlineDue: true);
+        Assert.True(unvoiced.Poll(new AdvAutoWaitState(true, false, 500, 2000), false, 1000));
+
+        var voiced = new AdvAutoAdvanceTimer(unvoicedDeadlineDue: true);
+        var state = new AdvAutoWaitState(true, true, 500, 2000);
+        Assert.False(voiced.Poll(state, true, 1000));
+        Assert.False(voiced.Poll(state, false, 4000));
+        Assert.True(voiced.Poll(state, false, 4500));
+    }
+
+    [Fact]
     public void DisablingAuto_CancelsDeadlineAndReenableStartsFresh()
     {
         var timer = new AdvAutoAdvanceTimer();

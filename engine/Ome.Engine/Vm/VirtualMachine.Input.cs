@@ -11,6 +11,36 @@ public sealed partial class VirtualMachine
     private long _mouseCallbackIntervalMs;
     private long _mouseCallbackArmedAtMs;
 
+    /// <summary>Native run-state 0x80000000: the engine runs adv_input_service_poll@0x411230 in place of the interpreter
+    /// until a click, fast-forward, Auto or a callback ends the wait. Op 0x72 enters it for a text page. Op 0xfa enters
+    /// it with no page: no wait indicator, no page break, and the text stays. Either way the end queues the frame's
+    /// current message as read.</summary>
+    private void WaitAtAdvInputPoll(int layoutSlot, bool textPage)
+    {
+        Volatile.Write(ref _advWaitCoroutineYieldRequested, 0); // a request belongs to the wait it reached
+        bool outerWaitPolling = _advTextWaitPolling;
+        bool outerPageless = _advInputPollPageless;
+        _advTextWaitPolling = true;
+        _advInputPollPageless = !textPage;
+        try
+        {
+            if (textPage) _host.WaitForInput(layoutSlot, ServiceHotspotCallback, CurrentAutoWaitState);
+            else _host.WaitForAdvInputPoll(ServiceHotspotCallback, CurrentAutoWaitState);
+        }
+        finally
+        {
+            _advTextWaitPolling = outerWaitPolling;
+            _advInputPollPageless = outerPageless;
+        }
+        _sharedProfile.ReadText.QueueMessage(
+            _cur.Script.PackedId, CurrentReadMessageIndex(),
+            _cur.Script.ReadMessageOffsets.Count);
+        _fastForwardPagePassed = true;   // PaceFastForwardOp charges the page if fast-forward passed it
+    }
+
+    private AdvAutoWaitState CurrentAutoWaitState()
+        => new(_autoMessageEnabled, _autoVoicePending, _autoMessageTime0Ms, _autoMessageTime1Ms);
+
     private int StepInput(string label, IReadOnlyList<Operand> a, int pc)
     {
         switch (label)
@@ -32,23 +62,7 @@ public sealed partial class VirtualMachine
                     }
                 }
                 if (wakeAtWait) _host.WakeInputCallbackService();
-                Volatile.Write(ref _advWaitCoroutineYieldRequested, 0); // a request belongs to the wait it reached
-                bool outerWaitPolling = _advTextWaitPolling;
-                _advTextWaitPolling = true;
-                try
-                {
-                    _host.WaitForInput((int)Read(a[0]), ServiceHotspotCallback,
-                        () => new AdvAutoWaitState(_autoMessageEnabled, _autoVoicePending,
-                                                   _autoMessageTime0Ms, _autoMessageTime1Ms));
-                }
-                finally
-                {
-                    _advTextWaitPolling = outerWaitPolling;
-                }
-                _sharedProfile.ReadText.QueueMessage(
-                    _cur.Script.PackedId, CurrentReadMessageIndex(),
-                    _cur.Script.ReadMessageOffsets.Count);
-                _fastForwardPagePassed = true;   // PaceFastForwardOp charges the page if fast-forward passed it
+                WaitAtAdvInputPoll((int)Read(a[0]), textPage: true);
                 return pc + 1;
             case "u0041BEB0":
             case "register-hotspot-callbacks": // 0x90: inclusive rect + enter/leave/activate local callbacks

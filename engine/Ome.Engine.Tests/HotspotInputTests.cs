@@ -704,10 +704,11 @@ public class HotspotInputTests
     }
 
     [Fact]
-    public void RefreshAdvSkipInputState_EndsFastForwardAndPersistentSkipRestartsItAtTheNextTextWait()
+    public void RefreshAdvSkipInputState_EndsFastForwardAndItsPollStartsItAgainFromPersistentSkip()
     {
-        // op_0xfa_refresh_adv_skip_input_state@0x416de0 polls the held mask, which carries no Skip injection, and
-        // starts nothing; op 0x72's wait acts on ctx+0x13dc again.
+        // op_0xfa_refresh_adv_skip_input_state@0x416de0 polls the held mask, which carries no Skip injection, so it
+        // ends fast-forward. Its poll (run-state 0x80000000) then takes ctx+0x13dc's injected action 6, which ends the
+        // poll at once and starts fast-forward again.
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = ScriptAssembler.Assemble(table, "REFRESH_ADV_SKIP", new List<(int, Operand[])>
         {
@@ -715,8 +716,6 @@ public class HotspotInputTests
             (0x19c, Array.Empty<Operand>()),
             (0xfa, Array.Empty<Operand>()),
             (0x1c7, new[] { G(0x148) }),
-            (0x72, new[] { I(0) }),
-            (0x1c7, new[] { G(0x149) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
         var host = new RecordingHost { AdvReadSkip = true };
@@ -724,10 +723,52 @@ public class HotspotInputTests
 
         vm.Run();
 
-        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x148));
-        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x149));
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(0x148));
         Assert.True(vm.MessageSkipEnabled);
+        Assert.Equal(new[] { true }, host.AdvInputPolls);   // entered with fast-forward on: it passes at once
+        Assert.Equal(0, host.Waits);
         Assert.Equal(new[] { true, false, true }, host.MessageSkipChanges);
+    }
+
+    [Fact]
+    public void RefreshAdvSkipInputState_WaitsForInputWithNoPageWhenNothingFastForwards()
+    {
+        // Kamidori's SHOWALLMAP@0x16a holds the world map on op 0xfa until a click: with fast-forward off the op sets
+        // run-state 0x80000000, the ADV input poll, and native advances past it only when the poll ends. It is no
+        // text page, so no page wait runs.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "REFRESH_ADV_WAIT", new List<(int, Operand[])>
+        {
+            (0xfa, Array.Empty<Operand>()),
+            (0x1c7, new[] { G(0x148) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host);
+
+        vm.Run();
+
+        Assert.Equal(new[] { false }, host.AdvInputPolls);
+        Assert.Equal(0, host.Waits);
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x148));
+    }
+
+    [Fact]
+    public void RefreshAdvSkipInputState_HaltsHeadlessAsATextWaitDoes()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "REFRESH_ADV_HALT", new List<(int, Operand[])>
+        {
+            (0xfa, Array.Empty<Operand>()),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host, new VmOptions(HaltAtWaitForInput: true));
+
+        vm.Run();
+
+        Assert.Equal("wait-for-input", vm.HaltReason);
+        Assert.Empty(host.AdvInputPolls);
     }
 
     [Theory]

@@ -23,6 +23,13 @@ public interface IInputHost
                       Func<AdvAutoWaitState> autoWaitState)
         => WaitForInput(layoutSlot, serviceInputCallback);
 
+    // Op 0xfa's wait: native run-state 0x80000000, the input poll of a text wait, with no page. There is no wait
+    // indicator or page break, the text stays, and Auto has no timer of its own: native polls the shared timer that the
+    // last page or sleep armed, which has normally expired, so an unvoiced Auto ends the wait at once. Hosts without a
+    // page model treat it as a text wait.
+    void WaitForAdvInputPoll(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
+        => WaitForInput(0, serviceInputCallback, autoWaitState);
+
     void WakeInputCallbackService() { }
     // Native clearing run-state 0x80000000 from a service call: the polling text wait returns as if the page were
     // advanced. Called on the VM thread from the wait's input callback.

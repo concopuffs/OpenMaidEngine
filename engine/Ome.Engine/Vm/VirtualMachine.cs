@@ -76,9 +76,11 @@ public sealed partial class VirtualMachine
     private int _pointerX = int.MinValue, _pointerY = int.MinValue;
     private int _mouseButtonState;
     private int _mouseWheelDelta;
-    // Native run-state bit 0x80000000: an ADV text wait (op 0x72) is polling input. It is clear while that wait
-    // runs a hotspot callback, as native clears the bit on dispatch and the callback's ret re-runs the wait.
+    // Native run-state bit 0x80000000: an ADV wait (op 0x72's text wait, or op 0xfa's poll with no page) is polling
+    // input. It is clear while that wait runs a hotspot callback, as native clears the bit on dispatch and the
+    // callback's ret re-runs the wait.
     private volatile bool _advTextWaitPolling;
+    private bool _advInputPollPageless;   // the polling wait is op 0xfa's
     private int _heldInputCallbackMask;
     private int _queuedInputCallbackMask;
     private bool _autoMessageEnabled;
@@ -1609,7 +1611,11 @@ public sealed partial class VirtualMachine
             if (sentinel >= 0) _cur.CallStack.RemoveAt(sentinel);
             // The callback's ret re-runs the waiting op 0x72. Its entry discards what the callback's effects held and
             // restarts fast-forward from persistent Skip or read-skip (a strip button's op 0x88 or 0x101 changed them).
-            EnterTextWait();
+            // Native's ret goes 3 dwords back, op 0x72's length; after op 0xfa's poll (1 dword) that lands inside the
+            // instruction before it. Only a poll whose own frame registered the hotspots gets here, and Kamidori's
+            // SHOWALLMAP, the one script with op 0xfa, registers none, so the port runs op 0xfa's entry again instead.
+            if (_advInputPollPageless) RefreshAdvSkipInputState();
+            else EnterTextWait();
         }
         RearmAfterWaitCallback();
         return true;

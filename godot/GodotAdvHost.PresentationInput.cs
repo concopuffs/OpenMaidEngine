@@ -257,20 +257,31 @@ public sealed partial class GodotAdvHost
 
     public void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
                              Func<AdvAutoWaitState> autoWaitState)
+        => WaitAtAdvInputPoll(layoutSlot, serviceInputCallback, autoWaitState, textPage: true);
+
+    // Op 0xfa: the same poll with no page (no page break or locator page, no wait indicator, the text stays).
+    public void WaitForAdvInputPoll(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
+        => WaitAtAdvInputPoll(0, serviceInputCallback, autoWaitState, textPage: false);
+
+    private void WaitAtAdvInputPoll(int layoutSlot, Func<bool> serviceInputCallback,
+                                    Func<AdvAutoWaitState> autoWaitState, bool textPage)
     {
-        Pages++;
-        _locator.Wait(Pages);
-        _main.CallDeferred("PageBreak");
-        lock (_textLock)
+        if (textPage)
         {
-            _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
-            _waitIndicatorStartedMs = _clock.NowMs;
-            _waitIndicatorEnabled = true;
-            _revealsFinishedUntilWait = false;   // op_0x72_handler clears ctx+0x55108
+            Pages++;
+            _locator.Wait(Pages);
+            _main.CallDeferred("PageBreak");
+            lock (_textLock)
+            {
+                _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
+                _waitIndicatorStartedMs = _clock.NowMs;
+                _waitIndicatorEnabled = true;
+                _revealsFinishedUntilWait = false;   // op_0x72_handler clears ctx+0x55108
+            }
         }
         IsWaiting = true;
-        _timeline?.State("input-wait", new() { ["page"] = Pages });
-        var autoTimer = new AdvAutoAdvanceTimer();
+        _timeline?.State(textPage ? "input-wait" : "input-poll", new() { ["page"] = Pages });
+        var autoTimer = new AdvAutoAdvanceTimer(unvoicedDeadlineDue: !textPage);
         bool autoAdvanced = false;
         bool messageSkipped = false;
         bool scriptSuspended = SuspendScriptForPresentation();
@@ -343,6 +354,7 @@ public sealed partial class GodotAdvHost
         {
             ["input"] = messageSkipped ? "message-skip" : autoAdvanced ? "auto" : "user",
         });
+        if (!textPage) return;
         lock (_textLock)
         {
             _advText = "";

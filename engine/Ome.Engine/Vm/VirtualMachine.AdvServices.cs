@@ -8,13 +8,15 @@ public sealed partial class VirtualMachine
     {
         switch (label)
         {
-            case "refresh-adv-skip-input-state": // 0xfa: end fast-forward unless action 6 is held
-                // op_0xfa_refresh_adv_skip_input_state@0x416de0 polls the held mask, which carries no Skip injection:
-                // without action 6 held it clears run-state 0x08000000. Persistent Skip starts it again at the next
-                // polling text wait (op 0x72), and the read state waits for the next page.
-                ReconcilePhysicalFastForward();
-                if (!PhysicalSkipActionHeld) SetScriptFastForward(false);
-                DiscardHeldTriggersUnlessFastForward();   // it polls the input latch and discards it, as op 0x72 does
+            case "refresh-adv-skip-input-state": // 0xfa: end fast-forward unless action 6 is held, then wait for input
+                RefreshAdvSkipInputState();
+                if (AdvFastForwardActive) return pc + 1;
+                // With fast-forward off, the op sets run-state 0x80000000: the ADV input poll a text wait runs, with no
+                // page. Kamidori's SHOWALLMAP holds the world map on it until a click. Persistent Skip's injected action
+                // 6 ends it at the first poll and starts fast-forward again.
+                if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return HALT; }
+                if (_messageSkipInjected) SetScriptFastForward(true);
+                WaitAtAdvInputPoll(0, textPage: false);
                 return pc + 1;
             case "u0041B290":
             case "set-message-skip": // 0x88: persistent all-message fast-forward service state
@@ -104,5 +106,15 @@ public sealed partial class VirtualMachine
             default:
                 throw new InvalidOperationException($"Non-ADV-service opcode routed to ADV-service handler: {label}");
         }
+    }
+
+    /// <summary>The entry of op_0xfa_refresh_adv_skip_input_state (/v2 0x416de0, 4.33G 0x417580). It polls the held
+    /// mask, which carries no Skip injection, so without action 6 held it clears run-state 0x08000000 even on a read
+    /// message. With fast-forward then off it discards the input latch, as op 0x72 does.</summary>
+    private void RefreshAdvSkipInputState()
+    {
+        ReconcilePhysicalFastForward();
+        if (!PhysicalSkipActionHeld) SetScriptFastForward(false);
+        DiscardHeldTriggersUnlessFastForward();
     }
 }

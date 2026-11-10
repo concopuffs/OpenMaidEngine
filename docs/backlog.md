@@ -67,15 +67,15 @@ it; git history keeps the record.
   where the encoder's match choices differ. Matching is optional, since native reads both.
 - **Resume the Kamidori fidelity sweep.** Since 2026-11-03 the sweep has driven native AGE and the port through
   the same steps (`tools/drive.py`, `rand-seed` before battles) and compared screenshots, VM positions and decoded
-  saves. It paused on 2026-11-08 at 木漏れ日の深緑地, turn 4, with every difference so far fixed or listed above.
-  Everything below was driven on the translated install's 4.33F build. Since then the game root is the clean
-  install (4.33G, Japanese UI). Its native AGE loads the turn-4 save and runs a battle and a turn end, with
-  `rand-seed` drawing as before. Re-check the port against it on the clean install before going further.
-  Covered at parity:
+  saves, with every difference so far fixed or listed above. Until 2026-11-08 it ran on the translated install's
+  4.33F build; since 2026-11-09 it runs on the clean install (4.33G, Japanese UI). It stands at SC0010@0xd08, the
+  page after the world map shows シセティカ湖 opening. Covered at parity:
   - the title, prologue and first map and battle;
   - 平穏なる採取地 to its clear (採取, DIG, STAGECLEAR) and the chapter scenes that follow;
   - the world map, town, church shop, tavern and workshop scenes, an alchemy craft and the SC1250 delivery;
-  - 木漏れ日の深緑地's first four turns, three battles in all.
+  - 木漏れ日の深緑地 from turn 4 to its clear on the clean install: battles, both 採取 points, the Shinigami
+    event, STAGECLEAR, the rewards, SC0000's chapter scenes and SC0010 through SHOWALLMAP (op `0xfa`'s click wait,
+    fixed 2026-11-09).
 
   Saves on both targets compare by decoded payload (`Ome.Cli save-diff`, `tools-reference.md`). Clock
   samples, gfx start stamps and save-history globals are expected to differ (`engine-re.md`, "Op 0x216 reads past

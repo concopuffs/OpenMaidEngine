@@ -221,6 +221,13 @@ internal class RecordingHost : IHost
     public virtual void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
                                      Func<AdvAutoWaitState> autoWaitState)
         => WaitForInput(layoutSlot, serviceInputCallback);
+    // Op 0xfa's poll: no page, so it counts apart from Waits. Each records whether fast-forward was on at its entry.
+    public readonly List<bool> AdvInputPolls = new();
+    public virtual void WaitForAdvInputPoll(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
+    {
+        AdvInputPolls.Add(MessageSkip);
+        while (serviceInputCallback()) { }
+    }
     public void InputCallbackCompleted(GfxState gfx) => InputCallbackFrames++;
     public virtual void EndInputWait() { }
     // Each hidden-window wait runs this first (a test supplies the input that ends it) and then takes the trigger.
