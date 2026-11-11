@@ -223,7 +223,7 @@ clicks.
 | Same text on every page (required) | **143 of 143.** Run A's text with its wraps joined equals run B's presented text once whitespace is collapsed |
 | Run B left in Japanese | none: every page presents English, speaker names included |
 | Line breaks (reviewed) | run A has 64 wraps and 93 deliberate breaks by the box's real right edge, most of the deliberate ones between a name plate and its line. 12 pages break where the catalog has a wrap: see below |
-| Wrapping (reviewed) | 1 page of run B stops a presented run at its layout's bottom: page 2 (`SC0000@0xd5a`), the narration. The translators broke it into two lines; the port's presented font wraps it into more rows than the narration window holds. With `--text-log`, the port now reports it (`SC0000@0xd55`, `rows_cut` 1) |
+| Wrapping (reviewed) | 1 page of run B ran past its layout's bottom: page 2 (`SC0000@0xd5a`), the narration. The translated install lays out every half-width character on an 11-pixel cell, and the translators broke this sentence into two lines of 61 characters. The port draws presented text at its glyphs' own widths (spec §7.4), and in メイリオ bold at 22 pixels the joined 123 characters wrap into three rows of a window that holds two (710 pixels each). Since the language's `overflow = "shrink"` (the default; `docs/modding/languages.md`), the port draws it at 96 % in two rows; `--text-log` lists it (`SC0000@0xd55`, `width_percent` 96). Rerun on 2026-11-11: 143 pages, same text on every page, none cut |
 | Damaged strings, untranslated stored strings, `SC2310@0x1232` | not reached by the opening |
 
 **The real edge does not find the translators' wraps.** The spec expected the real right edge to classify run A's
@@ -233,6 +233,12 @@ the word would have fitted and the page map calls the break deliberate. Every on
 middle. The importer's edge, the width 99% of a script's lines fit, calls them wraps, and the catalog joins them,
 which is right. So the page map's wrap class is a lower bound for an install wrapped by hand, and gate 11 needs only
 the comparison that ignores line breaks.
+
+**Overflow across the catalog (an estimate, not a run).** Measured with メイリオ bold's own advances at 22 pixels
+against the 11-pixel half cells, and assuming every entry sits in a two-row window 710 pixels wide, 848 of the
+19,846 entries that take two rows on half cells take three or more at the glyphs' widths (4 %). Narrowing fits each
+of them back into two rows at 88 % or more, 97 % at the median; the run above narrowed page 2 a little less than
+this model predicts. This is why `overflow = "shrink"` is the default.
 
 **Saves** were not compared again: gate 2 already holds for run B's catalog (milestone 3).
 

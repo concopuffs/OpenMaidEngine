@@ -13,8 +13,11 @@ public readonly record struct TextExtent(int Left, int Right)
 
 /// <summary>An ADV run's presented text placed for its entry (spec §7.2): the glyphs to draw, narrowed by
 /// <see cref="WidthPercent"/> for <c>fit = "shrink"</c>, their rows, and each row's shift for <c>align</c> (null when
-/// no row moves).</summary>
-public sealed record PresentedRunPlacement(PresentedTextPlan Plan, int WidthPercent, IReadOnlyList<int>? RowShiftsX);
+/// no row moves). <see cref="NarrowedToFit"/> marks a width chosen so that the run fits its window (§7.3).</summary>
+public sealed record PresentedRunPlacement(PresentedTextPlan Plan, int WidthPercent, IReadOnlyList<int>? RowShiftsX)
+{
+    public bool NarrowedToFit { get; init; }
+}
 
 /// <summary>
 /// Alignment and fit of presented text against its source text's extent (localization spec §7.2), and the rows an
@@ -29,6 +32,9 @@ public sealed record PresentedRunPlacement(PresentedTextPlan Plan, int WidthPerc
 /// <item><c>align = "center"</c> or <c>"end"</c> moves each row so its centre or its end is the source extent's. A row
 /// stays inside its bounds, the left one winning when it cannot keep both: in an ADV layout, its line origin (or where
 /// the run starts, when that is further left) and its right bound; for a <c>draw-string</c>, its surface.</item>
+/// <item>A language's <c>overflow = "shrink"</c> narrows an ADV run that would still be cut at its window's bottom to
+/// the widest width at which it fits, down to <c>min_fit_scale</c>; a run that does not fit even there is placed as
+/// <c>fit</c> left it, and is cut.</item>
 /// </list>
 /// Spaces at either end of a line count for neither extent.
 /// </summary>
@@ -112,23 +118,46 @@ public static class PresentedTextPlacement
     }
 
     /// <summary>
-    /// Places an ADV run's presented text (spec §7.1, §7.2): narrowed for <c>fit</c>, broken into rows as
-    /// <see cref="PresentedTextLayout.Plan"/> breaks it, and each row shifted for <c>align</c>. Without a source extent
-    /// the text is placed as written.
+    /// Places an ADV run's presented text (spec §7.1, §7.2, §7.3): narrowed for <c>fit</c>, broken into rows as
+    /// <see cref="PresentedTextLayout.Plan"/> breaks it, each row shifted for <c>align</c>, and narrowed further when
+    /// it would be cut and <paramref name="fitsWindow"/> is given. Without a source extent the text is aligned and
+    /// fitted as written.
     /// </summary>
     /// <param name="requests">One request per code point of <paramref name="text"/>.</param>
     /// <param name="sourceRows">The rows the source text took: one fits by width, more by rows.</param>
+    /// <param name="fitsWindow">For a language's <c>overflow = "shrink"</c>: whether a placement fits its window, as
+    /// the layout that draws it decides (the host lays it out without drawing). Null leaves a run that does not fit to
+    /// be cut.</param>
     public static PresentedRunPlacement Place(
         string text, bool[] opportunities, IReadOnlyList<GlyphRasterRequest> requests, IGlyphMaskRasterizer rasterizer,
         int cursorX, int lineOriginX, int rightBound, TextAlign align, TextFit fit, TextExtent? source, int sourceRows,
-        double minFitScale)
+        double minFitScale, Func<PresentedRunPlacement, bool>? fitsWindow = null)
     {
         ArgumentNullException.ThrowIfNull(requests);
-        PresentedTextPlan PlanAt(int percent) => PresentedTextLayout.Plan(
-            text, opportunities, percent == 100 ? requests : requests.Select(glyph => glyph with { WidthPercent = percent }).ToArray(),
+        PresentedTextPlan PlanAt(int width) => PresentedTextLayout.Plan(
+            text, opportunities, width == 100 ? requests : requests.Select(glyph => glyph with { WidthPercent = width }).ToArray(),
             rasterizer, cursorX, lineOriginX, rightBound);
+        PresentedRunPlacement PlaceAt(int width)
+        {
+            PresentedTextPlan plan = PlanAt(width);
+            return new PresentedRunPlacement(plan, width, RowShifts(plan));
+        }
+        IReadOnlyList<int>? RowShifts(PresentedTextPlan plan)
+        {
+            if (align == TextAlign.Start || source is not { } target) return null;
+            var shifts = new int[plan.BreaksBefore.Count + 1];
+            for (int row = 0; row < shifts.Length; row++)
+            {
+                (int first, int end) = Row(plan, row);
+                int start = row == 0 ? cursorX : lineOriginX;
+                if (Extent(plan.Glyphs.Skip(first).Take(end - first), rasterizer, start) is { } extent)
+                    shifts[row] = Shift(align, target, extent, System.Math.Min(start, lineOriginX), rightBound);
+            }
+            return shifts.Any(shift => shift != 0) ? shifts : null;
+        }
+
+        int floor = FloorPercent(minFitScale);
         int percent = 100;
-        PresentedTextPlan plan = PlanAt(100);
         if (fit == TextFit.Shrink && source is { } fitted)
         {
             if (sourceRows <= 1)
@@ -140,22 +169,24 @@ public static class PresentedTextPlacement
                 percent = FitPercent(lines, rasterizer, fitted.Width, minFitScale);
             }
             else
-            {
-                int floor = FloorPercent(minFitScale);
                 while (percent > floor && RowCount(PlanAt(percent)) > sourceRows) percent--;
-            }
-            if (percent < 100) plan = PlanAt(percent);
         }
-        if (align == TextAlign.Start || source is not { } target) return new PresentedRunPlacement(plan, percent, null);
-        var shifts = new int[plan.BreaksBefore.Count + 1];
-        for (int row = 0; row < shifts.Length; row++)
+        PresentedRunPlacement placed = PlaceAt(percent);
+        if (fitsWindow == null || percent <= floor || fitsWindow(placed)) return placed;
+
+        // Narrowing never adds a row, so the widest width that fits lies between the floor and the width that did
+        // not, and halving finds it. Each width taken was checked, so the result fits even where rounding breaks that.
+        PresentedRunPlacement best = PlaceAt(floor);
+        if (!fitsWindow(best)) return placed;
+        int fits = floor, cut = percent;
+        while (cut - fits > 1)
         {
-            (int first, int end) = Row(plan, row);
-            int start = row == 0 ? cursorX : lineOriginX;
-            if (Extent(plan.Glyphs.Skip(first).Take(end - first), rasterizer, start) is { } extent)
-                shifts[row] = Shift(align, target, extent, System.Math.Min(start, lineOriginX), rightBound);
+            int middle = (fits + cut) / 2;
+            PresentedRunPlacement candidate = PlaceAt(middle);
+            if (fitsWindow(candidate)) (fits, best) = (middle, candidate);
+            else cut = middle;
         }
-        return new PresentedRunPlacement(plan, percent, shifts.Any(shift => shift != 0) ? shifts : null);
+        return best with { NarrowedToFit = true };
     }
 
     /// <summary>The narrowest <paramref name="minScale"/> allows, in whole percent.</summary>

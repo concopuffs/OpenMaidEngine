@@ -213,6 +213,7 @@ public class TextCatalogFileTests
             digits = "ascii"
             glyph_delay_scale = 1.5
             min_fit_scale = 0.75
+            overflow = "cut"
 
             [[language.font]]
             requested = ["ＭＳ ゴシック"]
@@ -225,6 +226,7 @@ public class TextCatalogFileTests
 
         Assert.Equal(("pt-br", "Português", 1.5, 0.75), (language.Tag, language.Name, language.GlyphDelayScale, language.MinFitScale));
         Assert.Equal(["pt"], language.Fallback);
+        Assert.Equal(TextOverflow.Cut, language.Overflow);
         Assert.Equal((LineBreakMode.Anywhere, TextMeasure.Source, DigitsMode.Ascii),
                      (language.LineBreak!.Value, language.Measure!.Value, language.Digits!.Value));
         Assert.Equal(new[] { "fonts/Sans.otf|Noto Sans", "Georgia" },
@@ -233,6 +235,7 @@ public class TextCatalogFileTests
         var (merged, replaced) = language.Merge(new LanguageSettings("pt-br") { GlyphDelayScale = 1.0, Name = "PT" });
         Assert.Equal(["name", "glyph_delay_scale"], replaced);
         Assert.Equal(("PT", 1.0, 0.75), (merged.Name, merged.GlyphDelayScale, merged.MinFitScale));
+        Assert.Equal(["overflow"], language.Merge(new LanguageSettings("pt-br") { Overflow = TextOverflow.Shrink }).Replaced);
     }
 
     private static object Shape(TextEntry entry)

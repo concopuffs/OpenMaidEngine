@@ -126,9 +126,11 @@ public class PresentedTextPlacementTests
                                                           minLeft: 0, maxRight: 100));
 
     private static PresentedRunPlacement Place(string text, TextAlign align, TextFit fit, TextExtent? source,
-                                               int cursorX = 0, int right = 200, double minFit = 0.5, int sourceRows = 1)
+                                               int cursorX = 0, int right = 200, double minFit = 0.5, int sourceRows = 1,
+                                               Func<PresentedRunPlacement, bool>? fitsWindow = null)
         => PresentedTextPlacement.Place(text, PresentedLineBreaks.Opportunities(text, LineBreakMode.Words), Requests(text),
-                                        Cache(), cursorX, lineOriginX: 0, right, align, fit, source, sourceRows, minFit);
+                                        Cache(), cursorX, lineOriginX: 0, right, align, fit, source, sourceRows, minFit,
+                                        fitsWindow);
 
     [Fact]
     public void ACentredRunMovesEachRowUnderTheSourceCentre()
@@ -188,6 +190,82 @@ public class PresentedTextPlacementTests
         Assert.Equal(2, PresentedTextPlacement.CutRows(plan, 2));
         Assert.Equal(2, PresentedTextPlacement.CutRows(plan, 3));
         Assert.Equal(1, PresentedTextPlacement.CutRows(plan, 4));
+    }
+
+    // ---- overflow ----------------------------------------------------------------------------------------------------
+
+    /// <summary>Whether a placement fits a window <paramref name="rows"/> rows high, laid out as the host draws it
+    /// (without drawing); each width tried goes to <paramref name="tried"/>.</summary>
+    private static Func<PresentedRunPlacement, bool> FitsRows(int rows, List<int>? tried = null)
+    {
+        var engine = new RetainedGlyphLayoutEngine(Cache());
+        int bottom = (rows - 1) * (12 + Style.LineSpacing) + 12;
+        return placement =>
+        {
+            tried?.Add(placement.WidthPercent);
+            return !engine.Render(null,
+                new GlyphTextLayoutOptions(0, 0, 0, int.MaxValue, bottom, WrapHorizontally: false, Style,
+                                           placement.Plan.BreaksBefore, OverflowAtFontHeight: true,
+                                           RowShiftsX: placement.RowShiftsX),
+                placement.Plan.Glyphs).StoppedOnVerticalOverflow;
+        };
+    }
+
+    [Fact]
+    public void ARunThatWouldBeCutIsNarrowedToTheWidestWidthThatFitsItsWindow()
+    {
+        // Three words of 50 pixels in a 100-pixel layout take three rows. Two words share a row at 94 % (each glyph
+        // advances 9: "abcde fghij" ends with a 10-pixel cell at 96), not at 95 % (9.5 rounds half to even, to 10).
+        const string text = "abcde fghij klmno";
+        var tried = new List<int>();
+        PresentedRunPlacement placed = Place(text, TextAlign.Start, TextFit.None, null, right: 100,
+                                             fitsWindow: FitsRows(2, tried));
+
+        Assert.Equal((94, true, 2), (placed.WidthPercent, placed.NarrowedToFit, PresentedTextPlacement.RowCount(placed.Plan)));
+        Assert.All(placed.Plan.Glyphs, glyph => Assert.Equal(94, glyph.WidthPercent));
+        // As written, the floor, then halving.
+        Assert.Equal([100, 50, 75, 87, 93, 96, 94, 95], tried);
+        // An aligned run's shifts are those of its narrowed rows: 0..96 and 0..46 centred under 0..100.
+        Assert.Equal([2, 27], Place(text, TextAlign.Center, TextFit.None, new TextExtent(0, 100), right: 100,
+                                    sourceRows: 2, fitsWindow: FitsRows(2)).RowShiftsX);
+    }
+
+    [Fact]
+    public void ARunThatFitsItsWindowIsCheckedOnceAndKeepsItsWidth()
+    {
+        var tried = new List<int>();
+        PresentedRunPlacement placed = Place("abcde fghij klmno", TextAlign.Start, TextFit.None, null, right: 100,
+                                             fitsWindow: FitsRows(3, tried));
+
+        Assert.Equal((100, false), (placed.WidthPercent, placed.NarrowedToFit));
+        Assert.Equal([100], tried);
+    }
+
+    [Fact]
+    public void ARunThatDoesNotFitEvenAtTheFloorIsLeftToBeCut()
+    {
+        // Its own breaks make three rows, which no width takes away.
+        var tried = new List<int>();
+        PresentedRunPlacement placed = Place("ab\ncd\nef", TextAlign.Start, TextFit.None, null,
+                                             fitsWindow: FitsRows(2, tried));
+
+        Assert.Equal((100, false, 3), (placed.WidthPercent, placed.NarrowedToFit, PresentedTextPlacement.RowCount(placed.Plan)));
+        Assert.Equal([100, 50], tried);
+    }
+
+    [Fact]
+    public void OverflowNarrowsOnlyPastTheWidthTheEntrysFitLeft()
+    {
+        const string text = "abcde fghij klmno";
+        // Fit by a source of three rows keeps 100 %; the two-row window then takes it to 94 %.
+        PresentedRunPlacement byRows = Place(text, TextAlign.Start, TextFit.Shrink, new TextExtent(0, 100), right: 100,
+                                             sourceRows: 3, fitsWindow: FitsRows(2));
+        Assert.Equal((94, true), (byRows.WidthPercent, byRows.NarrowedToFit));
+        // Fit to a one-row source 100 pixels wide narrows further than the window needs: the entry's width stands.
+        PresentedRunPlacement byWidth = Place(text, TextAlign.Start, TextFit.Shrink, new TextExtent(0, 100), right: 100,
+                                              fitsWindow: FitsRows(2));
+        Assert.False(byWidth.NarrowedToFit);
+        Assert.True(byWidth.WidthPercent < 94, byWidth.WidthPercent.ToString());
     }
 
     // ---- the layout engine and the surface renderer --------------------------------------------------------------

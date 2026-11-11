@@ -53,7 +53,7 @@ and its save stamps say so (see "Saves" below).
 5. **Run it** in the port with `--mod my.lang --language en`, or install it in `mods/` and pick the language in the
    settings panel's OME section, which lists every language the installed packages define by its `name` (or with
    `[ui] Language` in `OME.INI`). Add `--text-log` to collect every string that reached the screen without an entry,
-   and every message cut at the bottom of its window ([cli.md](cli.md)).
+   and every message narrowed or cut to fit its window ([cli.md](cli.md)).
 
 A switch in the settings panel applies at once to the menus and to text drawn after it. Text already on screen stays
 until the game draws it again; everything is in the new language after returning to the title.
@@ -83,7 +83,8 @@ line_break = "words"                 # "words" (default) or "anywhere"
 measure = "presented"                # "presented" (default) or "source"
 digits = "ascii"                     # "keep" (default) or "ascii"
 glyph_delay_scale = 0.5              # reveal speed factor, above 0 and at most 4; default 1
-min_fit_scale = 0.6                  # the narrowest fit = "shrink" makes glyphs; default 0.75
+min_fit_scale = 0.6                  # the narrowest fit and overflow make glyphs; default 0.75
+overflow = "shrink"                  # "shrink" (default) or "cut"
 
 [[language.font]]
 requested = ["*"]                    # the game's faces this applies to; "*" for all
@@ -102,7 +103,8 @@ a manifest.
 | `measure` | what the scripts' length opcodes measure: the `presented` text, so a name plate sized from a name fits the translated name, or the `source` text, so the game's state never depends on the language |
 | `digits` | `ascii` presents full-width digits (`１２`) in numbers the scripts build as ASCII |
 | `glyph_delay_scale` | scales the reveal's delay per glyph for translated text. English has about twice the glyphs of Japanese per sentence, so `0.5` keeps the pace |
-| `min_fit_scale` | the narrowest an entry's `fit = "shrink"` makes its glyphs, as a share of their width: above 0 and at most 1; default `0.75` |
+| `min_fit_scale` | the narrowest an entry's `fit = "shrink"`, or `overflow`, makes its glyphs, as a share of their width: above 0 and at most 1; default `0.75` |
+| `overflow` | what a message that needs more rows than its window has does: `shrink` (default) narrows its glyphs just enough to fit; `cut` cuts it at the window's bottom. Below |
 | `[[language.font]]` | font mappings, below |
 
 **Several packages, one language.** A package may add text to a language another package defines: give it
@@ -218,15 +220,29 @@ align = "end"                        # "start" (default), "center" or "end"
 - `fit = "shrink"` narrows every glyph of the translation by one factor, never below the language's
   `min_fit_scale`. An original on one row gives the width: the translation's widest line is made no wider than it.
   An original that took several rows in the text window gives the rows: the translation is narrowed only as far as
-  it needs to wrap into no more rows.
+  it needs to wrap into no more rows. A message that still does not fit its window is narrowed further (below).
 - Both apply to text the game draws in its windows and to strings it draws onto pictures. History shows the text as
   written.
 - A name plate the game sizes from the name's length is sized from the translation (`measure`, above); with
   `measure = "source"` it keeps the original's size, and `align = "center"` centres the name on it.
 
-**Text cut at the bottom.** A translation that needs more rows than its window has is cut at the window's bottom, as
-the game cuts its own text. The port does not add a page. `--text-log` lists each cut message with the rows it lost
-([cli.md](cli.md)); shorten it, use `fit`, or patch the script to break the page.
+### Text too long for its window
+
+A message that needs more rows than its window has would be cut at the window's bottom, as the game cuts its own
+text. The port draws a translation at its letters' own widths, so one written to the line lengths of an in-place
+translation can need a row more than it had there. By default (`overflow = "shrink"`) the port narrows such a
+message's glyphs, all by one factor and only as far as it needs to fit, never below `min_fit_scale`. The window is
+whatever the game's script set up; nothing about it is per game.
+
+- A message that fits, or one whose entry's `fit` already made it fit, is drawn as before.
+- A message that does not fit even at `min_fit_scale`, or whose own `\n` breaks make more rows than the window has,
+  is drawn at full width and cut. The port does not add a page.
+- `overflow = "cut"` always cuts, as the game does.
+- History shows the text as written.
+
+`--text-log` lists each narrowed message with the width it got (`width_percent`) and each cut one with the rows it
+lost (`rows_cut`; [cli.md](cli.md)). To fit a message without narrowing it, shorten it or patch the script to break
+the page.
 
 ## Fonts
 

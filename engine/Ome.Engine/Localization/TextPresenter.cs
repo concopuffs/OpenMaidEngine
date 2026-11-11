@@ -26,8 +26,12 @@ public readonly record struct TextLookup(string Source, TextSite Site, TextSite?
 /// catalog entry that supplied it, if one did.</summary>
 public sealed record PresentedText(string Text, LineBreakMode LineBreak, TextEntry? Entry)
 {
-    /// <summary>The language's floor for the entry's <c>fit = "shrink"</c> (§7.2, §9.2).</summary>
+    /// <summary>The language's floor for the entry's <c>fit = "shrink"</c> (§7.2, §9.2) and for narrowing a run that
+    /// would be cut (<see cref="Overflow"/>).</summary>
     public double MinFitScale { get; init; } = TextLanguage.DefaultMinFitScale;
+
+    /// <summary>The language's handling of a run that needs more rows than its window has (§7.3).</summary>
+    public TextOverflow Overflow { get; init; } = TextOverflow.Shrink;
 }
 
 /// <summary>What a filter sees (spec §6.5): the source text, the catalog's result if any, the language, the drawing
@@ -84,12 +88,17 @@ public sealed record TextLanguage(string Tag, IReadOnlyList<TextCatalog> Chain)
     /// of Japanese for one sentence.</summary>
     public double GlyphDelayScale { get; init; } = 1.0;
 
-    /// <summary>The narrowest an entry's <c>fit = "shrink"</c> makes its glyphs, as a share of their width (§7.2):
-    /// the language's <c>min_fit_scale</c>, or <see cref="DefaultMinFitScale"/>.</summary>
+    /// <summary>The narrowest an entry's <c>fit = "shrink"</c>, or <see cref="Overflow"/>, makes its glyphs, as a
+    /// share of their width (§7.2): the language's <c>min_fit_scale</c>, or <see cref="DefaultMinFitScale"/>.</summary>
     public double MinFitScale { get; init; } = DefaultMinFitScale;
 
     /// <summary><see cref="MinFitScale"/> for a language that sets none: three quarters keeps Latin text legible.</summary>
     public const double DefaultMinFitScale = 0.75;
+
+    /// <summary>What a presented run that needs more rows than its window has does (§7.3): the language's
+    /// <c>overflow</c>. By default it is narrowed until it fits: a translation wrapped for the source's fixed cells can
+    /// need a row more at its glyphs' own widths.</summary>
+    public TextOverflow Overflow { get; init; } = TextOverflow.Shrink;
 
     /// <summary>The font tables (§7.4), in order; the first that applies to a face wins.</summary>
     public IReadOnlyList<TextFontMapping> Fonts { get; init; } = [];
@@ -182,6 +191,14 @@ public sealed class TextPresenter
         if (rows > 0) _misses?.RecordCut(lookup.Source, lookup.Site, rows);
     }
 
+    /// <summary>Reports that the presented text of <paramref name="lookup"/> was narrowed to
+    /// <paramref name="widthPercent"/> of its glyphs' width so that it was not cut (spec §7.3, the language's
+    /// <c>overflow = "shrink"</c>): the miss log records it, so a translator can find the messages to shorten.</summary>
+    public void ReportNarrowed(TextLookup lookup, int widthPercent)
+    {
+        if (widthPercent is > 0 and < 100) _misses?.RecordNarrowed(lookup.Source, lookup.Site, widthPercent);
+    }
+
     /// <summary>What a length opcode at <paramref name="site"/> returns for <paramref name="source"/> (spec §5.3), or
     /// null for the native result: the string resolves to no entry, or the language or the entry measures source.
     /// A string the language's <c>digits</c> setting converts counts as resolved. Misses are not logged here.</summary>
@@ -256,7 +273,11 @@ public sealed class TextPresenter
         foreach (ITextFilter filter in _filters)
             text = filter.Present(new TextFilterInput(source, text, Language.Tag, site, originSite, captures)) ?? text;
         PresentedText? presented = text == null ? null
-            : new PresentedText(text, Language.LineBreak, found) { MinFitScale = Language.MinFitScale };
+            : new PresentedText(text, Language.LineBreak, found)
+            {
+                MinFitScale = Language.MinFitScale,
+                Overflow = Language.Overflow,
+            };
         return new Result(presented, Missed: found == null && !number, measurable);
     }
 

@@ -233,6 +233,7 @@ public static class TextRootLoader
             Digits = settings?.Digits ?? DigitsMode.Keep,
             GlyphDelayScale = settings?.GlyphDelayScale ?? 1.0,
             MinFitScale = settings?.MinFitScale ?? TextLanguage.DefaultMinFitScale,
+            Overflow = settings?.Overflow ?? TextOverflow.Shrink,
             Fonts = (settings?.Fonts ?? []).Select(font => new TextFontMapping(font.Requested, font.Use)).ToList(),
         };
     }

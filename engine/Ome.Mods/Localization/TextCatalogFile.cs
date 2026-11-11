@@ -71,7 +71,7 @@ public sealed record LanguageFont(IReadOnlyList<string> Requested, IReadOnlyList
 /// <summary>
 /// A <c>[[language]]</c> table (localization spec §9.2): a language's name, fallback chain and settings. Null keeps
 /// the default: the tag's parents as the fallback, <c>words</c>, <c>presented</c>, <c>keep</c>, a glyph delay
-/// scale of 1 and the system's fonts. Packages declare it in their manifest (format version 2); a text root declares
+/// scale of 1, a fit floor of 0.75, <c>shrink</c> on overflow and the system's fonts. Packages declare it in their manifest (format version 2); a text root declares
 /// it in <c>languages.toml</c> (<see cref="TextRootLoader.LanguagesFile"/>).
 /// </summary>
 public sealed record LanguageSettings(string Tag)
@@ -83,8 +83,10 @@ public sealed record LanguageSettings(string Tag)
     public DigitsMode? Digits { get; init; }
     /// <summary>The factor on the reveal's glyph delay for presented runs (§7.5).</summary>
     public double? GlyphDelayScale { get; init; }
-    /// <summary>The floor for <c>fit = "shrink"</c> (§7.2). Read and kept; fitting is not built yet.</summary>
+    /// <summary>The floor for <c>fit = "shrink"</c> (§7.2) and for narrowing a run that would be cut.</summary>
     public double? MinFitScale { get; init; }
+    /// <summary>What a run that needs more rows than its window has does (§7.3): narrowed or cut.</summary>
+    public TextOverflow? Overflow { get; init; }
     /// <summary>The font tables, in order (§7.4); the first that applies to a face wins.</summary>
     public IReadOnlyList<LanguageFont>? Fonts { get; init; }
     public string Origin { get; init; } = "";
@@ -109,6 +111,7 @@ public sealed record LanguageSettings(string Tag)
             Digits = Pick(Digits, later.Digits, "digits"),
             GlyphDelayScale = Pick(GlyphDelayScale, later.GlyphDelayScale, "glyph_delay_scale"),
             MinFitScale = Pick(MinFitScale, later.MinFitScale, "min_fit_scale"),
+            Overflow = Pick(Overflow, later.Overflow, "overflow"),
             Fonts = Pick(Fonts, later.Fonts, "font"),
             Origin = later.Origin,
         };

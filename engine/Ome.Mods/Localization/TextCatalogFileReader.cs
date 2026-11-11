@@ -122,7 +122,7 @@ public static partial class TextCatalogFileReader
     /// <summary>
     /// One <c>[[language]]</c> table (spec §9.2), from a manifest or a <c>languages.toml</c>: <c>tag</c>, and
     /// optionally <c>name</c>, <c>fallback</c>, <c>line_break</c>, <c>measure</c>, <c>digits</c>,
-    /// <c>glyph_delay_scale</c>, <c>min_fit_scale</c> and <c>[[language.font]]</c> tables (<c>requested</c>,
+    /// <c>glyph_delay_scale</c>, <c>min_fit_scale</c>, <c>overflow</c> and <c>[[language.font]]</c> tables (<c>requested</c>,
     /// <c>use</c>). Each problem is added to <paramref name="problems"/> prefixed with <paramref name="where"/>;
     /// <paramref name="tags"/> collects the tags read so far, to report one declared twice.
     /// </summary>
@@ -138,6 +138,7 @@ public static partial class TextCatalogFileReader
         string? digits = fields.String("digits");
         double? delayScale = fields.Number("glyph_delay_scale");
         double? fitScale = fields.Number("min_fit_scale");
+        string? overflow = fields.String("overflow");
         var fontTables = fields.TableArray("font").ToArray();
         fields.RejectUnknown();
         if (tag == null) return null;
@@ -205,6 +206,13 @@ public static partial class TextCatalogFileReader
             },
             GlyphDelayScale = delayScale,
             MinFitScale = fitScale,
+            Overflow = overflow switch
+            {
+                null => null,
+                "shrink" => TextOverflow.Shrink,
+                "cut" => TextOverflow.Cut,
+                _ => fields.Problem<TextOverflow?>($"overflow must be \"shrink\" or \"cut\", not \"{overflow}\""),
+            },
             Fonts = fonts,
             Origin = where,
         };

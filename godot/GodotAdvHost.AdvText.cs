@@ -501,37 +501,37 @@ public sealed partial class GodotAdvHost
             ? LayoutSourceText(binding, run, out sourceGlyphs, out sourceExtent)
             : null;
 
+        GlyphTextLayoutOptions LayoutOptions(int right, bool wrapRows, IReadOnlyList<int>? lineBreaks,
+                                             IReadOnlyList<int>? rowShifts)
+            => new(run.Layout.CursorX, run.Layout.CursorY, binding.ResetCursorX, right,
+                   history ? int.MaxValue : run.Layout.Bottom, WrapHorizontally: wrapRows, style, lineBreaks, realization,
+                   OverflowAtFontHeight: run.Presented != null, RowShiftsX: rowShifts);
+
         PresentedRunPlacement? placement = null;
         if (run.Presented is { } presented && recordedLineBreaks == null)
         {
             // Presented text breaks where the presenter allows (§7.1), planned before drawing, and is narrowed and
-            // aligned as its entry asks (§7.2); history has no source pass and draws it as written.
+            // aligned as its entry asks (§7.2); history has no source pass and draws it as written. A language that
+            // shrinks overflow tries each width with the layout that draws it, without drawing (§7.3).
+            Func<PresentedRunPlacement, bool>? fitsWindow =
+                presented.Overflow == Ome.Engine.Localization.TextOverflow.Shrink && !history
+                    ? candidate => !text.Layout.Render(
+                        null, LayoutOptions(int.MaxValue, false, candidate.Plan.BreaksBefore, candidate.RowShiftsX),
+                        candidate.Plan.Glyphs).StoppedOnVerticalOverflow
+                    : null;
             placement = PresentedTextPlacement.Place(
                 drawnText, Ome.Engine.Localization.PresentedLineBreaks.Opportunities(drawnText, presented.LineBreak), requests,
                 text.Cache, run.Layout.CursorX, binding.ResetCursorX, run.Layout.Right,
                 presented.Entry?.Align ?? Ome.Engine.Localization.TextAlign.Start,
                 presented.Entry?.Fit ?? Ome.Engine.Localization.TextFit.None, sourceExtent, source?.Rows.Count ?? 0,
-                presented.MinFitScale);
+                presented.MinFitScale, fitsWindow);
             requests = placement.Plan.Glyphs;
             breaks = placement.Plan.BreaksBefore;
             rightBound = int.MaxValue;
             wrap = false;
         }
         GlyphTextLayoutResult rendered = text.Layout.Render(
-            updated,
-            new GlyphTextLayoutOptions(
-                run.Layout.CursorX,
-                run.Layout.CursorY,
-                binding.ResetCursorX,
-                rightBound,
-                history ? int.MaxValue : run.Layout.Bottom,
-                WrapHorizontally: wrap,
-                style,
-                breaks,
-                realization,
-                OverflowAtFontHeight: run.Presented != null,
-                RowShiftsX: placement?.RowShiftsX),
-            requests);
+            updated, LayoutOptions(rightBound, wrap, breaks, placement?.RowShiftsX), requests);
         // Presented rows below the layout's bottom are cut and reported (§7.3); history has no bottom.
         int cutRows = placement != null && !history && rendered.StoppedOnVerticalOverflow
             ? PresentedTextPlacement.CutRows(placement.Plan, rendered.ConsumedGlyphs)
@@ -600,6 +600,7 @@ public sealed partial class GodotAdvHost
             ["source_cursor_x"] = source?.CursorX,
             ["source_cursor_y"] = source?.CursorY,
             ["width_percent"] = placement?.WidthPercent,
+            ["narrowed_to_fit"] = placement?.NarrowedToFit,
             ["row_shifts"] = placement?.RowShiftsX is { } shifts ? string.Join(",", shifts) : null,
             ["cut_rows"] = cutRows,
         });
@@ -629,7 +630,11 @@ public sealed partial class GodotAdvHost
                 first,
                 ordered.Count,
                 rendered.CursorX,
-                rendered.CursorY) { Rows = rendered.Rows, Ruby = ruby, Source = source, CutRows = cutRows };
+                rendered.CursorY)
+            {
+                Rows = rendered.Rows, Ruby = ruby, Source = source, CutRows = cutRows,
+                NarrowedToFitPercent = placement is { NarrowedToFit: true } ? placement.WidthPercent : 0,
+            };
         }
 
         lock (_imageLock)

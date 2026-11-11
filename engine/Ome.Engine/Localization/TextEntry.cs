@@ -6,6 +6,11 @@ public enum TextAlign { Start, Center, End }
 /// <summary>Whether presented text wider than the source text is narrowed (localization spec §7.2).</summary>
 public enum TextFit { None, Shrink }
 
+/// <summary>What a language does with a presented run that needs more rows than its window has (localization spec
+/// §7.3; the language's <c>overflow</c>): narrow its glyphs until it fits, down to the language's
+/// <c>min_fit_scale</c>, or cut it at the window's bottom as the game cuts its own text.</summary>
+public enum TextOverflow { Shrink, Cut }
+
 /// <summary>What the length opcodes measure (localization spec §5.3).</summary>
 public enum TextMeasure { Presented, Source }
 

@@ -335,6 +335,37 @@ public class TextPresenterTests : IDisposable
     }
 
     [Fact]
+    public void ANarrowedMessageIsLoggedBetweenItsMissAndItsCutWithItsNarrowestWidth()
+    {
+        var misses = new TextMissLog();
+        var presenter = new TextPresenter(new TextLanguage("en", [TextCatalog.Build("en", [TextEntry.Literal("はい", "Yes")])])
+            { Overflow = TextOverflow.Cut }, misses: misses);
+        var lookup = new TextLookup("いいえ", new TextSite("SC0100", 0x10), null);
+
+        Assert.Null(Present(presenter, "いいえ"));
+        presenter.ReportCut(lookup, 1);
+        presenter.ReportNarrowed(lookup, 93);
+        presenter.ReportNarrowed(lookup, 88);
+        presenter.ReportNarrowed(lookup, 95);
+        presenter.ReportNarrowed(lookup, 100);   // not narrowed
+        presenter.ReportNarrowed(lookup, 0);
+
+        var written = new StringWriter();
+        misses.WriteJsonLines(written);
+        Assert.Equal(new[]
+        {
+            """{"source":"いいえ","script":"SC0100","at":"0x10","count":1}""",
+            """{"source":"いいえ","script":"SC0100","at":"0x10","count":3,"width_percent":88}""",
+            """{"source":"いいえ","script":"SC0100","at":"0x10","count":1,"rows_cut":1}""",
+        }, written.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r')));
+        Assert.Equal((1, 1, 1), (misses.Count, misses.NarrowedCount, misses.CutCount));
+        // The entry's text carries the language's overflow; a language shrinks by default (spec §7.3).
+        Assert.Equal(TextOverflow.Cut, presenter.Present("はい", new TextSite("SC0100", 0x10))!.Overflow);
+        Assert.Equal(TextOverflow.Shrink, new TextLanguage("en", []).Overflow);
+        Assert.Equal(TextOverflow.Shrink, new PresentedText("x", LineBreakMode.Words, null).Overflow);
+    }
+
+    [Fact]
     public void ThePseudoLanguageBracketsAndLengthensEveryStringAndLogsItAsAMiss()
     {
         var misses = new TextMissLog();

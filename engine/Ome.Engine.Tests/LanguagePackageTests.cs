@@ -108,6 +108,7 @@ public sealed class LanguagePackageTests : IDisposable
     [InlineData(2, "[[language]]\ntag = \"en\"\n[[language]]\ntag = \"EN\"", "language 'en' is declared twice")]
     [InlineData(2, "[[language]]\ntag = \"en\"\nglyph_delay_scale = 0", "glyph_delay_scale must be above 0 and at most 4")]
     [InlineData(2, "[[language]]\ntag = \"en\"\nmin_fit_scale = 1.5", "min_fit_scale must be above 0 and at most 1")]
+    [InlineData(2, "[[language]]\ntag = \"en\"\noverflow = \"page\"", "overflow must be \"shrink\" or \"cut\", not \"page\"")]
     [InlineData(2, "[[language]]\ntag = \"en\"\n[[language.font]]\nrequested = []\nuse = [\"Georgia\"]",
                 "requested must name at least one face")]
     [InlineData(2, "[[language]]\ntag = \"en\"\n[[language.font]]\nrequested = [\"*\"]\nuse = [\"fonts/a/b.ttf\"]",
@@ -175,7 +176,7 @@ public sealed class LanguagePackageTests : IDisposable
         {
             ["text/en/_global.toml"] = "[[text]]\nsource = \"はい\"\ntext = \"Yes\"\n\n[[text]]\nsource = \"いいえ\"\ntext = \"No\"\n",
         }, new Dictionary<string, byte[]> { ["fonts/Body.ttf"] = [1, 2, 3] });
-        ModPackage fix = Mod("b.fix", "[[language]]\ntag = \"en\"\nglyph_delay_scale = 0.75\n", new Dictionary<string, string>
+        ModPackage fix = Mod("b.fix", "[[language]]\ntag = \"en\"\nglyph_delay_scale = 0.75\noverflow = \"cut\"\n", new Dictionary<string, string>
         {
             ["text/en/fix.toml"] = "[[text]]\nsource = \"はい\"\ntext = \"Yeah\"\n\n[[text]]\nsource = \"まだ\"\n",
         });
@@ -194,7 +195,8 @@ public sealed class LanguagePackageTests : IDisposable
         Assert.Equal("fonts/a.lang/Body.ttf", Assert.Single(result.Text.Fonts).CachePath);
         LinkedLanguage language = Assert.Single(result.Text.Languages);
         Assert.Equal(["a.lang", "b.fix"], language.DefinedBy);
-        Assert.Equal(("English", 0.75), (language.Settings.Name, language.Settings.GlyphDelayScale));
+        Assert.Equal(("English", 0.75, TextOverflow.Cut),
+                     (language.Settings.Name, language.Settings.GlyphDelayScale, language.Settings.Overflow));
         Assert.Equal(["fonts/a.lang/Body.ttf", "Georgia"], Assert.Single(language.Settings.Fonts!).Use);
 
         string report = result.Report.Render();
@@ -225,7 +227,8 @@ public sealed class LanguagePackageTests : IDisposable
         Assert.Equal("Yeah", presenter.Present("はい", new TextSite("SC0100", 0x10))?.Text);
         Assert.Equal("No", presenter.Present("いいえ", new TextSite("SC0100", 0x10))?.Text);
         Assert.Null(presenter.Present("まだ", new TextSite("SC0100", 0x10)));
-        Assert.Equal((0.75, TextLanguage.DefaultMinFitScale), (loaded.GlyphDelayScale, loaded.MinFitScale));
+        Assert.Equal((0.75, TextLanguage.DefaultMinFitScale, TextOverflow.Cut),
+                     (loaded.GlyphDelayScale, loaded.MinFitScale, loaded.Overflow));
         string font = Assert.Single(loaded.Fonts).Use[0];
         Assert.True(Path.IsPathFullyQualified(font) && File.Exists(font), font);
         Assert.Equal("mods:en/000.a.lang/_global.toml:1", Assert.Single(report.Overrides).Replaced.Origin);

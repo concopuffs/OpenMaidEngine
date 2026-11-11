@@ -122,6 +122,30 @@ public class PresentedMessageTests
         Assert.Equal((0, 1), (misses.Count, misses.CutCount));
     }
 
+    [Fact]
+    public void AMessageTheHostNarrowedToFitIsReportedWithItsWidth()
+    {
+        // The host narrows the presented sentence to 91 % so that it is not cut (spec §7.3).
+        var misses = new TextMissLog();
+        Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100", SentenceCode(), Sentence);
+        var host = new RecordingHost
+        {
+            OnRetainedText = run => run.Presented == null ? null
+                : new AdvRetainedTextRunResult(run.Layout.Slot, 0, 4, 40, 0) { NarrowedToFitPercent = 91 },
+        };
+        var vm = new VirtualMachine(script, Table, host)
+        {
+            Presenter = Presenter(misses, TextEntry.Literal("あの黒石を拾った。", "I picked up that black stone.")),
+        };
+        vm.Run();
+
+        var written = new StringWriter();
+        misses.WriteJsonLines(written);
+        Assert.Equal("{\"source\":\"あの黒石を拾った。\",\"script\":\"SC0100\",\"at\":\"0x0\",\"count\":1,\"width_percent\":91}",
+                     written.ToString().Trim());
+        Assert.Equal((0, 1, 0), (misses.Count, misses.NarrowedCount, misses.CutCount));
+    }
+
     // ---- the record of stores -------------------------------------------------------------------------------------
 
     private static readonly TextEntry[] StoneEntries =

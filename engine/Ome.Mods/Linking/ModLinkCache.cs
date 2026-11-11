@@ -40,6 +40,7 @@ public sealed record LinkedLanguageEntry
     public double? GlyphDelayScale { get; init; }
     [JsonPropertyName("min_fit_scale"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? MinFitScale { get; init; }
+    [JsonPropertyName("overflow"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Overflow { get; init; }
     [JsonPropertyName("fonts"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<LinkedFontTable>? Fonts { get; init; }
 
@@ -57,6 +58,7 @@ public sealed record LinkedLanguageEntry
             Digits = s.Digits switch { DigitsMode.Ascii => "ascii", DigitsMode.Keep => "keep", _ => null },
             GlyphDelayScale = s.GlyphDelayScale,
             MinFitScale = s.MinFitScale,
+            Overflow = s.Overflow switch { TextOverflow.Shrink => "shrink", TextOverflow.Cut => "cut", _ => null },
             Fonts = s.Fonts?.Select(font => new LinkedFontTable(font.Requested, font.Use)).ToList(),
         };
     }
@@ -71,6 +73,7 @@ public sealed record LinkedLanguageEntry
         Digits = Digits switch { "ascii" => DigitsMode.Ascii, "keep" => DigitsMode.Keep, _ => null },
         GlyphDelayScale = GlyphDelayScale,
         MinFitScale = MinFitScale,
+        Overflow = Overflow switch { "shrink" => TextOverflow.Shrink, "cut" => TextOverflow.Cut, _ => null },
         Fonts = Fonts?.Select(font => new LanguageFont(font.Requested, font.Use)
             .Resolve(use => Path.GetFullPath(Path.Combine(directory, use)))).ToList(),
         Origin = $"mods: {string.Join(", ", DefinedBy)}",

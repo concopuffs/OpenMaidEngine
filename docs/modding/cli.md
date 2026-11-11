@@ -64,7 +64,7 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 | `--data-root DIR` | Use `DIR` as the profile root instead of the default, for a separate set of mods and saves. |
 | `--language TAG` | Present the game's text in `TAG` for this run, whatever `OME.INI` says: the catalogs the mods (and `--text-root`) hold for it. `ja` draws the scripts' text as written; `x-pseudo` brackets and lengthens every string, with no catalog. The menus and dialogs take the mods' `[[engine]]` entries for `TAG`, then the engine's own table for it, along its fallback chain, then Japanese ([languages.md](languages.md), "Engine text"). |
 | `--text-root DIR` | Also load a loose folder of catalogs laid out as a package's `text/`, after the mods' (languages.md, "Testing without a package"). |
-| `--text-log` | Write every string drawn without a catalog entry to `diagnostics/text-misses.jsonl`, and every translated message cut at the bottom of its window, with `rows_cut`, the rows it lost. |
+| `--text-log` | Write every string drawn without a catalog entry to `diagnostics/text-misses.jsonl`, every translated message narrowed to fit its window, with `width_percent`, the width it got, and every one cut at the bottom of its window, with `rows_cut`, the rows it lost. |
 
 `run-godot.ps1` (or `run-godot.cmd`) passes these through as `-Mod PATH` (repeatable) and `-NoMods`. Combine them
 with the game switches:

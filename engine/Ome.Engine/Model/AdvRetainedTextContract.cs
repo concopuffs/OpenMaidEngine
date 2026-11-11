@@ -65,6 +65,10 @@ public readonly record struct AdvRetainedTextRunResult(
     /// <summary>The rows of presented text the run did not draw because they fell below its layout's bottom
     /// (localization spec §7.3); 0 when nothing was cut.</summary>
     public int CutRows { get; init; }
+
+    /// <summary>The glyph width, in percent, presented text was narrowed to so that it fitted its layout instead of
+    /// being cut (the language's <c>overflow = "shrink"</c>, spec §7.3); 0 when the run was not narrowed for that.</summary>
+    public int NarrowedToFitPercent { get; init; }
 }
 
 /// <summary>

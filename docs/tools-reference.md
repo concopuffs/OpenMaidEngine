@@ -750,8 +750,12 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   recorded. An entry's `align` and `fit` place presented text against its source text's extent (spec §7.2): the
   source layout pass's for a run, the source string measured for a `draw-string`; `fit = "shrink"` narrows the glyph
   masks in the glyph cache (`GlyphRasterRequest.WidthPercent`), down to the language's `min_fit_scale` (default
-  0.75). A run cut at its layout's bottom goes to the miss log (§7.3). The timeline's `adv-text-layout-result` events
-  carry `width_percent`, `row_shifts` and `cut_rows`, and `draw-string` events a `placement`. Not yet: ruby in
+  0.75). A run that would run past its layout's bottom (§7.3) is narrowed, under the language's `overflow = "shrink"`
+  (the default), to the widest width at which it fits, down to the same floor: `PresentedTextPlacement.Place` halves
+  between the floor and the width that did not fit, and the host decides each width by laying the run out with the
+  options it draws with, without drawing. A run that fits nowhere above the floor, or with `overflow = "cut"`, is cut.
+  Both go to the miss log. The timeline's `adv-text-layout-result` events carry `width_percent`, `narrowed_to_fit`,
+  `row_shifts` and `cut_rows`, and `draw-string` events a `placement`. Not yet: ruby in
   presented text. The startup log's `[text]` lines
   name what loaded. The shell's own text (spec §11) takes the sources' `[[engine]]` entries for the language, then
   the shell's embedded table for it, along the fallback chain, then Japanese; an entry the shell cannot use (an
@@ -776,8 +780,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   instruction, as the F3 locator prints it) and `count`. Written every 2 seconds when it changed, and at exit.
   A message of several runs that misses is logged once, as its joined text at its first run; a string that is only a
   number is never a miss, and the length opcodes log nothing. Under `x-pseudo` every string is a miss. A presented
-  message whose rows run past its layout's bottom (spec §7.3) gets a line of its own after any miss at that site,
-  with `rows_cut`, the most rows it lost; its `count` is how often it was cut.
+  message narrowed to fit its layout (spec §7.3) gets a line of its own after any miss at that site, with
+  `width_percent`, the narrowest it was drawn; one whose rows still ran past its layout's bottom gets another, with
+  `rows_cut`, the most rows it lost. Each line's `count` is how often that happened.
 - **`OME.INI`** — the port's own options, shared by every game (engine shell spec §5.6): `[ui] Language` (a language
   tag; `ja`, the default; a malformed tag reads as `ja`), `[display] WindowWidth`/`WindowHeight` (the windowed game area; 0 or a missing or invalid pair is
   the canvas), `[debug] FpsCounter` and `LocatorHud` (0/1). It lives in Godot's `user://` folder, or beside the saves

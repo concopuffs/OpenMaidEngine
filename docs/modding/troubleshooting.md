@@ -142,10 +142,15 @@ the exact key the catalog needs, and `script` and `at` the site that drew it. If
 
 `omp text check` warns about entries whose source no installed script draws or stores where their scope reaches.
 
-**Text is cut off at the bottom of the window.** The translation needs more rows than the window has. Run with
-`--text-log`: each cut message is in `diagnostics/text-misses.jsonl` with `rows_cut`. Shorten the translation, give
-the entry `fit = "shrink"`, or patch the script to break the page ([languages.md](languages.md), "Alignment and
-fit").
+**Text is cut off at the bottom of the window.** The translation needs more rows than the window has, even with its
+glyphs narrowed to the language's `min_fit_scale` (or the language sets `overflow = "cut"`). Run with `--text-log`:
+each cut message is in `diagnostics/text-misses.jsonl` with `rows_cut`. Shorten the translation, remove `\n` breaks
+it does not need, or patch the script to break the page ([languages.md](languages.md), "Text too long for its
+window").
+
+**A message looks narrower than the others.** It needed more rows than its window has, and the port narrowed it to
+fit (`overflow = "shrink"`, the default). `--text-log` lists it with `width_percent`, the width it got. Shorten it to
+draw it at full width.
 
 **A label runs out of its box, or is no longer centred.** Give the entry `fit = "shrink"` to narrow it to the
 original's width, and `align = "center"` or `"end"` to place it as the original was. The language's `min_fit_scale`
