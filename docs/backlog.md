@@ -294,8 +294,8 @@ and the drive scenarios.
     rest), per-game base mods that hold every game-specific name, mod state beside the save, and the validation
     gates. Its §19 lists the questions still open.
   - It raises the package manifest to `omp = 2`, as the localization design does
-    (`superpowers/specs/2026-11-10-localization-design.md` §9.2). The two share one format change, whichever is
-    built first.
+    (`superpowers/specs/2026-11-10-localization-design.md` §9.2). Localization milestone 4 introduced version 2
+    (2026-11-11), so the draft's manifest tables join it, unless a released version 2 calls for a version 3.
   - Packages that target no profile are decided (2026-11-10, localization design §11.1). The draft still has to
     say what such a package may hold for Lua.
 
@@ -306,8 +306,9 @@ and the drive scenarios.
 ## Localization
 
 - **Build the localization framework.** The design is accepted (`superpowers/specs/2026-11-10-localization-design.md`,
-  2026-11-10) and milestones 0 to 3 are implemented. The port presents a language from a folder of catalogs
-  (`--text-root`), not yet from packages, and its own error box is fixed Japanese (`VirtualMachine.DiagnosticCaption`).
+  2026-11-10) and milestones 0 to 4 are implemented. The port presents a language from packages (`text/`, `fonts/`,
+  `[[language]]`) and from a folder of catalogs (`--text-root`); its own error box is fixed Japanese
+  (`VirtualMachine.DiagnosticCaption`).
   The spec's §19 holds the milestones and §18 the gates; they are not restated here.
   - **Milestone 0 is built, reviewed and revised** (2026-11-10). `omp text import-scripts` converts the Kamidori
     translation: all 430 changed scripts align, entries keep deliberate line breaks, stored literals and composed
@@ -366,18 +367,42 @@ and the drive scenarios.
       and HISTORY in English, as the Japanese save shows them in Japanese.
     - Gates 1 and 9 still hold: all 28 drive scenarios pass as written, and 27 of 28 are unchanged under x-pseudo
       (reveal-clock's timing checks, as in milestone 1). The 1,677 engine tests pass; `validate.py` runtime passes.
-  - **Next:** milestone 4.
-  - **`align`, `fit` and overflow reports (spec §7.2, §7.3) are in no milestone.** The entry keys are read, but the
-    host ignores them, and nothing reports a presented run cut at the bottom of its window. Both need the source
+  - **Milestone 4 is built** (2026-11-11). Manifests at `omp = 2` declare `[[language]]` tables, and packages carry
+    `text/<tag>/` catalogs and `fonts/`. The link reads every catalog (a file that does not read stops it with its
+    file and line), merges the languages per key in load order, requires each language a catalog adds to to be
+    defined, and reports entries, overrides, sources that reach no installed script and site entries that will not
+    bind. It keeps a base-offset table per patched script, and the cache holds the catalogs, fonts and merged
+    languages. The port loads the mods' text, then `--text-root`'s. `glyph_delay_scale` scales presented runs' reveal
+    delay; `[[language.font]]` puts bundled files and family names before the rasterizer's fallback. Save stamps mark
+    presentation-only packages. `omp text extract`, `check` and `stats` scan the installed scripts, appends included
+    (`ScriptTextScanner`). The modder guide is `modding/languages.md`.
+    - Beyond the spec's §9.3: an entry may leave out `text` (a template, skipped by the loader) and may carry
+      `obsolete = true`, so `extract` keeps its templates and marks in the files. `at` stays a base offset; the F3
+      locator prints the running script's offsets, which differ past a patch in a patched script. A bundled font
+      draws at its own weight. `check` tests exact entries for reach and patterns only for ambiguity.
+    - Kamidori: `extract` writes 49,868 templates in 354 files from 732 scripts in about 2 s, and a second run writes
+      nothing. `check` on the imported catalog: 48,588 entries, 0 errors, 0 warnings; `stats`: messages
+      44,372/45,655, strings 11,316/12,257, composed 31/34. The imported catalog as a local package (`omp = 2`,
+      `glyph_delay_scale = 0.5`) links ("text en: 48588 entries from 217 files") and the port presents the prologue
+      (`SC0000@0xfa2`) and Wil's name plate (`SC0000@0x1488`) from the link cache. A second local package that
+      bundles a serif font and sets the language's font table, loaded after it, overrides the table (reported), the
+      text draws in that font, and `check` lists the 388 characters it lacks.
+    - Tests: `LanguagePackageTests`, `TextToolTests`, and additions to `TextCatalogFileTests`, `TextPresenterTests`
+      and `PresentationSiteTests`. The 1,724 engine tests pass.
+    - Gates 1 and 9 still hold: all 28 drive scenarios pass as written, and 27 of 28 are unchanged under x-pseudo
+      (reveal-clock's timing checks, as in milestone 1).
+  - **Next:** milestone 5.
+  - **`align`, `fit` and overflow reports (spec §7.2, §7.3) are in no milestone.** The entry keys and the language's
+    `min_fit_scale` are read, but the host ignores them, and nothing reports a presented run cut at the bottom of its window. Both need the source
     text's extent, which the source layout pass (milestone 3) now computes. Done when an entry's `align` and `fit` place and
     narrow its text against the source extent, and a cut run goes to the miss log with its script, offset, message
     and the rows cut.
   - **Cut `localization-import-test.md`'s "Review answers" down to the results**, as that section says: the review
     text is committed (`2482813`).
-  - The manifest's `omp = 2` is shared with the Lua design (the item under "Mod loader and modding"). Whichever
-    is built first introduces it.
+  - The manifest's `omp = 2`, introduced by milestone 4, is shared with the Lua design (the item under "Mod loader
+    and modding").
 
-  Done when the spec's gates 1–11 pass and the modder guide under `docs/modding/` covers language packages.
+  Done when the spec's gates 1–11 pass and `modding/languages.md` covers milestones 5 and 6 as well.
 
 ## Platform and project
 

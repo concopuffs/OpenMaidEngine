@@ -15,6 +15,8 @@ An Open Maid Pack (OMP) is one mod. It comes in two forms that load identically:
 ├── scripts/        new scripts (NAME.oms), one per [scripts].names entry
 ├── replace/        whole-script replacements (SCRIPT.BIN)
 ├── assets/         asset overrides by original name, and new assets
+├── text/           translation catalogs, text/<language>/*.toml (format version 2; languages.md)
+├── fonts/          font files a language uses (format version 2; languages.md)
 ├── README.md       optional
 └── LICENSE         optional
 ```
@@ -25,7 +27,7 @@ changes behavior without a mention.
 ## Manifest
 
 ```toml
-omp = 1                              # package format version (required)
+omp = 1                              # package format version: 1, or 2 for languages (required)
 id = "example.double-exp"            # required
 name = "Double EXP"                  # required
 version = "1.2.0"                    # required, MAJOR.MINOR.PATCH
@@ -60,9 +62,15 @@ names = ["DBLEXP_ICON.AGF"]          # new assets, as records after the scripts
 
 [replace]
 "SC0010.BIN" = { over = "other.mod" } # this replacement deliberately supersedes other.mod's
+
+[[language]]                         # format version 2 only; repeatable (languages.md)
+tag = "en"
 ```
 
 Unknown keys are errors, so a misspelled setting cannot be silently ignored.
+
+**Format versions.** `omp = 2` adds the `[[language]]` table and the `text/` and `fonts/` folders; everything else
+is as in version 1, which a version 2 loader still reads. A version 1 package with any of the three is an error.
 
 ### Identity
 
@@ -157,6 +165,12 @@ landing on the wrong instructions.
 - A file with a name the game does not have is a **new asset**. List it in `[assets].names`. It becomes a record of
   the mod's append catalog, and scripts reach it with `asset "NAME"` (`new-scenes.md`).
 
+### Text and fonts: `text/`, `fonts/`
+
+`text/<language>/` holds translation catalogs and `fonts/` the font files a `[[language]]` table names. They change
+no script or asset: the port presents the game's text through them as it is drawn. A package that holds nothing
+else is presentation only, which its save stamps record. See [languages.md](languages.md).
+
 ## Limits
 
 Packages are treated as untrusted input:
@@ -165,4 +179,5 @@ Packages are treated as untrusted input:
 - a package may have at most 65,536 entries, 1 GiB per expanded entry and 8 GiB in total;
 - an entry that expands past 1 MiB at a ratio over 200:1 is rejected;
 - compiled plans are revalidated against the base on every load;
+- catalog files are at most 32 MiB each, and font files 64 MiB;
 - a package contains no native code. Version 1 runs only AGE bytecode, inside the VM.

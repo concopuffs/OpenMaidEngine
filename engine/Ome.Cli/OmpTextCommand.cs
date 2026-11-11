@@ -6,30 +6,92 @@ using Ome.Mods.Localization;
 using Ome.Mods.Localization.Import;
 
 /// <summary>
-/// <c>omp text</c> (localization spec §13). Version 1 of the toolchain has <c>import-scripts</c>: build a catalog from
-/// an install whose scripts were translated in place, aligned against the selected profile's install
-/// (<c>--game-root</c>), and write <c>import-report.json</c> (spec §18.1).
+/// <c>omp text</c> (localization spec §13), against the selected profile's install (<c>--game-root</c>):
+/// <c>extract</c> writes catalog templates from its scripts; <c>check</c> validates catalogs (packages and a text
+/// root) and <c>stats</c> counts what they translate; <c>import-scripts</c> builds a catalog from an install whose
+/// scripts were translated in place and writes <c>import-report.json</c> (spec §18.1).
 /// </summary>
 internal static partial class OmpTextCommand
 {
     [GeneratedRegex(@"^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$")]
     private static partial Regex LanguageTag();
 
-    public static int Run(string[] args, string baseRoot, Sys4AssetCatalog baseCatalog, OpcodeTable table)
+    public static int Run(string[] args, string baseRoot, Sys4AssetCatalog baseCatalog, OpcodeTable table, string profileId)
     {
         string verb = args.Length > 2 ? args[2] : "";
         return verb switch
         {
             "import-scripts" => ImportScripts(args, baseRoot, baseCatalog, table),
+            "extract" => Extract(args, baseRoot, baseCatalog, table, profileId),
+            "check" or "stats" => CheckOrStats(verb == "stats", args, baseRoot, baseCatalog, table, profileId),
             _ => Usage(),
         };
     }
 
     private static int Usage()
     {
-        Console.Error.WriteLine("usage: omp text import-scripts --from GAME_ROOT [--overlay-root DIR] [--allow-bmp-as-agf] "
+        Console.Error.WriteLine("usage: omp text extract --language TAG --output DIR");
+        Console.Error.WriteLine("       omp text check [--mod PATH ...] [--data-root DIR] [--text-root DIR] [--language TAG] [--no-scripts]");
+        Console.Error.WriteLine("       omp text stats [--mod PATH ...] [--data-root DIR] [--text-root DIR] [--language TAG] [--scripts]");
+        Console.Error.WriteLine("       omp text import-scripts --from GAME_ROOT [--overlay-root DIR] [--allow-bmp-as-agf] "
                                 + "--output DIR [--language TAG] [--verify] [--compare-archives]");
         return 2;
+    }
+
+    private static List<string> Options(string[] args, string name)
+        => args.Select((arg, k) => (arg, k)).Where(pair => pair.arg == name && pair.k + 1 < args.Length)
+            .Select(pair => Path.GetFullPath(args[pair.k + 1])).ToList();
+
+    /// <summary>The install's scripts as <c>extract</c>, <c>check</c> and <c>stats</c> read them: the base catalog's
+    /// own, before any mod or overlay.</summary>
+    private static ScriptTextCorpus Corpus(string baseRoot, Sys4AssetCatalog baseCatalog, OpcodeTable table)
+    {
+        var store = new Sys4AssetStore(baseCatalog, baseRoot, baseRoot);
+        var scanner = new ScriptTextScanner(table, Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson));
+        return ScriptTextCorpus.Scan(scanner, baseCatalog.EnumerateScripts().Where(packed => !packed.Asset.IsPlaceholder)
+            .Select(packed => (packed.Asset.Name, (Func<byte[]>)(() => store.ReadAll(packed.Asset)))));
+    }
+
+    private static int Extract(string[] args, string baseRoot, Sys4AssetCatalog baseCatalog, OpcodeTable table,
+                               string profileId)
+    {
+        string? output = Option(args, "--output");
+        string? language = Option(args, "--language");
+        if (output == null || language == null) return Usage();
+        if (!LanguageTag().IsMatch(language) || language == Ome.Engine.Localization.LanguageTag.Source)
+        {
+            Console.Error.WriteLine($"error: --language '{language}' is not a lowercase BCP 47 tag other than the source's, "
+                                    + "such as en or pt-br");
+            return 2;
+        }
+        ScriptTextCorpus corpus = Corpus(baseRoot, baseCatalog, table);
+        return Ome.Mods.Tools.TextCommands.Extract(corpus, language, output, $"the {profileId} install at {baseRoot}",
+                                                   Console.Out);
+    }
+
+    private static int CheckOrStats(bool stats, string[] args, string baseRoot, Sys4AssetCatalog baseCatalog,
+                                    OpcodeTable table, string profileId)
+    {
+        List<string> packages = Options(args, "--mod");
+        string? dataRoot = Option(args, "--data-root") is { } root ? Path.GetFullPath(root) : null;
+        string? textRoot = Option(args, "--text-root") is { } text ? Path.GetFullPath(text) : null;
+        if (packages.Count == 0 && dataRoot == null && textRoot == null)
+        {
+            Console.Error.WriteLine($"error: omp text {(stats ? "stats" : "check")} needs --mod PATH, --data-root DIR or --text-root DIR");
+            return 2;
+        }
+        if (textRoot != null && !Directory.Exists(textRoot))
+        {
+            Console.Error.WriteLine($"error: --text-root {textRoot}: no such folder");
+            return 2;
+        }
+        var contracts = Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
+        var store = new Sys4AssetStore(baseCatalog, baseRoot, baseRoot);
+        var linkBase = Ome.Mods.Linking.ModLinkBase.ForInstall(profileId, Path.Combine(baseRoot, "SYS4INI.BIN"), baseCatalog,
+            store, table, contracts, Paths.GlobalsJson(profileId), Paths.OmsModules(profileId), Paths.PatchPointsJson(profileId));
+        ScriptTextCorpus? corpus = stats || !args.Contains("--no-scripts") ? Corpus(baseRoot, baseCatalog, table) : null;
+        return Ome.Mods.Tools.TextCommands.Run(stats, linkBase, dataRoot, packages, textRoot, corpus,
+            Option(args, "--language"), args.Contains("--scripts"), Console.Out);
     }
 
     private static string? Option(string[] args, string name)

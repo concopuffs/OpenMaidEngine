@@ -8,16 +8,17 @@ namespace Ome.Mods.Localization;
 /// <summary>
 /// The presenter for a selected language (localization spec §10): none for the source language or a language with
 /// no catalog (gate 1), the pseudo-language's filter for <c>x-pseudo</c> (§14), else the language's catalogs from the
-/// text root (<see cref="TextRootLoader"/>). Packages carry <c>text/</c> from milestone 4; until then the port mounts
-/// one folder with <c>--text-root</c>. Each selection loads the files again, so a language switch picks up edits.
+/// text sources (<see cref="TextRootLoader"/>): the mod layer's catalogs, then a folder given with
+/// <c>--text-root</c>, which wins where both have an entry. Each selection loads the files again, so a language switch
+/// picks up edits.
 /// </summary>
-public sealed class LanguageLaunch(string? textRoot, Func<string, string?> baseFingerprint, Func<string, bool> isPatched,
-                                   TextMissLog? misses, ITextMessageIndex? messages = null)
+public sealed class LanguageLaunch(IReadOnlyList<TextSource> sources, TextSiteBinder binder, TextMissLog? misses,
+                                   ITextMessageIndex? messages = null)
 {
-    public string? TextRoot { get; } = textRoot;
+    public IReadOnlyList<TextSource> Sources { get; } = sources;
 
     /// <summary>Whether the mounted text defines any language, so the VM records string stores (spec §5.2).</summary>
-    public bool DefinesLanguage { get; } = textRoot != null && TextRootLoader.DefinesLanguage(textRoot);
+    public bool DefinesLanguage { get; } = sources.Any(source => source.DefinesLanguage);
 
     /// <summary>The presenter for <paramref name="tag"/>, or null to draw source text.</summary>
     /// <exception cref="TextCatalogException">A catalog file does not parse or validate.</exception>
@@ -27,8 +28,8 @@ public sealed class LanguageLaunch(string? textRoot, Func<string, string?> baseF
         if (normalized == LanguageTag.Source) return null;
         if (normalized == LanguageTag.Pseudo)
             return new TextPresenter(TextLanguage.Pseudo, [new PseudoLanguageFilter()], misses);
-        if (TextRoot == null) return null;
-        TextLanguage language = TextRootLoader.Load(TextRoot, normalized, baseFingerprint, isPatched, report);
+        if (Sources.Count == 0) return null;
+        TextLanguage language = TextRootLoader.Load(Sources, normalized, binder, report);
         return language.Chain.Count == 0 ? null : new TextPresenter(language, misses: misses, messages: messages);
     }
 
@@ -55,16 +56,5 @@ public sealed class LanguageLaunch(string? textRoot, Func<string, string?> baseF
                 return known[name] = fingerprint;
             }
         };
-    }
-
-    /// <summary>Whether the linked mod layer replaces or patches a script, so its offsets are not base offsets.</summary>
-    public static Func<string, bool> PatchedScripts(MountedModLayer? layer)
-    {
-        if (layer == null) return _ => false;
-        var scripts = layer.Manifest.Files.Keys
-            .Where(name => name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase))
-            .Select(TextCatalog.NormalizeScriptName)
-            .ToHashSet(StringComparer.Ordinal);
-        return script => scripts.Contains(TextCatalog.NormalizeScriptName(script));
     }
 }

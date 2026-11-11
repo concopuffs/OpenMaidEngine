@@ -1,3 +1,5 @@
+using Ome.Engine.Localization;
+using Ome.Mods.Localization;
 using Ome.Mods.Manifest;
 
 namespace Ome.Mods.Packages;
@@ -15,10 +17,17 @@ public sealed record ModReplacementFile(string Script, PackageEntry File);
 /// <c>[assets].names</c>. Which one an unlisted file is depends on the base catalog, so the linker decides.</summary>
 public sealed record ModAssetFile(string Name, PackageEntry File, bool ListedAsNew);
 
+/// <summary>A catalog under <c>text/&lt;language&gt;/</c> (localization spec §9.1): its language tag, its path inside
+/// the language folder (the merge order within the package), and the file.</summary>
+public sealed record ModTextFile(string Language, string Name, PackageEntry File);
+
+/// <summary>A font file under <c>fonts/</c> (localization spec §9.1), named by its basename.</summary>
+public sealed record ModFontFile(string Name, PackageEntry File);
+
 /// <summary>
-/// A package's files sorted into the content kinds of spec §3.2 and §4. Directories are matched case-insensitively.
-/// Files outside the layout are kept as notes (spec §3.2); a wrongly typed or nested file inside a content directory
-/// is an error.
+/// A package's files sorted into the content kinds of spec §3.2 and §4, and the localization spec's <c>text/</c> and
+/// <c>fonts/</c> (§9.1, format version 2). Directories are matched case-insensitively. Files outside the layout are
+/// kept as notes (spec §3.2); a wrongly typed or nested file inside a content directory is an error.
 /// </summary>
 public sealed record ModLayout(
     IReadOnlyList<ModPatchFiles> Patches,
@@ -28,6 +37,18 @@ public sealed record ModLayout(
     IReadOnlyList<string> Notes)
 {
     public const string PlanSuffix = ".omspatch.json";
+    public const string TextFolder = "text", FontsFolder = "fonts";
+    /// <summary>Largest font file a package may bundle (localization spec §16).</summary>
+    public const long MaxFontBytes = 64L << 20;
+
+    /// <summary>The catalogs under <c>text/</c>, by language and then path, in ordinal order.</summary>
+    public IReadOnlyList<ModTextFile> Text { get; init; } = [];
+    /// <summary>The font files under <c>fonts/</c>.</summary>
+    public IReadOnlyList<ModFontFile> Fonts { get; init; } = [];
+
+    /// <summary>Whether the package changes no script or asset: it holds only <c>text/</c>, <c>fonts/</c> and
+    /// <c>[[language]]</c> tables (localization spec §8, save stamps).</summary>
+    public bool ChangesNoContent => Patches.Count == 0 && Scripts.Count == 0 && Replacements.Count == 0 && Assets.Count == 0;
     private static readonly string[] Documents = ["README.md", "README.txt", "LICENSE", "LICENSE.md", "LICENSE.txt"];
 
     public static ModLayout Classify(ModManifest manifest, IReadOnlyList<PackageEntry> entries, List<string> problems)
@@ -38,6 +59,8 @@ public sealed record ModLayout(
         var replacements = new List<ModReplacementFile>();
         var assetFiles = new List<PackageEntry>();
         var notes = new List<string>();
+        var text = new List<ModTextFile>();
+        var fonts = new List<ModFontFile>();
 
         foreach (PackageEntry entry in entries)
         {
@@ -68,6 +91,21 @@ public sealed record ModLayout(
                     break;
                 case "assets" when !nested:
                     assetFiles.Add(entry);
+                    break;
+                case TextFolder or FontsFolder when manifest.OmpVersion < ModManifest.LanguageOmpVersion:
+                    problems.Add($"'{entry.Path}': {top.ToLowerInvariant()}/ needs omp = {ModManifest.LanguageOmpVersion}");
+                    break;
+                case TextFolder:
+                    if (TextFile(entry, rest, problems) is { } catalog) text.Add(catalog);
+                    break;
+                case FontsFolder when !nested && TextCatalogFileReader.IsFontFileName(rest):
+                    if (entry.Length > MaxFontBytes)
+                        problems.Add($"'{entry.Path}': a font may be at most {MaxFontBytes >> 20} MiB");
+                    else fonts.Add(new ModFontFile(rest, entry));
+                    break;
+                case FontsFolder:
+                    problems.Add($"'{entry.Path}': fonts/ holds only font files ({string.Join(", ", LanguageFont.Extensions)}), "
+                                 + "without subdirectories");
                     break;
                 case "patches":
                     problems.Add($"'{entry.Path}': patches/ holds only *.oms fragments and *{PlanSuffix} plans");
@@ -113,6 +151,44 @@ public sealed record ModLayout(
                      !assets.Any(asset => asset.Name.Equals(name, StringComparison.OrdinalIgnoreCase))))
             problems.Add($"assets.names: '{name}' has no assets/{name}");
 
-        return new ModLayout(patches, scripts, replacements, assets, notes);
+        // Each bundled font a language names must be in fonts/.
+        foreach (LanguageSettings language in manifest.Languages)
+            foreach (LanguageFont font in language.Fonts ?? [])
+                foreach (string use in font.Use.Where(use => use.StartsWith(LanguageFont.FontsFolder, StringComparison.OrdinalIgnoreCase)))
+                    if (!fonts.Any(file => file.Name.Equals(use[LanguageFont.FontsFolder.Length..], StringComparison.OrdinalIgnoreCase)))
+                        problems.Add($"{language.Origin}: '{use}' is not in the package");
+
+        return new ModLayout(patches, scripts, replacements, assets, notes)
+        {
+            Text = text.OrderBy(file => file.Language, StringComparer.Ordinal)
+                .ThenBy(file => file.Name, StringComparer.Ordinal).ToList(),
+            Fonts = fonts,
+        };
+    }
+
+    /// <summary>A file under <c>text/</c>: a catalog at <c>text/&lt;tag&gt;/…/NAME.toml</c>, where the tag is a
+    /// well-formed lowercase language other than the source and the pseudo-language.</summary>
+    private static ModTextFile? TextFile(PackageEntry entry, string rest, List<string> problems)
+    {
+        int slash = rest.IndexOf('/');
+        string tag = slash < 0 ? "" : rest[..slash];
+        string name = slash < 0 ? rest : rest[(slash + 1)..];
+        if (slash < 0 || !name.EndsWith(".toml", StringComparison.OrdinalIgnoreCase))
+        {
+            problems.Add($"'{entry.Path}': text/ holds catalogs at text/<language>/*.toml");
+            return null;
+        }
+        if (tag != LanguageTag.Normalize(tag) || !LanguageTag.IsWellFormed(tag) || tag == LanguageTag.Source
+            || tag == LanguageTag.Pseudo)
+        {
+            problems.Add($"'{entry.Path}': '{tag}' is not a lowercase language tag a package can carry text for");
+            return null;
+        }
+        if (entry.Length > TextCatalogFileReader.MaxBytes)
+        {
+            problems.Add($"'{entry.Path}': a catalog file may be at most {TextCatalogFileReader.MaxBytes >> 20} MiB");
+            return null;
+        }
+        return new ModTextFile(tag, name, entry);
     }
 }

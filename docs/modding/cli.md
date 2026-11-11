@@ -19,7 +19,7 @@ Your game guide lists the options its installs need ([games/README.md](games/REA
 |---|---|
 | `omp check [--mod PATH …] [--data-root DIR] [--skip-failed-mods]` | Links the mods and prints the link report, each mod catalog's records with their packed ids, and a summary. It writes nothing. It exits non-zero if the stack does not link. |
 | `omp build DIR [--output FILE.omp] [--mod DEP …]` | Validates and links the mod folder `DIR`, compiles every fragment, and writes a reproducible `.omp` with the plans stored inside (default `<id>-<version>.omp` beside the folder). The folder is not changed. Pass the mod's dependencies with `--mod`. |
-| `omp export --output-dir DIR [--mod PATH …] [--data-root DIR]` | Links the mods and writes what native AGE loads: patched and replaced scripts and asset overrides as loose files, and one `APPENDnn.AAI`/`.ALF` pair per mod catalog. It refuses a stack that does not link. |
+| `omp export --output-dir DIR [--mod PATH …] [--data-root DIR]` | Links the mods and writes what native AGE loads: patched and replaced scripts and asset overrides as loose files, and one `APPENDnn.AAI`/`.ALF` pair per mod catalog. It refuses a stack that does not link. It leaves out `text/`, `fonts/` and `[[language]]` with a note, since native AGE cannot present them. |
 | `omp explain NAME [--mod PATH …] [--data-root DIR]` | Says which layer and mod supplies a script or asset, such as `SC0000.BIN`, `$2$SCENE.BIN` or `my.mod:NAME`, and lists every plan applied to a script. A base entry shows its loose file or its range in the ALF archive. |
 
 `--mod` takes a folder or an `.omp` file and repeats. `--data-root DIR` also links the mods installed in a port
@@ -30,7 +30,17 @@ selectors are allocated fresh.
 native saves must match saves made in the port, pass the port's profile root as `--data-root`, so the export uses
 the same selectors.
 
-## Language tools
+## `omp text`: translations
+
+| Command | What it does |
+|---|---|
+| `omp text extract --language TAG --output DIR` | Writes catalog templates for language `TAG` into the package folder `DIR` (`DIR/text/TAG/`), from the install's scripts: one file per script with its messages and patterns, and `_global.toml` with every literal the scripts draw or store. Run again, it keeps every entry already there, adds templates for new sources, marks `obsolete = true` the entries whose source is gone, and rewrites only the files that changed. A file there that does not read stops it before it writes anything. |
+| `omp text check [--mod PATH …] [--data-root DIR] [--text-root DIR] [--language TAG] [--no-scripts]` | Links the packages as `omp check` does (printing its report), then validates every language's catalogs, the `--text-root` folder's last. Errors: a file that does not read, two patterns that can match one string, too many entries, a stack that does not link. Warnings: entries whose source the installed scripts do not draw or store where their scope reaches, site entries that do not bind, characters no bundled font covers. `--language` checks one language; `--no-scripts` skips reading the install. Exits non-zero on an error. |
+| `omp text stats [--mod PATH …] [--data-root DIR] [--text-root DIR] [--language TAG] [--scripts]` | Counts, per language, the messages, strings and composed strings of the installed scripts that its catalogs and their fallback chain translate. `--scripts` adds a line per script. |
+
+The catalog format and the workflow are in [languages.md](languages.md).
+
+## OMS tools
 
 | Command | What it does |
 |---|---|
@@ -50,6 +60,9 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 | `--skip-failed-mods` | If the stack does not link, drop the mods involved, say so, and start with the rest. Without it a failed link stops startup (exit code 2). |
 | `--forget-mod ID` | Release a removed mod's selector (see below). Repeatable. |
 | `--data-root DIR` | Use `DIR` as the profile root instead of the default, for a separate set of mods and saves. |
+| `--language TAG` | Present the game's text in `TAG` for this run, whatever `OME.INI` says: the catalogs the mods (and `--text-root`) hold for it. `ja` draws the scripts' text as written; `x-pseudo` brackets and lengthens every string, with no catalog. |
+| `--text-root DIR` | Also load a loose folder of catalogs laid out as a package's `text/`, after the mods' (languages.md, "Testing without a package"). |
+| `--text-log` | Write every string drawn without a catalog entry to `diagnostics/text-misses.jsonl`. |
 
 `run-godot.ps1` (or `run-godot.cmd`) passes these through as `-Mod PATH` (repeatable) and `-NoMods`. Combine them
 with the game switches:

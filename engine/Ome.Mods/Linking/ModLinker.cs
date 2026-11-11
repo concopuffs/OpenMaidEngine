@@ -12,16 +12,19 @@ public sealed record LinkedScript(string Name, byte[] Bytes, string? ReplacedBy,
 {
     /// <summary>The plans applied, in order, as <c>mod.id (patches/stem)</c>.</summary>
     public IReadOnlyList<string> Plans { get; init; } = [];
+
+    /// <summary>Where the base instructions went, for a patched script that no mod replaces (localization spec
+    /// §6.1); null otherwise.</summary>
+    public ScriptOffsetMap? Offsets { get; init; }
 }
 
-/// <summary>The outcome of a link: the resolved order, the changed scripts, and the report. When the report stops
-/// the link, <see cref="Scripts"/> holds what linked cleanly but must not be mounted.</summary>
 /// <summary>An <c>assets/</c> file that overrides the base asset of its basename; the last mod in load order wins.</summary>
 public sealed record LinkedAsset(string Name, string ModId, byte[] Bytes);
 
 /// <summary>The outcome of a link: the resolved order, the changed scripts, the mods' append catalogs, the asset
-/// overrides, the selector allocation after the link, and the report. When the report stops the link, the content
-/// holds what linked cleanly but must not be mounted, and the allocation must not be saved.</summary>
+/// overrides, the text (catalogs, fonts and languages), the selector allocation after the link, and the report. When
+/// the report stops the link, the content holds what linked cleanly but must not be mounted, and the allocation must
+/// not be saved.</summary>
 public sealed record ModLinkResult(
     IReadOnlyList<ModPackage> Order,
     IReadOnlyDictionary<string, LinkedScript> Scripts,
@@ -30,6 +33,7 @@ public sealed record ModLinkResult(
     public bool Succeeded => !Report.Stops;
     public IReadOnlyList<LinkedCatalog> Catalogs { get; init; } = [];
     public IReadOnlyDictionary<string, LinkedAsset> Assets { get; init; } = new Dictionary<string, LinkedAsset>();
+    public LinkedText Text { get; init; } = LinkedText.None;
     public SelectorStore Selectors { get; init; } = new();
 }
 
@@ -185,11 +189,21 @@ public static class ModLinker
         foreach (var (script, list) in replacements.Where(pair => !uses.ContainsKey(pair.Key)))
             scripts[script] = new LinkedScript(script, list.Bytes, list.Mod.Id, []);
         foreach (var (script, list) in uses.OrderBy(pair => pair.Key, StringComparer.Ordinal))
-            if (ApplyAll(script, list, Chosen(script)!, linkBase, ResolveResource, report) is { } bytes)
-                scripts[script] = new LinkedScript(script, bytes,
-                    replacements.TryGetValue(script, out var winner) ? winner.Mod.Id : null,
-                    list.Select(use => use.Mod.Id).Distinct().ToList()) { Plans = list.Select(use => use.Label).ToList() };
-        return new ModLinkResult(order, scripts, report) { Catalogs = catalogs, Assets = assets, Selectors = selectors };
+            if (ApplyAll(script, list, Chosen(script)!, linkBase, ResolveResource, report) is { } patched)
+            {
+                string? replacedBy = replacements.TryGetValue(script, out var winner) ? winner.Mod.Id : null;
+                scripts[script] = new LinkedScript(script, patched.Bytes, replacedBy,
+                    list.Select(use => use.Mod.Id).Distinct().ToList())
+                {
+                    Plans = list.Select(use => use.Label).ToList(),
+                    Offsets = replacedBy == null ? ScriptOffsetMap.From(patched) : null,
+                };
+            }
+        LinkedText text = ModTextLinker.Link(order, linkBase, scripts, report);
+        return new ModLinkResult(order, scripts, report)
+        {
+            Catalogs = catalogs, Assets = assets, Text = text, Selectors = selectors,
+        };
     }
 
     /// <summary>The names a mod's code may reach: its own, and those of the mods it requires.</summary>
@@ -279,8 +293,8 @@ public static class ModLinker
         }
     }
 
-    private static byte[]? ApplyAll(string script, List<PatchUse> uses, byte[] baseBytes, ModLinkBase linkBase,
-                                    Func<string, uint> resolveResource, ModLinkReport report)
+    private static OmsPatchResult? ApplyAll(string script, List<PatchUse> uses, byte[] baseBytes, ModLinkBase linkBase,
+                                            Func<string, uint> resolveResource, ModLinkReport report)
     {
         var plans = new List<OmsPatchPlan>();
         foreach (PatchUse use in uses)
@@ -314,7 +328,7 @@ public static class ModLinker
                 report.Add(ModReportClass.OrderedInteraction, Involved(interaction), script, interaction);
             foreach (string note in result.Notes)
                 report.Add(ModReportClass.Note, uses.Select(use => use.Mod.Id), script, note);
-            return result.Bytes;
+            return result;
         }
         catch (OmsPatchException error)
         {

@@ -7,7 +7,8 @@ namespace Ome.Mods.Localization;
 /// <summary>
 /// Writes a catalog file (localization spec §9.3) that <see cref="TextCatalogFileReader"/> reads back to the same
 /// entries. Keys come in a fixed order and strings are TOML basic strings, so the output is deterministic and
-/// diffs well. An entry's <c>script</c> is written only where it differs from the file's default scope.
+/// diffs well. An entry's <c>script</c> is written only where it differs from the file's default scope. A template
+/// (an item without text) is written without <c>text</c>, and an obsolete item with <c>obsolete = true</c>.
 /// </summary>
 public static class TextCatalogFileWriter
 {
@@ -18,14 +19,16 @@ public static class TextCatalogFileWriter
             text.Append("# ").Append(comment.ReplaceLineEndings(" ")).Append('\n');
         if (file.Script != null) text.Append("script = ").Append(Quote(file.Script)).Append('\n');
         if (file.Fingerprint != null) text.Append("fingerprint = ").Append(Quote(file.Fingerprint)).Append('\n');
-        foreach (TextEntry entry in file.Entries)
+        foreach (TextCatalogItem item in file.AllItems)
         {
+            TextEntry entry = item.Entry;
             text.Append("\n[[text]]\n");
             if (!string.Equals(entry.Script, file.Script, StringComparison.Ordinal))
                 text.Append("script = ").Append(Quote(entry.Script ?? "")).Append('\n');
             text.Append("source = ").Append(Quote(entry.Source)).Append('\n');
             if (entry.At is { } at) text.Append("at = 0x").Append(at.ToString("x", CultureInfo.InvariantCulture)).Append('\n');
-            text.Append("text = ").Append(Quote(entry.Text)).Append('\n');
+            if (item.HasText) text.Append("text = ").Append(Quote(entry.Text)).Append('\n');
+            if (item.Obsolete) text.Append("obsolete = true\n");
             if (entry.Align != TextAlign.Start)
                 text.Append("align = ").Append(Quote(entry.Align == TextAlign.Center ? "center" : "end")).Append('\n');
             if (entry.Fit == TextFit.Shrink) text.Append("fit = \"shrink\"\n");

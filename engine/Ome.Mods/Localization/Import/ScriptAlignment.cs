@@ -107,6 +107,11 @@ public sealed class ScriptAlignment
             why);
     }
 
+    /// <summary>A script aligned with itself: each instruction matches its own, nothing inserted. The composed-string
+    /// walk reads a base script alone this way (<c>omp text extract</c>).</summary>
+    internal static ScriptAlignment Identity(Ome.Engine.Model.Script script)
+        => new(Enumerable.Range(0, script.Instructions.Count).ToArray(), new bool[script.Instructions.Count], []);
+
     /// <summary>The dword offsets control flow can reach other than by falling through: immediate code targets and
     /// code values, and the script's call tables.</summary>
     public static IReadOnlySet<int> BranchTargets(Ome.Engine.Model.Script script, OpcodeContracts contracts)

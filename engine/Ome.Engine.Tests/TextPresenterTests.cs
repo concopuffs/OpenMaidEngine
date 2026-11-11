@@ -32,7 +32,8 @@ public class TextPresenterTests : IDisposable
 
     private TextLanguage Load(string tag, TextLoadReport? report = null, string? installed = Fingerprint,
                               bool patched = false)
-        => TextRootLoader.Load(_root, tag, _ => installed, _ => patched, report ?? new TextLoadReport());
+        => TextRootLoader.Load(_root, tag,
+            new TextSiteBinder(_ => installed, patched ? _ => (true, null) : null), report ?? new TextLoadReport());
 
     private static string? Present(TextPresenter presenter, string source, string script = "SC0100", int at = 0x10)
         => presenter.Present(source, new TextSite(script, at))?.Text;
@@ -134,7 +135,7 @@ public class TextPresenterTests : IDisposable
     [InlineData("sha256:00000000000000000000000000000000000000000000000000000000000000ff", false,
         "the base script's fingerprint differs")]
     [InlineData(null, false, "the script is not installed")]
-    [InlineData(Fingerprint, true, "a mod patches the script")]
+    [InlineData(Fingerprint, true, "a mod replaces the script")]
     public void SiteEntriesBindOnlyToTheirUnpatchedBaseScript(string? installed, bool patched, string reason)
     {
         WriteFile("en/SC0100.toml", $$"""
@@ -180,6 +181,107 @@ public class TextPresenterTests : IDisposable
         Assert.Equal("Right.", Present(presenter, "はい"));
         Assert.Equal("Yes", Present(presenter, "はい", at: 0x20));
         Assert.Equal("Yes", presenter.Present("はい", new TextSite("SC0100", 0x10, IsBaseScript: false))?.Text);
+    }
+
+    [Fact]
+    public void InAPatchedScriptASiteEntryMovesWithItsInstruction()
+    {
+        WriteFile("en/SC0100.toml", $$"""
+            script = "SC0100"
+            fingerprint = "{{Fingerprint}}"
+
+            [[text]]
+            source = "はい"
+            at = 0x8
+            text = "Before the patch."
+
+            [[text]]
+            source = "はい"
+            at = 0x20
+            text = "After the patch."
+
+            [[text]]
+            source = "はい"
+            at = 0x12
+            text = "Replaced by the patch."
+            """);
+        // A patch replaced 0x10..0x14 with ten dwords: what follows moved by six.
+        var map = new Ome.Mods.Linking.ScriptOffsetMap(
+            [new Ome.Mods.Linking.OffsetRun(0, 0x10, 0), new Ome.Mods.Linking.OffsetRun(0x14, 0x40, 6)]);
+        var report = new TextLoadReport();
+
+        var presenter = new TextPresenter(TextRootLoader.Load(_root, "en",
+            new TextSiteBinder(_ => Fingerprint, script => script == "SC0100" ? (true, map) : (false, null)), report));
+
+        Assert.Equal("Before the patch.", Present(presenter, "はい", at: 0x8));
+        Assert.Equal("After the patch.", Present(presenter, "はい", at: 0x26));
+        Assert.Null(Present(presenter, "はい", at: 0x20));
+        Assert.Equal(("en/SC0100.toml", 1, "a patch replaces the instruction"), Assert.Single(report.DroppedSites));
+    }
+
+    [Fact]
+    public void LaterSourcesWinPerEntryAndPerLanguageKey()
+    {
+        WriteFile("mods/en/a.toml", """
+            [[text]]
+            source = "はい"
+            text = "Yes"
+
+            [[text]]
+            source = "いいえ"
+            text = "No"
+
+            [[text]]
+            source = "まだ"
+            """);
+        WriteFile("root/en/b.toml", """
+            [[text]]
+            source = "はい"
+            text = "Yeah"
+
+            [[text]]
+            source = "いいえ"
+            text = "Nope"
+            obsolete = true
+            """);
+        WriteFile("root/languages.toml", """
+            [[language]]
+            tag = "en"
+            line_break = "anywhere"
+
+            [[language.font]]
+            requested = ["*"]
+            use = ["fonts/Body.ttf", "Georgia"]
+            """);
+        WriteFile("root/fonts/Body.ttf", "font");
+        LanguageSettings packaged = new("en") { Name = "English", GlyphDelayScale = 0.5, LineBreak = LineBreakMode.Words };
+        TextSource[] sources = [new(Path.Combine(_root, "mods"), [packaged], "mods"), new(Path.Combine(_root, "root"))];
+        var report = new TextLoadReport();
+
+        TextLanguage language = TextRootLoader.Load(sources, "en", new TextSiteBinder(_ => null), report);
+
+        var presenter = new TextPresenter(language);
+        Assert.Equal("Yeah", Present(presenter, "はい"));
+        Assert.Equal("No", Present(presenter, "いいえ"));
+        Assert.Null(Present(presenter, "まだ"));
+        Assert.Equal(("mods:en/a.toml:1", "en/b.toml:1"),
+                     (Assert.Single(report.Overrides).Replaced.Origin, report.Overrides[0].Winner.Origin));
+        Assert.Equal((LineBreakMode.Anywhere, 0.5), (language.LineBreak, language.GlyphDelayScale));
+        TextFontMapping fonts = Assert.Single(language.Fonts);
+        Assert.Equal([Path.GetFullPath(Path.Combine(_root, "root", "fonts", "Body.ttf")), "Georgia"], fonts.Use);
+        Assert.True(fonts.Applies("ＭＳ ゴシック"));
+    }
+
+    [Fact]
+    public void ALanguagesFileThatNamesAMissingFontStopsTheLoad()
+    {
+        WriteFile("en/a.toml", "[[text]]\nsource = \"はい\"\ntext = \"Yes\"\n");
+        WriteFile("languages.toml",
+            "[[language]]\ntag = \"en\"\n[[language.font]]\nrequested = [\"*\"]\nuse = [\"fonts/None.ttf\"]\n");
+
+        var error = Assert.Throws<TextCatalogException>(() => Load("en"));
+
+        Assert.Contains("'fonts/None.ttf' is not in", Assert.Single(error.Problems));
     }
 
     // ---- presenter, miss log, pseudo-language ---------------------------------------------------------------------
@@ -321,6 +423,21 @@ public class PresentationSiteTests
         misses.WriteJsonLines(written);
         Assert.StartsWith("""{"source":"未訳","script":"SC0100","at":"0x""", written.ToString());
         Assert.Equal(1, misses.Count);
+    }
+
+    [Theory]
+    [InlineData(0.5, 25)]
+    [InlineData(2.0, 100)]
+    [InlineData(0.001, 1)]
+    public void PresentedRunsRevealAtTheLanguagesGlyphDelayScale(double scale, int presented)
+    {
+        var language = new TextLanguage("en", [TextCatalog.Build("en",
+            [TextEntry.Literal("はい", "Yes"), TextEntry.Literal("黒石", "the black stone")])]) { GlyphDelayScale = scale };
+
+        var (host, _) = Run(new TextPresenter(language));
+
+        // The host's delay is 50 ms; a run with no entry keeps it.
+        Assert.Equal(new[] { presented, presented, 50 }, host.LiveTextRuns.Select(run => run.GlyphDelayMilliseconds));
     }
 
     [Fact]

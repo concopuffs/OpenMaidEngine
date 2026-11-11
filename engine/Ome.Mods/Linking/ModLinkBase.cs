@@ -18,6 +18,10 @@ public sealed record ModLinkBase
     public required string CatalogFingerprint { get; init; }
     /// <summary>A script's bytes as the base serves them, or null when the catalog has no such script.</summary>
     public required Func<string, byte[]?> ReadScript { get; init; }
+    /// <summary>Every installed script, the append packs' included (<c>$1$CIINIT.BIN</c>), with a reader of its bytes:
+    /// the link reports catalog entries that match none of their text (localization spec §9.4) and binds site entries
+    /// by their fingerprints. Empty skips that report.</summary>
+    public IReadOnlyList<(string Name, Func<byte[]> Read)> InstalledScripts { get; init; } = [];
     public required OpcodeTable Table { get; init; }
     public required OpcodeContracts Contracts { get; init; }
     public required IntrinsicCatalog Intrinsics { get; init; }
@@ -87,6 +91,8 @@ public sealed record ModLinkBase
             ReadScript = name => catalog.ResolveName(name) is { IsPlaceholder: false } entry
                                  && entry.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)
                 ? store.ReadAll(entry) : null,
+            InstalledScripts = catalog.EnumerateScripts().Where(packed => !packed.Asset.IsPlaceholder)
+                .Select(packed => (packed.Asset.Name, (Func<byte[]>)(() => store.ReadAll(packed.Asset)))).ToList(),
             Table = table,
             Contracts = contracts,
             Intrinsics = intrinsics,

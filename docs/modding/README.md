@@ -23,6 +23,9 @@ A mod is one package with a `manifest.toml`. Version 1 supports four kinds of co
   script conflict, so prefer patches ([packages.md](packages.md)).
 - **Assets:** files that override an original asset by name, or new assets that a mod's scripts use.
 
+Format version 2 adds **language packages**: translation catalogs and fonts that present the game's text in another
+language without changing a script ([languages.md](languages.md)). They run in the port only.
+
 Version 1 does not support runtime scripting (Lua), engine extensions, or patching code another mod inserted.
 `../backlog.md` and the mod loader design's future work list what may come later.
 
@@ -47,6 +50,7 @@ Test a mod in the port first: its link report names every conflict, while native
 | learn the language | [oms-language.md](oms-language.md) |
 | edit an original script without replacing it | [patching.md](patching.md) |
 | add a scene, a boot-time data edit, or new assets | [new-scenes.md](new-scenes.md) |
+| translate a game | [languages.md](languages.md) |
 | look up a command or a port flag | [cli.md](cli.md) |
 | understand an error or a crash | [troubleshooting.md](troubleshooting.md) |
 | find your game's options, values and quirks | [games/README.md](games/README.md) |
@@ -60,8 +64,9 @@ proved the loader run them in the port and in native AGE.
   (`tools/native_scratch.py`), never the game directory.
 - **A fragment is tied to exact bytes.** Each patch names the SHA-256 of the script it edits. An install whose
   scripts a translation or update replaces is a different base, and needs its own fragment.
-- **Text must be encodable in CP932** (Shift-JIS), since that is the games' only text encoding. English, Japanese
-  and full-width characters work. Characters outside CP932 are compile errors.
+- **Text in scripts must be encodable in CP932** (Shift-JIS), since that is the games' only text encoding. English,
+  Japanese and full-width characters work. Characters outside CP932 are compile errors. A language package's
+  translations are Unicode, because the port draws them itself.
 
 ## Where the deeper material lives
 
@@ -69,6 +74,7 @@ These guides are the home for how to make mods. The design records behind them a
 
 - the language design: `../superpowers/specs/2026-10-06-open-maid-script-design.md`;
 - the loader design: `../superpowers/specs/2026-11-03-mod-loader-design.md`;
+- the localization design: `../superpowers/specs/2026-11-10-localization-design.md`;
 - engine facts: `../engine-re.md` and `../sys4-format-notes.md`;
 - the generated opcode reference, `../opcode-reference.md`. Each game's global and patch-point references are
   linked from its identity block in [games/README.md](games/README.md).

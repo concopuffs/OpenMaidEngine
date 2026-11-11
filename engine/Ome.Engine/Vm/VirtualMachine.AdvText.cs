@@ -155,7 +155,7 @@ public sealed partial class VirtualMachine
         _advTextRevealing = reveals && !AdvFastForwardActive;
         try
         {
-            retained = _host.ShowText(Gfx, binding, liveRun, _messageGlyphDelayMilliseconds);
+            retained = _host.ShowText(Gfx, binding, liveRun, RevealDelay(presented));
         }
         finally
         {
@@ -172,6 +172,17 @@ public sealed partial class VirtualMachine
         // A presented message's span stays open until its last run.
         if (_presentedMessage == null) TextHistory.EndLookupSpan();
         return true;
+    }
+
+    /// <summary>The reveal's delay per glyph for a run: a presented run's is scaled by its language's
+    /// <c>glyph_delay_scale</c> (localization spec §7.5), and never reaches zero, so a reveal stays a reveal.</summary>
+    private int RevealDelay(PresentedText? presented)
+    {
+        if (presented == null || _presenter == null || _messageGlyphDelayMilliseconds <= 0) return _messageGlyphDelayMilliseconds;
+        double scale = _presenter.Language.GlyphDelayScale;
+        return scale == 1.0
+            ? _messageGlyphDelayMilliseconds
+            : System.Math.Max(1, (int)System.Math.Round(_messageGlyphDelayMilliseconds * scale));
     }
 
     private int StepAdvText(string label, Instruction ins, int pc)

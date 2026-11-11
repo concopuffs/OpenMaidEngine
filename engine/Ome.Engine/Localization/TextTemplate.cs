@@ -49,6 +49,19 @@ public sealed class TextTemplate
         ? throw new InvalidOperationException("a pattern has no single literal text")
         : string.Concat(Parts.Cast<LiteralPart>().Select(part => part.Text));
 
+    /// <summary>The template as written, with each placeholder's kind left out: the form a <c>text</c> may take.</summary>
+    public string WithoutKinds()
+        => string.Concat(Parts.Select(part => part switch
+        {
+            LiteralPart literal => Escape(literal.Text),
+            PlaceholderPart placeholder => "{" + placeholder.Name + "}",
+            _ => "",
+        }));
+
+    /// <summary>A source's untranslated text: the source itself, with placeholder kinds left out.</summary>
+    public static string UntranslatedText(string source)
+        => TryParse(source, allowKinds: true, out TextTemplate template, out _) ? template.WithoutKinds() : source;
+
     /// <summary>Escape literal text for a <c>source</c> or <c>text</c> value: braces are doubled.</summary>
     public static string Escape(string literal) => literal.Replace("{", "{{").Replace("}", "}}");
 

@@ -26,7 +26,7 @@ public class TextImportTests
 
     /// <summary>A script under construction. <see cref="Here"/> is the next instruction's dword offset, so a jump can
     /// be patched to point at a later instruction.</summary>
-    private sealed class Asm
+    internal sealed class Asm
     {
         private readonly List<(int Op, Operand[] Args)> _code = [];
         private readonly List<string> _strings = [];

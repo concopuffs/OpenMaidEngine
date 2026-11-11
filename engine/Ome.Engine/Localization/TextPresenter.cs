@@ -5,9 +5,11 @@ namespace Ome.Engine.Localization;
 
 /// <summary>
 /// Where a string reaches the boundary (localization spec §5.2): the script whose instruction draws it, and that
-/// instruction's dword offset. <see cref="BaseOffset"/> is null when the running script is not the base script (a
-/// mod patched it), since a site entry names a base offset (§6.1). The same form names a string's origin: the
-/// instruction that stored it into a global string cell.
+/// instruction's dword offset in the running script. The same form names a string's origin: the instruction that
+/// stored it into a global string cell. Site entries are bound to the running scripts when a language loads (a
+/// patched script's through the link's offset table, §6.1), so they compare with these offsets.
+/// <see cref="IsBaseScript"/> is false only where the site is unknown, such as history restored from a save (§8):
+/// site entries then do not apply.
 /// </summary>
 public readonly record struct TextSite(string Script, int Offset, bool IsBaseScript = true)
 {
@@ -74,8 +76,29 @@ public sealed record TextLanguage(string Tag, IReadOnlyList<TextCatalog> Chain)
 
     public DigitsMode Digits { get; init; } = DigitsMode.Keep;
 
+    /// <summary>The factor on the reveal's glyph delay for presented runs (§7.5): English has about twice the glyphs
+    /// of Japanese for one sentence.</summary>
+    public double GlyphDelayScale { get; init; } = 1.0;
+
+    /// <summary>The font tables (§7.4), in order; the first that applies to a face wins.</summary>
+    public IReadOnlyList<TextFontMapping> Fonts { get; init; } = [];
+
+    /// <summary>The fonts to use for authored face <paramref name="face"/>, or null for the host's own substitutes.</summary>
+    public IReadOnlyList<string>? FontsFor(string face) => Fonts.FirstOrDefault(font => font.Applies(face))?.Use;
+
     /// <summary>The pseudo-language (spec §14): no catalog, every string lengthened and bracketed.</summary>
     public static TextLanguage Pseudo { get; } = new(LanguageTag.Pseudo, []);
+}
+
+/// <summary>
+/// A language's font substitution (spec §7.4): for the authored faces <see cref="Requested"/> names (<c>*</c> for
+/// every face), the fonts to use in order. An absolute path is a font file the package bundles; any other entry is a
+/// family name. The host puts them in front of its own substitution list.
+/// </summary>
+public sealed record TextFontMapping(IReadOnlyList<string> Requested, IReadOnlyList<string> Use)
+{
+    public bool Applies(string face)
+        => Requested.Any(requested => requested == "*" || requested.Equals(face, StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>

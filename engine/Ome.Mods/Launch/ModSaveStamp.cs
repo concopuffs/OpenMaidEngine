@@ -8,7 +8,8 @@ namespace Ome.Mods.Launch;
 /// <summary>
 /// The stack recorded beside a save (spec §8, <c>SAVEnn.mods.toml</c>): each mod's id, version and package hash in load
 /// order, the selector allocation, and the link cache key. <see cref="Compare"/> lists what differs from the current
-/// stack; the loader warns with it and never blocks.
+/// stack; the loader warns with it and never blocks. A package that only presents text is marked (localization spec
+/// §8), and a change to one is reported as presentation only.
 /// </summary>
 public sealed record ModSaveStamp(IReadOnlyList<ModStackEntry> Mods, IReadOnlyDictionary<string, int> Selectors, string Key)
 {
@@ -22,8 +23,11 @@ public sealed record ModSaveStamp(IReadOnlyList<ModStackEntry> Mods, IReadOnlyDi
         text.Append("# The mod stack this save was made with (Open Maid Engine mod loader spec §8).\n")
             .Append("stamp = 1\nkey = \"").Append(Key).Append("\"\n");
         foreach (ModStackEntry mod in Mods)
+        {
             text.Append("\n[[mods]]\nid = \"").Append(mod.Id).Append("\"\nversion = \"").Append(mod.Version)
                 .Append("\"\nhash = \"").Append(mod.Hash).Append("\"\n");
+            if (mod.Presentation) text.Append("presentation = true\n");
+        }
         text.Append("\n[selectors]\n");
         foreach (var (id, selector) in Selectors.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             text.Append('"').Append(id).Append("\" = ").Append(selector).Append('\n');
@@ -39,7 +43,8 @@ public sealed record ModSaveStamp(IReadOnlyList<ModStackEntry> Mods, IReadOnlyDi
             var mods = new List<ModStackEntry>();
             if (table.TryGetValue("mods", out object? list) && list is TomlTableArray entries)
                 foreach (TomlTable entry in entries)
-                    mods.Add(new ModStackEntry((string)entry["id"], (string)entry["version"], (string)entry["hash"]));
+                    mods.Add(new ModStackEntry((string)entry["id"], (string)entry["version"], (string)entry["hash"],
+                        entry.TryGetValue("presentation", out object? presentation) && (bool)presentation));
             var selectors = new Dictionary<string, int>(StringComparer.Ordinal);
             if (table.TryGetValue("selectors", out object? raw) && raw is TomlTable selectorTable)
                 foreach (var (id, value) in selectorTable) selectors[id] = checked((int)(long)value);
@@ -61,15 +66,17 @@ public sealed record ModSaveStamp(IReadOnlyList<ModStackEntry> Mods, IReadOnlyDi
         var differences = new List<string>();
         var before = savedMods.ToDictionary(mod => mod.Id, StringComparer.Ordinal);
         var now = currentMods.ToDictionary(mod => mod.Id, StringComparer.Ordinal);
+        static string Kind(ModStackEntry mod) => mod.Presentation ? " (presentation only)" : "";
         foreach (ModStackEntry mod in currentMods.Where(mod => !before.ContainsKey(mod.Id)))
-            differences.Add($"added {mod.Id} {mod.Version}");
+            differences.Add($"added {mod.Id} {mod.Version}{Kind(mod)}");
         foreach (ModStackEntry mod in savedMods.Where(mod => !now.ContainsKey(mod.Id)))
-            differences.Add($"removed {mod.Id} {mod.Version}");
+            differences.Add($"removed {mod.Id} {mod.Version}{Kind(mod)}");
         foreach (ModStackEntry mod in currentMods.Where(mod => before.ContainsKey(mod.Id)))
         {
             ModStackEntry old = before[mod.Id];
-            if (old.Version != mod.Version) differences.Add($"{mod.Id} {old.Version} -> {mod.Version}");
-            else if (old.Hash != mod.Hash) differences.Add($"{mod.Id} {mod.Version} changed (package hash differs)");
+            string kind = old.Presentation && mod.Presentation ? " (presentation only)" : "";
+            if (old.Version != mod.Version) differences.Add($"{mod.Id} {old.Version} -> {mod.Version}{kind}");
+            else if (old.Hash != mod.Hash) differences.Add($"{mod.Id} {mod.Version} changed (package hash differs){kind}");
         }
         var common = currentMods.Select(mod => mod.Id).Where(before.ContainsKey).ToList();
         var commonBefore = savedMods.Select(mod => mod.Id).Where(now.ContainsKey).ToList();

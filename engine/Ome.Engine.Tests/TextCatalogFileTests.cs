@@ -60,6 +60,7 @@ public class TextCatalogFileTests
 
             [[text]]
             source = "c"
+            obsolete = "yes"
 
             [[text]]
             source = "{x}c"
@@ -85,11 +86,11 @@ public class TextCatalogFileTests
         Assert.Equal(new[]
         {
             "bad.toml:1: unknown key 'colour'",
-            "bad.toml:6: text is required",
-            "bad.toml:9: a pattern that starts or ends with a placeholder needs a script scope",
-            "bad.toml:13: an entry with 'at' needs the file's 'fingerprint' of the base script",
-            "bad.toml:19: align must be \"start\", \"center\" or \"end\", not \"middle\"",
-            "bad.toml:24: row_gap must be 0 to 256",
+            "bad.toml:6: obsolete must be true or false",
+            "bad.toml:10: a pattern that starts or ends with a placeholder needs a script scope",
+            "bad.toml:14: an entry with 'at' needs the file's 'fingerprint' of the base script",
+            "bad.toml:20: align must be \"start\", \"center\" or \"end\", not \"middle\"",
+            "bad.toml:25: row_gap must be 0 to 256",
         }, error.Problems);
     }
 
@@ -160,6 +161,78 @@ public class TextCatalogFileTests
         Assert.Equal(Fingerprint, read.Fingerprint);
         Assert.Equal(entries.Select(Shape), read.Entries.Select(Shape));
         Assert.Equal("c", Assert.Single(read.EngineEntries).Text);
+    }
+
+    [Fact]
+    public void TemplatesAndObsoleteEntriesStayInTheFileButAreNotApplied()
+    {
+        TextCatalogFile file = TextCatalogFileReader.Parse("""
+            script = "SC0100"
+
+            [[text]]
+            source = "はい"
+
+            [[text]]
+            source = "いいえ"
+            text = "No"
+            obsolete = true
+
+            [[text]]
+            source = "{v1:num}個"
+
+            [[text]]
+            source = "剣"
+            text = "Sword"
+            obsolete = false
+            """, "items.toml");
+
+        Assert.Equal([("はい", false, false), ("いいえ", true, true), ("{v1:num}個", false, false), ("剣", true, false)],
+                     file.Items.Select(item => (item.Entry.Source, item.HasText, item.Obsolete)));
+        Assert.Equal(["剣"], file.Entries.Select(entry => entry.Source));
+        // A template is checked as if its text were its source; a pattern's kinds are not text.
+        Assert.Equal("{v1}個", file.Items[2].Entry.Text);
+
+        string written = TextCatalogFileWriter.Write(file);
+        TextCatalogFile read = TextCatalogFileReader.Parse(written, "items.toml");
+        Assert.Equal(file.Items.Select(item => (item.Entry.Source, item.Entry.Text, item.HasText, item.Obsolete)),
+                     read.Items.Select(item => (item.Entry.Source, item.Entry.Text, item.HasText, item.Obsolete)));
+        Assert.Equal(1, written.Split("obsolete = true").Length - 1);
+        Assert.Equal(2, written.Split("\ntext = ").Length - 1);
+    }
+
+    [Fact]
+    public void ALanguagesFileReadsTheMilestoneFourKeys()
+    {
+        LanguageSettings language = Assert.Single(TextCatalogFileReader.ParseLanguages("""
+            [[language]]
+            tag = "pt-BR"
+            name = "Português"
+            fallback = ["pt"]
+            line_break = "anywhere"
+            measure = "source"
+            digits = "ascii"
+            glyph_delay_scale = 1.5
+            min_fit_scale = 0.75
+
+            [[language.font]]
+            requested = ["ＭＳ ゴシック"]
+            use = ["fonts/Sans.otf", "Noto Sans"]
+
+            [[language.font]]
+            requested = ["*"]
+            use = ["Georgia"]
+            """, "languages.toml"));
+
+        Assert.Equal(("pt-br", "Português", 1.5, 0.75), (language.Tag, language.Name, language.GlyphDelayScale, language.MinFitScale));
+        Assert.Equal(["pt"], language.Fallback);
+        Assert.Equal((LineBreakMode.Anywhere, TextMeasure.Source, DigitsMode.Ascii),
+                     (language.LineBreak!.Value, language.Measure!.Value, language.Digits!.Value));
+        Assert.Equal(new[] { "fonts/Sans.otf|Noto Sans", "Georgia" },
+                     language.Fonts!.Select(font => string.Join("|", font.Use)));
+
+        var (merged, replaced) = language.Merge(new LanguageSettings("pt-br") { GlyphDelayScale = 1.0, Name = "PT" });
+        Assert.Equal(["name", "glyph_delay_scale"], replaced);
+        Assert.Equal(("PT", 1.0, 0.75), (merged.Name, merged.GlyphDelayScale, merged.MinFitScale));
     }
 
     private static object Shape(TextEntry entry)

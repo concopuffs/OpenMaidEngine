@@ -156,7 +156,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── PROJECT-STRUCTURE.md                this file (where things live)
     │   ├── tools-reference.md                  every tool: purpose, usage, I/O (operational companion)
     │   ├── modding/                            modder-facing guides (README, first-mod, packages, oms-language,
-    │   │                                         patching, new-scenes, cli, troubleshooting); English, plain Markdown;
+    │   │                                         patching, new-scenes, languages, cli, troubleshooting); English, plain Markdown;
     │   │                                         generic only: game facts live in modding/games/
     │   │   └── games/                          README.md GENERATED (supported games + identity blocks); <profile>.md per game
     │   ├── backlog.md                          open work items (fidelity gaps, deferred follow-ups, accepted ideas)
@@ -249,11 +249,13 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       on Tomlyn plus semantic versions and ranges (Manifest/), and the linker:
     │                                       stack resolution and load order, replacements, plan composition, the
     │                                       spec §7 report, selector allocation, per-mod append catalogs, asset
-    │                                       overrides and the link cache (Linking/), startup discovery, flags and
-    │                                       save stamps (Launch/), and the omp commands (Tools/); the
-    │                                       localization catalog file reader and writer, the text root loader
-    │                                       and the script message index (Localization/) and
-    │                                       `omp text import-scripts` (Localization/Import/); referenced by
+    │                                       overrides, the stack's text, fonts and languages, offset tables for
+    │                                       patched scripts and the link cache (Linking/), startup discovery, flags
+    │                                       and save stamps (Launch/), and the omp and omp text commands (Tools/);
+    │                                       the localization catalog file reader and writer, the text source loader
+    │                                       and site binder, the script message index, the installed-script text
+    │                                       scanner, the template extractor and the font cmap reader
+    │                                       (Localization/) and `omp text import-scripts` (Localization/Import/); referenced by
     │                                       Ome.Cli, the Godot port (godot/Main.Mods.cs) and the tests
     │   ├── Ome.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,

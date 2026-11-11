@@ -45,6 +45,35 @@ public sealed partial class GodotAdvHost
 
     private TextPipeline ActiveText => _presentsText ? _presentedText.Value : _sourceText;
 
+    private readonly IGlyphMaskRasterizer _surfaceTextRasterizer;
+    private IGlyphMaskRasterizer? _presentedTextRasterizer;
+    private Func<string, IReadOnlyList<string>?>? _presentedFonts;
+
+    /// <summary>
+    /// The language's fonts (localization spec §7.4) for the rasterizer presented text draws with: put in front of
+    /// the portable policy's substitutes, for every run while the language is active. Null (the source language, or a
+    /// language without font tables) leaves the policy alone. Switching drops the fonts and glyph masks made so far;
+    /// text already drawn stays.
+    /// </summary>
+    public void UsePresentedFonts(Ome.Engine.Localization.TextLanguage? language)
+    {
+        Func<string, IReadOnlyList<string>?>? fonts = language is { Fonts.Count: > 0 } ? language.FontsFor : null;
+        if (fonts == null && _presentedFonts == null) return;
+        _presentedFonts = fonts;
+        // The presented pipeline is the gameplay one when that rasterizer is already portable.
+        if (_presentedText.IsValueCreated && _presentedTextRasterizer is GodotTextServerGlyphMaskRasterizer presented)
+        {
+            presented.UseLanguageFonts(fonts);
+            _presentedText.Value.Cache.Clear();
+        }
+        else if (_surfaceTextBackendInfo.Policy == GlyphRasterPolicy.PortableUnicode
+                 && _surfaceTextRasterizer is GodotTextServerGlyphMaskRasterizer gameplay)
+        {
+            gameplay.UseLanguageFonts(fonts);
+            _surfaceTextMaskCache.Clear();
+        }
+    }
+
     /// <summary>The aspect-mode font list for <paramref name="text"/>'s rasterizer: the gameplay rasterizer's, or none
     /// for the Unicode one, as on a portable run.</summary>
     private AspectFontRealization? RealizationFor(TextPipeline text)

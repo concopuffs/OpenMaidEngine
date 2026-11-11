@@ -9,11 +9,12 @@ using Ome.Mods.Localization;
 /// <summary>
 /// The game text's language (localization spec §10). ui:Language (or <c>--language</c>) selects it: the source
 /// language draws the scripts' text as written; <c>x-pseudo</c> presents every string lengthened and bracketed; any
-/// other tag presents the catalogs <c>--text-root DIR</c> holds for its fallback chain, with the settings of the
-/// root's <c>languages.toml</c>, and with none draws as written (gate 1). While the root defines any language the VM
+/// other tag presents the catalogs of its fallback chain, from the enabled packages' <c>text/</c> (through the link
+/// cache) and then from <c>--text-root DIR</c>, with the languages the packages' manifests and the root's
+/// <c>languages.toml</c> declare; with none it draws as written (gate 1). While the stack defines any language the VM
 /// records the instruction that stores each global string (§5.2), and messages of several runs resolve as one (§6.2).
 /// <c>--text-log</c> writes every string that reached the screen without an entry to
-/// <c>diagnostics/text-misses.jsonl</c>. Packages carry <c>text/</c> from milestone 4.
+/// <c>diagnostics/text-misses.jsonl</c>.
 /// </summary>
 public partial class Main
 {
@@ -25,8 +26,8 @@ public partial class Main
     private string? _textMissLogPath;
     private double _textMissFlushElapsed;
 
-    /// <summary><c>--text-root</c> and <c>--text-log</c>, with the install's own scripts (before the mod layer) for
-    /// the site entries' fingerprints. False stops startup.</summary>
+    /// <summary>The mod layer's text, <c>--text-root</c> and <c>--text-log</c>, with the install's own scripts (before
+    /// the mod layer) for the site entries' fingerprints. False stops startup.</summary>
     private bool PrepareLanguage(string[] userArgs, Sys4AssetCatalog baseCatalog, IAssetStore baseStore,
                                  OpcodeTable table)
     {
@@ -46,11 +47,14 @@ public partial class Main
             _textMissLogPath = Path.Combine(_profilePersistence.DiagnosticsDirectory, TextMissLogFile);
             GD.Print($"[text] misses go to {_textMissLogPath}");
         }
-        ScriptMessageIndex? messages = root == null
+        var sources = new System.Collections.Generic.List<TextSource>();
+        if (_modLayer?.TextSource is { } packaged) sources.Add(packaged);
+        if (root != null) sources.Add(new TextSource(root));
+        ScriptMessageIndex? messages = sources.Count == 0
             ? null
             : new ScriptMessageIndex(table, OmeRuntimeMetadata.LoadOpcodeContracts());
-        _languageLaunch = new LanguageLaunch(root, LanguageLaunch.BaseFingerprints(baseCatalog, baseStore),
-                                             LanguageLaunch.PatchedScripts(_modLayer), _textMisses, messages);
+        _languageLaunch = new LanguageLaunch(sources,
+            TextSiteBinder.For(LanguageLaunch.BaseFingerprints(baseCatalog, baseStore), _modLayer), _textMisses, messages);
         return true;
     }
 
@@ -80,6 +84,7 @@ public partial class Main
         }
         foreach (string line in report.Lines()) GD.Print($"[text] {line}");
         // The host switches rasterizer before the VM presents, and keeps the Unicode one for any presented run.
+        _host.UsePresentedFonts(presenter?.Language);
         if (presenter != null) _host.PresentsText = true;
         _vm.Presenter = presenter;
         if (presenter == null) _host.PresentsText = false;

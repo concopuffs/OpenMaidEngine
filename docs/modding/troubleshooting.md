@@ -99,6 +99,29 @@ correctly. Reinstall the mod to recover such a save, since its selector is kept.
 **My new page does not show.** Check that the site is on the path the game actually takes. The page locator records
 the route of the run you made. Branches and earlier choices can skip your site.
 
+## Translations
+
+**"text/fr/ adds entries to language 'fr', which no package in the stack defines".** Some package in the stack must
+declare the language with a `[[language]]` table. A package that only adds text to a language another one defines
+needs that other package enabled ([languages.md](languages.md)).
+
+**"[[language]] needs omp = 2" or "text/ needs omp = 2".** Language tables and the `text/` and `fonts/` folders are
+format version 2. Set `omp = 2` in the manifest.
+
+**A line stays Japanese.** Run with `--text-log`: if the line is in `diagnostics/text-misses.jsonl`, its `source` is
+the exact key the catalog needs, and `script` and `at` the site that drew it. If the catalog has that source:
+
+- an entry without `text`, or with `obsolete = true`, is skipped;
+- a site entry (`at`) does not bind when the script's fingerprint differs from the file's, or a mod replaces the
+  script; the link report and the port's `[text]` lines say so;
+- a sentence the script draws in pieces matches only as the whole sentence, joined without its line breaks.
+
+`omp text check` warns about entries whose source no installed script draws or stores where their scope reaches.
+
+**Squares or the wrong font.** The fonts of the language's `[[language.font]]` table lack those characters, and so
+do the system's. `omp text check` lists the characters each table's bundled fonts lack; add a font that has them to
+`use`.
+
 ## Game-specific problems
 
 Each game guide lists its quirks and current limits, such as installs with several bases, missing patch points, or

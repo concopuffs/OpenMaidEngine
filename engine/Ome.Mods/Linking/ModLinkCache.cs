@@ -2,17 +2,79 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Ome.Engine.Localization;
+using Ome.Mods.Localization;
 using Ome.Mods.Packages;
 using Ome.Script.Patch;
 using Ome.Script.Syntax;
 
 namespace Ome.Mods.Linking;
 
-/// <summary>One mod of a linked stack, as the cache and save stamps record it.</summary>
+/// <summary>One mod of a linked stack, as the cache and save stamps record it. <see cref="Presentation"/> marks a
+/// package that only presents text (localization spec §8): it changes no script or asset.</summary>
 public sealed record ModStackEntry(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("version")] string Version,
-    [property: JsonPropertyName("hash")] string Hash);
+    [property: JsonPropertyName("hash")] string Hash,
+    [property: JsonPropertyName("presentation")] bool Presentation = false);
+
+/// <summary>A <c>[[language.font]]</c> table in <c>link.json</c>.</summary>
+public sealed record LinkedFontTable(
+    [property: JsonPropertyName("requested")] IReadOnlyList<string> Requested,
+    [property: JsonPropertyName("use")] IReadOnlyList<string> Use);
+
+/// <summary>A merged <c>[[language]]</c> in <c>link.json</c> (localization spec §9.2): bundled fonts as paths under
+/// the cache directory (<c>fonts/&lt;mod&gt;/&lt;name&gt;</c>), and the mods that define it.</summary>
+public sealed record LinkedLanguageEntry
+{
+    [JsonPropertyName("tag")] public required string Tag { get; init; }
+    [JsonPropertyName("defined_by")] public IReadOnlyList<string> DefinedBy { get; init; } = [];
+    [JsonPropertyName("name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Name { get; init; }
+    [JsonPropertyName("fallback"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Fallback { get; init; }
+    [JsonPropertyName("line_break"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? LineBreak { get; init; }
+    [JsonPropertyName("measure"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Measure { get; init; }
+    [JsonPropertyName("digits"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Digits { get; init; }
+    [JsonPropertyName("glyph_delay_scale"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? GlyphDelayScale { get; init; }
+    [JsonPropertyName("min_fit_scale"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? MinFitScale { get; init; }
+    [JsonPropertyName("fonts"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<LinkedFontTable>? Fonts { get; init; }
+
+    public static LinkedLanguageEntry Of(LinkedLanguage language)
+    {
+        LanguageSettings s = language.Settings;
+        return new LinkedLanguageEntry
+        {
+            Tag = s.Tag,
+            DefinedBy = language.DefinedBy,
+            Name = s.Name,
+            Fallback = s.Fallback,
+            LineBreak = s.LineBreak switch { LineBreakMode.Anywhere => "anywhere", LineBreakMode.Words => "words", _ => null },
+            Measure = s.Measure switch { TextMeasure.Source => "source", TextMeasure.Presented => "presented", _ => null },
+            Digits = s.Digits switch { DigitsMode.Ascii => "ascii", DigitsMode.Keep => "keep", _ => null },
+            GlyphDelayScale = s.GlyphDelayScale,
+            MinFitScale = s.MinFitScale,
+            Fonts = s.Fonts?.Select(font => new LinkedFontTable(font.Requested, font.Use)).ToList(),
+        };
+    }
+
+    /// <summary>The settings, each bundled font resolved under <paramref name="directory"/>.</summary>
+    public LanguageSettings ToSettings(string directory) => new(Tag)
+    {
+        Name = Name,
+        Fallback = Fallback,
+        LineBreak = LineBreak switch { "anywhere" => LineBreakMode.Anywhere, "words" => LineBreakMode.Words, _ => null },
+        Measure = Measure switch { "source" => TextMeasure.Source, "presented" => TextMeasure.Presented, _ => null },
+        Digits = Digits switch { "ascii" => DigitsMode.Ascii, "keep" => DigitsMode.Keep, _ => null },
+        GlyphDelayScale = GlyphDelayScale,
+        MinFitScale = MinFitScale,
+        Fonts = Fonts?.Select(font => new LanguageFont(font.Requested, font.Use)
+            .Resolve(use => Path.GetFullPath(Path.Combine(directory, use)))).ToList(),
+        Origin = $"mods: {string.Join(", ", DefinedBy)}",
+    };
+}
 
 /// <summary>Which mods supplied a file of the linked layer (spec §6.5): for a script, the replacing mod and the
 /// patching mods; for an asset override or a catalog, its mod.</summary>
@@ -32,6 +94,16 @@ public sealed record ModLinkManifest
     [JsonPropertyName("files")] public required IReadOnlyDictionary<string, ModLayerSource> Files { get; init; }
     /// <summary>Every record a mod catalog holds, by its catalog name (<c>$sel$NAME</c>).</summary>
     [JsonPropertyName("records")] public required IReadOnlyDictionary<string, string> Records { get; init; }
+    /// <summary>The languages the stack defines (localization spec §9.2).</summary>
+    [JsonPropertyName("languages")] public IReadOnlyList<LinkedLanguageEntry> Languages { get; init; } = [];
+    /// <summary>The catalogs under <c>text/</c>, as paths inside it, in load order.</summary>
+    [JsonPropertyName("text")] public IReadOnlyList<string> Text { get; init; } = [];
+    /// <summary>The bundled fonts, as paths under the cache directory.</summary>
+    [JsonPropertyName("fonts")] public IReadOnlyList<string> Fonts { get; init; } = [];
+    /// <summary>For each patched script no mod replaces, where its base instructions went (<c>[start, end, delta]</c>
+    /// runs of dword offsets; localization spec §6.1).</summary>
+    [JsonPropertyName("offsets")]
+    public IReadOnlyDictionary<string, IReadOnlyList<int[]>> Offsets { get; init; } = new Dictionary<string, IReadOnlyList<int[]>>();
 }
 
 /// <summary>A linked stack as mounted (spec §6.4–§6.5): the cache directory, its <c>loose/</c> root (first in the
@@ -39,10 +111,37 @@ public sealed record ModLinkManifest
 public sealed record MountedModLayer(string Directory, ModLinkManifest Manifest, string ReportText)
 {
     public const string LooseFolder = "loose", CatalogFolder = "catalogs", ManifestFile = "link.json", ReportFile = "mod-link.txt";
+    public const string TextFolder = "text";
 
     public string Key => Manifest.Key;
     public string LooseRoot => Path.Combine(Directory, LooseFolder);
     public string CatalogDirectory => Path.Combine(Directory, CatalogFolder);
+
+    /// <summary>The stack's catalogs, laid out as a text root (<see cref="TextRootLoader"/>): one folder per language,
+    /// a folder per mod inside it, named so that the ordinal order is the load order.</summary>
+    public string TextRoot => Path.Combine(Directory, TextFolder);
+
+    /// <summary>The languages the stack defines, with bundled fonts as absolute paths into the cache.</summary>
+    public IReadOnlyList<LanguageSettings> Languages
+        => Manifest.Languages.Select(language => language.ToSettings(Directory)).ToList();
+
+    /// <summary>The stack's catalogs and languages, as one text source.</summary>
+    public TextSource? TextSource
+        => Manifest.Text.Count == 0 && Manifest.Languages.Count == 0 ? null : new TextSource(TextRoot, Languages, "mods");
+
+    private readonly Lazy<IReadOnlyDictionary<string, ScriptOffsetMap>> _offsets = new(() =>
+        Manifest.Offsets.ToDictionary(pair => TextCatalog.NormalizeScriptName(pair.Key),
+            pair => ScriptOffsetMap.FromArrays(pair.Value), StringComparer.Ordinal));
+
+    /// <summary>How a site entry's base offset in <paramref name="script"/> binds to the linked script: null when the
+    /// layer leaves the script as the base has it; otherwise the offset table of a patched script, or none when a mod
+    /// replaces it (localization spec §6.1).</summary>
+    public (bool Changed, ScriptOffsetMap? Map) SiteBinding(string script)
+    {
+        string name = TextCatalog.NormalizeScriptName(script) + ".BIN";
+        if (!Manifest.Files.TryGetValue(name, out ModLayerSource? file) || file.Kind != "script") return (false, null);
+        return (true, _offsets.Value.GetValueOrDefault(TextCatalog.NormalizeScriptName(script)));
+    }
 
     /// <summary>The mod that supplied a script or asset of the layer, by catalog name, or null for the base.</summary>
     public string? Explain(string name)
@@ -120,6 +219,9 @@ public static class ModLinkCache
             foreach (var (name, source) in manifest.Files)
                 if (!File.Exists(Path.Combine(source.Kind == "catalog" ? layer.CatalogDirectory : layer.LooseRoot, name)))
                     return null;
+            if (manifest.Text.Any(path => !File.Exists(Path.Combine(layer.TextRoot, path)))
+                || manifest.Fonts.Any(path => !File.Exists(Path.Combine(directory, path))))
+                return null;
             // A hit counts as recent use, so pruning keeps the entries that are actually launched.
             try
             {
@@ -203,6 +305,18 @@ public static class ModLinkCache
                 File.WriteAllBytes(Path.Combine(loose, asset.Name), asset.Bytes);
                 files[asset.Name] = new ModLayerSource("asset", [asset.ModId], "override of the base asset");
             }
+            foreach (LinkedTextFile file in result.Text.Files)
+            {
+                string path = Path.Combine(temporary, MountedModLayer.TextFolder, file.Path);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllBytes(path, file.Bytes);
+            }
+            foreach (LinkedFont font in result.Text.Fonts)
+            {
+                string path = Path.Combine(temporary, font.CachePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllBytes(path, font.Bytes);
+            }
             foreach (LinkedCatalog catalog in result.Catalogs)
             {
                 var (aai, alf) = catalog.Write(linkBase.AppendMagic, linkBase.CatalogTitle);
@@ -217,10 +331,17 @@ public static class ModLinkCache
             {
                 Key = key,
                 Profile = linkBase.Profile,
-                Order = result.Order.Select(mod => new ModStackEntry(mod.Id, mod.Manifest.Version.ToString(), mod.Hash)).ToList(),
+                Order = result.Order.Select(mod => new ModStackEntry(mod.Id, mod.Manifest.Version.ToString(), mod.Hash,
+                    mod.PresentationOnly)).ToList(),
                 Selectors = result.Catalogs.ToDictionary(catalog => catalog.ModId, catalog => catalog.Selector, StringComparer.Ordinal),
                 Files = files,
                 Records = records,
+                Languages = result.Text.Languages.Select(LinkedLanguageEntry.Of).ToList(),
+                Text = result.Text.Files.Select(file => file.Path).ToList(),
+                Fonts = result.Text.Fonts.Select(font => font.CachePath).ToList(),
+                Offsets = result.Scripts.Values.Where(script => script.Offsets != null)
+                    .OrderBy(script => script.Name, StringComparer.Ordinal)
+                    .ToDictionary(script => script.Name, script => script.Offsets!.ToArrays(), StringComparer.OrdinalIgnoreCase),
             };
             string report = result.Report.Render();
             File.WriteAllText(Path.Combine(temporary, MountedModLayer.ManifestFile), JsonSerializer.Serialize(manifest, Json),

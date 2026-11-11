@@ -62,6 +62,7 @@ public sealed partial class GodotAdvHost : IHost
             ?? throw new ArgumentException(
                 "Gameplay glyph rasterizers must identify their policy.",
                 nameof(surfaceTextRasterizer));
+        _surfaceTextRasterizer = surfaceTextRasterizer;
         _surfaceTextMaskCache = new CachedGlyphMaskRasterizer(
             surfaceTextRasterizer, capacity: surfaceTextMaskCacheCapacity);
         _sourceText = new TextPipeline(_surfaceTextBackendInfo, _surfaceTextMaskCache, coverageAlpha);
@@ -74,6 +75,8 @@ public sealed partial class GodotAdvHost : IHost
                 ?? throw new InvalidOperationException("The presented-text rasterizer must identify its policy.");
             if (info.Policy != GlyphRasterPolicy.PortableUnicode)
                 throw new InvalidOperationException("The presented-text rasterizer must take Unicode requests.");
+            _presentedTextRasterizer = rasterizer;
+            (rasterizer as GodotTextServerGlyphMaskRasterizer)?.UseLanguageFonts(_presentedFonts);
             return new TextPipeline(info, new CachedGlyphMaskRasterizer(rasterizer, PresentedTextMaskCacheCapacity),
                                     coverageAlpha);
         }, LazyThreadSafetyMode.ExecutionAndPublication);

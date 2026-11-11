@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Ome.Mods.Localization;
 using Tomlyn;
 using Tomlyn.Model;
 
@@ -59,8 +60,8 @@ public static partial class ManifestReader
 
         var reader = new TableReader(root, "", []);
         int omp = reader.Integer("omp", required: true) ?? 0;
-        if (omp != ModManifest.CurrentOmpVersion && reader.Problems.Count == 0)
-            reader.Problems.Add($"omp: format version {omp} is not supported (this loader reads {ModManifest.CurrentOmpVersion})");
+        if (omp is < 1 or > ModManifest.CurrentOmpVersion && reader.Problems.Count == 0)
+            reader.Problems.Add($"omp: format version {omp} is not supported (this loader reads 1 to {ModManifest.CurrentOmpVersion})");
 
         string id = reader.String("id", required: true) ?? "";
         if (id.Length > 0 && !IsValidId(id))
@@ -167,10 +168,26 @@ public static partial class ManifestReader
             replace.RejectUnknown();
         }
 
+        // Localization spec §9.2: format version 2 adds [[language]]; a version 1 manifest that has one is an error,
+        // as an unknown key is.
+        var languages = new List<LanguageSettings>();
+        var languageTables = reader.RawTableArray("language");
+        if (languageTables.Count > 0 && omp < ModManifest.LanguageOmpVersion)
+            reader.Problems.Add($"language: [[language]] needs omp = {ModManifest.LanguageOmpVersion}");
+        else
+        {
+            var tags = new HashSet<string>(StringComparer.Ordinal);
+            for (int k = 0; k < languageTables.Count; k++)
+                if (TextCatalogFileReader.ReadLanguage(languageTables[k], $"language[{k}]", reader.Problems, tags)
+                    is { } language)
+                    languages.Add(language);
+        }
+
         reader.RejectUnknown();
         if (reader.Problems.Count > 0) throw new ModManifestException(origin, reader.Problems);
         return new ModManifest
         {
+            OmpVersion = omp, Languages = languages,
             Id = id, Name = name, Version = version, Authors = authors, Description = description,
             Profile = profile, Target = target, Revisions = revisions, OmsVersion = oms,
             Requires = requires, Conflicts = conflicts, After = after, Before = before,
@@ -254,6 +271,16 @@ public static partial class ManifestReader
             if (value is null) return [];
             if (value is TomlTableArray array)
                 return array.Select((table, k) => new TableReader(table, $"{Path}{key}[{k}].", Problems)).ToList();
+            Problems.Add($"{Path}{key}: expected an array of tables ([[{key}]])");
+            return [];
+        }
+
+        /// <summary>The tables of a <c>[[key]]</c> array, for a reader of their own.</summary>
+        public IReadOnlyList<TomlTable> RawTableArray(string key)
+        {
+            object? value = Get(key, false);
+            if (value is null) return [];
+            if (value is TomlTableArray array) return array.ToList();
             Problems.Add($"{Path}{key}: expected an array of tables ([[{key}]])");
             return [];
         }

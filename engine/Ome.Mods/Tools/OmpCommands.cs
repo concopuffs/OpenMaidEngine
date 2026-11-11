@@ -210,6 +210,12 @@ public static class OmpCommands
                 Put(catalog.ArchiveFile, alf);
             }
             foreach (string name in written) console.WriteLine($"  {name}");
+            // Localization spec §9.4: native AGE has no presenter, so text and fonts stay with the port.
+            var presenting = result.Order.Where(mod => mod.Layout.Text.Count > 0 || mod.Layout.Fonts.Count > 0
+                                                       || mod.Manifest.Languages.Count > 0).Select(mod => mod.Id).ToList();
+            if (presenting.Count > 0)
+                console.WriteLine($"note: text/, fonts/ and [[language]] of {string.Join(", ", presenting)} are not exported: "
+                                  + "native AGE cannot load them");
             console.WriteLine($"omp export: {result.Order.Count} mods, {written.Count} files -> {Path.GetFullPath(outputDirectory)}");
             return 0;
         }
@@ -219,7 +225,7 @@ public static class OmpCommands
         }
     }
 
-    private static (ModLinkResult? Result, IReadOnlyList<ModPackage> Opened) LinkForInspection(
+    internal static (ModLinkResult? Result, IReadOnlyList<ModPackage> Opened) LinkForInspection(
         ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages, bool skipFailed, TextWriter console)
     {
         var report = new ModLinkReport();

@@ -1,3 +1,5 @@
+using Ome.Mods.Localization;
+
 namespace Ome.Mods.Manifest;
 
 /// <summary>A hard dependency (spec §3.3 <c>[[requires]]</c>).</summary>
@@ -10,11 +12,18 @@ public sealed record ModConflict(string Id, string? Reason);
 /// <see cref="Over"/>'s (spec §4.2).</summary>
 public sealed record ModReplacementOrder(string Script, string Over);
 
-/// <summary>A parsed and validated <c>manifest.toml</c> (spec §3.3).</summary>
+/// <summary>A parsed and validated <c>manifest.toml</c> (spec §3.3; format version 2 adds the localization spec's
+/// <c>[[language]]</c> tables, §9.2).</summary>
 public sealed record ModManifest
 {
-    public const int CurrentOmpVersion = 1;
+    /// <summary>The newest format version the reader takes; it also reads version 1.</summary>
+    public const int CurrentOmpVersion = 2;
+    /// <summary>The first format version with <c>[[language]]</c>, <c>text/</c> and <c>fonts/</c>.</summary>
+    public const int LanguageOmpVersion = 2;
     public const int CurrentOmsVersion = 1;
+
+    /// <summary>The manifest's <c>omp</c>.</summary>
+    public int OmpVersion { get; init; } = 1;
 
     public required string Id { get; init; }
     public required string Name { get; init; }
@@ -41,6 +50,10 @@ public sealed record ModManifest
     /// <summary>New assets, as the catalog records after the scripts.</summary>
     public IReadOnlyList<string> AssetNames { get; init; } = [];
     public IReadOnlyList<ModReplacementOrder> ReplacementOrders { get; init; } = [];
+
+    /// <summary>The languages the mod defines (localization spec §9.2), in manifest order, bundled fonts as written
+    /// (<c>fonts/NAME</c>).</summary>
+    public IReadOnlyList<LanguageSettings> Languages { get; init; } = [];
 
     /// <summary>Whether the mod owns an append catalog and so a selector (spec §6.2).</summary>
     public bool NeedsCatalog => ScriptNames.Count > 0 || AssetNames.Count > 0;

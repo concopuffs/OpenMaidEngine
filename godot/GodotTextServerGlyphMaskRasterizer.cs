@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using Ome.Engine.Text;
 using Godot;
 
@@ -14,7 +17,9 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
     private readonly object _gate = new();
     private readonly PortableTextRenderingPolicy _policy;
     private readonly TextServer _textServer;
-    private readonly BoundedLruCache<FontKey, SystemFont> _fonts;
+    private readonly BoundedLruCache<FontKey, Font> _fonts;
+    private readonly Dictionary<string, byte[]?> _fontData = new(StringComparer.OrdinalIgnoreCase);
+    private Func<string, IReadOnlyList<string>?>? _languageFonts;
     private bool _disposed;
 
     public GodotTextServerGlyphMaskRasterizer(PortableTextRenderingPolicy policy)
@@ -22,8 +27,7 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
         _policy = policy ?? throw new ArgumentNullException(nameof(policy));
         _textServer = TextServerManager.GetPrimaryInterface()
             ?? throw new InvalidOperationException("Godot has no primary TextServer interface.");
-        _fonts = new BoundedLruCache<FontKey, SystemFont>(
-            policy.FontCacheCapacity, font => font.Dispose());
+        _fonts = new BoundedLruCache<FontKey, Font>(policy.FontCacheCapacity, DisposeFont);
         BackendInfo = new GlyphRasterizerBackendInfo(
             "portable-godot-textserver",
             "Godot TextServer system fonts",
@@ -36,6 +40,23 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
 
     public GlyphRasterizerBackendInfo BackendInfo { get; }
 
+    /// <summary>
+    /// Puts a language's fonts (localization spec §7.4) in front of the policy's substitutes: for a face the language
+    /// maps, its bundled files (absolute paths) first, then its family names, then the policy's families. Null
+    /// removes them. The fonts made so far are dropped; the caller clears the glyph masks cached above this
+    /// rasterizer. A bundled file draws at its own weight.
+    /// </summary>
+    public void UseLanguageFonts(Func<string, IReadOnlyList<string>?>? fontsFor)
+    {
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _languageFonts = fontsFor;
+            _fonts.Clear();
+            _fontData.Clear();
+        }
+    }
+
     public GlyphMask Rasterize(GlyphRasterRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -47,7 +68,7 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            SystemFont font = ResolveFont(request);
+            Font font = ResolveFont(request);
             // Asking the high-level Font for the character primes both the selected system face
             // and any system fallback RID before we inspect the TextServer cache directly.
             _ = font.GetCharSize(request.UnicodeScalar, request.PixelHeight);
@@ -102,48 +123,99 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
         }
     }
 
-    private SystemFont ResolveFont(GlyphRasterRequest request)
+    private Font ResolveFont(GlyphRasterRequest request)
     {
         PortableFontRasterPolicy raster = _policy.Raster;
         int weight = request.Weight >= raster.BoldThreshold
             ? raster.BoldWeight
             : raster.RegularWeight;
         var key = new FontKey(request.FontFace, weight, request.Antialias);
-        if (_fonts.TryGetValue(key, out SystemFont? cached)) return cached;
+        if (_fonts.TryGetValue(key, out Font? cached)) return cached;
 
-        var font = new SystemFont
-        {
-            FontNames = _policy.ResolveFamilies(request.FontFace),
-            FontWeight = weight,
-            AllowSystemFallback = raster.AllowSystemFallback,
-            // UseAntiFont 0 asks for aliased glyphs whatever the policy's antialiasing.
-            Antialiasing = !request.Antialias ? TextServer.FontAntialiasing.None : raster.Antialiasing switch
+        // UseAntiFont 0 asks for aliased glyphs whatever the policy's antialiasing.
+        TextServer.FontAntialiasing antialiasing = !request.Antialias ? TextServer.FontAntialiasing.None
+            : raster.Antialiasing switch
             {
                 "none" => TextServer.FontAntialiasing.None,
                 "lcd" => TextServer.FontAntialiasing.Lcd,
                 _ => TextServer.FontAntialiasing.Gray,
-            },
-            Hinting = raster.Hinting switch
-            {
-                "none" => TextServer.Hinting.None,
-                "light" => TextServer.Hinting.Light,
-                _ => TextServer.Hinting.Normal,
-            },
-            SubpixelPositioning = raster.SubpixelPositioning switch
-            {
-                "auto" => TextServer.SubpixelPositioning.Auto,
-                "one-half" => TextServer.SubpixelPositioning.OneHalf,
-                "one-quarter" => TextServer.SubpixelPositioning.OneQuarter,
-                _ => TextServer.SubpixelPositioning.Disabled,
-            },
+            };
+        TextServer.Hinting hinting = raster.Hinting switch
+        {
+            "none" => TextServer.Hinting.None,
+            "light" => TextServer.Hinting.Light,
+            _ => TextServer.Hinting.Normal,
+        };
+        TextServer.SubpixelPositioning subpixel = raster.SubpixelPositioning switch
+        {
+            "auto" => TextServer.SubpixelPositioning.Auto,
+            "one-half" => TextServer.SubpixelPositioning.OneHalf,
+            "one-quarter" => TextServer.SubpixelPositioning.OneQuarter,
+            _ => TextServer.SubpixelPositioning.Disabled,
+        };
+        var bundled = new List<string>();
+        var families = new List<string>();
+        foreach (string use in _languageFonts?.Invoke(request.FontFace) ?? [])
+            (Path.IsPathFullyQualified(use) ? bundled : families).Add(use);
+        families.AddRange(_policy.ResolveFamilies(request.FontFace));
+        var system = new SystemFont
+        {
+            FontNames = families.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            FontWeight = weight,
+            AllowSystemFallback = raster.AllowSystemFallback,
+            Antialiasing = antialiasing,
+            Hinting = hinting,
+            SubpixelPositioning = subpixel,
             MultichannelSignedDistanceField =
                 raster.MultichannelSignedDistanceField,
         };
+        var files = new List<FontFile>();
+        foreach (string path in bundled)
+            if (FontData(path) is { } data)
+                files.Add(new FontFile
+                {
+                    Data = data,
+                    Antialiasing = antialiasing,
+                    Hinting = hinting,
+                    SubpixelPositioning = subpixel,
+                    MultichannelSignedDistanceField = raster.MultichannelSignedDistanceField,
+                });
+        Font font = system;
+        if (files.Count > 0)
+        {
+            var fallbacks = new Godot.Collections.Array<Font>();
+            foreach (FontFile file in files.Skip(1)) fallbacks.Add(file);
+            fallbacks.Add(system);
+            files[0].Fallbacks = fallbacks;
+            font = files[0];
+        }
         _fonts.Set(key, font);
         return font;
     }
 
-    private Rid FindGlyphRid(SystemFont font, GlyphRasterRequest request)
+    /// <summary>A bundled font file's bytes, read once; null (with a warning) when it cannot be read.</summary>
+    private byte[]? FontData(string path)
+    {
+        if (_fontData.TryGetValue(path, out byte[]? known)) return known;
+        byte[]? data = null;
+        try
+        {
+            data = File.ReadAllBytes(path);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            GD.PushWarning($"[text] font {path}: {error.Message}");
+        }
+        return _fontData[path] = data;
+    }
+
+    private static void DisposeFont(Font font)
+    {
+        foreach (Font fallback in font.Fallbacks) fallback.Dispose();
+        font.Dispose();
+    }
+
+    private Rid FindGlyphRid(Font font, GlyphRasterRequest request)
     {
         foreach (Rid rid in font.GetRids())
             if (_textServer.FontHasChar(rid, request.UnicodeScalar))
