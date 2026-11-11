@@ -11,9 +11,48 @@ public sealed partial class GodotAdvHost
 {
     private readonly object _textLock = new();
     private readonly CachedGlyphMaskRasterizer _surfaceTextMaskCache;
-    private readonly ImmediateSurfaceTextRenderer _surfaceTextPixelRenderer;
-    private readonly RetainedGlyphLayoutEngine _retainedGlyphLayoutEngine;
     private readonly GlyphRasterizerBackendInfo _surfaceTextBackendInfo;
+
+    /// <summary>One rasterizer with its glyph cache and the two renderers over it.</summary>
+    private sealed class TextPipeline(GlyphRasterizerBackendInfo info, CachedGlyphMaskRasterizer cache,
+                                      GlyphCoverageAlpha coverageAlpha)
+    {
+        public GlyphRasterizerBackendInfo Info { get; } = info;
+        public GlyphRasterPolicy Policy => Info.Policy;
+        public CachedGlyphMaskRasterizer Cache { get; } = cache;
+        public ImmediateSurfaceTextRenderer Pixels { get; } = new(cache, info.Policy, coverageAlpha);
+        public RetainedGlyphLayoutEngine Layout { get; } = new(cache, coverageAlpha);
+    }
+
+    // The gameplay rasterizer (--text-backend), and the Unicode one every run uses while a language is active
+    // (localization spec §7.4): an untranslated string then draws with the same faces as the translated ones beside it.
+    private readonly TextPipeline _sourceText;
+    private readonly Lazy<TextPipeline> _presentedText;
+    private volatile bool _presentsText;
+
+    /// <summary>Whether a language other than the source is active, with a catalog or the pseudo-language: every run
+    /// then draws with the Unicode rasterizer. False keeps the gameplay rasterizer (gate 1).</summary>
+    public bool PresentsText
+    {
+        get => _presentsText;
+        set
+        {
+            if (_presentsText == value) return;
+            _presentsText = value;
+            _timeline?.Event("text-presentation", new() { ["active"] = value });
+        }
+    }
+
+    private TextPipeline ActiveText => _presentsText ? _presentedText.Value : _sourceText;
+
+    /// <summary>The aspect-mode font list for <paramref name="text"/>'s rasterizer: the gameplay rasterizer's, or none
+    /// for the Unicode one, as on a portable run.</summary>
+    private AspectFontRealization? RealizationFor(TextPipeline text)
+        => ReferenceEquals(text, _sourceText) ? FontRealization : null;
+
+    /// <summary>A presented run's style: aspect mode's fixed reference cell does not fit other scripts, so presented
+    /// glyphs advance by their own width (spec §7.4).</summary>
+    private static AdvTextStyle PresentedStyle(AdvTextStyle style) => style with { AspectMode = 0 };
     private readonly HashSet<int> _retainedHistoryLayouts = new();
     private sealed class LiveTextState
     {
@@ -290,21 +329,39 @@ public sealed partial class GodotAdvHost
 
         var updated = new RgbaImage(
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
+        // A presented run always draws with the Unicode rasterizer, even if the language changed meanwhile.
+        TextPipeline text = run.Presented != null ? _presentedText.Value : ActiveText;
+        string drawnText = run.Presented?.Text ?? run.Text;
+        AdvTextStyle style = run.Presented != null ? PresentedStyle(run.Style) : run.Style;
+        AspectFontRealization? realization = run.Presented != null ? null : RealizationFor(text);
         IReadOnlyList<GlyphRasterRequest> requests =
-            ImmediateSurfaceTextRenderer.CreateRequests(
-                run.Text, run.Style, _surfaceTextBackendInfo.Policy, _textAntialias, FontRealization);
-        GlyphTextLayoutResult rendered = _retainedGlyphLayoutEngine.Render(
+            ImmediateSurfaceTextRenderer.CreateRequests(drawnText, style, text.Policy, _textAntialias, realization);
+        IReadOnlyList<int>? breaks = recordedLineBreaks;
+        int rightBound = recordedLineBreaks == null ? run.Layout.Right : int.MaxValue;
+        bool wrap = recordedLineBreaks == null;
+        if (run.Presented is { } presented && recordedLineBreaks == null)
+        {
+            // Presented text breaks where the presenter allows (localization spec §7.1), planned before drawing.
+            PresentedTextPlan plan = PresentedTextLayout.Plan(
+                drawnText, Ome.Engine.Localization.PresentedLineBreaks.Opportunities(drawnText, presented.LineBreak), requests,
+                text.Cache, run.Layout.CursorX, binding.ResetCursorX, run.Layout.Right);
+            requests = plan.Glyphs;
+            breaks = plan.BreaksBefore;
+            rightBound = int.MaxValue;
+            wrap = false;
+        }
+        GlyphTextLayoutResult rendered = text.Layout.Render(
             updated,
             new GlyphTextLayoutOptions(
                 run.Layout.CursorX,
                 run.Layout.CursorY,
                 binding.ResetCursorX,
-                recordedLineBreaks == null ? run.Layout.Right : int.MaxValue,
+                rightBound,
                 recordedLineBreaks == null ? run.Layout.Bottom : int.MaxValue,
-                WrapHorizontally: recordedLineBreaks == null,
-                run.Style,
-                recordedLineBreaks,
-                FontRealization),
+                WrapHorizontally: wrap,
+                style,
+                breaks,
+                realization),
             requests);
 
         // Op 0x196's ruby follows each base row in AGE's drawing order; History draws its ruby runs after the text.
@@ -318,9 +375,9 @@ public sealed partial class GodotAdvHost
         }
         if (!string.IsNullOrEmpty(run.Ruby) && rendered.Rows.Count > 0)
         {
-            ruby = _retainedGlyphLayoutEngine.RenderRuby(
+            ruby = text.Layout.RenderRuby(
                 updated, run.Text, rendered.Rows, run.Ruby, run.Style,
-                _surfaceTextBackendInfo.Policy, _textAntialias, RubyRules);
+                text.Policy, _textAntialias, RubyRules);
             for (int row = 0; row < rendered.Rows.Count; row++)
             {
                 AdvTextRow drawn = rendered.Rows[row];
@@ -339,9 +396,9 @@ public sealed partial class GodotAdvHost
                 int lastBase = firstBase + annotation.BaseGlyphCount - 1;
                 if (annotation.BaseGlyphCount <= 0 || lastBase >= rendered.Records.Count) continue;
                 AdvRetainedGlyphRecord left = rendered.Records[firstBase], right = rendered.Records[lastBase];
-                foreach (AdvRetainedGlyphRecord record in _retainedGlyphLayoutEngine.RenderRubyOver(
+                foreach (AdvRetainedGlyphRecord record in text.Layout.RenderRubyOver(
                              updated, left.Left, left.Top, right.Right - left.Left, annotation.Text, run.Style,
-                             _surfaceTextBackendInfo.Policy, _textAntialias, RubyRules, history: true))
+                             text.Policy, _textAntialias, RubyRules, history: true))
                     Add(record, true);
             }
         }
@@ -350,6 +407,8 @@ public sealed partial class GodotAdvHost
         {
             ["layout"] = binding.LayoutSlot,
             ["text"] = run.Text,
+            ["presented"] = run.Presented?.Text,
+            ["backend"] = text.Info.Id,
             ["cursor_x"] = run.Layout.CursorX,
             ["cursor_y"] = run.Layout.CursorY,
             ["right"] = run.Layout.Right,
@@ -416,21 +475,36 @@ public sealed partial class GodotAdvHost
         => DrawStringToSurface(surfaceSlot, x, y, text, AdvTextStyle.Default);
 
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
+        => DrawString(surfaceSlot, x, y, text, style, presented: null);
+
+    public void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style,
+                                    Ome.Engine.Localization.PresentedText presented)
+        => DrawString(surfaceSlot, x, y, text, style, presented);
+
+    private void DrawString(int surfaceSlot, int x, int y, string text, AdvTextStyle style,
+                            Ome.Engine.Localization.PresentedText? presented)
     {
-        DrawStringPixels(surfaceSlot, x, y, text, style);
+        TextPipeline pipeline = presented != null ? _presentedText.Value : ActiveText;
+        DrawStringPixels(surfaceSlot, x, y, text, style, pipeline, presented);
         _timeline?.Event("draw-string", new()
         {
             ["surface"] = surfaceSlot,
             ["x"] = x,
             ["y"] = y,
             ["text"] = text,
+            ["presented"] = presented?.Text,
             ["presentation"] = "rgba-glyph-mask",
-            ["backend"] = _surfaceTextBackendInfo.Id,
+            ["backend"] = pipeline.Info.Id,
         });
     }
 
+    /// <summary>The gap between the rows of a presented <c>draw-string</c> when its entry sets no <c>row_gap</c>
+    /// (localization spec §7.1).</summary>
+    private const int PresentedRowGap = 2;
+
     private void DrawStringPixels(
-        int surfaceSlot, int x, int y, string text, AdvTextStyle style)
+        int surfaceSlot, int x, int y, string text, AdvTextStyle style, TextPipeline pipeline,
+        Ome.Engine.Localization.PresentedText? presented)
     {
         RgbaImage? destination = ResolveSurfacePixels(surfaceSlot);
         if (destination == null
@@ -446,7 +520,22 @@ public sealed partial class GodotAdvHost
 
         var updated = new RgbaImage(
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
-        _surfaceTextPixelRenderer.Render(updated, x, y, text, style, _textAntialias, FontRealization, BlankExtentMode);
+        if (presented == null)
+            pipeline.Pixels.Render(updated, x, y, text, style, _textAntialias, RealizationFor(pipeline), BlankExtentMode);
+        else
+        {
+            // Each "\n" of the presented text starts a row at the same x, lower by the font's height and a gap.
+            AdvTextStyle presentedStyle = PresentedStyle(style);
+            int height = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
+            int step = height + (presented.Entry?.RowGap ?? PresentedRowGap);
+            string[] rows = presented.Text.Split('\n');
+            for (int row = 0; row < rows.Length; row++)
+            {
+                string drawn = new(rows[row].Where(c => c >= ' ').ToArray());
+                if (drawn.Length > 0)
+                    pipeline.Pixels.Render(updated, x, checked(y + row * step), drawn, presentedStyle, _textAntialias);
+            }
+        }
 
         lock (_imageLock) _surfaceImages[surfaceSlot] = updated;
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
@@ -591,8 +680,9 @@ public sealed partial class GodotAdvHost
         if (width <= 0 || height <= 0) return;
 
         var updated = new RgbaImage(width, height, new byte[checked(width * height * 4)]);
-        IReadOnlyList<(AdvRetainedGlyphRecord Cell, bool IsRuby)> cells = _retainedGlyphLayoutEngine.RenderRedraw(
-            updated, batch.Records, _surfaceTextBackendInfo.Policy, _textAntialias, RubyRules, FontRealization);
+        TextPipeline text = ActiveText;
+        IReadOnlyList<(AdvRetainedGlyphRecord Cell, bool IsRuby)> cells = text.Layout.RenderRedraw(
+            updated, batch.Records, text.Policy, _textAntialias, RubyRules, RealizationFor(text));
 
         bool bind = (batch.Flags & 4) == 0;
         RetainedAdvTextLayoutPresentation? presentation;

@@ -1,4 +1,5 @@
 using Ome.Engine.Hosting;
+using Ome.Engine.Localization;
 using Ome.Engine.Model;
 using Ome.Engine.Text;
 
@@ -6,6 +7,25 @@ namespace Ome.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
+    private volatile TextPresenter? _presenter;
+
+    /// <summary>
+    /// The selected language's presenter (localization spec §4, §5.2), or null to draw source text: the source
+    /// language, or a language with no catalog (gate 1). The VM asks it at each presentation site and passes both
+    /// forms to the host; everything the VM keeps (cells, history, saves, the page map) stays source text. The shell
+    /// replaces it when the language changes; the next run uses the new one.
+    /// </summary>
+    public TextPresenter? Presenter
+    {
+        get => _presenter;
+        set => _presenter = value;
+    }
+
+    /// <summary>The presented form of a string the instruction at <paramref name="ins"/> draws. Site entries bind to
+    /// the running script's own offsets: the text loader keeps them only for scripts no mod patches (§6.1).</summary>
+    private PresentedText? Present(string text, Instruction ins)
+        => _presenter?.Present(text, new TextSite(_cur.Script.Name, ins.Offset));
+
     /// <summary>One show-text run (op 0x6e's string, or op 0x196's base text with its ruby). False when the
     /// runaway-line guard halted the VM.</summary>
     private bool ShowTextRun(Instruction ins, IReadOnlyList<Operand> a, Operand o, string? ruby)
@@ -30,11 +50,15 @@ public sealed partial class VirtualMachine
         int layoutSlot = a.Count > 0 ? (int)Read(a[0]) : 0;
         string[] scriptStack;
         lock (_debugControlLock) scriptStack = _activeFrameNames.ToArray();
+        // Milestone 1 resolves each run on its own; a message of several runs resolves as one in milestone 2 (§6.2).
+        // Presented text carries no ruby: the catalog drops it, as the translators did (§18).
+        PresentedText? presented = Present(text, ins);
         var liveRun = new AdvLiveTextRun(
             off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack)
         {
-            Ruby = string.IsNullOrEmpty(ruby) ? null : ruby,
+            Ruby = string.IsNullOrEmpty(ruby) || presented != null ? null : ruby,
             ArmsGlyphTimer = ruby == null || RubyLayoutRules.ForEngine(_compatibility.EngineAbiId).ArmsGlyphTimer,
+            Presented = presented,
         };
         AdvTextLayoutPresentationBinding binding =
             TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
@@ -55,8 +79,12 @@ public sealed partial class VirtualMachine
             _advTextRevealing = false;
         }
         // History records the drawn rows (split at wraps), so it is written after layout but
-        // before the cursor moves.
-        TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: retained?.Rows, ruby: retained?.Ruby);
+        // before the cursor moves. A presented run's rows are the presented text's, so history keeps its source text
+        // as one record: the source layout pass that rebuilds native's rows is milestone 3 (§8).
+        if (presented == null)
+            TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: retained?.Rows, ruby: retained?.Ruby);
+        else
+            TextHistory.AppendText(layoutSlot, off, text, _advTextStyle);
         if (retained is { } result)
             TextHistory.SetCursor(
                 result.LayoutSlot, result.CursorX, result.CursorY);
@@ -146,9 +174,15 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             }
             case "draw-string": // 0x204 (surface slot, x, y, string)
-                _host.DrawStringToSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), ReadStr(a[3]),
-                                          _advTextStyle);
+            {
+                int surface = (int)Read(a[0]), x = (int)Read(a[1]), y = (int)Read(a[2]);
+                string text = ReadStr(a[3]);
+                if (Present(text, ins) is { } presented)
+                    _host.DrawStringToSurface(surface, x, y, text, _advTextStyle, presented);
+                else
+                    _host.DrawStringToSurface(surface, x, y, text, _advTextStyle);
                 return pc + 1;
+            }
             case "u00420A60":                 // pre-reference compatibility
             case "draw-formatted-integer":   // 0x205 (surface slot, x, y, value, field width, flags)
             {

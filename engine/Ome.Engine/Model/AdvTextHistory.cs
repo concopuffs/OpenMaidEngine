@@ -76,6 +76,11 @@ public sealed record AdvLiveTextRun(
     /// op 0x196 does not and keeps the previous run's phase (docs/engine-re.md, "The reveal clock").</summary>
     public bool ArmsGlyphTimer { get; init; } = true;
 
+    /// <summary>What the presenter gives for <see cref="Text"/> (localization spec §5.2), or null to draw the source
+    /// text. The host draws this, wrapped at its break opportunities, with no ruby; history, the page map and saves
+    /// keep <see cref="Text"/>.</summary>
+    public Localization.PresentedText? Presented { get; init; }
+
     public bool BelongsToScript(string scriptName)
     {
         foreach (string frame in ScriptStack)

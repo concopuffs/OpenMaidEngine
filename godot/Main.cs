@@ -34,6 +34,8 @@ public partial class Main : Godot.Control
     private VirtualMachine _vm = null!;
     private GodotAdvHost _host = null!;
     private IDisposable? _glyphRasterizerOwner;
+    // The Unicode rasterizer a language draws with when the gameplay one is GDI (localization spec §7.4).
+    private IDisposable? _presentedRasterizerOwner;
     private Sys4ScriptProvider? _scripts;
     // Real time, as native's tick reads timeGetTime: a service wait ends with its effect, not at the next frame.
     private readonly Ome.Engine.Hosting.FrameClock _clock = Ome.Engine.Hosting.FrameClock.StartRealTime();
@@ -124,6 +126,9 @@ public partial class Main : Godot.Control
         _selectedProfile = selectedProfile;
         _profilePersistence = profilePersistence;
         _assetStore = new Sys4AssetStore(catalog, gameRoot.Root, assetOptions.LooseRoots.ToArray());
+        // The install's own scripts, before the mod layer mounts: site entries name their fingerprints.
+        Sys4AssetCatalog baseCatalog = catalog;
+        IAssetStore baseStore = _assetStore;
         try
         {
             if (!LinkMods(userArgs, workingDirectory, selectedProfile, profilePersistence, gameRoot.Sys4IniPath, catalog,
@@ -455,6 +460,11 @@ public partial class Main : Godot.Control
                               assetOptions.AllowBmpAsAgf);
         IGlyphMaskRasterizer? surfaceTextRasterizer = null;
         PortableTextRenderingPolicy? portableTextPolicy = null;
+        string portablePolicyResource =
+            selectedProfile.Profile.MetadataReferences.TryGetValue(
+                "portableTextRendering", out string? configuredPolicy)
+            ? configuredPolicy
+            : PortableTextRenderingPolicy.JapaneseFallbackResourcePath;
         string? exactUnavailable = null;
         try
         {
@@ -487,11 +497,6 @@ public partial class Main : Godot.Control
                 if (textBackend == "gdi")
                     throw new PlatformNotSupportedException(
                         exactUnavailable ?? "Exact Windows GDI text is unavailable.");
-                string portablePolicyResource =
-                    selectedProfile.Profile.MetadataReferences.TryGetValue(
-                        "portableTextRendering", out string? configuredPolicy)
-                    ? configuredPolicy
-                    : PortableTextRenderingPolicy.JapaneseFallbackResourcePath;
                 portableTextPolicy = PortableTextRenderingPolicy.Load(portablePolicyResource);
                 var portable =
                     new GodotTextServerGlyphMaskRasterizer(portableTextPolicy);
@@ -530,8 +535,22 @@ public partial class Main : Godot.Control
             FontFamilySource = InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings),
             FontMetricsProbe = surfaceTextRasterizer as IFontMetricsProbe,
             BlankExtentMode = _catalog.StartupSettings.BlankExtentMode == 1,
+            PresentedTextRasterizer = () =>
+            {
+                PortableTextRenderingPolicy policy = PortableTextRenderingPolicy.Load(portablePolicyResource);
+                var portable = new GodotTextServerGlyphMaskRasterizer(policy);
+                _presentedRasterizerOwner = portable;
+                GD.Print($"[text] presented text uses {portable.BackendInfo.Id}: {portable.BackendInfo.Detail}");
+                return portable;
+            },
+            PresentedTextMaskCacheCapacity = portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048,
         };
         if (_sys4RegIniStore != null) _host.UseMessageSettingsStore(_sys4RegIniStore);
+        if (!_selftest && !PrepareLanguage(userArgs, baseCatalog, baseStore))
+        {
+            GetTree().Quit(2);
+            return;
+        }
         _trace = new GodotTraceSink(_locator, _timeline);
         if (_perfLogPath != null) _perf = new PerformanceFrameLog(_perfLogPath);
         // --trace-histogram: aggregate op/call-site execution counts of the REAL Godot run (headless flow
@@ -572,6 +591,11 @@ public partial class Main : Godot.Control
             foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed: initial global state
         if (holdMessageSkip)
             _vm.UpdateKeyboardVirtualKeyState(0x11, true); // Ctrl; bindings resolve it to logical action 6.
+        if (!ApplyGameLanguage(_portOptions.Effective.Language, startup: true))
+        {
+            GetTree().Quit(2);
+            return;
+        }
         _vmTask = Task.Run(() =>
         {
             try { _vm.Run(); }
@@ -619,6 +643,7 @@ public partial class Main : Godot.Control
     public override void _Process(double delta)
     {
         PumpDriveServer();
+        FlushTextMisses(delta);
         ProcessScreenMode();
         if (_fpsHud != null && _fpsHud.Visible)
         {
@@ -915,10 +940,13 @@ public partial class Main : Godot.Control
                 GD.PushWarning($"[persistence] clean-shutdown shared-profile write failed: {flush.Error}");
         }
 
+        FlushTextMisses();
         DumpHistogram(); _timeline?.Dispose(); _locator?.Dispose();
         _gpuRenderer?.Dispose();
         _glyphRasterizerOwner?.Dispose();
         _glyphRasterizerOwner = null;
+        _presentedRasterizerOwner?.Dispose();
+        _presentedRasterizerOwner = null;
         if (_perf != null)
         {
             _perf.Dispose();

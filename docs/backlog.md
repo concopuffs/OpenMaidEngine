@@ -302,20 +302,33 @@ and the drive scenarios.
 ## Localization
 
 - **Build the localization framework.** The design is accepted (`superpowers/specs/2026-11-10-localization-design.md`,
-  2026-11-10) and only milestone 0 is implemented. The port shows a game in another language only by running an
-  install whose scripts were translated in place, and its own error box is fixed Japanese
-  (`VirtualMachine.DiagnosticCaption`). The spec's §19 holds the milestones and §18 the gates; they are not
-  restated here.
+  2026-11-10) and milestones 0 and 1 are implemented. The port presents a language from a folder of catalogs
+  (`--text-root`), not yet from packages, and its own error box is fixed Japanese (`VirtualMachine.DiagnosticCaption`).
+  The spec's §19 holds the milestones and §18 the gates; they are not restated here.
   - **Milestone 0 is built, reviewed and revised** (2026-11-10). `omp text import-scripts` converts the Kamidori
     translation: all 430 changed scripts align, entries keep deliberate line breaks, stored literals and composed
     strings get scoped entries, and `--verify` finds 0 mismatches. The spec has the review's design changes. The
     results and rules are in `localization-import-test.md`.
-  - **Next:** milestone 1.
+  - **Milestone 1 is built** (2026-11-10). The presenter resolves exact entries at show-text runs and `draw-string`
+    through the language's fallback chain; `--language` takes any well-formed tag or `x-pseudo`, `--text-root` mounts
+    catalogs and `--text-log` writes the miss log (`tools-reference.md`). Presented text wraps at word breaks and draws
+    with the TextServer rasterizer. A presented `draw-string`'s `\n` rows, planned for milestone 2, came with it.
+    - Gate 1: all 28 committed scenarios pass on the port as written; the 1,628 engine tests pass.
+    - Gate 3: `TextPresenterTests` (merge, override report, scope and fallback order, malformed files with file and
+      line, site-entry binding).
+    - Gate 9: under `x-pseudo`, 27 of the 28 pass unchanged. `himegari-reveal-clock` times page 18 by its glyph
+      counts. The pseudo text is longer, so its timing checks fail, while its positions come in the same order:
+      each run took its presented glyph count × 300 ms (3.9, 1.5 and 10.2 s).
+    - Kamidori in English from the imported catalog: single-run lines and menu strings are presented.
+    - Left for later milestones: a sentence split by furigana stays source until messages (milestone 2). Menu strings
+      overrun fixed boxes until measurement, `align` and `fit` (milestone 2). The backlog shows a presented run's
+      source text on one row until history re-presentation (milestone 3).
+  - **Next:** milestone 2.
   - **The import verifier models pattern matching.** `ImportVerifier` checks patterns by sample with its own
     matcher for spec §6.3 and §6.4, since there is no presenter yet. Done when it uses the presenter's matcher
     (milestone 2), so the check tests the code the engine runs.
-  - **Cut `localization-import-test.md`'s "Review answers" down to the results** once the review text is
-    committed, as that section says.
+  - **Cut `localization-import-test.md`'s "Review answers" down to the results**, as that section says: the review
+    text is committed (`2482813`).
   - The manifest's `omp = 2` is shared with the Lua design (the item under "Mod loader and modding"). Whichever
     is built first introduces it.
 

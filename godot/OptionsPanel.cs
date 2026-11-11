@@ -298,9 +298,14 @@ public partial class OptionsPanel : Control
         var list = new OptionButton { FocusMode = FocusModeEnum.All, CustomMinimumSize = new Vector2(280, 32) };
         if (choice.Option == "language")
         {
-            foreach (string language in ShellStrings.Languages) list.AddItem(S[$"language.{language}"]);
-            list.Selected = ShellStrings.Languages.ToList().IndexOf(_port.Language);
-            list.ItemSelected += index => _port = _port with { Language = ShellStrings.Languages[(int)index] };
+            // A language the shell has no table for (one a text root supplies, or x-pseudo) is listed by its tag.
+            List<string> languages = ShellStrings.Languages.Contains(_port.Language)
+                ? [.. ShellStrings.Languages]
+                : [.. ShellStrings.Languages, _port.Language];
+            foreach (string language in languages)
+                list.AddItem(ShellStrings.Languages.Contains(language) ? S[$"language.{language}"] : language);
+            list.Selected = languages.IndexOf(_port.Language);
+            list.ItemSelected += index => _port = _port with { Language = languages[(int)index] };
         }
         else
         {

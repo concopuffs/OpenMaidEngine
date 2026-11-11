@@ -37,6 +37,11 @@ public interface IAdvHost
     void DrawStringToSurface(int surfaceSlot, int x, int y, string text) { }
     void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
         => DrawStringToSurface(surfaceSlot, x, y, text);
+    // A draw-string whose text the presenter replaced (localization spec §5.2): draw presented.Text instead, a "\n" in
+    // it starting a row at the same x (spec §7.1). Hosts that draw nothing take the presented text as the string.
+    void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style,
+                             Localization.PresentedText presented)
+        => DrawStringToSurface(surfaceSlot, x, y, presented.Text, style);
     // SYS4433 op 0x2de exposes AGE's installed-font-family cache to scripts. Return a stable
     // non-negative cache index for an available/renderable family, or -1 when unavailable.
     int FindFontFamilyIndex(string faceName) => -1;

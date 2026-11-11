@@ -231,9 +231,10 @@ public class ShellPanelTests
         Assert.Equal(new PortOptions("en", 1600, 1200, true, false),
                      PortOptions.Parse("[UI]\nlanguage = EN\n[display]\nWindowWidth=1600\nWindowHeight=1200\n" +
                                        "[debug]\nFpsCounter=1\nLocatorHud=0\n"));
-        // An unknown language, a half-given size and junk read as the defaults.
+        // Any well-formed tag is kept, normalized; a malformed one, a half-given size and junk read as the defaults.
+        Assert.Equal(PortOptions.Defaults with { Language = "pt-br" }, PortOptions.Parse("[ui]\nLanguage=pt_BR\n"));
         Assert.Equal(PortOptions.Defaults,
-                     PortOptions.Parse("[ui]\nLanguage=fr\n[display]\nWindowWidth=1600\n[debug]\nFpsCounter=yes\n"));
+                     PortOptions.Parse("[ui]\nLanguage=French\n[display]\nWindowWidth=1600\n[debug]\nFpsCounter=yes\n"));
         Assert.Equal(PortOptions.Defaults, PortOptions.Parse("[display]\nWindowWidth=-5\nWindowHeight=99999\n"));
     }
 
@@ -283,7 +284,8 @@ public class ShellPanelTests
         Assert.Equal(saved with { LocatorHud = true }, run.SavedAfter(run.Effective, edited));
         // Changing a flagged option writes the player's choice.
         Assert.Equal(saved with { Language = "ja" }, run.SavedAfter(run.Effective, run.Effective with { Language = "ja" }));
-        Assert.Throws<ArgumentException>(() => PortOptionsRun.Resolve(saved, ["--language", "fr"]));
+        Assert.Equal("x-pseudo", PortOptionsRun.Resolve(saved, ["--language", "x-pseudo"]).Effective.Language);
+        Assert.Throws<ArgumentException>(() => PortOptionsRun.Resolve(saved, ["--language", "French"]));
         Assert.Throws<ArgumentException>(() => PortOptionsRun.Resolve(saved, ["--language"]));
     }
 

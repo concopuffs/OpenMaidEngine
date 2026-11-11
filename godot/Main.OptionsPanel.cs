@@ -196,8 +196,8 @@ public partial class Main
             ApplyWindowSize(edited);
     }
 
-    /// <summary>ui:Language: the shell's texts, the bar and the strip switch tables. The 終了 dialog and the folder
-    /// picker read the table when they open.</summary>
+    /// <summary>ui:Language: the shell's texts, the bar and the strip switch tables, and the game text's language
+    /// (Main.Language.cs). The 終了 dialog and the folder picker read the table when they open.</summary>
     private void ApplyShellLanguage(string language)
     {
         _shellStrings = ShellStrings.Load(language);
@@ -208,6 +208,7 @@ public partial class Main
         _menuBar?.LayoutBar((int)_menuBar.Size.X);
         _menuStrip?.LayoutStrip(new Vector2I(_screenWidth, _screenHeight));
         GD.Print($"[options] the shell's language is {language}");
+        ApplyGameLanguage(language, startup: false);
     }
 
     /// <summary>display:WindowWidth/WindowHeight: the game's area in a window, the bar's rows scaled with it.</summary>

@@ -722,11 +722,30 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--fps-counter` — show Godot's rendered FPS and corresponding average frame time in the top-right corner,
   refreshed four times per second, for this run, whatever `OME.INI` says. The overlay observes the presentation loop
   only; it does not alter VM timing, input, compositor selection, or opcode handling.
-- `--language ja|en` — the engine shell's language for this run (the menu bar, the strip, 終了, the folder picker's
-  prompt and the options panel), whatever `OME.INI` says. Any other value fails startup. The game's own text is
-  unaffected.
-- **`OME.INI`** — the port's own options, shared by every game (engine shell spec §5.6): `[ui] Language` (`ja`, the
-  default, or `en`), `[display] WindowWidth`/`WindowHeight` (the windowed game area; 0 or a missing or invalid pair is
+- `--language TAG` — the language for this run, whatever `OME.INI` says: any well-formed tag (`ja`, `en`, `pt-br`,
+  `zh_Hant` reads as `zh-hant`), or `x-pseudo`. A malformed tag fails startup. It selects the engine shell's strings
+  (the menu bar, the strip, 終了, the folder picker's prompt and the options panel; `ja` for a tag the shell has no
+  table for) and the game text's language (localization spec §10): `ja` draws the scripts' text as written; `x-pseudo`
+  presents every show-text run and `draw-string` a third longer and in brackets, with no catalog, to find text that
+  bypasses the presenter and layouts that cannot take longer text; any other tag presents the catalogs `--text-root`
+  holds for it and its parents (`pt-br`, then `pt`), and without any draws as written. While a language presents
+  text, every string is drawn by the Godot TextServer rasterizer (spec §7.4), presented text wraps at word breaks,
+  and aspect mode's fixed cell does not apply to it. Milestone 1 limits: each run resolves on its own (a sentence
+  split by furigana is several runs and stays untranslated until milestone 2), presented text has no ruby, and the
+  backlog shows the source text of presented runs (milestone 3). The startup log's `[text]` lines name what loaded.
+  Switching the language in the options panel takes effect from the next run.
+- `--text-root DIR` — mount a folder of catalogs laid out as a package's `text/` (spec §9.1): `DIR/<tag>/*.toml`,
+  loaded in path order, later files winning at equal scope. A malformed file stops startup with every problem and its
+  file and line. Site entries (`at`) bind only when the file's `fingerprint` matches the installed base script and no
+  mod patches it; the `[text]` lines report the entries dropped. Packages carry `text/` from milestone 4; until then
+  this is how to play the local catalog `omp text import-scripts` writes, for example Kamidori in English:
+  `--profile kamidori` with `--language en --text-root build/games/kamidori/import-en/text`.
+- `--text-log` — write every string that reached a presentation site without a catalog entry to
+  `<data root>/diagnostics/text-misses.jsonl` (spec §14), one JSON object per line: `source`, `script`, `at` (the
+  instruction, as the F3 locator prints it) and `count`. Written every 2 seconds when it changed, and at exit.
+  Under `x-pseudo` every string is a miss.
+- **`OME.INI`** — the port's own options, shared by every game (engine shell spec §5.6): `[ui] Language` (a language
+  tag; `ja`, the default; a malformed tag reads as `ja`), `[display] WindowWidth`/`WindowHeight` (the windowed game area; 0 or a missing or invalid pair is
   the canvas), `[debug] FpsCounter` and `LocatorHud` (0/1). It lives in Godot's `user://` folder, or beside the saves
   under `--data-root`, so a driven run reads its sandbox's and never the player's; a self-test reads none. The
   options panel's 画面 and OME sections edit it, and its 決定 writes only the options the player changed, so a flag's

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Ome.Engine.Localization;
 
 namespace Ome.Engine.Frontend.Shell;
 
@@ -9,7 +10,9 @@ namespace Ome.Engine.Frontend.Shell;
 /// can read the port's file. A command-line flag wins for its run and never reaches the file
 /// (<see cref="PortOptionsRun"/>).
 /// </summary>
-/// <param name="Language">ui:Language, the shell's string table (<see cref="ShellStrings.Languages"/>).</param>
+/// <param name="Language">ui:Language: the language tag, which selects the shell's string table
+/// (<see cref="ShellStrings.Languages"/>, Japanese for any other tag) and the game text's catalogs (localization spec
+/// §10). Any well-formed tag is kept, so a language that a package or text root supplies survives in the file.</param>
 /// <param name="WindowWidth">display:WindowWidth: the window's client width in pixels, or 0 for the game's canvas.</param>
 /// <param name="WindowHeight">display:WindowHeight, likewise.</param>
 /// <param name="FpsCounter">debug:FpsCounter: the frame-rate overlay.</param>
@@ -23,13 +26,13 @@ public sealed record PortOptions(string Language, int WindowWidth, int WindowHei
     /// <summary>Whether the window size follows the game's canvas.</summary>
     public bool CanvasWindowSize => WindowWidth == 0 || WindowHeight == 0;
 
-    /// <summary>The values a file holds, each checked against its domain: an unknown language, a size out of range
-    /// or a half-given size reads as its default.</summary>
+    /// <summary>The values a file holds, each checked against its domain: a malformed language tag, a size out of
+    /// range or a half-given size reads as its default.</summary>
     public static PortOptions Parse(string text)
     {
         var ini = OmeIniDocument.Parse(text);
-        string language = (ini.Get("ui", "Language") ?? "").Trim().ToLowerInvariant();
-        if (!ShellStrings.Languages.Contains(language)) language = Defaults.Language;
+        string language = LanguageTag.Normalize(ini.Get("ui", "Language") ?? "");
+        if (!LanguageTag.IsWellFormed(language)) language = Defaults.Language;
         int width = Dimension(ini.Get("display", "WindowWidth"));
         int height = Dimension(ini.Get("display", "WindowHeight"));
         if (width == 0 || height == 0) width = height = 0;
@@ -78,7 +81,8 @@ public enum PortOptionFlags
 /// </summary>
 public sealed record PortOptionsRun(PortOptions Saved, PortOptions Effective, PortOptionFlags Overridden)
 {
-    /// <summary>Apply this run's flags: <c>--language ja|en</c>, <c>--window-width</c>/<c>--window-height</c> (checked
+    /// <summary>Apply this run's flags: <c>--language TAG</c> (a well-formed language tag, or <c>x-pseudo</c>),
+    /// <c>--window-width</c>/<c>--window-height</c> (checked
     /// by <see cref="WindowLaunchOptions"/>), <c>--fps-counter</c> and <c>--locator-hud</c>.</summary>
     /// <exception cref="ArgumentException">A flag has a missing or unknown value.</exception>
     public static PortOptionsRun Resolve(PortOptions saved, IReadOnlyList<string> arguments)
@@ -90,10 +94,10 @@ public sealed record PortOptionsRun(PortOptions Saved, PortOptions Effective, Po
             switch (arguments[i])
             {
                 case "--language":
-                    string language = i + 1 < arguments.Count ? arguments[++i].Trim().ToLowerInvariant() : "";
-                    if (!ShellStrings.Languages.Contains(language))
+                    string language = i + 1 < arguments.Count ? LanguageTag.Normalize(arguments[++i]) : "";
+                    if (!LanguageTag.IsWellFormed(language))
                         throw new ArgumentException(
-                            $"--language must be one of {string.Join(", ", ShellStrings.Languages)}; got '{language}'");
+                            $"--language must be a language tag such as ja, en or pt-br, or x-pseudo; got '{language}'");
                     effective = effective with { Language = language };
                     overridden |= PortOptionFlags.Language;
                     break;

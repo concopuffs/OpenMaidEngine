@@ -71,6 +71,8 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
                 ? []
                 : ExtractCoverage(rid, sizeKey, glyph, uv, width, height, request.Antialias);
             int advanceX = Mathf.RoundToInt(advance.X);
+            double ascent = _textServer.FontGetAscent(rid, request.PixelHeight);
+            double descent = _textServer.FontGetDescent(rid, request.PixelHeight);
             return new GlyphMask(
                 width,
                 height,
@@ -80,10 +82,12 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
                 advanceX,
                 0,
                 Math.Max(width, advanceX),
-                request.PixelHeight,
+                // GDI's cell is the font's whole height (GetTextExtentPoint32A gives tmHeight, ascent plus descent), and
+                // a retained glyph shows only its cell: an em-high cell would cut off descenders.
+                Math.Max(request.PixelHeight, (int)Math.Round(ascent + descent)),
                 coverage,
                 // AGE places the baseline at the cell top plus the font's ascent (GDI tmAscent).
-                Mathf.RoundToInt(_textServer.FontGetAscent(rid, request.PixelHeight)),
+                (int)Math.Round(ascent),
                 monochrome: !request.Antialias);
         }
     }

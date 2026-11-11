@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
@@ -34,6 +35,13 @@ public sealed partial class GodotAdvHost : IHost
     /// <summary>SYS4INI <c>BLANKEXTENTMODE</c> = 1: an aspect-mode blank in surface text advances by its own extent in
     /// the reference font (<see cref="ImmediateSurfaceTextRenderer"/>).</summary>
     public bool BlankExtentMode { get; init; }
+
+    /// <summary>Creates the Unicode rasterizer that draws while a language is active (localization spec §7.4), on first
+    /// use. Without one, or when the gameplay rasterizer is already portable, the gameplay rasterizer draws.</summary>
+    public Func<IGlyphMaskRasterizer>? PresentedTextRasterizer { get; init; }
+
+    /// <summary>Glyph masks the presented-text rasterizer's cache keeps.</summary>
+    public int PresentedTextMaskCacheCapacity { get; init; } = 2048;
     public GodotAdvHost(Main main, ResourceMap res, string scene, Ome.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
                         IGlyphMaskRasterizer surfaceTextRasterizer,
@@ -56,11 +64,19 @@ public sealed partial class GodotAdvHost : IHost
                 nameof(surfaceTextRasterizer));
         _surfaceTextMaskCache = new CachedGlyphMaskRasterizer(
             surfaceTextRasterizer, capacity: surfaceTextMaskCacheCapacity);
-        _surfaceTextPixelRenderer =
-            new ImmediateSurfaceTextRenderer(
-                _surfaceTextMaskCache, _surfaceTextBackendInfo.Policy, coverageAlpha);
-        _retainedGlyphLayoutEngine =
-            new RetainedGlyphLayoutEngine(_surfaceTextMaskCache, coverageAlpha);
+        _sourceText = new TextPipeline(_surfaceTextBackendInfo, _surfaceTextMaskCache, coverageAlpha);
+        _presentedText = new Lazy<TextPipeline>(() =>
+        {
+            if (_surfaceTextBackendInfo.Policy == GlyphRasterPolicy.PortableUnicode
+                || PresentedTextRasterizer?.Invoke() is not { } rasterizer)
+                return _sourceText;
+            GlyphRasterizerBackendInfo info = (rasterizer as IIdentifiedGlyphMaskRasterizer)?.BackendInfo
+                ?? throw new InvalidOperationException("The presented-text rasterizer must identify its policy.");
+            if (info.Policy != GlyphRasterPolicy.PortableUnicode)
+                throw new InvalidOperationException("The presented-text rasterizer must take Unicode requests.");
+            return new TextPipeline(info, new CachedGlyphMaskRasterizer(rasterizer, PresentedTextMaskCacheCapacity),
+                                    coverageAlpha);
+        }, LazyThreadSafetyMode.ExecutionAndPublication);
         _fontFamilies = new Lazy<EnumeratedFontFamily[]>(() => FontFamilySource != null
             ? FontFamilySource().Where(family => !string.IsNullOrWhiteSpace(family.FaceName)).ToArray()
             : Godot.OS.GetSystemFonts()
