@@ -16,6 +16,22 @@ public sealed record TextCatalogFile(
     IReadOnlyList<TextEntry> Entries,
     IReadOnlyList<EngineTextEntry> EngineEntries);
 
+/// <summary>
+/// A <c>[[language]]</c> table (localization spec §9.2): a language's name, fallback chain and settings. Null keeps
+/// the default: the tag's parents as the fallback, <c>words</c>, <c>presented</c> and <c>keep</c>. Packages declare
+/// it in their manifest from milestone 4; a text root declares it in <c>languages.toml</c>
+/// (<see cref="TextRootLoader.LanguagesFile"/>).
+/// </summary>
+public sealed record LanguageSettings(string Tag)
+{
+    public string? Name { get; init; }
+    public IReadOnlyList<string>? Fallback { get; init; }
+    public LineBreakMode? LineBreak { get; init; }
+    public TextMeasure? Measure { get; init; }
+    public DigitsMode? Digits { get; init; }
+    public string Origin { get; init; } = "";
+}
+
 /// <summary>A catalog file that does not parse or validate: every problem found, each with its file and line.</summary>
 public sealed class TextCatalogException : Exception
 {

@@ -2,14 +2,17 @@ using System;
 using System.IO;
 using Godot;
 using Ome.Engine.Localization;
+using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Mods.Localization;
 
 /// <summary>
-/// The game text's language (localization spec §10, milestone 1). ui:Language (or <c>--language</c>) selects it:
-/// the source language draws the scripts' text as written; <c>x-pseudo</c> presents every string lengthened and
-/// bracketed; any other tag presents the catalogs <c>--text-root DIR</c> holds for it and its parents, and with none
-/// draws as written (gate 1). <c>--text-log</c> writes every string that reached the screen without an entry to
+/// The game text's language (localization spec §10). ui:Language (or <c>--language</c>) selects it: the source
+/// language draws the scripts' text as written; <c>x-pseudo</c> presents every string lengthened and bracketed; any
+/// other tag presents the catalogs <c>--text-root DIR</c> holds for its fallback chain, with the settings of the
+/// root's <c>languages.toml</c>, and with none draws as written (gate 1). While the root defines any language the VM
+/// records the instruction that stores each global string (§5.2), and messages of several runs resolve as one (§6.2).
+/// <c>--text-log</c> writes every string that reached the screen without an entry to
 /// <c>diagnostics/text-misses.jsonl</c>. Packages carry <c>text/</c> from milestone 4.
 /// </summary>
 public partial class Main
@@ -24,7 +27,8 @@ public partial class Main
 
     /// <summary><c>--text-root</c> and <c>--text-log</c>, with the install's own scripts (before the mod layer) for
     /// the site entries' fingerprints. False stops startup.</summary>
-    private bool PrepareLanguage(string[] userArgs, Sys4AssetCatalog baseCatalog, IAssetStore baseStore)
+    private bool PrepareLanguage(string[] userArgs, Sys4AssetCatalog baseCatalog, IAssetStore baseStore,
+                                 OpcodeTable table)
     {
         string? root = ArgumentValue(userArgs, "--text-root");
         if (root != null)
@@ -42,8 +46,11 @@ public partial class Main
             _textMissLogPath = Path.Combine(_profilePersistence.DiagnosticsDirectory, TextMissLogFile);
             GD.Print($"[text] misses go to {_textMissLogPath}");
         }
+        ScriptMessageIndex? messages = root == null
+            ? null
+            : new ScriptMessageIndex(table, OmeRuntimeMetadata.LoadOpcodeContracts());
         _languageLaunch = new LanguageLaunch(root, LanguageLaunch.BaseFingerprints(baseCatalog, baseStore),
-                                             LanguageLaunch.PatchedScripts(_modLayer), _textMisses);
+                                             LanguageLaunch.PatchedScripts(_modLayer), _textMisses, messages);
         return true;
     }
 
@@ -55,6 +62,8 @@ public partial class Main
     private bool ApplyGameLanguage(string language, bool startup)
     {
         if (_languageLaunch == null || _vm == null || _host == null) return true;
+        // Before the VM runs, so the boot tables are recorded whichever language is selected.
+        if (startup) _vm.RecordsStringStores = _languageLaunch.DefinesLanguage;
         var report = new TextLoadReport();
         TextPresenter? presenter;
         try

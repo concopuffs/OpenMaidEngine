@@ -9,12 +9,16 @@ public sealed partial class VirtualMachine
         switch (label)
         {
             case "strlen": // 0x2c5: raw strlen(native encoded bytes)
-                Write(a[0], NativeStringByteLength(ReadStr(a[1])));
+            {
+                string text = ReadStr(a[1]);
+                Write(a[0], PresentedLength(a[1], text, pc, Localization.TextLengthKind.HalfCells)
+                            ?? NativeStringByteLength(text));
                 return pc + 1;
+            }
             case "lookup-array":
-                LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2]))); return pc + 1;
+                LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2])), pc); return pc + 1;
             case "lookup-array-2d":
-                LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2]) * Read(a[3]) + Read(a[4]))); return pc + 1;
+                LookupStore(a[0], BaseAddr(a[1]).Offset(Read(a[2]) * Read(a[3]) + Read(a[4])), pc); return pc + 1;
             case "take-address": // 0x63: pointer destination <- underlying address of operand 2
                 if (!TryStoreAddress(a[0], BaseAddr(a[1])))
                 {

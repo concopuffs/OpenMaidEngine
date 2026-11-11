@@ -21,14 +21,76 @@ public sealed partial class VirtualMachine
         set => _presenter = value;
     }
 
-    /// <summary>The presented form of a string the instruction at <paramref name="ins"/> draws. Site entries bind to
-    /// the running script's own offsets: the text loader keeps them only for scripts no mod patches (§6.1).</summary>
-    private PresentedText? Present(string text, Instruction ins)
-        => _presenter?.Present(text, new TextSite(_cur.Script.Name, ins.Offset));
+    /// <summary>The message whose first run drew its presented sentence (localization spec §6.2), in the frame and
+    /// script that run it, with the run that comes next. Its later runs, and the <c>end-text-line</c>s between them,
+    /// draw nothing.</summary>
+    private sealed record PresentedMessage(ExecFrame Frame, Script Script, TextMessage Message, int NextRun)
+    {
+        public bool Holds(ExecFrame frame, Script script)
+            => ReferenceEquals(frame, Frame) && ReferenceEquals(script, Script);
+    }
+
+    private PresentedMessage? _presentedMessage;
+
+    /// <summary>The presented form of a string the instruction at <paramref name="ins"/> draws from
+    /// <paramref name="operand"/>, with the operand's origin (§5.2). Site entries bind to the running script's own
+    /// offsets: the text loader keeps them only for scripts no mod patches (§6.1).</summary>
+    private PresentedText? Present(string text, Instruction ins, Operand operand, bool logMiss = true)
+        => _presenter?.Present(text, new TextSite(_cur.Script.Name, ins.Offset), OriginOf(operand), logMiss);
+
+    /// <summary>
+    /// What one show-text run draws (spec §6.2). A run that starts a message of several runs resolves the whole
+    /// message, its runs' texts joined: on an entry, it draws the presented sentence and the message's later runs
+    /// draw nothing (<paramref name="hidden"/>); on a miss, each run resolves on its own and only the message is
+    /// logged. A single run resolves with its operand's origin.
+    /// </summary>
+    private PresentedText? PresentRun(int pc, Instruction ins, Operand operand, string text, out bool hidden)
+    {
+        hidden = false;
+        if (_presenter is not { } presenter)
+        {
+            _presentedMessage = null;
+            return null;
+        }
+        if (_presentedMessage is { } active && active.Holds(_cur, _cur.Script)
+            && active.Message.Runs[active.NextRun].InstructionIndex == pc)
+        {
+            _presentedMessage = active.NextRun + 1 < active.Message.Runs.Count
+                ? active with { NextRun = active.NextRun + 1 }
+                : null;
+            hidden = true;
+            return null;
+        }
+        _presentedMessage = null;
+        if (presenter.Messages?.MessagesOf(_cur.Script) is { } messages
+            && messages.TryGetRun(pc, out TextMessage message, out int run) && message.Runs.Count > 1)
+        {
+            if (run == 0)
+            {
+                // Nothing executes between a message's runs, so every operand reads now as it will when its run
+                // executes.
+                string key = string.Concat(message.Runs.Select(part => ReadStr(part.Text)));
+                if (presenter.Present(key, new TextSite(_cur.Script.Name, ins.Offset)) is { Entry: not null } sentence)
+                {
+                    _presentedMessage = new PresentedMessage(_cur, _cur.Script, message, 1);
+                    return sentence;
+                }
+            }
+            return Present(text, ins, operand, logMiss: false);
+        }
+        return Present(text, ins, operand);
+    }
+
+    /// <summary>Whether the <c>end-text-line</c> at <paramref name="pc"/> lies inside a presented message, which
+    /// draws its own line breaks (§6.2).</summary>
+    private bool InsidePresentedMessage(int pc)
+        => _presentedMessage is { } active && active.Holds(_cur, _cur.Script)
+           && pc > active.Message.Runs[active.NextRun - 1].InstructionIndex
+           && pc < active.Message.Runs[active.NextRun].InstructionIndex;
 
     /// <summary>One show-text run (op 0x6e's string, or op 0x196's base text with its ruby). False when the
     /// runaway-line guard halted the VM.</summary>
-    private bool ShowTextRun(Instruction ins, IReadOnlyList<Operand> a, Operand o, string? ruby)
+    private bool ShowTextRun(Instruction ins, int pc, IReadOnlyList<Operand> a, Operand o, string? ruby)
     {
         int off = o.Type == T_STR ? (int)o.Value : ins.Offset;
         string text = ReadStr(o);
@@ -50,16 +112,22 @@ public sealed partial class VirtualMachine
         int layoutSlot = a.Count > 0 ? (int)Read(a[0]) : 0;
         string[] scriptStack;
         lock (_debugControlLock) scriptStack = _activeFrameNames.ToArray();
-        // Milestone 1 resolves each run on its own; a message of several runs resolves as one in milestone 2 (§6.2).
         // Presented text carries no ruby: the catalog drops it, as the translators did (§18).
-        PresentedText? presented = Present(text, ins);
+        PresentedText? presented = PresentRun(pc, ins, o, text, out bool hidden);
         var liveRun = new AdvLiveTextRun(
             off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack)
         {
-            Ruby = string.IsNullOrEmpty(ruby) || presented != null ? null : ruby,
+            Ruby = string.IsNullOrEmpty(ruby) || presented != null || hidden ? null : ruby,
             ArmsGlyphTimer = ruby == null || RubyLayoutRules.ForEngine(_compatibility.EngineAbiId).ArmsGlyphTimer,
             Presented = presented,
         };
+        if (hidden)
+        {
+            // The message's first run drew the sentence. History still records this run's source text (§6.2).
+            _host.NoteHiddenTextRun(liveRun);
+            TextHistory.AppendText(layoutSlot, off, text, _advTextStyle);
+            return true;
+        }
         AdvTextLayoutPresentationBinding binding =
             TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
         // A reveal runs (run-state 0x20000000) unless fast-forward or a finished-until-wait page publishes at once. Its
@@ -101,14 +169,14 @@ public sealed partial class VirtualMachine
                 foreach (var o in a)
                 {
                     if (!IsStr(o)) continue;
-                    if (!ShowTextRun(ins, a, o, ruby: null)) return HALT;
+                    if (!ShowTextRun(ins, pc, a, o, ruby: null)) return HALT;
                 }
                 return pc + 1;
             case "display-furigana": // 0x196 (layout slot, base text, ruby)
                 // op_0x196_handler@0x41f2a0 builds the base text like show-text with the ruby as the builder's third
                 // argument. Unlike op 0x6e it does not re-read message:ReadTextSkip; SYS4422's handler does not re-arm
                 // the glyph timer either, SYS4433's does (RubyLayoutRules.ArmsGlyphTimer).
-                if (!ShowTextRun(ins, a, a[1], ReadStr(a[2]))) return HALT;
+                if (!ShowTextRun(ins, pc, a, a[1], ReadStr(a[2]))) return HALT;
                 return pc + 1;
             case "define-adv-text-layout": // 0x70: configure layout and begin a logical retained group
                 TextHistory.DefineLayout((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
@@ -177,7 +245,7 @@ public sealed partial class VirtualMachine
             {
                 int surface = (int)Read(a[0]), x = (int)Read(a[1]), y = (int)Read(a[2]);
                 string text = ReadStr(a[3]);
-                if (Present(text, ins) is { } presented)
+                if (Present(text, ins, a[3]) is { } presented)
                     _host.DrawStringToSurface(surface, x, y, text, _advTextStyle, presented);
                 else
                     _host.DrawStringToSurface(surface, x, y, text, _advTextStyle);
@@ -240,7 +308,13 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "end-text-line":
             {
-                // The line break moves the layout's cursor record, which the host's wait indicator can follow.
+                // The line break moves the layout's cursor record, which the host's wait indicator can follow. Inside
+                // a presented message history still records the break, and the cursor stays after the sentence.
+                if (InsidePresentedMessage(pc))
+                {
+                    TextHistory.EndLine((int)Read(a[0]), _advTextStyle, moveCursor: false);
+                    return pc + 1;
+                }
                 TextHistory.EndLine((int)Read(a[0]), _advTextStyle);
                 var layout = TextHistory.GetLayoutSnapshot((int)Read(a[0]));
                 _host.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);

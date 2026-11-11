@@ -434,6 +434,25 @@ public class GlyphMaskCompositorTests
     }
 
     [Fact]
+    public void PresentedTextTestsOverflowAgainstTheFontHeight()
+    {
+        // A Unicode font's cell holds its full ascent and descent: 8 pixels for a 5-pixel font here.
+        static GlyphMask TallMask() => new(1, 1, 1, originX: 0, originY: 6,
+            cellAdvanceX: 4, cellAdvanceY: 0, cellWidth: 4, cellHeight: 8, [16]);
+        var engine = new RetainedGlyphLayoutEngine(new CountingRasterizer(_ => TallMask()));
+        var options = new GlyphTextLayoutOptions(2, 6, 2, 16, 12, true, Style());
+
+        GlyphTextLayoutResult cell = engine.Render(Image(16, 16), options, [NativeRequest(0x82a0, 0x3042)]);
+        GlyphTextLayoutResult font = engine.Render(Image(16, 16), options with { OverflowAtFontHeight = true },
+            [NativeRequest(0x82a0, 0x3042)]);
+
+        Assert.True(cell.StoppedOnVerticalOverflow);
+        Assert.False(font.StoppedOnVerticalOverflow);
+        // The record keeps the whole cell, which history and the wait indicator follow.
+        Assert.Equal(new AdvRetainedGlyphRecord(0, 2, 6, 6, 14), Assert.Single(font.Records));
+    }
+
+    [Fact]
     public void SimultaneousHorizontalAndVerticalOverflowTakesNativeWrapPath()
     {
         var engine = new RetainedGlyphLayoutEngine(new CountingRasterizer(_ => CellMask()));

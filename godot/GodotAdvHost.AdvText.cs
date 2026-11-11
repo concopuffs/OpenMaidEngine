@@ -197,6 +197,12 @@ public sealed partial class GodotAdvHost
         => throw new NotSupportedException(
             "Godot gameplay text requires a retained layout binding.");
 
+    public void NoteHiddenTextRun(AdvLiveTextRun run)
+    {
+        Captured.Add((run.SourceOffset, run.Text));
+        _locator.Text(run.SourceOffset, run.Text);
+    }
+
     public AdvRetainedTextRunResult? ShowText(
         GfxState gfx,
         AdvTextLayoutPresentationBinding binding,
@@ -361,7 +367,8 @@ public sealed partial class GodotAdvHost
                 WrapHorizontally: wrap,
                 style,
                 breaks,
-                realization),
+                realization,
+                OverflowAtFontHeight: run.Presented != null),
             requests);
 
         // Op 0x196's ruby follows each base row in AGE's drawing order; History draws its ruby runs after the text.

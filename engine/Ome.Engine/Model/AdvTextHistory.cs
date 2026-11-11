@@ -302,13 +302,19 @@ public sealed class AdvTextHistory
     /// Advance to the next horizontal text line. Native resets x to the layout's configured reset cursor
     /// and adds the primary font's pixel height plus the current extra line spacing to y.
     /// </summary>
-    public void EndLine(int requestedSlot, AdvTextStyle style)
+    /// <summary>Op 0x6f: a line break record, and the cursor to the start of the next line. Without
+    /// <paramref name="moveCursor"/> only the record is written: the break is inside a presented message, which
+    /// draws its own breaks (localization spec §6.2).</summary>
+    public void EndLine(int requestedSlot, AdvTextStyle style, bool moveCursor = true)
     {
         int slot = ResolveLayout(requestedSlot);
         var layout = GetOrCreateLayout(slot);
         int fontHeight = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
-        layout.CursorX = layout.ResetCursorX;
-        layout.CursorY += fontHeight + style.LineSpacing;
+        if (moveCursor)
+        {
+            layout.CursorX = layout.ResetCursorX;
+            layout.CursorY += fontHeight + style.LineSpacing;
+        }
         AppendLineBreak(slot, style);
     }
 

@@ -789,16 +789,15 @@ public sealed partial class VirtualMachine
         }
     }
 
-    private void LookupStore(Operand dst, VmAddress addr)
+    private void LookupStore(Operand dst, VmAddress addr, int pc)
     {
         if (TryStoreAddress(dst, addr)) return;
-        switch (dst.Type)
+        if (IsStr(dst))
         {
-            default:
-                if (IsStr(dst)) WriteStr(dst, ReadStringCell(addr));
-                else Write(dst, ReadIntCell(addr));
-                break;
+            WriteStr(dst, ReadStringCell(addr));
+            RecordStringCopy(dst, pc, addr);
         }
+        else Write(dst, ReadIntCell(addr));
     }
 
     private void WriteConsecutive(Operand destination, int index, long value)
@@ -1164,6 +1163,7 @@ public sealed partial class VirtualMachine
         GlobalStrings.Clear();
         GlobalPointers.Clear();
         GlobalStringPointers.Clear();
+        ClearStringStores();
     }
 
     private static Stack<int>[] CreateIntegerStacks()

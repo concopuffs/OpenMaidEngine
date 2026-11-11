@@ -29,13 +29,35 @@ public sealed class TextLoadReport
 
 /// <summary>
 /// Loads a language from a folder laid out as a package's <c>text/</c> (spec §9.1): <c>ROOT/&lt;tag&gt;/*.toml</c>,
-/// for the selected tag and each of its parents. This is how the port mounts a catalog before packages carry
+/// for the selected tag and each language of its fallback chain (its parents, or the <c>fallback</c> its
+/// <see cref="LanguagesFile"/> entry names), with that entry's settings. This is how the port mounts a catalog before packages carry
 /// <c>text/</c> (milestone 4), for example the local catalog <c>import-scripts</c> writes. Files load in ordinal
 /// order of their path inside the language folder; a problem in any file stops the load, with every problem and its
 /// file and line (§9.4 step 1).
 /// </summary>
 public static class TextRootLoader
 {
+    /// <summary>The text root's <c>[[language]]</c> tables (spec §9.2), beside the language folders. Packages declare
+    /// them in their manifest from milestone 4.</summary>
+    public const string LanguagesFile = "languages.toml";
+
+    /// <summary>Whether the root defines any language: a language folder with a catalog file, or a
+    /// <see cref="LanguagesFile"/>. While one does, the VM records string stores (spec §5.2), selected or not.</summary>
+    public static bool DefinesLanguage(string root)
+        => File.Exists(Path.Combine(root, LanguagesFile))
+           || Directory.EnumerateDirectories(root)
+               .Any(folder => Directory.EnumerateFiles(folder, "*.toml", SearchOption.AllDirectories).Any());
+
+    /// <summary>The root's <see cref="LanguagesFile"/>, or none.</summary>
+    /// <exception cref="TextCatalogException">The file does not parse or validate.</exception>
+    public static IReadOnlyList<LanguageSettings> ReadLanguages(string root)
+    {
+        string path = Path.Combine(root, LanguagesFile);
+        return File.Exists(path)
+            ? TextCatalogFileReader.ParseLanguages(File.ReadAllText(path, Encoding.UTF8), LanguagesFile)
+            : [];
+    }
+
     /// <summary>
     /// The catalogs of <paramref name="tag"/>'s fallback chain under <paramref name="root"/>. Each entry with
     /// <c>at</c> binds only to an unpatched base script whose fingerprint the file names:
@@ -46,9 +68,10 @@ public static class TextRootLoader
                                     Func<string, bool> isPatched, TextLoadReport report)
     {
         string normalized = LanguageTag.Normalize(tag);
+        LanguageSettings? settings = ReadLanguages(root).FirstOrDefault(declared => declared.Tag == normalized);
         var chain = new List<TextCatalog>();
         var problems = new List<string>();
-        foreach (string language in new[] { normalized }.Concat(LanguageTag.Parents(normalized)))
+        foreach (string language in new[] { normalized }.Concat(settings?.Fallback ?? LanguageTag.Parents(normalized)))
         {
             string folder = Path.Combine(root, language);
             if (!Directory.Exists(folder)) continue;
@@ -77,7 +100,12 @@ public static class TextRootLoader
             chain.Add(catalog);
         }
         if (problems.Count > 0) throw new TextCatalogException(problems);
-        return new TextLanguage(normalized, chain);
+        return new TextLanguage(normalized, chain)
+        {
+            LineBreak = settings?.LineBreak ?? LineBreakMode.Words,
+            Measure = settings?.Measure ?? TextMeasure.Presented,
+            Digits = settings?.Digits ?? DigitsMode.Keep,
+        };
     }
 
     /// <summary>The file's entries, without its site entries when they cannot bind (spec §9.4 step 3).</summary>

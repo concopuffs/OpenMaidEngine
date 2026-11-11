@@ -16,6 +16,10 @@ public interface IAdvHost
         ShowText(run, glyphDelayMilliseconds);
         return null;
     }
+    // A later run of a presented message (localization spec §6.2): the message's first run drew the whole presented
+    // sentence, so this run draws nothing and moves no cursor. The host still notes its source text, which the page
+    // map and the locator keep (§14).
+    void NoteHiddenTextRun(AdvLiveTextRun run) => ShowText(run.SourceOffset, run.Text);
     // ctx+0x55108: a click finished a reveal, so every later reveal publishes at once until the page's op 0x72 (or a
     // scene reset) clears it. The VM sets it when native's input latch holds action 4 as a reveal starts; the host
     // sets it for a click during a reveal.

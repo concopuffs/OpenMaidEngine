@@ -12,9 +12,12 @@ namespace Ome.Mods.Localization;
 /// one folder with <c>--text-root</c>. Each selection loads the files again, so a language switch picks up edits.
 /// </summary>
 public sealed class LanguageLaunch(string? textRoot, Func<string, string?> baseFingerprint, Func<string, bool> isPatched,
-                                   TextMissLog? misses)
+                                   TextMissLog? misses, ITextMessageIndex? messages = null)
 {
     public string? TextRoot { get; } = textRoot;
+
+    /// <summary>Whether the mounted text defines any language, so the VM records string stores (spec §5.2).</summary>
+    public bool DefinesLanguage { get; } = textRoot != null && TextRootLoader.DefinesLanguage(textRoot);
 
     /// <summary>The presenter for <paramref name="tag"/>, or null to draw source text.</summary>
     /// <exception cref="TextCatalogException">A catalog file does not parse or validate.</exception>
@@ -26,7 +29,7 @@ public sealed class LanguageLaunch(string? textRoot, Func<string, string?> baseF
             return new TextPresenter(TextLanguage.Pseudo, [new PseudoLanguageFilter()], misses);
         if (TextRoot == null) return null;
         TextLanguage language = TextRootLoader.Load(TextRoot, normalized, baseFingerprint, isPatched, report);
-        return language.Chain.Count == 0 ? null : new TextPresenter(language, misses: misses);
+        return language.Chain.Count == 0 ? null : new TextPresenter(language, misses: misses, messages: messages);
     }
 
     /// <summary>An installed script's fingerprint (<c>sha256:…</c>, as catalog files and patches name it), from the

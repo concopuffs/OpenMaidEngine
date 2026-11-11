@@ -302,7 +302,7 @@ and the drive scenarios.
 ## Localization
 
 - **Build the localization framework.** The design is accepted (`superpowers/specs/2026-11-10-localization-design.md`,
-  2026-11-10) and milestones 0 and 1 are implemented. The port presents a language from a folder of catalogs
+  2026-11-10) and milestones 0 to 2 are implemented. The port presents a language from a folder of catalogs
   (`--text-root`), not yet from packages, and its own error box is fixed Japanese (`VirtualMachine.DiagnosticCaption`).
   The spec's §19 holds the milestones and §18 the gates; they are not restated here.
   - **Milestone 0 is built, reviewed and revised** (2026-11-10). `omp text import-scripts` converts the Kamidori
@@ -320,13 +320,29 @@ and the drive scenarios.
       counts. The pseudo text is longer, so its timing checks fail, while its positions come in the same order:
       each run took its presented glyph count × 300 ms (3.9, 1.5 and 10.2 s).
     - Kamidori in English from the imported catalog: single-run lines and menu strings are presented.
-    - Left for later milestones: a sentence split by furigana stays source until messages (milestone 2). Menu strings
-      overrun fixed boxes until measurement, `align` and `fit` (milestone 2). The backlog shows a presented run's
-      source text on one row until history re-presentation (milestone 3).
-  - **Next:** milestone 2.
-  - **The import verifier models pattern matching.** `ImportVerifier` checks patterns by sample with its own
-    matcher for spec §6.3 and §6.4, since there is no presenter yet. Done when it uses the presenter's matcher
-    (milestone 2), so the check tests the code the engine runs.
+  - **Milestone 2 is built** (2026-11-11). Messages of several runs resolve as one; the VM records the instruction
+    that stores each global string, and lookup tries the origin's site and script before the drawing ones; patterns
+    match with a linear matcher, captures are presented, `digits = "ascii"` converts numbers; the three length
+    opcodes measure presented text in half cells, with `cells` and `measure`. `TextPatternOverlap` finds ambiguous
+    pattern pairs for `omp text check` (milestone 4). A text root's `languages.toml` holds `[[language]]` settings
+    until manifests do. `ImportVerifier` presents its pattern samples through the presenter.
+    - Gate 4: `PresentedMessageTests` (furigana sentence as one, a branch target splits, a miss falls back per run).
+      Kamidori's prologue page at `SC0000@0xfa2` draws one wrapped English sentence.
+    - Gate 5: `TextPatternTests` (number moved, captured name translated, ASCII digits, an ambiguous pair found).
+    - Gate 6: `PresentedMessageTests` (presented name measured, `cells` overrides, `measure = "source"` opts out).
+      Kamidori's first name plate (`SC0000@0x1fa29`) is sized to "Wil".
+    - Gate 10 still holds: `--verify` finds 0 mismatches.
+    - Gates 1 and 9 still hold: all 28 drive scenarios pass as written, and 27 of 28 are unchanged under x-pseudo
+      (reveal-clock's timing checks, as in milestone 1).
+    - Fixed on the way: presented text on a layout sized for the source font (Kamidori's 25-pixel name layout 9)
+      stopped at its first glyph, since the portable cell (ascent plus descent) overflowed the bottom bound. Presented
+      runs now test overflow against the font height their rows advance by.
+  - **Next:** milestone 3.
+  - **`align`, `fit` and overflow reports (spec §7.2, §7.3) are in no milestone.** The entry keys are read, but the
+    host ignores them, and nothing reports a presented run cut at the bottom of its window. Both need the source
+    text's extent, which milestone 3's source layout pass computes. Done when an entry's `align` and `fit` place and
+    narrow its text against the source extent, and a cut run goes to the miss log with its script, offset, message
+    and the rows cut.
   - **Cut `localization-import-test.md`'s "Review answers" down to the results**, as that section says: the review
     text is committed (`2482813`).
   - The manifest's `omp = 2` is shared with the Lua design (the item under "Mod loader and modding"). Whichever

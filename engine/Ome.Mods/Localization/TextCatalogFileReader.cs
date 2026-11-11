@@ -83,6 +83,95 @@ public static partial class TextCatalogFileReader
         return new TextCatalogFile(defaultScope, fingerprint, entries, engineEntries);
     }
 
+    /// <summary>
+    /// The <c>[[language]]</c> tables of a <c>languages.toml</c> (spec §9.2): <c>tag</c>, and optionally
+    /// <c>name</c>, <c>fallback</c>, <c>line_break</c>, <c>measure</c> and <c>digits</c>. Unknown keys are errors,
+    /// as in a catalog file, and so are the keys this version does not implement yet (<c>glyph_delay_scale</c>,
+    /// <c>min_fit_scale</c>, <c>[[language.font]]</c>).
+    /// </summary>
+    public static IReadOnlyList<LanguageSettings> ParseLanguages(string text, string origin)
+    {
+        TomlTable root;
+        try
+        {
+            root = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable();
+        }
+        catch (TomlException error)
+        {
+            string at = error.Line is { } line ? $"{origin}:{line}" : origin;
+            throw new TextCatalogException([$"{at}: not valid TOML: {error.Message}"]);
+        }
+        var problems = new List<string>();
+        Dictionary<string, List<int>> tableLines = TableArrayLines(text, origin);
+        var top = new Fields(root, origin, problems);
+        var languages = new List<LanguageSettings>();
+        var tags = new HashSet<string>(StringComparer.Ordinal);
+        foreach ((TomlTable table, int k) in top.TableArray("language"))
+        {
+            string where = Where(origin, tableLines, "language", k);
+            var fields = new Fields(table, where, problems);
+            string? tag = fields.String("tag", required: true);
+            string? name = fields.String("name");
+            IReadOnlyList<string>? fallback = fields.Strings("fallback");
+            string? lineBreak = fields.String("line_break");
+            string? measure = fields.String("measure");
+            string? digits = fields.String("digits");
+            fields.RejectUnknown();
+            if (tag == null) continue;
+            string normalized = LanguageTag.Normalize(tag);
+            if (!LanguageTag.IsWellFormed(normalized) || normalized == LanguageTag.Source
+                || normalized == LanguageTag.Pseudo)
+            {
+                fields.Problem($"tag '{tag}' is not a language a package can define");
+                continue;
+            }
+            if (!tags.Add(normalized)) fields.Problem($"language '{normalized}' is declared twice");
+            List<string>? chain = null;
+            if (fallback != null)
+            {
+                chain = [];
+                foreach (string parent in fallback)
+                {
+                    string next = LanguageTag.Normalize(parent);
+                    if (LanguageTag.IsWellFormed(next) && next != LanguageTag.Pseudo && next != normalized)
+                        chain.Add(next);
+                    else fields.Problem($"fallback '{parent}' is not another language's tag");
+                }
+            }
+            languages.Add(new LanguageSettings(normalized)
+            {
+                Name = name,
+                Fallback = chain,
+                LineBreak = lineBreak switch
+                {
+                    null => null,
+                    "words" => LineBreakMode.Words,
+                    "anywhere" => LineBreakMode.Anywhere,
+                    _ => fields.Problem<LineBreakMode?>(
+                        $"line_break must be \"words\" or \"anywhere\", not \"{lineBreak}\""),
+                },
+                Measure = measure switch
+                {
+                    null => null,
+                    "presented" => TextMeasure.Presented,
+                    "source" => TextMeasure.Source,
+                    _ => fields.Problem<TextMeasure?>($"measure must be \"presented\" or \"source\", not \"{measure}\""),
+                },
+                Digits = digits switch
+                {
+                    null => null,
+                    "keep" => DigitsMode.Keep,
+                    "ascii" => DigitsMode.Ascii,
+                    _ => fields.Problem<DigitsMode?>($"digits must be \"keep\" or \"ascii\", not \"{digits}\""),
+                },
+                Origin = where,
+            });
+        }
+        top.RejectUnknown();
+        if (problems.Count > 0) throw new TextCatalogException(problems);
+        return languages;
+    }
+
     private static TextEntry? ReadEntry(Fields fields, string? defaultScope, string? fingerprint)
     {
         string? source = fields.String("source", required: true);
@@ -196,6 +285,16 @@ public static partial class TextCatalogFileReader
             if (value is null) return null;
             if (value is long number) return number;
             problems.Add($"{where}: {key} must be an integer");
+            return null;
+        }
+
+        public IReadOnlyList<string>? Strings(string key)
+        {
+            object? value = Get(key, false);
+            if (value is null) return null;
+            if (value is TomlArray array && array.All(item => item is string))
+                return array.Cast<string>().ToArray();
+            problems.Add($"{where}: {key} must be an array of strings");
             return null;
         }
 

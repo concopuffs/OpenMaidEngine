@@ -7,8 +7,8 @@ namespace Ome.Mods.Localization.Import;
 /// catalog and compares the result with the translated install's text as the importer read it: wraps joined, and
 /// deliberate breaks kept as <c>\n</c>. A mismatch means two different translations ended up under one key.
 /// A pattern is also checked by value (R4 of <c>docs/localization-import-test.md</c>'s review): its source is
-/// filled with sample values, matched against the catalog's patterns as spec §6.3 and §6.4 describe, and the result
-/// must be the translation filled with the same values.
+/// filled with sample values and presented by the port's own <see cref="TextPresenter"/> (spec §6.3, §6.4), and the
+/// result must be the translation filled with the same values.
 /// </summary>
 public static class ImportVerifier
 {
@@ -17,7 +17,7 @@ public static class ImportVerifier
         var counts = new VerifyCounts();
         var patterns = new Dictionary<(string?, int?, string), TextEntry>();
         foreach (TextEntry entry in catalog.Patterns) patterns[(entry.Script, entry.At, entry.Source)] = entry;
-        var ranked = catalog.Patterns.OrderByDescending(entry => entry.SourceTemplate.LiteralLength).ToList();
+        var presenter = new TextPresenter(new TextLanguage(catalog.Language, [catalog]));
 
         foreach (TextOccurrence occurrence in occurrences)
         {
@@ -65,7 +65,7 @@ public static class ImportVerifier
                     if (occurrence.Kind == OccurrenceKind.Pattern) counts.CheckedPatterns++;
                     else counts.CheckedComposed++;
                     if (Same(presented, occurrence.Translation)
-                        && !BySample(catalog, ranked, occurrence, out string sampled, out string expected))
+                        && !BySample(presenter, occurrence, out string sampled, out string expected))
                     {
                         counts.Mismatches.Add(new ReportedMismatch(occurrence.Script, occurrence.Offset,
                             occurrence.Kind + " by sample", occurrence.Key, expected, sampled));
@@ -90,11 +90,11 @@ public static class ImportVerifier
 
     // ---- by sample -----------------------------------------------------------------------------------------------
 
-    private static bool BySample(TextCatalog catalog, IReadOnlyList<TextEntry> ranked, TextOccurrence occurrence,
-                                 out string presented, out string expected)
+    private static bool BySample(TextPresenter presenter, TextOccurrence occurrence, out string presented,
+                                 out string expected)
     {
         string drawn = Fill(occurrence.Key, occurrence.Key, kinds: true);
-        presented = Present(catalog, ranked, drawn, occurrence.Script, occurrence.Offset);
+        presented = presenter.Present(drawn, new TextSite(occurrence.Script, occurrence.Offset))?.Text ?? drawn;
         expected = Fill(occurrence.Translation, occurrence.Key, kinds: false);
         return Same(presented, expected);
     }
@@ -111,61 +111,5 @@ public static class ImportVerifier
             values[placeholder.Name] = placeholder.Kind == PlaceholderKind.Number ? (12 + k).ToString() : $"«{k + 1}»";
         }
         return TextTemplate.Parse(template, allowKinds: kinds).Render(values);
-    }
-
-    /// <summary>What the catalog presents for a drawn string: exact entries first, then patterns by scope (site,
-    /// script, global), the one with the most literal characters first. Captures are resolved too.</summary>
-    private static string Present(TextCatalog catalog, IReadOnlyList<TextEntry> ranked, string drawn, string script,
-                                  int at)
-    {
-        if (catalog.TryResolveExact(drawn, script, at, out TextEntry exact)) return exact.TextTemplate.Literal;
-        string normalized = TextCatalog.NormalizeScriptName(script);
-        foreach (Func<TextEntry, bool> scope in new Func<TextEntry, bool>[]
-                 {
-                     entry => entry.Script == normalized && entry.At == at,
-                     entry => entry.Script == normalized && entry.At == null,
-                     entry => entry.Script == null,
-                 })
-            foreach (TextEntry entry in ranked.Where(scope))
-            {
-                var captures = new Dictionary<string, string>(StringComparer.Ordinal);
-                if (!Match(entry.SourceTemplate.Parts, 0, drawn, 0, captures)) continue;
-                foreach (string name in captures.Keys.ToList())
-                    if (catalog.TryResolveExact(captures[name], script, at, out TextEntry resolved))
-                        captures[name] = resolved.TextTemplate.Literal;
-                return entry.TextTemplate.Render(captures);
-            }
-        return drawn;
-    }
-
-    /// <summary>Spec §6.3: the pattern matches the whole string, <c>{name}</c> as little non-empty text as possible
-    /// and <c>{name:num}</c> digits, half or full width, with an optional minus sign in front.</summary>
-    private static bool Match(IReadOnlyList<TemplatePart> parts, int part, string text, int at,
-                              Dictionary<string, string> captures)
-    {
-        if (part == parts.Count) return at == text.Length;
-        if (parts[part] is LiteralPart literal)
-            return string.CompareOrdinal(text, at, literal.Text, 0, literal.Text.Length) == 0
-                   && at + literal.Text.Length <= text.Length
-                   && Match(parts, part + 1, text, at + literal.Text.Length, captures);
-        var placeholder = (PlaceholderPart)parts[part];
-        for (int end = at + 1; end <= text.Length; end++)
-        {
-            string value = text[at..end];
-            if (placeholder.Kind == PlaceholderKind.Number && !IsNumber(value)) continue;
-            captures[placeholder.Name] = value;
-            if (Match(parts, part + 1, text, end, captures)) return true;
-        }
-        captures.Remove(placeholder.Name);
-        return false;
-    }
-
-    private static bool IsNumber(string value)
-    {
-        int start = value.Length > 0 && value[0] is '-' or '－' ? 1 : 0;
-        if (start == value.Length) return false;
-        for (int k = start; k < value.Length; k++)
-            if (value[k] is not (>= '0' and <= '9' or >= '０' and <= '９')) return false;
-        return true;
     }
 }

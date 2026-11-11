@@ -14,6 +14,8 @@ public sealed class TextCatalog
     private readonly Dictionary<string, TextEntry> _global;
     private readonly Dictionary<(string Script, string Key), TextEntry> _script;
     private readonly Dictionary<(string Script, int At, string Key), TextEntry> _site;
+    private readonly Dictionary<(string Script, int At), TextEntry[]> _sitePatterns;
+    private readonly Dictionary<string, TextEntry[]> _scriptPatterns;
 
     private TextCatalog(string language, IReadOnlyList<TextEntry> entries, IReadOnlyList<TextCatalogOverride> overrides,
                         Dictionary<string, TextEntry> global, Dictionary<(string, string), TextEntry> script,
@@ -26,6 +28,20 @@ public sealed class TextCatalog
         _script = script;
         _site = site;
         Patterns = patterns;
+        // Rank: most literal characters first; at equal rank the later entry, which wins between packages.
+        TextEntry[] Ranked(IEnumerable<(TextEntry Entry, int Order)> scoped) => scoped
+            .OrderByDescending(item => item.Entry.SourceTemplate.LiteralLength)
+            .ThenByDescending(item => item.Order)
+            .Select(item => item.Entry)
+            .ToArray();
+        var ordered = patterns.Select((entry, order) => (Entry: entry, Order: order)).ToArray();
+        _sitePatterns = ordered.Where(item => item.Entry.At != null)
+            .GroupBy(item => (item.Entry.Script!, item.Entry.At!.Value))
+            .ToDictionary(group => group.Key, Ranked);
+        _scriptPatterns = ordered.Where(item => item.Entry.Script != null && item.Entry.At == null)
+            .GroupBy(item => item.Entry.Script!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, Ranked, StringComparer.Ordinal);
+        GlobalPatterns = Ranked(ordered.Where(item => item.Entry.Script == null));
     }
 
     public string Language { get; }
@@ -37,6 +53,9 @@ public sealed class TextCatalog
 
     /// <summary>The pattern entries, in load order.</summary>
     public IReadOnlyList<TextEntry> Patterns { get; }
+
+    /// <summary>The global patterns, in the order they are tried.</summary>
+    public IReadOnlyList<TextEntry> GlobalPatterns { get; }
 
     public int Count => Entries.Count;
 
@@ -87,6 +106,27 @@ public sealed class TextCatalog
         return new TextCatalog(language, kept, overrides, global, script, site,
             kept.Where(entry => entry.IsPattern).ToArray());
     }
+
+    /// <summary>The exact entry with site scope at <paramref name="script"/> (a normalized name) and base offset
+    /// <paramref name="at"/>.</summary>
+    public bool TryGetSite(string script, int at, string source, out TextEntry entry)
+        => _site.TryGetValue((script, at, source), out entry!);
+
+    /// <summary>The exact entry with script scope for <paramref name="script"/> (a normalized name).</summary>
+    public bool TryGetScript(string script, string source, out TextEntry entry)
+        => _script.TryGetValue((script, source), out entry!);
+
+    /// <summary>The exact global entry.</summary>
+    public bool TryGetGlobal(string source, out TextEntry entry) => _global.TryGetValue(source, out entry!);
+
+    /// <summary>The site patterns at <paramref name="script"/> (normalized) and <paramref name="at"/>, in the order
+    /// they are tried.</summary>
+    public IReadOnlyList<TextEntry> SitePatterns(string script, int at)
+        => _sitePatterns.TryGetValue((script, at), out TextEntry[]? entries) ? entries : [];
+
+    /// <summary>The script patterns of <paramref name="script"/> (normalized), in the order they are tried.</summary>
+    public IReadOnlyList<TextEntry> ScriptPatterns(string script)
+        => _scriptPatterns.TryGetValue(script, out TextEntry[]? entries) ? entries : [];
 
     /// <summary>The exact entry for <paramref name="source"/> drawn by <paramref name="script"/> at base offset
     /// <paramref name="at"/>: site scope first, then script, then global (spec §6.4 steps 1–3).</summary>

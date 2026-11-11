@@ -7,6 +7,10 @@ namespace Ome.Engine.Text;
 /// History (text_history_render_records@0x4526c0) breaks only at retained line-break records this way.</param>
 /// <param name="FontRealization">The installed-font list behind aspect mode's glyph placement
 /// (<see cref="AspectGlyphPlacement"/>). Without it, aspect-mode glyphs draw at the pen.</param>
+/// <param name="OverflowAtFontHeight">Test the bottom bound against the font's height, the box rows advance by,
+/// instead of the glyph cell. Presented text sets it (localization spec §7): its Unicode font's cell holds the full
+/// ascent and descent, often taller than the source font's, and a layout sized for the source font (Kamidori's
+/// 25-pixel name plate) would otherwise stop at its first glyph.</param>
 public readonly record struct GlyphTextLayoutOptions(
     int CursorX,
     int CursorY,
@@ -16,7 +20,8 @@ public readonly record struct GlyphTextLayoutOptions(
     bool WrapHorizontally,
     AdvTextStyle Style,
     IReadOnlyList<int>? LineBreaksBefore = null,
-    AspectFontRealization? FontRealization = null);
+    AspectFontRealization? FontRealization = null,
+    bool OverflowAtFontHeight = false);
 
 public sealed record GlyphTextLayoutResult(
     IReadOnlyList<AdvRetainedGlyphRecord> Records,
@@ -116,8 +121,9 @@ public sealed class RetainedGlyphLayoutEngine
                   + (options.Style.RenderMode != 0 ? options.Style.EffectOffsetY : 0);
             int right = checked(cursorX + cellWidth);
             int bottom = checked(cursorY + cellHeight);
-            int overflowBottom = aspectReference == null ? bottom
-                : checked(cursorY + aspectReference.CellAdvanceY);
+            int overflowBottom = aspectReference != null ? checked(cursorY + aspectReference.CellAdvanceY)
+                : options.OverflowAtFontHeight ? checked(cursorY + request.PixelHeight)
+                : bottom;
             AdvTextOverflowFlags overflow = AdvRetainedTextContract.CheckOverflow(
                 options.RightBound, options.BottomBound, right, overflowBottom);
             observed |= overflow;

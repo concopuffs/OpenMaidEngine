@@ -185,8 +185,8 @@ and `ComposedStrings.cs` (rule 7).
    translation. A message is checked as the concatenation of its runs. An empty source written as whitespace needs
    no entry.
 6. **`--verify`** compares exactly: both sides hold the importer's reading of the line breaks. A pattern or
-   composed string is also checked by sample: its source, filled with sample values and matched against the
-   catalog's patterns in spec §6.4's order, must present as its translation filled the same way. A stored literal
+   composed string is also checked by sample: its source, filled with sample values and presented by the engine's
+   own `TextPresenter` (spec §6.4's order), must present as its translation filled the same way. A stored literal
    is checked at its storing site. One the install left untranslated is listed apart as "translated anyway", and
    a literal stored into a frame local is checked against the global entry and listed apart as a conflict.
 7. **Composed strings.** Start at each instruction that stores a string variable into another (`set-string`),

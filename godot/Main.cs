@@ -546,7 +546,7 @@ public partial class Main : Godot.Control
             PresentedTextMaskCacheCapacity = portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048,
         };
         if (_sys4RegIniStore != null) _host.UseMessageSettingsStore(_sys4RegIniStore);
-        if (!_selftest && !PrepareLanguage(userArgs, baseCatalog, baseStore))
+        if (!_selftest && !PrepareLanguage(userArgs, baseCatalog, baseStore, table))
         {
             GetTree().Quit(2);
             return;

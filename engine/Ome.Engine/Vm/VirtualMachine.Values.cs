@@ -1,4 +1,5 @@
 using Ome.Engine.Hosting;
+using Ome.Engine.Localization;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 
@@ -37,10 +38,12 @@ public sealed partial class VirtualMachine
                 string left = ReadStr(a[1]);
                 string right = ReadStr(a[2]);
                 WriteStr(a[0], left + right);
+                RecordStringStore(a[0], pc);
                 return pc + 1;
             }
             case "toString":
                 WriteStr(a[0], unchecked((int)Read(a[1])).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                RecordStringStore(a[0], pc);
                 return pc + 1;
             case "absolute-value":
             {
@@ -55,12 +58,20 @@ public sealed partial class VirtualMachine
             case "gre": Write(a[0], I32(Read(a[1])) >= I32(Read(a[2])) ? 1 : 0); return pc + 1;
             case "mov":
             case "set-string":
-                if (IsStr(a[0]) || IsStr(a[1])) WriteStr(a[0], ReadStr(a[1]));
+                if (IsStr(a[0]) || IsStr(a[1]))
+                {
+                    WriteStr(a[0], ReadStr(a[1]));
+                    RecordStringStore(a[0], pc, copiedFrom: a[1]);
+                }
                 else Write(a[0], Read(a[1]));
                 return pc + 1;
             case "halve-strlen": // 0x1a6: strlen(native encoded bytes) >> 1
-                Write(a[0], NativeStringByteLength(ReadStr(a[1])) >> 1);
+            {
+                string text = ReadStr(a[1]);
+                Write(a[0], PresentedLength(a[1], text, pc, TextLengthKind.Halved)
+                            ?? NativeStringByteLength(text) >> 1);
                 return pc + 1;
+            }
             case "edit-fullwidth-string-dialog": // 0x144: blocking AGERc command-10 editor
             {
                 string current = ReadStr(a[0]);
@@ -71,8 +82,12 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             }
             case "cp932-character-length": // 0x2c6: Japanese-locale _mbstrlen
-                Write(a[0], Cp932Text.CharacterLength(ReadStr(a[1]), _nativeStringEncoding));
+            {
+                string text = ReadStr(a[1]);
+                Write(a[0], PresentedLength(a[1], text, pc, TextLengthKind.Characters)
+                            ?? Cp932Text.CharacterLength(text, _nativeStringEncoding));
                 return pc + 1;
+            }
             case "cp932-substring": // 0x2c8: multibyte-character interval [start,start+count)
                 WriteStr(a[0], Cp932Text.Substring(
                     ReadStr(a[1]),
