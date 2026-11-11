@@ -22,10 +22,12 @@ public sealed class ModPackage : IDisposable
     public string Location => Container.Location;
     public string Id => Manifest.Id;
 
-    /// <summary>Whether the package only presents text (localization spec §8, save stamps): it changes no script or
-    /// asset, and carries text, fonts or a language. Adding or removing it is reported as presentation only.</summary>
+    /// <summary>Whether the package only presents (localization spec §8, save stamps): it changes no script or plain
+    /// asset, and carries text, fonts, language assets or a language. Adding or removing it is reported as presentation
+    /// only.</summary>
     public bool PresentationOnly => Layout.ChangesNoContent
-                                    && (Layout.Text.Count > 0 || Layout.Fonts.Count > 0 || Manifest.Languages.Count > 0);
+                                    && (Layout.Text.Count > 0 || Layout.Fonts.Count > 0 || Layout.LanguageAssets.Count > 0
+                                        || Manifest.Languages.Count > 0);
 
     private ModPackage(IPackageContainer container, ModManifest manifest, ModLayout layout, string hash)
     {

@@ -28,6 +28,7 @@ public partial class Main : Godot.Control
     private SelectedGameProfile _selectedProfile = null!;
     private ResolvedGamePersistence _profilePersistence = null!;
     private IAssetStore _assetStore = null!;
+    private LanguageAssetStore? _languageAssets;
     private Label _status = null!;
     private Label _fpsHud = null!;
     private double _fpsHudUpdateSeconds;
@@ -145,6 +146,22 @@ public partial class Main : Godot.Control
                 _catalog = catalog;
                 _assetStore = new Sys4AssetStore(catalog, gameRoot.Root,
                     [_modLayer.LooseRoot, .. assetOptions.LooseRoots]);
+                // Localization spec §12: the stack's language assets stand above its loose files while their
+                // language is selected.
+                if (_modLayer.LanguageAssets is { Count: > 0 } languageAssets)
+                {
+                    _languageAssets = new LanguageAssetStore(_assetStore, languageAssets);
+                    _assetStore = _languageAssets;
+                    GD.Print($"[assets] language assets for {languageAssets.Count} names in "
+                             + string.Join(", ", languageAssets.Languages));
+                    // The first read of each language file, so a modder sees which version the game loaded.
+                    var served = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>(
+                        System.StringComparer.OrdinalIgnoreCase);
+                    _languageAssets.Served += (entry, path) =>
+                    {
+                        if (served.TryAdd(path, 0)) GD.Print($"[assets] {entry.Name}: {path}");
+                    };
+                }
             }
         }
         catch (System.Exception error) when (

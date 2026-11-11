@@ -481,7 +481,7 @@ public sealed class LanguagePackageTests : IDisposable
         Assert.True(Ome.Mods.Tools.OmpCommands.Export(SyntheticBase(), null, [folder], output, console) == 0,
                     console.ToString());
         Assert.Empty(Directory.GetFiles(output));
-        Assert.Contains("note: text/, fonts/ and [[language]] of shell.de are not exported", console.ToString());
+        Assert.Contains("note: text/, fonts/, assets/<language>/ and [[language]] of shell.de are not exported", console.ToString());
     }
 
     [Fact]

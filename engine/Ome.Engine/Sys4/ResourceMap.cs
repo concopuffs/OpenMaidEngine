@@ -42,9 +42,13 @@ public sealed class ResourceMap
     public AssetEntry? ResolveMovie(long resourceId)
         => ResolveTypedPacked(resourceId, "movie", "an AGF/MPG record", IsMovie);
 
-    /// <summary>Decode an AGF directly from loose-first VFS bytes.</summary>
+    /// <summary>Decode an AGF directly from loose-first VFS bytes, or the PNG a language package supplied for it
+    /// (localization spec §12).</summary>
     public RgbaImage DecodeTexture(AssetEntry entry)
-        => AgfDecoder.Decode(_store, entry, _allowBmpAsAgf);
+    {
+        (byte[] bytes, bool png) = _store.ReadImage(entry);
+        return png ? PngDecoder.Decode(bytes, entry.Name) : AgfDecoder.Decode(bytes, entry.Name, _allowBmpAsAgf);
+    }
 
     /// <summary>Resolve a native packed raw id to one of AGE's Windows cursor resources.</summary>
     public AssetEntry? ResolveCursor(long resourceId)

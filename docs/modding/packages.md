@@ -14,7 +14,7 @@ An Open Maid Pack (OMP) is one mod. It comes in two forms that load identically:
 ├── patches/        fragments (NAME.oms) and compiled plans (NAME.omspatch.json)
 ├── scripts/        new scripts (NAME.oms), one per [scripts].names entry
 ├── replace/        whole-script replacements (SCRIPT.BIN)
-├── assets/         asset overrides by original name, and new assets
+├── assets/         asset overrides by original name, and new assets; assets/<language>/ (format version 2; languages.md)
 ├── text/           translation catalogs, text/<language>/*.toml (format version 2; languages.md)
 ├── fonts/          font files a language uses (format version 2; languages.md)
 ├── README.md       optional
@@ -69,9 +69,9 @@ tag = "en"
 
 Unknown keys are errors, so a misspelled setting cannot be silently ignored.
 
-**Format versions.** `omp = 2` adds the `[[language]]` table and the `text/` and `fonts/` folders, and lets a
-package leave out `[game]` (below); everything else is as in version 1, which a version 2 loader still reads. A
-version 1 package with any of the three, or without `[game]`, is an error.
+**Format versions.** `omp = 2` adds the `[[language]]` table, the `text/` and `fonts/` folders and language assets
+in `assets/<language>/`, and lets a package leave out `[game]` (below); everything else is as in version 1, which a
+version 2 loader still reads. A version 1 package with any of these, or without `[game]`, is an error.
 
 ### Identity
 
@@ -167,12 +167,15 @@ landing on the wrong instructions.
   mods override one asset, the last in load order wins, and the link report says so.
 - A file with a name the game does not have is a **new asset**. List it in `[assets].names`. It becomes a record of
   the mod's append catalog, and scripts reach it with `asset "NAME"` (`new-scenes.md`).
+- `assets/<language>/NAME` (format version 2) is a **language asset**: it replaces `NAME` only while that language is
+  selected, in the port only. A `.png` there stands for the `.AGF` of the same name. Plain `assets/` holds no PNG,
+  because native AGE reads only AGF. See [languages.md](languages.md), "Images and other assets".
 
 ### Text and fonts: `text/`, `fonts/`
 
 `text/<language>/` holds translation catalogs and `fonts/` the font files a `[[language]]` table names. They change
 no script or asset: the port presents the game's text through them as it is drawn. A package that holds nothing
-else is presentation only, which its save stamps record. See [languages.md](languages.md).
+else, or language assets besides, is presentation only, which its save stamps record. See [languages.md](languages.md).
 
 ## Limits
 

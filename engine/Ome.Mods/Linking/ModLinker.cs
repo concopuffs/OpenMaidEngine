@@ -33,6 +33,10 @@ public sealed record ModLinkResult(
     public bool Succeeded => !Report.Stops;
     public IReadOnlyList<LinkedCatalog> Catalogs { get; init; } = [];
     public IReadOnlyDictionary<string, LinkedAsset> Assets { get; init; } = new Dictionary<string, LinkedAsset>();
+    /// <summary>The language assets (localization spec §12), by catalog name: every package with a file for the name,
+    /// in load order.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<LinkedLanguageAssetLayer>> LanguageAssets { get; init; }
+        = new Dictionary<string, IReadOnlyList<LinkedLanguageAssetLayer>>();
     public LinkedText Text { get; init; } = LinkedText.None;
     public SelectorStore Selectors { get; init; } = new();
 }
@@ -200,9 +204,10 @@ public static class ModLinker
                 };
             }
         LinkedText text = ModTextLinker.Link(order, linkBase, scripts, report);
+        var languageAssets = ModLanguageAssetLinker.Link(order, linkBase, allocated, report);
         return new ModLinkResult(order, scripts, report)
         {
-            Catalogs = catalogs, Assets = assets, Text = text, Selectors = selectors,
+            Catalogs = catalogs, Assets = assets, LanguageAssets = languageAssets, Text = text, Selectors = selectors,
         };
     }
 

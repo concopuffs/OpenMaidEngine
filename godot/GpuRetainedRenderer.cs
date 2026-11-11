@@ -252,6 +252,21 @@ internal sealed class GpuRetainedRenderer : IDisposable
         new Vector2((float)value.YX, (float)value.YY),
         new Vector2((float)value.TX, (float)value.TY));
 
+    /// <summary>Drops the uploads of static assets, so the next frame uploads what the asset store serves now: a
+    /// language switch changes which file an asset id stands for (localization spec §12). A sprite that still shows
+    /// one keeps its own reference until it is drawn again.</summary>
+    public void ForgetStaticTextures()
+    {
+        var keys = new List<(int AssetId, long ColorKey, long DynamicKey)>();
+        foreach (var key in _textures.Keys)
+            if (key.DynamicKey == 0) keys.Add(key);
+        foreach (var key in keys)
+        {
+            _textures[key].Texture.Dispose();
+            _textures.Remove(key);
+        }
+    }
+
     public void Dispose()
     {
         _stage.Visible = false;

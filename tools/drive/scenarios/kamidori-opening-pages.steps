@@ -1,0 +1,26 @@
+# Kamidori's opening, page by page, for the localization run comparison (gate 11; localization spec §18.1,
+# docs/localization-import-test.md). The steps click from page to page and never wait on an offset, so they run
+# unchanged on the translated install, whose scripts carry extra instructions, and on the clean one. Run them on the
+# port once per install with a page map each, on a fresh sandbox, then compare the maps:
+#   run A, translated, no catalog:
+#     py -3.11 -X utf8 tools/drive.py --profile kamidori --game-root ../Kamidori_Translated port start
+#       --port-arg=--overlay-root --port-arg=<Kamidori_Translated\patch> --port-arg=--allow-bmp-as-agf
+#       --port-arg=--page-map --port-arg=<A.jsonl>
+#   run B, clean, with the imported catalog:
+#     py -3.11 -X utf8 tools/drive.py --profile kamidori port start --mod <catalog package>
+#       --port-arg=--language --port-arg=en --port-arg=--page-map --port-arg=<B.jsonl>
+#   each: py -3.11 -X utf8 tools/drive.py --profile kamidori port run tools/drive/scenarios/kamidori-opening-pages.steps
+#   then: py -3.11 -X utf8 tools/page_map_compare.py <A.jsonl> <B.jsonl>
+# The page clicks run until the first stage's field (FIELD), through SC0000's prologue and chapter movie.
+
+rand-seed 13
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+click newgame.begin
+wait-state script=SC0000 timeout=60
+wait-state script=FIELD click=adv.next every=2.5 timeout=1200
+wait 3
+shot kamidori-opening-pages-field

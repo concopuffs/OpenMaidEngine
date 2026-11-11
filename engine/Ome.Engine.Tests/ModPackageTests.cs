@@ -248,7 +248,7 @@ public sealed class ModPackageTests : IDisposable
     [InlineData("assets/DBLEXP_ICON.AGF", null, "'DBLEXP_ICON.AGF' has no assets/DBLEXP_ICON.AGF")]
     [InlineData("replace/SC0010.BIN", null, "the package has no replace/SC0010.BIN")]
     [InlineData("patches/award.txt", "x", "patches/ holds only")]
-    [InlineData("assets/sub/X.AGF", "x", "without subdirectories")]
+    [InlineData("assets/sub/X.AGF", "x", "assets/ holds files by basename")]
     [InlineData("manifest.toml", null, "no manifest.toml at the package root")]
     public void LayoutProblemsAreRejectedWithTheirReason(string path, string? text, string reason)
     {

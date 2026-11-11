@@ -5,6 +5,10 @@ public interface IAssetStore
 {
     Stream Open(AssetEntry entry);
     byte[] ReadAll(AssetEntry entry);
+
+    /// <summary>An image record's bytes, and whether they are a PNG that a language package supplied for it
+    /// (localization spec §12; <see cref="LanguageAssetStore"/>). Every other image goes to the AGF decoder.</summary>
+    (byte[] Bytes, bool Png) ReadImage(AssetEntry entry) => (ReadAll(entry), false);
 }
 
 /// <summary>Reports only successful catalog opens, matching AGE's profile unlock marker timing.</summary>
@@ -34,6 +38,13 @@ public sealed class CatalogTrackingAssetStore : IAssetStore
         var bytes = new byte[checked((int)stream.Length)];
         stream.ReadExactly(bytes);
         return bytes;
+    }
+
+    public (byte[] Bytes, bool Png) ReadImage(AssetEntry entry)
+    {
+        (byte[] Bytes, bool Png) image = _inner.ReadImage(entry);
+        _opened(entry);
+        return image;
     }
 }
 

@@ -93,6 +93,7 @@ public partial class Main
         }
         foreach (string line in report.Lines()) GD.Print($"[text] {line}");
         ApplyEngineText(language, selection, startup);
+        SelectLanguageAssets(selection, startup);
         TextPresenter? presenter = selection.Presenter;
         // The host switches rasterizer before the VM presents, and keeps the Unicode one for any presented run.
         _host.UsePresentedFonts(presenter?.Language);
@@ -120,6 +121,22 @@ public partial class Main
         if (selection.Engine.Count > 0)
             GD.Print($"[text] {language}: the shell's text comes from {string.Join(", ",
                 System.Linq.Enumerable.Select(selection.Engine, layer => layer.Language))} before its own tables");
+    }
+
+    /// <summary>The language assets of the selection's chain (spec §12). A switch takes effect when an asset is next
+    /// loaded, so the host drops what it decoded and the renderer what it uploaded.</summary>
+    private void SelectLanguageAssets(LanguageSelection selection, bool startup)
+    {
+        if (_languageAssets == null) return;
+        _languageAssets.Select(selection.Lookup);
+        if (!startup)
+        {
+            _host?.ForgetDecodedImages();
+            _gpuRenderer?.ForgetStaticTextures();
+        }
+        var languages = new System.Collections.Generic.HashSet<string>(_languageAssets.Table.Languages);
+        string[] used = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Where(selection.Lookup, languages.Contains));
+        if (used.Length > 0) GD.Print($"[assets] {selection.Tag}: language assets from {string.Join(", ", used)}");
     }
 
     /// <summary>Writes the miss log when it changed, every <see cref="TextMissFlushSeconds"/> and at shutdown.</summary>

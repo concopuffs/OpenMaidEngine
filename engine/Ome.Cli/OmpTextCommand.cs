@@ -25,6 +25,7 @@ internal static partial class OmpTextCommand
             "import-scripts" => ImportScripts(args, baseRoot, baseCatalog, table),
             "extract" => Extract(args, baseRoot, baseCatalog, table, profileId),
             "check" or "stats" => CheckOrStats(verb == "stats", args, baseRoot, baseCatalog, table, profileId),
+            "po-export" or "po-import" => Po(verb == "po-export", args),
             _ => Usage(),
         };
     }
@@ -36,7 +37,31 @@ internal static partial class OmpTextCommand
         Console.Error.WriteLine("       omp text stats [--mod PATH ...] [--data-root DIR] [--text-root DIR] [--language TAG] [--scripts]");
         Console.Error.WriteLine("       omp text import-scripts --from GAME_ROOT [--overlay-root DIR] [--allow-bmp-as-agf] "
                                 + "--output DIR [--language TAG] [--verify] [--compare-archives]");
+        Console.Error.WriteLine("       omp text po-export --language TAG (--package DIR | --text-root DIR) --output FILE.po");
+        Console.Error.WriteLine("       omp text po-import --language TAG (--package DIR | --text-root DIR) --input FILE.po");
         return 2;
+    }
+
+    /// <summary><c>po-export</c> and <c>po-import</c>: a language's catalogs, in a package (<c>DIR/text/TAG/</c>) or a
+    /// text root (<c>DIR/TAG/</c>), to and from gettext PO.</summary>
+    private static int Po(bool export, string[] args)
+    {
+        string? language = Option(args, "--language");
+        string? package = Option(args, "--package"), textRoot = Option(args, "--text-root");
+        string? file = Option(args, export ? "--output" : "--input");
+        if (language == null || file == null || (package == null) == (textRoot == null)) return Usage();
+        if (!LanguageTag().IsMatch(language) || language == Ome.Engine.Localization.LanguageTag.Source)
+        {
+            Console.Error.WriteLine($"error: --language '{language}' is not a lowercase BCP 47 tag other than the source's, "
+                                    + "such as en or pt-br");
+            return 2;
+        }
+        string folder = package != null
+            ? Path.Combine(Path.GetFullPath(package), "text", language)
+            : Path.Combine(Path.GetFullPath(textRoot!), language);
+        return export
+            ? Ome.Mods.Tools.TextPoCommands.Export(folder, language, file, Console.Out, EngineKeys)
+            : Ome.Mods.Tools.TextPoCommands.Import(folder, language, Path.GetFullPath(file), Console.Out, EngineKeys);
     }
 
     /// <summary>The shell's tables, for engine entries (localization spec §11).</summary>

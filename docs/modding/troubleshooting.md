@@ -107,7 +107,30 @@ declare the language with a `[[language]]` table. A package that only adds text 
 needs that other package enabled ([languages.md](languages.md)).
 
 **"[[language]] needs omp = 2" or "text/ needs omp = 2".** Language tables and the `text/` and `fonts/` folders are
-format version 2. Set `omp = 2` in the manifest.
+format version 2. Set `omp = 2` in the manifest. So are language assets: "language assets (assets/<language>/NAME)
+need omp = 2".
+
+**"assets/fr/ holds language assets for 'fr', which no package in the stack defines".** As for `text/`: enable the
+package with the `[[language]]` table, or add one.
+
+**"a PNG stands for an image only in assets/<language>/".** Plain `assets/` is what native AGE reads, so it takes the
+game's own formats. Put the PNG in a language folder, or convert it to AGF.
+
+**"neither the base nor this package's [assets].names has an asset NAME".** A language asset replaces an asset the
+game has, or one the same package adds. Check the name; for a PNG, the game's name with `.AGF` replaced by `.png`.
+
+**"NAME's asset hides OTHER's en asset".** A package later in load order replaces the asset for every language, so
+the earlier package's language version never shows. Ship an `en` version in the later package or in one that loads
+after it, or change the load order.
+
+**A translated picture does not change.** Check the log: the port prints an `[assets]` line with the file the
+first time it reads each language asset. With no line, the name or the language is not the one the game uses;
+`omp explain NAME` shows which version wins. After a language switch, a picture the game copied into another one
+changes only when the game loads it again: go back to the title, or restart.
+
+**`po-import` writes nothing.** A translation that names a placeholder its source does not define, or an engine
+value its key does not take, stops the import; each problem is listed with its file and line. Fix them in the PO
+file and import again.
 
 **A line stays Japanese.** Run with `--text-log`: if the line is in `diagnostics/text-misses.jsonl`, its `source` is
 the exact key the catalog needs, and `script` and `at` the site that drew it. If the catalog has that source:

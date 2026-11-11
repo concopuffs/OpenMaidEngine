@@ -3,8 +3,8 @@
 Results of the import test in the localization design (`superpowers/specs/2026-11-10-localization-design.md`
 §18.1): converting an install whose scripts were translated in place into a text catalog, and checking what the
 catalog carries. The design stays in the spec; this page holds the test's results and the importer's rules, so the
-spec can be revised against them. Gate 10 (half 1) ran on 2026-11-10 for milestone 0. Gate 11 (half 2) belongs to
-milestone 6 and has not run.
+spec can be revised against them. Gate 10 (half 1) ran on 2026-11-10 for milestone 0. Gate 11 (half 2) ran on
+2026-11-11 for milestone 6.
 
 **Status: reviewed, and the review's changes are in (2026-11-10).** Milestone 0's numbers were reviewed before
 milestone 1, as spec §19 asks. The review found one loss (line structure), and the user accepted three design
@@ -203,18 +203,50 @@ and `ComposedStrings.cs` (rule 7).
    the nearest earlier store into that cell in the same block, or the line it was folded into. With no such store
    the text is reported as not carried.
 
-## Gate 11 (milestone 6)
+## Gate 11 results (2026-11-11)
 
-Not run. Run A (the translated install) and run B (the clean install with this catalog) are expected to differ on
+**How it ran.** The port drove both installs over the same steps, `tools/drive/scenarios/kamidori-opening-pages.steps`
+with `rand-seed 13`: the title, a new game, then a page click every 2.5 s through SC0000's opening until the first
+stage's field (FIELD). The steps wait on scripts, never on offsets, so they run unchanged on the translated scripts.
+
+- Run A: `Kamidori_Translated/` with `--overlay-root patch --allow-bmp-as-agf`, no catalog.
+- Run B: `Kamidori/` with this catalog as a local package (`build/games/kamidori/import-en-mod`, local only) and
+  `--language en`.
+
+Each run wrote its page map with `--page-map`, and `tools/page_map_compare.py A.jsonl B.jsonl` compared them (usage
+in `tools-reference.md`, "Runtime page locator"). Each run took about 6.5 minutes and reached the field after 151
+clicks.
+
+| Check | Result |
+|---|---|
+| Pages | 143 in each run, in the same order. The wait offsets differ, as expected |
+| Same text on every page (required) | **143 of 143.** Run A's text with its wraps joined equals run B's presented text once whitespace is collapsed |
+| Run B left in Japanese | none: every page presents English, speaker names included |
+| Line breaks (reviewed) | run A has 64 wraps and 93 deliberate breaks by the box's real right edge, most of the deliberate ones between a name plate and its line. 12 pages break where the catalog has a wrap: see below |
+| Wrapping (reviewed) | 1 page of run B stops a presented run at its layout's bottom: page 2 (`SC0000@0xd5a`), the narration. The translators broke it into two lines; the port's presented font wraps it into more rows than the narration window holds |
+| Damaged strings, untranslated stored strings, `SC2310@0x1232` | not reached by the opening |
+
+**The real edge does not find the translators' wraps.** The spec expected the real right edge to classify run A's
+breaks without an estimate. On these pages it is the wrong model: the translators kept every line to 64 half cells,
+and the box takes at least 67. On the 12 pages, the line, a space and the next word come to 65 to 67 half cells, so
+the word would have fitted and the page map calls the break deliberate. Every one of them breaks a sentence in the
+middle. The importer's edge, the width 99% of a script's lines fit, calls them wraps, and the catalog joins them,
+which is right. So the page map's wrap class is a lower bound for an install wrapped by hand, and gate 11 needs only
+the comparison that ignores line breaks.
+
+**Saves** were not compared again: gate 2 already holds for run B's catalog (milestone 3).
+
+### Expected differences
+
+Run A (the translated install) and run B (the clean install with this catalog) are expected to differ on
 pages that draw:
 
 - strings damaged in the translated install, which run B shows in full Japanese;
 - the 635 stored strings run B translates and run A does not;
 - `SC2310@0x1232`, unless the decoder gap is fixed first.
 
-The gate needs a rule for these known differences. The review answered finding 2, so table rows are no longer among
-them, provided the engine records each store (R2). Gate 11 compares with wraps ignored and deliberate breaks kept,
-and it can classify run A's breaks with the layout's real right edge, which the port knows at run time (R1).
+Pages that draw them fail the required check and are reviewed against this list; the opening draws none. The review
+answered finding 2, so table rows are no longer among them, provided the engine records each store (R2).
 
 ## Review answers (2026-11-10)
 

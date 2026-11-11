@@ -1,11 +1,12 @@
 # Language packages
 
-A language package presents a game's text in another language. It changes no script and no asset. The scripts keep
-running on their own text, and the port translates each string as it is drawn. Saves, history and read flags
-therefore stay those of the original game, and a save made in one language loads in any other.
+A language package presents a game's text in another language. It changes no script, and no asset outside the
+language it gives versions for. The scripts keep running on their own text, and the port translates each string as it
+is drawn. Saves, history and read flags therefore stay those of the original game, and a save made in one language
+loads in any other.
 
 Language packages run in the port only. Native AGE draws the text its scripts hold, so `omp export` leaves a
-package's text out (with a note).
+package's text and language assets out (with a note).
 
 ## Layout
 
@@ -17,7 +18,9 @@ folders:
 ├── manifest.toml        omp = 2, with a [[language]] table
 ├── text/
 │   └── <tag>/           catalogs (*.toml), in subfolders if you like
-└── fonts/               font files the language uses (optional)
+├── fonts/               font files the language uses (optional)
+└── assets/
+    └── <tag>/           images and sounds shown only in that language (optional)
 ```
 
 `<tag>` is a lowercase BCP 47 language tag: `en`, `pt-br`, `zh-hant`. Catalog file names are free. Within a
@@ -205,6 +208,29 @@ lack falls back to the next font, then to the system's.
 - A bundled font draws at its own weight; the port does not embolden it.
 - `omp text check` lists the characters of the translations that no bundled font of a table covers.
 
+## Images and other assets
+
+Text drawn into a picture (a title logo, a menu button, a map label) is not text the port can translate. Give the
+picture a language version instead: put the file in `assets/<tag>/` under the name the game asks for, and it replaces
+that asset while the language, or one that falls back to it, is selected.
+
+```text
+<mod>/assets/en/SO001.png      an image: PNG stands for SO001.AGF
+<mod>/assets/en/VC0001.OGG     any other asset under its own name
+```
+
+- A `.png` file stands for the `.AGF` of the same name. Use PNG for edited images: any colour type and depth, with
+  transparency. Any other file keeps its name and is read as the game reads that asset.
+- The name must be an asset of the base game, or one your package adds in `[assets].names`. A script cannot have a
+  language version: its text goes in `text/`.
+- The language must be one some package in the stack defines with `[[language]]`.
+- Load order decides between packages. Inside one package, its language version wins over its own plain asset in
+  `assets/`. A later package's plain asset wins over an earlier package's language version, and `omp check` lists
+  that: ship a version for the language in the later package, or in one that loads after it.
+- A language switch shows a picture the game draws from its file at once. A picture the game copied into another
+  one changes when the game next loads it, which a restart always does.
+- `omp explain NAME` shows which language versions an asset has and which one wins.
+
 ## Engine text
 
 The port's own text has keys: the menu bar and its strip, the settings panel, the quit dialog, the folder picker,
@@ -262,17 +288,43 @@ that language and the game's text stays as the game has it.
 | `omp text extract --language TAG --output DIR` | writes or updates the templates in `DIR/text/TAG/`, with `_engine.toml` for a language the engine has no table for |
 | `omp text check [--mod PATH …] [--data-root DIR] [--text-root DIR] [--language TAG] [--no-scripts]` | links the packages and validates their catalogs; exits non-zero on an error |
 | `omp text stats [--mod PATH …] [--data-root DIR] [--text-root DIR] [--language TAG] [--scripts]` | counts the translated messages, strings and composed strings, per script with `--scripts` |
+| `omp text po-export --language TAG (--package DIR \| --text-root DIR) --output FILE.po` | writes the language's catalogs as one gettext PO file |
+| `omp text po-import --language TAG (--package DIR \| --text-root DIR) --input FILE.po` | puts the PO file's translations back into the catalogs |
 
 `check` reports errors (a file that does not read, two patterns that can match one string, too many entries, a stack
 that does not link, an engine entry with a value its key does not take) and warnings (entries whose source no
 installed script draws or stores where their scope reaches, site entries that do not bind, characters no bundled font
 covers, engine keys the engine does not have). Full options are in [cli.md](cli.md).
 
+### Working in PO
+
+Translation tools such as Poedit, Weblate and Lokalize read gettext PO. `po-export` writes one PO file of a
+language's catalogs, and `po-import` puts what the translators wrote back into them. The catalogs stay the source:
+import changes only each entry's `text`, keeps every other key and the files' header comments, and rewrites only the
+files whose entries changed.
+
+- Each catalog entry is one message. Its `msgctxt` is its scope: none at global scope, the script name at script
+  scope (`SC0100`), and the script and offset at a site (`SC0100@0x2a43`). An engine entry's context is `engine:` and
+  its key, and its `msgid` is the engine's Japanese.
+- A comment on each message gives the entry's `note` and the file and line it came from. A template exports with an
+  empty `msgstr`, an obsolete entry as an obsolete message (`#~`).
+- Import skips empty, fuzzy and obsolete messages and warns about messages no entry has. If a translation does not
+  fit its entry (a placeholder the source does not have, or a value an engine key does not take), it writes nothing
+  and lists each problem.
+- PO cannot tell an empty translation from a missing one. An entry translated as empty text (`text = ""`) exports
+  with an empty `msgstr` and a comment saying so; import leaves it as it is.
+- gettext's `msgfmt` refuses a message whose source and translation do not both start, or both end, with a line
+  break. The port does not mind; a catalog imported from a translated install can hold such messages.
+
 ## Saves
 
-A package that holds only `text/`, `fonts/` and `[[language]]` changes nothing a save records. Its save stamp marks
-it, and adding, removing or updating it is reported as "(presentation only)". A save made with any language loads
-with any other, or with none.
+A package that holds only `text/`, `fonts/`, `assets/<tag>/` and `[[language]]` changes no script, table or asset a
+save depends on. Its save stamp marks it, and adding, removing or updating it is reported as "(presentation only)".
+A save made with any language loads with any other, or with none.
+
+What the scripts compute from a measured length is saved as computed: with `measure = "presented"`, a name plate
+sized from a translated name is saved at that size. `measure = "source"` keeps a save the same as the original
+game's.
 
 ## Testing without a package
 
@@ -284,7 +336,6 @@ text that bypasses translation and layouts that cannot take longer text.
 ## Not yet
 
 - `align`, `fit` and overflow reports;
-- language-specific assets (`assets/<tag>/`) and PO import and export;
 - shaping and right-to-left scripts (Arabic, Hebrew, Thai, the Indic scripts).
 
 The design behind this page is `../superpowers/specs/2026-11-10-localization-design.md`; the open items are in

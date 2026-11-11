@@ -219,8 +219,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       separately navigable render, transition, diagnostic, and persistence contracts
     │   ├── Ome.Engine/Sys4/                 runtime game-root selection, catalog/parser and structured opcode-
     │                                       decode failures, loose-first bounded ALF asset store, script provider,
-    │                                       explicit overlay/codec launch policy, AGF/LZSS/BMP and Windows CUR
-    │                                       decoders, and resource facade
+    │                                       explicit overlay/codec launch policy, AGF/LZSS/BMP/PNG and Windows CUR
+    │                                       decoders, the language-asset store, and resource facade
     │   ├── Ome.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
     │                                       compositor/layout, retained live/History glyph and wait-atlas
     │                                       publication, and bounded font/glyph cache primitives
@@ -249,13 +249,14 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       on Tomlyn plus semantic versions and ranges (Manifest/), and the linker:
     │                                       stack resolution and load order, replacements, plan composition, the
     │                                       spec §7 report, selector allocation, per-mod append catalogs, asset
-    │                                       overrides, the stack's text, fonts and languages, offset tables for
-    │                                       patched scripts and the link cache (Linking/), startup discovery, flags
+    │                                       overrides, the stack's text, fonts, languages and language assets, offset
+    │                                       tables for patched scripts and the link cache (Linking/), startup discovery, flags
     │                                       and save stamps (Launch/), and the omp and omp text commands (Tools/);
     │                                       the localization catalog file reader and writer, the text source loader
     │                                       and site binder, the script message index, the installed-script text
-    │                                       scanner, the template extractor and the font cmap reader
-    │                                       (Localization/) and `omp text import-scripts` (Localization/Import/); referenced by
+    │                                       scanner, the template extractor, the font cmap reader and the gettext
+    │                                       PO reader and writer (Localization/) and `omp text import-scripts`
+    │                                       (Localization/Import/); referenced by
     │                                       Ome.Cli, the Godot port (godot/Main.Mods.cs) and the tests
     │   ├── Ome.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,
@@ -471,7 +472,8 @@ show-and-clear opcode dispatch; shared diagnostic state and native-context forma
 delay opcode dispatch; reset/default initialization, public menu-state accessors, and host state remain centralized.
 
 The disposable `build/games/<profile>/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs
-and map runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`. Packaged exports
+and map runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`, and hold each
+page's text for `tools/page_map_compare.py` (localization gate 11). Packaged exports
 have no repository output tree and write their automatic maps below
 `user://games/<profile-id>/diagnostics/page-maps` instead.
 

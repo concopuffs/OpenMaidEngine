@@ -229,9 +229,15 @@ public sealed partial class GodotAdvHost
     public AdvTextSourceLayout? LayoutHiddenTextRun(AdvTextLayoutPresentationBinding binding, AdvLiveTextRun run)
     {
         Captured.Add((run.SourceOffset, run.Text));
-        _locator.Text(run.SourceOffset, run.Text);
-        if (run.Layout.Width <= 0 || run.Layout.Height <= 0) return null;
+        // A hidden run draws nothing: its message's first run drew the presented text.
+        if (run.Layout.Width <= 0 || run.Layout.Height <= 0)
+        {
+            _locator.Text(run.SourceOffset, run.Text, "", null);
+            return null;
+        }
+        _runGeometry = null;
         AdvTextSourceLayout source = LayoutSourceText(binding, run, out IReadOnlyList<AdvRetainedGlyphRecord> glyphs);
+        _locator.Text(run.SourceOffset, run.Text, "", _runGeometry);
         if (binding.LayoutSlot <= 0 || binding.LayoutSlot != run.Layout.Slot || binding.SourceSurfaceSlot < 0
             || binding.FirstObjectHandle < 0 || binding.ObjectCapacity <= 0)
             return source;
@@ -287,7 +293,30 @@ public sealed partial class GodotAdvHost
             : [];
         glyphs = OrderedGlyphs(laid, ruby, byRow: !string.IsNullOrEmpty(run.SourceRuby) && laid.Rows.Count > 0)
             .Select(item => item.Record).ToArray();
+        _runGeometry = PageGeometry(run, laid, text, realization);
         return new AdvTextSourceLayout(laid.Rows, ruby, laid.CursorX, laid.CursorY);
+    }
+
+    /// <summary>The page map's view of the run being shown (<see cref="PageLocatorState"/>): its source layout's
+    /// geometry, set by the pass that laid the source text out, and whether the drawn run stopped at its layout's
+    /// bottom. The VM thread sets and reads them around one run.</summary>
+    private PageTextGeometry? _runGeometry;
+    private bool _runCut;
+
+    /// <summary>The page map's geometry of <paramref name="run"/>'s source text laid out as <paramref name="laid"/>
+    /// with <paramref name="text"/>'s rasterizer; null unless the locator writes a map.</summary>
+    private PageTextGeometry? PageGeometry(AdvLiveTextRun run, GlyphTextLayoutResult laid, TextPipeline text,
+                                           AspectFontRealization? realization)
+    {
+        if (!_locator.WritesMap || laid.Rows.Count == 0) return null;
+        int space = text.Layout.Render(
+            null,
+            new GlyphTextLayoutOptions(0, 0, 0, int.MaxValue, int.MaxValue, WrapHorizontally: false, run.Style,
+                                       FontRealization: realization),
+            ImmediateSurfaceTextRenderer.CreateRequests(" ", run.Style, text.Policy, _textAntialias, realization)).CursorX;
+        int height = run.Style.PrimaryFontSize > 0 ? run.Style.PrimaryFontSize : laid.Rows[0].Bottom - laid.Rows[0].Top;
+        return PageTextGeometry.Measure(run.Text, laid.Rows, laid.Records, run.Layout.Slot, run.Layout.Right,
+                                        height + run.Style.LineSpacing, space);
     }
 
     /// <summary>A run's records in AGE's drawing order: with ruby (<paramref name="byRow"/>), op 0x196's ruby follows
@@ -321,13 +350,16 @@ public sealed partial class GodotAdvHost
             || binding.ObjectCapacity <= 0)
             throw new InvalidOperationException(
                 $"ADV layout {run.Layout.Slot} has no retained presentation binding.");
+        _runGeometry = null;
+        _runCut = false;
         PrepareRetainedTextRun(
             gfx, binding, run,
             out RetainedAdvTextLayoutPresentation? presentation,
             out AdvRetainedTextRunResult result);
 
         Captured.Add((run.SourceOffset, run.Text));
-        _locator.Text(run.SourceOffset, run.Text);
+        _locator.Text(run.SourceOffset, run.Text, PresentsText ? run.Presented?.Text ?? run.Text : null, _runGeometry,
+                      _runCut);
         int delay = System.Math.Max(0, glyphDelayMilliseconds);
         int revealGlyphCount = System.Math.Max(
             0, System.Math.Min(
@@ -521,6 +553,11 @@ public sealed partial class GodotAdvHost
                                           || !ReferenceEquals(text, _sourceText))
             ? LayoutSourceText(binding, run, out sourceGlyphs)
             : null;
+        if (!history)
+        {
+            if (source == null) _runGeometry = PageGeometry(run, rendered, text, realization);
+            _runCut = rendered.StoppedOnVerticalOverflow;
+        }
 
         _timeline?.Event("adv-text-layout-result", new()
         {

@@ -24,6 +24,11 @@ public sealed record ModTextFile(string Language, string Name, PackageEntry File
 /// <summary>A font file under <c>fonts/</c> (localization spec §9.1), named by its basename.</summary>
 public sealed record ModFontFile(string Name, PackageEntry File);
 
+/// <summary>A language asset (localization spec §12): <c>assets/&lt;language&gt;/NAME</c>, which overrides the asset
+/// <see cref="Name"/> while that language, or one that falls back to it, is selected. A <c>NAME.png</c> stands for the
+/// image <c>NAME.AGF</c> (<see cref="Png"/>).</summary>
+public sealed record ModLanguageAssetFile(string Language, string Name, PackageEntry File, bool Png);
+
 /// <summary>
 /// A package's files sorted into the content kinds of spec §3.2 and §4, and the localization spec's <c>text/</c> and
 /// <c>fonts/</c> (§9.1, format version 2). Directories are matched case-insensitively. Files outside the layout are
@@ -45,9 +50,12 @@ public sealed record ModLayout(
     public IReadOnlyList<ModTextFile> Text { get; init; } = [];
     /// <summary>The font files under <c>fonts/</c>.</summary>
     public IReadOnlyList<ModFontFile> Fonts { get; init; } = [];
+    /// <summary>The language assets under <c>assets/&lt;language&gt;/</c>, by language and then name.</summary>
+    public IReadOnlyList<ModLanguageAssetFile> LanguageAssets { get; init; } = [];
 
-    /// <summary>Whether the package changes no script or asset: it holds only <c>text/</c>, <c>fonts/</c> and
-    /// <c>[[language]]</c> tables (localization spec §8, save stamps).</summary>
+    /// <summary>Whether the package changes no script or asset: it holds only <c>text/</c>, <c>fonts/</c>,
+    /// language assets and <c>[[language]]</c> tables (localization spec §8, save stamps). A language asset changes
+    /// what is shown, not what the game stores.</summary>
     public bool ChangesNoContent => Patches.Count == 0 && Scripts.Count == 0 && Replacements.Count == 0 && Assets.Count == 0;
     private static readonly string[] Documents = ["README.md", "README.txt", "LICENSE", "LICENSE.md", "LICENSE.txt"];
 
@@ -61,6 +69,7 @@ public sealed record ModLayout(
         var notes = new List<string>();
         var text = new List<ModTextFile>();
         var fonts = new List<ModFontFile>();
+        var languageAssets = new List<ModLanguageAssetFile>();
 
         foreach (PackageEntry entry in entries)
         {
@@ -96,8 +105,15 @@ public sealed record ModLayout(
                 case "replace" when !nested && rest.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase):
                     replacements.Add(new ModReplacementFile(rest, entry));
                     break;
+                case "assets" when !nested && rest.EndsWith(PngExtension, StringComparison.OrdinalIgnoreCase):
+                    problems.Add($"'{entry.Path}': a PNG stands for an image only in assets/<language>/; a plain asset "
+                                 + "is what native AGE reads (AGF)");
+                    break;
                 case "assets" when !nested:
                     assetFiles.Add(entry);
+                    break;
+                case "assets" when manifest.OmpVersion >= ModManifest.LanguageOmpVersion && rest.Count(c => c == '/') == 1:
+                    if (LanguageAsset(entry, rest, problems) is { } languageAsset) languageAssets.Add(languageAsset);
                     break;
                 case TextFolder or FontsFolder when manifest.OmpVersion < ModManifest.LanguageOmpVersion:
                     problems.Add($"'{entry.Path}': {top.ToLowerInvariant()}/ needs omp = {ModManifest.LanguageOmpVersion}");
@@ -123,8 +139,13 @@ public sealed record ModLayout(
                 case "replace":
                     problems.Add($"'{entry.Path}': replace/ holds only whole scripts (NAME.BIN)");
                     break;
+                case "assets" when manifest.OmpVersion < ModManifest.LanguageOmpVersion:
+                    problems.Add($"'{entry.Path}': assets/ holds files by basename; language assets "
+                                 + $"(assets/<language>/NAME) need omp = {ModManifest.LanguageOmpVersion}");
+                    break;
                 case "assets":
-                    problems.Add($"'{entry.Path}': assets/ holds files by basename, without subdirectories");
+                    problems.Add($"'{entry.Path}': assets/ holds files by basename, and assets/<language>/ by basename "
+                                 + "under one language folder");
                     break;
                 default:
                     notes.Add($"'{entry.Path}' is outside the package layout and is ignored");
@@ -165,13 +186,42 @@ public sealed record ModLayout(
                     if (!fonts.Any(file => file.Name.Equals(use[LanguageFont.FontsFolder.Length..], StringComparison.OrdinalIgnoreCase)))
                         problems.Add($"{language.Origin}: '{use}' is not in the package");
 
+        foreach (var clash in languageAssets.GroupBy(file => (file.Language, Name: file.Name.ToUpperInvariant()))
+                     .Where(group => group.Count() > 1))
+            problems.Add($"{string.Join(" and ", clash.Select(file => $"'{file.File.Path}'"))} both stand for "
+                         + $"{clash.First().Name} in {clash.Key.Language}");
+
         return new ModLayout(patches, scripts, replacements, assets, notes)
         {
             Text = text.OrderBy(file => file.Language, StringComparer.Ordinal)
                 .ThenBy(file => file.Name, StringComparer.Ordinal).ToList(),
             Fonts = fonts,
+            LanguageAssets = languageAssets.OrderBy(file => file.Language, StringComparer.Ordinal)
+                .ThenBy(file => file.Name, StringComparer.OrdinalIgnoreCase).ToList(),
         };
     }
+
+    public const string PngExtension = ".png", ImageExtension = ".AGF";
+
+    /// <summary>A file under <c>assets/&lt;language&gt;/</c>, where the tag is a well-formed lowercase language other
+    /// than the source and the pseudo-language; <c>NAME.png</c> stands for <c>NAME.AGF</c>.</summary>
+    private static ModLanguageAssetFile? LanguageAsset(PackageEntry entry, string rest, List<string> problems)
+    {
+        int slash = rest.IndexOf('/');
+        string tag = rest[..slash], name = rest[(slash + 1)..];
+        if (!IsPackageLanguage(tag))
+        {
+            problems.Add($"'{entry.Path}': '{tag}' is not a lowercase language tag a package can carry assets for");
+            return null;
+        }
+        bool png = name.EndsWith(PngExtension, StringComparison.OrdinalIgnoreCase);
+        if (png) name = name[..^PngExtension.Length] + ImageExtension;
+        return new ModLanguageAssetFile(tag, name, entry, png);
+    }
+
+    private static bool IsPackageLanguage(string tag)
+        => tag == LanguageTag.Normalize(tag) && LanguageTag.IsWellFormed(tag) && tag != LanguageTag.Source
+           && tag != LanguageTag.Pseudo;
 
     /// <summary>A file under <c>text/</c>: a catalog at <c>text/&lt;tag&gt;/…/NAME.toml</c>, where the tag is a
     /// well-formed lowercase language other than the source and the pseudo-language.</summary>
@@ -185,8 +235,7 @@ public sealed record ModLayout(
             problems.Add($"'{entry.Path}': text/ holds catalogs at text/<language>/*.toml");
             return null;
         }
-        if (tag != LanguageTag.Normalize(tag) || !LanguageTag.IsWellFormed(tag) || tag == LanguageTag.Source
-            || tag == LanguageTag.Pseudo)
+        if (!IsPackageLanguage(tag))
         {
             problems.Add($"'{entry.Path}': '{tag}' is not a lowercase language tag a package can carry text for");
             return null;

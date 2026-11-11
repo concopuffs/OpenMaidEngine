@@ -379,6 +379,13 @@ public sealed partial class GodotAdvHost
         return slots.ToArray();
     }
 
+    /// <summary>Drops the decoded images, so each is read again when next drawn: after a language switch, its
+    /// language assets apply from the next load (localization spec §12).</summary>
+    public void ForgetDecodedImages()
+    {
+        lock (_imageLock) _images.Clear();
+    }
+
     // Main-thread decoder handoff. Replacing the newest frame mirrors the native texture renderer's
     // sample callback: the retained object keeps its surface binding while only the surface pixels change.
     private RgbaImage? Decode(AssetEntry asset)

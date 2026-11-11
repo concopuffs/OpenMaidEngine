@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Ome.Engine.Localization;
+using Ome.Engine.Sys4;
 using Ome.Mods.Localization;
 using Ome.Mods.Packages;
 using Ome.Script.Patch;
@@ -76,6 +77,13 @@ public sealed record LinkedLanguageEntry
     };
 }
 
+/// <summary>One package's files for a name in <c>link.json</c>'s <c>language_assets</c> (localization spec §12):
+/// whether it supplies the plain asset, and its language assets by tag, as paths under the cache directory.</summary>
+public sealed record LinkedLanguageAssetEntry(
+    [property: JsonPropertyName("mod")] string Mod,
+    [property: JsonPropertyName("plain")] bool Plain,
+    [property: JsonPropertyName("files")] IReadOnlyDictionary<string, string> Files);
+
 /// <summary>Which mods supplied a file of the linked layer (spec §6.5): for a script, the replacing mod and the
 /// patching mods; for an asset override or a catalog, its mod.</summary>
 public sealed record ModLayerSource(
@@ -100,6 +108,11 @@ public sealed record ModLinkManifest
     [JsonPropertyName("text")] public IReadOnlyList<string> Text { get; init; } = [];
     /// <summary>The bundled fonts, as paths under the cache directory.</summary>
     [JsonPropertyName("fonts")] public IReadOnlyList<string> Fonts { get; init; } = [];
+    /// <summary>The language assets (localization spec §12), by catalog name: every package with a file for it, in
+    /// load order.</summary>
+    [JsonPropertyName("language_assets")]
+    public IReadOnlyDictionary<string, IReadOnlyList<LinkedLanguageAssetEntry>> LanguageAssets { get; init; }
+        = new Dictionary<string, IReadOnlyList<LinkedLanguageAssetEntry>>();
     /// <summary>For each patched script no mod replaces, where its base instructions went (<c>[start, end, delta]</c>
     /// runs of dword offsets; localization spec §6.1).</summary>
     [JsonPropertyName("offsets")]
@@ -111,7 +124,7 @@ public sealed record ModLinkManifest
 public sealed record MountedModLayer(string Directory, ModLinkManifest Manifest, string ReportText)
 {
     public const string LooseFolder = "loose", CatalogFolder = "catalogs", ManifestFile = "link.json", ReportFile = "mod-link.txt";
-    public const string TextFolder = "text";
+    public const string TextFolder = "text", LanguageAssetFolder = "assets";
 
     public string Key => Manifest.Key;
     public string LooseRoot => Path.Combine(Directory, LooseFolder);
@@ -129,6 +142,16 @@ public sealed record MountedModLayer(string Directory, ModLinkManifest Manifest,
     public TextSource? TextSource
         => Manifest.Text.Count == 0 && Manifest.Languages.Count == 0 ? null : new TextSource(TextRoot, Languages, "mods");
 
+    /// <summary>The stack's language assets, with their files as absolute paths into the cache.</summary>
+    public LanguageAssetTable LanguageAssets
+        => Manifest.LanguageAssets.Count == 0
+            ? LanguageAssetTable.Empty
+            : new LanguageAssetTable(Manifest.LanguageAssets.ToDictionary(pair => pair.Key,
+                pair => (IReadOnlyList<LanguageAssetLayer>)pair.Value.Select(entry => new LanguageAssetLayer(entry.Mod,
+                    entry.Plain, entry.Files.ToDictionary(file => file.Key,
+                        file => Path.GetFullPath(Path.Combine(Directory, file.Value)), StringComparer.Ordinal))).ToList(),
+                StringComparer.OrdinalIgnoreCase));
+
     private readonly Lazy<IReadOnlyDictionary<string, ScriptOffsetMap>> _offsets = new(() =>
         Manifest.Offsets.ToDictionary(pair => TextCatalog.NormalizeScriptName(pair.Key),
             pair => ScriptOffsetMap.FromArrays(pair.Value), StringComparer.Ordinal));
@@ -143,12 +166,19 @@ public sealed record MountedModLayer(string Directory, ModLinkManifest Manifest,
         return (true, _offsets.Value.GetValueOrDefault(TextCatalog.NormalizeScriptName(script)));
     }
 
-    /// <summary>The mod that supplied a script or asset of the layer, by catalog name, or null for the base.</summary>
+    /// <summary>The mod that supplied a script or asset of the layer, by catalog name, or null for the base; with the
+    /// language assets that can stand in for it.</summary>
     public string? Explain(string name)
     {
+        string? languages = Manifest.LanguageAssets.TryGetValue(name, out var layers)
+            ? "; language assets: " + string.Join(", ", layers.SelectMany(layer => layer.Files.Keys
+                .Select(tag => $"{tag} from {layer.Mod}")))
+            : null;
         if (Manifest.Files.TryGetValue(name, out ModLayerSource? file))
-            return $"{file.Kind} from {string.Join(", ", file.Mods)}" + (file.Detail.Length > 0 ? $" ({file.Detail})" : "");
-        return Manifest.Records.TryGetValue(name, out string? mod) ? $"record of {mod}'s append catalog" : null;
+            return $"{file.Kind} from {string.Join(", ", file.Mods)}" + (file.Detail.Length > 0 ? $" ({file.Detail})" : "")
+                   + languages;
+        if (Manifest.Records.TryGetValue(name, out string? mod)) return $"record of {mod}'s append catalog" + languages;
+        return languages == null ? null : "the base" + languages;
     }
 }
 
@@ -220,7 +250,9 @@ public static class ModLinkCache
                 if (!File.Exists(Path.Combine(source.Kind == "catalog" ? layer.CatalogDirectory : layer.LooseRoot, name)))
                     return null;
             if (manifest.Text.Any(path => !File.Exists(Path.Combine(layer.TextRoot, path)))
-                || manifest.Fonts.Any(path => !File.Exists(Path.Combine(directory, path))))
+                || manifest.Fonts.Any(path => !File.Exists(Path.Combine(directory, path)))
+                || manifest.LanguageAssets.Values.SelectMany(entries => entries).SelectMany(entry => entry.Files.Values)
+                    .Any(path => !File.Exists(Path.Combine(directory, path))))
                 return null;
             // A hit counts as recent use, so pruning keeps the entries that are actually launched.
             try
@@ -317,6 +349,27 @@ public static class ModLinkCache
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllBytes(path, font.Bytes);
             }
+            // Language assets as assets/<tag>/<mod>/NAME, a PNG under its own extension so the store knows it.
+            var languageAssets = new SortedDictionary<string, IReadOnlyList<LinkedLanguageAssetEntry>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (name, layers) in result.LanguageAssets)
+            {
+                var entries = new List<LinkedLanguageAssetEntry>();
+                foreach (LinkedLanguageAssetLayer layer in layers)
+                {
+                    var paths = new SortedDictionary<string, string>(StringComparer.Ordinal);
+                    foreach (var (tag, file) in layer.Files)
+                    {
+                        string fileName = file.Png ? Path.GetFileNameWithoutExtension(name) + ModLayout.PngExtension : name;
+                        string relative = $"{MountedModLayer.LanguageAssetFolder}/{tag}/{layer.ModId}/{fileName}";
+                        string path = Path.Combine(temporary, relative);
+                        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                        File.WriteAllBytes(path, file.Bytes);
+                        paths[tag] = relative;
+                    }
+                    entries.Add(new LinkedLanguageAssetEntry(layer.ModId, layer.Plain, paths));
+                }
+                languageAssets[name] = entries;
+            }
             foreach (LinkedCatalog catalog in result.Catalogs)
             {
                 var (aai, alf) = catalog.Write(linkBase.AppendMagic, linkBase.CatalogTitle);
@@ -339,6 +392,7 @@ public static class ModLinkCache
                 Languages = result.Text.Languages.Select(LinkedLanguageEntry.Of).ToList(),
                 Text = result.Text.Files.Select(file => file.Path).ToList(),
                 Fonts = result.Text.Fonts.Select(font => font.CachePath).ToList(),
+                LanguageAssets = languageAssets,
                 Offsets = result.Scripts.Values.Where(script => script.Offsets != null)
                     .OrderBy(script => script.Name, StringComparer.Ordinal)
                     .ToDictionary(script => script.Name, script => script.Offsets!.ToArrays(), StringComparer.OrdinalIgnoreCase),

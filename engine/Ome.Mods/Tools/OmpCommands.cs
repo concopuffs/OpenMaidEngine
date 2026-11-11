@@ -157,6 +157,20 @@ public static class OmpCommands
                 console.WriteLine($"{entry.Name}: base, packed id 0x{entry.PackedId:x8}, "
                                   + (location.Loose ? $"loose file {location.Path}" : $"{location.Path} at {location.Offset}+{location.Size}"));
             }
+            // A language asset stands in for the name while its language is selected (localization spec §12).
+            string catalogName = result.Catalogs
+                .SelectMany(modCatalog => modCatalog.Records.Select(record => (modCatalog.ModId, Record: record)))
+                .Where(pair => $"{pair.ModId}:{pair.Record.Name}".Equals(name, StringComparison.OrdinalIgnoreCase))
+                .Select(pair => pair.Record.CatalogName).FirstOrDefault() ?? name;
+            if (result.LanguageAssets.TryGetValue(catalogName, out var layers))
+                for (int index = 0; index < layers.Count; index++)
+                    foreach (var (tag, file) in layers[index].Files.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                    {
+                        bool hidden = layers.Skip(index + 1).Any(later => later.Plain && !later.Files.ContainsKey(tag));
+                        console.WriteLine($"  {tag}: language asset from {layers[index].ModId}{(file.Png ? " (PNG)" : "")}"
+                                          + (hidden ? ", hidden by a later package's asset"
+                                                    : $", while {tag} or a language that falls back to it is selected"));
+                    }
             if (!found) console.WriteLine($"{name}: neither the base nor the stack supplies it");
             return found ? 0 : 1;
         }
@@ -212,12 +226,13 @@ public static class OmpCommands
                 Put(catalog.ArchiveFile, alf);
             }
             foreach (string name in written) console.WriteLine($"  {name}");
-            // Localization spec §9.4: native AGE has no presenter, so text and fonts stay with the port.
+            // Localization spec §9.4: native AGE has no presenter, so text, fonts and language assets stay with the port.
             var presenting = result.Order.Where(mod => mod.Layout.Text.Count > 0 || mod.Layout.Fonts.Count > 0
+                                                       || mod.Layout.LanguageAssets.Count > 0
                                                        || mod.Manifest.Languages.Count > 0).Select(mod => mod.Id).ToList();
             if (presenting.Count > 0)
-                console.WriteLine($"note: text/, fonts/ and [[language]] of {string.Join(", ", presenting)} are not exported: "
-                                  + "native AGE cannot load them");
+                console.WriteLine($"note: text/, fonts/, assets/<language>/ and [[language]] of {string.Join(", ", presenting)} "
+                                  + "are not exported: native AGE cannot load them");
             console.WriteLine($"omp export: {result.Order.Count} mods, {written.Count} files -> {Path.GetFullPath(outputDirectory)}");
             return 0;
         }

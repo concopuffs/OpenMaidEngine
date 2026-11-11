@@ -381,7 +381,8 @@ discard 99.99% themselves.
 > and port-only targets are beyond version 1.
 >
 > **Design (2026-11-10):** `text/`, language packages and language assets are specified in
-> `docs/superpowers/specs/2026-11-10-localization-design.md` (accepted, not built).
+> `docs/superpowers/specs/2026-11-10-localization-design.md` (accepted; built in milestones 0–6, 2026-11-11). Modders'
+> guide: `docs/modding/languages.md`.
 
 Use **Open Maid Pack (OMP)** as the canonical distribution and mount unit. An OMP is a specification and
 manifest layered on a standard ZIP container, not a new compression algorithm. Existing ZIP tools,

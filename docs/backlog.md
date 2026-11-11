@@ -305,125 +305,23 @@ and the drive scenarios.
 
 ## Localization
 
-- **Build the localization framework.** The design is accepted (`superpowers/specs/2026-11-10-localization-design.md`,
-  2026-11-10) and milestones 0 to 5 are implemented. The port presents a language from packages (`text/`, `fonts/`,
-  `[[language]]`) and from a folder of catalogs (`--text-root`), and its own menus and boxes from the shell's
-  tables with the packages' `[[engine]]` entries in front.
-  The spec's §19 holds the milestones and §18 the gates; they are not restated here.
-  - **Milestone 0 is built, reviewed and revised** (2026-11-10). `omp text import-scripts` converts the Kamidori
-    translation: all 430 changed scripts align, entries keep deliberate line breaks, stored literals and composed
-    strings get scoped entries, and `--verify` finds 0 mismatches. The spec has the review's design changes. The
-    results and rules are in `localization-import-test.md`.
-  - **Milestone 1 is built** (2026-11-10). The presenter resolves exact entries at show-text runs and `draw-string`
-    through the language's fallback chain; `--language` takes any well-formed tag or `x-pseudo`, `--text-root` mounts
-    catalogs and `--text-log` writes the miss log (`tools-reference.md`). Presented text wraps at word breaks and draws
-    with the TextServer rasterizer. A presented `draw-string`'s `\n` rows, planned for milestone 2, came with it.
-    - Gate 1: all 28 committed scenarios pass on the port as written; the 1,628 engine tests pass.
-    - Gate 3: `TextPresenterTests` (merge, override report, scope and fallback order, malformed files with file and
-      line, site-entry binding).
-    - Gate 9: under `x-pseudo`, 27 of the 28 pass unchanged. `himegari-reveal-clock` times page 18 by its glyph
-      counts. The pseudo text is longer, so its timing checks fail, while its positions come in the same order:
-      each run took its presented glyph count × 300 ms (3.9, 1.5 and 10.2 s).
-    - Kamidori in English from the imported catalog: single-run lines and menu strings are presented.
-  - **Milestone 2 is built** (2026-11-11). Messages of several runs resolve as one; the VM records the instruction
-    that stores each global string, and lookup tries the origin's site and script before the drawing ones; patterns
-    match with a linear matcher, captures are presented, `digits = "ascii"` converts numbers; the three length
-    opcodes measure presented text in half cells, with `cells` and `measure`. `TextPatternOverlap` finds ambiguous
-    pattern pairs for `omp text check` (milestone 4). A text root's `languages.toml` holds `[[language]]` settings
-    until manifests do. `ImportVerifier` presents its pattern samples through the presenter.
-    - Gate 4: `PresentedMessageTests` (furigana sentence as one, a branch target splits, a miss falls back per run).
-      Kamidori's prologue page at `SC0000@0xfa2` draws one wrapped English sentence.
-    - Gate 5: `TextPatternTests` (number moved, captured name translated, ASCII digits, an ambiguous pair found).
-    - Gate 6: `PresentedMessageTests` (presented name measured, `cells` overrides, `measure = "source"` opts out).
-      Kamidori's first name plate (`SC0000@0x1fa29`) is sized to "Wil".
-    - Gate 10 still holds: `--verify` finds 0 mismatches.
-    - Gates 1 and 9 still hold: all 28 drive scenarios pass as written, and 27 of 28 are unchanged under x-pseudo
-      (reveal-clock's timing checks, as in milestone 1).
-    - Fixed on the way: presented text on a layout sized for the source font (Kamidori's 25-pixel name layout 9)
-      stopped at its first glyph, since the portable cell (ascent plus descent) overflowed the bottom bound. Presented
-      runs now test overflow against the font height their rows advance by.
-  - **Milestone 3 is built** (2026-11-11). Each run that draws something other than its source text is also laid out
-    as its source text with the gameplay rasterizer, without drawing (the source layout pass, spec §8). History
-    records those rows. Each layout keeps two cursors: the source cursor, which records and saves follow, and the
-    draw cursor of presented text, which the click-wait indicator follows. The VM keeps each run's or message's
-    lookup for the session. The backlog (op `0x1d1`) and the settings redraw (op `0x82`) present each group again
-    from it. After a load or a language change they match the records' text against unscoped entries
-    (`TextHistorySplit`: the fewest unmatched characters, then the fewest spans).
-    - Found on the way: a numbered save holds the gfx object table, and with it every text layout's retained glyph
-      objects. In Kamidori's SYSTEM4, layout 1's range is 0xd6d8 and layouts 8 and 9 share 0xe678, 0x1f4 objects
-      each. Presented glyphs made 133 of those records differ. Each retained layout now also keeps its source
-      glyphs, and a save writes them over the layout's range (`GfxState.CapturePersistenceSnapshot(sourceText)`).
-    - Gate 2: Kamidori driven to its first name plate (`SC0000@0x1488`) and saved. In English with
-      `measure = "source"`, `Ome.Cli save-diff` against the source-language save finds only the timestamp and play
-      time. With `measure = "presented"` it also finds four name-plate objects (0xd354–0xd357: source width 86 → 63,
-      x 182 → 159), one 23-pixel cell narrower for "Wil". `G[0x4f8]` matches, as the scripts reuse it before the
-      save. The gate's wording in spec §18, "confined to `G[0x4f8]` and frame locals", leaves out the graphics a
-      measured length sizes, which spec §2 names: they keep the measurement visible in the save. The headless host
-      draws nothing, so its saved history is the same with a language (`PresentedHistoryTests`).
-    - Gate 7: `PresentedHistoryTests` (the backlog in this session; after a load, with the global entry preferred;
-      after a language change; a miss in the same language shows its source; `x-pseudo` after a load). Kamidori in
-      English: the furigana page and HISTORY show English, wrapped, with the click-wait indicator after the last
-      presented glyph; the settings redraw keeps English. Gate 2's English save loaded from the title shows its page
-      and HISTORY in English, as the Japanese save shows them in Japanese.
-    - Gates 1 and 9 still hold: all 28 drive scenarios pass as written, and 27 of 28 are unchanged under x-pseudo
-      (reveal-clock's timing checks, as in milestone 1). The 1,677 engine tests pass; `validate.py` runtime passes.
-  - **Milestone 4 is built** (2026-11-11). Manifests at `omp = 2` declare `[[language]]` tables, and packages carry
-    `text/<tag>/` catalogs and `fonts/`. The link reads every catalog (a file that does not read stops it with its
-    file and line), merges the languages per key in load order, requires each language a catalog adds to to be
-    defined, and reports entries, overrides, sources that reach no installed script and site entries that will not
-    bind. It keeps a base-offset table per patched script, and the cache holds the catalogs, fonts and merged
-    languages. The port loads the mods' text, then `--text-root`'s. `glyph_delay_scale` scales presented runs' reveal
-    delay; `[[language.font]]` puts bundled files and family names before the rasterizer's fallback. Save stamps mark
-    presentation-only packages. `omp text extract`, `check` and `stats` scan the installed scripts, appends included
-    (`ScriptTextScanner`). The modder guide is `modding/languages.md`.
-    - Beyond the spec's §9.3: an entry may leave out `text` (a template, skipped by the loader) and may carry
-      `obsolete = true`, so `extract` keeps its templates and marks in the files. `at` stays a base offset; the F3
-      locator prints the running script's offsets, which differ past a patch in a patched script. A bundled font
-      draws at its own weight. `check` tests exact entries for reach and patterns only for ambiguity.
-    - Kamidori: `extract` writes 49,868 templates in 354 files from 732 scripts in about 2 s, and a second run writes
-      nothing. `check` on the imported catalog: 48,588 entries, 0 errors, 0 warnings; `stats`: messages
-      44,372/45,655, strings 11,316/12,257, composed 31/34. The imported catalog as a local package (`omp = 2`,
-      `glyph_delay_scale = 0.5`) links ("text en: 48588 entries from 217 files") and the port presents the prologue
-      (`SC0000@0xfa2`) and Wil's name plate (`SC0000@0x1488`) from the link cache. A second local package that
-      bundles a serif font and sets the language's font table, loaded after it, overrides the table (reported), the
-      text draws in that font, and `check` lists the 388 characters it lacks.
-    - Tests: `LanguagePackageTests`, `TextToolTests`, and additions to `TextCatalogFileTests`, `TextPresenterTests`
-      and `PresentationSiteTests`. The 1,724 engine tests pass.
-    - Gates 1 and 9 still hold: all 28 drive scenarios pass as written, and 27 of 28 are unchanged under x-pseudo
-      (reveal-clock's timing checks, as in milestone 1).
-  - **Milestone 5 is built** (2026-11-11). The shell's last fixed strings have keys: AGE's error box and op
-    `0x1b4`'s box (`AgeBoxText`; the VM composes them in AGE's Japanese, so the driver, the timeline and halt reasons
-    read what native shows, and the shell's Japanese table takes the same keys) and AGERC's name entry. The host
-    presents AGE's boxes from their parts in the shell's language (`ShellBoxes`). Catalogs' `[[engine]]` entries go
-    in front of the embedded tables along the language's fallback chain, then Japanese; an entry with an unknown key
-    or with an argument its Japanese does not take is left out with a warning. A language with engine text only
-    leaves the game text as written. The options panel lists the shell's languages and the stack's by `name`, with
-    the spec's line about a full switch. A version 2 manifest may leave out `[game]`; such a package targets every
-    profile and holds only `[[language]]`, catalogs of `[[engine]]` entries and `fonts/` (spec §11.1).
-    - Beyond the spec's §11: an `[[engine]]` entry may leave out `text` (a template) and carry `note`. `omp text
-      extract` writes a template per key into `_engine.toml` for a language the shell has no table for; `check`
-      warns about unknown keys and fails on arguments a key does not take. The lookup walks the language's fallback
-      chain, as game text does, where §11 names only the language and Japanese.
-    - In the port: a profile-less German package (`fallback = ["en"]`) shows its entries in the settings panel and
-      English for the rest; the OME section lists "Deutsch" with the note; a bad entry is reported and skipped; a
-      switch to Japanese relabels at once. `himegari-script-error` under `--language en` shows the English box and
-      passes as written, the driver reading Japanese.
-    - Tests: `EngineTextTests`, and additions to `LanguagePackageTests`, `TextToolTests`, `ShellModelTests` and
-      `HotspotInputTests`. The 1,752 engine tests pass.
-    - Gates 1 and 9 hold: all 28 drive scenarios pass as written, and 27 under `x-pseudo`, `himegari-reveal-clock`
-      failing only on its timing as before.
-  - **Next:** milestone 6.
-  - **`align`, `fit` and overflow reports (spec §7.2, §7.3) are in no milestone.** The entry keys and the language's
-    `min_fit_scale` are read, but the host ignores them, and nothing reports a presented run cut at the bottom of its window. Both need the source
-    text's extent, which the source layout pass (milestone 3) now computes. Done when an entry's `align` and `fit` place and
-    narrow its text against the source extent, and a cut run goes to the miss log with its script, offset, message
-    and the rows cut.
-  - **Cut `localization-import-test.md`'s "Review answers" down to the results**, as that section says: the review
-    text is committed (`2482813`).
-  - The manifest's `omp = 2`, introduced by milestone 4, is shared with the Lua design (the item under "Mod loader
-    and modding").
+The localization framework is built: milestones 0 to 6 of `superpowers/specs/2026-11-10-localization-design.md`, with
+its eleven gates (2026-11-11). Modders' guide: `modding/languages.md`; the import test's results:
+`localization-import-test.md`. Still open:
 
-  Done when the spec's gates 1–11 pass and `modding/languages.md` covers milestone 6 as well.
+- **`align`, `fit` and overflow reports (spec §7.2, §7.3)** are in no milestone. The entry keys and the language's
+  `min_fit_scale` are read, but the host ignores them, and nothing reports a presented run cut at the bottom of its
+  window. Gate 11 found one in Kamidori's opening: the narration page `SC0000@0xd5a`, which the translators broke
+  into two lines, wraps into more rows than its window holds (the page map marks it `cut`). Both need the source
+  text's extent, which the source layout pass computes. Done when an entry's `align` and `fit` place and narrow its
+  text against the source extent, and a cut run goes to the miss log with its script, offset, message and the rows
+  cut.
+- **The driver cannot choose the port's language.** `option NAME VALUE` takes the registry's numbers, so the
+  options panel's OME choices (language, window size) are set only by clicking the panel, as gate 8's live switch
+  was driven (2026-11-11). Done when a step sets the port's language (native AGE has none) and a scenario switches
+  it.
+- **Cut `localization-import-test.md`'s "Review answers" down to the results**, as that section says: the review
+  text is committed (`2482813`).
 
 ## Platform and project
 

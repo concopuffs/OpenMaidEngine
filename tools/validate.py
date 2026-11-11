@@ -47,6 +47,7 @@ CORE_TESTS = (
     "test_init_kamidori.py",
     "test_init_table_profile.py",
     "test_locate_page.py",
+    "test_page_map_compare.py",
     "test_drive_core.py",
     "test_native_scratch.py",
     "test_compiler_census.py",
