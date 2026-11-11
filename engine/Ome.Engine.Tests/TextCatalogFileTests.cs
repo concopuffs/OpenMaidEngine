@@ -1,0 +1,161 @@
+using System.Linq;
+using Ome.Engine.Localization;
+using Ome.Mods.Localization;
+using Xunit;
+
+/// <summary>Catalog files (localization spec §9.3): what the reader accepts and refuses, and the writer's round
+/// trip.</summary>
+public class TextCatalogFileTests
+{
+    private const string Fingerprint = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    [Fact]
+    public void ReadsScopesAndPresentationKeys()
+    {
+        TextCatalogFile file = TextCatalogFileReader.Parse($$"""
+            script = "SC0100.BIN"
+            fingerprint = "{{Fingerprint}}"
+
+            [[text]]
+            source = "はい"
+            text = "Yes"
+
+            [[text]]
+            script = ""
+            source = "いいえ"
+            text = "No"
+            align = "center"
+            fit = "shrink"
+            measure = "source"
+            cells = 12
+            note = "a choice"
+
+            [[text]]
+            source = "{who}が来た"
+            at = 0x2a43
+            text = "{who} came"
+            """, "sc0100.toml");
+
+        Assert.Equal("SC0100", file.Script);
+        Assert.Equal(Fingerprint, file.Fingerprint);
+        Assert.Equal(3, file.Entries.Count);
+        TextEntry yes = file.Entries[0], no = file.Entries[1], site = file.Entries[2];
+        Assert.Equal(("SC0100", (int?)null, "sc0100.toml:4"), (yes.Script, yes.At, yes.Origin));
+        Assert.Null(no.Script);
+        Assert.Equal((TextAlign.Center, TextFit.Shrink, TextMeasure.Source, 12, "a choice"),
+            (no.Align, no.Fit, no.Measure!.Value, no.Cells!.Value, no.Note));
+        Assert.Equal(("SC0100", 0x2a43), (site.Script, site.At!.Value));
+        Assert.True(site.IsPattern);
+    }
+
+    [Fact]
+    public void ReportsEveryProblemWithItsLine()
+    {
+        var error = Assert.Throws<TextCatalogException>(() => TextCatalogFileReader.Parse("""
+            [[text]]
+            source = "a"
+            text = "b"
+            colour = "red"
+
+            [[text]]
+            source = "c"
+
+            [[text]]
+            source = "{x}c"
+            text = "{x}d"
+
+            [[text]]
+            script = "SC0100"
+            source = "e"
+            text = "f"
+            at = 16
+
+            [[text]]
+            source = "g"
+            text = "h"
+            align = "middle"
+            """, "bad.toml"));
+
+        Assert.Equal(new[]
+        {
+            "bad.toml:1: unknown key 'colour'",
+            "bad.toml:6: text is required",
+            "bad.toml:9: a pattern that starts or ends with a placeholder needs a script scope",
+            "bad.toml:13: an entry with 'at' needs the file's 'fingerprint' of the base script",
+            "bad.toml:19: align must be \"start\", \"center\" or \"end\", not \"middle\"",
+        }, error.Problems);
+    }
+
+    [Fact]
+    public void RefusesUnknownTopLevelKeysAndWrongTypes()
+    {
+        var error = Assert.Throws<TextCatalogException>(() => TextCatalogFileReader.Parse("""
+            langauge = "en"
+            fingerprint = "md5:00"
+
+            [[text]]
+            source = 3
+            text = "x"
+            """, "top.toml"));
+
+        Assert.Contains("top.toml: fingerprint must be 'sha256:' and 64 lowercase hex digits", error.Problems);
+        Assert.Contains("top.toml:4: source must be a string", error.Problems);
+        Assert.Contains("top.toml: unknown key 'langauge'", error.Problems);
+    }
+
+    [Fact]
+    public void ReportsTomlSyntaxErrorsWithTheirLine()
+    {
+        var error = Assert.Throws<TextCatalogException>(() =>
+            TextCatalogFileReader.Parse("[[text]]\nsource = \"a\ntext = \"b\"\n", "broken.toml"));
+        Assert.StartsWith("broken.toml:2: not valid TOML", Assert.Single(error.Problems));
+    }
+
+    [Fact]
+    public void ReadsEngineEntriesAndChecksTheirKeys()
+    {
+        TextCatalogFile file = TextCatalogFileReader.Parse("""
+            [[engine]]
+            key = "shell.menu.quit"
+            text = "Quit"
+            """, "engine.toml");
+        Assert.Equal(new EngineTextEntry("shell.menu.quit", "Quit", "engine.toml:1"), Assert.Single(file.EngineEntries));
+
+        var error = Assert.Throws<TextCatalogException>(() => TextCatalogFileReader.Parse("""
+            [[engine]]
+            key = "Shell Menu"
+            text = "Quit"
+            """, "engine.toml"));
+        Assert.Contains("must be lowercase words", Assert.Single(error.Problems));
+    }
+
+    [Fact]
+    public void WriterOutputReadsBackToTheSameEntries()
+    {
+        TextEntry[] entries =
+        [
+            TextEntry.Literal("「はい」", "\"Yes,\" she said.\n\tThen a backslash: \\ and a bell \u0007"),
+            TextEntry.Literal("{literal braces}", "{kept}") with { Script = null },
+            TextEntry.Create("{v1}を手に入れた", "Got {v1}") with { Script = "SC0100" },
+            TextEntry.Literal("はい", "Yep") with
+            {
+                Script = "SC0100", At = 0x2a43, Align = TextAlign.End, Fit = TextFit.Shrink,
+                Measure = TextMeasure.Presented, Cells = 7, Note = "two breaks",
+            },
+        ];
+        var file = new TextCatalogFile("SC0100", Fingerprint, entries, [new EngineTextEntry("a.b", "c")]);
+
+        string written = TextCatalogFileWriter.Write(file, ["generated for a test"]);
+        TextCatalogFile read = TextCatalogFileReader.Parse(written, "round.toml");
+
+        Assert.StartsWith("# generated for a test\n", written.Replace("\r\n", "\n"));
+        Assert.Equal("SC0100", read.Script);
+        Assert.Equal(Fingerprint, read.Fingerprint);
+        Assert.Equal(entries.Select(Shape), read.Entries.Select(Shape));
+        Assert.Equal("c", Assert.Single(read.EngineEntries).Text);
+    }
+
+    private static object Shape(TextEntry entry)
+        => (entry.Source, entry.Text, entry.Script, entry.At, entry.Align, entry.Fit, entry.Measure, entry.Cells,
+            entry.Note);
+}

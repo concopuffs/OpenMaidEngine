@@ -118,6 +118,12 @@ it; git history keeps the record.
   holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
   (one differing opcode).
 
+- **Strings with control characters draw nothing.** `Sys4StringCodec.Decode` accepts only printable CP932, so a
+  literal holding a tab decodes to no string and its run draws empty. The translated Kamidori install has one:
+  `SC2310@0x1232`, `show-text` of a tab, a space and `―The cliff and the ru…` (found by `omp text
+  import-scripts`, which reads it leniently). Native AGE's handling has not been checked. Done when native's
+  inline-string read is known (Ghidra, the show-text path) and the codec does the same.
+
 ## Robustness
 
 Gaps the 2026-11-10 codebase review found and the fixes that followed it left open. None affects retail scripts.
@@ -300,9 +306,11 @@ and the drive scenarios.
   whose scripts were translated in place, and its own error box is fixed Japanese
   (`VirtualMachine.DiagnosticCaption`). The spec's §19 holds the milestones and §18 the gates; they are not
   restated here.
-  - **Next: milestone 0, the import check.** Convert the fan translation in `Kamidori_Translated/` into a catalog
-    offline, with no engine change, and review the report before milestone 1 starts (spec §18.1). Its count
-    decides the one open question, whether site scope (`at`) ships in version 1 (spec §20).
+  - **Milestone 0 is built and waits for review** (2026-11-10). `omp text import-scripts` converts the Kamidori
+    translation: all 430 changed scripts align and `--verify` finds 0 mismatches. The results, what the catalog
+    does not carry (site scope for 133 messages; 728 stored table strings the translators laid out per row) and the
+    translated install's own damage are in `localization-import-test.md`.
+  - **Next:** review those findings, revise spec §6 if they call for it, then start milestone 1.
   - The manifest's `omp = 2` is shared with the Lua design (the item under "Mod loader and modding"). Whichever
     is built first introduces it.
 

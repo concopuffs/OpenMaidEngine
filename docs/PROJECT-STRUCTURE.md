@@ -175,6 +175,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── global-reference.md                 GENERATED from globals.toml (human-readable global registry)
     │   ├── global-reference-kamidori.md        GENERATED from globals-kamidori.toml
     │   ├── kamidori-data-tables.md             Kamidori *INIT data tables: layering, layouts, semantics
+    │   ├── localization-import-test.md         localization import test results (spec §18.1, gates 10/11)
     │   ├── scjump-progression.md               SCJUMP progression decode + SCINIT decision→scene registry
     │   └── engine-re.md                        native-engine RE (Ghidra+MCP): dispatch table, decompiled ops
     │
@@ -223,6 +224,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── Ome.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
     │                                       compositor/layout, retained live/History glyph and wait-atlas
     │                                       publication, and bounded font/glyph cache primitives
+    │   ├── Ome.Engine/Localization/         text catalogs (docs/superpowers/specs/2026-11-10-localization-
+    │                                       design.md): placeholder templates, entries, the catalog's global/script/
+    │                                       site scopes, and the message segmenter (spec §6.2)
     │   ├── Ome.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       screenshot BMP naming, profile-owned state, identity, and
@@ -243,7 +247,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       stack resolution and load order, replacements, plan composition, the
     │                                       spec §7 report, selector allocation, per-mod append catalogs, asset
     │                                       overrides and the link cache (Linking/), startup discovery, flags and
-    │                                       save stamps (Launch/), and the omp commands (Tools/); referenced by
+    │                                       save stamps (Launch/), and the omp commands (Tools/); the
+    │                                       localization catalog file reader and writer (Localization/) and
+    │                                       `omp text import-scripts` (Localization/Import/); referenced by
     │                                       Ome.Cli, the Godot port (godot/Main.Mods.cs) and the tests
     │   ├── Ome.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
     │                                       location, performance logging, movie runtime/FFmpeg decoding,

@@ -43,6 +43,8 @@ var table = OpcodeTableJson.Load(Paths.OpcodesJson, selectedProfile.Profile.Engi
 // call-script execution: resolves ids -> scripts. Product paths pass this so subroutines run;
 // `trace` stays provider-less on purpose (the base-ISA offset oracle).
 var catalog = Sys4AssetCatalog.Load(sys4Ini);
+// omp text resolves its own asset roots: there --overlay-root belongs to the translated install (--from).
+if (command == "omp" && args.Length > 1 && args[1] == "text") return OmpTextCommand.Run(args, gameRoot, catalog, table);
 AssetLaunchOptions assetOptions = AssetLaunchOptions.Resolve(args, gameRoot);
 var assetStore = new Sys4AssetStore(catalog, gameRoot, assetOptions.LooseRoots.ToArray());
 var provider = new Sys4ScriptProvider(
