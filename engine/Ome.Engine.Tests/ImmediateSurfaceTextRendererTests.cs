@@ -38,7 +38,7 @@ public class ImmediateSurfaceTextRendererTests
         ImmediateSurfaceTextResult result =
             renderer.Render(destination, 1, 2, "Aあ", style);
 
-        Assert.Equal(new ImmediateSurfaceTextResult(2, 7, 2), result);
+        Assert.Equal(new ImmediateSurfaceTextResult(2, 7, 2) { Ink = new TextExtent(1, 7) }, result);
         Assert.Collection(rasterizer.Requests,
             ascii => Assert.Equal(
                 ("ＭＳ ゴシック", 4, -2, 700, 0x41, (ushort)0x41),

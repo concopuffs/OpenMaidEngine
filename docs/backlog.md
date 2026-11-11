@@ -306,16 +306,9 @@ and the drive scenarios.
 ## Localization
 
 The localization framework is built: milestones 0 to 6 of `superpowers/specs/2026-11-10-localization-design.md`, with
-its eleven gates (2026-11-11). Modders' guide: `modding/languages.md`; the import test's results:
-`localization-import-test.md`. Still open:
+its eleven gates, and `align`, `fit` and the overflow report (§7.2, §7.3), which no milestone held (2026-11-11).
+Modders' guide: `modding/languages.md`; the import test's results: `localization-import-test.md`. Still open:
 
-- **`align`, `fit` and overflow reports (spec §7.2, §7.3)** are in no milestone. The entry keys and the language's
-  `min_fit_scale` are read, but the host ignores them, and nothing reports a presented run cut at the bottom of its
-  window. Gate 11 found one in Kamidori's opening: the narration page `SC0000@0xd5a`, which the translators broke
-  into two lines, wraps into more rows than its window holds (the page map marks it `cut`). Both need the source
-  text's extent, which the source layout pass computes. Done when an entry's `align` and `fit` place and narrow its
-  text against the source extent, and a cut run goes to the miss log with its script, offset, message and the rows
-  cut.
 - **The driver cannot choose the port's language.** `option NAME VALUE` takes the registry's numbers, so the
   options panel's OME choices (language, window size) are set only by clicking the panel, as gate 8's live switch
   was driven (2026-11-11). Done when a step sets the port's language (native AGE has none) and a scenario switches

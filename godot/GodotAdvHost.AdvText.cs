@@ -236,7 +236,7 @@ public sealed partial class GodotAdvHost
             return null;
         }
         _runGeometry = null;
-        AdvTextSourceLayout source = LayoutSourceText(binding, run, out IReadOnlyList<AdvRetainedGlyphRecord> glyphs);
+        AdvTextSourceLayout source = LayoutSourceText(binding, run, out IReadOnlyList<AdvRetainedGlyphRecord> glyphs, out _);
         _locator.Text(run.SourceOffset, run.Text, "", _runGeometry);
         if (binding.LayoutSlot <= 0 || binding.LayoutSlot != run.Layout.Slot || binding.SourceSurfaceSlot < 0
             || binding.FirstObjectHandle < 0 || binding.ObjectCapacity <= 0)
@@ -274,9 +274,11 @@ public sealed partial class GodotAdvHost
     /// gameplay rasterizer from the source cursor, as the run would draw with no language selected, without drawing.
     /// History records its rows, so a save holds what the source-language run would have recorded, and
     /// <paramref name="glyphs"/> are its records in drawing order, which a save binds in place of the drawn glyphs.
+    /// <paramref name="extent"/> is where its ink runs, which an entry's <c>align</c> and <c>fit</c> place presented
+    /// text against (§7.2).
     /// </summary>
     private AdvTextSourceLayout LayoutSourceText(AdvTextLayoutPresentationBinding binding, AdvLiveTextRun run,
-                                                 out IReadOnlyList<AdvRetainedGlyphRecord> glyphs)
+                                                 out IReadOnlyList<AdvRetainedGlyphRecord> glyphs, out TextExtent? extent)
     {
         TextPipeline text = _sourceText;
         AspectFontRealization? realization = RealizationFor(text);
@@ -293,6 +295,7 @@ public sealed partial class GodotAdvHost
             : [];
         glyphs = OrderedGlyphs(laid, ruby, byRow: !string.IsNullOrEmpty(run.SourceRuby) && laid.Rows.Count > 0)
             .Select(item => item.Record).ToArray();
+        extent = PresentedTextPlacement.Extent(run.Text, laid.Records);
         _runGeometry = PageGeometry(run, laid, text, realization);
         return new AdvTextSourceLayout(laid.Rows, ruby, laid.CursorX, laid.CursorY);
     }
@@ -486,14 +489,31 @@ public sealed partial class GodotAdvHost
         IReadOnlyList<int>? breaks = recordedLineBreaks;
         int rightBound = recordedLineBreaks == null ? run.Layout.Right : int.MaxValue;
         bool wrap = recordedLineBreaks == null;
+
+        // What history records and a save binds (spec §8): the drawn rows when the run drew its source text with the
+        // gameplay rasterizer from the source cursor, else a separate source layout pass, laid out first: presented text
+        // aligns and fits against its extent (§7.2).
+        IReadOnlyList<AdvRetainedGlyphRecord>? sourceGlyphs = null;
+        TextExtent? sourceExtent = null;
+        AdvTextSourceLayout? source = !history
+                                      && (run.Presented != null || run.SourceCursor != null
+                                          || !ReferenceEquals(text, _sourceText))
+            ? LayoutSourceText(binding, run, out sourceGlyphs, out sourceExtent)
+            : null;
+
+        PresentedRunPlacement? placement = null;
         if (run.Presented is { } presented && recordedLineBreaks == null)
         {
-            // Presented text breaks where the presenter allows (localization spec §7.1), planned before drawing.
-            PresentedTextPlan plan = PresentedTextLayout.Plan(
+            // Presented text breaks where the presenter allows (§7.1), planned before drawing, and is narrowed and
+            // aligned as its entry asks (§7.2); history has no source pass and draws it as written.
+            placement = PresentedTextPlacement.Place(
                 drawnText, Ome.Engine.Localization.PresentedLineBreaks.Opportunities(drawnText, presented.LineBreak), requests,
-                text.Cache, run.Layout.CursorX, binding.ResetCursorX, run.Layout.Right);
-            requests = plan.Glyphs;
-            breaks = plan.BreaksBefore;
+                text.Cache, run.Layout.CursorX, binding.ResetCursorX, run.Layout.Right,
+                presented.Entry?.Align ?? Ome.Engine.Localization.TextAlign.Start,
+                presented.Entry?.Fit ?? Ome.Engine.Localization.TextFit.None, sourceExtent, source?.Rows.Count ?? 0,
+                presented.MinFitScale);
+            requests = placement.Plan.Glyphs;
+            breaks = placement.Plan.BreaksBefore;
             rightBound = int.MaxValue;
             wrap = false;
         }
@@ -509,8 +529,13 @@ public sealed partial class GodotAdvHost
                 style,
                 breaks,
                 realization,
-                OverflowAtFontHeight: run.Presented != null),
+                OverflowAtFontHeight: run.Presented != null,
+                RowShiftsX: placement?.RowShiftsX),
             requests);
+        // Presented rows below the layout's bottom are cut and reported (§7.3); history has no bottom.
+        int cutRows = placement != null && !history && rendered.StoppedOnVerticalOverflow
+            ? PresentedTextPlacement.CutRows(placement.Plan, rendered.ConsumedGlyphs)
+            : 0;
 
         // Op 0x196's ruby follows each base row in AGE's drawing order; History draws its ruby runs after the text.
         IReadOnlyList<AdvRubyGlyph> ruby = [];
@@ -545,14 +570,6 @@ public sealed partial class GodotAdvHost
             }
         }
 
-        // What history records and a save binds (spec §8): the drawn rows when the run drew its source text with the
-        // gameplay rasterizer from the source cursor, else a separate source layout pass.
-        IReadOnlyList<AdvRetainedGlyphRecord>? sourceGlyphs = null;
-        AdvTextSourceLayout? source = !history
-                                      && (run.Presented != null || run.SourceCursor != null
-                                          || !ReferenceEquals(text, _sourceText))
-            ? LayoutSourceText(binding, run, out sourceGlyphs)
-            : null;
         if (!history)
         {
             if (source == null) _runGeometry = PageGeometry(run, rendered, text, realization);
@@ -582,6 +599,9 @@ public sealed partial class GodotAdvHost
             ["result_cursor_y"] = rendered.CursorY,
             ["source_cursor_x"] = source?.CursorX,
             ["source_cursor_y"] = source?.CursorY,
+            ["width_percent"] = placement?.WidthPercent,
+            ["row_shifts"] = placement?.RowShiftsX is { } shifts ? string.Join(",", shifts) : null,
+            ["cut_rows"] = cutRows,
         });
 
         lock (_textLock)
@@ -609,7 +629,7 @@ public sealed partial class GodotAdvHost
                 first,
                 ordered.Count,
                 rendered.CursorX,
-                rendered.CursorY) { Rows = rendered.Rows, Ruby = ruby, Source = source };
+                rendered.CursorY) { Rows = rendered.Rows, Ruby = ruby, Source = source, CutRows = cutRows };
         }
 
         lock (_imageLock)
@@ -644,7 +664,7 @@ public sealed partial class GodotAdvHost
                             Ome.Engine.Localization.PresentedText? presented)
     {
         TextPipeline pipeline = presented != null ? _presentedText.Value : ActiveText;
-        DrawStringPixels(surfaceSlot, x, y, text, style, pipeline, presented);
+        string? placed = DrawStringPixels(surfaceSlot, x, y, text, style, pipeline, presented);
         _timeline?.Event("draw-string", new()
         {
             ["surface"] = surfaceSlot,
@@ -652,6 +672,7 @@ public sealed partial class GodotAdvHost
             ["y"] = y,
             ["text"] = text,
             ["presented"] = presented?.Text,
+            ["placement"] = placed,
             ["presentation"] = "rgba-glyph-mask",
             ["backend"] = pipeline.Info.Id,
         });
@@ -661,7 +682,9 @@ public sealed partial class GodotAdvHost
     /// (localization spec §7.1).</summary>
     private const int PresentedRowGap = 2;
 
-    private void DrawStringPixels(
+    /// <returns>For an entry that aligns or fits, how its rows were placed (§7.2): the source string's extent, the
+    /// glyph width in percent and each row's shift; else null.</returns>
+    private string? DrawStringPixels(
         int surfaceSlot, int x, int y, string text, AdvTextStyle style, TextPipeline pipeline,
         Ome.Engine.Localization.PresentedText? presented)
     {
@@ -679,6 +702,7 @@ public sealed partial class GodotAdvHost
 
         var updated = new RgbaImage(
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
+        string? placed = null;
         if (presented == null)
             pipeline.Pixels.Render(updated, x, y, text, style, _textAntialias, RealizationFor(pipeline), BlankExtentMode);
         else
@@ -687,17 +711,41 @@ public sealed partial class GodotAdvHost
             AdvTextStyle presentedStyle = PresentedStyle(style);
             int height = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
             int step = height + (presented.Entry?.RowGap ?? PresentedRowGap);
-            string[] rows = presented.Text.Split('\n');
+            IReadOnlyList<GlyphRasterRequest>[] rows = presented.Text.Split('\n')
+                .Select(row => ImmediateSurfaceTextRenderer.CreateRequests(
+                    new string(row.Where(c => c >= ' ').ToArray()), presentedStyle, pipeline.Policy, _textAntialias))
+                .ToArray();
+            // An entry's align and fit place its rows against what the source string would have covered (§7.2).
+            Ome.Engine.Localization.TextAlign align = presented.Entry?.Align ?? Ome.Engine.Localization.TextAlign.Start;
+            bool fit = presented.Entry?.Fit == Ome.Engine.Localization.TextFit.Shrink;
+            TextExtent? source = align != Ome.Engine.Localization.TextAlign.Start || fit
+                ? _sourceText.Pixels.Render(null, x, y, text, style, _textAntialias, RealizationFor(_sourceText),
+                                            BlankExtentMode).Ink
+                : null;
+            int percent = fit && source is { } fitted
+                ? PresentedTextPlacement.FitPercent(rows, pipeline.Cache, fitted.Width, presented.MinFitScale)
+                : 100;
+            if (percent < 100)
+                rows = rows.Select(row => (IReadOnlyList<GlyphRasterRequest>)row
+                    .Select(glyph => glyph with { WidthPercent = percent }).ToArray()).ToArray();
+            var shifts = new int[rows.Length];
             for (int row = 0; row < rows.Length; row++)
             {
-                string drawn = new(rows[row].Where(c => c >= ' ').ToArray());
-                if (drawn.Length > 0)
-                    pipeline.Pixels.Render(updated, x, checked(y + row * step), drawn, presentedStyle, _textAntialias);
+                if (rows[row].Count == 0) continue;
+                shifts[row] = source is { } target && align != Ome.Engine.Localization.TextAlign.Start
+                              && PresentedTextPlacement.Extent(rows[row], pipeline.Cache, x) is { } extent
+                    ? PresentedTextPlacement.Shift(align, target, extent, 0, updated.Width)
+                    : 0;
+                pipeline.Pixels.RenderGlyphs(updated, checked(x + shifts[row]), checked(y + row * step), rows[row],
+                                             presentedStyle);
             }
+            if (source is { } placedAgainst)
+                placed = $"source {placedAgainst.Left}..{placedAgainst.Right}, width {percent}%, shifts {string.Join(",", shifts)}";
         }
 
         lock (_imageLock) _surfaceImages[surfaceSlot] = updated;
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        return placed;
     }
 
     /// <summary>

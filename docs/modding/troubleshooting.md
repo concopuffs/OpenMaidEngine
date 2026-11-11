@@ -142,6 +142,15 @@ the exact key the catalog needs, and `script` and `at` the site that drew it. If
 
 `omp text check` warns about entries whose source no installed script draws or stores where their scope reaches.
 
+**Text is cut off at the bottom of the window.** The translation needs more rows than the window has. Run with
+`--text-log`: each cut message is in `diagnostics/text-misses.jsonl` with `rows_cut`. Shorten the translation, give
+the entry `fit = "shrink"`, or patch the script to break the page ([languages.md](languages.md), "Alignment and
+fit").
+
+**A label runs out of its box, or is no longer centred.** Give the entry `fit = "shrink"` to narrow it to the
+original's width, and `align = "center"` or `"end"` to place it as the original was. The language's `min_fit_scale`
+limits how narrow it gets.
+
 **Squares or the wrong font.** The fonts of the language's `[[language.font]]` table lack those characters, and so
 do the system's. `omp text check` lists the characters each table's bundled fonts lack; add a font that has them to
 `use`.

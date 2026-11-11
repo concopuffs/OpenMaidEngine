@@ -24,7 +24,11 @@ public readonly record struct TextLookup(string Source, TextSite Site, TextSite?
 
 /// <summary>What the presenter gives the host for one string: the text to draw, how it may break (§7.1), and the
 /// catalog entry that supplied it, if one did.</summary>
-public sealed record PresentedText(string Text, LineBreakMode LineBreak, TextEntry? Entry);
+public sealed record PresentedText(string Text, LineBreakMode LineBreak, TextEntry? Entry)
+{
+    /// <summary>The language's floor for the entry's <c>fit = "shrink"</c> (§7.2, §9.2).</summary>
+    public double MinFitScale { get; init; } = TextLanguage.DefaultMinFitScale;
+}
 
 /// <summary>What a filter sees (spec §6.5): the source text, the catalog's result if any, the language, the drawing
 /// site, the origin (§5.2; the site itself when the string has no record) and a pattern's captures, already
@@ -79,6 +83,13 @@ public sealed record TextLanguage(string Tag, IReadOnlyList<TextCatalog> Chain)
     /// <summary>The factor on the reveal's glyph delay for presented runs (§7.5): English has about twice the glyphs
     /// of Japanese for one sentence.</summary>
     public double GlyphDelayScale { get; init; } = 1.0;
+
+    /// <summary>The narrowest an entry's <c>fit = "shrink"</c> makes its glyphs, as a share of their width (§7.2):
+    /// the language's <c>min_fit_scale</c>, or <see cref="DefaultMinFitScale"/>.</summary>
+    public double MinFitScale { get; init; } = DefaultMinFitScale;
+
+    /// <summary><see cref="MinFitScale"/> for a language that sets none: three quarters keeps Latin text legible.</summary>
+    public const double DefaultMinFitScale = 0.75;
 
     /// <summary>The font tables (§7.4), in order; the first that applies to a face wins.</summary>
     public IReadOnlyList<TextFontMapping> Fonts { get; init; } = [];
@@ -163,6 +174,14 @@ public sealed class TextPresenter
         return result.Presented;
     }
 
+    /// <summary>Reports that the presented text of <paramref name="lookup"/> needed <paramref name="rows"/> more rows
+    /// than its window had and was cut there (spec §7.3): the miss log records it with the message's source text and
+    /// site.</summary>
+    public void ReportCut(TextLookup lookup, int rows)
+    {
+        if (rows > 0) _misses?.RecordCut(lookup.Source, lookup.Site, rows);
+    }
+
     /// <summary>What a length opcode at <paramref name="site"/> returns for <paramref name="source"/> (spec §5.3), or
     /// null for the native result: the string resolves to no entry, or the language or the entry measures source.
     /// A string the language's <c>digits</c> setting converts counts as resolved. Misses are not logged here.</summary>
@@ -236,7 +255,8 @@ public sealed class TextPresenter
         bool measurable = text != null;
         foreach (ITextFilter filter in _filters)
             text = filter.Present(new TextFilterInput(source, text, Language.Tag, site, originSite, captures)) ?? text;
-        PresentedText? presented = text == null ? null : new PresentedText(text, Language.LineBreak, found);
+        PresentedText? presented = text == null ? null
+            : new PresentedText(text, Language.LineBreak, found) { MinFitScale = Language.MinFitScale };
         return new Result(presented, Missed: found == null && !number, measurable);
     }
 

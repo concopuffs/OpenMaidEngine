@@ -49,7 +49,7 @@ public class ImmediateSurfaceAspectTextTests
 
         // Baseline y + 12 (the reference ascent, not メイリオ's 15); pens 2, 8 (+6) and 21 (+13).
         Assert.Equal(new[] { 2, 8, 21 }, TextPixels(destination, 3 + 12));
-        Assert.Equal(new ImmediateSurfaceTextResult(3, 27, 3), result);
+        Assert.Equal(new ImmediateSurfaceTextResult(3, 27, 3) { Ink = new TextExtent(2, 27) }, result);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class ImmediateSurfaceAspectTextTests
 
         // trunc(15 / 2.0 + 0.5) = 8 for one byte, 15 for two, whatever each glyph's own cell.
         Assert.Equal(new[] { 2, 10, 25 }, TextPixels(destination, 3 + 12));
-        Assert.Equal(new ImmediateSurfaceTextResult(3, 33, 3), result);
+        Assert.Equal(new ImmediateSurfaceTextResult(3, 33, 3) { Ink = new TextExtent(2, 31) }, result);
     }
 
     [Theory]

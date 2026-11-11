@@ -223,7 +223,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       decoders, the language-asset store, and resource facade
     │   ├── Ome.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
     │                                       compositor/layout, retained live/History glyph and wait-atlas
-    │                                       publication, and bounded font/glyph cache primitives
+    │                                       publication, bounded font/glyph cache primitives (the cache narrows
+    │                                       masks), and presented text's line breaking, alignment and fit
     │   ├── Ome.Engine/Localization/         text catalogs (docs/superpowers/specs/2026-11-10-localization-
     │                                       design.md): placeholder templates, entries, the catalog's global/script/
     │                                       site scopes, the message segmenter (spec §6.2), the presenter with its

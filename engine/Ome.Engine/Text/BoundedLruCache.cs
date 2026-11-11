@@ -81,7 +81,9 @@ public sealed class BoundedLruCache<TKey, TValue> where TKey : notnull
     }
 }
 
-/// <summary>Bounded caching decorator shared by exact and portable glyph-mask backends.</summary>
+/// <summary>Bounded caching decorator shared by exact and portable glyph-mask backends. A narrowed request
+/// (<see cref="GlyphRasterRequest.WidthPercent"/>) is the font-width glyph, from this cache, narrowed: no backend
+/// narrows.</summary>
 public sealed class CachedGlyphMaskRasterizer : IGlyphMaskRasterizer
 {
     private readonly IGlyphMaskRasterizer _inner;
@@ -109,8 +111,9 @@ public sealed class CachedGlyphMaskRasterizer : IGlyphMaskRasterizer
             return cached;
         }
 
-        GlyphMask result = _inner.Rasterize(request)
-            ?? throw new InvalidOperationException("The glyph rasterizer returned null.");
+        GlyphMask result = request.WidthPercent < 100
+            ? GlyphMaskNarrowing.Narrow(Rasterize(request with { WidthPercent = 100 }), request.WidthPercent)
+            : _inner.Rasterize(request) ?? throw new InvalidOperationException("The glyph rasterizer returned null.");
         _cache.Set(request, result);
         Interlocked.Increment(ref _misses);
         return result;

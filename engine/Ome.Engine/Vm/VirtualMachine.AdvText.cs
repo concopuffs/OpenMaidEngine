@@ -169,6 +169,8 @@ public sealed partial class VirtualMachine
         TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: source?.Rows, ruby: source?.Ruby);
         if (retained is { } result)
             TextHistory.SetRunCursors(result.LayoutSlot, source!.CursorX, source.CursorY, result.CursorX, result.CursorY);
+        // Presented text that needs more rows than its window has is cut, and reported (§7.3).
+        if (retained is { CutRows: > 0 } cut && lookup is { } cutLookup) _presenter?.ReportCut(cutLookup, cut.CutRows);
         // A presented message's span stays open until its last run.
         if (_presentedMessage == null) TextHistory.EndLookupSpan();
         return true;

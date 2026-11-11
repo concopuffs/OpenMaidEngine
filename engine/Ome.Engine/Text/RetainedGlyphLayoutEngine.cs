@@ -11,6 +11,9 @@ namespace Ome.Engine.Text;
 /// instead of the glyph cell. Presented text sets it (localization spec §7): its Unicode font's cell holds the full
 /// ascent and descent, often taller than the source font's, and a layout sized for the source font (Kamidori's
 /// 25-pixel name plate) would otherwise stop at its first glyph.</param>
+/// <param name="RowShiftsX">Pixels each row starts right of where it would (<paramref name="CursorX"/> for the first,
+/// <paramref name="LineOriginX"/> for the rest), by row; a row past the list's end is not shifted. Presented text an
+/// entry aligns sets it (localization spec §7.2).</param>
 public readonly record struct GlyphTextLayoutOptions(
     int CursorX,
     int CursorY,
@@ -21,7 +24,8 @@ public readonly record struct GlyphTextLayoutOptions(
     AdvTextStyle Style,
     IReadOnlyList<int>? LineBreaksBefore = null,
     AspectFontRealization? FontRealization = null,
-    bool OverflowAtFontHeight = false);
+    bool OverflowAtFontHeight = false,
+    IReadOnlyList<int>? RowShiftsX = null);
 
 public sealed record GlyphTextLayoutResult(
     IReadOnlyList<AdvRetainedGlyphRecord> Records,
@@ -61,7 +65,10 @@ public sealed class RetainedGlyphLayoutEngine
     {
         ArgumentNullException.ThrowIfNull(glyphs);
         var records = new List<AdvRetainedGlyphRecord>(glyphs.Count);
-        int cursorX = options.CursorX;
+        IReadOnlyList<int> shifts = options.RowShiftsX ?? [];
+        int row = 0;
+        int Shift(int index) => index < shifts.Count ? shifts[index] : 0;
+        int cursorX = checked(options.CursorX + Shift(0));
         int cursorY = options.CursorY;
         int wrappedLines = 0;
         var rows = new List<AdvTextRow>();
@@ -103,7 +110,7 @@ public sealed class RetainedGlyphLayoutEngine
                 rows.Add(new AdvTextRow(rowFirst, records.Count - rowFirst,
                     rowLeft, rowTop, rowRight, rowBottom, WrapsAfter: true));
             rowFirst = records.Count;
-            cursorX = options.LineOriginX;
+            cursorX = checked(options.LineOriginX + Shift(++row));
             cursorY = checked(cursorY + LineAdvance(pixelHeight));
         }
 
@@ -141,7 +148,7 @@ public sealed class RetainedGlyphLayoutEngine
                     || !AdvRetainedTextContract.PreventsHorizontalWrapBefore(
                         request.Cp932Code.Value)))
             {
-                cursorX = options.LineOriginX;
+                cursorX = checked(options.LineOriginX + Shift(++row));
                 cursorY = checked(cursorY + LineAdvance(request.PixelHeight));
                 wrappedLines++;
                 right = checked(cursorX + cellWidth);

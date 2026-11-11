@@ -61,6 +61,10 @@ public readonly record struct AdvRetainedTextRunResult(
     /// (localization spec §8): presented text, another rasterizer, or from the presented cursor. Null when the drawn
     /// layout is the source layout. History records these rows and the layout's source cursor follows them.</summary>
     public AdvTextSourceLayout? Source { get; init; }
+
+    /// <summary>The rows of presented text the run did not draw because they fell below its layout's bottom
+    /// (localization spec §7.3); 0 when nothing was cut.</summary>
+    public int CutRows { get; init; }
 }
 
 /// <summary>

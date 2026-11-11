@@ -309,6 +309,32 @@ public class TextPresenterTests : IDisposable
     }
 
     [Fact]
+    public void ACutFollowsTheMissAtItsPlaceAndKeepsTheMostRowsCut()
+    {
+        var misses = new TextMissLog();
+        var presenter = new TextPresenter(new TextLanguage("en", [TextCatalog.Build("en", [TextEntry.Literal("はい", "Yes")])])
+            { MinFitScale = 0.6 }, misses: misses);
+
+        Assert.Null(Present(presenter, "いいえ"));
+        presenter.ReportCut(new TextLookup("いいえ", new TextSite("SC0100", 0x10), null), 1);
+        presenter.ReportCut(new TextLookup("いいえ", new TextSite("SC0100", 0x10), null), 3);
+        presenter.ReportCut(new TextLookup("いいえ", new TextSite("SC0100", 0x10), null), 0);
+        presenter.ReportCut(new TextLookup("はい", new TextSite("SC0000", 0x8), null), 2);
+
+        var written = new StringWriter();
+        misses.WriteJsonLines(written);
+        Assert.Equal(new[]
+        {
+            """{"source":"はい","script":"SC0000","at":"0x8","count":1,"rows_cut":2}""",
+            """{"source":"いいえ","script":"SC0100","at":"0x10","count":1}""",
+            """{"source":"いいえ","script":"SC0100","at":"0x10","count":2,"rows_cut":3}""",
+        }, written.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r')));
+        // The entry's text carries the language's floor for fit = "shrink" (spec §7.2).
+        Assert.Equal(0.6, presenter.Present("はい", new TextSite("SC0100", 0x10))!.MinFitScale);
+        Assert.Equal(0.75, new PresentedText("x", LineBreakMode.Words, null).MinFitScale);
+    }
+
+    [Fact]
     public void ThePseudoLanguageBracketsAndLengthensEveryStringAndLogsItAsAMiss()
     {
         var misses = new TextMissLog();

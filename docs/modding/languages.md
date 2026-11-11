@@ -52,8 +52,8 @@ and its save stamps say so (see "Saves" below).
 
 5. **Run it** in the port with `--mod my.lang --language en`, or install it in `mods/` and pick the language in the
    settings panel's OME section, which lists every language the installed packages define by its `name` (or with
-   `[ui] Language` in `OME.INI`). Add `--text-log` to collect every string that reached the screen without an entry
-   ([cli.md](cli.md)).
+   `[ui] Language` in `OME.INI`). Add `--text-log` to collect every string that reached the screen without an entry,
+   and every message cut at the bottom of its window ([cli.md](cli.md)).
 
 A switch in the settings panel applies at once to the menus and to text drawn after it. Text already on screen stays
 until the game draws it again; everything is in the new language after returning to the title.
@@ -83,7 +83,7 @@ line_break = "words"                 # "words" (default) or "anywhere"
 measure = "presented"                # "presented" (default) or "source"
 digits = "ascii"                     # "keep" (default) or "ascii"
 glyph_delay_scale = 0.5              # reveal speed factor, above 0 and at most 4; default 1
-min_fit_scale = 0.6                  # floor for fit = "shrink" (read, not used yet)
+min_fit_scale = 0.6                  # the narrowest fit = "shrink" makes glyphs; default 0.75
 
 [[language.font]]
 requested = ["*"]                    # the game's faces this applies to; "*" for all
@@ -102,6 +102,7 @@ a manifest.
 | `measure` | what the scripts' length opcodes measure: the `presented` text, so a name plate sized from a name fits the translated name, or the `source` text, so the game's state never depends on the language |
 | `digits` | `ascii` presents full-width digits (`１２`) in numbers the scripts build as ASCII |
 | `glyph_delay_scale` | scales the reveal's delay per glyph for translated text. English has about twice the glyphs of Japanese per sentence, so `0.5` keeps the pace |
+| `min_fit_scale` | the narrowest an entry's `fit = "shrink"` makes its glyphs, as a share of their width: above 0 and at most 1; default `0.75` |
 | `[[language.font]]` | font mappings, below |
 
 **Several packages, one language.** A package may add text to a language another package defines: give it
@@ -141,7 +142,7 @@ note = "item name"
 | `cells` | this string's length in half cells, for the length opcodes |
 | `row_gap` | pixels between the rows of a `draw-string` whose text holds `\n`, beyond the font's height; default 2 |
 | `note` | for translators; the port ignores it |
-| `align`, `fit` | read and kept, but not applied yet (`../backlog.md`) |
+| `align`, `fit` | where the translation sits and how narrow it may get, against the original text: below |
 
 A file that does not read stops the link (and the port) with every problem, its file and its line.
 
@@ -195,6 +196,37 @@ text = "Got {count} {item}"
 - `extract` writes a message with variables as `{v1}`, `{v2}`, … and a string the scripts compose as a pattern scoped
   to the composing script.
 - Two patterns at one scope that can match the same string are an error in `omp text check`.
+
+### Alignment and fit
+
+Some text sits where the script put the original: a title centred by its cursor, a name plate, an item name in a
+fixed box. Two keys place a translation against the room the original text took, from its first character to its
+last (spaces at either end do not count):
+
+```toml
+[[text]]
+script = "FELLOW"
+source = "鉄槌"
+text = "Iron Hammer"
+fit = "shrink"                       # narrow the glyphs to the original's room
+align = "end"                        # "start" (default), "center" or "end"
+```
+
+- `align = "center"` puts each line's centre where the original's centre was; `"end"` puts its end where the
+  original's end was. A line stays inside its window or surface: it moves no further left than the window's left
+  margin (or where the text starts, when that is further left), nor past the right edge.
+- `fit = "shrink"` narrows every glyph of the translation by one factor, never below the language's
+  `min_fit_scale`. An original on one row gives the width: the translation's widest line is made no wider than it.
+  An original that took several rows in the text window gives the rows: the translation is narrowed only as far as
+  it needs to wrap into no more rows.
+- Both apply to text the game draws in its windows and to strings it draws onto pictures. History shows the text as
+  written.
+- A name plate the game sizes from the name's length is sized from the translation (`measure`, above); with
+  `measure = "source"` it keeps the original's size, and `align = "center"` centres the name on it.
+
+**Text cut at the bottom.** A translation that needs more rows than its window has is cut at the window's bottom, as
+the game cuts its own text. The port does not add a page. `--text-log` lists each cut message with the rows it lost
+([cli.md](cli.md)); shorten it, use `fit`, or patch the script to break the page.
 
 ## Fonts
 
@@ -335,7 +367,6 @@ text that bypasses translation and layouts that cannot take longer text.
 
 ## Not yet
 
-- `align`, `fit` and overflow reports;
 - shaping and right-to-left scripts (Arabic, Hebrew, Thai, the Indic scripts).
 
 The design behind this page is `../superpowers/specs/2026-11-10-localization-design.md`; the open items are in

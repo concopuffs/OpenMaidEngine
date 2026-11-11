@@ -6,7 +6,11 @@ namespace Ome.Engine.Text;
 public readonly record struct ImmediateSurfaceTextResult(
     int GlyphCount,
     int CursorX,
-    int CursorY);
+    int CursorY)
+{
+    /// <summary>Where the string's ink runs (<see cref="TextExtent"/>); null when it drew only blanks.</summary>
+    public TextExtent? Ink { get; init; }
+}
 
 /// <summary>
 /// Converts one string into backend-policy glyph requests and composites it directly into an AGE
@@ -38,8 +42,10 @@ public sealed class ImmediateSurfaceTextRenderer
     /// one every font is half its height wide.</param>
     /// <param name="blankExtentMode">SYS4INI <c>BLANKEXTENTMODE</c> = 1: in aspect mode a blank advances by its own extent
     /// in the reference font rather than by the reference cell.</param>
+    /// <param name="destination">Null measures only: presented text aligns against the source string's extent
+    /// (localization spec §7.2).</param>
     public ImmediateSurfaceTextResult Render(
-        RgbaImage destination,
+        RgbaImage? destination,
         int x,
         int y,
         string text,
@@ -48,23 +54,43 @@ public sealed class ImmediateSurfaceTextRenderer
         AspectFontRealization? realization = null,
         bool blankExtentMode = false)
     {
-        ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(text);
         IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(text, style, _policy, antialias, realization);
         if (style.AspectMode != 0)
             return RenderAspect(destination, x, y, requests, style, antialias, blankExtentMode);
+        return RenderGlyphs(destination, x, y, requests, style);
+    }
+
+    /// <summary>Draws <paramref name="requests"/> from the pen at (<paramref name="x"/>, <paramref name="y"/>), each
+    /// advancing it by its cell, as a string outside aspect mode draws: presented text, whose requests an entry may
+    /// narrow (localization spec §7.2). A null <paramref name="destination"/> measures only.</summary>
+    public ImmediateSurfaceTextResult RenderGlyphs(
+        RgbaImage? destination, int x, int y, IReadOnlyList<GlyphRasterRequest> requests, AdvTextStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
         int cursorX = x;
         int cursorY = y;
+        int? inkLeft = null;
+        int inkRight = x;
         foreach (GlyphRasterRequest request in requests)
         {
             GlyphMask mask = _rasterizer.Rasterize(request);
-            AgeGlyphMaskCompositor.DrawGlyph(
-                destination, mask, cursorX, cursorY,
-                AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), style, _coverageAlpha);
+            if (destination != null)
+                AgeGlyphMaskCompositor.DrawGlyph(
+                    destination, mask, cursorX, cursorY,
+                    AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), style, _coverageAlpha);
+            if (!PresentedTextPlacement.IsSpace(request.UnicodeScalar) && request.UnicodeScalar >= 0x20)
+            {
+                inkLeft ??= cursorX;
+                inkRight = checked(cursorX + mask.CellWidth);
+            }
             cursorX = checked(cursorX + mask.CellAdvanceX);
             cursorY = checked(cursorY + mask.CellAdvanceY);
         }
-        return new ImmediateSurfaceTextResult(requests.Count, cursorX, cursorY);
+        return new ImmediateSurfaceTextResult(requests.Count, cursorX, cursorY)
+        {
+            Ink = inkLeft is { } left ? new TextExtent(left, inkRight) : null,
+        };
     }
 
     /// <summary>
@@ -84,7 +110,7 @@ public sealed class ImmediateSurfaceTextRenderer
     /// byte's extent too; here a control byte keeps the fallback advance.
     /// </summary>
     private ImmediateSurfaceTextResult RenderAspect(
-        RgbaImage destination, int x, int y, IReadOnlyList<GlyphRasterRequest> requests, AdvTextStyle style,
+        RgbaImage? destination, int x, int y, IReadOnlyList<GlyphRasterRequest> requests, AdvTextStyle style,
         bool antialias, bool blankExtentMode)
     {
         if (requests.Count == 0) return new ImmediateSurfaceTextResult(0, x, y);
@@ -105,6 +131,8 @@ public sealed class ImmediateSurfaceTextRenderer
 
         bool effect = style.RenderMode != 0;
         int cursorX = x;
+        int? inkLeft = null;
+        int inkRight = x;
         foreach (GlyphRasterRequest request in requests)
         {
             bool singleByte = request.Cp932Code <= 0xff;
@@ -121,10 +149,16 @@ public sealed class ImmediateSurfaceTextRenderer
                 continue;
             }
             GlyphMask mask = _rasterizer.Rasterize(request);
-            AgeGlyphMaskCompositor.DrawGlyph(destination, mask, cursorX, y, baseline, style, _coverageAlpha);
+            if (destination != null)
+                AgeGlyphMaskCompositor.DrawGlyph(destination, mask, cursorX, y, baseline, style, _coverageAlpha);
+            inkLeft ??= cursorX;
+            inkRight = checked(cursorX + mask.CellWidth);
             cursorX = checked(cursorX + (effect ? EffectAdvance(reference, singleByte) : mask.CellAdvanceX));
         }
-        return new ImmediateSurfaceTextResult(requests.Count, cursorX, y);
+        return new ImmediateSurfaceTextResult(requests.Count, cursorX, y)
+        {
+            Ink = inkLeft is { } left ? new TextExtent(left, inkRight) : null,
+        };
     }
 
     /// <summary>text_draw_glyph_string_effect's aspect-mode advance outside the ADV layout: the reference 激's

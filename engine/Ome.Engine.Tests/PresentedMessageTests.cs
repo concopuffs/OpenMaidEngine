@@ -98,6 +98,30 @@ public class PresentedMessageTests
         Assert.Single(host.TextCursors);   // the break moves the cursor: no message was presented
     }
 
+    [Fact]
+    public void AMessageTheHostCutIsReportedOnceWithItsRows()
+    {
+        // The host draws the presented sentence and cuts two rows of it (spec §7.3).
+        var misses = new TextMissLog();
+        Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100", SentenceCode(), Sentence);
+        var host = new RecordingHost
+        {
+            OnRetainedText = run => run.Presented == null ? null
+                : new AdvRetainedTextRunResult(run.Layout.Slot, 0, 4, 40, 0) { CutRows = 2 },
+        };
+        var vm = new VirtualMachine(script, Table, host)
+        {
+            Presenter = Presenter(misses, TextEntry.Literal("あの黒石を拾った。", "I picked up that black stone.")),
+        };
+        vm.Run();
+
+        var written = new StringWriter();
+        misses.WriteJsonLines(written);
+        Assert.Equal("{\"source\":\"あの黒石を拾った。\",\"script\":\"SC0100\",\"at\":\"0x0\",\"count\":1,\"rows_cut\":2}",
+                     written.ToString().Trim());
+        Assert.Equal((0, 1), (misses.Count, misses.CutCount));
+    }
+
     // ---- the record of stores -------------------------------------------------------------------------------------
 
     private static readonly TextEntry[] StoneEntries =

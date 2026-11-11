@@ -223,7 +223,7 @@ clicks.
 | Same text on every page (required) | **143 of 143.** Run A's text with its wraps joined equals run B's presented text once whitespace is collapsed |
 | Run B left in Japanese | none: every page presents English, speaker names included |
 | Line breaks (reviewed) | run A has 64 wraps and 93 deliberate breaks by the box's real right edge, most of the deliberate ones between a name plate and its line. 12 pages break where the catalog has a wrap: see below |
-| Wrapping (reviewed) | 1 page of run B stops a presented run at its layout's bottom: page 2 (`SC0000@0xd5a`), the narration. The translators broke it into two lines; the port's presented font wraps it into more rows than the narration window holds |
+| Wrapping (reviewed) | 1 page of run B stops a presented run at its layout's bottom: page 2 (`SC0000@0xd5a`), the narration. The translators broke it into two lines; the port's presented font wraps it into more rows than the narration window holds. With `--text-log`, the port now reports it (`SC0000@0xd55`, `rows_cut` 1) |
 | Damaged strings, untranslated stored strings, `SC2310@0x1232` | not reached by the opening |
 
 **The real edge does not find the translators' wraps.** The spec expected the real right edge to classify run A's

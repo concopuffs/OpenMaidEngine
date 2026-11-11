@@ -53,6 +53,19 @@ public sealed record GlyphRasterRequest
     public ushort? Cp932Code { get; }
     public GlyphRasterPolicy Policy { get; }
     public bool Antialias { get; }
+
+    private readonly int _widthPercent = 100;
+
+    /// <summary>The glyph's width in percent of the font's own, 1 to 100: presented text an entry fits to its source
+    /// text's extent (localization spec §7.2, <c>fit = "shrink"</c>). The backends draw every glyph at the font's
+    /// width; <see cref="CachedGlyphMaskRasterizer"/> narrows the mask (<see cref="GlyphMaskNarrowing"/>).</summary>
+    public int WidthPercent
+    {
+        get => _widthPercent;
+        init => _widthPercent = value is >= 1 and <= 100
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(WidthPercent), value, "A glyph's width is 1 to 100 percent.");
+    }
 }
 
 /// <summary>

@@ -225,7 +225,7 @@ public sealed class LanguagePackageTests : IDisposable
         Assert.Equal("Yeah", presenter.Present("はい", new TextSite("SC0100", 0x10))?.Text);
         Assert.Equal("No", presenter.Present("いいえ", new TextSite("SC0100", 0x10))?.Text);
         Assert.Null(presenter.Present("まだ", new TextSite("SC0100", 0x10)));
-        Assert.Equal(0.75, loaded.GlyphDelayScale);
+        Assert.Equal((0.75, TextLanguage.DefaultMinFitScale), (loaded.GlyphDelayScale, loaded.MinFitScale));
         string font = Assert.Single(loaded.Fonts).Use[0];
         Assert.True(Path.IsPathFullyQualified(font) && File.Exists(font), font);
         Assert.Equal("mods:en/000.a.lang/_global.toml:1", Assert.Single(report.Overrides).Replaced.Origin);
