@@ -129,8 +129,8 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
   Values that only move between cells (packed ids, colours) still keep whichever extension they arrived with, and
   consumers that compare or index with the wide value could still differ. Neither disassembled corpus has a high-bit
   immediate in an arithmetic or compare op, so this is latent for retail scripts and live for mod bytecode. Done
-  when every integer cell holds one canonical form (the review's `VmMemory` in Part 3 is the natural place) and a
-  test round-trips a high-bit value through an immediate, a write, a save and a load.
+  when every integer cell holds one canonical form, written in one place (see "VM state has no owners" under
+  Architecture), and a test round-trips a high-bit value through an immediate, a write, a save and a load.
 - **The port's image and texture caches never evict.** `GodotAdvHost._images` (`godot/GodotAdvHost.Surfaces.cs`),
   `Main._pixelCache` (`Main.Compositor.cs`) and `GpuRetainedRenderer`'s `_textures` and `_lerpMaterials` keep every
   entry for the session: about 1.9 MB of RAM per 800×600 image, and again in VRAM. A long session grows without
@@ -146,6 +146,83 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
   setup. A stream whose layout or format changes mid-stream would be converted with the old setup, which can read a
   missing plane. This is inferred from FFmpeg's behaviour; no shipped movie is known to change layout. Done when the shim reconfigures swr when a frame's layout, rate or format differs from the
   last, with a synthesized test stream that changes layout.
+
+## Architecture
+
+Structural problems the 2026-11-10 codebase review found in `VirtualMachine` (27 partial files), `GodotAdvHost` (6)
+and `Main` (15). A partial class only changes which file a member is in, so any file can still read or write any
+field. The review proposed one migration for all of them: state components, opcode modules and front-end
+controllers (`vm-host-main-restructure-design-2026-11-10.md` at the workspace root, outside this repository). That
+plan was not adopted on 2026-11-10, so each problem below is to be handled on its own, by whatever design fits when
+the work touches it. Each change should be behaviour-neutral and checked by the suite, the `oms-rebuild` trace gate
+and the drive scenarios.
+
+- **Opcode dispatch is kept in three hand-written lists.** `StepInstruction`'s switch (`VirtualMachine.cs`, 401
+  case labels), the 18 family handlers' switches (392 labels), and `OpcodeRuntimeCoverage.ImplementedOpcodes` (283
+  opcodes). `opcodes_build.py` reads that last list with a regex (`load_runtime_coverage`) to publish coverage. Each
+  instruction runs two string switches. If the lists drift, the only check is `Step`'s default case, at run time
+  (`runtime-coverage-inconsistency`), and no test reaches it. About 120 of `Step`'s labels are `u004xxxxx` aliases
+  paired with a semantic name. Since 2026-11-10 executability is resolved once per opcode, so a step no longer
+  allocates. Done when one table maps each opcode to its handler; coverage is derived from that table, with no hand
+  list and no regex; and a test over every ABI table fails on an implemented opcode without a handler, or on a
+  handler bound to an unknown name. Fast-forward pacing is calibrated per op (`PaceFastForwardOp`), so re-time it
+  after the change.
+- **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:1085-1154`)
+  assigns 38 fields from many partials, and `GodotAdvHost.ResetSceneContext` (`GodotAdvHost.PresentationInput.cs`)
+  does the same on the host. Scene state added without a line in these methods survives タイトルに戻る. That is how
+  the host's dialog events stayed signalled until 2026-11-10, when each was reset by hand. Done when a root reload
+  rebuilds scene-lifetime state instead of clearing it, so a new field cannot be missed, and a test shows a reload
+  keeps no scene state from before it.
+- **Two instruction loops.** `RunFrame` (`VirtualMachine.cs:1184`) and `RunWaitCallback` (`:1678`) each run the
+  per-instruction services (`ServiceInstructionBoundary`, `ApplyIgnoredDwords`, `FrameYield`, `PaceFastForwardOp`),
+  and each maps the `int.MinValue + n` step sentinels (`HALT`, `FRAME_RETURN`, `HOTSPOT_RETURN`, `ROOT_RELOAD`) to
+  outcomes. Until 2026-11-10 the callback loop ignored a halt and skipped those services. Done when one loop serves
+  frames and callbacks, and a step returns a typed result instead of a sentinel int.
+- **No single error path.** The VM reports a fault in several ways: 57 `HaltReason` assignments, `VmHaltException`,
+  the native error dialog (`ShowScriptError`), host warnings (`ReportWarning`), and exceptions that end the VM
+  thread. The mod linker, the OMS compiler and the CLI each keep their own catch filters. Three of the review's bugs
+  were a fault that matched no filter: a halt inside a callback, `ModPackageException` at launch, and a drive command
+  that threw. All three are fixed. Done when each layer has one documented fault type that its filters name, and the
+  VM turns any fault raised during a step into a halt, with a reason and a trace event, in one place.
+- **VM state has no owners.** Any of the 27 files can write any field. The skip and auto-message flags are the most
+  shared: `_messageSkipServiceActive` is used in 7 files, and `_messageSkipInjected` and `_advTextWaitPolling` in 5
+  each. Integer-cell normalisation (under Robustness) and the bounds checks on script-controlled indices also have
+  no single home. Done when each group of state is private to one type that others change through named methods:
+  memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Moving the skip and input
+  group last gives its callers time to settle what they need.
+- **Revision behaviour is one boolean.** `EngineRevisions.IsSys4433` (in `Text/`) selects behaviour at five sites:
+  `Sys4RegIniStore`, `AgeGlyphMaskCompositor`, `RubyLayoutRules` (two) and the op-`0x215` rule
+  (`VirtualMachine.cs:214`). The revision-diff triage (under Engine fidelity) will add rules, and a third revision
+  cannot be expressed as a boolean. Done when one traits record per ABI, outside `Text/`, describes each revision,
+  and each site reads the trait it needs.
+- **The host's threads have no stated ownership.** `GodotAdvHost` holds nine lock objects, five `AutoResetEvent`s,
+  a `ManualResetEventSlim` and a `SemaphoreSlim`, and nothing documents which fields each lock guards or the lock
+  order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`
+  now. The host's 29 `_main.CallDeferred("Name", …)` calls name `Main` methods by string, so a rename fails when the
+  game runs, not when it builds. Done when each lock's fields and the lock order are written down (or no lock is
+  taken under another), and calls to the main thread are typed. A typed dispatcher must keep `CallDeferred`'s timing;
+  check that on a drive scenario.
+- **Modal dialogs are separate fields.** `Main` keeps the 終了 dialog (`_exitConfirmation`), the script error box,
+  the options panel, the screenshot folder dialog and the full-width editor in their own fields, plus a hold
+  counter (`_frontendModalHolds`). Input routing, the drive `dialogs` and `answer` steps and screen-mode changes each
+  test the fields: they are used in 7 files. On the host, each dialog is an event plus a result field that the
+  scene reset must clear by hand (the item above). Done when one owner knows which modal is open, routing and the
+  drive steps ask it, and a reset cancels any pending dialog request.
+- **`Main` has no seams.** `_Ready` is 542 lines (`Main.cs:76-617`) of flag parsing, session building and wiring, and
+  12 files read `_screenWidth`. Launch-flag parsing has its own item under Robustness. Done when startup, the frame
+  pipeline and each front-end concern (audio, movies, compositing, the shell, input, driving, screenshots) own their
+  fields; `_Process` calls them in an explicit order rather than Godot's node order; and the screen geometry is one
+  shared object.
+- **The render traversal is written three times.** `Main.Compositor.cs` has a GPU path (`TryRecompositeGpu` and
+  its range helpers) and a software path (`RecompositeSoftware`) over the same retained objects, and
+  `Sys4/RetainedSurfaceRasterizer.cs` walks them a third time. A rule fixed in one can be missed in the others. Done
+  when one Godot-free traversal drives both the GPU and the software output, and the rasterizer either shares it or
+  documents why its rules differ.
+- **The Godot front end has no unit tests.** `godot/` is tested only by `--selftest` (`Main.SelfTest.cs`), which runs
+  the host with `synchronizeExplicitPresentation: false` (`Main.cs:521`). `GodotAdvHost.PresentationInput.cs` (the
+  waits and input) uses no Godot API, but sits in the Godot project, which no test project references. Done when the
+  host's VM-thread side and the other Godot-free front-end code live in a library with tests (`Ome.Engine.Frontend`
+  is the existing one).
 
 ## Open Maid Script
 
