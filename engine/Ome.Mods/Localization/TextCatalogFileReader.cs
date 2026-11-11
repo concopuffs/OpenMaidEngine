@@ -93,6 +93,7 @@ public static partial class TextCatalogFileReader
         string? fit = fields.String("fit");
         string? measure = fields.String("measure");
         long? cells = fields.Integer("cells");
+        long? rowGap = fields.Integer("row_gap");
         string? note = fields.String("note");
         fields.RejectUnknown();
         if (source == null || text == null) return null;
@@ -118,6 +119,8 @@ public static partial class TextCatalogFileReader
             return fields.Problem<TextEntry>($"note is limited to {TextCatalogLimits.MaxStringLength} characters");
         if (cells is { } count && (count < 0 || count > TextCatalogLimits.MaxCells))
             return fields.Problem<TextEntry>($"cells must be 0 to {TextCatalogLimits.MaxCells}");
+        if (rowGap is { } gap && (gap < 0 || gap > TextCatalogLimits.MaxRowGap))
+            return fields.Problem<TextEntry>($"row_gap must be 0 to {TextCatalogLimits.MaxRowGap}");
 
         TextAlign alignment = align switch
         {
@@ -147,6 +150,7 @@ public static partial class TextCatalogFileReader
             Fit = fitting,
             Measure = measuring,
             Cells = cells is { } c ? (int)c : null,
+            RowGap = rowGap is { } g ? (int)g : null,
             Note = note,
         };
     }

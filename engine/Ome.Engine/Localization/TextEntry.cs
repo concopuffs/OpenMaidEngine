@@ -18,6 +18,8 @@ public static class TextCatalogLimits
     public const int MaxEntriesPerLanguage = 1_000_000;
     /// <summary>The largest <c>cells</c> value.</summary>
     public const int MaxCells = 4096;
+    /// <summary>The largest <c>row_gap</c> value, in pixels.</summary>
+    public const int MaxRowGap = 256;
 }
 
 /// <summary>
@@ -44,7 +46,8 @@ public sealed record TextEntry
     /// <summary>The normalized script name (<see cref="TextCatalog.NormalizeScriptName"/>), or null for global.</summary>
     public string? Script { get; init; }
 
-    /// <summary>The base dword offset of the instruction that draws the text; needs <see cref="Script"/>.</summary>
+    /// <summary>The base dword offset of the instruction that draws or stores the text (spec §6.1); needs
+    /// <see cref="Script"/>.</summary>
     public int? At { get; init; }
 
     public TextAlign Align { get; init; } = TextAlign.Start;
@@ -55,6 +58,10 @@ public sealed record TextEntry
 
     /// <summary>This string's length in half cells, in place of the count (spec §5.3).</summary>
     public int? Cells { get; init; }
+
+    /// <summary>Pixels between the rows of a <c>draw-string</c> whose presented text holds a line break, beyond the
+    /// font's height (spec §7.1); null keeps the default.</summary>
+    public int? RowGap { get; init; }
 
     /// <summary>A translator's comment; the engine ignores it.</summary>
     public string? Note { get; init; }

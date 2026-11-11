@@ -20,6 +20,10 @@ public sealed class Sampled<T>
 public sealed record NotAlignedScript(string Script, AlignmentFailure Failure);
 public sealed record ScriptTargetDisagreement(string Script, TargetDisagreement Disagreement);
 public sealed record ReportedLiteral(string Script, int Offset, string Opcode, string Base, string Translated);
+public sealed record ReportedShortening(string Script, int Offset, string Opcode, string Base, string Translated,
+                                        string Class);
+public sealed record ReportedComposed(string Script, int Offset, string Source, string Text);
+public sealed record ReportedSkip(string Script, int Offset, string Reason);
 public sealed record ReportedText(string Script, int Offset, string Source, string Translated);
 public sealed record ReportedVariants(string Script, string Source, IReadOnlyList<string> Translations);
 public sealed record ReportedConflict(string Source, string Global, string Script, int Offset, string Translated);
@@ -57,7 +61,49 @@ public sealed class MessageCounts
     public int Translated { get; set; }
     public int Untranslated { get; set; }
     public int WithAuthoredBreaks { get; set; }
-    public int TranslationsWithJoinedBreaks { get; set; }
+}
+
+/// <summary>The line edge of one script's layout (review R1 of <c>docs/localization-import-test.md</c>): the width,
+/// in half cells, that 99 of every 100 of its translated lines fit. <see cref="From"/> is <c>install</c> when the
+/// script has too few lines and the edge of the whole install's lines applies. <see cref="Wider"/> counts its
+/// lines wider than the edge, which the engine wraps where they cross it.</summary>
+public sealed record ReportedEdge(string Script, string Layout, int Edge, string From, int Lines, int Widest, int Wider);
+
+/// <summary>The translated messages' line breaks, each a wrap or deliberate (review R1 of
+/// <c>docs/localization-import-test.md</c>). Widths are in half cells, as the engine measures text.</summary>
+public sealed class BreakCounts
+{
+    /// <summary>Breaks that only wrap: the next word did not fit the widest translated line of the layout.</summary>
+    public int Wraps { get; set; }
+
+    /// <summary>Breaks kept as <c>\n</c> in the entry.</summary>
+    public int Deliberate { get; set; }
+
+    public int MessagesWithDeliberate { get; set; }
+
+    /// <summary>Wraps that would be deliberate if the script's widest line were its edge: the class of these
+    /// depends on the edge chosen.</summary>
+    public int Uncertain { get; set; }
+
+    /// <summary>Breaks the width makes wraps that stay deliberate because the message already has as many wraps as
+    /// the translation added breaks.</summary>
+    public int KeptByCount { get; set; }
+
+    /// <summary>The messages of <see cref="KeptByCount"/>, for a spot check.</summary>
+    public Sampled<ReportedText> KeptByCountSamples { get; } = new();
+
+    public List<ReportedEdge> Edges { get; } = [];
+
+    /// <summary>Translated lines wider than their script's edge. The engine wraps them where they cross it, and some
+    /// carry spaces that push a word past the edge.</summary>
+    public Sampled<ReportedText> WiderThanEdge { get; } = new();
+
+    /// <summary>For a spot check: the base breaks the message itself, and the translation has no deliberate
+    /// break.</summary>
+    public Sampled<ReportedText> AuthoredWithoutDeliberate { get; } = new();
+
+    /// <summary>For a spot check: the translation has a deliberate break where the base has none.</summary>
+    public Sampled<ReportedText> DeliberateWithoutAuthored { get; } = new();
 }
 
 /// <summary>Which scope served each converted message (decision 2: the key is the source text).</summary>
@@ -107,26 +153,59 @@ public sealed class LiteralCounts
 {
     public Dictionary<string, int> ChangedByOpcode { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>A stored literal translated differently from the global choice; the catalog cannot scope it,
-    /// because the string is drawn somewhere else.</summary>
+    /// <summary>A literal stored into a frame local string, translated differently from the global choice. No
+    /// record names the store (review R2 of <c>docs/localization-import-test.md</c>), so the catalog cannot scope
+    /// it.</summary>
     public Sampled<ReportedConflict> UnscopableConflicts { get; } = new();
 
-    /// <summary>A stored literal the install left untranslated where the global entry translates it: the catalog
-    /// presents more than the install did, and no scope can avoid that either.</summary>
+    /// <summary>A stored literal the install left untranslated where the catalog translates it: an untranslated
+    /// copy gets no entry, so the catalog presents more than the install did.</summary>
     public Sampled<ReportedConflict> UntranslatedInInstall { get; } = new();
 
     /// <summary>Literals compared or switched on (spec §5.1): the base literal stays, so no entry is needed.</summary>
     public List<ReportedLiteral> FeedCompares { get; } = [];
 
-    /// <summary>An empty literal the translation filled with text, such as a stage description line the Japanese
-    /// left empty: an empty source is no key, so the catalog cannot carry it.</summary>
+    /// <summary>An empty literal the translation filled with text, with no line before it to fold into: an empty
+    /// source is no key, so the catalog cannot carry it.</summary>
     public Sampled<ReportedLiteral> EmptyFilled { get; } = new();
+
+    /// <summary>An empty stored line the translation filled with text, folded after <c>\n</c> into the entry of
+    /// the line stored to the cell before it (review R2), such as a stage description's fourth line.</summary>
+    public Sampled<ReportedLiteral> EmptyFolded { get; } = new();
 
     /// <summary>Literals fed to <c>concat</c>: candidates for patterns (spec §6.3).</summary>
     public Sampled<ReportedLiteral> FeedConcat { get; } = new();
 
     /// <summary>Changed literals of every other opcode, which nothing presents.</summary>
     public Sampled<ReportedLiteral> Other { get; } = new();
+}
+
+/// <summary>Strings the scripts compose with <c>concat</c> and <c>toString</c> (review R4 of
+/// <c>docs/localization-import-test.md</c>), each a pattern with the composing script's scope.</summary>
+public sealed class ComposedCounts
+{
+    /// <summary>Stores and draws of a composed string with at least one template.</summary>
+    public int Stores { get; set; }
+
+    /// <summary>Distinct templates, one per path that builds a different one.</summary>
+    public int Templates { get; set; }
+
+    /// <summary>Templates whose translation is the source.</summary>
+    public int Untranslated { get; set; }
+
+    public int Entries { get; set; }
+
+    /// <summary>The templates with literal text and their translations, for review.</summary>
+    public Sampled<ReportedComposed> Patterns { get; } = new();
+
+    /// <summary>Stores whose walk back gave up, with the reason: <c>paths</c> (too many), <c>steps</c> (too far),
+    /// <c>loop</c>, or <c>function entry</c> (no write starts the value inside the function). A store that also
+    /// gave templates is listed too: some of its paths are missing.</summary>
+    public Sampled<ReportedSkip> Skipped { get; } = new();
+
+    /// <summary>Paths whose template cannot be written: an operand used twice, or a literal that does not
+    /// decode.</summary>
+    public Sampled<ReportedComposed> Unreadable { get; } = new();
 }
 
 /// <summary>Differences in the translated install's strings that are not translations. The importer keeps the
@@ -137,6 +216,13 @@ public sealed class DamageCounts
     /// scripts lose characters from many strings the translators left in Japanese (<c>savemesskip</c> reads
     /// <c>avemesskip</c>, <c>キャンセル</c> reads <c>ャンル</c>, <c>週送り。</c> reads three ways at three sites).</summary>
     public Sampled<ReportedLiteral> LostCharacters { get; } = new();
+
+    /// <summary>For review: every string that lost more than one character, with its class. <c>damage</c> keeps a
+    /// letter or digit and is kept as source; <c>translation</c> keeps only punctuation and is kept as written.</summary>
+    public Sampled<ReportedShortening> LostSeveral { get; } = new();
+
+    /// <summary>The strings of <see cref="LostSeveral"/> kept as translations.</summary>
+    public int ShortenedTranslations { get; set; }
 
     /// <summary>An empty literal the translated install writes as spaces; it draws the same, so it needs no entry.
     /// Compares are listed under <see cref="LiteralCounts.FeedCompares"/> instead.</summary>
@@ -171,13 +257,15 @@ public sealed class VerifyCounts
     public int CheckedDrawLiterals { get; set; }
     public int CheckedStoredLiterals { get; set; }
     public int CheckedPatterns { get; set; }
+    public int CheckedComposed { get; set; }
 
     /// <summary>Messages, drawn literals and patterns whose presented text differs from the translated install's.
     /// Each one means two translations ended up under one key.</summary>
     public Sampled<ReportedMismatch> Mismatches { get; } = new();
 
-    /// <summary>Stored literals whose global entry is not the translation at this site: the unscopable conflicts
-    /// of <see cref="LiteralCounts.UnscopableConflicts"/>, seen from the catalog.</summary>
+    /// <summary>Literals stored into a frame local whose global entry is not the translation at this site: the
+    /// unscopable conflicts of <see cref="LiteralCounts.UnscopableConflicts"/>, seen from the catalog. A literal
+    /// stored into a string cell is checked at its storing site, and a difference there is a mismatch.</summary>
     public Sampled<ReportedMismatch> StoredLiteralConflicts { get; } = new();
 
     /// <summary>Stored literals the install left untranslated that the catalog translates
@@ -200,9 +288,11 @@ public sealed class ImportReport
     public ScriptCounts Scripts { get; } = new();
     public AlignmentCounts Alignment { get; } = new();
     public MessageCounts Messages { get; } = new();
+    public BreakCounts Breaks { get; } = new();
     public ScopeCounts Scope { get; } = new();
     public UnjoinedCounts Unjoined { get; } = new();
     public LiteralCounts Literals { get; } = new();
+    public ComposedCounts Composed { get; } = new();
     public DamageCounts Damage { get; } = new();
     public FuriganaCounts Furigana { get; } = new();
     public AssetCounts? Assets { get; set; }

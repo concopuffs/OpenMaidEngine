@@ -142,7 +142,15 @@ internal static partial class OmpTextCommand
         Console.WriteLine($"  messages: {m.Total} ({m.Literal} literal, {m.WithVariables} with variables, "
                           + $"{m.VariableOnly} of them variables only): "
                           + $"{m.Translated} translated, {m.Untranslated} untranslated; {m.WithAuthoredBreaks} with "
-                          + $"authored breaks, {m.TranslationsWithJoinedBreaks} translations with joined breaks");
+                          + $"authored breaks");
+        BreakCounts k = report.Breaks;
+        Console.WriteLine($"  line breaks: {k.Wraps} wraps, {k.Deliberate} deliberate ({k.MessagesWithDeliberate} "
+                          + $"messages), {k.Uncertain} uncertain, {k.KeptByCount} kept by the added-break count; "
+                          + $"edges for {k.Edges.Count} script layouts "
+                          + $"({k.Edges.Count(e => e.From == "install")} from the whole install), "
+                          + $"{k.WiderThanEdge.Count} lines wider than their edge; "
+                          + $"{k.AuthoredWithoutDeliberate.Count} messages lose an authored break, "
+                          + $"{k.DeliberateWithoutAuthored.Count} gain a deliberate one");
         Console.WriteLine($"  entries: {c.GlobalEntries} global, {c.ScriptEntries} script, {c.SiteEntries} site, "
                           + $"{c.PatternEntries} pattern; messages served at global {c.MessagesAtGlobal}, script "
                           + $"{c.MessagesAtScript}, site {c.MessagesAtSite}, untranslated {c.MessagesUntranslated}");
@@ -156,11 +164,18 @@ internal static partial class OmpTextCommand
                               .Select(p => $"{p.Key} {p.Value}"))
                           + $"; {report.Literals.FeedCompares.Count} feed compares, {report.Literals.FeedConcat.Count} "
                           + $"feed concat; stored literals: {report.Literals.UnscopableConflicts.Count} unscopable "
-                          + $"conflicts, {report.Literals.UntranslatedInInstall.Count} untranslated in the install that "
-                          + $"the catalog translates, "
-                          + $"{report.Literals.EmptyFilled.Count} empty literals filled with text (not carried)");
+                          + $"conflicts (frame locals), {report.Literals.UntranslatedInInstall.Count} untranslated in "
+                          + $"the install that the catalog translates; empty literals filled with text: "
+                          + $"{report.Literals.EmptyFolded.Count} folded into the line before, "
+                          + $"{report.Literals.EmptyFilled.Count} not carried");
+        ComposedCounts cc = report.Composed;
+        Console.WriteLine($"  composed strings: {cc.Stores} stores and draws, {cc.Templates} templates "
+                          + $"({cc.Untranslated} untranslated), {cc.Entries} pattern entries; {cc.Skipped.Count} walks "
+                          + $"gave up, {cc.Unreadable.Count} templates unreadable");
         DamageCounts d = report.Damage;
-        Console.WriteLine($"  not translations, kept as source: {d.LostCharacters.Count} strings missing characters, "
+        Console.WriteLine($"  not translations, kept as source: {d.LostCharacters.Count} strings missing characters "
+                          + $"({d.LostSeveral.Count} lost several, {d.ShortenedTranslations} of them kept as "
+                          + $"translations), "
                           + $"{d.EmptyWrittenAsSpace.Count} empty strings written as spaces; "
                           + $"{d.ControlCharacters.Count} strings with control characters read leniently");
         Console.WriteLine($"  furigana: {report.Furigana.BaseRuns} base runs, {report.Furigana.TranslatedEmptied} emptied, "
@@ -171,7 +186,8 @@ internal static partial class OmpTextCommand
                               + $"{a.NonAssetFiles.Count} non-asset files (archives compared by {a.ArchivesCompared})");
         if (report.Verify is { } v)
             Console.WriteLine($"  verify: {v.CheckedMessages} messages, {v.CheckedDrawLiterals} drawn literals, "
-                              + $"{v.CheckedPatterns} patterns, {v.CheckedStoredLiterals} stored literals: "
+                              + $"{v.CheckedPatterns} patterns, {v.CheckedComposed} composed, "
+                              + $"{v.CheckedStoredLiterals} stored literals: "
                               + $"{v.Mismatches.Count} mismatches, {v.StoredLiteralConflicts.Count} stored-literal conflicts, "
                               + $"{v.StoredLiteralsTranslatedAnyway.Count} stored literals translated anyway");
         Console.WriteLine($"  wrote {fileCount} catalog files to {textDirectory} and {reportPath}");

@@ -302,15 +302,20 @@ and the drive scenarios.
 ## Localization
 
 - **Build the localization framework.** The design is accepted (`superpowers/specs/2026-11-10-localization-design.md`,
-  2026-11-10) and nothing is implemented. The port shows a game in another language only by running an install
-  whose scripts were translated in place, and its own error box is fixed Japanese
+  2026-11-10) and only milestone 0 is implemented. The port shows a game in another language only by running an
+  install whose scripts were translated in place, and its own error box is fixed Japanese
   (`VirtualMachine.DiagnosticCaption`). The spec's §19 holds the milestones and §18 the gates; they are not
   restated here.
-  - **Milestone 0 is built and waits for review** (2026-11-10). `omp text import-scripts` converts the Kamidori
-    translation: all 430 changed scripts align and `--verify` finds 0 mismatches. The results, what the catalog
-    does not carry (site scope for 133 messages; 728 stored table strings the translators laid out per row) and the
-    translated install's own damage are in `localization-import-test.md`.
-  - **Next:** review those findings, revise spec §6 if they call for it, then start milestone 1.
+  - **Milestone 0 is built, reviewed and revised** (2026-11-10). `omp text import-scripts` converts the Kamidori
+    translation: all 430 changed scripts align, entries keep deliberate line breaks, stored literals and composed
+    strings get scoped entries, and `--verify` finds 0 mismatches. The spec has the review's design changes. The
+    results and rules are in `localization-import-test.md`.
+  - **Next:** milestone 1.
+  - **The import verifier models pattern matching.** `ImportVerifier` checks patterns by sample with its own
+    matcher for spec §6.3 and §6.4, since there is no presenter yet. Done when it uses the presenter's matcher
+    (milestone 2), so the check tests the code the engine runs.
+  - **Cut `localization-import-test.md`'s "Review answers" down to the results** once the review text is
+    committed, as that section says.
   - The manifest's `omp = 2` is shared with the Lua design (the item under "Mod loader and modding"). Whichever
     is built first introduces it.
 

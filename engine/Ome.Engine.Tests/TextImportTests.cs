@@ -15,8 +15,10 @@ using Xunit;
 /// scripts (text replaced in place, hand-made line breaks added as show-text + end-text-line pairs).</summary>
 public class TextImportTests
 {
-    private const int ShowText = 0x6e, EndTextLine = 0x6f, WaitForInput = 0x72, Jmp = 0x8c, SetString = 0x192,
-        StringEquals = 0x194, DisplayFurigana = 0x196, Comment = 0x1a7, Exit = 0x2;
+    private const int ShowText = 0x6e, EndTextLine = 0x6f, WaitForInput = 0x72, Jmp = 0x8c, Call = 0x8f, Ret = 0x5,
+        Jcc = 0xa0, SetString = 0x192, Concat = 0x193, StringEquals = 0x194, DisplayFurigana = 0x196, Comment = 0x1a7,
+        ToString = 0x1c8, Exit = 0x2;
+    private const uint NoTarget = 0xFFFFFFFF;
 
     private static readonly OpcodeTable Table = OpcodeTableJson.Load(Paths.OpcodesJson);
     private static readonly OpcodeContracts Contracts = OpcodeContracts.Load(Paths.OpcodesJson);
@@ -68,6 +70,8 @@ public class TextImportTests
 
     private static Operand I(long value) => new(0, value);
     private static Operand GlobalString(long index) => new(5, index);
+    private static Operand GlobalInt(long index) => new(3, index);
+    private static Operand LocalString(long index) => new(0xb, index);
 
     private static ScriptMessages Segment(Script script)
         => MessageSegmenter.Segment(script, Text, ScriptAlignment.BranchTargets(script, Contracts));
@@ -163,7 +167,7 @@ public class TextImportTests
         {
             var asm = new Asm();
             int jump = asm.Op(Jmp, I(0));
-            if (translated) asm.Say("Hello,", "and welcome.");
+            if (translated) asm.Say("Hello, and welcome to", "the village.");
             else asm.Say("こんにちは。");
             int target = asm.Here;
             asm.Say(translated ? "Yes" : "はい");
@@ -177,13 +181,116 @@ public class TextImportTests
         Assert.Equal((1, 1, 0), (report.Scripts.Changed, report.Scripts.Aligned, report.Scripts.NotAligned.Count));
         Assert.Equal((1, 1), (report.Alignment.InsertedShowText, report.Alignment.InsertedEndTextLine));
         Assert.Equal(0, report.Alignment.TargetDisagreements.Count);
-        Assert.Equal((2, 2, 1), (report.Messages.Total, report.Messages.Translated,
-            report.Messages.TranslationsWithJoinedBreaks));
+        Assert.Equal((2, 2, 1), (report.Messages.Total, report.Messages.Translated, report.Breaks.Wraps));
         TextCatalog catalog = Catalog(import);
-        Assert.Equal("Hello, and welcome.", Present(catalog, "こんにちは。"));
+        Assert.Equal("Hello, and welcome to the village.", Present(catalog, "こんにちは。"));
         Assert.Equal("Yes", Present(catalog, "はい"));
         Assert.Equal(new[] { ScriptTranslationImporter.GlobalFileName }, import.Files.Keys);
         Assert.Equal(0, ImportVerifier.Verify(catalog, import.Occurrences).Mismatches.Count);
+    }
+
+    /// <summary>A translated line of exactly 40 half cells: the line edge of the scripts below.</summary>
+    private const string EdgeLine = "The quick brown fox jumped over the dogs";
+
+    private static void SayFillers(Asm asm, bool translated, int count)
+    {
+        for (int k = 0; k < count; k++) asm.Say(translated ? EdgeLine : "あ" + k);
+    }
+
+    [Fact]
+    public void BreaksAreWrapsOrDeliberateByTheScriptsLineEdge()
+    {
+        const string full = "Every word of this line fills the box up";
+        Assert.Equal((40, 40), (EdgeLine.Length, full.Length));
+        Asm Build(bool translated)
+        {
+            var asm = new Asm();
+            SayFillers(asm, translated, 20);
+            if (translated)
+            {
+                asm.Say("We walked along the river and up the", "hill.");
+                asm.Say("Yes.", "Fine.");
+                asm.Say(full, "[ Accessory ]");
+                asm.Say("Flies over pits", " [ Skill ]      CP: 3");
+            }
+            else
+            {
+                asm.Say("川沿いを歩いて丘を登った。");
+                asm.Say("はい。");
+                asm.Say("【装飾】", "説明");
+                asm.Say("【移動】", "説明二");
+            }
+            asm.Op(Exit);
+            return asm;
+        }
+
+        var (import, report) = Import(("SC0008", Build(false), Build(true)));
+
+        TextCatalog catalog = Catalog(import);
+        // "hill." would cross the edge, so the break only wraps; "Fine." would have fit, so the break is meant.
+        Assert.Equal("We walked along the river and up the hill.", Present(catalog, "川沿いを歩いて丘を登った。"));
+        Assert.Equal("Yes.\nFine.", Present(catalog, "はい。"));
+        // The line ends at the edge, but the base breaks there itself and the translation added no break.
+        Assert.Equal(full + "\n[ Accessory ]", Present(catalog, "【装飾】説明"));
+        // A line that starts with a space is never a wrap, and spaces inside a line stay.
+        Assert.Equal("Flies over pits\n [ Skill ]      CP: 3", Present(catalog, "【移動】説明二"));
+        ReportedEdge edge = Assert.Single(report.Breaks.Edges);
+        Assert.Equal((40, "script"), (edge.Edge, edge.From));
+        Assert.Equal((1, 3, 1), (report.Breaks.Wraps, report.Breaks.Deliberate, report.Breaks.KeptByCount));
+        Assert.Equal(0, ImportVerifier.Verify(catalog, import.Occurrences).Mismatches.Count);
+    }
+
+    [Fact]
+    public void AScriptWithFewLinesTakesTheInstallsLineEdge()
+    {
+        Asm Long(bool translated)
+        {
+            var asm = new Asm();
+            SayFillers(asm, translated, 20);
+            asm.Op(Exit);
+            return asm;
+        }
+
+        Asm Short(bool translated)
+        {
+            var asm = new Asm();
+            if (translated) asm.Say("I see.", "Okay.");
+            else asm.Say("なるほど。");
+            asm.Op(Exit);
+            return asm;
+        }
+
+        var (import, report) = Import(("SC0009", Long(false), Long(true)), ("SC0010", Short(false), Short(true)));
+
+        // Measured by its own two lines, "Okay." would not fit after "I see." and the break would be a wrap.
+        Assert.Equal("I see.\nOkay.", Present(Catalog(import), "なるほど。"));
+        ReportedEdge edge = report.Breaks.Edges.Single(e => e.Script == "SC0010");
+        Assert.Equal((40, "install", 2), (edge.Edge, edge.From, edge.Lines));
+    }
+
+    [Fact]
+    public void AShortenedStringIsDamageOnlyWhileALetterIsLeft()
+    {
+        Asm Build(params string[] values)
+        {
+            var asm = new Asm();
+            for (int k = 0; k < values.Length; k++) asm.Op(SetString, GlobalString(k + 1), asm.S(values[k]));
+            asm.Op(Exit);
+            return asm;
+        }
+
+        var (import, report) = Import(("EBINIT", Build("週送り。", "精霊／ヘタレ種", "スキル『"),
+            Build("週り。", "精", "『")));
+
+        TextCatalog catalog = Catalog(import);
+        Assert.Equal("週送り。", Present(catalog, "週送り。"));
+        Assert.Equal("精霊／ヘタレ種", Present(catalog, "精霊／ヘタレ種"));
+        // Only punctuation is left: the words moved to another string, so this is a translation.
+        Assert.Equal("『", Present(catalog, "スキル『"));
+        Assert.Equal(2, report.Damage.LostCharacters.Count);
+        Assert.Equal(new[] { ("精霊／ヘタレ種", "damage"), ("スキル『", "translation") },
+            report.Damage.LostSeveral.Samples.Select(s => (s.Base, s.Class)));
+        Assert.Equal(1, report.Damage.ShortenedTranslations);
     }
 
     [Fact]
@@ -282,17 +389,65 @@ public class TextImportTests
 
         var (import, report) = Import(
             ("SC0004", Build("シーン回想終了", "シーン回想終了"), Build("シーン回想終了", "シン回想終了")),
-            ("SP0001", Build("シーン回想終了"), Build("Return to Gallery")),
-            ("QUINIT", Build("の調査", "の調査", "の調査"), Build("Forest survey", "Lake survey", "Forest survey")));
+            ("SP0001", Build("シーン回想終了"), Build("Return to Gallery")));
 
         TextCatalog catalog = Catalog(import);
-        Assert.Equal("Return to Gallery", Present(catalog, "シーン回想終了"));
-        Assert.Equal("Forest survey", Present(catalog, "の調査"));
+        // The untranslated copies get no entry of their own, so SC0004 presents the translation too.
+        Assert.Equal("Return to Gallery", Present(catalog, "シーン回想終了", "SC0004", 0));
         Assert.Equal(2, report.Literals.UntranslatedInInstall.Count);
-        ReportedConflict conflict = Assert.Single(report.Literals.UnscopableConflicts.Samples);
-        Assert.Equal(("QUINIT", "Lake survey"), (conflict.Script, conflict.Translated));
         VerifyCounts verify = ImportVerifier.Verify(catalog, import.Occurrences);
-        Assert.Equal((1, 2), (verify.StoredLiteralConflicts.Count, verify.StoredLiteralsTranslatedAnyway.Count));
+        Assert.Equal((0, 2), (verify.Mismatches.Count, verify.StoredLiteralsTranslatedAnyway.Count));
+    }
+
+    [Fact]
+    public void AStoredLiteralIsScopedByTheInstructionThatStoresIt()
+    {
+        Asm Build(string local, params string[] values)
+        {
+            var asm = new Asm();
+            foreach (string value in values) asm.Op(SetString, GlobalString(0x6ba5), asm.S(value));
+            asm.Op(SetString, LocalString(0), asm.S(local));
+            asm.Op(Exit);
+            return asm;
+        }
+
+        var (import, report) = Import(("QUINIT",
+            Build("の調査", "の調査", "の調査", "の調査"), Build("Survey", "Forest survey", "Lake survey", "Forest survey")));
+
+        TextCatalog catalog = Catalog(import);
+        Assert.Equal("Forest survey", Present(catalog, "の調査"));
+        // A set-string with two operands is 5 dwords long; the second store has a site entry.
+        Assert.Equal("Lake survey", Present(catalog, "の調査", "QUINIT", 5));
+        Assert.Equal("Forest survey", Present(catalog, "の調査", "QUINIT", 10));
+        // Nothing records a store into a frame local, so that one can only take the global entry.
+        ReportedConflict conflict = Assert.Single(report.Literals.UnscopableConflicts.Samples);
+        Assert.Equal(("QUINIT", 15, "Survey"), (conflict.Script, conflict.Offset, conflict.Translated));
+        VerifyCounts verify = ImportVerifier.Verify(catalog, import.Occurrences);
+        Assert.Equal((0, 1), (verify.Mismatches.Count, verify.StoredLiteralConflicts.Count));
+    }
+
+    [Fact]
+    public void AFilledEmptyLineFoldsIntoTheLineStoredToTheCellBefore()
+    {
+        static Asm Build(params string[] lines)
+        {
+            var asm = new Asm();
+            for (int k = 0; k < 4; k++) asm.Op(SetString, GlobalString(0x24ab + k), asm.S(lines[k]));
+            int jump = asm.Op(Jmp, I(0));
+            asm.Target(jump, 0, asm.Here);
+            // A block starts here, so nothing before it is the line before.
+            asm.Op(SetString, GlobalString(0x24af), asm.S(lines[4]));
+            asm.Op(Exit);
+            return asm;
+        }
+
+        var (import, report) = Import(("STINIT", Build("一行目", "二行目", "", "", ""),
+            Build("Line one", "Line two ", "three", "four", "five")));
+
+        Assert.Equal("Line two\nthree\nfour", Present(Catalog(import), "二行目"));
+        Assert.Equal((2, 1), (report.Literals.EmptyFolded.Count, report.Literals.EmptyFilled.Count));
+        Assert.Equal(23, report.Literals.EmptyFilled.Samples.Single().Offset);
+        Assert.Equal(0, ImportVerifier.Verify(Catalog(import), import.Occurrences).Mismatches.Count);
     }
 
     [Fact]
@@ -333,5 +488,116 @@ public class TextImportTests
         NotAlignedScript failure = Assert.Single(report.Scripts.NotAligned);
         Assert.Equal(("set-string", "operand 1 differs"), (failure.Failure.BaseOpcode, failure.Failure.Reason));
         Assert.Empty(import.Occurrences);
+    }
+
+    // ---- composed strings (R4) ----------------------------------------------------------------------------------
+
+    [Fact]
+    public void AComposedStringBecomesAPatternOfTheComposingScript()
+    {
+        static Asm Build(string head, string tail)
+        {
+            var asm = new Asm();
+            asm.Op(Concat, LocalString(0), GlobalString(3), asm.S(head));
+            asm.Op(Concat, LocalString(0), LocalString(0), GlobalString(4));
+            asm.Op(Concat, LocalString(0), LocalString(0), asm.S(tail));
+            asm.Op(SetString, GlobalString(9), LocalString(0));
+            asm.Op(Exit);
+            return asm;
+        }
+
+        var (import, report) = Import(("SHOWCC", Build("が『", "』の称号を獲得"), Build(" has acquired the title 『", "』")));
+
+        TextCatalog catalog = Catalog(import);
+        TextEntry pattern = Assert.Single(catalog.Patterns);
+        Assert.Equal(("{v1}が『{v2}』の称号を獲得", "{v1} has acquired the title 『{v2}』", "SHOWCC", (int?)null),
+            (pattern.Source, pattern.Text, pattern.Script, pattern.At));
+        Assert.Equal((1, 1, 1), (report.Composed.Stores, report.Composed.Templates, report.Composed.Entries));
+        VerifyCounts verify = ImportVerifier.Verify(catalog, import.Occurrences);
+        Assert.Equal((1, 0), (verify.CheckedComposed, verify.Mismatches.Count));
+
+        // A pattern of the store's own site wins over the script's, so it shadows the composed string: verify fills
+        // the source with sample values and finds that the catalog presents something else.
+        TextOccurrence store = import.Occurrences.Single(o => o.Kind == OccurrenceKind.Composed);
+        Assert.True(TextEntry.TryCreate("{v1}の称号を獲得", "Title: {v1}", out TextEntry shadow, out _));
+        TextCatalog shadowed = TextCatalog.Build("en",
+            catalog.Entries.Append(shadow with { Script = "SHOWCC", At = store.Offset }));
+        ReportedMismatch mismatch = Assert.Single(ImportVerifier.Verify(shadowed, import.Occurrences).Mismatches.Samples);
+        Assert.Equal("Composed by sample", mismatch.Kind);
+    }
+
+    [Fact]
+    public void EachPathToAStoreGivesItsOwnTemplate()
+    {
+        static Asm Build(string minus, string plus)
+        {
+            var asm = new Asm();
+            asm.Op(ToString, LocalString(0), GlobalInt(5));
+            int branch = asm.Op(Jcc, GlobalInt(6), I(NoTarget), I(0));
+            asm.Op(Concat, LocalString(0), asm.S(minus), LocalString(0));
+            int skip = asm.Op(Jmp, I(0));
+            asm.Target(branch, 2, asm.Here);
+            asm.Op(Concat, LocalString(0), asm.S(plus), LocalString(0));
+            asm.Target(skip, 0, asm.Here);
+            asm.Op(SetString, GlobalString(9), LocalString(0));
+            asm.Op(Exit);
+            return asm;
+        }
+
+        var (import, report) = Import(("SHOWCC", Build("基本出撃コスト－", "基本出撃コスト＋"),
+            Build("Command Cost -", "Command Cost +")));
+
+        TextCatalog catalog = Catalog(import);
+        Assert.Equal(new[]
+            {
+                ("基本出撃コスト＋{v1:num}", "Command Cost +{v1}"), ("基本出撃コスト－{v1:num}", "Command Cost -{v1}"),
+            },
+            catalog.Patterns.Select(p => (p.Source, p.Text)).OrderBy(p => p.Source, StringComparer.Ordinal));
+        Assert.All(catalog.Patterns, p => Assert.Equal(("SHOWCC", (int?)null), (p.Script, p.At)));
+        Assert.Equal((1, 2, 2), (report.Composed.Stores, report.Composed.Templates, report.Composed.Entries));
+        VerifyCounts verify = ImportVerifier.Verify(catalog, import.Occurrences);
+        Assert.Equal((2, 0), (verify.CheckedComposed, verify.Mismatches.Count));
+    }
+
+    [Fact]
+    public void AWalkGivesUpAtALoopOrTooManyPathsAndReportsTheStore()
+    {
+        static Asm Loop(string start, string more)
+        {
+            var asm = new Asm();
+            asm.Op(SetString, LocalString(0), asm.S(start));
+            int top = asm.Here;
+            asm.Op(Concat, LocalString(0), LocalString(0), asm.S(more));
+            asm.Op(Jcc, GlobalInt(6), I(NoTarget), I(top));
+            asm.Op(SetString, GlobalString(9), LocalString(0));
+            asm.Op(Exit);
+            return asm;
+        }
+
+        // Four optional parts: sixteen paths, more than a walk follows.
+        static Asm Paths(string part)
+        {
+            var asm = new Asm();
+            asm.Op(ToString, LocalString(0), GlobalInt(5));
+            for (int k = 0; k < 4; k++)
+            {
+                int branch = asm.Op(Jcc, GlobalInt(6 + k), I(NoTarget), I(0));
+                asm.Op(Concat, LocalString(0), LocalString(0), asm.S(part));
+                asm.Target(branch, 2, asm.Here);
+            }
+            asm.Op(SetString, GlobalString(9), LocalString(0));
+            asm.Op(Exit);
+            return asm;
+        }
+
+        var (import, report) = Import(("FIELD", Loop("星", "★"), Loop("Star", "*")),
+            ("SALE", Paths("個"), Paths(" pcs")));
+
+        Assert.Equal(new[] { ("FIELD", "loop"), ("SALE", "paths") },
+            report.Composed.Skipped.Samples.Select(s => (s.Script, s.Reason)));
+        // The path that leaves the loop at once still gives its template; with literals only, it is an exact entry.
+        TextCatalog catalog = Catalog(import);
+        Assert.Equal("Star*", Present(catalog, "星★", "FIELD"));
+        Assert.Equal(0, ImportVerifier.Verify(catalog, import.Occurrences).Mismatches.Count);
     }
 }

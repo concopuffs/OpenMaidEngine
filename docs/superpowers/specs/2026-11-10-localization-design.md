@@ -1,8 +1,10 @@
 # Localization — design
 
 **Date:** 2026-11-10
-**Status:** accepted 2026-11-10, after one design review. Nothing is implemented. §20 records the questions
-settled at acceptance and the one still open.
+**Status:** accepted 2026-11-10, after one design review. Revised the same day after the review of milestone 0's
+numbers (`docs/localization-import-test.md`): line structure in entries (§7.1, §18.1), the record of stores and
+the lookup order it allows (§5.2, §6.1, §6.4, §15), and `at` in version 1 (§20). Milestone 0 is implemented;
+nothing in the engine is. §20 records the settled questions.
 **Home in the canonical map:** this file is the design. The package format it extends stays in
 `docs/superpowers/specs/2026-11-03-mod-loader-design.md`. The shell's string tables stay in
 `docs/superpowers/specs/2026-11-09-engine-shell-design.md` (§6). Native text and history findings stay in
@@ -10,11 +12,11 @@ settled at acceptance and the one still open.
 
 **Not verified** (each is marked where it matters):
 
-- how many source strings the Kamidori fan translation renders in more than one way. The diff in §2 counted
-  instruction changes only. Milestone 0 measures this;
-- what Himegari's 17,401 `draw-string` calls with a variable operand draw. The design treats them like any other
+- what Himegari's 17,401 `draw-string` calls with a variable operand draw. 17,361 of them draw through a pointer
+  into a named string table, so they resolve with the cell's record (§5.2); the rest are treated like any other
   string;
-- what Himegari's name editor names, and whether any script compares the result (§5.1);
+- whether any Himegari script compares the name its editor writes (cell `0x279`, which 1,666 `show-text` sites
+  draw; §5.1);
 - the frame position a save resumes from (§8). `docs/engine-re.md` says the scripts rebuild the page; the saved
   position itself was not traced for this design.
 
@@ -153,6 +155,32 @@ script does not justify them yet.
 At each site the VM asks the presenter for the presented text and passes both forms to the host. The host draws
 the presented form.
 
+**The origin of a stored string.** Table and UI text is stored in one place and drawn in another, so the drawing
+site alone cannot scope its entries. The VM therefore keeps a record per global string cell:
+
+- **Record.** Every instruction that writes a global string cell (`set-string`, `concat`, `toString`, `mov`)
+  records itself and the text it wrote. The destination may be a cell or a pointer to one (operand types 5, 8 and
+  14). A copy from a global cell whose record is still valid takes over that record instead, so a table row copied
+  elsewhere keeps the literal's origin.
+- **Use.** At the presentation sites and in the length opcodes (§5.3), an operand that resolves to a global string
+  cell takes the cell's record as its **origin**, but only while the cell still holds the recorded text. Any other
+  write that changes the text cancels the record, with no hook of its own. For a literal operand the origin is the
+  drawing instruction itself.
+- **Lookup.** The origin narrows the lookup as §6.4 says, so a site entry on the instruction that stored a table
+  row applies wherever the row is drawn.
+- **Kept whenever the mounted stack defines a language,** not only while one is selected, so switching language
+  during play is exact for the tables the boot scripts fill. A root reload clears the records: a reload that
+  mounts the first language during play starts with none until the title. With no language in the stack nothing
+  is recorded (gate 1).
+- **Not saved.** Tables the boot scripts fill (QUINIT, EBINIT and the others INIT2 runs) are written before any
+  load, and a load that writes the same text back keeps their records. A cell filled on demand, such as the stage
+  loader's, has no record after a load until its loader runs again; until then it is resolved at the drawing site.
+- **Not covered:** strings held in frame locals, which have no record. A string built with `concat` has the store
+  that wrote it into the cell as its origin; its text is matched by a pattern (§6.3).
+
+The evidence is in `docs/localization-import-test.md` (R2): the scripts draw table text through a pointer into a
+named table, and 9,398 of the 9,429 global cells that literals write have one writing site.
+
 Not resolved in version 1: `draw-formatted-integer` and the digit atlases (numbers only), the diagnostic
 accumulator and the developer jump picker (developer-facing).
 
@@ -194,9 +222,11 @@ An entry matches by exact source text. It may be narrowed:
 | Scope | Written as | Matches |
 |---|---|---|
 | Global | no scope | the text, wherever it is drawn |
-| Script | `script = "STATUS"` | only when that script's instruction draws it |
+| Script | `script = "STATUS"` | only when that script's instruction draws it, or stored it (§5.2) |
 | Site | `script = "SC0100"`, `at = 0x2a43` | only that instruction |
 
+- `script` and `at` name the instruction that holds the text: the one that draws a message or literal, or the one
+  that stored a string the record of §5.2 traces. `text/en/QUINIT.toml` thus translates the strings QUINIT stores.
 - The site form uses the coordinate the F3 locator already prints (`text SC0100@0x2a43`). It is a base offset, so
   the catalog file must name the script's fingerprint, as a patch does.
 - A site entry depends on mapping base offsets to the linked script the VM runs. The linker does not keep that
@@ -205,7 +235,7 @@ An entry matches by exact source text. It may be narrowed:
   cheap: one offset table per patched script in the link cache. An unpatched script needs none, because its
   offsets are the base offsets. Runtime hooks on a script site would need the same table (the Lua design,
   `docs/backlog.md`, "Runtime scripting (Lua)").
-- Whether `at` ships in version 1 is decided by milestone 0's count (§18.1).
+- `at` ships in version 1 (§20). In the Kamidori import, 137 messages and 553 stored strings need it.
 - Comparison is by exact code points. There is no normalisation, since the extraction tool writes the keys.
 
 ### 6.2 Messages
@@ -244,7 +274,8 @@ A string built at runtime has no fixed key. An entry whose source contains a pla
 
 Having the VM remember which literals a string was built from was considered and set aside. It fails on a save:
 string cells come back from `SAVEnn.DAT` as plain text. Matching on the finished text has to work anyway, so
-patterns are the one mechanism and the VM's string model is unchanged.
+patterns are the one mechanism and the VM's string model is unchanged. The record of §5.2 is narrower: it names
+only the instruction that stored a cell, which scopes the lookup, and a load that changes the text cancels it.
 
 ```toml
 [[text]]
@@ -271,22 +302,32 @@ text   = "You cannot carry any more {item}"
 - **No regular expressions.** The matcher is linear in the text length, so a package cannot make it slow.
 - A pattern with no literal text at its start or end must have a script scope, to bound both cost and false
   matches.
+- **A composed string takes the composing script's scope.** 17 Kamidori scripts store notices and choices into
+  the line list at cell `0x2340`, and `MES` draws them. With the record of §5.2, `SHOWCC`'s pattern
+  `{v1}が『{v2}』の称号を獲得` is scoped to `SHOWCC`, the script that stores the line. Scoped to the drawing script,
+  `MES` would hold the patterns of 17 scripts, where they could match each other's lines.
 
 ### 6.4 Resolution order
 
-For a source text and the site that draws it:
+For a source text, the site that draws it, and its origin (§5.2):
 
-1. exact entry, site scope;
-2. exact entry, script scope;
-3. exact entry, global;
-4. patterns in the same scope order, the one with the most literal characters first;
-5. filters (§6.5);
-6. no hit: the source text is drawn.
+1. exact entry, site scope, at the origin;
+2. exact entry, site scope, at the drawing instruction;
+3. exact entry, script scope, for the origin's script;
+4. exact entry, script scope, for the drawing script;
+5. exact entry, global;
+6. patterns in the same scope order, the one with the most literal characters first;
+7. filters (§6.5);
+8. no hit: the source text is drawn.
+
+For a literal operand, and for a string with no valid record, the origin is the drawing instruction, so steps 1
+and 2 are one step, as are 3 and 4.
 
 - **Between packages,** the later one in load order wins at equal scope. The link report lists each override.
 - **Between languages,** `pt-BR` falls back to `pt`, then to source. A language may declare a different chain.
 - **Ambiguity is an error at build.** Two patterns of equal rank that can match one string fail `omp text check`.
-- **Cache.** Results are cached by source text and scope, because menus redraw the same strings every frame.
+- **Cache.** Results are cached by source text, drawing site and origin, because menus redraw the same strings
+  every frame.
   Misses are cached too. The cache has a fixed capacity and evicts the least recently used result
   (`BoundedLruCache`, which the glyph rasterizer already uses). Himegari has about 17,400 `draw-string` sites with
   a variable operand, and a counter that changes every frame would otherwise grow the cache without limit.
@@ -326,6 +367,17 @@ For presented text:
 - `\n` in the presented text forces a break.
 
 A language declares `line_break = "words"` or `"anywhere"` (§9.2).
+
+**Breaks that are structure.** An entry keeps the breaks its text needs as `\n`: a header line above a description,
+a column padded with spaces, a list. The base scripts have such breaks of their own (2,252 Kamidori messages hold
+an `end-text-line` the base authored), and translators add more. Wrapping is the engine's job, so an entry holds no
+wraps; `import-scripts` tells the two apart (§18.1).
+
+**`\n` in `draw-string`.** A `draw-string` draws one row at a point the script chose. A `\n` in its presented text
+starts a new row at the same x, lower by the font's height plus a gap. The gap is 2 pixels by default, which fits
+Kamidori's `SELSTAGE` (rows 18 pixels apart in a 16-pixel font). An entry's `row_gap` sets another (§9.3):
+`INFO2` draws its quest lines 21 pixels apart, for example. This lets one entry carry text that a translation
+spread over the next cell, where the source left that cell empty and the script skips drawing it.
 
 ### 7.2 Alignment and fit
 
@@ -503,10 +555,11 @@ note   = "item name"                 # for translators; the engine ignores it
 
 | Key | Meaning |
 |---|---|
-| `source` | the source text, a message key (§6.2) or a pattern (§6.3) |
-| `text` | the presented text; `\n` forces a line break |
-| `script`, `at` | scope (§6.1) |
+| `source` | the source text, a message key (§6.2) or a pattern (§6.3). An empty source is not a valid key |
+| `text` | the presented text; `\n` forces a line break, and in a `draw-string` starts a new row (§7.1) |
+| `script`, `at` | scope: the instruction that draws or stores the text (§6.1) |
 | `align`, `fit` | layout (§7.2) |
+| `row_gap` | pixels between rows of a `draw-string` that holds `\n`, beyond the font's height; default 2 (§7.1) |
 | `measure` | override the language's measurement mode for this string |
 | `cells` | this string's length in half cells, in place of the count (§5.3) |
 | `note` | translator comment |
@@ -539,7 +592,9 @@ speak gettext PO, so §13 adds a PO export and import. PO as the shipped format 
   the game text stays source and the shell uses its own fallback. No per-game setting is added in version 1.
 - **Switching.** The shell already switches live. Game text drawn after the switch uses the new language; text
   already on a surface stays until the script redraws it. A full switch is guaranteed after returning to the
-  title, and the options panel says so in one line beside the setting.
+  title, and the options panel says so in one line beside the setting. Table text keeps its scoped entries across
+  a switch, because the records of §5.2 are kept whenever the stack defines a language. A return to the title
+  re-runs INIT2 (op `0x9` restarts SYSTEM4), which records the boot tables again.
 - **Source language.** `ja` means "no presenter" for these games. A stack with no catalog for the selected
   language runs with the presenter off.
 
@@ -615,11 +670,11 @@ New `Ome.Cli omp text` commands:
 
 | Command | Effect |
 |---|---|
-| `omp text extract --language TAG --output DIR` | write catalog templates from the installed scripts: every message per script (with its authored line breaks in `note`), every string literal as a global candidate, and suggested patterns where literals feed `concat`. Run again, it keeps existing translations and marks entries whose source changed or disappeared |
+| `omp text extract --language TAG --output DIR` | write catalog templates from the installed scripts: every message per script (with its authored line breaks in `note`), every string literal as a global candidate, and a pattern for each string the scripts compose with `concat`, scoped to the composing script (§6.3). Run again, it keeps existing translations and marks entries whose source changed or disappeared |
 | `omp text check [--mod PATH …]` | validate catalogs without starting the game: syntax, placeholders used on both sides, ambiguous patterns, sources that match nothing, glyph coverage for bundled fonts |
 | `omp text stats` | translated and untranslated counts per script and language |
 | `omp text po-export`, `po-import` | convert a language to and from gettext PO for translation tools (`msgctxt` carries the scope) |
-| `omp text import-scripts --from GAME_ROOT [--overlay-root DIR] --output DIR` | build a catalog from an install whose scripts were translated in place, by aligning each script with the base and joining hand-broken lines back into messages. Writes the catalog and `import-report.json` (§18.1) |
+| `omp text import-scripts --from GAME_ROOT [--overlay-root DIR] --output DIR` | build a catalog from an install whose scripts were translated in place, by aligning each script with the base and joining hand-broken lines back into messages, with deliberate breaks kept. Writes the catalog and `import-report.json` (§18.1) |
 | `omp text import-scripts … --verify` | replay: present every base message and literal through the catalog just written and compare with the translated install's text. Runs without the game |
 
 `import-scripts` is what turns an existing translation into a package. The Kamidori diff in §2 shows the
@@ -645,12 +700,12 @@ output.
 | Part | Change |
 |---|---|
 | `Ome.Engine` (new `Localization/`) | `TextCatalog` (immutable, per language), `TextPresenter` (resolution, patterns, message table, cache, filter chain), the message segmenter |
-| `VirtualMachine` | the two presentation sites pass source and presented text; the three length opcodes consult the presenter. The VM holds one `TextPresenter` reference and no other new state |
+| `VirtualMachine` | the two presentation sites pass source and presented text, with the operand's origin; the three length opcodes consult the presenter. Every write to a global string cell records its instruction and text while the stack defines a language (§5.2); the records are not saved, and a root reload clears them. Beyond the records, the VM holds one `TextPresenter` reference and no other new state |
 | `AdvTextHistory` | a second, unsaved cursor per layout; an unsaved table of resolved messages per group; group re-presentation for `0x1d1` and `0x82` |
 | `IAdvHost` | the live run carries the presented text, break positions, alignment and fit; the result returns source rows and both cursors. No text measurer: lengths are counted in the engine (§5.3) |
-| `RetainedGlyphLayoutEngine` | break at allowed positions; a measure-only pass for the source rows |
+| `RetainedGlyphLayoutEngine` | break at allowed positions; a measure-only pass for the source rows; rows for `\n` in a `draw-string` (§7.1) |
 | Godot host | text server rasterizer for every run while a language is active; per-language font substitution; the wait indicator follows the presented layout |
-| `Ome.Mods` | `text/`, `fonts/`, `assets/<language>/`, `[[language]]`, merge and report, presentation-only stamps; a base-offset table per patched script in the link cache, if `at` ships (§6.1) |
+| `Ome.Mods` | `text/`, `fonts/`, `assets/<language>/`, `[[language]]`, merge and report, presentation-only stamps; a base-offset table per patched script in the link cache, for `at` (§6.1) |
 | `Ome.Engine.Frontend` | `ui:Language` accepts any tag; language list from the stack; engine-string lookup with the package layer |
 | `Ome.Cli` | `omp text` commands |
 
@@ -695,7 +750,7 @@ Catalogs are data from untrusted packages (mod loader spec §11):
 | 7. History | the backlog shows presented text before and after a save and load, and changes with the language; the click-wait indicator sits after the last presented glyph |
 | 8. Assets | a language asset overrides its package's plain one only while its language is selected; the fallback chain applies; a later package's plain asset wins over an earlier package's language asset, and the link report lists it |
 | 9. Pseudo-language | the committed drive scenarios run under `x-pseudo` with the same VM positions as the source run |
-| 10. Import, local only | `import-scripts` converts the translated Kamidori install; `--verify` reproduces its text for every message and literal; every item the catalog could not carry is on a reviewed list (§18.1) |
+| 10. Import, local only | `import-scripts` converts the translated Kamidori install; `--verify` reproduces its text for every message, literal and composed string; every item the catalog could not carry is on a reviewed list (§18.1) |
 | 11. Run comparison, local only | the port driven over the same scenarios on the translated install and on the clean install with the imported catalog shows the same text on every page (§18.1) |
 
 Gates 1–9 use synthetic catalogs written for the tests and run in CI. Gates 10 and 11 need an install the
@@ -720,16 +775,29 @@ script and writes a catalog and a report. The report answers the questions the d
 | changed literals outside messages (`set-string`, `draw-string` and `concat` operands) | whether table and UI strings convert as plain global entries |
 | changed literals that feed compares or the value switch | §5.1. The three known ones should need no entry, because the base literal stays in place |
 | emptied furigana runs | §6.2. The catalog drops ruby from the presented text, as the translators did |
-| literals that feed `concat` | which patterns (§6.3) a real translation needs |
+| line breaks in translated messages: wraps, deliberate breaks, and the line edge per script and layout | §7.1. An entry keeps the deliberate breaks as `\n` and no wraps |
+| stored literals by scope, and empty stored lines the translation filled | §5.2. A site entry on the storing instruction carries a table row; a filled empty line folds into the line before it |
+| composed strings: the templates each store or draw builds, and the walks that gave up | which patterns (§6.3) a real translation needs, with the composing script's scope |
+| strings the install shortened, by class | that the install's damage is not taken for a translation |
 | changed files that are neither scripts nor images | what the design has no home for |
 | replaced images | the list that becomes `assets/<language>/` (§12) |
 
-`--verify` then presents every base message and literal through the catalog and compares the result with the
-translated install's text, ignoring line breaks and runs of spaces. A mismatch means two different translations
-ended up under one key.
+**Line breaks.** The translated install marks every line break the same way, so the importer classifies each one.
+Widths are counted in half cells. The line edge of a script and layout is the width that 99% of its translated
+lines fit; a script with few lines takes the install's edge for that layout. A break is a wrap when the next
+line's first word would not have fitted on the line before it, and deliberate otherwise. A break before a blank
+line or an indented line is deliberate, and a message has at most as many wraps as the breaks the translation
+added. The full rules and their trade-offs are in `docs/localization-import-test.md`.
 
-The numbers decide the open question in §20. If almost nothing needs site scope, `at` can leave version 1. If a
-large share of messages cannot be joined, §6.2 has to change before anything is built on it.
+`--verify` then presents every base message and literal through the catalog and compares the result with the
+translated install's text as the importer read it, with wraps joined and deliberate breaks kept. The comparison
+is exact. A stored literal is checked at the instruction that stores it. A pattern is checked by sample as well:
+its source, filled with sample values, must present through the catalog's patterns as its translation filled the
+same way. A mismatch means two different translations ended up under one key, or that one pattern shadows
+another.
+
+Milestone 0's numbers settled the open question of `at`: it ships in version 1 (§20). No message failed to join,
+so §6.2 stands. The results are in `docs/localization-import-test.md`.
 
 **Half 2: run comparison (gate 11, milestone 6).** The port already runs both installs
 (`docs/modding/games/kamidori.md`). Drive the same scenarios with the same `rand-seed` on each:
@@ -738,8 +806,9 @@ large share of messages cannot be joined, §6.2 has to change before anything is
 - run B: the clean install with the imported catalog.
 
 Page N of run A must show the same text as page N of run B. Run A's page map `dialogue` is compared with run
-B's `presented` field, ignoring line breaks and runs of spaces. Offsets are not compared, because the
-translated scripts carry extra instructions.
+B's `presented` field, ignoring wraps. Run A's breaks are classified with the layout's real right edge, which the
+port knows at run time, so this needs no estimate of the edge. Offsets are not compared, because the translated
+scripts carry extra instructions.
 
 Two more results come from the same runs:
 
@@ -763,7 +832,8 @@ can go through both halves, and each one that does is another check on the desig
    they call for it. The imported catalog then serves as local test data for every later milestone.
 1. **Core.** Catalog, presenter, exact lookup at the two sites, `ui:Language` wiring, word wrapping, Unicode
    raster path, miss log, pseudo-language. Gates 1, 3, 9.
-2. **Messages, patterns, measurement.** Gates 4, 5, 6.
+2. **Messages, patterns, measurement.** The record of stores and the lookup by origin (§5.2, §6.4); rows for `\n`
+   in a `draw-string` (§7.1). Gates 4, 5, 6.
 3. **History and saves.** Source layout pass, second cursor, history re-presentation. Gates 2, 7.
 4. **Packages and tools.** `text/`, `fonts/`, `[[language]]` in the loader; `omp text extract`, `check`, `stats`;
    the modder guide under `docs/modding/`.
@@ -771,9 +841,10 @@ can go through both halves, and each one that does is another check on the desig
 6. **Assets and run comparison.** Language assets, PNG input, PO conversion, the page map's `presented` field.
    Gates 8, 11.
 
-## 20. Settled questions, and the one still open
+## 20. Settled questions
 
-Settled on 2026-11-10, by the design review and the user:
+Settled on 2026-11-10, by the design review and the user. The last four rows were settled by the review of
+milestone 0's numbers (`docs/localization-import-test.md`, R1 to R3):
 
 | Question | Decision | Alternative that was set aside |
 |---|---|---|
@@ -785,8 +856,9 @@ Settled on 2026-11-10, by the design review and the user:
 | Switching language while playing | fully switched after returning to the title, with a note in the options panel (§10) | requiring a restart |
 | Asset precedence between packages | load order decides; a language asset ranks only above its own package's plain asset (§12) | every language asset above every plain asset, with the conflict reported |
 | Name entry | a limitation of version 1 (§5.1) | presenting the default in the editor now (§17) |
+| Site scope | `at` ships in version 1, with the offset table of §6.1. 137 Kamidori messages need it: their script translates the same source two ways, often with content the source line lacks, such as the name of the quest just registered | leaving `at` out: those sites show another translation from their script, and one script announces the wrong quest |
+| Stored text translated per row | a record of the instruction that stored each global string cell, so a site entry on the store applies where the row is drawn (§5.2) | accepting it as a limit of version 1, with OMS patches to the table scripts; or grouped entries for consecutive cells, which needs the presenter to know groups that nothing in the scripts names |
+| Text a translation spread into an empty cell | folded after `\n` into the entry of the line before, and `\n` in a `draw-string` starts a new row (§7.1) | an entry keyed by the empty source, which no compare-safe key allows: scripts compare the cell with `""` to skip the row |
+| Line breaks in entries | an entry keeps deliberate breaks as `\n` and no wraps (§7.1); `--verify` and gate 11 ignore only wraps (§18.1) | joining every break, which loses headers, columns and lists |
 
-Still open:
-
-- **Site scope.** Whether `at` ships in version 1. It needs the offset table of §6.1. Milestone 0's count of
-  messages that need it decides (§18.1).
+Nothing is open.
