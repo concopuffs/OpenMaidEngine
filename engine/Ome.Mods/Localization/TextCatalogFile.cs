@@ -2,8 +2,10 @@ using Ome.Engine.Localization;
 
 namespace Ome.Mods.Localization;
 
-/// <summary>An <c>[[engine]]</c> entry: a keyed string the port draws itself (localization spec §11).</summary>
-public sealed record EngineTextEntry(string Key, string Text, string Origin = "");
+/// <summary>An <c>[[engine]]</c> entry: a keyed string the port draws itself (localization spec §11). Without
+/// <see cref="Text"/> it is a template, which the loader skips: <c>omp text extract</c> writes one for each key the
+/// engine has no table for in the language, with the engine's own wording in <see cref="Note"/>.</summary>
+public sealed record EngineTextEntry(string Key, string? Text, string Origin = "", string? Note = null);
 
 /// <summary>
 /// One catalog file under a package's <c>text/&lt;language&gt;/</c> (localization spec §9.3). <see cref="Script"/>

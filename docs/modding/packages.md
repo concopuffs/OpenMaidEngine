@@ -34,7 +34,7 @@ version = "1.2.0"                    # required, MAJOR.MINOR.PATCH
 authors = ["you"]
 description = "Doubles experience awards."
 
-[game]                               # required
+[game]                               # required (a version 2 package without it is for every game)
 profile = "<profile>"                # a profile id from games/README.md (required)
 target = "native"                    # "native" is the only version 1 target (required)
 revisions = ["sha256:…"]             # SYS4INI.BIN fingerprints this mod supports
@@ -69,8 +69,9 @@ tag = "en"
 
 Unknown keys are errors, so a misspelled setting cannot be silently ignored.
 
-**Format versions.** `omp = 2` adds the `[[language]]` table and the `text/` and `fonts/` folders; everything else
-is as in version 1, which a version 2 loader still reads. A version 1 package with any of the three is an error.
+**Format versions.** `omp = 2` adds the `[[language]]` table and the `text/` and `fonts/` folders, and lets a
+package leave out `[game]` (below); everything else is as in version 1, which a version 2 loader still reads. A
+version 1 package with any of the three, or without `[game]`, is an error.
 
 ### Identity
 
@@ -85,7 +86,9 @@ is as in version 1, which a version 2 loader still reads. A version 1 package wi
 
 ### `[game]`
 
-- **`profile`:** the game. A mod targets exactly one game.
+- **`profile`:** the game. A mod targets exactly one game. A version 2 package without `[game]` targets every game
+  and holds only the engine's own text in other languages: `[[language]]` tables, catalogs with `[[engine]]` entries
+  alone, and `fonts/` ([languages.md](languages.md), "A shell language for every game").
 - **`target`:** `native`. The mod uses only what the original engine supports, so it can be exported for
   `AGE.EXE`.
 - **`revisions`:** optional SHA-256 fingerprints of `SYS4INI.BIN`. When present, any other installed catalog stops

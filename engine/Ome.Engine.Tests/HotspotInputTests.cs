@@ -362,6 +362,13 @@ public class HotspotInputTests
         Assert.StartsWith("Depth が不正です INNER != OUTER\n\nデバック情報：\nFILE=INNER ADDRESS=3 LINE=-1 COMMAND=-(2) DEPTH=1\n",
                           shown.Text);
         Assert.Contains("中止：プログラムを終了します．", shown.Text);
+        // The box's parts, for a host that shows it in another language (localization spec §11).
+        AgeBoxParts parts = shown.Parts!;
+        Assert.Equal(AgeBoxText.DepthMismatch, parts.Message.Key);
+        Assert.Equal(new[] { "INNER", "OUTER" }, parts.Message.Args);
+        Assert.Equal(new AgeBoxLocation("INNER", 3, -1, "-", 2, 1), parts.Location);
+        Assert.True(parts.Prompt);
+        Assert.Equal(shown.Text, AgeBoxText.Compose(parts, AgeBoxText.JapaneseText));
     }
 
     /// <summary>The Depth error's box answered 再試行 or 無視 (driven natively 2026-11-04). The callee waits at

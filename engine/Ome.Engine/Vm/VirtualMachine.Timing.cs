@@ -91,7 +91,7 @@ public sealed partial class VirtualMachine
                 // another script, AGE raises Depth before the cursor moves; op 0xd5 recorded length 0, so 再試行 and
                 // 無視 both run it again and the error repeats until 中止.
                 if (targetOffset != -1 && _timedCallbackGuard is { } guard && !IsSameScript(guard, _cur.Script))
-                    return RaiseInstructionScriptError(DepthErrorText(guard), pc, ignoreSkipsInstruction: false);
+                    return RaiseInstructionScriptError(DepthError(guard), pc, ignoreSkipsInstruction: false);
                 _timedCallbackCursor++;
                 if (targetOffset < 0 || !_cur.Script.IndexByOffset.TryGetValue(targetOffset, out int target))
                     return pc;

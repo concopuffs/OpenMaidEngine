@@ -1,7 +1,9 @@
 namespace Ome.Engine.Model;
 
-/// <summary>A synchronous AGE-owned diagnostic prompt after native body/context formatting.</summary>
-public readonly record struct DiagnosticMessage(string Caption, string Text);
+/// <summary>A synchronous AGE-owned diagnostic prompt after native body/context formatting. <see cref="Caption"/>
+/// and <see cref="Text"/> are AGE's Japanese; <see cref="Parts"/>, when the VM built the box, let a host present it in
+/// another language (<see cref="AgeBoxText.Compose"/>).</summary>
+public readonly record struct DiagnosticMessage(string Caption, string Text, AgeBoxParts? Parts = null);
 
 /// <summary>The answer to an interpreter error box (age_show_message_box mode 7, MessageBoxA style 0x112). AGE's
 /// packer thunk maps IDRETRY to 2 and IDIGNORE to 4 for the main loop's policy; every other button exits.</summary>

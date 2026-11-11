@@ -80,7 +80,7 @@ public partial class Main
         var context = new OptionsPanel.Context(
             _shellStrings, draft, opened, new Vector2I(_screenWidth, _screenHeight), PanelWindowSizes(opened),
             () => _windowed, toWindow => SwitchScreenMode(toWindow, "the options panel"), _forceScreen, About(),
-            Diagnostics(), OmeIcon);
+            Diagnostics(), OmeIcon, _languageLaunch?.Languages() ?? []);
         var panel = new OptionsPanel(context, section);
         panel.Committed += edited => CloseOptionsPanel(panel, draft, opened, edited, fromSettings);
         panel.Cancelled += () => CloseOptionsPanel(panel, draft, opened, null, fromSettings);
@@ -196,19 +196,24 @@ public partial class Main
             ApplyWindowSize(edited);
     }
 
-    /// <summary>ui:Language: the shell's texts, the bar and the strip switch tables, and the game text's language
-    /// (Main.Language.cs). The 終了 dialog and the folder picker read the table when they open.</summary>
+    /// <summary>ui:Language: the game text's language and the shell's tables (Main.Language.cs).</summary>
     private void ApplyShellLanguage(string language)
     {
-        _shellStrings = ShellStrings.Load(language);
+        GD.Print($"[options] the shell's language is {language}");
+        ApplyGameLanguage(language, startup: false);
+    }
+
+    /// <summary>The shell's texts: the bar and the strip switch tables. The 終了 dialog, the folder picker and AGE's
+    /// boxes read the table when they open.</summary>
+    private void UseShellStrings(ShellStrings strings)
+    {
+        _shellStrings = strings;
         _shellMenu = new ShellMenu(_shellStrings, _catalog.StartupSettings);
         if (_menuItems != null) _shellMenu.Relabel(_menuItems);
         if (_menuStrip != null) _shellMenu.Relabel(_menuStrip.Bar.Items);
         RefreshMenu();
         _menuBar?.LayoutBar((int)_menuBar.Size.X);
         _menuStrip?.LayoutStrip(new Vector2I(_screenWidth, _screenHeight));
-        GD.Print($"[options] the shell's language is {language}");
-        ApplyGameLanguage(language, startup: false);
     }
 
     /// <summary>display:WindowWidth/WindowHeight: the game's area in a window, the bar's rows scaled with it.</summary>

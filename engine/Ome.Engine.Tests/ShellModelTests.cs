@@ -361,7 +361,10 @@ public class ShellModelTests
             .Concat(ShellOptions.All.Select(o => o.LabelKey))
             .Concat(ShellPanel.PortSwitches.Concat(ShellPanel.PortChoices).Select(ShellPanel.LabelKey))
             .Concat(ShellPanel.Sections.SelectMany(s => s.Groups).Select(g => g.TitleKey))
-            .Concat(ShellPanel.TextKeys);
+            .Concat(ShellPanel.TextKeys)
+            .Append(ShellPanel.LanguageNoteKey)
+            .Concat(ShellBoxes.NameEntryKeys)
+            .Concat(Ome.Engine.Model.AgeBoxText.Japanese.Keys);
     }
 
     [Fact]

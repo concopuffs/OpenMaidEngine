@@ -1,8 +1,10 @@
 using System;
+using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Sys4;
 using Godot;
 
-/// <summary>Godot presentation for AGERc command 10's blocking INPUTNAME editor.</summary>
+/// <summary>Godot presentation for AGERc command 10's blocking INPUTNAME editor, in the shell's language
+/// (<see cref="ShellBoxes"/>).</summary>
 public partial class FullwidthTextEditorDialog : Window
 {
     private readonly LineEdit _edit = new() { MaxLength = 255 };
@@ -11,13 +13,15 @@ public partial class FullwidthTextEditorDialog : Window
         AutowrapMode = TextServer.AutowrapMode.WordSmart,
         CustomMinimumSize = new Vector2(0, 28),
     };
+    private readonly ShellStrings _strings;
     private bool _completed;
 
     public event Action<bool, string>? EditCompleted;
 
-    public FullwidthTextEditorDialog()
+    public FullwidthTextEditorDialog(ShellStrings strings)
     {
-        Title = "文字入力";
+        _strings = strings;
+        Title = strings[ShellBoxes.NameEntryTitle];
         Exclusive = true;
         Transient = true;
         Unresizable = true;
@@ -32,15 +36,15 @@ public partial class FullwidthTextEditorDialog : Window
 
         var column = new VBoxContainer();
         margin.AddChild(column);
-        column.AddChild(new Label { Text = "全角文字で名前を入力してください。" });
+        column.AddChild(new Label { Text = strings[ShellBoxes.NameEntryPrompt] });
         _edit.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         column.AddChild(_edit);
         _error.AddThemeColorOverride("font_color", new Color(1.0f, 0.35f, 0.35f));
         column.AddChild(_error);
 
         var actions = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
-        var cancel = new Button { Text = "キャンセル" };
-        var accept = new Button { Text = "決定" };
+        var cancel = new Button { Text = strings[ShellBoxes.NameEntryCancel] };
+        var accept = new Button { Text = strings[ShellBoxes.NameEntryAccept] };
         actions.AddChild(cancel);
         actions.AddChild(accept);
         column.AddChild(actions);
@@ -67,8 +71,8 @@ public partial class FullwidthTextEditorDialog : Window
         if (error != FullwidthTextValidationError.None)
         {
             _error.Text = error == FullwidthTextValidationError.TooLong
-                ? "字数オーバーです"
-                : "半角文字は使用できません";
+                ? _strings[ShellBoxes.NameEntryTooLong]
+                : _strings[ShellBoxes.NameEntryHalfWidth];
             _edit.GrabFocus();
             return;
         }

@@ -31,10 +31,11 @@ public sealed record ModManifest
     public IReadOnlyList<string> Authors { get; init; } = [];
     public string? Description { get; init; }
 
-    /// <summary>The embedded profile id the mod targets (<c>[game].profile</c>).</summary>
-    public required string Profile { get; init; }
-    /// <summary><c>[game].target</c>; <c>native</c> is the only version 1 target.</summary>
-    public required string Target { get; init; }
+    /// <summary>The embedded profile id the mod targets (<c>[game].profile</c>); null for a version 2 package
+    /// without <c>[game]</c>, which every profile accepts (localization spec §11.1).</summary>
+    public string? Profile { get; init; }
+    /// <summary><c>[game].target</c>; <c>native</c> is the only version 1 target. Null without <c>[game]</c>.</summary>
+    public string? Target { get; init; }
     /// <summary><c>[game].revisions</c>: <c>sha256:</c> fingerprints of <c>SYS4INI.BIN</c>; empty admits any.</summary>
     public IReadOnlyList<string> Revisions { get; init; } = [];
 
@@ -54,6 +55,10 @@ public sealed record ModManifest
     /// <summary>The languages the mod defines (localization spec §9.2), in manifest order, bundled fonts as written
     /// (<c>fonts/NAME</c>).</summary>
     public IReadOnlyList<LanguageSettings> Languages { get; init; } = [];
+
+    /// <summary>Whether the package targets no profile (localization spec §11.1): it may hold only
+    /// <c>[[language]]</c>, catalogs with <c>[[engine]]</c> entries alone, and <c>fonts/</c>.</summary>
+    public bool TargetsAnyProfile => Profile == null;
 
     /// <summary>Whether the mod owns an append catalog and so a selector (spec §6.2).</summary>
     public bool NeedsCatalog => ScriptNames.Count > 0 || AssetNames.Count > 0;

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Ome.Engine.Diagnostics;
+using Ome.Engine.Frontend.Shell;
+using Ome.Engine.Model;
 using Ome.Engine.Persistence;
 using Ome.Engine.Profiles;
 using Ome.Engine.Vm;
@@ -422,14 +424,19 @@ public partial class Main
         _ageCursorTexture = null;
     }
 
-    public void ShowAgeDiagnostic(string text, string caption)
+    /// <summary>Op 0x1b4's box, in the shell's language (the driven run's log keeps AGE's Japanese).</summary>
+    public void ShowAgeDiagnostic(DiagnosticMessage message)
     {
         try
         {
             // A driven run (--control) has nobody to dismiss a modal box, and OS.Alert would block the main thread
             // that serves the control channel; log the box instead (the timeline records it either way).
-            if (_driveServer != null) GD.Print($"[diagnostic] {caption}: {text.Replace("\n", " / ")}");
-            else OS.Alert(text, caption);
+            if (_driveServer != null) GD.Print($"[diagnostic] {message.Caption}: {message.Text.Replace("\n", " / ")}");
+            else
+            {
+                (string caption, string text) = ShellBoxes.Present(message, _shellStrings);
+                OS.Alert(text, caption);
+            }
         }
         catch (System.Exception error)
         {
@@ -441,9 +448,9 @@ public partial class Main
         }
     }
 
-    /// <summary>AGE's interpreter error box (中止/再試行/無視), shown for driven runs too: the driver answers it with
-    /// `answer`, as it answers the native box.</summary>
-    public void ShowAgeScriptError(string text, string caption)
+    /// <summary>AGE's interpreter error box (中止/再試行/無視) in the shell's language, shown for driven runs too: the
+    /// driver answers it with `answer`, as it answers the native box, and reads it in Japanese.</summary>
+    public void ShowAgeScriptError(DiagnosticMessage message)
     {
         if (_scriptErrorDialog != null)
         {
@@ -451,8 +458,8 @@ public partial class Main
             _scriptErrorDialog.QueueFree();
             FreezePresentedFrame(false);
         }
-        GD.Print($"[vm] script error box: {text.Split('\n')[0]}");
-        var dialog = new ScriptErrorDialog(caption, text);
+        GD.Print($"[vm] script error box: {message.Text.Split('\n')[0]}");
+        var dialog = new ScriptErrorDialog(message, _shellStrings);
         _scriptErrorDialog = dialog;
         dialog.Completed += choice =>
         {
@@ -475,7 +482,7 @@ public partial class Main
             _fullwidthTextEditor.QueueFree();
         }
 
-        var editor = new FullwidthTextEditorDialog();
+        var editor = new FullwidthTextEditorDialog(_shellStrings);
         _fullwidthTextEditor = editor;
         editor.EditCompleted += (accepted, text) =>
         {

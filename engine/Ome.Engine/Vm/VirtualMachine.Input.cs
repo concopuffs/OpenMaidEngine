@@ -126,7 +126,7 @@ public sealed partial class VirtualMachine
                 if (_mouseCallbackTarget == -1) return pc + 1;
                 _cur.CallStack.Add(pc + 1);
                 if (_mouseCallbackOwner is { } owner && !IsSameScript(owner, _cur.Script))
-                    return RaiseInstructionScriptError(DepthErrorText(owner), pc);
+                    return RaiseInstructionScriptError(DepthError(owner), pc);
                 if (_cur.Script.IndexByOffset.TryGetValue(_mouseCallbackTarget, out int target)) return target;
                 _cur.CallStack.RemoveAt(_cur.CallStack.Count - 1);
                 return pc + 1;

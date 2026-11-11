@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Model;
 using Godot;
 
@@ -6,16 +8,20 @@ using Godot;
 /// Godot presentation of AGE's interpreter error box: age_show_message_box@0x409370 mode 7, MessageBoxA style
 /// 0x112 (MB_ABORTRETRYIGNORE | MB_ICONHAND | MB_DEFBUTTON2) captioned エラーが発生しました. 再試行 is the default
 /// button. Like the Win32 box, it has no cancel and its ✕ is disabled: only the three answers dismiss it.
+/// <para>The box shows the shell's language (localization spec §11: <see cref="ShellBoxes"/>); the drive protocol
+/// lists it in AGE's Japanese, and its buttons answer to the Japanese, the English and the shown labels.</para>
 /// <para>Drawn as Windows 10 draws that box for AGE (<see cref="Win32Dialog"/>): a white message area with the
 /// IDI_HAND icon over a COLOR_BTNFACE button strip, in the system message font. The layout values were captured
 /// from AGE's box on 2026-11-04. Windows centres the box on the monitor; the port centres it on the game.</para>
 /// </summary>
 public partial class ScriptErrorDialog : Win32Dialog
 {
-    // MessageBoxA labels its buttons in the Windows UI language. These are Japanese Windows' labels, which the
-    // box's own text names; the driver also accepts the English labels (&Abort, &Retry, &Ignore).
-    private static readonly string[] ButtonTexts = { "中止(&A)", "再試行(&R)", "無視(&I)" };
+    // MessageBoxA labels its buttons in the Windows UI language. AgeBoxText's are Japanese Windows' labels, which the
+    // box's own text names; the driver also accepts English Windows' labels.
+    private static readonly string[] JapaneseButtonTexts =
+        [.. System.Linq.Enumerable.Select(AgeBoxText.ButtonKeys, AgeBoxText.JapaneseText)];
     private static readonly string[] EnglishButtonTexts = { "&Abort", "&Retry", "&Ignore" };
+    private static readonly char[] NativeMnemonics = { 'A', 'R', 'I' };
     private static readonly ScriptErrorChoice[] Choices =
         { ScriptErrorChoice.Abort, ScriptErrorChoice.Retry, ScriptErrorChoice.Ignore };
 
@@ -25,20 +31,25 @@ public partial class ScriptErrorDialog : Win32Dialog
     private const int StripHeight = 40, ButtonTop = 7, ButtonWidth = 75, ButtonHeight = 23;
     private static readonly int[] ButtonFromRight = { 255, 173, 90 };
 
-    private readonly string _caption;
-    private readonly string _text;
+    private readonly DiagnosticMessage _message;
+    private readonly IReadOnlyList<string> _buttonTexts;
     private readonly Win32ClassicButton[] _buttons = new Win32ClassicButton[3];
     private bool _completed;
 
     public event Action<ScriptErrorChoice>? Completed;
 
-    public ScriptErrorDialog(string caption, string text) : this(caption, text, Layout(text)) { }
+    public ScriptErrorDialog(DiagnosticMessage message, ShellStrings strings)
+        : this(message, ShellBoxes.Present(message, strings), ShellBoxes.ErrorButtons(strings)) { }
 
-    private ScriptErrorDialog(string caption, string text, (Win32StaticText Text, Vector2I Client, int White) layout)
+    private ScriptErrorDialog(DiagnosticMessage message, (string Caption, string Text) shown, IReadOnlyList<string> buttons)
+        : this(message, shown.Caption, buttons, Layout(shown.Text)) { }
+
+    private ScriptErrorDialog(DiagnosticMessage message, string caption, IReadOnlyList<string> buttons,
+                              (Win32StaticText Text, Vector2I Client, int White) layout)
         : base(caption, layout.Client, closeEnabled: false)
     {
-        _caption = caption;
-        _text = text;
+        _message = message;
+        _buttonTexts = buttons;
         int width = layout.Client.X;
 
         Client.AddChild(new ColorRect
@@ -51,10 +62,10 @@ public partial class ScriptErrorDialog : Win32Dialog
         Client.AddChild(layout.Text);
 
         Win32Font font = Win32DialogStyle.MessageFont;
-        for (int i = 0; i < ButtonTexts.Length; i++)
+        for (int i = 0; i < Choices.Length; i++)
         {
             ScriptErrorChoice choice = Choices[i];
-            var button = new Win32ClassicButton(ButtonTexts[i], font)
+            var button = new Win32ClassicButton(_buttonTexts[i], font)
             {
                 IsDefault = i == 1,     // MB_DEFBUTTON2
                 Position = new Vector2(width - ButtonFromRight[i], layout.White + ButtonTop),
@@ -87,46 +98,47 @@ public partial class ScriptErrorDialog : Win32Dialog
         _buttons[1].GrabFocus();        // MB_DEFBUTTON2
     }
 
-    // The buttons' mnemonics: A, R and I answer at once, as in the Win32 box. Enter, Space, Tab and the arrows
-    // reach the focused button through Godot's focus handling.
+    // The buttons' mnemonics answer at once, as in the Win32 box: each label's '&' letter (A, R and I in Japanese
+    // and English). Enter, Space, Tab and the arrows reach the focused button through Godot's focus handling.
     private void OnWindowInput(InputEvent e)
     {
         if (e is not InputEventKey { Pressed: true, Echo: false } key) return;
-        ScriptErrorChoice? choice = key.Keycode switch
+        for (int i = 0; i < Choices.Length; i++)
         {
-            Key.A => ScriptErrorChoice.Abort,
-            Key.R => ScriptErrorChoice.Retry,
-            Key.I => ScriptErrorChoice.Ignore,
-            _ => null,
-        };
-        if (choice is not { } picked) return;
-        Complete(picked);
-        SetInputAsHandled();
+            char mnemonic = MenuItem.MnemonicOf(_buttonTexts[i]) ?? NativeMnemonics[i];
+            if ((long)key.Keycode != char.ToUpperInvariant(mnemonic)) continue;
+            Complete(Choices[i]);
+            SetInputAsHandled();
+            return;
+        }
     }
 
     // MB_ABORTRETRYIGNORE has no cancel answer: its ✕ is disabled.
     protected override void OnCloseButton() { }
 
-    /// <summary>The dialog as the drive protocol lists it.</summary>
+    /// <summary>The dialog as the drive protocol lists it: in AGE's Japanese, whatever the shell shows.</summary>
     public System.Text.Json.Nodes.JsonObject Describe()
     {
         var buttons = new System.Text.Json.Nodes.JsonArray();
-        foreach (string text in ButtonTexts) buttons.Add(text);
-        return new System.Text.Json.Nodes.JsonObject { ["title"] = _caption, ["text"] = _text, ["buttons"] = buttons };
+        foreach (string text in JapaneseButtonTexts) buttons.Add(text);
+        return new System.Text.Json.Nodes.JsonObject
+        {
+            ["title"] = _message.Caption, ["text"] = _message.Text, ["buttons"] = buttons,
+        };
     }
 
-    /// <summary>Press a button by its Japanese or English label (ampersands and case ignored). Returns the label,
-    /// or null when none matches.</summary>
+    /// <summary>Press a button by its Japanese, English or shown label (ampersands and case ignored). Returns the
+    /// Japanese label, or null when none matches.</summary>
     public string? Press(string button)
     {
         string wanted = Normalize(button);
-        for (int i = 0; i < ButtonTexts.Length; i++)
+        for (int i = 0; i < Choices.Length; i++)
         {
-            if (Normalize(ButtonTexts[i]) != wanted && Normalize(ButtonTexts[i].Split('(')[0]) != wanted
-                && Normalize(EnglishButtonTexts[i]) != wanted)
+            if (Normalize(JapaneseButtonTexts[i]) != wanted && Normalize(JapaneseButtonTexts[i].Split('(')[0]) != wanted
+                && Normalize(EnglishButtonTexts[i]) != wanted && Normalize(_buttonTexts[i]) != wanted)
                 continue;
             Complete(Choices[i]);
-            return ButtonTexts[i];
+            return JapaneseButtonTexts[i];
         }
         return null;
     }

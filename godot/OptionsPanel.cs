@@ -23,10 +23,12 @@ public partial class OptionsPanel : Control
     /// <param name="WindowSizes">画面's window sizes (<see cref="ShellPanel.WindowSizes"/>).</param>
     /// <param name="SwitchScreenMode">The screen-mode command; false when nothing changed.</param>
     /// <param name="ForceScreen">display:ForceScreen 1 keeps the window.</param>
+    /// <param name="Languages">The languages the mounted stack defines, with their names (localization spec §10).</param>
     public sealed record Context(ShellStrings Strings, ShellOptionsDraft Draft, PortOptions PortOptions, Vector2I Canvas,
                                  IReadOnlyList<(int Width, int Height)> WindowSizes, Func<bool> Windowed,
                                  Func<bool, bool> SwitchScreenMode, bool ForceScreen, ShellAbout About,
-                                 ShellDiagnostics Diagnostics, Texture2D Icon);
+                                 ShellDiagnostics Diagnostics, Texture2D Icon,
+                                 IReadOnlyList<(string Tag, string? Name)> Languages);
 
     /// <summary>決定, with the edited port options.</summary>
     public event Action<PortOptions>? Committed;
@@ -298,14 +300,18 @@ public partial class OptionsPanel : Control
         var list = new OptionButton { FocusMode = FocusModeEnum.All, CustomMinimumSize = new Vector2(280, 32) };
         if (choice.Option == "language")
         {
-            // A language the shell has no table for (one a text root supplies, or x-pseudo) is listed by its tag.
-            List<string> languages = ShellStrings.Languages.Contains(_port.Language)
-                ? [.. ShellStrings.Languages]
-                : [.. ShellStrings.Languages, _port.Language];
-            foreach (string language in languages)
-                list.AddItem(ShellStrings.Languages.Contains(language) ? S[$"language.{language}"] : language);
-            list.Selected = languages.IndexOf(_port.Language);
-            list.ItemSelected += index => _port = _port with { Language = languages[(int)index] };
+            // The shell's languages, then the stack's by their names; a full switch waits for the title (spec §10).
+            IReadOnlyList<(string Tag, string Label)> languages =
+                ShellPanel.LanguageChoices(S, _context.Languages, _port.Language);
+            foreach ((_, string name) in languages) list.AddItem(name);
+            list.Selected = languages.Select(language => language.Tag).ToList().IndexOf(_port.Language);
+            list.ItemSelected += index => _port = _port with { Language = languages[(int)index].Tag };
+            row.AddChild(list);
+            var column = new VBoxContainer();
+            column.AddThemeConstantOverride("separation", 4);
+            column.AddChild(row);
+            column.AddChild(Wrapped(S[ShellPanel.LanguageNoteKey], Dim));
+            return column;
         }
         else
         {

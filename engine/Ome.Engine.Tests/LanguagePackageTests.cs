@@ -360,4 +360,151 @@ public sealed class LanguagePackageTests : IDisposable
         Assert.True(moved > 0);
         Assert.True(map.Runs.Count > 1);
     }
+
+    // ------------------------------------------------------------------------------------------- engine text (milestone 5)
+
+    private const string German = "[[language]]\ntag = \"de\"\nname = \"Deutsch\"\nfallback = [\"en\"]\n";
+
+    /// <summary>A version 2 package without [game] (localization spec §11.1).</summary>
+    private string ProfilelessFolder(string id, string tables, IReadOnlyDictionary<string, string>? files = null)
+    {
+        string folder = Path.Combine(_root, id + "-" + Guid.NewGuid().ToString("N")[..6]);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "manifest.toml"),
+            $"omp = 2\nid = \"{id}\"\nname = \"{id}\"\nversion = \"1.0.0\"\n{tables}\n", new UTF8Encoding(false));
+        foreach (var (path, text) in files ?? new Dictionary<string, string>())
+            Write(Path.Combine(folder, path), new UTF8Encoding(false).GetBytes(text));
+        return folder;
+    }
+
+    private ModPackage ProfilelessMod(string id, string tables, IReadOnlyDictionary<string, string>? files = null)
+    {
+        ModPackage mod = ModPackage.Open(ProfilelessFolder(id, tables, files));
+        _opened.Add(mod);
+        return mod;
+    }
+
+    private static readonly Dictionary<string, string> GermanShell = new()
+    {
+        ["text/de/_engine.toml"] = "[[engine]]\nkey = \"command.skip\"\ntext = \"Ü&berspringen\"\n\n"
+                                   + "[[engine]]\nkey = \"exit.title\"\ntext = \"Beenden\"\n\n"
+                                   + "[[engine]]\nkey = \"command.auto\"\nnote = \"ja: ｵｰﾄﾓｰﾄﾞ\"\n",
+    };
+
+    [Fact]
+    public void AVersionTwoManifestMayLeaveOutGameAndThenTargetsEveryProfile()
+    {
+        ModManifest manifest = ManifestReader.Parse("omp = 2\nid = \"shell.de\"\nname = \"de\"\nversion = \"1.0.0\"\n" + German);
+
+        Assert.True(manifest.TargetsAnyProfile);
+        Assert.Null(manifest.Profile);
+        Assert.Null(manifest.Target);
+        Assert.False(ManifestReader.Parse(ManifestText("lang.en")).TargetsAnyProfile);
+        var version1 = Assert.Throws<ModManifestException>(() =>
+            ManifestReader.Parse("omp = 1\nid = \"shell.de\"\nname = \"de\"\nversion = \"1.0.0\"\n"));
+        Assert.Contains("game: required", version1.Problems);
+    }
+
+    [Theory]
+    [InlineData("[scripts]\nnames = [\"NEWSCENE\"]", "scripts: a package without [game] holds no scripts or assets")]
+    [InlineData("[assets]\nnames = [\"A.PNG\"]", "assets: a package without [game] holds no scripts or assets")]
+    [InlineData("[replace]\n\"SC0100.BIN\" = { over = \"x.y\" }", "replace: a package without [game] holds no scripts")]
+    public void APackageWithoutGameHasNoGameTables(string tables, string reason)
+    {
+        var error = Assert.Throws<ModManifestException>(() =>
+            ManifestReader.Parse($"omp = 2\nid = \"shell.de\"\nname = \"de\"\nversion = \"1.0.0\"\n{tables}\n"));
+        Assert.Contains(error.Problems, problem => problem.StartsWith(reason));
+    }
+
+    [Theory]
+    [InlineData("patches/SC0100.oms")]
+    [InlineData("assets/A.PNG")]
+    [InlineData("replace/SC0100.BIN")]
+    public void APackageWithoutGameHoldsOnlyTextAndFonts(string path)
+    {
+        var error = Assert.Throws<ModPackageException>(() =>
+            ModPackage.Open(ProfilelessFolder("shell.de", German, new Dictionary<string, string> { [path] = "x" })));
+        Assert.Contains($"'{path}': a package without [game] holds only text/ and fonts/", error.Message);
+    }
+
+    [Fact]
+    public void AnEngineOnlyPackageLinksForAnyProfileAndItsCacheLoadsAsEngineText()
+    {
+        ModPackage shell = ProfilelessMod("shell.de", German, GermanShell);
+        ModLinkBase linkBase = SyntheticBase();
+
+        ModLinkResult result = ModLinker.Link(linkBase, [shell], []);
+
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.Contains("text de: 0 entries from 1 files, 2 engine keys", result.Report.Render());
+        Assert.True(Assert.Single(result.Order).Layout.ChangesNoContent);
+        ModLinkCache.Write(Path.Combine(_root, "cache"), "k", linkBase, result);
+        MountedModLayer layer = ModLinkCache.TryOpen(Path.Combine(_root, "cache"), "k")!;
+        var launch = new LanguageLaunch([layer.TextSource!], TextSiteBinder.For(_ => null, layer), null);
+        var report = new TextLoadReport();
+
+        LanguageSelection selection = launch.Load("de", report);
+
+        Assert.Null(selection.Presenter);                          // no game text: drawn as written (spec §10)
+        Assert.Equal(["de", "en"], selection.Lookup);
+        EngineTextLayer german = Assert.Single(selection.Engine);
+        Assert.Equal("de", german.Language);
+        Assert.Equal(["command.skip", "exit.title"], german.Entries.Keys.Order(StringComparer.Ordinal));   // no template
+        Assert.Equal("Beenden", german.Entries["exit.title"].Text);
+        Assert.Contains("engine text de: 2 keys", report.Lines());
+        Assert.Equal([("de", "Deutsch")], launch.Languages());
+        Assert.True(launch.DefinesLanguage);
+    }
+
+    [Fact]
+    public void GameTextInAPackageWithoutGameStopsTheLink()
+    {
+        ModPackage shell = ProfilelessMod("shell.de", German, new Dictionary<string, string>
+        {
+            ["text/de/a.toml"] = "[[text]]\nsource = \"はい\"\ntext = \"Ja\"\n",
+        });
+
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), [shell], []);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Report.Lines, line => line.Stops && line.Message.StartsWith(
+            "shell.de/text/de/a.toml:1: a package without [game] holds only [[engine]] entries"));
+    }
+
+    [Fact]
+    public void ExportLeavesAnEngineOnlyPackageOutWithANote()
+    {
+        string folder = ProfilelessFolder("shell.de", German, GermanShell);
+        string output = Path.Combine(_root, "export");
+        var console = new StringWriter();
+
+        Assert.True(Ome.Mods.Tools.OmpCommands.Export(SyntheticBase(), null, [folder], output, console) == 0,
+                    console.ToString());
+        Assert.Empty(Directory.GetFiles(output));
+        Assert.Contains("note: text/, fonts/ and [[language]] of shell.de are not exported", console.ToString());
+    }
+
+    [Fact]
+    public void EngineEntriesMergeAlongTheChainWithTheLaterSourceWinning()
+    {
+        string first = Path.Combine(_root, "first"), second = Path.Combine(_root, "second");
+        Write(Path.Combine(first, "languages.toml"), Encoding.UTF8.GetBytes(German));
+        Write(Path.Combine(first, "de", "a.toml"), Encoding.UTF8.GetBytes(
+            "[[engine]]\nkey = \"exit.title\"\ntext = \"Ende\"\n\n[[text]]\nsource = \"はい\"\ntext = \"Ja\"\n"));
+        Write(Path.Combine(first, "en", "a.toml"), Encoding.UTF8.GetBytes("[[engine]]\nkey = \"exit.title\"\ntext = \"Leave\"\n"));
+        Write(Path.Combine(second, "de", "b.toml"), Encoding.UTF8.GetBytes("[[engine]]\nkey = \"exit.title\"\ntext = \"Beenden\"\n"));
+        Write(Path.Combine(second, "fr", "b.toml"), Encoding.UTF8.GetBytes("[[engine]]\nkey = \"exit.title\"\ntext = \"Quitter\"\n"));
+        var launch = new LanguageLaunch([new TextSource(first), new TextSource(second)], new TextSiteBinder(_ => null), null);
+
+        LanguageSelection selection = launch.Load("de", new TextLoadReport());
+
+        Assert.NotNull(selection.Presenter);                       // de has game text
+        Assert.Equal(["de", "en"], selection.Engine.Select(layer => layer.Language));
+        Assert.Equal("Beenden", selection.Engine[0].Entries["exit.title"].Text);
+        Assert.Equal("de/b.toml:1", selection.Engine[0].Entries["exit.title"].Origin);
+        Assert.Equal("Leave", selection.Engine[1].Entries["exit.title"].Text);
+        Assert.Equal([("de", "Deutsch"), ("en", null), ("fr", null)], launch.Languages());
+        Assert.Single(launch.Load("de", new TextLoadReport()).Presenter!.Language.Chain);   // en has engine text only
+        Assert.Null(launch.Load("fr", new TextLoadReport()).Presenter);
+    }
 }

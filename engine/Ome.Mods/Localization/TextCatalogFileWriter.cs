@@ -42,7 +42,8 @@ public static class TextCatalogFileWriter
         {
             text.Append("\n[[engine]]\n");
             text.Append("key = ").Append(Quote(entry.Key)).Append('\n');
-            text.Append("text = ").Append(Quote(entry.Text)).Append('\n');
+            if (entry.Text != null) text.Append("text = ").Append(Quote(entry.Text)).Append('\n');
+            if (entry.Note != null) text.Append("note = ").Append(Quote(entry.Note)).Append('\n');
         }
         return text.ToString();
     }

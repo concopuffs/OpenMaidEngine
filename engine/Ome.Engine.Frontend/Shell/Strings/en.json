@@ -56,6 +56,25 @@
 
   "folder.prompt": "Choose the folder to save screenshots in.",
 
+  "name-entry.title": "Enter a name",
+  "name-entry.prompt": "Enter the name in full-width characters.",
+  "name-entry.too-long": "The name is too long.",
+  "name-entry.half-width": "Half-width characters cannot be used.",
+  "name-entry.accept": "OK",
+  "name-entry.cancel": "Cancel",
+
+  "error.caption": "An error occurred",
+  "error.debug": "Debug information:",
+  "error.debug.location": "FILE={0} ADDRESS={1} LINE={2} COMMAND={3}({4}) DEPTH={5}",
+  "error.prompt": "Continue the program?",
+  "error.prompt.abort": "Abort: end the program.",
+  "error.prompt.retry": "Retry: run this command again.\n        (it may not work correctly)",
+  "error.prompt.ignore": "Ignore: skip the error and continue.\n        (it may not work correctly)",
+  "error.abort": "&Abort",
+  "error.retry": "&Retry",
+  "error.ignore": "&Ignore",
+  "error.depth": "Invalid depth {0} != {1}",
+
   "section.message": "Text",
   "section.sound": "Sound",
   "section.other": "Other",
@@ -84,6 +103,7 @@
   "option.window-size": "Window size",
   "option.fps-counter": "Show the frame rate",
   "option.locator-hud": "Show the page locator (F2)",
+  "option.language.note": "Everything is shown in the new language after returning to the title.",
   "panel.title": "Settings",
   "panel.ok": "OK",
   "panel.cancel": "Cancel",

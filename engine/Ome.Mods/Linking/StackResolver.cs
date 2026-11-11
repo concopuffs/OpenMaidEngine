@@ -28,9 +28,10 @@ public static class StackResolver
         foreach (ModPackage mod in byId.Values)
         {
             ModManifest manifest = mod.Manifest;
-            if (manifest.Profile != linkBase.Profile)
+            // A package without [game] targets every profile (localization spec §11.1).
+            if (manifest.Profile is { } profile && profile != linkBase.Profile)
                 report.Add(ModReportClass.Error, mod.Id, null,
-                    $"targets profile {manifest.Profile}, but the game is {linkBase.Profile}");
+                    $"targets profile {profile}, but the game is {linkBase.Profile}");
             if (manifest.Revisions.Count > 0
                 && !manifest.Revisions.Contains(linkBase.CatalogFingerprint, StringComparer.OrdinalIgnoreCase))
                 report.Add(ModReportClass.Error, mod.Id, null,

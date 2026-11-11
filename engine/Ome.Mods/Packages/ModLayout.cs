@@ -75,6 +75,13 @@ public sealed record ModLayout(
                     notes.Add($"'{entry.Path}' is outside the package layout and is ignored");
                 continue;
             }
+            // Localization spec §11.1: a package for every profile carries presentation only.
+            if (manifest.TargetsAnyProfile && top.ToLowerInvariant() is "patches" or "scripts" or "replace" or "assets")
+            {
+                problems.Add($"'{entry.Path}': a package without [game] holds only text/ and fonts/; "
+                             + $"{top.ToLowerInvariant()}/ needs a [game] table");
+                continue;
+            }
             switch (top.ToLowerInvariant())
             {
                 case "patches" when !nested && rest.EndsWith(PlanSuffix, StringComparison.OrdinalIgnoreCase):

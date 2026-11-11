@@ -36,7 +36,9 @@ and its save stamps say so (see "Saves" below).
    Ome.Cli omp text extract --language en --output my.lang <game options>
    ```
 
-   Every entry it writes has a `source` and no `text`. An entry without `text` is a template: the port skips it.
+   Every entry it writes has a `source` and no `text`. An entry without `text` is a template: the port skips it. For
+   a language the engine has no menus of its own for (it has Japanese and English), it also writes `_engine.toml`
+   with a template for each of the engine's strings ("Engine text" below).
 2. **Translate** by adding `text = "…"` to the entries you translate. Leave the rest as they are, or delete them.
 3. **Write the manifest** (below), with `omp = 2` and a `[[language]]` table for the language.
 4. **Check** the package without starting the game:
@@ -45,9 +47,13 @@ and its save stamps say so (see "Saves" below).
    Ome.Cli omp text check --mod my.lang <game options>
    ```
 
-5. **Run it** in the port with `--mod my.lang --language en` (or install it in `mods/` and pick the language with
+5. **Run it** in the port with `--mod my.lang --language en`, or install it in `mods/` and pick the language in the
+   settings panel's OME section, which lists every language the installed packages define by its `name` (or with
    `[ui] Language` in `OME.INI`). Add `--text-log` to collect every string that reached the screen without an entry
    ([cli.md](cli.md)).
+
+A switch in the settings panel applies at once to the menus and to text drawn after it. Text already on screen stays
+until the game draws it again; everything is in the new language after returning to the title.
 
 Run `extract` again after a game update, or whenever you want the templates current: it keeps every entry the folder
 holds, translated or not, adds templates for sources no file has yet, and marks `obsolete = true` each entry whose
@@ -199,17 +205,68 @@ lack falls back to the next font, then to the system's.
 - A bundled font draws at its own weight; the port does not embolden it.
 - `omp text check` lists the characters of the translations that no bundled font of a table covers.
 
+## Engine text
+
+The port's own text has keys: the menu bar and its strip, the settings panel, the quit dialog, the folder picker,
+the name entry, and the error box AGE shows when a script fails. The engine has it in Japanese and English. A
+catalog sets it for its language with `[[engine]]` tables:
+
+```toml
+[[engine]]
+key = "command.skip"
+text = "Ü&berspringen"
+```
+
+- `key` names the string, not its text. `&` marks a menu item's or button's access key; `&&` is a literal ampersand.
+- A string that takes values has `{0}`, `{1}`, … where its Japanese has them. The text may reorder or leave them out
+  but not add one. Write a literal brace as `{{` or `}}`.
+- An entry without `text` is a template: `omp text extract` writes one per key into `_engine.toml` for a language
+  the engine has no table for, with the Japanese and English in `note`.
+- The shell looks a key up in the selected language's entries from every package (a later package wins), then in the
+  engine's own table for that language, then the same for each language of its fallback chain, then in the engine's
+  Japanese. A German package with `fallback = ["en"]` shows the engine's English for every key it leaves out.
+- An entry the engine cannot use (a key it does not have, or a value it does not take) is left out, with a `[text]`
+  line in the log. `omp text check` warns about unknown keys and fails on the rest.
+- Game text and engine text never mix: `[[text]]` entries match the game's text, `[[engine]]` entries the engine's
+  keys. One catalog file may hold both.
+- The game driver reads the menus and boxes in Japanese, whatever is shown.
+
+`extract` lists every key. The engine's own tables are `engine/Ome.Engine.Frontend/Shell/Strings/ja.json` and
+`en.json` in the source, with the error box's strings (`error.*`) in `engine/Ome.Engine/Model/AgeBoxText.cs`.
+
+### A shell language for every game
+
+A version 2 package may leave out `[game]`. It then targets every profile:
+
+```toml
+omp = 2
+id = "fan.shell-de"
+name = "Deutsche Oberfläche"
+version = "1.0.0"
+
+[[language]]
+tag = "de"
+name = "Deutsch"
+fallback = ["en"]
+```
+
+Such a package holds only `[[language]]` tables, catalogs with `[[engine]]` entries alone, and `fonts/`. A `[[text]]`
+entry, `patches/`, `scripts/`, `replace/` or `assets/`, or a `[scripts]`, `[assets]` or `[replace]` table is an error
+in it. Install it in each game's `mods/` folder or pass it with `--mod`. With its language selected, the shell speaks
+that language and the game's text stays as the game has it.
+
 ## Tools
 
 | Command | What it does |
 |---|---|
-| `omp text extract --language TAG --output DIR` | writes or updates the templates in `DIR/text/TAG/` |
+| `omp text extract --language TAG --output DIR` | writes or updates the templates in `DIR/text/TAG/`, with `_engine.toml` for a language the engine has no table for |
 | `omp text check [--mod PATH …] [--data-root DIR] [--text-root DIR] [--language TAG] [--no-scripts]` | links the packages and validates their catalogs; exits non-zero on an error |
 | `omp text stats [--mod PATH …] [--data-root DIR] [--text-root DIR] [--language TAG] [--scripts]` | counts the translated messages, strings and composed strings, per script with `--scripts` |
 
 `check` reports errors (a file that does not read, two patterns that can match one string, too many entries, a stack
-that does not link) and warnings (entries whose source no installed script draws or stores where their scope
-reaches, site entries that do not bind, characters no bundled font covers). Full options are in [cli.md](cli.md).
+that does not link, an engine entry with a value its key does not take) and warnings (entries whose source no
+installed script draws or stores where their scope reaches, site entries that do not bind, characters no bundled font
+covers, engine keys the engine does not have). Full options are in [cli.md](cli.md).
 
 ## Saves
 
@@ -227,7 +284,6 @@ text that bypasses translation and layouts that cannot take longer text.
 ## Not yet
 
 - `align`, `fit` and overflow reports;
-- the engine's own menus and dialogs in a package's language (the shell has Japanese and English);
 - language-specific assets (`assets/<tag>/`) and PO import and export;
 - shaping and right-to-left scripts (Arabic, Hebrew, Thai, the Indic scripts).
 

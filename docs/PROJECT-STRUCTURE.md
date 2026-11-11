@@ -263,7 +263,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       game-driving control protocol (Control/), and the engine
     │                                       shell's model (Shell/: its commands, menu tree with
     │                                       prune/refresh, state, options, string tables in
-    │                                       Strings/*.json, the 終了 dialog's texts, IShellHost (the
+    │                                       Strings/*.json with the mods' engine text in front, the 終了
+    │                                       dialog's texts, AGE's boxes and the name entry
+    │                                       (ShellBoxes), IShellHost (the
     │                                       frontend services its commands reach), the options panel's
     │                                       layout, draft and 情報 rows, the engine identity, and the
     │                                       port options with their OME.INI store)
@@ -385,6 +387,9 @@ records shared by input hosts, timing policy, VM dispatch, Godot, and tests.
 `engine/Ome.Engine/Model/AdvPresentationContracts.cs` owns neutral ADV wait-indicator configuration shared by VM
 dispatch, retained presentation, hosts, Godot, and tests. `engine/Ome.Engine/Model/DiagnosticContracts.cs` owns
 the neutral synchronous diagnostic message transported between VM dispatch, diagnostic hosts, Godot, and tests.
+`engine/Ome.Engine/Model/AgeBoxText.cs` owns the keyed Japanese of AGE's own boxes (the interpreter error box and op
+`0x1b4`'s box) and composes a box from its parts in any language; the shell's tables take its keys (localization
+spec §11).
 
 `engine/Ome.Engine/Model/GfxState.cs` retains cross-domain retained-graphics coordination.
 `engine/Ome.Engine/Model/GfxState.Contracts.cs` owns its public render, transition, diagnostic, persistence,

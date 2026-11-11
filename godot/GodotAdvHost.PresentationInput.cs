@@ -84,7 +84,7 @@ public sealed partial class GodotAdvHost
         });
         // A root reload's WakeAllWaits may have left the event set with no dialog waiting: drop it before showing.
         _diagnosticMessageCompleted.Reset();
-        _main.CallDeferred("ShowAgeDiagnostic", message.Text, message.Caption);
+        Godot.Callable.From(() => _main.ShowAgeDiagnostic(message)).CallDeferred();
         while (!_stopping && !_diagnosticMessageCompleted.WaitOne(50)) { }
     }
 
@@ -101,7 +101,7 @@ public sealed partial class GodotAdvHost
             ["text"] = message.Text,
         });
         _scriptErrorCompleted.Reset();
-        _main.CallDeferred("ShowAgeScriptError", message.Text, message.Caption);
+        Godot.Callable.From(() => _main.ShowAgeScriptError(message)).CallDeferred();
         while (!_stopping && !_scriptErrorCompleted.WaitOne(50)) { }
         if (_stopRequested) return ScriptErrorChoice.Abort;
         if (_rootReloadInterrupt) return ScriptErrorChoice.Retry;

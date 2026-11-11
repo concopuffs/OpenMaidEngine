@@ -306,9 +306,9 @@ and the drive scenarios.
 ## Localization
 
 - **Build the localization framework.** The design is accepted (`superpowers/specs/2026-11-10-localization-design.md`,
-  2026-11-10) and milestones 0 to 4 are implemented. The port presents a language from packages (`text/`, `fonts/`,
-  `[[language]]`) and from a folder of catalogs (`--text-root`); its own error box is fixed Japanese
-  (`VirtualMachine.DiagnosticCaption`).
+  2026-11-10) and milestones 0 to 5 are implemented. The port presents a language from packages (`text/`, `fonts/`,
+  `[[language]]`) and from a folder of catalogs (`--text-root`), and its own menus and boxes from the shell's
+  tables with the packages' `[[engine]]` entries in front.
   The spec's §19 holds the milestones and §18 the gates; they are not restated here.
   - **Milestone 0 is built, reviewed and revised** (2026-11-10). `omp text import-scripts` converts the Kamidori
     translation: all 430 changed scripts align, entries keep deliberate line breaks, stored literals and composed
@@ -391,7 +391,28 @@ and the drive scenarios.
       and `PresentationSiteTests`. The 1,724 engine tests pass.
     - Gates 1 and 9 still hold: all 28 drive scenarios pass as written, and 27 of 28 are unchanged under x-pseudo
       (reveal-clock's timing checks, as in milestone 1).
-  - **Next:** milestone 5.
+  - **Milestone 5 is built** (2026-11-11). The shell's last fixed strings have keys: AGE's error box and op
+    `0x1b4`'s box (`AgeBoxText`; the VM composes them in AGE's Japanese, so the driver, the timeline and halt reasons
+    read what native shows, and the shell's Japanese table takes the same keys) and AGERC's name entry. The host
+    presents AGE's boxes from their parts in the shell's language (`ShellBoxes`). Catalogs' `[[engine]]` entries go
+    in front of the embedded tables along the language's fallback chain, then Japanese; an entry with an unknown key
+    or with an argument its Japanese does not take is left out with a warning. A language with engine text only
+    leaves the game text as written. The options panel lists the shell's languages and the stack's by `name`, with
+    the spec's line about a full switch. A version 2 manifest may leave out `[game]`; such a package targets every
+    profile and holds only `[[language]]`, catalogs of `[[engine]]` entries and `fonts/` (spec §11.1).
+    - Beyond the spec's §11: an `[[engine]]` entry may leave out `text` (a template) and carry `note`. `omp text
+      extract` writes a template per key into `_engine.toml` for a language the shell has no table for; `check`
+      warns about unknown keys and fails on arguments a key does not take. The lookup walks the language's fallback
+      chain, as game text does, where §11 names only the language and Japanese.
+    - In the port: a profile-less German package (`fallback = ["en"]`) shows its entries in the settings panel and
+      English for the rest; the OME section lists "Deutsch" with the note; a bad entry is reported and skipped; a
+      switch to Japanese relabels at once. `himegari-script-error` under `--language en` shows the English box and
+      passes as written, the driver reading Japanese.
+    - Tests: `EngineTextTests`, and additions to `LanguagePackageTests`, `TextToolTests`, `ShellModelTests` and
+      `HotspotInputTests`. The 1,752 engine tests pass.
+    - Gates 1 and 9 hold: all 28 drive scenarios pass as written, and 27 under `x-pseudo`, `himegari-reveal-clock`
+      failing only on its timing as before.
+  - **Next:** milestone 6.
   - **`align`, `fit` and overflow reports (spec §7.2, §7.3) are in no milestone.** The entry keys and the language's
     `min_fit_scale` are read, but the host ignores them, and nothing reports a presented run cut at the bottom of its window. Both need the source
     text's extent, which the source layout pass (milestone 3) now computes. Done when an entry's `align` and `fit` place and
@@ -402,7 +423,7 @@ and the drive scenarios.
   - The manifest's `omp = 2`, introduced by milestone 4, is shared with the Lua design (the item under "Mod loader
     and modding").
 
-  Done when the spec's gates 1–11 pass and `modding/languages.md` covers milestones 5 and 6 as well.
+  Done when the spec's gates 1–11 pass and `modding/languages.md` covers milestone 6 as well.
 
 ## Platform and project
 

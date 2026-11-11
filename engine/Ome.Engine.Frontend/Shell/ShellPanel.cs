@@ -161,6 +161,25 @@ public static class ShellPanel
         _ => Fill(strings["value.percent"], value.ToString(CultureInfo.InvariantCulture)),
     };
 
+    /// <summary>The line beside the language setting (localization spec §10).</summary>
+    public const string LanguageNoteKey = "option.language.note";
+
+    /// <summary>
+    /// The languages the OME section offers (localization spec §10): the shell's own, by their entries in
+    /// <paramref name="strings"/>; then each language the mounted stack defines that the shell has no table for, by
+    /// its <c>name</c> (its tag when it has none); then <paramref name="current"/> by its tag when neither has it
+    /// (<c>x-pseudo</c>, or a language no package defines any more).
+    /// </summary>
+    public static IReadOnlyList<(string Tag, string Label)> LanguageChoices(
+        ShellStrings strings, IReadOnlyList<(string Tag, string? Name)> stack, string current)
+    {
+        var choices = ShellStrings.Languages.Select(tag => (tag, strings[$"language.{tag}"])).ToList();
+        foreach ((string tag, string? name) in stack)
+            if (!choices.Any(choice => choice.Item1 == tag)) choices.Add((tag, string.IsNullOrWhiteSpace(name) ? tag : name));
+        if (!choices.Any(choice => choice.Item1 == current)) choices.Add((current, current));
+        return choices;
+    }
+
     /// <summary>A window size's entry in the 画面 list; the canvas's own size says so.</summary>
     public static string WindowSizeText(ShellStrings strings, int width, int height, bool canvas)
     {

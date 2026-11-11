@@ -17,10 +17,15 @@ public sealed class TextLoadReport
     /// installed, a mod replaces the script, or a patch replaced the instruction (spec §6.1).</summary>
     public List<(string File, int SiteEntries, string Reason)> DroppedSites { get; } = [];
 
+    /// <summary>Each language in the chain with <c>[[engine]]</c> entries (spec §11), and how many keys they set.</summary>
+    public List<(string Tag, int Keys)> EngineText { get; } = [];
+
     public IEnumerable<string> Lines()
     {
         foreach (var (tag, files, entries) in Languages)
             yield return $"text {tag}: {entries} entries from {files} files";
+        foreach (var (tag, keys) in EngineText)
+            yield return $"engine text {tag}: {keys} keys";
         foreach (TextCatalogOverride replaced in Overrides)
             yield return $"text override: {replaced.Replaced.Origin} replaced by {replaced.Winner.Origin}";
         foreach (var (file, sites, reason) in DroppedSites)
@@ -105,6 +110,15 @@ public static class TextRootLoader
                    .Where(folder => !Path.GetFileName(folder).Equals(FontsFolder, StringComparison.OrdinalIgnoreCase))
                    .Any(folder => Directory.EnumerateFiles(folder, "*.toml", SearchOption.AllDirectories).Any()));
 
+    /// <summary>The tags of the root's language folders that hold a catalog file.</summary>
+    public static IEnumerable<string> LanguageFolders(string root)
+        => Directory.Exists(root)
+            ? Directory.EnumerateDirectories(root)
+                .Where(folder => !Path.GetFileName(folder).Equals(FontsFolder, StringComparison.OrdinalIgnoreCase)
+                                 && Directory.EnumerateFiles(folder, "*.toml", SearchOption.AllDirectories).Any())
+                .Select(folder => Path.GetFileName(folder))
+            : [];
+
     /// <summary>The root's <see cref="LanguagesFile"/>, or none, with each bundled font as an absolute path under
     /// <c>ROOT/fonts/</c>.</summary>
     /// <exception cref="TextCatalogException">The file does not parse or validate, or names a font the root does not
@@ -136,7 +150,10 @@ public static class TextRootLoader
 
     /// <summary>
     /// The catalogs of <paramref name="tag"/>'s fallback chain from <paramref name="sources"/>, in order, with the
-    /// language's merged settings. Each entry with <c>at</c> binds through <paramref name="binder"/>.
+    /// language's merged settings and the chain's <c>[[engine]]</c> entries (spec §11). Each entry with <c>at</c>
+    /// binds through <paramref name="binder"/>. A language whose files hold no <c>[[text]]</c> table, templates
+    /// included, has no catalog in the chain: a language with only engine text leaves the game text as written
+    /// (§10).
     /// </summary>
     /// <exception cref="TextCatalogException">A file, or a languages file, does not parse or validate.</exception>
     public static TextLanguage Load(IReadOnlyList<TextSource> sources, string tag, TextSiteBinder binder,
@@ -148,12 +165,15 @@ public static class TextRootLoader
             foreach (LanguageSettings declared in source.ReadLanguages().Where(declared => declared.Tag == normalized))
                 settings = settings == null ? declared : settings.Merge(declared).Merged;
         var chain = new List<TextCatalog>();
+        var engine = new List<EngineTextLayer>();
         var problems = new List<string>();
-        foreach (string language in new[] { normalized }.Concat(settings?.Fallback ?? LanguageTag.Parents(normalized)))
+        string[] lookup = [.. new[] { normalized }.Concat(settings?.Fallback ?? LanguageTag.Parents(normalized)).Distinct()];
+        foreach (string language in lookup)
         {
             var entries = new List<TextEntry>();
+            var engineEntries = new Dictionary<string, EngineTextValue>(StringComparer.Ordinal);
             int fileCount = 0;
-            bool found = false;
+            bool found = false, hasText = false;
             foreach (TextSource source in sources)
             {
                 string folder = Path.Combine(source.Root, language);
@@ -178,9 +198,17 @@ public static class TextRootLoader
                         continue;
                     }
                     entries.AddRange(Bind(file, name, binder, report));
+                    hasText |= file.AllItems.Count > 0;
+                    foreach (EngineTextEntry entry in file.EngineEntries)
+                        if (entry.Text != null) engineEntries[entry.Key] = new EngineTextValue(entry.Text, entry.Origin);
                 }
             }
-            if (!found) continue;
+            if (engineEntries.Count > 0)
+            {
+                engine.Add(new EngineTextLayer(language, engineEntries));
+                report.EngineText.Add((language, engineEntries.Count));
+            }
+            if (!found || !hasText) continue;
             TextCatalog catalog;
             try
             {
@@ -198,6 +226,8 @@ public static class TextRootLoader
         if (problems.Count > 0) throw new TextCatalogException(problems);
         return new TextLanguage(normalized, chain)
         {
+            Lookup = lookup,
+            Engine = engine,
             LineBreak = settings?.LineBreak ?? LineBreakMode.Words,
             Measure = settings?.Measure ?? TextMeasure.Presented,
             Digits = settings?.Digits ?? DigitsMode.Keep,

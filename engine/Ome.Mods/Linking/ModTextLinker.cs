@@ -116,6 +116,14 @@ public static class ModTextLinker
                     report.Add(ModReportClass.Error, mod.Id, null, $"{origin}: {error.Message}");
                     continue;
                 }
+                if (mod.Manifest.TargetsAnyProfile && catalog.AllItems.Count > 0)
+                {
+                    // Localization spec §11.1: game text is tied to a game; a package for every profile has none.
+                    report.Add(ModReportClass.Error, mod.Id, null,
+                        $"{catalog.AllItems[0].Entry.Origin}: a package without [game] holds only [[engine]] entries; "
+                        + "[[text]] entries need a [game] table");
+                    continue;
+                }
                 if (!parsed.TryGetValue(file.Language, out var list)) parsed[file.Language] = list = [];
                 list.Add((mod, origin, catalog));
                 files.Add(new LinkedTextFile(file.Language, mod.Id,
@@ -128,7 +136,9 @@ public static class ModTextLinker
                     + $"declare it in its manifest ([[language]] tag = \"{tag}\")");
         }
 
-        ScriptTextCorpus? corpus = parsed.Count > 0 ? BaseText(linkBase) : null;
+        // The base's text is scanned only for game text: engine entries reach no script.
+        ScriptTextCorpus? corpus = parsed.Values.Any(list => list.Any(item => item.File.AllItems.Count > 0))
+            ? BaseText(linkBase) : null;
         foreach (var (tag, list) in parsed.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             TextCatalog catalog;
@@ -144,9 +154,12 @@ public static class ModTextLinker
             var mods = list.Select(item => item.Mod.Id).Distinct().ToList();
             int templates = list.Sum(item => item.File.Items.Count(entry => !entry.HasText));
             int obsolete = list.Sum(item => item.File.Items.Count(entry => entry.Obsolete));
+            int engineKeys = list.SelectMany(item => item.File.EngineEntries).Where(entry => entry.Text != null)
+                .Select(entry => entry.Key).Distinct().Count();
             report.Add(ModReportClass.Note, mods, null,
                 $"text {tag}: {catalog.Count} entries from {list.Count} files"
-                + (templates > 0 ? $", {templates} without text" : "") + (obsolete > 0 ? $", {obsolete} obsolete" : ""));
+                + (templates > 0 ? $", {templates} without text" : "") + (obsolete > 0 ? $", {obsolete} obsolete" : "")
+                + (engineKeys > 0 ? $", {engineKeys} engine keys" : ""));
             ReportOverrides(tag, catalog, report);
             foreach (var (mod, name, file) in list)
             {

@@ -32,7 +32,6 @@ public sealed partial class VirtualMachine
     private const int T_IMM = 0, T_FLOAT = 1, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
                       T_GSTRPTR = 8, T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12,
                       T_LSTRPTR = 14;
-    private const string DiagnosticCaption = "エラーが発生しました";
 
     private readonly Script _s;
     private readonly OpcodeTable _t;
@@ -857,28 +856,23 @@ public sealed partial class VirtualMachine
     }
 
     private DiagnosticMessage BuildDiagnosticMessage(Instruction instruction)
-        => new(DiagnosticCaption, _diagnosticOutput.PendingText + DiagnosticContext(instruction));
+        => AgeBox(new AgeBoxParts(AgeBoxMessage.Script(_diagnosticOutput.PendingText), DiagnosticLocation(instruction),
+                                  Prompt: false));
 
-    private string DiagnosticContext(Instruction instruction)
+    /// <summary>An AGE box in AGE's wording, with its parts for a host that presents it in another language.</summary>
+    private static DiagnosticMessage AgeBox(AgeBoxParts parts)
+        => new(AgeBoxText.JapaneseText(AgeBoxText.Caption), AgeBoxText.Compose(parts, AgeBoxText.JapaneseText), parts);
+
+    private AgeBoxLocation DiagnosticLocation(Instruction instruction)
     {
         // Himegari's release AGE initializes both optional debug metadata tables to null and has no
         // writer for either one. The native formatter consequently emits -1 and "-" here.
         const int sourceLine = -1;
         const string commandName = "-";
         int nativeDepth = Math.Max(0, _depth - 1);
-        return string.Format(
-            System.Globalization.CultureInfo.InvariantCulture,
-            "\n\nデバック情報：\nFILE={0} ADDRESS={1:X} LINE={2} COMMAND={3}({4}) DEPTH={5}\n",
-            _cur.Script.Name, instruction.Offset, sourceLine, commandName,
-            instruction.Opcode, nativeDepth);
+        return new AgeBoxLocation(_cur.Script.Name, instruction.Offset, sourceLine, commandName, instruction.Opcode,
+                                  nativeDepth);
     }
-
-    // age_show_message_box@0x409370 mode 7 (the errors the interpreter throws with flags 0x10007): body "%s%s"
-    // followed by this prompt, MessageBoxA style 0x112 (abort/retry/ignore).
-    private const string ScriptErrorPrompt =
-        "\n\nプログラムを続行しますか？\n\n中止：プログラムを終了します．\n再試行：もう一度このコマンドを実行します．\n"
-        + "        (ただし正常に動作しない場合があります)\n無視：エラーを無視しプログラムを続行します．\n"
-        + "      (ただし正常に動作しない場合があります)\n";
 
     /// <summary>
     /// A native interpreter error (a C++ throw with flags 0x10007) raised while the current frame waits: AGE shows
@@ -888,9 +882,9 @@ public sealed partial class VirtualMachine
     /// successor is skipped by that many dwords. While a frame waits, native's frame pc is already past the waiting
     /// instruction, so the coordinate is the next instruction's.
     /// </summary>
-    private ScriptErrorChoice PresentWaitScriptError(string text)
+    private ScriptErrorChoice PresentWaitScriptError(AgeBoxMessage error)
     {
-        ScriptErrorChoice choice = ShowScriptError(text, Math.Min(_cur.Pc + 1, _cur.Script.Instructions.Count - 1));
+        ScriptErrorChoice choice = ShowScriptError(error, Math.Min(_cur.Pc + 1, _cur.Script.Instructions.Count - 1));
         if (choice == ScriptErrorChoice.Ignore)
             Interlocked.Add(ref _cur.IgnoredDwords, InstructionDwords(_cur.Script, _cur.Pc));
         return choice;
@@ -903,8 +897,8 @@ public sealed partial class VirtualMachine
     /// instruction runs again. 無視 adds the frame's last decoded instruction length, which for these handlers is the
     /// instruction's own (op 0xcd sets it on entry; op 0xd5 sets 0, so its error repeats). 中止 ends the run.
     /// </summary>
-    private int RaiseInstructionScriptError(string text, int pc, bool ignoreSkipsInstruction = true)
-        => ShowScriptError(text, pc) switch
+    private int RaiseInstructionScriptError(AgeBoxMessage error, int pc, bool ignoreSkipsInstruction = true)
+        => ShowScriptError(error, pc) switch
         {
             ScriptErrorChoice.Retry => pc,
             ScriptErrorChoice.Ignore => ignoreSkipsInstruction ? pc + 1 : pc,
@@ -913,7 +907,8 @@ public sealed partial class VirtualMachine
 
     /// <summary>"Depth が不正です <running> != <owner>": a callback registered by one script is dispatched while
     /// another runs (native throws flags 0x10007 from each guard).</summary>
-    private string DepthErrorText(Script owner) => $"Depth が不正です {_cur.Script.Name} != {owner.Name}";
+    private AgeBoxMessage DepthError(Script owner)
+        => AgeBoxMessage.Keyed(AgeBoxText.DepthMismatch, _cur.Script.Name, owner.Name);
 
     /// <summary>
     /// Native callback guards compare the running frame's packed resource id with the registrant's, so two
@@ -925,10 +920,13 @@ public sealed partial class VirtualMachine
                ? a.PackedId == b.PackedId
                : string.Equals(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
 
-    private ScriptErrorChoice ShowScriptError(string text, int coordinateIndex)
+    // age_show_message_box@0x409370 mode 7 (the errors the interpreter throws with flags 0x10007): body "%s%s"
+    // followed by the prompt (AgeBoxText.Prompt…), MessageBoxA style 0x112 (abort/retry/ignore).
+    private ScriptErrorChoice ShowScriptError(AgeBoxMessage error, int coordinateIndex)
     {
-        var message = new DiagnosticMessage(DiagnosticCaption,
-            text + DiagnosticContext(_cur.Script.Instructions[coordinateIndex]) + ScriptErrorPrompt);
+        string text = error.Text(AgeBoxText.JapaneseText);
+        DiagnosticMessage message = AgeBox(new AgeBoxParts(error,
+            DiagnosticLocation(_cur.Script.Instructions[coordinateIndex]), Prompt: true));
         ScriptErrorChoice choice = _host.ShowScriptError(message);
         if (choice is ScriptErrorChoice.Retry or ScriptErrorChoice.Ignore) return choice;
         ScriptError = message;
@@ -1631,7 +1629,7 @@ public sealed partial class VirtualMachine
         {
             // The dequeued callback is gone either way: 再試行 and 無視 keep waiting without it, with the owner's
             // bindings still armed (natively, the next right click raises the error again).
-            if (PresentWaitScriptError(DepthErrorText(owner.Script)) == ScriptErrorChoice.Abort)
+            if (PresentWaitScriptError(DepthError(owner.Script)) == ScriptErrorChoice.Abort)
                 throw new ScriptErrorException();
             lock (_interactiveLock) owner.Hotspots.RearmAfterCallback(_pointerX, _pointerY);
             return false;

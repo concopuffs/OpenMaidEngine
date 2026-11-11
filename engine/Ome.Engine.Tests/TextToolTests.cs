@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Localization;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
@@ -412,5 +413,71 @@ public sealed class TextToolTests : IDisposable
         Assert.Equal(12, BinaryPrimitives.ReadUInt16BigEndian(groups.AsSpan(format12)));
         BinaryPrimitives.WriteUInt32BigEndian(groups.AsSpan(format12 + 12), 0x1000_0000);   // more groups than bytes
         Assert.Throws<InvalidDataException>(() => FontCoverage.Read(groups));
+    }
+
+    // ---- engine text (milestone 5) -------------------------------------------------------------------------------
+
+    private static readonly EngineTextKeys Keys =
+        new(ShellStrings.Embedded(ShellStrings.FallbackLanguage)!, ShellStrings.Embedded, ShellStrings.EntryProblem);
+
+    [Fact]
+    public void ExtractWritesEngineTemplatesForALanguageTheEngineHasNoTableFor()
+    {
+        string package = Path.Combine(_root, "pkg");
+        string path = Path.Combine(package, "text", "de", EngineTextKeys.TemplateFile);
+        var console = new StringWriter();
+
+        Assert.Equal(0, TextCommands.Extract(Corpus(Scene()), "de", package, "the test install", console, Keys));
+
+        Assert.Contains($"; {Keys.Japanese.Count} engine text templates in _engine.toml", console.ToString());
+        TextCatalogFile engine = TextCatalogFileReader.Read(path, "de/_engine.toml");
+        Assert.Equal(Keys.Japanese.Keys.Order(StringComparer.Ordinal), engine.EngineEntries.Select(entry => entry.Key));
+        Assert.All(engine.EngineEntries, entry => Assert.Null(entry.Text));
+        Assert.Equal("ja: 終了\nen: Quit", engine.EngineEntries.Single(entry => entry.Key == "exit.title").Note);
+
+        // Translated and extracted again: the translation stays, and no key gets a second template.
+        File.WriteAllText(path, File.ReadAllText(path).Replace("key = \"exit.title\"\n",
+                                                               "key = \"exit.title\"\ntext = \"Beenden\"\n"));
+        console = new StringWriter();
+        Assert.Equal(0, TextCommands.Extract(Corpus(Scene()), "de", package, "the test install", console, Keys));
+        Assert.DoesNotContain("engine text templates", console.ToString());
+        engine = TextCatalogFileReader.Read(path, "de/_engine.toml");
+        Assert.Equal(Keys.Japanese.Count, engine.EngineEntries.Count);
+        Assert.Equal("Beenden", engine.EngineEntries.Single(entry => entry.Key == "exit.title").Text);
+
+        // English has the engine's own table.
+        Assert.Equal(0, TextCommands.Extract(Corpus(Scene()), "en", package, "the test install", TextWriter.Null, Keys));
+        Assert.False(File.Exists(Path.Combine(package, "text", "en", EngineTextKeys.TemplateFile)));
+    }
+
+    [Fact]
+    public void CheckWarnsAboutUnknownEngineKeysAndFailsOnArgumentsTheTextCannotTake()
+    {
+        WriteFile("de/_engine.toml", """
+            [[engine]]
+            key = "exit.title"
+            text = "Beenden"
+
+            [[engine]]
+            key = "no.such.key"
+            text = "x"
+
+            [[engine]]
+            key = "value.milliseconds"
+            text = "{1} ms"
+
+            [[engine]]
+            key = "command.auto"
+            note = "a template"
+            """);
+        var console = new StringWriter();
+
+        Assert.Equal(1, TextCommands.Check(Root(), null, null, console, Keys));
+
+        string output = console.ToString();
+        Assert.Contains("text de: 0 entries from 1 files, 3 engine keys", output);
+        Assert.Contains("warning: de/_engine.toml:5: the engine has no text 'no.such.key'; the entry is not used", output);
+        Assert.Contains("error: de/_engine.toml:9: 'value.milliseconds' takes {0}, not {1}", output);
+        Assert.Contains("omp text check: fails: 1 errors, 1 warnings", output);
     }
 }

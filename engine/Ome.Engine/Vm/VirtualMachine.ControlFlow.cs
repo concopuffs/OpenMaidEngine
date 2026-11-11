@@ -172,7 +172,7 @@ public sealed partial class VirtualMachine
                     // so 再試行 raises it again. Op 0x7c records no instruction length before the throw, so native's
                     // 無視 skips by the previous handler's; the port skips the 0x7c itself.
                     if (_coroutineYieldOwner is { } owner && !IsSameScript(owner, _cur.Script))
-                        return RaiseInstructionScriptError(DepthErrorText(owner), pc);
+                        return RaiseInstructionScriptError(DepthError(owner), pc);
                     // Op 0x7c restores coroutine_runstate & ~0x2000000. Unless handler B came through a second op
                     // 0x199, that keeps op 0x199's 0x4000000: the hidden-window wait (Himegari's handler A takes this
                     // path, as adv_hide_window_enabled G[0x62425] is 0 in retail). The page stays hidden until

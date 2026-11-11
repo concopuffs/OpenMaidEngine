@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Localization;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
@@ -38,6 +39,10 @@ internal static partial class OmpTextCommand
         return 2;
     }
 
+    /// <summary>The shell's tables, for engine entries (localization spec §11).</summary>
+    private static Ome.Mods.Tools.EngineTextKeys EngineKeys { get; } = new(
+        ShellStrings.Embedded(ShellStrings.FallbackLanguage)!, ShellStrings.Embedded, ShellStrings.EntryProblem);
+
     private static List<string> Options(string[] args, string name)
         => args.Select((arg, k) => (arg, k)).Where(pair => pair.arg == name && pair.k + 1 < args.Length)
             .Select(pair => Path.GetFullPath(args[pair.k + 1])).ToList();
@@ -66,7 +71,7 @@ internal static partial class OmpTextCommand
         }
         ScriptTextCorpus corpus = Corpus(baseRoot, baseCatalog, table);
         return Ome.Mods.Tools.TextCommands.Extract(corpus, language, output, $"the {profileId} install at {baseRoot}",
-                                                   Console.Out);
+                                                   Console.Out, EngineKeys);
     }
 
     private static int CheckOrStats(bool stats, string[] args, string baseRoot, Sys4AssetCatalog baseCatalog,
@@ -91,7 +96,7 @@ internal static partial class OmpTextCommand
             store, table, contracts, Paths.GlobalsJson(profileId), Paths.OmsModules(profileId), Paths.PatchPointsJson(profileId));
         ScriptTextCorpus? corpus = stats || !args.Contains("--no-scripts") ? Corpus(baseRoot, baseCatalog, table) : null;
         return Ome.Mods.Tools.TextCommands.Run(stats, linkBase, dataRoot, packages, textRoot, corpus,
-            Option(args, "--language"), args.Contains("--scripts"), Console.Out);
+            Option(args, "--language"), args.Contains("--scripts"), Console.Out, EngineKeys);
     }
 
     private static string? Option(string[] args, string name)

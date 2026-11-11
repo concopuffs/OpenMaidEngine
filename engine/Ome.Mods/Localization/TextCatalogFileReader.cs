@@ -75,11 +75,12 @@ public static partial class TextCatalogFileReader
             string where = Where(origin, tableLines, "engine", k);
             var fields = new Fields(table, where, problems);
             string? key = fields.String("key", required: true);
-            string? value = fields.String("text", required: true);
+            string? value = fields.String("text");
+            string? note = fields.String("note");
             fields.RejectUnknown();
             if (key != null && !EngineKeyPattern().IsMatch(key))
                 problems.Add($"{where}: key '{key}' must be lowercase words joined by '.', '-' or '_'");
-            else if (key != null && value != null) engineEntries.Add(new EngineTextEntry(key, value, where));
+            else if (key != null) engineEntries.Add(new EngineTextEntry(key, value, where, note));
         }
         top.RejectUnknown();
         if (problems.Count > 0) throw new TextCatalogException(problems);

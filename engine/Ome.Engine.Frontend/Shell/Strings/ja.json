@@ -56,6 +56,13 @@
 
   "folder.prompt": "画像を保存するフォルダを選択してください",
 
+  "name-entry.title": "文字入力",
+  "name-entry.prompt": "全角文字で名前を入力してください。",
+  "name-entry.too-long": "字数オーバーです",
+  "name-entry.half-width": "半角文字は使用できません",
+  "name-entry.accept": "決定",
+  "name-entry.cancel": "キャンセル",
+
   "section.message": "ﾒｯｾｰｼﾞ",
   "section.sound": "ｻｳﾝﾄﾞ",
   "section.other": "その他",
@@ -84,6 +91,7 @@
   "option.window-size": "ｳｲﾝﾄﾞｳｻｲｽﾞ",
   "option.fps-counter": "FPSを表示する",
   "option.locator-hud": "ﾍﾟｰｼﾞの位置を表示する (F2)",
+  "option.language.note": "ﾀｲﾄﾙに戻ると、すべての表示が新しい言語になります",
   "panel.title": "設定",
   "panel.ok": "決定",
   "panel.cancel": "ｷｬﾝｾﾙ",

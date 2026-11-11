@@ -100,6 +100,19 @@ public sealed class TextSet
     }
 }
 
+/// <summary>
+/// The engine's own text, for <c>omp text check</c> and <c>extract</c> (localization spec §11): its keys with their
+/// Japanese, the table it embeds for a language (null when it has none), and why a package may not set a key to a
+/// text (null when it may). Ome.Cli gives it from the shell's tables.
+/// </summary>
+public sealed record EngineTextKeys(IReadOnlyDictionary<string, string> Japanese,
+                                    Func<string, IReadOnlyDictionary<string, string>?> Embedded,
+                                    Func<string, string, string?> Problem)
+{
+    /// <summary>The catalog file <c>extract</c> writes engine templates into.</summary>
+    public const string TemplateFile = "_engine.toml";
+}
+
 /// <summary><c>omp text extract</c>, <c>check</c> and <c>stats</c> (localization spec §13).</summary>
 public static class TextCommands
 {
@@ -111,7 +124,8 @@ public static class TextCommands
     /// root's catalogs come after the packages'. A stack that does not link fails <c>check</c>.
     /// </summary>
     public static int Run(bool stats, ModLinkBase linkBase, string? dataRoot, IReadOnlyList<string> packages,
-                          string? textRoot, ScriptTextCorpus? corpus, string? only, bool perScript, TextWriter console)
+                          string? textRoot, ScriptTextCorpus? corpus, string? only, bool perScript, TextWriter console,
+                          EngineTextKeys? engine = null)
     {
         var set = new TextSet();
         bool linked = true;
@@ -127,7 +141,7 @@ public static class TextCommands
                 set.AddLink(result);
             }
             if (textRoot != null) set.AddRoot(textRoot);
-            int status = stats ? Stats(set, corpus!, only, perScript, console) : Check(set, corpus, only, console);
+            int status = stats ? Stats(set, corpus!, only, perScript, console) : Check(set, corpus, only, console, engine);
             if (!linked) console.WriteLine("omp text: the stack does not link (see the report above)");
             return linked ? status : 1;
         }
@@ -138,8 +152,11 @@ public static class TextCommands
     }
 
     /// <summary>Writes catalog templates for <paramref name="language"/> under
-    /// <c><paramref name="outputRoot"/>/text/&lt;language&gt;/</c> (<see cref="TextTemplateExtractor"/>).</summary>
-    public static int Extract(ScriptTextCorpus corpus, string language, string outputRoot, string origin, TextWriter console)
+    /// <c><paramref name="outputRoot"/>/text/&lt;language&gt;/</c> (<see cref="TextTemplateExtractor"/>), and, for a
+    /// language the engine has no table for, an <c>[[engine]]</c> template in <see cref="EngineTextKeys.TemplateFile"/>
+    /// for each of its keys no file of the folder sets.</summary>
+    public static int Extract(ScriptTextCorpus corpus, string language, string outputRoot, string origin, TextWriter console,
+                              EngineTextKeys? engine = null)
     {
         string folder = Path.Combine(Path.GetFullPath(outputRoot), "text", language);
         var existing = new Dictionary<string, TextCatalogFile>(StringComparer.Ordinal);
@@ -164,7 +181,9 @@ public static class TextCommands
             return 1;
         }
         var counts = new ExtractCounts();
-        IReadOnlyDictionary<string, TextCatalogFile> files = TextTemplateExtractor.Build(corpus, existing, counts);
+        var files = new Dictionary<string, TextCatalogFile>(TextTemplateExtractor.Build(corpus, existing, counts),
+                                                            StringComparer.Ordinal);
+        int engineTemplates = engine == null ? 0 : AddEngineTemplates(engine, language, existing, files);
         string[] header =
         [
             $"Catalog template written by omp text extract from {origin}.",
@@ -181,8 +200,32 @@ public static class TextCommands
         console.WriteLine($"omp text extract: {corpus.Scripts.Count} scripts -> {folder}: {counts.FilesWritten} files written, "
                           + $"{counts.FilesUnchanged} unchanged; {counts.NewTemplates} new templates, {counts.KeptTranslated} "
                           + $"translated and {counts.KeptUntranslated} untranslated entries kept, {counts.MarkedObsolete} "
-                          + $"marked obsolete, {counts.Revived} no longer obsolete");
+                          + $"marked obsolete, {counts.Revived} no longer obsolete"
+                          + (engineTemplates > 0 ? $"; {engineTemplates} engine text templates in {EngineTextKeys.TemplateFile}" : ""));
         return 0;
+    }
+
+    /// <summary>For a language the engine has no table for, a template for each engine key no file in the folder
+    /// sets, added to <see cref="EngineTextKeys.TemplateFile"/> with the Japanese and English wording in
+    /// <c>note</c>. Returns how many it added.</summary>
+    private static int AddEngineTemplates(EngineTextKeys engine, string language,
+                                          IReadOnlyDictionary<string, TextCatalogFile> existing,
+                                          Dictionary<string, TextCatalogFile> files)
+    {
+        if (engine.Embedded(language) != null) return 0;
+        var present = existing.Values.Concat(files.Values).SelectMany(file => file.EngineEntries)
+            .Select(entry => entry.Key).ToHashSet(StringComparer.Ordinal);
+        IReadOnlyDictionary<string, string>? english = engine.Embedded("en");
+        var templates = engine.Japanese.Keys.Where(key => !present.Contains(key)).Order(StringComparer.Ordinal)
+            .Select(key => new EngineTextEntry(key, null, Note:
+                "ja: " + engine.Japanese[key] + (english?.TryGetValue(key, out string? en) == true ? "\nen: " + en : "")))
+            .ToList();
+        if (templates.Count == 0) return 0;
+        TextCatalogFile file = files.TryGetValue(EngineTextKeys.TemplateFile, out TextCatalogFile? generated) ? generated
+            : existing.TryGetValue(EngineTextKeys.TemplateFile, out TextCatalogFile? old) ? old
+            : new TextCatalogFile(null, null, [], []);
+        files[EngineTextKeys.TemplateFile] = file with { EngineEntries = [.. file.EngineEntries, .. templates] };
+        return templates.Count;
     }
 
     /// <summary>
@@ -191,7 +234,8 @@ public static class TextCommands
     /// scope reaches, site entries name the installed revision, and the bundled fonts cover the presented text.
     /// Errors (a file that does not read, ambiguous patterns, too many entries) make it fail; the rest are warnings.
     /// </summary>
-    public static int Check(TextSet set, ScriptTextCorpus? corpus, string? only, TextWriter console)
+    public static int Check(TextSet set, ScriptTextCorpus? corpus, string? only, TextWriter console,
+                            EngineTextKeys? engine = null)
     {
         int errors = 0, warnings = 0;
         void Error(string message)
@@ -220,15 +264,25 @@ public static class TextCommands
             }
             int templates = files.Sum(file => file.File.Items.Count(item => !item.HasText));
             int obsolete = files.Sum(file => file.File.Items.Count(item => item.Obsolete));
+            int engineKeys = files.SelectMany(file => file.File.EngineEntries).Where(entry => entry.Text != null)
+                .Select(entry => entry.Key).Distinct().Count();
             console.WriteLine($"text {tag}: {catalog.Count} entries from {files.Count} files"
                               + (templates > 0 ? $", {templates} without text" : "")
                               + (obsolete > 0 ? $", {obsolete} obsolete" : "")
+                              + (engineKeys > 0 ? $", {engineKeys} engine keys" : "")
                               + (set.Languages.ContainsKey(tag) ? "" : " (no [[language]] table: defaults)"));
             foreach (AmbiguousPatterns pair in TextPatternOverlap.Find(catalog))
                 Error($"text {tag}: {pair.First.Origin} and {pair.Second.Origin}: the patterns \"{pair.First.Source}\" and "
                       + $"\"{pair.Second.Source}\" can match one string; give one a narrower scope or more literal text");
             if (corpus != null)
                 foreach (var (_, origin, file) in files) CheckReach(origin, file, corpus, Warning);
+            if (engine != null)
+                foreach (EngineTextEntry entry in files.SelectMany(file => file.File.EngineEntries).Where(entry => entry.Text != null))
+                {
+                    if (!engine.Japanese.ContainsKey(entry.Key))
+                        Warning($"{entry.Origin}: the engine has no text '{entry.Key}'; the entry is not used");
+                    else if (engine.Problem(entry.Key, entry.Text!) is { } problem) Error($"{entry.Origin}: {problem}");
+                }
             if (set.Languages.TryGetValue(tag, out LanguageSettings? settings))
                 CheckCoverage(tag, settings, catalog, set, Warning);
         }

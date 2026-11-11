@@ -180,7 +180,9 @@ public static class OmpCommands
         {
             if (result == null) return 1;
             console.Write(result.Report.Render());
-            var portOnly = result.Order.Where(mod => !mod.Manifest.Target.Equals("native", StringComparison.Ordinal)).ToList();
+            // A package without [game] (localization spec §11.1) holds only presentation, which export leaves out.
+            var portOnly = result.Order.Where(mod => mod.Manifest.Target is { } target
+                                                     && !target.Equals("native", StringComparison.Ordinal)).ToList();
             if (portOnly.Count > 0)
             {
                 console.WriteLine("omp export: refused: " + string.Join(", ", portOnly.Select(mod => $"{mod.Id} targets {mod.Manifest.Target}"))

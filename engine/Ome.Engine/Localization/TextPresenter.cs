@@ -86,6 +86,14 @@ public sealed record TextLanguage(string Tag, IReadOnlyList<TextCatalog> Chain)
     /// <summary>The fonts to use for authored face <paramref name="face"/>, or null for the host's own substitutes.</summary>
     public IReadOnlyList<string>? FontsFor(string face) => Fonts.FirstOrDefault(font => font.Applies(face))?.Use;
 
+    /// <summary>The language and its fallbacks, in order, whether or not a source has their folders (§10): the
+    /// shell's tables follow the same chain.</summary>
+    public IReadOnlyList<string> Lookup { get; init; } = [Tag];
+
+    /// <summary>The sources' <c>[[engine]]</c> entries (§11) for each language of <see cref="Lookup"/> that has any,
+    /// in chain order.</summary>
+    public IReadOnlyList<EngineTextLayer> Engine { get; init; } = [];
+
     /// <summary>The pseudo-language (spec §14): no catalog, every string lengthened and bracketed.</summary>
     public static TextLanguage Pseudo { get; } = new(LanguageTag.Pseudo, []);
 }
@@ -302,3 +310,13 @@ public sealed class TextPresenter
     /// length opcodes follow it (a filter's text alone does not count).</summary>
     private readonly record struct Result(PresentedText? Presented, bool Missed, bool Measurable);
 }
+
+/// <summary>An <c>[[engine]]</c> entry's text and the file and line it came from.</summary>
+public readonly record struct EngineTextValue(string Text, string Origin);
+
+/// <summary>
+/// One language's engine text from the text sources (localization spec §11): its <c>[[engine]]</c> entries by key,
+/// merged in load order, so a later file or package wins. The shell puts it in front of its embedded table for that
+/// language.
+/// </summary>
+public sealed record EngineTextLayer(string Language, IReadOnlyDictionary<string, EngineTextValue> Entries);

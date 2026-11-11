@@ -86,7 +86,8 @@ same way without the warning.
 reached a handler that belongs to the scene `OWNER` while the script `SCRIPT`, which the scene called with `run`, was
 waiting for input. Typically a right-click opens the ADV menu. Pages inside a script called with `run` cannot use the
 scene's menu. Insert the pages into the scene with a patch, or make the script a scene of its own
-([new-scenes.md](new-scenes.md)). The port shows the same message as native AGE and ends the run.
+([new-scenes.md](new-scenes.md)). The port shows the same box as native AGE, with 中止 (abort), 再試行 (retry) and 無視
+(ignore); with an English shell it reads "An error occurred" and "Invalid depth SCRIPT != OWNER".
 
 **My edit is gone after loading a save.** The cells you changed are part of the save, so loading restores the saved
 values. Make the edit somewhere the save does not store, or repeat it at a point that runs after loading
@@ -121,6 +122,15 @@ the exact key the catalog needs, and `script` and `at` the site that drew it. If
 **Squares or the wrong font.** The fonts of the language's `[[language.font]]` table lack those characters, and so
 do the system's. `omp text check` lists the characters each table's bundled fonts lack; add a font that has them to
 `use`.
+
+**A menu or dialog keeps the engine's wording.** The log has a `[text]` line for each `[[engine]]` entry the engine
+left out, ending "the engine's own text is shown": the key is not one the engine has, or the text names a value
+(`{1}`) its Japanese does not take. `omp text check` reports both. An entry without `text` is a template and is
+skipped.
+
+**"a package without [game] holds only text/ and fonts/" or "holds only [[engine]] entries".** A package for every
+game carries the engine's own text only. Game text, patches, scripts and assets need a `[game]` table naming the
+game ([languages.md](languages.md), "A shell language for every game").
 
 ## Game-specific problems
 

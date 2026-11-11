@@ -74,13 +74,15 @@ public static partial class ManifestReader
         var authors = reader.Strings("authors");
         string? description = reader.String("description");
 
-        string profile = "", target = "";
+        // Localization spec §11.1: from format version 2 a package may target no profile; it then holds only
+        // presentation (languages, engine text, fonts), and every profile's loader takes it.
+        string? profile = null, target = null;
         List<string> revisions = [];
-        if (reader.Table("game", required: true) is { } game)
+        if (reader.Table("game", required: omp < ModManifest.LanguageOmpVersion) is { } game)
         {
             profile = game.String("profile", required: true) ?? "";
             target = game.String("target", required: true) ?? "";
-            if (target.Length > 0 && target != "native")
+            if (target is { Length: > 0 } && target != "native")
                 game.Problems.Add($"game.target: '{target}' is not supported; version 1 mods target \"native\"");
             revisions = game.Strings("revisions");
             foreach (string revision in revisions.Where(revision => !IsValidFingerprint(revision)))
@@ -144,6 +146,10 @@ public static partial class ManifestReader
                 assets.Problems.Add($"assets.names: '{asset}' is not an ASCII basename with an extension");
             assets.RejectUnknown();
         }
+        if (profile == null)
+            foreach (string table in new[] { "scripts", "assets", "replace" }.Where(root.ContainsKey))
+                reader.Problems.Add($"{table}: a package without [game] holds no scripts or assets (it may have "
+                                    + "[[language]], text/ with [[engine]] entries only, and fonts/)");
         foreach (var duplicate in scriptNames.Concat(assetNames).GroupBy(n => n, StringComparer.OrdinalIgnoreCase)
                      .Where(group => group.Count() > 1))
             reader.Problems.Add($"scripts.names/assets.names: '{duplicate.Key}' is listed more than once");
