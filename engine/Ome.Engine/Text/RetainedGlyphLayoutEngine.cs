@@ -52,12 +52,13 @@ public sealed class RetainedGlyphLayoutEngine
         _coverageAlpha = coverageAlpha;
     }
 
+    /// <summary>Lay out <paramref name="glyphs"/> and draw them into <paramref name="destination"/>; a null destination
+    /// only measures, as the source layout pass of presented text does (localization spec §8).</summary>
     public GlyphTextLayoutResult Render(
-        RgbaImage destination,
+        RgbaImage? destination,
         GlyphTextLayoutOptions options,
         IReadOnlyList<GlyphRasterRequest> glyphs)
     {
-        ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(glyphs);
         var records = new List<AdvRetainedGlyphRecord>(glyphs.Count);
         int cursorX = options.CursorX;
@@ -170,11 +171,12 @@ public sealed class RetainedGlyphLayoutEngine
                 ? checked(cursorX + AspectGlyphPlacement.OffsetX(
                     mask, referenceBlackBoxWidth, fontSize, request.Cp932Code, options.Style.AspectMode))
                 : cursorX;
-            AgeGlyphMaskCompositor.DrawGlyph(
-                destination, mask,
-                shiftByEffect ? checked(drawX + options.Style.EffectOffsetX) : drawX,
-                checked((shiftByEffect ? cursorY + options.Style.EffectOffsetY : cursorY) - raise),
-                AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), options.Style, _coverageAlpha);
+            if (destination != null)
+                AgeGlyphMaskCompositor.DrawGlyph(
+                    destination, mask,
+                    shiftByEffect ? checked(drawX + options.Style.EffectOffsetX) : drawX,
+                    checked((shiftByEffect ? cursorY + options.Style.EffectOffsetY : cursorY) - raise),
+                    AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), options.Style, _coverageAlpha);
             records.Add(new AdvRetainedGlyphRecord(0, cursorX, cursorY, right, bottom));
             cursorX = checked(cursorX + advanceX);
             if (aspectReference == null) cursorY = checked(cursorY + mask.CellAdvanceY);
@@ -216,7 +218,7 @@ public sealed class RetainedGlyphLayoutEngine
     /// The cursor is not moved: AGE restores it to the end of the base text.
     /// </summary>
     public IReadOnlyList<AdvRubyGlyph> RenderRuby(
-        RgbaImage destination,
+        RgbaImage? destination,
         string baseText,
         IReadOnlyList<AdvTextRow> rows,
         string ruby,
@@ -246,7 +248,7 @@ public sealed class RetainedGlyphLayoutEngine
     /// <summary>Draw a ruby over one base (<see cref="RubyTextLayout.Draw"/>) with this engine's rasterizer;
     /// <paramref name="history"/> selects History's top offset.</summary>
     public IReadOnlyList<AdvRetainedGlyphRecord> RenderRubyOver(
-        RgbaImage destination,
+        RgbaImage? destination,
         int baseLeft,
         int baseTop,
         int baseWidth,

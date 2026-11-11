@@ -92,7 +92,7 @@ public static class RubyTextLayout
     /// record chain flag 1, so the whole ruby publishes in one tick.
     /// </summary>
     public static IReadOnlyList<AdvRetainedGlyphRecord> Draw(
-        RgbaImage destination,
+        RgbaImage? destination,
         IGlyphMaskRasterizer rasterizer,
         int baseLeft,
         int baseTop,
@@ -105,7 +105,6 @@ public static class RubyTextLayout
         bool history = false,
         GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
     {
-        ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(rasterizer);
         ArgumentNullException.ThrowIfNull(ruby);
         ArgumentNullException.ThrowIfNull(rules);
@@ -143,7 +142,7 @@ public static class RubyTextLayout
     /// the ruby font, with no gap.
     /// </summary>
     public static IReadOnlyList<AdvRetainedGlyphRecord> DrawAt(
-        RgbaImage destination,
+        RgbaImage? destination,
         IGlyphMaskRasterizer rasterizer,
         int x,
         int y,
@@ -154,7 +153,6 @@ public static class RubyTextLayout
         RubyLayoutRules rules,
         GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
     {
-        ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(rasterizer);
         ArgumentNullException.ThrowIfNull(ruby);
         ArgumentNullException.ThrowIfNull(rules);
@@ -165,7 +163,7 @@ public static class RubyTextLayout
     }
 
     private static List<AdvRetainedGlyphRecord> DrawCells(
-        RgbaImage destination,
+        RgbaImage? destination,
         IReadOnlyList<GlyphRasterRequest> requests,
         GlyphMask[] masks,
         int x,
@@ -181,9 +179,10 @@ public static class RubyTextLayout
         {
             GlyphMask mask = masks[index];
             int right = checked(x + mask.CellWidth);
-            AgeGlyphMaskCompositor.DrawGlyph(
-                destination, mask, x, y,
-                AgeGlyphMaskCompositor.CellTopToBaseline(mask, requests[index].PixelHeight), plain, coverageAlpha);
+            if (destination != null)
+                AgeGlyphMaskCompositor.DrawGlyph(
+                    destination, mask, x, y,
+                    AgeGlyphMaskCompositor.CellTopToBaseline(mask, requests[index].PixelHeight), plain, coverageAlpha);
             int chain = rules.ChainEveryRubyRecord || index > 0 ? 1 : 0;
             records.Add(new AdvRetainedGlyphRecord(chain, x, y, right, checked(y + mask.CellHeight)));
             bool singleByte = requests[index].Cp932Code is < 0x100;

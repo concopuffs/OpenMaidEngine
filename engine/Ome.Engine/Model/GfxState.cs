@@ -61,6 +61,45 @@ public sealed partial class GfxState
         }
     }
 
+    /// <summary>
+    /// The state a numbered save writes, with each of <paramref name="sourceText"/>'s object ranges holding the glyphs
+    /// the source-language run would have bound (localization spec §8) in place of the drawn ones. A range with no drawn
+    /// object stays empty, as the layout's objects are released. A source glyph keeps the drawn object at its handle
+    /// with the glyph's bind applied (gfx_object_bind_draw), or binds a new object.
+    /// </summary>
+    public GfxPersistenceSnapshot CapturePersistenceSnapshot(IReadOnlyList<AdvTextSourceObjects>? sourceText)
+    {
+        GfxPersistenceSnapshot snapshot = CapturePersistenceSnapshot();
+        if (sourceText is not { Count: > 0 }) return snapshot;
+        var objects = snapshot.Objects.ToDictionary(item => item.Handle, item => item.Object);
+        foreach (AdvTextSourceObjects layout in sourceText)
+        {
+            var drawn = new Dictionary<long, GfxObject>();
+            for (long handle = layout.FirstHandle; handle < layout.FirstHandle + layout.Capacity; handle++)
+                if (objects.Remove(handle, out GfxObject? existing)) drawn[handle] = existing;
+            if (drawn.Count == 0) continue;
+            for (int index = 0; index < layout.Glyphs.Count; index++)
+            {
+                AdvRetainedGlyphPlacement placement = layout.Glyphs[index];
+                AdvRetainedGlyphRecord cell = placement.Record;
+                if (cell.Width <= 0 || cell.Height <= 0) continue;
+                long handle = layout.FirstHandle + index;
+                GfxObject bound = drawn.GetValueOrDefault(handle) ?? new GfxObject();
+                bound.SourceSlot = layout.SurfaceSlot;
+                bound.SrcRect = (cell.Left, cell.Top, cell.Width, cell.Height);
+                bound.SrcCollapsed = false;
+                bound.V24 = (placement.LayoutOriginX + cell.Left, placement.LayoutOriginY + cell.Top, 0);
+                bound.Visible = true;
+                bound.PostBindStaticColorBlend = false;
+                objects[handle] = bound;
+            }
+        }
+        return snapshot with
+        {
+            Objects = objects.OrderBy(item => item.Key).Select(item => (item.Key, item.Value)).ToArray(),
+        };
+    }
+
     public GfxPersistenceSnapshot CapturePersistenceSnapshot()
     {
         lock (_lock)

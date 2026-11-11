@@ -69,8 +69,17 @@ public sealed record AdvLiveTextRun(
     string Text,
     IReadOnlyList<string> ScriptStack)
 {
-    /// <summary>Op 0x196's ruby, drawn over <see cref="Text"/> (null for show-text).</summary>
+    /// <summary>Op 0x196's ruby, drawn over <see cref="Text"/> (null for show-text, and for a presented run).</summary>
     public string? Ruby { get; init; }
+
+    /// <summary>Op 0x196's ruby as the script gave it, drawn or not: the source layout pass lays it out
+    /// (localization spec §8).</summary>
+    public string? SourceRuby { get; init; }
+
+    /// <summary>Where the layout's source cursor is, when the run draws from another one (localization spec §8):
+    /// <see cref="Layout"/> holds the presented cursor the run draws from, and the source layout pass starts here.
+    /// Null when the two cursors are one.</summary>
+    public (int X, int Y)? SourceCursor { get; init; }
 
     /// <summary>Whether a timed reveal of this run restarts the glyph timer (<c>ctx+0x5f630</c>). Op 0x6e arms it;
     /// op 0x196 does not and keeps the previous run's phase (docs/engine-re.md, "The reveal clock").</summary>
@@ -118,6 +127,13 @@ public readonly record struct AdvTextHistoryRect(int Left, int Top, int Right, i
 /// <summary>AGE's logical 8-byte history index entry.</summary>
 public readonly record struct AdvTextHistoryEntry(int LayoutSlot, int FirstRecordIndex);
 
+/// <summary>
+/// A run, or a message of several runs, that a presenter resolved in this session (localization spec §8): its records
+/// [<see cref="FirstRecord"/>, <see cref="EndRecord"/>), what was looked up, and the language then selected. History
+/// presents these records again from the lookup, not by matching their text. Not saved.
+/// </summary>
+public sealed record AdvTextLookupSpan(int FirstRecord, int EndRecord, Localization.TextLookup Lookup, string Language);
+
 /// <summary>The host-facing result of rendering one retained history group into a target ADV layout.</summary>
 public sealed record AdvTextHistoryRenderBatch(
     int LayoutSlot,
@@ -137,6 +153,10 @@ public sealed record AdvTextHistoryRenderBatch(
 
     /// <summary>The group's ruby runs (op 0x1d1 only), each over the text record drawn before it.</summary>
     public IReadOnlyList<AdvTextRubyAnnotation> Ruby { get; init; } = [];
+
+    /// <summary>The group presented again (localization spec §8): drawn instead of <see cref="Text"/>, wrapped in the
+    /// target layout at its break opportunities, with no ruby. Null draws the records as they are.</summary>
+    public Localization.PresentedText? Presented { get; init; }
 }
 
 /// <summary>A ruby drawn over glyphs <see cref="BaseFirstGlyph"/>..+<see cref="BaseGlyphCount"/> of a History
@@ -155,7 +175,13 @@ public sealed record AdvTextRedrawBatch(
     int FirstRecordIndex,
     int Flags,
     AdvTextLayoutSnapshot Layout,
-    IReadOnlyList<AdvTextRedrawRecord> Records);
+    IReadOnlyList<AdvTextRedrawRecord> Records)
+{
+    /// <summary>The group presented again (localization spec §8), drawn instead of <see cref="Records"/> from the
+    /// first text record's top-left and wrapped in the layout as live presented text is, in that record's style.
+    /// Null draws the records at their rectangles.</summary>
+    public Localization.PresentedText? Presented { get; init; }
+}
 
 /// <summary>
 /// Engine-owned retained ADV backlog. Native numbered saves serialize this same model; live HISTORY.BIN
@@ -173,6 +199,11 @@ public sealed class AdvTextHistory
         public int ResetCursorY;
         public int CursorX;
         public int CursorY;
+        // The presented cursor (localization spec §8): where presented text draws while it is apart from the source
+        // cursor above, which the recorded rows follow. Not saved.
+        public bool DrawCursorApart;
+        public int DrawCursorX;
+        public int DrawCursorY;
         public int Right;
         public int Bottom;
         public long WaitIndicatorObjectHandle = -1;
@@ -185,6 +216,8 @@ public sealed class AdvTextHistory
     private readonly Dictionary<int, LayoutState> _layouts = new();
     private readonly HashSet<int> _pendingGroupStarts = new();
     private int _navigationAnchorIndex = -1;
+    private readonly Dictionary<int, AdvTextLookupSpan> _lookupSpans = new();
+    private (int First, Localization.TextLookup Lookup, string Language)? _openLookupSpan;
 
     public IReadOnlyList<AdvTextHistoryRecord> Records => _records;
     public IReadOnlyList<AdvTextHistoryEntry> Entries => _entries;
@@ -212,6 +245,7 @@ public sealed class AdvTextHistory
         var layout = GetOrCreateLayout(slot);
         layout.CursorX = layout.ResetCursorX;
         layout.CursorY = layout.ResetCursorY;
+        layout.DrawCursorApart = false;
         AppendBoundary(slot);
     }
 
@@ -231,12 +265,53 @@ public sealed class AdvTextHistory
         layout.Bottom = bottom;
     }
 
+    /// <summary>Op 0x7a: both cursors to (<paramref name="x"/>, <paramref name="y"/>).</summary>
     public void SetCursor(int requestedSlot, int x, int y)
     {
         int slot = ResolveLayout(requestedSlot);
         var layout = GetOrCreateLayout(slot);
         layout.CursorX = x;
         layout.CursorY = y;
+        layout.DrawCursorApart = false;
+    }
+
+    /// <summary>After a show-text run (localization spec §8): the source cursor to where the source layout ended, and
+    /// the presented cursor to where the drawn text ended. They are one cursor again when they meet.</summary>
+    public void SetRunCursors(int requestedSlot, int sourceX, int sourceY, int drawX, int drawY)
+    {
+        var layout = GetOrCreateLayout(ResolveLayout(requestedSlot));
+        (layout.CursorX, layout.CursorY) = (sourceX, sourceY);
+        (layout.DrawCursorX, layout.DrawCursorY) = (drawX, drawY);
+        layout.DrawCursorApart = drawX != sourceX || drawY != sourceY;
+    }
+
+    /// <summary>After a run that draws nothing, a later run of a presented message (localization spec §6.2, §8): only
+    /// the source cursor moves.</summary>
+    public void SetSourceCursor(int requestedSlot, int x, int y)
+    {
+        var layout = GetOrCreateLayout(ResolveLayout(requestedSlot));
+        if (!layout.DrawCursorApart) (layout.DrawCursorX, layout.DrawCursorY) = (layout.CursorX, layout.CursorY);
+        (layout.CursorX, layout.CursorY) = (x, y);
+        layout.DrawCursorApart = layout.DrawCursorX != x || layout.DrawCursorY != y;
+    }
+
+    /// <summary>The layout as a run draws it: <see cref="GetLayoutSnapshot"/> with the presented cursor
+    /// (localization spec §8).</summary>
+    public AdvTextLayoutSnapshot GetDrawSnapshot(int requestedSlot)
+    {
+        int slot = ResolveLayout(requestedSlot);
+        var layout = GetOrCreateLayout(slot);
+        AdvTextLayoutSnapshot snapshot = SnapshotLayout(slot);
+        return layout.DrawCursorApart
+            ? snapshot with { CursorX = layout.DrawCursorX, CursorY = layout.DrawCursorY }
+            : snapshot;
+    }
+
+    /// <summary>The source cursor while the presented cursor is apart from it, else null.</summary>
+    public (int X, int Y)? SourceCursorApart(int requestedSlot)
+    {
+        var layout = GetOrCreateLayout(ResolveLayout(requestedSlot));
+        return layout.DrawCursorApart ? (layout.CursorX, layout.CursorY) : null;
     }
 
     public void SetLayoutOrigin(int requestedSlot, int x, int y)
@@ -299,23 +374,57 @@ public sealed class AdvTextHistory
     }
 
     /// <summary>
-    /// Advance to the next horizontal text line. Native resets x to the layout's configured reset cursor
-    /// and adds the primary font's pixel height plus the current extra line spacing to y.
+    /// Op 0x6f: a line break record, and the cursor to the start of the next line. Native resets x to the layout's
+    /// configured reset cursor and adds the primary font's pixel height plus the current extra line spacing to y. A
+    /// presented cursor apart from the source one moves the same way, unless <paramref name="moveDrawCursor"/> is clear:
+    /// the break is inside a presented message, which draws its own breaks (localization spec §6.2, §8).
     /// </summary>
-    /// <summary>Op 0x6f: a line break record, and the cursor to the start of the next line. Without
-    /// <paramref name="moveCursor"/> only the record is written: the break is inside a presented message, which
-    /// draws its own breaks (localization spec §6.2).</summary>
-    public void EndLine(int requestedSlot, AdvTextStyle style, bool moveCursor = true)
+    public void EndLine(int requestedSlot, AdvTextStyle style, bool moveDrawCursor = true)
     {
         int slot = ResolveLayout(requestedSlot);
         var layout = GetOrCreateLayout(slot);
-        int fontHeight = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
-        if (moveCursor)
-        {
-            layout.CursorX = layout.ResetCursorX;
-            layout.CursorY += fontHeight + style.LineSpacing;
-        }
+        int advance = (style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24) + style.LineSpacing;
+        if (!moveDrawCursor && !layout.DrawCursorApart)
+            (layout.DrawCursorApart, layout.DrawCursorX, layout.DrawCursorY) = (true, layout.CursorX, layout.CursorY);
+        else if (moveDrawCursor && layout.DrawCursorApart)
+            (layout.DrawCursorX, layout.DrawCursorY) = (layout.ResetCursorX, layout.DrawCursorY + advance);
+        layout.CursorX = layout.ResetCursorX;
+        layout.CursorY += advance;
         AppendLineBreak(slot, style);
+    }
+
+    /// <summary>Start the lookup span of a run or message whose records follow (localization spec §8); the open span,
+    /// if any, ends first. Nothing is kept while recording is suppressed.</summary>
+    public void BeginLookupSpan(Localization.TextLookup lookup, string language)
+    {
+        EndLookupSpan();
+        if (!RecordingSuppressed) _openLookupSpan = (_records.Count, lookup, language);
+    }
+
+    /// <summary>End the open lookup span after its last record.</summary>
+    public void EndLookupSpan()
+    {
+        if (_openLookupSpan is not { } open) return;
+        _openLookupSpan = null;
+        if (_records.Count > open.First)
+            _lookupSpans[open.First] = new AdvTextLookupSpan(open.First, _records.Count, open.Lookup, open.Language);
+    }
+
+    /// <summary>The lookup span whose first record is <paramref name="firstRecord"/>.</summary>
+    public bool TryGetLookupSpan(int firstRecord, out AdvTextLookupSpan span)
+        => _lookupSpans.TryGetValue(firstRecord, out span!);
+
+    /// <summary>Where op 0x1d1 and op 0x82 stop walking the group at <paramref name="firstRecordIndex"/> (exclusive): the
+    /// next group start, or the first navigation-filtered record unless flag 1 is set.</summary>
+    public int GroupEnd(int firstRecordIndex, int flags)
+    {
+        int end = firstRecordIndex;
+        foreach (var record in EnumerateGroup(firstRecordIndex))
+        {
+            if (record.Flags.HasFlag(AdvTextHistoryRecordFlags.NavigationFiltered) && (flags & 1) == 0) break;
+            end++;
+        }
+        return end;
     }
 
     private void AppendLineBreak(int slot, AdvTextStyle style)
@@ -389,6 +498,8 @@ public sealed class AdvTextHistory
         _entries.Clear();
         _pendingGroupStarts.Clear();
         _navigationAnchorIndex = -1;
+        _lookupSpans.Clear();
+        _openLookupSpan = null;
     }
 
     /// <summary>Replace retained history from AGE's numbered-save history tail.</summary>
@@ -403,6 +514,9 @@ public sealed class AdvTextHistory
         _entries.Clear();
         _entries.AddRange(entries);
         _pendingGroupStarts.Clear();
+        // A loaded record has no lookup: history matches its text against the catalogs (localization spec §8).
+        _lookupSpans.Clear();
+        _openLookupSpan = null;
         // Native text_history_deserialize clears and reconstructs only the history entry/record vectors.
         // Live layout definitions, selected layout, surfaces, and retained-object bindings remain owned by
         // the initialized text manager and are rebuilt by the script restore path as needed.

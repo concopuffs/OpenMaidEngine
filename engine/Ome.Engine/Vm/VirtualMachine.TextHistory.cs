@@ -55,14 +55,23 @@ public sealed partial class VirtualMachine
                 if ((flags & 4) == 0 && TextHistory.TryBuildHistoryRenderBatch(
                         (int)Read(a[0]), (int)Read(a[1]), flags, Read(a[3]), Read(a[4]), _advTextStyle,
                         out var batch))
+                {
+                    if (PresentHistoryGroup(batch.FirstRecordIndex, flags) is { } presented)
+                        batch = batch with { Presented = presented };
                     _host.RenderTextHistory(Gfx, TextHistory.GetPresentationBinding(batch.LayoutSlot), batch);
+                }
                 return pc + 1;
             }
             case "redraw-retained-text-group": // 0x82: draw an ordinary ADV group again at its records' rectangles
                 if (TextHistory.TryBuildRedrawBatch(
                         (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), Read(a[3]), Read(a[4]), _advTextStyle,
                         out var redraw))
+                {
+                    if (redraw.Records.Any(record => !record.IsRuby)
+                        && PresentHistoryGroup(redraw.FirstRecordIndex, (int)Read(a[2])) is { } presented)
+                        redraw = redraw with { Presented = presented };
                     _host.RedrawRetainedTextGroup(Gfx, TextHistory.GetPresentationBinding(redraw.LayoutSlot), redraw);
+                }
                 return pc + 1;
             case "u0041BB90":
             case "find-text-history-value": // 0x1d3: operand 3 is accepted but ignored natively

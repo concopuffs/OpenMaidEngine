@@ -17,13 +17,21 @@ public interface IAdvHost
         return null;
     }
     // A later run of a presented message (localization spec §6.2): the message's first run drew the whole presented
-    // sentence, so this run draws nothing and moves no cursor. The host still notes its source text, which the page
-    // map and the locator keep (§14).
-    void NoteHiddenTextRun(AdvLiveTextRun run) => ShowText(run.SourceOffset, run.Text);
+    // sentence, so this run draws nothing. The host notes its source text, which the page map and the locator keep
+    // (§14), and returns its source layout (§8), which history records and the source cursor follows. Null records one
+    // row at the cursor, as a null ShowText result does.
+    AdvTextSourceLayout? LayoutHiddenTextRun(AdvTextLayoutPresentationBinding binding, AdvLiveTextRun run)
+    {
+        ShowText(run.SourceOffset, run.Text);
+        return null;
+    }
     // ctx+0x55108: a click finished a reveal, so every later reveal publishes at once until the page's op 0x72 (or a
     // scene reset) clears it. The VM sets it when native's input latch holds action 4 as a reveal starts; the host
     // sets it for a click during a reveal.
     void FinishTextRevealsUntilWait() { }
+    // The layouts whose bound glyphs are not what the source-language run would have bound, with its glyphs
+    // (localization spec §8). A numbered save writes those in their place.
+    IReadOnlyList<AdvTextSourceObjects> SourceTextObjects => [];
     // Whether ctx+0x55108 is set. While it is, the reveal service publishes without polling the input latch.
     bool TextRevealsFinishedUntilWait => false;
     // Native registers message:MessageSpeed=5 (ms per glyph) and message:MesWinAlpha=8 before SYS4REG.INI

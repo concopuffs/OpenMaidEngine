@@ -123,6 +123,10 @@ it; git history keeps the record.
   `SC2310@0x1232`, `show-text` of a tab, a space and `―The cliff and the ru…` (found by `omp text
   import-scripts`, which reads it leniently). Native AGE's handling has not been checked. Done when native's
   inline-string read is known (Ghidra, the show-text path) and the codec does the same.
+- **The backlog after a load repeats the loaded page's line on the port.** Kamidori saved at its first name plate
+  (`SC0000@0x1488`, 2026-11-11) and loaded from the title shows Wil's line twice in HISTORY, in Japanese as in
+  English: the saved records hold it, and the resumed page records it again. Native has not been driven to the same
+  load. Done when native's backlog after that load is known, and the port's matches it.
 
 ## Robustness
 
@@ -302,7 +306,7 @@ and the drive scenarios.
 ## Localization
 
 - **Build the localization framework.** The design is accepted (`superpowers/specs/2026-11-10-localization-design.md`,
-  2026-11-10) and milestones 0 to 2 are implemented. The port presents a language from a folder of catalogs
+  2026-11-10) and milestones 0 to 3 are implemented. The port presents a language from a folder of catalogs
   (`--text-root`), not yet from packages, and its own error box is fixed Japanese (`VirtualMachine.DiagnosticCaption`).
   The spec's §19 holds the milestones and §18 the gates; they are not restated here.
   - **Milestone 0 is built, reviewed and revised** (2026-11-10). `omp text import-scripts` converts the Kamidori
@@ -337,10 +341,35 @@ and the drive scenarios.
     - Fixed on the way: presented text on a layout sized for the source font (Kamidori's 25-pixel name layout 9)
       stopped at its first glyph, since the portable cell (ascent plus descent) overflowed the bottom bound. Presented
       runs now test overflow against the font height their rows advance by.
-  - **Next:** milestone 3.
+  - **Milestone 3 is built** (2026-11-11). Each run that draws something other than its source text is also laid out
+    as its source text with the gameplay rasterizer, without drawing (the source layout pass, spec §8). History
+    records those rows. Each layout keeps two cursors: the source cursor, which records and saves follow, and the
+    draw cursor of presented text, which the click-wait indicator follows. The VM keeps each run's or message's
+    lookup for the session. The backlog (op `0x1d1`) and the settings redraw (op `0x82`) present each group again
+    from it. After a load or a language change they match the records' text against unscoped entries
+    (`TextHistorySplit`: the fewest unmatched characters, then the fewest spans).
+    - Found on the way: a numbered save holds the gfx object table, and with it every text layout's retained glyph
+      objects. In Kamidori's SYSTEM4, layout 1's range is 0xd6d8 and layouts 8 and 9 share 0xe678, 0x1f4 objects
+      each. Presented glyphs made 133 of those records differ. Each retained layout now also keeps its source
+      glyphs, and a save writes them over the layout's range (`GfxState.CapturePersistenceSnapshot(sourceText)`).
+    - Gate 2: Kamidori driven to its first name plate (`SC0000@0x1488`) and saved. In English with
+      `measure = "source"`, `Ome.Cli save-diff` against the source-language save finds only the timestamp and play
+      time. With `measure = "presented"` it also finds four name-plate objects (0xd354–0xd357: source width 86 → 63,
+      x 182 → 159), one 23-pixel cell narrower for "Wil". `G[0x4f8]` matches, as the scripts reuse it before the
+      save. The gate's wording in spec §18, "confined to `G[0x4f8]` and frame locals", leaves out the graphics a
+      measured length sizes, which spec §2 names: they keep the measurement visible in the save. The headless host
+      draws nothing, so its saved history is the same with a language (`PresentedHistoryTests`).
+    - Gate 7: `PresentedHistoryTests` (the backlog in this session; after a load, with the global entry preferred;
+      after a language change; a miss in the same language shows its source; `x-pseudo` after a load). Kamidori in
+      English: the furigana page and HISTORY show English, wrapped, with the click-wait indicator after the last
+      presented glyph; the settings redraw keeps English. Gate 2's English save loaded from the title shows its page
+      and HISTORY in English, as the Japanese save shows them in Japanese.
+    - Gates 1 and 9 still hold: all 28 drive scenarios pass as written, and 27 of 28 are unchanged under x-pseudo
+      (reveal-clock's timing checks, as in milestone 1). The 1,677 engine tests pass; `validate.py` runtime passes.
+  - **Next:** milestone 4.
   - **`align`, `fit` and overflow reports (spec §7.2, §7.3) are in no milestone.** The entry keys are read, but the
     host ignores them, and nothing reports a presented run cut at the bottom of its window. Both need the source
-    text's extent, which milestone 3's source layout pass computes. Done when an entry's `align` and `fit` place and
+    text's extent, which the source layout pass (milestone 3) now computes. Done when an entry's `align` and `fit` place and
     narrow its text against the source extent, and a cut run goes to the miss log with its script, offset, message
     and the rows cut.
   - **Cut `localization-import-test.md`'s "Review answers" down to the results**, as that section says: the review

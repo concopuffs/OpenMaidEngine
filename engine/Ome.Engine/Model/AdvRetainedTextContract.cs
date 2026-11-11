@@ -56,7 +56,25 @@ public readonly record struct AdvRetainedTextRunResult(
 
     /// <summary>Op 0x196's ruby characters in drawing order, each with the row it was drawn over.</summary>
     public IReadOnlyList<AdvRubyGlyph> Ruby { get; init; } = [];
+
+    /// <summary>The run's source text laid out where native AGE would draw it, when the host drew something else
+    /// (localization spec §8): presented text, another rasterizer, or from the presented cursor. Null when the drawn
+    /// layout is the source layout. History records these rows and the layout's source cursor follows them.</summary>
+    public AdvTextSourceLayout? Source { get; init; }
 }
+
+/// <summary>
+/// The glyph objects one ADV layout would have bound with no language selected (localization spec §8): its object range
+/// and surface, and the source glyphs published so far, glyph i bound at <see cref="FirstHandle"/> + i. A numbered save
+/// writes these in place of the drawn glyphs, so it holds what the source-language run would have.
+/// </summary>
+public sealed record AdvTextSourceObjects(
+    long FirstHandle, long Capacity, int SurfaceSlot, IReadOnlyList<AdvRetainedGlyphPlacement> Glyphs);
+
+/// <summary>A source layout pass (localization spec §8): the rows and ruby native AGE would record for a run's
+/// source text, and where its cursor would end. Nothing is drawn.</summary>
+public sealed record AdvTextSourceLayout(
+    IReadOnlyList<AdvTextRow> Rows, IReadOnlyList<AdvRubyGlyph> Ruby, int CursorX, int CursorY);
 
 /// <summary>One drawn ruby character: its text, the base row it sits over, and its retained record.</summary>
 public readonly record struct AdvRubyGlyph(int Row, string Text, AdvRetainedGlyphRecord Record);

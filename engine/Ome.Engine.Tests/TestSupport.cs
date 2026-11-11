@@ -136,6 +136,15 @@ internal class RecordingHost : IHost
         ShowText(run, glyphDelayMilliseconds);
         return OnRetainedText?.Invoke(run);
     }
+    /// <summary>The source layout a later run of a presented message returns (localization spec §8).</summary>
+    public Func<AdvLiveTextRun, AdvTextSourceLayout?>? OnHiddenText;
+    public readonly List<AdvLiveTextRun> HiddenTextRuns = new();
+    public AdvTextSourceLayout? LayoutHiddenTextRun(AdvTextLayoutPresentationBinding binding, AdvLiveTextRun run)
+    {
+        ShowText(run.SourceOffset, run.Text);
+        HiddenTextRuns.Add(run);
+        return OnHiddenText?.Invoke(run);
+    }
     public void SetMessageGlyphDelayMilliseconds(int milliseconds)
         => MessageGlyphDelayMilliseconds = milliseconds;
     public long AutoMessageTime0Milliseconds { get; set; } = 500;

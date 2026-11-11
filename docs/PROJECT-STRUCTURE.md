@@ -228,7 +228,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       design.md): placeholder templates, entries, the catalog's global/script/
     │                                       site scopes, the message segmenter (spec §6.2), the presenter with its
     │                                       pattern matcher and overlap check, half-cell measurement, line-break
-    │                                       opportunities, the pseudo-language and the miss log
+    │                                       opportunities, history's text split (spec §8), the pseudo-language
+    │                                       and the miss log
     │   ├── Ome.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       screenshot BMP naming, profile-owned state, identity, and
@@ -420,6 +421,10 @@ text style and glyph-delay control, direct surface-string and retained numeric-g
 text/wait-object bindings; text history and input/skip/auto services remain separate.
 `engine/Ome.Engine/Vm/VirtualMachine.TextHistory.cs` owns history recording control, metadata append/navigation,
 retained history rendering, metadata/voice lookup, and history backlog clearing.
+`engine/Ome.Engine/Vm/VirtualMachine.HistoryPresentation.cs` presents a history group again in the current language
+(localization spec §8): by the lookups recorded this session, else by splitting the records' text against unscoped
+entries. `engine/Ome.Engine/Vm/VirtualMachine.TextStores.cs` records which instruction stored each global string, so
+a lookup can try the store's site (spec §5.2).
 `engine/Ome.Engine/Vm/VirtualMachine.AdvServices.cs` owns persistent/active message-skip control, read-skip
 settings and queries, auto-message state/timing, and per-message voice/skip reset opcode dispatch; shared state
 and refresh helpers remain in the VM coordinator because live text and input paths also consume them.

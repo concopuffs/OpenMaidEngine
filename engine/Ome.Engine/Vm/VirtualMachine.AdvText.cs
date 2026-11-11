@@ -39,14 +39,17 @@ public sealed partial class VirtualMachine
         => _presenter?.Present(text, new TextSite(_cur.Script.Name, ins.Offset), OriginOf(operand), logMiss);
 
     /// <summary>
-    /// What one show-text run draws (spec §6.2). A run that starts a message of several runs resolves the whole
-    /// message, its runs' texts joined: on an entry, it draws the presented sentence and the message's later runs
-    /// draw nothing (<paramref name="hidden"/>); on a miss, each run resolves on its own and only the message is
-    /// logged. A single run resolves with its operand's origin.
+    /// What one show-text run draws (spec §6.2), and what was looked up for it (<paramref name="lookup"/>, which
+    /// history keeps, §8). A run that starts a message of several runs resolves the whole message, its runs' texts
+    /// joined: on an entry, it draws the presented sentence and the message's later runs draw nothing
+    /// (<paramref name="hidden"/>); on a miss, each run resolves on its own and only the message is logged. A single run
+    /// resolves with its operand's origin.
     /// </summary>
-    private PresentedText? PresentRun(int pc, Instruction ins, Operand operand, string text, out bool hidden)
+    private PresentedText? PresentRun(int pc, Instruction ins, Operand operand, string text, out bool hidden,
+                                      out TextLookup? lookup)
     {
         hidden = false;
+        lookup = null;
         if (_presenter is not { } presenter)
         {
             _presentedMessage = null;
@@ -62,23 +65,26 @@ public sealed partial class VirtualMachine
             return null;
         }
         _presentedMessage = null;
+        var site = new TextSite(_cur.Script.Name, ins.Offset);
+        TextMessage? message = null;
+        int run = -1;
         if (presenter.Messages?.MessagesOf(_cur.Script) is { } messages
-            && messages.TryGetRun(pc, out TextMessage message, out int run) && message.Runs.Count > 1)
+            && messages.TryGetRun(pc, out TextMessage found, out int index) && found.Runs.Count > 1)
+            (message, run) = (found, index);
+        bool inMessage = message != null;
+        if (message != null && run == 0)
         {
-            if (run == 0)
+            // Nothing executes between a message's runs, so every operand reads now as it will when its run executes.
+            string key = string.Concat(message.Runs.Select(part => ReadStr(part.Text)));
+            if (presenter.Present(key, site) is { Entry: not null } sentence)
             {
-                // Nothing executes between a message's runs, so every operand reads now as it will when its run
-                // executes.
-                string key = string.Concat(message.Runs.Select(part => ReadStr(part.Text)));
-                if (presenter.Present(key, new TextSite(_cur.Script.Name, ins.Offset)) is { Entry: not null } sentence)
-                {
-                    _presentedMessage = new PresentedMessage(_cur, _cur.Script, message, 1);
-                    return sentence;
-                }
+                _presentedMessage = new PresentedMessage(_cur, _cur.Script, message, 1);
+                lookup = new TextLookup(key, site, null);
+                return sentence;
             }
-            return Present(text, ins, operand, logMiss: false);
         }
-        return Present(text, ins, operand);
+        lookup = new TextLookup(text, site, OriginOf(operand));
+        return presenter.Present(text, site, lookup.Value.Origin, logMiss: !inMessage);
     }
 
     /// <summary>Whether the <c>end-text-line</c> at <paramref name="pc"/> lies inside a presented message, which
@@ -113,21 +119,30 @@ public sealed partial class VirtualMachine
         string[] scriptStack;
         lock (_debugControlLock) scriptStack = _activeFrameNames.ToArray();
         // Presented text carries no ruby: the catalog drops it, as the translators did (§18).
-        PresentedText? presented = PresentRun(pc, ins, o, text, out bool hidden);
+        PresentedText? presented = PresentRun(pc, ins, o, text, out bool hidden, out TextLookup? lookup);
+        // The run draws from the presented cursor; its source layout pass starts at the source cursor (§8).
         var liveRun = new AdvLiveTextRun(
-            off, TextHistory.GetLayoutSnapshot(layoutSlot), _advTextStyle, text, scriptStack)
+            off, TextHistory.GetDrawSnapshot(layoutSlot), _advTextStyle, text, scriptStack)
         {
             Ruby = string.IsNullOrEmpty(ruby) || presented != null || hidden ? null : ruby,
+            SourceRuby = string.IsNullOrEmpty(ruby) ? null : ruby,
+            SourceCursor = TextHistory.SourceCursorApart(layoutSlot),
             ArmsGlyphTimer = ruby == null || RubyLayoutRules.ForEngine(_compatibility.EngineAbiId).ArmsGlyphTimer,
             Presented = presented,
         };
         if (hidden)
         {
-            // The message's first run drew the sentence. History still records this run's source text (§6.2).
-            _host.NoteHiddenTextRun(liveRun);
-            TextHistory.AppendText(layoutSlot, off, text, _advTextStyle);
+            // The message's first run drew the sentence. History records this run's source rows, and only the source
+            // cursor moves (§6.2, §8).
+            AdvTextSourceLayout? hiddenSource = _host.LayoutHiddenTextRun(
+                TextHistory.GetPresentationBinding(liveRun.Layout.Slot), liveRun);
+            TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: hiddenSource?.Rows,
+                                   ruby: hiddenSource?.Ruby);
+            if (hiddenSource != null) TextHistory.SetSourceCursor(layoutSlot, hiddenSource.CursorX, hiddenSource.CursorY);
+            if (_presentedMessage == null) TextHistory.EndLookupSpan();   // the message's last run
             return true;
         }
+        if (lookup is { } asked) TextHistory.BeginLookupSpan(asked, _presenter!.Language.Tag);
         AdvTextLayoutPresentationBinding binding =
             TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
         // A reveal runs (run-state 0x20000000) unless fast-forward or a finished-until-wait page publishes at once. Its
@@ -146,16 +161,16 @@ public sealed partial class VirtualMachine
         {
             _advTextRevealing = false;
         }
-        // History records the drawn rows (split at wraps), so it is written after layout but
-        // before the cursor moves. A presented run's rows are the presented text's, so history keeps its source text
-        // as one record: the source layout pass that rebuilds native's rows is milestone 3 (§8).
-        if (presented == null)
-            TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: retained?.Rows, ruby: retained?.Ruby);
-        else
-            TextHistory.AppendText(layoutSlot, off, text, _advTextStyle);
+        // History records the source rows (split at wraps), so it is written after layout but before the cursors move:
+        // the drawn rows when the host drew the source text where native would, else its source layout pass (§8).
+        AdvTextSourceLayout? source = retained is { } drawn
+            ? drawn.Source ?? new AdvTextSourceLayout(drawn.Rows, drawn.Ruby, drawn.CursorX, drawn.CursorY)
+            : null;
+        TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: source?.Rows, ruby: source?.Ruby);
         if (retained is { } result)
-            TextHistory.SetCursor(
-                result.LayoutSlot, result.CursorX, result.CursorY);
+            TextHistory.SetRunCursors(result.LayoutSlot, source!.CursorX, source.CursorY, result.CursorX, result.CursorY);
+        // A presented message's span stays open until its last run.
+        if (_presentedMessage == null) TextHistory.EndLookupSpan();
         return true;
     }
 
@@ -308,15 +323,12 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "end-text-line":
             {
-                // The line break moves the layout's cursor record, which the host's wait indicator can follow. Inside
-                // a presented message history still records the break, and the cursor stays after the sentence.
-                if (InsidePresentedMessage(pc))
-                {
-                    TextHistory.EndLine((int)Read(a[0]), _advTextStyle, moveCursor: false);
-                    return pc + 1;
-                }
-                TextHistory.EndLine((int)Read(a[0]), _advTextStyle);
-                var layout = TextHistory.GetLayoutSnapshot((int)Read(a[0]));
+                // The line break moves the layout's cursors; the host's wait indicator can follow the presented one.
+                // Inside a presented message only the source cursor moves: the sentence draws its own breaks (§6.2).
+                bool insideMessage = InsidePresentedMessage(pc);
+                TextHistory.EndLine((int)Read(a[0]), _advTextStyle, moveDrawCursor: !insideMessage);
+                if (insideMessage) return pc + 1;
+                var layout = TextHistory.GetDrawSnapshot((int)Read(a[0]));
                 _host.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
                 return pc + 1;
             }

@@ -9,6 +9,10 @@ namespace Ome.Engine.Text;
 public sealed class RetainedAdvTextLayoutPresentation
 {
     private readonly List<AdvRetainedGlyphPlacement> _glyphs = new();
+    // The glyphs each run's source text has in the source layout (localization spec §8), in drawing order, and for
+    // each run the drawn glyph count after it and its source glyphs' end.
+    private readonly List<AdvRetainedGlyphPlacement> _sourceGlyphs = new();
+    private readonly List<(int DrawnEnd, int SourceEnd)> _sourceRuns = new();
 
     public RetainedAdvTextLayoutPresentation(AdvTextLayoutPresentationBinding binding)
     {
@@ -29,6 +33,10 @@ public sealed class RetainedAdvTextLayoutPresentation
     public int PublishableGlyphCount
         => (int)Math.Min(_glyphs.Count, Binding.ObjectCapacity);
 
+    /// <summary>Whether a run drew something other than its source layout (localization spec §8), so the glyphs the
+    /// source-language run would have published (<see cref="PublishedSourceGlyphs"/>) are not <see cref="Glyphs"/>.</summary>
+    public bool SourceDiffers { get; private set; }
+
     public int Append(
         IReadOnlyList<AdvRetainedGlyphRecord> records,
         int layoutOriginX,
@@ -39,6 +47,7 @@ public sealed class RetainedAdvTextLayoutPresentation
         foreach (AdvRetainedGlyphRecord record in records)
             _glyphs.Add(new AdvRetainedGlyphPlacement(record, layoutOriginX, layoutOriginY));
         if (records.Count > 0) _lastAppendedIsRuby = false;
+        AddSourceRun(records, layoutOriginX, layoutOriginY);
         return first;
     }
 
@@ -51,13 +60,16 @@ public sealed class RetainedAdvTextLayoutPresentation
     /// (<paramref name="chainEveryRubyRecord"/>; adv_text_draw_ruby_over_row_sys4433@0x4590d0) every ruby record has
     /// chain flag 1 and the ruby builder resets the pending record to 0, so a record's flag is 1 exactly when it is a
     /// ruby character.
+    /// <paramref name="sourceRecords"/> are the source layout's records when the run drew something else (localization
+    /// spec §8), in the same drawing order; null when the run drew its source layout.
     /// </summary>
     public int AppendRun(
         IReadOnlyList<AdvRetainedGlyphRecord> records,
         IReadOnlyList<bool> isRuby,
         int layoutOriginX,
         int layoutOriginY,
-        bool chainEveryRubyRecord = false)
+        bool chainEveryRubyRecord = false,
+        IReadOnlyList<AdvRetainedGlyphRecord>? sourceRecords = null)
     {
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(isRuby);
@@ -71,7 +83,45 @@ public sealed class RetainedAdvTextLayoutPresentation
             _glyphs.Add(new AdvRetainedGlyphPlacement(record, layoutOriginX, layoutOriginY));
             _lastAppendedIsRuby = !chainEveryRubyRecord && isRuby[index];
         }
+        AddSourceRun(sourceRecords ?? records, layoutOriginX, layoutOriginY);
+        SourceDiffers |= sourceRecords != null;
         return first;
+    }
+
+    /// <summary>A run that drew nothing (a hidden run of a presented message, localization spec §8): only its source
+    /// layout's records, which the source-language run would have drawn.</summary>
+    public void AppendSourceOnly(IReadOnlyList<AdvRetainedGlyphRecord> sourceRecords, int layoutOriginX, int layoutOriginY)
+    {
+        ArgumentNullException.ThrowIfNull(sourceRecords);
+        AddSourceRun(sourceRecords, layoutOriginX, layoutOriginY);
+        SourceDiffers |= sourceRecords.Count > 0;
+    }
+
+    private void AddSourceRun(IReadOnlyList<AdvRetainedGlyphRecord> records, int layoutOriginX, int layoutOriginY)
+    {
+        foreach (AdvRetainedGlyphRecord record in records)
+            _sourceGlyphs.Add(new AdvRetainedGlyphPlacement(record, layoutOriginX, layoutOriginY));
+        _sourceRuns.Add((_glyphs.Count, _sourceGlyphs.Count));
+    }
+
+    /// <summary>The glyphs the source-language run would have published by now (localization spec §8), up to the
+    /// layout's capacity: all of every run whose drawn glyphs are published, and of a run still revealing, as many as it
+    /// has published.</summary>
+    public IReadOnlyList<AdvRetainedGlyphPlacement> PublishedSourceGlyphs()
+    {
+        int published = 0, drawnStart = 0, sourceStart = 0;
+        foreach ((int drawnEnd, int sourceEnd) in _sourceRuns)
+        {
+            if (PublishedGlyphCount >= drawnEnd)
+                published = sourceEnd;
+            else
+            {
+                published = Math.Min(sourceEnd, sourceStart + Math.Max(0, PublishedGlyphCount - drawnStart));
+                break;
+            }
+            (drawnStart, sourceStart) = (drawnEnd, sourceEnd);
+        }
+        return _sourceGlyphs.Take((int)Math.Min(published, Binding.ObjectCapacity)).ToArray();
     }
 
     private bool _lastAppendedIsRuby;

@@ -16,6 +16,10 @@ public readonly record struct TextSite(string Script, int Offset, bool IsBaseScr
     public override string ToString() => $"{TextCatalog.NormalizeScriptName(Script)}@0x{Offset:x}";
 }
 
+/// <summary>What the presenter was asked for one run or message (localization spec §8): the source text, the drawing
+/// site and the origin. History presents the run again from it.</summary>
+public readonly record struct TextLookup(string Source, TextSite Site, TextSite? Origin);
+
 /// <summary>What the presenter gives the host for one string: the text to draw, how it may break (§7.1), and the
 /// catalog entry that supplied it, if one did.</summary>
 public sealed record PresentedText(string Text, LineBreakMode LineBreak, TextEntry? Entry);
@@ -90,9 +94,15 @@ public sealed class TextPresenter
 
     private static readonly IReadOnlyDictionary<string, string> NoCaptures = new Dictionary<string, string>();
 
+    /// <summary>The site a filter sees for a string whose site is unknown (history restored from a save, §8).</summary>
+    private static readonly TextSite UnknownSite = new("", 0, IsBaseScript: false);
+
+    private delegate bool ExactLookup(TextCatalog catalog, string source, out TextEntry entry);
+
     private readonly IReadOnlyList<ITextFilter> _filters;
     private readonly TextMissLog? _misses;
     private readonly BoundedLruCache<CacheKey, Result> _cache;
+    private readonly BoundedLruCache<string, Result> _unscopedCache;
 
     public TextPresenter(TextLanguage language, IEnumerable<ITextFilter>? filters = null, TextMissLog? misses = null,
                          int cacheCapacity = DefaultCacheCapacity, ITextMessageIndex? messages = null)
@@ -101,6 +111,7 @@ public sealed class TextPresenter
         _filters = (filters ?? []).ToArray();
         _misses = misses;
         _cache = new BoundedLruCache<CacheKey, Result>(cacheCapacity);
+        _unscopedCache = new BoundedLruCache<string, Result>(Math.Max(1, cacheCapacity / 8));
         Messages = messages;
     }
 
@@ -135,30 +146,54 @@ public sealed class TextPresenter
         return kind == TextLengthKind.Halved ? TextMeasurement.Halve(cells) : cells;
     }
 
+    /// <summary>
+    /// The presented form of a history string whose site is unknown, from a group a save restored (spec §8): exact
+    /// entries of every scope, a global one first, then patterns of every scope, then the filters, each catalog of the
+    /// chain in turn. Misses are not logged.
+    /// </summary>
+    public PresentedText? PresentUnscoped(string source)
+    {
+        if (source.Length == 0) return null;
+        if (!_unscopedCache.TryGetValue(source, out Result result))
+        {
+            result = Resolve(source, UnknownSite, UnknownSite,
+                (TextCatalog catalog, string text, out TextEntry entry) => catalog.TryGetUnscoped(text, out entry),
+                catalog => [catalog.UnscopedPatterns]);
+            _unscopedCache.Set(source, result);
+        }
+        return result.Presented;
+    }
+
     private Result Lookup(string source, TextSite site, TextSite origin)
     {
         var key = new CacheKey(source, Scope.Of(site), Scope.Of(origin));
         if (!_cache.TryGetValue(key, out Result result))
         {
-            result = Resolve(source, site, origin, key.Site, key.Origin);
+            Scope drawn = key.Site, from = key.Origin;
+            result = Resolve(source, site, origin,
+                (TextCatalog catalog, string text, out TextEntry entry) => TryExact(catalog, text, drawn, from, out entry),
+                catalog => PatternScopes(catalog, drawn, from));
             _cache.Set(key, result);
         }
         return result;
     }
 
-    private Result Resolve(string source, TextSite site, TextSite originSite, Scope drawn, Scope origin)
+    /// <summary>Resolve <paramref name="source"/> through the chain with <paramref name="exact"/> lookups and the
+    /// <paramref name="patterns"/> lists in the order they are tried, then the filters.</summary>
+    private Result Resolve(string source, TextSite site, TextSite originSite, ExactLookup exact,
+                           Func<TextCatalog, IEnumerable<IReadOnlyList<TextEntry>>> patterns)
     {
         TextEntry? found = null;
         string? text = null;
         IReadOnlyDictionary<string, string> captures = NoCaptures;
         foreach (TextCatalog catalog in Language.Chain)
         {
-            if (TryExact(catalog, source, drawn, origin, out TextEntry exact))
+            if (exact(catalog, source, out TextEntry literal))
             {
-                (found, text) = (exact, exact.TextTemplate.Literal);
+                (found, text) = (literal, literal.TextTemplate.Literal);
                 break;
             }
-            if (TryPattern(catalog, source, drawn, origin, out TextEntry pattern, out var matched))
+            if (TryPattern(catalog, source, exact, patterns, out TextEntry pattern, out var matched))
             {
                 captures = matched;
                 (found, text) = (pattern, pattern.TextTemplate.Render(matched));
@@ -190,15 +225,16 @@ public sealed class TextPresenter
     /// <summary>Spec §6.4 step 6: patterns in the same scope order, the one with the most literal characters first.
     /// Each <c>{name}</c> capture is resolved as a string drawn at the same site; a <c>num</c> capture follows the
     /// language's <c>digits</c> setting.</summary>
-    private bool TryPattern(TextCatalog catalog, string source, Scope drawn, Scope origin, out TextEntry entry,
+    private bool TryPattern(TextCatalog catalog, string source, ExactLookup exact,
+                            Func<TextCatalog, IEnumerable<IReadOnlyList<TextEntry>>> patterns, out TextEntry entry,
                             out IReadOnlyDictionary<string, string> captures)
     {
-        foreach (IReadOnlyList<TextEntry> scoped in PatternScopes(catalog, drawn, origin))
+        foreach (IReadOnlyList<TextEntry> scoped in patterns(catalog))
             foreach (TextEntry candidate in scoped)
             {
                 if (!TextPatternMatcher.TryMatch(candidate.SourceTemplate, source, out var matched)) continue;
                 foreach (PlaceholderPart placeholder in candidate.SourceTemplate.Placeholders)
-                    matched[placeholder.Name] = ResolveCapture(matched[placeholder.Name], placeholder.Kind, drawn, origin);
+                    matched[placeholder.Name] = ResolveCapture(matched[placeholder.Name], placeholder.Kind, exact);
                 (entry, captures) = (candidate, matched);
                 return true;
             }
@@ -217,11 +253,11 @@ public sealed class TextPresenter
 
     /// <summary>A capture's presented text: an exact entry through the fallback chain, else the captured text, with
     /// a number's digits made ASCII when the language asks for it.</summary>
-    private string ResolveCapture(string captured, PlaceholderKind kind, Scope drawn, Scope origin)
+    private string ResolveCapture(string captured, PlaceholderKind kind, ExactLookup exact)
     {
         if (kind == PlaceholderKind.Any)
             foreach (TextCatalog catalog in Language.Chain)
-                if (TryExact(catalog, captured, drawn, origin, out TextEntry entry))
+                if (exact(catalog, captured, out TextEntry entry))
                     return entry.TextTemplate.Literal;
         return Language.Digits == DigitsMode.Ascii && TextPatternMatcher.IsNumber(captured)
             ? TextPatternMatcher.AsciiDigits(captured)

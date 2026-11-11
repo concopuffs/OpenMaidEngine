@@ -1372,7 +1372,7 @@ public sealed partial class VirtualMachine
         int gfxRecordSize = _nativeDatStore.Identity.NumberedGfxRecordSize;
         NativeNumberedSaveState basis = _retainedNativeNumberedState
             ?? NativeNumberedSaveCodec.Empty(frames, gfxRecordSize);
-        var gfx = NativeGfxPersistenceCodec.Capture(Gfx, gfxRecordSize);
+        var gfx = NativeGfxPersistenceCodec.Capture(Gfx, gfxRecordSize, _host.SourceTextObjects);
         ServiceBgmFade(complete: false);   // a fade to zero that has ended has cleared the retained track
         return basis with
         {

@@ -117,6 +117,62 @@ public class RetainedAdvTextLayoutPresentationTests
         Assert.Equal(expected, gfx.SnapshotVisibleObjects());
     }
 
+    private static AdvRetainedGlyphRecord Cell(int left, int width) => new(0, left, 0, left + width, 8);
+
+    [Fact]
+    public void ASaveBindsTheSourceGlyphsInPlaceOfThePresentedOnes()
+    {
+        // Localization spec §8: a presented run drew two glyphs where its source layout has three, and a hidden run of
+        // the message drew none where its source has two more. Capacity 4 cuts the fifth.
+        var presentation = new RetainedAdvTextLayoutPresentation(
+            new AdvTextLayoutPresentationBinding(1, 21, 100, 4, -1, 10, 20));
+        presentation.AppendRun([Cell(0, 10), Cell(10, 10)], [false, false], 30, 40,
+                               sourceRecords: [Cell(0, 20), Cell(20, 20), Cell(40, 20)]);
+        presentation.AppendSourceOnly([Cell(60, 20), Cell(80, 20)], 30, 40);
+        var gfx = new GfxState();
+        gfx.CreateSurface(21);
+
+        Assert.True(presentation.SourceDiffers);
+        Assert.Empty(presentation.PublishedSourceGlyphs());
+        presentation.PublishThrough(gfx, 1);
+        Assert.Equal(new[] { 0 }, presentation.PublishedSourceGlyphs().Select(glyph => glyph.Record.Left));
+        presentation.PublishThrough(gfx, 2);
+        IReadOnlyList<AdvRetainedGlyphPlacement> source = presentation.PublishedSourceGlyphs();
+        Assert.Equal(new[] { 0, 20, 40, 60 }, source.Select(glyph => glyph.Record.Left));
+
+        gfx.GetOrCreate(100).Color = 0x80ffffff;
+        GfxPersistenceSnapshot saved = gfx.CapturePersistenceSnapshot([new AdvTextSourceObjects(100, 4, 21, source)]);
+
+        Assert.Equal(new long[] { 100, 101, 102, 103 }, saved.Objects.Select(item => item.Handle));
+        Assert.Equal(new[] { (0, 0, 20, 8), (20, 0, 20, 8), (40, 0, 20, 8), (60, 0, 20, 8) },
+                     saved.Objects.Select(item => item.Object.SrcRect));
+        Assert.Equal((90L, 40L, 0L), saved.Objects[3].Object.V24);
+        Assert.All(saved.Objects, item => Assert.True(item.Object.Visible));
+        // The drawn object's other state stays with its handle; the live objects are untouched.
+        Assert.Equal(0x80ffffffL, saved.Objects[0].Object.Color);
+        Assert.Equal(new long[] { 100, 101 }, gfx.SnapshotVisibleObjects().Select(item => item.Handle));
+        Assert.Equal((40L, 40L, 0L), gfx.TryGet(101)!.V24);
+    }
+
+    [Fact]
+    public void ARunWithoutASourcePassSavesWhatItDrewAndAReleasedRangeStaysEmpty()
+    {
+        var presentation = new RetainedAdvTextLayoutPresentation(
+            new AdvTextLayoutPresentationBinding(1, 21, 100, 4, -1, 10, 20));
+        presentation.AppendRun([Cell(0, 10), Cell(10, 10)], [false, false], 30, 40);
+        var gfx = new GfxState();
+        gfx.CreateSurface(21);
+        presentation.PublishThrough(gfx, 2);
+
+        Assert.False(presentation.SourceDiffers);
+        Assert.Equal(presentation.Glyphs, presentation.PublishedSourceGlyphs());
+
+        presentation.ErasePublished(gfx);
+        GfxPersistenceSnapshot saved = gfx.CapturePersistenceSnapshot(
+            [new AdvTextSourceObjects(100, 4, 21, presentation.PublishedSourceGlyphs())]);
+        Assert.Empty(saved.Objects);
+    }
+
     private static RetainedAdvTextLayoutPresentation Presentation(int capacity)
     {
         var presentation = new RetainedAdvTextLayoutPresentation(

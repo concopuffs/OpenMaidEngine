@@ -736,9 +736,14 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   read from a global cell is also looked up at the instruction that stored it (spec §5.2, §6.4), so a site entry on a
   table's store applies wherever the row is drawn. Patterns match strings the scripts build, and their captures are
   presented too (§6.3). `strlen`, `halve-strlen` and `cp932-character-length` measure the presented text of a string
-  that has an entry, in half cells (§5.3), so a plate the script sizes from a name fits the presented name. Not yet:
-  ruby in presented text, the backlog's presented rows (milestone 3), `align`, `fit` and overflow reports. The
-  startup log's `[text]` lines name what loaded. Switching the language in the options panel takes effect from the
+  that has an entry, in half cells (§5.3), so a plate the script sizes from a name fits the presented name. History
+  and saves keep the source text (§8): each run is also laid out as its source text, without drawing, and history
+  records those rows. A save holds the glyph objects the source text would have bound, so with `measure = "source"`
+  it decodes as the source language's does. The backlog (op `0x1d1`) and the redraw after a settings change (op
+  `0x82`) present each group again in the current language: by the lookup recorded this session, or after a load or
+  language change by matching the records' text against unscoped entries. A group with nothing presented draws as
+  recorded. Not yet: ruby in presented text, `align`, `fit` and overflow reports. The startup log's `[text]` lines
+  name what loaded. Switching the language in the options panel takes effect from the
   next run.
 - `--text-root DIR` — mount a folder of catalogs laid out as a package's `text/` (spec §9.1): `DIR/<tag>/*.toml`,
   loaded in path order, later files winning at equal scope. A malformed file stops startup with every problem and its

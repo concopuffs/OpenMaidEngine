@@ -16,11 +16,15 @@ public sealed class TextCatalog
     private readonly Dictionary<(string Script, int At, string Key), TextEntry> _site;
     private readonly Dictionary<(string Script, int At), TextEntry[]> _sitePatterns;
     private readonly Dictionary<string, TextEntry[]> _scriptPatterns;
+    private readonly Lazy<Dictionary<string, TextEntry>> _unscoped;
+    private readonly Lazy<TextEntry[]> _unscopedPatterns;
 
     private TextCatalog(string language, IReadOnlyList<TextEntry> entries, IReadOnlyList<TextCatalogOverride> overrides,
                         Dictionary<string, TextEntry> global, Dictionary<(string, string), TextEntry> script,
                         Dictionary<(string, int, string), TextEntry> site, IReadOnlyList<TextEntry> patterns)
     {
+        var order = new Dictionary<TextEntry, int>(ReferenceEqualityComparer.Instance);
+        for (int index = 0; index < entries.Count; index++) order[entries[index]] = index;
         Language = language;
         Entries = entries;
         Overrides = overrides;
@@ -28,12 +32,6 @@ public sealed class TextCatalog
         _script = script;
         _site = site;
         Patterns = patterns;
-        // Rank: most literal characters first; at equal rank the later entry, which wins between packages.
-        TextEntry[] Ranked(IEnumerable<(TextEntry Entry, int Order)> scoped) => scoped
-            .OrderByDescending(item => item.Entry.SourceTemplate.LiteralLength)
-            .ThenByDescending(item => item.Order)
-            .Select(item => item.Entry)
-            .ToArray();
         var ordered = patterns.Select((entry, order) => (Entry: entry, Order: order)).ToArray();
         _sitePatterns = ordered.Where(item => item.Entry.At != null)
             .GroupBy(item => (item.Entry.Script!, item.Entry.At!.Value))
@@ -42,7 +40,29 @@ public sealed class TextCatalog
             .GroupBy(item => item.Entry.Script!, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, Ranked, StringComparer.Ordinal);
         GlobalPatterns = Ranked(ordered.Where(item => item.Entry.Script == null));
+        _unscoped = new Lazy<Dictionary<string, TextEntry>>(() =>
+        {
+            // Site entries, then script entries, then global ones, each in load order: the later write wins, so a
+            // global entry is preferred (spec §8).
+            var unscoped = new Dictionary<string, TextEntry>(StringComparer.Ordinal);
+            foreach (TextEntry entry in site.Values.OrderBy(Order)) unscoped[entry.Key] = entry;
+            foreach (TextEntry entry in script.Values.OrderBy(Order)) unscoped[entry.Key] = entry;
+            foreach (TextEntry entry in global.Values.OrderBy(Order)) unscoped[entry.Key] = entry;
+            return unscoped;
+        });
+        _unscopedPatterns = new Lazy<TextEntry[]>(() => GlobalPatterns
+            .Concat(Ranked(ordered.Where(item => item.Entry.Script != null && item.Entry.At == null)))
+            .Concat(Ranked(ordered.Where(item => item.Entry.At != null)))
+            .ToArray());
+        int Order(TextEntry entry) => order.TryGetValue(entry, out int index) ? index : int.MaxValue;
     }
+
+    /// <summary>Rank: most literal characters first; at equal rank the later entry, which wins between packages.</summary>
+    private static TextEntry[] Ranked(IEnumerable<(TextEntry Entry, int Order)> scoped) => scoped
+        .OrderByDescending(item => item.Entry.SourceTemplate.LiteralLength)
+        .ThenByDescending(item => item.Order)
+        .Select(item => item.Entry)
+        .ToArray();
 
     public string Language { get; }
 
@@ -118,6 +138,14 @@ public sealed class TextCatalog
 
     /// <summary>The exact global entry.</summary>
     public bool TryGetGlobal(string source, out TextEntry entry) => _global.TryGetValue(source, out entry!);
+
+    /// <summary>The exact entry of any scope, for a string whose site is unknown (spec §8: history restored from a
+    /// save): the global entry if there is one, else the last script entry loaded, else the last site entry.</summary>
+    public bool TryGetUnscoped(string source, out TextEntry entry) => _unscoped.Value.TryGetValue(source, out entry!);
+
+    /// <summary>Every pattern, for a string whose site is unknown: the global ones first, then script, then site
+    /// patterns, each scope ranked as lookup ranks it.</summary>
+    public IReadOnlyList<TextEntry> UnscopedPatterns => _unscopedPatterns.Value;
 
     /// <summary>The site patterns at <paramref name="script"/> (normalized) and <paramref name="at"/>, in the order
     /// they are tried.</summary>

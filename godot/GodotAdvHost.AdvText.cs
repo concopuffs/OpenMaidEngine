@@ -197,10 +197,88 @@ public sealed partial class GodotAdvHost
         => throw new NotSupportedException(
             "Godot gameplay text requires a retained layout binding.");
 
-    public void NoteHiddenTextRun(AdvLiveTextRun run)
+    public AdvTextSourceLayout? LayoutHiddenTextRun(AdvTextLayoutPresentationBinding binding, AdvLiveTextRun run)
     {
         Captured.Add((run.SourceOffset, run.Text));
         _locator.Text(run.SourceOffset, run.Text);
+        if (run.Layout.Width <= 0 || run.Layout.Height <= 0) return null;
+        AdvTextSourceLayout source = LayoutSourceText(binding, run, out IReadOnlyList<AdvRetainedGlyphRecord> glyphs);
+        if (binding.LayoutSlot <= 0 || binding.LayoutSlot != run.Layout.Slot || binding.SourceSurfaceSlot < 0
+            || binding.FirstObjectHandle < 0 || binding.ObjectCapacity <= 0)
+            return source;
+        lock (_textLock)
+        {
+            if (!_retainedTextLayouts.TryGetValue(binding.LayoutSlot, out RetainedAdvTextLayoutPresentation? presentation))
+            {
+                presentation = new RetainedAdvTextLayoutPresentation(binding);
+                _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
+            }
+            // Drawn by the message's first run; a save binds what the source-language run would have drawn.
+            if (presentation.Binding == binding)
+                presentation.AppendSourceOnly(glyphs, run.Layout.OriginX, run.Layout.OriginY);
+        }
+        return source;
+    }
+
+    public IReadOnlyList<AdvTextSourceObjects> SourceTextObjects
+    {
+        get
+        {
+            lock (_textLock)
+                return _retainedTextLayouts.Values
+                    .Where(presentation => presentation.SourceDiffers)
+                    .Select(presentation => new AdvTextSourceObjects(
+                        presentation.Binding.FirstObjectHandle, presentation.Binding.ObjectCapacity,
+                        presentation.Binding.SourceSurfaceSlot, presentation.PublishedSourceGlyphs()))
+                    .ToArray();
+        }
+    }
+
+    /// <summary>
+    /// The source layout pass (localization spec §8): <paramref name="run"/>'s source text and ruby laid out with the
+    /// gameplay rasterizer from the source cursor, as the run would draw with no language selected, without drawing.
+    /// History records its rows, so a save holds what the source-language run would have recorded, and
+    /// <paramref name="glyphs"/> are its records in drawing order, which a save binds in place of the drawn glyphs.
+    /// </summary>
+    private AdvTextSourceLayout LayoutSourceText(AdvTextLayoutPresentationBinding binding, AdvLiveTextRun run,
+                                                 out IReadOnlyList<AdvRetainedGlyphRecord> glyphs)
+    {
+        TextPipeline text = _sourceText;
+        AspectFontRealization? realization = RealizationFor(text);
+        (int x, int y) = run.SourceCursor ?? (run.Layout.CursorX, run.Layout.CursorY);
+        GlyphTextLayoutResult laid = text.Layout.Render(
+            null,
+            new GlyphTextLayoutOptions(
+                x, y, binding.ResetCursorX, run.Layout.Right, run.Layout.Bottom, WrapHorizontally: true, run.Style,
+                FontRealization: realization),
+            ImmediateSurfaceTextRenderer.CreateRequests(run.Text, run.Style, text.Policy, _textAntialias, realization));
+        IReadOnlyList<AdvRubyGlyph> ruby = !string.IsNullOrEmpty(run.SourceRuby) && laid.Rows.Count > 0
+            ? text.Layout.RenderRuby(
+                null, run.Text, laid.Rows, run.SourceRuby, run.Style, text.Policy, _textAntialias, RubyRules)
+            : [];
+        glyphs = OrderedGlyphs(laid, ruby, byRow: !string.IsNullOrEmpty(run.SourceRuby) && laid.Rows.Count > 0)
+            .Select(item => item.Record).ToArray();
+        return new AdvTextSourceLayout(laid.Rows, ruby, laid.CursorX, laid.CursorY);
+    }
+
+    /// <summary>A run's records in AGE's drawing order: with ruby (<paramref name="byRow"/>), op 0x196's ruby follows
+    /// each base row.</summary>
+    private static IEnumerable<(AdvRetainedGlyphRecord Record, bool IsRuby)> OrderedGlyphs(
+        GlyphTextLayoutResult rendered, IReadOnlyList<AdvRubyGlyph> ruby, bool byRow)
+    {
+        if (!byRow)
+        {
+            foreach (AdvRetainedGlyphRecord record in rendered.Records) yield return (record, false);
+            yield break;
+        }
+        for (int row = 0; row < rendered.Rows.Count; row++)
+        {
+            AdvTextRow drawn = rendered.Rows[row];
+            for (int glyph = drawn.FirstGlyph; glyph < drawn.FirstGlyph + drawn.GlyphCount; glyph++)
+                yield return (rendered.Records[glyph], false);
+            foreach (AdvRubyGlyph character in ruby)
+                if (character.Row == row) yield return (character.Record, true);
+        }
     }
 
     public AdvRetainedTextRunResult? ShowText(
@@ -305,6 +383,7 @@ public sealed partial class GodotAdvHost
     /// indices, never at the layout's edges. Native text_history_render_records@0x4526c0 checks no bounds;
     /// the surface clips what falls outside.</param>
     /// <param name="historyRuby">History's ruby runs (op 0x1d1), each drawn over its base glyphs.</param>
+    /// <param name="history">Op 0x1d1's group: no bottom bound, as native checks none, and no source layout pass.</param>
     private void PrepareRetainedTextRun(
         GfxState gfx,
         AdvTextLayoutPresentationBinding binding,
@@ -312,7 +391,8 @@ public sealed partial class GodotAdvHost
         out RetainedAdvTextLayoutPresentation presentation,
         out AdvRetainedTextRunResult result,
         IReadOnlyList<int>? recordedLineBreaks = null,
-        IReadOnlyList<AdvTextRubyAnnotation>? historyRuby = null)
+        IReadOnlyList<AdvTextRubyAnnotation>? historyRuby = null,
+        bool history = false)
     {
         presentation = null!;
         result = default;
@@ -363,7 +443,7 @@ public sealed partial class GodotAdvHost
                 run.Layout.CursorY,
                 binding.ResetCursorX,
                 rightBound,
-                recordedLineBreaks == null ? run.Layout.Bottom : int.MaxValue,
+                history ? int.MaxValue : run.Layout.Bottom,
                 WrapHorizontally: wrap,
                 style,
                 breaks,
@@ -385,14 +465,8 @@ public sealed partial class GodotAdvHost
             ruby = text.Layout.RenderRuby(
                 updated, run.Text, rendered.Rows, run.Ruby, run.Style,
                 text.Policy, _textAntialias, RubyRules);
-            for (int row = 0; row < rendered.Rows.Count; row++)
-            {
-                AdvTextRow drawn = rendered.Rows[row];
-                for (int glyph = drawn.FirstGlyph; glyph < drawn.FirstGlyph + drawn.GlyphCount; glyph++)
-                    Add(rendered.Records[glyph], false);
-                foreach (AdvRubyGlyph character in ruby)
-                    if (character.Row == row) Add(character.Record, true);
-            }
+            foreach ((AdvRetainedGlyphRecord record, bool isRuby) in OrderedGlyphs(rendered, ruby, byRow: true))
+                Add(record, isRuby);
         }
         else
         {
@@ -409,6 +483,15 @@ public sealed partial class GodotAdvHost
                     Add(record, true);
             }
         }
+
+        // What history records and a save binds (spec §8): the drawn rows when the run drew its source text with the
+        // gameplay rasterizer from the source cursor, else a separate source layout pass.
+        IReadOnlyList<AdvRetainedGlyphRecord>? sourceGlyphs = null;
+        AdvTextSourceLayout? source = !history
+                                      && (run.Presented != null || run.SourceCursor != null
+                                          || !ReferenceEquals(text, _sourceText))
+            ? LayoutSourceText(binding, run, out sourceGlyphs)
+            : null;
 
         _timeline?.Event("adv-text-layout-result", new()
         {
@@ -431,6 +514,8 @@ public sealed partial class GodotAdvHost
             ["vertical_overflow"] = rendered.StoppedOnVerticalOverflow,
             ["result_cursor_x"] = rendered.CursorX,
             ["result_cursor_y"] = rendered.CursorY,
+            ["source_cursor_x"] = source?.CursorX,
+            ["source_cursor_y"] = source?.CursorY,
         });
 
         lock (_textLock)
@@ -449,7 +534,8 @@ public sealed partial class GodotAdvHost
                 orderedIsRuby,
                 run.Layout.OriginX,
                 run.Layout.OriginY,
-                RubyRules.ChainEveryRubyRecord);
+                RubyRules.ChainEveryRubyRecord,
+                sourceGlyphs);
             _layoutCursors[binding.LayoutSlot] = (rendered.CursorX, rendered.CursorY);
             RebuildRetainedWaitIndicator(binding.LayoutSlot);
             result = new AdvRetainedTextRunResult(
@@ -457,7 +543,7 @@ public sealed partial class GodotAdvHost
                 first,
                 ordered.Count,
                 rendered.CursorX,
-                rendered.CursorY) { Rows = rendered.Rows, Ruby = ruby };
+                rendered.CursorY) { Rows = rendered.Rows, Ruby = ruby, Source = source };
         }
 
         lock (_imageLock)
@@ -625,12 +711,13 @@ public sealed partial class GodotAdvHost
         AdvTextLayoutPresentationBinding binding,
         AdvTextHistoryRenderBatch batch)
     {
+        // A presented group (localization spec §8) wraps in the target layout as live presented text does.
         var run = new AdvLiveTextRun(
             batch.FirstRecordIndex,
             batch.Layout,
             batch.Style,
             batch.Text,
-            Array.Empty<string>());
+            Array.Empty<string>()) { Presented = batch.Presented };
         if (binding.LayoutSlot != batch.LayoutSlot
             || binding.FirstObjectHandle < 0
             || binding.ObjectCapacity <= 0)
@@ -640,8 +727,9 @@ public sealed partial class GodotAdvHost
             gfx, binding, run,
             out RetainedAdvTextLayoutPresentation? presentation,
             out AdvRetainedTextRunResult result,
-            batch.RecordedLineBreaks,
-            batch.Ruby);
+            batch.Presented == null ? batch.RecordedLineBreaks : null,
+            batch.Presented == null ? batch.Ruby : null,
+            history: true);
 
         presentation.PublishThrough(
             gfx,
@@ -658,6 +746,7 @@ public sealed partial class GodotAdvHost
             ["x"] = batch.Layout.OriginX + batch.Layout.CursorX,
             ["y"] = batch.Layout.OriginY + batch.Layout.CursorY,
             ["text"] = batch.Text,
+            ["presented"] = batch.Presented?.Text,
             ["glyphs"] = result.GlyphCount,
             ["presentation"] = "retained-glyphs",
         });
@@ -687,9 +776,11 @@ public sealed partial class GodotAdvHost
         if (width <= 0 || height <= 0) return;
 
         var updated = new RgbaImage(width, height, new byte[checked(width * height * 4)]);
-        TextPipeline text = ActiveText;
-        IReadOnlyList<(AdvRetainedGlyphRecord Cell, bool IsRuby)> cells = text.Layout.RenderRedraw(
-            updated, batch.Records, text.Policy, _textAntialias, RubyRules, RealizationFor(text));
+        TextPipeline text = batch.Presented != null ? _presentedText.Value : ActiveText;
+        IReadOnlyList<(AdvRetainedGlyphRecord Cell, bool IsRuby)> cells = batch.Presented is { } presented
+            ? RedrawPresented(updated, binding, batch, presented, text)
+            : text.Layout.RenderRedraw(
+                updated, batch.Records, text.Policy, _textAntialias, RubyRules, RealizationFor(text));
 
         bool bind = (batch.Flags & 4) == 0;
         RetainedAdvTextLayoutPresentation? presentation;
@@ -729,6 +820,27 @@ public sealed partial class GodotAdvHost
             ["records"] = batch.Records.Count,
             ["cells"] = cells.Count,
         });
+    }
+
+    /// <summary>Op 0x82 for a presented group (localization spec §8): the presented text from the first text record's
+    /// top-left in its style, wrapped in the layout as live presented text is.</summary>
+    private IReadOnlyList<(AdvRetainedGlyphRecord Cell, bool IsRuby)> RedrawPresented(
+        RgbaImage destination, AdvTextLayoutPresentationBinding binding, AdvTextRedrawBatch batch,
+        Ome.Engine.Localization.PresentedText presented, TextPipeline text)
+    {
+        AdvTextRedrawRecord first = batch.Records.First(record => !record.IsRuby);
+        AdvTextStyle style = PresentedStyle(first.Style);
+        PresentedTextPlan plan = PresentedTextLayout.Plan(
+            presented.Text, Ome.Engine.Localization.PresentedLineBreaks.Opportunities(presented.Text, presented.LineBreak),
+            ImmediateSurfaceTextRenderer.CreateRequests(presented.Text, style, text.Policy, _textAntialias, null),
+            text.Cache, first.Rect.Left, binding.ResetCursorX, batch.Layout.Right);
+        GlyphTextLayoutResult drawn = text.Layout.Render(
+            destination,
+            new GlyphTextLayoutOptions(
+                first.Rect.Left, first.Rect.Top, binding.ResetCursorX, int.MaxValue, batch.Layout.Bottom,
+                WrapHorizontally: false, style, plan.BreaksBefore, OverflowAtFontHeight: true),
+            plan.Glyphs);
+        return drawn.Records.Select(record => (record, false)).ToArray();
     }
 
     public void EndTextHistoryPresentation(GfxState gfx)

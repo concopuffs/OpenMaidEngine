@@ -14,10 +14,12 @@ internal static class NativeGfxPersistenceCodec
         long RangeFirst,
         int RangeCount,
         byte[] RangeRecord) Capture(GfxState gfx,
-            int gfxRecordSize = NativeGfxSaveLayout.BaseRecordSize)
+            int gfxRecordSize = NativeGfxSaveLayout.BaseRecordSize,
+            IReadOnlyList<AdvTextSourceObjects>? sourceText = null)
     {
         NativeGfxSaveLayout layout = NativeGfxSaveLayout.FromRecordSize(gfxRecordSize);
-        GfxPersistenceSnapshot snapshot = gfx.CapturePersistenceSnapshot();
+        // Presented text's glyphs are saved as the source text's (localization spec §8).
+        GfxPersistenceSnapshot snapshot = gfx.CapturePersistenceSnapshot(sourceText);
         // context_state_serialize copies the op-0x71 page snapshot of the native record table verbatim.
         byte[] surfaces = gfx.CaptureNativeSurfaceRecords();
         NativeSavedGfxObject[] objects = snapshot.Objects
