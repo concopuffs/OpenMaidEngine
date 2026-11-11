@@ -379,6 +379,9 @@ discard 99.99% themselves.
 > `docs/superpowers/specs/2026-11-03-mod-loader-design.md` and implemented (`engine/Ome.Mods`, `Ome.Cli omp`; all
 > six acceptance gates passed 2026-11-03). This section remains the direction it implements; Lua, `text/`, `config/`
 > and port-only targets are beyond version 1.
+>
+> **Design (2026-11-10):** `text/`, language packages and language assets are specified in
+> `docs/superpowers/specs/2026-11-10-localization-design.md` (accepted, not built).
 
 Use **Open Maid Pack (OMP)** as the canonical distribution and mount unit. An OMP is a specification and
 manifest layered on a standard ZIP container, not a new compression algorithm. Existing ZIP tools,

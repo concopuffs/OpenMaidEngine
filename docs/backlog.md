@@ -283,8 +283,11 @@ and the drive scenarios.
     repository. It covers the runtime choice, hooks declared in the manifest, the engine API (`maid.vm` and the
     rest), per-game base mods that hold every game-specific name, mod state beside the save, and the validation
     gates. Its §19 lists the questions still open.
-  - It raises the package manifest to `omp = 2`, as the localization draft does. The two must share one format
-    change, whichever is built first.
+  - It raises the package manifest to `omp = 2`, as the localization design does
+    (`superpowers/specs/2026-11-10-localization-design.md` §9.2). The two share one format change, whichever is
+    built first.
+  - Packages that target no profile are decided (2026-11-10, localization design §11.1). The draft still has to
+    say what such a package may hold for Lua.
 
   Done when the draft is accepted (moved to `superpowers/specs/2026-11-10-lua-scripting-design.md` with its row in
   the canonical documents map) and this item is replaced by its milestones. The first of those is the runtime
@@ -292,34 +295,18 @@ and the drive scenarios.
 
 ## Localization
 
-- **Localization framework: design draft under review (user request 2026-11-04).** There are two layers:
-  - **Engine-owned text.** This is the strings that AGE.EXE and AGERC.DLL draw themselves. The engine shell's (the
-    menu bar, the strip, 終了 and the options panel) already come from keyed tables, `Shell/Strings/ja.json` and
-    `en.json`, which `OME.INI`'s `ui:Language` picks (`superpowers/specs/2026-11-09-engine-shell-design.md`, §6).
-    Still fixed Japanese: the エラーが発生しました box (`VirtualMachine.DiagnosticCaption`) and other native message
-    boxes.
-  - **Game text.** This is script dialogue, CG text and system graphics. Mods and translation packs carry it.
+- **Build the localization framework.** The design is accepted (`superpowers/specs/2026-11-10-localization-design.md`,
+  2026-11-10) and nothing is implemented. The port shows a game in another language only by running an install
+  whose scripts were translated in place, and its own error box is fixed Japanese
+  (`VirtualMachine.DiagnosticCaption`). The spec's §19 holds the milestones and §18 the gates; they are not
+  restated here.
+  - **Next: milestone 0, the import check.** Convert the fan translation in `Kamidori_Translated/` into a catalog
+    offline, with no engine change, and review the report before milestone 1 starts (spec §18.1). Its count
+    decides the one open question, whether site scope (`at`) ships in version 1 (spec §20).
+  - The manifest's `omp = 2` is shared with the Lua design (the item under "Mod loader and modding"). Whichever
+    is built first introduces it.
 
-  The engine's concern is the first layer. The goal is a framework, not a one-off English translation. Questions
-  to settle:
-  - String identity: keys versus native source text.
-  - Locale selection and fallback: the native Japanese stays the default and the fidelity reference.
-  - Per-profile overrides: games differ in wording.
-  - How mods ship and override both layers through the loader.
-  - Fonts and glyph coverage.
-  - Keeping the drive protocol's native control texts (`dialogs`/`answer`) stable whatever locale is shown. The
-    shell settled this for its own controls: they report their Japanese texts whatever `ui:Language` shows (spec §8).
-
-  **Draft (2026-11-10, not accepted):** `localization-framework-design-2026-11-10.md` at the workspace root, outside
-  this repository. It proposes an answer to each question above. It also goes further than "the engine's concern is
-  the first layer": the engine applies game-text translations when text is drawn, from catalogs that packages
-  carry, and the scripts and the strings the VM holds stay Japanese. Its first milestone converts the fan
-  translation in `Kamidori_Translated/` into a catalog as an offline check, before any engine change (draft §18.1).
-  Its §20 lists the questions still open. Lua text filters are left to the Lua item under "Mod loader and modding".
-
-  Done when the draft is accepted (moved to `superpowers/specs/2026-11-10-localization-design.md` with its row in
-  the canonical documents map), this item is replaced by its milestones, and the remaining engine-owned strings go
-  through the framework.
+  Done when the spec's gates 1–11 pass and the modder guide under `docs/modding/` covers language packages.
 
 ## Platform and project
 
