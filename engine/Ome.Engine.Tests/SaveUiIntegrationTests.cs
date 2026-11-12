@@ -359,8 +359,8 @@ public class SaveUiIntegrationTests
             foreach (string name in new[] { "SAVE00.DAT", "SAVE.DAT", "RT.DAT" })
                 if (File.Exists(Path.Combine(saveRoot, name)))
                     File.Copy(Path.Combine(saveRoot, name), Path.Combine(temporaryRoot, name));
-            var identity = Ome.Engine.Profiles.GameProfileRegistry.BuiltIn.Find("kamidori")!
-                .Persistence.CreateExpectedNativeIdentity();
+            var kamidori = Ome.Engine.Profiles.GameProfileRegistry.BuiltIn.Find("kamidori")!;
+            var identity = kamidori.Persistence.CreateExpectedNativeIdentity(EngineBuilds.ForProfile(kamidori).Rules.Saves);
             var store = new DirectoryNativeDatStore(temporaryRoot, identity);
             var numbered = NativeNumberedSaveCodec.Decode(store.LoadNumberedFile(0)!.Document.Payload, 0x2e4);
             OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");

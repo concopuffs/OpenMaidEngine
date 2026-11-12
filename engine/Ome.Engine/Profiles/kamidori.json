@@ -9,6 +9,7 @@
   ],
   "scriptRevisions": ["SYS4433"],
   "sysFrontendId": "SYS4",
+  "engineBuild": "4.33G",
   "engineAbiId": "SYS4433",
   "naturalBootScript": "SYSTEM4.BIN",
   "metadataReferences": {},
@@ -16,7 +17,6 @@
     "storageNamespace": "kamidori",
     "writesEnabled": true,
     "magic": "S4SD",
-    "compatibilityId": 1194537780,
     "gameId": "神採りアルケミーマイスター",
     "expectedPackedSaveVersion": 320,
     "bankDimensions": {
@@ -26,7 +26,6 @@
       "pointerGlobals": 1,
       "pointerStrings": 1,
       "localPointerScratch": 1
-    },
-    "numberedGfxRecordSize": 740
+    }
   }
 }

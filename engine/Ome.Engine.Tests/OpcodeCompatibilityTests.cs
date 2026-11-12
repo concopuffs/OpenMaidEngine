@@ -38,7 +38,7 @@ public class OpcodeCompatibilityTests
             new Dictionary<int, (string Label, int Argc)> { [0x2] = ("exit", 0) },
             "TEST-ABI");
         byte[] bytes = ScriptAssembler.AssembleBytes(
-            new[] { (0x1be, Array.Empty<Operand>()) }, Array.Empty<string>());
+            new[] { (0x1be, Array.Empty<Operand>()) }, Array.Empty<string>(), "SYS4422");
 
         var error = Assert.Throws<Sys4OpcodeDecodeException>(
             () => Sys4Loader.Parse(bytes, table, "MISSING.BIN", 0x1234));
@@ -67,7 +67,7 @@ public class OpcodeCompatibilityTests
         host.PlayingSoundChannels.Add(11);
         var normal = new VirtualMachine(
             script, table, host, sink: normalTrace,
-            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
         normal.Run();
 
         Assert.Null(normal.CompatibilityFailure);
@@ -93,7 +93,7 @@ public class OpcodeCompatibilityTests
         Script title = scripts.RequireByName("TITLE.BIN");
         var vm = new VirtualMachine(
             title, table, new CaptureHost(), new VmOptions(MaxSteps: 100_000), scripts,
-            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
 
         vm.Run();
 
@@ -138,7 +138,7 @@ public class OpcodeCompatibilityTests
             }, Array.Empty<string>());
         var vm = new VirtualMachine(
             probe, table, new RecordingHost(),
-            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
 
         vm.Run();
 

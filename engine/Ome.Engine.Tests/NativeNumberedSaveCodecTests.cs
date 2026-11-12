@@ -403,8 +403,9 @@ public class NativeNumberedSaveCodecTests
             + $"range first={BinaryPrimitives.ReadInt32LittleEndian(document.Payload.AsSpan(rangeAt))}, "
             + $"range count={BinaryPrimitives.ReadInt32LittleEndian(document.Payload.AsSpan(rangeAt + 4))}, "
             + $"history bytes={source.Length - document.BytesConsumed}");
-        var identity = Ome.Engine.Profiles.GameProfileRegistry.BuiltIn.Find("kamidori")!
-            .Persistence.CreateExpectedNativeIdentity();
+        var kamidori = Ome.Engine.Profiles.GameProfileRegistry.BuiltIn.Find("kamidori")!;
+        var identity = kamidori.Persistence.CreateExpectedNativeIdentity(
+            Ome.Engine.Vm.EngineBuilds.ForProfile(kamidori).Rules.Saves);
         Assert.Equal(document.Metadata.GameId, identity.GameId);
         identity.Validate(document.Metadata);
         NativeNumberedSaveState decoded = NativeNumberedSaveCodec.Decode(document.Payload, 0x2e4);

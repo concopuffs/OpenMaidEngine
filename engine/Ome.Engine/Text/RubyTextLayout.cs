@@ -108,7 +108,7 @@ public static class RubyTextLayout
         ArgumentNullException.ThrowIfNull(rasterizer);
         ArgumentNullException.ThrowIfNull(ruby);
         ArgumentNullException.ThrowIfNull(rules);
-        string drawn = rules.Sys4433Spacing ? ControlCharactersAsSpaces(ruby) : ruby;
+        string drawn = rules.HalfWidthAwareSpacing ? ControlCharactersAsSpaces(ruby) : ruby;
         IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(drawn, style, policy, antialias);
         var masks = new GlyphMask[requests.Count];
         int rubyWidth = 0;
@@ -123,7 +123,7 @@ public static class RubyTextLayout
         if (difference > 0)
         {
             int bytes = Cp932.GetByteCount(ruby);
-            int divisor = rules.Sys4433Spacing ? (bytes + 3) >> 1 : bytes / 2 + 1;
+            int divisor = rules.HalfWidthAwareSpacing ? (bytes + 3) >> 1 : bytes / 2 + 1;
             gap = (int)((uint)difference / (uint)divisor);
         }
         else
@@ -157,7 +157,7 @@ public static class RubyTextLayout
         ArgumentNullException.ThrowIfNull(ruby);
         ArgumentNullException.ThrowIfNull(rules);
         IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(
-            rules.Sys4433Spacing ? ControlCharactersAsSpaces(ruby) : ruby, style, policy, antialias);
+            rules.HalfWidthAwareSpacing ? ControlCharactersAsSpaces(ruby) : ruby, style, policy, antialias);
         GlyphMask[] masks = requests.Select(rasterizer.Rasterize).ToArray();
         return DrawCells(destination, requests, masks, x, y, 0, style, rules, coverageAlpha);
     }
@@ -186,7 +186,7 @@ public static class RubyTextLayout
             int chain = rules.ChainEveryRubyRecord || index > 0 ? 1 : 0;
             records.Add(new AdvRetainedGlyphRecord(chain, x, y, right, checked(y + mask.CellHeight)));
             bool singleByte = requests[index].Cp932Code is < 0x100;
-            x = checked(right + (rules.Sys4433Spacing && singleByte ? gap / 2 : gap));
+            x = checked(right + (rules.HalfWidthAwareSpacing && singleByte ? gap / 2 : gap));
         }
         return records;
     }

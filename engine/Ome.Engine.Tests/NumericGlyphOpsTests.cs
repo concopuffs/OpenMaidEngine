@@ -76,7 +76,7 @@ public class NumericGlyphOpsTests
                 Exit(),
             }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, table, new RecordingHost(),
-            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
 
         vm.Run();
 
@@ -142,7 +142,7 @@ public class NumericGlyphOpsTests
         var unregisteredVm = new VirtualMachine(unregisteredDraw, table, new RecordingHost());
         var invalidExtendedVm = new VirtualMachine(
             invalidExtendedRegistration, sys4433, new RecordingHost(),
-            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
         invalidVm.Run();
         unregisteredVm.Run();
         invalidExtendedVm.Run();

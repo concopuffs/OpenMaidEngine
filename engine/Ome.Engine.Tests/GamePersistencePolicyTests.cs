@@ -1,6 +1,7 @@
 using Ome.Engine.Persistence;
 using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
+using Ome.Engine.Vm;
 
 public sealed class GamePersistencePolicyTests
 {
@@ -8,6 +9,12 @@ public sealed class GamePersistencePolicyTests
         new("S4IC422", "姫狩りダンジョンマイスター");
     private static readonly GameCatalogIdentity KamidoriIdentity =
         new("S4IC433", "神採りアルケミーマイスター");
+
+    // Composition resolves persistence with the save rules of the profile's engine build.
+    private static ResolvedGamePersistence Resolve(
+        SelectedGameProfile selected, Sys4StartupSettings settings, string userRoot, string? profileRoot = null)
+        => ResolvedGamePersistence.Resolve(
+            selected, EngineBuilds.ForProfile(selected.Profile).Rules.Saves, settings, userRoot, profileRoot);
 
     [Fact]
     public void ProfilePolicyResolvesSys4IniVersionAndNamespacedPaths()
@@ -17,7 +24,7 @@ public sealed class GamePersistencePolicyTests
         SelectedGameProfile selected = GameProfileSelection.Resolve([], HimegariIdentity);
         string userRoot = Path.Combine(Path.GetTempPath(), "ome-profile-policy", "user-root");
 
-        ResolvedGamePersistence resolved = ResolvedGamePersistence.Resolve(
+        ResolvedGamePersistence resolved = Resolve(
             selected, settings, userRoot);
 
         Assert.Equal(
@@ -35,7 +42,7 @@ public sealed class GamePersistencePolicyTests
 
         Sys4StartupSettings wrongVersion = Settings(
             "320", "Eushully\\姫狩りダンジョンマイスター");
-        ResolvedGamePersistence mismatched = ResolvedGamePersistence.Resolve(
+        ResolvedGamePersistence mismatched = Resolve(
             selected, wrongVersion, userRoot);
         Assert.False(mismatched.WritesEnabled);
         Assert.Null(mismatched.CreateNativeDatStore());
@@ -49,7 +56,7 @@ public sealed class GamePersistencePolicyTests
         SelectedGameProfile selected = GameProfileSelection.Resolve([], HimegariIdentity);
         string sandbox = Path.Combine(Path.GetTempPath(), "ome-profile-policy", "sandbox", "fresh");
 
-        ResolvedGamePersistence resolved = ResolvedGamePersistence.Resolve(
+        ResolvedGamePersistence resolved = Resolve(
             selected, settings, Path.Combine(Path.GetTempPath(), "unused-user-root"), sandbox);
 
         Assert.Equal(Path.GetFullPath(sandbox), resolved.ProfileRoot);
@@ -67,7 +74,7 @@ public sealed class GamePersistencePolicyTests
         SelectedGameProfile selected = GameProfileSelection.Resolve(
             ["--profile", "himegari"], KamidoriIdentity);
 
-        ResolvedGamePersistence resolved = ResolvedGamePersistence.Resolve(
+        ResolvedGamePersistence resolved = Resolve(
             selected,
             Settings("320", "Eushully\\神採りアルケミーマイスター"),
             Path.Combine(Path.GetTempPath(), "ome-profile-policy", "mismatch"));
@@ -86,11 +93,11 @@ public sealed class GamePersistencePolicyTests
             Path.GetTempPath(), "ome-profile-isolation", Guid.NewGuid().ToString("N"));
         try
         {
-            ResolvedGamePersistence himegari = ResolvedGamePersistence.Resolve(
+            ResolvedGamePersistence himegari = Resolve(
                 GameProfileSelection.Resolve([], HimegariIdentity),
                 Settings("310", "Eushully\\姫狩りダンジョンマイスター"),
                 userRoot);
-            ResolvedGamePersistence kamidori = ResolvedGamePersistence.Resolve(
+            ResolvedGamePersistence kamidori = Resolve(
                 GameProfileSelection.Resolve([], KamidoriIdentity),
                 Settings("320", "Eushully\\神採りアルケミーマイスター"),
                 userRoot);
@@ -101,6 +108,8 @@ public sealed class GamePersistencePolicyTests
             Assert.NotNull(kamidori.CreateNativeDatStore());
             Assert.Equal(0x2e4, kamidori.NativeIdentity.NumberedGfxRecordSize);
             Assert.Equal(0x2d4, himegari.NativeIdentity.NumberedGfxRecordSize);
+            Assert.Equal(0x47333334u, kamidori.NativeIdentity.CompatibilityId);   // "433G", the build's stamp
+            Assert.Equal(0x4a343234u, himegari.NativeIdentity.CompatibilityId);   // "424J"
 
             var himegariStore = new DirectoryNativeDatStore(
                 himegari.NativePaths.SaveDirectory, himegari.NativeIdentity);

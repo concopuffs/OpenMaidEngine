@@ -162,7 +162,7 @@ public class PointerAndBlockCopyOpsTests
         }, Array.Empty<string>());
         var vm = new VirtualMachine(
             script, table, new RecordingHost(),
-            compatibility: new VmCompatibilityContext("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
         vm.Globals[0x810] = 44;
         vm.Globals[0x811] = 55;
 

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Ome.Engine.Model;
+using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
@@ -59,7 +60,7 @@ public class GfxCommandBufferTests
     [Theory]
     [InlineData("himegari", "SYS4422", 0)]
     [InlineData("kamidori", "SYS4433", -1)]
-    public void QueryOfAnObjectAColorFadeCreated_FollowsTheEngineRevision(string profile, string abi, long unboundSlot)
+    public void QueryOfAnObjectAColorFadeCreated_FollowsTheEngineBuild(string profile, string abi, long unboundSlot)
     {
         // Kamidori SC1250 label_fcb3 erases layer 1's object 0xcb2a, and 0x98aa then fades it with op 0x202, which
         // get-or-creates it unbound. SYS4433's op 0x215 (0x486120) reads an object whose flag bit 0 is clear as
@@ -73,7 +74,7 @@ public class GfxCommandBufferTests
             (0x1fb, new[] { G(1), G(5), I(0), I(0), G(6), G(6), G(2), G(2) }),
             Query(11, 1), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost(), compatibility: new(profile, abi));
+        var vm = new VirtualMachine(scene, t, new RecordingHost(), build: EngineBuilds.ForProfile(GameProfileRegistry.BuiltIn.Find(profile)!));
         vm.Run();
         Assert.NotNull(vm.Gfx.TryGet(0xcb2a));
         Assert.Equal(unboundSlot, vm.Globals[10]);

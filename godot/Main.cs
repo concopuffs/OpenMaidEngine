@@ -26,6 +26,9 @@ public partial class Main : Godot.Control
     private WindowLaunchOptions _windowOptions;
     private Sys4AssetCatalog _catalog = null!;
     private SelectedGameProfile _selectedProfile = null!;
+    // The engine build the profile runs (Vm/EngineBuilds.cs): its rules go to the VM, the host and the stores below,
+    // and its ABI picks the opcode table. Nothing past this file reads its id.
+    private EngineBuild _engineBuild = null!;
     private ResolvedGamePersistence _profilePersistence = null!;
     private IAssetStore _assetStore = null!;
     private LanguageAssetStore? _languageAssets;
@@ -87,6 +90,7 @@ public partial class Main : Godot.Control
         InitializeExitPolicy();
         GameRootSelection gameRoot;
         SelectedGameProfile selectedProfile;
+        EngineBuild engineBuild;
         ResolvedGamePersistence profilePersistence;
         Sys4AssetCatalog catalog;
         AssetLaunchOptions assetOptions;
@@ -109,9 +113,11 @@ public partial class Main : Godot.Control
             GameCatalogIdentity detectedIdentity =
                 GameCatalogIdentity.ReadSys4IniHeader(gameRoot.Sys4IniPath);
             selectedProfile = GameProfileSelection.Resolve(userArgs, detectedIdentity);
+            engineBuild = EngineBuilds.ForProfile(selectedProfile.Profile);
             catalog = Sys4AssetCatalog.Load(gameRoot.Sys4IniPath);
             profilePersistence = ResolvedGamePersistence.Resolve(
                 selectedProfile,
+                engineBuild.Rules.Saves,
                 catalog.StartupSettings,
                 ProjectSettings.GlobalizePath("user://"),
                 ArgumentValue(userArgs, "--data-root"));   // --data-root <dir>: driver sandboxes
@@ -125,6 +131,7 @@ public partial class Main : Godot.Control
         }
         _catalog = catalog;
         _selectedProfile = selectedProfile;
+        _engineBuild = engineBuild;
         _profilePersistence = profilePersistence;
         _assetStore = new Sys4AssetStore(catalog, gameRoot.Root, assetOptions.LooseRoots.ToArray());
         // The install's own scripts, before the mod layer mounts: site entries name their fingerprints.
@@ -175,7 +182,7 @@ public partial class Main : Godot.Control
         GD.Print($"[profile] id={selectedProfile.Profile.Id} title=\"{selectedProfile.Profile.DisplayTitle}\" " +
                  $"selection={selectedProfile.SourceName} identity-match={selectedProfile.IdentityMatched} " +
                  $"frontend={selectedProfile.Profile.SysFrontendId} " +
-                 $"abi={selectedProfile.Profile.EngineAbiId} probe={selectedProfile.ProbeMode}");
+                 $"build={engineBuild.Id} abi={engineBuild.AbiId} probe={selectedProfile.ProbeMode}");
         GD.Print($"[profile] catalog={selectedProfile.DetectedIdentity.Display} " +
                  $"game-root={gameRoot.Root} root-source={gameRoot.SourceName}");
         _clickOnUp = catalog.StartupSettings.ClickOnUp;
@@ -372,7 +379,7 @@ public partial class Main : Godot.Control
         _clock.Speed = System.Math.Clamp(speed, 0.05, 8.0);
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
-        var table = OmeRuntimeMetadata.LoadOpcodeTable(selectedProfile.Profile.EngineAbiId);
+        var table = OmeRuntimeMetadata.LoadOpcodeTable(engineBuild.AbiId);
         GD.Print($"[profile] opcode-layers={string.Join(",", table.ResolvedLayers)} " +
                  $"contracts={table.Count}");
         INativeDatStore? nativeSaveStore = null;
@@ -403,7 +410,7 @@ public partial class Main : Godot.Control
             {
                 _sys4RegIniStore = Sys4RegIniStore.ForPath(
                     catalog.StartupSettings, profilePersistence.NativePaths.Sys4RegIniPath,
-                    selectedProfile.Profile.EngineAbiId);
+                    engineBuild.Rules.Settings);
                 _audioMixerSettings = _sys4RegIniStore.Load();
                 // SYS4REG.INI holds 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ; the shared profile carries it while the game runs.
                 sharedProfile.ReadMessageSkipEnabled = _sys4RegIniStore.LoadReadTextSkip();
@@ -543,12 +550,11 @@ public partial class Main : Godot.Control
             synchronizeExplicitPresentation: !_selftest,
             surfaceTextMaskCacheCapacity:
                 portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048,
-            coverageAlpha: AgeGlyphMaskCompositor.CoverageAlphaFor(selectedProfile.Profile.EngineAbiId))
+            coverageAlpha: engineBuild.Rules.Text.GlyphCoverage)
         {
             SleepScale = sleepScale,
             TraceOps = _gfxLogPath != null,
-            RubyRules = RubyLayoutRules.For(selectedProfile.Profile.EngineAbiId, _catalog.StartupSettings,
-                                            _sys4RegIniStore?.RubyShiftMode),
+            RubyRules = engineBuild.Rules.Text.Ruby.For(_catalog.StartupSettings, _sys4RegIniStore?.RubyShiftMode),
             FontFamilySource = InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings),
             FontMetricsProbe = surfaceTextRasterizer as IFontMetricsProbe,
             BlankExtentMode = _catalog.StartupSettings.BlankExtentMode == 1,
@@ -578,15 +584,16 @@ public partial class Main : Godot.Control
         if (histFile != null) { _hist = new Ome.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Ome.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
         _vm = new VirtualMachine(script, table, _host,
-            GodotVmOptions.Create(_selftest, nativeDebugMenu, _catalog.StartupSettings),
+            GodotVmOptions.Create(_selftest, nativeDebugMenu, _catalog.StartupSettings) with
+            {
+                ProfileId = selectedProfile.Profile.Id,
+                ProbeMode = selectedProfile.ProbeMode,
+            },
             provider, sink,
             sharedProfile: sharedProfile,
             nativeDatStore: nativeSaveStore,
             audioMixerSettings: _audioMixerSettings,
-            compatibility: new VmCompatibilityContext(
-                selectedProfile.Profile.Id,
-                selectedProfile.Profile.EngineAbiId,
-                selectedProfile.ProbeMode));
+            build: engineBuild);
         if (scripts != null && selectedProfile.Profile.DebugSceneLaunch != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);

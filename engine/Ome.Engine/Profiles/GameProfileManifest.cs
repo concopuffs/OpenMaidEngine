@@ -61,7 +61,8 @@ public sealed record GameCatalogIdentity
 
 /// <summary>
 /// Authored, content-free description of one supported game. Opcode semantics belong to the selected
-/// engine ABI snapshot/layers, not to this game manifest.
+/// engine ABI snapshot/layers, and engine behaviour to the engine build the profile names (Vm/EngineBuilds.cs), not to
+/// this game manifest.
 /// </summary>
 public sealed record GameProfileManifest
 {
@@ -71,6 +72,7 @@ public sealed record GameProfileManifest
         IEnumerable<GameCatalogIdentity> catalogIdentities,
         IEnumerable<string> scriptRevisions,
         string sysFrontendId,
+        string engineBuildId,
         string engineAbiId,
         string naturalBootScript,
         IReadOnlyDictionary<string, string>? metadataReferences,
@@ -81,6 +83,7 @@ public sealed record GameProfileManifest
         RequireStableId(id, nameof(id));
         ArgumentException.ThrowIfNullOrWhiteSpace(displayTitle);
         ArgumentException.ThrowIfNullOrWhiteSpace(sysFrontendId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(engineBuildId);
         ArgumentException.ThrowIfNullOrWhiteSpace(engineAbiId);
         ArgumentException.ThrowIfNullOrWhiteSpace(naturalBootScript);
         ArgumentNullException.ThrowIfNull(catalogIdentities);
@@ -102,6 +105,7 @@ public sealed record GameProfileManifest
         CatalogIdentities = identities;
         ScriptRevisions = revisions;
         SysFrontendId = sysFrontendId;
+        EngineBuildId = engineBuildId;
         EngineAbiId = engineAbiId;
         NaturalBootScript = naturalBootScript;
         MetadataReferences = (metadataReferences ?? new Dictionary<string, string>())
@@ -116,6 +120,10 @@ public sealed record GameProfileManifest
     public ImmutableArray<GameCatalogIdentity> CatalogIdentities { get; }
     public ImmutableArray<string> ScriptRevisions { get; }
     public string SysFrontendId { get; }
+    /// <summary>The engine build the profile runs (<c>EngineBuilds.ForProfile</c>), one per profile.</summary>
+    public string EngineBuildId { get; }
+    /// <summary>The build's script ABI, kept in the manifest for the tools that read manifests; composition checks
+    /// that it agrees with the build.</summary>
     public string EngineAbiId { get; }
     public string NaturalBootScript { get; }
     public ImmutableDictionary<string, string> MetadataReferences { get; }

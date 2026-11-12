@@ -37,9 +37,8 @@ public sealed partial class VirtualMachine
     private readonly OpcodeTable _t;
     private readonly IHost _host;
     private readonly VmOptions _o;
-    private readonly VmCompatibilityContext _compatibility;
-    // Op 0x215 on SYS4433 reads an object draw-texture has not bound as absent (GfxState.QuerySlot).
-    private readonly bool _queryUnboundGfxObjectsAsAbsent;
+    // The engine build's rules (Vm/EngineBuilds.cs). The VM never reads the build's id or ABI.
+    private readonly EngineRules _rules;
     private readonly Encoding _nativeStringEncoding;
     private readonly IScriptProvider? _provider;
     private readonly SharedProfile _sharedProfile;
@@ -199,18 +198,13 @@ public sealed partial class VirtualMachine
                           INativeDatStore? nativeDatStore = null,
                           AudioMixerSettings? audioMixerSettings = null,
                           DiagnosticOutputState? diagnosticOutput = null,
-                          VmCompatibilityContext? compatibility = null, IPaceClock? paceClock = null,
+                          EngineBuild? build = null, IPaceClock? paceClock = null,
                           TimeProvider? playClock = null)
     {
         _s = s; _t = t; _host = host; _o = o ?? new VmOptions(); _provider = provider;
         _paceClock = paceClock ?? new StopwatchPaceClock();
         _playClock = playClock ?? TimeProvider.System;
-        _compatibility = compatibility ?? VmCompatibilityContext.ForTable(t);
-        if (!string.Equals(_compatibility.EngineAbiId, t.AbiId, StringComparison.Ordinal))
-            throw new ArgumentException(
-                $"VM compatibility ABI '{_compatibility.EngineAbiId}' does not match opcode table ABI '{t.AbiId}'",
-                nameof(compatibility));
-        _queryUnboundGfxObjectsAsAbsent = Text.EngineRevisions.IsSys4433(_compatibility.EngineAbiId);
+        _rules = EngineBuilds.ForVm(build, t).Rules;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         _nativeStringEncoding = Encoding.GetEncoding(_o.NativeStringCodePage);
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
@@ -1770,25 +1764,15 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         if (!_t.TryGetDefinition(op, out OpcodeDefinition definition))
         {
-            HaltReason = $"opcode-not-in-abi:{_t.AbiId}:0x{op:x}";
+            HaltReason = UnsupportedOpcodeDiagnostic.NotInAbi(_t, op);
             return HALT;
         }
         string label = definition.Label;
         if (!IsExecutable(op))
         {
-            var diagnostic = new UnsupportedOpcodeDiagnostic(
-                _compatibility.ProfileId,
-                _compatibility.EngineAbiId,
-                _cur.Script.EngineRevision,
-                _cur.Script.Name,
-                _cur.Script.PackedId,
-                ins.Offset,
-                op,
-                definition.CanonicalLabel,
-                definition.ContractProvenance.LayerId,
-                ins.Args.ToArray());
+            var diagnostic = UnsupportedOpcodeDiagnostic.For(_o.ProfileId, _t, _cur.Script, ins, definition);
             _sink.Emit(TraceEvent.UnsupportedOpcode(diagnostic, pc));
-            if (_compatibility.ProbeMode) return pc + 1;
+            if (_o.ProbeMode) return pc + 1;
             CompatibilityFailure = diagnostic;
             HaltReason = diagnostic.ToString();
             return HALT;

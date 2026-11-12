@@ -150,7 +150,7 @@ _ARTERIAL_ACCESSORS = {
 
 REFERENCE_PROFILE = "himegari"
 ENGINES: dict[str, EngineFacts] = {
-    "himegari": EngineFacts(0x413860, 0x9B24C, _HIMEGARI_ACCESSORS, runtime_start=0x54F3DE, version="4.22"),
+    "himegari": EngineFacts(0x413860, 0x9B24C, _HIMEGARI_ACCESSORS, runtime_start=0x54F3DE, version="4.24J"),
     # SYS4433, AGE 4.33G (the clean install's AGE.EXE; docs/engine-re.md, "Kamidori engine builds"): the ctx
     # constructor at 0x413e70 fills ctx+0x9f704; accessors read frame_pc at ctx+0x57fb8. First pinned on the
     # translation's 4.33F (constructor 0x413e50, table ctx+0x9f700) from --align-accessors (every alignment

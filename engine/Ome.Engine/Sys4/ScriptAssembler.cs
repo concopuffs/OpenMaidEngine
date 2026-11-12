@@ -13,6 +13,7 @@ namespace Ome.Engine.Sys4;
 public static class ScriptAssembler
 {
     private const int HeaderSize = 0x3C, NumFields = 13, StringArgType = 2;
+    private const string Family = "SYS4";
     private static readonly Encoding Cp932;
     static ScriptAssembler()
     {
@@ -20,12 +21,19 @@ public static class ScriptAssembler
         Cp932 = Encoding.GetEncoding(932);
     }
 
+    /// <summary>A script of <paramref name="table"/>'s ABI, parsed with that table.</summary>
     public static Script Assemble(OpcodeTable table, string name,
                                   IReadOnlyList<(int Op, Operand[] Args)> instrs, IReadOnlyList<string> strings)
-        => Sys4Loader.Parse(AssembleBytes(instrs, strings), table, name);
+        => Sys4Loader.Parse(AssembleBytes(instrs, strings, table.AbiId), table, name);
 
-    public static byte[] AssembleBytes(IReadOnlyList<(int Op, Operand[] Args)> instrs, IReadOnlyList<string> strings)
+    /// <param name="abiId">The script ABI the header's magic names, as the compiler writes it (OmsCanonical): a SYS4
+    /// ABI such as <c>SYS4433</c>. A table of no script ABI (the opcode catalog, a test's own table) gets the bare
+    /// family magic <c>SYS4</c>.</param>
+    public static byte[] AssembleBytes(IReadOnlyList<(int Op, Operand[] Args)> instrs, IReadOnlyList<string> strings,
+                                       string abiId)
     {
+        ArgumentNullException.ThrowIfNull(abiId);
+        string magic = abiId.StartsWith(Family, StringComparison.Ordinal) && abiId.Length <= 8 ? abiId : Family;
         int codeLen = 0;
         foreach (var ins in instrs) codeLen += 1 + 2 * ins.Args.Length;
         var messageOffsets = new List<uint>();
@@ -66,7 +74,7 @@ public static class ScriptAssembler
         fields[12] = codeLen + messageOffsets.Count;
 
         var bytes = new byte[HeaderSize + body.Count * 4];
-        Encoding.ASCII.GetBytes("SYS4422 ").CopyTo(bytes, 0);
+        Encoding.ASCII.GetBytes(magic.PadRight(8)).CopyTo(bytes, 0);
         for (int k = 0; k < NumFields; k++) BitConverter.GetBytes(fields[k]).CopyTo(bytes, 8 + k * 4);
         for (int i = 0; i < body.Count; i++) BitConverter.GetBytes(body[i]).CopyTo(bytes, HeaderSize + i * 4);
         return bytes;

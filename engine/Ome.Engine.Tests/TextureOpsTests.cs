@@ -40,7 +40,7 @@ public class TextureOpsTests
         var host = new RecHost();
         var vm = new VirtualMachine(
             provider.RequireByName(launch.RootScript), table, host, new VmOptions(MaxSteps: 20_000_000), provider,
-            compatibility: new VmCompatibilityContext(profile.Id, profile.EngineAbiId));
+            build: EngineBuilds.ForProfile(profile));
         vm.HostScene(new HostedSceneEntry(launch.CoordinatorScript, scene.PackedId, writes));
         vm.Run();   // headless, the scene ends polling INPUTNAME's name entry (SC0000@0xe632) until the step limit
 

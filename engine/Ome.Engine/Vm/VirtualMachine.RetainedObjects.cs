@@ -13,7 +13,7 @@ public sealed partial class VirtualMachine
             case "query-gfx-object?":   // 0x215 (out)(handle) -> slot | -1
             {
                 long handle = Read(a[1]);
-                int slot = Gfx.QuerySlot(handle, unboundReadsAbsent: _queryUnboundGfxObjectsAsAbsent);
+                int slot = Gfx.QuerySlot(handle, unboundReadsAbsent: _rules.Gfx.UnboundObjectReadsAbsent);
                 if (_diagSetTexture)   // reuse the flag: show what the slot query returns (grey-BG slot dig)
                     System.Console.Error.WriteLine($"[query] handle=0x{handle:x} handleOp=(type={a[1].Type} val=0x{a[1].Value:x}) " +
                         $"-> QuerySlot={slot} objectPresent={Gfx.TryGet(handle) != null}");

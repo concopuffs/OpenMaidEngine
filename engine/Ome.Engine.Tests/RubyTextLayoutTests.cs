@@ -1,5 +1,6 @@
 using Ome.Engine.Model;
 using Ome.Engine.Persistence;
+using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
 using Ome.Engine.Vm;
@@ -50,7 +51,7 @@ public class RubyTextLayoutTests
         // 篝火 is 48 pixels and かがりび 32: (48 - 32) / (4 + 1) = 3 pixels before, between and after.
         IReadOnlyList<AdvRetainedGlyphRecord> records = RubyTextLayout.Draw(
             Image(200, 80), rasterizer, 10, 40, 48, "かがりび", Style(), GlyphRasterPolicy.NativeCp932Gray4, true,
-            RubyLayoutRules.Sys4422);
+            RubyLayoutRules.FixedOffsets);
 
         // Mode 3: top + lfHeight (-8) + 1 - effect y (1).
         Assert.Equal(new AdvRetainedGlyphRecord[]
@@ -75,7 +76,7 @@ public class RubyTextLayoutTests
         // A 21-pixel base under a 32-pixel ruby: -(-11 / 2) = 5 pixels of overhang on the left, and no gap.
         IReadOnlyList<AdvRetainedGlyphRecord> records = RubyTextLayout.Draw(
             Image(200, 80), new SquareRasterizer(), 100, 40, 21, "いちにさ", Style(renderMode: 1),
-            GlyphRasterPolicy.NativeCp932Gray4, true, RubyLayoutRules.Sys4422);
+            GlyphRasterPolicy.NativeCp932Gray4, true, RubyLayoutRules.FixedOffsets);
 
         // Not mode 3: top + lfHeight + 1.
         Assert.Equal(new[] { 95, 103, 111, 119 }, records.Select(record => record.Left));
@@ -88,7 +89,7 @@ public class RubyTextLayoutTests
         RgbaImage destination = Image(80, 60);
 
         RubyTextLayout.Draw(destination, new SquareRasterizer(), 10, 40, 48, "か", Style(),
-            GlyphRasterPolicy.NativeCp932Gray4, true, RubyLayoutRules.Sys4422);
+            GlyphRasterPolicy.NativeCp932Gray4, true, RubyLayoutRules.FixedOffsets);
 
         // One mask pixel at the ruby baseline (cell top 32 + ascent 8 - origin 1) with no outline around it.
         int Alpha(int x, int y) => destination.Pixels[(y * 80 + x) * 4 + 3];
@@ -98,42 +99,42 @@ public class RubyTextLayoutTests
     }
 
     [Fact]
-    public void Sys4433DividesTheGapByHalfTheBytesPlusThreeAndHalvesItAfterASingleByteCharacter()
+    public void HalfWidthAwareSpacingDividesTheGapByHalfTheBytesPlusThreeAndHalvesItAfterASingleByteCharacter()
     {
         // ｱか is 3 bytes and 12 pixels over a 48-pixel base: (48 - 12) / ((3 + 3) >> 1) = 12 (SYS4422 divides by
         // 3 / 2 + 1 = 2). ｱ is followed by 6 pixels, half the gap.
         IReadOnlyList<AdvRetainedGlyphRecord> records = RubyTextLayout.Draw(
             Image(200, 80), new SquareRasterizer(), 10, 40, 48, "ｱか", Style(),
-            GlyphRasterPolicy.NativeCp932Gray4, true, RubyLayoutRules.Sys4433(rubyShiftMode: 1, drawMode: 1));
+            GlyphRasterPolicy.NativeCp932Gray4, true, RubyLayoutRules.ShiftModes(rubyShiftMode: 1, drawMode: 1));
 
         // Kamidori (RubyShiftMode 1): top + lfHeight, and mode 3 raises nothing. Every record chains.
         Assert.Equal(new AdvRetainedGlyphRecord[] { new(1, 22, 32, 26, 40), new(1, 32, 32, 40, 40) }, records);
     }
 
     [Fact]
-    public void Sys4433DrawsAControlCharacterAsASpace()
+    public void HalfWidthAwareSpacingDrawsAControlCharacterAsASpace()
     {
         var rasterizer = new SquareRasterizer();
 
         RubyTextLayout.Draw(Image(200, 80), rasterizer, 10, 40, 48, "か	か", Style(),
-            GlyphRasterPolicy.NativeCp932Gray4, true, RubyLayoutRules.Sys4433(rubyShiftMode: 1, drawMode: 1));
+            GlyphRasterPolicy.NativeCp932Gray4, true, RubyLayoutRules.ShiftModes(rubyShiftMode: 1, drawMode: 1));
 
         Assert.Equal(new[] { 'か', ' ', 'か' }, rasterizer.Requests.Select(request => (char)request.UnicodeScalar));
     }
 
     [Theory]
-    // SYS4422: one pixel below top + lfHeight, raised by the mode-3 effect offset, live and in History.
-    [InlineData("SYS4422", 0, 1, false, 32)]
-    [InlineData("SYS4422", 0, 1, true, 32)]
-    // SYS4433: the pixel only off DrawMode 1 with RubyShiftMode 0, never in History; the raise only with
+    // Himegari's 4.24J: one pixel below top + lfHeight, raised by the mode-3 effect offset, live and in History.
+    [InlineData("himegari", 0, 1, false, 32)]
+    [InlineData("himegari", 0, 1, true, 32)]
+    // Kamidori's 4.33G: the pixel only off DrawMode 1 with RubyShiftMode 0, never in History; the raise only with
     // RubyShiftMode 0.
-    [InlineData("SYS4433", 0, 0, false, 32)]
-    [InlineData("SYS4433", 0, 1, false, 31)]
-    [InlineData("SYS4433", 0, 0, true, 31)]
-    [InlineData("SYS4433", 1, 0, false, 32)]
-    [InlineData("SYS4433", 1, 1, true, 32)]
-    public void RubyTopFollowsTheRevisionsShiftRules(
-        string engineAbiId, int rubyShiftMode, int drawMode, bool history, int top)
+    [InlineData("kamidori", 0, 0, false, 32)]
+    [InlineData("kamidori", 0, 1, false, 31)]
+    [InlineData("kamidori", 0, 0, true, 31)]
+    [InlineData("kamidori", 1, 0, false, 32)]
+    [InlineData("kamidori", 1, 1, true, 32)]
+    public void RubyTopFollowsTheBuildsShiftRules(
+        string profile, int rubyShiftMode, int drawMode, bool history, int top)
     {
         Sys4StartupSettings settings = Sys4StartupSettings.FromPairs(
         [
@@ -143,7 +144,8 @@ public class RubyTextLayoutTests
 
         IReadOnlyList<AdvRetainedGlyphRecord> records = RubyTextLayout.Draw(
             Image(200, 80), new SquareRasterizer(), 10, 40, 48, "か", Style(renderMode: 3),
-            GlyphRasterPolicy.NativeCp932Gray4, true, RubyLayoutRules.For(engineAbiId, settings), history);
+            GlyphRasterPolicy.NativeCp932Gray4, true,
+            EngineBuilds.ForProfile(GameProfileRegistry.BuiltIn.Find(profile)!).Rules.Text.Ruby.For(settings), history);
 
         Assert.Equal(top, Assert.Single(records).Top);
     }
@@ -193,7 +195,7 @@ public class RubyTextLayoutTests
     }
 
     [Fact]
-    public void Sys4433ChainsEveryRubyRecordSoTheWholeRubyPublishesInOneTick()
+    public void ChainingEveryRubyRecordPublishesTheWholeRubyInOneTick()
     {
         var presentation = new RetainedAdvTextLayoutPresentation(
             new AdvTextLayoutPresentationBinding(1, 21, 55000, 500, -1, 0, 0));
@@ -214,7 +216,7 @@ public class RubyTextLayoutTests
     }
 
     [Fact]
-    public void Sys4433OpcodeFuriganaArmsTheGlyphTimer()
+    public void FuriganaArmsTheGlyphTimerUnder433G()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
         var script = ScriptAssembler.Assemble(table, "KAMIDORI-FURIGANA",
@@ -227,7 +229,7 @@ public class RubyTextLayoutTests
         var runs = new List<AdvLiveTextRun>();
         var host = new RecordingHost { OnRetainedText = run => { runs.Add(run); return null; } };
 
-        new VirtualMachine(script, table, host, compatibility: new("kamidori", "SYS4433")).Run();
+        new VirtualMachine(script, table, host, build: EngineBuilds.Age433G).Run();
 
         Assert.True(Assert.Single(runs).ArmsGlyphTimer);
     }
@@ -311,7 +313,7 @@ public class RubyTextLayoutTests
     {
         // text_redraw_retained_group@0x451530 draws each record at its rectangle, ruby included, so a redraw in the
         // page's own style gives back the live page's pixels.
-        RubyLayoutRules rules = sys4433 ? RubyLayoutRules.Sys4433(1, 1) : RubyLayoutRules.Sys4422;
+        RubyLayoutRules rules = sys4433 ? RubyLayoutRules.ShiftModes(1, 1) : RubyLayoutRules.FixedOffsets;
         var engine = new RetainedGlyphLayoutEngine(new SquareRasterizer());
         var history = new AdvTextHistory();
         history.DefineLayout(1, 200, 90, 0, 0);

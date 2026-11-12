@@ -175,7 +175,7 @@ public class SfxOpsTests
         var host = new RecordingHost();
         host.PlayingSoundChannels.Add(11);
         var vm = new VirtualMachine(script, table, host,
-            compatibility: new("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
 
         vm.Run();
 

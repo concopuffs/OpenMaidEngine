@@ -411,7 +411,10 @@ accounting, and visible retained-scene snapshots.
 top-level opcode dispatcher; `Step` now contains only label grouping, domain routing, strict compatibility
 failure, and an internal coverage/dispatcher consistency guard. `OpcodeRuntimeCoverage.cs` owns runtime
 implementation membership independently of ABI-table membership and corpus observation;
-`VmCompatibilityContext.cs` owns selected-profile execution context and structured unsupported-op diagnostics.
+`UnsupportedOpcodeDiagnostic.cs` is the structured unsupported-op diagnostic. `EngineBuilds.cs` declares every engine
+build the port reproduces (4.24J, 4.33G) as its parent plus changes, and the VM takes the build's rules; the rule
+types sit beside the natives that read them (`Text/TextRules.cs`, `Model/GfxRules.cs`, `Persistence/SettingsRules.cs`,
+`Persistence/SaveRules.cs`; `superpowers/specs/2026-11-12-engine-layering-design.md` §7).
 Its partial-class companion `engine/Ome.Engine/Vm/VirtualMachine.Audio.cs` owns VM audio
 state, BGM restart semantics, and the BGM/voice/SFX/mixer opcode handler; `Step` retains the audio labels and
 routes that family into the handler. `engine/Ome.Engine/Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/

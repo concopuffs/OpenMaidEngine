@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
+using Ome.Engine.Vm;
 using Xunit;
 
 // Startup must survive unreadable profile files (AGE offers to continue past "データが壊れています"), and the
@@ -183,7 +184,7 @@ public class ProfileStartupRecoveryTests
             var startup = Sys4StartupSettings.FromPairs([
                 new("FONT", "ＭＳ 明朝"), new("ENABLEANTIFONT", "1"), new("FULLSCREENBIT", "32"),
                 new("NOSETMUSIC", "3"), new("RUBYSHIFTMODE", "1")]);
-            Sys4RegIniStore store = Sys4RegIniStore.ForPath(startup, path, "SYS4433");
+            Sys4RegIniStore store = Sys4RegIniStore.ForPath(startup, path, EngineBuilds.Age433G.Rules.Settings);
             store.SaveMessageInt(Sys4RegIniStore.MessageSpeedKey, Sys4RegIniStore.DefaultMessageSpeed);
 
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -209,7 +210,7 @@ public class ProfileStartupRecoveryTests
 
             // A hand-added RubyShiftMode overrides SYS4INI's.
             File.AppendAllText(path, "[message]\r\nRubyShiftMode=0\r\n", Encoding.GetEncoding(932));
-            Assert.Equal(0, Sys4RegIniStore.ForPath(startup, path, "SYS4433").RubyShiftMode);
+            Assert.Equal(0, Sys4RegIniStore.ForPath(startup, path, EngineBuilds.Age433G.Rules.Settings).RubyShiftMode);
         }
         finally
         {

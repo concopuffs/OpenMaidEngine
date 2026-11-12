@@ -175,7 +175,7 @@ public class NaturalBootIntegrationTests
         GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("himegari")!;
         var vm = new VirtualMachine(scripts.RequireByName("SYSTEM4.BIN"), table, host,
             new VmOptions(MaxSteps: 5_000_000), scripts, sink,
-            compatibility: new VmCompatibilityContext(profile.Id, profile.EngineAbiId));
+            build: EngineBuilds.ForProfile(profile));
         host.Vm = vm;
         sink.OnEnter = name =>
         {
@@ -309,7 +309,7 @@ public class NaturalBootIntegrationTests
         var vm = new VirtualMachine(
             scripts.RequireByName(profile.NaturalBootScript), table, host,
             new VmOptions(MaxSteps: 5_000_000), scripts, sink,
-            compatibility: new VmCompatibilityContext(profile.Id, profile.EngineAbiId));
+            build: EngineBuilds.ForProfile(profile));
         host.Vm = vm;
         sink.OnEnter = name =>
         {

@@ -5,8 +5,9 @@ using Ome.Engine.Sys4;
 namespace Ome.Engine.Profiles;
 
 /// <summary>
-/// Authored native-persistence facts that cannot yet be derived from the common SYS4 catalog. The
-/// packed save version is still read from SYS4INI and checked against the observed profile value.
+/// Authored native-persistence facts of a game that cannot yet be derived from the common SYS4 catalog. The
+/// packed save version is still read from SYS4INI and checked against the observed profile value. The engine's own
+/// save facts (its version stamp and numbered-save record size) come from the engine build's <see cref="SaveRules"/>.
 /// </summary>
 public sealed record GamePersistencePolicy
 {
@@ -15,11 +16,9 @@ public sealed record GamePersistencePolicy
         bool writesEnabled,
         string? readOnlyReason,
         NativeSaveMagic magic,
-        uint compatibilityId,
         string gameId,
         int expectedPackedSaveVersion,
         NativeSaveBankDimensions bankDimensions,
-        int numberedGfxRecordSize,
         IReadOnlyList<string>? legacyGameIds = null)
     {
         GameProfileManifest.RequireStableId(storageNamespace, nameof(storageNamespace));
@@ -27,45 +26,37 @@ public sealed record GamePersistencePolicy
         ArgumentNullException.ThrowIfNull(bankDimensions);
         if (expectedPackedSaveVersion < 0)
             throw new ArgumentOutOfRangeException(nameof(expectedPackedSaveVersion));
-        if (numberedGfxRecordSize <= 0)
-            throw new ArgumentOutOfRangeException(nameof(numberedGfxRecordSize));
         if (!writesEnabled && string.IsNullOrWhiteSpace(readOnlyReason))
             throw new ArgumentException(
                 "a read-only persistence policy requires a reason", nameof(readOnlyReason));
-        if (writesEnabled && !NativeGfxSaveLayout.IsSupported(numberedGfxRecordSize))
-            throw new ArgumentException(
-                $"write-enabled policy uses unsupported numbered-save gfx record size " +
-                $"0x{numberedGfxRecordSize:x}", nameof(numberedGfxRecordSize));
 
         StorageNamespace = storageNamespace;
         WritesEnabled = writesEnabled;
         ReadOnlyReason = writesEnabled ? null : readOnlyReason;
         Magic = magic;
-        CompatibilityId = compatibilityId;
         GameId = gameId;
         LegacyGameIds = legacyGameIds?.ToArray() ?? [];
         ExpectedPackedSaveVersion = expectedPackedSaveVersion;
         BankDimensions = bankDimensions;
-        NumberedGfxRecordSize = numberedGfxRecordSize;
     }
 
     public string StorageNamespace { get; }
     public bool WritesEnabled { get; }
     public string? ReadOnlyReason { get; }
     public NativeSaveMagic Magic { get; }
-    /// <summary>The engine version AGE writes at header +0x04 of every save file; see
-    /// <see cref="NativeSaveIdentity.CompatibilityId"/>.</summary>
-    public uint CompatibilityId { get; }
     public string GameId { get; }
     /// <summary>Game ids that earlier port builds wrote, accepted on read only.</summary>
     public IReadOnlyList<string> LegacyGameIds { get; }
+    /// <summary>SYS4INI's SAVEVERSION for this game (310, 320): the game's own value, which AGE reads from SYS4INI and
+    /// splits into set:SaveVersion1/2 (docs/engine-re.md, "SYS4INI startup-settings catalog"); checked here against the
+    /// install.</summary>
     public int ExpectedPackedSaveVersion { get; }
     public NativeSaveBankDimensions BankDimensions { get; }
-    public int NumberedGfxRecordSize { get; }
 
-    public NativeSaveIdentity ResolveNativeIdentity(Sys4StartupSettings startupSettings)
+    public NativeSaveIdentity ResolveNativeIdentity(Sys4StartupSettings startupSettings, SaveRules engineSaves)
     {
         ArgumentNullException.ThrowIfNull(startupSettings);
+        ArgumentNullException.ThrowIfNull(engineSaves);
         string? raw = startupSettings.GetValueOrDefault("SAVEVERSION");
         if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out int packed)
             || packed < 0)
@@ -76,21 +67,22 @@ public sealed record GamePersistencePolicy
                 $"SYS4INI SAVEVERSION {packed} does not match profile value " +
                 $"{ExpectedPackedSaveVersion}");
 
-        return CreateNativeIdentity(packed);
+        return CreateNativeIdentity(packed, engineSaves);
     }
 
-    public NativeSaveIdentity CreateExpectedNativeIdentity()
-        => CreateNativeIdentity(ExpectedPackedSaveVersion);
+    public NativeSaveIdentity CreateExpectedNativeIdentity(SaveRules engineSaves)
+        => CreateNativeIdentity(
+            ExpectedPackedSaveVersion, engineSaves ?? throw new ArgumentNullException(nameof(engineSaves)));
 
-    private NativeSaveIdentity CreateNativeIdentity(int packed)
+    private NativeSaveIdentity CreateNativeIdentity(int packed, SaveRules engineSaves)
         => new(
             Magic,
-            CompatibilityId,
+            engineSaves.CompatibilityId,
             GameId,
             SaveVersion1: packed / 100,
             SaveVersion2: packed % 100,
             BankDimensions: BankDimensions,
-            NumberedGfxRecordSize: NumberedGfxRecordSize,
+            NumberedGfxRecordSize: engineSaves.NumberedGfxRecordSize,
             LegacyGameIds: LegacyGameIds);
 }
 
@@ -106,13 +98,16 @@ public sealed record ResolvedGamePersistence(
     /// <param name="profileRootOverride">An explicit profile root (the frontend's <c>--data-root</c>). It replaces
     /// <c>&lt;user data&gt;/games/&lt;namespace&gt;</c> and keeps the native layout beneath it, so a driver sandbox
     /// can hold one game's saves and seed the other's.</param>
+    /// <param name="engineSaves">The save rules of the engine build the profile runs.</param>
     public static ResolvedGamePersistence Resolve(
         SelectedGameProfile selected,
+        SaveRules engineSaves,
         Sys4StartupSettings startupSettings,
         string godotUserDataRoot,
         string? profileRootOverride = null)
     {
         ArgumentNullException.ThrowIfNull(selected);
+        ArgumentNullException.ThrowIfNull(engineSaves);
         ArgumentNullException.ThrowIfNull(startupSettings);
         ArgumentException.ThrowIfNullOrWhiteSpace(godotUserDataRoot);
 
@@ -136,13 +131,13 @@ public sealed record ResolvedGamePersistence(
                 throw new InvalidDataException("profile persistence root escaped the Godot user-data root");
         }
 
-        NativeSaveIdentity identity = policy.CreateExpectedNativeIdentity();
+        NativeSaveIdentity identity = policy.CreateExpectedNativeIdentity(engineSaves);
         string? contractMismatch = null;
         if (selected.IdentityMatched)
         {
             try
             {
-                identity = policy.ResolveNativeIdentity(startupSettings);
+                identity = policy.ResolveNativeIdentity(startupSettings, engineSaves);
             }
             catch (InvalidDataException error)
             {

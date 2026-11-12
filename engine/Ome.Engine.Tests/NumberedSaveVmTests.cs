@@ -22,8 +22,8 @@ public class NumberedSaveVmTests
         string root = NewTemporaryDirectory();
         try
         {
-            var identity = Ome.Engine.Profiles.GameProfileRegistry.BuiltIn.Find(profile)!
-                .Persistence.CreateExpectedNativeIdentity();
+            var manifest = Ome.Engine.Profiles.GameProfileRegistry.BuiltIn.Find(profile)!;
+            var identity = manifest.Persistence.CreateExpectedNativeIdentity(EngineBuilds.ForProfile(manifest).Rules.Saves);
             var store = new DirectoryNativeDatStore(root, identity);
             Script script = WithPackedId(ScriptAssembler.Assemble(Table, "SAVE_TEST.BIN",
             [

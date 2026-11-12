@@ -9,6 +9,7 @@
   ],
   "scriptRevisions": ["SYS4422"],
   "sysFrontendId": "SYS4",
+  "engineBuild": "4.24J",
   "engineAbiId": "SYS4422",
   "naturalBootScript": "SYSTEM4.BIN",
   "metadataReferences": {
@@ -35,7 +36,6 @@
     "storageNamespace": "himegari",
     "writesEnabled": true,
     "magic": "S4SD",
-    "compatibilityId": 1244934708,
     "gameId": "姫狩りダンジョンマイスター",
     "legacyGameIds": ["蟋ｫ迢ｩ繧翫ム繝ｳ繧ｸ繝ｧ繝ｳ繝槭う繧ｹ繧ｿ繝ｼ"],
     "expectedPackedSaveVersion": 310,
@@ -46,7 +46,6 @@
       "pointerGlobals": 1,
       "pointerStrings": 1,
       "localPointerScratch": 1
-    },
-    "numberedGfxRecordSize": 724
+    }
   }
 }

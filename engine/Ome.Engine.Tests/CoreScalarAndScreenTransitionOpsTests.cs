@@ -176,7 +176,7 @@ public class CoreScalarAndScreenTransitionOpsTests
                 (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
         var vm = new VirtualMachine(script, table, new RecordingHost(),
-            compatibility: new("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
 
         vm.Run();
 
@@ -280,7 +280,7 @@ public class CoreScalarAndScreenTransitionOpsTests
         var host = new RecordingHost();
 
         new VirtualMachine(script, table, host,
-            compatibility: new("kamidori", "SYS4433")).Run();
+            build: EngineBuilds.Age433G).Run();
 
         Assert.Equal((1, 80L), Assert.Single(host.SurfaceWhiteFades));
         Assert.Equal(1280, LegacyScreenTransitionTiming.DurationMilliseconds(80));
@@ -309,7 +309,7 @@ public class CoreScalarAndScreenTransitionOpsTests
         var host = new RecordingHost();
 
         new VirtualMachine(script, table, host,
-            compatibility: new("kamidori", "SYS4433")).Run();
+            build: EngineBuilds.Age433G).Run();
 
         Assert.Equal(new[]
         {

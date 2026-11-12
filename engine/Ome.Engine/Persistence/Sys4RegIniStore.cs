@@ -43,42 +43,7 @@ public sealed class Sys4RegIniStore
     private static readonly Encoding Cp932 = CreateCp932();
     private static readonly string[] RouteKeys = ["", "Music", "SE", "Voice", "Movie"];
 
-    // engine_settings_load_sys4reg_ini@0x46b6e0 binds these keys, in this order, to the engine settings;
-    // the values are engine_settings_register_defaults@0x46be30's. A SYS4INI trailer pair named like the key
-    // overrides the default (Himegari: FULLSCREENBIT=32, FONT), sound:Music follows NOSETMUSIC (see ForPath),
-    // and message:UseAntiFont is bound only when ENABLEANTIFONT is set.
-    private static readonly (string Section, string Key, string Default)[] NativeBindings =
-    [
-        ("display", "UseDirectDrawEmuration", "0"), ("display", "UseWideSurface", "0"),
-        ("display", "ScreenMode", "0"), ("display", "FullScreenBit", "16"), ("display", "UseIVideoWindow", "1"),
-        ("display", "DeviceType", "0"), ("display", "VertexProcessing", "0"), ("display", "PresentInterval", "0"),
-        ("display", "TextureBit", "32"), ("display", "PixelShader", "-1"), ("display", "ForceScreen", "0"),
-        ("display", "VirtualFullScreen", "0"), ("display", "AspectMode", "0"), ("display", "FullScreenWidth", "0"),
-        ("display", "FullScreenHeight", "0"), ("display", "LimitAero", "0"),
-        ("sound", "Sound", "1"), ("sound", "Music", "0"), ("sound", "SE", "1"), ("sound", "Voice", "1"),
-        ("sound", "Movie", "1"), ("sound", "UseDirectSound", "1"), ("sound", "UseDirectSoundEmuration", "1"),
-        ("sound", "DirectSoundCooperativeLevel", "1"), ("sound", "Volume0", "-1"), ("sound", "Volume1", "-1"),
-        ("sound", "Volume2", "-1"), ("sound", "Volume3", "-1"), ("sound", "Volume4", "-1"),
-        ("sound", "MusicFadeOnVoicePlaying", "1"), ("sound", "MusicFadeOnVoicePlayingVolume", "50"),
-        ("message", "Font", ""), ("message", "RMouseEvent", "0"), ("message", "MessageSpeed", "5"),
-        ("message", "MesWinAlpha", "8"), ("message", "UseAntiFont", "1"), ("message", "AutoMessageTime0", "500"),
-        ("message", "AutoMessageTime1", "2000"), ("message", "ReadTextSkip", "0"),
-        ("message", "AdvanceMesOnWheel", "0"),
-        ("system", "SaveBMPPath", ""), ("system", "UseMMX", "1"), ("system", "EffectSkipOnClick", "0"),
-        ("system", "OutErrorLog", "0"),
-    ];
-
-    // SYS4433 (Kamidori; loader 0x472530) also binds display:VirtualFullScreenType after LimitAero and, with
-    // message:UseAntiFont under ENABLEANTIFONT, message:AntiFontLevel; a native Kamidori exit writes both, as 0.
-    private static readonly (string Section, string Key, string Default)[] Sys4433Bindings = NativeBindings
-        .SelectMany(binding => binding.Key switch
-        {
-            "LimitAero" => new[] { binding, ("display", "VirtualFullScreenType", "0") },
-            "UseAntiFont" => new[] { binding, ("message", "AntiFontLevel", "0") },
-            _ => new[] { binding },
-        })
-        .ToArray();
-    private readonly (string Section, string Key, string Default)[] _bindings;
+    private readonly IReadOnlyList<Sys4RegIniKey> _bindings;
     private readonly Sys4StartupSettings _startupSettings;
 
     private readonly string _path;
@@ -87,14 +52,15 @@ public sealed class Sys4RegIniStore
     private readonly int[] _routeValues = [0, 0, 1, 1, 1];
     private IniDocument? _document;
 
-    /// <param name="engineAbiId">The profile's engine ABI, which picks the keys AGE binds (SYS4433 binds two more).
-    /// Null means SYS4422's.</param>
+    /// <param name="settingsRules">The engine build's bound keys (<see cref="SettingsRules"/>). Null means
+    /// <see cref="SettingsRules.LoaderKeys"/>.</param>
     public Sys4RegIniStore(
-        string path, int defaultMusicRouteValue, Sys4StartupSettings? startupSettings = null, string? engineAbiId = null)
+        string path, int defaultMusicRouteValue, Sys4StartupSettings? startupSettings = null,
+        SettingsRules? settingsRules = null)
     {
         if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Settings path is required.", nameof(path));
         _path = Path.GetFullPath(path);
-        _bindings = engineAbiId != null && Text.EngineRevisions.IsSys4433(engineAbiId) ? Sys4433Bindings : NativeBindings;
+        _bindings = (settingsRules ?? SettingsRules.LoaderKeys).BoundKeys;
         _startupSettings = startupSettings ?? Sys4StartupSettings.Empty;
         _defaultMusicRouteValue = defaultMusicRouteValue;
         _routeValues[(int)AudioMixerCategory.Music] = defaultMusicRouteValue;
@@ -109,7 +75,7 @@ public sealed class Sys4RegIniStore
     public static Sys4RegIniStore ForPath(
         Sys4StartupSettings startupSettings,
         string path,
-        string? engineAbiId = null)
+        SettingsRules? settingsRules = null)
     {
         ArgumentNullException.ThrowIfNull(startupSettings);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -119,7 +85,7 @@ public sealed class Sys4RegIniStore
             && noSetMusic != 0
             ? noSetMusic - 1
             : 0;
-        return new Sys4RegIniStore(path, defaultMusic, startupSettings, engineAbiId);
+        return new Sys4RegIniStore(path, defaultMusic, startupSettings, settingsRules);
     }
 
     public AudioMixerSettings Load()
@@ -271,8 +237,8 @@ public sealed class Sys4RegIniStore
 
     private bool AntiFontBound => BindsAntiFont(_startupSettings);
 
-    /// <summary>Whether AGE binds message:UseAntiFont (and SYS4433's AntiFontLevel): set:EnableAntiFont is nonzero.
-    /// </summary>
+    /// <summary>Whether AGE binds message:UseAntiFont (and AntiFontLevel, where the build binds it): set:EnableAntiFont
+    /// is nonzero.</summary>
     public static bool BindsAntiFont(Sys4StartupSettings settings)
         => int.TryParse(settings.GetValueOrDefault("ENABLEANTIFONT")?.Trim(),
             NumberStyles.Integer, CultureInfo.InvariantCulture, out int enableAntiFont) && enableAntiFont != 0;

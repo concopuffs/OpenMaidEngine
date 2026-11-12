@@ -80,7 +80,7 @@ public class ForegroundTransitionTests
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, table, new RecordingHost(),
-            compatibility: new("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
         vm.Globals[10] = 8;
         vm.Globals[11] = 16;
         vm.Globals[12] = 100;
@@ -194,7 +194,7 @@ public class ForegroundTransitionTests
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, table, new RecordingHost(),
-            compatibility: new("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
         vm.Globals[10] = 100;
         vm.Globals[11] = -90;
         vm.Globals[12] = 0;
@@ -226,7 +226,7 @@ public class ForegroundTransitionTests
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, table, new RecordingHost(),
-            compatibility: new("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
 
         vm.Run();
 

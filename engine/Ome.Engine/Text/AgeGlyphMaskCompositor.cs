@@ -2,15 +2,15 @@ using Ome.Engine.Model;
 
 namespace Ome.Engine.Text;
 
-/// <summary>How an engine revision's glyph blit turns a gray-4 coverage value (0..16) into alpha. An aliased glyph's
-/// set pixels are opaque under both.</summary>
+/// <summary>How an engine build's glyph blit turns a gray-4 coverage value (0..16) into alpha
+/// (<see cref="TextRules.GlyphCoverage"/>). An aliased glyph's set pixels are opaque under both.</summary>
 public enum GlyphCoverageAlpha
 {
-    /// <summary>SYS4422 (Himegari; text_blit_glyph_bitmap@0x458c80): <c>c * 255 &gt;&gt; 4</c>, opaque at full
+    /// <summary>4.24J (Himegari; text_blit_glyph_bitmap@0x458c80): <c>c * 255 &gt;&gt; 4</c>, opaque at full
     /// coverage.</summary>
     Sixteenths,
 
-    /// <summary>SYS4433 (Kamidori; text_blit_glyph_bitmap_sys4433@0x45cff0): <c>c * 255 / 17</c>, so full coverage is
+    /// <summary>4.33G (Kamidori; text_blit_glyph_bitmap_sys4433@0x45cff0): <c>c * 255 / 17</c>, so full coverage is
     /// 240 and text never hides what lies under it. (Its GGO_GRAY8 branch, <c>c * 255 / 65</c>, needs text manager
     /// +0x35584 = 1, which nothing sets.)</summary>
     Seventeenths,
@@ -25,10 +25,6 @@ public static class AgeGlyphMaskCompositor
     /// </summary>
     public static int CellTopToBaseline(GlyphMask mask, int pixelHeight)
         => (mask ?? throw new ArgumentNullException(nameof(mask))).Ascent ?? pixelHeight;
-
-    /// <summary>The glyph blit of a profile's engine ABI.</summary>
-    public static GlyphCoverageAlpha CoverageAlphaFor(string engineAbiId)
-        => EngineRevisions.IsSys4433(engineAbiId) ? GlyphCoverageAlpha.Seventeenths : GlyphCoverageAlpha.Sixteenths;
 
     public static void DrawGlyph(
         RgbaImage destination,

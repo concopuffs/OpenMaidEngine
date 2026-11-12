@@ -1,5 +1,7 @@
 using Ome.Engine.Model;
+using Ome.Engine.Profiles;
 using Ome.Engine.Text;
+using Ome.Engine.Vm;
 
 public class GlyphMaskCompositorTests
 {
@@ -192,10 +194,11 @@ public class GlyphMaskCompositorTests
     }
 
     [Theory]
-    [InlineData("SYS4433", GlyphCoverageAlpha.Seventeenths)]
-    [InlineData("SYS4422", GlyphCoverageAlpha.Sixteenths)]
-    public void EachEngineRevisionHasItsOwnBlit(string engineAbiId, GlyphCoverageAlpha expected)
-        => Assert.Equal(expected, AgeGlyphMaskCompositor.CoverageAlphaFor(engineAbiId));
+    [InlineData("kamidori", GlyphCoverageAlpha.Seventeenths)]
+    [InlineData("himegari", GlyphCoverageAlpha.Sixteenths)]
+    public void EachProfilesEngineBuildHasItsOwnBlit(string profile, GlyphCoverageAlpha expected)
+        => Assert.Equal(expected,
+            EngineBuilds.ForProfile(GameProfileRegistry.BuiltIn.Find(profile)!).Rules.Text.GlyphCoverage);
 
     [Fact]
     public void ExistingDestinationUsesIntegerRgbBlendAndMaximumAlpha()

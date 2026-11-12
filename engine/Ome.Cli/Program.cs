@@ -39,7 +39,9 @@ GameCatalogIdentity catalogIdentity = GameCatalogIdentity.ReadSys4IniHeader(sys4
 SelectedGameProfile selectedProfile = GameProfileSelection.Resolve(args, catalogIdentity);
 if (selectedProfile.MismatchDiagnostic is { } mismatchDiagnostic)
     Console.Error.WriteLine($"warning: {mismatchDiagnostic}");
-var table = OpcodeTableJson.Load(Paths.OpcodesJson, selectedProfile.Profile.EngineAbiId);
+// The engine is put together here: the profile's build gives every rule, and its ABI picks the opcode table.
+EngineBuild engineBuild = EngineBuilds.ForProfile(selectedProfile.Profile);
+var table = OpcodeTableJson.Load(Paths.OpcodesJson, engineBuild.AbiId);
 // call-script execution: resolves ids -> scripts. Product paths pass this so subroutines run;
 // `trace` stays provider-less on purpose (the base-ISA offset oracle).
 var catalog = Sys4AssetCatalog.Load(sys4Ini);
@@ -330,11 +332,15 @@ if (command == "oms-rebuild")
         bootScripts = bootPolicy.DataTableBootstrapScripts;
     }
     return OmsRebuildCheck.Run(catalog, assetStore, table, Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson),
-        OmsModules(), rebuildScenes, bootScripts, new VmOptions(HaltAtWaitForInput: args.Contains("--halt-at-wait")),
-        int.TryParse(OptionValue("--limit"), out int rebuildLimit) ? rebuildLimit : 30,
+        OmsModules(), rebuildScenes, bootScripts,
         // The profile's VM facts. Each scene runs as the root from zeroed banks, so it takes its retail entry.
-        new VmCompatibilityContext(selectedProfile.Profile.Id, selectedProfile.Profile.EngineAbiId,
-            selectedProfile.ProbeMode),
+        new VmOptions(HaltAtWaitForInput: args.Contains("--halt-at-wait"))
+        {
+            ProfileId = selectedProfile.Profile.Id,
+            ProbeMode = selectedProfile.ProbeMode,
+        },
+        int.TryParse(OptionValue("--limit"), out int rebuildLimit) ? rebuildLimit : 30,
+        engineBuild,
         idiomatic: OptionValue("--level") == "idiomatic",
         // Gate 7 (spec §12): patch every script with an inert probe plan (--patch-probe [stride], default 5).
         patchProbe: !args.Contains("--patch-probe") ? 0
@@ -591,7 +597,8 @@ if (command == "catalog-scan")
     var report = new
     {
         profile_id = selectedProfile.Profile.Id,
-        engine_abi_id = selectedProfile.Profile.EngineAbiId,
+        engine_build = engineBuild.Id,
+        engine_abi_id = engineBuild.AbiId,
         resolved_abi_layers = table.ResolvedLayers,
         catalog_identity = selectedProfile.DetectedIdentity.Display,
         selection_source = selectedProfile.SourceName,
@@ -642,7 +649,7 @@ if (command == "run")
     // Faithful by default: halt at wait-for-input (no player => stop, don't plow past prompts). --plow opts
     // into the old walk-every-page behavior (dialogue coverage). See VmOptions.HaltAtWaitForInput.
     var vm = new VirtualMachine(script, table, runHost, new VmOptions(HaltAtWaitForInput: !args.Contains("--plow")),
-                                provider, trace.Sink);
+                                provider, trace.Sink, build: engineBuild);
     vm.Run();
     trace.Report();
     Console.WriteLine($"{Path.GetFileName(args[1])}: {vm.Steps} steps, {vm.Emitted.Count} show-text, {vm.CallScriptDispatches} call-scripts (halt: {vm.HaltReason})");
@@ -661,7 +668,7 @@ if (command == "audio")
     var res = new ResourceMap(
         catalog, assetStore, Console.Error.WriteLine, assetOptions.AllowBmpAsAgf);
     var host = new AudioTraceHost(res);
-    var vm = new VirtualMachine(ScriptByName(sceneName), table, host);
+    var vm = new VirtualMachine(ScriptByName(sceneName), table, host, build: engineBuild);
     // optional: seed globals, e.g. `audio SC0000.BIN 0xa57=1` to set Lily's form-A flag
     foreach (var s in args.Skip(2))
     {
@@ -705,13 +712,13 @@ if (command == "gfx")
     if (boot)
         foreach (string b in selectedProfile.Profile.DirectSceneDiagnostics!.DataBootstrapScripts)
         {
-            var bs = session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider);
+            var bs = session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider, build: engineBuild);
             Console.WriteLine($"[boot] {b}: {bs.Steps} steps (halt: {bs.Halt})");
         }
     var target = ScriptByName(sceneName);
     // With --boot, run the target like the real engine (call-scripts on) so subroutine-driven setup runs.
-    var vm = boot ? new VirtualMachine(target, table, host, new VmOptions(MaxSteps: 20_000_000), provider)
-                  : new VirtualMachine(target, table, host);
+    var vm = boot ? new VirtualMachine(target, table, host, new VmOptions(MaxSteps: 20_000_000), provider, build: engineBuild)
+                  : new VirtualMachine(target, table, host, build: engineBuild);
     foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
     foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
     vm.Run();
@@ -752,7 +759,7 @@ if (command == "init-image")
                         ?? throw new InvalidOperationException($"not a script: {name}");
         var ints = new Dictionary<int, long>(session.Globals);
         var strings = new Dictionary<int, string>(session.GlobalStrings);
-        var result = session.RunScene(script, table, new CaptureHost(), initOptions, provider);
+        var result = session.RunScene(script, table, new CaptureHost(), initOptions, provider, build: engineBuild);
         var intDelta = session.Globals
             .Where(kv => !ints.TryGetValue(kv.Key, out long old) || old != kv.Value)
             .OrderBy(kv => kv.Key)
@@ -816,7 +823,7 @@ if (command == "play")
     foreach (var name in scenes)
     {
         var script = ScriptByName(name);
-        var r = session.RunScene(script, table, new CaptureHost(), playOpts, provider, trace.Sink);
+        var r = session.RunScene(script, table, new CaptureHost(), playOpts, provider, trace.Sink, build: engineBuild);
         totalLines += r.Emitted.Count;
         Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
         // --show N prints each scene's first N emitted lines.
@@ -851,7 +858,7 @@ if (command == "sweep")
             return 2;
         }
         foreach (string s in diagnosticPolicy.DataTableBootstrapScripts)
-            bootSession.RunScene(ScriptByName(s), table, new CaptureHost(), null, provider);
+            bootSession.RunScene(ScriptByName(s), table, new CaptureHost(), null, provider, build: engineBuild);
         baseline = bootSession.ToJson();
         Console.WriteLine($"[boot] baseline = {bootSession.Globals.Count} globals; running {names.Count} scenes from it.");
     }
@@ -870,7 +877,7 @@ if (command == "sweep")
     {
         var session = Fresh();
         if (seeded) foreach (var (k, v) in seeds) session.Seed(k, v);
-        return session.RunScene(ScriptByName(name), table, new CaptureHost(), sweepOpts, provider).Emitted.Count;
+        return session.RunScene(ScriptByName(name), table, new CaptureHost(), sweepOpts, provider, build: engineBuild).Emitted.Count;
     }
 
     if (seeds.Count > 0)
@@ -893,7 +900,7 @@ if (command == "sweep")
     foreach (var name in names)
     {
         var session = Fresh();
-        var r = session.RunScene(ScriptByName(name), table, new CaptureHost(), sweepOpts, provider, trace.Sink);
+        var r = session.RunScene(ScriptByName(name), table, new CaptureHost(), sweepOpts, provider, trace.Sink, build: engineBuild);
         var halt = r.Halt ?? "null";
         haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
         totalLines += r.Emitted.Count;
@@ -944,10 +951,10 @@ if (command == "trace")
         }
         if (boot && si < 0)   // --state already carries boot state; don't re-run the *INIT prefix
             foreach (string b in selectedProfile.Profile.DirectSceneDiagnostics!.DataBootstrapScripts)
-                session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider);
+                session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider, build: engineBuild);
         var sink = new JsonOffsetTraceSink(target.Name);
         var vm = new VirtualMachine(target, table, new CaptureHost(),
-                                    new VmOptions(HaltAtWaitForInput: true, MaxSteps: 20_000_000), provider, sink);
+                                    new VmOptions(HaltAtWaitForInput: true, MaxSteps: 20_000_000), provider, sink, build: engineBuild);
         foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
         vm.Run();
@@ -964,7 +971,7 @@ if (command == "trace")
     var trace = new SortedDictionary<string, object>(StringComparer.Ordinal);
     foreach (var name in provider.ScriptNames.Where(n => scene.IsMatch(n)).OrderBy(n => n, StringComparer.Ordinal))
     {
-        var vm = new VirtualMachine(ScriptByName(name), table, new CaptureHost());
+        var vm = new VirtualMachine(ScriptByName(name), table, new CaptureHost(), build: engineBuild);
         vm.Run();
         trace[name] = new { offsets = vm.Emitted.Select(e => e.Offset).ToArray(), halt = vm.HaltReason, steps = vm.Steps };
     }

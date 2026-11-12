@@ -75,6 +75,7 @@ public sealed class GameProfileRegistry
         public CatalogIdentityDocument[]? CatalogIdentities { get; init; }
         public string[]? ScriptRevisions { get; init; }
         public string? SysFrontendId { get; init; }
+        public string? EngineBuild { get; init; }
         public string? EngineAbiId { get; init; }
         public string? NaturalBootScript { get; init; }
         public Dictionary<string, string>? MetadataReferences { get; init; }
@@ -90,6 +91,7 @@ public sealed class GameProfileRegistry
                 (CatalogIdentities ?? []).Select(identity => identity.ToIdentity()),
                 ScriptRevisions ?? [],
                 SysFrontendId ?? "",
+                EngineBuild ?? "",
                 EngineAbiId ?? "",
                 NaturalBootScript ?? "",
                 MetadataReferences,
@@ -147,12 +149,10 @@ public sealed class GameProfileRegistry
         public bool? WritesEnabled { get; init; }
         public string? ReadOnlyReason { get; init; }
         public string? Magic { get; init; }
-        public uint? CompatibilityId { get; init; }
         public string? GameId { get; init; }
         public string[]? LegacyGameIds { get; init; }
         public int? ExpectedPackedSaveVersion { get; init; }
         public BankDimensionsDocument? BankDimensions { get; init; }
-        public int? NumberedGfxRecordSize { get; init; }
 
         public GamePersistencePolicy ToPolicy()
         {
@@ -164,15 +164,11 @@ public sealed class GameProfileRegistry
                 WritesEnabled.Value,
                 ReadOnlyReason,
                 magic,
-                CompatibilityId
-                    ?? throw new InvalidOperationException("compatibilityId is required"),
                 GameId ?? "",
                 ExpectedPackedSaveVersion
                     ?? throw new InvalidOperationException("expectedPackedSaveVersion is required"),
                 (BankDimensions
                     ?? throw new InvalidOperationException("bankDimensions is required")).ToDimensions(),
-                NumberedGfxRecordSize
-                    ?? throw new InvalidOperationException("numberedGfxRecordSize is required"),
                 LegacyGameIds);
         }
     }

@@ -184,10 +184,16 @@ revision changes; a sweep then checks the rows that matter. Four builds have dum
 
 | Engine id | Game | AGE.EXE | ctx constructor | Opcode table | Handlers | C runtime starts |
 |---|---|---|---|---|---:|---|
-| `himegari` | Himegari (EU10) | 4.22 | `0x413860` | `ctx+0x9b24c` | 420 | `0x54f3de` |
+| `himegari` | Himegari (EU10) | 4.24J | `0x413860` | `ctx+0x9b24c` | 420 | `0x54f3de` |
 | `kamidori` | Kamidori (EU12), clean install | 4.33G | `0x413e70` | `ctx+0x9f704` | 437 | `0x556878` |
 | `kamidori-433f` | Kamidori, the English translation | 4.33F | `0x413e50` | `ctx+0x9f700` | 437 | `0x556878` |
 | `arterial` | 創刻のアテリアル (EU13) | 4.38D | `0x414e10` | `ctx+0xa4b9c` | 473 | `0x583dd8` |
+
+**Himegari is 4.24J** (checked 2026-11-12). The dump's own version resource reads `FileVersion` `4.24J` (UTF-16 at
+`0x602f08`), and so does the installed `AGE.EXE` (1,105,920 bytes, dated 2009-11-13, SHA-256
+`5c80a3a8c5b2e755647247c2195446385c5f1920db422bcb35cfd41cd77b5ee6`), which writes `424J` into its saves ("Save
+identity and native read checks" below). This table and the revision diff called it 4.22 before, after the script
+ABI `SYS4422`; the ABI and the build are different names.
 
 **Arterial.** `Arterial/創刻のアテリアル/` is a reference install with no port profile (`paths.REFERENCE_INSTALLS`),
 kept only for engine comparison. Its packed `AGE.EXE` (1,294,848 bytes, SHA-256
@@ -200,7 +206,7 @@ rep stosd`) located the constructor, and `operand_access.py --engine arterial --
 kamidori` aligned all 14 accessors unanimously. The Ghidra image is `/arterial/4.38D/range_00400000.bin`.
 Function ID names start at `0x566214` (the NFM compression library). The DirectShow base classes follow, and the C
 runtime begins at the `operator new[]` thunk `0x583dd8` (150 callers; `__security_check_cookie` at `0x5843fe`).
-Unlike 4.22 and 4.33, most of 4.38D's engine code from about `0x4a0000` on is not 16-aligned, so alignment does
+Unlike 4.24J and 4.33, most of 4.38D's engine code from about `0x4a0000` on is not 16-aligned, so alignment does
 not mark where the runtime starts.
 
 **Method.** Same-opcode handlers pair exactly. Aligning their instruction streams, and then their callees', votes
@@ -1059,10 +1065,11 @@ reaches `label_f63f`, which queries the layer object with op `0x215`:
   at (-512,-576): a black screen through pages 13-16.
 
 **Port.** `GfxState.QuerySlot(handle, unboundReadsAbsent)` returns -1 for an object whose `Visible` is clear when
-asked as SYS4433 does. `VirtualMachine` asks so on SYS4433 (`EngineRevisions.IsSys4433`). With it the SC1250 route's
+asked as SYS4433 does. `VirtualMachine` asks so when its engine build's rule says to (`GfxRules.UnboundObjectReadsAbsent`,
+set for 4.33G in `Vm/EngineBuilds.cs`). With it the SC1250 route's
 states 37-72 match native and the shots differ only in the animated wait indicator. Tests:
 `GfxStateTests.QueryReadsAnUnboundObjectAsAbsentWhenAskedAsSys4433Does`,
-`GfxCommandBufferTests.QueryOfAnObjectAColorFadeCreated_FollowsTheEngineRevision`. The 4.33G workers are renamed and
+`GfxCommandBufferTests.QueryOfAnObjectAColorFadeCreated_FollowsTheEngineBuild`. The 4.33G workers are renamed and
 commented in Ghidra (`/kamidori/4.33G`).
 
 #### ADV layer surface-slot registry (`G[0x3239]`, closed 2026-07-23)
@@ -5245,9 +5252,10 @@ Kamidori's engine has neither of Himegari's two ruby code sequences. Its live ru
 `RUBYSHIFTMODE` comes from the SYS4INI trailer. SYS4433's `SYS4REG.INI` loader also reads `message:RubyShiftMode`
 over it, but never writes it ([sys4-format-notes.md](sys4-format-notes.md), "Native SYS4REG.INI engine options").
 
-**Port.** `RubyLayoutRules` holds each revision's rules: `Sys4422`, or `Sys4433(rubyShiftMode, drawMode)` from the
-profile's engine ABI, its SYS4INI and the loaded `SYS4REG.INI` (`RubyLayoutRules.For`). `RubyTextLayout`,
-`RetainedAdvTextLayoutPresentation.AppendRun` and the glyph timer read them.
+**Port.** The engine build's `TextRules.Ruby` (`Vm/EngineBuilds.cs`) picks the rules: `RubyRule.FixedOffsets` for
+4.24J, or `RubyRule.ShiftModes` for 4.33G, which gives `RubyLayoutRules.ShiftModes(rubyShiftMode, drawMode)` from the
+SYS4INI and the loaded `SYS4REG.INI`. `RubyTextLayout` and `RetainedAdvTextLayoutPresentation.AppendRun` read them;
+whether op `0x196` re-arms the glyph timer is the separate rule `TextRules.FuriganaArmsGlyphTimer`.
 
 **Check.** `tools/drive/scenarios/kamidori-furigana.steps` (2026-11-07) shows the prologue page `SC0000@0xfa2`, with
 はんらん over 叛乱, and then its History. The translation blanks every ruby, so it runs on the Japanese base (the port
@@ -5298,8 +5306,9 @@ The 0.72 s is the old port's (n - 1) delays, which showed the first tick at once
 **Port.**
 
 - `Ome.Engine.Hosting.PeriodTimer` implements the arm and the poll.
-- `GodotAdvHost` keeps one timer. It arms it when a run with `AdvLiveTextRun.ArmsGlyphTimer` (op `0x6e`; the VM sets
-  false for op `0x196`) takes the timed path.
+- `GodotAdvHost` keeps one timer. It arms it when a run with `AdvLiveTextRun.ArmsGlyphTimer` (op `0x6e`; for op
+  `0x196` the VM takes the build's `TextRules.FuriganaArmsGlyphTimer`, false for 4.24J and true for 4.33G) takes the
+  timed path.
 - The reveal loop polls on the engine clock and wakes at the timer's next due millisecond. It requests a
   presentation for each tick and does not wait for it, since a frame wait would make polls late and drop ticks.
 - Tests: `PeriodTimerTests`.
@@ -7963,7 +7972,7 @@ the reference raster. Tests: `AspectGlyphPlacementTests` and
 `text_blit_glyph_bitmap_sys4433@0x45cff0` turns a gray-4 coverage value `c` (0..16) into alpha `c * 255 / 17`, so
 full coverage is 240 and text never fully hides what lies under it. SYS4422 uses `c * 255 >> 4`. Its GGO_GRAY8
 branch, `c * 255 / 65`, needs text manager `+0x35584` = 1, which nothing sets. An aliased glyph's set pixels are opaque
-under both. The port picks the blit by engine ABI (`AgeGlyphMaskCompositor.CoverageAlphaFor`).
+under both. The port takes the blit from the engine build's `TextRules.GlyphCoverage` (`Vm/EngineBuilds.cs`).
 
 #### Aspect-mode surface text (2026-11-07)
 

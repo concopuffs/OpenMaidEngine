@@ -17,6 +17,7 @@ Use the profile id wherever a guide writes `<profile>`.
 |---|---|
 | Profile id | `himegari` (`--profile himegari`) |
 | Title | Himegari Dungeon Meister (姫狩りダンジョンマイスター) |
+| Engine build | AGE `4.24J` |
 | Engine ABI | `SYS4422` |
 | Catalog revision | `S4IC422` |
 | Boot script | `SYSTEM4.BIN` |
@@ -34,6 +35,7 @@ Use the profile id wherever a guide writes `<profile>`.
 |---|---|
 | Profile id | `kamidori` (`--profile kamidori`) |
 | Title | Kamidori Alchemy Meister (神採りアルケミーマイスター) |
+| Engine build | AGE `4.33G` |
 | Engine ABI | `SYS4433` |
 | Catalog revision | `S4IC433` |
 | Boot script | `SYSTEM4.BIN` |

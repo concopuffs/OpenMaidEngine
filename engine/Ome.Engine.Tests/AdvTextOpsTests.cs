@@ -466,7 +466,7 @@ public class AdvTextOpsTests
         var host = new RecordingHost();
 
         new VirtualMachine(script, table, host,
-            compatibility: new("kamidori", "SYS4433")).Run();
+            build: EngineBuilds.Age433G).Run();
 
         Assert.Equal(
             new AdvWaitIndicatorConfig(1, 2, 0, 12, 0, 0, 30, 30, 32, 20, 64),
@@ -487,7 +487,7 @@ public class AdvTextOpsTests
         var host = new RecordingHost();
 
         new VirtualMachine(script, table, host,
-            compatibility: new("kamidori", "SYS4433")).Run();
+            build: EngineBuilds.Age433G).Run();
 
         Assert.Equal(new[] { true, false }, host.WaitIndicatorFollowLastGlyphChanges);
     }
@@ -506,7 +506,7 @@ public class AdvTextOpsTests
         var host = new RecordingHost();
 
         new VirtualMachine(script, table, host,
-            compatibility: new("kamidori", "SYS4433")).Run();
+            build: EngineBuilds.Age433G).Run();
 
         Assert.Equal(1, Assert.Single(host.LiveTextRuns).Run.Style.AspectMode);
     }
@@ -527,7 +527,7 @@ public class AdvTextOpsTests
         var host = new RecordingHost();
         host.FontFamilyIndices["ＭＳ 明朝"] = 7;
         var vm = new VirtualMachine(script, table, host,
-            compatibility: new("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
 
         vm.Run();
 
@@ -548,7 +548,7 @@ public class AdvTextOpsTests
             }, Array.Empty<string>());
         var host = new RecordingHost { FontFamilyCount = familyCount };
         var vm = new VirtualMachine(script, table, host,
-            compatibility: new("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
 
         vm.Run();
 
@@ -572,7 +572,7 @@ public class AdvTextOpsTests
         host.FontFamilyNames[0] = "MS Gothic";
         host.FontFamilyNames[1] = "Yu Mincho";
         var vm = new VirtualMachine(script, table, host,
-            compatibility: new("kamidori", "SYS4433"));
+            build: EngineBuilds.Age433G);
 
         vm.Run();
 

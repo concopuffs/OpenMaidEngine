@@ -101,6 +101,7 @@ def identity(profile_id: str) -> list[str]:
     rows = [
         ("Profile id", f"`{profile_id}` (`--profile {profile_id}`)"),
         ("Title", f"{data['displayTitle']} ({catalog['title']})"),
+        ("Engine build", f"AGE `{data['engineBuild']}`"),
         ("Engine ABI", f"`{data['engineAbiId']}`"),
         ("Catalog revision", f"`{catalog['catalogRevision']}`"),
         ("Boot script", f"`{data['naturalBootScript']}`"),

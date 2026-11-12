@@ -17,17 +17,16 @@ public sealed class GameProfileSelectionTests
 
         GameProfileManifest himegari = Assert.IsType<GameProfileManifest>(registry.Find("himegari"));
         Assert.Equal("SYS4", himegari.SysFrontendId);
+        Assert.Equal("4.24J", himegari.EngineBuildId);
         Assert.Equal("SYS4422", himegari.EngineAbiId);
         Assert.Equal(["SYS4422"], himegari.ScriptRevisions);
         Assert.Equal("SYSTEM4.BIN", himegari.NaturalBootScript);
         Assert.Equal("himegari", himegari.PersistenceNamespace);
         Assert.True(himegari.PersistenceWritesEnabled);
         Assert.Equal(310, himegari.Persistence.ExpectedPackedSaveVersion);
-        Assert.Equal(0x4a343234u, himegari.Persistence.CompatibilityId);   // "424J", the current AGE.EXE
         Assert.Equal("姫狩りダンジョンマイスター", himegari.Persistence.GameId);
         Assert.Equal(["蟋ｫ迢ｩ繧翫ム繝ｳ繧ｸ繝ｧ繝ｳ繝槭う繧ｹ繧ｿ繝ｼ"], himegari.Persistence.LegacyGameIds);
         Assert.Equal([402459, 1, 789, 1, 1, 1], himegari.Persistence.BankDimensions.ToArray());
-        Assert.Equal(0x2d4, himegari.Persistence.NumberedGfxRecordSize);
         Assert.Equal("res://config/japanese-text-rendering.json",
             himegari.MetadataReferences["portableTextRendering"]);
         DirectSceneDiagnosticPolicy himegariDiagnostics =
@@ -49,17 +48,16 @@ public sealed class GameProfileSelectionTests
 
         GameProfileManifest kamidori = Assert.IsType<GameProfileManifest>(registry.Find("kamidori"));
         Assert.Equal("SYS4", kamidori.SysFrontendId);
+        Assert.Equal("4.33G", kamidori.EngineBuildId);
         Assert.Equal("SYS4433", kamidori.EngineAbiId);
         Assert.Equal(["SYS4433"], kamidori.ScriptRevisions);
         Assert.Equal("SYSTEM4.BIN", kamidori.NaturalBootScript);
         Assert.Equal("kamidori", kamidori.PersistenceNamespace);
         Assert.True(kamidori.PersistenceWritesEnabled);
         Assert.Equal(320, kamidori.Persistence.ExpectedPackedSaveVersion);
-        Assert.Equal(0x47333334u, kamidori.Persistence.CompatibilityId);   // "433G", the clean install's 4.33G
         Assert.Equal("神採りアルケミーマイスター", kamidori.Persistence.GameId);
         Assert.Empty(kamidori.Persistence.LegacyGameIds);
         Assert.Equal([1037327, 1, 802, 1, 1, 1], kamidori.Persistence.BankDimensions.ToArray());
-        Assert.Equal(0x2e4, kamidori.Persistence.NumberedGfxRecordSize);
         Assert.Null(kamidori.Persistence.ReadOnlyReason);
         Assert.Null(kamidori.DirectSceneDiagnostics);
         Assert.Null(kamidori.DebugSceneLaunch);
@@ -250,6 +248,7 @@ public sealed class GameProfileSelectionTests
             [identity],
             ["SYS4000"],
             "SYS4",
+            "0.00A",
             "SYS4000",
             "SYSTEM4.BIN",
             metadataReferences: null,
@@ -258,9 +257,7 @@ public sealed class GameProfileSelectionTests
                 writesEnabled: false,
                 readOnlyReason: "synthetic test profile",
                 NativeSaveMagic.S4SD,
-                compatibilityId: 1,
                 gameId: id,
                 expectedPackedSaveVersion: 300,
-                new NativeSaveBankDimensions(1, 1, 1, 1, 1, 1),
-                numberedGfxRecordSize: NativeNumberedSaveState.GfxRecordSize));
+                new NativeSaveBankDimensions(1, 1, 1, 1, 1, 1)));
 }

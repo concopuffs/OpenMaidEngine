@@ -138,6 +138,29 @@ it; git history keeps the record.
 
   Done when each mode reveals its strips or clip mask as native draws them, checked frame by frame against native
   with `drive.py` at a low `speed`.
+- **Float operands.** Two gaps in how the VM reads a float-form operand (an inline float, a float global or a float
+  local), found by milestone 0 of the engine layering spec (`superpowers/specs/2026-11-12-engine-layering-design.md`,
+  §13):
+  - 4.33G reads op `0x1fd`'s x, y and z scale as floats (`vm_operand_fetch_float`; `vm-map/opcodes.toml`
+    `access_by_abi`), and Kamidori's `ALLMAP@0x5d9` and `SAVE@0xcad` pass the float immediate 37.5 (`0x42160000`)
+    for x and y. The two sites scale a full-size image into the 384×216 save thumbnail, on the branch taken when the
+    source image is not thumbnail-sized. The port reads them with the integer accessor, which gives the float's raw
+    bits (1,108,738,048), so that thumbnail is scaled by about eleven million percent. The other 23 opcodes the
+    revision diff marks for float access see only integer forms in both corpora, which both builds read alike.
+  - The integer accessor itself: native's `vm_operand_fetch` truncates a float form toward zero (`engine-re.md`, "VM
+    value, array and call semantics relevant to compilation"); `VirtualMachine.Read` returns its raw bits. No integer-read operand in either corpus is a float form,
+    so nothing shows it yet.
+
+  Done when op `0x1fd` reads its scale operands as floats under 4.33G (a handler variant bound by the build, spec
+  §7.2), the integer accessor truncates float forms, and a Kamidori save whose thumbnail takes that branch matches
+  native's (`SAVExx.STH`).
+- **Kamidori: History leaves different objects in a save.** `kamidori-history-after-load.steps` saves slot No.003
+  after opening and closing History on SC0000's first name-plate page. Native's `SAVE03.DAT` and the port's differ
+  under `save-diff` in 29 gfx records (2026-11-12): field `+0x14` of objects `0xd6d8`–`0xd6ef` is 53 natively and
+  51 on the port, `0xe678`–`0xe67a` 26 against 24, and `0xd6f0` and `0xe67b` exist only natively. The port's save is
+  the same on `develop` (`1d7a39e`), so this predates the engine layering work. The scenario's History pictures match
+  native. Done when the records match, or the field is shown to be a stamp and listed with `save-diff`'s expected
+  differences (`tools-reference.md`).
 
 ## Robustness
 
@@ -216,12 +239,6 @@ captures where they apply.
   memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. A
   census of every field comes first (milestone 2); the skip and auto state gets its owner next (milestone 5),
   because audio and other natives read it; the waits move last (milestone 11).
-- **Revision behaviour is one boolean.** `EngineRevisions.IsSys4433` (in `Text/`) selects behaviour at five sites:
-  `Sys4RegIniStore`, `AgeGlyphMaskCompositor`, `RubyLayoutRules` (two) and the op-`0x215` rule
-  (`VirtualMachine.cs:213`). The revision-diff triage (under Engine fidelity) will add rules, and a third revision
-  cannot be expressed as a boolean. Done when each engine build is declared in one file as its parent plus changes,
-  each site reads the rule it needs, and nothing below the point where the engine is put together takes an ABI or
-  build id (layering spec §7). Planned: milestone 0.
 - **The host's threads have no stated ownership.** `GodotAdvHost` holds nine lock objects, six `AutoResetEvent`s,
   a `ManualResetEventSlim` and a `SemaphoreSlim`, and nothing documents which fields each lock guards or the lock
   order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`

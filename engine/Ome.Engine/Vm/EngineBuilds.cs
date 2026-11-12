@@ -1,0 +1,106 @@
+using Ome.Engine.Model;
+using Ome.Engine.Persistence;
+using Ome.Engine.Profiles;
+using Ome.Engine.Text;
+
+namespace Ome.Engine.Vm;
+
+/// <summary>Every rule an engine build gives the natives (docs/superpowers/specs/2026-11-12-engine-layering-design.md
+/// §7.3). The rule types live beside the natives that read them.</summary>
+public sealed record EngineRules(TextRules Text, GfxRules Gfx, SettingsRules Settings, SaveRules Saves);
+
+/// <summary>
+/// One build of native AGE whose behaviour the port reproduces (spec §7.1). <see cref="Id"/> is the version the build
+/// names itself by, and <see cref="AbiId"/> the opcode table it runs. Both are read only where the engine is put
+/// together: code below that point takes <see cref="Rules"/> (spec §7.6).
+/// </summary>
+public sealed record EngineBuild(string Id, string AbiId, EngineRules Rules);
+
+/// <summary>
+/// The engine builds the port reproduces, each declared as its parent plus changes (spec §7.4). A change names the
+/// behaviour, never the build, and its comment points to the evidence. Adding a game: spec §7.8.
+/// </summary>
+public static class EngineBuilds
+{
+    /// <summary>AGE 4.24J, Himegari's (its version resource and the <c>424J</c> stamp in every save it writes;
+    /// docs/engine-re.md, "Comparing engine builds").</summary>
+    public static EngineBuild Age424J { get; } = new(
+        Id: "4.24J",
+        AbiId: "SYS4422",
+        Rules: new EngineRules(
+            Text: new TextRules(
+                GlyphCoverage: GlyphCoverageAlpha.Sixteenths,
+                Ruby: RubyRule.FixedOffsets,
+                FuriganaArmsGlyphTimer: false),
+            Gfx: new GfxRules(UnboundObjectReadsAbsent: false),
+            Settings: SettingsRules.LoaderKeys,
+            Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize)));
+
+    /// <summary>AGE 4.33G, Kamidori's clean install (docs/engine-re.md, "Kamidori engine builds"). The profile runs this
+    /// build whichever executable the player has (spec §7.5).</summary>
+    public static EngineBuild Age433G { get; } = Age424J with
+    {
+        Id = "4.33G",
+        AbiId = "SYS4433",
+        Rules = Age424J.Rules with
+        {
+            Text = Age424J.Rules.Text with
+            {
+                // text_blit_glyph_bitmap_sys4433@0x45cff0 divides coverage by 17.
+                GlyphCoverage = GlyphCoverageAlpha.Seventeenths,
+                // adv_text_draw_ruby_over_row_sys4433@0x4590d0 reads message:RubyShiftMode and set:DrawMode.
+                Ruby = RubyRule.ShiftModes,
+                // Its op 0x196 handler re-arms the glyph timer as op 0x6e does.
+                FuriganaArmsGlyphTimer = true,
+            },
+            // Worker 0x486120 tests the record's bound bit before it returns the slot.
+            Gfx = Age424J.Rules.Gfx with { UnboundObjectReadsAbsent = true },
+            // The SYS4REG.INI loader 0x472530 binds two more keys, and a native exit writes both as 0.
+            Settings = Age424J.Rules.Settings
+                .BindingAfter("LimitAero", new Sys4RegIniKey("display", "VirtualFullScreenType", "0"))
+                .BindingAfter("UseAntiFont", new Sys4RegIniKey("message", "AntiFontLevel", "0")),
+            // Numbered saves append a rotation cache to every graphics record.
+            Saves = new SaveRules(versionStamp: "433G", numberedGfxRecordSize: NativeGfxSaveLayout.RotationCacheRecordSize),
+        },
+    };
+
+    /// <summary>Every build, parents first.</summary>
+    public static IReadOnlyList<EngineBuild> All { get; } = [Age424J, Age433G];
+
+    public static EngineBuild? Find(string id)
+        => All.FirstOrDefault(build => string.Equals(build.Id, id, StringComparison.Ordinal));
+
+    /// <summary>The build a profile names. Its manifest also names the ABI, for the tools that read manifests; the
+    /// two must agree.</summary>
+    public static EngineBuild ForProfile(GameProfileManifest profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        EngineBuild build = Find(profile.EngineBuildId)
+            ?? throw new InvalidDataException(
+                $"profile '{profile.Id}' names engine build '{profile.EngineBuildId}', which is not declared; "
+                + $"builds: {string.Join(", ", All.Select(known => known.Id))}");
+        if (!string.Equals(build.AbiId, profile.EngineAbiId, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"profile '{profile.Id}' names ABI '{profile.EngineAbiId}', but its engine build {build.Id} runs "
+                + $"'{build.AbiId}'");
+        return build;
+    }
+
+    /// <summary>
+    /// The build a VM runs over <paramref name="table"/>: <paramref name="build"/> when the composition named one (it
+    /// must run that table's ABI), else, for tests and tools that run a bare table, the first build declared for the
+    /// table's ABI, or <see cref="Age424J"/> for a table of no build's ABI (the opcode catalog, a test's own table).
+    /// </summary>
+    public static EngineBuild ForVm(EngineBuild? build, OpcodeTable table)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        if (build == null)
+            return All.FirstOrDefault(known => string.Equals(known.AbiId, table.AbiId, StringComparison.Ordinal))
+                   ?? Age424J;
+        if (!string.Equals(build.AbiId, table.AbiId, StringComparison.Ordinal))
+            throw new ArgumentException(
+                $"engine build {build.Id} runs ABI '{build.AbiId}', not the opcode table's '{table.AbiId}'",
+                nameof(build));
+        return build;
+    }
+}

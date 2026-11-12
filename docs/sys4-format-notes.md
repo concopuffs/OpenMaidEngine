@@ -615,7 +615,8 @@ VM semantic load/save using an isolated temporary copy. Nonzero caches are cover
 and selected-range animation tests, including import/re-save and nested saved-frame continuation.
 
 As of 2026-09-21, both layouts are supported by the shared persistence codecs and Kamidori writes are
-enabled. The profile's `numberedGfxRecordSize` flows through `NativeSaveIdentity` into fresh capture;
+enabled. The engine build's numbered-save record size (`SaveRules.NumberedGfxRecordSize` in `Vm/EngineBuilds.cs`: 724
+for 4.24J, 740 for 4.33G; a profile field until 2026-11-12) flows through `NativeSaveIdentity` into fresh capture;
 `NativeGfxSaveLayout` owns supported sizes, sparse stride, and allocation terms. File import checks the
 declared layout against the selected identity. Save opcodes remain shared. The Kamidori manifest's save
 game ID is `神採りアルケミーマイスター`, matching the native header; its former mojibake value prevented

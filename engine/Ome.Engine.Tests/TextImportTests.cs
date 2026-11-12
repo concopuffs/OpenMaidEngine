@@ -63,7 +63,7 @@ public class TextImportTests
             => _code[instruction] = (_code[instruction].Op,
                 _code[instruction].Args.Select((arg, k) => k == argument ? I(offset) : arg).ToArray());
 
-        public byte[] Bytes() => ScriptAssembler.AssembleBytes(_code, _strings);
+        public byte[] Bytes() => ScriptAssembler.AssembleBytes(_code, _strings, Table.AbiId);
 
         public Script Script(string name = "TEST") => Sys4Loader.Parse(Bytes(), Table, name);
     }

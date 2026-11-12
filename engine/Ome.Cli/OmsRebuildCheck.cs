@@ -95,7 +95,7 @@ internal static class OmsRebuildCheck
     public static int Run(Sys4AssetCatalog catalog, IAssetStore store, OpcodeTable table, OpcodeContracts contracts,
                           IReadOnlyList<GameModule> modules, IReadOnlyList<string> scenes,
                           IReadOnlyList<string> bootScripts, VmOptions options, int limit,
-                          VmCompatibilityContext compatibility, bool idiomatic = false, int patchProbe = 0,
+                          EngineBuild build, bool idiomatic = false, int patchProbe = 0,
                           string? dumpDirectory = null)
     {
         var intrinsics = new IntrinsicCatalog(table, contracts);
@@ -158,7 +158,7 @@ internal static class OmsRebuildCheck
             {
                 var host = new SimulatedClockHost();
                 session.RunScene(provider.RequireByName(name), table, host, options, provider,
-                    probed ? new StepRecorder(InsertedStep, () => host.Discounted++) : null, compatibility);
+                    probed ? new StepRecorder(InsertedStep, () => host.Discounted++) : null, build);
             }
             return session.ToJson();
         }
@@ -178,7 +178,7 @@ internal static class OmsRebuildCheck
                 var host = new SimulatedClockHost();
                 var recorder = probed ? new StepRecorder(InsertedStep, () => host.Discounted++) : new StepRecorder();
                 SceneResult result = session.RunScene(provider.RequireByName(scene), table, host, playOptions,
-                    provider, recorder, compatibility);
+                    provider, recorder, build);
                 return (recorder, result, session.ToJson());
             }
             var a = Play(originalProvider, originalBaseline, options, probed: false);

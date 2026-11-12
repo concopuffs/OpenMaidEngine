@@ -42,6 +42,14 @@ public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int C
                                int WheelKeyUpAction = 3, int WheelKeyDownAction = 1,
                                bool CoexistMessageSkip = false, int FastForwardPageMicroseconds = 0)
 {
+    /// <summary>The selected profile's id, which labels an unsupported-opcode diagnostic
+    /// (<see cref="UnsupportedOpcodeDiagnostic.ProfileId"/>). No behaviour reads it.</summary>
+    public string ProfileId { get; init; } = "unselected";
+
+    /// <summary>Probe mode (<c>--probe</c>): an unsupported opcode is reported and skipped instead of halting the
+    /// run.</summary>
+    public bool ProbeMode { get; init; }
+
     /// <summary>Native fast-forward cost per op. Text waits timed with Frida under held Ctrl (2026-11-07) fit 15 µs
     /// per op plus <see cref="NativeFastForwardPageMicroseconds"/> per page: Kamidori's SC0000 (34,851 ops, 140 pages,
     /// 865 ms) and Himegari's opening pages (12 µs/op, 2.75 ms/page) agree (docs/engine-re.md, "Fast-forward

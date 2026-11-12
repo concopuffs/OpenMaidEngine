@@ -127,7 +127,7 @@ public sealed partial class VirtualMachine
             Ruby = string.IsNullOrEmpty(ruby) || presented != null || hidden ? null : ruby,
             SourceRuby = string.IsNullOrEmpty(ruby) ? null : ruby,
             SourceCursor = TextHistory.SourceCursorApart(layoutSlot),
-            ArmsGlyphTimer = ruby == null || RubyLayoutRules.ForEngine(_compatibility.EngineAbiId).ArmsGlyphTimer,
+            ArmsGlyphTimer = ruby == null || _rules.Text.FuriganaArmsGlyphTimer,
             Presented = presented,
         };
         if (hidden)
@@ -205,8 +205,8 @@ public sealed partial class VirtualMachine
                 return pc + 1;
             case "display-furigana": // 0x196 (layout slot, base text, ruby)
                 // op_0x196_handler@0x41f2a0 builds the base text like show-text with the ruby as the builder's third
-                // argument. Unlike op 0x6e it does not re-read message:ReadTextSkip; SYS4422's handler does not re-arm
-                // the glyph timer either, SYS4433's does (RubyLayoutRules.ArmsGlyphTimer).
+                // argument. Unlike op 0x6e it does not re-read message:ReadTextSkip; whether it re-arms the glyph timer
+                // is the build's rule (TextRules.FuriganaArmsGlyphTimer).
                 if (!ShowTextRun(ins, pc, a, a[1], ReadStr(a[2]))) return HALT;
                 return pc + 1;
             case "define-adv-text-layout": // 0x70: configure layout and begin a logical retained group

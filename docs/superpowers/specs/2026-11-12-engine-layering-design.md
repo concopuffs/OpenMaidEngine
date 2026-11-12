@@ -2,7 +2,8 @@
 
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
-design review, and accepted with the decisions of 2026-11-12 (§2). Nothing is implemented. §15 records the history.
+design review, and accepted with the decisions of 2026-11-12 (§2). Milestone 0 (engine builds) is implemented on
+`feature/engine-layering`; §7.5, §7.6 and §13 record what it settled. §15 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
 `vm-map/opcodes.toml`, and the open work it covers in `docs/backlog.md` (§14), which points here.
@@ -521,8 +522,8 @@ The profiles already carry these stamps as `compatibilityId`: 1244934708 is `424
 as little-endian bytes. So a build's id is its stamp, and `compatibilityId` is the build's id written a second
 time (§7.5).
 
-The engine table in `docs/engine-re.md` and the revision diff's header call Himegari's build 4.22. The running
-executable reports 4.24J. Milestone 0 checks which is right for the dump and corrects the living reference.
+Himegari's build is 4.24J. The engine table in `docs/engine-re.md` and the revision diff's header called it 4.22,
+after the ABI name; milestone 0 found `FileVersion` `4.24J` in the dump's own version resource and corrected both.
 
 A build's definition names three things:
 
@@ -617,8 +618,9 @@ Arterial (4.38D) in 36, Himegari to Kamidori in 125.
 
 ### 7.5 How a build is chosen
 
-- **The profile manifest names its build.** Today it names only `engineAbiId`. It gains an `engineBuild` field, and
-  the ABI follows from the build.
+- **The profile manifest names its build** in an `engineBuild` field (`4.24J`, `4.33G`). It keeps `engineAbiId`,
+  because the Python tools read manifests and have no build table; `EngineBuilds.ForProfile` rejects a profile whose
+  ABI is not its build's. Composition loads the opcode table by the build's ABI.
 - **One build per profile** (§2, decision 8). Kamidori's translated install runs 4.33F and its clean
   install runs 4.33G. The port reproduces 4.33G for the profile, whichever executable the player has:
   - the port never runs the executable;
@@ -629,12 +631,14 @@ Arterial (4.38D) in 36, Himegari to Kamidori in 125.
   together from the install fingerprints the mod loader already keeps. Nothing else would change.
 - **Engine facts leave the profile in milestone 0** (§2, decision 12). `compatibilityId` is the build's
   id. `numberedGfxRecordSize` (724 and 740) is a constant inside the save handlers, per the revision diff. Both
-  become the build's save rules. `expectedPackedSaveVersion` (310 and 320) sits in the same block; milestone 0
-  checks whether it is the engine's or the game's.
+  became the build's `SaveRules` (version stamp and record size), which composition hands to persistence.
+  `expectedPackedSaveVersion` (310 and 320) is the game's and stays: AGE reads `SAVEVERSION` from the game's
+  `SYS4INI.BIN`, and the profile value only checks the install.
 
 ### 7.6 Enforcement
 
-**By structure first.** Nothing below the point where the engine is put together takes an id string:
+**By structure first.** Nothing below the point where the engine is put together takes an id string (the profile
+id that labels an unsupported-opcode diagnostic travels in `VmOptions.ProfileId`; no behaviour reads it):
 
 - `VmCompatibilityContext` (`ProfileId`, `EngineAbiId`, `ProbeMode`) is today's seam. The build replaces it; it is
   not kept beside the build.
@@ -643,6 +647,10 @@ Arterial (4.38D) in 36, Himegari to Kamidori in 125.
 - The check that the build's ABI matches the opcode table's (`Vm/VirtualMachine.cs:209`) moves to where the engine
   is put together.
 
+As built: the VM takes an `EngineBuild` and keeps only its rules. A VM given none (tests and tools that run a bare
+table) takes the first build declared for its table's ABI, or 4.24J for the opcode catalog; the lookup and the ABI
+check are `EngineBuilds.ForVm`, in the build file.
+
 **A test is the backstop.** It fails when anything other than these reads the ABI id or a build id:
 
 - `EngineBuilds.cs`;
@@ -650,15 +658,20 @@ Arterial (4.38D) in 36, Himegari to Kamidori in 125.
 - the script toolchain: `Ome.Script` (the compiler, the decompiler and the patch code) and `Ome.Mods/Linking/`
   (`ModLinkBase.cs`, `ModCatalogBuilder.cs`) pass the table's ABI to choose opcodes and write the script header's
   magic, which is a fact about the file;
-- composition: `godot/Main.cs`, `godot/Main.Mods.cs`;
-- diagnostics that print the id: `Sys4/Sys4OpcodeDecodeException.cs`, `Ome.Engine.Frontend/GodotTraceSink.cs`, and
-  the error messages at `Localization/MessageSegmenter.cs:14` and
+- composition: `godot/Main.cs`, `godot/Main.Mods.cs`, and the command-line tools (`Ome.Cli`), which put the engine
+  together for their own runs;
+- diagnostics that print the id: `Sys4/Sys4OpcodeDecodeException.cs`, `Vm/UnsupportedOpcodeDiagnostic.cs`,
+  `Ome.Engine.Frontend/GodotTraceSink.cs`, and the error messages at `Localization/MessageSegmenter.cs:14` and
   `Ome.Mods/Localization/Import/ComposedStrings.cs:40`.
+
+The test is `EngineBuildTests.NothingBelowCompositionReadsAnAbiOrBuildId`. It strips comments and fails on an ABI or
+build id read, a `SYS4nnn` or build-id literal, or a build lookup anywhere else in `engine/` and `godot/`.
 
 `Vm/OpcodeRuntimeCoverage.cs:57-59` goes away with milestone 1.
 
-One thing the test will not see: `Sys4/ScriptAssembler.cs:69` writes the header magic as the literal `"SYS4422 "`.
-It reads no id, but it is a revision name in engine code, so milestone 0 makes it take the ABI from its caller.
+One thing the test would not have seen: `Sys4/ScriptAssembler.cs:69` wrote the header magic as the literal
+`"SYS4422 "`. Milestone 0 made it take the ABI from its caller: `Assemble` writes its table's ABI, and a table of no
+script ABI (the opcode catalog) gets the bare family magic `SYS4`. It is on the list as script toolchain.
 
 ### 7.7 One implementation where builds agree
 
@@ -807,11 +820,19 @@ Every design question is decided (§2). These facts are not verified yet; each n
 | That an engine-thread loop keeps today's frame timing | §5.3, part 2 | Milestone 11: `--timeline-log` runs of the drive scenarios, against a tolerance set before measuring |
 | How many tests assert on state that moves from the VM into a native | §12 | The census, milestone 2 |
 | That `DisableTransitiveProjectReferences` keeps device types out of handler compiles | §3.3 | Milestone 3: a compile that is meant to fail |
-| Whether the 22 operand-access rows need any code; the port may already read those operands correctly | §7.2 | Milestone 0 |
+| Whether the 22 operand-access rows need any code; the port may already read those operands correctly | §7.2 | Milestone 0: one does (below) |
 | What the 125 revision differences are, and whether they come to about ten rules | §7.2 | Backlog, "Triage the opcode revision diff" |
 | That building a frame description for every frame keeps the GPU path's frame times | §6.3 | Milestone 7: `--perf-log` captures of `FIELD` and SC0000's effect band |
-| Whether Himegari's engine dump is 4.22 or 4.24J | §7.1 | Milestone 0 |
-| Whether `expectedPackedSaveVersion` is the engine's or the game's | §7.5 | Milestone 0 |
+| Whether Himegari's engine dump is 4.22 or 4.24J | §7.1 | Milestone 0: 4.24J |
+| Whether `expectedPackedSaveVersion` is the engine's or the game's | §7.5 | Milestone 0: the game's |
+
+**The operand-access rows (milestone 0).** The revision diff lists 24 opcodes whose operands 4.33G reads or writes
+as floats where 4.24J uses integers (`0x1cd`, `0x1fd`–`0x1ff`, `0x217`–`0x21a`, `0x21e`–`0x220`, `0x226`–`0x22f`,
+`0x233`–`0x235`); the registry already records each as `access_by_abi`. The port reads all of them with the integer
+accessor. That is right wherever the operand is an integer form, and in both corpora only two sites pass anything
+else: Kamidori's `ALLMAP@0x5d9` and `SAVE@0xcad` give op `0x1fd` the float immediate 37.5 for the x and y scale of a
+save thumbnail. So one row needs code: a 4.33G handler for op `0x1fd` that reads those operands as floats
+(`docs/backlog.md`, "Float operands").
 
 ## 14. Backlog items this covers
 
@@ -854,3 +875,11 @@ Not covered:
   cannot move before fast-forward pacing leaves the VM (§3.3, milestone 5), and every blocking wait must run the
   tick or be marked modal (§5.3).
 - **2026-11-12, accepted** with the decisions in §2.2.
+- **2026-11-12, milestone 0.** Engine builds implemented on `feature/engine-layering`: `Vm/EngineBuilds.cs` declares
+  4.24J and 4.33G with text, graphics, settings and save rules; profiles name their build; `EngineRevisions` and
+  `VmCompatibilityContext` are gone; the test of §7.6 passes. Saves written by the port on `develop` and on the
+  branch are equal under `save-diff` for both games. The text, settings and save scenarios (`himegari-furigana`,
+  `-antifont-off`, `-settings-dialog`, `kamidori-furigana`, `-config-redraw`, `-shell`, `-history-after-load`) pass
+  on the port before and after with the same `SYS4REG.INI`. Their shots are identical except for animation phase
+  (Himegari's wisp, Kamidori's wait indicator) and the build label's uncommitted `+`. §7.1, §7.5, §7.6 and §13 were
+  updated with what it found.

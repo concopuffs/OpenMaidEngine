@@ -50,11 +50,11 @@ public sealed class GameSession
     public SceneResult RunScene(Script script, OpcodeTable table, IHost host,
                                 VmOptions? options = null, IScriptProvider? provider = null,
                                 ITraceSink? sink = null,
-                                VmCompatibilityContext? compatibility = null)
+                                EngineBuild? build = null)
     {
         var vm = new VirtualMachine(
             script, table, host, options, provider, sink, TextHistory, SharedProfile, NativeDatStore,
-            AudioMixerSettings, DiagnosticOutput, compatibility);
+            AudioMixerSettings, DiagnosticOutput, build);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalFloats) vm.GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;

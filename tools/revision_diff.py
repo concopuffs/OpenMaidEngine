@@ -3,7 +3,7 @@
 
 Each engine dump has its own dispatch table, so opcode N pairs exactly with opcode N. What an opcode does usually
 lives a call or two below its handler (op 0x215's SYS4433 bit-0 test is in its worker), and builds differ in their
-compiler setup and data layout: Himegari's AGE 4.22 calls checked-iterator asserts and out-of-line container
+compiler setup and data layout: Himegari's AGE 4.24J calls checked-iterator asserts and out-of-line container
 helpers that Kamidori's 4.33 inlines, 4.38D does not align functions, and records and the context grow between
 versions. Comparing instruction text would flag nearly every opcode. Instead:
 

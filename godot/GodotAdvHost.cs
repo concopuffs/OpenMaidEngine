@@ -20,8 +20,8 @@ public sealed partial class GodotAdvHost : IHost
     private readonly Lazy<EnumeratedFontFamily[]> _fontFamilies;
     private readonly Lazy<AspectFontRealization?> _fontRealization;
 
-    /// <summary>The engine revision's furigana rules (op 0x196); Himegari's unless the profile selects another.</summary>
-    public RubyLayoutRules RubyRules { get; init; } = RubyLayoutRules.Sys4422;
+    /// <summary>The engine build's furigana rules for this install's settings (TextRules.Ruby).</summary>
+    public required RubyLayoutRules RubyRules { get; init; }
 
     /// <summary>Builds the installed-font list SYS4433's ops 0x2dc-0x2de read, in the engine's order, on first use.
     /// Without one the list is Godot's system fonts; Windows runs supply AGE's own (<see cref="FontFamilyCatalog"/>).
@@ -45,10 +45,10 @@ public sealed partial class GodotAdvHost : IHost
     public GodotAdvHost(Main main, ResourceMap res, string scene, Ome.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
                         IGlyphMaskRasterizer surfaceTextRasterizer,
+                        GlyphCoverageAlpha coverageAlpha,
                         GodotTimelineLog? timeline = null,
                         bool synchronizeExplicitPresentation = true,
-                        int surfaceTextMaskCacheCapacity = 2048,
-                        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
+                        int surfaceTextMaskCacheCapacity = 2048)
     {
         _main = main; _res = res; _rootScene = scene; _clock = clock;
         _locator = locator; _timeline = timeline;

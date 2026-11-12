@@ -20,7 +20,7 @@ public partial class Main
     {
         var table = OmeRuntimeMetadata.LoadOpcodeTable();
         var (script, provider) = BuildSelfTestScene(table);
-        var headless = new VirtualMachine(script, table, new CaptureHost(), null, provider);
+        var headless = new VirtualMachine(script, table, new CaptureHost(), null, provider, build: _engineBuild);
         headless.Run();
         var expected = headless.Emitted.ConvertAll(e => e.Offset);
 
