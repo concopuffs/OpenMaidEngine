@@ -98,8 +98,9 @@ it; git history keeps the record.
   (`engine-re.md`, "Comparing engine builds"). Only `0x215` (fixed), `0x202` (the same in both) and the 4.33F/4.33G
   pair have been read. Each remaining row is a SYS4 revision change, an engine change outside the opcodes, or tool
   noise. The same triage is the first step for every game added later: diff its engine against the nearest
-  profile's instead of playing it through. Revision changes need a decision: model them per ABI as op `0x215` is, or record that the port's games
-  never reach them. Done when every Himegari–Kamidori row is triaged, with port changes made or listed here and
+  profile's instead of playing it through. Start from the shared helpers, since one helper explains many rows
+  (layering spec §7.2, §7.8). Each real change becomes a registry fact, a handler variant or a rule in the build's
+  definition (spec §7.2, §7.3), or is recorded as unreachable by the port's games. Done when every Himegari–Kamidori row is triaged, with port changes made or listed here and
   native engine changes documented in `engine-re.md`.
 - **Kamidori battles end about 0.26 s sooner on the port.** In 一陣の訓練地 (2026-11-10, sandbox k1clean) a battle
   took 10.92 s from 決定 to COMMITBTL on native and 10.66 s on the port. Timed in segments: click to BTL's
@@ -169,13 +170,15 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
 
 ## Architecture
 
-Structural problems the 2026-11-10 codebase review found in `VirtualMachine` (27 partial files), `GodotAdvHost` (6)
+Structural problems the 2026-11-10 codebase review found in `VirtualMachine` (29 partial files), `GodotAdvHost` (6)
 and `Main` (15). A partial class only changes which file a member is in, so any file can still read or write any
-field. The review proposed one migration for all of them: state components, opcode modules and front-end
-controllers (`vm-host-main-restructure-design-2026-11-10.md` at the workspace root, outside this repository). That
-plan was not adopted on 2026-11-10, so each problem below is to be handled on its own, by whatever design fits when
-the work touches it. Each change should be behaviour-neutral and checked by the suite, the `oms-rebuild` trace gate
-and the drive scenarios.
+field. The review proposed one migration for all of them (`vm-host-main-restructure-design-2026-11-10.md` at the
+workspace root, outside this repository); that plan was not adopted. On 2026-11-12 the engine layering design was
+accepted instead (`docs/superpowers/specs/2026-11-12-engine-layering-design.md`): handlers, natives and devices in
+three projects, and engine builds declared in one file. Each item below that it covers names the milestone that
+does it; the others are still handled on their own. Each change should be behaviour-neutral and pass the spec's
+acceptance 4: the suite, the `oms-rebuild` trace gate, the drive scenarios, `save-diff`, and timing or frame-time
+captures where they apply.
 
 - **Opcode dispatch is kept in three hand-written lists.** `StepInstruction`'s switch (`VirtualMachine.cs`, 401
   case labels), the 18 family handlers' switches (392 labels), and `OpcodeRuntimeCoverage.ImplementedOpcodes` (283
@@ -185,43 +188,47 @@ and the drive scenarios.
   paired with a semantic name. Since 2026-11-10 executability is resolved once per opcode, so a step no longer
   allocates. Done when one table maps each opcode to its handler; coverage is derived from that table, with no hand
   list and no regex; and a test over every ABI table fails on an implemented opcode without a handler, or on a
-  handler bound to an unknown name. Fast-forward pacing is calibrated per op (`PaceFastForwardOp`), so re-time it
-  after the change.
+  handler bound to an unknown name. Fast-forward pacing is a flat wall-clock cost per op and per page, so faster
+  dispatch needs no re-timing; `himegari-read-skip.steps` checks it. Planned: layering spec, milestone 1.
 - **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:1085-1154`)
   assigns 38 fields from many partials, and `GodotAdvHost.ResetSceneContext` (`GodotAdvHost.PresentationInput.cs`)
   does the same on the host. Scene state added without a line in these methods survives タイトルに戻る. That is how
   the host's dialog events stayed signalled until 2026-11-10, when each was reset by hand. Done when a root reload
   rebuilds scene-lifetime state instead of clearing it, so a new field cannot be missed, and a test shows a reload
-  keeps no scene state from before it.
+  keeps no scene state from before it. Planned: layering spec, as each native takes its state; closed at milestone
+  12.
 - **Two instruction loops.** `RunFrame` (`VirtualMachine.cs:1184`) and `RunWaitCallback` (`:1678`) each run the
   per-instruction services (`ServiceInstructionBoundary`, `ApplyIgnoredDwords`, `FrameYield`, `PaceFastForwardOp`),
   and each maps the `int.MinValue + n` step sentinels (`HALT`, `FRAME_RETURN`, `HOTSPOT_RETURN`, `ROOT_RELOAD`) to
   outcomes. Until 2026-11-10 the callback loop ignored a halt and skipped those services. Done when one loop serves
-  frames and callbacks, and a step returns a typed result instead of a sentinel int.
+  frames and callbacks, and a step returns a typed result instead of a sentinel int. Planned: layering spec, the
+  typed result in milestone 1 and one loop in milestone 11 (spec §5.4).
 - **No single error path.** The VM reports a fault in several ways: 57 `HaltReason` assignments, `VmHaltException`,
   the native error dialog (`ShowScriptError`), host warnings (`ReportWarning`), and exceptions that end the VM
   thread. The mod linker, the OMS compiler and the CLI each keep their own catch filters. Three of the review's bugs
   were a fault that matched no filter: a halt inside a callback, `ModPackageException` at launch, and a drive command
   that threw. All three are fixed. Done when each layer has one documented fault type that its filters name, and the
   VM turns any fault raised during a step into a halt, with a reason and a trace event, in one place.
-- **VM state has no owners.** Any of the 27 files can write any field. The skip and auto-message flags are the most
+- **VM state has no owners.** Any of the 29 files can write any field. The skip and auto-message flags are the most
   shared: `_messageSkipServiceActive` is used in 7 files, and `_messageSkipInjected` and `_advTextWaitPolling` in 5
   each. Integer-cell normalisation (under Robustness) and the bounds checks on script-controlled indices also have
   no single home. Done when each group of state is private to one type that others change through named methods:
-  memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Moving the skip and input
-  group last gives its callers time to settle what they need.
+  memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. A
+  census of every field comes first (milestone 2); the skip and auto state gets its owner next (milestone 5),
+  because audio and other natives read it; the waits move last (milestone 11).
 - **Revision behaviour is one boolean.** `EngineRevisions.IsSys4433` (in `Text/`) selects behaviour at five sites:
   `Sys4RegIniStore`, `AgeGlyphMaskCompositor`, `RubyLayoutRules` (two) and the op-`0x215` rule
-  (`VirtualMachine.cs:214`). The revision-diff triage (under Engine fidelity) will add rules, and a third revision
-  cannot be expressed as a boolean. Done when one traits record per ABI, outside `Text/`, describes each revision,
-  and each site reads the trait it needs.
-- **The host's threads have no stated ownership.** `GodotAdvHost` holds nine lock objects, five `AutoResetEvent`s,
+  (`VirtualMachine.cs:213`). The revision-diff triage (under Engine fidelity) will add rules, and a third revision
+  cannot be expressed as a boolean. Done when each engine build is declared in one file as its parent plus changes,
+  each site reads the rule it needs, and nothing below the point where the engine is put together takes an ABI or
+  build id (layering spec §7). Planned: milestone 0.
+- **The host's threads have no stated ownership.** `GodotAdvHost` holds nine lock objects, six `AutoResetEvent`s,
   a `ManualResetEventSlim` and a `SemaphoreSlim`, and nothing documents which fields each lock guards or the lock
   order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`
   now. The host's 29 `_main.CallDeferred("Name", …)` calls name `Main` methods by string, so a rename fails when the
   game runs, not when it builds. Done when each lock's fields and the lock order are written down (or no lock is
   taken under another), and calls to the main thread are typed. A typed dispatcher must keep `CallDeferred`'s timing;
-  check that on a drive scenario.
+  check that on a drive scenario. Planned: layering spec, typed calls in milestone 4 and the locks in milestone 11.
 - **Modal dialogs are separate fields.** `Main` keeps the 終了 dialog (`_exitConfirmation`), the script error box,
   the options panel, the screenshot folder dialog and the full-width editor in their own fields, plus a hold
   counter (`_frontendModalHolds`). Input routing, the drive `dialogs` and `answer` steps and screen-mode changes each
@@ -237,7 +244,8 @@ and the drive scenarios.
   its range helpers) and a software path (`RecompositeSoftware`) over the same retained objects, and
   `Sys4/RetainedSurfaceRasterizer.cs` walks them a third time. A rule fixed in one can be missed in the others. Done
   when one Godot-free traversal drives both the GPU and the software output, and the rasterizer either shares it or
-  documents why its rules differ.
+  documents why its rules differ. Planned: layering spec, milestone 7 (the frame description and the reference
+  renderer, spec §6.3).
 - **Normal play still uses the software compositor.** `TryRecompositeGpu` (`godot/Main.Compositor.cs`) hands the
   frame to `RecompositeSoftware` in three cases:
   - A whole-screen transition runs (`_host.HasScreenTransition`): AGE's blocking transitions between two complete
@@ -253,12 +261,14 @@ and the drive scenarios.
   software path's `_pixelCache`, so fades showed the old language's images. Done when the GPU path draws screen
   transitions through an offscreen texture (a `SubViewport`) blended over the captured source and has the additive
   LERP-tint variant, and the software path runs only when chosen (`--render-backend software`, the two logs) as the
-  reference. A driven fade's GPU frames must match the software path's within a stated tolerance.
+  reference. A driven fade's GPU frames must match the software path's within a stated tolerance. The layering spec
+  leaves this open (its §10), but its milestone 7 gives the GPU path the reference renderer and the test that
+  compares the two.
 - **The Godot front end has no unit tests.** `godot/` is tested only by `--selftest` (`Main.SelfTest.cs`), which runs
   the host with `synchronizeExplicitPresentation: false` (`Main.cs:521`). `GodotAdvHost.PresentationInput.cs` (the
   waits and input) uses no Godot API, but sits in the Godot project, which no test project references. Done when the
   host's VM-thread side and the other Godot-free front-end code live in a library with tests (`Ome.Engine.Frontend`
-  is the existing one).
+  is the existing one). Planned: layering spec, milestone 4, which lifts the host into `Ome.Engine` instead.
 
 ## Open Maid Script
 

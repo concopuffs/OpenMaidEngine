@@ -60,6 +60,9 @@ Three layers, cleanly separated:
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
+- **Inside the runtime.** How the VM core and the backend adapters divide into opcode handlers, engine natives and
+  devices, in three projects, and how each engine build is declared:
+  `docs/superpowers/specs/2026-11-12-engine-layering-design.md` (accepted 2026-11-12, not yet implemented).
 - **Runtime language.** VM core in **C#** (Godot's C# support) — a 1.5M-instruction fetch/execute
   loop is too hot for GDScript. Presentation, UI, mod tooling, and export targets use Godot. This
   is why **Godot now fits**: under the earlier "faithful port" framing it was overkill (you'd use

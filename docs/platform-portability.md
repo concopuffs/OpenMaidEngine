@@ -15,6 +15,9 @@ The VM and content pipeline are already mostly platform-neutral:
 - Effectful bytecode operations cross `Hosting/IHost.cs`; the VM does not call native OS APIs.
 - Movie payloads arrive from `IAssetStore` as owned bytes and decoded frames enter the compositor as the
   platform-neutral `RgbaImage` type.
+- Files have no device of their own: `INativeDatStore` and `IAssetStore` reach the disk through .NET's file API.
+  When a target has no file system that .NET can use, a device that reads and writes bytes by path is added below
+  them (engine layering design, `docs/superpowers/specs/2026-11-12-engine-layering-design.md` §6.4).
 - Native-compatible persistence uses managed streams behind `INativeDatStore`; the selected manifest owns
   identity/layout policy and Godot places native files below `user://games/<profile-id>/`, retaining native
   filenames and formats. Himegari and Kamidori both support read/write persistence with profile-selected
