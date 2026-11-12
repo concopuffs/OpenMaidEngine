@@ -133,6 +133,10 @@ Extra port options go through `--port-arg=…`, one per argument; your game guid
 installs. Each start uses an empty save sandbox. See `../tools-reference.md`, "Game driver", for the steps and the
 native side. `tools/drive/scenarios/*-mod-*.steps` are working examples.
 
+`language TAG` switches the port's language as the settings panel's OME section does, and fails for a language no
+installed package defines (other than `ja` and `en`). Native AGE has no language, so a scenario that uses it runs on
+the port only; `tools/drive/scenarios/port/` holds those.
+
 ## Outside the repository
 
 Fragments and new scripts compile against the repository's OMS modules (`oms/<profile>/`) and generated registries

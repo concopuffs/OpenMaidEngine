@@ -228,9 +228,10 @@ public sealed class DamageCounts
     /// Compares are listed under <see cref="LiteralCounts.FeedCompares"/> instead.</summary>
     public Sampled<ReportedLiteral> EmptyWrittenAsSpace { get; } = new();
 
-    /// <summary>A translated string with control characters, which the runtime's string decoder rejects
-    /// (<c>Sys4StringCodec</c>); the importer reads it leniently, with each control character as a space.</summary>
-    public Sampled<ReportedLiteral> ControlCharacters { get; } = new();
+    /// <summary>A translated string the runtime's string decoder refuses (<c>Sys4StringCodec</c>: a byte CP932 does not
+    /// decode and encode back unchanged); the importer reads it leniently, as CP932 decodes it, with each control
+    /// character as a space.</summary>
+    public Sampled<ReportedLiteral> Undecodable { get; } = new();
 }
 
 public sealed class FuriganaCounts

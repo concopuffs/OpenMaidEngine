@@ -70,6 +70,12 @@ public class DriveControlTests
             return new JsonObject { ["option"] = name, ["value"] = value, ["section"] = "message" };
         }
         public JsonObject Options() => new() { ["options"] = new JsonArray(new JsonObject { ["name"] = "se" }) };
+        public string? ChosenLanguage;
+        public JsonObject Language(string tag)
+        {
+            ChosenLanguage = tag;
+            return new JsonObject { ["language"] = tag, ["previous"] = "ja" };
+        }
     }
 
     private static DriveState At(string location, string? waiting = null, bool busy = false, params string[] outer)
@@ -326,6 +332,24 @@ public class DriveControlTests
             (string?)Run(new DriveDispatcher(without), without, """{"id":4,"op":"option","name":"se","value":0}""")["error"]);
         Assert.Contains("'options' is not supported",
             (string?)Run(new DriveDispatcher(without), without, """{"id":5,"op":"options"}""")["error"]);
+    }
+
+    [Fact]
+    public void LanguageGoesToTheBackendNormalizedAndNeedsTheLanguageCapability()
+    {
+        var backend = new FakeBackend { Capabilities = new[] { "language" } };
+        var dispatcher = new DriveDispatcher(backend);
+        var chosen = Run(dispatcher, backend, """{"id":1,"op":"language","tag":"PT_BR"}""");
+        Assert.True((bool)chosen["ok"]!);
+        Assert.Equal("pt-br", backend.ChosenLanguage);
+        Assert.Equal("ja", (string?)chosen["result"]!["previous"]);
+        var malformed = Run(dispatcher, backend, """{"id":2,"op":"language","tag":"english!"}""");
+        Assert.Contains("not a language tag", (string?)malformed["error"]);
+        Assert.False((bool)Run(dispatcher, backend, """{"id":3,"op":"language"}""")["ok"]!);
+
+        var without = new FakeBackend { Capabilities = new[] { "options" } };
+        Assert.Contains("'language' is not supported",
+            (string?)Run(new DriveDispatcher(without), without, """{"id":4,"op":"language","tag":"en"}""")["error"]);
     }
 
     [Fact]

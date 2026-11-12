@@ -524,6 +524,25 @@ public sealed class AdvTextHistory
     }
 
     /// <summary>
+    /// The end of a full load's history restore (text_history_deserialize: Himegari @0x456130, Kamidori 4.33G
+    /// @0x457b30): remove records from the end back to and including the last group-start record, or every record when
+    /// none starts a group. The load resumes the saved page at its read-message coordinate, the page's op 0x71, so the
+    /// page records that group again. The entry index stays as loaded: its last entry and the one the resumed op 0x71
+    /// adds share a first record, and navigation passes over the repeat.
+    /// </summary>
+    public void DropLastGroup()
+    {
+        while (_records.Count > 0)
+        {
+            bool groupStart = _records[^1].Flags.HasFlag(AdvTextHistoryRecordFlags.GroupStart);
+            _records.RemoveAt(_records.Count - 1);
+            if (groupStart) break;
+        }
+        foreach (AdvTextLookupSpan span in _lookupSpans.Values.Where(span => span.EndRecord > _records.Count).ToList())
+            _lookupSpans.Remove(span.FirstRecord);
+    }
+
+    /// <summary>
     /// Resolve a logical entry relative to AGE's latest-boundary navigation anchor. Repeated calls do not
     /// mutate the anchor; HISTORY.BIN supplies cumulative deltas while counting and paging backward.
     /// </summary>

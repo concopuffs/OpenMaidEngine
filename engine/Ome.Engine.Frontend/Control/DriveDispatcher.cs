@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Ome.Engine.Localization;
 
 namespace Ome.Engine.Frontend.Control;
 
@@ -40,6 +41,9 @@ public interface IDriveBackend
     /// <summary>The 設定 options shown, opened from ﾒｯｾｰｼﾞ and cancelled: {options: [{name, section, value, min, max,
     /// step, applies}]} (capability "options").</summary>
     JsonObject Options() => throw new DriveProtocolException("'options' has no implementation here");
+    /// <summary>Choose <paramref name="tag"/> (normalized) in the options panel's language list and commit it as 決定
+    /// does; returns {language, previous, languages} (capability "language", the port's).</summary>
+    JsonObject Language(string tag) => throw new DriveProtocolException("'language' has no implementation here");
     /// <summary>Draw op 0x60 from <paramref name="seed"/>'s per-site streams, or from the game's own generator when
     /// null; returns what op 0x60 drew since the previous call (capability "rand").</summary>
     JsonObject RandSeed(uint? seed) => throw new DriveProtocolException("'rand-seed' has no implementation here");
@@ -243,6 +247,14 @@ public sealed class DriveDispatcher
             case "options":
                 RequireCapability("options");
                 return Immediate(request, reply, () => _backend.Options());
+            case "language":
+            {
+                RequireCapability("language");
+                string tag = LanguageTag.Normalize(request.Text("tag"));
+                if (!LanguageTag.IsWellFormed(tag))
+                    throw new DriveProtocolException($"'{tag}' is not a language tag such as ja, en or pt-br");
+                return Immediate(request, reply, () => _backend.Language(tag));
+            }
             default:
                 throw new DriveProtocolException(
                     $"unknown op '{request.Op}' (the {_backend.Target} supports state, pointer, click, key, wheel, " +

@@ -1416,7 +1416,11 @@ public sealed partial class VirtualMachine
             if (restoreHistory)
             {
                 if (history == null) TextHistory.Clear();
-                else TextHistory.RestorePersistenceSnapshot(history.Entries, history.Records);
+                else
+                {
+                    TextHistory.RestorePersistenceSnapshot(history.Entries, history.Records);
+                    TextHistory.DropLastGroup();   // the resumed page records it again
+                }
                 _loadedNumberedState = state;
             }
             else

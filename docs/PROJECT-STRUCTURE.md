@@ -124,7 +124,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── drive_mcp.py (+ test_drive_mcp.py)  MCP server: the driver's operations as five agent tools
     │   ├── drive/                              the driver's data: <profile>.toml (points, sandbox settings,
     │   │                                       native engine pointer / polling / dialog policy),
-    │   │                                       native-agent.js (Frida agent), scenarios/*.steps (replayable runs)
+    │   │                                       native-agent.js (Frida agent), scenarios/*.steps (replayable runs
+    │   │                                       on both targets), scenarios/port/*.steps (port-only runs)
     │   ├── validate_opcode_table*.py           decode-coverage validators
     │   ├── movie-corpus-gate/                  C# full-corpus FFmpeg decode/lifecycle acceptance tool
     │   └── probe_*.py                          format reverse-engineering probes (historical)

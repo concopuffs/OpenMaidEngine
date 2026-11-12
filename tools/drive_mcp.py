@@ -54,8 +54,8 @@ native AGE never takes the foreground.
 
 Positions read SCRIPT@offset (dword offsets, as in the disassembly and the page locator). At a text wait the pc is
 already past the wait instruction, so a page reads as the page map's next page_start_offset. The driver refuses ESC
-on native AGE (it closes the game). Committed scenarios live in tools/drive/scenarios/*.steps (run one with
-drive_steps(target, file=...)).
+on native AGE (it closes the game). Committed scenarios live in tools/drive/scenarios/*.steps, port-only ones in
+tools/drive/scenarios/port/ (run one with drive_steps(target, file=...)).
 
 Steps (one per string; '#' starts a comment):
 {drive.steps_help()}

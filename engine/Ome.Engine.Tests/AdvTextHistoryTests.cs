@@ -113,6 +113,48 @@ public class AdvTextHistoryTests
     }
 
     [Fact]
+    public void ALoadDropsTheLastGroupWhichTheResumedPageRecordsOnce()
+    {
+        // Kamidori SC0000's first name plate, saved at its wait: native's load drops Wil's group (metadata, voice and
+        // text) and the page, resumed at its op 0x71, records it again; History shows it once.
+        var history = new AdvTextHistory();
+        history.DefineLayout(1, 800, 160, 0, 430);
+        history.AppendText(1, 0x141a, "俺は逸る胸を押さえ、深呼吸した。", AdvTextStyle.Default);
+        history.EndLine(1, AdvTextStyle.Default);
+        void WilsPage()
+        {
+            history.ResetLayout(1);
+            history.AppendMetadata(1, 2, AdvTextStyle.Default);
+            history.AppendVoice(59, 0, AdvTextStyle.Default);
+            history.AppendText(1, 0x1480, "「あれからもう１年か。あっという間だったな……」", AdvTextStyle.Default);
+        }
+        WilsPage();
+        history.RestorePersistenceSnapshot(history.Entries.ToArray(), history.Records.ToArray());
+
+        history.DropLastGroup();
+
+        Assert.Equal(["俺は逸る胸を押さえ、深呼吸した。", ""], history.Records.Select(record => record.Text));
+        Assert.Equal(2, history.Entries.Count);   // the index stays as loaded
+        WilsPage();
+        Assert.Equal(5, history.Records.Count);
+        Assert.Equal(history.Entries[^2].FirstRecordIndex, history.Entries[^1].FirstRecordIndex);
+        Assert.True(history.TryStepGroup(-1, out AdvTextHistoryEntry previous));
+        Assert.Equal(0, previous.FirstRecordIndex);   // one step back passes the repeated entry
+    }
+
+    [Fact]
+    public void ALoadWithoutAGroupStartDropsEveryRecord()
+    {
+        var history = new AdvTextHistory();
+        history.AppendText(1, 10, "a", AdvTextStyle.Default);
+        history.AppendText(1, 11, "b", AdvTextStyle.Default);
+
+        history.DropLastGroup();
+
+        Assert.Empty(history.Records);
+    }
+
+    [Fact]
     public void ConfiguredCursorIsDeferredUntilResetWhileBoundsApplyToTheLayout()
     {
         var history = new AdvTextHistory();

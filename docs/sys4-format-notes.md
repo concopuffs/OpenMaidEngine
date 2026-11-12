@@ -814,6 +814,9 @@ task. These tags give a head start on labeling the disassembly.*
   ("ＭＳ 明朝"), and engine directives ("loadmesskip advset", "ＡＤＶパート").
 - Non-scene scripts (`MENU`, `ADDEXP`) contain only a handful of control strings —
   consistent with the inventory's subsystem/data-table categorization.
+- A string is whatever bytes precede the NUL: native checks no character, and lays out a control character such as
+  a tab as a single-byte glyph (`engine-re.md`, "Strings with control characters"). The translated Kamidori's
+  `SC2310@0x1232` begins with one.
 
 ## Inline integer arrays — CONFIRMED
 

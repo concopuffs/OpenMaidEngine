@@ -1,0 +1,23 @@
+# Port only (scenarios/port/): `language` needs the port's capability, since native AGE has no language to choose.
+# The step switches the language as a player does, through the options panel's OME section, and the VM goes on where
+# it was. With no package defining a language, English changes the shell's text (the menu bar, the strip, the panel)
+# while the game text stays as written; with a language package (`--mod`), the game text and its language assets
+# switch too. On a fresh sandbox, on the clean install (Kamidori/):
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port run tools/drive/scenarios/port/kamidori-language-switch.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+language en
+wait 1
+shot language-en-title
+expect script=TITLE
+
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+language ja
+wait 1
+shot language-ja-gamestart
+expect script=GAMESTART
+state

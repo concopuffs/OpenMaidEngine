@@ -1,6 +1,7 @@
 """Plain tests for the game driver's platform-independent logic: steps, conditions, profiles, sandboxes, the
 protocol client and the step executor against a fake server (no game, Godot, Frida, Pillow or Windows needed)."""
 import json
+import re
 import socket
 import struct
 import sys
@@ -95,6 +96,25 @@ def test_step_files():
             print("   ", error)
             portable = False
         check(portable, f"{path.name} parses and needs no target-only capability")
+    # Port-only scenarios (scenarios/port/) may use what only the port offers, such as `language` and `speed`.
+    port_capabilities = port_capability_names()
+    port_scenarios = sorted((HERE / "drive" / "scenarios" / "port").glob("*.steps"))
+    check(bool(port_scenarios), "port-only scenario files exist")
+    for path in port_scenarios:
+        try:
+            parsed = core.parse_steps(path.read_text(encoding="utf-8").splitlines())
+            core.check_capabilities(parsed, port_capabilities, "port")
+            runs = True
+        except core.DriveError as error:
+            print("   ", error)
+            runs = False
+        check(runs, f"port/{path.name} parses and needs only port capabilities")
+
+
+def port_capability_names() -> list[str]:
+    """PortCapabilities in godot/Main.Drive.cs."""
+    port_source = (HERE.parent / "godot" / "Main.Drive.cs").read_text(encoding="utf-8")
+    return re.findall(r'"([a-z-]+)"', port_source.split("PortCapabilities =")[1].split(";")[0])
 
 
 def test_capabilities():
@@ -112,9 +132,7 @@ def test_capabilities():
     check(not raises(core.check_capabilities, steps[2:], ["dialogs", "answer"], "native target"),
           "native capabilities cover dialogs and answer")
     check(set(core.SHARED_CAPABILITIES) <= set(native.CAPABILITIES), "shared capabilities are native capabilities")
-    port_source = (HERE.parent / "godot" / "Main.Drive.cs").read_text(encoding="utf-8")
-    check(all(f'"{name}"' in port_source.split("PortCapabilities =")[1].split(";")[0]
-              for name in core.SHARED_CAPABILITIES), "shared capabilities are port capabilities")
+    check(set(core.SHARED_CAPABILITIES) <= set(port_capability_names()), "shared capabilities are port capabilities")
 
 
 def test_keys_and_points():
@@ -576,6 +594,29 @@ def test_option_step():
           "option results describe the option and the listed values")
 
 
+def test_language_step():
+    check(core.language_tag(" PT_BR ") == "pt-br" and core.language_tag("x-pseudo") == "x-pseudo",
+          "tags read as the port normalizes them")
+    check(raises(core.parse_step, "language english!", contains="a tag such as"), "a malformed tag is refused")
+    check(raises(core.parse_step, "language", contains="takes 1..1"), "language needs a tag")
+    check(core.step_capabilities(core.parse_step("language en")) == {"language"},
+          "language needs the language capability")
+    check("language" not in core.SHARED_CAPABILITIES and "language" not in native.CAPABILITIES,
+          "native AGE has no language to choose")
+
+    reply = {"language": "en", "previous": "ja", "languages": ["ja", "en"]}
+    server = FakeServer(lambda request: {"ok": True, "result": reply if request.get("op") == "language" else {}})
+    with tempfile.TemporaryDirectory() as directory:
+        with core.Client(server.port, "secret") as client:
+            executor = core.Executor(client, core.Profile(points={}), Path(directory))
+            results = []
+            ok = executor.run(core.parse_steps(["language EN"]), results.append)
+    check(ok and [(r["op"], r.get("tag")) for r in server.requests[1:]] == [("language", "en")],
+          "language sends the normalized tag")
+    check("language=en" in core.describe(results[0]) and "previous=ja" in core.describe(results[0])
+          and "languages=ja,en" in core.describe(results[0]), "a language result names both languages and the list")
+
+
 def test_settings_trailer():
     pairs = [("USEAPPDATAFOLDER", "1"), ("SAVEPATH", "Eushully\\姫\\SAVE")]
     strings = b"".join(key.encode("ascii") + b"\0" + value.encode("cp932") + b"\0" for key, value in pairs)
@@ -640,6 +681,7 @@ def main():
     test_window_step()
     test_menu_step()
     test_option_step()
+    test_language_step()
     test_settings_trailer()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0

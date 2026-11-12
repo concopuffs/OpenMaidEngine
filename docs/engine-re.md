@@ -4225,6 +4225,24 @@ serialized pixels. Full restoration runs the saved scripts from their ordinary e
 `AdvTextHistory.RestorePersistenceSnapshot` consequently replaces only backlog data and preserves any
 initialized live layout configuration/bindings. A focused native-tail regression pins that separation.
 
+**The deserializer drops the saved page's group (2026-11-11).** After it rebuilds both vectors,
+`text_history_deserialize` (Himegari `0x456130`, Kamidori 4.33G `0x457b30`) removes records from the end.
+- Each pass resizes the record vector to one less (`text_history_records_resize`, Himegari `0x455a70`, 4.33G
+  `0x454d50`).
+- It stops after removing the first record, counting from the end, whose flags have bit 1 (group start).
+- With no group start, it removes every record.
+- The entry index is not touched.
+
+The resumed frame starts at its read-message coordinate, the page's op `0x71`, so the page records that group
+again. Op `0x71` adds a new entry with the same first record as the loaded last entry, and History's navigation
+passes over the repeat. The saved records still hold the group, so the trim belongs to the load, not the save.
+
+A native and a port save at Kamidori's first name plate (`SC0000@0x1488`) hold the same 100 records. Each ends
+with Wil's group: metadata 2 and 3, voice 59 and the text. After the load, native's History shows that line once.
+`AdvTextHistory.DropLastGroup` does the same for the port's full load (`TryLoadNumberedState`). The codec's
+`Decode`/`DecodeInto` stay raw, so they still round-trip a tail.
+`tools/drive/scenarios/kamidori-history-after-load.steps` drives the case on both targets.
+
 History's display support consists of the ordinary presentation operations: primary/ruby font sizes
 (`0x75/0x197`), font weight (`0x2bd`), colors/effect mode/offset (`0x76/0x77/0x78/0x1a4`), layout origin
 (`0x198`), surface rectangle fill (`0x20b`), message-window alpha (`0x131`), and retained-object presentation
@@ -7786,6 +7804,25 @@ catalog.
   drift's SECOND half" above. The then-remaining `AE*` blend and cold-anchor work is resolved by the later
   blend, geometry, animation, and retained-presentation sections.
 
+
+### Strings with control characters (2026-11-11)
+
+Native accepts any byte in a string, control characters included.
+- **Read:** `vm_operand_read_string_buffer` (4.33F `0x418ff0`) reads a type-2 operand by inverting dwords up to
+  the one that holds the NUL. It checks no character.
+- **Layout:** `adv_text_append_horizontal_glyph_records@0x45b710` (4.33F) lays out every byte below `0x80`, and
+  `0xA0`-`0xDF`, as a single-byte character, control characters included. In aspect mode such a byte advances half
+  a reference cell, like ASCII.
+- **Glyph:** GDI supplies it. `GetGlyphOutlineA(0x09)` succeeds in ＭＳ ゴシック, ＭＳ 明朝 and メイリオ and returns a
+  small fallback glyph, the same as for `0x1f` (ＭＳ ゴシック, 22 px, `GGO_GRAY4`: box 4×3, cell increment 12).
+
+A scan of every type-2 operand in Himegari and Kamidori (the clean and the translated install) found one such string,
+in the translated Kamidori: `SC2310@0x1232`'s `show-text` begins with a tab.
+
+**Port:** `Sys4StringCodec` (and its twin in `tools/sys4load.py`) decodes bytes below `0x80` as single-byte
+characters, so the string decodes whole and encodes back to the same bytes. It still refuses a byte that CP932 does
+not decode and encode back unchanged (`backlog.md`). The as-written text path encodes the tab back to `0x09` and
+draws GDI's glyph, as native does. Presented text (a language package) draws no glyph for a control character.
 
 ### SYS4433 live ADV aspect-mode layout metrics (2026-09-21)
 

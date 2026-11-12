@@ -548,6 +548,19 @@ public partial class OptionsPanel : Control
         return _context.Draft.Value(option);
     }
 
+    /// <summary>The driver's <c>language</c> step: the OME section's language list takes <paramref name="tag"/> as a
+    /// pick in the list does, and the section redraws. False when the section shown is not OME or the list does not
+    /// offer the tag; <paramref name="offered"/> lists the tags it offers, in its order.</summary>
+    public bool SetLanguage(string tag, out IReadOnlyList<string> offered)
+    {
+        offered = ShellPanel.LanguageChoices(S, _context.Languages, _port.Language)
+            .Select(choice => choice.Tag).ToList();
+        if (_section != ShellSection.Ome || !offered.Contains(tag)) return false;
+        _port = _port with { Language = tag };
+        ShowSection(_section);
+        return true;
+    }
+
     /// <summary>The driver's <c>options</c> step: the native options the profile shows, with the draft's values.
     /// </summary>
     public JsonArray ListOptions()

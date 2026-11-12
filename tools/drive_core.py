@@ -460,6 +460,17 @@ SECTION_COMMANDS = {"message": "message-settings", "sound": "sound-settings", "o
 OPTIONS_SECTION = "message"
 
 
+LANGUAGE_TAG = re.compile(r"[a-z]{2,3}(?:-[a-z0-9]{1,8})*|x(?:-[a-z0-9]{1,8})+")
+
+
+def language_tag(text: str) -> str:
+    """A `language` step's tag in the form the port uses (LanguageTag.Normalize): lower case, `_` read as `-`."""
+    tag = text.strip().replace("_", "-").lower()
+    if not LANGUAGE_TAG.fullmatch(tag):
+        raise DriveError(f"language takes a tag such as ja, en or pt-br, got {text!r}")
+    return tag
+
+
 def option_value(name: str, text: str) -> tuple[str, int]:
     """An `option` step's name and value: a value in the option's domain and on its step (on/off for a switch)."""
     key = name.lower()
@@ -558,6 +569,9 @@ STEPS = {
                     "on/off for a switch; names: message-speed, wheel-advance, se, effect-skip, …", "options"),
     "options": _spec(0, 0, "", "options                       list the 設定 options with their values and domains "
                      "(opens 設定 and cancels it)", "options"),
+    "language": _spec(1, 1, "", "language TAG                  choose the port's language in its options panel (OME "
+                      "section) and commit it as 決定 does: menus, game text and language assets switch at once, and "
+                      "OME.INI keeps it (port)", "language"),
     "close": _spec(0, 0, "timeout", "close [timeout=S]             quit the game and end the session"),
 }
 NUMERIC_OPTIONS = {"hold", "timeout", "quiet", "threshold", "every"}
@@ -638,6 +652,8 @@ def _validate(step: Step) -> None:
         menu_command(step.args[0])
     elif step.name == "option":
         option_value(*step.args)
+    elif step.name == "language":
+        language_tag(step.args[0])
     elif step.name == "wait":
         try:
             float(step.args[0])
@@ -1005,6 +1021,8 @@ class Executor:
             return self.client.call("option", name=name, value=value)
         elif step.name == "options":
             return self.client.call("options")
+        elif step.name == "language":
+            return self.client.call("language", tag=language_tag(step.args[0]))
         elif step.name == "close":
             timeout = float(options.get("timeout", 20))
             result = self.client.call("close", timeout=timeout + REPLY_MARGIN_S, timeout_ms=int(timeout * 1000))
@@ -1044,7 +1062,7 @@ def describe(result: dict[str, Any]) -> str:
     details = []
     for key in ("error", "path", "location", "settled", "pokes", "seconds", "answered", "exit_code",
                 "cursor_moved_to", "label", "checked", "seed", "previous_seed", "draws", "option", "value",
-                "section"):
+                "section", "language", "previous"):
         if key in result and result[key] is not None:
             details.append(f"{key}={result[key]}")
     if "frames" in result:
@@ -1055,6 +1073,8 @@ def describe(result: dict[str, Any]) -> str:
         details.append("sites=" + " ".join(f"{site}x{count}" for site, count in result["sites"].items()))
     if "options" in result:
         details.append("options=" + " ".join(f"{entry['name']}={entry['value']}" for entry in result["options"]))
+    if "languages" in result:
+        details.append("languages=" + ",".join(result["languages"]))
     lines = [f"{mark} {result.get('step', '')}  " + "  ".join(details)]
     lines += ["  " + describe_event(event) for event in result.get("events", [])]
     return "\n".join(lines)

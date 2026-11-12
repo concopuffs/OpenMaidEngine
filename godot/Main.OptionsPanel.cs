@@ -156,6 +156,30 @@ public partial class Main
         return new System.Text.Json.Nodes.JsonObject { ["options"] = options };
     }
 
+    /// <summary>The driver's <c>language</c> step (capability "language"), as a player switches: ﾊﾞｰｼﾞｮﾝ情報 opens the
+    /// panel (no script gate grays it), the OME section's list takes <paramref name="tag"/>, and 決定 commits it, so
+    /// OME.INI keeps it and the switch applies at once (localization spec §10). No native option changes, so 決定 runs
+    /// no CALLBACK_SETTING.BIN.</summary>
+    private System.Text.Json.Nodes.JsonObject DriveLanguage(string tag)
+    {
+        string previous = _portOptions.Effective.Language;
+        OptionsPanel panel = OpenPanelForDriver(ShellSection.Info);
+        panel.Press(ShellStrings.Japanese[ShellPanel.Section(ShellSection.Ome).TitleKey]);
+        if (!panel.SetLanguage(tag, out IReadOnlyList<string> offered))
+        {
+            panel.Press("cancel");
+            throw new DriveProtocolException(
+                $"the language list has no '{tag}'; it offers {string.Join(", ", offered)}");
+        }
+        panel.Press("ok");
+        var languages = new System.Text.Json.Nodes.JsonArray();
+        foreach (string language in offered) languages.Add(language);
+        return new System.Text.Json.Nodes.JsonObject
+        {
+            ["language"] = _portOptions.Effective.Language, ["previous"] = previous, ["languages"] = languages,
+        };
+    }
+
     private OptionsPanel OpenPanelForDriver(ShellSection section)
     {
         if (_optionsPanel != null) throw new DriveProtocolException("the options panel is already open");

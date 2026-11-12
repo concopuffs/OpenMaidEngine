@@ -190,6 +190,8 @@ public class NumberedSaveVmTests
             var history = new AdvTextHistory();
             history.DefineLayout(1, 100, 50, 0, 0);
             history.AppendText(1, 0, "履歴復帰", AdvTextStyle.Default);
+            history.ResetLayout(1);
+            history.AppendText(1, 4, "保存した頁", AdvTextStyle.Default);
             store.SaveNumberedFile(
                 1, NativeNumberedSaveCodec.Encode(state), NativeTextHistoryCodec.Encode(history),
                 NativeSystemTime.FromLocalDateTime(DateTime.Now), 123);
@@ -236,7 +238,9 @@ public class NumberedSaveVmTests
                 [(0x3321L, 1), (0x2aeaL, 2)],
                 host.SfxLoads);
             Assert.Equal(Enumerable.Range(0, 10), host.SfxReleases);
+            // The saved page's group is dropped (text_history_deserialize), since the resumed page records it again.
             Assert.Equal("履歴復帰", liveHistory.Records.Single().Text);
+            Assert.Equal(2, liveHistory.Entries.Count);
             Assert.Equal(3, vm.Gfx.QuerySlot(100));
             Assert.Contains(
                 vm.Gfx.CapturePersistenceSnapshot().Surfaces,

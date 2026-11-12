@@ -138,7 +138,7 @@ public partial class Main
     private sealed class PortDriveBackend(Main main) : IDriveBackend
     {
         private static readonly string[] PortCapabilities =
-            { "speed", "waiting", "dialogs", "answer", "window", "menu", "rand", "options" };
+            { "speed", "waiting", "dialogs", "answer", "window", "menu", "rand", "options", "language" };
 
         public string Target => "port";
         public string Profile { get; } = main._selectedProfile.Profile.Id;
@@ -234,6 +234,8 @@ public partial class Main
         public System.Text.Json.Nodes.JsonObject Option(string name, int value) => main.DriveOption(name, value);
 
         public System.Text.Json.Nodes.JsonObject Options() => main.DriveOptions();
+
+        public System.Text.Json.Nodes.JsonObject Language(string tag) => main.DriveLanguage(tag);
 
         public System.Text.Json.Nodes.JsonArray Dialogs()
         {

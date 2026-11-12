@@ -58,6 +58,9 @@ and its save stamps say so (see "Saves" below).
 A switch in the settings panel applies at once to the menus and to text drawn after it. Text already on screen stays
 until the game draws it again; everything is in the new language after returning to the title.
 
+The game driver switches the same way with its `language TAG` step, so a test can check a page before and after a
+switch ([cli.md](cli.md), "Automated testing").
+
 Run `extract` again after a game update, or whenever you want the templates current: it keeps every entry the folder
 holds, translated or not, adds templates for sources no file has yet, and marks `obsolete = true` each entry whose
 source the scripts no longer draw or store (an obsolete entry is skipped, like a template). It rewrites only the

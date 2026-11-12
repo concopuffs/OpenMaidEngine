@@ -118,15 +118,15 @@ it; git history keeps the record.
   holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
   (one differing opcode).
 
-- **Strings with control characters draw nothing.** `Sys4StringCodec.Decode` accepts only printable CP932, so a
-  literal holding a tab decodes to no string and its run draws empty. The translated Kamidori install has one:
-  `SC2310@0x1232`, `show-text` of a tab, a space and `―The cliff and the ru…` (found by `omp text
-  import-scripts`, which reads it leniently). Native AGE's handling has not been checked. Done when native's
-  inline-string read is known (Ghidra, the show-text path) and the codec does the same.
-- **The backlog after a load repeats the loaded page's line on the port.** Kamidori saved at its first name plate
-  (`SC0000@0x1488`, 2026-11-11) and loaded from the title shows Wil's line twice in HISTORY, in Japanese as in
-  English: the saved records hold it, and the resumed page records it again. Native has not been driven to the same
-  load. Done when native's backlog after that load is known, and the port's matches it.
+- **Strings with bytes outside JIS X 0208 decode to nothing.** `Sys4StringCodec.Decode` (and its twin in
+  `tools/sys4load.py`) accepts single bytes below `0x80` and `0xA1`-`0xDF`, and double-byte characters whose lead byte
+  is `0x81`-`0x9F` or `0xE0`-`0xEA`. It refuses any other byte: lead bytes `0xEB`-`0xFC` (CP932's NEC and IBM
+  extensions and user-defined characters, and two unused), `0x80`, `0xA0`, `0xFD`-`0xFF`, and a bad trail byte. The
+  whole string then decodes to nothing and its run draws empty. Native reads every byte before the NUL and hands it
+  to GDI (`engine-re.md`, "Strings with control characters"). No script in Himegari or Kamidori (clean and
+  translated) holds such a byte, so nothing shows it yet; a mod or another game could. Done when the codec keeps
+  these strings byte for byte (CP932's extensions decoded, other bytes kept so they encode back) and the port draws
+  them as native does.
 - **Strip reveals and mask wipes are drawn as crossfades.** The port keeps each transition's mode, thickness,
   timing and blocking, but both render paths blend the whole target in at one alpha.
   - The legacy strip reveals `0x27`/`0x28` (Kamidori: one `0x27` call and 192 `0x28` calls across 47 scripts;
@@ -333,14 +333,8 @@ and the drive scenarios.
 
 The localization framework is built: milestones 0 to 6 of `superpowers/specs/2026-11-10-localization-design.md`, with
 its eleven gates, and `align`, `fit` and the overflow report (§7.2, §7.3), which no milestone held (2026-11-11).
-Modders' guide: `modding/languages.md`; the import test's results: `localization-import-test.md`. Still open:
-
-- **The driver cannot choose the port's language.** `option NAME VALUE` takes the registry's numbers, so the
-  options panel's OME choices (language, window size) are set only by clicking the panel, as gate 8's live switch
-  was driven (2026-11-11). Done when a step sets the port's language (native AGE has none) and a scenario switches
-  it.
-- **Cut `localization-import-test.md`'s "Review answers" down to the results**, as that section says: the review
-  text is committed (`2482813`).
+Modders' guide: `modding/languages.md`; the import test's results: `localization-import-test.md`. Nothing is open;
+the future work spec §17 lists stays in the spec.
 
 ## Platform and project
 

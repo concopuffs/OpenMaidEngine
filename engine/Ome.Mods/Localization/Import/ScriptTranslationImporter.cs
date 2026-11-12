@@ -269,7 +269,7 @@ public sealed class ScriptTranslationImporter
                 report.Messages.Literal++;
                 string text = span.IsTranslation ? Unescape(translation) : span.ReadableKey;
                 if (span.Lenient)
-                    report.Damage.ControlCharacters.Add(new ReportedLiteral(script, message.Offset, "message",
+                    report.Damage.Undecodable.Add(new ReportedLiteral(script, message.Offset, "message",
                         span.ReadableKey, Unescape(span.Joined)));
                 var shortened = new ReportedLiteral(script, message.Offset, "message", span.ReadableKey,
                     Unescape(span.Joined));
@@ -287,7 +287,7 @@ public sealed class ScriptTranslationImporter
             {
                 report.Messages.WithVariables++;
                 if (span.Lenient)
-                    report.Damage.ControlCharacters.Add(new ReportedLiteral(script, message.Offset, "message",
+                    report.Damage.Undecodable.Add(new ReportedLiteral(script, message.Offset, "message",
                         span.Key, span.Joined));
                 if (translation == span.Key) report.Messages.Untranslated++;
                 else report.Messages.Translated++;
@@ -330,7 +330,7 @@ public sealed class ScriptTranslationImporter
                     lenient = true;
                 }
                 var literal = new ReportedLiteral(script, source.Offset, label, original, changed);
-                if (lenient) report.Damage.ControlCharacters.Add(literal);
+                if (lenient) report.Damage.Undecodable.Add(literal);
                 if (original != changed)
                 {
                     if (CompareLabels.Contains(label))

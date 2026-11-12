@@ -1,0 +1,64 @@
+# History after a load (Kamidori clean install, Kamidori/). The scenario saves at the first name-plate page to slot
+# No.003. It returns to the title, loads that slot and opens History, taking shots before the save and after the load.
+# SC0000 waits at 0x1485 and reads 0x1488.
+# On native, history-after shows Wil's line once at the bottom, as history-before does. A full load drops the saved
+# page's group because the resumed page records it again (text_history_deserialize; engine-re.md, "Retained History
+# record model and lifetime").
+# On a fresh sandbox, on both targets:
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori native start
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori native run tools/drive/scenarios/kamidori-history-after-load.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+click newgame.begin
+wait-state script=SC0000 timeout=60
+wait-state at=SC0000@0x1488 click=adv.next every=2.5 timeout=240
+wait 3
+move 512 288
+wait 1
+shot history-page
+wheel up 1                            # History
+wait-state script=HISTORY timeout=10
+wait 3
+shot history-before
+click 968 492                         # close History
+wait 2
+rclick 512 288                        # the ADV menu
+wait 2
+click 125 85                          # SAVE
+wait-state script=SAVE timeout=10
+wait 2
+move 360 243
+wait 0.5
+click 360 243                         # No.003
+wait 1.5
+click 470 298                         # はい
+wait 3
+close-request
+wait 1
+answer タイトルに戻る(&T)
+answer OK
+wait-state top=TITLE@0x9a6 click=adv.next every=3 timeout=120
+wait 4
+click 775 362                         # Load Data
+wait 2
+click 60 90                           # page 0-9
+wait 1
+move 360 243
+wait 0.5
+click 360 243                         # No.003
+wait 1.5
+click 470 298                         # はい
+wait-state at=SC0000@0x1488 timeout=30
+wait 3
+move 512 288
+wait 1
+shot history-loaded
+wheel up 1
+wait-state script=HISTORY timeout=10
+wait 3
+shot history-after
+state
