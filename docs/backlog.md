@@ -225,9 +225,10 @@ captures where they apply.
   shared: `_messageSkipServiceActive` is used in 7 files, and `_messageSkipInjected` and `_advTextWaitPolling` in 5
   each. Integer-cell normalisation (under Robustness) and the bounds checks on script-controlled indices also have
   no single home. Done when each group of state is private to one type that others change through named methods:
-  memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. A
-  census of every field comes first (milestone 2); the skip and auto state gets its owner next (milestone 5),
-  because audio and other natives read it; the waits move last (milestone 11).
+  memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. The
+  census of every field (milestone 2, `docs/superpowers/plans/2026-11-12-engine-layering.md`) names each one's owner;
+  the skip and auto state gets its owner next (milestone 5), because audio and other natives read it; the waits move
+  last (milestone 11).
 - **The host's threads have no stated ownership.** `GodotAdvHost` holds nine lock objects, six `AutoResetEvent`s,
   a `ManualResetEventSlim` and a `SemaphoreSlim`, and nothing documents which fields each lock guards or the lock
   order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`

@@ -2,9 +2,10 @@
 
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
-design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table)
-and 3 (projects) are implemented on `feature/engine-layering`; §3.3, §4, §7.5, §7.6 and §13 record what they
-settled. §15 records the history.
+design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
+2 (census) and 3 (projects) are done on `feature/engine-layering`; §3.3, §4, §7.5, §7.6, §11, §12 and §13 record
+what they settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`.
+§15 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
 `vm-map/opcodes.toml`, and the open work it covers in `docs/backlog.md` (§14), which points here.
@@ -309,7 +310,9 @@ The fade reads the skip state, which is why that state gets an owner before the 
 
 ### 5.2 The subsystems
 
-Names are suggestions. Each row is settled in the milestone that builds it, from the census (milestone 2).
+Names are suggestions. Each row is settled in the milestone that builds it, from the census (milestone 2). The
+census (plan §2, §3.2) gives every field of `VirtualMachine` and `GodotAdvHost` an owner, and adds one the table
+lacks: the tick function of §5.3 owns the statement block (ops `0x1f4`/`0x1f5`).
 
 | Native | Owns | Comes from | Devices |
 |---|---|---|---|
@@ -835,6 +838,11 @@ Notes on the order:
   threads, on its own.
 - **Text is late because it is the largest subsystem and the one where fidelity is hardest to hold**
   (`GodotAdvHost.AdvText.cs` is 1,147 lines). The pattern should be proven on smaller ones first.
+- **The census confirms the order of milestones 6 to 11** (plan §3.2) and adds four things to their scope: the
+  statement block goes with the tick function in milestone 6; milestone 7's graphics native tells a listener when a
+  surface is released, because the text layouts retained on it go too; script memory, which no milestone built, comes
+  in milestone 9 before the save native; and the shell's composed reads (`MenuState`, `MessageSettings`) stay at the
+  VM in milestone 9.
 
 ## 12. Costs and risks
 
@@ -850,7 +858,10 @@ Notes on the order:
 - **A missed wait.** A wait left out of §5.3's table stalls a fade or a duck release while it blocks. The test of
   §5.3 is the check.
 - **Test changes.** Handler tests keep using fake natives. A test that asserts on state which moves into a native
-  must switch to the real native over headless devices. The census counts them.
+  must switch to the real native over headless devices. The census counts them (plan §3.4): 311 of the 1,350 test
+  methods read such state through the VM's public members. 242 of them read script memory's banks, which need no
+  device; the other 152 read graphics (68), text (33), input and waits (26), skip and auto (14), shell services (14)
+  or saves and settings (5) state.
 - **The lift's typed calls.** They must keep `CallDeferred`'s timing. Milestone 4 checks that on a drive scenario.
 - **Work in flight.** The Lua draft assumes today's VM; the Lua spec should be written against §8.
 - **Wiring.** Each native's constructor and the code that puts the engine together are new, in exchange for
@@ -870,7 +881,7 @@ Every design question is decided (§2). These facts are not verified yet; each n
 |---|---|---|
 | That native's BGM fade stops while a modal dialog is open | §5.3, §2 decision 10 | A native trace before milestone 6 lands: hook native's fade tick (Himegari's `bgm_fade_tick@0x464960`) under Frida, start a fade, and open the 終了 dialog (`close-request`) while it runs. The same run checks whether native's modal movie (op `0x20f`) keeps its main loop's services running. |
 | That an engine-thread loop keeps today's frame timing | §5.3, part 2 | Milestone 11: `--timeline-log` runs of the drive scenarios, against a tolerance set before measuring |
-| How many tests assert on state that moves from the VM into a native | §12 | The census, milestone 2 |
+| How many tests assert on state that moves from the VM into a native | §12 | Milestone 2: 311 test methods, 152 beyond script memory (plan §3.4) |
 | That `DisableTransitiveProjectReferences` keeps device types out of handler compiles | §3.3 | Milestone 3: a compile that is meant to fail |
 | Whether the 22 operand-access rows need any code; the port may already read those operands correctly | §7.2 | Milestone 0: one does (below) |
 | What the 125 revision differences are, and whether they come to about ten rules | §7.2 | Backlog, "Triage the opcode revision diff" |
@@ -951,3 +962,7 @@ Not covered:
   `himegari-read-skip` keeps its time (37.8 s). The saves of `himegari-save-load` and
   `kamidori-history-after-load` are equal under `save-diff` except for their timestamp, and their thumbnails are
   byte-identical.
+- **2026-11-12, milestone 2.** The census of `VirtualMachine`'s 129 fields and `GodotAdvHost`'s 118, measured at
+  `18d4d1b`, is kept in the implementation plan (`docs/superpowers/plans/2026-11-12-engine-layering.md`). It confirms
+  the order of milestones 6 to 11 with four additions to their scope (§11, notes on the order), adds the tick
+  function's statement block to §5.2, and fills in §12's test count (§13).
