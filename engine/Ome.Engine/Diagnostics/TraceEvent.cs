@@ -19,7 +19,7 @@ public readonly struct TraceEvent
     public string? Name  { get; private init; }    // script/scene name; resolved call-script name (null => unresolved/stub)
     public string? Text  { get; private init; }    // halt reason; frame outcome
     public Instruction? Ins { get; private init; } // Step: the instruction (args) by ref, never copied
-    public Vm.UnsupportedOpcodeDiagnostic? CompatibilityDiagnostic { get; private init; }
+    public UnsupportedOpcodeDiagnostic? CompatibilityDiagnostic { get; private init; }
 
     public static TraceEvent Step(int pc, Instruction ins, int depth) => new()
         { Kind = TraceEventKind.Step, Pc = pc, Opcode = ins.Opcode, Ins = ins, Depth = depth };
@@ -31,7 +31,7 @@ public readonly struct TraceEvent
         { Kind = TraceEventKind.CallScript, Id = id, Name = name };
     public static TraceEvent Stub(int opcode, int pc) => new()
         { Kind = TraceEventKind.Stub, Opcode = opcode, Pc = pc };
-    public static TraceEvent UnsupportedOpcode(Vm.UnsupportedOpcodeDiagnostic diagnostic, int pc) => new()
+    public static TraceEvent UnsupportedOpcode(UnsupportedOpcodeDiagnostic diagnostic, int pc) => new()
         { Kind = TraceEventKind.UnsupportedOpcode, Opcode = diagnostic.Opcode, Pc = pc,
           CompatibilityDiagnostic = diagnostic };
     public static TraceEvent Halt(string reason, long steps) => new()

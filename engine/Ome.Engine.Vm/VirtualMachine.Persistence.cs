@@ -184,28 +184,8 @@ public sealed partial class VirtualMachine
     private StepResult OpWriteNumberedSaveThumbnail(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (_nativeDatStore == null)
-        {
-            Write(a[0], 1);
-            return StepResult.Next;
-        }
-        try
-        {
-            var image = _host.CaptureSurfacePixels(unchecked((int)Read(a[2])));
-            if (image == null)
-            {
-                Write(a[0], 2);
-                return StepResult.Next;
-            }
-            byte[] encoded = NumberedThumbnailCodec.Encode(image);
-            _nativeDatStore.SaveNumberedThumbnail(unchecked((int)Read(a[1])), encoded);
-            Write(a[0], 0);
-        }
-        catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
-        catch (InvalidDataException) { Write(a[0], 2); }
-        catch (OverflowException) { Write(a[0], 2); }
-        catch (IOException) { Write(a[0], 1); }
-        catch (UnauthorizedAccessException) { Write(a[0], 1); }
+        Write(a[0], NumberedSaveThumbnails.Write(
+            _host, _nativeDatStore, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
 
@@ -213,28 +193,8 @@ public sealed partial class VirtualMachine
     private StepResult OpLoadNumberedSaveThumbnail(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (_nativeDatStore == null)
-        {
-            Write(a[0], 1);
-            return StepResult.Next;
-        }
-        try
-        {
-            byte[]? encoded =
-                _nativeDatStore.LoadNumberedThumbnail(unchecked((int)Read(a[1])));
-            if (encoded == null)
-            {
-                Write(a[0], 1);
-                return StepResult.Next;
-            }
-            var image = NumberedThumbnailCodec.Decode(encoded);
-            Write(a[0], _host.ReplaceSurfacePixels(unchecked((int)Read(a[2])), image) ? 0 : 2);
-        }
-        catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
-        catch (InvalidDataException) { Write(a[0], 2); }
-        catch (OverflowException) { Write(a[0], 2); }
-        catch (IOException) { Write(a[0], 1); }
-        catch (UnauthorizedAccessException) { Write(a[0], 1); }
+        Write(a[0], NumberedSaveThumbnails.Load(
+            _host, _nativeDatStore, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
 

@@ -97,7 +97,7 @@ public sealed class Sys4StartupSettings
     public int DependMovieSound => ReadInt("DEPENDMOVIESOUND", 1);
 
     /// <summary>AUTOFREETEX (set:AutoFreeTex, registered default 0): under CreateObject bit 1, bit 1 releases every
-    /// surface before a numbered load and bit 0 at op 0x9 (<see cref="Vm.VmOptions"/>). Kamidori sets 3; Himegari has
+    /// surface before a numbered load and bit 0 at op 0x9 (the VM's <c>VmOptions</c>). Kamidori sets 3; Himegari has
     /// none. Missing or non-numeric means 0.</summary>
     public int AutoFreeTex => ReadInt("AUTOFREETEX", 0);
 

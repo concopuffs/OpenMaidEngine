@@ -58,7 +58,7 @@ public sealed record GlyphRasterRequest
 
     /// <summary>The glyph's width in percent of the font's own, 1 to 100: presented text an entry fits to its source
     /// text's extent (localization spec §7.2, <c>fit = "shrink"</c>). The backends draw every glyph at the font's
-    /// width; <see cref="CachedGlyphMaskRasterizer"/> narrows the mask (<see cref="GlyphMaskNarrowing"/>).</summary>
+    /// width; <c>CachedGlyphMaskRasterizer</c> narrows the mask (<c>GlyphMaskNarrowing</c>).</summary>
     public int WidthPercent
     {
         get => _widthPercent;
@@ -140,7 +140,7 @@ public sealed class GlyphMask
 
     /// <summary>
     /// An aliased glyph (GGO_BITMAP, AntiFont off): every coverage value is 0 or 16. AGE keeps such a glyph as
-    /// packed bits, which changes what its mode-2 second pass draws (<see cref="AgeGlyphMaskCompositor"/>).
+    /// packed bits, which changes what its mode-2 second pass draws (<c>AgeGlyphMaskCompositor</c>).
     /// </summary>
     public bool Monochrome { get; }
 

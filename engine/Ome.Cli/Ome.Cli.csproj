@@ -2,6 +2,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ome.Engine\Ome.Engine.csproj" />
+    <ProjectReference Include="..\Ome.Engine.Devices\Ome.Engine.Devices.csproj" />
+    <ProjectReference Include="..\Ome.Engine.Vm\Ome.Engine.Vm.csproj" />
     <ProjectReference Include="..\Ome.Engine.Frontend\Ome.Engine.Frontend.csproj" />
     <ProjectReference Include="..\Ome.Script\Ome.Script.csproj" />
     <ProjectReference Include="..\Ome.Mods\Ome.Mods.csproj" />

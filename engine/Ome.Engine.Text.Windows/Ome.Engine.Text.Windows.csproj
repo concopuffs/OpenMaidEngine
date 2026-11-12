@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ome.Engine\Ome.Engine.csproj" />
+    <ProjectReference Include="..\Ome.Engine.Devices\Ome.Engine.Devices.csproj" />
   </ItemGroup>
 
 </Project>

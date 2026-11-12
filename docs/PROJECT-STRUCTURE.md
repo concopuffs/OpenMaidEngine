@@ -223,10 +223,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       decode failures, loose-first bounded ALF asset store, script provider,
     │                                       explicit overlay/codec launch policy, AGF/LZSS/BMP/PNG and Windows CUR
     │                                       decoders, the language-asset store, and resource facade
-    │   ├── Ome.Engine/Text/                 backend-neutral glyph-mask requests/results, deterministic AGE
-    │                                       compositor/layout, retained live/History glyph and wait-atlas
-    │                                       publication, bounded font/glyph cache primitives (the cache narrows
-    │                                       masks), and presented text's line breaking, alignment and fit
+    │   ├── Ome.Engine/Text/                 deterministic AGE compositor/layout, retained live/History glyph
+    │                                       and wait-atlas publication, bounded font/glyph cache primitives (the
+    │                                       cache narrows masks), and presented text's line breaking, alignment
+    │                                       and fit
     │   ├── Ome.Engine/Localization/         text catalogs (docs/superpowers/specs/2026-11-10-localization-
     │                                       design.md): placeholder templates, entries, the catalog's global/script/
     │                                       site scopes, the message segmenter (spec §6.2), the presenter with its
@@ -237,6 +237,12 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       screenshot BMP naming, profile-owned state, identity, and
     │                                       serialized bank dimensions
+    │   ├── Ome.Engine.Vm/                   the handler layer (superpowers/specs/2026-11-12-engine-layering-design.md
+    │                                       §3.3): the interpreter, the handler table and handlers, and the engine
+    │                                       builds; references Ome.Engine only and cannot see Ome.Engine.Devices
+    │   ├── Ome.Engine.Devices/              the device layer: interfaces of what an operating system or front end
+    │                                       does and the plain data they carry (RgbaImage, glyph-mask requests and
+    │                                       results, the font family source, the movie decoder); references nothing
     │   ├── Ome.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
     │                                       open-maid-script-design.md): operand contracts, intrinsics (Abi/), intermediate
     │                                       form and byte-exact decoder/encoder (Ir/), lexer/parser/AST (Syntax/),
@@ -343,9 +349,9 @@ classic Win32 look-alikes (`godot/Win32Dialog.cs`, `Win32DialogFrame.cs`, `Win32
 Both `engine/OmeEngine.sln` and `godot/OME.sln` include the project; Godot and `Ome.Engine.Tests` consume it
 through project references rather than compiling duplicate linked sources. The first owned cluster contains
 `PageLocatorState`, `GodotTimelineLog`, `GodotTraceSink`, `StepLimitDiagnosticFormatter`, `GodotVmOptions`,
-`PerformanceFrameLog`, and `WindowLaunchOptions`. It also owns the internal movie decoder boundary/runtime,
-audio-timeline alignment, movie-surface registry, and RIFF/WAVE sanitizer; only the `Himegari` and
-`Ome.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg native interop and the
+`PerformanceFrameLog`, and `WindowLaunchOptions`. It also owns the internal movie runtime (the decoder interfaces
+are in `Ome.Engine.Devices`), audio-timeline alignment, movie-surface registry, and RIFF/WAVE sanitizer; only the
+`OME` and `Ome.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg native interop and the
 asynchronous/paced decoder also live here; the `Ome.MovieCorpusGate` tool receives friend access to the native
 frame-source seam and references this project rather than compiling source links. Reusable movie-corpus discovery,
 decode-gate, and report contracts live here as well; `tools/movie-corpus-gate/Program.cs` remains only the
@@ -373,16 +379,17 @@ timed-deadline waiting, frame yield, and scene reset. `engine/Ome.Engine/Hosting
 SFX, fade, volume, and route-control contracts, including the compatibility overload/default chains used by
 simple hosts. `engine/Ome.Engine/Hosting/IMovieHost.cs` owns ordinary, positioned, mask-transition, activity-query,
 and modal movie playback contracts. `engine/Ome.Engine/Hosting/IGraphicsHost.cs` owns mutable surfaces,
-retained-range/frame presentation, transitions, texture lifecycle, pixel capture/replace, draw, and size
-contracts. `engine/Ome.Engine/Hosting/IInputHost.cs` owns modal fullwidth entry, ADV waits/callback servicing,
+retained-range/frame presentation, transitions, texture lifecycle, draw, and size contracts. Pixel capture and
+replace are `engine/Ome.Engine/Hosting/ISurfacePixels.cs`, outside `IHost` because they carry a device type; the
+save thumbnails reach them through `engine/Ome.Engine/Persistence/NumberedSaveThumbnails.cs`. `engine/Ome.Engine/Hosting/IInputHost.cs` owns modal fullwidth entry, ADV waits/callback servicing,
 input clock, cursor resources, and skip-state interaction. `engine/Ome.Engine/Hosting/IAdvHost.cs` owns live and
 surface text, history presentation, ADV layout publication, message presentation settings, wait indicators, and
 page-presentation suspension. `IHost` inherits all seven focused contracts; every required member and
 overload/default chain remains unchanged. The neutral
 `engine/Ome.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie mask work between the VM, host, and
 retained graphics without making `Model` depend on `Hosting`.
-`engine/Ome.Engine/Model/RgbaImage.cs` owns the format-independent packed RGBA image transported between SYS4
-decoders, host surfaces, renderers, persistence, and tests; consumers do not depend on `Sys4` merely to exchange
+`engine/Ome.Engine.Devices/Model/RgbaImage.cs` owns the format-independent packed RGBA image transported between
+SYS4 decoders, host surfaces, renderers, persistence, and tests; consumers do not depend on `Sys4` merely to exchange
 decoded pixels.
 `engine/Ome.Engine/Model/SurfaceContracts.cs` owns neutral surface fill/copy requests and the black-fade direction
 shared by VM presentation, graphics hosts, Godot, and tests.
@@ -407,75 +414,77 @@ the interpolation helpers consumed by retained-scene sampling. `engine/Ome.Engin
 owns surface/movie transition queues, presentation activity and click-skip logic, diagnostics and dirty-reason
 accounting, and visible retained-scene snapshots.
 
-`engine/Ome.Engine/Vm/VirtualMachine.cs` retains VM execution lifecycle, cross-domain state, the instruction loops
+`engine/Ome.Engine.Vm/` is the handler layer's project: it references `Ome.Engine` only, with
+`DisableTransitiveProjectReferences`, so handler code cannot name a device type (`ProjectBoundaryTests`).
+`engine/Ome.Engine.Vm/VirtualMachine.cs` retains VM execution lifecycle, cross-domain state, the instruction loops
 and dispatch: a step indexes the handlers bound to the table's opcodes at construction and calls one, which returns a
 `StepResult` (`StepResult.cs`). `VirtualMachine.Handlers.cs` is the handler table, each opcode's name (its registry
 semantic name, else its label) to its handler; it is the only list of implemented opcodes. The handlers (`Op…`
-methods) sit in the partials by family. `UnsupportedOpcodeDiagnostic.cs` is the structured diagnostic for an opcode
-with no handler. `EngineBuilds.cs` declares every engine
+methods) sit in the partials by family. `engine/Ome.Engine/Diagnostics/UnsupportedOpcodeDiagnostic.cs` is the
+structured diagnostic for an opcode with no handler. `EngineBuilds.cs` declares every engine
 build the port reproduces (4.24J, 4.33G) as its parent plus changes, and the VM takes the build's rules; the rule
 types sit beside the natives that read them (`Text/TextRules.cs`, `Model/GfxRules.cs`, `Persistence/SettingsRules.cs`,
 `Persistence/SaveRules.cs`; `superpowers/specs/2026-11-12-engine-layering-design.md` §7).
-Its partial-class companion `engine/Ome.Engine/Vm/VirtualMachine.Audio.cs` owns VM audio
+Its partial-class companion `engine/Ome.Engine.Vm/VirtualMachine.Audio.cs` owns VM audio
 state, BGM restart semantics, and the BGM/voice/SFX/mixer opcode handler; `Step` retains the audio labels and
-routes that family into the handler. `engine/Ome.Engine/Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/
+routes that family into the handler. `engine/Ome.Engine.Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/
 positioned movie playback, movie surface metadata/activity queries, and movie-mask transition dispatch; `Step`
-likewise retains and routes the movie labels. `engine/Ome.Engine/Vm/VirtualMachine.Surface.cs` owns per-script
+likewise retains and routes the movie labels. `engine/Ome.Engine.Vm/VirtualMachine.Surface.cs` owns per-script
 reload-policy reset/configuration, surface allocation/loading, texture binding and sizing, mutable surface
 fill/copy, render-target control, and individual/transient surface release; its labels remain at their existing
 dispatcher positions around the retained numeric-glyph and object cases.
-`engine/Ome.Engine/Vm/VirtualMachine.RetainedObjects.cs` owns retained-object registry queries,
+`engine/Ome.Engine.Vm/VirtualMachine.RetainedObjects.cs` owns retained-object registry queries,
 default-slot and geometry mutation, direct and range transforms, clone, and erase dispatch; animation, surface,
 ADV-binding, and presentation labels remain in their respective dispatcher groups.
-`engine/Ome.Engine/Vm/VirtualMachine.Animation.cs` owns retained spritesheet and color channels, timed and cyclic
+`engine/Ome.Engine.Vm/VirtualMachine.Animation.cs` owns retained spritesheet and color channels, timed and cyclic
 transforms, per-object animation control, frame-time sampling, and the shared animation-clock opcode handler.
-`engine/Ome.Engine/Vm/VirtualMachine.Presentation.cs` owns queued surface-alpha transitions, frame and object-range
+`engine/Ome.Engine.Vm/VirtualMachine.Presentation.cs` owns queued surface-alpha transitions, frame and object-range
 publication, skip-aware blocking fades/crossfades, foreground-transition waits, and graphics command-queue clear.
-`engine/Ome.Engine/Vm/VirtualMachine.AdvText.cs` owns live ADV text emission, layout/cursor/wait-indicator state,
+`engine/Ome.Engine.Vm/VirtualMachine.AdvText.cs` owns live ADV text emission, layout/cursor/wait-indicator state,
 text style and glyph-delay control, direct surface-string and retained numeric-glyph rendering, and retained
 text/wait-object bindings; text history and input/skip/auto services remain separate.
-`engine/Ome.Engine/Vm/VirtualMachine.TextHistory.cs` owns history recording control, metadata append/navigation,
+`engine/Ome.Engine.Vm/VirtualMachine.TextHistory.cs` owns history recording control, metadata append/navigation,
 retained history rendering, metadata/voice lookup, and history backlog clearing.
-`engine/Ome.Engine/Vm/VirtualMachine.HistoryPresentation.cs` presents a history group again in the current language
+`engine/Ome.Engine.Vm/VirtualMachine.HistoryPresentation.cs` presents a history group again in the current language
 (localization spec §8): by the lookups recorded this session, else by splitting the records' text against unscoped
-entries. `engine/Ome.Engine/Vm/VirtualMachine.TextStores.cs` records which instruction stored each global string, so
+entries. `engine/Ome.Engine.Vm/VirtualMachine.TextStores.cs` records which instruction stored each global string, so
 a lookup can try the store's site (spec §5.2).
-`engine/Ome.Engine/Vm/VirtualMachine.AdvServices.cs` owns persistent/active message-skip control, read-skip
+`engine/Ome.Engine.Vm/VirtualMachine.AdvServices.cs` owns persistent/active message-skip control, read-skip
 settings and queries, auto-message state/timing, and per-message voice/skip reset opcode dispatch; shared state
 and refresh helpers remain in the VM coordinator because live text and input paths also consume them.
-`engine/Ome.Engine/Vm/VirtualMachine.Input.cs` owns blocking ADV waits, hotspot registration/arming, cursor
+`engine/Ome.Engine.Vm/VirtualMachine.Input.cs` owns blocking ADV waits, hotspot registration/arming, cursor
 resources and virtual position, raw mouse/joystick callback registration and dispatch, action polling, and
 physical-input mapping; public host-thread input entry points and shared synchronization remain in the coordinator.
-`engine/Ome.Engine/Vm/VirtualMachine.Timing.cs` owns the monotonic-time query, host sleep, relative timed-callback
+`engine/Ome.Engine.Vm/VirtualMachine.Timing.cs` owns the monotonic-time query, host sleep, relative timed-callback
 schedule construction, deadline/catch-up selection, and callback resumption opcode handler.
-`engine/Ome.Engine/Vm/VirtualMachine.Persistence.cs` owns catalog-unlock lookup, numbered save/load and nested
+`engine/Ome.Engine.Vm/VirtualMachine.Persistence.cs` owns catalog-unlock lookup, numbered save/load and nested
 restore continuation, metadata/copy/delete, thumbnail persistence, and shared-profile integer/string opcode
 dispatch; capture/apply helpers and persistent coordinator state remain in `VirtualMachine.cs`.
 `engine/Ome.Engine/Persistence/NativeGfxSaveLayout.cs` owns the supported native graphics-record layouts
 used by the shared numbered-payload and semantic graphics codecs. The profile selects the layout through
 `NativeSaveIdentity`, including first-time saves; exact format details live in
 [SYS4 format notes](sys4-format-notes.md#kamidori-320-layout).
-`engine/Ome.Engine/Vm/VirtualMachine.MemoryCollections.cs` owns string byte length, addressed lookup/copy,
+`engine/Ome.Engine.Vm/VirtualMachine.MemoryCollections.cs` owns string byte length, addressed lookup/copy,
 inline arrays, rectangle search and stable index sorting, bounded integer queues/stacks, bit/range operations,
 and native-style random-modulo dispatch; shared storage/address helpers remain in the coordinator.
-`engine/Ome.Engine/Vm/VirtualMachine.ControlFlow.cs` owns local jumps/calls/returns, value-switch construction,
+`engine/Ome.Engine.Vm/VirtualMachine.ControlFlow.cs` owns local jumps/calls/returns, value-switch construction,
 ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch; process/root exit and cross-script
-lifecycle are routed separately. `engine/Ome.Engine/Vm/VirtualMachine.InputLatch.cs` owns native's input latch: the
+lifecycle are routed separately. `engine/Ome.Engine.Vm/VirtualMachine.InputLatch.cs` owns native's input latch: the
 triggers held while nothing polls (effects under `EffectSkipOnClick` 0, the ADV coroutine yield), the services that
-take them, and the discard points. `engine/Ome.Engine/Vm/VirtualMachine.PhysicalFastForward.cs` owns fast-forward
+take them, and the discard points. `engine/Ome.Engine.Vm/VirtualMachine.PhysicalFastForward.cs` owns fast-forward
 from a held action 6 (Ctrl): its two start paths, op `0x101`'s reveal suppression and the clears.
-`engine/Ome.Engine/Vm/VirtualMachine.DeterministicRandom.cs` owns op `0x60`'s seeded per-call-site streams, which
+`engine/Ome.Engine.Vm/VirtualMachine.DeterministicRandom.cs` owns op `0x60`'s seeded per-call-site streams, which
 the drive step `rand-seed` turns on.
-`engine/Ome.Engine/Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
+`engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state
 remain in `VirtualMachine.cs`.
-`engine/Ome.Engine/Vm/VirtualMachine.Values.cs` owns integer arithmetic, bitwise and comparison operations,
+`engine/Ome.Engine.Vm/VirtualMachine.Values.cs` owns integer arithmetic, bitwise and comparison operations,
 string comparison/concatenation/conversion/move, native byte-length and CP932 operations, and the host-backed
 fullwidth string editor; shared operand storage, addressing, and native-string encoding remain in the coordinator.
-`engine/Ome.Engine/Vm/VirtualMachine.Diagnostics.cs` owns diagnostic value/newline accumulation and synchronous
+`engine/Ome.Engine.Vm/VirtualMachine.Diagnostics.cs` owns diagnostic value/newline accumulation and synchronous
 show-and-clear opcode dispatch; shared diagnostic state and native-context formatting remain in the coordinator.
-`engine/Ome.Engine/Vm/VirtualMachine.RuntimeSettings.cs` owns message-window alpha and system-menu enable/show
+`engine/Ome.Engine.Vm/VirtualMachine.RuntimeSettings.cs` owns message-window alpha and system-menu enable/show
 delay opcode dispatch; reset/default initialization, public menu-state accessors, and host state remain centralized.
 
 The disposable `build/games/<profile>/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs
@@ -513,7 +522,7 @@ spec §6.2–§6.5.
   evidence-scoped ABI snapshots/layers, revision-scoped structured evidence, semantics, and dependencies).
   Current revision snapshots resolve directly; the schema supports future parent/add/replace/remove composition
   without asserting a base SYS4 lineage. What the port runs is the engine's handler table
-  (`engine/Ome.Engine/Vm/VirtualMachine.Handlers.cs`), not registry data. Run `tools/opcodes_build.py --build` to regenerate both Python views
+  (`engine/Ome.Engine.Vm/VirtualMachine.Handlers.cs`), not registry data. Run `tools/opcodes_build.py --build` to regenerate both Python views
   (`tools/age_opcodes.py`, `tools/age_opcode_semantics.py`), machine JSON (`build/opcodes.json`), reference
   (`docs/opcode-reference.md`), and union/per-profile coverage. `--lint` also checks profile/revision/evidence
   references, dangling deps, confidence ceilings, and vocabulary.

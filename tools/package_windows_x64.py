@@ -26,6 +26,8 @@ REQUIRED_FILES = (
     "OME.pck",
     f"{MANAGED_DIRECTORY}/OME.dll",
     f"{MANAGED_DIRECTORY}/Ome.Engine.dll",
+    f"{MANAGED_DIRECTORY}/Ome.Engine.Devices.dll",
+    f"{MANAGED_DIRECTORY}/Ome.Engine.Vm.dll",
     f"{MANAGED_DIRECTORY}/Ome.Engine.Frontend.dll",
     f"{MANAGED_DIRECTORY}/Ome.Engine.Text.Windows.dll",
     f"{MANAGED_DIRECTORY}/coreclr.dll",

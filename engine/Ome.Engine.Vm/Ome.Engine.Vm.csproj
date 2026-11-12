@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The handler layer (docs/superpowers/specs/2026-11-12-engine-layering-design.md §3.3, §4): the interpreter, the
+       handler table, the handlers and the engine builds of §7. It references Ome.Engine only. Without
+       DisableTransitiveProjectReferences it would also see Ome.Engine.Devices through Ome.Engine; with it, handler
+       code that names a device type fails to compile, and so does a native interface member that carries one
+       (CS0012). ProjectBoundaryTests checks the built assembly. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ome.Engine\Ome.Engine.csproj" />
+  </ItemGroup>
+
+</Project>

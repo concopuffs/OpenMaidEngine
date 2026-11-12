@@ -11,6 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Ome.Engine.Devices\Ome.Engine.Devices.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Profiles\*.json"
                       LogicalName="Ome.Engine.Profiles.%(Filename)%(Extension)" />
   </ItemGroup>

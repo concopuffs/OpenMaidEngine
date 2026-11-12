@@ -5,8 +5,8 @@ namespace Ome.Engine.Persistence;
 
 /// <summary>
 /// The save facts that belong to an engine build rather than to a game (docs/superpowers/specs/2026-11-12-engine-layering-design.md
-/// §7.5). The builds are declared in <c>Vm/EngineBuilds.cs</c>; a profile keeps the game's facts (magic, game id,
-/// SYS4INI SAVEVERSION, bank dimensions).
+/// §7.5). The builds are declared in <c>Ome.Engine.Vm/EngineBuilds.cs</c>; a profile keeps the game's facts (magic,
+/// game id, SYS4INI SAVEVERSION, bank dimensions).
 /// </summary>
 public sealed record SaveRules
 {

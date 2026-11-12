@@ -24,6 +24,8 @@ REQUIRED_FILES = (
     "OME.pck",
     f"{MANAGED_DIRECTORY}/OME.dll",
     f"{MANAGED_DIRECTORY}/Ome.Engine.dll",
+    f"{MANAGED_DIRECTORY}/Ome.Engine.Devices.dll",
+    f"{MANAGED_DIRECTORY}/Ome.Engine.Vm.dll",
     f"{MANAGED_DIRECTORY}/Ome.Engine.Frontend.dll",
     f"{MANAGED_DIRECTORY}/{package_notices.DEPS_FILE}",
     f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.linux-x64-LICENSE.TXT",

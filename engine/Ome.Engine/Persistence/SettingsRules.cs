@@ -6,7 +6,7 @@ public readonly record struct Sys4RegIniKey(string Section, string Key, string D
 /// <summary>
 /// The SYS4REG.INI keys an engine build binds, in its loader's order (docs/superpowers/specs/2026-11-12-engine-layering-design.md
 /// §7.3: a table). <see cref="Sys4RegIniStore"/> loads every one (defaults for missing ones) and writes them in this
-/// order. The builds that differ are declared in <c>Vm/EngineBuilds.cs</c>.
+/// order. The builds that differ are declared in <c>Ome.Engine.Vm/EngineBuilds.cs</c>.
 /// </summary>
 public sealed record SettingsRules
 {

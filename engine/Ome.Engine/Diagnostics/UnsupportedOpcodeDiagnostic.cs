@@ -1,6 +1,6 @@
 using Ome.Engine.Model;
 
-namespace Ome.Engine.Vm;
+namespace Ome.Engine.Diagnostics;
 
 /// <summary>A recognized ABI instruction for which the runtime has no implementation.</summary>
 public sealed record UnsupportedOpcodeDiagnostic(
@@ -16,7 +16,7 @@ public sealed record UnsupportedOpcodeDiagnostic(
     IReadOnlyList<Operand> Operands)
 {
     /// <summary>The diagnostic for <paramref name="instruction"/> of <paramref name="script"/>, run over
-    /// <paramref name="table"/>; <paramref name="profileId"/> labels it (<see cref="VmOptions.ProfileId"/>).</summary>
+    /// <paramref name="table"/>; <paramref name="profileId"/> labels it (<c>VmOptions.ProfileId</c>).</summary>
     public static UnsupportedOpcodeDiagnostic For(
         string profileId, OpcodeTable table, Script script, Instruction instruction, OpcodeDefinition definition)
         => new(

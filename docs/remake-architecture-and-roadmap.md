@@ -794,117 +794,117 @@ do not mix mechanical moves with semantic changes.
 
    The first bounded `VirtualMachine.Step` extraction converted the sealed VM type to a sealed partial class and
    moved VM-owned audio state, BGM restart semantics, and the existing BGM/voice/SFX/mixer case bodies into
-   `engine/Ome.Engine/Vm/VirtualMachine.Audio.cs`. The top-level dispatcher retains the exact opcode labels and
+   `engine/Ome.Engine.Vm/VirtualMachine.Audio.cs`. The top-level dispatcher retains the exact opcode labels and
    routes only that family through `StepAudio`; public VM behavior and case-body logic remain unchanged. Runtime
    validation remains green.
 
    The second bounded `VirtualMachine.Step` extraction moved modal, asynchronous, and positioned movie playback,
    movie surface stop-time/activity queries, and movie-mask transition case bodies into
-   `engine/Ome.Engine/Vm/VirtualMachine.Movie.cs`. The top-level dispatcher retains all movie labels at their
+   `engine/Ome.Engine.Vm/VirtualMachine.Movie.cs`. The top-level dispatcher retains all movie labels at their
    existing positions and routes them through `StepMovie`; the original instruction remains available for the
    two bytecode-offset compatibility paths. Runtime validation remains green.
 
    The third bounded `VirtualMachine.Step` extraction moved surface allocation/loading, texture binding and
    sizing, mutable surface fill/copy, render-target control, and transient-surface release into
-   `engine/Ome.Engine/Vm/VirtualMachine.Surface.cs`. The top-level dispatcher retains these labels at their
+   `engine/Ome.Engine.Vm/VirtualMachine.Surface.cs`. The top-level dispatcher retains these labels at their
    existing positions, including the separate routing groups around numeric-glyph and retained-object cases;
    public VM behavior and case-body logic remain unchanged. Runtime validation remains green.
 
    The fourth bounded `VirtualMachine.Step` extraction moved retained-object registry queries, default-slot and
    geometry mutation, direct and embedded-range transforms, clone, and erase dispatch into
-   `engine/Ome.Engine/Vm/VirtualMachine.RetainedObjects.cs`. The top-level dispatcher retains all labels at their
+   `engine/Ome.Engine.Vm/VirtualMachine.RetainedObjects.cs`. The top-level dispatcher retains all labels at their
    existing positions and routes the separated groups through `StepRetainedObject`; timed/cyclic animation,
    color, surface release, ADV binding, and presentation behavior remain outside this handler. Runtime validation
    remains green.
 
    The fifth bounded `VirtualMachine.Step` extraction moved retained spritesheet and color channels, timed and
    cyclic transforms, per-object animation control, frame-time sampling, and shared animation-clock dispatch into
-   `engine/Ome.Engine/Vm/VirtualMachine.Animation.cs`. The top-level dispatcher retains all labels at their
+   `engine/Ome.Engine.Vm/VirtualMachine.Animation.cs`. The top-level dispatcher retains all labels at their
    existing positions and routes the separated groups through `StepAnimation`; presentation transitions and movie
    masking remain outside the guarded handler. Runtime validation remains green.
 
    The sixth bounded `VirtualMachine.Step` extraction moved queued surface-alpha transitions, frame and object-
    range publication, skip-aware blocking fades/crossfades, foreground-transition waits, and graphics command-
-   queue clear into `engine/Ome.Engine/Vm/VirtualMachine.Presentation.cs`. The top-level dispatcher retains all
+   queue clear into `engine/Ome.Engine.Vm/VirtualMachine.Presentation.cs`. The top-level dispatcher retains all
    labels and aliases at their existing positions and routes them through guarded `StepPresentation`; movie-mask
    transition dispatch remains with the movie handler. Runtime validation remains green.
 
    The seventh bounded `VirtualMachine.Step` extraction moved live ADV text emission, layout/cursor/wait-indicator
    state, text style and glyph-delay control, direct surface-string and retained numeric-glyph rendering, and
-   retained text/wait-object bindings into `engine/Ome.Engine/Vm/VirtualMachine.AdvText.cs`. The top-level
+   retained text/wait-object bindings into `engine/Ome.Engine.Vm/VirtualMachine.AdvText.cs`. The top-level
    dispatcher retains all labels at their existing positions and routes the separated groups through guarded
    `StepAdvText`; the complete instruction remains available for emission and layout-reset bytecode offsets.
    Text-history and input/skip/auto services remain outside the handler. Runtime validation remains green.
 
    The eighth bounded `VirtualMachine.Step` extraction moved text-history recording control, metadata append and
    navigation, retained history rendering, metadata/voice lookup, and backlog clearing into
-   `engine/Ome.Engine/Vm/VirtualMachine.TextHistory.cs`. The top-level dispatcher retains all labels and aliases
+   `engine/Ome.Engine.Vm/VirtualMachine.TextHistory.cs`. The top-level dispatcher retains all labels and aliases
    at their existing positions and routes them through guarded `StepTextHistory`; live ADV text remains with
    `StepAdvText`, while skip/auto-message services remain outside both handlers. Runtime validation remains green.
 
    The ninth bounded `VirtualMachine.Step` extraction moved persistent/active message-skip control, read-skip
    settings and queries, auto-message state/timing, and per-message voice/skip reset dispatch into
-   `engine/Ome.Engine/Vm/VirtualMachine.AdvServices.cs`. The top-level dispatcher retains all labels and aliases
+   `engine/Ome.Engine.Vm/VirtualMachine.AdvServices.cs`. The top-level dispatcher retains all labels and aliases
    at their existing positions and routes them through guarded `StepAdvService`; shared state and refresh helpers
    remain in the VM coordinator because live-text and input paths also consume them. Runtime validation remains
    green.
 
    The tenth bounded `VirtualMachine.Step` extraction moved blocking ADV waits, hotspot registration/arming,
    cursor resources and virtual position, raw mouse/joystick callback registration and dispatch, action polling,
-   and physical-input mapping into `engine/Ome.Engine/Vm/VirtualMachine.Input.cs`. The top-level dispatcher
+   and physical-input mapping into `engine/Ome.Engine.Vm/VirtualMachine.Input.cs`. The top-level dispatcher
    retains all labels and aliases at their existing positions and routes them through guarded `StepInput`; public
    host-thread input entry points, shared synchronization, and callback service helpers remain in the coordinator.
    Runtime validation remains green.
 
    The eleventh bounded `VirtualMachine.Step` extraction moved the monotonic-time query, host sleep, relative
    timed-callback schedule construction, deadline/catch-up selection, and callback resumption into
-   `engine/Ome.Engine/Vm/VirtualMachine.Timing.cs`. The top-level dispatcher retains all labels and aliases at
+   `engine/Ome.Engine.Vm/VirtualMachine.Timing.cs`. The top-level dispatcher retains all labels and aliases at
    their existing positions and routes the separated groups through guarded `StepTiming`; animation-frame
    sampling remains with `StepAnimation`. Runtime validation remains green.
 
    The twelfth bounded `VirtualMachine.Step` extraction moved catalog-unlock lookup, numbered save/load and
    nested restore continuation, metadata/copy/delete, thumbnail persistence, and shared-profile integer/string
-   dispatch into `engine/Ome.Engine/Vm/VirtualMachine.Persistence.cs`. The top-level dispatcher retains all
+   dispatch into `engine/Ome.Engine.Vm/VirtualMachine.Persistence.cs`. The top-level dispatcher retains all
    labels at their existing positions and routes them through guarded `StepPersistence`; capture/apply helpers
    and persistent coordinator state remain in `VirtualMachine.cs`. Runtime validation remains green.
 
    The thirteenth bounded `VirtualMachine.Step` extraction moved string byte length, addressed lookup/copy,
    inline arrays, rectangle search and stable index sorting, bounded integer queues/stacks, bit/range operations,
    and native-style random-modulo dispatch into
-   `engine/Ome.Engine/Vm/VirtualMachine.MemoryCollections.cs`. The top-level dispatcher retains all labels and
+   `engine/Ome.Engine.Vm/VirtualMachine.MemoryCollections.cs`. The top-level dispatcher retains all labels and
    aliases at their existing positions and routes them through guarded `StepMemoryCollection`; shared storage and
    address-resolution helpers remain in the coordinator. Runtime validation remains green.
 
    The fourteenth bounded `VirtualMachine.Step` extraction moved local jumps/calls/returns, value-switch
    construction, ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch into
-   `engine/Ome.Engine/Vm/VirtualMachine.ControlFlow.cs`. The top-level dispatcher retains all labels and aliases
+   `engine/Ome.Engine.Vm/VirtualMachine.ControlFlow.cs`. The top-level dispatcher retains all labels and aliases
    at their existing positions and routes them through guarded `StepControlFlow`; the complete instruction remains
    available for labeled-yield opcode/offset diagnostics. Process/root exit and cross-script lifecycle remain in
    the coordinator. Runtime validation remains green.
 
    The fifteenth bounded `VirtualMachine.Step` extraction moved process/frame/root exit, ordinary cross-script
    calls, mounted append autoruns, and preloaded script-slot load/call dispatch into
-   `engine/Ome.Engine/Vm/VirtualMachine.ScriptLifecycle.cs`. The top-level dispatcher retains all labels and
+   `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs`. The top-level dispatcher retains all labels and
    aliases at their existing positions and routes them through guarded `StepScriptLifecycle`; frame execution,
    provider access, call-depth enforcement, and shared lifecycle state remain in the coordinator. Runtime
    validation remains green.
 
    The sixteenth bounded `VirtualMachine.Step` extraction moved integer arithmetic, bitwise and comparison
    operations, string comparison/concatenation/conversion/move, native byte-length and CP932 operations, and
-   the host-backed fullwidth string editor into `engine/Ome.Engine/Vm/VirtualMachine.Values.cs`. The top-level
+   the host-backed fullwidth string editor into `engine/Ome.Engine.Vm/VirtualMachine.Values.cs`. The top-level
    dispatcher retains all labels at their existing positions and routes the two groups around the timing query
    through guarded `StepValue`; shared operand storage, addressing, and native-string encoding remain in the
    coordinator. Runtime validation remains green.
 
    The seventeenth bounded `VirtualMachine.Step` extraction moved diagnostic operand/newline accumulation and
-   synchronous show-and-clear prompt dispatch into `engine/Ome.Engine/Vm/VirtualMachine.Diagnostics.cs`. The
+   synchronous show-and-clear prompt dispatch into `engine/Ome.Engine.Vm/VirtualMachine.Diagnostics.cs`. The
    top-level dispatcher retains all labels and aliases at their existing positions and passes the complete
    instruction through guarded `StepDiagnostic`; shared accumulator state and native-context formatting remain
    in the coordinator. Runtime validation remains green.
 
    The eighteenth bounded `VirtualMachine.Step` extraction moved message-window alpha get/set, system-menu
    enable state, and system-menu show-delay get/set into
-   `engine/Ome.Engine/Vm/VirtualMachine.RuntimeSettings.cs`. The top-level dispatcher retains all labels and
+   `engine/Ome.Engine.Vm/VirtualMachine.RuntimeSettings.cs`. The top-level dispatcher retains all labels and
    aliases at their existing positions and routes them through guarded `StepRuntimeSetting`; reset/default
    initialization, public menu-state accessors, and host state remain centralized. Runtime validation remains
    green.
@@ -1766,8 +1766,8 @@ the debug-scene coordinator as diagnostic-only profile fixtures. `SYS4422` resol
 snapshot and `SYS4433` a direct 269-contract snapshot. Neither composes a claimed base. The canonical layer
 schema and runtime loader support evidence-backed parents, additions, full contract/handler replacements, and
 removals later; every effective contract retains its supplying layer. The engine binds handlers by opcode name
-(`Vm/VirtualMachine.Handlers.cs`), so both snapshots run one handler for an opcode they name alike while the
-registry reports semantic evidence per revision: code reuse is not a cross-revision claim.
+(`Ome.Engine.Vm/VirtualMachine.Handlers.cs`), so both snapshots run one handler for an opcode they name alike while
+the registry reports semantic evidence per revision: code reuse is not a cross-revision claim.
 
 Himegari's `0xaba5c` scene-entry gate, `0x62425` native-service value, direct-scene SYSTEM4/INIT/resource
 bootstrap, SC0000 external SFX value, and debug-launch coordinator writes now live only in the Himegari

@@ -7,7 +7,7 @@ using Ome.Engine.Sys4;
 
 /// <summary>Shared test doubles: a host that records observable effects, and an in-memory script
 /// provider for synthetic call-script targets.</summary>
-internal class RecordingHost : IHost
+internal class RecordingHost : IHost, ISurfacePixels
 {
     public int Waits;
     public int Presents;

@@ -36,7 +36,7 @@ public sealed partial class VirtualMachine
     private readonly Handler?[] _handlers;   // _t's opcodes bound to their handlers (VirtualMachine.Handlers.cs)
     private readonly IHost _host;
     private readonly VmOptions _o;
-    // The engine build's rules (Vm/EngineBuilds.cs). The VM never reads the build's id or ABI.
+    // The engine build's rules (Ome.Engine.Vm/EngineBuilds.cs). The VM never reads the build's id or ABI.
     private readonly EngineRules _rules;
     private readonly Encoding _nativeStringEncoding;
     private readonly IScriptProvider? _provider;

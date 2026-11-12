@@ -1066,7 +1066,7 @@ reaches `label_f63f`, which queries the layer object with op `0x215`:
 
 **Port.** `GfxState.QuerySlot(handle, unboundReadsAbsent)` returns -1 for an object whose `Visible` is clear when
 asked as SYS4433 does. `VirtualMachine` asks so when its engine build's rule says to (`GfxRules.UnboundObjectReadsAbsent`,
-set for 4.33G in `Vm/EngineBuilds.cs`). With it the SC1250 route's
+set for 4.33G in `Ome.Engine.Vm/EngineBuilds.cs`). With it the SC1250 route's
 states 37-72 match native and the shots differ only in the animated wait indicator. Tests:
 `GfxStateTests.QueryReadsAnUnboundObjectAsAbsentWhenAskedAsSys4433Does`,
 `GfxCommandBufferTests.QueryOfAnObjectAColorFadeCreated_FollowsTheEngineBuild`. The 4.33G workers are renamed and
@@ -5253,7 +5253,7 @@ Kamidori's engine has neither of Himegari's two ruby code sequences. Its live ru
 `RUBYSHIFTMODE` comes from the SYS4INI trailer. SYS4433's `SYS4REG.INI` loader also reads `message:RubyShiftMode`
 over it, but never writes it ([sys4-format-notes.md](sys4-format-notes.md), "Native SYS4REG.INI engine options").
 
-**Port.** The engine build's `TextRules.Ruby` (`Vm/EngineBuilds.cs`) picks the rules: `RubyRule.FixedOffsets` for
+**Port.** The engine build's `TextRules.Ruby` (`Ome.Engine.Vm/EngineBuilds.cs`) picks the rules: `RubyRule.FixedOffsets` for
 4.24J, or `RubyRule.ShiftModes` for 4.33G, which gives `RubyLayoutRules.ShiftModes(rubyShiftMode, drawMode)` from the
 SYS4INI and the loaded `SYS4REG.INI`. `RubyTextLayout` and `RetainedAdvTextLayoutPresentation.AppendRun` read them;
 whether op `0x196` re-arms the glyph timer is the separate rule `TextRules.FuriganaArmsGlyphTimer`.
@@ -7973,7 +7973,7 @@ the reference raster. Tests: `AspectGlyphPlacementTests` and
 `text_blit_glyph_bitmap_sys4433@0x45cff0` turns a gray-4 coverage value `c` (0..16) into alpha `c * 255 / 17`, so
 full coverage is 240 and text never fully hides what lies under it. SYS4422 uses `c * 255 >> 4`. Its GGO_GRAY8
 branch, `c * 255 / 65`, needs text manager `+0x35584` = 1, which nothing sets. An aliased glyph's set pixels are opaque
-under both. The port takes the blit from the engine build's `TextRules.GlyphCoverage` (`Vm/EngineBuilds.cs`).
+under both. The port takes the blit from the engine build's `TextRules.GlyphCoverage` (`Ome.Engine.Vm/EngineBuilds.cs`).
 
 #### Aspect-mode surface text (2026-11-07)
 

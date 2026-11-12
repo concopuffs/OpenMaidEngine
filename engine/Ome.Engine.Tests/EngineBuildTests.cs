@@ -103,7 +103,7 @@ public sealed class EngineBuildTests
     private static readonly string[] AllowedReaders =
     [
         // The builds themselves.
-        "engine/Ome.Engine/Vm/EngineBuilds.cs",
+        "engine/Ome.Engine.Vm/EngineBuilds.cs",
         // Profile loading and the registry loader.
         "engine/Ome.Engine/Profiles/",
         "engine/Ome.Engine/Sys4/Sys4Loader.cs",
@@ -120,7 +120,7 @@ public sealed class EngineBuildTests
         "engine/Ome.Cli/",
         // Diagnostics that print the id.
         "engine/Ome.Engine/Sys4/Sys4OpcodeDecodeException.cs",
-        "engine/Ome.Engine/Vm/UnsupportedOpcodeDiagnostic.cs",
+        "engine/Ome.Engine/Diagnostics/UnsupportedOpcodeDiagnostic.cs",
         "engine/Ome.Engine.Frontend/GodotTraceSink.cs",
         "engine/Ome.Engine/Localization/MessageSegmenter.cs",
         "engine/Ome.Mods/Localization/Import/ComposedStrings.cs",
@@ -155,6 +155,19 @@ public sealed class EngineBuildTests
         }
         Assert.True(files > 300, $"only {files} sources were found");
         Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void EveryAllowedReaderExists()
+    {
+        // A moved file would otherwise leave its entry pointing at nothing and its reads flagged, or a directory
+        // entry silently allowing nothing.
+        string[] missing = AllowedReaders
+            .Where(allowed => allowed.EndsWith('/')
+                ? !Directory.Exists(Path.Combine(Paths.Repo, allowed))
+                : !File.Exists(Path.Combine(Paths.Repo, allowed)))
+            .ToArray();
+        Assert.Empty(missing);
     }
 
     [Fact]

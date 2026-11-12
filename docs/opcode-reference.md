@@ -5,7 +5,7 @@
 
 Observation proves presence in that exact script revision; it does not prove a base SYS4 definition, revision ancestry, or absence from any unscanned game.
 
-Which opcodes the port runs is the engine's handler table (`engine/Ome.Engine/Vm/VirtualMachine.Handlers.cs`), which binds each opcode by its name; `OpcodeHandlerTableTests` checks that every opcode of a game's ABI table has a handler.
+Which opcodes the port runs is the engine's handler table (`engine/Ome.Engine.Vm/VirtualMachine.Handlers.cs`), which binds each opcode by its name; `OpcodeHandlerTableTests` checks that every opcode of a game's ABI table has a handler.
 
 - **himegari:** 248 opcodes in 520 scripts / 1522942 instructions; catalog `S4IC422`, scripts `SYS4422`, artifact `build/games/himegari/catalog-opcode-coverage.json`
 - **kamidori:** 269 opcodes in 732 scripts / 2123406 instructions; catalog `S4IC433`, scripts `SYS4433`, artifact `build/games/kamidori/catalog-opcode-coverage.json`

@@ -3,7 +3,7 @@ namespace Ome.Engine.Text;
 /// <summary>
 /// The text rules an engine build gives the text natives (docs/superpowers/specs/2026-11-12-engine-layering-design.md
 /// §7.3). Each member is one behaviour, named for what it does; the builds that differ are declared in
-/// <c>Vm/EngineBuilds.cs</c>.
+/// <c>Ome.Engine.Vm/EngineBuilds.cs</c>.
 /// </summary>
 /// <param name="GlyphCoverage">How the glyph blit turns a gray-4 coverage value into alpha: in sixteenths
 /// (text_blit_glyph_bitmap@0x458c80 in 4.24J) or seventeenths (text_blit_glyph_bitmap_sys4433@0x45cff0 in 4.33G);

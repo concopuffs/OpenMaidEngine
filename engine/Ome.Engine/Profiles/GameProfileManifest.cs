@@ -61,8 +61,8 @@ public sealed record GameCatalogIdentity
 
 /// <summary>
 /// Authored, content-free description of one supported game. Opcode semantics belong to the selected
-/// engine ABI snapshot/layers, and engine behaviour to the engine build the profile names (Vm/EngineBuilds.cs), not to
-/// this game manifest.
+/// engine ABI snapshot/layers, and engine behaviour to the engine build the profile names
+/// (Ome.Engine.Vm/EngineBuilds.cs), not to this game manifest.
 /// </summary>
 public sealed record GameProfileManifest
 {

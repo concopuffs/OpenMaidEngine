@@ -19,7 +19,7 @@ internal sealed record MovieRuntime(string Name, int AssetId, long ResourceId, I
             ? Math.Max(0, presentationDurationMs.Value)
             : null;
         IMovieDecoder decoder = factory.Open(
-            payload, Math.Max(0, initialPositionMs), safeDurationMs);
+            payload.Name, payload.Bytes, Math.Max(0, initialPositionMs), safeDurationMs);
         long remainingMs = decoder.StopTimeMs is >= 0 and var stopTime
             ? Math.Max(0, stopTime - decoder.InitialPositionMs)
             : -1;

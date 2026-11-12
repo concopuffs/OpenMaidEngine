@@ -31,13 +31,15 @@ public class MovieOpcodeTests
 
     private sealed class FakeMovieDecoderFactory(FakeMovieDecoder decoder) : IMovieDecoderFactory
     {
-        public MoviePayload? OpenedPayload { get; private set; }
+        public string? OpenedName { get; private set; }
+        public byte[]? OpenedBytes { get; private set; }
         public long OpenedInitialPositionMs { get; private set; }
         public long? OpenedPresentationDurationMs { get; private set; }
         public IMovieDecoder Open(
-            MoviePayload movie, long initialPositionMs = 0, long? presentationDurationMs = null)
+            string name, byte[] bytes, long initialPositionMs = 0, long? presentationDurationMs = null)
         {
-            OpenedPayload = movie;
+            OpenedName = name;
+            OpenedBytes = bytes;
             OpenedInitialPositionMs = initialPositionMs;
             OpenedPresentationDurationMs = presentationDurationMs;
             return decoder;
@@ -120,7 +122,8 @@ public class MovieOpcodeTests
 
         var runtime = MovieRuntime.Open("TEST.AGF", 7, 0x123, payload, factory);
 
-        Assert.Same(payload, factory.OpenedPayload);
+        Assert.Equal(payload.Name, factory.OpenedName);
+        Assert.Same(payload.Bytes, factory.OpenedBytes);
         Assert.Equal(0, factory.OpenedInitialPositionMs);
         Assert.Same(decoder, runtime.Decoder);
         Assert.Equal(0x123, runtime.ResourceId);

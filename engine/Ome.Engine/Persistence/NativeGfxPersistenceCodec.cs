@@ -3,7 +3,9 @@ using Ome.Engine.Model;
 
 namespace Ome.Engine.Persistence;
 
-internal static class NativeGfxPersistenceCodec
+/// <summary>The graphics part of a numbered save: surface records, retained objects and the range transform, written
+/// and read as native's save does. The VM's save and load call it.</summary>
+public static class NativeGfxPersistenceCodec
 {
     private const int SurfaceCount = 1000;
     private const int SurfaceRecordSize = 20;

@@ -13,6 +13,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\engine\Ome.Engine\Ome.Engine.csproj" />
+    <ProjectReference Include="..\engine\Ome.Engine.Devices\Ome.Engine.Devices.csproj" />
+    <ProjectReference Include="..\engine\Ome.Engine.Vm\Ome.Engine.Vm.csproj" />
     <ProjectReference Include="..\engine\Ome.Engine.Frontend\Ome.Engine.Frontend.csproj" />
     <ProjectReference Include="..\engine\Ome.Mods\Ome.Mods.csproj" />
     <EmbeddedResource Include="..\build\opcodes.json"

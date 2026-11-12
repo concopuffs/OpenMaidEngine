@@ -7,7 +7,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
 
-public sealed partial class GodotAdvHost : IHost
+public sealed partial class GodotAdvHost : IHost, ISurfacePixels
 {
     private readonly Main _main;
     private readonly ResourceMap _res;

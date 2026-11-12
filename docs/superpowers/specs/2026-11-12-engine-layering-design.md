@@ -2,9 +2,9 @@
 
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
-design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds) and 1 (handler
-table) are implemented on `feature/engine-layering`; §4, §7.5, §7.6 and §13 record what they settled. §15 records
-the history.
+design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table)
+and 3 (projects) are implemented on `feature/engine-layering`; §3.3, §4, §7.5, §7.6 and §13 record what they
+settled. §15 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
 `vm-map/opcodes.toml`, and the open work it covers in `docs/backlog.md` (§14), which points here.
@@ -185,6 +185,32 @@ So a port native should line up with a native subsystem, and the engine tick of 
 `FrameClock` stays in `Ome.Engine`: it is the engine's own clock (speed scaling, and a stepped mode for tests) over
 a time source. `INativeDatStore` and `IAssetStore` stay too (§6.4).
 
+**As built (milestone 3).**
+
+- **The projects.** `engine/Ome.Engine.Vm/` holds what `Ome.Engine/Vm/` held, in the same namespace, and its project
+  sets `DisableTransitiveProjectReferences`. `engine/Ome.Engine.Devices/` holds the types of the table above except
+  `IPaceClock`, in their old namespaces. The movie decoder's interfaces and their two audio records became public,
+  and the factory takes a name and the file's bytes. The solution, the Godot project and the release packages
+  include both assemblies.
+- **The diagnostic** is `Ome.Engine.Diagnostics.UnsupportedOpcodeDiagnostic` (`Diagnostics/`).
+- **One internal type** of `Ome.Engine` was used by the VM: `NativeGfxPersistenceCodec`, the save's graphics
+  records. It is public now.
+- **The thumbnails.** `CaptureSurfacePixels` and `ReplaceSurfacePixels` left `IGraphicsHost` for
+  `Hosting/ISurfacePixels.cs`, which `IHost` does not include. `Persistence/NumberedSaveThumbnails` (`Write`, `Load`)
+  is the native that ops `0x1ae` and `0x1af` call; it returns the script's result. The Godot host and the tests'
+  recording host implement `ISurfacePixels`. A host without it has no pixels, as the interface's defaults gave
+  before.
+- **Proved once.** Before the thumbnail change, the handlers failed with CS0012 at the two sites named above. A file
+  in `Ome.Engine.Vm` that names `RgbaImage` or `IGlyphMaskRasterizer` fails with CS0234. A reference from
+  `Ome.Engine` to `Ome.Engine.Vm` fails restore with MSB4006 (a circular dependency).
+- **The backstop** is `ProjectBoundaryTests`:
+  - each layer is its own assembly, and the device types are in `Ome.Engine.Devices`;
+  - the handler assembly references `Ome.Engine` and not `Ome.Engine.Devices`;
+  - `Ome.Engine` does not reference the handler assembly, and `Ome.Engine.Devices` references no `Ome.*` assembly;
+  - each of the three project files references only the layer below, and `Ome.Engine.Vm`'s sets
+    `DisableTransitiveProjectReferences`;
+  - `IHost` and its seven interfaces name no device type.
+
 ### 3.4 What today's types become
 
 - **`IHost` and its seven interfaces become the natives' interfaces.** They are already written at the right level
@@ -214,8 +240,8 @@ a time source. `INativeDatStore` and `IAssetStore` stay too (§6.4).
 
 **As built (milestone 1).**
 
-- **The table** is `Vm/VirtualMachine.Handlers.cs`. It maps each opcode's name to its handler. The name is the
-  opcode's `CanonicalLabel`: its registry semantic name, or its label when it has none. A VM binds its table's
+- **The table** is `Ome.Engine.Vm/VirtualMachine.Handlers.cs`. It maps each opcode's name to its handler. The name
+  is the opcode's `CanonicalLabel`: its registry semantic name, or its label when it has none. A VM binds its table's
   opcodes into an array indexed by opcode when it is constructed. The 120 `u004xxxxx` alias labels are gone.
 - **Names are unique.** The registry lint and `OpcodeHandlerTableTests` both reject two opcodes with one name.
   Op `0x19a` shared `get-message-skip` with `0x1c7` and is now `get-message-skip-enabled`. The shared name had also
@@ -232,9 +258,9 @@ a time source. `INativeDatStore` and `IAssetStore` stay too (§6.4).
   name in the catalog; no two opcodes share a name; an opcode without a handler halts with its diagnostic.
 - **Handlers are `Op…` methods** of `VirtualMachine`, in the partials by family, until there are natives to give
   them (milestones 3 to 11).
-- **`StepResult`** (`Vm/StepResult.cs`) is `Next`, `Jump(index)`, `Halt`, `FrameReturn`, `HotspotReturn` or
-  `RootReload`. A wait's callback still pushes a marker on the frame's local call stack; `ret` turns it into
-  `HotspotReturn`.
+- **`StepResult`** (`Ome.Engine.Vm/StepResult.cs`) is `Next`, `Jump(index)`, `Halt`, `FrameReturn`,
+  `HotspotReturn` or `RootReload`. A wait's callback still pushes a marker on the frame's local call stack; `ret`
+  turns it into `HotspotReturn`.
 
 The BGM fade after the change (names illustrative):
 
@@ -685,12 +711,13 @@ check are `EngineBuilds.ForVm`, in the build file.
   magic, which is a fact about the file;
 - composition: `godot/Main.cs`, `godot/Main.Mods.cs`, and the command-line tools (`Ome.Cli`), which put the engine
   together for their own runs;
-- diagnostics that print the id: `Sys4/Sys4OpcodeDecodeException.cs`, `Vm/UnsupportedOpcodeDiagnostic.cs`,
+- diagnostics that print the id: `Sys4/Sys4OpcodeDecodeException.cs`, `Diagnostics/UnsupportedOpcodeDiagnostic.cs`,
   `Ome.Engine.Frontend/GodotTraceSink.cs`, and the error messages at `Localization/MessageSegmenter.cs:14` and
   `Ome.Mods/Localization/Import/ComposedStrings.cs:40`.
 
 The test is `EngineBuildTests.NothingBelowCompositionReadsAnAbiOrBuildId`. It strips comments and fails on an ABI or
 build id read, a `SYS4nnn` or build-id literal, or a build lookup anywhere else in `engine/` and `godot/`.
+`EveryAllowedReaderExists` fails when a file or folder on the list is gone, as a move would leave it.
 
 `Vm/OpcodeRuntimeCoverage.cs`, which read the catalog's ABI id, went away with milestone 1.
 
@@ -916,3 +943,11 @@ Not covered:
   `SYS4REG.INI` are equal, and their shots are identical except for animation phase and the build label. The saves of
   `himegari-save-load` and `kamidori-history-after-load` are equal under `save-diff` except for their timestamp and
   play time.
+- **2026-11-12, milestone 3.** `Ome.Engine.Vm` and `Ome.Engine.Devices` created on `feature/engine-layering` (§3.3,
+  "As built"). As §3.3 predicted, only the two thumbnail handlers and one internal type stood in the way. The two
+  compiles meant to fail do fail, and `ProjectBoundaryTests` is the backstop. The suite (1855), core validation and
+  workspace validation on both games (`oms-rebuild` included) pass. The ten port scenarios of milestone 1 pass on the
+  new build with equal `SYS4REG.INI`; their shots are identical except for animation phase and the build label, and
+  `himegari-read-skip` keeps its time (37.8 s). The saves of `himegari-save-load` and
+  `kamidori-history-after-load` are equal under `save-diff` except for their timestamp, and their thumbnails are
+  byte-identical.

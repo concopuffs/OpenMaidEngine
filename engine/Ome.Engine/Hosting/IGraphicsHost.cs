@@ -29,12 +29,6 @@ public interface IGraphicsHost
 
     void CreateTexture(int slot, int width, int height);
 
-    /// <summary>Return a stable RGBA snapshot of one numbered surface, or null when unavailable.</summary>
-    RgbaImage? CaptureSurfacePixels(int slot) => null;
-
-    /// <summary>Replace one numbered surface from decoded RGBA pixels. False means unsupported.</summary>
-    bool ReplaceSurfacePixels(int slot, RgbaImage image) => false;
-
     void SetTexture(long resourceId, int slot);
     void SetTexture(long resourceId, int slot, long colorKey) => SetTexture(resourceId, slot);
     void ReleaseSurface(int slot) { }

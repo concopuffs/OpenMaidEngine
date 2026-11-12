@@ -26,8 +26,8 @@ public partial class Main : Godot.Control
     private WindowLaunchOptions _windowOptions;
     private Sys4AssetCatalog _catalog = null!;
     private SelectedGameProfile _selectedProfile = null!;
-    // The engine build the profile runs (Vm/EngineBuilds.cs): its rules go to the VM, the host and the stores below,
-    // and its ABI picks the opcode table. Nothing past this file reads its id.
+    // The engine build the profile runs (Ome.Engine.Vm/EngineBuilds.cs): its rules go to the VM, the host and the
+    // stores below, and its ABI picks the opcode table. Nothing past this file reads its id.
     private EngineBuild _engineBuild = null!;
     private ResolvedGamePersistence _profilePersistence = null!;
     private IAssetStore _assetStore = null!;

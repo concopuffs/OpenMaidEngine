@@ -496,6 +496,6 @@ internal sealed class FfmpegMovieDecoder : IMovieDecoder
 internal sealed class FfmpegMovieDecoderFactory : IMovieDecoderFactory
 {
     public IMovieDecoder Open(
-        MoviePayload movie, long initialPositionMs = 0, long? presentationDurationMs = null)
-        => new FfmpegMovieDecoder(movie, initialPositionMs, presentationDurationMs);
+        string name, byte[] bytes, long initialPositionMs = 0, long? presentationDurationMs = null)
+        => new FfmpegMovieDecoder(new MoviePayload(name, bytes), initialPositionMs, presentationDurationMs);
 }

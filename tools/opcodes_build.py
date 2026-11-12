@@ -376,7 +376,7 @@ def emit_reference_md(model: M.Model) -> str:
          "Observation proves presence in that exact script revision; it does not prove a base SYS4 "
          "definition, revision ancestry, or absence from any unscanned game.", "",
          "Which opcodes the port runs is the engine's handler table "
-         "(`engine/Ome.Engine/Vm/VirtualMachine.Handlers.cs`), which binds each opcode by its name; "
+         "(`engine/Ome.Engine.Vm/VirtualMachine.Handlers.cs`), which binds each opcode by its name; "
          "`OpcodeHandlerTableTests` checks that every opcode of a game's ABI table has a handler.", ""]
     for observation in model.observations.values():
         L.append(
