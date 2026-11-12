@@ -24,7 +24,8 @@ A mod is one package with a `manifest.toml`. Version 1 supports four kinds of co
 - **Assets:** files that override an original asset by name, or new assets that a mod's scripts use.
 
 Format version 2 adds **language packages**: translation catalogs and fonts that present the game's text in another
-language without changing a script ([languages.md](languages.md)). They run in the port only.
+language without changing a script ([translating.md](translating.md) walks through one, [languages.md](languages.md)
+has every rule). They run in the port only.
 
 Version 1 does not support runtime scripting (Lua), engine extensions, or patching code another mod inserted.
 `../backlog.md` and the mod loader design's future work list what may come later.
@@ -50,7 +51,8 @@ Test a mod in the port first: its link report names every conflict, while native
 | learn the language | [oms-language.md](oms-language.md) |
 | edit an original script without replacing it | [patching.md](patching.md) |
 | add a scene, a boot-time data edit, or new assets | [new-scenes.md](new-scenes.md) |
-| translate a game | [languages.md](languages.md) |
+| translate a game, step by step | [translating.md](translating.md) |
+| look up a language package's keys and rules | [languages.md](languages.md) |
 | look up a command or a port flag | [cli.md](cli.md) |
 | understand an error or a crash | [troubleshooting.md](troubleshooting.md) |
 | find your game's options, values and quirks | [games/README.md](games/README.md) |

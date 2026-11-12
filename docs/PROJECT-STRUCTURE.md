@@ -157,7 +157,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── PROJECT-STRUCTURE.md                this file (where things live)
     │   ├── tools-reference.md                  every tool: purpose, usage, I/O (operational companion)
     │   ├── modding/                            modder-facing guides (README, first-mod, packages, oms-language,
-    │   │                                         patching, new-scenes, languages, cli, troubleshooting); English, plain Markdown;
+    │   │                                         patching, new-scenes, translating, languages, cli, troubleshooting);
+    │   │                                         English, plain Markdown;
     │   │                                         generic only: game facts live in modding/games/
     │   │   └── games/                          README.md GENERATED (supported games + identity blocks); <profile>.md per game
     │   ├── backlog.md                          open work items (fidelity gaps, deferred follow-ups, accepted ideas)

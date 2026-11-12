@@ -5,6 +5,9 @@ language it gives versions for. The scripts keep running on their own text, and 
 is drawn. Saves, history and read flags therefore stay those of the original game, and a save made in one language
 loads in any other.
 
+This page is the reference. For a walkthrough from an empty folder to a shared package, start with
+[translating.md](translating.md).
+
 Language packages run in the port only. Native AGE draws the text its scripts hold, so `omp export` leaves a
 package's text and language assets out (with a note).
 
@@ -184,7 +187,9 @@ An entry matches the exact source text. A scope narrows where:
 | site | `script` and `at = 0x…` | at that one instruction |
 
 The narrowest entry wins, then a later file or package. `at` is the instruction's dword offset in the original
-script, as the F3 locator prints it (`text SC0100@0x2a43`) when no mod patches that script. A file with site entries
+script; a message's is its first `show-text`'s, as `--text-log` writes it. The F3 locator prints the page's last
+`show-text` (`text SC0100@0x2a43`), the same instruction for a message drawn in one piece, when no mod patches that
+script. A file with site entries
 gives the script's `fingerprint` (`Ome.Cli oms-patch --fingerprint SC0100.BIN`). Site entries bind only to that
 revision of the script:
 

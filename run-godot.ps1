@@ -15,6 +15,9 @@
 #   .\run-godot.ps1 -OverlayRoot <dir> -AllowBmpAsAgf  select generic asset compatibility options
 #   .\run-godot.ps1 -Mod <mod folder or .omp> [-Mod ...]  also load these mods (docs/modding/cli.md)
 #   .\run-godot.ps1 -NoMods    start without any mod, even those in the profile's mods/ folder
+#   .\run-godot.ps1 -Language <tag>  show the game in this language (docs/modding/languages.md)
+#   .\run-godot.ps1 -TextRoot <dir>  also load a folder of loose catalogs for every language
+#   .\run-godot.ps1 -TextLog   log untranslated, narrowed and cut text to the profile's diagnostics/
 #   .\run-godot.ps1 -Profile kamidori -GameRoot <install>  explicitly select a game profile
 #   .\run-godot.ps1 -Profile himegari -Probe -GameRoot <install>  force a read-only diagnostic run
 #   .\run-godot.ps1 -Doctor     resolve and print prerequisites without building or launching
@@ -30,6 +33,9 @@ param(
     [switch]$AllowBmpAsAgf,
     [string[]]$Mod,
     [switch]$NoMods,
+    [string]$Language,
+    [string]$TextRoot,
+    [switch]$TextLog,
     [switch]$TranslationPatch,
     [switch]$Probe,
     [switch]$SelfTest,
@@ -223,6 +229,12 @@ if ($SelfTest) {
         $userArgs += @('--mod', (Resolve-Path -LiteralPath $modPath).ProviderPath)
     }
     if ($NoMods) { $userArgs += '--no-mods' }
+    if ($Language) { $userArgs += @('--language', $Language) }
+    if ($TextRoot) {
+        if (-not (Test-Path -LiteralPath $TextRoot)) { throw "text root not found: $TextRoot" }
+        $userArgs += @('--text-root', (Resolve-Path -LiteralPath $TextRoot).ProviderPath)
+    }
+    if ($TextLog) { $userArgs += '--text-log' }
     if ($perfLogFile) {
         Write-Host "==> performance log: $perfLogFile" -ForegroundColor Cyan
         $userArgs += @('--perf-log', $perfLogFile)

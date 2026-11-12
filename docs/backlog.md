@@ -333,8 +333,16 @@ and the drive scenarios.
 
 The localization framework is built: milestones 0 to 6 of `superpowers/specs/2026-11-10-localization-design.md`, with
 its eleven gates, and `align`, `fit` and the overflow report (§7.2, §7.3), which no milestone held (2026-11-11).
-Modders' guide: `modding/languages.md`; the import test's results: `localization-import-test.md`. Nothing is open;
-the future work spec §17 lists stays in the spec.
+Modders' guides: `modding/translating.md` (the walkthrough) and `modding/languages.md` (the reference); the import
+test's results: `localization-import-test.md`. The future work spec §17 lists stays in the spec.
+
+- **Translators cannot find or export the pictures to translate.** A language asset replaces a picture by its file
+  name (`modding/languages.md`, "Images and other assets"), but no modder command names the pictures on screen or
+  writes an original as PNG to edit. Today only developer tools come close: the port's `--gfx-log FILE` logs each
+  drawn object's resolved file, `omp text import-scripts --package` writes PNGs only for pictures an in-place
+  translation replaced, and `tools/convert_agf.py` converts extracted AGFs to BMP for Himegari's archives only.
+  Done when the port or `Ome.Cli` names the pictures on the current screen, and `Ome.Cli` exports a named asset as
+  PNG with the port's decoder, both documented in `modding/translating.md` step 8.
 
 ## Platform and project
 

@@ -645,7 +645,8 @@ it authoritatively selects the `kamidori` profile and install root while still a
 under `.AGF` catalog names. `run-godot.cmd -Kamidori -TranslationPatch` is the convenience spelling for the
 translated install `../Kamidori_Translated` (unless `-GameRoot` is given) with its `patch/` overlay plus that BMP
 compatibility option; neither behavior is inferred from the game profile. `-Mod <folder or .omp>` (repeatable) forwards each path, resolved against the caller's
-directory, as `--mod`, and `-NoMods` forwards `--no-mods` (windowed runs only; `docs/modding/cli.md`).
+directory, as `--mod`, and `-NoMods` forwards `--no-mods`; `-Language <tag>`, `-TextRoot <dir>` (resolved the same way)
+and `-TextLog` forward `--language`, `--text-root` and `--text-log` (windowed runs only; `docs/modding/cli.md`).
 `-FpsCounter` forwards `--fps-counter` to display a low-overhead live FPS/frame-time overlay.
 For an immediate native Vulkan startup crash involving injected overlay DLLs, see the tested
 [Windows overlay diagnosis and process-local workaround](platform-portability.md#windows-vulkan-startup-and-injected-overlays).

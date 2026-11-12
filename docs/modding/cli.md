@@ -67,8 +67,8 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 | `--text-root DIR` | Also load a loose folder of catalogs laid out as a package's `text/`, after the mods' (languages.md, "Testing without a package"). |
 | `--text-log` | Write every string drawn without a catalog entry to `diagnostics/text-misses.jsonl`, every translated message narrowed to fit its window, with `width_percent`, the width it got, and every one cut at the bottom of its window, with `rows_cut`, the rows it lost. |
 
-`run-godot.ps1` (or `run-godot.cmd`) passes these through as `-Mod PATH` (repeatable) and `-NoMods`. Combine them
-with the game switches:
+`run-godot.ps1` (or `run-godot.cmd`) passes these through as `-Mod PATH` (repeatable), `-NoMods`, `-Language TAG`,
+`-TextRoot DIR` and `-TextLog`. Combine them with the game switches:
 
 ```text
 .\run-godot.cmd <game switches> -Mod path\to\my.mod
@@ -96,7 +96,7 @@ Each game has a **profile root**:
 | `mods/selectors.toml` | Written by the port: the selector each mod with new scripts or assets was given. Do not edit it. |
 | `mods/.cache/` | The linked results, each reused while nothing changes. A link keeps the 8 most recent and removes older ones, but none younger than an hour. Safe to delete at any time. |
 | `SAVE/` | Saves. With mods loaded, each `SAVEnn.DAT` gets a `SAVEnn.mods.toml` stamp beside it. |
-| `diagnostics/` | `mod-link.txt` (the last link report) and `mod-save-stamps.txt` (save-stamp warnings). |
+| `diagnostics/` | `mod-link.txt` (the last link report), `mod-save-stamps.txt` (save-stamp warnings) and, with `--text-log`, `text-misses.jsonl`. |
 
 To install a mod, copy its `.omp` (or folder) into `mods/`. To remove it, delete it. Its selector stays reserved,
 so reinstalling it later restores saves made inside its scripts. When you are sure it is gone for good, start once
