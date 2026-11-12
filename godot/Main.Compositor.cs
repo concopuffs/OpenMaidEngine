@@ -27,6 +27,11 @@ public partial class Main
     // GfxState and applied here; object opacity comes only from the actual blend/color path.
     private sealed record CachedPixels(int Width, int Height, byte[] Rgba);
     private readonly System.Collections.Generic.Dictionary<(int AssetId, long Key), CachedPixels> _pixelCache = new();
+
+    /// <summary>Drops the prepared pixels of every catalog image, so the software path takes each one from the host
+    /// again: after a language switch, its language assets apply (localization spec §12). Main thread, as the
+    /// compositor.</summary>
+    private void ForgetPreparedPixels() => _pixelCache.Clear();
     private readonly System.Collections.Generic.List<RenderObject> _visibleSnapshot = new(1024);
 
     /// <summary>A retained object's live source slot, read under the gfx lock (the VM thread changes the object).</summary>

@@ -127,6 +127,16 @@ it; git history keeps the record.
   (`SC0000@0x1488`, 2026-11-11) and loaded from the title shows Wil's line twice in HISTORY, in Japanese as in
   English: the saved records hold it, and the resumed page records it again. Native has not been driven to the same
   load. Done when native's backlog after that load is known, and the port's matches it.
+- **Strip reveals and mask wipes are drawn as crossfades.** The port keeps each transition's mode, thickness,
+  timing and blocking, but both render paths blend the whole target in at one alpha.
+  - The legacy strip reveals `0x27`/`0x28` (Kamidori: one `0x27` call and 192 `0x28` calls across 47 scripts;
+    `engine-re.md`, "Kamidori SYS4433 comparison image and K6 frontier") end in
+    `LegacyScreenTransitionComposite.Alpha`, which ignores the mode.
+  - The type-2 range wipe `0x24f` (Kamidori's story-portrait helper in ten scripts; `engine-re.md`, "Patterned
+    retained-range transition opcode `0x24f`") goes through `CrossfadeApproximation` (`godot/Main.Compositor.cs`).
+
+  Done when each mode reveals its strips or clip mask as native draws them, checked frame by frame against native
+  with `drive.py` at a low `speed`.
 
 ## Robustness
 
@@ -228,6 +238,22 @@ and the drive scenarios.
   `Sys4/RetainedSurfaceRasterizer.cs` walks them a third time. A rule fixed in one can be missed in the others. Done
   when one Godot-free traversal drives both the GPU and the software output, and the rasterizer either shares it or
   documents why its rules differ.
+- **Normal play still uses the software compositor.** `TryRecompositeGpu` (`godot/Main.Compositor.cs`) hands the
+  frame to `RecompositeSoftware` in three cases:
+  - A whole-screen transition runs (`_host.HasScreenTransition`): AGE's blocking transitions between two complete
+    frames, which are the black and white fades, `0x25`'s crossfade and the `0x27`/`0x28` strip reveals. Kamidori's
+    title fades to and from Game Start are among them. Native (mode 4) flattens the target frame into one surface
+    and blends it over the captured source frame (`CompositeFlattenedTransitionTarget`). Fading each object on the
+    GPU would dim the frame and let layers show through each other, so the GPU path needs an offscreen target it
+    does not have.
+  - An object has an additive LERP tint: there is no shader variant, and neither game has shown one.
+  - `--gfx-log` or `--timeline-log` is on.
+
+  So every rule and cache lives twice. Until 2026-11-11 a language switch cleared the GPU's textures but not the
+  software path's `_pixelCache`, so fades showed the old language's images. Done when the GPU path draws screen
+  transitions through an offscreen texture (a `SubViewport`) blended over the captured source and has the additive
+  LERP-tint variant, and the software path runs only when chosen (`--render-backend software`, the two logs) as the
+  reference. A driven fade's GPU frames must match the software path's within a stated tolerance.
 - **The Godot front end has no unit tests.** `godot/` is tested only by `--selftest` (`Main.SelfTest.cs`), which runs
   the host with `synchronizeExplicitPresentation: false` (`Main.cs:521`). `GodotAdvHost.PresentationInput.cs` (the
   waits and input) uses no Godot API, but sits in the Godot project, which no test project references. Done when the

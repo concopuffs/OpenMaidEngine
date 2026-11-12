@@ -124,7 +124,8 @@ public partial class Main
     }
 
     /// <summary>The language assets of the selection's chain (spec §12). A switch takes effect when an asset is next
-    /// loaded, so the host drops what it decoded and the renderer what it uploaded.</summary>
+    /// loaded, so the host drops what it decoded, the GPU renderer what it uploaded, and the software compositor
+    /// (screen transitions, and frames the GPU path declines) what it prepared.</summary>
     private void SelectLanguageAssets(LanguageSelection selection, bool startup)
     {
         if (_languageAssets == null) return;
@@ -133,6 +134,7 @@ public partial class Main
         {
             _host?.ForgetDecodedImages();
             _gpuRenderer?.ForgetStaticTextures();
+            ForgetPreparedPixels();
         }
         var languages = new System.Collections.Generic.HashSet<string>(_languageAssets.Table.Languages);
         string[] used = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Where(selection.Lookup, languages.Contains));
