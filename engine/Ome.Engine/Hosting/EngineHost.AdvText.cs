@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Persistence;
 using Ome.Engine.Text;
+using Ome.Engine.Diagnostics;
 
-public sealed partial class GodotAdvHost
+namespace Ome.Engine.Hosting;
+
+public sealed partial class EngineHost
 {
     private readonly object _textLock = new();
     private readonly CachedGlyphMaskRasterizer _surfaceTextMaskCache;
@@ -61,13 +63,13 @@ public sealed partial class GodotAdvHost
         if (fonts == null && _presentedFonts == null) return;
         _presentedFonts = fonts;
         // The presented pipeline is the gameplay one when that rasterizer is already portable.
-        if (_presentedText.IsValueCreated && _presentedTextRasterizer is GodotTextServerGlyphMaskRasterizer presented)
+        if (_presentedText.IsValueCreated && _presentedTextRasterizer is ILanguageFontRasterizer presented)
         {
             presented.UseLanguageFonts(fonts);
             _presentedText.Value.Cache.Clear();
         }
         else if (_surfaceTextBackendInfo.Policy == GlyphRasterPolicy.PortableUnicode
-                 && _surfaceTextRasterizer is GodotTextServerGlyphMaskRasterizer gameplay)
+                 && _surfaceTextRasterizer is ILanguageFontRasterizer gameplay)
         {
             gameplay.UseLanguageFonts(fonts);
             _surfaceTextMaskCache.Clear();
@@ -214,7 +216,7 @@ public sealed partial class GodotAdvHost
         catch (Exception error) when (
             error is System.IO.IOException or UnauthorizedAccessException or System.IO.InvalidDataException)
         {
-            Godot.GD.PushWarning($"[settings] message settings save failed: {error.Message}");
+            _frontEnd.Warn($"[settings] message settings save failed: {error.Message}");
         }
     }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Ome.Engine.Diagnostics;
 using Ome.Engine.Model;
 
 /// <summary>

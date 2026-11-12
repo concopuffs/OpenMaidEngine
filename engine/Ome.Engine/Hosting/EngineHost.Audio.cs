@@ -1,10 +1,11 @@
 using System;
-using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 
-public sealed partial class GodotAdvHost
+namespace Ome.Engine.Hosting;
+
+public sealed partial class EngineHost
 {
     private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
     private int _voiceBgmDuckControl;
@@ -35,15 +36,15 @@ public sealed partial class GodotAdvHost
         });
         if (audio == null) return;
         if (forceRestart)
-            _main.CallDeferred("RestartBgm", audio.Bytes, audio.Name, startMode);
+            _frontEnd.RestartBgm(audio.Bytes, audio.Name, startMode);
         else
-            _main.CallDeferred("PlayBgm", audio.Bytes, audio.Name);
+            _frontEnd.PlayBgm(audio.Bytes, audio.Name);
     }
 
     public void StopBgm()
     {
         _timeline?.Event("bgm-stop", new());
-        _main.CallDeferred("StopBgm");
+        _frontEnd.StopBgm();
     }
 
     public void PlayVoice(long id) => PlayVoice(id, 0, false);
@@ -70,7 +71,7 @@ public sealed partial class GodotAdvHost
         }
         if (queuedForSkip)
         {
-            if (firstQueued) _main.CallDeferred("StopVoiceForMessageSkip");
+            if (firstQueued) _frontEnd.StopVoiceForMessageSkip();
             return;
         }
         DispatchVoice(audio, playbackVariant, muted);
@@ -78,7 +79,7 @@ public sealed partial class GodotAdvHost
 
     private void DispatchVoice(AudioPayload audio, int playbackVariant, bool muted)
     {
-        int generation = _main.QueueVoicePlayback();
+        int generation = _frontEnd.QueueVoicePlayback();
         // voice_bgm_duck_begin@0x406de0 reads sound:MusicFadeOnVoicePlaying and its volume (percent) at each
         // voice start; the 設定 dialog's ｻｳﾝﾄﾞ page sets both.
         (bool fadeOnVoice, int fadePercent) = VoiceBgmDuckSettings();
@@ -86,7 +87,7 @@ public sealed partial class GodotAdvHost
         // Godot's stream player has no matching AGE start-mode control. Retain the native
         // variant through dispatch/timeline so that distinction is not erased at the VM seam.
         // A muted voice (op 0x1d5) still plays, at volume 0, so its completion keeps Auto timing.
-        _main.CallDeferred("PlayVoice", audio.Bytes, audio.Name, generation, duckBgm, fadePercent, muted);
+        _frontEnd.PlayVoice(audio.Bytes, audio.Name, generation, duckBgm, fadePercent, muted);
     }
 
     /// <summary>sound:MusicFadeOnVoicePlaying (registered default 1) and sound:MusicFadeOnVoicePlayingVolume (50).
@@ -114,7 +115,7 @@ public sealed partial class GodotAdvHost
         // Op 0x1bc: native stops channel 12 and clears message_skip_queued_voice_id/arg.
         lock (_messageSkipLock) _queuedSkippedVoice = null;
         _timeline?.Event("voice-stop", new());
-        _main.CallDeferred("StopVoiceForMessageSkip");
+        _frontEnd.StopVoiceForMessageSkip();
     }
 
     public void ArmVoiceBgmDuckRelease()
@@ -127,7 +128,7 @@ public sealed partial class GodotAdvHost
             System.Threading.Volatile.Write(ref _voiceBgmDuckControl, 0);
         }
         if ((control & 1) != 0) return;
-        _main.CallDeferred("ArmVoiceBgmDuckRelease");
+        _frontEnd.ArmVoiceBgmDuckRelease();
     }
 
     public void SetStatementBlockActive(bool active)
@@ -165,7 +166,7 @@ public sealed partial class GodotAdvHost
         _sfxNames[channel] = audio?.Name;
         _timeline?.Event("sfx-load", new() { ["resource"] = resourceId, ["channel"] = channel,
             ["file"] = audio?.Name });
-        if (audio != null) _main.CallDeferred("LoadSoundEffect", audio.Bytes, audio.Name, channel);
+        if (audio != null) _frontEnd.LoadSoundEffect(audio.Bytes, audio.Name, channel);
     }
 
     public void StartSoundEffect(int channel) => StartSoundEffect(channel, 0);
@@ -175,7 +176,7 @@ public sealed partial class GodotAdvHost
         if ((uint)channel >= (uint)_sfxNames.Length || _sfxNames[channel] == null) return;
         _timeline?.Event("sfx-start", new() { ["channel"] = channel,
             ["start_mode"] = startMode, ["file"] = _sfxNames[channel] });
-        _main.CallDeferred("StartSoundEffect", channel, startMode);
+        _frontEnd.StartSoundEffect(channel, startMode);
     }
 
     public void ScheduleSoundEffectStart(int channel, int startMode, long delayMs)
@@ -185,7 +186,7 @@ public sealed partial class GodotAdvHost
         double realSeconds = ms / 1000.0 / System.Math.Max(0.05, _clock.Speed);
         _timeline?.Event("sfx-start-scheduled", new() { ["channel"] = channel,
             ["start_mode"] = startMode, ["delay_ms"] = ms, ["file"] = _sfxNames[channel] });
-        _main.CallDeferred("ScheduleSoundEffectStart", channel, startMode, realSeconds);
+        _frontEnd.ScheduleSoundEffectStart(channel, startMode, realSeconds);
     }
 
     public void ReleaseSoundEffect(int channel)
@@ -194,17 +195,17 @@ public sealed partial class GodotAdvHost
         _timeline?.Event("sfx-release", new() { ["channel"] = channel,
             ["file"] = _sfxNames[channel] });
         _sfxNames[channel] = null;
-        _main.CallDeferred("ReleaseSoundEffect", channel);
+        _frontEnd.ReleaseSoundEffect(channel);
     }
 
-    public bool IsSoundChannelPlaying(int channel) => _main.IsSoundChannelPlaying(channel);
+    public bool IsSoundChannelPlaying(int channel) => _frontEnd.IsSoundChannelPlaying(channel);
 
     private AudioPayload? LoadAudio(AssetEntry asset)
     {
         try { return _res.ReadAudio(asset); }
         catch (System.Exception e)
         {
-            Godot.GD.Print($"audio read failed {asset.Name}: {e.Message}");
+            _frontEnd.Print($"audio read failed {asset.Name}: {e.Message}");
             return null;
         }
     }
@@ -221,7 +222,7 @@ public sealed partial class GodotAdvHost
         double realSeconds = ms / 1000.0 / System.Math.Max(0.05, _clock.Speed);
         _timeline?.Event("bgm-fade", new() { ["target_basis_points"] = targetBasisPoints, ["duration_ms"] = ms });
         System.Threading.Volatile.Write(ref _bgmFadeDeadlineMs, ms > 0 ? _clock.NowMs + ms : long.MinValue);
-        _main.CallDeferred("FadeBgm", targetBasisPoints, NativeAudioVolume.FadeSteps(ms), realSeconds);
+        _frontEnd.FadeBgm(targetBasisPoints, NativeAudioVolume.FadeSteps(ms), realSeconds);
     }
 
     public bool IsBgmFadeActive => _clock.NowMs < System.Threading.Volatile.Read(ref _bgmFadeDeadlineMs);
@@ -230,7 +231,7 @@ public sealed partial class GodotAdvHost
     {
         System.Threading.Volatile.Write(ref _bgmFadeDeadlineMs, long.MinValue);
         _timeline?.Event("bgm-fade-complete", new());
-        _main.CallDeferred("CompleteBgmFade");
+        _frontEnd.CompleteBgmFade();
     }
 
     public void ApplyAudioVolume(int category, int basisPoints)
@@ -240,7 +241,7 @@ public sealed partial class GodotAdvHost
             ["category"] = category,
             ["basis_points"] = basisPoints,
         });
-        _main.CallDeferred("ApplyAudioVolume", category, basisPoints);
+        _frontEnd.ApplyAudioVolume(category, basisPoints);
     }
 
     public void ApplyAudioRouteEnabled(int category, bool enabled)
@@ -250,6 +251,6 @@ public sealed partial class GodotAdvHost
             ["category"] = category,
             ["enabled"] = enabled,
         });
-        _main.CallDeferred("ApplyAudioRouteEnabled", category, enabled);
+        _frontEnd.ApplyAudioRouteEnabled(category, enabled);
     }
 }

@@ -10,7 +10,7 @@ using Godot;
 /// AGE still owns layout, effects, blending, retained ordering, and surface lifetime.
 /// </summary>
 public sealed class GodotTextServerGlyphMaskRasterizer :
-    IIdentifiedGlyphMaskRasterizer, IDisposable
+    IIdentifiedGlyphMaskRasterizer, ILanguageFontRasterizer, IDisposable
 {
     private readonly record struct FontKey(string RequestedFace, int Weight, bool Antialias);
 

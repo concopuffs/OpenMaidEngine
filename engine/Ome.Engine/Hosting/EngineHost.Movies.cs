@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
-using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 
-public sealed partial class GodotAdvHost
+namespace Ome.Engine.Hosting;
+
+public sealed partial class EngineHost
 {
     private readonly MovieSurfaceRegistry _movieSurfaces = new();
     private sealed record MovieMaskPlayback(
@@ -19,7 +20,7 @@ public sealed partial class GodotAdvHost
     {
         string scene = CurrentScene;
         var asset = _res.ResolveMovie(resourceId);
-        if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
+        if (asset == null) { _frontEnd.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
         StartMovie(asset, resourceId, surfaceSlot, movieFlags, modal: false,
                    initialPositionMs: 0, startDelayMs: startDelayMs, presentationDurationMs: null,
                    movieMask: null, out long? stopTimeMs, out _);
@@ -31,7 +32,7 @@ public sealed partial class GodotAdvHost
     {
         string scene = CurrentScene;
         var asset = _res.ResolveMovie(resourceId);
-        if (asset == null) { Godot.GD.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
+        if (asset == null) { _frontEnd.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
         StartMovie(asset, resourceId, surfaceSlot, movieFlags, modal: false,
                    initialPositionMs: positionMs, startDelayMs: startDelayMs, presentationDurationMs: null,
                    movieMask: null, out long? stopTimeMs, out _);
@@ -51,7 +52,7 @@ public sealed partial class GodotAdvHost
         var asset = _res.ResolveMovie(request.ResourceId);
         if (asset == null)
         {
-            Godot.GD.Print($"movie mask unresolved {CurrentScene}:0x{request.ResourceId:x}");
+            _frontEnd.Print($"movie mask unresolved {CurrentScene}:0x{request.ResourceId:x}");
             PublishMovieMaskTerminal(new MovieMaskPlayback(gfx, request, captured));
             return;
         }
@@ -73,7 +74,7 @@ public sealed partial class GodotAdvHost
     public void SetMoviePlaybackRate(int surfaceSlot, double rate)
     {
         if (!_movieSurfaces.TryGetBinding(surfaceSlot, out MovieSurfaceBinding binding)) return;
-        _main.QueueMoviePlaybackRate(binding.PlaybackId, rate);
+        _frontEnd.QueueMoviePlaybackRate(binding.PlaybackId, rate);
         _timeline?.Event("movie-rate", new()
         {
             ["surface"] = surfaceSlot,
@@ -82,13 +83,13 @@ public sealed partial class GodotAdvHost
         });
     }
 
-    public GodotHostDiagnosticSnapshot CaptureDiagnosticSnapshot()
+    public EngineHostDiagnosticSnapshot CaptureDiagnosticSnapshot()
     {
         IReadOnlyList<MovieSurfaceDiagnostic> movies = _movieSurfaces.Snapshot();
         IReadOnlyList<long> completed = _movieSurfaces.CompletedPlaybackIds();
         bool screenTransitionActive;
         lock (_screenTransitionLock) screenTransitionActive = _screenTransition != null;
-        return new GodotHostDiagnosticSnapshot(
+        return new EngineHostDiagnosticSnapshot(
             CurrentScene,
             IsWaiting,
             IsTransitionWaiting,
@@ -110,7 +111,7 @@ public sealed partial class GodotAdvHost
         var asset = _res.ResolveMovie(resourceId);
         if (asset == null)
         {
-            Godot.GD.Print($"modal movie unresolved packed:0x{resourceId:x}");
+            _frontEnd.Print($"modal movie unresolved packed:0x{resourceId:x}");
             return;
         }
 
@@ -174,7 +175,7 @@ public sealed partial class GodotAdvHost
         {
             AbandonMovieMaskPlayback(prior.PlaybackId);
             ForgetMovieMaskSurface(prior.SurfaceSlot, prior.PlaybackId);
-            _main.CallDeferred("StopMovie", prior.PlaybackId);
+            _frontEnd.StopMovie(prior.PlaybackId);
         }
         if (movieMask != null)
             lock (_movieMaskLock)
@@ -200,7 +201,7 @@ public sealed partial class GodotAdvHost
                 ["presentation_duration_ms"] = presentationDurationMs,
                 ["movie_mask"] = movieMask != null,
             });
-            bool started = _main.TryPlayMovie(
+            bool started = _frontEnd.TryPlayMovie(
                 movie.Bytes, movie.Name, playbackId, resourceId, asset.PackedId, movieFlags,
                 initialPositionMs, startDelayMs, presentationDurationMs, out stopTimeMs);
             if (!started)
@@ -216,7 +217,7 @@ public sealed partial class GodotAdvHost
             _movieSurfaces.Abandon(playbackId, out _);
             _slotDims.TryRemove(surfaceSlot, out _);
             stopTimeMs = 0;
-            Godot.GD.Print($"movie read failed {asset.Name}: {e.Message}");
+            _frontEnd.Print($"movie read failed {asset.Name}: {e.Message}");
             return false;
         }
     }

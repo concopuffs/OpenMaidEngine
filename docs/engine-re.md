@@ -2279,7 +2279,7 @@ calls `timeBeginPeriod`, so `kernel32!Sleep(1)` lasts about a millisecond. A pol
 (`op_0xcd_dispatch_mouse_callback@0x417e10`) fires the op-`0xcc` callback once `timeGetTime()` minus the last firing
 reaches the interval, and re-arms from that moment, so a 50 ms callback runs about every 50 ms.
 
-The port's `GodotAdvHost.Sleep` used to request a synchronized presentation on every sleep and wait for the
+The port's `EngineHost.Sleep` used to request a synchronized presentation on every sleep and wait for the
 compositor to take it, which happens once per display frame. Each `sleep 1` then lasted up to a frame (16.7 ms at
 60 Hz), and the 50 ms callback fired after three or four frames: every 50 or 67 ms. FIELD's callback
 (`label_1498`) counts its calls in local `0x2f53` while nothing is selected, and draws the help overlay (texture
@@ -2494,7 +2494,7 @@ Op `0x1f9` loads its AGF synchronously, inside the op, in these steps:
 Native keeps no decoded image, so loading the same AGF again costs as much as the first time.
 
 A Frida probe timed each op with `QueryPerformanceCounter`, hooking AGE.EXE functions only. It ran on the
-`himegari-effect-waits.steps` run from boot to SC0000's page 14. The port times are `GodotAdvHost.SetTexture`'s
+`himegari-effect-waits.steps` run from boot to SC0000's page 14. The port times are `EngineHost.SetTexture`'s
 decode in the same run:
 
 | Load (resource) | Native op | of which LZSS | Port, optimized | Port, Debug build |
@@ -2508,7 +2508,7 @@ decode in the same run:
 | AE001D again | 3.60 ms | 1.77 ms | 0.00 ms (cached) | 0.00 ms (cached) |
 
 The port decodes an AGF on its first load (`AgfDecoder`) and caches the RGBA image by packed id
-(`GodotAdvHost.Decode`). With the JIT optimizing, each load is within about 1.6 ms of native's, and repeat loads cost
+(`EngineHost.Decode`). With the JIT optimizing, each load is within about 1.6 ms of native's, and repeat loads cost
 nothing. `drive.py port` runs Godot's Debug configuration, where the JIT optimizer is disabled unless it is started
 with `--optimize` (`tools-reference.md`, "Port timing"). There the same decodes take two to three times as long. A standalone benchmark of `AgfDecoder` gives the same split: EV052DA takes
 3.94 ms optimized and 9.20 ms in Debug.
@@ -3468,7 +3468,7 @@ The two settings are script-visible rather than constants embedded in the wait h
   500-ms steps over 500..9500 ms.
 
 **Port implementation.** The VM retains the enable bit, both configured delays, and per-message voice flag,
-then supplies their live state to the blocking host wait. `GodotAdvHost` polls a small deterministic timer
+then supplies their live state to the blocking host wait. `EngineHost` polls a small deterministic timer
 from the existing monotonic frame clock. Unvoiced pages wait Time1; voiced pages remain parked through actual
 `AudioStreamPlayer` playback and then wait Time0. A queued/started/completed generation counter closes the
 deferred-call race between the VM thread queuing a voice and Godot beginning playback. Turning Auto off
@@ -3536,7 +3536,7 @@ of starting it. When Skip/read-skip input ends, `adv_interpreter_tick` starts th
 queue; skipped voices do not accumulate.
 
 **Port implementation.** The VM owns persistent op-`0x88` state and keeps op `0x19a` separate from the
-combined op-`0x1c7` persistent/host-input query. `GodotAdvHost` completes text reveal and stable message waits
+combined op-`0x1c7` persistent/host-input query. `EngineHost` completes text reveal and stable message waits
 while Skip is active; the existing `0x1c7` transition branches continue to publish their completed endpoints.
 Voice requests replace one host-side deferred payload during Skip and the latest payload starts when
 `0x88(0)` arrives. Enabling Skip through the real SC0000 hotspot callback wakes the parked wait without
@@ -3548,7 +3548,7 @@ the affected handlers, interpreter tick, and settings-default initializer are na
 `adv_interpreter_tick`'s one-op dispatch as one rendered frame per opcode only while Skip was active.
 That contradicted the synchronized native trace above: the outer service calls the dispatcher in fast bursts,
 and Ctrl measured about 7,738 operand fetches/sec rather than one per display frame. The artificial
-`GodotAdvHost.FrameYield` wait made the setup/cleanup bytecode between skipped fades take seconds even though
+`EngineHost.FrameYield` wait made the setup/cleanup bytecode between skipped fades take seconds even though
 the fades themselves correctly jumped to their endpoints. `FrameYield` is nonblocking again; only explicit
 presentation, sleep, and input services own wall-clock time.
 
@@ -4417,7 +4417,7 @@ the configured outline color.
 
 - `AdvTextHistory.TryBuildRedrawBatch` walks the group as native does and gives each record its draw style: the
   current `AdvTextStyle` with the record's colors (or flag 2's) and pixel height, and mode 0 for ruby.
-- `IAdvHost.RedrawRetainedTextGroup` receives it. `GodotAdvHost` draws every record at its rectangle into a cleared
+- `IAdvHost.RedrawRetainedTextGroup` receives it. `EngineHost` draws every record at its rectangle into a cleared
   layout surface (`RetainedGlyphLayoutEngine.RenderRedraw`; ruby through `RubyTextLayout.DrawAt`).
 - Unless flag 4 is set, it binds the published glyphs again over the new pixels. Native binds one object per record,
   which covers the same cells.
@@ -5063,7 +5063,7 @@ no launch/profile override is planned for it.
 making an unsupported character an atomic fallback rather than a partially rasterized string. It applies
 the decoded LOGFONT rebuild rules (default 24px Mincho, odd heights rounded down, 32/33 mapped to 31,
 negative half-width, and weight 700 only for bold), then advances from GDI's returned cell metrics while
-the shared compositor writes into a cloned `RgbaImage`. `GodotAdvHost.DrawStringToSurface` publishes that
+the shared compositor writes into a cloned `RgbaImage`. `EngineHost.DrawStringToSurface` publishes that
 snapshot for ops `0x204` and `0x205`; successful exact draws add no `SurfaceTextDraw` metadata. Text on a
 bound surface is therefore ordinary texture data in both software and GPU retained renderers: later handles
 can occlude it, and the owning object's alpha/tint, animated fade, affine transform, source rectangle,
@@ -5153,7 +5153,7 @@ then differed from native in 494 pixels, 54 of them by more than 24 levels; it n
 **Port.**
 
 - **Setting.** `GlyphRasterRequest.Antialias` carries the flag, so the mask cache keeps the two formats apart; AGE
-  empties its cache instead. `GodotAdvHost` holds the flag:
+  empties its cache instead. `EngineHost` holds the flag:
   - `Sys4RegIniStore.TextAntialiasEnabled` seeds it at startup, from `EnableAntiFont` and `UseAntiFont`;
   - the 設定 dialog's OK sets it through `IAgercSettingsHost.SetTextAntialias`.
 - **Rasterizers.** `WindowsGdiGlyphMaskRasterizer` reads `GGO_BITMAP` with AGE's row stride (`UnpackNativeBitmapRows`)
@@ -5222,7 +5222,7 @@ font.
 - `VirtualMachine` runs op `0x196` through `ShowTextRun`, as op `0x6e` does, with `AdvLiveTextRun.Ruby`.
 - `Ome.Engine.Text.RubyTextLayout` holds the font, the row split and the layout. `RetainedGlyphLayoutEngine.RenderRuby`
   draws a run's ruby and `RenderRubyOver` History's.
-- `GodotAdvHost` appends each row's base glyphs and then its ruby, in AGE's order.
+- `EngineHost` appends each row's base glyphs and then its ruby, in AGE's order.
 - `RetainedAdvTextLayoutPresentation.AppendRun` applies the chain rule across runs. The reveal counts ticks through
   `PublicationTarget`.
 - `AdvTextHistory` keeps the flag-4 records (`AdvTextHistoryRecordFlags.Ruby`), and `TryBuildHistoryRenderBatch` turns
@@ -5307,7 +5307,7 @@ The 0.72 s is the old port's (n - 1) delays, which showed the first tick at once
 **Port.**
 
 - `Ome.Engine.Hosting.PeriodTimer` implements the arm and the poll.
-- `GodotAdvHost` keeps one timer. It arms it when a run with `AdvLiveTextRun.ArmsGlyphTimer` (op `0x6e`; for op
+- `EngineHost` keeps one timer. It arms it when a run with `AdvLiveTextRun.ArmsGlyphTimer` (op `0x6e`; for op
   `0x196` the VM takes the build's `TextRules.FuriganaArmsGlyphTimer`, false for 4.24J and true for 4.33G) takes the
   timed path.
 - The reveal loop polls on the engine clock and wakes at the timer's next due millisecond. It requests a
@@ -5334,7 +5334,7 @@ the following click releases the wait.
 
 **Port implementation:** the single-scene harness now injects SYSTEM4's exact SO000 surface-12 and op-`0x73`
 configuration alongside its existing SO001 shortcut. The VM forwards all ten operands through the host ABI;
-`GodotAdvHost` retains configurations by layout and pairs them with op `0x212`'s script-owned handle and
+`EngineHost` retains configurations by layout and pairs them with op `0x212`'s script-owned handle and
 layout origin. `RetainedAdvWaitIndicatorPresentation` binds the current atlas cell as an ordinary
 `GfxState` object, mutating it only when the 48 ms frame boundary changes. Op `0x20a` recreates an erased
 current frame; HIDEWIN suspension and wait-service shutdown erase the handle. The former Godot
@@ -5355,7 +5355,7 @@ op `0x1b1` (`SYSTEM4@0xb7`, text manager `+0x570`); Himegari never does. In foll
 (`+0x50`) plus the left/top of the layout's last 20-byte glyph record (`*(layout+0x30) - 0x10`). The builders always
 draw into the last record and then push the next one at the cursor, so that record is the pending one just past the
 last glyph. Op `0x6f`'s line end, op `0x7a` and a layout reset move it. The port used to anchor on the last glyph's own
-left, one cell left of native. `GodotAdvHost` now keeps each layout's cursor (`_layoutCursors`), set by every drawn run
+left, one cell left of native. `EngineHost` now keeps each layout's cursor (`_layoutCursors`), set by every drawn run
 and by `IAdvHost.SetAdvTextCursor`, which op `0x6f` now calls too. On `SC0000@0xfa2` the indicator now lands where
 native draws it.
 
@@ -5421,7 +5421,7 @@ channel comes from `G[0x6242d]`.
 and executes `0xb5(2)` whenever mouse/joy selection changes. Each activation path loads raw id `0x3321`
 (`SE015.WAV`) into channel 1 and immediately starts it; GAMESTART additionally uses raw `0x2aeb`
 (`SE013.WAV`). A synchronized Godot trace captured repeated hover starts and the Game Start activation, but
-each preceding load recorded `file:null`: `GodotAdvHost.LoadSoundEffect` applied the active script's
+each preceding load recorded `file:null`: `EngineHost.LoadSoundEffect` applied the active script's
 scene-local manifest, and TITLE has only 14 local entries. `ResourceMap.ResolveSoundEffect` now uses the
 native packed lookup and filters the selected record to OGG/WAV before the existing byte/player path.
 The corrected synchronized trace resolves and starts `SE020`, `SE015`, and `SE013` through
@@ -6090,7 +6090,7 @@ skipped instructions across seven distinct scripts and reduces the effectful-gap
 distinct opcodes / 28 instructions.
 
 The same manual pass exposed a resource-addressing issue after `0x6c` was fixed: ROOM did execute
-`play-voice`, but `GodotAdvHost` attempted only inferred SC-section resolution. ROOM's voice operands
+`play-voice`, but `EngineHost` attempted only inferred SC-section resolution. ROOM's voice operands
 `0x3365..0x3376` are universal packed SYS4INI indices (for example `0x3365` is `EUA0016.OGG`). The first
 compatibility fix tried an SC section and then a type-checked base-catalog fallback. Subsequent native RE
 proved there is no first stage: ROOM and SC scripts alike pass an already absolute packed id directly to
@@ -6364,7 +6364,7 @@ page 18 reveals its 35 glyphs in two runs around the furigana かがりび.
 - `VirtualMachine.InputLatch` holds the triggers that arrive while nothing polls (`HoldTriggers`), and the consumers
   and discard points above take or drop them. The ADV coroutine yield holds its triggers in the same latch.
 - Godot (`Main.Input`) routes a trigger that arrives during an effect wait to
-  `GodotAdvHost.TryPollEffectTriggers`. That reads `EffectSkipOnClick` from `SYS4REG.INI` at each trigger, and
+  `EngineHost.TryPollEffectTriggers`. That reads `EffectSkipOnClick` from `SYS4REG.INI` at each trigger, and
   polls when it is 1 and the effect is a screen transition or a `0x400` wait without service-flags bit 0. Otherwise
   the trigger goes to the latch.
 - Only a polling text wait (`VirtualMachine.IsAdvTextWaitPolling`, native run-state `0x80000000`) dispatches hotspots
@@ -6486,7 +6486,7 @@ The shipped flags hold no wait through a movie itself:
   clock to the latest layer stop time from op `0x23f` (`0x32b2`).
 
 **Port.** `MovieSurfaceRegistry.HoldsServiceWait` applies the same predicate to the flags each binding keeps from its
-movie op, until the surface is released. `GodotAdvHost.HasActiveMoviePresentation` reads it for `0x21c` and the
+movie op, until the surface is released. `EngineHost.HasActiveMoviePresentation` reads it for `0x21c` and the
 foreground-transition waits. Before this, any unfinished movie held the wait. Kamidori's first-battle SHOWGROW then
 sat about 9.3 s after Engage, against native's 6.5 s; it now sits 6.3 s. SC0000's chapter wait is unchanged:
 native 1.63 s, port 1.68 s. Test: `MovieSurfaceRegistryTests.OnlyFlagsWithBit2SetAndBit0ClearHoldTheServiceWait`.
@@ -6584,7 +6584,7 @@ Op `0x236` requires the destination texture to exist, and `CMovieTextureRenderer
 the first sample, through the whole start delay, the object therefore shows the zeroed texture, which the additive
 blend leaves invisible.
 
-**Port.** `GodotAdvHost.StartMovie` dropped the slot's created image when it bound the movie. Before the first frame
+**Port.** `EngineHost.StartMovie` dropped the slot's created image when it bound the movie. Before the first frame
 the object had neither a texture nor a surface resource, and `Main.Compositor` drew it as a surfaceless fill in the
 object's white tint. `MovieSurfaceRegistry.Begin` now takes the surface's contents at bind time, and
 `TryResolveSurface` serves them until `PublishFrame` supplies a sample. A movie mask keeps its own path. Test:
@@ -7086,7 +7086,7 @@ the port:
   them for the field HUD's turn/control/mana/level/HP/SP/FS values.
 
 This path creates ordinary retained graphics objects, so the existing atlas decode and compositor are
-the correct backend; it is not an immediate `GodotAdvHost.DrawTexture` raster operation. The port models
+the correct backend; it is not an immediate `EngineHost.DrawTexture` raster operation. The port models
 all eleven handler-addressable indices as safe independent `GfxState` records rather than reproducing
 native index 10's adjacent-memory overwrite. Each `0x23b` call erases its full destination-handle capacity
 and then uses the ordinary
@@ -7569,9 +7569,9 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
     click on SC0000 withholds about 90 ms at `0x21b`. The save/load scenario passes.
   - **Sleeps (2026-11-08).** `sleep_op_0xc8@0x420ec0` never sets run-state `0x400`: under 10 ms it calls kernel32
     `Sleep` inline, and from 10 ms it sets run-state bit 1 and arms the timer. So native renders nothing while a
-    sleep inside a block runs. `GodotAdvHost.Sleep` used to request a presentation on every sleep, which the render
+    sleep inside a block runs. `EngineHost.Sleep` used to request a presentation on every sleep, which the render
     withholding lets through, so a strip button's new icon showed during its 100 ms sleep instead of at the close.
-    It now requests none while a block is open (`GodotAdvHost.SleepPresentationFor`, checked by the Godot
+    It now requests none while a block is open (`EngineHost.SleepPresentationFor`, checked by the Godot
     self-test). A scan of both games' disassembly (2026-11-08) finds sleeps lexically inside a block only in
     Himegari: the four strip buttons (`sleep 0x64`, no present) in 301 scenes, and one `sleep 0x10` in ADDEXP that a
     `present-frame` follows. Kamidori has none. Blocks that span a call (ADDEXP into MES.BIN) are tracked at run

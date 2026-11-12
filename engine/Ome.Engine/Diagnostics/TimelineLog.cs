@@ -2,10 +2,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
+namespace Ome.Engine.Diagnostics;
+
 /// <summary>Diagnostic-only synchronized JSONL stream for correlating VM execution, host waits/audio,
 /// and compositor object changes. All producers share one lock, so event order is unambiguous even though
 /// the VM and compositor run on different threads.</summary>
-public sealed class GodotTimelineLog : System.IDisposable
+public sealed class TimelineLog : System.IDisposable
 {
     private readonly object _lock = new();
     private readonly StreamWriter _writer;
@@ -19,7 +21,7 @@ public sealed class GodotTimelineLog : System.IDisposable
     private string _state = "starting";
     private bool _disposed;
 
-    public GodotTimelineLog(string path)
+    public TimelineLog(string path)
     {
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);

@@ -163,3 +163,12 @@ public interface IIdentifiedGlyphMaskRasterizer : IGlyphMaskRasterizer
 {
     GlyphRasterizerBackendInfo BackendInfo { get; }
 }
+
+/// <summary>A Unicode rasterizer that can draw a language's text in that language's fonts (localization spec §7.4).
+/// </summary>
+public interface ILanguageFontRasterizer : IGlyphMaskRasterizer
+{
+    /// <summary>Puts the fonts <paramref name="fontsFor"/> maps a face to in front of the rasterizer's own substitutes;
+    /// null removes them. The fonts made so far are dropped; the caller clears the glyph masks cached above it.</summary>
+    void UseLanguageFonts(Func<string, IReadOnlyList<string>?>? fontsFor);
+}

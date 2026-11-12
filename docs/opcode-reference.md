@@ -261,7 +261,7 @@ The requested CP932 face is copied into the primary LOGFONT lfFaceName and AGE a
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari, kamidori; revisions=SYS4422, SYS4433; artifact=`Himegari SYS4422 Ghidra /v2 and Kamidori SYS4433 Ghidra /kamidori/SYS4433 (4.33F), addresses given for /kamidori/4.33G`; site=`vm-map/opcodes.toml opcode 0x1b1`; scope=matching SYS4422 and SYS4433 native handlers plus wait-indicator renderer. SYS4422 op_0x1b1_set_wait_indicator_follow_last_glyph@0x41f480 writes text-manager+0x56c (EngineCtx+0x14eac); SYS4433 equivalent @0x41d620 writes its shifted text-manager+0x570 (EngineCtx+0x14ea8). The wait-indicator publisher has explicit 0/1 branches: zero uses layout origin plus configured destination offset, while one additionally reads the final 0x14-byte retained glyph record and adds its left/top. Kamidori's natural SYSTEM4.BIN boot sets one at 0xb7. Himegari's dispatcher installs the same behavior despite no decoded corpus use.
 
-SYS4433's renderer is adv_wait_indicator_draw_frame_sys4433@0x4526d0: x = layout+0xc + *(layout+0x30 - 0x10) + config+0x50, and likewise for y. The builders draw into the last record and then push the next one at the cursor, which op 0x6f's line end, op 0x7a and a layout reset move. The port keeps each layout's cursor (GodotAdvHost._layoutCursors, fed by every drawn run and by IAdvHost.SetAdvTextCursor) and anchors there; anchoring on the last glyph's own left had put Kamidori's indicator one cell left of native's (fixed 2026-11-07).
+SYS4433's renderer is adv_wait_indicator_draw_frame_sys4433@0x4526d0: x = layout+0xc + *(layout+0x30 - 0x10) + config+0x50, and likewise for y. The builders draw into the last record and then push the next one at the cursor, which op 0x6f's line end, op 0x7a and a layout reset move. The port keeps each layout's cursor (EngineHost._layoutCursors, fed by every drawn run and by IAdvHost.SetAdvTextCursor) and anchors there; anchoring on the last glyph's own left had put Kamidori's indicator one cell left of native's (fixed 2026-11-07).
 
 ### 0x1b5 `set-message-glyph-delay` (u0041B5F0, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -272,7 +272,7 @@ SYS4433's renderer is adv_wait_indicator_draw_frame_sys4433@0x4526d0: x = layout
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1b5`; scope=Himegari SYS4422. Complete corpus consistency across all 11 uses in 5 scripts: CONFIG's reset button sets 50 ms and its controls change the value in 5-ms steps over 5..100; MAMES, ITMES, SKMES, and INFOMES bracket retained show-text descriptions with get op 0x7f, set 0, and restore the saved value. Ghidra /v2: op_0x1b5_handler stores operand 1 at ctx+0x14e9c and sets message:MessageSpeed; engine_initialize_subsystems_from_settings seeds ctx+0x14e9c from message:MessageSpeed, which engine_settings_register_defaults@0x46be30 registers as 5 and Himegari's SYS4INI does not override. So a new profile reveals text at 5 ms per glyph; the 50 ms in earlier native traces presumably came from a profile whose stored MessageSpeed was 50 (not checked).
 
-Port status (2026-11-03): GodotAdvHost seeds the delay from SYS4REG.INI [message] MessageSpeed (default 5, was a fixed 50) and writes it back at shutdown, not per op, because the description scripts set 0 and restore it for every item.
+Port status (2026-11-03): EngineHost seeds the delay from SYS4REG.INI [message] MessageSpeed (default 5, was a fixed 50) and writes it back at shutdown, not per op, because the description scripts set 0 and restore it for every item.
 
 ### 0x1bb `set-text-history-recording` (set-text-history-recording, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -1551,7 +1551,7 @@ Both revision handlers convert origin/extent operands into paired edge rectangle
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x131`; scope=Himegari SYS4422. Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with `message:MesWinAlpha` and writes the result. HISTORY.BIN and the shared ADV redraw path compute (16-value)<<4 for the control-strip alpha.
 
-Port status (2026-11-03): GodotAdvHost seeds the value from SYS4REG.INI [message] MesWinAlpha (default 8 from engine_settings_register_defaults; the port used 0, an opaque window that hid the CG behind SC0000's opening text) and writes it back at shutdown.
+Port status (2026-11-03): EngineHost seeds the value from SYS4REG.INI [message] MesWinAlpha (default 8 from engine_settings_register_defaults; the port used 0, an opaque window that hid the CG behind SC0000's opening text) and writes it back at shutdown.
 
 ### 0x13a `register-numeric-glyph-style` (u0041F3A0, argc 6)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)

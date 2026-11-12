@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
 
-public sealed partial class GodotAdvHost
+namespace Ome.Engine.Hosting;
+
+public sealed partial class EngineHost
 {
     private readonly object _imageLock = new();
     private readonly Dictionary<int, RgbaImage?> _images = new();        // packed catalog id -> decoded pixels
@@ -60,7 +61,7 @@ public sealed partial class GodotAdvHost
             _surfaceColorKeys.Remove(slot);
         }
         _slotDims[slot] = (safeWidth, safeHeight);
-        if (TraceOps) Godot.GD.Print($"[op] create-texture slot={slot} {width}x{height}");
+        if (TraceOps) _frontEnd.Print($"[op] create-texture slot={slot} {width}x{height}");
     }
 
     public void SetTexture(long resourceId, int slot) => SetTexture(resourceId, slot, -1);
@@ -79,7 +80,7 @@ public sealed partial class GodotAdvHost
         var asset = _res.ResolveTexture(resourceId);
         var image = asset != null ? Decode(asset) : null;
         _slotDims[slot] = image != null ? (image.Width, image.Height) : (0, 0);
-        if (TraceOps) Godot.GD.Print($"[op] set-texture slot={slot} resId=0x{resourceId:x} -> {(asset?.Name ?? "<none>")}");
+        if (TraceOps) _frontEnd.Print($"[op] set-texture slot={slot} resId=0x{resourceId:x} -> {(asset?.Name ?? "<none>")}");
     }
 
     // AGF is decoded synchronously on the VM thread so geometry queried immediately afterward sees real dims.
@@ -246,7 +247,7 @@ public sealed partial class GodotAdvHost
                 ["surface"] = slot,
                 ["completed"] = movieRelease.Completed,
             });
-            _main.CallDeferred("StopMovie", binding.PlaybackId);
+            _frontEnd.StopMovie(binding.PlaybackId);
         }
     }
 
@@ -366,7 +367,7 @@ public sealed partial class GodotAdvHost
                 ["playback"] = binding.PlaybackId,
                 ["range_release"] = true,
             });
-            _main.CallDeferred("StopMovie", binding.PlaybackId);
+            _frontEnd.StopMovie(binding.PlaybackId);
         }
     }
 
@@ -396,7 +397,7 @@ public sealed partial class GodotAdvHost
             try { return _images[asset.PackedId] = _res.DecodeTexture(asset); }
             catch (System.Exception e)
             {
-                Godot.GD.Print($"AGF decode failed {asset.Name}: {e.Message}");
+                _frontEnd.Print($"AGF decode failed {asset.Name}: {e.Message}");
                 _images[asset.PackedId] = null;
                 return null;
             }

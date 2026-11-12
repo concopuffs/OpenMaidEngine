@@ -2,20 +2,22 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
+using Ome.Engine.Diagnostics;
 
-public sealed partial class GodotAdvHost : IHost, ISurfacePixels
+namespace Ome.Engine.Hosting;
+
+public sealed partial class EngineHost : IHost, ISurfacePixels
 {
-    private readonly Main _main;
+    private readonly IFrontEnd _frontEnd;
     private readonly ResourceMap _res;
     private readonly string _rootScene;
     private readonly int _screenWidth;
     private readonly int _screenHeight;
     private readonly Ome.Engine.Hosting.FrameClock _clock;
-    private readonly GodotTimelineLog? _timeline;
+    private readonly TimelineLog? _timeline;
     private readonly PageLocatorState _locator;
     private readonly Lazy<EnumeratedFontFamily[]> _fontFamilies;
     private readonly Lazy<AspectFontRealization?> _fontRealization;
@@ -24,7 +26,8 @@ public sealed partial class GodotAdvHost : IHost, ISurfacePixels
     public required RubyLayoutRules RubyRules { get; init; }
 
     /// <summary>Builds the installed-font list SYS4433's ops 0x2dc-0x2de read, in the engine's order, on first use.
-    /// Without one the list is Godot's system fonts; Windows runs supply AGE's own (<see cref="FontFamilyCatalog"/>).
+    /// Without one the list is empty. The Godot front end supplies its system fonts, and AGE's own on Windows runs
+    /// (<see cref="FontFamilyCatalog"/>).
     /// </summary>
     public Func<IReadOnlyList<EnumeratedFontFamily>>? FontFamilySource { get; init; }
 
@@ -42,15 +45,15 @@ public sealed partial class GodotAdvHost : IHost, ISurfacePixels
 
     /// <summary>Glyph masks the presented-text rasterizer's cache keeps.</summary>
     public int PresentedTextMaskCacheCapacity { get; init; } = 2048;
-    public GodotAdvHost(Main main, ResourceMap res, string scene, Ome.Engine.Hosting.FrameClock clock,
+    public EngineHost(IFrontEnd frontEnd, ResourceMap res, string scene, Ome.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
                         IGlyphMaskRasterizer surfaceTextRasterizer,
                         GlyphCoverageAlpha coverageAlpha,
-                        GodotTimelineLog? timeline = null,
+                        TimelineLog? timeline = null,
                         bool synchronizeExplicitPresentation = true,
                         int surfaceTextMaskCacheCapacity = 2048)
     {
-        _main = main; _res = res; _rootScene = scene; _clock = clock;
+        _frontEnd = frontEnd; _res = res; _rootScene = scene; _clock = clock;
         _locator = locator; _timeline = timeline;
         _screenWidth = logicalCanvas.Width;
         _screenHeight = logicalCanvas.Height;
@@ -76,17 +79,13 @@ public sealed partial class GodotAdvHost : IHost, ISurfacePixels
             if (info.Policy != GlyphRasterPolicy.PortableUnicode)
                 throw new InvalidOperationException("The presented-text rasterizer must take Unicode requests.");
             _presentedTextRasterizer = rasterizer;
-            (rasterizer as GodotTextServerGlyphMaskRasterizer)?.UseLanguageFonts(_presentedFonts);
+            (rasterizer as ILanguageFontRasterizer)?.UseLanguageFonts(_presentedFonts);
             return new TextPipeline(info, new CachedGlyphMaskRasterizer(rasterizer, PresentedTextMaskCacheCapacity),
                                     coverageAlpha);
         }, LazyThreadSafetyMode.ExecutionAndPublication);
         _fontFamilies = new Lazy<EnumeratedFontFamily[]>(() => FontFamilySource != null
             ? FontFamilySource().Where(family => !string.IsNullOrWhiteSpace(family.FaceName)).ToArray()
-            : Godot.OS.GetSystemFonts()
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(name => new EnumeratedFontFamily(name, 0))
-                .ToArray());
+            : []);
         _fontRealization = new Lazy<AspectFontRealization?>(() => FontMetricsProbe != null
             ? new AspectFontRealization(_fontFamilies.Value, FontMetricsProbe)
             : null);
@@ -109,7 +108,7 @@ public sealed partial class GodotAdvHost : IHost, ISurfacePixels
     private AspectFontRealization? FontRealization => _fontRealization.Value;
 }
 
-public sealed record GodotHostDiagnosticSnapshot(
+public sealed record EngineHostDiagnosticSnapshot(
     string CurrentScene, bool IsInputWaiting, bool IsTransitionWaiting, bool IsSleeping,
     bool IsTextRevealing, bool IsModalMovieWaiting, bool IsAdvPagePresentationSuspended,
     bool IsMessageSkipActive, bool IsScreenTransitionActive, long TransitionStartedAtMs,

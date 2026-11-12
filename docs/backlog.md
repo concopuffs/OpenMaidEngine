@@ -175,11 +175,12 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
   immediate in an arithmetic or compare op, so this is latent for retail scripts and live for mod bytecode. Done
   when every integer cell holds one canonical form, written in one place (see "VM state has no owners" under
   Architecture), and a test round-trips a high-bit value through an immediate, a write, a save and a load.
-- **The port's image and texture caches never evict.** `GodotAdvHost._images` (`godot/GodotAdvHost.Surfaces.cs`),
-  `Main._pixelCache` (`Main.Compositor.cs`) and `GpuRetainedRenderer`'s `_textures` and `_lerpMaterials` keep every
-  entry for the session: about 1.9 MB of RAM per 800×600 image, and again in VRAM. A long session grows without
-  bound. Done when each cache has a bound or a release point (a scene change, a released surface) and a long
-  driven session shows flat memory.
+- **The port's image and texture caches never evict.** `EngineHost._images`
+  (`engine/Ome.Engine/Hosting/EngineHost.Surfaces.cs`), `SoftwareCompositor._pixelCache`
+  (`engine/Ome.Engine/Hosting/SoftwareCompositor.cs`) and `GpuRetainedRenderer`'s `_textures` and `_lerpMaterials` keep
+  every entry for the session: about 1.9 MB of RAM per 800×600 image, and again in VRAM. A long session grows without
+  bound. Done when each cache has a bound or a release point (a scene change, a released surface) and a long driven
+  session shows flat memory.
 - **Unknown launch flags are ignored.** Flags are parsed across `Main._Ready`, `AssetLaunchOptions`,
   `GameProfileSelection`, `WindowLaunchOptions`, mod linking, screenshots and the port options, each by its own
   lookup, so a misspelt flag is silently ignored. Since 2026-11-10 `--seed`, `--speed` and `--sleep-scale` reject a
@@ -193,18 +194,18 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
 
 ## Architecture
 
-Structural problems the 2026-11-10 codebase review found in `VirtualMachine` (29 partial files), `GodotAdvHost` (6)
-and `Main` (15). A partial class only changes which file a member is in, so any file can still read or write any
-field. The review proposed one migration for all of them (`vm-host-main-restructure-design-2026-11-10.md` at the
-workspace root, outside this repository); that plan was not adopted. On 2026-11-12 the engine layering design was
-accepted instead (`docs/superpowers/specs/2026-11-12-engine-layering-design.md`): handlers, natives and devices in
-three projects, and engine builds declared in one file. Each item below that it covers names the milestone that
-does it; the others are still handled on their own. Each change should be behaviour-neutral and pass the spec's
-acceptance 4: the suite, the `oms-rebuild` trace gate, the drive scenarios, `save-diff`, and timing or frame-time
-captures where they apply.
+Structural problems the 2026-11-10 codebase review found in `VirtualMachine` (29 partial files), `GodotAdvHost` (6;
+`EngineHost` in `Ome.Engine` since milestone 4 of the design below) and `Main` (15). A partial class only changes which
+file a member is in, so any file can still read or write any field. The review proposed one migration for all of them
+(`vm-host-main-restructure-design-2026-11-10.md` at the workspace root, outside this repository); that plan was not
+adopted. On 2026-11-12 the engine layering design was accepted instead
+(`docs/superpowers/specs/2026-11-12-engine-layering-design.md`): handlers, natives and devices in three projects, and
+engine builds declared in one file. Each item below that it covers names the milestone that does it; the others are
+still handled on their own. Each change should be behaviour-neutral and pass the spec's acceptance 4: the suite, the
+`oms-rebuild` trace gate, the drive scenarios, `save-diff`, and timing or frame-time captures where they apply.
 
 - **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:1085-1154`)
-  assigns 38 fields from many partials, and `GodotAdvHost.ResetSceneContext` (`GodotAdvHost.PresentationInput.cs`)
+  assigns 38 fields from many partials, and `EngineHost.ResetSceneContext` (`EngineHost.PresentationInput.cs`)
   does the same on the host. Scene state added without a line in these methods survives タイトルに戻る. That is how
   the host's dialog events stayed signalled until 2026-11-10, when each was reset by hand. Done when a root reload
   rebuilds scene-lifetime state instead of clearing it, so a new field cannot be missed, and a test shows a reload
@@ -229,13 +230,13 @@ captures where they apply.
   census of every field (milestone 2, `docs/superpowers/plans/2026-11-12-engine-layering.md`) names each one's owner;
   the skip and auto state gets its owner next (milestone 5), because audio and other natives read it; the waits move
   last (milestone 11).
-- **The host's threads have no stated ownership.** `GodotAdvHost` holds nine lock objects, six `AutoResetEvent`s,
+- **The host's threads have no stated ownership.** `EngineHost` holds nine lock objects, six `AutoResetEvent`s,
   a `ManualResetEventSlim` and a `SemaphoreSlim`, and nothing documents which fields each lock guards or the lock
   order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`
-  now. The host's 29 `_main.CallDeferred("Name", …)` calls name `Main` methods by string, so a rename fails when the
-  game runs, not when it builds. Done when each lock's fields and the lock order are written down (or no lock is
-  taken under another), and calls to the main thread are typed. A typed dispatcher must keep `CallDeferred`'s timing;
-  check that on a drive scenario. Planned: layering spec, typed calls in milestone 4 and the locks in milestone 11.
+  now. Since milestone 4 (2026-11-12) the host's calls to the main thread are typed: it calls `IFrontEnd`, which
+  `Main` implements with the `CallDeferred` calls the host made before, and a drive scenario showed the same timing.
+  Done when each lock's fields and the lock order are written down (or no lock is taken under another). Planned:
+  layering spec, milestone 11.
 - **Modal dialogs are separate fields.** `Main` keeps the 終了 dialog (`_exitConfirmation`), the script error box,
   the options panel, the screenshot folder dialog and the full-width editor in their own fields, plus a hold
   counter (`_frontendModalHolds`). Input routing, the drive `dialogs` and `answer` steps and screen-mode changes each
@@ -248,7 +249,7 @@ captures where they apply.
   fields; `_Process` calls them in an explicit order rather than Godot's node order; and the screen geometry is one
   shared object.
 - **The render traversal is written three times.** `Main.Compositor.cs` has a GPU path (`TryRecompositeGpu` and
-  its range helpers) and a software path (`RecompositeSoftware`) over the same retained objects, and
+  its range helpers), `Hosting/SoftwareCompositor.cs` a software path (`Compose`) over the same retained objects, and
   `Sys4/RetainedSurfaceRasterizer.cs` walks them a third time. A rule fixed in one can be missed in the others. Done
   when one Godot-free traversal drives both the GPU and the software output, and the rasterizer either shares it or
   documents why its rules differ. Planned: layering spec, milestone 7 (the frame description and the reference
@@ -271,11 +272,6 @@ captures where they apply.
   reference. A driven fade's GPU frames must match the software path's within a stated tolerance. The layering spec
   leaves this open (its §10), but its milestone 7 gives the GPU path the reference renderer and the test that
   compares the two.
-- **The Godot front end has no unit tests.** `godot/` is tested only by `--selftest` (`Main.SelfTest.cs`), which runs
-  the host with `synchronizeExplicitPresentation: false` (`Main.cs:521`). `GodotAdvHost.PresentationInput.cs` (the
-  waits and input) uses no Godot API, but sits in the Godot project, which no test project references. Done when the
-  host's VM-thread side and the other Godot-free front-end code live in a library with tests (`Ome.Engine.Frontend`
-  is the existing one). Planned: layering spec, milestone 4, which lifts the host into `Ome.Engine` instead.
 
 ## Open Maid Script
 

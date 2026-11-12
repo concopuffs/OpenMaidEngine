@@ -91,7 +91,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    FIELD's `0x32da..0x32dd` map sheets and SYSTEM4's `0x337e` SO001 are ordinary examples of the universal
    base indexes used throughout the corpus, not special fallback cases.
 3. **Wire the backend.** **✅ FIRST-PASS RENDER LANDED (2026-07-06).** `Ome.Engine/Sys4/ResourceMap.cs`
-   (Resolve + BMP path) + `GodotAdvHost` texture ops → `TextureRect` compositing behind the dialogue;
+   (Resolve + BMP path) + `EngineHost` texture ops → `TextureRect` compositing behind the dialogue;
    `IHost.DrawTexture` extended with dst x/y; 800×600 window; `convert_agf.py --scene` pre-converts a
    scene's manifest AGFs → BMP. The full-screen **event-CG layer renders end-to-end** from the executed
    bytecode. **Historical limitations at first landing (subsequently resolved in the Phase-A graphics
@@ -103,7 +103,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
 
    **System chrome ownership (resolved 2026-07-20).** The normal Godot entry now runs SYSTEM4 as the live
    root, so its SO000/SO001 loads, ADV-layout definitions, and retained slot initialization execute through
-   `GodotAdvHost` before TITLE and child scenes. Asset lookup decodes VFS-owned AGF bytes directly and does
+   `EngineHost` before TITLE and child scenes. Asset lookup decodes VFS-owned AGF bytes directly and does
    not depend on a scene-limited converted BMP. `CALLBACK_WINDOW.BIN` consequently inherits slot `0x11`
    with SO001 and can crop its textbox/buttons normally. The explicit `--scene SC0000 --boot` diagnostic
    still injects the same known inherited layout and surface state because it intentionally bypasses
@@ -115,7 +115,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    voice, cursor, SFX, or movie resolution.
 4. **Audio.** **BGM/voice/SFX wired; VFS bytes complete (2026-07-11); packed-raw SFX corrected 2026-07-20.** `IHost.PlayBgm/PlayVoice` +
    VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.ReadAudio` opens the
-   resolved catalog entry through `IAssetStore`; `GodotAdvHost` passes the bytes to `Main`'s players
+   resolved catalog entry through `IAssetStore`; `EngineHost` passes the bytes to `Main`'s players
    (`AudioStreamOggVorbis.LoadFromBuffer`; BGM loops, voice interrupt-on-new). Non-Godot hosts no-op it
    → `--selftest`/8-8 byte-identical. SC0000 fires 18 BGM + 198 voice. **By-ear VALIDATED
    (2026-07-06):** voices play on their lines (`play-voice` med→HIGH). **BUT the two audio ops use DIFFERENT
@@ -125,7 +125,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    - **BGM** (`play-bgm`) → **DIRECT LITERAL NAME**, `id → BGM{id:03d}.OGG` (DATA3), not the packed
      resource table. Confirmed by ear (`play-bgm 5→BGM005`, `8→BGM008`) and proven
      by `play-bgm 0x23→BGM035.OGG` — a real standalone track (BGM set skips 030-034) the old scene model mis-resolved
-     to a graphics entry. Implemented as `ResourceMap.ResolveBgm(id)`; `GodotAdvHost.PlayBgm` uses it.
+     to a graphics entry. Implemented as `ResourceMap.ResolveBgm(id)`; `EngineHost.PlayBgm` uses it.
      The prior "Frida-confirmed play-bgm 5→BGM006" record was a mis-attribution.
 
    Lily silent = correct (form-gated on `G[0xa57/0xa58/0xa59]`, unseeded). SFX WAV entries use universal
@@ -150,7 +150,7 @@ A2b-background: **steps 1–3 landed; step 2's packed resolver was corrected 202
 runtime operands are already universal packed ids, and every typed runtime facade now uses that contract.
 `tools/resolve_asset.py` and
 `build/games/himegari/asset-sections.json` remain grouping/correlation diagnostics, not runtime inputs. Step 3 = **first-pass
-render** (ResourceMap + GodotAdvHost texture ops → TextureRect compositing): the full-screen event-CG
+render** (ResourceMap + EngineHost texture ops → TextureRect compositing): the full-screen event-CG
 layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphics geometry/blend
 subsystem** — native geometry ops (`0x208` + sprite position/animation) so sprites/`BG*` position, plus
 alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4): voice uses the

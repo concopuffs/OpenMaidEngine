@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Godot;
+using Ome.Engine.Hosting;
 using Ome.Engine.Frontend.Control;
 
 // The driving protocol's port backend (docs/superpowers/specs/2026-11-03-game-driving-design.md §5). With
@@ -147,7 +148,7 @@ public partial class Main
         public DriveState CaptureState()
         {
             IReadOnlyList<DriveFrame> frames = DriveFrame.FromVm(main._vm.CaptureFrameLocations());
-            GodotHostDiagnosticSnapshot host = main._host.CaptureDiagnosticSnapshot();
+            EngineHostDiagnosticSnapshot host = main._host.CaptureDiagnosticSnapshot();
             string? waiting =
                 host.IsModalMovieWaiting ? DriveWaiting.Movie
                 : host.IsTransitionWaiting ? DriveWaiting.Transition

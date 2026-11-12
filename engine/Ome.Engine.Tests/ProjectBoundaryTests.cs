@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
@@ -31,6 +32,7 @@ public class ProjectBoundaryTests
     [InlineData(typeof(GlyphMask))]
     [InlineData(typeof(GlyphRasterRequest))]
     [InlineData(typeof(IGlyphMaskRasterizer))]
+    [InlineData(typeof(ILanguageFontRasterizer))]
     [InlineData(typeof(IFontFamilySource))]
     [InlineData(typeof(EnumeratedFontFamily))]
     [InlineData(typeof(IMovieDecoder))]
@@ -74,6 +76,28 @@ public class ProjectBoundaryTests
             if (used.Assembly == Devices)
                 offenders.Add($"{contract.Name}.{member.Name}: {used.Name}");
         Assert.Empty(offenders);
+    }
+
+    [Fact]
+    public void NoGodotTypeImplementsTheHost()
+    {
+        // Milestone 4 lifted the host into Ome.Engine (EngineHost); godot/ keeps the front end and device
+        // implementations, and reaches the host only through its class. Main implements IFrontEnd, which shows the
+        // scan reads base lists.
+        string[] host = typeof(IHost).GetInterfaces().Append(typeof(IHost)).Append(typeof(ISurfacePixels))
+            .Select(type => type.Name).ToArray();
+        var declaration = new Regex(@"\b(?:class|record|struct)\s+(\w+)[^{;=]*?:\s*([^{;]+?)(?:\bwhere\b|\{|;)");
+        var bases = new List<(string Type, string Base)>();
+        foreach (string path in Directory.EnumerateFiles(Path.Combine(Paths.Repo, "godot"), "*.cs", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(Paths.Repo, path).Replace('\\', '/');
+            if (relative.Split('/').Any(part => part is "obj" or "bin" or ".godot")) continue;
+            foreach (Match match in declaration.Matches(File.ReadAllText(path)))
+            foreach (Match name in Regex.Matches(match.Groups[2].Value, @"[A-Za-z_][\w.]*"))
+                bases.Add((match.Groups[1].Value, name.Value.Split('.')[^1]));
+        }
+        Assert.Contains(("Main", nameof(IFrontEnd)), bases);
+        Assert.Empty(bases.Where(pair => host.Contains(pair.Base)));
     }
 
     private static IEnumerable<Type> Signature(MemberInfo member) => member switch

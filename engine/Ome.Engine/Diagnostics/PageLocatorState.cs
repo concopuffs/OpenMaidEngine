@@ -5,6 +5,8 @@ using System.Text.Json;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 
+namespace Ome.Engine.Diagnostics;
+
 /// <summary>
 /// A show-text run's source layout as the page map needs it (localization spec §14, §18.1): its layout, the tops of its
 /// first and last rows, where its last row's text ends without trailing spaces, the width of its first word, the

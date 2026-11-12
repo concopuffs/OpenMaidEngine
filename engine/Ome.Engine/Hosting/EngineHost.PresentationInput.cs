@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
-using Ome.Engine.Vm;
+
+namespace Ome.Engine.Hosting;
 
 [Flags]
 public enum HostPresentationReason
@@ -23,7 +23,7 @@ public readonly record struct BackbufferPublicationPolicy(
     bool PreserveExistingPixels,
     bool AppendGpuLayers);
 
-public sealed partial class GodotAdvHost
+public sealed partial class EngineHost
 {
     private readonly object _scriptContextLock = new();
     private readonly Stack<string> _scriptContexts = new();
@@ -84,7 +84,7 @@ public sealed partial class GodotAdvHost
         });
         // A root reload's WakeAllWaits may have left the event set with no dialog waiting: drop it before showing.
         _diagnosticMessageCompleted.Reset();
-        Godot.Callable.From(() => _main.ShowAgeDiagnostic(message)).CallDeferred();
+        _frontEnd.ShowAgeDiagnostic(message);
         while (!_stopping && !_diagnosticMessageCompleted.WaitOne(50)) { }
     }
 
@@ -101,7 +101,7 @@ public sealed partial class GodotAdvHost
             ["text"] = message.Text,
         });
         _scriptErrorCompleted.Reset();
-        Godot.Callable.From(() => _main.ShowAgeScriptError(message)).CallDeferred();
+        _frontEnd.ShowAgeScriptError(message);
         while (!_stopping && !_scriptErrorCompleted.WaitOne(50)) { }
         if (_stopRequested) return ScriptErrorChoice.Abort;
         if (_rootReloadInterrupt) return ScriptErrorChoice.Retry;
@@ -125,7 +125,7 @@ public sealed partial class GodotAdvHost
             ["initial"] = request.InitialText,
         });
         _fullwidthTextEditCompleted.Reset();
-        _main.CallDeferred("ShowAgeFullwidthTextEditor", request.InitialText);
+        _frontEnd.ShowAgeFullwidthTextEditor(request.InitialText);
         while (!_stopping && !_fullwidthTextEditCompleted.WaitOne(50)) { }
         lock (_fullwidthTextEditLock) return _fullwidthTextEditResult;
     }
@@ -238,7 +238,7 @@ public sealed partial class GodotAdvHost
             preserveExistingPixels, range, snapshot.Count);
     }
 
-    internal static BackbufferPublicationPolicy ResolveBackbufferPublicationPolicy(
+    public static BackbufferPublicationPolicy ResolveBackbufferPublicationPolicy(
         bool preserveExistingPixels, GfxHandleRange range, int visibleObjectCount)
     {
         // Native preservation is a pixel rule, not permission to retain an unbounded history of
@@ -274,7 +274,7 @@ public sealed partial class GodotAdvHost
         {
             Pages++;
             _locator.Wait(Pages);
-            _main.CallDeferred("PageBreak");
+            _frontEnd.PageBreak();
             lock (_textLock)
             {
                 _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
@@ -336,7 +336,7 @@ public sealed partial class GodotAdvHost
                     messageSkipped = true;
                     break;
                 }
-                if (autoTimer.Poll(autoWaitState(), _main.IsVoicePlaybackActive, _clock.NowMs))
+                if (autoTimer.Poll(autoWaitState(), _frontEnd.IsVoicePlaybackActive, _clock.NowMs))
                 {
                     autoAdvanced = true;
                     break;
@@ -363,7 +363,7 @@ public sealed partial class GodotAdvHost
         {
             _advText = "";
         }
-        _main.CallDeferred("ClearPage");
+        _frontEnd.ClearPage();
     }
 
     // Called from the main thread (click) or an auto-clicker. A transition click is consumed by
@@ -403,7 +403,7 @@ public sealed partial class GodotAdvHost
         else lock (_screenTransitionLock) polls = _screenTransition != null;
         if (!polls) return false;
         _timeline?.State("effect-input-polled", new() { ["actions"] = actionMask });
-        if ((actionMask & (1 << VirtualMachine.AdvanceAction)) != 0) TryForceActiveTransition("advance");
+        if ((actionMask & (1 << InputBindings.AdvanceAction)) != 0) TryForceActiveTransition("advance");
         return true;
     }
 
@@ -598,7 +598,7 @@ public sealed partial class GodotAdvHost
         try
         {
             var cursor = _res.DecodeCursor(asset);
-            _main.CallDeferred("SetAgeCursor", cursor.Image.Pixels, cursor.Image.Width, cursor.Image.Height,
+            _frontEnd.SetAgeCursor(cursor.Image.Pixels, cursor.Image.Width, cursor.Image.Height,
                                cursor.HotspotX, cursor.HotspotY);
             _timeline?.Event("cursor-set", new() { ["resource"] = resourceId, ["asset"] = asset.Name });
         }
@@ -610,14 +610,14 @@ public sealed partial class GodotAdvHost
 
     public void ClearCursorResource()
     {
-        _main.CallDeferred("ClearAgeCursor");
+        _frontEnd.ClearAgeCursor();
         _timeline?.Event("cursor-clear", new());
     }
 
     public void WarpCursor(int virtualX, int virtualY)
     {
         // Script execution is on the VM thread; Godot input/display APIs belong to the main thread.
-        _main.CallDeferred("WarpAgeCursor", virtualX, virtualY);
+        _frontEnd.WarpAgeCursor(virtualX, virtualY);
         _timeline?.Event("cursor-warp", new() { ["x"] = virtualX, ["y"] = virtualY });
     }
 
@@ -967,12 +967,12 @@ public sealed partial class GodotAdvHost
     public void Stop()
     {
         _stopRequested = true;
-        _main.CallDeferred("ClearAgeCursor");
+        _frontEnd.ClearAgeCursor();
         WakeAllWaits();
     }
 
     /// <summary>Op 0x2cf: Main switches at its next frame (Main.ScreenMode.cs).</summary>
-    public void RequestScreenMode(bool windowed) => _main.RequestScreenModeFromScript(windowed);
+    public void RequestScreenMode(bool windowed) => _frontEnd.RequestScreenModeFromScript(windowed);
 
     public void InterruptForRootReload()
     {
@@ -1049,8 +1049,8 @@ public sealed partial class GodotAdvHost
         IsTextRevealing = false;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
-        _main.CallDeferred("CancelScheduledSoundEffectStarts");
-        _main.CallDeferred("ClearPage");
+        _frontEnd.CancelScheduledSoundEffectStarts();
+        _frontEnd.ClearPage();
         _timeline?.State("scene-context-reset", new() { ["surfaces"] = LiveSurfaceSlots() });
     }
 
@@ -1119,19 +1119,19 @@ public sealed partial class GodotAdvHost
     public double SleepScale = 1.0;   // --sleep-scale <f>: debug multiplier for explicit op-0xc8 holds only
     // Wait on the unified FrameClock timebase (not Thread.Sleep) so the Speed multiplier scales
     // sleeps together with retained presentation clocks. Main._Process advances the clock + pulses each frame.
-    internal static long NormalizeSleepMilliseconds(long duration, double scale)
+    public static long NormalizeSleepMilliseconds(long duration, double scale)
         => (long)System.Math.Clamp(duration * scale, 1, 60_000);
 
     // sleep_op_0xc8@0x420ec0 calls kernel32 Sleep for an operand under 10 ms and returns; only a longer sleep arms the
     // main-loop timer. Either way native renders a dirty frame at the next loop iteration without waiting for the display.
-    internal const long NativeInlineSleepLimitMs = 10;
+    public const long NativeInlineSleepLimitMs = 10;
 
-    internal enum SleepPresentation { None, Immediate, Synchronized }
+    public enum SleepPresentation { None, Immediate, Synchronized }
 
     /// <summary>What a sleep asks of the compositor. The sleep sets no run-state 0x400, so inside an open statement
     /// block engine_main_tick renders nothing while it runs: Himegari's control-strip callbacks sleep 100 ms inside a
     /// block and native shows their pressed icon only at the close (docs/engine-re.md, "Statement blocks").</summary>
-    internal static SleepPresentation SleepPresentationFor(long duration, bool statementBlockActive)
+    public static SleepPresentation SleepPresentationFor(long duration, bool statementBlockActive)
         => statementBlockActive ? SleepPresentation.None
            : duration < NativeInlineSleepLimitMs ? SleepPresentation.Immediate
            : SleepPresentation.Synchronized;

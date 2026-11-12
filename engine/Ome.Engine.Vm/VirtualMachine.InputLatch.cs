@@ -33,9 +33,8 @@ namespace Ome.Engine.Vm;
 /// </summary>
 public sealed partial class VirtualMachine
 {
-    /// <summary>Logical action 4, the left click in both games: it advances a page, finishes a reveal, skips an effect
-    /// (EffectSkipOnClick 1) and cancels a modal movie.</summary>
-    public const int AdvanceAction = 4;
+    /// <inheritdoc cref="Ome.Engine.Model.InputBindings.AdvanceAction"/>
+    public const int AdvanceAction = Ome.Engine.Model.InputBindings.AdvanceAction;
 
     /// <summary>Logical action 5, Space in both games: at a polling text wait it enters the frame's handler A, which
     /// hides the window (adv_input_service_poll@0x411230).</summary>

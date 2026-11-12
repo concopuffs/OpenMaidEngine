@@ -3,18 +3,20 @@ using System.Collections.Generic;
 using System.Linq;
 using Ome.Engine.Model;
 
-internal readonly record struct MovieSurfaceBinding(long PlaybackId, long ResourceId, int SurfaceSlot,
+namespace Ome.Engine.Hosting;
+
+public readonly record struct MovieSurfaceBinding(long PlaybackId, long ResourceId, int SurfaceSlot,
                                                     long MovieFlags = 0);
-internal sealed record MovieSurfaceFrame(RgbaImage Image, string Name, int AssetId);
+public sealed record MovieSurfaceFrame(RgbaImage Image, string Name, int AssetId);
 public sealed record MovieSurfaceDiagnostic(int SurfaceSlot, long PlaybackId, long ResourceId,
                                             bool Completed, bool HasFrame, string? Name);
-internal enum MovieSurfaceReleaseKind { NotBound, Released }
-internal readonly record struct MovieSurfaceRelease(MovieSurfaceReleaseKind Kind,
+public enum MovieSurfaceReleaseKind { NotBound, Released }
+public readonly record struct MovieSurfaceRelease(MovieSurfaceReleaseKind Kind,
                                                     MovieSurfaceBinding Binding, bool Completed);
 
 /// <summary>Instance-keyed movie/surface ownership. A resource may be played more than once concurrently;
 /// completion and frames therefore belong to a playback, never to the shared asset id.</summary>
-internal sealed class MovieSurfaceRegistry
+public sealed class MovieSurfaceRegistry
 {
     private readonly object _lock = new();
     private readonly Dictionary<int, MovieSurfaceBinding> _bySurface = new();

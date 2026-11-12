@@ -9,14 +9,14 @@ using Ome.Engine.Diagnostics;
 public sealed class GodotTraceSink : ITraceSink
 {
     private const int RecentStepCapacity = 128;
-    private readonly GodotTimelineLog? _timeline;
+    private readonly TimelineLog? _timeline;
     private readonly PageLocatorState _locator;
     private readonly object _snapshotLock = new();
     private readonly Stack<string> _scripts = new();
     private readonly Queue<GodotTraceStepSnapshot> _recentSteps = new();
     private GodotTraceStepSnapshot? _latestStep;
     private GodotTraceSnapshot? _haltSnapshot;
-    public GodotTraceSink(PageLocatorState locator, GodotTimelineLog? timeline = null)
+    public GodotTraceSink(PageLocatorState locator, TimelineLog? timeline = null)
     { _locator = locator; _timeline = timeline; }
     // The page locator needs the exact script/offset even when the heavier timeline log is disabled.
     public bool TracingSteps => true;

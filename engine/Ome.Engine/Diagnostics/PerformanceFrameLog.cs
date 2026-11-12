@@ -5,6 +5,8 @@ using System.IO;
 using System.Text;
 using Ome.Engine.Model;
 
+namespace Ome.Engine.Diagnostics;
+
 /// <summary>
 /// Buffered, diagnostic-only CSV writer for real Godot frame and retained-compositor cost. The writer is
 /// deliberately independent of Godot types so its schema and clipping arithmetic can be unit tested.

@@ -1,3 +1,4 @@
+using Ome.Engine.Diagnostics;
 using Ome.Engine.Model;
 
 public class PerformanceFrameLogTests

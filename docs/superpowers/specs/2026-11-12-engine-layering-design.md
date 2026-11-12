@@ -3,9 +3,9 @@
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
-2 (census) and 3 (projects) are done on `feature/engine-layering`; §3.3, §4, §7.5, §7.6, §11, §12 and §13 record
-what they settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`.
-§15 records the history.
+2 (census), 3 (projects) and 4 (the lift) are done on `feature/engine-layering`; §3.3, §4, §6.2, §6.3, §7.5, §7.6,
+§11, §12 and §13 record what they settled. The census is in the implementation plan,
+`docs/superpowers/plans/2026-11-12-engine-layering.md`. §15 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
 `vm-map/opcodes.toml`, and the open work it covers in `docs/backlog.md` (§14), which points here.
@@ -470,6 +470,35 @@ The contract:
 A dialog is a request object that the device completes. A reset cancels outstanding requests, so a signal cannot
 outlive its wait.
 
+**As built (milestone 4).**
+
+- **The lifted host** is `Ome.Engine.Hosting.EngineHost` (`engine/Ome.Engine/Hosting/EngineHost*.cs`, the six files
+  of `godot/GodotAdvHost*.cs` with their threading and locks unchanged). Its snapshot record is
+  `EngineHostDiagnosticSnapshot`. The ten lines that printed a message print through the front end.
+- **The typed interface** is `Hosting/IFrontEnd.cs`: the 30 members and two for the log (`Print`, `Warn`). `Main`
+  implements it explicitly in `godot/Main.FrontEnd.cs`, each command with the `CallDeferred` the host made before.
+  The count above was off by two: `ShowAgeDiagnostic` and `ShowAgeScriptError` were deferred too (through
+  `Callable.From`, since a `DiagnosticMessage` is not a Variant), so 24 members are deferred commands and 6 run on
+  the caller's thread (`QueueVoicePlayback`, `IsVoicePlaybackActive`, `IsSoundChannelPlaying`, `TryPlayMovie`,
+  `QueueMoviePlaybackRate`, `RequestScreenModeFromScript`).
+- **What else moved with it.** The movie surface registry (`Hosting/MovieSurfaceRegistry.cs`) and the three logs the
+  host and the compositors write (`Diagnostics/PageLocatorState.cs`, `Diagnostics/TimelineLog.cs`, formerly
+  `GodotTimelineLog`, and `Diagnostics/PerformanceFrameLog.cs`) came from `Ome.Engine.Frontend`. One device
+  interface is new: `ILanguageFontRasterizer` (`Ome.Engine.Devices`), the TextServer rasterizer's language-font
+  call. The installed-font fallback (Godot's system fonts) is the front end's: without a font source the host lists
+  none. The click action that skips an effect (logical action 4), which the host tested through
+  `VirtualMachine.AdvanceAction`, is `InputBindings.AdvanceAction`; the VM's constant names it.
+- **Tests.** `EngineHostTests` runs the host over a front end that does nothing, with a catalog and no game files:
+  its commands reach the front end in the order sent, and a filled surface drawn by an object over a background
+  colour composes into the expected frame. `ProjectBoundaryTests.NoGodotTypeImplementsTheHost` reads every base list
+  in `godot/` and fails on `IHost`, its interfaces or `ISurfacePixels`.
+- **The timing is kept.** `kamidori-opening-pages.steps` and `himegari-read-skip.steps` ran on the build before the
+  lift (`12dfda5`) and on the lifted one, with `--timeline-log` and the same temporary probe in both: an event where
+  the host defers a call to `Main`, and one where `Main`'s method runs. Both builds made the same calls (649 and 174)
+  and applied each in the frame that sent it or the next. On the Kamidori run 515 were applied in the same frame and
+  134 in the next before the lift, 522 and 127 after; the median lag was 5.0 ms and 4.9 ms. No call waited more than
+  one frame on either build.
+
 ### 6.3 Graphics: a frame description and a reference renderer
 
 **`RenderObject` is not a device's vocabulary** (`Model/GfxState.Contracts.cs:117`). It carries AGE's four
@@ -533,6 +562,14 @@ and `kamidori-history-after-load.steps` compare with native, without Godot.
 
 **Not included:** finishing the GPU path (whole-screen transitions through an offscreen target, the additive
 LERP-tint variant). That stays a backlog item; this design gives it the reference to match.
+
+**As built (milestone 4).** The software path is `Ome.Engine.Hosting.SoftwareCompositor`
+(`Hosting/SoftwareCompositor.cs`). Its `Compose` is what `RecompositeSoftware` did up to the upload: it still reads
+`RenderObject`s and the host's surfaces, and draws into its own RGBA buffer. `Main.RecompositeSoftware` calls it and
+uploads the buffer (`Image.SetData`, `ImageTexture.Update`). The rules both paths use are shared, not copied: the
+blur-range sources (`Hosting/BlurRangeSources.cs`), a blur's sample matrix (`SoftwareCompositor.BlurSampleAffine`)
+and the patterned transition's crossfade (`SoftwareCompositor.CrossfadeApproximation`). Which path draws is
+unchanged. Milestone 7 makes this class the reference renderer by giving it the frame description to read.
 
 ### 6.4 Files
 
@@ -883,6 +920,7 @@ Every design question is decided (§2). These facts are not verified yet; each n
 | That an engine-thread loop keeps today's frame timing | §5.3, part 2 | Milestone 11: `--timeline-log` runs of the drive scenarios, against a tolerance set before measuring |
 | How many tests assert on state that moves from the VM into a native | §12 | Milestone 2: 311 test methods, 152 beyond script memory (plan §3.4) |
 | That `DisableTransitiveProjectReferences` keeps device types out of handler compiles | §3.3 | Milestone 3: a compile that is meant to fail |
+| That the lift's typed calls keep `CallDeferred`'s timing | §12 | Milestone 4: they do (§6.2, "As built") |
 | Whether the 22 operand-access rows need any code; the port may already read those operands correctly | §7.2 | Milestone 0: one does (below) |
 | What the 125 revision differences are, and whether they come to about ten rules | §7.2 | Backlog, "Triage the opcode revision diff" |
 | That building a frame description for every frame keeps the GPU path's frame times | §6.3 | Milestone 7: `--perf-log` captures of `FIELD` and SC0000's effect band |
@@ -966,3 +1004,15 @@ Not covered:
   `18d4d1b`, is kept in the implementation plan (`docs/superpowers/plans/2026-11-12-engine-layering.md`). It confirms
   the order of milestones 6 to 11 with four additions to their scope (§11, notes on the order), adds the tick
   function's statement block to §5.2, and fills in §12's test count (§13).
+- **2026-11-12, milestone 4.** The host lifted into `Ome.Engine` on `feature/engine-layering` (§6.2 and §6.3, "As
+  built"). `GodotAdvHost` is `Ome.Engine.Hosting.EngineHost`; it reaches Godot only through `IFrontEnd`, which `Main`
+  implements with the same `CallDeferred` calls, and the software compositor is `SoftwareCompositor`.
+  `EngineHostTests` runs the host over a front end that does nothing and renders a frame, and `ProjectBoundaryTests`
+  checks that no `godot/` type implements the host. A probed run of `kamidori-opening-pages` and `himegari-read-skip`
+  before and after the lift shows that the typed calls keep `CallDeferred`'s timing (§13). The suite (1860) and
+  validation at the core, workspace and runtime levels on both games pass. The runtime level's Godot self-test had
+  failed since milestone 0, which gave the self-test's headless VM the profile's build over the catalog's table; it
+  now runs the live VM's table. The ten port scenarios pass with equal `SYS4REG.INI`. Their shots are identical except
+  for animation phase and the build label, and `himegari-read-skip` keeps its time (37.7 s). The saves of
+  `himegari-save-load` and `kamidori-history-after-load` are equal under `save-diff` except for their timestamp and
+  play time, and their thumbnails are byte-identical.

@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Ome.Engine.Diagnostics;
+using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 
 public partial class Main
@@ -10,28 +12,15 @@ public partial class Main
     private ImageTexture _screenTex = null!;
     private GpuRetainedRenderer _gpuRenderer = null!;
     private bool _useGpuBackend = true;
-    private readonly List<RenderObject> _blurSources = new();
-    // One managed composition target for the entire frame. Layer helpers mutate it in place; only the
-    // completed frame crosses the Godot Image boundary, avoiding a full GetData/SetData round-trip per layer.
-    private byte[] _screenPixels = [];
+    private readonly BlurRangeSources _blurSources = new();
+    private SoftwareCompositor _compositor = null!;      // the software path (Ome.Engine), drawn into its own buffer
 
     private string? _gfxLogPath;                // --gfx-log <file>: log per-object compositor draw/skip CHANGES
-    private System.IO.StreamWriter? _gfxLog;
-    private readonly System.Collections.Generic.Dictionary<long, string> _lastGfxDecision = new();
-    private int _gfxLogFrame;
-
-    // ---- retained per-frame compositor (main thread, from _Process) ----
-    // Clear the screen and composite the VM's current VISIBLE gfx objects in ascending-handle order (= the
-    // engine's z-order), each blitting its live surface's rect at its position. Decoded AGF pixels are cached
-    // by catalog identity (this runs every frame). Native scale/translation matrix channels are sampled independently by
-    // GfxState and applied here; object opacity comes only from the actual blend/color path.
-    private sealed record CachedPixels(int Width, int Height, byte[] Rgba);
-    private readonly System.Collections.Generic.Dictionary<(int AssetId, long Key), CachedPixels> _pixelCache = new();
 
     /// <summary>Drops the prepared pixels of every catalog image, so the software path takes each one from the host
     /// again: after a language switch, its language assets apply (localization spec §12). Main thread, as the
     /// compositor.</summary>
-    private void ForgetPreparedPixels() => _pixelCache.Clear();
+    private void ForgetPreparedPixels() => _compositor.ForgetPreparedPixels();
     private readonly System.Collections.Generic.List<RenderObject> _visibleSnapshot = new(1024);
 
     /// <summary>A retained object's live source slot, read under the gfx lock (the VM thread changes the object).</summary>
@@ -85,7 +74,7 @@ public partial class Main
         _gpuRenderer.BeginFrame(publicationPolicy.AppendGpuLayers, _perf);
         long blurIndexStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         long blurIndexAllocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-        CollectBlurSources(_visibleSnapshot);
+        _blurSources.Collect(_visibleSnapshot);
         _perf?.RecordGpuBlurScan(PerformanceFrameLog.Timestamp() - blurIndexStarted,
             PerformanceFrameLog.AllocatedBytes() - blurIndexAllocated);
         foreach (var v in _visibleSnapshot)
@@ -94,7 +83,7 @@ public partial class Main
             long workStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
             long workAllocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             bool blurSource = v.RadialBlurTransition == null && v.DirectionalBlurTransition == null &&
-                IsBlurSource(v.Handle);
+                _blurSources.Contains(v.Handle);
             _perf?.RecordGpuBlurScan(PerformanceFrameLog.Timestamp() - workStarted,
                 PerformanceFrameLog.AllocatedBytes() - workAllocated);
             if (blurSource)
@@ -137,7 +126,7 @@ public partial class Main
                 // The portable contract retains the native mask mode/thickness. Until the GPU path has
                 // clip-mask sprites, publish the same timed endpoints through a source-over crossfade.
                 _perf?.RecordTransitionLayer();
-                DrawTransitionRangeGpu(_visibleSnapshot, CrossfadeApproximation(patterned));
+                DrawTransitionRangeGpu(_visibleSnapshot, SoftwareCompositor.CrossfadeApproximation(patterned));
             }
             else if (v.SurfaceTransition is { } transition)
             {
@@ -261,27 +250,6 @@ public partial class Main
         return drawn;
     }
 
-    // Rebuild for each snapshot: effect lifetime and source ranges can change between passes.
-    // Index iteration also avoids boxing List<RenderObject>'s large enumerator through IReadOnlyList.
-    private void CollectBlurSources(IReadOnlyList<RenderObject> visible)
-    {
-        _blurSources.Clear();
-        for (int i = 0; i < visible.Count; i++)
-        {
-            var item = visible[i];
-            if (item.DirectionalBlurTransition != null || item.RadialBlurTransition != null)
-                _blurSources.Add(item);
-        }
-    }
-
-    private bool IsBlurSource(long handle)
-    {
-        foreach (RenderObject item in _blurSources)
-            if ((item.DirectionalBlurTransition is { } directional && directional.Contains(handle)) ||
-                (item.RadialBlurTransition is { } radial && radial.Contains(handle))) return true;
-        return false;
-    }
-
     private int DrawDirectionalBlurRangeGpu(
         IReadOnlyList<RenderObject> visible, DirectionalBlurRangeTransitionState effect)
         => DrawBlurRangeGpu(visible, effect, null);
@@ -325,7 +293,7 @@ public partial class Main
                 int height = source.H > 0 ? source.H : _screenHeight;
                 for (int sample = 0; sample < samples; sample++)
                 {
-                    var affine = BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
+                    var affine = SoftwareCompositor.BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
                     _perf?.RecordFillLayer();
                     if (_gpuRenderer.DrawFill(
                         width, height, affine, source.Tint,
@@ -344,7 +312,7 @@ public partial class Main
 
             for (int sample = 0; sample < samples; sample++)
             {
-                var affine = BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
+                var affine = SoftwareCompositor.BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
                 var resolved = texture.Value;
                 float opacity = source.Alpha / 255f / samples;
                 if (_gpuRenderer.DrawTexture(
@@ -362,28 +330,8 @@ public partial class Main
         return drawn;
     }
 
-    private static Affine2D BlurSampleAffine(
-        Affine2D source, DirectionalBlurRangeTransitionState? directional,
-        RadialBlurRangeTransitionState? radial,
-        int sample, int sampleCount, int viewportWidth)
-    {
-        double fraction = sampleCount == 1 ? 0 : sample / (double)(sampleCount - 1);
-        if (directional is { } directionalEffect)
-        {
-            double radians = directionalEffect.AngleDegrees * System.Math.PI / 180.0;
-            double distance = directionalEffect.Length * fraction;
-            return source.Then(new Affine2D(
-                1, 0, 0, 1,
-                System.Math.Cos(radians) * distance,
-                System.Math.Sin(radians) * distance));
-        }
-        RadialBlurRangeTransitionState effect = radial!.Value;
-        double scale = 1.0 + effect.Length / System.Math.Max(1, viewportWidth) * fraction;
-        var zoom = new Affine2D(scale, 0, 0, scale,
-            effect.CenterX * (1 - scale), effect.CenterY * (1 - scale));
-        return source.Then(zoom);
-    }
 
+    // ---- the software path: SoftwareCompositor composes, Main uploads ----
     private void RecompositeSoftware(
         IReadOnlyList<RenderObject>? sampledVisible = null,
         bool preserveExistingPixels = false)
@@ -394,494 +342,15 @@ public partial class Main
             _perf.RecordPresentationCoordinate(presentStep?.Script ?? "<startup>",
                                                presentStep?.Offset ?? -1, presentStep?.Opcode ?? -1);
         }
+        _compositor.Compose(sampledVisible, preserveExistingPixels, _pageCount);
         long phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         long allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-        bool hasScreenTransition = _host.TrySnapshotScreenTransition(out var transition);
-        _perf?.RecordSnapshotAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
-        _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
-        if (!hasScreenTransition && sampledVisible == null)
-        {
-            phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            preserveExistingPixels = _host.SnapshotBackbufferObjects(
-                _vm.Gfx, _clock.NowMs, _visibleSnapshot).PreserveExistingPixels;
-            _perf?.RecordSnapshotAllocation(
-                PerformanceFrameLog.AllocatedBytes() - allocationPhase);
-            _perf?.RecordSnapshot(PerformanceFrameLog.Timestamp() - phase);
-        }
-        if (hasScreenTransition) preserveExistingPixels = false;
-        _perf?.BeginRecomposite(hasScreenTransition);
-
-        phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        if (!preserveExistingPixels)
-        {
-            System.Array.Clear(_screenPixels);
-            long background = _vm.Gfx.DisplayBackgroundColor;
-            if (background != 0)
-                FillQuad(0, 0, _screenWidth, _screenHeight, background, 1f);
-        }
-        _perf?.RecordClear(PerformanceFrameLog.Timestamp() - phase);
-        System.Collections.Generic.Dictionary<long, string>? decisions = _gfxLogPath != null || _timeline != null ? new() : null;
-        if (hasScreenTransition)
-        {
-            allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            // Native mode 4 keeps the captured source opaque and alpha-composites the complete target
-            // surface over it. The target is one flattened surface: its objects drawn opaquely over the
-            // surface's clear (black, or the overlay colour for the white fade). Fading each object on its own
-            // instead dims the whole frame mid-transition and lets the target's layers show through each other.
-            CompositeVisibleObjects(transition.Source, 1f, decisions);
-            CompositeFlattenedTransitionTarget(transition, decisions);
-            _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
-        }
-        else
-        {
-            allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            CompositeVisibleObjects(sampledVisible ?? _visibleSnapshot, 1f, decisions);
-            _perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
-        }
-        phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        allocationPhase = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-        _screen.SetData(_screenWidth, _screenHeight, false, Image.Format.Rgba8, _screenPixels);
+        _screen.SetData(_screenWidth, _screenHeight, false, Image.Format.Rgba8, _compositor.Pixels);
         _perf?.RecordSetDataAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
         _perf?.RecordSetData(PerformanceFrameLog.Timestamp() - phase);
         phase = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
         _screenTex.Update(_screen);
         _perf?.RecordTextureUpdate(PerformanceFrameLog.Timestamp() - phase);
-        if (decisions != null) LogGfxDecisionChanges(decisions);
         _perf?.EndRecomposite();
     }
-
-    private byte[] _transitionSourcePixels = [];
-
-    /// <summary>Blend the transition's flattened target surface over the source already in the screen
-    /// buffer at the transition's progress (native screen_transition_tick mode 4).</summary>
-    private void CompositeFlattenedTransitionTarget(
-        LegacyScreenTransitionSnapshot transition,
-        System.Collections.Generic.Dictionary<long, string>? decisions)
-    {
-        int alpha = Ome.Engine.Model.LegacyScreenTransitionComposite.Alpha(transition.Progress);
-        if (alpha == 0) return;
-        if (_transitionSourcePixels.Length != _screenPixels.Length)
-            _transitionSourcePixels = new byte[_screenPixels.Length];
-        System.Buffer.BlockCopy(_screenPixels, 0, _transitionSourcePixels, 0, _screenPixels.Length);
-        System.Array.Clear(_screenPixels);
-        FillQuad(0, 0, _screenWidth, _screenHeight, transition.OverlayRgb, 1f);
-        CompositeVisibleObjects(transition.Target, 1f, decisions);
-        if (alpha < 256)
-            Ome.Engine.Model.LegacyScreenTransitionComposite.BlendTargetOverSource(
-                _screenPixels, _transitionSourcePixels, alpha);
-    }
-
-    private void CompositeVisibleObjects(
-        IReadOnlyList<RenderObject> visible,
-        float globalOpacity,
-        System.Collections.Generic.Dictionary<long, string>? decisions)
-    {
-        CollectBlurSources(visible);
-        int z = 0;
-        foreach (var v in visible)   // interpolate at the retained-presentation clock
-        {
-            _perf?.RecordObject(v.TimeVarying);
-            if (v.RadialBlurTransition == null && v.DirectionalBlurTransition == null &&
-                IsBlurSource(v.Handle))
-            {
-                _perf?.RecordSkippedLayer();
-                if (decisions != null) decisions[v.Handle] = "SKIP(blur source range)";
-                continue;
-            }
-            var t = v.Transform;
-            var affine = Ome.Engine.Model.Transform2DMath.Build(t, v.Rotation, v.ScaleCycle, v.TranslationCycle);
-            var localToDest = affine.FromLocalOrigin(v.DstX, v.DstY);
-            if (v.RangeTransform is { } rangeTransform)
-                localToDest = localToDest.Then(rangeTransform);
-            var projected = localToDest.Apply(0, 0);
-            int dstX = (int)System.Math.Round(projected.X);
-            int dstY = (int)System.Math.Round(projected.Y);
-            float opacity = v.Alpha / 255f * globalOpacity;  // transform Z is never opacity
-            float strength = v.TintStrength / 255f;          // tint-blend / fill strength
-            int? rawSlot = SourceSlotOf(v.Handle);
-            long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            var surfaceTexture = rawSlot != null
-                ? _host.ResolveSurfaceTexture(rawSlot.Value, v.SurfaceResId)
-                : null;
-            _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-            bool movieSurfaceBound = rawSlot != null && _host.IsMovieSurfaceBound(rawSlot.Value);
-            // These strings exist only for --gfx-log/timeline diagnostics. DEBUGMAP visits roughly one
-            // thousand retained objects per composition, so formatting them unconditionally creates
-            // several megabytes of short-lived garbage even in an ordinary run.
-            string? outcome = null;
-            if (v.DirectionalBlurTransition is { } directionalBlur)
-            {
-                _perf?.RecordTransitionLayer();
-                int layers = DrawDirectionalBlurRange(visible, directionalBlur);
-                if (decisions != null)
-                    outcome = $"DIRECTIONAL-BLUR key=0x{directionalBlur.CommandKey:x} " +
-                              $"angle={directionalBlur.AngleDegrees:0.0} " +
-                              $"length={directionalBlur.Length:0.0} " +
-                              $"progress={directionalBlur.Progress:0.000} layers={layers}";
-            }
-            else if (v.RadialBlurTransition is { } radialBlur)
-            {
-                _perf?.RecordTransitionLayer();
-                int layers = DrawRadialBlurRange(visible, radialBlur);
-                if (decisions != null)
-                    outcome = $"RADIAL-BLUR key=0x{radialBlur.CommandKey:x} " +
-                              $"center=({radialBlur.CenterX:0.0},{radialBlur.CenterY:0.0}) " +
-                              $"length={radialBlur.Length:0.0} progress={radialBlur.Progress:0.000} layers={layers}";
-            }
-            else if (v.PatternedSurfaceTransition is { } patterned)
-            {
-                _perf?.RecordTransitionLayer();
-                int layers = DrawTransitionRange(visible, CrossfadeApproximation(patterned));
-                if (decisions != null)
-                    outcome = $"PATTERN-TRANSITION slot={patterned.TargetSlot} " +
-                              $"key=0x{patterned.CommandKey:x} mode={(int)patterned.Mode} " +
-                              $"thickness={patterned.PatternThickness} progress={patterned.Progress:0.000} " +
-                              $"forced={patterned.Forced} layers={layers}";
-            }
-            else if (v.SurfaceTransition is { } transition)
-            {
-                _perf?.RecordTransitionLayer();
-                int layers = DrawTransitionRange(visible, transition);
-                if (decisions != null)
-                    outcome = $"TRANSITION slot={transition.TargetSlot} key=0x{transition.CommandKey:x} " +
-                              $"progress={transition.Progress:0.000} forced={transition.Forced} layers={layers}";
-            }
-            else if (v.SurfaceResId == 0 && surfaceTexture == null)
-            {
-                // A colored object with no bound surface = a fade/flash fill (e.g. fade-to-black). Its presence
-                // is the tint STRENGTH (0=absent, 255=solid), scaled by any object opacity. Uncolored surfaceless
-                // objects are render targets — still skipped (slice C).
-                if (v.Blend != Ome.Engine.Model.BlendKind.Opaque)
-                {
-                    int baseW = v.W > 0 ? v.W : _screenWidth;
-                    int baseH = v.H > 0 ? v.H : _screenHeight;
-                    // One-shot/mode-1 packed color supplies opacity directly. Static mode-0 fills retain
-                    // the tint-strength convention used by the existing effect objects.
-                    float fillA = v.MultiplyTint ? opacity : opacity * strength;
-                    _perf?.RecordFillLayer();
-                    FillAffineQuad(baseW, baseH, localToDest, v.Tint, fillA);
-                    if (decisions != null)
-                        outcome = $"FILL tint=0x{v.Tint:x6} a={fillA:0.00} {baseW}x{baseH}@({dstX},{dstY}) " +
-                                  $"base=({v.DstX},{v.DstY}) anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) " +
-                                  $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) " +
-                                  $"trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) rot={v.Rotation.AngleDegrees:0.0}" +
-                                  ColorTimeline(v.ColorTransition);
-                }
-                else
-                {
-                    _perf?.RecordSkippedLayer();
-                    if (decisions != null) outcome = "SKIP(no-resId, opaque render-target)";
-                }
-            }
-            else
-            {
-                var texture = surfaceTexture;
-                if (texture == null && !movieSurfaceBound)
-                {
-                    resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-                    texture = _host.ResolveResIdTexture(v.SurfaceResId);
-                    _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-                }
-                if (texture == null)
-                {
-                    _perf?.RecordSkippedLayer();
-                    if (decisions != null) outcome = $"SKIP(resId=0x{v.SurfaceResId:x} UNRESOLVED)";
-                }
-                else
-                {
-                    BlitLayer(texture.Value.Image, texture.Value.AssetId, v.ColorKey, v.Tint, strength, v.SrcX, v.SrcY, v.W, v.H,
-                              localToDest, opacity, v.MultiplyTint, texture.Value.IsDynamic, v.Blend);
-                    if (decisions != null)
-                        outcome = $"slot={rawSlot} DRAWN resId=0x{v.SurfaceResId:x} {texture.Value.Name} " +
-                                  $"src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) base=({v.DstX},{v.DstY}) " +
-                                  $"anchor=({t.AnchorX:0.0},{t.AnchorY:0.0}) dst=({dstX},{dstY}) " +
-                                  $"scale=({t.ScaleX:0.00},{t.ScaleY:0.00}) trans=({t.TranslateX:0.0},{t.TranslateY:0.0}) " +
-                                  $"rot=({t.RotationAngleDegrees:0.0}+{v.Rotation.AngleDegrees:0.0}) " +
-                                  $"mode={_vm.Gfx.TryGet(v.Handle)?.StaticColorMode} op={opacity:0.00} tintStr={strength:0.00}" +
-                                  ColorTimeline(v.ColorTransition);
-                }
-            }
-            if (decisions != null) decisions[v.Handle] = $"z{z} {outcome}";
-            z++;
-        }
-    }
-
-    private static string ColorTimeline(Ome.Engine.Model.ColorTransitionState? state)
-        => state is { } c
-            ? $" color=0x{c.Current:x8}->0x{c.Target:x8} colorProgress={c.Progress:0.000}"
-            : "";
-
-    // Native type-0 surface commands first leave range A in normal z-order, then alpha-composite range B
-    // into the target surface. SC0000 binds that target to handle+2, above both source handles, so drawing
-    // range B here with progress produces old*(1-progress)+new*progress without disturbing ambient channels.
-    private int DrawTransitionRange(IReadOnlyList<RenderObject> visible, SurfaceTransitionState transition)
-    {
-        int drawn = 0;
-        long end = transition.RangeBStart + transition.RangeBCount;
-        foreach (var source in visible)
-        {
-            if (source.Handle < transition.RangeBStart || source.Handle >= end ||
-                source.SurfaceTransition != null || source.PatternedSurfaceTransition != null)
-                continue;
-            _perf?.RecordObject(source.TimeVarying);
-            var affine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle, source.TranslationCycle)
-                .FromLocalOrigin(source.DstX, source.DstY);
-            if (source.RangeTransform is { } rangeTransform)
-                affine = affine.Then(rangeTransform);
-            float opacity = source.Alpha / 255f * (float)transition.Progress;
-            int? rawSlot = SourceSlotOf(source.Handle);
-            long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            var texture = rawSlot != null
-                ? _host.ResolveSurfaceTexture(rawSlot.Value, source.SurfaceResId)
-                : null;
-            _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-            bool movieSurfaceBound = rawSlot != null && _host.IsMovieSurfaceBound(rawSlot.Value);
-            if (source.SurfaceResId == 0 && texture == null)
-            {
-                if (source.Blend == BlendKind.Opaque)
-                {
-                    _perf?.RecordSkippedLayer();
-                    continue;
-                }
-                int w = source.W > 0 ? source.W : _screenWidth;
-                int h = source.H > 0 ? source.H : _screenHeight;
-                _perf?.RecordFillLayer();
-                FillAffineQuad(w, h, affine, source.Tint, opacity * source.TintStrength / 255f);
-            }
-            else
-            {
-                if (!movieSurfaceBound && texture == null)
-                {
-                    resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-                    texture = _host.ResolveResIdTexture(source.SurfaceResId);
-                    _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-                }
-                if (texture == null)
-                {
-                    _perf?.RecordSkippedLayer();
-                    continue;
-                }
-                BlitLayer(texture.Value.Image, texture.Value.AssetId, source.ColorKey, source.Tint, source.TintStrength / 255f,
-                          source.SrcX, source.SrcY, source.W, source.H, affine, opacity, source.MultiplyTint,
-                          texture.Value.IsDynamic, source.Blend);
-            }
-            drawn++;
-        }
-        return drawn;
-    }
-
-    private static SurfaceTransitionState CrossfadeApproximation(PatternedSurfaceTransitionState transition)
-        => new(transition.CommandKey, transition.TargetSlot,
-               transition.RangeAStart, transition.RangeACount,
-               transition.RangeBStart, transition.RangeBCount,
-               transition.DelayMs, transition.DurationMs, transition.StartMs,
-               transition.Progress, transition.Forced);
-
-    private int DrawRadialBlurRange(
-        IReadOnlyList<RenderObject> visible, RadialBlurRangeTransitionState effect)
-        => DrawBlurRange(visible, null, effect);
-
-    private int DrawDirectionalBlurRange(
-        IReadOnlyList<RenderObject> visible, DirectionalBlurRangeTransitionState effect)
-        => DrawBlurRange(visible, effect, null);
-
-    private int DrawBlurRange(
-        IReadOnlyList<RenderObject> visible,
-        DirectionalBlurRangeTransitionState? directional,
-        RadialBlurRangeTransitionState? radial)
-    {
-        double length = directional?.Length ?? radial!.Value.Length;
-        int samples = System.Math.Abs(length) < 0.5 ? 1 : 6;
-        int drawn = 0;
-        foreach (RenderObject source in visible)
-        {
-            bool contains = directional?.Contains(source.Handle) ?? radial!.Value.Contains(source.Handle);
-            if (!contains || source.DirectionalBlurTransition != null || source.RadialBlurTransition != null)
-                continue;
-            _perf?.RecordObject(source.TimeVarying);
-            var baseAffine = Transform2DMath.Build(source.Transform, source.Rotation, source.ScaleCycle, source.TranslationCycle)
-                .FromLocalOrigin(source.DstX, source.DstY);
-            if (source.RangeTransform is { } rangeTransform)
-                baseAffine = baseAffine.Then(rangeTransform);
-            int? rawSlot = SourceSlotOf(source.Handle);
-            long resolveStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            var texture = rawSlot != null
-                ? _host.ResolveSurfaceTexture(rawSlot.Value, source.SurfaceResId)
-                : null;
-            _perf?.RecordResolve(PerformanceFrameLog.Timestamp() - resolveStarted);
-            bool movieSurfaceBound = rawSlot != null && _host.IsMovieSurfaceBound(rawSlot.Value);
-            if (source.SurfaceResId == 0 && texture == null)
-            {
-                if (source.Blend == BlendKind.Opaque) { _perf?.RecordSkippedLayer(); continue; }
-                int width = source.W > 0 ? source.W : _screenWidth;
-                int height = source.H > 0 ? source.H : _screenHeight;
-                for (int sample = 0; sample < samples; sample++)
-                {
-                    var affine = BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
-                    _perf?.RecordFillLayer();
-                    FillAffineQuad(
-                        width, height, affine, source.Tint,
-                        source.Alpha / 255f * source.TintStrength / 255f / samples);
-                    drawn++;
-                }
-                continue;
-            }
-            if (!movieSurfaceBound && texture == null)
-                texture = _host.ResolveResIdTexture(source.SurfaceResId);
-            if (texture == null) { _perf?.RecordSkippedLayer(); continue; }
-
-            for (int sample = 0; sample < samples; sample++)
-            {
-                var affine = BlurSampleAffine(baseAffine, directional, radial, sample, samples, _screenWidth);
-                var resolved = texture.Value;
-                BlitLayer(
-                    resolved.Image, resolved.AssetId, source.ColorKey, source.Tint,
-                    source.TintStrength / 255f, source.SrcX, source.SrcY, source.W, source.H,
-                    affine, source.Alpha / 255f / samples, source.MultiplyTint,
-                    resolved.IsDynamic, BlendKind.Alpha);
-                drawn++;
-            }
-        }
-        return drawn;
-    }
-
-    // Diagnostic (--gfx-log): print, per rendered frame, only the objects whose compositor outcome CHANGED
-    // since last frame (added / gone / drawn↔skip / resId change). Quiet until something actually changes, so
-    // the frame where the background drops out — and WHY — stands out. See systematic-debugging of the grey-BG.
-    private void LogGfxDecisionChanges(System.Collections.Generic.Dictionary<long, string> curr)
-    {
-        if (_gfxLogPath != null && _gfxLog == null)
-        {
-            var dir = System.IO.Path.GetDirectoryName(_gfxLogPath);
-            if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
-            _gfxLog = new System.IO.StreamWriter(_gfxLogPath!) { AutoFlush = true };
-        }
-        _gfxLogFrame++;
-        var lines = new System.Collections.Generic.List<string>();
-        foreach (var kv in curr)
-            if (!_lastGfxDecision.TryGetValue(kv.Key, out var prev) || prev != kv.Value)
-                lines.Add($"  0x{kv.Key:x}: {kv.Value}" + (_lastGfxDecision.ContainsKey(kv.Key) ? "" : "  [NEW]"));
-        foreach (var kv in _lastGfxDecision)
-            if (!curr.ContainsKey(kv.Key))
-                lines.Add($"  0x{kv.Key:x}: GONE (was {kv.Value})");
-        if (lines.Count > 0 && _gfxLog != null)
-        {
-            _gfxLog.WriteLine($"[frame {_gfxLogFrame} nowMs={_clock.NowMs} page={_pageCount}] {curr.Count} visible, {lines.Count} changes:");
-            foreach (var l in lines) _gfxLog.WriteLine(l);
-        }
-        if (lines.Count > 0)
-            _timeline?.Event("objects", new() { ["visible_count"] = curr.Count, ["changes"] = lines.ToArray() });
-        _lastGfxDecision.Clear();
-        foreach (var kv in curr) _lastGfxDecision[kv.Key] = kv.Value;
-    }
-
-    // Blit one object's surface rect. Static source pixels are cached per (assetId, colorKey): on first use, texels
-    // matching the surface colorkey are made transparent (native bakes the key at load — engine-re.md §Blend).
-    // Mode 0 uses tintStrength to LERP texel RGB toward tint. Mode 1 uses packed RGB modulation and
-    // SRCALPHA/ONE additive composition; black source pixels therefore contribute nothing.
-    private void BlitLayer(RgbaImage decoded, int assetId, long colorKey, long tint, float tintStrength, int srcX, int srcY, int w, int h,
-                           Ome.Engine.Model.Affine2D localToDest, float alpha = 1f, bool multiplyTint = false,
-                           bool dynamic = false, BlendKind blend = BlendKind.Alpha)
-    {
-        // Native gfx_object_blit_d3d9 clips the explicit source rectangle and returns without drawing when
-        // right<=left or bottom<=top. FIELD deliberately creates zero-area prototype objects from SO005;
-        // expanding those dimensions to the full texture leaks the entire spritesheet onto the map.
-        if (w <= 0 || h <= 0) return;
-        long sourcePrepStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        long sourcePrepAllocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-        var cacheKey = (assetId, colorKey);
-        int sourceWidth, sourceHeight;
-        byte[] sourcePixels;
-        if (dynamic)
-        {
-            // Decoder samples replace the pixels of one retained surface. Never enter them in the static cache.
-            // Clone only when applying a key so the decoder-owned newest-frame buffer remains untouched.
-            sourceWidth = decoded.Width;
-            sourceHeight = decoded.Height;
-            sourcePixels = decoded.Pixels;
-            if (Ome.Engine.Model.BlendMath.HasColorKey(colorKey))
-            {
-                sourcePixels = (byte[])sourcePixels.Clone();
-                BakeColorKey(sourcePixels, colorKey);
-            }
-        }
-        else
-        {
-            if (!_pixelCache.TryGetValue(cacheKey, out var cached))
-            {
-                byte[] pixels = decoded.Pixels;
-                if (Ome.Engine.Model.BlendMath.HasColorKey(colorKey))
-                {
-                    pixels = (byte[])pixels.Clone();
-                    BakeColorKey(pixels, colorKey);
-                }
-                cached = new CachedPixels(decoded.Width, decoded.Height, pixels);
-                _pixelCache[cacheKey] = cached;
-            }
-            sourceWidth = cached.Width;
-            sourceHeight = cached.Height;
-            sourcePixels = cached.Rgba;
-        }
-
-        int sw = w;
-        int sh = h;
-        sw = System.Math.Min(sw, sourceWidth - srcX);
-        sh = System.Math.Min(sh, sourceHeight - srcY);
-        _perf?.RecordSourcePrep(PerformanceFrameLog.Timestamp() - sourcePrepStarted);
-        _perf?.RecordSourcePrepAllocation(PerformanceFrameLog.AllocatedBytes() - sourcePrepAllocated);
-        if (sw <= 0 || sh <= 0) return;
-        long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        Ome.Engine.Model.SoftwareAffineRasterizer.BlitRgba(
-            _screenPixels, _screenWidth, _screenHeight, sourcePixels, sourceWidth, sourceHeight,
-            srcX, srcY, sw, sh, localToDest, tint, tintStrength, alpha, multiplyTint, blend);
-        _perf?.RecordRaster(sw, sh, localToDest, _screenWidth, _screenHeight, dynamic, blend,
-                            PerformanceFrameLog.Timestamp() - rasterStarted);
-    }
-
-    private void FillAffineQuad(int w, int h, Ome.Engine.Model.Affine2D localToDest, long tint, float alpha)
-    {
-        long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        Ome.Engine.Model.SoftwareAffineRasterizer.FillRgba(
-            _screenPixels, _screenWidth, _screenHeight, w, h, localToDest, tint, alpha);
-        _perf?.RecordRaster(w, h, localToDest, _screenWidth, _screenHeight, false, BlendKind.Alpha,
-                            PerformanceFrameLog.Timestamp() - rasterStarted);
-    }
-
-    // Alpha-blend a solid tint (0xRRGGBB) rectangle over the screen — the surfaceless fade/flash fill.
-    private void FillQuad(int dstX, int dstY, int w, int h, long tint, float alpha)
-    {
-        int ia = (int)(System.Math.Clamp(alpha, 0f, 1f) * 255);
-        if (ia == 0) return;
-        long rasterStarted = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
-        int tr = (int)((tint >> 16) & 0xff), tg = (int)((tint >> 8) & 0xff), tb = (int)(tint & 0xff);
-        byte[] dst = _screenPixels;
-        int dw = _screenWidth, dh = _screenHeight;
-        int x0 = System.Math.Max(0, -dstX), x1 = System.Math.Min(w, dw - dstX);
-        int y0 = System.Math.Max(0, -dstY), y1 = System.Math.Min(h, dh - dstY);
-        if (x1 <= x0 || y1 <= y0) return;
-        for (int y = y0; y < y1; y++)
-            for (int x = x0; x < x1; x++)
-            {
-                int dxp = dstX + x, dyp = dstY + y;
-                int di = (dyp * dw + dxp) * 4;
-                dst[di]     = (byte)((tr * ia + dst[di]     * (255 - ia)) / 255);
-                dst[di + 1] = (byte)((tg * ia + dst[di + 1] * (255 - ia)) / 255);
-                dst[di + 2] = (byte)((tb * ia + dst[di + 2] * (255 - ia)) / 255);
-                dst[di + 3] = (byte)System.Math.Min(255, dst[di + 3] + ia);
-            }
-        _perf?.RecordFillLayer();
-        _perf?.RecordRaster(w, h, new Affine2D(1, 0, 0, 1, dstX, dstY),
-                            _screenWidth, _screenHeight, false, BlendKind.Alpha,
-                            PerformanceFrameLog.Timestamp() - rasterStarted);
-    }
-
-    // Make colorkey-matching texels transparent (native colorkey is baked at surface load).
-    private static void BakeColorKey(byte[] px, long colorKey)
-    {
-        for (int i = 0; i < px.Length; i += 4)
-            if (Ome.Engine.Model.BlendMath.ColorKeyMatches(px[i], px[i + 1], px[i + 2], colorKey))
-                px[i + 3] = 0;
-    }
-
 }

@@ -314,7 +314,10 @@ and templates.
 
 The Godot deliverable includes `OME.sln` because Godot's .NET exporter requires a solution,
 `export_presets.cfg` for Linux and Windows x86_64, and `build/.gdignore` so disposable capture frames below
-the project do not enter its import or export scan. `tools/build-linux-x64.sh` and
+the project do not enter its import or export scan. Every `godot/*.cs` has a tracked `.cs.uid` sidecar (Godot's
+script id): add, move or delete it with its source, since `tools/test_release_workflow.py` checks that the two sets
+match. A headless editor scan (`<Godot console> --headless --editor --quit --path godot`) writes a missing one.
+`tools/build-linux-x64.sh` and
 `tools/build-windows-x64.sh` produce their complete disposable artifacts under `build/export/`; the older
 Windows-hosted `tools/export-linux-x64.ps1` remains a Linux-export development path.
 
@@ -323,8 +326,9 @@ companions keep cohesive surfaces independently navigable without changing the G
 paths: `godot/Main.SelfTest.cs` owns the synthetic threaded/headless regression harness, while
 `godot/Main.Audio.cs` owns BGM, voice, sound-effect, mixer-routing/persistence, and audio-bus control, and
 `godot/Main.Movie.cs` owns decoder staging, movie frame/audio publication, completion, and teardown.
-`godot/Main.Compositor.cs` owns retained/GPU/software composition state, texture resolution and caching,
-surface-transition drawing, raster helpers, and compositor decision logging. `godot/Main.Input.cs` owns
+`godot/Main.Compositor.cs` owns the GPU path, chooses between it and the software path each frame, and uploads the
+software path's frame; the software path itself is `engine/Ome.Engine/Hosting/SoftwareCompositor.cs` (below).
+`godot/Main.FrontEnd.cs` is Main's `IFrontEnd`, the calls the lifted host makes. `godot/Main.Input.cs` owns
 Godot input routing, locator/debug hotkeys, debug-scene dispatch, cursor control, native alerts, and
 full-width text entry. `godot/Main.Drive.cs` owns the `--control` driving backend: the control server's lifetime,
 injected input events, exclusive input, and the port side of the protocol (state, screenshots, speed, close).
@@ -348,9 +352,10 @@ classic Win32 look-alikes (`godot/Win32Dialog.cs`, `Win32DialogFrame.cs`, `Win32
 `engine/Ome.Engine.Frontend/` is the production owner of frontend helpers that do not depend on Godot types.
 Both `engine/OmeEngine.sln` and `godot/OME.sln` include the project; Godot and `Ome.Engine.Tests` consume it
 through project references rather than compiling duplicate linked sources. The first owned cluster contains
-`PageLocatorState`, `GodotTimelineLog`, `GodotTraceSink`, `StepLimitDiagnosticFormatter`, `GodotVmOptions`,
-`PerformanceFrameLog`, and `WindowLaunchOptions`. It also owns the internal movie runtime (the decoder interfaces
-are in `Ome.Engine.Devices`), audio-timeline alignment, movie-surface registry, and RIFF/WAVE sanitizer; only the
+`GodotTraceSink`, `StepLimitDiagnosticFormatter`, `GodotVmOptions` and `WindowLaunchOptions`; the logs the host and
+the compositors write (`PageLocatorState`, `TimelineLog`, `PerformanceFrameLog`) are in
+`engine/Ome.Engine/Diagnostics/`. It also owns the internal movie runtime (the decoder interfaces
+are in `Ome.Engine.Devices`), audio-timeline alignment, and RIFF/WAVE sanitizer; only the
 `OME` and `Ome.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg native interop and the
 asynchronous/paced decoder also live here; the `Ome.MovieCorpusGate` tool receives friend access to the native
 frame-source seam and references this project rather than compiling source links. Reusable movie-corpus discovery,
@@ -359,18 +364,22 @@ command-line entry point and output writer. `Control/` holds the game-driving pr
 (`docs/superpowers/specs/2026-11-03-game-driving-design.md`): its JSON model and conditions, the dispatcher that
 turns requests into timed input over an `IDriveBackend`, and the loopback `DriveServer`.
 
-`godot/GodotAdvHost.cs` retains cross-domain host coordination. Its partial-class companion
-`godot/GodotAdvHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,
+The runtime host is `engine/Ome.Engine/Hosting/EngineHost.cs`, lifted out of `godot/` in engine layering milestone 4
+(`docs/superpowers/specs/2026-11-12-engine-layering-design.md`); it reaches the front end only through
+`Hosting/IFrontEnd.cs`. `EngineHost.cs` retains cross-domain host coordination. Its partial-class companion
+`EngineHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,
 history presentation, message-window alpha, and retained wait-indicator configuration/publication.
-`godot/GodotAdvHost.PresentationInput.cs` owns script/presentation synchronization, waits and timing,
+`EngineHost.PresentationInput.cs` owns script/presentation synchronization, waits and timing,
 message-skip/input services, cursor and foreground waits, frame/backbuffer publication, transitions, and
-scene-context lifecycle coordination. `godot/GodotAdvHost.Surfaces.cs` owns decoded-image caching, mutable
+scene-context lifecycle coordination. `EngineHost.Surfaces.cs` owns decoded-image caching, mutable
 surface pixels/resources/dimensions, fill/copy/resolve operations, render-target publication, and surface/range
-teardown. `godot/GodotAdvHost.Movies.cs` owns movie surface bindings, ordinary and modal playback, movie-mask
-transitions, diagnostic snapshots, frame/completion publication, and mask teardown.
-`godot/GodotAdvHost.Audio.cs` owns BGM, voice and SFX resolution/dispatch, delayed voice state, volume/routing
+teardown. `EngineHost.Movies.cs` owns movie surface bindings (through `MovieSurfaceRegistry.cs`), ordinary and modal
+playback, movie-mask transitions, diagnostic snapshots, frame/completion publication, and mask teardown.
+`EngineHost.Audio.cs` owns BGM, voice and SFX resolution/dispatch, delayed voice state, volume/routing
 control, and the background BGM fade's deadline and completion; presentation/input retains the message-skip, reset, and frame-pulse consumers
-of that state through the sealed partial class.
+of that state through the sealed partial class. `Hosting/SoftwareCompositor.cs` is the software path: it composes the
+visible retained objects into its own RGBA buffer, which the front end uploads; `Hosting/BlurRangeSources.cs` is the
+blur-range rule it shares with the GPU path.
 
 `engine/Ome.Engine/Hosting/IHost.cs` remains the aggregate runtime host accepted by the VM and existing host
 implementations. `engine/Ome.Engine/Hosting/IDiagnosticHost.cs` owns recoverable-warning and modal-diagnostic

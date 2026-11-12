@@ -3,8 +3,10 @@
 **Date:** 2026-11-12
 **Spec:** `docs/superpowers/specs/2026-11-12-engine-layering-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps the census of milestone 2 and what it settles about the later milestones.
-**Status:** milestones 0, 1 and 3 are built (spec §15). Milestone 2, the census below, was measured at `18d4d1b` on
-`feature/engine-layering`. Next: milestone 4.
+**Status:** milestones 0, 1, 3 and 4 are built (spec §15). Milestone 2, the census below, was measured at `18d4d1b` on
+`feature/engine-layering`; since milestone 4 the host it names `GodotAdvHost` is `EngineHost`, in
+`engine/Ome.Engine/Hosting/`, and its file names below drop the prefix (`AdvText` is `EngineHost.AdvText.cs`). Next:
+milestone 5.
 
 Paths are relative to `age-reimpl/`.
 

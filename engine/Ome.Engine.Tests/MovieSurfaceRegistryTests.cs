@@ -1,3 +1,4 @@
+using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 
 public class MovieSurfaceRegistryTests

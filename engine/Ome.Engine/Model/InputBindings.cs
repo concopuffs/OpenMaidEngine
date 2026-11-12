@@ -12,6 +12,10 @@ public sealed class InputBindings
     public const int DefaultActionCount = 7;
     public const double JoystickAxisThreshold = 0.5;
 
+    /// <summary>Logical action 4, the left click in both games: it advances a page, finishes a reveal, skips an effect
+    /// (EffectSkipOnClick 1) and cancels a modal movie.</summary>
+    public const int AdvanceAction = 4;
+
     private readonly object _lock = new();
     private readonly int[] _keyboardActions = Enumerable.Repeat(-1, 256).ToArray();
     private readonly int[] _mouseButtonSlots = new int[2];

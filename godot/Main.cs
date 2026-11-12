@@ -29,6 +29,8 @@ public partial class Main : Godot.Control
     // The engine build the profile runs (Ome.Engine.Vm/EngineBuilds.cs): its rules go to the VM, the host and the
     // stores below, and its ABI picks the opcode table. Nothing past this file reads its id.
     private EngineBuild _engineBuild = null!;
+    // The opcode table of the build's ABI that the VM runs; the self-test's headless twin runs it too.
+    private OpcodeTable _opcodeTable = null!;
     private ResolvedGamePersistence _profilePersistence = null!;
     private IAssetStore _assetStore = null!;
     private LanguageAssetStore? _languageAssets;
@@ -36,7 +38,7 @@ public partial class Main : Godot.Control
     private Label _fpsHud = null!;
     private double _fpsHudUpdateSeconds;
     private VirtualMachine _vm = null!;
-    private GodotAdvHost _host = null!;
+    private EngineHost _host = null!;
     private IDisposable? _glyphRasterizerOwner;
     // The Unicode rasterizer a language draws with when the gameplay one is GDI (localization spec §7.4).
     private IDisposable? _presentedRasterizerOwner;
@@ -74,7 +76,7 @@ public partial class Main : Godot.Control
     private int _seqFrames = 180;               // --frames <n>: how many frames to dump (default ~3s @60fps)
     private int _seqIdx;
     private string? _timelineLogPath;            // --timeline-log <jsonl>: synchronized VM/host/compositor evidence
-    private GodotTimelineLog? _timeline;
+    private TimelineLog? _timeline;
     private int _timelineFrame;
     private string? _perfLogPath;                // --perf-log <csv>: low-overhead frame/compositor timings + work
     private PerformanceFrameLog? _perf;
@@ -217,7 +219,6 @@ public partial class Main : Godot.Control
         }
         _screenWidth = logicalCanvas.Width;
         _screenHeight = logicalCanvas.Height;
-        _screenPixels = new byte[logicalCanvas.RgbaByteCount];
         // The windowed AGE's menu bar sits above the game's client area, so the viewport is the canvas plus the bar.
         LoadMenuBar(gameRoot.Root, catalog.StartupSettings, userArgs);
         InitScreenshots(userArgs, gameRoot.Root,
@@ -380,6 +381,7 @@ public partial class Main : Godot.Control
         GD.Print($"[renderer] retained backend={(_useGpuBackend ? "gpu" : "software")}");
 
         var table = OmeRuntimeMetadata.LoadOpcodeTable(engineBuild.AbiId);
+        _opcodeTable = table;
         GD.Print($"[profile] opcode-layers={string.Join(",", table.ResolvedLayers)} " +
                  $"contracts={table.Count}");
         INativeDatStore? nativeSaveStore = null;
@@ -471,7 +473,7 @@ public partial class Main : Godot.Control
             }
         }
         _scripts = scripts;
-        if (_timelineLogPath != null) _timeline = new GodotTimelineLog(_timelineLogPath);
+        if (_timelineLogPath != null) _timeline = new TimelineLog(_timelineLogPath);
         if (!_selftest && pageMapPath == null)
             pageMapPath = DefaultPageMapPath(scene);
         _locator = PageLocatorState.Open(scene, _selftest ? null : pageMapPath, out string? pageMapWarning);
@@ -543,7 +545,7 @@ public partial class Main : Godot.Control
             selectedTextBackend.Detail);
         if (textBackend == "auto" && exactUnavailable != null)
             GD.Print($"[text] exact backend unavailable; selected portable: {exactUnavailable}");
-        _host = new GodotAdvHost(
+        _host = new EngineHost(
             this, resources, scene, _clock, _locator, logicalCanvas,
             surfaceTextRasterizer,
             timeline: _timeline,
@@ -594,6 +596,11 @@ public partial class Main : Godot.Control
             nativeDatStore: nativeSaveStore,
             audioMixerSettings: _audioMixerSettings,
             build: engineBuild);
+        _compositor = new SoftwareCompositor(_host, _vm.Gfx, _clock, logicalCanvas, _gfxLogPath)
+        {
+            Perf = _perf,
+            Timeline = _timeline,
+        };
         if (scripts != null && selectedProfile.Profile.DebugSceneLaunch != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);
@@ -646,7 +653,7 @@ public partial class Main : Godot.Control
             {
                 while (!_done)
                 {
-                    GodotHostDiagnosticSnapshot snapshot = _host.CaptureDiagnosticSnapshot();
+                    EngineHostDiagnosticSnapshot snapshot = _host.CaptureDiagnosticSnapshot();
                     if (_host.IsWaiting || snapshot.IsModalMovieWaiting) _host.SignalInput();
                     await Task.Delay(1);
                 }
@@ -1040,9 +1047,8 @@ public partial class Main : Godot.Control
     }
 
     /// <summary>AGE's own installed-font list (<see cref="FontFamilyCatalog"/>) when text draws through Windows GDI, so
-    /// the names the scripts look up are the names GDI draws; otherwise null, and the host lists Godot's system
-    /// fonts.</summary>
-    private static Func<IReadOnlyList<EnumeratedFontFamily>>? InstalledFontFamilySource(
+    /// the names the scripts look up are the names GDI draws; otherwise Godot's system fonts.</summary>
+    private static Func<IReadOnlyList<EnumeratedFontFamily>> InstalledFontFamilySource(
         IGlyphMaskRasterizer rasterizer, Sys4StartupSettings settings)
     {
 #if OME_WINDOWS_GDI
@@ -1053,6 +1059,10 @@ public partial class Main : Godot.Control
                 return FontFamilyCatalog.Build(source, settings.UseProportionalFont, settings.ValidFontCheckers);
             };
 #endif
-        return null;
+        return () => OS.GetSystemFonts()
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(name => new EnumeratedFontFamily(name, 0))
+            .ToArray();
     }
 }

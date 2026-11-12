@@ -18,7 +18,8 @@ public partial class Main
     // and deferred main-thread calls) drives the VM identically to a headless run.
     private void RunSelfTest()
     {
-        var table = OmeRuntimeMetadata.LoadOpcodeTable();
+        // The live run's table, which runs the build's ABI as EngineBuilds.ForVm requires.
+        var table = _opcodeTable;
         var (script, provider) = BuildSelfTestScene(table);
         var headless = new VirtualMachine(script, table, new CaptureHost(), null, provider, build: _engineBuild);
         headless.Run();
@@ -37,15 +38,15 @@ public partial class Main
                                  ?? _selectedProfile.Profile.NaturalBootScript;
         launcherSmoke.Open(debugEntries, launcherContext, present: false);
         launcherSmoke.Free();
-        bool sleepMinimumOk = GodotAdvHost.NormalizeSleepMilliseconds(0, 1.0) == 1
-                              && GodotAdvHost.NormalizeSleepMilliseconds(100, 1.0) == 100;
+        bool sleepMinimumOk = EngineHost.NormalizeSleepMilliseconds(0, 1.0) == 1
+                              && EngineHost.NormalizeSleepMilliseconds(100, 1.0) == 100;
         // A sleep inside an open statement block presents nothing; outside one, a short sleep presents without
         // waiting for the display and a longer one waits for it.
         bool sleepPresentationOk =
-            GodotAdvHost.SleepPresentationFor(100, true) == GodotAdvHost.SleepPresentation.None
-            && GodotAdvHost.SleepPresentationFor(1, true) == GodotAdvHost.SleepPresentation.None
-            && GodotAdvHost.SleepPresentationFor(1, false) == GodotAdvHost.SleepPresentation.Immediate
-            && GodotAdvHost.SleepPresentationFor(100, false) == GodotAdvHost.SleepPresentation.Synchronized;
+            EngineHost.SleepPresentationFor(100, true) == EngineHost.SleepPresentation.None
+            && EngineHost.SleepPresentationFor(1, true) == EngineHost.SleepPresentation.None
+            && EngineHost.SleepPresentationFor(1, false) == EngineHost.SleepPresentation.Immediate
+            && EngineHost.SleepPresentationFor(100, false) == EngineHost.SleepPresentation.Synchronized;
         bool inputTranslationOk = Win32VirtualKeyTranslator.TryTranslate(
                                       new InputEventKey { PhysicalKeycode = Key.Z }, out int zVk) && zVk == 0x5a
                                   && Win32VirtualKeyTranslator.TryTranslate(
@@ -325,7 +326,7 @@ public partial class Main
         bool logicalCanvasOk = _host.LogicalCanvas == new Sys4LogicalCanvas(_screenWidth, _screenHeight)
                                && _screen.GetWidth() == _screenWidth
                                && _screen.GetHeight() == _screenHeight
-                               && _screenPixels.Length == checked(_screenWidth * _screenHeight * 4)
+                               && _compositor.Pixels.Length == checked(_screenWidth * _screenHeight * 4)
                                && rootWindow.ContentScaleSize
                                   == new Vector2I(_screenWidth, _screenHeight + _menuBarHeight)
                                && _windowOptions == WindowLaunchOptions.Resolve(
@@ -341,10 +342,10 @@ public partial class Main
                 == new BackbufferPublicationPolicy(
                     PreserveExistingPixels: true,
                     AppendGpuLayers: backbufferSnapshot.Count == 0)
-            && GodotAdvHost.ResolveBackbufferPublicationPolicy(
+            && EngineHost.ResolveBackbufferPublicationPolicy(
                 true, GfxHandleRange.All, 1)
                 == new BackbufferPublicationPolicy(true, false)
-            && GodotAdvHost.ResolveBackbufferPublicationPolicy(
+            && EngineHost.ResolveBackbufferPublicationPolicy(
                 true, new GfxHandleRange(0, 60000), 1)
                 == new BackbufferPublicationPolicy(true, true);
         _host.ClearRenderTarget(-1);
