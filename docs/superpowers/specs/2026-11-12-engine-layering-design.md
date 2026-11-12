@@ -2,8 +2,9 @@
 
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
-design review, and accepted with the decisions of 2026-11-12 (§2). Milestone 0 (engine builds) is implemented on
-`feature/engine-layering`; §7.5, §7.6 and §13 record what it settled. §15 records the history.
+design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds) and 1 (handler
+table) are implemented on `feature/engine-layering`; §4, §7.5, §7.6 and §13 record what they settled. §15 records
+the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
 `vm-map/opcodes.toml`, and the open work it covers in `docs/backlog.md` (§14), which points here.
@@ -210,6 +211,30 @@ a time source. `INativeDatStore` and `IAssetStore` stay too (§6.4).
 - **The interpreter stays here:** the frame stack, `call-script`, coroutines and the instruction loop are not
   natives. They take part in saves through an interface the save native defines, and they take script requests
   from natives (§5.4).
+
+**As built (milestone 1).**
+
+- **The table** is `Vm/VirtualMachine.Handlers.cs`. It maps each opcode's name to its handler. The name is the
+  opcode's `CanonicalLabel`: its registry semantic name, or its label when it has none. A VM binds its table's
+  opcodes into an array indexed by opcode when it is constructed. The 120 `u004xxxxx` alias labels are gone.
+- **Names are unique.** The registry lint and `OpcodeHandlerTableTests` both reject two opcodes with one name.
+  Op `0x19a` shared `get-message-skip` with `0x1c7` and is now `get-message-skip-enabled`. The shared name had also
+  kept both opcodes from an Open Maid Script name.
+- **A variant can be bound by name.** A revision whose opcode differs can give it another name in its ABI layer;
+  the opcode is then unimplemented until a handler binds that name. Whether builds also override bindings is decided
+  with the first variant, op `0x1fd`'s float read (backlog "Float operands"). The ABI layers'
+  `handler_implementation_id` field is gone: nothing set it.
+- **Coverage is derived.** `VirtualMachine.Implements(table, opcode)` answers it, and `Ome.Cli catalog-scan` reports
+  a corpus's opcodes without a handler. `opcodes_build.py` reads no C#, and the registry's generated outputs no
+  longer report runtime coverage. `tools/scene_opcode_coverage.py`, which parsed the switch's case labels, is
+  retired.
+- **The test** (acceptance 3): every opcode of each game's ABI table has a handler; every bound name is an opcode's
+  name in the catalog; no two opcodes share a name; an opcode without a handler halts with its diagnostic.
+- **Handlers are `Op…` methods** of `VirtualMachine`, in the partials by family, until there are natives to give
+  them (milestones 3 to 11).
+- **`StepResult`** (`Vm/StepResult.cs`) is `Next`, `Jump(index)`, `Halt`, `FrameReturn`, `HotspotReturn` or
+  `RootReload`. A wait's callback still pushes a marker on the frame's local call stack; `ret` turns it into
+  `HotspotReturn`.
 
 The BGM fade after the change (names illustrative):
 
@@ -667,7 +692,7 @@ check are `EngineBuilds.ForVm`, in the build file.
 The test is `EngineBuildTests.NothingBelowCompositionReadsAnAbiOrBuildId`. It strips comments and fails on an ABI or
 build id read, a `SYS4nnn` or build-id literal, or a build lookup anywhere else in `engine/` and `godot/`.
 
-`Vm/OpcodeRuntimeCoverage.cs:57-59` goes away with milestone 1.
+`Vm/OpcodeRuntimeCoverage.cs`, which read the catalog's ABI id, went away with milestone 1.
 
 One thing the test would not have seen: `Sys4/ScriptAssembler.cs:69` wrote the header magic as the literal
 `"SYS4422 "`. Milestone 0 made it take the ABI from its caller: `Assemble` writes its table's ABI, and a table of no
@@ -883,3 +908,11 @@ Not covered:
   on the port before and after with the same `SYS4REG.INI`. Their shots are identical except for animation phase
   (Himegari's wisp, Kamidori's wait indicator) and the build label's uncommitted `+`. §7.1, §7.5, §7.6 and §13 were
   updated with what it found.
+- **2026-11-12, milestone 1.** The handler table, derived coverage and `StepResult` implemented on
+  `feature/engine-layering` (§4, "As built"). Op `0x19a` renamed `get-message-skip-enabled`. The test of acceptance 3
+  passes on both games' ABI tables (SYS4422 248 opcodes, SYS4433 269), and the catalog has 265 opcodes without a
+  handler. `himegari-read-skip.steps` gives the same result in the same time (37.8 s before and after), and nine more
+  port scenarios pass on both builds: the seven of milestone 0, `himegari-save-load` and `kamidori-opening-pages`. Their
+  `SYS4REG.INI` are equal, and their shots are identical except for animation phase and the build label. The saves of
+  `himegari-save-load` and `kamidori-history-after-load` are equal under `save-diff` except for their timestamp and
+  play time.

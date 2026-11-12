@@ -203,16 +203,6 @@ does it; the others are still handled on their own. Each change should be behavi
 acceptance 4: the suite, the `oms-rebuild` trace gate, the drive scenarios, `save-diff`, and timing or frame-time
 captures where they apply.
 
-- **Opcode dispatch is kept in three hand-written lists.** `StepInstruction`'s switch (`VirtualMachine.cs`, 401
-  case labels), the 18 family handlers' switches (392 labels), and `OpcodeRuntimeCoverage.ImplementedOpcodes` (283
-  opcodes). `opcodes_build.py` reads that last list with a regex (`load_runtime_coverage`) to publish coverage. Each
-  instruction runs two string switches. If the lists drift, the only check is `Step`'s default case, at run time
-  (`runtime-coverage-inconsistency`), and no test reaches it. About 120 of `Step`'s labels are `u004xxxxx` aliases
-  paired with a semantic name. Since 2026-11-10 executability is resolved once per opcode, so a step no longer
-  allocates. Done when one table maps each opcode to its handler; coverage is derived from that table, with no hand
-  list and no regex; and a test over every ABI table fails on an implemented opcode without a handler, or on a
-  handler bound to an unknown name. Fast-forward pacing is a flat wall-clock cost per op and per page, so faster
-  dispatch needs no re-timing; `himegari-read-skip.steps` checks it. Planned: layering spec, milestone 1.
 - **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:1085-1154`)
   assigns 38 fields from many partials, and `GodotAdvHost.ResetSceneContext` (`GodotAdvHost.PresentationInput.cs`)
   does the same on the host. Scene state added without a line in these methods survives タイトルに戻る. That is how
@@ -220,12 +210,11 @@ captures where they apply.
   rebuilds scene-lifetime state instead of clearing it, so a new field cannot be missed, and a test shows a reload
   keeps no scene state from before it. Planned: layering spec, as each native takes its state; closed at milestone
   12.
-- **Two instruction loops.** `RunFrame` (`VirtualMachine.cs:1184`) and `RunWaitCallback` (`:1678`) each run the
+- **Two instruction loops.** `RunFrame` (`VirtualMachine.cs:1177`) and `RunWaitCallback` (`:1676`) each run the
   per-instruction services (`ServiceInstructionBoundary`, `ApplyIgnoredDwords`, `FrameYield`, `PaceFastForwardOp`),
-  and each maps the `int.MinValue + n` step sentinels (`HALT`, `FRAME_RETURN`, `HOTSPOT_RETURN`, `ROOT_RELOAD`) to
-  outcomes. Until 2026-11-10 the callback loop ignored a halt and skipped those services. Done when one loop serves
-  frames and callbacks, and a step returns a typed result instead of a sentinel int. Planned: layering spec, the
-  typed result in milestone 1 and one loop in milestone 11 (spec §5.4).
+  and each maps a step's `StepResult` kind to an outcome. Until 2026-11-10 the callback loop ignored a halt and
+  skipped those services. Done when one loop serves frames and callbacks. Planned: layering spec, milestone 11
+  (spec §5.4); the typed step result came with milestone 1.
 - **No single error path.** The VM reports a fault in several ways: 57 `HaltReason` assignments, `VmHaltException`,
   the native error dialog (`ShowScriptError`), host warnings (`ReportWarning`), and exceptions that end the VM
   thread. The mod linker, the OMS compiler and the CLI each keep their own catch filters. Three of the review's bugs

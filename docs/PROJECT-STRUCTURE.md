@@ -407,11 +407,12 @@ the interpolation helpers consumed by retained-scene sampling. `engine/Ome.Engin
 owns surface/movie transition queues, presentation activity and click-skip logic, diagnostics and dirty-reason
 accounting, and visible retained-scene snapshots.
 
-`engine/Ome.Engine/Vm/VirtualMachine.cs` retains VM execution lifecycle, cross-domain state, and the proven
-top-level opcode dispatcher; `Step` now contains only label grouping, domain routing, strict compatibility
-failure, and an internal coverage/dispatcher consistency guard. `OpcodeRuntimeCoverage.cs` owns runtime
-implementation membership independently of ABI-table membership and corpus observation;
-`UnsupportedOpcodeDiagnostic.cs` is the structured unsupported-op diagnostic. `EngineBuilds.cs` declares every engine
+`engine/Ome.Engine/Vm/VirtualMachine.cs` retains VM execution lifecycle, cross-domain state, the instruction loops
+and dispatch: a step indexes the handlers bound to the table's opcodes at construction and calls one, which returns a
+`StepResult` (`StepResult.cs`). `VirtualMachine.Handlers.cs` is the handler table, each opcode's name (its registry
+semantic name, else its label) to its handler; it is the only list of implemented opcodes. The handlers (`Op…`
+methods) sit in the partials by family. `UnsupportedOpcodeDiagnostic.cs` is the structured diagnostic for an opcode
+with no handler. `EngineBuilds.cs` declares every engine
 build the port reproduces (4.24J, 4.33G) as its parent plus changes, and the VM takes the build's rules; the rule
 types sit beside the natives that read them (`Text/TextRules.cs`, `Model/GfxRules.cs`, `Persistence/SettingsRules.cs`,
 `Persistence/SaveRules.cs`; `superpowers/specs/2026-11-12-engine-layering-design.md` §7).
@@ -511,8 +512,8 @@ spec §6.2–§6.5.
 - **Opcode knowledge is edited ONLY in `vm-map/opcodes.toml`** (catalog framing, per-profile observation,
   evidence-scoped ABI snapshots/layers, revision-scoped structured evidence, semantics, and dependencies).
   Current revision snapshots resolve directly; the schema supports future parent/add/replace/remove composition
-  without asserting a base SYS4 lineage. Runtime implementation remains owned by
-  `OpcodeRuntimeCoverage.cs`. Run `tools/opcodes_build.py --build` to regenerate both Python views
+  without asserting a base SYS4 lineage. What the port runs is the engine's handler table
+  (`engine/Ome.Engine/Vm/VirtualMachine.Handlers.cs`), not registry data. Run `tools/opcodes_build.py --build` to regenerate both Python views
   (`tools/age_opcodes.py`, `tools/age_opcode_semantics.py`), machine JSON (`build/opcodes.json`), reference
   (`docs/opcode-reference.md`), and union/per-profile coverage. `--lint` also checks profile/revision/evidence
   references, dangling deps, confidence ceilings, and vocabulary.

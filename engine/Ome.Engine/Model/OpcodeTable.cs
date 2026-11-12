@@ -29,7 +29,6 @@ public sealed record OpcodeDefinition(
     IReadOnlySet<string> ObservedBy,
     string? SemanticName = null,
     IReadOnlySet<string>? SemanticEvidenceRevisions = null,
-    string? HandlerImplementationId = null,
     OpcodeResolutionProvenance? Resolution = null)
 {
     public string CanonicalLabel => string.IsNullOrWhiteSpace(SemanticName) ? Label : SemanticName;

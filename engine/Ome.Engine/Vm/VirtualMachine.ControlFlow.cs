@@ -108,113 +108,136 @@ public sealed partial class VirtualMachine
         return handlerB;
     }
 
-    private int StepControlFlow(string label, Instruction ins, int pc)
+    private StepResult OpJmp(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        return StepResult.Jump(_cur.Script.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1));
+    }
+
+    private StepResult OpCall(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        // A direct call names its target; `call *v` calls the code offset the variable holds. A value that is
+        // no instruction's offset calls nothing, and pushes no return address.
+        long target = a[0].Type == T_IMM ? a[0].Value : Read(a[0]);
+        if (target is < 0 or > int.MaxValue || !_cur.Script.IndexByOffset.TryGetValue((int)target, out int callee))
+            return StepResult.Next;
+        _cur.CallStack.Add(pc + 1);
+        return StepResult.Jump(callee);
+    }
+
+    private StepResult OpRet(Instruction ins, int pc)
+    {
+        if (_cur.CallStack.Count == 0) return StepResult.FrameReturn;   // empty intra-call stack => return from the script frame
+        int r = _cur.CallStack[^1];
+        _cur.CallStack.RemoveAt(_cur.CallStack.Count - 1);
+        return r == HotspotReturnMarker ? StepResult.HotspotReturn : StepResult.Jump(r);
+    }
+
+    private StepResult OpJcc(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        long tgt = Read(a[0]) != 0 ? a[1].Value : a[2].Value;
+        return StepResult.Jump(tgt == NoJump ? pc + 1 : _cur.Script.IndexByOffset.GetValueOrDefault((int)tgt, pc + 1));
+    }
+
+    private StepResult OpBeginValueSwitch(Instruction ins, int pc)
+    {
+        _valueSwitchTargets.Clear(); return StepResult.Next;
+    }
+
+    private StepResult OpAddValueSwitchCase(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        _valueSwitchTargets[ReadStr(a[0])] = checked((int)Read(a[1])); return StepResult.Next;
+    }
+
+    private StepResult OpValueSwitchJump(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        int target = _valueSwitchTargets.TryGetValue(ReadStr(a[0]), out int matched)
+            ? matched : checked((int)Read(a[1]));
+        return StepResult.Jump(_cur.Script.IndexByOffset.GetValueOrDefault(target, pc + 1));
+    }
+
+    // 0x7b: retain native handler metadata
+    private StepResult OpCoroutineSaveYieldHandlers(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        _cur.CoroutineYieldHandlerA = (int)Read(a[0]);
+        _cur.CoroutineYieldHandlerB = (int)Read(a[1]);
+        return StepResult.Next;
+    }
+
+    // 0x199: A -> nested service -> B -> 0x7c resume
+    private StepResult OpYieldAdvCoroutine(Instruction ins, int pc)
+    {
+        // op_0x199_yield_adv_coroutine@0x416440. Only the 0x7b handlers belong to the frame; the yield state
+        // and its owner (+0x5f6bc) are engine-wide. With no yield entered, it saves the resume pc and its
+        // owner and enters handler A, or does nothing without one. A yield while one is entered leaves for
+        // handler B, with the resume still armed. Either way it clears the service trigger mask (ctx+0xa0ce8).
+        // The port keeps no such mask apart from the input latch, which op 0x199 leaves alone.
+        if (!_coroutineYieldEntered)
+            return StepResult.Jump(_cur.CoroutineYieldHandlerA == -1
+                ? pc + 1
+                : EnterCoroutineYieldHandlerA(pc + 1, resumesTextWait: false));
+        if (_cur.CoroutineYieldHandlerB == -1) return StepResult.Next;
+        _coroutineYieldEntered = false;
+        return StepResult.Jump(_cur.Script.IndexByOffset.GetValueOrDefault(_cur.CoroutineYieldHandlerB, pc + 1));
+    }
+
+    // 0x7c: restore the PC saved by op 0x199
+    private StepResult OpCoroutineResume(Instruction ins, int pc)
+    {
+        if (_coroutineResumePc is int resumePc)
+        {
+            // op_0x7c_handler@0x417cb0: a resume saved by another script raises Depth before anything changes,
+            // so 再試行 raises it again. Op 0x7c records no instruction length before the throw, so native's
+            // 無視 skips by the previous handler's; the port skips the 0x7c itself.
+            if (_coroutineYieldOwner is { } owner && !IsSameScript(owner, _cur.Script))
+                return StepResult.Jump(RaiseInstructionScriptError(DepthError(owner), pc));
+            // Op 0x7c restores coroutine_runstate & ~0x2000000. Unless handler B came through a second op
+            // 0x199, that keeps op 0x199's 0x4000000: the hidden-window wait (Himegari's handler A takes this
+            // path, as adv_hide_window_enabled G[0x62425] is 0 in retail). The page stays hidden until
+            // handler B's own op 0x7c.
+            bool hiddenWindow = _coroutineYieldEntered;
+            bool resumesTextWait = _coroutineResumesTextWait;
+            ResetCoroutineYield();
+            // Op 0x7c also clears the current hotspot hit (ctx+0xc6f8) and keeps the hovered record: the
+            // next poll leaves it, and only a pointer move hits it again.
+            bool hitCleared;
+            lock (_interactiveLock) hitCleared = _interactiveFrame?.Hotspots.InvalidateHit() == true;
+            if (hitCleared) _host.WakeInputCallbackService();
+            if (hiddenWindow && WaitInHiddenWindow(resumePc, resumesTextWait) is >= 0 and int handlerB)
+                return StepResult.Jump(handlerB);
+            _host.SetAdvPagePresentationSuspended(Gfx, false);
+            return resumesTextWait ? StepResult.HotspotReturn : StepResult.Jump(resumePc);
+        }
+        return StepResult.Next;                       // cold bounded scene-entry path
+    }
+
+    // 0x140: bounded host model for LABEL/J only
+    private StepResult OpCoroutineLabelYield(Instruction ins, int pc)
     {
         int op = ins.Opcode;
         var a = ins.Args;
-        switch (label)
+        if (!IsAdvLabeledYield(_cur.Script, ins))
         {
-            case "jmp": return _cur.Script.IndexByOffset.GetValueOrDefault((int)a[0].Value, pc + 1);
-            case "call":
-            {
-                // A direct call names its target; `call *v` calls the code offset the variable holds. A value that is
-                // no instruction's offset calls nothing, and pushes no return address.
-                long target = a[0].Type == T_IMM ? a[0].Value : Read(a[0]);
-                if (target is < 0 or > int.MaxValue || !_cur.Script.IndexByOffset.TryGetValue((int)target, out int callee))
-                    return pc + 1;
-                _cur.CallStack.Add(pc + 1);
-                return callee;
-            }
-            case "ret":
-                if (_cur.CallStack.Count > 0) { int r = _cur.CallStack[^1]; _cur.CallStack.RemoveAt(_cur.CallStack.Count - 1); return r; }
-                return FRAME_RETURN;    // empty intra-call stack => return from the script frame
-            case "jcc":
-            {
-                long tgt = Read(a[0]) != 0 ? a[1].Value : a[2].Value;
-                return tgt == NoJump ? pc + 1 : _cur.Script.IndexByOffset.GetValueOrDefault((int)tgt, pc + 1);
-            }
-            case "begin-value-switch":
-                _valueSwitchTargets.Clear(); return pc + 1;
-            case "add-value-switch-case":
-                _valueSwitchTargets[ReadStr(a[0])] = checked((int)Read(a[1])); return pc + 1;
-            case "value-switch-jump":
-            {
-                int target = _valueSwitchTargets.TryGetValue(ReadStr(a[0]), out int matched)
-                    ? matched : checked((int)Read(a[1]));
-                return _cur.Script.IndexByOffset.GetValueOrDefault(target, pc + 1);
-            }
-            case "u0041ADB0":
-            case "coroutine-save-yield-handlers":   // 0x7b: retain native handler metadata
-                _cur.CoroutineYieldHandlerA = (int)Read(a[0]);
-                _cur.CoroutineYieldHandlerB = (int)Read(a[1]);
-                return pc + 1;
-            case "u00414D50":
-            case "yield-adv-coroutine":             // 0x199: A -> nested service -> B -> 0x7c resume
-            {
-                // op_0x199_yield_adv_coroutine@0x416440. Only the 0x7b handlers belong to the frame; the yield state
-                // and its owner (+0x5f6bc) are engine-wide. With no yield entered, it saves the resume pc and its
-                // owner and enters handler A, or does nothing without one. A yield while one is entered leaves for
-                // handler B, with the resume still armed. Either way it clears the service trigger mask (ctx+0xa0ce8).
-                // The port keeps no such mask apart from the input latch, which op 0x199 leaves alone.
-                if (!_coroutineYieldEntered)
-                    return _cur.CoroutineYieldHandlerA == -1
-                        ? pc + 1
-                        : EnterCoroutineYieldHandlerA(pc + 1, resumesTextWait: false);
-                if (_cur.CoroutineYieldHandlerB == -1) return pc + 1;
-                _coroutineYieldEntered = false;
-                return _cur.Script.IndexByOffset.GetValueOrDefault(_cur.CoroutineYieldHandlerB, pc + 1);
-            }
-            case "u00416A90":
-            case "coroutine-resume":                // 0x7c: restore the PC saved by op 0x199
-                if (_coroutineResumePc is int resumePc)
-                {
-                    // op_0x7c_handler@0x417cb0: a resume saved by another script raises Depth before anything changes,
-                    // so 再試行 raises it again. Op 0x7c records no instruction length before the throw, so native's
-                    // 無視 skips by the previous handler's; the port skips the 0x7c itself.
-                    if (_coroutineYieldOwner is { } owner && !IsSameScript(owner, _cur.Script))
-                        return RaiseInstructionScriptError(DepthError(owner), pc);
-                    // Op 0x7c restores coroutine_runstate & ~0x2000000. Unless handler B came through a second op
-                    // 0x199, that keeps op 0x199's 0x4000000: the hidden-window wait (Himegari's handler A takes this
-                    // path, as adv_hide_window_enabled G[0x62425] is 0 in retail). The page stays hidden until
-                    // handler B's own op 0x7c.
-                    bool hiddenWindow = _coroutineYieldEntered;
-                    bool resumesTextWait = _coroutineResumesTextWait;
-                    ResetCoroutineYield();
-                    // Op 0x7c also clears the current hotspot hit (ctx+0xc6f8) and keeps the hovered record: the
-                    // next poll leaves it, and only a pointer move hits it again.
-                    bool hitCleared;
-                    lock (_interactiveLock) hitCleared = _interactiveFrame?.Hotspots.InvalidateHit() == true;
-                    if (hitCleared) _host.WakeInputCallbackService();
-                    if (hiddenWindow && WaitInHiddenWindow(resumePc, resumesTextWait) is >= 0 and int handlerB)
-                        return handlerB;
-                    _host.SetAdvPagePresentationSuspended(Gfx, false);
-                    return resumesTextWait ? HOTSPOT_RETURN : resumePc;
-                }
-                return pc + 1;                       // cold bounded scene-entry path
-            case "u0041F9C0":
-            case "coroutine-label-yield":           // 0x140: bounded host model for LABEL/J only
-            {
-                if (!IsAdvLabeledYield(_cur.Script, ins))
-                {
-                    if (_sink.TracingSteps) _sink.Emit(TraceEvent.Stub(op, pc));
-                    return pc + 1;
-                }
-                if (!TryGetAdvYieldTerminal(pc, a[0], out long terminal, out string? problem))
-                {
-                    HaltReason ??= problem ?? $"coroutine-yield-pattern@0x{ins.Offset:x}";
-                    return HALT;
-                }
-
-                int visits = _cur.CoroutineYieldVisits.GetValueOrDefault(pc);
-                _cur.CoroutineYieldVisits[pc] = visits + 1;
-                // First visit must enter setup even if out retained this same terminal from a prior scene: it returns
-                // -1, which no instruction has, so the setup's `call *out` calls nothing. Every later visit returns
-                // the scene loop head and exits the bounded loop.
-                Write(a[0], visits == 0 ? -1 : terminal);
-                return pc + 1;
-            }
-            default:
-                throw new InvalidOperationException($"Non-control-flow opcode routed to control-flow handler: {label}");
+            if (_sink.TracingSteps) _sink.Emit(TraceEvent.Stub(op, pc));
+            return StepResult.Next;
         }
+        if (!TryGetAdvYieldTerminal(pc, a[0], out long terminal, out string? problem))
+        {
+            HaltReason ??= problem ?? $"coroutine-yield-pattern@0x{ins.Offset:x}";
+            return StepResult.Halt;
+        }
+
+        int visits = _cur.CoroutineYieldVisits.GetValueOrDefault(pc);
+        _cur.CoroutineYieldVisits[pc] = visits + 1;
+        // First visit must enter setup even if out retained this same terminal from a prior scene: it returns
+        // -1, which no instruction has, so the setup's `call *out` calls nothing. Every later visit returns
+        // the scene loop head and exits the bounded loop.
+        Write(a[0], visits == 0 ? -1 : terminal);
+        return StepResult.Next;
     }
 }

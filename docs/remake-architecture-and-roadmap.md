@@ -1765,9 +1765,9 @@ selection, and proven native-service globals as profile data; and direct-scene r
 the debug-scene coordinator as diagnostic-only profile fixtures. `SYS4422` resolves a direct 248-contract
 snapshot and `SYS4433` a direct 269-contract snapshot. Neither composes a claimed base. The canonical layer
 schema and runtime loader support evidence-backed parents, additions, full contract/handler replacements, and
-removals later; every effective contract and handler binding retains its supplying layer. Both snapshots may
-bind `ome-vm-switch/0x...` implementations while reporting semantic evidence independently, so code reuse is
-not a cross-revision claim.
+removals later; every effective contract retains its supplying layer. The engine binds handlers by opcode name
+(`Vm/VirtualMachine.Handlers.cs`), so both snapshots run one handler for an opcode they name alike while the
+registry reports semantic evidence per revision: code reuse is not a cross-revision claim.
 
 Himegari's `0xaba5c` scene-entry gate, `0x62425` native-service value, direct-scene SYSTEM4/INIT/resource
 bootstrap, SC0000 external SFX value, and debug-launch coordinator writes now live only in the Himegari

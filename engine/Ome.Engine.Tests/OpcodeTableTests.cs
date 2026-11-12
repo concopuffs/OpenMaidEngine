@@ -64,13 +64,16 @@ public class OpcodeTableTests
         Assert.Equal(["SYS4422"], sys4422.ResolvedLayers);
         Assert.Equal(["SYS4433"], sys4433.ResolvedLayers);
 
-        Assert.True(OpcodeRuntimeCoverage.TryResolve(sys4422, 0xba, out var himegari));
-        Assert.True(OpcodeRuntimeCoverage.TryResolve(sys4433, 0xba, out var kamidori));
-        Assert.Equal(himegari.ImplementationId, kamidori.ImplementationId);
-        Assert.Equal("SYS4422", himegari.BindingProvenance.LayerId);
-        Assert.Equal("SYS4433", kamidori.BindingProvenance.LayerId);
-        Assert.Equal("evidence-confirmed", himegari.SemanticEvidenceStatus);
-        Assert.Equal("compatibility-reuse-unconfirmed-for-revision", kamidori.SemanticEvidenceStatus);
+        // One handler runs 0xba under both snapshots; the registry's evidence covers only SYS4422.
+        Assert.True(VirtualMachine.Implements(sys4422, 0xba));
+        Assert.True(VirtualMachine.Implements(sys4433, 0xba));
+        Assert.True(sys4422.TryGetDefinition(0xba, out OpcodeDefinition himegari));
+        Assert.True(sys4433.TryGetDefinition(0xba, out OpcodeDefinition kamidori));
+        Assert.Equal(himegari.CanonicalLabel, kamidori.CanonicalLabel);
+        Assert.Equal("SYS4422", himegari.ContractProvenance.LayerId);
+        Assert.Equal("SYS4433", kamidori.ContractProvenance.LayerId);
+        Assert.Contains("SYS4422", himegari.EvidenceRevisions);
+        Assert.DoesNotContain("SYS4433", kamidori.EvidenceRevisions);
     }
 
     [Fact]
@@ -94,10 +97,7 @@ public class OpcodeTableTests
                   "id":"CHILD","kind":"revision-layer","composes":["BASE"],
                   "evidence":{"method":"fixture","artifact":"child.bin","scope":"CHILD"},
                   "members":["0x3"],
-                  "contracts":[{
-                    "op":"0x2","label":"two-new","argc":2,
-                    "handler_implementation_id":"child-handler/two"
-                  }],
+                  "contracts":[{"op":"0x2","label":"two-new","argc":2}],
                   "removes":["0x1"]
                 }
               ]
@@ -115,9 +115,7 @@ public class OpcodeTableTests
             .ContractProvenance.LayerId);
         Assert.Equal("CHILD", table.Entries.Single(entry => entry.Opcode == 0x3)
             .ContractProvenance.LayerId);
-        Assert.True(OpcodeRuntimeCoverage.TryResolve(table, 0x2, out var handler));
-        Assert.Equal("child-handler/two", handler.ImplementationId);
-        Assert.Equal("CHILD", handler.BindingProvenance.LayerId);
-        Assert.False(handler.IsExecutable);
+        // A layer that renames an opcode leaves it unimplemented until a handler binds the new name.
+        Assert.False(VirtualMachine.Implements(table, 0x2));
     }
 }

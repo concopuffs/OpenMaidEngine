@@ -1375,7 +1375,8 @@ previous `+600` target, resets current to zero, and verifies the next SC0000 leg
 
 #### The `0x21c–0x243` sprite transform / ANIMATION cluster (2026-07-10, partial implementation)
 
-The scene-completeness tracker (`tools/scene_opcode_coverage.py`) flagged a dense band of GAP ops in
+The scene-completeness tracker (`tools/scene_opcode_coverage.py`, retired on 2026-11-12 once every opcode of
+both games had a handler) flagged a dense band of GAP ops in
 `0x21c–0x243` (+ `0x2bd/0x2bf`) — at that point the **largest remaining rendering unknown** in SC0000
 (e.g. `0x220`×66,
 `0x22f`×34, `0x228`×33, `0x21e`×25 static sites). Resolving every one through the dispatch table
@@ -4682,8 +4683,8 @@ A calls `HIDEWIN.BIN` unconditionally, then yields again into handler B.
     latched trigger, the Skip service, a stop or a root reload.
   - It then enters handler B, or returns to the resume when the frame has none.
 - `TryRequestAdvWaitCoroutineYield` is the Space entry. `ServiceHotspotCallback` runs it before queued hotspot
-  callbacks, with hotspot dispatch suspended as during any callback. Its op `0x7c` returns `HOTSPOT_RETURN` to the
-  parked wait.
+  callbacks, with hotspot dispatch suspended as during any callback. Its op `0x7c` returns
+  `StepResult.HotspotReturn` to the parked wait.
 - `TryLatchAdvCoroutineYieldTrigger` holds Godot's trigger edges in the input latch while a yield is under way
   ("Effect skipping and the input latch").
   - It applies only when no nested script's raw input callbacks own input, so `HIDEWIN.BIN` keeps its own input.

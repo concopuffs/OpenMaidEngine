@@ -527,8 +527,7 @@ if (command == "catalog-scan")
 {
     Sys4CorpusScanResult scan = Sys4CorpusScanner.Scan(catalog, provider);
     int[] unsupportedOpcodes = scan.OpcodeOccurrences
-        .Where(pair => !OpcodeRuntimeCoverage.TryResolve(table, pair.Key, out var handler)
-                       || !handler.IsExecutable)
+        .Where(pair => !VirtualMachine.Implements(table, pair.Key))
         .Select(pair => pair.Key)
         .ToArray();
     var unsupportedSites = unsupportedOpcodes.ToDictionary(

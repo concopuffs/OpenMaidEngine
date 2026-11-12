@@ -147,10 +147,7 @@ public static class OpcodeTableJson
                         inherited?.ObservedBy ?? new HashSet<string>(StringComparer.Ordinal),
                         contract.TryGetProperty("semantic_name", out JsonElement semanticName)
                             ? semanticName.GetString() : inherited?.SemanticName,
-                        inherited?.EvidenceRevisions,
-                        contract.TryGetProperty(
-                            "handler_implementation_id", out JsonElement implementationId)
-                            ? implementationId.GetString() : inherited?.HandlerImplementationId);
+                        inherited?.EvidenceRevisions);
                 }
             }
             return new AbiLayerDocument(id, composes, members, contracts, removes, provenance);

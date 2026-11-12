@@ -211,6 +211,11 @@ def test_lint():
     cycle = FIXTURE.replace('composes = []', 'composes = ["SYS4422"]', 1)
     e, w = M.lint(M.load(write_tmp(cycle)))
     check(any("composition cycle" in message for message in e), "ABI layer cycles are linted")
+    assert FIXTURE.count('name = "stmt-begin"') == 1
+    shared = FIXTURE.replace('name = "stmt-begin"', 'name = "hotspot-branch"', 1)
+    e, w = M.lint(M.load(write_tmp(shared)))
+    check(any("share the name 'hotspot-branch'" in message for message in e),
+          "two opcodes with one name are a lint error")
 
 def _with_access(index, replacement):
     """FIXTURE with operand `index` of 0x90 carrying `replacement` lines instead of its access."""
@@ -328,7 +333,7 @@ def test_canonical_kamidori_revision_provenance():
 def test_emit_views():
     import opcodes_build as B, json as _json
     m = M.load(write_tmp(FIXTURE))
-    j = _json.loads(B.emit_json(m, frozenset({0x90})))
+    j = _json.loads(B.emit_json(m))
     check(j["dependents"]["0x1f4"] == ["0x90"], "json dependents index correct")
     snapshot = next(layer for layer in j["abi_layers"] if layer["id"] == "SYS4422")
     check(snapshot["kind"] == "complete-observed-snapshot"
@@ -340,9 +345,8 @@ def test_emit_views():
     check(hotspot["observed_by"] == ["himegari"], "json exposes general observation list")
     check(hotspot["semantics"]["evidence"][0]["method"] == "native-re",
           "json emits structured semantic evidence")
-    check(hotspot["handler_bindings"][0]["layer_id"] == "SYS4422"
-          and hotspot["handler_bindings"][0]["semantic_evidence_status"] == "evidence-confirmed",
-          "json separates snapshot handler binding from shared implementation identity")
+    check("runtime_implemented" not in hotspot and "handler_bindings" not in hotspot,
+          "json describes the registry only; the engine's handler table says what runs")
     md = B.emit_reference_md(m)
     check("hotspot-branch" in md and "depended on by" in md.lower()
           and "ABI snapshots and composition" in md,

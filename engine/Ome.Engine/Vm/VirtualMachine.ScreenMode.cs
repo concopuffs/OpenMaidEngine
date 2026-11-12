@@ -22,11 +22,11 @@ public sealed partial class VirtualMachine
 
     /// <summary>Op 0x2cf (op_0x2cf_handler@0x425370): operand 0 asks for fullscreen and 1 for a window; any other
     /// value does nothing.</summary>
-    private int StepScreenMode(IReadOnlyList<Operand> a, int pc)
+    private StepResult OpRequestScreenMode(Instruction ins, int pc)
     {
-        long mode = Read(a[0]);
+        long mode = Read(ins.Args[0]);
         if (mode is 0 or 1) _host.RequestScreenMode(windowed: mode == 1);
-        return pc + 1;
+        return StepResult.Next;
     }
 
     /// <summary>The next queued callback script, in the order native's launch queue would hold them.</summary>

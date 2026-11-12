@@ -3756,7 +3756,7 @@ argc = 1
 abi_source = "kelebek+decode-validated"
 
 [opcode.semantics]
-name = "get-message-skip"
+name = "get-message-skip-enabled"
 category = "input"
 summary = "(out) - return the current all-message skip state set by op 0x88."
 noop_headless = false

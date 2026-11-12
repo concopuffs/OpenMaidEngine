@@ -4,37 +4,52 @@ namespace Ome.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
-    private int StepRuntimeSetting(string label, IReadOnlyList<Operand> a, int pc)
+    // 0x131: process-owned message:MesWinAlpha setting
+    private StepResult OpGetMessageWindowAlpha(Instruction ins, int pc)
     {
-        switch (label)
-        {
-            case "get-message-window-alpha": // 0x131: process-owned message:MesWinAlpha setting
-            case "u00415F70":
-                Write(a[0], _messageWindowAlphaSetting);
-                return pc + 1;
-            case "set-message-window-alpha": // 0x141: paired message:MesWinAlpha configuration setter
-            case "u0041FAA0":
-                _messageWindowAlphaSetting = (int)Read(a[0]);
-                _host.SetMessageWindowAlphaSetting(_messageWindowAlphaSetting);
-                return pc + 1;
-            case "set-system-menu-enabled": // 0x142: native AGERC menu reentrancy guard
-            case "u0041FB10": // pre-reference compatibility
-                _systemMenuActionsEnabled = unchecked((int)Read(a[0]));
-                return pc + 1;
-            case "get-system-menu-show-delay": // 0x148: paired TIMER_SHOWMENU getter
-            case "u004160A0": // pre-reference compatibility
-                Write(a[0], unchecked((int)_systemMenuShowDelayMilliseconds));
-                return pc + 1;
-            case "set-system-menu-show-delay": // 0x149: top-edge dwell threshold in milliseconds
-            case "u0041FCE0": // pre-reference compatibility
-                _systemMenuShowDelayMilliseconds = unchecked((uint)Read(a[0]));
-                return pc + 1;
-            case "set-system-key-disable-mask": // 0x10f: op_0x10f_set_system_key_disable_mask@0x4217a0
-            case "u0041E690": // pre-reference compatibility
-                Volatile.Write(ref _systemKeyDisableMask, unchecked((int)Read(a[0])));
-                return pc + 1;
-            default:
-                throw new InvalidOperationException($"Non-runtime-setting opcode routed to runtime-setting handler: {label}");
-        }
+        var a = ins.Args;
+        Write(a[0], _messageWindowAlphaSetting);
+        return StepResult.Next;
+    }
+
+    // 0x141: paired message:MesWinAlpha configuration setter
+    private StepResult OpSetMessageWindowAlpha(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        _messageWindowAlphaSetting = (int)Read(a[0]);
+        _host.SetMessageWindowAlphaSetting(_messageWindowAlphaSetting);
+        return StepResult.Next;
+    }
+
+    // 0x142: native AGERC menu reentrancy guard
+    private StepResult OpSetSystemMenuEnabled(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        _systemMenuActionsEnabled = unchecked((int)Read(a[0]));
+        return StepResult.Next;
+    }
+
+    // 0x148: paired TIMER_SHOWMENU getter
+    private StepResult OpGetSystemMenuShowDelay(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Write(a[0], unchecked((int)_systemMenuShowDelayMilliseconds));
+        return StepResult.Next;
+    }
+
+    // 0x149: top-edge dwell threshold in milliseconds
+    private StepResult OpSetSystemMenuShowDelay(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        _systemMenuShowDelayMilliseconds = unchecked((uint)Read(a[0]));
+        return StepResult.Next;
+    }
+
+    // 0x10f: op_0x10f_set_system_key_disable_mask@0x4217a0
+    private StepResult OpSetSystemKeyDisableMask(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Volatile.Write(ref _systemKeyDisableMask, unchecked((int)Read(a[0])));
+        return StepResult.Next;
     }
 }

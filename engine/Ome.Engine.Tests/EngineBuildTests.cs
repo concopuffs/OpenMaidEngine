@@ -124,8 +124,6 @@ public sealed class EngineBuildTests
         "engine/Ome.Engine.Frontend/GodotTraceSink.cs",
         "engine/Ome.Engine/Localization/MessageSegmenter.cs",
         "engine/Ome.Mods/Localization/Import/ComposedStrings.cs",
-        // Goes away with milestone 1 (coverage derived from the handler table).
-        "engine/Ome.Engine/Vm/OpcodeRuntimeCoverage.cs",
     ];
 
     private static readonly Regex IdRead = new(
@@ -165,9 +163,9 @@ public sealed class EngineBuildTests
         string source = "// profile.EngineAbiId\nvar a = \"//\"; var b = t.AbiId; /* build.Id */ var c = \"SYS4433\";\n"
                         + "var d = \"\"\"\n  .AbiId\n  \"\"\";";
         string[] lines = WithoutComments(source).Split('\n');
-        Assert.False(IdRead.IsMatch(lines[0]));
+        Assert.DoesNotMatch(IdRead, lines[0]);
         Assert.Equal([".AbiId", "\"SYS4433"], IdRead.Matches(lines[1]).Select(match => match.Value));
-        Assert.True(IdRead.IsMatch(lines[3]));   // inside a raw string literal, which is code's data, not a comment
+        Assert.Matches(IdRead, lines[3]);   // inside a raw string literal, which is code's data, not a comment
     }
 
     /// <summary>C# source with its comments blanked (line breaks kept), strings and characters left as they are.</summary>

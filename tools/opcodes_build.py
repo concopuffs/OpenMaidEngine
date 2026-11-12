@@ -214,31 +214,6 @@ def _semantic_status(opcode: M.Opcode) -> str:
     return "investigated" if semantics and semantics.source != "kelebek" else "catalog-only"
 
 
-def _handler_evidence_status(opcode: M.Opcode, revision: str) -> str:
-    evidence_revisions = {
-        revision_id
-        for evidence in (opcode.semantics.evidence if opcode.semantics else [])
-        for revision_id in evidence.engine_revisions
-    }
-    return ("evidence-confirmed" if revision in evidence_revisions
-            else "compatibility-reuse-unconfirmed-for-revision")
-
-
-def load_runtime_coverage() -> frozenset[int]:
-    """Read the engine-owned implementation set without making it opcode-registry source data."""
-    source = (
-        paths.REPO / "engine" / "Ome.Engine" / "Vm" / "OpcodeRuntimeCoverage.cs"
-    ).read_text(encoding="utf-8")
-    match = re.search(
-        r"ImplementedOpcodes\s*=\s*new HashSet<int>\s*\{(?P<body>.*?)\}\s*\.ToFrozenSet",
-        source,
-        re.DOTALL,
-    )
-    if not match:
-        raise ValueError("could not locate OpcodeRuntimeCoverage.ImplementedOpcodes")
-    return frozenset(int(value, 16) for value in re.findall(r"0x[0-9a-fA-F]+", match.group("body")))
-
-
 def profile_contract_errors(model: M.Model) -> list[str]:
     """Cross-check observation revision ids against the embedded runtime manifests."""
     errors: list[str] = []
@@ -335,7 +310,7 @@ def _abi_layers_json(model: M.Model) -> list[dict]:
     return layers
 
 
-def emit_json(model: M.Model, runtime_implemented: frozenset[int] = frozenset()) -> str:
+def emit_json(model: M.Model) -> str:
     rev = M.dependents(model)
     out = {"meta": model.meta,
            "abi_layers": _abi_layers_json(model),
@@ -358,23 +333,13 @@ def emit_json(model: M.Model, runtime_implemented: frozenset[int] = frozenset())
         e = {"op": "0x%x" % op, "label": oc.label, "argc": oc.argc,
              "observed_by": sorted(oc.observed_by),
              "observed_revisions": sorted(oc.observed_revisions),
-             "runtime_implemented": op in runtime_implemented,
              "semantic_status": _semantic_status(oc),
              "code_target_args": oc.code_target_args, "code_target_kind": oc.code_target_kind,
              "abi_source": oc.abi_source,
              "abi_applicability": {
                  "catalog_scope": "upstream AGE catalog; revision applicability unspecified",
                  "proven_by_observation": sorted(oc.observed_revisions),
-             },
-             "handler_bindings": [
-                 {
-                     "layer_id": revision,
-                     "implementation_id": f"ome-vm-switch/0x{op:x}",
-                     "semantic_evidence_status": _handler_evidence_status(oc, revision),
-                 }
-                 for revision in sorted(oc.observed_revisions)
-                 if op in runtime_implemented
-             ]}
+             }}
         s = oc.semantics
         if s:
             e["semantics"] = {"name": s.name, "category": s.category, "summary": s.summary,
@@ -400,9 +365,7 @@ def _operand_access_md(oc: M.Opcode) -> str:
         parts.append(f"`{arg.get('i')}` {kinds}{target}{value}")
     return " · ".join(parts)
 
-def emit_reference_md(
-    model: M.Model, runtime_implemented: frozenset[int] = frozenset()
-) -> str:
+def emit_reference_md(model: M.Model) -> str:
     rev = M.dependents(model)
     observed_union = {op for op, oc in model.opcodes.items() if oc.observed_by}
     L = ["<!-- DO NOT EDIT -- generated from vm-map/opcodes.toml by tools/opcodes_build.py --build -->",
@@ -411,7 +374,10 @@ def emit_reference_md(
          f"{len(observed_union)} are observed in at least one recorded game corpus. "
          "Source of truth: `vm-map/opcodes.toml`.", "",
          "Observation proves presence in that exact script revision; it does not prove a base SYS4 "
-         "definition, revision ancestry, or absence from any unscanned game.", ""]
+         "definition, revision ancestry, or absence from any unscanned game.", "",
+         "Which opcodes the port runs is the engine's handler table "
+         "(`engine/Ome.Engine/Vm/VirtualMachine.Handlers.cs`), which binds each opcode by its name; "
+         "`OpcodeHandlerTableTests` checks that every opcode of a game's ABI table has a handler.", ""]
     for observation in model.observations.values():
         L.append(
             f"- **{observation.profile_id}:** {len(observation.opcodes)} opcodes in "
@@ -454,14 +420,6 @@ def emit_reference_md(
                    if oc.observed_revisions else "membership is not yet established")
             )
             L.append(f"- **semantic status:** {_semantic_status(oc)}")
-            L.append(f"- **runtime implemented:** {'yes' if op in runtime_implemented else 'no'}")
-            if op in runtime_implemented and oc.observed_revisions:
-                bindings = "; ".join(
-                    f"`{revision}` -> `ome-vm-switch/0x{op:x}` "
-                    f"({_handler_evidence_status(oc, revision)})"
-                    for revision in sorted(oc.observed_revisions)
-                )
-                L.append(f"- **handler bindings:** {bindings}")
             if s:
                 L.append(f"- **summary:** {s.summary}" if s.summary else "- **summary:** —")
                 operands = _operand_access_md(oc)
@@ -486,11 +444,7 @@ def emit_reference_md(
             L.append("")
     return "\n".join(L) + "\n"
 
-def emit_coverage_md(
-    model: M.Model,
-    runtime_implemented: frozenset[int] = frozenset(),
-    profile_id: str | None = None,
-) -> str:
+def emit_coverage_md(model: M.Model, profile_id: str | None = None) -> str:
     if profile_id is None:
         observed_ops = {op for op, oc in model.opcodes.items() if oc.observed_by}
         title = "Opcode Coverage — observed union (generated)"
@@ -515,8 +469,6 @@ def emit_coverage_md(
             by_cat[s.category] += 1
             if s.name != oc.label:
                 named += 1
-    implemented_observed = observed_ops & runtime_implemented
-    unsupported_observed = observed_ops - runtime_implemented
     investigated_observed = {
         op for op in observed_ops if _semantic_status(model.opcodes[op]) == "investigated"
     }
@@ -526,23 +478,19 @@ def emit_coverage_md(
          f"- observed opcodes: {len(observed_ops)}",
          f"- catalog entries not observed in this scope: {len(model.opcodes) - len(observed_ops)}",
          f"- observed and semantically investigated: {len(investigated_observed)}",
-         f"- observed and runtime implemented: {len(implemented_observed)}",
-         f"- observed but runtime unsupported: {len(unsupported_observed)}",
          f"- given a distinct mnemonic: {named}", "",
-         "## observed but runtime unsupported", "",
-         (", ".join(f"`0x{op:x}`" for op in sorted(unsupported_observed)) or "None."), "",
          "## by source", ""]
     L += [f"- {k}: {v}" for k, v in sorted(by_src.items())]
     L += ["", "## by confidence", ""] + [f"- {k}: {by_conf[k]}" for k in ("high", "med", "low")]
     L += ["", "## by category", ""] + [f"- {k}: {v}" for k, v in sorted(by_cat.items())]
     return "\n".join(L) + "\n"
 
-def tracked_outputs(model, runtime_implemented) -> dict[Path, str]:
+def tracked_outputs(model) -> dict[Path, str]:
     """The generated files kept in git, by path, as --build writes them."""
     return {
         paths.REPO / "tools" / "age_opcodes.py": emit_runtime_py(model),
         paths.REPO / "tools" / "age_opcode_semantics.py": emit_semantics_py(model),
-        paths.REPO / "docs" / "opcode-reference.md": emit_reference_md(model, runtime_implemented),
+        paths.REPO / "docs" / "opcode-reference.md": emit_reference_md(model),
     }
 
 
@@ -580,8 +528,7 @@ def main(argv=None):
             for m in errors:
                 print("error:", m)
             return 1
-        runtime_implemented = load_runtime_coverage()
-        tracked = tracked_outputs(model, runtime_implemented)
+        tracked = tracked_outputs(model)
         if args.check:
             stale = [path for path, text in tracked.items() if _read_or_none(path) != text]
             for path in stale:
@@ -596,16 +543,16 @@ def main(argv=None):
         print("build: wrote tools/age_opcodes.py, tools/age_opcode_semantics.py, docs/opcode-reference.md")
         paths.SHARED_BUILD.mkdir(parents=True, exist_ok=True)
         (paths.SHARED_BUILD / "opcodes.json").write_text(
-            emit_json(model, runtime_implemented), encoding="utf-8", newline="\n"
+            emit_json(model), encoding="utf-8", newline="\n"
         )
         (paths.SHARED_BUILD / "opcode-coverage.md").write_text(
-            emit_coverage_md(model, runtime_implemented), encoding="utf-8", newline="\n"
+            emit_coverage_md(model), encoding="utf-8", newline="\n"
         )
         for profile_id in model.observations:
             game_build = paths.ToolContext.resolve(profile_id, environ={}).game_build
             game_build.mkdir(parents=True, exist_ok=True)
             (game_build / "opcode-coverage.md").write_text(
-                emit_coverage_md(model, runtime_implemented, profile_id), encoding="utf-8", newline="\n"
+                emit_coverage_md(model, profile_id), encoding="utf-8", newline="\n"
             )
         print("build: wrote shared opcode views plus build/games/<profile-id>/opcode-coverage.md")
         return 0

@@ -16,7 +16,7 @@ public class OpcodeCompatibilityTests
         Assert.True(table.TryGetDefinition(0x1be, out OpcodeDefinition definition));
         Assert.False(definition.IsObservedBy("himegari"));
         Assert.True(definition.IsObservedBy("kamidori"));
-        Assert.True(OpcodeRuntimeCoverage.IsImplemented(0x1be));
+        Assert.True(VirtualMachine.Implements(table, 0x1be));
         Assert.Equal("SYS4433", table.AbiId);
         IReadOnlySet<int> himegari = table.Observations["himegari"].Opcodes;
         IReadOnlySet<int> kamidori = table.Observations["kamidori"].Opcodes;
@@ -27,7 +27,7 @@ public class OpcodeCompatibilityTests
         Assert.All(
             himegariTable.Entries,
             entry => Assert.True(
-                OpcodeRuntimeCoverage.IsImplemented(entry.Opcode),
+                VirtualMachine.Implements(himegariTable, entry.Opcode),
                 $"Himegari-observed opcode 0x{entry.Opcode:x} would enter unsupported fallback"));
     }
 
@@ -147,7 +147,7 @@ public class OpcodeCompatibilityTests
         RenderObject visible = Assert.Single(vm.Gfx.SnapshotVisibleObjects());
         Assert.Equal((500L, 0x39f + 7 * (0x15 + 1), 10),
             (visible.Handle, visible.SrcX, visible.DstX));
-        Assert.True(OpcodeRuntimeCoverage.IsImplemented(0x2da));
+        Assert.True(VirtualMachine.Implements(table, 0x2da));
         Assert.True(table.TryGetDefinition(0x2da, out OpcodeDefinition definition));
         Assert.Equal("register-extended-numeric-glyph-style", definition.SemanticName);
     }
@@ -180,7 +180,7 @@ public class OpcodeCompatibilityTests
         Assert.Equal(0x2d8, seten.Opcode);
         Assert.True(table.TryGetDefinition(0x2d8, out OpcodeDefinition definition));
         Assert.Equal("fill-int-array", definition.SemanticName);
-        Assert.True(OpcodeRuntimeCoverage.IsImplemented(0x2d8));
+        Assert.True(VirtualMachine.Implements(table, 0x2d8));
     }
 
     [Fact]

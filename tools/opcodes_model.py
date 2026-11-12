@@ -393,6 +393,14 @@ def lint(model: Model) -> tuple[list[str], list[str]]:
                          and ops[d].semantics.confidence in CONFIDENCE]
             if dep_confs and CONFIDENCE[s.confidence] > min(dep_confs):
                 warnings.append(f"{tag}: confidence {s.confidence!r} exceeds dependency ceiling")
+    # The engine's handler table binds an opcode by its name (semantic name, else label), so names are unique.
+    owners = collections.defaultdict(list)
+    for op, oc in ops.items():
+        owners[oc.semantics.name if oc.semantics else oc.label].append(op)
+    for name, shared in sorted(owners.items()):
+        if len(shared) > 1:
+            errors.append(f"opcodes {', '.join(f'0x{op:x}' for op in sorted(shared))} share the name {name!r}; "
+                          "the engine's handler table binds opcodes by name")
     return errors, warnings
 
 def _operand_access_errors(model: Model, oc: Opcode, tag: str) -> list[str]:
