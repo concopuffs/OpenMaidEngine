@@ -35,8 +35,9 @@ public sealed record ModLinkBase
     public string AppendMagic { get; init; } = "S4AC422 ";
     /// <summary>The selectors the install's own <c>*.AAI</c> catalogs use; mods never receive them.</summary>
     public IReadOnlySet<int> InstallSelectors { get; init; } = new HashSet<int>();
-    /// <summary>Whether the base catalog has a real (non-placeholder) record of that basename; an <c>assets/</c> file
-    /// of such a name overrides it, any other is a new asset (spec §4.4).</summary>
+    /// <summary>Whether the base catalog, or an append catalog the install mounts, has a real (non-placeholder)
+    /// record of that basename; an <c>assets/</c> file of such a name overrides it, any other is a new asset (spec
+    /// §4.4). An append record's name keeps its <c>$n$</c> prefix, as AGE opens it from the game root.</summary>
     public Func<string, bool> HasAsset { get; init; } = _ => false;
     /// <summary>The toolchain's identity for the link cache key (spec §6.4): the compiler and linker builds and the
     /// profile's opcode table, preludes and patch points.</summary>
@@ -102,7 +103,7 @@ public sealed record ModLinkBase
             CatalogTitle = catalog.Title,
             AppendMagic = ("S4AC" + catalog.Magic[4..]).PadRight(8)[..8],
             InstallSelectors = catalog.AppendPacks.Keys.ToHashSet(),
-            HasAsset = name => catalog.ResolveName(name) is { IsPlaceholder: false },
+            HasAsset = name => catalog.ResolveMountedName(name) is { IsPlaceholder: false },
             ToolchainStamp = string.Join("\n", stamp),
         };
     }

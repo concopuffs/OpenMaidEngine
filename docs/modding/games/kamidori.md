@@ -55,6 +55,22 @@ decompile those records from the root file. The translated install replaces 11 o
 append content shows in English there with or without the overlay (`../../asset-resolution-re.md`). The translated
 records' strings are partly damaged, so do not copy code from them.
 
+## The translation as a language package
+
+One command turns the translated install into a package that shows the untranslated install in English in the port
+([languages.md](../languages.md), "From a translation made in place"):
+
+```text
+Ome.Cli omp text import-scripts --profile kamidori --game-root ../Kamidori --from ../Kamidori_Translated --overlay-root patch --allow-bmp-as-agf --output build/games/kamidori/import-en --package --verify
+```
+
+- The package holds 48,588 entries in 217 catalog files and 232 images: 207 from `patch/`, and the 25 `$n$`
+  append images from the translated root. All of them are BMPs under AGF names, written as PNG.
+- The manifest's `glyph_delay_scale` comes out at 0.48.
+- Play it with `.\run-godot.cmd -Kamidori -Mod build\games\kamidori\import-en`, and choose English in the options
+  panel's OME section (or pass `--language en` to the port).
+- Keep it under `build/`. It is the translators' work, for playing on your own machine only.
+
 ## First mod values
 
 The values for [first-mod.md](../first-mod.md), on the translated opening scene:

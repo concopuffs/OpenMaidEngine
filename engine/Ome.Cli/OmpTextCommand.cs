@@ -10,7 +10,8 @@ using Ome.Mods.Localization.Import;
 /// <c>omp text</c> (localization spec §13), against the selected profile's install (<c>--game-root</c>):
 /// <c>extract</c> writes catalog templates from its scripts; <c>check</c> validates catalogs (packages and a text
 /// root) and <c>stats</c> counts what they translate; <c>import-scripts</c> builds a catalog from an install whose
-/// scripts were translated in place and writes <c>import-report.json</c> (spec §18.1).
+/// scripts were translated in place and writes <c>import-report.json</c> (spec §18.1), and with <c>--package</c>
+/// also the replaced images and a manifest, so its output loads as a package.
 /// </summary>
 internal static partial class OmpTextCommand
 {
@@ -22,7 +23,7 @@ internal static partial class OmpTextCommand
         string verb = args.Length > 2 ? args[2] : "";
         return verb switch
         {
-            "import-scripts" => ImportScripts(args, baseRoot, baseCatalog, table),
+            "import-scripts" => ImportScripts(args, baseRoot, baseCatalog, table, profileId),
             "extract" => Extract(args, baseRoot, baseCatalog, table, profileId),
             "check" or "stats" => CheckOrStats(verb == "stats", args, baseRoot, baseCatalog, table, profileId),
             "po-export" or "po-import" => Po(verb == "po-export", args),
@@ -36,7 +37,7 @@ internal static partial class OmpTextCommand
         Console.Error.WriteLine("       omp text check [--mod PATH ...] [--data-root DIR] [--text-root DIR] [--language TAG] [--no-scripts]");
         Console.Error.WriteLine("       omp text stats [--mod PATH ...] [--data-root DIR] [--text-root DIR] [--language TAG] [--scripts]");
         Console.Error.WriteLine("       omp text import-scripts --from GAME_ROOT [--overlay-root DIR] [--allow-bmp-as-agf] "
-                                + "--output DIR [--language TAG] [--verify] [--compare-archives]");
+                                + "--output DIR [--language TAG] [--package] [--verify] [--compare-archives]");
         Console.Error.WriteLine("       omp text po-export --language TAG (--package DIR | --text-root DIR) --output FILE.po");
         Console.Error.WriteLine("       omp text po-import --language TAG (--package DIR | --text-root DIR) --input FILE.po");
         return 2;
@@ -130,7 +131,8 @@ internal static partial class OmpTextCommand
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
 
-    private static int ImportScripts(string[] args, string baseRoot, Sys4AssetCatalog baseCatalog, OpcodeTable table)
+    private static int ImportScripts(string[] args, string baseRoot, Sys4AssetCatalog baseCatalog, OpcodeTable table,
+                                     string profileId)
     {
         string? from = Option(args, "--from");
         string? output = Option(args, "--output");
@@ -199,6 +201,32 @@ internal static partial class OmpTextCommand
         foreach (var (fileName, file) in import.Files)
             File.WriteAllText(Path.Combine(textDirectory, fileName), TextCatalogFileWriter.Write(file, header));
 
+        // --package: the replaced images become the language's assets, and a manifest makes the folder a package.
+        string? manifestNote = null;
+        if (args.Contains("--package"))
+        {
+            var translatedAssets = new Dictionary<string, AssetEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (PackedAssetEntry packed in translatedCatalog.EnumerateAssets())
+                translatedAssets.TryAdd(packed.Asset.Name, packed.Asset);
+            string assetDirectory = Path.Combine(Path.GetFullPath(output), "assets", language);
+            ImportPackage.WriteAssets(report.Assets.ReplacedImages.Select(name => translatedAssets[name].Name),
+                name => translatedStore.ReadAll(translatedAssets[name]), assetDirectory, report.Assets);
+            string manifestPath = Path.Combine(Path.GetFullPath(output), Ome.Mods.Manifest.ManifestReader.FileName);
+            if (File.Exists(manifestPath)) manifestNote = $"kept the existing {manifestPath}";
+            else
+            {
+                double scale = ImportPackage.GlyphDelayScale(import.Files.Values.SelectMany(file => file.Entries));
+                File.WriteAllText(manifestPath, ImportPackage.Manifest(profileId, language,
+                    ImportPackage.LanguageName(language), Path.GetFileName(translatedRoot), scale, header));
+                manifestNote = $"wrote {manifestPath} (glyph_delay_scale {scale.ToString(System.Globalization.CultureInfo.InvariantCulture)})";
+            }
+            // A text root's languages file: a package declares its languages in the manifest, and its layout refuses it.
+            string textRootLanguages = Path.Combine(Path.GetFullPath(output), "text", "languages.toml");
+            if (File.Exists(textRootLanguages))
+                manifestNote += $"{Environment.NewLine}  warning: {textRootLanguages} is a text root's file; the package "
+                                + "does not load while it is there (its manifest declares the languages)";
+        }
+
         if (args.Contains("--verify"))
         {
             var entries = new List<TextEntry>();
@@ -210,6 +238,7 @@ internal static partial class OmpTextCommand
         string reportPath = Path.Combine(Path.GetFullPath(output), "import-report.json");
         File.WriteAllText(reportPath, report.ToJson());
         PrintSummary(report, textDirectory, reportPath, import.Files.Count);
+        if (manifestNote != null) Console.WriteLine($"  {manifestNote}");
         return report.Verify is { Mismatches.Count: > 0 } ? 1 : 0;
     }
 
@@ -275,7 +304,10 @@ internal static partial class OmpTextCommand
         if (report.Assets is { } a)
             Console.WriteLine($"  assets: {a.ReplacedImages.Count} replaced images, {a.ChangedOther.Count} other changed, "
                               + $"{a.TranslatedOnly.Count} only in the translation, {a.BaseOnly.Count} only in the base, "
-                              + $"{a.NonAssetFiles.Count} non-asset files (archives compared by {a.ArchivesCompared})");
+                              + $"{a.NonAssetFiles.Count} non-asset files (archives compared by {a.ArchivesCompared})"
+                              + (a.Written is { } written
+                                  ? $"; wrote {written} to assets/{report.Language}/, {a.NotWritten.Count} not written"
+                                  : ""));
         if (report.Verify is { } v)
             Console.WriteLine($"  verify: {v.CheckedMessages} messages, {v.CheckedDrawLiterals} drawn literals, "
                               + $"{v.CheckedPatterns} patterns, {v.CheckedComposed} composed, "

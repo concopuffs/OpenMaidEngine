@@ -249,6 +249,12 @@ public sealed class AssetCounts
     public List<string> BaseOnly { get; } = [];
     public List<string> TranslatedOnly { get; } = [];
     public List<string> NonAssetFiles { get; } = [];
+
+    /// <summary>With <c>--package</c>: how many replaced images were written to <c>assets/&lt;language&gt;/</c>;
+    /// null without it.</summary>
+    public int? Written { get; set; }
+    /// <summary>With <c>--package</c>: the replaced images that could not be written, each with the reason.</summary>
+    public List<string> NotWritten { get; } = [];
 }
 
 public sealed class VerifyCounts

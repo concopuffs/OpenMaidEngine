@@ -28,7 +28,17 @@ dotnet run --project engine/Ome.Cli -- omp text import-scripts --profile kamidor
 - The command, its options and its output are in `tools-reference.md` (`omp text import-scripts`). A run takes
   about 5 s. The full report is `import-report.json` beside the catalog: counts, plus up to 200 samples per list.
 - Code: `engine/Ome.Mods/Localization/Import/`, with the segmenter in `engine/Ome.Engine/Localization/`. Tests:
-  `TextImportTests`, `TextCatalogFileTests`, `LocalizationTextModelTests` (synthetic scripts).
+  `TextImportTests`, `TextCatalogFileTests`, `LocalizationTextModelTests` (synthetic scripts), `ImportPackageTests`.
+- **`--package` (2026-11-11)** makes the output one package that loads as it is.
+  - It writes the 232 replaced images to `assets/en/` as PNG: 207 from `patch/` and the 25 `$n$` append images in
+    the translated root, all BMPs under AGF names.
+  - It writes a manifest whose `glyph_delay_scale` comes out at 0.48. The hand-made package of gate 11 used 0.5.
+  - `omp check` links it: 48,588 entries from 217 files, no errors.
+  - The port runs the clean install with this one package and `--language en`. The opening credits, the title, the
+    new-game screen and SC0000's first page are in English, and six of its images (SO001, SO004–6, SO023,
+    EV999YB) were served by then.
+  - The 25 append images first failed the link: the base-asset check read only `SYS4INI.BIN`'s records. It now
+    takes the install's append catalogs too, by their `$n$` names, as AGE and the port's store open them.
 
 ## Gate 10 results (2026-11-10)
 
@@ -50,7 +60,7 @@ first run differed, the row says why.
 | Emptied furigana | 2,960 of 3,072 runs emptied; 104 keep a reading | Dropping ruby from the presented text matches what the translators did. Spec §2's 2,595 counted only the 120 same-shape scripts |
 | Composed strings | 30 stores build 34 templates. 3 are untranslated; the other 31, in 11 scripts, become 27 pattern entries with the composing script's scope. 0 walks gave up. Of the first run's "Literals that feed `concat`" row, the claim "all in `SHOWCC` and `SC5510`" was wrong (R4) | Patterns get a real test (R4). The 313 variable messages are only variables, so they test nothing |
 | Changed files that are neither scripts nor images | 4: `AGE.EXE`, `AGERC.DLL` and `SYS4RK.BIN` (the 4.33F engine), and a stray `SO009 (older one).AGF` | Nothing the design lacks a home for |
-| Replaced images | 232 | The list for `assets/<language>/` (§12). Spec §2's 243 counted image files: 4 names appear twice, 6 are identical to the official loose updates, 1 is the stray file |
+| Replaced images | 232 | The list for `assets/<language>/` (§12), which `--package` writes (below). Spec §2's 243 counted image files: 4 names appear twice, 6 are identical to the official loose updates, 1 is the stray file |
 
 ## For the review: what the catalog does not carry
 

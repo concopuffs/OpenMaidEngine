@@ -150,7 +150,7 @@ public static class OmpCommands
                                       + $"record {k}, packed id 0x{modCatalog.PackedId(k):x8}"
                                       + (record.Stub ? " (generated record-0 stub)" : ""));
                 }
-            if (!found && catalog.ResolveName(name) is { IsPlaceholder: false } entry)
+            if (!found && catalog.ResolveMountedName(name) is { IsPlaceholder: false } entry)
             {
                 found = true;
                 AssetLocation location = store.Locate(entry);

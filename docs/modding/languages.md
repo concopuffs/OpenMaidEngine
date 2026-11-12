@@ -63,6 +63,28 @@ holds, translated or not, adds templates for sources no file has yet, and marks 
 source the scripts no longer draw or store (an obsolete entry is skipped, like a template). It rewrites only the
 files whose entries changed, and it does not keep comments, so write notes for translators in `note`.
 
+### From a translation made in place
+
+Some translations replace the game's own scripts and images in an install. `import-scripts` turns such an install
+into a package for the port. It compares each translated script with the original and writes the translated text as
+catalog entries. With `--package` it also writes the images the translation replaced to `assets/<tag>/`, each AGF
+as a PNG. When the folder has no manifest, it writes one with the language's `[[language]]` table:
+
+```text
+Ome.Cli omp text import-scripts --from TRANSLATED_ROOT --output my.lang --language en --package <game options>
+```
+
+- The game options name the original install. `--overlay-root` and `--allow-bmp-as-agf` apply to the translated
+  install, as it is played without the port.
+- `--verify` reads the catalogs back and checks every message against the translated scripts.
+- The summary and `import-report.json` list what could not be carried.
+- The manifest's `glyph_delay_scale` is the original's character count divided by the translation's. Its `id` and
+  `name` are placeholders: edit them, since the importer leaves an existing manifest unchanged.
+- Run the result as any package, with `--mod my.lang --language en`.
+
+The text and images remain their translators' work. The package is for playing a translated install you already
+have; share it only with the translators' permission.
+
 ## Manifest
 
 ```toml
@@ -338,6 +360,7 @@ that language and the game's text stays as the game has it.
 | `omp text stats [--mod PATH …] [--data-root DIR] [--text-root DIR] [--language TAG] [--scripts]` | counts the translated messages, strings and composed strings, per script with `--scripts` |
 | `omp text po-export --language TAG (--package DIR \| --text-root DIR) --output FILE.po` | writes the language's catalogs as one gettext PO file |
 | `omp text po-import --language TAG (--package DIR \| --text-root DIR) --input FILE.po` | puts the PO file's translations back into the catalogs |
+| `omp text import-scripts --from GAME_ROOT --output DIR [--language TAG] [--package] [--verify]` | builds catalogs from an install translated in place, and with `--package` its images and a manifest ("From a translation made in place") |
 
 `check` reports errors (a file that does not read, two patterns that can match one string, too many entries, a stack
 that does not link, an engine entry with a value its key does not take) and warnings (entries whose source no

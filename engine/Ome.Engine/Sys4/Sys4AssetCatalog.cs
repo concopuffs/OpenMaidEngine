@@ -195,6 +195,12 @@ public sealed class Sys4AssetCatalog
         => _byName.TryGetValue(Path.GetFileName(name), out var entry) && Path.GetFileName(name) == name
             ? entry : null;
 
+    /// <summary><see cref="ResolveName"/> over this catalog's real records, then those of the append catalogs mounted
+    /// on it in selector order. An append record's name keeps its <c>$n$</c> prefix, the name AGE opens it by.</summary>
+    public AssetEntry? ResolveMountedName(string name)
+        => ResolveName(name) ?? _appendPacks.OrderBy(pair => pair.Key)
+            .Select(pair => pair.Value.ResolveName(name)).FirstOrDefault(entry => entry != null);
+
     /// <summary>Resolve within the owning scene section; ids cannot spill into the next section.</summary>
     public AssetEntry? ResolveScene(string scene, long localId)
     {

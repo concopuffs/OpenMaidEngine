@@ -164,7 +164,8 @@ landing on the wrong instructions.
 ### Assets: `assets/`
 
 - A file named like an original asset (`assets/BG001.AGF`) overrides it, matched case-insensitively. When several
-  mods override one asset, the last in load order wins, and the link report says so.
+  mods override one asset, the last in load order wins, and the link report says so. The records of the game's own
+  append catalogs count as original assets under their `$n$` names (`assets/$1$BG001.AGF`).
 - A file with a name the game does not have is a **new asset**. List it in `[assets].names`. It becomes a record of
   the mod's append catalog, and scripts reach it with `asset "NAME"` (`new-scenes.md`).
 - `assets/<language>/NAME` (format version 2) is a **language asset**: it replaces `NAME` only while that language is
