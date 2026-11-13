@@ -28,8 +28,8 @@ public enum ScriptCollectionStatus
 /// through <see cref="Integers"/> and its siblings, which the VM's public face forwards.</para>
 /// <para>The banks are five sections of a numbered save (<see cref="WriteSaveRecords"/>, <see cref="ReadSaveRecords"/>);
 /// the save native decides when they are written and read (spec §5.1, rule 6).</para>
-/// <para>Engine thread only, apart from <see cref="SeedDeterministicRandom"/>, which the driver calls from the front
-/// end's thread under the draws' lock.</para>
+/// <para>Engine thread only (spec §5.1, rule 4); the driver's <see cref="SeedDeterministicRandom"/> comes as a
+/// request (InputAndWaits.Invoke).</para>
 /// </remarks>
 public sealed partial class ScriptMemory
 {

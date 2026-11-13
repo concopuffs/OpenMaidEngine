@@ -22,9 +22,8 @@ namespace Ome.Engine.Natives;
 /// speed. A fade advances only when the tick runs: native advances it in its main loop, which stops under a modal
 /// dialog, and its period timer makes up the time on the first tick after (docs/engine-re.md, "A fade under the 終了
 /// dialog stops, then catches up"). Computing the level from the elapsed time does the same.</para>
-/// <para>Threads: the VM thread calls everything except the mixer methods the options panel calls and the
-/// fast-forward notice, which come from the front end's thread. One lock keeps them apart until milestone 11 (spec
-/// §5.1, rule 4).</para>
+/// <para>Engine thread only (spec §5.1, rule 4): the options panel's mixer calls come as requests
+/// (InputAndWaits.Invoke).</para>
 /// </remarks>
 public sealed partial class Audio : IFastForwardListener
 {
@@ -33,7 +32,6 @@ public sealed partial class Audio : IFastForwardListener
     public const int VoiceChannel = 12;
     private const int ChannelCount = 13;
 
-    private readonly object _lock = new();
     private readonly IAudioDevice _device;
     private readonly IAudioAssets _assets;
     private readonly FrameClock _clock;
@@ -46,8 +44,8 @@ public sealed partial class Audio : IFastForwardListener
     private readonly int[] _playIds = new int[ChannelCount];
     private int _lastPlayId;
     // Whether Service has anything to do besides taking the device's reports: a fade runs, a delayed start waits, or
-    // the duck release is due. Read without the lock at every instruction boundary.
-    private volatile bool _timedWork;
+    // the duck release is due. Read at every instruction boundary.
+    private bool _timedWork;
 
     /// <param name="device">The sound output.</param>
     /// <param name="assets">Where sounds are found.</param>
@@ -93,23 +91,20 @@ public sealed partial class Audio : IFastForwardListener
     {
         bool reported = _device.TryTakeEnded(out AudioChannelEnded ended);
         if (!reported && !_timedWork) return;
-        lock (_lock)
+        while (reported)
         {
-            while (reported)
-            {
-                ChannelEnded(ended);
-                reported = _device.TryTakeEnded(out ended);
-            }
-            long now = _clock.NowMs;
-            if (!statementBlockOpen)
-            {
-                ServiceDelayedSoundEffects(now);
-                ServiceDelayedVoice(now);
-            }
-            ServiceDuckRelease();
-            ServiceFade(now);
-            UpdateTimedWork();
+            ChannelEnded(ended);
+            reported = _device.TryTakeEnded(out ended);
         }
+        long now = _clock.NowMs;
+        if (!statementBlockOpen)
+        {
+            ServiceDelayedSoundEffects(now);
+            ServiceDelayedVoice(now);
+        }
+        ServiceDuckRelease();
+        ServiceFade(now);
+        UpdateTimedWork();
     }
 
     private void ChannelEnded(AudioChannelEnded ended)
@@ -150,14 +145,11 @@ public sealed partial class Audio : IFastForwardListener
     /// (sfx_clear_scheduled_starts) without stopping what plays or unloading a channel.</summary>
     public void ResetScene()
     {
-        lock (_lock)
-        {
-            _heldVoice = null;
-            _delayedVoice = null;
-            _duckControl = 0;
-            _voiceMuteFlags = 0;
-            CancelDelayedSoundEffects();
-            UpdateTimedWork();
-        }
+        _heldVoice = null;
+        _delayedVoice = null;
+        _duckControl = 0;
+        _voiceMuteFlags = 0;
+        CancelDelayedSoundEffects();
+        UpdateTimedWork();
     }
 }

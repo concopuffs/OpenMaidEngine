@@ -102,7 +102,7 @@ public sealed partial class VirtualMachine
         }
         int layoutSlot = a.Count > 0 ? (int)Read(a[0]) : 0;
         string[] scriptStack;
-        lock (_debugControlLock) scriptStack = _activeFrameNames.ToArray();
+        scriptStack = _activeFrameNames.ToArray();
         // Presented text carries no ruby: the catalog drops it, as the translators did (§18).
         PresentedText? presented = PresentRun(pc, ins, o, text, out bool hidden, out TextLookup? lookup);
         // The run draws from the presented cursor; its source layout pass starts at the source cursor (§8).

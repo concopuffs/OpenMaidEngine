@@ -14,11 +14,12 @@ namespace Ome.Engine.Natives;
 /// <remarks>
 /// <para>The engine thread runs the ops: it binds a playback, opens its decoder at once (op 0x23f reads the stop time
 /// right after op 0x236), and requests rates and stops. The front end's frame runs <see cref="ServiceFrame"/>
-/// (<c>Movies.Playback.cs</c>), which takes those requests, publishes each decoder's newest frame, feeds the sound and
-/// reports completion, where Godot's frame did before; milestone 11 decides the threads. The graphics native asks which
-/// surfaces a movie shows (<see cref="IGraphicsMovies"/>) and tells this one when a surface is released
-/// (<see cref="ISurfaceListener"/>). Op 0x20f's modal movie is a wait, which the lifted host runs until milestone 11
-/// with <see cref="ResolveModal"/> and <see cref="StartModal"/>.</para>
+/// (<c>Movies.Playback.cs</c>), which takes those requests, runs the decoders and feeds the sound on the front end's
+/// thread, where the stream device is; each decoder's newest frame and its completion go to the engine thread, which
+/// publishes them (<see cref="PublishServiced"/>). The graphics native asks which surfaces a movie shows
+/// (<see cref="IGraphicsMovies"/>) and tells this one when a surface is released (<see cref="ISurfaceListener"/>).
+/// Op 0x20f's modal movie is a wait of the input and waits native, over <see cref="ResolveModal"/> and
+/// <see cref="StartModal"/>.</para>
 /// </remarks>
 public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
 {
@@ -35,7 +36,6 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
     private readonly MovieSurfaceRegistry _surfaces = new();
 
     private sealed record MaskPlayback(MovieMaskTransitionRequest Request, RgbaImage Captured);
-    private readonly object _maskLock = new();
     private readonly Dictionary<long, MaskPlayback> _masksByPlayback = new();
     private readonly Dictionary<int, long> _maskPlaybackBySurface = new();
 
@@ -74,8 +74,8 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
     public static Movies Headless(Graphics graphics)
         => new(graphics, NoMovieAssets.Instance, decoders: null, sound: null, dependMovieSound: 0);
 
-    /// <summary>What to call when a movie completes or a mask frame lands: the lifted host's waits (until
-    /// milestone 11).</summary>
+    /// <summary>What to call when a frame or a completion waits for the engine thread, a movie completes or a mask frame
+    /// lands: the input and waits native wakes its waits.</summary>
     public void WakeWaitsWith(Action wake) => _wake = wake ?? throw new ArgumentNullException(nameof(wake));
 
     // ---- the ops (engine thread) ----
@@ -203,11 +203,8 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
             RequestStop(prior.PlaybackId);
         }
         if (mask != null)
-            lock (_maskLock)
-            {
-                _masksByPlayback[playbackId] = mask;
-                _maskPlaybackBySurface[surfaceSlot] = playbackId;
-            }
+            _masksByPlayback[playbackId] = mask;
+            _maskPlaybackBySurface[surfaceSlot] = playbackId;
         _graphics.ForgetSurfaceColorKey(surfaceSlot);
         // Movie surfaces inherit the selected game's primary size until a decoded frame supplies content.
         if (mask == null) _graphics.SetSurfaceSize(surfaceSlot, _graphics.Canvas.Width, _graphics.Canvas.Height);
@@ -251,7 +248,7 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
     private void PublishFrame(long playbackId, string name, int assetId, RgbaImage frame)
     {
         MaskPlayback? mask;
-        lock (_maskLock) _masksByPlayback.TryGetValue(playbackId, out mask);
+        _masksByPlayback.TryGetValue(playbackId, out mask);
         if (mask != null)
         {
             MovieMaskTransitionRequest request = mask.Request;
@@ -303,8 +300,7 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
 
     private MaskPlayback? RemoveMask(long playbackId)
     {
-        lock (_maskLock)
-            return _masksByPlayback.Remove(playbackId, out var playback) ? playback : null;
+        return _masksByPlayback.Remove(playbackId, out var playback) ? playback : null;
     }
 
     private void AbandonMask(long playbackId)
@@ -317,19 +313,18 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
 
     private void ForgetMaskSurface(int surfaceSlot, long playbackId)
     {
-        lock (_maskLock)
-            if (_maskPlaybackBySurface.GetValueOrDefault(surfaceSlot) == playbackId)
-                _maskPlaybackBySurface.Remove(surfaceSlot);
+        if (_maskPlaybackBySurface.GetValueOrDefault(surfaceSlot) == playbackId)
+            _maskPlaybackBySurface.Remove(surfaceSlot);
     }
 
     // The log names a script as the host's script stack did: its file name, upper case, without the extension.
     private static string SceneOf(string script) => Path.GetFileNameWithoutExtension(script).ToUpperInvariant();
 
-    // ---- the graphics native's questions (the front end's thread, under the presentation barrier) ----
+    // ---- the graphics native's questions (the engine thread, in the lowering) ----
 
     bool IGraphicsMovies.IsMaskedSurface(int surfaceSlot)
     {
-        lock (_maskLock) return _maskPlaybackBySurface.ContainsKey(surfaceSlot);
+        return _maskPlaybackBySurface.ContainsKey(surfaceSlot);
     }
 
     bool IGraphicsMovies.TryResolveSurface(int surfaceSlot, out MovieSurfaceFrame? frame)

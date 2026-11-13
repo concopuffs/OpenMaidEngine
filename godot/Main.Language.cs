@@ -95,11 +95,15 @@ public partial class Main
         ApplyEngineText(language, selection, startup);
         SelectLanguageAssets(selection, startup);
         TextPresenter? presenter = selection.Presenter;
-        // The text native switches rasterizer before it presents, and keeps the Unicode one for any presented run.
-        _text.UsePresentedFonts(presenter?.Language);
-        if (presenter != null) _text.PresentsText = true;
-        _text.Presenter = presenter;
-        if (presenter == null) _text.PresentsText = false;
+        // The text native switches rasterizer before it presents, and keeps the Unicode one for any presented run. It
+        // is the engine thread's, so the switch lands at its next instruction boundary or wait.
+        _waits.Invoke(() =>
+        {
+            _text.UsePresentedFonts(presenter?.Language);
+            if (presenter != null) _text.PresentsText = true;
+            _text.Presenter = presenter;
+            if (presenter == null) _text.PresentsText = false;
+        });
         GD.Print(presenter == null
             ? $"[text] {language}: the game text is drawn as written"
             : presenter.Language.Chain.Count == 0
@@ -132,7 +136,7 @@ public partial class Main
         _languageAssets.Select(selection.Lookup);
         if (!startup)
         {
-            _graphics?.ForgetDecodedImages();
+            if (_graphics is { } graphics) _waits.Invoke(graphics.ForgetDecodedImages);
             _gpuRenderer?.ForgetStaticTextures();
             ForgetPreparedPixels();
         }

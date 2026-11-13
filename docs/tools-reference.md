@@ -863,6 +863,13 @@ GPU presentation. GPU rendering is the normal backend; select the reference rend
 with `--render-backend software` or the local launcher's `-SoftwareRenderer` switch. An explicit
 `--render-backend gpu` is accepted but normally unnecessary.
 
+Since engine layering milestone 11 the frame is lowered on the engine thread, in the frame turn the front end asks
+for each display frame (`docs/superpowers/specs/2026-11-12-engine-layering-design.md` §5.3). `pulse_ms` is the whole
+turn: the handshake, the presentation reasons and the lowering. `recomposite_ms` runs from the lowering's start on the
+engine thread to the end of the draw on the front end. The lowering's allocations are counted on the engine thread. A
+turn the engine thread did not start within 4 ms publishes its frame in a later turn. That frame's row carries no
+presentation reasons or decisions, and its recomposition starts at the draw.
+
 The writer replaces the target, buffers 120 rows between flushes, and prints its frame/recomposition counts on
 normal shutdown. Use a windowed Release-equivalent run at speed 1 for performance evidence; headless runs
 validate the schema only. Before a baseline, verify that no older Godot game processes remain alive; an

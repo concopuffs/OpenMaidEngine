@@ -1,36 +1,78 @@
-using System.Threading;
+using System;
+using Ome.Engine.Model;
+using Ome.Engine.Natives;
 
 namespace Ome.Engine.Hosting;
 
-// The one place the host blocks the engine thread (engine layering spec §5.3, part 1). A wait that is not modal runs
-// the engine tick each time it wakes, so a BGM fade, a delayed start or a duck release goes on while the VM waits, as
-// native's main loop runs them while its interpreter is parked. A modal wait runs nothing: native's modal loops (a
-// message box, AGERC's dialogs, a menu's loop) freeze its main loop (docs/engine-re.md, "A fade under the 終了 dialog
-// stops, then catches up"). EngineHostWaitTests fails on a blocking call anywhere else in the host; a zero timeout
-// only polls and is allowed.
+// The waits the VM asks the host for are the input and waits native's (Natives/InputAndWaits*.cs): each member here
+// calls it, until milestone 12 has the VM call the native itself. Nothing here blocks (InputAndWaitsTests).
 public sealed partial class EngineHost
 {
-    /// <summary>Block until <paramref name="handle"/> is set or <paramref name="timeoutMs"/> passes, then run the
-    /// tick.</summary>
-    private bool WaitAndTick(WaitHandle handle, int timeoutMs)
-    {
-        bool signalled = handle.WaitOne(timeoutMs);
-        _tick.Service();
-        return signalled;
-    }
+    // ---- dialogs ----
+    public void ShowDiagnosticMessage(DiagnosticMessage message) => _waits.ShowDiagnosticMessage(message);
+    public ScriptErrorChoice ShowScriptError(DiagnosticMessage message) => _waits.ShowScriptError(message);
+    public FullwidthTextEditResult EditFullwidthString(FullwidthTextEditRequest request)
+        => _waits.EditFullwidthString(request);
 
-    /// <summary>Block until one of <paramref name="handles"/> is set or <paramref name="timeoutMs"/> passes, then run
-    /// the tick.</summary>
-    private int WaitAnyAndTick(WaitHandle[] handles, int timeoutMs = Timeout.Infinite)
-    {
-        int index = WaitHandle.WaitAny(handles, timeoutMs);
-        _tick.Service();
-        return index;
-    }
+    // ---- the interpreter's frames, sleeps, the modal hold, the scene reset ----
+    public void EnterScriptContext(string scriptName) => _waits.EnterScriptContext(scriptName);
+    public void ExitScriptContext(string scriptName) => _waits.ExitScriptContext(scriptName);
+    public void Sleep(long duration) => _waits.Sleep(duration);
+    public void WaitForTimedCallbackDeadline(long duration) => _waits.WaitForTimedCallbackDeadline(duration);
+    public void FrameYield() => _waits.FrameYield();
+    public void ResetSceneContext() => _waits.ResetScene();
+    public void InterruptForRootReload() => _waits.InterruptForRootReload();
 
-    /// <summary>A modal wait: block without running the tick.</summary>
-    private static bool WaitModal(WaitHandle handle, int timeoutMs) => handle.WaitOne(timeoutMs);
+    // ---- the modal movie ----
+    public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
+        => _waits.PlayModalMovieToSurface(resourceId, surfaceSlot, movieFlags);
+    public void CancelNextModalMovie() => _waits.CancelNextModalMovie();
 
-    /// <summary>A modal wait: block without running the tick.</summary>
-    private static bool WaitModal(ManualResetEventSlim released, int timeoutMs) => released.Wait(timeoutMs);
+    // ---- presentation and effects ----
+    public void PresentObjectRange(GfxState gfx, long firstHandle, long count) => _waits.PresentObjectRange(firstHandle, count);
+    public void WaitForForegroundTransition(GfxState gfx) => _waits.WaitForForegroundTransition(gfx);
+    public void PresentFrame(GfxState gfx) => _waits.PresentFrame();
+
+    public void FadeSurfaceWithBlack(
+        GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction,
+        bool forceEndpoint = false)
+        => _waits.WaitForScreenTransition(
+            _graphics.StartSurfaceBlackFade(surface, intervalArgument, direction, forceEndpoint));
+
+    public void CrossfadeSurfaces(
+        GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument,
+        bool forceEndpoint = false)
+        => _waits.WaitForScreenTransition(
+            _graphics.StartSurfaceCrossfade(sourceSurface, targetSurface, intervalArgument, forceEndpoint));
+
+    public void FadeSurfaceToWhite(
+        GfxState gfx, int surface, long intervalArgument, bool forceEndpoint = false)
+        => _waits.WaitForScreenTransition(_graphics.StartSurfaceWhiteFade(surface, intervalArgument, forceEndpoint));
+
+    public void RevealSurfaceWithPattern(
+        GfxState gfx, SurfacePatternTransitionRequest request, bool forceEndpoint = false)
+        => _waits.WaitForScreenTransition(_graphics.StartSurfacePatternReveal(request, forceEndpoint));
+
+    // ---- text and input waits ----
+    public void WaitForTextReveal(GfxState gfx, TextManager text) => _waits.WaitForTextReveal(gfx);
+
+    public void WaitForInput() => WaitForInput(0);
+
+    public void WaitForInput(int layoutSlot)
+        => WaitForInput(layoutSlot, static () => false, static () => default);
+
+    public void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        => WaitForInput(layoutSlot, serviceInputCallback, static () => default);
+
+    public void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
+        => _waits.WaitAtAdvInputPoll(layoutSlot, serviceInputCallback, autoWaitState, textPage: true);
+
+    // Op 0xfa: the same poll with no page (no page break or locator page, no wait indicator, the text stays).
+    public void WaitForAdvInputPoll(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
+        => _waits.WaitAtAdvInputPoll(0, serviceInputCallback, autoWaitState, textPage: false);
+
+    public void WakeInputCallbackService() => _waits.WakeInputCallbackService();
+    public void EndInputWait() => _waits.EndInputWait();
+    public void WaitForServiceTrigger(Func<bool> triggered) => _waits.WaitForServiceTrigger(triggered);
+    public long InputClockMilliseconds => _clock.NowMs;
 }

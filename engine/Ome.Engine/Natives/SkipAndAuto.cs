@@ -13,14 +13,12 @@ namespace Ome.Engine.Natives;
 /// tells its <see cref="IFastForwardListener"/>s each time a channel is set.
 /// </summary>
 /// <remarks>
-/// Threads: the VM thread calls everything except <see cref="PhysicalInputChanged"/> and <see cref="TryLatchCancelClick"/>,
-/// which the front end's input thread calls. The front end and the lifted host read the state from theirs. Two locks
-/// remain until milestone 11 (spec §5.1, rule 4): the input lock orders the action-6 decisions, and the state lock
-/// joins the two channels.
+/// Engine thread only (spec §5.1, rule 4): the front end's input reaches <see cref="PhysicalInputChanged"/> and
+/// <see cref="TryLatchCancelClick"/> through the input and waits native's routing, and its menu toggles through the
+/// shell native's requests.
 /// </remarks>
 public sealed partial class SkipAndAuto
 {
-    private readonly object _stateLock = new();
     private IFastForwardListener[] _listeners = [];
 
     private volatile bool _messageSkipEnabled;   // ctx+0x550fc message_skip_display_enabled: the Skip toggle
@@ -59,11 +57,8 @@ public sealed partial class SkipAndAuto
     public void Listen(IFastForwardListener listener)
     {
         ArgumentNullException.ThrowIfNull(listener);
-        lock (_stateLock)
-        {
-            if (_listeners.Any(known => ReferenceEquals(known, listener))) return;
-            _listeners = [.. _listeners, listener];
-        }
+        if (_listeners.Any(known => ReferenceEquals(known, listener))) return;
+        _listeners = [.. _listeners, listener];
     }
 
     /// <summary>Run-state 0x08000000: ADV fast-forward, from either channel.</summary>
@@ -90,31 +85,24 @@ public sealed partial class SkipAndAuto
     {
         bool active;
         bool changed;
-        lock (_stateLock)
-        {
-            if (channel == FastForwardChannel.Physical) _physicalFastForward = value;
-            else _scriptFastForward = value;
-            active = _scriptFastForward || _physicalFastForward;
-            changed = active != _fastForward;
-            _fastForward = active;
-        }
+        if (channel == FastForwardChannel.Physical) _physicalFastForward = value;
+        else _scriptFastForward = value;
+        active = _scriptFastForward || _physicalFastForward;
+        changed = active != _fastForward;
+        _fastForward = active;
         foreach (IFastForwardListener listener in Volatile.Read(ref _listeners))
             listener.FastForwardChannelSet(channel, value, active, changed);
     }
 
-    /// <summary>Run <paramref name="hold"/> under the state lock if fast-forward is on, and say whether it ran. The
-    /// lifted host holds a voice back this way while fast-forward runs (native's message_skip_queued_voice): a channel
-    /// set on another thread cannot end fast-forward between the test and the hold, so the listener that takes the
-    /// voice when it ends always finds it.</summary>
+    /// <summary>Run <paramref name="hold"/> if fast-forward is on, and say whether it ran. The audio native holds a voice
+    /// back this way while fast-forward runs (native's message_skip_queued_voice), and the listener that hears
+    /// fast-forward end takes it.</summary>
     public bool WhileFastForward(Action hold)
     {
         ArgumentNullException.ThrowIfNull(hold);
-        lock (_stateLock)
-        {
-            if (!_fastForward) return false;
-            hold();
-            return true;
-        }
+        if (!_fastForward) return false;
+        hold();
+        return true;
     }
 
     /// <summary>Op 0x88. op_0x88_set_message_skip@0x41f130 writes ctx+0x13dc and ctx+0x550fc alike. Enabling sets no
@@ -160,7 +148,7 @@ public sealed partial class SkipAndAuto
         Interlocked.Exchange(ref _clickCancelTriggers, 0);
         SetScriptFastForward(false);
         EndPhysicalFastForward();
-        lock (_inputLock) _revealPhysicalSkipSuppressed = true;
+        _revealPhysicalSkipSuppressed = true;
     }
 
     /// <summary>

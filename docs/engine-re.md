@@ -3474,7 +3474,8 @@ The two settings are script-visible rather than constants embedded in the wait h
   500-ms steps over 500..9500 ms.
 
 **Port implementation.** The VM retains the enable bit, both configured delays, and per-message voice flag,
-then supplies their live state to the blocking host wait. `EngineHost` polls a small deterministic timer
+then supplies their live state to the blocking wait. The input and waits native (`InputAndWaits.TextWait.cs`, since
+engine layering milestone 11) polls a small deterministic timer
 from the existing monotonic frame clock. Unvoiced pages wait Time1; voiced pages remain parked through actual
 `AudioStreamPlayer` playback and then wait Time0. A queued/started/completed generation counter closes the
 deferred-call race between the VM thread queuing a voice and Godot beginning playback. Turning Auto off
@@ -3542,7 +3543,7 @@ of starting it. When Skip/read-skip input ends, `adv_interpreter_tick` starts th
 queue; skipped voices do not accumulate.
 
 **Port implementation.** The skip-and-auto native (`SkipAndAuto`) owns persistent op-`0x88` state and keeps op `0x19a` separate from the
-combined op-`0x1c7` persistent/host-input query. `EngineHost` completes the text native's reveal and the stable
+combined op-`0x1c7` persistent/host-input query. The input and waits native completes the text native's reveal and the stable
 message waits while Skip is active; the existing `0x1c7` transition branches continue to publish their completed endpoints.
 Voice requests replace one host-side deferred payload during Skip and the latest payload starts when
 `0x88(0)` arrives. Enabling Skip through the real SC0000 hotspot callback wakes the parked wait without
@@ -3556,7 +3557,8 @@ That contradicted the synchronized native trace above: the outer service calls t
 and Ctrl measured about 7,738 operand fetches/sec rather than one per display frame. The artificial
 `EngineHost.FrameYield` wait made the setup/cleanup bytecode between skipped fades take seconds even though
 the fades themselves correctly jumped to their endpoints. `FrameYield` is nonblocking again; only explicit
-presentation, sleep, and input services own wall-clock time.
+presentation, sleep, and input services own wall-clock time. Since engine layering milestone 11 it is
+`InputAndWaits.FrameYield`, where the engine thread answers the front end's frame turn without waiting for the display.
 
 **Fast-forward pace (2026-11-03).** The main loop `engine_main_tick_with_exception_policy@0x411840` is now
 readable, and it settles the fast-forward rate. While run-state `0x08000000` is set it dispatches exactly one op
@@ -6392,8 +6394,8 @@ page 18 reveals its 35 glyphs in two runs around the furigana かがりび.
 
 - `VirtualMachine.InputLatch` holds the triggers that arrive while nothing polls (`HoldTriggers`), and the consumers
   and discard points above take or drop them. The ADV coroutine yield holds its triggers in the same latch.
-- Godot (`Main.Input`) routes a trigger that arrives during an effect wait to
-  `EngineHost.TryPollEffectTriggers`. That reads `EffectSkipOnClick` from `SYS4REG.INI` at each trigger, and
+- The input and waits native (`InputAndWaits.Events.cs`; `Main.Input` until engine layering milestone 11) routes a
+  trigger that arrives during an effect wait to `TryPollEffectTriggers` (`InputAndWaits.Transitions.cs`). That reads `EffectSkipOnClick` from `SYS4REG.INI` at each trigger, and
   polls when it is 1 and the effect is a screen transition or a `0x400` wait without service-flags bit 0. Otherwise
   the trigger goes to the latch.
 - Only a polling text wait (`VirtualMachine.IsAdvTextWaitPolling`, native run-state `0x80000000`) dispatches hotspots
@@ -7602,7 +7604,7 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
     `Sleep` inline, and from 10 ms it sets run-state bit 1 and arms the timer. So native renders nothing while a
     sleep inside a block runs. `EngineHost.Sleep` used to request a presentation on every sleep, which the render
     withholding lets through, so a strip button's new icon showed during its 100 ms sleep instead of at the close.
-    It now requests none while a block is open (`EngineHost.SleepPresentationFor`, checked by the Godot
+    It now requests none while a block is open (`InputAndWaits.SleepPresentationFor`, checked by the Godot
     self-test). A scan of both games' disassembly (2026-11-08) finds sleeps lexically inside a block only in
     Himegari: the four strip buttons (`sleep 0x64`, no present) in 301 scenes, and one `sleep 0x10` in ADDEXP that a
     `present-frame` follows. Kamidori has none. Blocks that span a call (ADDEXP into MES.BIN) are tracked at run

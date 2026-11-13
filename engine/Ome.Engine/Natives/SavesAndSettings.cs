@@ -23,8 +23,8 @@ public readonly record struct SharedProfileShutdownFlushResult(
 /// through .NET (spec §6.4).
 /// </summary>
 /// <remarks>
-/// <para>Engine thread, apart from the shutdown flush, which the front end calls once the engine thread has stopped,
-/// and the settings store, which the front end's shell also reads and writes (SYS4REG.INI keys native AGERC owned).</para>
+/// <para>Engine thread only, apart from the shutdown flush, which the front end calls once the engine thread has
+/// returned, so the two never run together, and the settings store, which the front end's shell also reads and writes (SYS4REG.INI keys native AGERC owned).</para>
 /// <para>A numbered save holds other natives' records too; each writes and reads its own, in the order this native
 /// decides (spec §5.1, rule 6; <see cref="NumberedSaveRecords"/>).</para>
 /// </remarks>
@@ -34,7 +34,6 @@ public sealed partial class SavesAndSettings
     private readonly INativeDatStore? _store;
     private readonly Sys4RegIniStore? _settings;
     private readonly bool _noSaveDat;
-    private readonly object _shutdownLock = new();
     private bool _shutdownHandled;
     // The save container's playtime clock (docs/engine-re.md, "Playtime"): a save stores now + base - start in whole
     // seconds. Construction and op 0x9 zero it from now; reading a save container sets only the pending value, which
@@ -97,28 +96,25 @@ public sealed partial class SavesAndSettings
     /// </summary>
     public SharedProfileShutdownFlushResult FlushSharedProfileOnShutdown()
     {
-        lock (_shutdownLock)
+        if (_shutdownHandled)
+            return new(SharedProfileShutdownFlushOutcome.AlreadyHandled);
+        _shutdownHandled = true;
+
+        if (_noSaveDat)
+            return new(SharedProfileShutdownFlushOutcome.Suppressed);
+        if (_store == null)
+            return new(SharedProfileShutdownFlushOutcome.StoreUnavailable);
+
+        try
         {
-            if (_shutdownHandled)
-                return new(SharedProfileShutdownFlushOutcome.AlreadyHandled);
-            _shutdownHandled = true;
-
-            if (_noSaveDat)
-                return new(SharedProfileShutdownFlushOutcome.Suppressed);
-            if (_store == null)
-                return new(SharedProfileShutdownFlushOutcome.StoreUnavailable);
-
-            try
-            {
-                _profile.Save(_store, NativeSystemTime.FromLocalDateTime(DateTime.Now), AccumulatedPlaySeconds);
-                return new(SharedProfileShutdownFlushOutcome.Saved);
-            }
-            catch (Exception error) when (
-                error is IOException or UnauthorizedAccessException or InvalidDataException
-                or ArgumentOutOfRangeException or OverflowException)
-            {
-                return new(SharedProfileShutdownFlushOutcome.Failed, error.Message);
-            }
+            _profile.Save(_store, NativeSystemTime.FromLocalDateTime(DateTime.Now), AccumulatedPlaySeconds);
+            return new(SharedProfileShutdownFlushOutcome.Saved);
+        }
+        catch (Exception error) when (
+            error is IOException or UnauthorizedAccessException or InvalidDataException
+            or ArgumentOutOfRangeException or OverflowException)
+        {
+            return new(SharedProfileShutdownFlushOutcome.Failed, error.Message);
         }
     }
 

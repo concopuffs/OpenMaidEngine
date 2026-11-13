@@ -40,7 +40,10 @@ public partial class Main : Godot.Control
     private double _fpsHudUpdateSeconds;
     private VirtualMachine _vm = null!;
     private EngineHost _host = null!;
-    private Audio _audio = null!;   // the audio native (engine layering milestone 6): the options panel sets the mixer through it
+    // The input and waits native (milestone 11): every wait, and the engine thread's loop. This thread reaches the
+    // engine only through it: queued input, a frame turn each frame, and requests (InputAndWaits.Turns.cs).
+    private InputAndWaits _waits = null!;
+    private Audio _audio = null!;   // the audio native (engine layering milestone 6): the options panel's requests set its mixer
     private Graphics _graphics = null!;   // the graphics native (milestone 7): surfaces, publication, frame lowering
     private Movies? _movies;   // the movie native (milestone 8): this node supplies its decoder and its sound streams
     // The save and settings native (milestone 9): the shared profile, the numbered saves and SYS4REG.INI, which the shell
@@ -201,8 +204,7 @@ public partial class Main : Godot.Control
                  $"build={engineBuild.Id} abi={engineBuild.AbiId} probe={selectedProfile.ProbeMode}");
         GD.Print($"[profile] catalog={selectedProfile.DetectedIdentity.Display} " +
                  $"game-root={gameRoot.Root} root-source={gameRoot.SourceName}");
-        _clickOnUp = catalog.StartupSettings.ClickOnUp;
-        GD.Print($"[input] mouse clicks trigger on {(_clickOnUp ? "release" : "press")} (SYS4INI CLICKONUP)");
+        GD.Print($"[input] mouse clicks trigger on {(catalog.StartupSettings.ClickOnUp ? "release" : "press")} (SYS4INI CLICKONUP)");
         GD.Print($"[assets] overlays=" +
                  (assetOptions.OverlayRoots.Count == 0
                     ? "<none>"
@@ -592,13 +594,16 @@ public partial class Main : Godot.Control
             engineBuild.Rules.Text.Ruby.For(_catalog.StartupSettings, SettingsStore?.RubyShiftMode),
             blankExtentMode: _catalog.StartupSettings.BlankExtentMode == 1,
             settings: SettingsStore, locator: _locator, timeline: _timeline);
-        _host = new EngineHost(
-            this, skipAndAuto, _audio, tick, _graphics, _movies, _saves, _shell, _text, resources, _clock, _locator,
-            timeline: _timeline,
-            synchronizeExplicitPresentation: !_selftest)
+        // The input and waits native (milestone 11) runs every wait the VM blocks in, over the natives above; the lifted
+        // host keeps what is left (the cursor, the Auto delays' seed and the message settings' shutdown write).
+        _waits = new InputAndWaits(skipAndAuto, _audio, tick, _graphics, _movies, _shell, _text, _clock, _locator,
+                                   _timeline, synchronizeExplicitPresentation: !_selftest, settings: SettingsStore)
         {
             SleepScale = sleepScale,
+            ClickOnUp = _catalog.StartupSettings.ClickOnUp,
         };
+        _host = new EngineHost(this, skipAndAuto, _graphics, _movies, _saves, _text, _waits, resources, _clock,
+                               _timeline);
         if (!_selftest && !PrepareLanguage(userArgs, baseCatalog, baseStore, table))
         {
             GetTree().Quit(2);
@@ -628,7 +633,8 @@ public partial class Main : Godot.Control
             tick: tick,
             graphics: _graphics,
             movies: _movies,
-            text: _text);
+            text: _text,
+            waits: _waits);
         _reference = new ReferenceRenderer(logicalCanvas) { Perf = _perf };
         _gpuRenderer.Perf = _perf;
         _decisionLog = new GfxDecisionLog(_gfxLogPath, _timeline);
@@ -652,15 +658,16 @@ public partial class Main : Godot.Control
         else
             foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed: initial global state
         if (holdMessageSkip)
-            _vm.UpdateKeyboardVirtualKeyState(0x11, true); // Ctrl; bindings resolve it to logical action 6.
+            _waits.HoldKeyFromLaunch(0x11); // Ctrl; bindings resolve it to logical action 6.
         if (!ApplyGameLanguage(_portOptions.Effective.Language, startup: true))
         {
             GetTree().Quit(2);
             return;
         }
+        // The engine thread (InputAndWaits.Turns.cs): the interpreter, its waits and every native run on it.
         _vmTask = Task.Run(() =>
         {
-            try { _vm.Run(); }
+            try { _waits.RunEngine(() => _vm.Run()); }
             catch (Exception error) { _vmFailure = error; }
             finally { _done = true; }
         });
@@ -673,10 +680,10 @@ public partial class Main : Godot.Control
         }
 
         if (_selftest)
-            _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting) _host.SignalInput(); await Task.Delay(1); } });
+            _ = Task.Run(async () => { while (!_done) { if (_waits.IsWaiting) _waits.SignalInput(); await Task.Delay(1); } });
         // --shot: auto-advance up to (but not past) the target page, then _Process captures + quits.
         if (_shotPath != null)
-            _ = Task.Run(async () => { while (!_done) { if (_host.IsWaiting && _host.Pages < _shotPage) _host.SignalInput(); await Task.Delay(1); } });
+            _ = Task.Run(async () => { while (!_done) { if (_waits.IsWaiting && _waits.Pages < _shotPage) _waits.SignalInput(); await Task.Delay(1); } });
         // --shot-sequence: auto-advance past every input-cancellable wait, including modal movies,
         // so a bounded capture can reach the requested natural-boot presentation slice.
         if (_seqDir != null)
@@ -684,8 +691,7 @@ public partial class Main : Godot.Control
             {
                 while (!_done)
                 {
-                    EngineHostDiagnosticSnapshot snapshot = _host.CaptureDiagnosticSnapshot();
-                    if (_host.IsWaiting || snapshot.IsModalMovieWaiting) _host.SignalInput();
+                    if (_waits.IsWaiting || _waits.IsModalMovieWaiting) _waits.SignalInput();
                     await Task.Delay(1);
                 }
             });
@@ -694,9 +700,9 @@ public partial class Main : Godot.Control
             {
                 while (!_done)
                 {
-                    if (_host.IsTransitionWaiting && _host.TransitionStartedAtMs >= 0 &&
-                        _clock.NowMs - _host.TransitionStartedAtMs >= transitionClickMs)
-                        _host.SignalInput();
+                    if (_waits.IsTransitionWaiting && _waits.TransitionStartedAtMs >= 0 &&
+                        _clock.NowMs - _waits.TransitionStartedAtMs >= transitionClickMs)
+                        _waits.SignalInput();
                     await Task.Delay(1);
                 }
             });
@@ -728,42 +734,30 @@ public partial class Main : Godot.Control
         try
         {
             long phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            ReportEndedAudioChannels();   // before the pulse, so the engine thread it wakes sees them
-            _host?.PulseFrame();
-            perf?.RecordPulse(PerformanceFrameLog.Timestamp() - phase);
-
-            phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            _movies?.ServiceFrame(_timelineFrame);
+            ReportEndedAudioChannels();   // before the turn, so the engine thread sees them
+            _movies?.ServiceFrame(_timelineFrame);   // its frames and completions wait for the engine thread
             perf?.RecordMovies(PerformanceFrameLog.Timestamp() - phase);
 
+            // The frame turn (InputAndWaits.Turns.cs): the engine thread answers at its next instruction boundary or
+            // wait, presents if that is where native would render (native publishes retained mutations only at its
+            // present and service boundaries) and lowers the frame, and this thread draws it. The self-test presents
+            // nothing and only wakes the waits.
             phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            HostPresentationReason presentationReasons = HostPresentationReason.None;
-            bool presentationEntered = !_selftest && _vm != null && _host != null
-                && _host.TryEnterPresentation();
-            long allocationPhase = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-            bool shouldRecomposite = false;
-            try
+            if (_selftest || _vm == null || _waits == null)
             {
-                if (presentationEntered)
-                {
-                    presentationReasons = _host!.ConsumePresentationReasons();
-                    shouldRecomposite = presentationReasons != HostPresentationReason.None;
-                    perf?.RecordPresentationReasons((int)presentationReasons);
-                    perf?.RecordShouldRecomposite(PerformanceFrameLog.Timestamp() - phase);
-                    if (shouldRecomposite)
-                        Recomposite();   // native publishes retained mutations only at present/service boundaries
-                }
-                else
-                {
-                    perf?.RecordPresentationReasons(0);
-                    perf?.RecordShouldRecomposite(PerformanceFrameLog.Timestamp() - phase);
-                }
+                _waits?.PulseFrame();
+                perf?.RecordPulse(PerformanceFrameLog.Timestamp() - phase);
+                perf?.RecordPresentationReasons(0);
             }
-            finally
+            else
             {
-                if (presentationEntered) _host!.ExitPresentation();
+                var decisions = _decisionLog.NextFrame();
+                var frame = _waits.RunFrameTurn(perf, decisions,
+                                                perf != null ? (_presentationCoordinateNote ??= NotePresentationCoordinate) : null,
+                                                FrameTurnTimeoutMs, out bool late);
+                perf?.RecordPulse(PerformanceFrameLog.Timestamp() - phase);
+                if (frame != null) DrawFrame(frame, late);
             }
-            perf?.RecordRecomposeAllocation(PerformanceFrameLog.AllocatedBytes() - allocationPhase);
 
             // --shot-sequence: dump one PNG per frame across the opening so a time-based (paced) effect can be
             // verified as distinct frames, not just the final state. Captures after Recomposite; quits when full.
@@ -779,7 +773,7 @@ public partial class Main : Godot.Control
                 return;
             }
             // --shot: once the target page is composed and parked at wait-for-input, settle a few frames then grab it.
-            if (_shotPath != null && !_shotDone && _host != null && (_host.Pages >= _shotPage && _host.IsWaiting || _done))
+            if (_shotPath != null && !_shotDone && _waits != null && (_waits.Pages >= _shotPage && _waits.IsWaiting || _done))
             {
                 if (++_shotSettle >= _shotSettleTarget)
                 {
@@ -847,6 +841,10 @@ public partial class Main : Godot.Control
             long nowMs = _clock.NowMs;
             GodotTraceSnapshot trace = traceOverride ?? _trace.Snapshot();
             MoviePlaybackDiagnostics? movies = _movies?.PlaybackDiagnostics();
+            // The host's and graphics' state is the engine thread's: ask it, and say so when it does not answer.
+            bool engineAnswered = _waits.TryInvoke(
+                () => ((object)_host.CaptureDiagnosticSnapshot(), (object)_vm.Gfx.CaptureDiagnosticSnapshot(nowMs)),
+                DiagnosticAnswerTimeoutMs, out var engineState);
             var snapshot = new
             {
                 format_version = 1,
@@ -861,8 +859,9 @@ public partial class Main : Godot.Control
                     done = _done,
                     trace,
                 },
-                host = _host.CaptureDiagnosticSnapshot(),
-                gfx = _vm.Gfx.CaptureDiagnosticSnapshot(nowMs),
+                engine_thread_answered = engineAnswered,
+                host = engineAnswered ? engineState.Item1 : null,
+                gfx = engineAnswered ? engineState.Item2 : null,
                 active_movies = movies?.Playing,
                 pending_movies = movies?.Opened,
             };
@@ -911,7 +910,10 @@ public partial class Main : Godot.Control
             : long.TryParse(text, System.Globalization.NumberStyles.AllowLeadingSign,
                             System.Globalization.CultureInfo.InvariantCulture, out value);
 
-    /// <summary>The exit code when the VM thread does not stop at shutdown and the port exits without teardown.</summary>
+    /// <summary>How long a diagnostic snapshot waits for the engine thread to answer: a stalled one does not.</summary>
+    private const int DiagnosticAnswerTimeoutMs = 500;
+
+    /// <summary>The exit code when the engine thread does not stop at shutdown and the port exits without teardown.</summary>
     private const int VmStopTimeoutExitCode = 3;
 
     public override void _ExitTree()
@@ -935,7 +937,7 @@ public partial class Main : Godot.Control
 
         if (!vmStopped)
         {
-            // The VM thread may still be using the glyph rasterizer and the movie decoders, and disposing native
+            // The engine thread may still be using the glyph rasterizer and the movie decoders, and disposing native
             // resources under it can fault. Leave everything to process exit, with a nonzero code to show the stall.
             string message = "[vm] the VM did not stop within 5 seconds; exiting without teardown or the shared-profile flush";
             GD.PushError(message);

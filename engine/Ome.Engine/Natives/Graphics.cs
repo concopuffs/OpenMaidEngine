@@ -12,9 +12,9 @@ namespace Ome.Engine.Natives;
 /// into a frame description (<c>Graphics.Frame.cs</c>) that a renderer or the reference renderer draws.
 /// </summary>
 /// <remarks>
-/// <para>The engine thread runs the ops; the front end's thread lowers frames and resolves textures under the
-/// presentation barrier. Surfaces are replaced, never written in place, so a frame keeps the pixels it was lowered
-/// with.</para>
+/// <para>Engine thread only (spec §5.1, rule 4): it runs the ops and lowers the frames, in the input and waits native's
+/// frame turns. Surfaces are replaced, never written in place, so the front end draws a frame with the pixels it was
+/// lowered with while the engine thread goes on.</para>
 /// <para>The movie native (<see cref="Movies"/>) answers which surfaces a movie owns (<see cref="IGraphicsMovies"/>),
 /// and it and the lifted host's text part, until milestone 10, hear when a surface is released or replaced
 /// (<see cref="ISurfaceListener"/>).</para>

@@ -13,7 +13,7 @@ public sealed partial class VirtualMachine
     // The yield came from an ADV text wait (adv_input_service_poll's action-5 entry), so the saved run state holds
     // the wait (0x80000000): op 0x7c returns to the parked wait rather than to an instruction.
     private bool _coroutineResumesTextWait;
-    private volatile bool _coroutineYieldActive;      // _coroutineResumePc is set; read by the input thread
+    private volatile bool _coroutineYieldActive;      // _coroutineResumePc is set; read when input is routed
     private volatile bool _hiddenWindowWaiting;       // run-state 0x4000000: the engine waits for any trigger
     private volatile bool _hiddenWindowWheelTriggers; // ...with the text wait's 0x80000000, so the wheel is one
     private int _advWaitCoroutineYieldRequested;      // logical action 5 reached a polling ADV text wait
@@ -90,7 +90,8 @@ public sealed partial class VirtualMachine
                 // op 0x88(1) or the native menu's Skip toggle ends this wait. Fast-forward alone (read-skip) does not.
                 ApplyMenuToggles();
                 return TakeHeldTriggers() != 0
-                       || _skip.MessageSkipInjected || _stopRequested || _rootReloadRequested;
+                       || _skip.MessageSkipInjected || _stopAndReload.StopRequested
+                       || _stopAndReload.ReloadRequested;
             });
         }
         finally
@@ -206,7 +207,7 @@ public sealed partial class VirtualMachine
             // Op 0x7c also clears the current hotspot hit (ctx+0xc6f8) and keeps the hovered record: the
             // next poll leaves it, and only a pointer move hits it again.
             bool hitCleared;
-            lock (_interactiveLock) hitCleared = _interactiveFrame?.Hotspots.InvalidateHit() == true;
+            hitCleared = _interactiveFrame?.Hotspots.InvalidateHit() == true;
             if (hitCleared) _host.WakeInputCallbackService();
             if (hiddenWindow && WaitInHiddenWindow(resumePc, resumesTextWait) is >= 0 and int handlerB)
                 return StepResult.Jump(handlerB);

@@ -40,15 +40,15 @@ public partial class Main
                                  ?? _selectedProfile.Profile.NaturalBootScript;
         launcherSmoke.Open(debugEntries, launcherContext, present: false);
         launcherSmoke.Free();
-        bool sleepMinimumOk = EngineHost.NormalizeSleepMilliseconds(0, 1.0) == 1
-                              && EngineHost.NormalizeSleepMilliseconds(100, 1.0) == 100;
+        bool sleepMinimumOk = InputAndWaits.NormalizeSleepMilliseconds(0, 1.0) == 1
+                              && InputAndWaits.NormalizeSleepMilliseconds(100, 1.0) == 100;
         // A sleep inside an open statement block presents nothing; outside one, a short sleep presents without
         // waiting for the display and a longer one waits for it.
         bool sleepPresentationOk =
-            EngineHost.SleepPresentationFor(100, true) == EngineHost.SleepPresentation.None
-            && EngineHost.SleepPresentationFor(1, true) == EngineHost.SleepPresentation.None
-            && EngineHost.SleepPresentationFor(1, false) == EngineHost.SleepPresentation.Immediate
-            && EngineHost.SleepPresentationFor(100, false) == EngineHost.SleepPresentation.Synchronized;
+            InputAndWaits.SleepPresentationFor(100, true) == InputAndWaits.SleepPresentation.None
+            && InputAndWaits.SleepPresentationFor(1, true) == InputAndWaits.SleepPresentation.None
+            && InputAndWaits.SleepPresentationFor(1, false) == InputAndWaits.SleepPresentation.Immediate
+            && InputAndWaits.SleepPresentationFor(100, false) == InputAndWaits.SleepPresentation.Synchronized;
         bool inputTranslationOk = Win32VirtualKeyTranslator.TryTranslate(
                                       new InputEventKey { PhysicalKeycode = Key.Z }, out int zVk) && zVk == 0x5a
                                   && Win32VirtualKeyTranslator.TryTranslate(
@@ -324,7 +324,7 @@ public partial class Main
                                       OS.GetCmdlineUserArgs(),
                                       new Sys4LogicalCanvas(_screenWidth, _screenHeight), _portOptions.Effective);
         var backbufferSnapshot = new List<RenderObject>();
-        _host.PresentFrame(_vm.Gfx);
+        _waits.PresentFrame();
         BackbufferPublicationPolicy fullPolicy =
             _graphics.SnapshotBackbufferObjects(_clock.NowMs, backbufferSnapshot);
         bool backbufferPreservationOk =
@@ -339,7 +339,7 @@ public partial class Main
                 true, new GfxHandleRange(0, 60000), 1)
                 == new BackbufferPublicationPolicy(true, true);
         _graphics.ClearRenderTarget();
-        _host.PresentFrame(_vm.Gfx);
+        _waits.PresentFrame();
         BackbufferPublicationPolicy clearedPolicy =
             _graphics.SnapshotBackbufferObjects(_clock.NowMs, backbufferSnapshot);
         backbufferPreservationOk &=

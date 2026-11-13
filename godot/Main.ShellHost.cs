@@ -26,5 +26,5 @@ public partial class Main : IShellHost
 
     void IShellHost.ReturnToTitle() => _vm?.RequestRootReload();
 
-    void IShellHost.HoldVm(bool hold) => _host?.SetFrontendModalHold(hold);
+    void IShellHost.HoldVm(bool hold) => _waits?.SetFrontendModalHold(hold);
 }

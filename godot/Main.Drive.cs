@@ -146,7 +146,8 @@ public partial class Main
         public string Profile { get; } = main._selectedProfile.Profile.Id;
         public IReadOnlyList<string> Capabilities => PortCapabilities;
 
-        public DriveState CaptureState()
+        /// <summary>The VM's frames and what it waits for, read on the engine thread.</summary>
+        public DriveState CaptureState() => main._waits.Invoke(() =>
         {
             IReadOnlyList<DriveFrame> frames = DriveFrame.FromVm(main._vm.CaptureFrameLocations());
             EngineHostDiagnosticSnapshot host = main._host.CaptureDiagnosticSnapshot();
@@ -158,7 +159,7 @@ public partial class Main
                 : host.IsSleeping ? DriveWaiting.Sleep
                 : null;
             return new DriveState(frames, waiting, host.IsTextRevealing || host.IsScreenTransitionActive);
-        }
+        });
 
         public void Pointer(int x, int y) => main.InjectDrivePointer(x, y);
 
@@ -209,7 +210,7 @@ public partial class Main
         public void SetSpeed(double factor) => main._clock.Speed = factor;
 
         public System.Text.Json.Nodes.JsonObject RandSeed(uint? seed)
-            => DriveRandomReport.ToJson(seed, main._vm.Memory.SeedDeterministicRandom(seed));
+            => DriveRandomReport.ToJson(seed, main._waits.Invoke(() => main._vm.Memory.SeedDeterministicRandom(seed)));
 
         public void Close() => main.GetTree().Quit(0);
 

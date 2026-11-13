@@ -21,22 +21,19 @@ public sealed partial class GfxState
     /// HasColor so the compositor applies alpha+tint (vs the opaque default).</summary>
     public void SetObjectColor(long handle, long packed)
     {
-        lock (_lock) { var o = GetOrCreate(handle); o.Color = packed; o.HasColor = true; }
+        var o = GetOrCreate(handle); o.Color = packed; o.HasColor = true;
     }
 
     /// <summary>Resolve 0x202/0x203's native negative sentinels against obj+0x60 (the current static
     /// packed color): negative alpha preserves its alpha byte; negative RGB preserves its RGB bytes.</summary>
     public void SetObjectColorResolved(long handle, long alpha, long rgb)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            long current = o.HasColor ? o.Color : 0xffffffff;
-            long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
-            long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
-            o.Color = PackColor(resolvedAlpha, resolvedRgb);
-            o.HasColor = true;
-        }
+        var o = GetOrCreate(handle);
+        long current = o.HasColor ? o.Color : 0xffffffff;
+        long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
+        long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
+        o.Color = PackColor(resolvedAlpha, resolvedRgb);
+        o.HasColor = true;
     }
 
     /// <summary>Op 0x202: arm the delayed one-shot packed-color interpolation without replacing the
@@ -45,45 +42,36 @@ public sealed partial class GfxState
     /// when its visible bit is set, so a fade sent to a hidden or just-erased handle is dropped.</summary>
     public void SetAnimatedObjectColorResolved(long handle, long delayMs, long durationMs, long alpha, long rgb)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            if (!o.Visible) return;
-            long current = o.HasColor ? o.Color : 0xffffffff;
-            long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
-            long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
-            if (!o.HasColor) { o.Color = current; o.HasColor = true; }
-            o.OneShotColorTarget = PackColor(resolvedAlpha, resolvedRgb);
-            o.ColorDelayMs = delayMs;
-            o.ColorDurationMs = durationMs;
-            o.OneShotColorEnabled = true;
-            o.OneShotColorBlend = true;
-            o.OneShotStartMs = -1;
-        }
+        var o = GetOrCreate(handle);
+        if (!o.Visible) return;
+        long current = o.HasColor ? o.Color : 0xffffffff;
+        long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
+        long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
+        if (!o.HasColor) { o.Color = current; o.HasColor = true; }
+        o.OneShotColorTarget = PackColor(resolvedAlpha, resolvedRgb);
+        o.ColorDelayMs = delayMs;
+        o.ColorDurationMs = durationMs;
+        o.OneShotColorEnabled = true;
+        o.OneShotColorBlend = true;
+        o.OneShotStartMs = -1;
     }
 
     public void SetStaticObjectColorResolved(long handle, long mode, long alpha, long rgb)
     {
         SetObjectColorResolved(handle, alpha, rgb);
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.StaticColorMode = mode;
-            o.PostBindStaticColorBlend = mode == 0 && o.Visible;
-        }
+        var o = GetOrCreate(handle);
+        o.StaticColorMode = mode;
+        o.PostBindStaticColorBlend = mode == 0 && o.Visible;
     }
 
     /// <summary>Op 0x231 (looping): set total frame count, column count and milliseconds per frame. Every
     /// frame retains draw-texture's source rectangle dimensions.</summary>
     public void SetSrcRect(long handle, long frameCount, long columns, long period)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.SrcFrameCount = frameCount < 1 ? 1 : frameCount;
-            o.SrcColumns = columns < 1 ? 1 : columns;
-            o.SrcPeriod = period; o.SrcStart = -1; o.SrcAnim = true;
-        }
+        var o = GetOrCreate(handle);
+        o.SrcFrameCount = frameCount < 1 ? 1 : frameCount;
+        o.SrcColumns = columns < 1 ? 1 : columns;
+        o.SrcPeriod = period; o.SrcStart = -1; o.SrcAnim = true;
     }
 
     /// <summary>Op 0x239: arm the finite one-shot cell channel (native gfx_worker_set_srcrect_cell@0x47ed90).
@@ -93,16 +81,13 @@ public sealed partial class GfxState
     public void SetSrcRectOneShot(long handle, long delayMs, long durationMs, long frameCount, long columns,
                                   long flags)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            if (!o.Visible) return;
-            o.SrcDelayMs = delayMs; o.SrcDurationMs = durationMs;
-            o.SrcFrameCount = frameCount < 1 ? 1 : frameCount;
-            o.SrcColumns = columns < 1 ? 1 : columns;
-            o.SrcOneShotFlags = flags;
-            o.SrcOneShotEnabled = durationMs > 0; o.OneShotStartMs = -1;
-        }
+        var o = GetOrCreate(handle);
+        if (!o.Visible) return;
+        o.SrcDelayMs = delayMs; o.SrcDurationMs = durationMs;
+        o.SrcFrameCount = frameCount < 1 ? 1 : frameCount;
+        o.SrcColumns = columns < 1 ? 1 : columns;
+        o.SrcOneShotFlags = flags;
+        o.SrcOneShotEnabled = durationMs > 0; o.OneShotStartMs = -1;
     }
 
     /// <summary>The one-shot cell channel's end (native gfx_object_apply_transform_channels@0x473e3c): with
@@ -152,35 +137,29 @@ public sealed partial class GfxState
     /// <paramref name="target"/>. The sampled value is consumed by the object's unchanged blend mode.</summary>
     public void SetColorAnim(long handle, long period, long target)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.ColorPeriod = period; o.ColorTarget = target; o.ColorStart = -1; o.ColorAnim = true;
-        }
+        var o = GetOrCreate(handle);
+        o.ColorPeriod = period; o.ColorTarget = target; o.ColorStart = -1; o.ColorAnim = true;
     }
 
     /// <summary>Op 0x232 handler contract: resolve negative alpha/RGB sentinels from static obj+0x60,
     /// clamp alpha above 255, then arm the cyclic packed-color channel without changing blend mode.</summary>
     public void SetColorAnimResolved(long handle, long period, long alpha, long rgb)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            long current = o.Color & 0xffffffff;
-            long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
-            long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
-            o.ColorPeriod = period;
-            o.ColorTarget = PackColor(resolvedAlpha, resolvedRgb);
-            o.ColorStart = -1;
-            o.ColorAnim = true;
-        }
+        var o = GetOrCreate(handle);
+        long current = o.Color & 0xffffffff;
+        long resolvedAlpha = alpha < 0 ? (current >> 24) & 0xff : System.Math.Min(alpha, 0xff);
+        long resolvedRgb = rgb < 0 ? current & 0xffffff : rgb & 0xffffff;
+        o.ColorPeriod = period;
+        o.ColorTarget = PackColor(resolvedAlpha, resolvedRgb);
+        o.ColorStart = -1;
+        o.ColorAnim = true;
     }
 
     /// <summary>Op 0x242: replace the retained object's animation-control word. Native bit 0 makes its
     /// finite one-shot channels nonblocking and immune to op 0x243 forced completion.</summary>
     public void SetOneShotAnimationControl(long handle, long flags)
     {
-        lock (_lock) GetOrCreate(handle).OneShotAnimationControlFlags = flags;
+        GetOrCreate(handle).OneShotAnimationControlFlags = flags;
     }
 
     /// <summary>Part of op 0x243: immediately commit every unprotected finite one-shot channel. Objects
@@ -238,83 +217,65 @@ public sealed partial class GfxState
     /// integer percentages; native divides them by 100 before matrix4_make_scale at obj+0x6c.</summary>
     public void SetCurrentScale(long handle, (long X, long Y, long Z) percent)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.TransformMarked = true;
-            o.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
-        }
+        var o = GetOrCreate(handle);
+        o.TransformMarked = true;
+        o.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
     }
 
     /// <summary>Op 0x1fe: immediately replace the object's current axis-angle rotation matrix at
     /// obj+0xec. Axis components and angle are retained as native floating-point values.</summary>
     public void SetCurrentRotation(long handle, (long X, long Y, long Z) axis, long angleDegrees)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.TransformMarked = true;
-            o.RotationCurrent = (axis.X, axis.Y, axis.Z, angleDegrees);
-            o.EvaluatedRotationCache = RotationCache(o.RotationCurrent);
-        }
+        var o = GetOrCreate(handle);
+        o.TransformMarked = true;
+        o.RotationCurrent = (axis.X, axis.Y, axis.Z, angleDegrees);
+        o.EvaluatedRotationCache = RotationCache(o.RotationCurrent);
     }
 
     /// <summary>Op 0x1ff: immediately replace the object's current translation matrix at obj+0x16c.</summary>
     public void SetCurrentTranslation(long handle, (long X, long Y, long Z) translation)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.TransformMarked = true;
-            o.V16c = translation;
-            o.TranslationCurrent = translation;
-        }
+        var o = GetOrCreate(handle);
+        o.TransformMarked = true;
+        o.V16c = translation;
+        o.TranslationCurrent = translation;
     }
 
     /// <summary>Op 0x21e: normalized scale target (100 = identity), with independent delay/duration.</summary>
     public void SetScaleChannel(long handle, long delayMs, long durationMs, (long X, long Y, long Z) percent)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            // Native setters get-or-create first, then require object flag bit 0 (draw-bound/visible).
-            // Pre-bind calls leave a neutral, queryable placeholder and do not queue latent motion.
-            if (!o.Visible) return;
-            o.TransformMarked = true;
-            o.ScaleDelayMs = delayMs; o.ScaleDurationMs = durationMs;
-            o.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
-            o.ScaleEnabled = durationMs > 0; o.OneShotStartMs = -1;
-        }
+        var o = GetOrCreate(handle);
+        // Native setters get-or-create first, then require object flag bit 0 (draw-bound/visible).
+        // Pre-bind calls leave a neutral, queryable placeholder and do not queue latent motion.
+        if (!o.Visible) return;
+        o.TransformMarked = true;
+        o.ScaleDelayMs = delayMs; o.ScaleDurationMs = durationMs;
+        o.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+        o.ScaleEnabled = durationMs > 0; o.OneShotStartMs = -1;
     }
 
     /// <summary>Op 0x220: absolute translation target, with independent delay/duration.</summary>
     public void SetTranslationChannel(long handle, long delayMs, long durationMs, (long X, long Y, long Z) target)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            if (!o.Visible) return;
-            o.TransformMarked = true;
-            o.TranslationDelayMs = delayMs; o.TranslationDurationMs = durationMs;
-            o.TranslationTarget = target;
-            o.TranslationEnabled = durationMs > 0; o.OneShotStartMs = -1;
-        }
+        var o = GetOrCreate(handle);
+        if (!o.Visible) return;
+        o.TransformMarked = true;
+        o.TranslationDelayMs = delayMs; o.TranslationDurationMs = durationMs;
+        o.TranslationTarget = target;
+        o.TranslationEnabled = durationMs > 0; o.OneShotStartMs = -1;
     }
 
     /// <summary>Op 0x228: query the current translation decomposed from the native matrix at obj+0x16c.
     /// This is independent of both the delayed target at obj+0x1ac and draw/base position V24.</summary>
     public bool TryQueryTranslationCurrent(long handle, out (double X, double Y, double Z) current)
     {
-        lock (_lock)
+        if (_objects.TryGetValue(handle, out var o))
         {
-            if (_objects.TryGetValue(handle, out var o))
-            {
-                current = o.TranslationCurrent;
-                return true;
-            }
-            current = default;
-            return false;
+            current = o.TranslationCurrent;
+            return true;
         }
+        current = default;
+        return false;
     }
 
     /// <summary>Op 0x227: query the current axis-angle rotation stored at
@@ -322,70 +283,55 @@ public sealed partial class GfxState
     public bool TryQueryRotationCurrent(
         long handle, out (double X, double Y, double Z, double Angle) current)
     {
-        lock (_lock)
+        if (_objects.TryGetValue(handle, out var o))
         {
-            if (_objects.TryGetValue(handle, out var o))
-            {
-                current = o.RotationCurrent;
-                return true;
-            }
-            current = default;
-            return false;
+            current = o.RotationCurrent;
+            return true;
         }
+        current = default;
+        return false;
     }
 
     /// <summary>Op 0x21f: delayed one-shot axis-angle rotation target, sharing obj+0x34's start timestamp.</summary>
     public void SetRotationChannel(long handle, long delayMs, long durationMs,
                                    (long X, long Y, long Z) axis, long angleDegrees)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            if (!o.Visible) return;
-            o.TransformMarked = true;
-            o.RotationDelayMs = delayMs; o.RotationDurationMs = durationMs;
-            o.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
-            o.RotationChannelEnabled = durationMs > 0; o.OneShotStartMs = -1;
-        }
+        var o = GetOrCreate(handle);
+        if (!o.Visible) return;
+        o.TransformMarked = true;
+        o.RotationDelayMs = delayMs; o.RotationDurationMs = durationMs;
+        o.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
+        o.RotationChannelEnabled = durationMs > 0; o.OneShotStartMs = -1;
     }
 
     /// <summary>Op 0x234: retain the cyclic rotation period and axis separately. Native interpolation uses
     /// frame-time retained-gfx owner+0xb550 (EngineCtx+0x51b64) and rotates through 360 degrees per period.</summary>
     public void SetRotationCycle(long handle, long periodMs, (long X, long Y, long Z) axis)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.RotationPeriodMs = periodMs; o.RotationAxis = axis; o.RotationEnabled = periodMs > 0;
-            o.RotationStartMs = -1;
-        }
+        var o = GetOrCreate(handle);
+        o.RotationPeriodMs = periodMs; o.RotationAxis = axis; o.RotationEnabled = periodMs > 0;
+        o.RotationStartMs = -1;
     }
 
     /// <summary>Op 0x233: cyclic identity-to-target scale, sampled with a triangular ping-pong phase.</summary>
     public void SetScaleCycle(long handle, long periodMs, (long X, long Y, long Z) percent)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.ScaleCyclePeriodMs = periodMs;
-            o.ScaleCycleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
-            o.ScaleCycleEnabled = periodMs > 0;
-            o.ScaleCycleStartMs = -1;
-        }
+        var o = GetOrCreate(handle);
+        o.ScaleCyclePeriodMs = periodMs;
+        o.ScaleCycleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+        o.ScaleCycleEnabled = periodMs > 0;
+        o.ScaleCycleStartMs = -1;
     }
 
     /// <summary>Op 0x235: cyclic identity-to-target translation, sampled with a triangular
     /// ping-pong phase and composed after the sibling cyclic rotation.</summary>
     public void SetTranslationCycle(long handle, long periodMs, (long X, long Y, long Z) target)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.TranslationCyclePeriodMs = periodMs;
-            o.TranslationCycleTarget = target;
-            o.TranslationCycleEnabled = periodMs > 0;
-            o.TranslationCycleStartMs = -1;
-        }
+        var o = GetOrCreate(handle);
+        o.TranslationCyclePeriodMs = periodMs;
+        o.TranslationCycleTarget = target;
+        o.TranslationCycleEnabled = periodMs > 0;
+        o.TranslationCycleStartMs = -1;
     }
 
     /// <summary>Op 0x230: stop every cyclic object channel without changing its base/current state,
@@ -393,45 +339,39 @@ public sealed partial class GfxState
     /// pairs at obj+0x20c..0x230.</summary>
     public void ResetCyclicAnimationChannels(long handle)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.ColorStart = -1;
-            o.ScaleCycleStartMs = -1;
-            o.RotationStartMs = -1;
-            o.TranslationCycleStartMs = -1;
-            o.SrcStart = -1;
-            o.ColorPeriod = 0;
-            o.ScaleCyclePeriodMs = 0;
-            o.RotationPeriodMs = 0;
-            o.TranslationCyclePeriodMs = 0;
-            o.SrcPeriod = 0;
-            o.ColorAnim = false;
-            o.ScaleCycleEnabled = false;
-            o.RotationEnabled = false;
-            o.TranslationCycleEnabled = false;
-            o.SrcAnim = false;
+        var o = GetOrCreate(handle);
+        o.ColorStart = -1;
+        o.ScaleCycleStartMs = -1;
+        o.RotationStartMs = -1;
+        o.TranslationCycleStartMs = -1;
+        o.SrcStart = -1;
+        o.ColorPeriod = 0;
+        o.ScaleCyclePeriodMs = 0;
+        o.RotationPeriodMs = 0;
+        o.TranslationCyclePeriodMs = 0;
+        o.SrcPeriod = 0;
+        o.ColorAnim = false;
+        o.ScaleCycleEnabled = false;
+        o.RotationEnabled = false;
+        o.TranslationCycleEnabled = false;
+        o.SrcAnim = false;
 
-            // Preserve drop-in numbered-save compatibility for all five cyclic channels. The ten native
-            // timing dwords form one contiguous range.
-            if (o.NativePersistenceRecord is { Length: >= 0x234 } raw)
-            {
-                raw[0] &= 0xfb;
-                System.Array.Clear(raw, 0x20c, 0x28);
-            }
+        // Preserve drop-in numbered-save compatibility for all five cyclic channels. The ten native
+        // timing dwords form one contiguous range.
+        if (o.NativePersistenceRecord is { Length: >= 0x234 } raw)
+        {
+            raw[0] &= 0xfb;
+            System.Array.Clear(raw, 0x20c, 0x28);
         }
     }
 
     /// <summary>Op 0x238: set its separate global animation-service duration and reset marker.</summary>
     public void SetAnimClock(long durationTicks)
     {
-        lock (_lock)
-        {
-            AnimClockDurationTicks = durationTicks;
-            _animClockStartMs = -1;
-            AnimClockGeneration++;
-            MarkRetainedMutation();
-        }
+        AnimClockDurationTicks = durationTicks;
+        _animClockStartMs = -1;
+        AnimClockGeneration++;
+        MarkRetainedMutation();
     }
 
     /// <summary>One poll of the op-0x21c effect wait (run-state 0x400), as gfx_animation_service_poll (SYS4422
@@ -445,50 +385,41 @@ public sealed partial class GfxState
     /// Only this wait polls, so the window and a one-shot flags word otherwise wait for the next 0x21c.</summary>
     public bool PollEffectService(long nowMs)
     {
-        lock (_lock)
+        if (AnimClockDurationTicks != 0)
         {
-            if (AnimClockDurationTicks != 0)
-            {
-                if (_animClockStartMs < 0) _animClockStartMs = nowMs;
-                if (nowMs - _animClockStartMs <= AnimClockDurationTicks) return true;
-                _animClockStartMs = -1;
-                AnimClockDurationTicks = 0;
-            }
-            bool running = HasActiveTimedPresentation(nowMs);
-            if (!running && (AnimationServiceFlags & AnimationServiceFlagsOneShot) != 0) AnimationServiceFlags = 0;
-            return running;
+            if (_animClockStartMs < 0) _animClockStartMs = nowMs;
+            if (nowMs - _animClockStartMs <= AnimClockDurationTicks) return true;
+            _animClockStartMs = -1;
+            AnimClockDurationTicks = 0;
         }
+        bool running = HasActiveTimedPresentation(nowMs);
+        if (!running && (AnimationServiceFlags & AnimationServiceFlagsOneShot) != 0) AnimationServiceFlags = 0;
+        return running;
     }
 
     public void SetAnimationServiceFlags(long flags)
     {
-        lock (_lock) AnimationServiceFlags = unchecked((uint)flags);
+        AnimationServiceFlags = unchecked((uint)flags);
     }
 
     public void SampleFrameTime(long nowMilliseconds)
     {
-        lock (_lock)
-        {
-            _previousFrameTimeMs = _currentFrameTimeMs;
-            _currentFrameTimeMs = nowMilliseconds;
-            PreviousFrameTimeMilliseconds = CurrentFrameTimeMilliseconds;
-            CurrentFrameTimeMilliseconds = unchecked((uint)nowMilliseconds);
-        }
+        _previousFrameTimeMs = _currentFrameTimeMs;
+        _currentFrameTimeMs = nowMilliseconds;
+        PreviousFrameTimeMilliseconds = CurrentFrameTimeMilliseconds;
+        CurrentFrameTimeMilliseconds = unchecked((uint)nowMilliseconds);
     }
 
     /// <summary>Op 0x243: force ordinary finite channels to their endpoints and reset the separate
     /// global animation-service clock. Op-0x242-detached objects ignore the completion request.</summary>
     public void ResetAnimClock()
     {
-        lock (_lock)
-        {
-            if ((AnimationServiceFlags & 2) != 0) return;
-            ForceCompleteOneShotChannels();
-            AnimClockDurationTicks = 0;
-            _animClockStartMs = -1;
-            AnimClockGeneration++;
-            MarkRetainedMutation();
-        }
+        if ((AnimationServiceFlags & 2) != 0) return;
+        ForceCompleteOneShotChannels();
+        AnimClockDurationTicks = 0;
+        _animClockStartMs = -1;
+        AnimClockGeneration++;
+        MarkRetainedMutation();
     }
 
     private static long SourceCellAt(GfxObject o, long nowMs)

@@ -28,7 +28,7 @@ public sealed partial class SkipAndAuto
     /// <summary>True while a completed action-4 click would cancel fast-forward instead of reaching hotspots.</summary>
     public bool ClickCancelArmed => Settings.CancelMessageSkipOnClick != 0 && _fastForward;
 
-    /// <summary>Latch an action-4 click trigger for the state machine (the input thread). False when the setting is
+    /// <summary>Latch an action-4 click trigger for the state machine (routed on the engine thread). False when the setting is
     /// off or fast-forward is inactive, in which case the click keeps its ordinary routing.</summary>
     public bool TryLatchCancelClick()
     {

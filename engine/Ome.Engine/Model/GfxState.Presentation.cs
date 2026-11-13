@@ -54,17 +54,14 @@ public sealed partial class GfxState
         long rangeAStart, int rangeACount, long rangeBStart, int rangeBCount,
         long delayMs, long durationMs)
     {
-        lock (_lock)
+        _surfaceTransitions[targetSlot] = new SurfaceTransition
         {
-            _surfaceTransitions[targetSlot] = new SurfaceTransition
-            {
-                CommandKey = commandKey, TargetSlot = targetSlot,
-                RangeAStart = rangeAStart, RangeACount = System.Math.Max(0, rangeACount),
-                RangeBStart = rangeBStart, RangeBCount = System.Math.Max(0, rangeBCount),
-                DelayMs = System.Math.Max(0, delayMs), DurationMs = System.Math.Max(0, durationMs),
-            };
-            MarkRetainedMutation();
-        }
+            CommandKey = commandKey, TargetSlot = targetSlot,
+            RangeAStart = rangeAStart, RangeACount = System.Math.Max(0, rangeACount),
+            RangeBStart = rangeBStart, RangeBCount = System.Math.Max(0, rangeBCount),
+            DelayMs = System.Math.Max(0, delayMs), DurationMs = System.Math.Max(0, durationMs),
+        };
+        MarkRetainedMutation();
     }
 
     /// <summary>Op 0x24f: queue the type-2 patterned replacement of one retained range by another.
@@ -74,50 +71,44 @@ public sealed partial class GfxState
         long rangeAStart, int rangeACount, long rangeBStart, int rangeBCount,
         int mode, int patternThickness, long delayMs, long durationMs)
     {
-        lock (_lock)
+        if (patternThickness > 0 && (mode < 0 || mode > 11)) return;
+        if (patternThickness < 1)
         {
-            if (patternThickness > 0 && (mode < 0 || mode > 11)) return;
-            if (patternThickness < 1)
-            {
-                patternThickness = 1;
-                mode = -1;
-                delayMs = 0;
-                durationMs = 0;
-            }
-            _patternedSurfaceTransitions[commandKey] = new PatternedSurfaceTransition
-            {
-                CommandKey = commandKey,
-                TargetSlot = targetSlot,
-                RangeAStart = rangeAStart,
-                RangeACount = System.Math.Max(0, rangeACount),
-                RangeBStart = rangeBStart,
-                RangeBCount = System.Math.Max(0, rangeBCount),
-                Mode = (SurfacePatternTransitionMode)mode,
-                PatternThickness = patternThickness,
-                DelayMs = System.Math.Max(0, delayMs),
-                DurationMs = System.Math.Max(0, durationMs),
-            };
-            MarkRetainedMutation();
+            patternThickness = 1;
+            mode = -1;
+            delayMs = 0;
+            durationMs = 0;
         }
+        _patternedSurfaceTransitions[commandKey] = new PatternedSurfaceTransition
+        {
+            CommandKey = commandKey,
+            TargetSlot = targetSlot,
+            RangeAStart = rangeAStart,
+            RangeACount = System.Math.Max(0, rangeACount),
+            RangeBStart = rangeBStart,
+            RangeBCount = System.Math.Max(0, rangeBCount),
+            Mode = (SurfacePatternTransitionMode)mode,
+            PatternThickness = patternThickness,
+            DelayMs = System.Math.Max(0, delayMs),
+            DurationMs = System.Math.Max(0, durationMs),
+        };
+        MarkRetainedMutation();
     }
 
     public void QueueMovieMaskTransition(MovieMaskTransitionRequest request)
     {
-        lock (_lock)
+        _movieMaskTransitions[request.SurfaceSlot] = new MovieMaskTransition
         {
-            _movieMaskTransitions[request.SurfaceSlot] = new MovieMaskTransition
+            Request = request with
             {
-                Request = request with
-                {
-                    SourceRangeCount = System.Math.Max(0, request.SourceRangeCount),
-                    Width = System.Math.Max(0, request.Width),
-                    Height = System.Math.Max(0, request.Height),
-                    StartDelayMs = System.Math.Max(0, request.StartDelayMs),
-                    DurationMs = System.Math.Max(0, request.DurationMs),
-                },
-            };
-            MarkRetainedMutation();
-        }
+                SourceRangeCount = System.Math.Max(0, request.SourceRangeCount),
+                Width = System.Math.Max(0, request.Width),
+                Height = System.Math.Max(0, request.Height),
+                StartDelayMs = System.Math.Max(0, request.StartDelayMs),
+                DurationMs = System.Math.Max(0, request.DurationMs),
+            },
+        };
+        MarkRetainedMutation();
     }
 
     /// <summary>SYS4433 op 0x251: replace the command handle with a delayed radial-blur post-effect
@@ -128,32 +119,29 @@ public sealed partial class GfxState
         double endLength, double endCenterX, double endCenterY,
         long delayMs, long durationMs)
     {
-        lock (_lock)
+        // Native replaces any ordinary map entry at this key with the special command record. Keep a
+        // visible placeholder in the projected model so the compositor encounters the effect at the
+        // same handle-ordered z position even when the script did not bind a draw object first.
+        GfxObject command = GetOrCreate(commandKey);
+        command.SourceSlot = targetSlot;
+        command.Visible = true;
+        _directionalBlurTransitions.Remove(commandKey);
+        _radialBlurTransitions[commandKey] = new RadialBlurRangeTransition
         {
-            // Native replaces any ordinary map entry at this key with the special command record. Keep a
-            // visible placeholder in the projected model so the compositor encounters the effect at the
-            // same handle-ordered z position even when the script did not bind a draw object first.
-            GfxObject command = GetOrCreate(commandKey);
-            command.SourceSlot = targetSlot;
-            command.Visible = true;
-            _directionalBlurTransitions.Remove(commandKey);
-            _radialBlurTransitions[commandKey] = new RadialBlurRangeTransition
-            {
-                CommandKey = commandKey,
-                TargetSlot = targetSlot,
-                RangeStart = rangeStart,
-                RangeCount = System.Math.Max(0, rangeCount),
-                StartLength = startLength,
-                StartCenterX = startCenterX,
-                StartCenterY = startCenterY,
-                EndLength = endLength,
-                EndCenterX = endCenterX,
-                EndCenterY = endCenterY,
-                DelayMs = System.Math.Max(0, delayMs),
-                DurationMs = System.Math.Max(0, durationMs),
-            };
-            MarkRetainedMutation();
-        }
+            CommandKey = commandKey,
+            TargetSlot = targetSlot,
+            RangeStart = rangeStart,
+            RangeCount = System.Math.Max(0, rangeCount),
+            StartLength = startLength,
+            StartCenterX = startCenterX,
+            StartCenterY = startCenterY,
+            EndLength = endLength,
+            EndCenterX = endCenterX,
+            EndCenterY = endCenterY,
+            DelayMs = System.Math.Max(0, delayMs),
+            DurationMs = System.Math.Max(0, durationMs),
+        };
+        MarkRetainedMutation();
     }
 
     /// <summary>SYS4433 op 0x250: replace the command handle with a delayed directional-blur
@@ -164,65 +152,55 @@ public sealed partial class GfxState
         double endLength, double endAngleDegrees,
         long delayMs, long durationMs)
     {
-        lock (_lock)
+        GfxObject command = GetOrCreate(commandKey);
+        command.SourceSlot = targetSlot;
+        command.Visible = true;
+        _radialBlurTransitions.Remove(commandKey);
+        _directionalBlurTransitions[commandKey] = new DirectionalBlurRangeTransition
         {
-            GfxObject command = GetOrCreate(commandKey);
-            command.SourceSlot = targetSlot;
-            command.Visible = true;
-            _radialBlurTransitions.Remove(commandKey);
-            _directionalBlurTransitions[commandKey] = new DirectionalBlurRangeTransition
-            {
-                CommandKey = commandKey,
-                TargetSlot = targetSlot,
-                RangeStart = rangeStart,
-                RangeCount = System.Math.Max(0, rangeCount),
-                StartLength = startLength,
-                StartAngleDegrees = startAngleDegrees,
-                EndLength = endLength,
-                EndAngleDegrees = endAngleDegrees,
-                DelayMs = System.Math.Max(0, delayMs),
-                DurationMs = System.Math.Max(0, durationMs),
-            };
-            MarkRetainedMutation();
-        }
+            CommandKey = commandKey,
+            TargetSlot = targetSlot,
+            RangeStart = rangeStart,
+            RangeCount = System.Math.Max(0, rangeCount),
+            StartLength = startLength,
+            StartAngleDegrees = startAngleDegrees,
+            EndLength = endLength,
+            EndAngleDegrees = endAngleDegrees,
+            DelayMs = System.Math.Max(0, delayMs),
+            DurationMs = System.Math.Max(0, durationMs),
+        };
+        MarkRetainedMutation();
     }
 
     public bool CompleteMovieMaskTransition(int surfaceSlot)
     {
-        lock (_lock)
-        {
-            if (!_movieMaskTransitions.TryGetValue(surfaceSlot, out var transition)
-                || transition.Completed)
-                return false;
-            transition.Completed = true;
-            MarkRetainedMutation();
-            return true;
-        }
+        if (!_movieMaskTransitions.TryGetValue(surfaceSlot, out var transition)
+            || transition.Completed)
+            return false;
+        transition.Completed = true;
+        MarkRetainedMutation();
+        return true;
     }
 
     public IReadOnlyList<MovieMaskTransitionState> SnapshotMovieMaskTransitions()
     {
-        lock (_lock)
-            return _movieMaskTransitions.Values
-                .Select(t => new MovieMaskTransitionState(t.Request, t.Completed)).ToList();
+        return _movieMaskTransitions.Values
+            .Select(t => new MovieMaskTransitionState(t.Request, t.Completed)).ToList();
     }
 
     /// <summary>Start every pending foreground transition at the native present boundary.</summary>
     public int StartForegroundTransitions(long nowMs)
     {
-        lock (_lock)
-        {
-            int started = 0;
-            foreach (var t in _surfaceTransitions.Values)
-                if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
-            foreach (var t in _patternedSurfaceTransitions.Values)
-                if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
-            foreach (var t in _radialBlurTransitions.Values)
-                if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
-            foreach (var t in _directionalBlurTransitions.Values)
-                if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
-            return started;
-        }
+        int started = 0;
+        foreach (var t in _surfaceTransitions.Values)
+            if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
+        foreach (var t in _patternedSurfaceTransitions.Values)
+            if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
+        foreach (var t in _radialBlurTransitions.Values)
+            if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
+        foreach (var t in _directionalBlurTransitions.Values)
+            if (t.StartMs < 0) { t.StartMs = nowMs; started++; }
+        return started;
     }
 
     /// <summary>Stamp the one-shot channels that no frame has sampled yet. Native seeds a channel's start from the
@@ -232,38 +210,34 @@ public sealed partial class GfxState
     /// those.</summary>
     public int SeedOneShotChannels(long nowMs)
     {
-        lock (_lock)
+        int seeded = 0;
+        if (_rangeTransformCount > 0)
         {
-            int seeded = 0;
-            if (_rangeTransformCount > 0)
+            var r = _rangeTransform;
+            if ((r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled) && r.OneShotStartMs < 0)
             {
-                var r = _rangeTransform;
-                if ((r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled) && r.OneShotStartMs < 0)
-                {
-                    r.OneShotStartMs = nowMs;
-                    seeded++;
-                }
-            }
-            foreach (var o in _objects.Values)
-            {
-                if (!o.Visible || o.OneShotStartMs >= 0) continue;
-                if (!(o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled
-                      || o.SrcOneShotEnabled)) continue;
-                o.OneShotStartMs = nowMs;
+                r.OneShotStartMs = nowMs;
                 seeded++;
             }
-            return seeded;
         }
+        foreach (var o in _objects.Values)
+        {
+            if (!o.Visible || o.OneShotStartMs >= 0) continue;
+            if (!(o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled || o.TranslationEnabled
+                  || o.SrcOneShotEnabled)) continue;
+            o.OneShotStartMs = nowMs;
+            seeded++;
+        }
+        return seeded;
     }
 
     public bool HasActiveForegroundTransitions(long nowMs)
     {
-        lock (_lock)
-            return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
-                   || _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
-                   || _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
-                   || _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
-                   || _movieMaskTransitions.Values.Any(t => !t.Completed);
+        return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+               || _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+               || _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+               || _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+               || _movieMaskTransitions.Values.Any(t => !t.Completed);
     }
 
     /// <summary>Native op 0x21c keeps presenting until both queued surface commands and finite one-shot
@@ -274,16 +248,15 @@ public sealed partial class GfxState
     /// render commits it (docs/engine-re.md, "Service waits end on the engine clock").</para></summary>
     public bool HasActiveTimedPresentation(long nowMs)
     {
-        lock (_lock)
-            return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                   _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                   _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                   _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                   _movieMaskTransitions.Values.Any(t => !t.Completed) ||
-                   HasRunningChannels(_rangeTransform, nowMs) ||
-                   _objects.Values.Any(o => o.Visible &&
-                                            (o.OneShotAnimationControlFlags & 1) == 0 &&
-                                            HasRunningChannels(o, nowMs));
+        return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+               _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+               _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+               _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+               _movieMaskTransitions.Values.Any(t => !t.Completed) ||
+               HasRunningChannels(_rangeTransform, nowMs) ||
+               _objects.Values.Any(o => o.Visible &&
+                                        (o.OneShotAnimationControlFlags & 1) == 0 &&
+                                        HasRunningChannels(o, nowMs));
     }
 
     /// <summary>Whether a finite one-shot channel is still running at <paramref name="nowMs"/>: enabled and either
@@ -305,43 +278,40 @@ public sealed partial class GfxState
     /// which can keep the host's op-0x21c presentation wait active.</summary>
     public GfxDiagnosticSnapshot CaptureDiagnosticSnapshot(long nowMs)
     {
-        lock (_lock)
-        {
-            BlockingGfxObjectDiagnostic? range = HasBlockingChannels(_rangeTransform)
-                ? DescribeBlockingObject(-1, _rangeTransform)
-                : null;
-            var objects = _objects
-                .Where(pair => pair.Value.Visible
-                    && (pair.Value.OneShotAnimationControlFlags & 1) == 0
-                    && HasBlockingChannels(pair.Value))
-                .OrderBy(pair => pair.Key)
-                .Select(pair => DescribeBlockingObject(pair.Key, pair.Value))
-                .ToArray();
-            return new GfxDiagnosticSnapshot(
-                nowMs,
-                _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
-                    || _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
-                    || _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
-                    || _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
-                    || _movieMaskTransitions.Values.Any(t => !t.Completed)
-                    || range != null || objects.Length != 0,
-                _objects.Count,
-                _objects.Values.Count(o => o.Visible),
-                _surfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
-                    + _patternedSurfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
-                    + _radialBlurTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
-                    + _directionalBlurTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
-                    + _movieMaskTransitions.Values.Count(t => !t.Completed),
-                AnimationServiceFlags,
-                AnimClockDurationTicks,
-                AnimClockGeneration,
-                PreviousFrameTimeMilliseconds,
-                CurrentFrameTimeMilliseconds,
-                _rangeTransformFirst,
-                _rangeTransformCount,
-                range,
-                objects);
-        }
+        BlockingGfxObjectDiagnostic? range = HasBlockingChannels(_rangeTransform)
+            ? DescribeBlockingObject(-1, _rangeTransform)
+            : null;
+        var objects = _objects
+            .Where(pair => pair.Value.Visible
+                && (pair.Value.OneShotAnimationControlFlags & 1) == 0
+                && HasBlockingChannels(pair.Value))
+            .OrderBy(pair => pair.Key)
+            .Select(pair => DescribeBlockingObject(pair.Key, pair.Value))
+            .ToArray();
+        return new GfxDiagnosticSnapshot(
+            nowMs,
+            _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                || _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                || _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                || _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0)
+                || _movieMaskTransitions.Values.Any(t => !t.Completed)
+                || range != null || objects.Length != 0,
+            _objects.Count,
+            _objects.Values.Count(o => o.Visible),
+            _surfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
+                + _patternedSurfaceTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
+                + _radialBlurTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
+                + _directionalBlurTransitions.Values.Count(t => TransitionProgress(t, nowMs) < 1.0)
+                + _movieMaskTransitions.Values.Count(t => !t.Completed),
+            AnimationServiceFlags,
+            AnimClockDurationTicks,
+            AnimClockGeneration,
+            PreviousFrameTimeMilliseconds,
+            CurrentFrameTimeMilliseconds,
+            _rangeTransformFirst,
+            _rangeTransformCount,
+            range,
+            objects);
     }
 
     private static bool HasBlockingChannels(GfxObject o)
@@ -361,22 +331,21 @@ public sealed partial class GfxState
     /// the interpreter is parked at an input wait. Static waits themselves are deliberately not animation.</summary>
     public bool HasActiveVisualPresentation(long nowMs)
     {
-        lock (_lock)
-            return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                   _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                   _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                   _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                   _movieMaskTransitions.Values.Any(t => !t.Completed) ||
-                   _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
-                   _rangeTransform.TranslationEnabled ||
-                   _objects.Values.Any(o => o.Visible &&
-                       (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
-                        o.TranslationEnabled || o.SrcOneShotEnabled ||
-                        (o.SrcAnim && o.SrcPeriod > 0) ||
-                        (o.ColorAnim && o.ColorPeriod > 0) ||
-                        (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
-                        (o.RotationEnabled && o.RotationPeriodMs > 0) ||
-                        (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0)));
+        return _surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+               _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+               _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+               _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+               _movieMaskTransitions.Values.Any(t => !t.Completed) ||
+               _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
+               _rangeTransform.TranslationEnabled ||
+               _objects.Values.Any(o => o.Visible &&
+                   (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
+                    o.TranslationEnabled || o.SrcOneShotEnabled ||
+                    (o.SrcAnim && o.SrcPeriod > 0) ||
+                    (o.ColorAnim && o.ColorPeriod > 0) ||
+                    (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
+                    (o.RotationEnabled && o.RotationPeriodMs > 0) ||
+                    (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0)));
     }
 
     /// <summary>Consume the native run-state-0x400 EffectSkipOnClick action and, when permitted, force its
@@ -385,13 +354,10 @@ public sealed partial class GfxState
     /// ambient cycles, and op-0x242-detached channels continue asynchronously after the service resumes.</summary>
     public bool TryCompleteClickSkippableTimedPresentation(long nowMs, out int completed)
     {
-        lock (_lock)
-        {
-            completed = 0;
-            if ((AnimationServiceFlags & 1) != 0) return false;
-            if ((AnimationServiceFlags & 2) == 0) completed = ForceCompleteTimedPresentation(nowMs);
-            return true;
-        }
+        completed = 0;
+        if ((AnimationServiceFlags & 1) != 0) return false;
+        if ((AnimationServiceFlags & 2) == 0) completed = ForceCompleteTimedPresentation(nowMs);
+        return true;
     }
 
     /// <summary>ADV fast-forward's force at an op-0x21c wait. While run-state 0x08000000 is set, native's main tick
@@ -402,13 +368,12 @@ public sealed partial class GfxState
     /// Movie masks and op-0x242-detached channels are not forced. Returns the number of endpoints completed.</summary>
     public int ForceCompleteTimedPresentationForFastForward(long nowMs)
     {
-        lock (_lock)
-            return (AnimationServiceFlags & 2) == 0 ? ForceCompleteTimedPresentation(nowMs) : 0;
+        return (AnimationServiceFlags & 2) == 0 ? ForceCompleteTimedPresentation(nowMs) : 0;
     }
 
     /// <summary>The forced render the shared worker requests (force-complete +0xb55c): every running surface
     /// command and every unprotected finite one-shot channel takes its endpoint, and the anim-clock window ends.
-    /// Caller holds the lock.</summary>
+    /// </summary>
     private int ForceCompleteTimedPresentation(long nowMs)
     {
         int completed = 0;
@@ -465,44 +430,37 @@ public sealed partial class GfxState
     /// command endpoint immediately; interactive run-state-0x400 skipping uses the broader method above.</summary>
     public int CompleteForegroundTransitions(long nowMs)
     {
-        lock (_lock)
-        {
-            int completed = 0;
-            foreach (var t in _surfaceTransitions.Values)
-                if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
-            foreach (var t in _patternedSurfaceTransitions.Values)
-                if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
-            foreach (var t in _radialBlurTransitions.Values)
-                if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
-            foreach (var t in _directionalBlurTransitions.Values)
-                if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
-            if (completed > 0) MarkRetainedMutation();
-            return completed;
-        }
+        int completed = 0;
+        foreach (var t in _surfaceTransitions.Values)
+            if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
+        foreach (var t in _patternedSurfaceTransitions.Values)
+            if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
+        foreach (var t in _radialBlurTransitions.Values)
+            if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
+        foreach (var t in _directionalBlurTransitions.Values)
+            if (!t.Forced && TransitionProgress(t, nowMs) < 1.0) { t.Forced = true; completed++; }
+        if (completed > 0) MarkRetainedMutation();
+        return completed;
     }
 
     public IReadOnlyList<SurfaceTransitionState> SnapshotForegroundTransitions(long nowMs)
     {
-        lock (_lock)
-            return _surfaceTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
+        return _surfaceTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
     }
 
     public IReadOnlyList<PatternedSurfaceTransitionState> SnapshotPatternedSurfaceTransitions(long nowMs)
     {
-        lock (_lock)
-            return _patternedSurfaceTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
+        return _patternedSurfaceTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
     }
 
     public IReadOnlyList<RadialBlurRangeTransitionState> SnapshotRadialBlurRangeTransitions(long nowMs)
     {
-        lock (_lock)
-            return _radialBlurTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
+        return _radialBlurTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
     }
 
     public IReadOnlyList<DirectionalBlurRangeTransitionState> SnapshotDirectionalBlurRangeTransitions(long nowMs)
     {
-        lock (_lock)
-            return _directionalBlurTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
+        return _directionalBlurTransitions.Values.Select(t => SampleTransition(t, nowMs)).ToList();
     }
 
     private static double TransitionProgress(SurfaceTransition t, long nowMs)
@@ -582,53 +540,50 @@ public sealed partial class GfxState
     /// previous/current samples select different cells. Retained VM writes are published exactly once.</summary>
     public GfxPresentationReason ConsumePresentationReasons(long nowMs)
     {
-        lock (_lock)
+        _previousFrameTimeMs = _currentFrameTimeMs;
+        _currentFrameTimeMs = nowMs;
+        PreviousFrameTimeMilliseconds = unchecked((uint)_previousFrameTimeMs);
+        CurrentFrameTimeMilliseconds = unchecked((uint)_currentFrameTimeMs);
+
+        GfxPresentationReason reasons = GfxPresentationReason.None;
+        if (_publishedMutationGeneration != _mutationGeneration)
         {
-            _previousFrameTimeMs = _currentFrameTimeMs;
-            _currentFrameTimeMs = nowMs;
-            PreviousFrameTimeMilliseconds = unchecked((uint)_previousFrameTimeMs);
-            CurrentFrameTimeMilliseconds = unchecked((uint)_currentFrameTimeMs);
-
-            GfxPresentationReason reasons = GfxPresentationReason.None;
-            if (_publishedMutationGeneration != _mutationGeneration)
-            {
-                _publishedMutationGeneration = _mutationGeneration;
-                reasons |= GfxPresentationReason.RetainedMutation;
-            }
-
-            if (_surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
-                _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
-                _rangeTransform.TranslationEnabled ||
-                _objects.Values.Any(o => o.Visible &&
-                    (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
-                     o.TranslationEnabled || o.SrcOneShotEnabled ||
-                     (o.ColorAnim && o.ColorPeriod > 0) ||
-                     (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
-                     (o.RotationEnabled && o.RotationPeriodMs > 0) ||
-                     (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0))))
-                reasons |= GfxPresentationReason.ContinuousChannel;
-
-            foreach (var o in _objects.Values)
-            {
-                if (!o.Visible || !o.SrcAnim || o.SrcPeriod <= 0 || o.SrcFrameCount < 1) continue;
-                if (o.SrcStart < 0)
-                {
-                    // Prototype clones made before first publication all enter here in the same shared sample,
-                    // reproducing FIELD's native phase lock.
-                    o.SrcStart = nowMs;
-                    continue;
-                }
-                if (SourceCellAt(o, _previousFrameTimeMs) != SourceCellAt(o, _currentFrameTimeMs))
-                {
-                    reasons |= GfxPresentationReason.DiscreteSourceCell;
-                    break;
-                }
-            }
-            return reasons;
+            _publishedMutationGeneration = _mutationGeneration;
+            reasons |= GfxPresentationReason.RetainedMutation;
         }
+
+        if (_surfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+            _patternedSurfaceTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+            _radialBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+            _directionalBlurTransitions.Values.Any(t => TransitionProgress(t, nowMs) < 1.0) ||
+            _rangeTransform.ScaleEnabled || _rangeTransform.RotationChannelEnabled ||
+            _rangeTransform.TranslationEnabled ||
+            _objects.Values.Any(o => o.Visible &&
+                (o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
+                 o.TranslationEnabled || o.SrcOneShotEnabled ||
+                 (o.ColorAnim && o.ColorPeriod > 0) ||
+                 (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
+                 (o.RotationEnabled && o.RotationPeriodMs > 0) ||
+                 (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0))))
+            reasons |= GfxPresentationReason.ContinuousChannel;
+
+        foreach (var o in _objects.Values)
+        {
+            if (!o.Visible || !o.SrcAnim || o.SrcPeriod <= 0 || o.SrcFrameCount < 1) continue;
+            if (o.SrcStart < 0)
+            {
+                // Prototype clones made before first publication all enter here in the same shared sample,
+                // reproducing FIELD's native phase lock.
+                o.SrcStart = nowMs;
+                continue;
+            }
+            if (SourceCellAt(o, _previousFrameTimeMs) != SourceCellAt(o, _currentFrameTimeMs))
+            {
+                reasons |= GfxPresentationReason.DiscreteSourceCell;
+                break;
+            }
+        }
+        return reasons;
     }
 
     /// <summary>Back-compat: snapshot with no animation clock (nowMs = 0) — deterministic, for headless
@@ -654,223 +609,220 @@ public sealed partial class GfxState
     public void SnapshotVisibleObjects(long nowMs, List<RenderObject> list)
     {
         ArgumentNullException.ThrowIfNull(list);
-        lock (_lock)
+        list.Clear();
+        Affine2D? rangeAffine = null;
+        bool rangeTimeVarying = false;
+        if (_rangeTransformCount > 0)
         {
-            list.Clear();
-            Affine2D? rangeAffine = null;
-            bool rangeTimeVarying = false;
-            if (_rangeTransformCount > 0)
+            var r = _rangeTransform;
+            bool hadRangeOneShot = r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled;
+            if (hadRangeOneShot && r.OneShotStartMs < 0) r.OneShotStartMs = nowMs;
+            var rangeScale = SampleMatrixChannel(ref r.ScaleCurrent, ref r.ScaleTarget, ref r.ScaleDelayMs,
+                ref r.ScaleDurationMs, r.OneShotStartMs, ref r.ScaleEnabled, nowMs, IdentityScale);
+            var rangeRotation = SampleRotationChannel(ref r.RotationCurrent, ref r.RotationTarget,
+                ref r.RotationDelayMs, ref r.RotationDurationMs, r.OneShotStartMs,
+                ref r.RotationChannelEnabled, nowMs);
+            r.EvaluatedRotationCache = RotationCache(rangeRotation);
+            var rangeTranslation = SampleMatrixChannel(ref r.TranslationCurrent, ref r.TranslationTarget,
+                ref r.TranslationDelayMs, ref r.TranslationDurationMs, r.OneShotStartMs,
+                ref r.TranslationEnabled, nowMs, IdentityTranslation);
+            if (!r.ScaleEnabled && !r.RotationChannelEnabled && !r.TranslationEnabled)
+                r.OneShotStartMs = -1;
+            rangeTimeVarying = r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled;
+            rangeAffine = Transform2DMath.Build(new TransformState(
+                rangeScale.X, rangeScale.Y, rangeScale.Z,
+                rangeTranslation.X, rangeTranslation.Y, rangeTranslation.Z,
+                r.V18.X, r.V18.Y, r.V18.Z,
+                rangeRotation.X, rangeRotation.Y, rangeRotation.Z, rangeRotation.Angle));
+        }
+        foreach (long handle in _orderedObjectHandles)
+        {
+            var o = _objects[handle];
+            if (!o.Visible) continue;
+            bool hadOneShot = o.OneShotColorEnabled || o.ScaleEnabled ||
+                              o.RotationChannelEnabled || o.TranslationEnabled || o.SrcOneShotEnabled;
+            // Created/mutable surfaces have no file resource id but remain a distinct surface class.
+            // Zero is an active "key black" value, so created and absent slots both default to -1.
+            var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, -1L);
+            bool createdSurface = _createdSurfaces.Contains(o.SourceSlot);
+
+            // ---- packed color: a static mode 0 treats alpha as tint/fill strength. Once op 0x202 has
+            // armed the one-shot channel, its current/target ARGB instead supplies opacity and D3D-style
+            // multiplicative RGB modulation (including after target commit). Mode 1 uses the same blend.
+            // Op 0x232 modifies this temporary packed color before the unchanged mode consumes it. ----
+            int alpha = 255; long tint = 0xFFFFFF; int strength = 0; var blend = BlendKind.Opaque;
+            bool multiplyTint = false;
+            long sampledColor = o.HasColor ? o.Color : 0xffffffff;
+            ColorTransitionState? colorTransition = null;
+            if (o.OneShotColorEnabled)
             {
-                var r = _rangeTransform;
-                bool hadRangeOneShot = r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled;
-                if (hadRangeOneShot && r.OneShotStartMs < 0) r.OneShotStartMs = nowMs;
-                var rangeScale = SampleMatrixChannel(ref r.ScaleCurrent, ref r.ScaleTarget, ref r.ScaleDelayMs,
-                    ref r.ScaleDurationMs, r.OneShotStartMs, ref r.ScaleEnabled, nowMs, IdentityScale);
-                var rangeRotation = SampleRotationChannel(ref r.RotationCurrent, ref r.RotationTarget,
-                    ref r.RotationDelayMs, ref r.RotationDurationMs, r.OneShotStartMs,
-                    ref r.RotationChannelEnabled, nowMs);
-                r.EvaluatedRotationCache = RotationCache(rangeRotation);
-                var rangeTranslation = SampleMatrixChannel(ref r.TranslationCurrent, ref r.TranslationTarget,
-                    ref r.TranslationDelayMs, ref r.TranslationDurationMs, r.OneShotStartMs,
-                    ref r.TranslationEnabled, nowMs, IdentityTranslation);
-                if (!r.ScaleEnabled && !r.RotationChannelEnabled && !r.TranslationEnabled)
-                    r.OneShotStartMs = -1;
-                rangeTimeVarying = r.ScaleEnabled || r.RotationChannelEnabled || r.TranslationEnabled;
-                rangeAffine = Transform2DMath.Build(new TransformState(
-                    rangeScale.X, rangeScale.Y, rangeScale.Z,
-                    rangeTranslation.X, rangeTranslation.Y, rangeTranslation.Z,
-                    r.V18.X, r.V18.Y, r.V18.Z,
-                    rangeRotation.X, rangeRotation.Y, rangeRotation.Z, rangeRotation.Angle));
+                if (o.OneShotStartMs < 0) o.OneShotStartMs = nowMs;
+                (sampledColor, colorTransition) = SampleOneShotColor(o, nowMs);
             }
-            foreach (long handle in _orderedObjectHandles)
+            if (o.ColorAnim)
             {
-                var o = _objects[handle];
-                if (!o.Visible) continue;
-                bool hadOneShot = o.OneShotColorEnabled || o.ScaleEnabled ||
-                                  o.RotationChannelEnabled || o.TranslationEnabled || o.SrcOneShotEnabled;
-                // Created/mutable surfaces have no file resource id but remain a distinct surface class.
-                // Zero is an active "key black" value, so created and absent slots both default to -1.
-                var (resId, ck) = _surfaces.TryGetValue(o.SourceSlot, out var s) ? s : (0L, -1L);
-                bool createdSurface = _createdSurfaces.Contains(o.SourceSlot);
-
-                // ---- packed color: a static mode 0 treats alpha as tint/fill strength. Once op 0x202 has
-                // armed the one-shot channel, its current/target ARGB instead supplies opacity and D3D-style
-                // multiplicative RGB modulation (including after target commit). Mode 1 uses the same blend.
-                // Op 0x232 modifies this temporary packed color before the unchanged mode consumes it. ----
-                int alpha = 255; long tint = 0xFFFFFF; int strength = 0; var blend = BlendKind.Opaque;
-                bool multiplyTint = false;
-                long sampledColor = o.HasColor ? o.Color : 0xffffffff;
-                ColorTransitionState? colorTransition = null;
-                if (o.OneShotColorEnabled)
-                {
-                    if (o.OneShotStartMs < 0) o.OneShotStartMs = nowMs;
-                    (sampledColor, colorTransition) = SampleOneShotColor(o, nowMs);
-                }
-                if (o.ColorAnim)
-                {
-                    if (o.ColorStart < 0) o.ColorStart = nowMs;
-                    sampledColor = InterpolatePackedColor(sampledColor, o.ColorTarget,
-                        PingPongWeight(nowMs, o.ColorStart, o.ColorPeriod));
-                }
-                if (o.HasColor || o.ColorAnim)
-                {
-                    var (a, r, g, b) = BlendMath.UnpackArgb(sampledColor);
-                    tint = ((long)r << 16) | ((long)g << 8) | (long)b;
-                    if (o.StaticColorMode == 1)
-                    {
-                        // Native mode 1 enables SRCALPHA/ONE additive blending and passes packed ARGB as
-                        // D3D modulation. Black therefore contributes nothing (TITLE's SO022 flames),
-                        // while the high byte scales the additive source contribution.
-                        alpha = a; strength = 0; blend = BlendKind.Additive; multiplyTint = true;
-                    }
-                    else if (o.StaticColorMode == 0 && o.OneShotColorBlend)
-                    {
-                        alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
-                    }
-                    else if (o.StaticColorMode == 0 && o.PostBindStaticColorBlend)
-                    {
-                        // FIELD suppresses a still-bound idle unit while its clone moves; CALLBACK_SETTING
-                        // rebuilds the erased ADV backing and writes the configured opacity after binding it.
-                        // Pre-bind static alpha-zero CG initialization remains the opaque mode-0 path.
-                        alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
-                    }
-                    else if (o.StaticColorMode == 2)
-                    {
-                        // Native transition-source mode: 0xffffffff is opaque identity modulation,
-                        // not a request to replace every texel with white.
-                        alpha = a; strength = 0; blend = BlendKind.Alpha;
-                    }
-                    else if (createdSurface)
-                    {
-                        // Native created/render-target surfaces use packed alpha as object opacity.
-                        // SYSTEM4/BUNKI relies on this for translucent panels; FIELD uses the same surface
-                        // at alpha 0x40 beneath the minimap so the paper chrome remains visible.
-                        alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
-                    }
-                    else if (resId != 0)
-                    {
-                        // Native mode 0 is the opaque textured path. RGB modulates the source and the
-                        // packed alpha byte does not become tint strength; in particular 0xffffffff is
-                        // identity after the foreground-transition cleanup write.
-                        alpha = 255; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
-                    }
-                    else
-                    {
-                        // A surfaceless mode-0 object is a solid fill, whose high byte remains fill strength.
-                        strength = a; blend = BlendKind.Alpha;
-                    }
-                }
-                // ---- src-rect: preserve cell dimensions and offset it row-major through the sheet ----
-                // One-shot channels share the start stamp, seeded on first sight.
-                if (hadOneShot
-                    && o.OneShotStartMs < 0)
-                    o.OneShotStartMs = nowMs;
-                int srcX = o.SrcRect.X, srcY = o.SrcRect.Y, w = o.SrcRect.W, h = o.SrcRect.H;
-                bool drawsNothing = o.SrcCollapsed;
-                if (o.SrcOneShotEnabled)
-                    (srcX, srcY, w, h) = SampleSrcOneShot(o, nowMs, out drawsNothing);
-                else if (o.SrcAnim && o.SrcPeriod > 0 && o.SrcFrameCount >= 1)
-                {
-                    if (o.SrcStart < 0) o.SrcStart = nowMs;
-                    long cell = SourceCellAt(o, nowMs);   // clamps a start stamp later than now (a restored clock)
-                    srcX = o.SrcRect.X + (int)(cell % o.SrcColumns) * o.SrcRect.W;
-                    srcY = o.SrcRect.Y + (int)(cell / o.SrcColumns) * o.SrcRect.H;
-                }
-
-                // One-shot matrix channels: hold current through delay, then linearly sample current -> target.
-                var scale = SampleMatrixChannel(ref o.ScaleCurrent, ref o.ScaleTarget, ref o.ScaleDelayMs,
-                                                ref o.ScaleDurationMs, o.OneShotStartMs, ref o.ScaleEnabled, nowMs,
-                                                IdentityScale);
-                var rotation = SampleRotationChannel(ref o.RotationCurrent, ref o.RotationTarget,
-                                                     ref o.RotationDelayMs, ref o.RotationDurationMs,
-                                                     o.OneShotStartMs, ref o.RotationChannelEnabled, nowMs);
-                o.EvaluatedRotationCache = RotationCache(rotation);
-                var translation = SampleMatrixChannel(ref o.TranslationCurrent, ref o.TranslationTarget,
-                                                      ref o.TranslationDelayMs, ref o.TranslationDurationMs,
-                                                      o.OneShotStartMs, ref o.TranslationEnabled, nowMs,
-                                                      IdentityTranslation);
-                if (!o.OneShotColorEnabled && !o.ScaleEnabled && !o.RotationChannelEnabled && !o.TranslationEnabled
-                    && !o.SrcOneShotEnabled)
-                {
-                    if (hadOneShot) o.OneShotAnimationControlFlags &= ~1L;
-                    o.OneShotStartMs = -1;
-                }
-
-                double cycleAngle = 0;
-                double cycleScaleX = 1, cycleScaleY = 1, cycleScaleZ = 1;
-                double cycleTranslationX = 0, cycleTranslationY = 0, cycleTranslationZ = 0;
-                if (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0)
-                {
-                    if (o.ScaleCycleStartMs < 0) o.ScaleCycleStartMs = nowMs;
-                    double weight = ScaleCycleWeight(nowMs, o.ScaleCycleStartMs, o.ScaleCyclePeriodMs);
-                    cycleScaleX += (o.ScaleCycleTarget.X - 1) * weight;
-                    cycleScaleY += (o.ScaleCycleTarget.Y - 1) * weight;
-                    cycleScaleZ += (o.ScaleCycleTarget.Z - 1) * weight;
-                }
-                if (o.RotationEnabled && o.RotationPeriodMs > 0)
-                {
-                    if (o.RotationStartMs < 0) o.RotationStartMs = nowMs;
-                    long elapsed = System.Math.Max(0, nowMs - o.RotationStartMs);
-                    cycleAngle = ((elapsed % o.RotationPeriodMs) * 360) / o.RotationPeriodMs;
-                }
-                if (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0)
-                {
-                    if (o.TranslationCycleStartMs < 0) o.TranslationCycleStartMs = nowMs;
-                    double weight = ScaleCycleWeight(
-                        nowMs, o.TranslationCycleStartMs, o.TranslationCyclePeriodMs);
-                    cycleTranslationX = o.TranslationCycleTarget.X * weight;
-                    cycleTranslationY = o.TranslationCycleTarget.Y * weight;
-                    cycleTranslationZ = o.TranslationCycleTarget.Z * weight;
-                }
-
-                SurfaceTransitionState? transition = _surfaceTransitions.TryGetValue(o.SourceSlot, out var st)
-                    ? SampleTransition(st, nowMs) : null;
-                PatternedSurfaceTransitionState? patternedTransition =
-                    _patternedSurfaceTransitions.TryGetValue(handle, out var pt)
-                        ? SampleTransition(pt, nowMs) : null;
-                RadialBlurRangeTransitionState? radialBlur =
-                    _radialBlurTransitions.TryGetValue(handle, out var rb)
-                        ? SampleTransition(rb, nowMs) : null;
-                DirectionalBlurRangeTransitionState? directionalBlur =
-                    _directionalBlurTransitions.TryGetValue(handle, out var db)
-                        ? SampleTransition(db, nowMs) : null;
-                Affine2D? objectRangeTransform = rangeAffine is { } ra &&
-                    handle >= _rangeTransformFirst && handle - _rangeTransformFirst < _rangeTransformCount
-                    ? ra : null;
-                bool timeVarying =
-                    o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
-                    o.TranslationEnabled || o.SrcOneShotEnabled ||
-                    (o.SrcAnim && o.SrcPeriod > 0) ||
-                    (o.ColorAnim && o.ColorPeriod > 0) ||
-                    (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
-                    (o.RotationEnabled && o.RotationPeriodMs > 0) ||
-                    (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0) ||
-                    transition is { Progress: < 1.0 } ||
-                    patternedTransition is { Progress: < 1.0 } ||
-                    radialBlur is { Progress: < 1.0 } ||
-                    directionalBlur is { Progress: < 1.0 } ||
-                    (objectRangeTransform != null && rangeTimeVarying);
-                if (drawsNothing) continue;   // an empty native source rect draws no pixels
-                list.Add(new RenderObject(handle, resId, ck, srcX, srcY, w, h,
-                                          (int)o.V24.X, (int)o.V24.Y,
-                                          new TransformState(scale.X, scale.Y, scale.Z,
-                                                             translation.X, translation.Y, translation.Z,
-                                                             o.V18.X, o.V18.Y, o.V18.Z,
-                                                             rotation.X, rotation.Y, rotation.Z, rotation.Angle),
-                                          new RotationCycleState(o.RotationEnabled, o.RotationPeriodMs,
-                                                                 o.RotationAxis.X, o.RotationAxis.Y,
-                                                                 o.RotationAxis.Z, cycleAngle),
-                                          alpha, tint, strength, blend, multiplyTint, transition,
-                                          colorTransition, objectRangeTransform, timeVarying,
-                                          new ScaleCycleState(o.ScaleCycleEnabled, o.ScaleCyclePeriodMs,
-                                                              cycleScaleX, cycleScaleY, cycleScaleZ),
-                                          radialBlur, directionalBlur,
-                                          new TranslationCycleState(
-                                              o.TranslationCycleEnabled,
-                                              o.TranslationCyclePeriodMs,
-                                              cycleTranslationX, cycleTranslationY,
-                                              cycleTranslationZ), patternedTransition));
+                if (o.ColorStart < 0) o.ColorStart = nowMs;
+                sampledColor = InterpolatePackedColor(sampledColor, o.ColorTarget,
+                    PingPongWeight(nowMs, o.ColorStart, o.ColorPeriod));
             }
+            if (o.HasColor || o.ColorAnim)
+            {
+                var (a, r, g, b) = BlendMath.UnpackArgb(sampledColor);
+                tint = ((long)r << 16) | ((long)g << 8) | (long)b;
+                if (o.StaticColorMode == 1)
+                {
+                    // Native mode 1 enables SRCALPHA/ONE additive blending and passes packed ARGB as
+                    // D3D modulation. Black therefore contributes nothing (TITLE's SO022 flames),
+                    // while the high byte scales the additive source contribution.
+                    alpha = a; strength = 0; blend = BlendKind.Additive; multiplyTint = true;
+                }
+                else if (o.StaticColorMode == 0 && o.OneShotColorBlend)
+                {
+                    alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
+                }
+                else if (o.StaticColorMode == 0 && o.PostBindStaticColorBlend)
+                {
+                    // FIELD suppresses a still-bound idle unit while its clone moves; CALLBACK_SETTING
+                    // rebuilds the erased ADV backing and writes the configured opacity after binding it.
+                    // Pre-bind static alpha-zero CG initialization remains the opaque mode-0 path.
+                    alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
+                }
+                else if (o.StaticColorMode == 2)
+                {
+                    // Native transition-source mode: 0xffffffff is opaque identity modulation,
+                    // not a request to replace every texel with white.
+                    alpha = a; strength = 0; blend = BlendKind.Alpha;
+                }
+                else if (createdSurface)
+                {
+                    // Native created/render-target surfaces use packed alpha as object opacity.
+                    // SYSTEM4/BUNKI relies on this for translucent panels; FIELD uses the same surface
+                    // at alpha 0x40 beneath the minimap so the paper chrome remains visible.
+                    alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
+                }
+                else if (resId != 0)
+                {
+                    // Native mode 0 is the opaque textured path. RGB modulates the source and the
+                    // packed alpha byte does not become tint strength; in particular 0xffffffff is
+                    // identity after the foreground-transition cleanup write.
+                    alpha = 255; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
+                }
+                else
+                {
+                    // A surfaceless mode-0 object is a solid fill, whose high byte remains fill strength.
+                    strength = a; blend = BlendKind.Alpha;
+                }
+            }
+            // ---- src-rect: preserve cell dimensions and offset it row-major through the sheet ----
+            // One-shot channels share the start stamp, seeded on first sight.
+            if (hadOneShot
+                && o.OneShotStartMs < 0)
+                o.OneShotStartMs = nowMs;
+            int srcX = o.SrcRect.X, srcY = o.SrcRect.Y, w = o.SrcRect.W, h = o.SrcRect.H;
+            bool drawsNothing = o.SrcCollapsed;
+            if (o.SrcOneShotEnabled)
+                (srcX, srcY, w, h) = SampleSrcOneShot(o, nowMs, out drawsNothing);
+            else if (o.SrcAnim && o.SrcPeriod > 0 && o.SrcFrameCount >= 1)
+            {
+                if (o.SrcStart < 0) o.SrcStart = nowMs;
+                long cell = SourceCellAt(o, nowMs);   // clamps a start stamp later than now (a restored clock)
+                srcX = o.SrcRect.X + (int)(cell % o.SrcColumns) * o.SrcRect.W;
+                srcY = o.SrcRect.Y + (int)(cell / o.SrcColumns) * o.SrcRect.H;
+            }
+
+            // One-shot matrix channels: hold current through delay, then linearly sample current -> target.
+            var scale = SampleMatrixChannel(ref o.ScaleCurrent, ref o.ScaleTarget, ref o.ScaleDelayMs,
+                                            ref o.ScaleDurationMs, o.OneShotStartMs, ref o.ScaleEnabled, nowMs,
+                                            IdentityScale);
+            var rotation = SampleRotationChannel(ref o.RotationCurrent, ref o.RotationTarget,
+                                                 ref o.RotationDelayMs, ref o.RotationDurationMs,
+                                                 o.OneShotStartMs, ref o.RotationChannelEnabled, nowMs);
+            o.EvaluatedRotationCache = RotationCache(rotation);
+            var translation = SampleMatrixChannel(ref o.TranslationCurrent, ref o.TranslationTarget,
+                                                  ref o.TranslationDelayMs, ref o.TranslationDurationMs,
+                                                  o.OneShotStartMs, ref o.TranslationEnabled, nowMs,
+                                                  IdentityTranslation);
+            if (!o.OneShotColorEnabled && !o.ScaleEnabled && !o.RotationChannelEnabled && !o.TranslationEnabled
+                && !o.SrcOneShotEnabled)
+            {
+                if (hadOneShot) o.OneShotAnimationControlFlags &= ~1L;
+                o.OneShotStartMs = -1;
+            }
+
+            double cycleAngle = 0;
+            double cycleScaleX = 1, cycleScaleY = 1, cycleScaleZ = 1;
+            double cycleTranslationX = 0, cycleTranslationY = 0, cycleTranslationZ = 0;
+            if (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0)
+            {
+                if (o.ScaleCycleStartMs < 0) o.ScaleCycleStartMs = nowMs;
+                double weight = ScaleCycleWeight(nowMs, o.ScaleCycleStartMs, o.ScaleCyclePeriodMs);
+                cycleScaleX += (o.ScaleCycleTarget.X - 1) * weight;
+                cycleScaleY += (o.ScaleCycleTarget.Y - 1) * weight;
+                cycleScaleZ += (o.ScaleCycleTarget.Z - 1) * weight;
+            }
+            if (o.RotationEnabled && o.RotationPeriodMs > 0)
+            {
+                if (o.RotationStartMs < 0) o.RotationStartMs = nowMs;
+                long elapsed = System.Math.Max(0, nowMs - o.RotationStartMs);
+                cycleAngle = ((elapsed % o.RotationPeriodMs) * 360) / o.RotationPeriodMs;
+            }
+            if (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0)
+            {
+                if (o.TranslationCycleStartMs < 0) o.TranslationCycleStartMs = nowMs;
+                double weight = ScaleCycleWeight(
+                    nowMs, o.TranslationCycleStartMs, o.TranslationCyclePeriodMs);
+                cycleTranslationX = o.TranslationCycleTarget.X * weight;
+                cycleTranslationY = o.TranslationCycleTarget.Y * weight;
+                cycleTranslationZ = o.TranslationCycleTarget.Z * weight;
+            }
+
+            SurfaceTransitionState? transition = _surfaceTransitions.TryGetValue(o.SourceSlot, out var st)
+                ? SampleTransition(st, nowMs) : null;
+            PatternedSurfaceTransitionState? patternedTransition =
+                _patternedSurfaceTransitions.TryGetValue(handle, out var pt)
+                    ? SampleTransition(pt, nowMs) : null;
+            RadialBlurRangeTransitionState? radialBlur =
+                _radialBlurTransitions.TryGetValue(handle, out var rb)
+                    ? SampleTransition(rb, nowMs) : null;
+            DirectionalBlurRangeTransitionState? directionalBlur =
+                _directionalBlurTransitions.TryGetValue(handle, out var db)
+                    ? SampleTransition(db, nowMs) : null;
+            Affine2D? objectRangeTransform = rangeAffine is { } ra &&
+                handle >= _rangeTransformFirst && handle - _rangeTransformFirst < _rangeTransformCount
+                ? ra : null;
+            bool timeVarying =
+                o.OneShotColorEnabled || o.ScaleEnabled || o.RotationChannelEnabled ||
+                o.TranslationEnabled || o.SrcOneShotEnabled ||
+                (o.SrcAnim && o.SrcPeriod > 0) ||
+                (o.ColorAnim && o.ColorPeriod > 0) ||
+                (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
+                (o.RotationEnabled && o.RotationPeriodMs > 0) ||
+                (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0) ||
+                transition is { Progress: < 1.0 } ||
+                patternedTransition is { Progress: < 1.0 } ||
+                radialBlur is { Progress: < 1.0 } ||
+                directionalBlur is { Progress: < 1.0 } ||
+                (objectRangeTransform != null && rangeTimeVarying);
+            if (drawsNothing) continue;   // an empty native source rect draws no pixels
+            list.Add(new RenderObject(handle, resId, ck, srcX, srcY, w, h,
+                                      (int)o.V24.X, (int)o.V24.Y,
+                                      new TransformState(scale.X, scale.Y, scale.Z,
+                                                         translation.X, translation.Y, translation.Z,
+                                                         o.V18.X, o.V18.Y, o.V18.Z,
+                                                         rotation.X, rotation.Y, rotation.Z, rotation.Angle),
+                                      new RotationCycleState(o.RotationEnabled, o.RotationPeriodMs,
+                                                             o.RotationAxis.X, o.RotationAxis.Y,
+                                                             o.RotationAxis.Z, cycleAngle),
+                                      alpha, tint, strength, blend, multiplyTint, transition,
+                                      colorTransition, objectRangeTransform, timeVarying,
+                                      new ScaleCycleState(o.ScaleCycleEnabled, o.ScaleCyclePeriodMs,
+                                                          cycleScaleX, cycleScaleY, cycleScaleZ),
+                                      radialBlur, directionalBlur,
+                                      new TranslationCycleState(
+                                          o.TranslationCycleEnabled,
+                                          o.TranslationCyclePeriodMs,
+                                          cycleTranslationX, cycleTranslationY,
+                                          cycleTranslationZ), patternedTransition));
         }
     }
 }

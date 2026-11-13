@@ -13,17 +13,14 @@ public readonly record struct SurfaceTexture(RgbaImage Image, string Name, int A
 // method here, doing the record (GfxState) and the pixels in native's order.
 public sealed partial class Graphics
 {
-    private readonly object _imageLock = new();
     private readonly Dictionary<int, RgbaImage?> _images = new();        // packed catalog id -> decoded pixels
     // Mutable AGE surfaces are published by replacing immutable RgbaImage snapshots, so a renderer can finish reading
     // an old frame while the VM prepares a copied-rectangle update.
     private readonly Dictionary<int, RgbaImage> _surfaceImages = new();
     private readonly Dictionary<int, long> _surfaceColorKeys = new();
-    private readonly object _resourceLock = new();
     private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> packed catalog id
     // slot -> dimensions of the currently allocated surface. Slot 0 begins as the selected game's logical canvas, but
-    // op 0x1fa releases it like any other slot; later queries return 0x0. Concurrent: the VM thread allocates and
-    // releases surfaces while the front end's frame service publishes masked movie captures (the movie native).
+    // op 0x1fa releases it like any other slot; later queries return 0x0.
     private readonly ConcurrentDictionary<int, (int W, int H)> _slotDims = new();
 
     /// <summary><c>--gfx-log</c>: print set-texture/create-texture slot assignments.</summary>
@@ -61,7 +58,7 @@ public sealed partial class Graphics
         {
             long resourceId;
             bool loaded;
-            lock (_resourceLock) loaded = _surfaceResources.TryGetValue(slot, out resourceId);
+            loaded = _surfaceResources.TryGetValue(slot, out resourceId);
             string file = loaded ? _res?.ResolveTexture(resourceId)?.Name ?? "<none>" : "<none>";
             trace($"draw-texture slot={slot} src=({srcX},{srcY} {width}x{height}) dst=({dstX},{dstY}) file={file}");
         }
@@ -122,7 +119,7 @@ public sealed partial class Graphics
             if (RgbaSurfaceOps.FillRect(updated, fill.X, fill.Y, fill.Width, fill.Height,
                                         unchecked((byte)fill.Alpha), fill.Rgb))
             {
-                lock (_imageLock) _surfaceImages[fill.SurfaceSlot] = updated;
+                _surfaceImages[fill.SurfaceSlot] = updated;
                 RequestPresentation();
             }
         }
@@ -159,7 +156,7 @@ public sealed partial class Graphics
                                            copy.DestinationWidth, copy.DestinationHeight);
         if (copied)
         {
-            lock (_imageLock) _surfaceImages[copy.DestinationSurface] = updated;
+            _surfaceImages[copy.DestinationSurface] = updated;
             RequestPresentation();
         }
         _timeline?.Event("surface-copy", new()
@@ -181,23 +178,20 @@ public sealed partial class Graphics
         int surfaceSlot = State.CurrentRenderTargetSlot;
         if (surfaceSlot < 0)
         {
-            lock (_backbufferRangeLock) _backbufferClearPending = true;
+            _backbufferClearPending = true;
         }
         else
         {
-            lock (_imageLock)
-            {
-                // A fresh buffer rather than an in-place clear, as every other surface write: the GPU texture cache
-                // sees a changed dynamic surface by its pixel array's identity, and the main thread may be reading
-                // the published one.
-                if (_surfaceImages.TryGetValue(surfaceSlot, out var image))
-                    _surfaceImages[surfaceSlot] = new RgbaImage(image.Width, image.Height, new byte[image.Pixels.Length]);
-                else if (_slotDims.TryGetValue(surfaceSlot, out var dimensions)
-                         && dimensions.W > 0 && dimensions.H > 0)
-                    _surfaceImages[surfaceSlot] = new RgbaImage(
-                        dimensions.W, dimensions.H,
-                        new byte[checked(dimensions.W * dimensions.H * 4)]);
-            }
+            // A fresh buffer rather than an in-place clear, as every other surface write: the GPU texture cache
+            // sees a changed dynamic surface by its pixel array's identity, and the front end may be drawing a frame
+            // that holds the published one.
+            if (_surfaceImages.TryGetValue(surfaceSlot, out var image))
+                _surfaceImages[surfaceSlot] = new RgbaImage(image.Width, image.Height, new byte[image.Pixels.Length]);
+            else if (_slotDims.TryGetValue(surfaceSlot, out var dimensions)
+                     && dimensions.W > 0 && dimensions.H > 0)
+                _surfaceImages[surfaceSlot] = new RgbaImage(
+                    dimensions.W, dimensions.H,
+                    new byte[checked(dimensions.W * dimensions.H * 4)]);
         }
         _timeline?.Event("render-target-clear", new() { ["surface"] = surfaceSlot });
     }
@@ -206,15 +200,12 @@ public sealed partial class Graphics
 
     private void CreateSurfacePixels(int slot, int width, int height)
     {
-        lock (_resourceLock) _surfaceResources.Remove(slot);
+        _surfaceResources.Remove(slot);
         int safeWidth = System.Math.Max(0, width);
         int safeHeight = System.Math.Max(0, height);
-        lock (_imageLock)
-        {
-            _surfaceImages[slot] = new RgbaImage(safeWidth, safeHeight,
-                new byte[checked(safeWidth * safeHeight * 4)]);
-            _surfaceColorKeys.Remove(slot);
-        }
+        _surfaceImages[slot] = new RgbaImage(safeWidth, safeHeight,
+            new byte[checked(safeWidth * safeHeight * 4)]);
+        _surfaceColorKeys.Remove(slot);
         _slotDims[slot] = (safeWidth, safeHeight);
         if (TraceOps) _print($"[op] create-texture slot={slot} {width}x{height}");
     }
@@ -222,12 +213,9 @@ public sealed partial class Graphics
     // The catalog image is decoded synchronously on the VM thread, so a size queried at once sees its real size.
     private void LoadSurfacePixels(long resourceId, int slot, long colorKey)
     {
-        lock (_imageLock)
-        {
-            _surfaceImages.Remove(slot);
-            _surfaceColorKeys[slot] = colorKey;
-        }
-        lock (_resourceLock) _surfaceResources[slot] = resourceId;
+        _surfaceImages.Remove(slot);
+        _surfaceColorKeys[slot] = colorKey;
+        _surfaceResources[slot] = resourceId;
         var asset = _res?.ResolveTexture(resourceId);
         var image = asset != null ? Decode(asset) : null;
         _slotDims[slot] = image != null ? (image.Width, image.Height) : (0, 0);
@@ -238,15 +226,12 @@ public sealed partial class Graphics
 
     private void ReleaseSlotPixels(int slot)
     {
-        lock (_transitionLock) _renderTargetSnapshots.Remove(slot);
+        _renderTargetSnapshots.Remove(slot);
         // Native deletes the slot's movie object first, finished or not.
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceReleasing(slot);
-        lock (_imageLock)
-        {
-            _surfaceImages.Remove(slot);
-            _surfaceColorKeys.Remove(slot);
-        }
-        lock (_resourceLock) _surfaceResources.Remove(slot);
+        _surfaceImages.Remove(slot);
+        _surfaceColorKeys.Remove(slot);
+        _surfaceResources.Remove(slot);
         _slotDims.TryRemove(slot, out _);
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceReleased(slot);
     }
@@ -255,19 +240,14 @@ public sealed partial class Graphics
     {
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceRangeReleasing(firstSlot, count);
         int end = checked(firstSlot + count);
-        lock (_transitionLock)
-            for (int slot = firstSlot; slot < end; slot++) _renderTargetSnapshots.Remove(slot);
-        lock (_imageLock)
+        for (int slot = firstSlot; slot < end; slot++) _renderTargetSnapshots.Remove(slot);
+        for (int slot = firstSlot; slot < end; slot++)
         {
-            for (int slot = firstSlot; slot < end; slot++)
-            {
-                _surfaceImages.Remove(slot);
-                _surfaceColorKeys.Remove(slot);
-                _slotDims.TryRemove(slot, out _);
-            }
+            _surfaceImages.Remove(slot);
+            _surfaceColorKeys.Remove(slot);
+            _slotDims.TryRemove(slot, out _);
         }
-        lock (_resourceLock)
-            for (int slot = firstSlot; slot < end; slot++) _surfaceResources.Remove(slot);
+        for (int slot = firstSlot; slot < end; slot++) _surfaceResources.Remove(slot);
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceRangeReleased(firstSlot, count);
         _timeline?.Event("surface-range-release", new() { ["first"] = firstSlot, ["count"] = count });
     }
@@ -288,13 +268,10 @@ public sealed partial class Graphics
         if (image.Width <= 0 || image.Height <= 0
             || image.Pixels.Length != checked(image.Width * image.Height * 4))
             return false;
-        lock (_imageLock)
-        {
-            _surfaceImages[slot] =
-                new RgbaImage(image.Width, image.Height, (byte[])image.Pixels.Clone());
-            _surfaceColorKeys.Remove(slot);
-        }
-        lock (_resourceLock) _surfaceResources.Remove(slot);
+        _surfaceImages[slot] =
+            new RgbaImage(image.Width, image.Height, (byte[])image.Pixels.Clone());
+        _surfaceColorKeys.Remove(slot);
+        _surfaceResources.Remove(slot);
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceReplaced(slot);
         _slotDims[slot] = (image.Width, image.Height);
         return true;
@@ -304,15 +281,13 @@ public sealed partial class Graphics
     /// neither.</summary>
     public RgbaImage? SurfacePixels(int slot)
     {
-        lock (_imageLock)
-            if (_surfaceImages.TryGetValue(slot, out var mutable)) return mutable;
+        if (_surfaceImages.TryGetValue(slot, out var mutable)) return mutable;
         long resourceId;
-        lock (_resourceLock)
-            if (!_surfaceResources.TryGetValue(slot, out resourceId)) return null;
+        if (!_surfaceResources.TryGetValue(slot, out resourceId)) return null;
         var resolved = ResolveResIdTexture(resourceId);
         if (resolved == null) return null;
         long colorKey;
-        lock (_imageLock) colorKey = _surfaceColorKeys.GetValueOrDefault(slot, -1);
+        colorKey = _surfaceColorKeys.GetValueOrDefault(slot, -1);
         return RgbaSurfaceOps.WithColorKey(resolved.Value.Image, colorKey);
     }
 
@@ -320,21 +295,20 @@ public sealed partial class Graphics
     /// resource and colour key; <paramref name="updateSize"/> also records the image's size as the surface's.</summary>
     public void PublishSurfacePixels(int slot, RgbaImage image, bool updateSize = true)
     {
-        lock (_imageLock) _surfaceImages[slot] = image;
+        _surfaceImages[slot] = image;
         if (updateSize) _slotDims[slot] = (image.Width, image.Height);
     }
 
     /// <summary>Take a surface's own pixels away (a movie starting on it keeps them until its first sample).</summary>
     public RgbaImage? TakeSurfacePixels(int slot)
     {
-        lock (_imageLock)
-            return _surfaceImages.Remove(slot, out RgbaImage? image) ? image : null;
+        return _surfaceImages.Remove(slot, out RgbaImage? image) ? image : null;
     }
 
     /// <summary>The surface draws without a colour key (a movie bound to it).</summary>
     public void ForgetSurfaceColorKey(int slot)
     {
-        lock (_imageLock) _surfaceColorKeys.Remove(slot);
+        _surfaceColorKeys.Remove(slot);
     }
 
     /// <summary>Record a surface's size without pixels (a movie's before its first frame).</summary>
@@ -369,15 +343,13 @@ public sealed partial class Graphics
     public SurfaceTexture? ResolveSurfaceTexture(int surfaceSlot, long fallbackResourceId)
     {
         if (_movies.IsMaskedSurface(surfaceSlot))
-            lock (_imageLock)
-                if (_surfaceImages.TryGetValue(surfaceSlot, out var masked))
-                    return new SurfaceTexture(masked, $"<movie-mask:{surfaceSlot}>", int.MinValue + surfaceSlot, true);
+            if (_surfaceImages.TryGetValue(surfaceSlot, out var masked))
+                return new SurfaceTexture(masked, $"<movie-mask:{surfaceSlot}>", int.MinValue + surfaceSlot, true);
         if (_movies.TryResolveSurface(surfaceSlot, out var movie) && movie != null)
             return new SurfaceTexture(movie.Image, movie.Name, movie.AssetId, true);
         if (_movies.IsBound(surfaceSlot)) return null;
-        lock (_imageLock)
-            if (_surfaceImages.TryGetValue(surfaceSlot, out var surface))
-                return new SurfaceTexture(surface, $"<surface:{surfaceSlot}>", int.MinValue + surfaceSlot, true);
+        if (_surfaceImages.TryGetValue(surfaceSlot, out var surface))
+            return new SurfaceTexture(surface, $"<surface:{surfaceSlot}>", int.MinValue + surfaceSlot, true);
         return fallbackResourceId != 0 ? ResolveResIdTexture(fallbackResourceId) : null;
     }
 
@@ -385,15 +357,15 @@ public sealed partial class Graphics
     /// created blank, or given pixels from outside).</summary>
     public long? SurfaceResource(int slot)
     {
-        lock (_resourceLock) return _surfaceResources.TryGetValue(slot, out long resourceId) ? resourceId : null;
+        return _surfaceResources.TryGetValue(slot, out long resourceId) ? resourceId : null;
     }
 
     /// <summary>The slots holding a surface (pixels or a loaded resource), for the timeline.</summary>
     public int[] LiveSurfaceSlots()
     {
         var slots = new SortedSet<int>();
-        lock (_imageLock) slots.UnionWith(_surfaceImages.Keys);
-        lock (_resourceLock) slots.UnionWith(_surfaceResources.Keys);
+        slots.UnionWith(_surfaceImages.Keys);
+        slots.UnionWith(_surfaceResources.Keys);
         return slots.ToArray();
     }
 
@@ -401,21 +373,18 @@ public sealed partial class Graphics
     /// language assets apply from the next load (localization spec §12).</summary>
     public void ForgetDecodedImages()
     {
-        lock (_imageLock) _images.Clear();
+        _images.Clear();
     }
 
     private RgbaImage? Decode(AssetEntry asset)
     {
-        lock (_imageLock)
+        if (_images.TryGetValue(asset.PackedId, out var cached)) return cached;
+        try { return _images[asset.PackedId] = _res!.DecodeTexture(asset); }
+        catch (System.Exception e)
         {
-            if (_images.TryGetValue(asset.PackedId, out var cached)) return cached;
-            try { return _images[asset.PackedId] = _res!.DecodeTexture(asset); }
-            catch (System.Exception e)
-            {
-                _print($"AGF decode failed {asset.Name}: {e.Message}");
-                _images[asset.PackedId] = null;
-                return null;
-            }
+            _print($"AGF decode failed {asset.Name}: {e.Message}");
+            _images[asset.PackedId] = null;
+            return null;
         }
     }
 }

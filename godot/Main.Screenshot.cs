@@ -90,7 +90,7 @@ public partial class Main
         string initial = SaveBmpPath;
         if (initial.Length == 0)
             initial = _useAppDataFolder ? DesktopDirectory() ?? _gameExecutableDirectory : _gameExecutableDirectory;
-        _host?.SetFrontendModalHold(true);
+        _waits?.SetFrontendModalHold(true);
         FreezePresentedFrame(true);
         GD.Print($"[menu] screenshot folder dialog opens at {initial}");
         _screenshotFolderDialog = ScreenshotFolderDialog.Open(_shellStrings["folder.prompt"], initial, OnScreenshotFolderChosen);
@@ -110,6 +110,6 @@ public partial class Main
             GD.Print("[menu] screenshot folder dialog cancelled");
         }
         FreezePresentedFrame(false);
-        _host?.SetFrontendModalHold(false);
+        _waits?.SetFrontendModalHold(false);
     }
 }

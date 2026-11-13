@@ -18,11 +18,8 @@ public sealed partial class GfxState
 
     public void SetDisplayBackgroundColor(long packedRgb)
     {
-        lock (_lock)
-        {
-            DisplayBackgroundColor = packedRgb & 0x00ff_ffff;
-            MarkRetainedMutation();
-        }
+        DisplayBackgroundColor = packedRgb & 0x00ff_ffff;
+        MarkRetainedMutation();
     }
 
     private void MarkRetainedMutation() => _mutationGeneration++;
@@ -34,31 +31,28 @@ public sealed partial class GfxState
     /// model.</summary>
     public void ResetSceneContext()
     {
-        lock (_lock)
-        {
-            _objects.Clear();
-            _orderedObjectHandles.Clear();
-            _reloadableSurfaces.Clear();                      // record +0x08, zeroed with the tables
-            ResetSurfaceRecordTable(_surfaceRecords);         // scene_context_init_reset calls
-            ResetSurfaceRecordTable(_surfaceRecordSnapshot);  // gfx_surface_record_tables_init
-            _movieStopTimesMs.Clear();                        // and deletes every ctx+0x52bd4 movie object
-            _surfaceTransitions.Clear();
-            _patternedSurfaceTransitions.Clear();
-            _movieMaskTransitions.Clear();
-            _radialBlurTransitions.Clear();
-            _directionalBlurTransitions.Clear();
-            CurrentObject = 0;
-            CurrentRenderTargetSlot = -1;
-            _rangeTransformFirst = 0;
-            _rangeTransformCount = 0;
-            _rangeTransform = new GfxObject();
-            ClearAnimationServiceForObjectClear();
-            PreviousFrameTimeMilliseconds = 0;
-            CurrentFrameTimeMilliseconds = 0;
-            _previousFrameTimeMs = 0;
-            _currentFrameTimeMs = 0;
-            MarkRetainedMutation();
-        }
+        _objects.Clear();
+        _orderedObjectHandles.Clear();
+        _reloadableSurfaces.Clear();                      // record +0x08, zeroed with the tables
+        ResetSurfaceRecordTable(_surfaceRecords);         // scene_context_init_reset calls
+        ResetSurfaceRecordTable(_surfaceRecordSnapshot);  // gfx_surface_record_tables_init
+        _movieStopTimesMs.Clear();                        // and deletes every ctx+0x52bd4 movie object
+        _surfaceTransitions.Clear();
+        _patternedSurfaceTransitions.Clear();
+        _movieMaskTransitions.Clear();
+        _radialBlurTransitions.Clear();
+        _directionalBlurTransitions.Clear();
+        CurrentObject = 0;
+        CurrentRenderTargetSlot = -1;
+        _rangeTransformFirst = 0;
+        _rangeTransformCount = 0;
+        _rangeTransform = new GfxObject();
+        ClearAnimationServiceForObjectClear();
+        PreviousFrameTimeMilliseconds = 0;
+        CurrentFrameTimeMilliseconds = 0;
+        _previousFrameTimeMs = 0;
+        _currentFrameTimeMs = 0;
+        MarkRetainedMutation();
     }
 
     /// <summary>
@@ -102,59 +96,52 @@ public sealed partial class GfxState
 
     public GfxPersistenceSnapshot CapturePersistenceSnapshot()
     {
-        lock (_lock)
-        {
-            var surfaces = _surfaces.Keys
-                .Concat(_reloadableSurfaces)
-                .Distinct()
-                .Select(slot =>
-                {
-                    bool active = _surfaces.TryGetValue(slot, out var value);
-                    return new GfxSurfacePersistenceState(
-                        slot, active ? value.ResId : -1, active ? value.ColorKey : 0,
-                        active && _createdSurfaces.Contains(slot),
-                        _reloadableSurfaces.Contains(slot));
-                })
-                .OrderBy(item => item.Slot)
-                .ToArray();
-            var objects = _orderedObjectHandles
-                .Select(handle => (handle, CloneState(_objects[handle])))
-                .ToArray();
-            return new GfxPersistenceSnapshot(
-                surfaces, objects, _rangeTransformFirst, _rangeTransformCount,
-                CloneState(_rangeTransform));
-        }
+        var surfaces = _surfaces.Keys
+            .Concat(_reloadableSurfaces)
+            .Distinct()
+            .Select(slot =>
+            {
+                bool active = _surfaces.TryGetValue(slot, out var value);
+                return new GfxSurfacePersistenceState(
+                    slot, active ? value.ResId : -1, active ? value.ColorKey : 0,
+                    active && _createdSurfaces.Contains(slot),
+                    _reloadableSurfaces.Contains(slot));
+            })
+            .OrderBy(item => item.Slot)
+            .ToArray();
+        var objects = _orderedObjectHandles
+            .Select(handle => (handle, CloneState(_objects[handle])))
+            .ToArray();
+        return new GfxPersistenceSnapshot(
+            surfaces, objects, _rangeTransformFirst, _rangeTransformCount,
+            CloneState(_rangeTransform));
     }
 
     public void RestorePersistenceSnapshot(GfxPersistenceSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        lock (_lock)
+        _surfaces.Clear();
+        _createdSurfaces.Clear();
+        _reloadableSurfaces.Clear();
+        foreach (GfxSurfacePersistenceState surface in snapshot.Surfaces)
         {
-            _surfaces.Clear();
-            _createdSurfaces.Clear();
-            _reloadableSurfaces.Clear();
-            foreach (GfxSurfacePersistenceState surface in snapshot.Surfaces)
-            {
-                if (surface.ResourceId >= 0 || surface.Created)
-                    _surfaces[surface.Slot] = (surface.ResourceId, surface.ColorKey);
-                if (surface.Created) _createdSurfaces.Add(surface.Slot);
-                if (surface.ReloadOnRestore) _reloadableSurfaces.Add(surface.Slot);
-            }
-            _objects.Clear();
-            _orderedObjectHandles.Clear();
-            foreach (var (handle, state) in snapshot.Objects)
-            {
-                _objects[handle] = CloneState(state);
-                _orderedObjectHandles.Add(handle);
-            }
-            _orderedObjectHandles.Sort();
-            _rangeTransformFirst = snapshot.RangeFirst;
-            _rangeTransformCount = snapshot.RangeCount;
-            _rangeTransform = CloneState(snapshot.RangeTransform);
-            MarkRetainedMutation();
+            if (surface.ResourceId >= 0 || surface.Created)
+                _surfaces[surface.Slot] = (surface.ResourceId, surface.ColorKey);
+            if (surface.Created) _createdSurfaces.Add(surface.Slot);
+            if (surface.ReloadOnRestore) _reloadableSurfaces.Add(surface.Slot);
         }
+        _objects.Clear();
+        _orderedObjectHandles.Clear();
+        foreach (var (handle, state) in snapshot.Objects)
+        {
+            _objects[handle] = CloneState(state);
+            _orderedObjectHandles.Add(handle);
+        }
+        _orderedObjectHandles.Sort();
+        _rangeTransformFirst = snapshot.RangeFirst;
+        _rangeTransformCount = snapshot.RangeCount;
+        _rangeTransform = CloneState(snapshot.RangeTransform);
+        MarkRetainedMutation();
     }
 
-    private readonly object _lock = new();
 }

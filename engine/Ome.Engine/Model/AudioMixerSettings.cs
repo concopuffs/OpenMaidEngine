@@ -22,7 +22,6 @@ public sealed class AudioMixerSettings
     public const int UnconfiguredVolume = -1;
     public const int MaximumVolume = 10_000;
 
-    private readonly object _lock = new();
     private readonly int[] _volumes =
     [
         UnconfiguredVolume, UnconfiguredVolume, UnconfiguredVolume,
@@ -34,61 +33,49 @@ public sealed class AudioMixerSettings
 
     public bool TryGetVolume(int category, out int basisPoints)
     {
-        lock (_lock)
+        if ((uint)category >= CategoryCount)
         {
-            if ((uint)category >= CategoryCount)
-            {
-                basisPoints = default;
-                return false;
-            }
-            basisPoints = _volumes[category];
-            return true;
+            basisPoints = default;
+            return false;
         }
+        basisPoints = _volumes[category];
+        return true;
     }
 
     public bool TrySetVolume(int category, long basisPoints)
     {
         AudioMixerSettingsSnapshot snapshot;
-        lock (_lock)
-        {
-            if ((uint)category >= CategoryCount) return false;
-            _volumes[category] = checked((int)basisPoints);
-            snapshot = SnapshotLocked();
-        }
+        if ((uint)category >= CategoryCount) return false;
+        _volumes[category] = checked((int)basisPoints);
+        snapshot = SnapshotLocked();
         Changed?.Invoke(snapshot);
         return true;
     }
 
     public bool TryGetRouteEnabled(int category, out bool enabled)
     {
-        lock (_lock)
+        if (category is < (int)AudioMixerCategory.Music or >= CategoryCount)
         {
-            if (category is < (int)AudioMixerCategory.Music or >= CategoryCount)
-            {
-                enabled = default;
-                return false;
-            }
-            enabled = _routes[category];
-            return true;
+            enabled = default;
+            return false;
         }
+        enabled = _routes[category];
+        return true;
     }
 
     public bool TrySetRouteEnabled(int category, bool enabled, out bool changed)
     {
         AudioMixerSettingsSnapshot? snapshot = null;
-        lock (_lock)
+        if (category is < (int)AudioMixerCategory.Music or >= CategoryCount)
         {
-            if (category is < (int)AudioMixerCategory.Music or >= CategoryCount)
-            {
-                changed = false;
-                return false;
-            }
-            changed = _routes[category] != enabled;
-            if (changed)
-            {
-                _routes[category] = enabled;
-                snapshot = SnapshotLocked();
-            }
+            changed = false;
+            return false;
+        }
+        changed = _routes[category] != enabled;
+        if (changed)
+        {
+            _routes[category] = enabled;
+            snapshot = SnapshotLocked();
         }
         if (snapshot != null) Changed?.Invoke(snapshot);
         return true;
@@ -96,19 +83,16 @@ public sealed class AudioMixerSettings
 
     public AudioMixerSettingsSnapshot Snapshot()
     {
-        lock (_lock) return SnapshotLocked();
+        return SnapshotLocked();
     }
 
     public void Replace(AudioMixerSettingsSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ValidateSnapshot(snapshot);
-        lock (_lock)
-        {
-            snapshot.Volumes.CopyTo(_volumes, 0);
-            snapshot.Routes.CopyTo(_routes, 0);
-            _routes[(int)AudioMixerCategory.Master] = false;
-        }
+        snapshot.Volumes.CopyTo(_volumes, 0);
+        snapshot.Routes.CopyTo(_routes, 0);
+        _routes[(int)AudioMixerCategory.Master] = false;
     }
 
     public static void ValidateSnapshot(AudioMixerSettingsSnapshot snapshot)

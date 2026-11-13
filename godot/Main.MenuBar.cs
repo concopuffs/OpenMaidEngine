@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using Ome.Engine.Frontend.Control;
 using Ome.Engine.Frontend.Shell;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
+using Ome.Engine.Vm;
 using Godot;
 
 /// <summary>
@@ -103,9 +105,20 @@ public partial class Main
         if (ShellSnapshot() is { } state) _shellMenu?.Refresh(items, state);
     }
 
-    /// <summary>The shell's state snapshot, rebuilt each time a surface opens; null before the VM exists.</summary>
+    /// <summary>The shell's state snapshot, rebuilt each time a surface opens; null before the VM exists. The VM's
+    /// part is read on the engine thread.</summary>
     private ShellState? ShellSnapshot() =>
-        _vm == null ? null : new ShellState(Windowed, _vm.MenuState);
+        _vm == null ? null : new ShellState(Windowed, _waits.Invoke(() => _vm.MenuState));
+
+    private EngineThreadMenuServices? _menuServices;
+
+    /// <summary>The menu commands' view of the VM: the menu runs on the front end's thread, the VM on the engine's.
+    /// </summary>
+    private sealed class EngineThreadMenuServices(InputAndWaits waits, IVmMenuServices vm) : IVmMenuServices
+    {
+        public VmMenuState MenuState => waits.Invoke(() => vm.MenuState);
+        public bool RequestMenuHideWindow() => waits.Invoke(vm.RequestMenuHideWindow);
+    }
 
     /// <summary>A menu command, as age_main_window_proc's WM_COMMAND and AGERC's agerc_menu_command run it: the shell's
     /// commands, then the window menu's.</summary>
@@ -115,7 +128,7 @@ public partial class Main
         if (_vm == null) return;
         if (ShellCommands.Find(id) is { } command)
         {
-            command.Run(Shell, _shell!, _vm);
+            command.Run(Shell, _shell!, _menuServices ??= new EngineThreadMenuServices(_waits, _vm));
             return;
         }
         switch (id)

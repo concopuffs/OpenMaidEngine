@@ -72,7 +72,7 @@ public partial class Main
             || _screenshotFolderDialog != null)
             return;
         // While op 0x142's gate is 0 the script-shared sections are read-only; native 設定 cannot open then.
-        bool readOnly = !_vm.MenuState.SystemMenuEnabled;
+        bool readOnly = !_waits.Invoke(() => _vm.MenuState).SystemMenuEnabled;
         var draft = new ShellOptionsDraft(new SettingsHost(this), _catalog.StartupSettings, readOnly);
         PortOptions opened = _portOptions.Effective;
         // 設定's OK runs agerc_settings_apply and CALLBACK_SETTING.BIN even when nothing changed; ﾊﾞｰｼﾞｮﾝ情報's OK
@@ -328,15 +328,17 @@ public partial class Main
         }
     }
 
-    /// <summary>The engine side of the panel's draft: AGE:IAGEService on the audio mixer, the VM and SYS4REG.INI.
-    /// </summary>
+    /// <summary>The engine side of the panel's draft: AGE:IAGEService on the audio mixer, the VM and SYS4REG.INI. What
+    /// it reads and changes of the natives runs on the engine thread (InputAndWaits.Invoke); SYS4REG.INI's store is
+    /// shared.</summary>
     private sealed class SettingsHost(Main main) : IShellSettingsHost
     {
         private Sys4RegIniStore? Store => main.SettingsStore;
 
-        public MessageSettings MessageSettings => main._vm?.MessageSettings ?? new MessageSettings(
-            Sys4RegIniStore.DefaultMessageSpeed, Sys4RegIniStore.DefaultMesWinAlpha,
-            Sys4RegIniStore.DefaultAutoMessageTime0, Sys4RegIniStore.DefaultAutoMessageTime1);
+        public MessageSettings MessageSettings => main._vm is { } vm
+            ? main._waits.Invoke(() => vm.MessageSettings)
+            : new MessageSettings(Sys4RegIniStore.DefaultMessageSpeed, Sys4RegIniStore.DefaultMesWinAlpha,
+                                  Sys4RegIniStore.DefaultAutoMessageTime0, Sys4RegIniStore.DefaultAutoMessageTime1);
 
         public int LoadInt(string section, string key, int defaultValue) =>
             Store?.LoadInt(section, key, defaultValue) ?? defaultValue;
@@ -356,22 +358,26 @@ public partial class Main
         public void SetTextAntialias(bool enabled)
         {
             SaveInt("message", Sys4RegIniStore.UseAntiFontKey, enabled ? 1 : 0);
-            main._text?.SetTextAntialias(enabled);
+            if (main._text is { } text) main._waits.Invoke(() => text.SetTextAntialias(enabled));
         }
 
         // The sound object starts every level at 10000; sound:VolumeN = -1 never replaces it.
-        public int Volume(int category) =>
+        public int Volume(int category) => main._waits.Invoke(() =>
             main._audio.TryGetVolume(category, out int level) && level >= 0
                 ? level
-                : AudioMixerSettings.MaximumVolume;
+                : AudioMixerSettings.MaximumVolume);
 
-        public void ApplyVolume(int category, int basisPoints) => main._audio.PreviewVolume(category, basisPoints);
+        public void ApplyVolume(int category, int basisPoints)
+            => main._waits.Invoke(() => main._audio.PreviewVolume(category, basisPoints));
 
-        public void SaveVolume(int category, int basisPoints) => main._audio.TrySetVolume(category, basisPoints);
+        public void SaveVolume(int category, int basisPoints)
+            => main._waits.Invoke(() => main._audio.TrySetVolume(category, basisPoints));
 
-        public bool RouteEnabled(int category) => main._audio.TryGetRouteEnabled(category, out bool enabled) && enabled;
+        public bool RouteEnabled(int category)
+            => main._waits.Invoke(() => main._audio.TryGetRouteEnabled(category, out bool enabled) && enabled);
 
-        public void SetRouteEnabled(int category, bool enabled) => main._audio.TrySetRouteEnabled(category, enabled);
+        public void SetRouteEnabled(int category, bool enabled)
+            => main._waits.Invoke(() => main._audio.TrySetRouteEnabled(category, enabled));
 
         public void ApplyMessageSettings(MessageSettings settings) => main._shell?.RequestMessageSettings(settings);
     }

@@ -5,10 +5,16 @@ using Ome.Engine.Sys4;
 namespace Ome.Engine.Natives;
 
 // The decoders. The engine thread opens a playback's decoder and stages it with the rates and stops it requests; the
-// front end's frame takes them in ServiceFrame and runs the decoders, which is where Godot's frame ran them before
-// (milestone 11 decides the threads).
+// front end's frame takes them in ServiceFrame and runs the decoders and their sound, whose stream device is the front
+// end's and stays on its thread (spec §5.3, part 2). The frames and completions ServiceFrame takes go to the engine
+// thread, which publishes them (PublishServiced) where native's main loop pumps its messages.
 public sealed partial class Movies
 {
+    private readonly record struct Serviced(long PlaybackId, string? Name, int AssetId, RgbaImage? Frame);
+
+    // Taken by the frame service, published by the engine thread.
+    private readonly ConcurrentQueue<Serviced> _serviced = new();
+
     // Staged by the engine thread, taken by the frame service.
     private readonly ConcurrentDictionary<long, MovieRuntime> _opened = new();
     private readonly ConcurrentDictionary<long, double> _requestedRates = new();
@@ -61,8 +67,9 @@ public sealed partial class Movies
 
     /// <summary>
     /// Once a frame, on the front end's thread: stop what the engine thread stopped, take the decoders it opened, apply
-    /// the rates, and for each playback past its start delay publish its newest frame into its surface, feed its sound,
-    /// and complete it when its decoder ends or its watchdog fires.
+    /// the rates, and for each playback past its start delay take its newest frame, feed its sound, and see it complete
+    /// when its decoder ends or its watchdog fires. The frames and completions wake the engine thread, which publishes
+    /// them (<see cref="PublishServiced"/>).
     /// </summary>
     /// <param name="renderFrame">The front end's frame number, for the log.</param>
     public void ServiceFrame(long renderFrame)
@@ -71,6 +78,7 @@ public sealed partial class Movies
         while (_requestedStops.TryDequeue(out long playbackId)) Stop(playbackId);
         AdoptOpened();
         ApplyRequestedRates();
+        bool serviced = false;
         foreach (var (playbackId, movie) in _playing)
         {
             long elapsedMs = (long)_time.GetElapsedTime(movie.StartedAtTimestamp).TotalMilliseconds;
@@ -80,7 +88,8 @@ public sealed partial class Movies
             if (frameWasAlreadySeen) audio?.Update();
             if (movie.Decoder.TryTakeFrame(out var frame))
             {
-                PublishFrame(playbackId, movie.Name, movie.AssetId, frame);
+                _serviced.Enqueue(new(playbackId, movie.Name, movie.AssetId, frame));
+                serviced = true;
                 if (_frameSeen.Add(playbackId))
                 {
                     _print($"movie first frame {movie.Name} playback={playbackId}: " +
@@ -98,8 +107,21 @@ public sealed partial class Movies
                     _print($"movie decode failed {movie.Name}: {failure}");
                 if (watchdogExpired && !movie.Decoder.IsCompleted)
                     _print($"movie completion watchdog {movie.Name}: forcing completion after {movie.WatchdogMs} ms");
-                Complete(playbackId);
+                _serviced.Enqueue(new(playbackId, null, 0, null));
+                serviced = true;
             }
+        }
+        if (serviced) _wake();
+    }
+
+    /// <summary>The engine thread: publish the frames the frame service took into their surfaces, and complete the
+    /// playbacks it saw end, in the order it took them.</summary>
+    public void PublishServiced()
+    {
+        while (_serviced.TryDequeue(out Serviced item))
+        {
+            if (item.Frame is { } frame) PublishFrame(item.PlaybackId, item.Name!, item.AssetId, frame);
+            else Complete(item.PlaybackId);
         }
     }
 

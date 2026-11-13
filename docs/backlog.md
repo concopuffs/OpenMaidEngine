@@ -219,18 +219,14 @@ still handled on their own. Each change should be behaviour-neutral and pass the
 
 - **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:991`)
   assigns fields from many partials (each native's state, since milestones 5 to 10, through its `ResetScene`), and
-  `EngineHost.ResetSceneContext` (`EngineHost.PresentationInput.cs`) does the same on the host. Scene state added
+  `InputAndWaits.ResetScene` (`Natives/InputAndWaits.cs`, the host's reset since milestone 11) does the same for the
+  waits. Scene state added
   without a line in these methods survives タイトルに戻る. That is how the host's dialog events stayed signalled until
   2026-11-10, when each was reset by hand; since milestone 9 (2026-11-13) a dialog is a request that the reset
   cancels. Done when a root reload
   rebuilds scene-lifetime state instead of clearing it, so a new field cannot be missed, and a test shows a reload
   keeps no scene state from before it. Planned: layering spec, as each native takes its state; closed at milestone
   12.
-- **Two instruction loops.** `RunFrame` (`VirtualMachine.cs:1177`) and `RunWaitCallback` (`:1676`) each run the
-  per-instruction services (`ServiceInstructionBoundary`, `ApplyIgnoredDwords`, `FrameYield`, the pace's `SkipAndAuto.PaceOp`),
-  and each maps a step's `StepResult` kind to an outcome. Until 2026-11-10 the callback loop ignored a halt and
-  skipped those services. Done when one loop serves frames and callbacks. Planned: layering spec, milestone 11
-  (spec §5.4); the typed step result came with milestone 1.
 - **No single error path.** The VM reports a fault in several ways: 57 `HaltReason` assignments, `VmHaltException`,
   the native error dialog (`ShowScriptError`), host warnings (`ReportWarning`), and exceptions that end the VM
   thread. The mod linker, the OMS compiler and the CLI each keep their own catch filters. Three of the review's bugs
@@ -240,7 +236,7 @@ still handled on their own. Each change should be behaviour-neutral and pass the
 - **VM state has no owners.** Any of the VM's files can write any field. The skip and auto-message flags were the
   most shared (`_messageSkipServiceActive` in 7 files, `_messageSkipInjected` in 5); since milestone 5 (2026-11-12)
   they are private to the skip-and-auto native, `engine/Ome.Engine/Natives/SkipAndAuto*.cs`. `_advTextWaitPolling`
-  is still used in 5. Integer-cell normalisation (under Robustness) and the bounds checks on script-controlled indices also have
+  is still used in 4. Integer-cell normalisation (under Robustness) and the bounds checks on script-controlled indices also have
   no single home. Done when each group of state is private to one type that others change through named methods:
   memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. The
   census of every field (milestone 2, `docs/superpowers/plans/2026-11-12-engine-layering.md`) names each one's owner;
@@ -248,17 +244,9 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   block (`Natives/EngineTick.cs`), since milestone 7 graphics (`Natives/Graphics*.cs`: the surface table,
   publication and the screen transition), since milestone 8 movies, and since milestone 9 (2026-11-13) the memory
   banks (`Natives/ScriptMemory*.cs`), the saves and the play clock (`Natives/SavesAndSettings*.cs`) and the menu
-  (`Natives/ShellServices*.cs`), and since milestone 10 text (`Natives/TextManager*.cs`); the waits move last
-  (milestone 11).
-- **The host's threads have no stated ownership.** Since milestone 10 (2026-11-13) `EngineHost` holds no lock
-  object: milestones 5 to 10 moved its locks (skip, delayed voice, image, screen transition, backbuffer, text) into
-  the natives with the state they guard. It still holds three `AutoResetEvent`s, a `ManualResetEventSlim`, a
-  `SemaphoreSlim` and the presentation barrier, the natives hold the locks, and nothing documents which fields each
-  lock guards or the lock order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`
-  now. Since milestone 4 (2026-11-12) the host's calls to the main thread are typed: it calls `IFrontEnd`, which
-  `Main` implements with the `CallDeferred` calls the host made before, and a drive scenario showed the same timing.
-  Done when each lock's fields and the lock order are written down (or no lock is taken under another). Planned:
-  layering spec, milestone 11.
+  (`Natives/ShellServices*.cs`), since milestone 10 text (`Natives/TextManager*.cs`), and since milestone 11 the waits
+  (`Natives/InputAndWaits*.cs`). The interpreter's input state (the callback frames, the latch, the pointer the ops
+  read) stays at the VM, as the census has it.
 - **Modal dialogs are separate fields.** `Main` keeps the 終了 dialog (`_exitConfirmation`), the script error box,
   the options panel, the screenshot folder dialog and the full-width editor in their own fields, plus a hold
   counter (`_frontendModalHolds`). Input routing, the drive `dialogs` and `answer` steps and screen-mode changes each

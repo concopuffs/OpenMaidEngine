@@ -282,6 +282,42 @@ public class ProjectBoundaryTests
     }
 
     [Fact]
+    public void TheWaitsAreTheInputAndWaitsNatives()
+    {
+        // The census (plan §4, "Input and waits") found the waits' handles and flags in the host, with the presentation
+        // waits' fields that milestones 7 and 8 left there; milestone 11 gave them to the input and waits native. The
+        // lifted host keeps no lock, wait handle or wait flag.
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        Assert.Empty(typeof(InputAndWaits).GetFields(instance).Where(field => !field.IsPrivate).Select(field => field.Name));
+        string[] census =
+        [
+            "_gate", "_inputCallbackSignal", "_frameSignal", "_stopRequested", "_rootReloadInterrupt",
+            "_frontendModalRelease", "_frontendModalHolds", "_presentationBarrier", "_presentationRequestConsumed",
+            "_synchronizeExplicitPresentation", "_explicitPresentationRequestGeneration",
+            "_consumedPresentationRequestGeneration", "_lastSynchronizedPresentationTimestamp", "_foregroundGfx",
+            "_foregroundTransitionWaitBypassed", "_transitionStartedAtMs", "_modalMovieWaiting", "_modalMovieCancelled",
+            "_modalMovieCancelPending", "_presentationWithheldByStatementBlock",
+        ];
+        Assert.Empty(typeof(EngineHost).GetFields(instance).Select(field => field.Name).Intersect(census));
+        Assert.Empty(typeof(EngineHost).GetMembers(instance).Select(member => member.Name)
+                         .Intersect(["IsWaiting", "IsTransitionWaiting", "IsSleeping", "Pages", "SleepScale"]));
+        Assert.Empty(typeof(EngineHost).GetFields(instance).Where(field =>
+            typeof(System.Threading.WaitHandle).IsAssignableFrom(field.FieldType)
+            || field.FieldType == typeof(System.Threading.SemaphoreSlim)
+            || field.FieldType == typeof(System.Threading.ManualResetEventSlim)
+            || field.FieldType == typeof(System.Threading.ReaderWriterLockSlim)
+            || field.FieldType == typeof(object)));
+        // What a game input does is the native's (InputAndWaits.Events.cs): the front end passes device events and
+        // routes none to the interpreter (the driver may still read its state). Comments may name its members.
+        string[] code = Directory.EnumerateFiles(Path.Combine(Paths.Repo, "godot"), "*.cs")
+            .SelectMany(File.ReadAllLines)
+            .Select(line => line.IndexOf("//", StringComparison.Ordinal) is int comment and >= 0 ? line[..comment] : line)
+            .ToArray();
+        foreach (MethodInfo method in typeof(IInterpreterInput).GetMethods().Where(method => !method.IsSpecialName))
+            Assert.DoesNotContain(code, line => line.Contains("_vm." + method.Name + "(", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TheShellsContractsHoldNothingANativeOwns()
     {
         // Milestone 9's done-when: the screen mode, the message toggles and the 設定 values are the shell native's, so

@@ -1,17 +1,12 @@
 using System;
-using Ome.Engine.Model;
-using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 
 namespace Ome.Engine.Hosting;
 
-// Text is the text native's (Natives/TextManager*.cs). The host keeps the reveal wait, which blocks the engine thread
-// until the native says the run is out, and its part of the page wait (EngineHost.PresentationInput.cs), until
-// milestone 11; a click, fast-forward and a stop finish the native's reveal.
+// SYS4REG.INI's [message] keys the host still carries: it seeds the Auto delays into the skip and auto native at
+// construction and writes the message settings back at shutdown.
 public sealed partial class EngineHost
 {
-    private readonly TextManager _text;
-
     /// <summary>
     /// Seed AutoMessageTime0/1 (into the skip and auto native) from the save native's SYS4REG.INI [message], native
     /// defaults when absent; the text native reads MessageSpeed, MesWinAlpha and UseAntiFont itself. Changes are written
@@ -49,26 +44,5 @@ public sealed partial class EngineHost
         {
             _frontEnd.Warn($"[settings] message settings save failed: {error.Message}");
         }
-    }
-
-    /// <summary>
-    /// The reveal wait: the engine thread services the text native's reveal at each engine tick until its last glyph is
-    /// out, a click or fast-forward finishes it, or the engine stops. Presentation is requested, not awaited: a frame
-    /// wait would make the poll late and drop boundaries.
-    /// </summary>
-    public void WaitForTextReveal(GfxState gfx, TextManager text)
-    {
-        bool scriptSuspended = SuspendScriptForPresentation();
-        try
-        {
-            _graphics.RequestPresentation();
-            while (!_stopping && text.ServiceReveal(gfx) is int waitMs)
-                WaitAndTick(_frameSignal, waitMs);
-        }
-        finally
-        {
-            ResumeScriptAfterPresentation(scriptSuspended);
-        }
-        _timeline?.State("running", new() { ["text_reveal_complete"] = true });
     }
 }

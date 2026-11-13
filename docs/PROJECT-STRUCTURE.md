@@ -241,7 +241,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       group of engine state: SkipAndAuto (Skip, Auto, read skip, fast-forward
     │                                       and its pace), Audio (the 13 channels, the BGM track and envelope, the
     │                                       voice, delayed starts, the mixer), EngineTick (the tick and the
-    │                                       statement block), Graphics (the retained objects, the surface table
+    │                                       statement block), InputAndWaits (the waits, the routing of the front
+    │                                       end's input, the engine thread's frame turns and the front end's
+    │                                       requests) with StopAndReload, Graphics (the retained objects, the surface table
     │                                       and its pixels, publication, the screen transition, the frame lowering)
     │                                       Movies (the bindings of movies to surfaces, the decoders, their
     │                                       sound, completion, the mask transitions), ScriptMemory (the five
@@ -389,16 +391,12 @@ turns requests into timed input over an `IDriveBackend`, and the loopback `Drive
 
 The runtime host is `engine/Ome.Engine/Hosting/EngineHost.cs`, lifted out of `godot/` in engine layering milestone 4
 (`docs/superpowers/specs/2026-11-12-engine-layering-design.md`); it reaches the front end only through
-`Hosting/IFrontEnd.cs`. `EngineHost.cs` retains cross-domain host coordination. Its partial-class companion
-`EngineHost.AdvText.cs` holds the reveal's wait (`IAdvHost.WaitForTextReveal`, which services the text native's
-reveal; milestone 11 moves it), seeds skip's Auto times from `SYS4REG.INI` and writes the message settings back at
-shutdown.
-`EngineHost.PresentationInput.cs` owns script/presentation synchronization, waits and timing,
-message-skip/input services, cursor and foreground waits, the waits on the graphics native's publication and screen
-transitions (milestone 11 moves them), and scene-context lifecycle coordination. `EngineHost.Movies.cs` owns op
-`0x20f`'s modal movie wait over the movie native (milestone 11 moves the waits) and the diagnostic snapshot.
-`EngineHost.Waits.cs` is the one place the host blocks: each wait runs the engine tick on every wake unless it is
-modal (engine layering spec §5.3). `Hosting/ReferenceRenderer.cs` is the reference renderer (spec §6.3): it draws a
+`Hosting/IFrontEnd.cs`. Since milestone 11 it holds no lock, wait handle or wait flag: it keeps the `IHost` members the
+VM calls, each a call to the native that does the work, and the diagnostic snapshot (`EngineHost.cs`). Its partials
+are `EngineHost.Waits.cs`, which hands every wait to the input and waits native, `EngineHost.Cursor.cs` (the AGE
+cursor of ops `0x86`, `0x87` and `0x10a`) and `EngineHost.Settings.cs` (it seeds skip's Auto times from `SYS4REG.INI`
+and writes the message settings back at shutdown). `Hosting/HostPresentationReason.cs` names why a frame is drawn
+again. Milestone 12 removes the host. `Hosting/ReferenceRenderer.cs` is the reference renderer (spec §6.3): it draws a
 frame description into its own RGBA buffer, which the front end shows, and defines what each frame item means; a
 render-target publication draws with its rules. `Hosting/BlurRangeSources.cs` is the blur-range rule the lowering
 uses.
@@ -409,8 +407,8 @@ reporting contracts, while `engine/Ome.Engine/Hosting/ILifecycleHost.cs` owns sc
 timed-deadline waiting, frame yield, and scene reset. Audio is not a host contract: the VM calls the audio native
 (below). `engine/Ome.Engine/Hosting/IMovieHost.cs` owns ordinary, positioned, mask-transition, activity-query,
 and modal movie playback contracts. `engine/Ome.Engine/Hosting/IGraphicsHost.cs` keeps the presentation ops
-that block (ops `0x222` and `0x20c`, the foreground transition wait, the four screen fades) until the waits move in
-milestone 11; the surface ops are the graphics native's. Pixel capture and replace are
+that block (ops `0x222` and `0x20c`, the foreground transition wait, the four screen fades), which the host hands to
+the input and waits native; the surface ops are the graphics native's. Pixel capture and replace are
 `engine/Ome.Engine/Hosting/ISurfacePixels.cs`, which the graphics native implements; the save thumbnails reach them
 through `engine/Ome.Engine/Persistence/NumberedSaveThumbnails.cs`. `engine/Ome.Engine/Hosting/IInputHost.cs` owns
 modal fullwidth entry, ADV waits/callback servicing, input clock, cursor resources, and skip-state interaction.
@@ -551,6 +549,17 @@ screen-mode switch launch (`TakeCallbackScript`), and ops `0x1b2`-`0x1b4`'s text
 (`Dialogs`: each a request the front end completes through `IShellDialogs`; a stop or a reset cancels it) and the
 screen mode (`ScreenMode`: every switch, `display:ScreenMode` and `ForceScreen`, op `0x2cf`'s request), which the front
 end shows through `engine/Ome.Engine.Devices/Window/IWindowDevice.cs`.
+The input and waits native `engine/Ome.Engine/Natives/InputAndWaits.cs` owns native's waits and the wait flags (run-state
+`0x80000000`, `0x400`, a sleep, op `0x20f`'s modal movie), and the engine thread (spec §5.3, "As built (milestone
+11)"). Its partials: `Blocking` is the one place a wait blocks (each wait that is not modal runs the engine tick on
+every wake); `Events` routes the front end's input as `age_main_window_proc` does, to the interpreter through
+`Natives/IInterpreterInput.cs`; `TextWait` holds the ADV input poll and the reveal's wait; `Sleep` holds the sleeps,
+the timed-callback deadline, the instruction boundary's `FrameYield` and the front end's modal hold; `Transitions`
+holds the effect and screen transition waits; `Presentation` holds the synchronized presentation and where the engine
+thread may present; `Modal` holds op `0x20f`'s movie and the dialog waits; `Turns` holds the engine thread
+(`RunEngine`), the front end's frame turn (`RunFrameTurn`, which returns the frame description to draw) and its
+requests (`Invoke`, `TryInvoke`). `Natives/StopAndReload.cs` holds the stop and the return to title, one copy for the
+waits and the interpreter; `Natives/IWaitListener.cs` tells the front end of the text waits' pages.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state

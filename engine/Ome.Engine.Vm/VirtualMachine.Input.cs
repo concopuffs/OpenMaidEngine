@@ -1,9 +1,12 @@
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 
 namespace Ome.Engine.Vm;
 
-public sealed partial class VirtualMachine
+// The interpreter's side of the input routing (IInterpreterInput): the input and waits native routes each device input
+// to these members.
+public sealed partial class VirtualMachine : IInterpreterInput
 {
     // The op-0xcc mouse callback is engine state, not frame state (op 0xcd checks the registrant).
     private int _mouseCallbackTarget = -1;
@@ -55,13 +58,10 @@ public sealed partial class VirtualMachine
         // direct-scene runs reach this: they force the scene's developer-loop 0x93 at 0x622. On retail
         // paths every 0x93 is re-registered before a text wait (2026-11-04; docs/backlog.md).
         bool wakeAtWait = false;
-        lock (_interactiveLock)
+        if (_cur.Hotspots.HasDefinitions && !_cur.Hotspots.Armed)
         {
-            if (_cur.Hotspots.HasDefinitions && !_cur.Hotspots.Armed)
-            {
-                _interactiveFrame = _cur;
-                wakeAtWait = _cur.Hotspots.Arm(_pointerX, _pointerY);
-            }
+            _interactiveFrame = _cur;
+            wakeAtWait = _cur.Hotspots.Arm(_pointerX, _pointerY);
         }
         if (wakeAtWait) _host.WakeInputCallbackService();
         WaitAtAdvInputPoll((int)Read(a[0]), textPage: true);
@@ -72,20 +72,16 @@ public sealed partial class VirtualMachine
     private StepResult OpRegisterHotspotCallbacks(Instruction ins, int pc)
     {
         var a = ins.Args;
-        lock (_interactiveLock)
-            _cur.Hotspots.Register((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
-                                   (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]));
+        _cur.Hotspots.Register((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
+                               (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]));
         return StepResult.Next;
     }
 
     // 0x93
     private StepResult OpCancelHotspotWait(Instruction ins, int pc)
     {
-        lock (_interactiveLock)
-        {
-            _cur.Hotspots.Reset();
-            if (ReferenceEquals(_interactiveFrame, _cur)) _interactiveFrame = null;
-        }
+        _cur.Hotspots.Reset();
+        if (ReferenceEquals(_interactiveFrame, _cur)) _interactiveFrame = null;
         return StepResult.Next;
     }
 
@@ -93,11 +89,8 @@ public sealed partial class VirtualMachine
     private StepResult OpArmHotspotWait(Instruction ins, int pc)
     {
         bool wake;
-        lock (_interactiveLock)
-        {
-            _interactiveFrame = _cur;
-            wake = _cur.Hotspots.Arm(_pointerX, _pointerY);
-        }
+        _interactiveFrame = _cur;
+        wake = _cur.Hotspots.Arm(_pointerX, _pointerY);
         if (wake) _host.WakeInputCallbackService();
         return StepResult.Next;
     }
@@ -106,9 +99,8 @@ public sealed partial class VirtualMachine
     private StepResult OpBindHotspotKey(Instruction ins, int pc)
     {
         var a = ins.Args;
-        lock (_interactiveLock)
-            _cur.Hotspots.BindKey((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
-                                  (int)Read(a[3]), (int)Read(a[4]));
+        _cur.Hotspots.BindKey((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
+                              (int)Read(a[3]), (int)Read(a[4]));
         return StepResult.Next;
     }
 
@@ -135,7 +127,7 @@ public sealed partial class VirtualMachine
         _mouseCallbackOwner = _cur.Script;
         _mouseCallbackIntervalMs = System.Math.Max(0, Read(a[0]));
         _mouseCallbackArmedAtMs = _host.InputClockMilliseconds;
-        lock (_interactiveLock) _rawInputFrame = _cur;
+        _rawInputFrame = _cur;
         return StepResult.Next;
     }
 
@@ -251,7 +243,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int x, y;
-        lock (_interactiveLock) { x = _pointerX; y = _pointerY; }
+        x = _pointerX; y = _pointerY;
         Write(a[0], x == int.MinValue ? 0 : x);
         Write(a[1], y == int.MinValue ? 0 : y);
         return StepResult.Next;
@@ -289,17 +281,4 @@ public sealed partial class VirtualMachine
         }
         return StepResult.Next;
     }
-}
-
-/// <summary>Where <see cref="VirtualMachine.ApplyMouseWheel"/> sent one wheel delta.</summary>
-public enum MouseWheelOutcome
-{
-    /// <summary>Accumulated for op 0x10d.</summary>
-    Accumulated,
-    /// <summary>Queued the hotspot callback bound to the wheel's logical action.</summary>
-    Activated,
-    /// <summary>The frontend should advance the page or finish the text reveal, as a click does.</summary>
-    Advance,
-    /// <summary>Consumed with no effect.</summary>
-    Dropped,
 }

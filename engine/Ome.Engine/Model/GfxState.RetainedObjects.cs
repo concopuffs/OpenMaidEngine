@@ -124,103 +124,82 @@ public sealed partial class GfxState
 
     public GfxObject GetOrCreate(long handle)
     {
-        // Locked: called from the VM thread (directly by geometry/animation ops and inside BindDraw/anim
-        // ops) while the main-thread compositor enumerates _objects in SnapshotVisibleObjects. _lock is re-entrant
-        // (Monitor) so the callers that already hold it are fine.
-        lock (_lock)
+        if (!_objects.TryGetValue(handle, out var o))
         {
-            if (!_objects.TryGetValue(handle, out var o))
-            {
-                o = new GfxObject();
-                _objects[handle] = o;
-                InsertOrderedHandle(handle);
-            }
-            CurrentObject = handle;
-            MarkRetainedMutation();
-            return o;
+            o = new GfxObject();
+            _objects[handle] = o;
+            InsertOrderedHandle(handle);
         }
+        CurrentObject = handle;
+        MarkRetainedMutation();
+        return o;
     }
 
     public void SetDefaultObjectSlot(int slot)
     {
-        lock (_lock) DefaultObjectSlot = slot;
+        DefaultObjectSlot = slot;
     }
 
 
     public void SetObjectAnchor(long handle, (long X, long Y, long Z) anchor)
     {
-        lock (_lock) GetOrCreate(handle).V18 = anchor;
+        GetOrCreate(handle).V18 = anchor;
     }
 
     public void SetObjectPosition(long handle, (long X, long Y, long Z) position)
     {
-        lock (_lock) GetOrCreate(handle).V24 = position;
+        GetOrCreate(handle).V24 = position;
     }
 
     /// <summary>Op 0x229: reset the embedded range transform, select [first, first+count), and set its
     /// anchor/pivot. This does not create or mutate an ordinary retained object.</summary>
     public void SetRangeTransform(long first, long count, (long X, long Y, long Z) anchor)
     {
-        lock (_lock)
-        {
-            _rangeTransformFirst = first;
-            _rangeTransformCount = System.Math.Max(0, count);
-            _rangeTransform = new GfxObject { V18 = anchor };
-            MarkRetainedMutation();
-        }
+        _rangeTransformFirst = first;
+        _rangeTransformCount = System.Math.Max(0, count);
+        _rangeTransform = new GfxObject { V18 = anchor };
+        MarkRetainedMutation();
     }
 
     /// <summary>Op 0x22a: immediately replace the embedded range transform's current scale.</summary>
     public void SetRangeScaleCurrent((long X, long Y, long Z) percent)
     {
-        lock (_lock)
-        {
-            _rangeTransform.TransformMarked = true;   // owner+0x490, the embedded record's +0x68
-            _rangeTransform.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
-            MarkRetainedMutation();
-        }
+        _rangeTransform.TransformMarked = true;   // owner+0x490, the embedded record's +0x68
+        _rangeTransform.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+        MarkRetainedMutation();
     }
 
     /// <summary>Op 0x22c: immediately replace the embedded range transform's current translation.</summary>
     public void SetRangeTranslationCurrent((long X, long Y, long Z) translation)
     {
-        lock (_lock)
-        {
-            _rangeTransform.TransformMarked = true;
-            _rangeTransform.TranslationCurrent = translation;
-            MarkRetainedMutation();
-        }
+        _rangeTransform.TransformMarked = true;
+        _rangeTransform.TranslationCurrent = translation;
+        MarkRetainedMutation();
     }
 
     /// <summary>Op 0x22d: arm the range transform's delayed one-shot scale target.</summary>
     public void SetRangeScaleChannel(long delayMs, long durationMs, (long X, long Y, long Z) percent)
     {
-        lock (_lock)
-        {
-            _rangeTransform.TransformMarked = true;
-            _rangeTransform.ScaleDelayMs = delayMs;
-            _rangeTransform.ScaleDurationMs = durationMs;
-            _rangeTransform.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
-            _rangeTransform.ScaleEnabled = durationMs > 0;
-            _rangeTransform.OneShotStartMs = -1;
-            MarkRetainedMutation();
-        }
+        _rangeTransform.TransformMarked = true;
+        _rangeTransform.ScaleDelayMs = delayMs;
+        _rangeTransform.ScaleDurationMs = durationMs;
+        _rangeTransform.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+        _rangeTransform.ScaleEnabled = durationMs > 0;
+        _rangeTransform.OneShotStartMs = -1;
+        MarkRetainedMutation();
     }
 
     /// <summary>Op 0x22e: arm the range transform's delayed one-shot axis-angle rotation target.</summary>
     public void SetRangeRotationChannel(long delayMs, long durationMs,
                                         (long X, long Y, long Z) axis, long angleDegrees)
     {
-        lock (_lock)
-        {
-            _rangeTransform.TransformMarked = true;
-            _rangeTransform.RotationDelayMs = delayMs;
-            _rangeTransform.RotationDurationMs = durationMs;
-            _rangeTransform.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
-            _rangeTransform.RotationChannelEnabled = durationMs > 0;
-            _rangeTransform.OneShotStartMs = -1;
-            MarkRetainedMutation();
-        }
+        _rangeTransform.TransformMarked = true;
+        _rangeTransform.RotationDelayMs = delayMs;
+        _rangeTransform.RotationDurationMs = durationMs;
+        _rangeTransform.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
+        _rangeTransform.RotationChannelEnabled = durationMs > 0;
+        _rangeTransform.OneShotStartMs = -1;
+        MarkRetainedMutation();
     }
 
     /// <summary>Op 0x22f: arm the selected retained-gfx range transform's delayed one-shot
@@ -229,90 +208,77 @@ public sealed partial class GfxState
     public void SetRangeTranslationChannel(long delayMs, long durationMs,
                                            (long X, long Y, long Z) target)
     {
-        lock (_lock)
-        {
-            _rangeTransform.TransformMarked = true;
-            _rangeTransform.TranslationDelayMs = delayMs;
-            _rangeTransform.TranslationDurationMs = durationMs;
-            _rangeTransform.TranslationTarget = target;
-            _rangeTransform.TranslationEnabled = durationMs > 0;
-            _rangeTransform.OneShotStartMs = -1;
-            MarkRetainedMutation();
-        }
+        _rangeTransform.TransformMarked = true;
+        _rangeTransform.TranslationDelayMs = delayMs;
+        _rangeTransform.TranslationDurationMs = durationMs;
+        _rangeTransform.TranslationTarget = target;
+        _rangeTransform.TranslationEnabled = durationMs > 0;
+        _rangeTransform.OneShotStartMs = -1;
+        MarkRetainedMutation();
     }
 
     /// <summary>Op 0x21d: clone the native 0x2d4-byte retained-object record from source to destination.</summary>
     public bool CloneObject(long sourceHandle, long destinationHandle)
     {
-        lock (_lock)
-        {
-            if (!_objects.TryGetValue(sourceHandle, out var s)) return false;
-            bool destinationIsNew = !_objects.ContainsKey(destinationHandle);
-            _objects[destinationHandle] = CloneState(s);
-            if (destinationIsNew) InsertOrderedHandle(destinationHandle);
-            CurrentObject = destinationHandle;
-            MarkRetainedMutation();
-            return true;
-        }
+        if (!_objects.TryGetValue(sourceHandle, out var s)) return false;
+        bool destinationIsNew = !_objects.ContainsKey(destinationHandle);
+        _objects[destinationHandle] = CloneState(s);
+        if (destinationIsNew) InsertOrderedHandle(destinationHandle);
+        CurrentObject = destinationHandle;
+        MarkRetainedMutation();
+        return true;
     }
 
     /// <summary>Op 0x214: exchange the complete retained-object records at two handles. If exactly
     /// one handle exists, move its record to the missing handle; if neither exists, retain no records.</summary>
     public void SwapObjects(long firstHandle, long secondHandle)
     {
-        lock (_lock)
+        if (firstHandle == secondHandle)
         {
-            if (firstHandle == secondHandle)
-            {
-                MarkRetainedMutation();
-                return;
-            }
-
-            bool hasFirst = _objects.TryGetValue(firstHandle, out var first);
-            bool hasSecond = _objects.TryGetValue(secondHandle, out var second);
-            if (hasFirst && hasSecond)
-            {
-                _objects[firstHandle] = CloneState(second!);
-                _objects[secondHandle] = CloneState(first!);
-            }
-            else if (hasFirst)
-            {
-                _objects.Remove(firstHandle);
-                _objects[secondHandle] = CloneState(first!);
-                RemoveOrderedHandle(firstHandle);
-                InsertOrderedHandle(secondHandle);
-            }
-            else if (hasSecond)
-            {
-                _objects.Remove(secondHandle);
-                _objects[firstHandle] = CloneState(second!);
-                RemoveOrderedHandle(secondHandle);
-                InsertOrderedHandle(firstHandle);
-            }
             MarkRetainedMutation();
+            return;
         }
+
+        bool hasFirst = _objects.TryGetValue(firstHandle, out var first);
+        bool hasSecond = _objects.TryGetValue(secondHandle, out var second);
+        if (hasFirst && hasSecond)
+        {
+            _objects[firstHandle] = CloneState(second!);
+            _objects[secondHandle] = CloneState(first!);
+        }
+        else if (hasFirst)
+        {
+            _objects.Remove(firstHandle);
+            _objects[secondHandle] = CloneState(first!);
+            RemoveOrderedHandle(firstHandle);
+            InsertOrderedHandle(secondHandle);
+        }
+        else if (hasSecond)
+        {
+            _objects.Remove(secondHandle);
+            _objects[firstHandle] = CloneState(second!);
+            RemoveOrderedHandle(secondHandle);
+            InsertOrderedHandle(firstHandle);
+        }
+        MarkRetainedMutation();
     }
 
-    /// <summary>The live object, for the VM thread. Another thread must use <see cref="TryGetSourceSlot"/>: the
-    /// object's fields change under the VM.</summary>
+    /// <summary>The live object.</summary>
     public GfxObject? TryGet(long handle)
     {
-        lock (_lock) return _objects.TryGetValue(handle, out var o) ? o : null;
+        return _objects.TryGetValue(handle, out var o) ? o : null;
     }
 
-    /// <summary>A present object's source slot (obj+4), read under the lock; safe from the presentation thread.</summary>
+    /// <summary>A present object's source slot (obj+4).</summary>
     public bool TryGetSourceSlot(long handle, out int slot)
     {
-        lock (_lock)
+        if (_objects.TryGetValue(handle, out var o))
         {
-            if (_objects.TryGetValue(handle, out var o))
-            {
-                slot = o.SourceSlot;
-                return true;
-            }
-            slot = 0;
-            return false;
+            slot = o.SourceSlot;
+            return true;
         }
+        slot = 0;
+        return false;
     }
 
     /// <summary>Op 0x215: look up <paramref name="handle"/> in the retained gfx-object map and return obj+4,
@@ -323,8 +289,7 @@ public sealed partial class GfxState
     /// slot 0 by default, for any present object.</summary>
     public int QuerySlot(long handle, bool unboundReadsAbsent = false)
     {
-        lock (_lock)
-            return _objects.TryGetValue(handle, out var o) && (o.Visible || !unboundReadsAbsent) ? o.SourceSlot : -1;
+        return _objects.TryGetValue(handle, out var o) && (o.Visible || !unboundReadsAbsent) ? o.SourceSlot : -1;
     }
 
     /// <summary>Opcode 0x216 reads the live surface record's resource id (owner+0x700), not an object field or the
@@ -336,31 +301,25 @@ public sealed partial class GfxState
     /// unrelated manager memory, which is not modeled.</summary>
     public long QueryField(long idx)
     {
-        lock (_lock)
-        {
-            if (idx is >= 0 and < SurfaceRecordCount)
-                return _surfaceRecords[(int)idx * SurfaceRecordDwords + RecordResourceId];
-            if (idx is >= SurfaceRecordCount and < 2 * SurfaceRecordCount)
-                return _surfaceRecordSnapshot[((int)idx - SurfaceRecordCount) * SurfaceRecordDwords + RecordResourceId];
-            return idx == -1 ? 0 : -1;
-        }
+        if (idx is >= 0 and < SurfaceRecordCount)
+            return _surfaceRecords[(int)idx * SurfaceRecordDwords + RecordResourceId];
+        if (idx is >= SurfaceRecordCount and < 2 * SurfaceRecordCount)
+            return _surfaceRecordSnapshot[((int)idx - SurfaceRecordCount) * SurfaceRecordDwords + RecordResourceId];
+        return idx == -1 ? 0 : -1;
     }
 
     public void Release(long handle)
     {
-        lock (_lock)   // re-entrant: EraseRange already holds _lock
+        bool removedTransition = _radialBlurTransitions.Remove(handle)
+                                 | _directionalBlurTransitions.Remove(handle)
+                                 | _patternedSurfaceTransitions.Remove(handle);
+        if (_objects.Remove(handle))
         {
-            bool removedTransition = _radialBlurTransitions.Remove(handle)
-                                     | _directionalBlurTransitions.Remove(handle)
-                                     | _patternedSurfaceTransitions.Remove(handle);
-            if (_objects.Remove(handle))
-            {
-                int index = _orderedObjectHandles.BinarySearch(handle);
-                if (index >= 0) _orderedObjectHandles.RemoveAt(index);
-                MarkRetainedMutation();
-            }
-            else if (removedTransition) MarkRetainedMutation();
+            int index = _orderedObjectHandles.BinarySearch(handle);
+            if (index >= 0) _orderedObjectHandles.RemoveAt(index);
+            MarkRetainedMutation();
         }
+        else if (removedTransition) MarkRetainedMutation();
     }
 
     /// <summary>Op 0x1f7 semantics (native gfx_object_erase_range @0x47d8b0): erase handles in
@@ -370,31 +329,25 @@ public sealed partial class GfxState
     {
         // Retained-object cleanup (native gfx_object_erase): removes the object from the map, so it stops
         // compositing next frame. Faithful to the engine (the render loop iterates the retained-object map).
-        lock (_lock)
-        {
-            if (count > 1) for (long i = handle; i < handle + count; i++) Release(i);
-            else Release(handle);
-        }
+        if (count > 1) for (long i = handle; i < handle + count; i++) Release(i);
+        else Release(handle);
     }
 
     /// <summary>Op 0x1f6: clear every retained gfx-object record without releasing surface resources.</summary>
     public void ClearRetainedObjects()
     {
-        lock (_lock)
-        {
-            _objects.Clear();
-            _orderedObjectHandles.Clear();
-            _radialBlurTransitions.Clear();
-            _directionalBlurTransitions.Clear();
-            _patternedSurfaceTransitions.Clear();
-            CurrentObject = 0;
-            ClearAnimationServiceForObjectClear();
-            MarkRetainedMutation();
-        }
+        _objects.Clear();
+        _orderedObjectHandles.Clear();
+        _radialBlurTransitions.Clear();
+        _directionalBlurTransitions.Clear();
+        _patternedSurfaceTransitions.Clear();
+        CurrentObject = 0;
+        ClearAnimationServiceForObjectClear();
+        MarkRetainedMutation();
     }
 
     /// <summary>retained_gfx_objects_clear@0x47cab0 (op 0x1f6 and scene_context_init_reset): op 0x238's window
-    /// ends, and the service flags clear only when bit 16 asks. Caller holds the lock.</summary>
+    /// ends, and the service flags clear only when bit 16 asks.</summary>
     private void ClearAnimationServiceForObjectClear()
     {
         AnimClockDurationTicks = 0;
@@ -444,12 +397,9 @@ public sealed partial class GfxState
     /// <paramref name="slot"/>'s rect at (dstX,dstY) and becomes visible.</summary>
     public void BindDraw(long handle, int slot, int sx, int sy, int w, int h, int dstX, int dstY)
     {
-        lock (_lock)
-        {
-            var o = GetOrCreate(handle);
-            o.SourceSlot = slot; o.SrcRect = (sx, sy, w, h); o.SrcCollapsed = false; o.V24 = (dstX, dstY, 0); o.Visible = true;
-            o.PostBindStaticColorBlend = false;
-        }
+        var o = GetOrCreate(handle);
+        o.SourceSlot = slot; o.SrcRect = (sx, sy, w, h); o.SrcCollapsed = false; o.V24 = (dstX, dstY, 0); o.Visible = true;
+        o.PostBindStaticColorBlend = false;
     }
 
     /// <summary>Ops 0x13a/0x2da: replace one of eleven safely isolated handler-addressable styles.
@@ -459,14 +409,11 @@ public sealed partial class GfxState
                                           int sourceCellSpacing = 0,
                                           int destinationCellSpacing = 0)
     {
-        lock (_lock)
-        {
-            if ((uint)styleIndex >= (uint)_numericGlyphStyles.Length) return false;
-            _numericGlyphStyles[styleIndex] =
-                new NumericGlyphStyle(surfaceSlot, atlasX, atlasY, digitWidth, digitHeight,
-                                      sourceCellSpacing, destinationCellSpacing);
-            return true;
-        }
+        if ((uint)styleIndex >= (uint)_numericGlyphStyles.Length) return false;
+        _numericGlyphStyles[styleIndex] =
+            new NumericGlyphStyle(surfaceSlot, atlasX, atlasY, digitWidth, digitHeight,
+                                  sourceCellSpacing, destinationCellSpacing);
+        return true;
     }
 
     /// <summary>Op 0x23b: erase a destination handle range, split a signed 32-bit value into decimal
@@ -475,57 +422,54 @@ public sealed partial class GfxState
     public bool DrawDecimalGlyphs(long baseHandle, int styleIndex, int value, int x, int y,
                                   int digitCapacity, int flags)
     {
-        lock (_lock)
+        if ((uint)styleIndex >= (uint)_numericGlyphStyles.Length
+            || !_numericGlyphStyles[styleIndex].Registered) return false;
+
+        NumericGlyphStyle style = _numericGlyphStyles[styleIndex];
+        EraseRange(baseHandle, digitCapacity);
+        int sourceCellAdvance = unchecked(style.DigitWidth + style.SourceCellSpacing);
+        int destinationCellAdvance =
+            unchecked(style.DigitWidth + style.DestinationCellSpacing);
+
+        int remaining = value;
+        int handleOffset = 0;
+        int digitCount = 1;
+        for (int n = remaining / 10; n != 0; n /= 10) digitCount++;
+
+        for (int slot = digitCapacity - 1; slot >= 0; slot--)
         {
-            if ((uint)styleIndex >= (uint)_numericGlyphStyles.Length
-                || !_numericGlyphStyles[styleIndex].Registered) return false;
+            int digit = remaining % 10;
+            int drawX;
+            bool draw;
 
-            NumericGlyphStyle style = _numericGlyphStyles[styleIndex];
-            EraseRange(baseHandle, digitCapacity);
-            int sourceCellAdvance = unchecked(style.DigitWidth + style.SourceCellSpacing);
-            int destinationCellAdvance =
-                unchecked(style.DigitWidth + style.DestinationCellSpacing);
-
-            int remaining = value;
-            int handleOffset = 0;
-            int digitCount = 1;
-            for (int n = remaining / 10; n != 0; n /= 10) digitCount++;
-
-            for (int slot = digitCapacity - 1; slot >= 0; slot--)
+            if ((flags & 0x2) != 0)
             {
-                int digit = remaining % 10;
-                int drawX;
-                bool draw;
-
-                if ((flags & 0x2) != 0)
-                {
-                    draw = slot == digitCapacity - 1 || remaining != 0;
-                    drawX = unchecked(x + destinationCellAdvance * slot
-                        - (digitCapacity - digitCount) * destinationCellAdvance / 2);
-                }
-                else if ((flags & 0x4) != 0)
-                {
-                    digitCount--;
-                    draw = slot == digitCapacity - 1 || remaining != 0;
-                    drawX = unchecked(x + destinationCellAdvance * digitCount);
-                }
-                else
-                {
-                    draw = (flags & 0x1) != 0 || slot == digitCapacity - 1 || remaining != 0;
-                    drawX = unchecked(x + destinationCellAdvance * slot);
-                }
-
-                if (draw)
-                {
-                    int srcX = unchecked(style.AtlasX + digit * sourceCellAdvance);
-                    BindDraw(baseHandle + handleOffset, style.SurfaceSlot,
-                             srcX, style.AtlasY, style.DigitWidth, style.DigitHeight, drawX, y);
-                    handleOffset++;
-                }
-                remaining /= 10;
+                draw = slot == digitCapacity - 1 || remaining != 0;
+                drawX = unchecked(x + destinationCellAdvance * slot
+                    - (digitCapacity - digitCount) * destinationCellAdvance / 2);
             }
-            return true;
+            else if ((flags & 0x4) != 0)
+            {
+                digitCount--;
+                draw = slot == digitCapacity - 1 || remaining != 0;
+                drawX = unchecked(x + destinationCellAdvance * digitCount);
+            }
+            else
+            {
+                draw = (flags & 0x1) != 0 || slot == digitCapacity - 1 || remaining != 0;
+                drawX = unchecked(x + destinationCellAdvance * slot);
+            }
+
+            if (draw)
+            {
+                int srcX = unchecked(style.AtlasX + digit * sourceCellAdvance);
+                BindDraw(baseHandle + handleOffset, style.SurfaceSlot,
+                         srcX, style.AtlasY, style.DigitWidth, style.DigitHeight, drawX, y);
+                handleOffset++;
+            }
+            remaining /= 10;
         }
+        return true;
     }
 
     private void InsertOrderedHandle(long handle)

@@ -72,55 +72,46 @@ public sealed partial class GfxState
     /// transition and composite workers all set the created flag (+0x10) on their destination.</summary>
     public void MarkSurfaceContentWritten(int slot)
     {
-        lock (_lock) WriteSurfaceRecord(slot, RecordCreated, 1);
+        WriteSurfaceRecord(slot, RecordCreated, 1);
     }
 
     /// <summary>Record a gfx_surface_create_blank whose pixels the host owns (op 0x70's layout surface, a
     /// missing 0x223/0x24f target): resource id -1, created flag 1.</summary>
     public void RecordBlankSurfaceCreated(int slot)
     {
-        lock (_lock)
-        {
-            WriteSurfaceRecord(slot, RecordResourceId, -1);
-            WriteSurfaceRecord(slot, RecordCreated, 1);
-        }
+        WriteSurfaceRecord(slot, RecordResourceId, -1);
+        WriteSurfaceRecord(slot, RecordCreated, 1);
     }
 
     /// <summary>The 0x223/0x24f producers create their target surface only when the slot is empty (or
     /// sized differently, which this model cannot see).</summary>
     public void RecordTransitionTargetCreated(int slot)
     {
-        lock (_lock)
-        {
-            if (_surfaces.ContainsKey(slot)) return;
-            WriteSurfaceRecord(slot, RecordResourceId, -1);
-            WriteSurfaceRecord(slot, RecordCreated, 1);
-        }
+        if (_surfaces.ContainsKey(slot)) return;
+        WriteSurfaceRecord(slot, RecordResourceId, -1);
+        WriteSurfaceRecord(slot, RecordCreated, 1);
     }
 
     /// <summary>Op 0x71: copy the live surface records into the page snapshot that numbered saves write
     /// (op_0x71_reset_adv_text_layout@0x41e540 memcpy ctx+0x46d14 -> ctx+0x4bb34).</summary>
     public void SnapshotSurfaceRecords()
     {
-        lock (_lock) Array.Copy(_surfaceRecords, _surfaceRecordSnapshot, _surfaceRecords.Length);
+        Array.Copy(_surfaceRecords, _surfaceRecordSnapshot, _surfaceRecords.Length);
     }
 
     /// <summary>The 20,000 snapshot bytes context_state_serialize copies into a numbered save.</summary>
     public byte[] CaptureNativeSurfaceRecords()
     {
-        lock (_lock)
-        {
-            var bytes = new byte[_surfaceRecordSnapshot.Length * 4];
-            Buffer.BlockCopy(_surfaceRecordSnapshot, 0, bytes, 0, bytes.Length);
-            return bytes;
-        }
+        var bytes = new byte[_surfaceRecordSnapshot.Length * 4];
+        Buffer.BlockCopy(_surfaceRecordSnapshot, 0, bytes, 0, bytes.Length);
+        return bytes;
     }
 
     public void SetTiledSurfaceEdgeLength(long edgeLength)
     {
         // Native stores the complete operand in one signed dword. It does not invalidate or rebuild
         // already-created mode-1 surfaces, nor does it mark the retained compositor dirty.
-        lock (_lock) TiledSurfaceEdgeLength = unchecked((int)edgeLength);
+        TiledSurfaceEdgeLength = unchecked((int)edgeLength);
     }
 
     /// <summary>Ops 0x1f9 (mode 0) and 0x249 (<paramref name="rawTextureMode"/>, mode 1). Like
@@ -128,16 +119,13 @@ public sealed partial class GfxState
     /// a cleared created flag; the reload flag is left alone.</summary>
     public void SetSurface(int slot, long resId, long colorKey, bool rawTextureMode = false)
     {
-        lock (_lock)
-        {
-            WriteSurfaceRecord(slot, RecordResourceId, rawTextureMode ? -1 : unchecked((int)resId));
-            WriteSurfaceRecord(slot, RecordColorKey, PackNativeSurfaceColorKey(colorKey));
-            WriteSurfaceRecord(slot, RecordCreated, 0);
-            _surfaces[slot] = (resId, colorKey);
-            _createdSurfaces.Remove(slot);
-            _movieStopTimesMs.Remove(slot);
-            MarkRetainedMutation();
-        }
+        WriteSurfaceRecord(slot, RecordResourceId, rawTextureMode ? -1 : unchecked((int)resId));
+        WriteSurfaceRecord(slot, RecordColorKey, PackNativeSurfaceColorKey(colorKey));
+        WriteSurfaceRecord(slot, RecordCreated, 0);
+        _surfaces[slot] = (resId, colorKey);
+        _createdSurfaces.Remove(slot);
+        _movieStopTimesMs.Remove(slot);
+        MarkRetainedMutation();
     }
 
     /// <summary>Op 0x258 (gfx_surface_set_persistence_flags@0x4159c0): bit 0 replaces the record +0x08
@@ -145,30 +133,24 @@ public sealed partial class GfxState
     /// separate from loading a texture because AGE's create/load/release workers preserve both.</summary>
     public void SetSurfacePersistenceFlags(int slot, long flags)
     {
-        lock (_lock)
-        {
-            if ((flags & 1) != 0) _reloadableSurfaces.Add(slot);
-            else _reloadableSurfaces.Remove(slot);
-            if ((uint)slot >= SurfaceRecordCount) return;
-            int at = slot * SurfaceRecordDwords;
-            _surfaceRecords[at + RecordReload] = _surfaceRecordSnapshot[at + RecordReload] = (int)(flags & 1);
-            _surfaceRecords[at + RecordPolicy] = _surfaceRecordSnapshot[at + RecordPolicy] =
-                (int)((flags >> 1) & 1);
-        }
+        if ((flags & 1) != 0) _reloadableSurfaces.Add(slot);
+        else _reloadableSurfaces.Remove(slot);
+        if ((uint)slot >= SurfaceRecordCount) return;
+        int at = slot * SurfaceRecordDwords;
+        _surfaceRecords[at + RecordReload] = _surfaceRecordSnapshot[at + RecordReload] = (int)(flags & 1);
+        _surfaceRecords[at + RecordPolicy] = _surfaceRecordSnapshot[at + RecordPolicy] =
+            (int)((flags >> 1) & 1);
     }
 
     /// <summary>Opcode 0x259 script-entry lifecycle: clear record +0x08 and +0x0c for every surface in
     /// both tables.</summary>
     public void ClearSurfaceReloadPolicies()
     {
-        lock (_lock)
+        _reloadableSurfaces.Clear();
+        for (int at = 0; at < _surfaceRecords.Length; at += SurfaceRecordDwords)
         {
-            _reloadableSurfaces.Clear();
-            for (int at = 0; at < _surfaceRecords.Length; at += SurfaceRecordDwords)
-            {
-                _surfaceRecords[at + RecordReload] = _surfaceRecordSnapshot[at + RecordReload] = 0;
-                _surfaceRecords[at + RecordPolicy] = _surfaceRecordSnapshot[at + RecordPolicy] = 0;
-            }
+            _surfaceRecords[at + RecordReload] = _surfaceRecordSnapshot[at + RecordReload] = 0;
+            _surfaceRecords[at + RecordPolicy] = _surfaceRecordSnapshot[at + RecordPolicy] = 0;
         }
     }
 
@@ -176,70 +158,61 @@ public sealed partial class GfxState
     /// deliberately distinguishes a movie surface with unavailable metadata from an empty movie slot.</summary>
     public void SetMovieStopTime(int slot, long? stopTimeMs)
     {
-        lock (_lock) _movieStopTimesMs[slot] = stopTimeMs;
+        _movieStopTimesMs[slot] = stopTimeMs;
     }
 
     /// <summary>Op 0x23f query. False means no movie object occupies the slot; true with a null value
     /// means the movie exists but its stop-time query failed or returned unusable metadata.</summary>
     public bool TryGetMovieStopTime(int slot, out long? stopTimeMs)
     {
-        lock (_lock) return _movieStopTimesMs.TryGetValue(slot, out stopTimeMs);
+        return _movieStopTimesMs.TryGetValue(slot, out stopTimeMs);
     }
 
     /// <summary>Op 0x20d: select a surface as the D3D render target; values at or above 1000 restore the
     /// device backbuffer in the native engine.</summary>
     public void SelectRenderTarget(long slot)
     {
-        lock (_lock) CurrentRenderTargetSlot = slot is >= 0 and < 1000 ? (int)slot : -1;
+        CurrentRenderTargetSlot = slot is >= 0 and < 1000 ? (int)slot : -1;
     }
 
     /// <summary>Op 0x23d: release the transient surface range while retaining system-owned low slots.</summary>
     public void ReleaseSurfaceRange(int firstSlot, int count)
     {
-        lock (_lock)
+        int end = checked(firstSlot + count);
+        for (int slot = firstSlot; slot < end; slot++)
         {
-            int end = checked(firstSlot + count);
-            for (int slot = firstSlot; slot < end; slot++)
-            {
-                WriteSurfaceRecord(slot, RecordResourceId, -1);   // retained_gfx_release_surface
-                _surfaces.Remove(slot);
-                _createdSurfaces.Remove(slot);
-                _movieStopTimesMs.Remove(slot);
-                _surfaceTransitions.Remove(slot);
-                _movieMaskTransitions.Remove(slot);
-            }
-            if (CurrentRenderTargetSlot >= firstSlot && CurrentRenderTargetSlot < end)
-                CurrentRenderTargetSlot = -1;
-            MarkRetainedMutation();
+            WriteSurfaceRecord(slot, RecordResourceId, -1);   // retained_gfx_release_surface
+            _surfaces.Remove(slot);
+            _createdSurfaces.Remove(slot);
+            _movieStopTimesMs.Remove(slot);
+            _surfaceTransitions.Remove(slot);
+            _movieMaskTransitions.Remove(slot);
         }
+        if (CurrentRenderTargetSlot >= firstSlot && CurrentRenderTargetSlot < end)
+            CurrentRenderTargetSlot = -1;
+        MarkRetainedMutation();
     }
 
     public void CreateSurface(int slot)
     {
-        lock (_lock)
-        {
-            WriteSurfaceRecord(slot, RecordResourceId, -1);   // gfx_surface_create_blank@0x477370
-            WriteSurfaceRecord(slot, RecordCreated, 1);
-            _surfaces[slot] = (0, -1); // create-texture: real mutable pixels, no asset id or color key
-            _createdSurfaces.Add(slot);
-            _movieStopTimesMs.Remove(slot);
-            MarkRetainedMutation();
-        }
+        WriteSurfaceRecord(slot, RecordResourceId, -1);   // gfx_surface_create_blank@0x477370
+        WriteSurfaceRecord(slot, RecordCreated, 1);
+        _surfaces[slot] = (0, -1); // create-texture: real mutable pixels, no asset id or color key
+        _createdSurfaces.Add(slot);
+        _movieStopTimesMs.Remove(slot);
+        MarkRetainedMutation();
     }
 
     /// <summary>Op 0x1fa. retained_gfx_release_surface resets only the record's resource id; the color key
     /// and created flag stay until the slot is loaded or created again.</summary>
     public void ClearSurface(int slot)
     {
-        lock (_lock)
-        {
-            WriteSurfaceRecord(slot, RecordResourceId, -1);
-            _surfaces.Remove(slot);
-            _createdSurfaces.Remove(slot);
-            _movieStopTimesMs.Remove(slot);
-            _surfaceTransitions.Remove(slot);
-            _movieMaskTransitions.Remove(slot);
-            MarkRetainedMutation();
-        }
+        WriteSurfaceRecord(slot, RecordResourceId, -1);
+        _surfaces.Remove(slot);
+        _createdSurfaces.Remove(slot);
+        _movieStopTimesMs.Remove(slot);
+        _surfaceTransitions.Remove(slot);
+        _movieMaskTransitions.Remove(slot);
+        MarkRetainedMutation();
     }
 }

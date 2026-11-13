@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;

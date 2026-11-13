@@ -31,42 +31,33 @@ public sealed partial class Audio
     /// every unit's action (docs/engine-re.md, "Forced BGM lifecycle siblings").</summary>
     public void PlayBgm(long trackId)
     {
-        lock (_lock)
+        CompleteScriptFade();
+        if (trackId != _bgmTrack)
         {
-            CompleteScriptFade();
-            if (trackId != _bgmTrack)
-            {
-                _bgmTrack = trackId;
-                StartBgm(trackId, startMode: 1, forced: false);
-            }
-            UpdateTimedWork();
+            _bgmTrack = trackId;
+            StartBgm(trackId, startMode: 1, forced: false);
         }
+        UpdateTimedWork();
     }
 
     /// <summary>Ops 0xb7 (start mode 1, loop) and 0xb9 (0, once): start a track even if it is the current one; zero
     /// restarts the retained track, and with none stops.</summary>
     public void RestartBgm(long trackId, int startMode)
     {
-        lock (_lock)
-        {
-            CompleteScriptFade();
-            if (trackId != 0) _bgmTrack = trackId;
-            if (_bgmTrack == 0) StopBgmLocked();
-            else StartBgm(_bgmTrack, startMode, forced: true);
-            UpdateTimedWork();
-        }
+        CompleteScriptFade();
+        if (trackId != 0) _bgmTrack = trackId;
+        if (_bgmTrack == 0) StopBgmLocked();
+        else StartBgm(_bgmTrack, startMode, forced: true);
+        UpdateTimedWork();
     }
 
     /// <summary>Op 0xb8: release the source and clear the retained track (bgm_stop_release@0x464690).</summary>
     public void StopBgm()
     {
-        lock (_lock)
-        {
-            CompleteScriptFade();
-            _bgmTrack = 0;
-            StopBgmLocked();
-            UpdateTimedWork();
-        }
+        CompleteScriptFade();
+        _bgmTrack = 0;
+        StopBgmLocked();
+        UpdateTimedWork();
     }
 
     /// <summary>Op 0xc0: the retained track. A fade to zero that has run its course has cleared it.</summary>
@@ -74,12 +65,9 @@ public sealed partial class Audio
     {
         get
         {
-            lock (_lock)
-            {
-                ServiceFade(_clock.NowMs);
-                UpdateTimedWork();
-                return _bgmTrack;
-            }
+            ServiceFade(_clock.NowMs);
+            UpdateTimedWork();
+            return _bgmTrack;
         }
     }
 
@@ -89,41 +77,32 @@ public sealed partial class Audio
     /// endpoint at once; an advance click sets no fast-forward, so it keeps the authored length.</summary>
     public void FadeBgm(int targetBasisPoints, long durationMs)
     {
-        lock (_lock)
-        {
-            long ms = _skip.FastForwardActive ? 0 : Math.Clamp(durationMs, 0, 60_000);
-            _timeline?.Event("bgm-fade", new() { ["target_basis_points"] = targetBasisPoints, ["duration_ms"] = ms });
-            RestoreDuck();
-            _fade = null;
-            var fade = new BgmFade(_bgmLevel, Math.Clamp(targetBasisPoints, 0, FullLevel),
-                NativeAudioVolume.FadeSteps(ms), _clock.NowMs, ms, Script: true);
-            if (ms == 0) CommitFade(fade, targetBasisPoints);
-            else _fade = fade;
-            UpdateTimedWork();
-        }
+        long ms = _skip.FastForwardActive ? 0 : Math.Clamp(durationMs, 0, 60_000);
+        _timeline?.Event("bgm-fade", new() { ["target_basis_points"] = targetBasisPoints, ["duration_ms"] = ms });
+        RestoreDuck();
+        _fade = null;
+        var fade = new BgmFade(_bgmLevel, Math.Clamp(targetBasisPoints, 0, FullLevel),
+            NativeAudioVolume.FadeSteps(ms), _clock.NowMs, ms, Script: true);
+        if (ms == 0) CommitFade(fade, targetBasisPoints);
+        else _fade = fade;
+        UpdateTimedWork();
     }
 
     /// <summary>Op 0x1bf, and the tick after a delayed voice start: bit 0x10000 makes the op 0x1cf mask one-shot, and
     /// unless bit 0 suppresses it the duck release is armed for when the voice ends.</summary>
     public void ArmVoiceBgmDuckRelease()
     {
-        lock (_lock)
-        {
-            ArmDuckRelease();
-            UpdateTimedWork();
-        }
+        ArmDuckRelease();
+        UpdateTimedWork();
     }
 
     /// <summary>Op 0x1cf: the transient control mask. Bit 0 suppresses the duck at a voice start and the tick's
     /// release.</summary>
     public void SetVoiceBgmDuckControl(long flags)
     {
-        lock (_lock)
-        {
-            _duckControl = unchecked((int)flags);
-            _timeline?.State("voice-bgm-duck-control", new() { ["flags"] = flags });
-            UpdateTimedWork();
-        }
+        _duckControl = unchecked((int)flags);
+        _timeline?.State("voice-bgm-duck-control", new() { ["flags"] = flags });
+        UpdateTimedWork();
     }
 
     private void StartBgm(long trackId, int startMode, bool forced)

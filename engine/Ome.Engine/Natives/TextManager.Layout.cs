@@ -48,17 +48,14 @@ public sealed partial class TextManager
         if (binding.LayoutSlot <= 0 || binding.LayoutSlot != run.Layout.Slot || binding.SourceSurfaceSlot < 0
             || binding.FirstObjectHandle < 0 || binding.ObjectCapacity <= 0)
             return source;
-        lock (_textLock)
+        if (!_retainedTextLayouts.TryGetValue(binding.LayoutSlot, out RetainedAdvTextLayoutPresentation? presentation))
         {
-            if (!_retainedTextLayouts.TryGetValue(binding.LayoutSlot, out RetainedAdvTextLayoutPresentation? presentation))
-            {
-                presentation = new RetainedAdvTextLayoutPresentation(binding);
-                _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
-            }
-            // Drawn by the message's first run; a save binds what the source-language run would have drawn.
-            if (presentation.Binding == binding)
-                presentation.AppendSourceOnly(glyphs, run.Layout.OriginX, run.Layout.OriginY);
+            presentation = new RetainedAdvTextLayoutPresentation(binding);
+            _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
         }
+        // Drawn by the message's first run; a save binds what the source-language run would have drawn.
+        if (presentation.Binding == binding)
+            presentation.AppendSourceOnly(glyphs, run.Layout.OriginX, run.Layout.OriginY);
         return source;
     }
 
@@ -68,13 +65,12 @@ public sealed partial class TextManager
     {
         get
         {
-            lock (_textLock)
-                return _retainedTextLayouts.Values
-                    .Where(presentation => presentation.SourceDiffers)
-                    .Select(presentation => new AdvTextSourceObjects(
-                        presentation.Binding.FirstObjectHandle, presentation.Binding.ObjectCapacity,
-                        presentation.Binding.SourceSurfaceSlot, presentation.PublishedSourceGlyphs()))
-                    .ToArray();
+            return _retainedTextLayouts.Values
+                .Where(presentation => presentation.SourceDiffers)
+                .Select(presentation => new AdvTextSourceObjects(
+                    presentation.Binding.FirstObjectHandle, presentation.Binding.ObjectCapacity,
+                    presentation.Binding.SourceSurfaceSlot, presentation.PublishedSourceGlyphs()))
+                .ToArray();
         }
     }
 
@@ -307,37 +303,34 @@ public sealed partial class TextManager
             ["cut_rows"] = cutRows,
         });
 
-        lock (_textLock)
+        if (!_retainedTextLayouts.TryGetValue(
+                binding.LayoutSlot, out presentation!))
         {
-            if (!_retainedTextLayouts.TryGetValue(
-                    binding.LayoutSlot, out presentation!))
-            {
-                presentation = new RetainedAdvTextLayoutPresentation(binding);
-                _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
-            }
-            else if (presentation.Binding != binding)
-                throw new InvalidOperationException(
-                    $"ADV layout {binding.LayoutSlot} changed its retained binding without reset.");
-            int first = presentation.AppendRun(
-                ordered,
-                orderedIsRuby,
-                run.Layout.OriginX,
-                run.Layout.OriginY,
-                _rubyRules.ChainEveryRubyRecord,
-                sourceGlyphs);
-            _layoutCursors[binding.LayoutSlot] = (rendered.CursorX, rendered.CursorY);
-            RebuildRetainedWaitIndicator(binding.LayoutSlot);
-            result = new AdvRetainedTextRunResult(
-                binding.LayoutSlot,
-                first,
-                ordered.Count,
-                rendered.CursorX,
-                rendered.CursorY)
-            {
-                Rows = rendered.Rows, Ruby = ruby, Source = source, CutRows = cutRows,
-                NarrowedToFitPercent = placement is { NarrowedToFit: true } ? placement.WidthPercent : 0,
-            };
+            presentation = new RetainedAdvTextLayoutPresentation(binding);
+            _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
         }
+        else if (presentation.Binding != binding)
+            throw new InvalidOperationException(
+                $"ADV layout {binding.LayoutSlot} changed its retained binding without reset.");
+        int first = presentation.AppendRun(
+            ordered,
+            orderedIsRuby,
+            run.Layout.OriginX,
+            run.Layout.OriginY,
+            _rubyRules.ChainEveryRubyRecord,
+            sourceGlyphs);
+        _layoutCursors[binding.LayoutSlot] = (rendered.CursorX, rendered.CursorY);
+        RebuildRetainedWaitIndicator(binding.LayoutSlot);
+        result = new AdvRetainedTextRunResult(
+            binding.LayoutSlot,
+            first,
+            ordered.Count,
+            rendered.CursorX,
+            rendered.CursorY)
+        {
+            Rows = rendered.Rows, Ruby = ruby, Source = source, CutRows = cutRows,
+            NarrowedToFitPercent = placement is { NarrowedToFit: true } ? placement.WidthPercent : 0,
+        };
 
         _graphics.PublishSurfacePixels(binding.SourceSurfaceSlot, updated);
         gfx.CreateSurface(binding.SourceSurfaceSlot);
@@ -347,13 +340,10 @@ public sealed partial class TextManager
     /// slot becomes current. The follow-last-glyph wait indicator anchors there.</summary>
     public void SetAdvTextCursor(int layoutSlot, int x, int y)
     {
-        lock (_textLock)
-        {
-            if (layoutSlot != 0) _currentAdvLayout = layoutSlot;
-            int slot = layoutSlot != 0 ? layoutSlot : _currentAdvLayout;
-            _layoutCursors[slot] = (x, y);
-            RebuildRetainedWaitIndicator(slot);
-        }
+        if (layoutSlot != 0) _currentAdvLayout = layoutSlot;
+        int slot = layoutSlot != 0 ? layoutSlot : _currentAdvLayout;
+        _layoutCursors[slot] = (x, y);
+        RebuildRetainedWaitIndicator(slot);
         _timeline?.Event("text-cursor", new() { ["slot"] = layoutSlot, ["x"] = x, ["y"] = y });
         Tell(listener => listener.CursorMoved(layoutSlot, x, y));
     }
@@ -460,8 +450,7 @@ public sealed partial class TextManager
     {
         get
         {
-            lock (_textLock)
-                return InputWaiting && _activeWaitLayout != 0 ? _activeWaitLayout : _currentAdvLayout;
+            return InputWaiting && _activeWaitLayout != 0 ? _activeWaitLayout : _currentAdvLayout;
         }
     }
 
@@ -469,15 +458,12 @@ public sealed partial class TextManager
     /// stops.</summary>
     public void ClearRenderedAdvTextLayout(int layoutSlot)
     {
-        lock (_textLock)
+        int slot = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
+        if (!_retainedTextLayouts.ContainsKey(slot) && _activeRunLayout == slot)
         {
-            int slot = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
-            if (!_retainedTextLayouts.ContainsKey(slot) && _activeRunLayout == slot)
-            {
-                _activeRunLayout = 0;
-                _advTextForceComplete = false;
-                IsRevealing = false;
-            }
+            _activeRunLayout = 0;
+            _advTextForceComplete = false;
+            IsRevealing = false;
         }
         Tell(listener => listener.LayoutCleared(layoutSlot));
     }
@@ -485,19 +471,16 @@ public sealed partial class TextManager
     /// <summary>Op 0x71: a layout's retained glyphs and History binding go, and its surface is cleared.</summary>
     public void ResetRenderedAdvTextLayout(GfxState gfx, AdvTextLayoutPresentationBinding binding)
     {
-        lock (_textLock)
+        _retainedHistoryLayouts.Remove(binding.LayoutSlot);
+        _retainedTextLayouts.Remove(binding.LayoutSlot);
+        if (_activeRunLayout == binding.LayoutSlot)
         {
-            _retainedHistoryLayouts.Remove(binding.LayoutSlot);
-            _retainedTextLayouts.Remove(binding.LayoutSlot);
-            if (_activeRunLayout == binding.LayoutSlot)
-            {
-                _activeRunLayout = 0;
-                _advTextForceComplete = false;
-                IsRevealing = false;
-            }
-            if (_suspendedRetainedTextLayoutSlot == binding.LayoutSlot)
-                _suspendedRetainedTextLayoutSlot = 0;
+            _activeRunLayout = 0;
+            _advTextForceComplete = false;
+            IsRevealing = false;
         }
+        if (_suspendedRetainedTextLayoutSlot == binding.LayoutSlot)
+            _suspendedRetainedTextLayoutSlot = 0;
         Tell(listener => listener.LayoutCleared(binding.LayoutSlot));
         if (_sourceText == null) return;
 
@@ -553,10 +536,7 @@ public sealed partial class TextManager
         presentation.PublishThrough(
             gfx,
             checked(result.FirstGlyphIndex + result.GlyphCount));
-        lock (_textLock)
-        {
-            _retainedHistoryLayouts.Add(batch.LayoutSlot);
-        }
+        _retainedHistoryLayouts.Add(batch.LayoutSlot);
         _graphics.RequestPresentation();
         _timeline?.Event("history-render", new()
         {
@@ -605,21 +585,18 @@ public sealed partial class TextManager
 
         bool bind = (batch.Flags & 4) == 0;
         RetainedAdvTextLayoutPresentation? presentation;
-        lock (_textLock)
+        // A layout with no live text yet takes the drawn cells as its glyphs.
+        if (!_retainedTextLayouts.TryGetValue(binding.LayoutSlot, out presentation) && bind)
         {
-            // A layout with no live text yet takes the drawn cells as its glyphs.
-            if (!_retainedTextLayouts.TryGetValue(binding.LayoutSlot, out presentation) && bind)
-            {
-                presentation = new RetainedAdvTextLayoutPresentation(binding);
-                _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
-                presentation.AppendRun(
-                    cells.Select(cell => cell.Cell).ToArray(),
-                    cells.Select(cell => cell.IsRuby).ToArray(),
-                    batch.Layout.OriginX,
-                    batch.Layout.OriginY,
-                    _rubyRules.ChainEveryRubyRecord);
-                RebuildRetainedWaitIndicator(binding.LayoutSlot);
-            }
+            presentation = new RetainedAdvTextLayoutPresentation(binding);
+            _retainedTextLayouts.Add(binding.LayoutSlot, presentation);
+            presentation.AppendRun(
+                cells.Select(cell => cell.Cell).ToArray(),
+                cells.Select(cell => cell.IsRuby).ToArray(),
+                batch.Layout.OriginX,
+                batch.Layout.OriginY,
+                _rubyRules.ChainEveryRubyRecord);
+            RebuildRetainedWaitIndicator(binding.LayoutSlot);
         }
 
         _graphics.PublishSurfacePixels(binding.SourceSurfaceSlot, updated);
@@ -668,21 +645,18 @@ public sealed partial class TextManager
     {
         RetainedAdvTextLayoutPresentation[] retained;
         int[] surfaceSlots;
-        lock (_textLock)
-        {
-            retained = _retainedHistoryLayouts
-                .Select(slot => _retainedTextLayouts.GetValueOrDefault(slot))
-                .Where(presentation => presentation != null)
-                .Cast<RetainedAdvTextLayoutPresentation>()
-                .ToArray();
-            surfaceSlots = retained
-                .Select(presentation => presentation.Binding.SourceSurfaceSlot)
-                .Distinct()
-                .ToArray();
-            foreach (int slot in _retainedHistoryLayouts)
-                _retainedTextLayouts.Remove(slot);
-            _retainedHistoryLayouts.Clear();
-        }
+        retained = _retainedHistoryLayouts
+            .Select(slot => _retainedTextLayouts.GetValueOrDefault(slot))
+            .Where(presentation => presentation != null)
+            .Cast<RetainedAdvTextLayoutPresentation>()
+            .ToArray();
+        surfaceSlots = retained
+            .Select(presentation => presentation.Binding.SourceSurfaceSlot)
+            .Distinct()
+            .ToArray();
+        foreach (int slot in _retainedHistoryLayouts)
+            _retainedTextLayouts.Remove(slot);
+        _retainedHistoryLayouts.Clear();
         Tell(listener => listener.HistoryPresentationEnded());
         if (_sourceText == null) return;
 

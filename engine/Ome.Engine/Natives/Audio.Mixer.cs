@@ -14,20 +14,17 @@ public sealed partial class Audio
     /// not exist.</summary>
     public bool TrySetVolume(int category, long basisPoints)
     {
-        lock (_lock)
-        {
-            if (!_mixer.TrySetVolume(category, basisPoints)) return false;
-            int level = checked((int)basisPoints);
-            _timeline?.State("audio-volume", new() { ["category"] = category, ["basis_points"] = level });
-            ApplyBusVolume(category, level);
-            return true;
-        }
+        if (!_mixer.TrySetVolume(category, basisPoints)) return false;
+        int level = checked((int)basisPoints);
+        _timeline?.State("audio-volume", new() { ["category"] = category, ["basis_points"] = level });
+        ApplyBusVolume(category, level);
+        return true;
     }
 
     /// <summary>The options panel's preview: apply a level to a category without storing it.</summary>
     public void PreviewVolume(int category, int basisPoints)
     {
-        lock (_lock) ApplyBusVolume(category, basisPoints);
+        ApplyBusVolume(category, basisPoints);
     }
 
     /// <summary>Op 0xc7 and the options panel: whether a category's route is on. False for a category without one
@@ -38,26 +35,20 @@ public sealed partial class Audio
     /// nothing, as native's workers do. False for a category without one.</summary>
     public bool TrySetRouteEnabled(int category, bool enabled)
     {
-        lock (_lock)
-        {
-            if (!_mixer.TrySetRouteEnabled(category, enabled, out bool changed)) return false;
-            if (!changed) return true;
-            _timeline?.State("audio-route", new() { ["category"] = category, ["enabled"] = enabled });
-            ApplyRoute(category, enabled);
-            UpdateTimedWork();
-            return true;
-        }
+        if (!_mixer.TrySetRouteEnabled(category, enabled, out bool changed)) return false;
+        if (!changed) return true;
+        _timeline?.State("audio-route", new() { ["category"] = category, ["enabled"] = enabled });
+        ApplyRoute(category, enabled);
+        UpdateTimedWork();
+        return true;
     }
 
     private void ApplyMixer(AudioMixerSettingsSnapshot snapshot)
     {
-        lock (_lock)
-        {
-            for (int category = 0; category < AudioMixerSettings.CategoryCount; category++)
-                ApplyBusVolume(category, snapshot.Volumes[category]);
-            for (int category = (int)AudioMixerCategory.Music; category < AudioMixerSettings.CategoryCount; category++)
-                if (BusOf(category) is { } bus) _device.SetBusMuted(bus, !snapshot.Routes[category]);
-        }
+        for (int category = 0; category < AudioMixerSettings.CategoryCount; category++)
+            ApplyBusVolume(category, snapshot.Volumes[category]);
+        for (int category = (int)AudioMixerCategory.Music; category < AudioMixerSettings.CategoryCount; category++)
+            if (BusOf(category) is { } bus) _device.SetBusMuted(bus, !snapshot.Routes[category]);
     }
 
     private void ApplyBusVolume(int category, int basisPoints)
@@ -122,25 +113,22 @@ public sealed partial class Audio
     public void RestoreSaved(long bgmTrack, IReadOnlyList<long> soundEffectResourceIds)
     {
         ArgumentNullException.ThrowIfNull(soundEffectResourceIds);
-        lock (_lock)
+        CompleteScriptFade();
+        _bgmTrack = bgmTrack;
+        if (_bgmTrack == 0)
         {
-            CompleteScriptFade();
-            _bgmTrack = bgmTrack;
-            if (_bgmTrack == 0)
-            {
-                _timeline?.Event("bgm-fade", new() { ["target_basis_points"] = 0, ["duration_ms"] = 0L });
-                RestoreDuck();
-                _fade = null;
-                ReleaseBgmSource();
-            }
-            else StartBgm(_bgmTrack, startMode: 1, forced: false);
-            for (int channel = 0; channel < SoundEffectChannelCount; channel++)
-            {
-                ReleaseSoundEffectLocked(channel);
-                long resourceId = channel < soundEffectResourceIds.Count ? soundEffectResourceIds[channel] : 0;
-                if (resourceId != 0) LoadSoundEffectLocked(resourceId, channel);
-            }
-            UpdateTimedWork();
+            _timeline?.Event("bgm-fade", new() { ["target_basis_points"] = 0, ["duration_ms"] = 0L });
+            RestoreDuck();
+            _fade = null;
+            ReleaseBgmSource();
         }
+        else StartBgm(_bgmTrack, startMode: 1, forced: false);
+        for (int channel = 0; channel < SoundEffectChannelCount; channel++)
+        {
+            ReleaseSoundEffectLocked(channel);
+            long resourceId = channel < soundEffectResourceIds.Count ? soundEffectResourceIds[channel] : 0;
+            if (resourceId != 0) LoadSoundEffectLocked(resourceId, channel);
+        }
+        UpdateTimedWork();
     }
 }

@@ -110,7 +110,7 @@ public partial class Main : IAudioDevice
         if (AudioChannel(channel) is { } player) player.VolumeDb = volumeDb;
     }
 
-    // Main thread, once a frame before PulseFrame: a play that ran out is reported, so the woken engine thread sees it.
+    // Main thread, once a frame before the frame turn: a play that ran out is reported, so the woken engine thread sees it.
     private void ReportEndedAudioChannels()
     {
         for (int channel = 0; channel < AudioChannelCount; channel++)

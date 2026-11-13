@@ -31,8 +31,8 @@ public sealed class PerformanceFrameLog : IDisposable
         var directory = System.IO.Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
         _writer = new StreamWriter(path, append: false, Encoding.UTF8, 64 * 1024);
-        // Presentation coordinates are appended separately so a VM thread released by PulseFrame can be
-        // distinguished from the coordinate observed at _Process entry.
+        // Presentation coordinates are appended separately: the instruction a frame turn presents, noted on the engine
+        // thread at its lowering, can differ from the one observed at _Process entry.
         _writer.WriteLine(
             "frame,now_ms,delta_ms,main_ms,pulse_ms,movie_ms,should_recomposite_ms,recomposite_ms," +
             "clear_ms,snapshot_ms,resolve_ms,source_prep_ms,raster_ms,set_data_ms,texture_update_ms,ui_ms," +

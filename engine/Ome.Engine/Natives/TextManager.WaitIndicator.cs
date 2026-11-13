@@ -24,11 +24,8 @@ public sealed partial class TextManager
 
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)
     {
-        lock (_textLock)
-        {
-            _waitIndicators[config.LayoutSlot] = config;
-            RebuildRetainedWaitIndicator(config.LayoutSlot);
-        }
+        _waitIndicators[config.LayoutSlot] = config;
+        RebuildRetainedWaitIndicator(config.LayoutSlot);
         _timeline?.Event("wait-indicator-config", new()
         {
             ["layout"] = config.LayoutSlot, ["x"] = config.X, ["y"] = config.Y,
@@ -42,12 +39,9 @@ public sealed partial class TextManager
 
     public void SetAdvWaitIndicatorFollowLastGlyph(bool enabled)
     {
-        lock (_textLock)
-        {
-            _waitIndicatorFollowLastGlyph = enabled;
-            foreach (int layoutSlot in _waitIndicators.Keys.ToArray())
-                RebuildRetainedWaitIndicator(layoutSlot);
-        }
+        _waitIndicatorFollowLastGlyph = enabled;
+        foreach (int layoutSlot in _waitIndicators.Keys.ToArray())
+            RebuildRetainedWaitIndicator(layoutSlot);
         _timeline?.Event("wait-indicator-follow-last-glyph", new() { ["enabled"] = enabled });
         Tell(listener => listener.WaitIndicatorFollowsLastGlyph(enabled));
     }
@@ -56,11 +50,8 @@ public sealed partial class TextManager
         AdvTextLayoutPresentationBinding binding,
         AdvTextLayoutSnapshot layout)
     {
-        lock (_textLock)
-        {
-            _waitIndicatorBindings[binding.LayoutSlot] = (binding, layout);
-            RebuildRetainedWaitIndicator(binding.LayoutSlot);
-        }
+        _waitIndicatorBindings[binding.LayoutSlot] = (binding, layout);
+        RebuildRetainedWaitIndicator(binding.LayoutSlot);
         _timeline?.Event("wait-indicator-bind", new()
         {
             ["layout"] = binding.LayoutSlot,
@@ -101,11 +92,8 @@ public sealed partial class TextManager
 
     public void SetAdvWaitIndicatorEnabled(bool enabled)
     {
-        lock (_textLock)
-        {
-            if (enabled && !_waitIndicatorEnabled) _waitIndicatorStartedMs = _clock.NowMs;
-            _waitIndicatorEnabled = enabled;
-        }
+        if (enabled && !_waitIndicatorEnabled) _waitIndicatorStartedMs = _clock.NowMs;
+        _waitIndicatorEnabled = enabled;
         _graphics.RequestPresentation();
         _timeline?.Event("wait-indicator-enabled", new() { ["enabled"] = enabled });
         Tell(listener => listener.WaitIndicatorEnabled(enabled));
@@ -122,20 +110,17 @@ public sealed partial class TextManager
     public void PublishAdvTextLayout(
         GfxState gfx, AdvTextLayoutPresentationBinding binding)
     {
-        lock (_textLock)
-        {
-            if (_retainedTextLayouts.TryGetValue(
-                    binding.LayoutSlot, out RetainedAdvTextLayoutPresentation? presentation)
-                && presentation.Binding == binding)
-                presentation.Republish(gfx);
-            if (_retainedWaitIndicators.TryGetValue(
-                    binding.LayoutSlot,
-                    out RetainedAdvWaitIndicatorPresentation? indicator))
-                indicator.Republish(
-                    gfx,
-                    _clock.NowMs - _waitIndicatorStartedMs,
-                    WaitIndicatorShouldBeVisible(binding.LayoutSlot));
-        }
+        if (_retainedTextLayouts.TryGetValue(
+                binding.LayoutSlot, out RetainedAdvTextLayoutPresentation? presentation)
+            && presentation.Binding == binding)
+            presentation.Republish(gfx);
+        if (_retainedWaitIndicators.TryGetValue(
+                binding.LayoutSlot,
+                out RetainedAdvWaitIndicatorPresentation? indicator))
+            indicator.Republish(
+                gfx,
+                _clock.NowMs - _waitIndicatorStartedMs,
+                WaitIndicatorShouldBeVisible(binding.LayoutSlot));
         PublishAdvTextLayout(binding.LayoutSlot);
     }
 
@@ -145,19 +130,16 @@ public sealed partial class TextManager
            && _waitIndicatorEnabled
            && _activeWaitLayout == layoutSlot;
 
-    /// <summary>Each frame, from the front end's thread: the wait indicators advance their animation and show only on
-    /// the waiting layout.</summary>
+    /// <summary>Each frame turn that presents: the wait indicators advance their animation and show only on the waiting
+    /// layout.</summary>
     public void UpdateWaitIndicators(GfxState gfx)
     {
-        lock (_textLock)
-        {
-            foreach ((int layoutSlot, RetainedAdvWaitIndicatorPresentation presentation)
-                     in _retainedWaitIndicators)
-                presentation.Update(
-                    gfx,
-                    _clock.NowMs - _waitIndicatorStartedMs,
-                    WaitIndicatorShouldBeVisible(layoutSlot));
-        }
+        foreach ((int layoutSlot, RetainedAdvWaitIndicatorPresentation presentation)
+                 in _retainedWaitIndicators)
+            presentation.Update(
+                gfx,
+                _clock.NowMs - _waitIndicatorStartedMs,
+                WaitIndicatorShouldBeVisible(layoutSlot));
     }
 
     // ---- the page wait (op 0x72) ----
@@ -166,19 +148,16 @@ public sealed partial class TextManager
     /// from its first frame, and the page's later reveals animate again (op_0x72_handler clears ctx+0x55108).</summary>
     public void BeginPageWait(int layoutSlot)
     {
-        lock (_textLock)
-        {
-            _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
-            _waitIndicatorStartedMs = _clock.NowMs;
-            _waitIndicatorEnabled = true;
-            _revealsFinishedUntilWait = false;
-        }
+        _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
+        _waitIndicatorStartedMs = _clock.NowMs;
+        _waitIndicatorEnabled = true;
+        _revealsFinishedUntilWait = false;
     }
 
     /// <summary>Whether the wait indicator is enabled (op 0x1b5's switch and the page wait's).</summary>
     public bool WaitIndicatorEnabled
     {
-        get { lock (_textLock) return _waitIndicatorEnabled; }
+        get { return _waitIndicatorEnabled; }
     }
 
     /// <summary>After an input callback returns inside the page wait: native's callback returns through the shared ADV
@@ -186,13 +165,10 @@ public sealed partial class TextManager
     /// parent wait parked, so the parent's marker comes back at the same boundary when it was enabled before.</summary>
     public void RestoreWaitIndicator(bool wasEnabled)
     {
-        lock (_textLock)
+        if (wasEnabled && !_waitIndicatorEnabled)
         {
-            if (wasEnabled && !_waitIndicatorEnabled)
-            {
-                _waitIndicatorEnabled = true;
-                _waitIndicatorStartedMs = _clock.NowMs;
-            }
+            _waitIndicatorEnabled = true;
+            _waitIndicatorStartedMs = _clock.NowMs;
         }
     }
 
@@ -200,7 +176,7 @@ public sealed partial class TextManager
     /// stops.</summary>
     public void StopWaitIndicator()
     {
-        lock (_textLock) _waitIndicatorEnabled = false;
+        _waitIndicatorEnabled = false;
     }
 
     // ---- the page a hide-window callback suspends ----
@@ -218,40 +194,37 @@ public sealed partial class TextManager
     /// the waiting layout's, else the current one's.</summary>
     public void SetAdvPagePresentationSuspended(GfxState gfx, bool suspended)
     {
-        lock (_textLock)
+        if (suspended)
         {
-            if (suspended)
-            {
-                int slot = InputWaiting && _activeWaitLayout != 0
-                    ? _activeWaitLayout
-                    : _currentAdvLayout;
-                if (_retainedTextLayouts.TryGetValue(
-                        slot, out RetainedAdvTextLayoutPresentation? presentation))
-                    presentation.ErasePublished(gfx);
-                if (_retainedWaitIndicators.TryGetValue(
-                        slot, out RetainedAdvWaitIndicatorPresentation? indicator))
-                    indicator.Erase(gfx);
-                if (_retainedTextLayouts.ContainsKey(slot)
-                    || _retainedWaitIndicators.ContainsKey(slot))
-                    _suspendedRetainedTextLayoutSlot = slot;
-            }
-            else if (_suspendedRetainedTextLayoutSlot != 0)
-            {
-                if (_retainedTextLayouts.TryGetValue(
-                        _suspendedRetainedTextLayoutSlot,
-                        out RetainedAdvTextLayoutPresentation? presentation))
-                    presentation.Republish(gfx);
-                if (_retainedWaitIndicators.TryGetValue(
-                        _suspendedRetainedTextLayoutSlot,
-                        out RetainedAdvWaitIndicatorPresentation? indicator))
-                    indicator.Republish(
-                        gfx,
-                        _clock.NowMs - _waitIndicatorStartedMs,
-                        InputWaiting
-                        && _waitIndicatorEnabled
-                        && _activeWaitLayout == _suspendedRetainedTextLayoutSlot);
-                _suspendedRetainedTextLayoutSlot = 0;
-            }
+            int slot = InputWaiting && _activeWaitLayout != 0
+                ? _activeWaitLayout
+                : _currentAdvLayout;
+            if (_retainedTextLayouts.TryGetValue(
+                    slot, out RetainedAdvTextLayoutPresentation? presentation))
+                presentation.ErasePublished(gfx);
+            if (_retainedWaitIndicators.TryGetValue(
+                    slot, out RetainedAdvWaitIndicatorPresentation? indicator))
+                indicator.Erase(gfx);
+            if (_retainedTextLayouts.ContainsKey(slot)
+                || _retainedWaitIndicators.ContainsKey(slot))
+                _suspendedRetainedTextLayoutSlot = slot;
+        }
+        else if (_suspendedRetainedTextLayoutSlot != 0)
+        {
+            if (_retainedTextLayouts.TryGetValue(
+                    _suspendedRetainedTextLayoutSlot,
+                    out RetainedAdvTextLayoutPresentation? presentation))
+                presentation.Republish(gfx);
+            if (_retainedWaitIndicators.TryGetValue(
+                    _suspendedRetainedTextLayoutSlot,
+                    out RetainedAdvWaitIndicatorPresentation? indicator))
+                indicator.Republish(
+                    gfx,
+                    _clock.NowMs - _waitIndicatorStartedMs,
+                    InputWaiting
+                    && _waitIndicatorEnabled
+                    && _activeWaitLayout == _suspendedRetainedTextLayoutSlot);
+            _suspendedRetainedTextLayoutSlot = 0;
         }
         _graphics.RequestPresentation();
         SetAdvPagePresentationSuspended(suspended);

@@ -20,7 +20,6 @@ public sealed class InputBindings
     /// 0x08000000; <c>Ome.Engine.Natives.SkipAndAuto</c>).</summary>
     public const int FastForwardAction = 6;
 
-    private readonly object _lock = new();
     private readonly int[] _keyboardActions = Enumerable.Repeat(-1, 256).ToArray();
     private readonly int[] _mouseButtonSlots = new int[2];
     private readonly int[] _joystickButtons = new int[MaximumActions];
@@ -46,13 +45,13 @@ public sealed class InputBindings
 
     public int ActionCount
     {
-        get { lock (_lock) return _actionCount; }
+        get { return _actionCount; }
     }
 
     public bool SetActionCount(int count)
     {
         if ((uint)count >= MaximumActions) return false;
-        lock (_lock) _actionCount = count;
+        _actionCount = count;
         return true;
     }
 
@@ -61,107 +60,95 @@ public sealed class InputBindings
         if ((uint)action >= MaximumActions) return false;
         int virtualKey = DikToVirtualKey(dikScanCode);
         if (virtualKey == 0) return true; // Native writes VK[0]; GetAsyncKeyState(0) never contributes.
-        lock (_lock) _keyboardActions[virtualKey] = action;
+        _keyboardActions[virtualKey] = action;
         return true;
     }
 
     public void MapJoystickButton(int buttonSlot, int physicalButton)
     {
         if ((uint)buttonSlot >= MaximumActions) return;
-        lock (_lock) _joystickButtons[buttonSlot] = physicalButton;
+        _joystickButtons[buttonSlot] = physicalButton;
     }
 
     public void MapMouseButton(int buttonSlot, int physicalButton)
     {
         if ((uint)buttonSlot >= MaximumActions || (uint)physicalButton >= _mouseButtonSlots.Length) return;
-        lock (_lock) _mouseButtonSlots[physicalButton] = buttonSlot;
+        _mouseButtonSlots[physicalButton] = buttonSlot;
     }
 
     public int KeyboardAction(int virtualKey)
     {
         if ((uint)virtualKey >= _keyboardActions.Length) return -1;
-        lock (_lock) return _keyboardActions[virtualKey];
+        return _keyboardActions[virtualKey];
     }
 
     public int MouseAction(int physicalButton)
     {
         if ((uint)physicalButton >= _mouseButtonSlots.Length) return -1;
-        lock (_lock) return (_mouseButtonSlots[physicalButton] + 4) & 31;
+        return (_mouseButtonSlots[physicalButton] + 4) & 31;
     }
 
     public int JoystickButtonActionMask(int physicalButton)
     {
         if ((uint)physicalButton >= 32) return 0;
-        lock (_lock) return JoystickButtonActionMaskLocked(physicalButton);
+        return JoystickButtonActionMaskLocked(physicalButton);
     }
 
     public void UpdateKeyboardVirtualKey(int virtualKey, bool pressed)
     {
         if ((uint)virtualKey >= _keyboardActions.Length) return;
-        lock (_lock)
-        {
-            if (pressed) _heldVirtualKeys.Add(virtualKey);
-            else _heldVirtualKeys.Remove(virtualKey);
-        }
+        if (pressed) _heldVirtualKeys.Add(virtualKey);
+        else _heldVirtualKeys.Remove(virtualKey);
     }
 
     public void UpdateMouseButton(int physicalButton, bool pressed)
     {
         if ((uint)physicalButton >= 32) return;
-        lock (_lock) UpdateBit(ref _heldMouseButtons, physicalButton, pressed);
+        UpdateBit(ref _heldMouseButtons, physicalButton, pressed);
     }
 
     public void UpdateJoystickButton(int physicalButton, bool pressed)
     {
         if ((uint)physicalButton >= 32) return;
-        lock (_lock) UpdateBit(ref _heldJoystickButtons, physicalButton, pressed);
+        UpdateBit(ref _heldJoystickButtons, physicalButton, pressed);
     }
 
     public void UpdateJoystickAxes(double x, double y)
     {
-        lock (_lock)
-        {
-            _joystickX = Math.Clamp(x, -1.0, 1.0);
-            _joystickY = Math.Clamp(y, -1.0, 1.0);
-        }
+        _joystickX = Math.Clamp(x, -1.0, 1.0);
+        _joystickY = Math.Clamp(y, -1.0, 1.0);
     }
 
     public void UpdateJoystickAxis(int axis, double value)
     {
-        lock (_lock)
-        {
-            if (axis == 0) _joystickX = Math.Clamp(value, -1.0, 1.0);
-            else if (axis == 1) _joystickY = Math.Clamp(value, -1.0, 1.0);
-        }
+        if (axis == 0) _joystickX = Math.Clamp(value, -1.0, 1.0);
+        else if (axis == 1) _joystickY = Math.Clamp(value, -1.0, 1.0);
     }
 
     public int PollActionMask()
     {
-        lock (_lock)
+        int mask = 0;
+        foreach (int virtualKey in _heldVirtualKeys)
         {
-            int mask = 0;
-            foreach (int virtualKey in _heldVirtualKeys)
-            {
-                int action = _keyboardActions[virtualKey];
-                if ((uint)action < MaximumActions) mask |= 1 << action;
-            }
-
-            // Native polls only VK_LBUTTON/VK_RBUTTON. Their zero-initialized slots both produce
-            // action 4 until scripts remap one of them.
-            for (int button = 0; button < _mouseButtonSlots.Length; button++)
-                if ((_heldMouseButtons & (1u << button)) != 0)
-                    mask |= 1 << ((_mouseButtonSlots[button] + 4) & 31);
-
-            if (_joystickY < -JoystickAxisThreshold) mask |= 1 << 0;
-            else if (_joystickY > JoystickAxisThreshold) mask |= 1 << 2;
-            if (_joystickX > JoystickAxisThreshold) mask |= 1 << 1;
-            else if (_joystickX < -JoystickAxisThreshold) mask |= 1 << 3;
-
-            for (int physicalButton = 0; physicalButton < 32; physicalButton++)
-                if ((_heldJoystickButtons & (1u << physicalButton)) != 0)
-                    mask |= JoystickButtonActionMaskLocked(physicalButton);
-            return mask;
+            int action = _keyboardActions[virtualKey];
+            if ((uint)action < MaximumActions) mask |= 1 << action;
         }
+
+        // Native polls only VK_LBUTTON/VK_RBUTTON. Their zero-initialized slots both produce
+        // action 4 until scripts remap one of them.
+        for (int button = 0; button < _mouseButtonSlots.Length; button++)
+            if ((_heldMouseButtons & (1u << button)) != 0)
+                mask |= 1 << ((_mouseButtonSlots[button] + 4) & 31);
+
+        if (_joystickY < -JoystickAxisThreshold) mask |= 1 << 0;
+        else if (_joystickY > JoystickAxisThreshold) mask |= 1 << 2;
+        if (_joystickX > JoystickAxisThreshold) mask |= 1 << 1;
+        else if (_joystickX < -JoystickAxisThreshold) mask |= 1 << 3;
+
+        for (int physicalButton = 0; physicalButton < 32; physicalButton++)
+            if ((_heldJoystickButtons & (1u << physicalButton)) != 0)
+                mask |= JoystickButtonActionMaskLocked(physicalButton);
+        return mask;
     }
 
     private int JoystickButtonActionMaskLocked(int physicalButton)

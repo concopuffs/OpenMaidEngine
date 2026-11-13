@@ -65,7 +65,7 @@ public sealed partial class VirtualMachine
             // Native restores the saved top frame as the numbered-save boundary selected by
             // opcode 0x1ad. Re-establish that identity so a subsequent save excludes transient
             // SAVE/menu helper frames instead of serializing the currently open modal stack.
-            lock (_debugControlLock) _saveResumeFrame = _cur;
+            _saveResumeFrame = _cur;
             _cur.RestoredSaveFrame = null;
             _saves.EndRestore();
             _restoreFrameIndex = -1;
@@ -128,7 +128,7 @@ public sealed partial class VirtualMachine
     // 0x1ad
     private StepResult OpMarkSaveResumeFrame(Instruction ins, int pc)
     {
-        lock (_debugControlLock) _saveResumeFrame = _cur;
+        _saveResumeFrame = _cur;
         return StepResult.Next;
     }
 

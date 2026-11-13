@@ -17,7 +17,6 @@ public sealed record DeterministicRandomSummary(uint? Seed, int Draws, IReadOnly
 /// inside native AGE.</summary>
 public sealed partial class ScriptMemory
 {
-    private readonly object _deterministicRandomLock = new();
     private uint? _deterministicRandomSeed;
     private int _deterministicRandomDraws;
     private readonly Dictionary<(uint PackedId, int Offset), DeterministicRandomStream> _deterministicRandomSites = new();
@@ -30,22 +29,20 @@ public sealed partial class ScriptMemory
     }
 
     /// <summary>Start drawing op 0x60 from <paramref name="seed"/>'s streams, or from the game's own generator when
-    /// null. Every stream restarts. Returns what was drawn since the previous call. Safe from any thread.</summary>
+    /// null. Every stream restarts. Returns what was drawn since the previous call. The driver asks for it through the
+    /// input and waits native's requests.</summary>
     public DeterministicRandomSummary SeedDeterministicRandom(uint? seed)
     {
-        lock (_deterministicRandomLock)
-        {
-            var sites = _deterministicRandomSites
-                .Select(entry => new DeterministicRandomSite(entry.Value.Script, entry.Key.PackedId, entry.Key.Offset,
-                                                             entry.Value.Draws))
-                .OrderBy(site => site.Script, StringComparer.Ordinal).ThenBy(site => site.Offset)
-                .ToArray();
-            var summary = new DeterministicRandomSummary(_deterministicRandomSeed, _deterministicRandomDraws, sites);
-            _deterministicRandomSeed = seed;
-            _deterministicRandomDraws = 0;
-            _deterministicRandomSites.Clear();
-            return summary;
-        }
+        var sites = _deterministicRandomSites
+            .Select(entry => new DeterministicRandomSite(entry.Value.Script, entry.Key.PackedId, entry.Key.Offset,
+                                                         entry.Value.Draws))
+            .OrderBy(site => site.Script, StringComparer.Ordinal).ThenBy(site => site.Offset)
+            .ToArray();
+        var summary = new DeterministicRandomSummary(_deterministicRandomSeed, _deterministicRandomDraws, sites);
+        _deterministicRandomSeed = seed;
+        _deterministicRandomDraws = 0;
+        _deterministicRandomSites.Clear();
+        return summary;
     }
 
     /// <summary>A stream's first state for the site at <paramref name="offset"/> in script <paramref name="packedId"/>.
@@ -64,20 +61,17 @@ public sealed partial class ScriptMemory
     /// <paramref name="offset"/> in <paramref name="script"/> (packed id <paramref name="packedId"/>).</summary>
     public int DrawRandom(string script, uint packedId, int offset)
     {
-        lock (_deterministicRandomLock)
+        if (_deterministicRandomSeed is not uint seed) return System.Random.Shared.Next(0x8000);
+        if (!_deterministicRandomSites.TryGetValue((packedId, offset), out DeterministicRandomStream? stream))
         {
-            if (_deterministicRandomSeed is not uint seed) return System.Random.Shared.Next(0x8000);
-            if (!_deterministicRandomSites.TryGetValue((packedId, offset), out DeterministicRandomStream? stream))
-            {
-                stream = new DeterministicRandomStream(script, DeterministicRandomInitialState(seed, packedId, offset));
-                _deterministicRandomSites.Add((packedId, offset), stream);
-            }
-            uint state = stream.State;
-            int value = DeterministicRandomNext(ref state);
-            stream.State = state;
-            stream.Draws++;
-            _deterministicRandomDraws++;
-            return value;
+            stream = new DeterministicRandomStream(script, DeterministicRandomInitialState(seed, packedId, offset));
+            _deterministicRandomSites.Add((packedId, offset), stream);
         }
+        uint state = stream.State;
+        int value = DeterministicRandomNext(ref state);
+        stream.State = state;
+        stream.Draws++;
+        _deterministicRandomDraws++;
+        return value;
     }
 }

@@ -46,15 +46,14 @@ public sealed record TextDevices(
 /// and what it reads).
 /// </summary>
 /// <remarks>
-/// <para>The reveal and the page wait block the engine thread, and those waits stay with the lifted host until milestone
-/// 11 (<see cref="EngineHost"/>): the host waits, and the text manager says when to stop.</para>
-/// <para>Threads, as in the host before: the engine thread lays out and draws; the front end's thread advances the wait
-/// indicator each frame (<see cref="UpdateWaitIndicators"/>) and finishes a reveal on a click
-/// (<see cref="FinishRevealOnClick"/>). <c>_textLock</c> guards what both touch.</para>
+/// <para>The reveal and the page wait block the engine thread in the input and waits native
+/// (<c>InputAndWaits.TextWait.cs</c>): the native waits, and the text manager says when to stop.</para>
+/// <para>Engine thread only (spec §5.1, rule 4): it lays out and draws, the waits advance the wait indicator in each
+/// frame turn (<see cref="UpdateWaitIndicators"/>), and a routed click finishes a reveal
+/// (<see cref="FinishRevealOnClick"/>).</para>
 /// </remarks>
 public sealed partial class TextManager : ISurfaceListener
 {
-    private readonly object _textLock = new();
     private readonly Graphics _graphics;
     private readonly SkipAndAuto _skip;
     private readonly FrameClock _clock;
@@ -193,8 +192,8 @@ public sealed partial class TextManager : ISurfaceListener
     }
 
     /// <summary>Where the text manager learns whether the engine thread is in an input wait: the wait indicator shows
-    /// only then, and the page a hide-window callback suspends is the waiting one. The lifted host owns the waits until
-    /// milestone 11.</summary>
+    /// only then, and the page a hide-window callback suspends is the waiting one: the input and waits native's.
+    /// </summary>
     public void ReadInputWaitFrom(Func<bool> waiting) => _inputWaiting = waiting ?? (static () => false);
 
     private bool InputWaiting => _inputWaiting();
@@ -284,7 +283,7 @@ public sealed partial class TextManager : ISurfaceListener
     private void ReadSettings(Sys4RegIniStore store)
     {
         int speed = store.LoadMessageInt(Sys4RegIniStore.MessageSpeedKey, Sys4RegIniStore.DefaultMessageSpeed);
-        lock (_textLock) _messageGlyphDelayMilliseconds = Math.Max(0, speed);
+        _messageGlyphDelayMilliseconds = Math.Max(0, speed);
         _messageWindowAlphaSetting = store.LoadMessageInt(Sys4RegIniStore.MesWinAlphaKey,
                                                           Sys4RegIniStore.DefaultMesWinAlpha);
         _textAntialias = store.TextAntialiasEnabled;
@@ -302,14 +301,14 @@ public sealed partial class TextManager : ISurfaceListener
     {
         get
         {
-            lock (_textLock) return _messageGlyphDelayMilliseconds;
+            return _messageGlyphDelayMilliseconds;
         }
     }
 
     public void SetMessageGlyphDelayMilliseconds(int milliseconds)
     {
         int delay = Math.Max(0, milliseconds);
-        lock (_textLock) _messageGlyphDelayMilliseconds = delay;
+        _messageGlyphDelayMilliseconds = delay;
         _timeline?.Event("message-glyph-delay", new() { ["delay_ms"] = delay });
     }
 
@@ -346,22 +345,19 @@ public sealed partial class TextManager : ISurfaceListener
     {
         Style = AdvTextStyle.Default;
         History.SetRecordingEnabled(true);
-        lock (_textLock)
-        {
-            _retainedHistoryLayouts.Clear();
-            _retainedTextLayouts.Clear();
-            _activeRunLayout = 0;
-            _suspendedRetainedTextLayoutSlot = 0;
-            _layoutCursors.Clear();
-            _advTextForceComplete = false;
-            _revealsFinishedUntilWait = false;
-            _waitIndicators.Clear();
-            _waitIndicatorBindings.Clear();
-            _retainedWaitIndicators.Clear();
-            _activeWaitLayout = 0;
-            _waitIndicatorEnabled = false;
-            _reveal = null;
-        }
+        _retainedHistoryLayouts.Clear();
+        _retainedTextLayouts.Clear();
+        _activeRunLayout = 0;
+        _suspendedRetainedTextLayoutSlot = 0;
+        _layoutCursors.Clear();
+        _advTextForceComplete = false;
+        _revealsFinishedUntilWait = false;
+        _waitIndicators.Clear();
+        _waitIndicatorBindings.Clear();
+        _retainedWaitIndicators.Clear();
+        _activeWaitLayout = 0;
+        _waitIndicatorEnabled = false;
+        _reveal = null;
         _advPagePresentationSuspended = false;
         IsRevealing = false;
     }
@@ -395,34 +391,28 @@ public sealed partial class TextManager : ISurfaceListener
     void ISurfaceListener.SurfaceRangeReleased(int firstSlot, int count)
     {
         int end = checked(firstSlot + count);
-        lock (_textLock)
-        {
-            foreach (int layoutSlot in _retainedTextLayouts
-                         .Where(pair =>
-                             pair.Value.Binding.SourceSurfaceSlot >= firstSlot
-                             && pair.Value.Binding.SourceSurfaceSlot < end)
-                         .Select(pair => pair.Key)
-                         .ToArray())
-                _retainedTextLayouts.Remove(layoutSlot);
-            _retainedHistoryLayouts.RemoveWhere(layoutSlot =>
-                !_retainedTextLayouts.ContainsKey(layoutSlot));
-        }
+        foreach (int layoutSlot in _retainedTextLayouts
+                     .Where(pair =>
+                         pair.Value.Binding.SourceSurfaceSlot >= firstSlot
+                         && pair.Value.Binding.SourceSurfaceSlot < end)
+                     .Select(pair => pair.Key)
+                     .ToArray())
+            _retainedTextLayouts.Remove(layoutSlot);
+        _retainedHistoryLayouts.RemoveWhere(layoutSlot =>
+            !_retainedTextLayouts.ContainsKey(layoutSlot));
     }
 
     void ISurfaceListener.SurfaceReplaced(int slot) => DropTextLayoutsOn(slot);
 
     private void DropTextLayoutsOn(int slot)
     {
-        lock (_textLock)
+        foreach (int layoutSlot in _retainedTextLayouts
+                     .Where(pair => pair.Value.Binding.SourceSurfaceSlot == slot)
+                     .Select(pair => pair.Key)
+                     .ToArray())
         {
-            foreach (int layoutSlot in _retainedTextLayouts
-                         .Where(pair => pair.Value.Binding.SourceSurfaceSlot == slot)
-                         .Select(pair => pair.Key)
-                         .ToArray())
-            {
-                _retainedTextLayouts.Remove(layoutSlot);
-                _retainedHistoryLayouts.Remove(layoutSlot);
-            }
+            _retainedTextLayouts.Remove(layoutSlot);
+            _retainedHistoryLayouts.Remove(layoutSlot);
         }
     }
 }

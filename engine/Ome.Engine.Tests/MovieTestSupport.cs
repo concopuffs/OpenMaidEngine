@@ -140,7 +140,8 @@ internal sealed class FakeAudioStreamDevice : IAudioStreamDevice
 }
 
 /// <summary>A movie native over fakes, on an 800x600 graphics native: a manual clock, movie files for every id, a
-/// scripted decoder and a stream device. <see cref="ServiceFrame"/> runs the front end's frame service.</summary>
+/// scripted decoder and a stream device. <see cref="ServiceFrame"/> runs the front end's frame service and the engine
+/// thread's publication of what it took.</summary>
 internal sealed class MovieRig
 {
     /// <summary>One movie the native opened a decoder for, as an op asked for it.</summary>
@@ -193,8 +194,13 @@ internal sealed class MovieRig
         }).ToArray();
     }
 
-    /// <summary>Run the front end's frame service once.</summary>
-    public void ServiceFrame() => Movies.ServiceFrame(++_renderFrame);
+    /// <summary>Run the front end's frame service once, then publish what it took, as the engine thread's next pump
+    /// does (InputAndWaits.Turns.cs).</summary>
+    public void ServiceFrame()
+    {
+        Movies.ServiceFrame(++_renderFrame);
+        Movies.PublishServiced();
+    }
 
     /// <summary>Move the clock by <paramref name="ms"/>, then run a frame service.</summary>
     public void Advance(long ms)

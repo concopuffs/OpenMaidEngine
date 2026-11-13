@@ -107,7 +107,7 @@ public sealed partial class VirtualMachine
         }
         if ((held & AdvanceTrigger) == 0) return;
         bool activated;
-        lock (_interactiveLock) activated = _interactiveFrame?.Hotspots.Activate() == true;
+        activated = _interactiveFrame?.Hotspots.Activate() == true;
         if (!activated) _host.EndInputWait();
     }
 }

@@ -25,7 +25,14 @@ public partial class Main : IFramePresenter
     // so its pixels keep the history a preserving frame draws over.
     private ReferenceRenderer? _shadowReference;
     private bool _lastFrameOnGpu;
-    private FrameDescription? _lastFrame;   // the description the screen shows, until the next frame is lowered
+    private FrameDescription? _lastFrame;   // the description the screen shows; the graphics native keeps it two lowerings
+
+    /// <summary>How long a display frame waits for the engine thread's frame turn. It answers at its next instruction
+    /// boundary or wait, so only a long instruction (a decode, a save) or the time before the interpreter starts makes
+    /// it late; its frame then comes with a later turn.</summary>
+    private const int FrameTurnTimeoutMs = 4;
+
+    private Action? _presentationCoordinateNote;
 
     private string? _gfxLogPath;                // --gfx-log <file>: log per-object draw/skip CHANGES
 
@@ -33,20 +40,24 @@ public partial class Main : IFramePresenter
     /// a language switch, its language assets apply (localization spec §12). Main thread, as the renderer.</summary>
     private void ForgetPreparedPixels() => _reference.ForgetPreparedPixels();
 
-    private void Recomposite()
+    // The engine thread, just before a frame turn lowers: --perf-log notes the instruction the frame presents.
+    private void NotePresentationCoordinate()
     {
-        if (_perf != null)
-        {
-            var presentStep = _trace.LatestStep;
-            _perf.RecordPresentationCoordinate(presentStep?.Script ?? "<startup>",
-                                               presentStep?.Offset ?? -1, presentStep?.Opcode ?? -1);
-        }
-        // The decision strings of a diagnostic run are the reference renderer's evidence, so its frames draw there.
-        var decisions = _decisionLog.NextFrame();
-        FrameDescription frame = _graphics.LowerFrame(_clock.NowMs, _perf, decisions);
+        var presentStep = _trace.LatestStep;
+        _perf?.RecordPresentationCoordinate(presentStep?.Script ?? "<startup>",
+                                            presentStep?.Offset ?? -1, presentStep?.Opcode ?? -1);
+    }
+
+    /// <summary>Draw the frame a frame turn published (InputAndWaits.RunFrameTurn). A <paramref name="late"/> frame was
+    /// lowered in an earlier turn, without this frame's diagnostics.</summary>
+    private void DrawFrame(FrameDescription frame, bool late)
+    {
+        if (late) _perf?.BeginRecomposite(frame.ScreenTransition != null);
         _lastFrame = frame;
         _shadowReference?.Draw(frame);
-        _lastFrameOnGpu = decisions == null && _useGpuBackend && _gpuRenderer.TryDraw(frame);
+        // The decision strings of a diagnostic run are the reference renderer's evidence, so its frames draw there.
+        bool diagnostic = _decisionLog.Enabled;
+        _lastFrameOnGpu = !diagnostic && _useGpuBackend && _gpuRenderer.TryDraw(frame);
         if (_lastFrameOnGpu)
         {
             _screenView.Visible = false;
@@ -57,7 +68,7 @@ public partial class Main : IFramePresenter
         _gpuRenderer.Visible = false;
         _screenView.Visible = true;
         _reference.Draw(frame);
-        if (decisions != null) _decisionLog.Record(_clock.NowMs, _pageCount);
+        if (diagnostic && !late) _decisionLog.Record(_clock.NowMs, _pageCount);
         Present(_reference.Pixels, _reference.Width, _reference.Height);
         _perf?.EndRecomposite();
     }
@@ -90,7 +101,7 @@ public partial class Main : IFramePresenter
         if (path == null)
         {
             _shadowReference ??= new ReferenceRenderer(_graphics.Canvas);
-            _graphics.RequestPresentation();
+            _waits.Invoke(() => _graphics.RequestPresentation());
             return new JsonObject { ["armed"] = true };
         }
         if (_shadowReference == null)

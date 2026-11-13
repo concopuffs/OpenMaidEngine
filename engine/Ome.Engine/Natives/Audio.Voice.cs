@@ -23,82 +23,67 @@ public sealed partial class Audio
     /// (op 0x1bd). Its audible meaning is unproven; the port only keeps it.</summary>
     public int VoicePlaybackVariant
     {
-        get { lock (_lock) return _voicePlaybackVariant; }
+        get { return _voicePlaybackVariant; }
     }
 
     /// <summary>Op 0xc4: a line's voice. A pending op 0x1d5 request is promoted and this voice plays muted, on channel
     /// 12 at volume 0, so its completion keeps Auto's timing.</summary>
     public void PlayVoice(long voiceId)
     {
-        lock (_lock)
-        {
-            if ((_voiceMuteFlags & VoiceMutePromoted) != 0) _voiceMuteFlags = 0;
-            else if ((_voiceMuteFlags & VoiceMuteRequested) != 0) _voiceMuteFlags |= VoiceMutePromoted;
-            StartVoice(voiceId, 0, muted: (_voiceMuteFlags & VoiceMuteRequested) != 0);
-            UpdateTimedWork();
-        }
+        if ((_voiceMuteFlags & VoiceMutePromoted) != 0) _voiceMuteFlags = 0;
+        else if ((_voiceMuteFlags & VoiceMuteRequested) != 0) _voiceMuteFlags |= VoiceMutePromoted;
+        StartVoice(voiceId, 0, muted: (_voiceMuteFlags & VoiceMuteRequested) != 0);
+        UpdateTimedWork();
     }
 
     /// <summary>Op 0x1bd: a voice replayed from History, with playback variant 1. It plays audibly and consumes a
     /// pending op 0x1d5 request.</summary>
     public void PlayHistoryVoice(long voiceId)
     {
-        lock (_lock)
-        {
-            if ((_voiceMuteFlags & (VoiceMuteRequested | VoiceMutePromoted)) != 0) _voiceMuteFlags = 0;
-            StartVoice(voiceId, 1, muted: false);
-            UpdateTimedWork();
-        }
+        if ((_voiceMuteFlags & (VoiceMuteRequested | VoiceMutePromoted)) != 0) _voiceMuteFlags = 0;
+        StartVoice(voiceId, 1, muted: false);
+        UpdateTimedWork();
     }
 
     /// <summary>Op 0x1d5: the next op 0xc4 voice plays at volume 0.</summary>
     public void MuteNextVoice()
     {
-        lock (_lock) _voiceMuteFlags = VoiceMuteRequested;
+        _voiceMuteFlags = VoiceMuteRequested;
     }
 
     /// <summary>Op 0x1bc's audio part: stop channel 12, drop the voice fast-forward held back and clear the op 0x1d5
     /// request.</summary>
     public void ResetMessageVoiceState()
     {
-        lock (_lock)
-        {
-            _heldVoice = null;
-            _voiceMuteFlags = 0;
-            _timeline?.Event("voice-stop", new());
-            StopChannel(VoiceChannel);
-            UpdateTimedWork();
-        }
+        _heldVoice = null;
+        _voiceMuteFlags = 0;
+        _timeline?.Event("voice-stop", new());
+        StopChannel(VoiceChannel);
+        UpdateTimedWork();
     }
 
     /// <summary>Op 0x2c0: replace the pending delayed voice. The delay counts from the first tick outside a statement
     /// block (voice_tick_delayed_playback@0x4884d0), and the start arms the duck release as op 0x1bf does.</summary>
     public void ScheduleVoicePlayback(long voiceId, int playbackVariant, long delayMs)
     {
-        lock (_lock)
+        AudioClip? clip = _assets.Voice(voiceId);
+        _timeline?.Event("voice-scheduled", new()
         {
-            AudioClip? clip = _assets.Voice(voiceId);
-            _timeline?.Event("voice-scheduled", new()
-            {
-                ["id"] = voiceId, ["file"] = clip?.Name, ["playback_variant"] = playbackVariant,
-                ["delay_ms"] = unchecked((uint)delayMs),
-            });
-            _delayedVoice = clip == null ? null : new DelayedVoice(clip, playbackVariant, unchecked((uint)delayMs), null);
-            UpdateTimedWork();
-        }
+            ["id"] = voiceId, ["file"] = clip?.Name, ["playback_variant"] = playbackVariant,
+            ["delay_ms"] = unchecked((uint)delayMs),
+        });
+        _delayedVoice = clip == null ? null : new DelayedVoice(clip, playbackVariant, unchecked((uint)delayMs), null);
+        UpdateTimedWork();
     }
 
     /// <summary>Fast-forward ended: play the voice it held back (<see cref="IFastForwardListener"/>).</summary>
     void IFastForwardListener.FastForwardChannelSet(FastForwardChannel channel, bool value, bool active, bool changed)
     {
         if (!changed || active) return;
-        lock (_lock)
-        {
-            if (_heldVoice is not { } held) return;
-            _heldVoice = null;
-            DispatchVoice(held.Clip, held.PlaybackVariant, held.Muted);
-            UpdateTimedWork();
-        }
+        if (_heldVoice is not { } held) return;
+        _heldVoice = null;
+        DispatchVoice(held.Clip, held.PlaybackVariant, held.Muted);
+        UpdateTimedWork();
     }
 
     private void StartVoice(long voiceId, int playbackVariant, bool muted)
@@ -108,8 +93,8 @@ public sealed partial class Audio
             ["playback_variant"] = playbackVariant, ["muted"] = muted });
         if (clip == null) return;
         var start = new VoiceStart(clip, playbackVariant, muted);
-        // Held under the skip native's lock, so a voice requested as fast-forward ends is either held and then played
-        // by the notice of its end, or played now.
+        // A voice requested while fast-forward runs is held and played by the notice of its end; otherwise it plays
+        // now.
         bool first = false;
         if (_skip.WhileFastForward(() => { first = _heldVoice == null; _heldVoice = start; }))
         {

@@ -16,7 +16,7 @@ public sealed partial class VirtualMachine
     public IReadOnlyList<VmFrameLocation> CaptureFrameLocations()
     {
         ExecFrame[] active;
-        lock (_debugControlLock) active = _activeExecutionFrames.ToArray();
+        active = _activeExecutionFrames.ToArray();
         var locations = new VmFrameLocation[active.Length];
         for (int i = 0; i < active.Length; i++)
         {

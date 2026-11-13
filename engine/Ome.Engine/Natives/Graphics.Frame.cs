@@ -11,16 +11,18 @@ namespace Ome.Engine.Natives;
 // a render-target publication lowers its range here too.
 public sealed partial class Graphics
 {
-    // Front-end thread only: the description and the snapshot it is lowered from are reused for every frame.
-    private FrameDescription? _frame;
-    private readonly FrameScreenTransition _frameScreenTransition = new();
+    // The engine thread's, in a frame turn. Two descriptions take turns, each with its screen transition, so the front
+    // end draws one while the next is lowered into the other; the snapshot they are lowered from is reused.
+    private readonly FrameDescription?[] _frames = new FrameDescription?[2];
+    private readonly FrameScreenTransition[] _frameScreenTransitions = [new(), new()];
+    private int _nextFrame;
     private readonly List<RenderObject> _frameObjects = new(1024);
     private readonly BlurRangeSources _blurSources = new();
 
     /// <summary>
     /// Lower the frame to present at <paramref name="nowMs"/>: the pending screen transition, or the backbuffer's
-    /// published objects and whether they land over the current pixels. The description is valid until the next call;
-    /// the front end calls this on its thread, once per frame it draws.
+    /// published objects and whether they land over the current pixels. The description is valid until the call after
+    /// next: the waits lower it in a frame turn, and the front end draws it while the next is lowered into the other.
     /// </summary>
     /// <param name="perf"><c>--perf-log</c>'s counters: snapshot, object visits, layers and resolve times. The caller
     /// starts the frame's record and ends it after drawing; this begins the recomposition.</param>
@@ -29,7 +31,9 @@ public sealed partial class Graphics
     public FrameDescription LowerFrame(long nowMs, PerformanceFrameLog? perf = null,
                                        Dictionary<long, string>? decisions = null)
     {
-        FrameDescription frame = _frame ??= new FrameDescription { Width = _screenWidth, Height = _screenHeight };
+        int buffer = _nextFrame;
+        _nextFrame ^= 1;
+        FrameDescription frame = _frames[buffer] ??= new FrameDescription { Width = _screenWidth, Height = _screenHeight };
         frame.Items.Clear();
         frame.ScreenTransition = null;
 
@@ -59,7 +63,7 @@ public sealed partial class Graphics
             // it. The target is one flattened surface: its objects drawn opaquely over the surface's clear (black, or
             // the overlay colour for the white fade). Fading each object on its own instead dims the whole frame
             // mid-transition and lets the target's layers show through each other.
-            FrameScreenTransition screen = _frameScreenTransition;
+            FrameScreenTransition screen = _frameScreenTransitions[buffer];
             screen.Source.Clear();
             screen.Target.Clear();
             LowerObjects(transition.Source, screen.Source, perf, decisions);

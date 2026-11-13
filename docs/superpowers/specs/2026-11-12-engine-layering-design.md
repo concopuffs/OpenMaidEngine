@@ -4,7 +4,8 @@
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
 2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio), 7 (graphics), 8 (movies), 9 (saves,
-settings and shell services) and 10 (text) are done on `feature/engine-layering`; §3.3, §4, §5.2, §5.3, §6.2, §6.3, §7.5, §7.6, §8,
+settings and shell services), 10 (text) and 11 (input, waits and the engine loop) are done on
+`feature/engine-layering`; §3.3, §4, §5.2, §5.3, §5.4, §6.2, §6.3, §7.5, §7.6, §8,
 §11, §12 and §13 record what they settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15
 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
@@ -542,6 +543,49 @@ show-text runs and the reveal; `TextManager.WaitIndicator.cs` the wait indicator
   the page locator and the timeline. It hands the native to `EngineHost` and the VM. The native attaches itself to the
   graphics native as the surface listener that drops the layouts retained on a released surface (census addition 2).
 
+**As built (milestone 11).** The input and waits native is `Ome.Engine.Natives.InputAndWaits`
+(`engine/Ome.Engine/Natives/InputAndWaits*.cs`):
+
+- `InputAndWaits.cs` holds its construction, the wait flags, the stop and the scene reset;
+- `.Blocking.cs` is the one place where a wait blocks;
+- `.Events.cs` routes the front end's input;
+- `.TextWait.cs` holds the ADV input poll (ops `0x72` and `0xfa`) and the reveal's wait;
+- `.Sleep.cs` holds the sleeps, the timed-callback deadline, the instruction boundary's `FrameYield` and the front
+  end's modal hold;
+- `.Transitions.cs` holds the effect and screen transition waits;
+- `.Presentation.cs` holds the synchronized presentation and the rule that replaced `ScriptPresentationBarrier`;
+- `.Modal.cs` holds op `0x20f`'s modal movie and the three dialog waits;
+- `.Turns.cs` holds the engine thread, its frame turns and the front end's requests (§5.3).
+
+`StopAndReload` (`Natives/StopAndReload.cs`) holds the stop and the return to title. The waits and the interpreter
+share its one copy.
+
+- **Its state.** The host's 11 census rows belong to the native: the three wait handles, the wait flags, the modal
+  hold and its release, and `SleepScale`. The stop and the reload interrupt are `StopAndReload`'s. The native also has
+  the fields that milestones 7 and 8 left in the host for the waits that block on graphics and movies:
+  - the synchronized presentation's request generations and its timestamp;
+  - the foreground transition's fields;
+  - op `0x20f`'s three fields;
+  - `_presentationWithheldByStatementBlock`.
+- **What stays at the VM.** The census's 24 VM rows stay at the VM, because they are the interpreter's: the hotspot
+  callback frames, the input latch, op `0xcc`'s callback and ops `0xd3`-`0xd5`'s, the pointer, buttons and wheel that
+  ops `0x108` and `0x10d` read, the coroutine yield and the hidden-window wait. The native routes each input to them
+  through `IInterpreterInput` (`Natives/IInterpreterInput.cs`), which the native defines and the VM implements (§5.4,
+  rule 2). The native decides which of them an input reaches, as `age_main_window_proc@0x486320` and the ADV services
+  do. `_interactiveLock` went when input moved to the engine thread (§5.3).
+- **Input routing.** `godot/Main.Input.cs` passes each pointer, button, wheel, key and joystick event to the native.
+  It keeps only its own controls: the menus, the dialogs and its hot keys. The rules it used to apply are now the
+  native's: `CLICKONUP`, `message:AdvanceMesOnWheel`, `system:EffectSkipOnClick`, the advance at a wait, and the
+  click that skips an effect or cancels a movie.
+- **What stays at the host.** `EngineHost` keeps the `IHost` members the VM calls, each of which calls the native.
+  It also keeps the cursor, the seed of the Auto delays and the shutdown write of the message settings. It holds no
+  lock, no wait handle and no wait flag. Milestone 12 removes it.
+- **Done when.** `ProjectBoundaryTests` checks three things: the native's fields are private; `EngineHost` keeps
+  none of the census's wait fields and no lock, wait handle or semaphore; and no `godot/` file routes input to the
+  interpreter. `InputAndWaitsTests` replaces `EngineHostWaitTests`. It keeps milestone 6's fade tests and fails on
+  any blocking call in `InputAndWaits*.cs` or `EngineHost*.cs` outside `.Blocking.cs` and `.Turns.cs`. It also checks
+  the routing and the two threads (§5.3).
+
 ### 5.3 Time
 
 **Today.** The VM runs on a task thread (`godot/Main.cs:616`) and blocks inside host calls. Godot's main thread
@@ -613,6 +657,137 @@ runs.
 fallback keeps the code and changes who drives the loop: the front end's frame callback gives the engine thread a
 turn and waits for it to yield.
 
+**As built (milestone 11): the thread question.** The engine thread runs native's main loop, and the front end
+drives the frames. This is part 2's design and its fallback together. The engine thread keeps its own loop, so
+waits block as native's do. The front end asks for a frame turn each display frame, which keeps presentation on the
+display's clock.
+
+- **The engine thread** is the interpreter's task (`godot/Main.cs`), run through `InputAndWaits.RunEngine`. Every
+  native is that thread's alone and takes no lock (§5.1, rule 4). The tick runs at each instruction boundary and
+  each time a wait wakes (part 1).
+- **A frame turn.** Each display frame, the front end's `_Process` asks for a turn (`RunFrameTurn`) and waits for it
+  up to 4 ms (`Main.FrameTurnTimeoutMs`). The engine thread answers at its next instruction boundary (`FrameYield`)
+  or at a wait, before the wait blocks and after it wakes. In the turn the engine thread:
+  - routes the queued input;
+  - runs the queued requests;
+  - publishes the movie frames that the front end serviced;
+  - if it may present, consumes the presentation reasons and lowers the frame description (§6.3).
+
+  The front end draws the description that the turn published. Once a turn has started, the front end waits for it
+  to end. A turn that has not started by the deadline stays asked for: the engine thread answers it later, and its
+  frame is drawn on the next display frame, marked late in the perf log.
+- **Where it may present.** The engine thread presents only where native renders: outside a script's burst
+  (`_scriptDepth == 0`) or once the burst is suspended at a wait. A turn at an instruction boundary inside a burst
+  ends with nothing to draw. A published frame that the front end has not taken holds the next one back, with its
+  reasons still pending, so no publication is lost. This replaces `ScriptPresentationBarrier`, through which the
+  render thread read `GfxState` while the VM wrote it.
+- **The front end's thread** does what part 2 lists:
+  - It queues input events, which the engine thread routes at its next boundary or wait (`.Events.cs`).
+  - It asks for the frame turn.
+  - It applies the device commands: audio, the window, the cursor, and the movie decoders with their sound, which
+    stay on its thread because the stream device touches Godot nodes.
+  - It draws the published description. The descriptions are double-buffered (`Graphics.Frame.cs`), and the pixels
+    they name are immutable, since a surface's image is replaced, not written. So the engine thread can go on while
+    the front end draws.
+- **Requests.** What else the front end needs of the engine runs on the engine thread through one queue:
+  - the options panel, the menu bar's state and commands (`EngineThreadMenuServices` in `Main.MenuBar.cs`), the
+    language switch, the debug frame controls, and the driver's `state`, `rand-seed` and `reference-diff` use
+    `Invoke`;
+  - the stall diagnostic uses `TryInvoke` with a 500 ms limit, and says whether the engine answered;
+  - a stop or a return to title sets `StopAndReload`'s flag and posts `WakeAllWaits` to the engine thread.
+
+  While no engine thread runs (before the interpreter starts and after it returns), a request runs at once on its
+  caller's thread. A request made on the engine thread also runs at once.
+- **The deadlock rule of §6.2, rule 6, holds.** The front end waits for a turn that has started, but nothing on the
+  engine thread waits for the front end. A device call from the engine thread is a command or a query of the
+  device's last report. The front end's modal hold is the one handoff the engine thread waits on, and that wait is
+  modal.
+- **Blocking outside the waits.** The engine thread blocks in one other place: fast-forward pacing
+  (`SkipAndAuto.PaceOp`) sleeps a few milliseconds per op or page through `IPaceClock`. The sleep models a cost per op and
+  per page (§11, notes on the order), and the next turn is answered when it ends.
+
+**The timing.** The tolerance was written before measuring (ten rules: the same step results, `SYS4REG.INI`, shots,
+saves, log lines and reference differences; step seconds within 5 %, 2 % for the reveal clock and the read skip; frame
+times; presentation latency; timed waits). Rules 1 to 7 compare 21 port runs with milestone 10's (`c478357`). Rules
+8 to 10 compare the build after milestone 11's first two steps (the native, then the one loop; no thread changed)
+with the finished build, under the same display.
+
+- **Frame times and presentation latency are within tolerance** (rules 8 and 9: `--perf-log`, optimized, two runs
+  each of SC0000's effect band and Kamidori's `FIELD`):
+  - drawn frames in the band: 3110 and 3109 before, 3103 and 3103 after for the band; 4609 and 4614 before, 4615 and
+    4616 after for `FIELD`;
+  - main-thread time per drawn frame, which now includes the wait for the turn: median 0.030 to 0.048 ms and p95
+    0.566 to 0.582 ms for the band; median 0.519 to 0.500 ms and p95 0.619 to 0.655 ms for `FIELD`;
+  - the p95 of the frame delta is 10 ms on both;
+  - the frames from a new presentation coordinate to the first frame drawn at it: mean 0.20 to 0.00 and largest 8 to
+    0 for the band; mean 0.64 to 0.05 and largest 11 to 2 for `FIELD`.
+- **Timed waits are outside rule 10 as it was written, and closer to native** (`--timeline-log`: the reveal clock,
+  the latch sleep, the effect waits and Kamidori's opening). Three behaviours changed, all because a wait no longer
+  waits for the front end's thread:
+  - **Short sleeps.** A `sleep 1` in the title and new-game poll loops took a median 10 to 16 ms before, a display
+    frame. The sleep did end at its deadline, but resuming waited for the barrier while the front end drew. Now it
+    takes about 1 ms, as native's `kernel32!Sleep(1)` does (`docs/engine-re.md`, "Short sleeps do not wait for the
+    display"). Each loop lasts as long as before, since its end is set by input or a fade, but runs 5 to 13 times
+    as many iterations. So the sequence of states differs by those iterations.
+  - **Transitions end at their length.** SC0000's four waits at `0x123de` after page 13's click took 154, 897, 164 and
+    338 ms before, and 150.7, 890.5, 150.3 and 300.6 ms after. Native's Frida trace measured 150, 890, 150 and 300 ms
+    (`docs/engine-re.md`, "Service waits end on the engine clock"). From the click to page 14's show-text took 1582 ms
+    before, 1520 ms after, and 1505 ms on native.
+  - **A reveal ends with its last glyph** instead of at the next frame. Page 14's reveal, which no click finishes in
+    the effect waits, took 231.9 ms before, 156.4 ms after, and 156 ms on native. The median reveal moved 0.3 ms in
+    the two runs that click through their reveals and 8 ms in the effect waits.
+  - **What follows from them.** The drive scenarios click on a fixed period, so a click now falls at another point in
+    the script: a modal movie that a click cancels ends at another time, page 14's reveal is finished by its click
+    instead of by a held one, and the new-game loop runs a few iterations fewer. With the poll loops collapsed to one
+    entry each and the cancelled movies left out, the three Himegari runs have the same sequence of waits. The 1000 and
+    750 ms sleeps are within a millisecond.
+- **The 21 port runs are within rules 1 to 7.** Against milestone 10's runs, they show:
+  - the same step results, apart from where a poll caught the script;
+  - the same `SYS4REG.INI`, shots and log lines;
+  - saves equal under `save-diff`, apart from the timestamp and the play time.
+
+  Step seconds are within 0.6 %: the reveal clock went from 93.88 to 93.93 s and the read skip from 37.77 to
+  37.75 s. Himegari's `reference-diff` run is the exception, 3.1 % shorter (49.33 to 47.78 s), still within 5 %.
+  Its two steps whose numbers move vary as much between two runs of milestone 10's build: page 14 had 1250 and 1425
+  pixels over the tolerance there and 1216 here; page 15's mid-effect step had 51631 and 1246 there and 54649 here.
+- **So the timing is within the tolerance on rules 1 to 9.** It is outside rule 10 as the rule was written, and in
+  each case the new timing is closer to native's.
+
+**The locks and wait handles that remain, one by one.** Milestone 11 removed 273 `lock` statements, which guarded
+natives' state against the front end's thread. Graphics, movies, the movie surface registry, text, audio, skip and
+auto, script memory, the saves native, the VM's interactive and debug-control state, `GfxState`, `InputBindings` and
+`AudioMixerSettings` take no lock now. `ScriptPresentationBarrier` and its tests are deleted. What is left:
+
+| Lock or handle | Where | Guards | Threads |
+|---|---|---|---|
+| `_turnLock` | `InputAndWaits.Turns.cs` | Which thread is the engine's, the turn's handshake and the diagnostics it carries, the published frame, and the request queue. Nothing runs under it except a turn or a request that the front end runs while no engine thread runs | Both. It is the one lock between them, and no other lock is taken under it |
+| `_frameSignal` (`AutoResetEvent`) | `InputAndWaits.cs` | The engine thread's one wake: a turn, input, a request, a serviced movie frame, a stop | Set by both; only the engine thread waits on it |
+| `_workQueued` (an int) | `InputAndWaits.Turns.cs` | That input, a request or a serviced movie frame is waiting. Read without a lock first, then taken by `Interlocked.Exchange`, which is a full fence, so a wake cannot be lost | Set by both, taken by the engine |
+| `_input` (`ConcurrentQueue`), `_advanceQueued` | `InputAndWaits.Events.cs` | The front end's input events, and the one advance `SignalInput` may queue | Front end enqueues, engine routes |
+| `Request.Done` (`ManualResetEventSlim`) | `InputAndWaits.Turns.cs` | A request's completion | Engine sets it, the asker waits |
+| `_frontendModalRelease` (`ManualResetEventSlim`) | `InputAndWaits.Sleep.cs` | A front-end modal hold (the options panel, the 終了 dialog, the screenshot folder): while it is reset, the engine thread waits at `FrameYield`, modally, and still answers turns | Front end sets and resets it, engine waits |
+| `_gate` (`SemaphoreSlim`), `_inputCallbackSignal` (`AutoResetEvent`) | `InputAndWaits.cs` | A click or Auto ends a text wait; input or a menu request reaches a wait's callbacks. They are handles because a wait blocks on one of them together with `_frameSignal` (`_blockHandles`) | `_gate`: engine only, since input is routed there. `_inputCallbackSignal`: also set by the shell native's menu requests from the front end |
+| `StopAndReload`'s two flags (`volatile`) | `StopAndReload.cs` | The stop and the return to title | Front end writes, both read; asking posts the wake |
+| The wait flags `_waiting`, `_transitionWaiting`, `_sleeping`, `_pages`, `_modalMovieWaiting` (`volatile`), `_transitionStartedAtMs` (`Interlocked`) | `InputAndWaits*.cs` | What the engine waits for. The front end's self-test and capture clickers (`--selftest`, `--shot`, `--shot-sequence`, `--transition-click-ms`) read them as status | Engine writes, front end reads |
+| `ShellDialog.Sync`, `_closed` (`ManualResetEventSlim`), the open-dialog list | `ShellServices.Dialogs.cs` | A dialog's answer and state, its close, and the dialogs a stop cancels | Engine opens and cancels, front end answers |
+| The menu queue (`ConcurrentQueue`, `volatile` pending flag) and `_windowed` | `ShellServices.cs`, `.ScreenMode.cs` | Menu toggles and screen-mode switches; the screen mode | Front end writes, engine takes |
+| `SystemKeyDisableMask`, `SystemMenuShowDelayMilliseconds` | `ShellServices.cs` | Ops `0x10f` and `0x148`, read by the front end's key and menu-bar handling. Word-sized and written by one thread, so a read is at most a frame late | Engine writes, front end reads |
+| `_serviced`, `_opened`, `_requestedRates`, `_requestedStops` (concurrent collections) | `Movies.Playback.cs` | The decoders' handoff: frames and completions the front end serviced, the movies it opened, and the rates and stops the engine asked for | Front end services, engine publishes and asks |
+| The audio device's ended queue (`ConcurrentQueue`) | `godot/Main.Audio.cs`, `SilentAudioDevice` | Channels that ended, reported to the engine (§6.2, rule 3) | Device enqueues, engine drains |
+| `FrameClock._speedLock` | `Hosting/FrameClock.cs` | The clock's speed scale and the sample it scales | The driver's `speed` sets it; both threads read the clock |
+| `TimelineLog`, `PageLocatorState`, `TextMissLog`, `HistogramTraceSink` locks | `Diagnostics/`, `Localization/` | One writer, so events keep their order | Both: the engine records, and the front end records its own events and reads the locator (F2, F3) |
+| `Sys4RegIniStore._lock` | `Persistence/` | `SYS4REG.INI`'s values and its write | The options panel writes from the front end, natives from the engine |
+| `SharedProfile._catalogUnlockLock`, `ScreenshotBmpStore._lock`, `ResourceMap._diagnosticLock` | `Persistence/`, `Sys4/` | The unlocked catalog entries; the screenshot counter (F1 on the front end); reported diagnostics, once each | Callers on either thread |
+| `BoundedLruCache._gate`, `AspectFontRealization._gate`, the glyph rasterizers' `_gate`, `GdiTextMetrics.Faces` | `Text/`, `godot/` | The glyph and metrics caches, and the TextServer rasterizer, which runs on its caller's thread (§6.2, rule 6) | The engine's text and the front end's own text (the shell, the options panel) |
+| The decoder's events and locks; `FfmpegMovieNative._decodeLock` | `Ome.Engine.Frontend/FfmpegMovie*.cs` | The decode thread's frames and audio, cancel and first frame | The decoder's own thread and the front end |
+| `GodotTraceSink._snapshotLock` and its queue; `DriveServer._calls` | `Ome.Engine.Frontend/` | The trace ring that the stall diagnostic reads; the driver's calls, which the front end takes each frame (`Pump`) | The engine's trace and the front end; the driver's socket and the front end |
+
+The VM keeps a few `volatile` fields and `Interlocked` updates from the old input thread: `_advTextWaitPolling`, the
+coroutine-yield flags, the input latch, the wheel delta and the queued callback mask. The skip-and-auto native
+keeps its `volatile` toggles, the Auto times and the click-cancel count. The text native keeps its `volatile` settings
+and reveal flag. Each of these is written and read on the engine thread now, so they are harmless and order nothing.
+Backlog "The host's threads have no stated ownership" is closed by this table.
+
 ### 5.4 Requests to the interpreter
 
 Some natives must make script work happen:
@@ -639,6 +814,27 @@ the native whether the callback is due and the interpreter runs it.
 
 This also gives "Two instruction loops" (backlog) its shape: one loop takes requests, whether it was entered from a
 frame or from a wait.
+
+**As built (milestone 11).** One loop: `VirtualMachine.RunInstructions` (`Ome.Engine.Vm/VirtualMachine.cs`) runs a
+frame's body and a wait's callback, which ends at the callback's return. Each instruction gets native's per-op
+services in one order:
+
+1. the stop and reload requests;
+2. the step limit;
+3. the boundary's services and requests (`ServiceInstructionBoundary`);
+4. the handler;
+5. a pending 無視 skip;
+6. `FrameYield`, where the engine thread answers a frame turn and takes the front end's messages;
+7. fast-forward's pace.
+
+A frame's loop also takes a debug frame return. `RunFrame` and `RunWaitCallback` map `RunInstructions`' end to their
+outcome, so a halt, an exit request or a root reload inside a callback ends the run as it would in a frame. The
+requests of rule 3 reach the interpreter at the two points the rule names: the boundary, and each time a wait wakes.
+In both, `InputAndWaits` first routes the queued input. So a click that arrives during a burst is routed at the next
+boundary, against the state the script has reached. Native's main loop peeks its messages after each op in the same
+way (`docs/engine-re.md`, "Fast-forward pace"). The front end's requests (§5.3, "As built (milestone 11)") are
+not script requests: they read or set a native's state and never run a script. Backlog "Two instruction loops" is
+closed.
 
 ## 6. Devices
 
@@ -814,6 +1010,22 @@ outlive its wait.
   before.
 - **`IFrontEnd` lost four members**: the three `ShowAge*` and `RequestScreenModeFromScript`. `ILifecycleHost` lost
   `RequestScreenMode`.
+
+**As built (milestone 11).**
+
+- **Rule 1 holds, with milestone 8's exception kept.** The movie stream device and the decoder's frames stay on the
+  front end's thread, because Godot's stream device touches Godot nodes. The movie native's `ServiceFrame` runs
+  there each display frame, before the frame turn. It queues the frames and completions it serviced, and it wakes
+  the engine thread once. The engine thread publishes them at its next turn or wake (`PublishServiced`), so what a
+  movie shows is set on the engine thread. The ended-channel reports of the audio device reach the engine the same
+  way (rule 3).
+- **The dialog waits are the input and waits native's** (`InputAndWaits.Modal.cs`): it opens a box through the shell
+  native and waits modally on its `Closed` handle. The front end answers on its own thread.
+- **Rule 6 holds.** The front end waits for the engine thread in two places. It waits up to 4 ms for a frame turn,
+  and without limit once the turn has started. It also waits for a request to finish. The engine thread does neither
+  in a turn nor in a request: it takes no device call that needs the front end's thread. Under a front-end modal
+  hold it waits for the front end, but modally, and it still answers turns and runs requests. So the options panel,
+  which is open during the hold, can still read and set the natives.
 
 ### 6.3 Graphics: a frame description and a reference renderer
 
@@ -1320,7 +1532,7 @@ Every design question is decided (§2). These facts are not verified yet; each n
 | What | Where it matters | Measured by |
 |---|---|---|
 | That native's BGM fade stops while a modal dialog is open | §5.3, §2 decision 10 | Before milestone 6, with a Frida trace of `bgm_fade_tick@0x464960` while the 終了 dialog was open: the fade stops, and the first tick after the dialog makes up the time, so the fade ends when it would have. The modal movie (op `0x20f`) keeps the services running (`docs/engine-re.md`, "A fade under the 終了 dialog stops, then catches up") |
-| That an engine-thread loop keeps today's frame timing | §5.3, part 2 | Milestone 11: `--timeline-log` runs of the drive scenarios, against a tolerance set before measuring |
+| That an engine-thread loop keeps today's frame timing | §5.3, part 2 | Milestone 11: frame times and presentation latency are within the tolerance set before measuring. The timed waits now end when their time is up, as native's do, where they used to end at the next display frame (§5.3, "As built (milestone 11)") |
 | How many tests assert on state that moves from the VM into a native | §12 | Milestone 2: 311 test methods, 152 beyond script memory (plan §3.4) |
 | That `DisableTransitiveProjectReferences` keeps device types out of handler compiles | §3.3 | Milestone 3: a compile that is meant to fail |
 | That the lift's typed calls keep `CallDeferred`'s timing | §12 | Milestone 4: they do (§6.2, "As built") |
@@ -1346,8 +1558,9 @@ From `docs/backlog.md`, `## Architecture`:
 - "Revision behaviour is one boolean" — milestone 0.
 - "VM state has no owners" — the census in milestone 2, then milestones 5 to 11.
 - "Scene reset clears fields one by one" — as each native takes its state; closed at milestone 12.
-- "The host's threads have no stated ownership" — typed calls in milestone 4, the locks in milestone 11.
-- "Two instruction loops" — the typed step result in milestone 1; one loop in milestone 11 (§5.4).
+- "The host's threads have no stated ownership" — typed calls in milestone 4, the locks in milestone 11, which
+  closed it (§5.3, "As built (milestone 11)").
+- "Two instruction loops" — the typed step result in milestone 1; one loop in milestone 11, which closed it (§5.4).
 - "The Godot front end has no unit tests" — milestone 4.
 - "The render traversal is written three times" — milestone 7, which closed it.
 
@@ -1508,3 +1721,16 @@ Not covered:
   `reference-diff` steps, on SC0000's effect band (pages 14 and 15), counted other pixels over the tolerance. A second
   run of the new build differed from the first by more than the first did from the build before (page 15: 51,631 and
   1,246 pixels), so those counts follow the band's phase when the frame is caught.
+- **2026-11-13, milestone 11.** Input, waits and the engine loop, built on `feature/engine-layering` in three
+  steps:
+  - the input and waits native, on the old threads;
+  - one instruction loop;
+  - the engine thread as native's main loop, with the front end asking for one frame turn each display frame (§5.2,
+    §5.3 and §5.4, "As built").
+
+  273 `lock` statements and `ScriptPresentationBarrier` are gone. Each remaining lock and wait handle is listed in
+  §5.3 with what it guards and which threads touch it. The suite (1941), validation at the core, workspace and runtime
+  levels on both games, and the 21 port runs of milestone 10 pass, and so do frame times and presentation latency. The timed waits are outside the tolerance's rule 10 as written: a `sleep 1`
+  now takes about 1 ms, and a transition or a reveal ends at its length instead of at the next frame. Native's Frida
+  measurements of the same waits agree with the new times. Backlog "Two instruction loops" and "The host's threads
+  have no stated ownership" are closed.

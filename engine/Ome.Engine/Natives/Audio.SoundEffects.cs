@@ -15,55 +15,43 @@ public sealed partial class Audio
     /// <summary>Op 0xb4: load a sound effect on a channel (0..9), replacing what it held.</summary>
     public void LoadSoundEffect(long resourceId, int channel)
     {
-        lock (_lock)
-        {
-            LoadSoundEffectLocked(resourceId, channel);
-            UpdateTimedWork();
-        }
+        LoadSoundEffectLocked(resourceId, channel);
+        UpdateTimedWork();
     }
 
     /// <summary>Ops 0xb5 (start mode 0, once) and 0xba (1, the decoder rewinds at the end): start a loaded
     /// channel.</summary>
     public void StartSoundEffect(int channel, int startMode)
     {
-        lock (_lock)
-        {
-            if (!IsSoundEffectChannel(channel) || _soundEffectNames[channel] == null) return;
-            _timeline?.Event("sfx-start", new() { ["channel"] = channel,
-                ["start_mode"] = startMode, ["file"] = _soundEffectNames[channel] });
-            PlayChannel(channel, loop: startMode != 0, NativeAudioVolume.ToDecibels(FullLevel));
-        }
+        if (!IsSoundEffectChannel(channel) || _soundEffectNames[channel] == null) return;
+        _timeline?.Event("sfx-start", new() { ["channel"] = channel,
+            ["start_mode"] = startMode, ["file"] = _soundEffectNames[channel] });
+        PlayChannel(channel, loop: startMode != 0, NativeAudioVolume.ToDecibels(FullLevel));
     }
 
     /// <summary>Op 0x2bf, the facade's SetDelay: start a loaded channel after a delay. One start waits per channel; a
     /// new one replaces it, and loading or releasing the channel cancels it.</summary>
     public void ScheduleSoundEffectStart(int channel, int startMode, long delayMs)
     {
-        lock (_lock)
-        {
-            if (!IsSoundEffectChannel(channel) || _soundEffectNames[channel] == null) return;
-            long ms = Math.Clamp(delayMs, 0, 60_000);
-            _timeline?.Event("sfx-start-scheduled", new() { ["channel"] = channel,
-                ["start_mode"] = startMode, ["delay_ms"] = ms, ["file"] = _soundEffectNames[channel] });
-            _delayedStarts[channel] = new DelayedStart(startMode, _clock.NowMs + ms);
-            UpdateTimedWork();
-        }
+        if (!IsSoundEffectChannel(channel) || _soundEffectNames[channel] == null) return;
+        long ms = Math.Clamp(delayMs, 0, 60_000);
+        _timeline?.Event("sfx-start-scheduled", new() { ["channel"] = channel,
+            ["start_mode"] = startMode, ["delay_ms"] = ms, ["file"] = _soundEffectNames[channel] });
+        _delayedStarts[channel] = new DelayedStart(startMode, _clock.NowMs + ms);
+        UpdateTimedWork();
     }
 
     /// <summary>Op 0xb6: stop a channel and drop its sound.</summary>
     public void ReleaseSoundEffect(int channel)
     {
-        lock (_lock)
-        {
-            ReleaseSoundEffectLocked(channel);
-            UpdateTimedWork();
-        }
+        ReleaseSoundEffectLocked(channel);
+        UpdateTimedWork();
     }
 
     /// <summary>The resource each sound effect channel holds, for a numbered save (0 for none).</summary>
     public IReadOnlyList<long> SoundEffectResourceIds
     {
-        get { lock (_lock) return _soundEffectResourceIds.ToArray(); }
+        get { return _soundEffectResourceIds.ToArray(); }
     }
 
     private void LoadSoundEffectLocked(long resourceId, int channel)

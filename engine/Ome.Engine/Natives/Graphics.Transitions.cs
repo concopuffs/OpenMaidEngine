@@ -5,8 +5,7 @@ using Ome.Engine.Sys4;
 namespace Ome.Engine.Natives;
 
 /// <summary>A whole-screen transition the native started: when it started and how long it runs, and what the
-/// timeline records about it. The lifted host blocks the engine thread until it is drawn (milestone 11 moves the
-/// wait).</summary>
+/// timeline records about it. The input and waits native blocks the engine thread until it is drawn.</summary>
 public readonly record struct ScreenTransitionStart(long StartMs, long DurationMs, Dictionary<string, object?> Detail);
 
 /// <summary>How a backbuffer publication lands: over the current pixels or on a clean frame, and whether a retained
@@ -20,14 +19,12 @@ public readonly record struct LegacyScreenTransitionSnapshot(
 
 // Publication and the whole-screen transition: what op 0x222 and op 0x20c publish (a render target's captured objects
 // and pixels, or the backbuffer's range and whether it keeps its pixels), and the 0x21/0x22/0x24/0x25 family's
-// screen transition with its timing. The lifted host keeps the waits that block on them.
+// screen transition with its timing. The input and waits native's waits block on them.
 public sealed partial class Graphics
 {
-    private readonly object _transitionLock = new();
     // surface slot -> the objects op 0x222/0x20c last published into it; the screen transitions draw from them.
     private readonly Dictionary<int, IReadOnlyList<RenderObject>> _renderTargetSnapshots = new();
-    private ScreenTransition? _screenTransition;   // under _transitionLock
-    private readonly object _backbufferRangeLock = new();
+    private ScreenTransition? _screenTransition;
     private GfxHandleRange _backbufferRange = GfxHandleRange.All;
     private bool _backbufferPublicationPreservesExistingPixels;
     private bool _backbufferClearPending;
@@ -45,11 +42,8 @@ public sealed partial class Graphics
             PublishObjectRangeToSurface(firstHandle, count);
             return false;
         }
-        lock (_backbufferRangeLock)
-        {
-            _backbufferRange = new GfxHandleRange(firstHandle, count);
-            _backbufferPublicationPreservesExistingPixels = true;
-        }
+        _backbufferRange = new GfxHandleRange(firstHandle, count);
+        _backbufferPublicationPreservesExistingPixels = true;
         _timeline?.Event("present-object-range", new() { ["first"] = firstHandle, ["count"] = count });
         return true;
     }
@@ -65,18 +59,15 @@ public sealed partial class Graphics
             int slot = State.CurrentRenderTargetSlot;
             var snapshot = State.SnapshotVisibleObjects(_clock.NowMs);
             PublishObjectRangeToSurface(0, long.MaxValue, snapshot);
-            lock (_transitionLock) _renderTargetSnapshots[slot] = snapshot;
+            _renderTargetSnapshots[slot] = snapshot;
             _timeline?.Event("render-target-snapshot", new()
             {
                 ["surface"] = slot, ["objects"] = snapshot.Count,
             });
             return false;
         }
-        lock (_backbufferRangeLock)
-        {
-            _backbufferRange = GfxHandleRange.All;
-            _backbufferPublicationPreservesExistingPixels = true;
-        }
+        _backbufferRange = GfxHandleRange.All;
+        _backbufferPublicationPreservesExistingPixels = true;
         long nowMs = _clock.NowMs;
         int started = State.StartForegroundTransitions(nowMs);
         State.SeedOneShotChannels(nowMs);   // gfx_render_frame samples, so seeds, every visible channel
@@ -106,13 +97,10 @@ public sealed partial class Graphics
         State.SnapshotVisibleObjects(nowMs, snapshot);
         GfxHandleRange range;
         bool preserveExistingPixels;
-        lock (_backbufferRangeLock)
-        {
-            range = _backbufferRange;
-            preserveExistingPixels =
-                _backbufferPublicationPreservesExistingPixels && !_backbufferClearPending;
-            _backbufferClearPending = false;
-        }
+        range = _backbufferRange;
+        preserveExistingPixels =
+            _backbufferPublicationPreservesExistingPixels && !_backbufferClearPending;
+        _backbufferClearPending = false;
         int write = 0;
         for (int read = 0; read < snapshot.Count; read++)
             if (range.Contains(snapshot[read].Handle)) snapshot[write++] = snapshot[read];
@@ -150,20 +138,19 @@ public sealed partial class Graphics
             return;
 
         RgbaImage destination;
-        lock (_imageLock)
-            destination = _surfaceImages.TryGetValue(targetSlot, out var current)
-                ? new RgbaImage(current.Width, current.Height, (byte[])current.Pixels.Clone())
-                : new RgbaImage(dimensions.W, dimensions.H,
-                    new byte[checked(dimensions.W * dimensions.H * 4)]);
+        destination = _surfaceImages.TryGetValue(targetSlot, out var current)
+            ? new RgbaImage(current.Width, current.Height, (byte[])current.Pixels.Clone())
+            : new RgbaImage(dimensions.W, dimensions.H,
+                new byte[checked(dimensions.W * dimensions.H * 4)]);
 
         IReadOnlyList<RenderObject> visible = sampled ?? State.SnapshotVisibleObjects(_clock.NowMs);
         int rendered = DrawObjectRange(destination, visible, firstHandle, count);
 
-        lock (_imageLock) _surfaceImages[targetSlot] = destination;
+        _surfaceImages[targetSlot] = destination;
         IReadOnlyList<RenderObject> retained = visible
             .Where(item => item.Handle >= firstHandle && item.Handle - firstHandle < count)
             .ToArray();
-        lock (_transitionLock) _renderTargetSnapshots[targetSlot] = retained;
+        _renderTargetSnapshots[targetSlot] = retained;
         _timeline?.Event("render-target-publish", new()
         {
             ["surface"] = targetSlot,
@@ -176,7 +163,7 @@ public sealed partial class Graphics
 
     private IReadOnlyList<RenderObject>? RenderTargetSnapshot(int slot)
     {
-        lock (_transitionLock) return _renderTargetSnapshots.GetValueOrDefault(slot);
+        return _renderTargetSnapshots.GetValueOrDefault(slot);
     }
 
     // ---- the whole-screen transition (ops 0x21, 0x22, 0x24, 0x25) ----
@@ -206,13 +193,10 @@ public sealed partial class Graphics
         long start = _clock.NowMs;
         IReadOnlyList<RenderObject> source;
         IReadOnlyList<RenderObject> target;
-        lock (_transitionLock)
-        {
-            source = _renderTargetSnapshots.TryGetValue(sourceSurface, out var capturedSource)
-                ? capturedSource : System.Array.Empty<RenderObject>();
-            target = _renderTargetSnapshots.TryGetValue(targetSurface, out var capturedTarget)
-                ? capturedTarget : State.SnapshotVisibleObjects(start);
-        }
+        source = _renderTargetSnapshots.TryGetValue(sourceSurface, out var capturedSource)
+            ? capturedSource : System.Array.Empty<RenderObject>();
+        target = _renderTargetSnapshots.TryGetValue(targetSurface, out var capturedTarget)
+            ? capturedTarget : State.SnapshotVisibleObjects(start);
         return StartScreenTransition(source, target, start, intervalArgument, forceEndpoint, new()
         {
             ["kind"] = "surface-crossfade",
@@ -265,11 +249,10 @@ public sealed partial class Graphics
         Dictionary<string, object?> detail, long overlayRgb = 0, long? durationOverride = null)
     {
         long duration = durationOverride ?? LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
-        lock (_transitionLock)
-            _screenTransition = new ScreenTransition(source, target, start, duration, overlayRgb)
-            {
-                Forced = forceEndpoint,
-            };
+        _screenTransition = new ScreenTransition(source, target, start, duration, overlayRgb)
+        {
+            Forced = forceEndpoint,
+        };
         RequestPresentation();
         detail["interval_argument"] = intervalArgument;
         detail["duration_ms"] = duration;
@@ -282,61 +265,51 @@ public sealed partial class Graphics
     /// <summary>A screen transition is pending: running, or forced and not yet drawn.</summary>
     public bool ScreenTransitionPending
     {
-        get { lock (_transitionLock) return _screenTransition != null; }
+        get { return _screenTransition != null; }
     }
 
     /// <summary>The screen transition has nothing left to run at <paramref name="nowMs"/> (none, forced, or past its
     /// end).</summary>
     public bool ScreenTransitionDue(long nowMs)
     {
-        lock (_transitionLock)
-            return _screenTransition == null || _screenTransition.Forced
-                || nowMs - _screenTransition.StartMs >= _screenTransition.DurationMs;
+        return _screenTransition == null || _screenTransition.Forced
+            || nowMs - _screenTransition.StartMs >= _screenTransition.DurationMs;
     }
 
     /// <summary>Force the pending screen transition to its endpoint; false when there is none.</summary>
     public bool ForceScreenTransition()
     {
-        lock (_transitionLock)
-        {
-            if (_screenTransition == null) return false;
-            _screenTransition.Forced = true;
-            return true;
-        }
+        if (_screenTransition == null) return false;
+        _screenTransition.Forced = true;
+        return true;
     }
 
     /// <summary>The pending screen transition at <paramref name="nowMs"/>. A forced (completed) one is handed out
     /// once: its terminal frame is drawn by this caller, so only the path that draws calls this.</summary>
     public bool TrySnapshotScreenTransition(long nowMs, out LegacyScreenTransitionSnapshot snapshot)
     {
-        lock (_transitionLock)
+        if (_screenTransition == null)
         {
-            if (_screenTransition == null)
-            {
-                snapshot = default;
-                return false;
-            }
-            double progress = _screenTransition.Forced ? 1.0
-                : System.Math.Clamp((nowMs - _screenTransition.StartMs)
-                    / (double)_screenTransition.DurationMs, 0.0, 1.0);
-            snapshot = new LegacyScreenTransitionSnapshot(
-                _screenTransition.Source, _screenTransition.Target, progress, _screenTransition.OverlayRgb);
-            if (_screenTransition.Forced) _screenTransition = null;
-            return true;
+            snapshot = default;
+            return false;
         }
+        double progress = _screenTransition.Forced ? 1.0
+            : System.Math.Clamp((nowMs - _screenTransition.StartMs)
+                / (double)_screenTransition.DurationMs, 0.0, 1.0);
+        snapshot = new LegacyScreenTransitionSnapshot(
+            _screenTransition.Source, _screenTransition.Target, progress, _screenTransition.OverlayRgb);
+        if (_screenTransition.Forced) _screenTransition = null;
+        return true;
     }
 
     /// <summary>scene_context_init_reset: the backbuffer publishes everything again over a clean frame, and a pending
     /// screen transition goes. A render target's captured objects stay with its surface.</summary>
     public void ResetScene()
     {
-        lock (_backbufferRangeLock)
-        {
-            _backbufferRange = GfxHandleRange.All;
-            _backbufferPublicationPreservesExistingPixels = false;
-            _backbufferClearPending = false;
-        }
-        lock (_transitionLock) _screenTransition = null;
+        _backbufferRange = GfxHandleRange.All;
+        _backbufferPublicationPreservesExistingPixels = false;
+        _backbufferClearPending = false;
+        _screenTransition = null;
         RequestPresentation();
     }
 

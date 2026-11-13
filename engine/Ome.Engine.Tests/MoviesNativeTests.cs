@@ -106,7 +106,7 @@ public class MoviesNativeTests
 
         Assert.False(rig.Movies.IsSurfaceActive(9));
         Assert.Equal([1L], rig.Movies.CompletedPlaybackIds());
-        Assert.Equal(1, rig.Wakes);
+        Assert.Equal(2, rig.Wakes);   // the frame service hands the completion over, and the completion wakes the waits
         // A completed movie stays bound, and still holds the effect wait until its surface is released.
         Assert.True(rig.Movies.HoldsServiceWait);
         Assert.False(decoder.Disposed);
@@ -283,8 +283,9 @@ public class MoviesNativeTests
 
         Assert.True(rig.Graphics.State.SnapshotMovieMaskTransitions().Single().Completed);
         Assert.False(rig.Movies.IsSurfaceActive(45));
-        // The waits wake for the first mask, the decoded frame's, the terminal one and the completion.
-        Assert.Equal(4, rig.Wakes);
+        // The waits wake for the first mask, the decoded frame's, the terminal one and the completion, and the frame
+        // service wakes the engine thread to publish the frame and the completion it took.
+        Assert.Equal(6, rig.Wakes);
     }
 
     [Fact]

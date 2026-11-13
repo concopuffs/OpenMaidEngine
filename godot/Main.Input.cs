@@ -6,7 +6,6 @@ using Ome.Engine.Diagnostics;
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Model;
 using Ome.Engine.Natives;
-using Ome.Engine.Persistence;
 using Ome.Engine.Profiles;
 using Ome.Engine.Vm;
 
@@ -19,8 +18,6 @@ public partial class Main
     private IReadOnlyList<DebugSceneEntry> _debugSceneEntries = System.Array.Empty<DebugSceneEntry>();
     private PageLocatorState _locator = null!;
     private bool _locatorHudVisible;
-    /// <summary>SYS4INI CLICKONUP: mouse clicks trigger on release (see Sys4StartupSettings.ClickOnUp).</summary>
-    private bool _clickOnUp;
 
     // _Input (not _UnhandledInput): the root Control consumes mouse clicks as GUI input before they
     // reach _UnhandledInput, so clicks were swallowed while keyboard ui_accept still got through.
@@ -90,28 +87,24 @@ public partial class Main
         }
         // WM_KEYDOWN VK_F1 saves a screenshot BMP, and the key still reaches the game's bindings below.
         TrySaveScreenshotFromKey(e);
+        // What an input does in the game is the input and waits native's (InputAndWaits.Events.cs): this queues each
+        // device event, in native client pixels and Win32 virtual keys, for the engine thread, and stops it here; the
+        // game area has no controls of its own.
         if (e is InputEventMouseMotion motion)
         {
             if (!Windowed) NoteTopEdgePointer(motion.Position);   // the strip's top-edge dwell
             var p = ToNativeScreen(motion.Position);
-            _vm.UpdatePointer(p.X, p.Y);
+            _waits.PointerMoved(p.X, p.Y);
             return;
         }
         if (e is InputEventMouseButton wheel
             && wheel.Pressed
             && (wheel.ButtonIndex == MouseButton.WheelUp || wheel.ButtonIndex == MouseButton.WheelDown))
         {
-            // WM_MOUSEWHEEL supplies signed multiples of WHEEL_DELTA (120). At an ADV text wait its sign raises
-            // the WHEELKEYUP/WHEELKEYDOWN action (wheel-up opens History); otherwise AGE accumulates it until op
-            // 0x10d reads and clears it (HISTORY scrolls by its sign). VirtualMachine.ApplyMouseWheel has the rules.
+            // WM_MOUSEWHEEL supplies signed multiples of WHEEL_DELTA (120).
             int direction = wheel.ButtonIndex == MouseButton.WheelUp ? 1 : -1;
             int steps = System.Math.Max(1, (int)System.Math.Round(wheel.Factor));
-            bool advanceOnWheel = SettingsStore?.LoadMessageInt(Sys4RegIniStore.AdvanceMesOnWheelKey, 0) == 1;
-            MouseWheelOutcome outcome = _vm.ApplyMouseWheel(direction * 120 * steps, advanceOnWheel,
-                                                            _text.IsRevealing);
-            if (outcome == MouseWheelOutcome.Advance
-                && !_text.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
-                _host.SignalInput();
+            _waits.MouseWheel(direction * 120 * steps);
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -119,69 +112,8 @@ public partial class Main
             && (mb.ButtonIndex == MouseButton.Left || mb.ButtonIndex == MouseButton.Right))
         {
             var p = ToNativeScreen(mb.Position);
-            bool advPageSuspended = _text.IsAdvPagePresentationSuspended;
-            bool rawInputCallbackActive = _vm.IsRawInputCallbackActive;
-            _vm.UpdatePointer(p.X, p.Y);
-            int nativeButtonBit = mb.ButtonIndex == MouseButton.Left ? 0x1 : 0x2;
-            int physicalButton = mb.ButtonIndex == MouseButton.Left ? 0 : 1;
-            _vm.UpdateMouseButtonState(nativeButtonBit, mb.Pressed);
-            int action = _vm.UpdatePhysicalMouseButtonState(physicalButton, mb.Pressed);
-            // Native AGE latches the click that every trigger below consumes on button-up under CLICKONUP
-            // (Himegari), on button-down otherwise. Menus read the polled state above, so a menu opened by this
-            // click starts with the button already up, as natively.
-            if (mb.Pressed == _clickOnUp) return;
-            if (_host.IsModalMovieWaiting)
-            {
-                _host.SignalInput();
-                GetViewport().SetInputAsHandled();
-                return;
-            }
-            // While an effect service parks the VM, the trigger goes to the effect's poll or to the input latch,
-            // never to a hotspot under the effect or to a page wait (RouteEffectTrigger).
-            if (_host.IsTransitionWaiting)
-            {
-                if (action >= 0) RouteEffectTrigger(1 << action);
-                GetViewport().SetInputAsHandled();
-                return;
-            }
-            // An ADV coroutine yield (hide window) runs with no input service: the click only latches for the
-            // hidden-window wait, which it ends. It reaches no hotspot and never advances the page.
-            if (action >= 0 && _vm.TryLatchAdvCoroutineYieldTrigger(1 << action))
-            {
-                GetViewport().SetInputAsHandled();
-                return;
-            }
-            // CANCELMESSKIPONCLICK: during active fast-forward native withholds hotspot dispatch and feeds the
-            // action-4 click to adv_interpreter_tick's cancel state machine instead.
-            if (action == 4 && _vm.TryLatchMessageSkipCancelClick())
-            {
-                GetViewport().SetInputAsHandled();
-                return;
-            }
-            // Only a polling text wait dispatches hotspots and op-0x97 bindings (adv_input_service_poll). Elsewhere the
-            // click goes to a running reveal's poll or stays in native's input latch (RouteUnpolledTrigger).
-            if (action >= 0 && !_vm.IsAdvTextWaitPolling)
-            {
-                RouteUnpolledTrigger(1 << action);
-                GetViewport().SetInputAsHandled();
-                return;
-            }
-            // AGE exposes mouse buttons twice: op 0x108 reads the raw bitmask while op 0xff translates
-            // the held physical button through the script-configured logical action map.
-            if (action >= 0 && _vm.TryActivateInputActions(1 << action))
-            {
-                GetViewport().SetInputAsHandled();
-                return;
-            }
-            if (mb.ButtonIndex == MouseButton.Left && _vm.TryActivatePointer(p.X, p.Y))
-            {
-                GetViewport().SetInputAsHandled();
-                return;
-            }
-            // Modal callback scripts return through their own bytecode. Signaling the enclosing ADV wait
-            // here would also advance the restored dialogue page after HISTORY/HIDEWIN exits.
-            if (mb.ButtonIndex == MouseButton.Left
-                && !advPageSuspended && !rawInputCallbackActive) _host.SignalInput();
+            _waits.MouseButton(mb.ButtonIndex == MouseButton.Left ? 0 : 1, mb.Pressed, p.X, p.Y);
+            GetViewport().SetInputAsHandled();
             return;
         }
         // Native WM_KEYDOWN VK_ESCAPE posts an unforced WM_CLOSE (the 終了 dialog) and still delivers the key.
@@ -190,120 +122,18 @@ public partial class Main
         if (e is InputEventKey gameplayKey && !gameplayKey.Echo
             && Win32VirtualKeyTranslator.TryTranslate(gameplayKey, out int virtualKey))
         {
-            int action = _vm.UpdateKeyboardVirtualKeyState(virtualKey, gameplayKey.Pressed);
-            if (gameplayKey.Pressed && action >= 0 && _host.IsTransitionWaiting)
-            {
-                RouteEffectTrigger(1 << action);
-                GetViewport().SetInputAsHandled();
-            }
-            else if (gameplayKey.Pressed && action >= 0 && _vm.TryLatchAdvCoroutineYieldTrigger(1 << action))
-            {
-                GetViewport().SetInputAsHandled();
-            }
-            else if (gameplayKey.Pressed && action == 4 && _vm.TryLatchMessageSkipCancelClick())
-            {
-                GetViewport().SetInputAsHandled();
-            }
-            else if (gameplayKey.Pressed && action >= 0 && !_host.IsModalMovieWaiting && !_vm.IsAdvTextWaitPolling)
-            {
-                RouteUnpolledTrigger(1 << action);
-                GetViewport().SetInputAsHandled();
-            }
-            else if (gameplayKey.Pressed && action >= 0 && _vm.TryActivateInputActions(1 << action))
-            {
-                GetViewport().SetInputAsHandled();
-            }
-            else if (gameplayKey.Pressed && action == HideWindowAction && _vm.TryRequestAdvWaitCoroutineYield())
-            {
-                GetViewport().SetInputAsHandled();
-            }
-            else if (gameplayKey.Pressed && IsAdvanceAction(action))
-            {
-                if (_host.IsModalMovieWaiting)
-                {
-                    _host.SignalInput();
-                    GetViewport().SetInputAsHandled();
-                }
-                else if (!_text.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
-                    _host.SignalInput();
-            }
+            _waits.Key(virtualKey, gameplayKey.Pressed);
+            GetViewport().SetInputAsHandled();
             return;
         }
         if (e is InputEventJoypadButton joyButton)
         {
-            int actionMask = _vm.UpdateJoystickButtonState((int)joyButton.ButtonIndex, joyButton.Pressed);
-            if (joyButton.Pressed && actionMask != 0 && _host.IsTransitionWaiting)
-            {
-                RouteEffectTrigger(actionMask);
-                GetViewport().SetInputAsHandled();
-            }
-            else if (joyButton.Pressed && _vm.TryLatchAdvCoroutineYieldTrigger(actionMask))
-            {
-                GetViewport().SetInputAsHandled();
-            }
-            else if (joyButton.Pressed && actionMask != 0 && !_host.IsModalMovieWaiting && !_vm.IsAdvTextWaitPolling)
-            {
-                RouteUnpolledTrigger(actionMask);
-                GetViewport().SetInputAsHandled();
-            }
-            else if (joyButton.Pressed && _vm.TryActivateInputActions(actionMask))
-            {
-                GetViewport().SetInputAsHandled();
-            }
-            else if (joyButton.Pressed && !HasAdvanceAction(actionMask)
-                     && (actionMask & (1 << HideWindowAction)) != 0 && _vm.TryRequestAdvWaitCoroutineYield())
-            {
-                GetViewport().SetInputAsHandled();
-            }
-            else if (joyButton.Pressed && HasAdvanceAction(actionMask))
-            {
-                if (_host.IsModalMovieWaiting)
-                {
-                    _host.SignalInput();
-                    GetViewport().SetInputAsHandled();
-                }
-                else if (!_text.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
-                    _host.SignalInput();
-            }
+            _waits.JoystickButton((int)joyButton.ButtonIndex, joyButton.Pressed);
+            GetViewport().SetInputAsHandled();
             return;
         }
-        if (e is InputEventJoypadMotion joyMotion && (int)joyMotion.Axis is 0 or 1)
-            _vm.UpdateJoystickAxisState((int)joyMotion.Axis, joyMotion.AxisValue);
-    }
-
-    // Native services advance, finish a reveal, skip an effect or cancel a movie on logical action 4 only. At a text
-    // wait, action 5 (Space in both games) enters the coroutine yield instead: hide window (adv_input_service_poll).
-    private const int HideWindowAction = VirtualMachine.AdvWaitCoroutineYieldAction;
-    private static bool IsAdvanceAction(int action) => action == VirtualMachine.AdvanceAction;
-    private static bool HasAdvanceAction(int mask) => (mask & (1 << VirtualMachine.AdvanceAction)) != 0;
-
-    /// <summary>system:EffectSkipOnClick, read on each trigger: the 設定 dialog's その他 page writes it.</summary>
-    private bool EffectSkipOnClick => SettingsStore?.LoadInt("system", "EffectSkipOnClick", 0) == 1;
-
-    /// <summary>A trigger while an effect service parks the VM. With EffectSkipOnClick 1 the effect polls it (action 4
-    /// skips the effect, anything else is dropped); otherwise native's input latch holds it for the next service that
-    /// polls, such as the next text reveal, which a held click finishes (docs/engine-re.md, "Effect skipping and the
-    /// input latch").</summary>
-    private void RouteEffectTrigger(int actionMask)
-    {
-        if (!_host.TryPollEffectTriggers(actionMask, EffectSkipOnClick)) _vm.HoldTriggers(actionMask);
-    }
-
-    /// <summary>A trigger while no text wait polls (native run-state 0x80000000 clear), so no hotspot or op-0x97 binding
-    /// can take it. A running reveal polls on every tick (adv_text_reveal_service_tick@0x406fa0): action 4 finishes it
-    /// and the poll drops the rest. Otherwise nothing polls: a sleep (run-state 1), the ops between waits, a callback
-    /// script or a timed callback sequence. age_main_window_proc latches every mapped click and key whatever the run
-    /// state, so native's input latch keeps the trigger for the next service that polls: the next reveal's first tick,
-    /// the timed sequence's tick, or op 0x72's entry, which discards it (docs/engine-re.md, "Effect skipping and the
-    /// input latch").</summary>
-    private void RouteUnpolledTrigger(int actionMask)
-    {
-        if (_text.IsRevealing)
-        {
-            if (HasAdvanceAction(actionMask)) _host.SignalInput();
-            return;
-        }
-        _vm.HoldTriggers(actionMask);
+        if (e is InputEventJoypadMotion joyMotion)
+            _waits.JoystickAxis((int)joyMotion.Axis, joyMotion.AxisValue);
     }
 
     private void ToggleDebugSceneLauncher()
@@ -342,7 +172,7 @@ public partial class Main
         var coordinatorWrites = policy.CoordinatorWrites
             .ToDictionary(seed => seed.Address, seed => seed.Value);
         coordinatorWrites[policy.PackedScriptIdAddress] = entry.PackedId;
-        if (!_vm.TryRequestDebugFrameReturn(frame.FrameId, coordinatorWrites))
+        if (!_waits.Invoke(() => _vm.TryRequestDebugFrameReturn(frame.FrameId, coordinatorWrites)))
         {
             _debugSceneLauncher.SetStatus("TITLE changed frames before launch; reopen the launcher and try again.");
             return;
@@ -358,12 +188,12 @@ public partial class Main
         _debugSceneLauncher.Hide();
         // ADV waits need an explicit wake; TITLE's actual menu is a 1 ms sleep/poll loop and will consume
         // the request at its next opcode boundary without leaving a stale input signal for the child scene.
-        if (_host.IsWaiting) _host.SignalInput();
+        if (_waits.IsWaiting) _waits.SignalInput();
     }
 
     private bool TryGetTitleDebugFrame(out DebugFrameSnapshot frame, out string reason)
     {
-        frame = _vm.DebugFrame!;
+        frame = _waits.Invoke(() => _vm.DebugFrame)!;
         DebugSceneLaunchPolicy? policy = _selectedProfile.Profile.DebugSceneLaunch;
         if (policy == null)
         {
