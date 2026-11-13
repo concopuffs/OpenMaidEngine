@@ -226,12 +226,11 @@ public class RubyTextLayoutTests
                 (0x196, new[] { I(0), S(0), S(1) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "叛乱", "はんらん" });
-        var runs = new List<AdvLiveTextRun>();
-        var host = new RecordingHost { OnRetainedText = run => { runs.Add(run); return null; } };
+        var host = new RecordingHost();
 
         new VirtualMachine(script, table, host, build: EngineBuilds.Age433G).Run();
 
-        Assert.True(Assert.Single(runs).ArmsGlyphTimer);
+        Assert.True(Assert.Single(host.LiveTextRuns).Run.ArmsGlyphTimer);
     }
 
     [Fact]
@@ -241,36 +240,18 @@ public class RubyTextLayoutTests
             new List<(int, Operand[])>
             {
                 (0x70, new[] { I(1), I(640), I(160), I(0), I(430) }),
+                (0x213, new[] { I(1), I(100), I(64) }),
                 (0x75, new[] { I(24) }),
                 (0x6e, new[] { I(0), S(0) }),
                 (0x196, new[] { I(0), S(1), S(2) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "今にも", "篝火", "かがりび" });
-        var runs = new List<AdvLiveTextRun>();
-        var host = new RecordingHost
-        {
-            OnRetainedText = run =>
-            {
-                runs.Add(run);
-                if (run.Ruby == null)
-                    return new AdvRetainedTextRunResult(run.Layout.Slot, 0, 3, 72, 0)
-                    {
-                        Rows = [new AdvTextRow(0, 3, 0, 0, 72, 24, false)],
-                    };
-                return new AdvRetainedTextRunResult(run.Layout.Slot, 3, 6, 120, 0)
-                {
-                    Rows = [new AdvTextRow(0, 2, 72, 0, 120, 24, false)],
-                    Ruby =
-                    [
-                        new AdvRubyGlyph(0, "か", new(0, 75, -8, 83, 0)),
-                        new AdvRubyGlyph(0, "が", new(1, 86, -8, 94, 0)),
-                    ],
-                };
-            },
-        };
-        var vm = new VirtualMachine(script, Table, host);
+        // Square glyphs: 今にも is 72 pixels and 篝火 48, かがりび at the ruby's 8 pixels 32 above it.
+        var host = new RecordingHost();
+        var vm = TestText.Vm(script, Table, host, TestText.Glyphs(TestText.Square()));
 
         vm.Run();
+        List<AdvLiveTextRun> runs = [.. host.LiveTextRuns.Select(shown => shown.Run)];
 
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal(new string?[] { null, "かがりび" }, runs.Select(run => run.Ruby));
@@ -282,8 +263,11 @@ public class RubyTextLayoutTests
             {
                 ("今にも", AdvTextHistoryRecordFlags.GroupStart, new(0, 0, 72, 24), 24, 0),
                 ("篝火", AdvTextHistoryRecordFlags.None, new(72, 0, 120, 24), 24, 0),
-                ("か", AdvTextHistoryRecordFlags.Ruby, new(75, -8, 83, 0), 8, 0),
-                ("が", AdvTextHistoryRecordFlags.Ruby, new(86, -8, 94, 0), 8, 0),
+                // (48 - 32) / 5 = 3 pixels between ruby glyphs; mode 0: top + lfHeight (-8) + 1.
+                ("か", AdvTextHistoryRecordFlags.Ruby, new(75, -7, 83, 1), 8, 0),
+                ("が", AdvTextHistoryRecordFlags.Ruby, new(86, -7, 94, 1), 8, 0),
+                ("り", AdvTextHistoryRecordFlags.Ruby, new(97, -7, 105, 1), 8, 0),
+                ("び", AdvTextHistoryRecordFlags.Ruby, new(108, -7, 116, 1), 8, 0),
             },
             vm.TextHistory.Records.Select(record =>
                 (record.Text, record.Flags, record.Rect, record.Style.PrimaryFontSize, record.Style.RenderMode)));
@@ -291,12 +275,12 @@ public class RubyTextLayoutTests
         // History draws the ruby over the record before it; op 0x82 draws each ruby record at its own rectangle.
         Assert.True(vm.TextHistory.TryBuildHistoryRenderBatch(1, 0, 0, 0, 0, Style(), out AdvTextHistoryRenderBatch batch));
         Assert.Equal("今にも篝火", batch.Text);
-        Assert.Equal(new[] { new AdvTextRubyAnnotation(3, 2, "かが") }, batch.Ruby);
+        Assert.Equal(new[] { new AdvTextRubyAnnotation(3, 2, "かがりび") }, batch.Ruby);
         Assert.True(vm.TextHistory.TryBuildRedrawBatch(1, 0, 0, 0, 0, Style(), out AdvTextRedrawBatch redraw));
         Assert.Equal(
-            new[] { ("今にも", false), ("篝火", false), ("か", true), ("が", true) },
+            new[] { ("今にも", false), ("篝火", false), ("か", true), ("が", true), ("り", true), ("び", true) },
             redraw.Records.Select(record => (record.Text, record.IsRuby)));
-        Assert.Equal(new AdvTextHistoryRect(86, -8, 94, 0), redraw.Records[3].Rect);
+        Assert.Equal(new AdvTextHistoryRect(86, -7, 94, 1), redraw.Records[3].Rect);
 
         // A numbered save keeps the ruby records: flags 4, the ruby pixel height and render mode 0.
         var restored = new AdvTextHistory();

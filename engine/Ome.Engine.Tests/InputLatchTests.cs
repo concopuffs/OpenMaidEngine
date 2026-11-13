@@ -79,14 +79,14 @@ public class InputLatchTests
     public void AHeldClickFinishesTheNextRevealOnly()
     {
         // adv_text_reveal_service_tick@0x406fa0 takes the whole latch on its first tick; action 4 finishes the reveal
-        // (and sets ctx+0x55108, which the host keeps until the page's op 0x72).
+        // (and sets ctx+0x55108, which the text native keeps until the page's op 0x72).
         var (vm, host) = Start(Assemble("REVEAL", [.. TextLayout, (0x6e, new[] { I(0), S(0) }), (0x6e, new[] { I(0), S(1) })]),
                                Click);
 
         vm.Run();
 
-        Assert.Equal(1, host.TextRevealFinishes);
-        Assert.Equal(0, vm.HeldTriggers);
+        Assert.True(vm.Text.TextRevealsFinishedUntilWait);
+        Assert.Equal(0, vm.HeldTriggers);   // the second run's reveal had nothing to take
     }
 
     [Fact]
@@ -96,11 +96,11 @@ public class InputLatchTests
         // stays latched (op 0x72's entry would discard it).
         var (vm, host) = Start(Assemble("REVEAL_RUNS", [.. TextLayout, (0x6e, new[] { I(0), S(0) }), (0x6e, new[] { I(0), S(1) })]),
                                Click);
-        host.HoldWhen = _ => host.TextRevealFinishes == 1;
+        host.HoldWhen = v => v.Text.TextRevealsFinishedUntilWait;
 
         vm.Run();
 
-        Assert.Equal(1, host.TextRevealFinishes);
+        Assert.True(vm.Text.TextRevealsFinishedUntilWait);
         Assert.Equal(Click, vm.HeldTriggers);
     }
 
@@ -111,7 +111,7 @@ public class InputLatchTests
 
         vm.Run();
 
-        Assert.Equal(0, host.TextRevealFinishes);
+        Assert.False(vm.Text.TextRevealsFinishedUntilWait);
         Assert.Equal(0, vm.HeldTriggers);
     }
 
@@ -123,7 +123,7 @@ public class InputLatchTests
 
         vm.Run();
 
-        Assert.Equal(0, host.TextRevealFinishes);
+        Assert.False(vm.Text.TextRevealsFinishedUntilWait);
         Assert.Equal(Click, vm.HeldTriggers);
     }
 

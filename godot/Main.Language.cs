@@ -95,11 +95,11 @@ public partial class Main
         ApplyEngineText(language, selection, startup);
         SelectLanguageAssets(selection, startup);
         TextPresenter? presenter = selection.Presenter;
-        // The host switches rasterizer before the VM presents, and keeps the Unicode one for any presented run.
-        _host.UsePresentedFonts(presenter?.Language);
-        if (presenter != null) _host.PresentsText = true;
-        _vm.Presenter = presenter;
-        if (presenter == null) _host.PresentsText = false;
+        // The text native switches rasterizer before it presents, and keeps the Unicode one for any presented run.
+        _text.UsePresentedFonts(presenter?.Language);
+        if (presenter != null) _text.PresentsText = true;
+        _text.Presenter = presenter;
+        if (presenter == null) _text.PresentsText = false;
         GD.Print(presenter == null
             ? $"[text] {language}: the game text is drawn as written"
             : presenter.Language.Chain.Count == 0

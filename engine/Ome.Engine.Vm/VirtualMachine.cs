@@ -33,6 +33,7 @@ public sealed partial class VirtualMachine
     private readonly SavesAndSettings _saves;
     private readonly NumberedSaveRecords _saveRecords;   // what a numbered save holds besides the save native's own
     private readonly ShellServices _shell;
+    private readonly TextManager _text;
     private static readonly bool _diagSetTexture = System.Environment.GetEnvironmentVariable("OME_DIAG_SETTEX") == "1";
     private ExecFrame _cur = null!;
     private int _depth;
@@ -58,7 +59,6 @@ public sealed partial class VirtualMachine
     // input. It is clear while that wait runs a hotspot callback, as native clears the bit on dispatch and the
     // callback's ret re-runs the wait.
     private volatile bool _advTextWaitPolling;
-    private volatile bool _advTextRevealing;   // run-state 0x20000000: a reveal is running in the host
     private bool _advInputPollPageless;   // the polling wait is op 0xfa's
     private int _heldInputCallbackMask;
     private int _queuedInputCallbackMask;
@@ -66,9 +66,6 @@ public sealed partial class VirtualMachine
     private bool _initialRootRun = true;
     private volatile bool _stopRequested;
     private volatile bool _rootReloadRequested;   // frontend 終了 dialog: タイトルに戻る
-    private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
-    private int _messageWindowAlphaSetting;
-    private int _messageGlyphDelayMilliseconds;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
     // Opcodes 0x06/0x08 load scripts into numbered EngineCtx frame slots and invoke them later.
     // Unlike ordinary call-script frames, native non-adjacent slots survive return with locals intact.
@@ -89,7 +86,8 @@ public sealed partial class VirtualMachine
     /// <summary>The graphics native this VM's handlers call (Ome.Engine/Natives/Graphics*.cs).</summary>
     public Graphics Graphics => _graphics;
     public InputBindings InputBindings { get; } = new();
-    public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
+    /// <summary>The shown text: the text native's (<see cref="TextManager.Emitted"/>).</summary>
+    public List<(int Offset, string Text, string Script)> Emitted => _text.Emitted;
     public string? HaltReason { get; private set; }
     public UnsupportedOpcodeDiagnostic? CompatibilityFailure { get; private set; }
     /// <summary>The native script error that ended the run (AGE's エラーが発生しました box), or null.</summary>
@@ -138,7 +136,11 @@ public sealed partial class VirtualMachine
     {
         get { lock (_interactiveLock) return _rawInputFrame?.Script.Name; }
     }
-    public AdvTextHistory TextHistory { get; }
+    /// <summary>The text native this VM's handlers call (Ome.Engine/Natives/TextManager*.cs): the layouts and
+    /// History, the style, the reveal, the wait indicator, the message settings and the presenter.</summary>
+    public TextManager Text => _text;
+    /// <summary>The layouts and the backlog: the text native's.</summary>
+    public AdvTextHistory TextHistory => _text.History;
 
     /// <summary>The currently executing recursive script frame and stack, or null outside VM execution.</summary>
     public DebugFrameSnapshot? DebugFrame
@@ -159,7 +161,8 @@ public sealed partial class VirtualMachine
                           ShellServices? shell = null,
                           EngineBuild? build = null, SkipAndAuto? skipAndAuto = null,
                           Audio? audio = null, EngineTick? tick = null,
-                          Graphics? graphics = null, Movies? movies = null, ScriptMemory? memory = null)
+                          Graphics? graphics = null, Movies? movies = null, ScriptMemory? memory = null,
+                          TextManager? text = null)
     {
         _s = s; _t = t; _handlers = BindHandlers(t); _host = host; _o = o ?? new VmOptions(); _provider = provider;
         // Composition hands over the native its time device belongs to; tests and tools that give none get one over
@@ -173,11 +176,17 @@ public sealed partial class VirtualMachine
         _graphics = graphics ?? Graphics.Headless();
         // Without a front end no movie resolves (Movies.Headless); composition gives the one over the decoder.
         _movies = movies ?? Movies.Headless(_graphics);
+        // Without a front end the text native draws nothing (TextManager.Headless); it keeps the history it is given,
+        // which a GameSession shares across its scenes. A host that listens to text (a test's fake) hears it.
+        if (text != null && textHistory != null && !ReferenceEquals(text.History, textHistory))
+            throw new ArgumentException("A text native keeps its own history.", nameof(textHistory));
+        _text = text ?? TextManager.Headless(_graphics, _skip, history: textHistory);
+        if (host is ITextListener textListener) _text.Listen(textListener);
         _rules = EngineBuilds.ForVm(build, t).Rules;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         // Without composition the banks start empty in a script memory of the options' code page.
         _memory = memory ?? new ScriptMemory(_o.NativeStringCodePage);
-        _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
+        _sink = sink ?? NullTraceSink.Instance;
         // Without composition there is no save store: a numbered save fails, and the shared profile starts empty.
         _saves = saves ?? new SavesAndSettings();
         // Without composition the shell native has no window and no dialogs, and a menu request wakes this VM's host.
@@ -187,10 +196,8 @@ public sealed partial class VirtualMachine
             shell.WakeWaitsWith(host.WakeInputCallbackService);
         }
         _shell = shell;
-        _messageWindowAlphaSetting = host.MessageWindowAlphaSetting;
-        _messageGlyphDelayMilliseconds = System.Math.Max(0, host.MessageGlyphDelayMilliseconds);
         _saveRecords = new NumberedSaveRecords(
-            _memory, _audio, _graphics, TextHistory, CaptureSavedFrames, () => _host.SourceTextObjects,
+            _memory, _audio, _graphics, _text, CaptureSavedFrames,
             releaseSurfacesOnLoad: (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0);
     }
 
@@ -437,7 +444,7 @@ public sealed partial class VirtualMachine
 
     /// <summary>A physical input changed: the skip native decides whether action 6 starts or ends fast-forward.</summary>
     private void OnPhysicalSkipInputChanged()
-        => _skip.PhysicalInputChanged(InputBindings, _advTextWaitPolling, _advTextRevealing);
+        => _skip.PhysicalInputChanged(InputBindings, _advTextWaitPolling, _text.IsRevealing);
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
     private int GlobalPointer(int index) => _memory.IntegerPointer(index);
@@ -608,7 +615,7 @@ public sealed partial class VirtualMachine
 
         // Native uses the primary LOGFONT cell height as a fixed-width advance, halved for ASCII.
         // Odd heights (and the engine's 32/33-pixel special cases) are rounded down on font rebuild.
-        int fontSize = _advTextStyle.PrimaryFontSize > 0 ? _advTextStyle.PrimaryFontSize : 24;
+        int fontSize = _text.Style.PrimaryFontSize > 0 ? _text.Style.PrimaryFontSize : 24;
         int cellAdvance = fontSize == 33 ? 31
             : fontSize == 32 || (fontSize & 1) != 0 ? fontSize - 1
             : fontSize;
@@ -1027,8 +1034,7 @@ public sealed partial class VirtualMachine
         _audio.ResetScene();
         _tick.ResetScene();   // a root reload abandons every open block with its frames
         _shell.ResetScene();   // the system-menu fields, queued menu commands and callbacks; an open dialog is cancelled
-        _advTextStyle = AdvTextStyle.Default;
-        TextHistory.SetRecordingEnabled(true);
+        _text.ResetScene();    // the layouts, the reveal and the indicator go; the style starts over, History records
         _skip.ResetScene();   // Skip, Auto and read skip start over; run-state 0x08000000 is zeroed
         _movies.ResetScene();   // every surface's movie object goes; the surfaces stay
         _host.ResetSceneContext();
@@ -1044,7 +1050,7 @@ public sealed partial class VirtualMachine
     private void ResetGlobalBanks()
     {
         _memory.ResetScene();
-        ClearStringStores();
+        _text.ClearStringStores();
     }
 
     private FrameOutcome RunFrame(ExecFrame frame, FrameCause cause, long callId = 0)

@@ -218,7 +218,7 @@ still handled on their own. Each change should be behaviour-neutral and pass the
 `oms-rebuild` trace gate, the drive scenarios, `save-diff`, and timing or frame-time captures where they apply.
 
 - **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:991`)
-  assigns fields from many partials (each native's state, since milestones 5 to 9, through its `ResetScene`), and
+  assigns fields from many partials (each native's state, since milestones 5 to 10, through its `ResetScene`), and
   `EngineHost.ResetSceneContext` (`EngineHost.PresentationInput.cs`) does the same on the host. Scene state added
   without a line in these methods survives タイトルに戻る. That is how the host's dialog events stayed signalled until
   2026-11-10, when each was reset by hand; since milestone 9 (2026-11-13) a dialog is a request that the reset
@@ -248,12 +248,13 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   block (`Natives/EngineTick.cs`), since milestone 7 graphics (`Natives/Graphics*.cs`: the surface table,
   publication and the screen transition), since milestone 8 movies, and since milestone 9 (2026-11-13) the memory
   banks (`Natives/ScriptMemory*.cs`), the saves and the play clock (`Natives/SavesAndSettings*.cs`) and the menu
-  (`Natives/ShellServices*.cs`); the waits move last (milestone 11).
-- **The host's threads have no stated ownership.** `EngineHost` holds four lock objects (nine until milestones 5
-  to 7 moved the skip, delayed-voice, image, screen-transition and backbuffer locks into their natives), six
-  `AutoResetEvent`s,
-  a `ManualResetEventSlim` and a `SemaphoreSlim`, and nothing documents which fields each lock guards or the lock
-  order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`
+  (`Natives/ShellServices*.cs`), and since milestone 10 text (`Natives/TextManager*.cs`); the waits move last
+  (milestone 11).
+- **The host's threads have no stated ownership.** Since milestone 10 (2026-11-13) `EngineHost` holds no lock
+  object: milestones 5 to 10 moved its locks (skip, delayed voice, image, screen transition, backbuffer, text) into
+  the natives with the state they guard. It still holds three `AutoResetEvent`s, a `ManualResetEventSlim`, a
+  `SemaphoreSlim` and the presentation barrier, the natives hold the locks, and nothing documents which fields each
+  lock guards or the lock order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`
   now. Since milestone 4 (2026-11-12) the host's calls to the main thread are typed: it calls `IFrontEnd`, which
   `Main` implements with the `CallDeferred` calls the host made before, and a drive scenario showed the same timing.
   Done when each lock's fields and the lock order are written down (or no lock is taken under another). Planned:

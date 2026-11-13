@@ -177,8 +177,8 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         long first = Read(a[0]), count = Read(a[1]);
         Gfx.EraseRange(first, count);
-        foreach (int layoutSlot in TextHistory.LayoutsCoveredByTextObjectErase(first, count))
-            _host.ClearRenderedAdvTextLayout(layoutSlot);
+        foreach (int layoutSlot in _text.History.LayoutsCoveredByTextObjectErase(first, count))
+            _text.ClearRenderedAdvTextLayout(layoutSlot);
         return StepResult.Next;
     }
 

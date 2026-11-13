@@ -3542,8 +3542,8 @@ of starting it. When Skip/read-skip input ends, `adv_interpreter_tick` starts th
 queue; skipped voices do not accumulate.
 
 **Port implementation.** The skip-and-auto native (`SkipAndAuto`) owns persistent op-`0x88` state and keeps op `0x19a` separate from the
-combined op-`0x1c7` persistent/host-input query. `EngineHost` completes text reveal and stable message waits
-while Skip is active; the existing `0x1c7` transition branches continue to publish their completed endpoints.
+combined op-`0x1c7` persistent/host-input query. `EngineHost` completes the text native's reveal and the stable
+message waits while Skip is active; the existing `0x1c7` transition branches continue to publish their completed endpoints.
 Voice requests replace one host-side deferred payload during Skip and the latest payload starts when
 `0x88(0)` arrives. Enabling Skip through the real SC0000 hotspot callback wakes the parked wait without
 creating a synthetic pointer click. Focused tests cover `0x88` enable/disable, `0x19a`, `0x1c7`, transient
@@ -4423,8 +4423,9 @@ the configured outline color.
 
 - `AdvTextHistory.TryBuildRedrawBatch` walks the group as native does and gives each record its draw style: the
   current `AdvTextStyle` with the record's colors (or flag 2's) and pixel height, and mode 0 for ruby.
-- `IAdvHost.RedrawRetainedTextGroup` receives it. `EngineHost` draws every record at its rectangle into a cleared
-  layout surface (`RetainedGlyphLayoutEngine.RenderRedraw`; ruby through `RubyTextLayout.DrawAt`).
+- The text native's `RedrawGroup` (`engine/Ome.Engine/Natives/TextManager.Presentation.cs`) receives it and draws
+  every record at its rectangle into a cleared layout surface (`RetainedGlyphLayoutEngine.RenderRedraw`; ruby through
+  `RubyTextLayout.DrawAt`).
 - Unless flag 4 is set, it binds the published glyphs again over the new pixels. Native binds one object per record,
   which covers the same cells.
 - Flag 8's voice replay is not modelled (`docs/backlog.md`).
@@ -5069,7 +5070,7 @@ no launch/profile override is planned for it.
 making an unsupported character an atomic fallback rather than a partially rasterized string. It applies
 the decoded LOGFONT rebuild rules (default 24px Mincho, odd heights rounded down, 32/33 mapped to 31,
 negative half-width, and weight 700 only for bold), then advances from GDI's returned cell metrics while
-the shared compositor writes into a cloned `RgbaImage`. `EngineHost.DrawStringToSurface` publishes that
+the shared compositor writes into a cloned `RgbaImage`. The text native's `DrawStringToSurface` publishes that
 snapshot for ops `0x204` and `0x205`; successful exact draws add no `SurfaceTextDraw` metadata. Text on a
 bound surface is therefore ordinary texture data in both software and GPU retained renderers: later handles
 can occlude it, and the owning object's alpha/tint, animated fade, affine transform, source rectangle,
@@ -5159,9 +5160,9 @@ then differed from native in 494 pixels, 54 of them by more than 24 levels; it n
 **Port.**
 
 - **Setting.** `GlyphRasterRequest.Antialias` carries the flag, so the mask cache keeps the two formats apart; AGE
-  empties its cache instead. `EngineHost` holds the flag:
+  empties its cache instead. The text native holds the flag (`TextManager.TextAntialias`):
   - `Sys4RegIniStore.TextAntialiasEnabled` seeds it at startup, from `EnableAntiFont` and `UseAntiFont`;
-  - the 設定 dialog's OK sets it through `IAgercSettingsHost.SetTextAntialias`.
+  - the options panel's OK sets it through `IShellSettingsHost.SetTextAntialias`.
 - **Rasterizers.** `WindowsGdiGlyphMaskRasterizer` reads `GGO_BITMAP` with AGE's row stride (`UnpackNativeBitmapRows`)
   into a `Monochrome` mask of 0/16 coverage. The portable backend renders with `FontAntialiasing.None` and thresholds
   the result.
@@ -5228,7 +5229,7 @@ font.
 - `VirtualMachine` runs op `0x196` through `ShowTextRun`, as op `0x6e` does, with `AdvLiveTextRun.Ruby`.
 - `Ome.Engine.Text.RubyTextLayout` holds the font, the row split and the layout. `RetainedGlyphLayoutEngine.RenderRuby`
   draws a run's ruby and `RenderRubyOver` History's.
-- `EngineHost` appends each row's base glyphs and then its ruby, in AGE's order.
+- The text native appends each row's base glyphs and then its ruby, in AGE's order.
 - `RetainedAdvTextLayoutPresentation.AppendRun` applies the chain rule across runs. The reveal counts ticks through
   `PublicationTarget`.
 - `AdvTextHistory` keeps the flag-4 records (`AdvTextHistoryRecordFlags.Ruby`), and `TryBuildHistoryRenderBatch` turns
@@ -5313,11 +5314,12 @@ The 0.72 s is the old port's (n - 1) delays, which showed the first tick at once
 **Port.**
 
 - `Ome.Engine.Hosting.PeriodTimer` implements the arm and the poll.
-- `EngineHost` keeps one timer. It arms it when a run with `AdvLiveTextRun.ArmsGlyphTimer` (op `0x6e`; for op
+- The text native keeps one timer. It arms it when a run with `AdvLiveTextRun.ArmsGlyphTimer` (op `0x6e`; for op
   `0x196` the VM takes the build's `TextRules.FuriganaArmsGlyphTimer`, false for 4.24J and true for 4.33G) takes the
   timed path.
-- The reveal loop polls on the engine clock and wakes at the timer's next due millisecond. It requests a
-  presentation for each tick and does not wait for it, since a frame wait would make polls late and drop ticks.
+- The host's reveal wait polls the native (`TextManager.ServiceReveal`) on the engine clock and wakes at the timer's
+  next due millisecond. It requests a presentation for each tick and does not wait for it, since a frame wait would
+  make polls late and drop ticks.
 - Tests: `PeriodTimerTests`.
 - Check: `tools/drive/scenarios/himegari-reveal-clock.steps` (page 18 at 300 ms).
 
@@ -5339,9 +5341,8 @@ visible only after show-text has naturally or forcibly completed. The completion
 the following click releases the wait.
 
 **Port implementation:** the single-scene harness now injects SYSTEM4's exact SO000 surface-12 and op-`0x73`
-configuration alongside its existing SO001 shortcut. The VM forwards all ten operands through the host ABI;
-`EngineHost` retains configurations by layout and pairs them with op `0x212`'s script-owned handle and
-layout origin. `RetainedAdvWaitIndicatorPresentation` binds the current atlas cell as an ordinary
+configuration alongside its existing SO001 shortcut. The VM passes all ten operands to the text native, which
+retains configurations by layout and pairs them with op `0x212`'s script-owned handle and layout origin. `RetainedAdvWaitIndicatorPresentation` binds the current atlas cell as an ordinary
 `GfxState` object, mutating it only when the 48 ms frame boundary changes. Op `0x20a` recreates an erased
 current frame; HIDEWIN suspension and wait-service shutdown erase the handle. The former Godot
 `TextureRect` overlay and raw-callback visibility exception are removed, so normal handle order, source
@@ -5361,8 +5362,8 @@ op `0x1b1` (`SYSTEM4@0xb7`, text manager `+0x570`); Himegari never does. In foll
 (`+0x50`) plus the left/top of the layout's last 20-byte glyph record (`*(layout+0x30) - 0x10`). The builders always
 draw into the last record and then push the next one at the cursor, so that record is the pending one just past the
 last glyph. Op `0x6f`'s line end, op `0x7a` and a layout reset move it. The port used to anchor on the last glyph's own
-left, one cell left of native. `EngineHost` now keeps each layout's cursor (`_layoutCursors`), set by every drawn run
-and by `IAdvHost.SetAdvTextCursor`, which op `0x6f` now calls too. On `SC0000@0xfa2` the indicator now lands where
+left, one cell left of native. The text native now keeps each layout's cursor (`_layoutCursors`), set by every drawn
+run and by `SetAdvTextCursor`, which op `0x6f` now calls too. On `SC0000@0xfa2` the indicator now lands where
 native draws it.
 
 ### SC0000 native SFX / BGM-fade family — `0xb4`/`0xb5`/`0xb6`/`0xba`/`0xc2`/`0xd9` (2026-07-11)
@@ -6398,8 +6399,8 @@ page 18 reveals its 35 glyphs in two runs around the furigana かがりび.
 - Only a polling text wait (`VirtualMachine.IsAdvTextWaitPolling`, native run-state `0x80000000`) dispatches hotspots
   and op-`0x97` bindings. Any other mapped click, key or joystick trigger goes through `Main.RouteUnpolledTrigger`: a
   running reveal's poll takes action 4 and drops the rest, and otherwise the trigger is held in the latch.
-- A held action 4 reaches the host as `IAdvHost.FinishTextRevealsUntilWait` (kept until the next text wait) or
-  `IMovieHost.CancelNextModalMovie`.
+- A held action 4 reaches the text native as `TextManager.FinishTextRevealsUntilWait` (kept until the next text
+  wait) or the host as `IMovieHost.CancelNextModalMovie`.
 - Op `0xd5` polls the latch before and after each wait for the next entry (`TryAbortTimedCallbackSequence`; the
   literal entry intervals in both games are 33 ms at most), and flushes it at cursor 0.
 - Tests: `InputLatchTests` and `TimedCallbackOpsTests` (synthesized).

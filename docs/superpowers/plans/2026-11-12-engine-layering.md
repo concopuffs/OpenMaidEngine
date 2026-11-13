@@ -3,7 +3,7 @@
 **Date:** 2026-11-12
 **Spec:** `docs/superpowers/specs/2026-11-12-engine-layering-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps the census of milestone 2 and what it settles about the later milestones.
-**Status:** milestones 0, 1, 3, 4, 5, 6, 7, 8 and 9 are built (spec §15). Milestone 2, the census below, was measured at
+**Status:** milestones 0, 1, 3, 4, 5, 6, 7, 8, 9 and 10 are built (spec §15). Milestone 2, the census below, was measured at
 `18d4d1b` on `feature/engine-layering`; since milestone 4 the host it names `GodotAdvHost` is `EngineHost`, in
 `engine/Ome.Engine/Hosting/`, and its file names below drop the prefix (`AdvText` is `EngineHost.AdvText.cs`). Since
 milestone 5 the skip and auto fields of §4 are the private state of `engine/Ome.Engine/Natives/SkipAndAuto*.cs`
@@ -22,7 +22,10 @@ movie op. Since milestone 9 the fields of §4's script memory, saves and setting
 state of `engine/Ome.Engine/Natives/ScriptMemory*.cs`, `SavesAndSettings*.cs` and `ShellServices*.cs` (spec §5.2,
 "As built"), except the five banks, which the VM keeps as properties that return the native's, and `ScriptError`,
 which stays on the VM as the run's outcome; the host's six dialog fields became the shell native's dialog requests.
-Next: milestone 10.
+Since milestone 10 the text fields of §4 are the private state of `engine/Ome.Engine/Natives/TextManager*.cs` (spec
+§5.2, "As built"), except the VM's `_presentedMessage`, and `Emitted` and `TextHistory`, which the VM keeps as
+properties that return the native's; the host's `_advText` and `_liveText` were dead and are gone, and its
+`IsTextRevealing` and the VM's `_advTextRevealing` are one flag, the native's. Next: milestone 11.
 
 Paths are relative to `age-reimpl/`.
 

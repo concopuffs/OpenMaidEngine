@@ -61,20 +61,20 @@ public class EngineHostTests
     internal static EngineHost Host(IFrontEnd frontEnd, PageLocatorState locator, FrameClock clock,
                                     SkipAndAuto? skipAndAuto = null, AudioRig? audio = null,
                                     Graphics? graphics = null, Movies? movies = null,
-                                    SavesAndSettings? saves = null, ShellServices? shell = null)
+                                    SavesAndSettings? saves = null, ShellServices? shell = null,
+                                    TextManager? text = null)
     {
         SkipAndAuto skip = audio?.Skip ?? skipAndAuto ?? SkipAndAuto.WithSystemClock();
         Audio native = audio?.Audio ?? Audio.Silent(skip);
         ResourceMap resources = EmptyResources();
         Graphics surfaces = graphics ?? new Graphics(resources, clock, Canvas);
+        saves ??= new SavesAndSettings();
+        text ??= new TextManager(surfaces, skip, clock, new TextDevices(new NoGlyphs(), GlyphCoverageAlpha.Sixteenths),
+                                 RubyLayoutRules.FixedOffsets, settings: saves.Settings, locator: locator);
         return new(frontEnd, skip, native, audio?.Tick ?? new EngineTick(native),
-                   surfaces, movies ?? Movies.Headless(surfaces), saves ?? new SavesAndSettings(),
-                   shell ?? ShellServices.Headless(), resources,
-                   clock, locator, new NoGlyphs(), GlyphCoverageAlpha.Sixteenths,
-                   synchronizeExplicitPresentation: false)
-        {
-            RubyRules = RubyLayoutRules.FixedOffsets,
-        };
+                   surfaces, movies ?? Movies.Headless(surfaces), saves,
+                   shell ?? ShellServices.Headless(), text, resources,
+                   clock, locator, synchronizeExplicitPresentation: false);
     }
 
     internal static IFrontEnd NothingAtAll() => new NothingFrontEnd();

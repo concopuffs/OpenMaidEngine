@@ -3038,7 +3038,7 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = "Ghidra /v2: op_0x131_handler@0x4295e0 calls the settings getter with `message:MesWinAlpha` and writes the result. HISTORY.BIN and the shared ADV redraw path compute (16-value)<<4 for the control-strip alpha."
-details = "Port status (2026-11-03): EngineHost seeds the value from SYS4REG.INI [message] MesWinAlpha (default 8 from engine_settings_register_defaults; the port used 0, an opaque window that hid the CG behind SC0000's opening text) and writes it back at shutdown."
+details = "Port status (2026-11-03): the text native (TextManager) seeds the value from SYS4REG.INI [message] MesWinAlpha (default 8 from engine_settings_register_defaults; the port used 0, an opaque window that hid the CG behind SC0000's opening text) and writes it back at shutdown."
 
 [[opcode.semantics.args]]
 i = 1
@@ -4456,7 +4456,7 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = "Complete corpus consistency across all 11 uses in 5 scripts: CONFIG's reset button sets 50 ms and its controls change the value in 5-ms steps over 5..100; MAMES, ITMES, SKMES, and INFOMES bracket retained show-text descriptions with get op 0x7f, set 0, and restore the saved value. Ghidra /v2: op_0x1b5_handler stores operand 1 at ctx+0x14e9c and sets message:MessageSpeed; engine_initialize_subsystems_from_settings seeds ctx+0x14e9c from message:MessageSpeed, which engine_settings_register_defaults@0x46be30 registers as 5 and Himegari's SYS4INI does not override. So a new profile reveals text at 5 ms per glyph; the 50 ms in earlier native traces presumably came from a profile whose stored MessageSpeed was 50 (not checked)."
-details = "Port status (2026-11-03): EngineHost seeds the delay from SYS4REG.INI [message] MessageSpeed (default 5, was a fixed 50) and writes it back at shutdown, not per op, because the description scripts set 0 and restore it for every item."
+details = "Port status (2026-11-03): the text native (TextManager) seeds the delay from SYS4REG.INI [message] MessageSpeed (default 5, was a fixed 50) and writes it back at shutdown, not per op, because the description scripts set 0 and restore it for every item."
 
 [[opcode.semantics.args]]
 i = 1
@@ -8717,7 +8717,7 @@ abi_source = "kelebek+decode-validated"
 name = "redraw-retained-text-group"
 category = "adv"
 summary = "(layout_slot)(record_index)(flags)(text_color)(effect_color) - clear and redraw an ordinary retained ADV text group into its original layout."
-details = "This is the ordinary-page redraw sibling of 0x1d1's History renderer, which draws in the current style. It releases the layout's objects, clears its surface and draws each retained record again at its own rectangle, ruby records included: each text record keeps its colors (or bit 1's) and pixel height and takes the manager's current face, weight and render mode, and a ruby record draws in the ruby font in mode 0. It stops at the next group boundary, binds one object per record unless bit 2 is set, restores the font state, and leaves the live glyph vector and text cursor alone, so later text continues the page. Flag bit 0 crosses navigation-filtered records, bit 1 overrides both colors, bit 2 suppresses the binding, and bit 3 replays retained voice records. All six Kamidori calls are CONFIG setting handlers that run right after a change, so the page behind CONFIG shows it at once (not CONFIG return paths): 0x83 supplies layout_slot/record_index, flags is 2, text_color is white, and effect_color is the configured outline color. The port builds the per-record draws (AdvTextHistory.TryBuildRedrawBatch -> IAdvHost.RedrawRetainedTextGroup -> RetainedGlyphLayoutEngine.RenderRedraw) and binds its published glyphs again over the new pixels; bit 3's voice replay is not modelled. docs/engine-re.md, 'Op 0x82 redraw'."
+details = "This is the ordinary-page redraw sibling of 0x1d1's History renderer, which draws in the current style. It releases the layout's objects, clears its surface and draws each retained record again at its own rectangle, ruby records included: each text record keeps its colors (or bit 1's) and pixel height and takes the manager's current face, weight and render mode, and a ruby record draws in the ruby font in mode 0. It stops at the next group boundary, binds one object per record unless bit 2 is set, restores the font state, and leaves the live glyph vector and text cursor alone, so later text continues the page. Flag bit 0 crosses navigation-filtered records, bit 1 overrides both colors, bit 2 suppresses the binding, and bit 3 replays retained voice records. All six Kamidori calls are CONFIG setting handlers that run right after a change, so the page behind CONFIG shows it at once (not CONFIG return paths): 0x83 supplies layout_slot/record_index, flags is 2, text_color is white, and effect_color is the configured outline color. The port builds the per-record draws (AdvTextHistory.TryBuildRedrawBatch -> TextManager.RedrawGroup -> RetainedGlyphLayoutEngine.RenderRedraw) and binds its published glyphs again over the new pixels; bit 3's voice replay is not modelled. docs/engine-re.md, 'Op 0x82 redraw'."
 noop_headless = false
 source = "investigation"
 confidence = "high"
@@ -9883,7 +9883,7 @@ abi_source = "kelebek"
 name = "set-adv-wait-indicator-follow-last-glyph"
 category = "adv"
 summary = "(enabled) — choose the ADV wait indicator's destination anchor. Zero uses the layout origin plus configured offset; one also adds the left/top of the layout's last 20-byte glyph record, which is the pending record at the text cursor, just past the last drawn glyph."
-details = "SYS4433's renderer is adv_wait_indicator_draw_frame_sys4433@0x4526d0: x = layout+0xc + *(layout+0x30 - 0x10) + config+0x50, and likewise for y. The builders draw into the last record and then push the next one at the cursor, which op 0x6f's line end, op 0x7a and a layout reset move. The port keeps each layout's cursor (EngineHost._layoutCursors, fed by every drawn run and by IAdvHost.SetAdvTextCursor) and anchors there; anchoring on the last glyph's own left had put Kamidori's indicator one cell left of native's (fixed 2026-11-07)."
+details = "SYS4433's renderer is adv_wait_indicator_draw_frame_sys4433@0x4526d0: x = layout+0xc + *(layout+0x30 - 0x10) + config+0x50, and likewise for y. The builders draw into the last record and then push the next one at the cursor, which op 0x6f's line end, op 0x7a and a layout reset move. The port keeps each layout's cursor (TextManager._layoutCursors, fed by every drawn run and by TextManager.SetAdvTextCursor) and anchors there; anchoring on the last glyph's own left had put Kamidori's indicator one cell left of native's (fixed 2026-11-07)."
 noop_headless = false
 source = "investigation"
 confidence = "high"

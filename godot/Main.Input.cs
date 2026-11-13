@@ -108,9 +108,9 @@ public partial class Main
             int steps = System.Math.Max(1, (int)System.Math.Round(wheel.Factor));
             bool advanceOnWheel = SettingsStore?.LoadMessageInt(Sys4RegIniStore.AdvanceMesOnWheelKey, 0) == 1;
             MouseWheelOutcome outcome = _vm.ApplyMouseWheel(direction * 120 * steps, advanceOnWheel,
-                                                            _host.IsTextRevealing);
+                                                            _text.IsRevealing);
             if (outcome == MouseWheelOutcome.Advance
-                && !_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
+                && !_text.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
                 _host.SignalInput();
             GetViewport().SetInputAsHandled();
             return;
@@ -119,7 +119,7 @@ public partial class Main
             && (mb.ButtonIndex == MouseButton.Left || mb.ButtonIndex == MouseButton.Right))
         {
             var p = ToNativeScreen(mb.Position);
-            bool advPageSuspended = _host.IsAdvPagePresentationSuspended;
+            bool advPageSuspended = _text.IsAdvPagePresentationSuspended;
             bool rawInputCallbackActive = _vm.IsRawInputCallbackActive;
             _vm.UpdatePointer(p.X, p.Y);
             int nativeButtonBit = mb.ButtonIndex == MouseButton.Left ? 0x1 : 0x2;
@@ -224,7 +224,7 @@ public partial class Main
                     _host.SignalInput();
                     GetViewport().SetInputAsHandled();
                 }
-                else if (!_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
+                else if (!_text.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
                     _host.SignalInput();
             }
             return;
@@ -262,7 +262,7 @@ public partial class Main
                     _host.SignalInput();
                     GetViewport().SetInputAsHandled();
                 }
-                else if (!_host.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
+                else if (!_text.IsAdvPagePresentationSuspended && !_vm.IsRawInputCallbackActive)
                     _host.SignalInput();
             }
             return;
@@ -298,7 +298,7 @@ public partial class Main
     /// input latch").</summary>
     private void RouteUnpolledTrigger(int actionMask)
     {
-        if (_host.IsTextRevealing)
+        if (_text.IsRevealing)
         {
             if (HasAdvanceAction(actionMask)) _host.SignalInput();
             return;

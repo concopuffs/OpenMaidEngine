@@ -356,7 +356,7 @@ public partial class Main
         public void SetTextAntialias(bool enabled)
         {
             SaveInt("message", Sys4RegIniStore.UseAntiFontKey, enabled ? 1 : 0);
-            main._host?.SetTextAntialias(enabled);
+            main._text?.SetTextAntialias(enabled);
         }
 
         // The sound object starts every level at 10000; sound:VolumeN = -1 never replaces it.

@@ -11,8 +11,8 @@ public sealed partial class VirtualMachine
         if (Read(a[0]) is 0 or 1)
         {
             bool enabled = Read(a[0]) == 1;
-            TextHistory.SetRecordingEnabled(enabled);
-            if (enabled) _host.EndTextHistoryPresentation(Gfx);
+            _text.History.SetRecordingEnabled(enabled);
+            if (enabled) _text.EndTextHistoryPresentation(Gfx);
         }
         return StepResult.Next;
     }
@@ -21,14 +21,14 @@ public sealed partial class VirtualMachine
     private StepResult OpAppendTextHistoryMetadata(Instruction ins, int pc)
     {
         var a = ins.Args;
-        TextHistory.AppendMetadata(Read(a[1]), Read(a[0]), _advTextStyle); return StepResult.Next;
+        _text.History.AppendMetadata(Read(a[1]), Read(a[0]), _text.Style); return StepResult.Next;
     }
 
     // 0x1d0: cumulative delta from the latest retained boundary
     private StepResult OpStepTextHistory(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (TextHistory.TryStepGroup((int)Read(a[2]), out var historyEntry))
+        if (_text.History.TryStepGroup((int)Read(a[2]), out var historyEntry))
         {
             Write(a[0], historyEntry.LayoutSlot);
             Write(a[1], historyEntry.FirstRecordIndex);
@@ -50,7 +50,7 @@ public sealed partial class VirtualMachine
         // does not drive that native-only cursor, so direction is neutral and the current entry is
         // the newest retained boundary.
         Write(a[0], 0);
-        if (TextHistory.TryGetCurrentRedrawEntry(out var redrawEntry))
+        if (_text.History.TryGetCurrentRedrawEntry(out var redrawEntry))
         {
             Write(a[1], redrawEntry.LayoutSlot);
             Write(a[2], redrawEntry.FirstRecordIndex);
@@ -68,15 +68,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         // Native History draws every record in the text manager's current style.
-        int flags = (int)Read(a[2]);
-        if ((flags & 4) == 0 && TextHistory.TryBuildHistoryRenderBatch(
-                (int)Read(a[0]), (int)Read(a[1]), flags, Read(a[3]), Read(a[4]), _advTextStyle,
-                out var batch))
-        {
-            if (PresentHistoryGroup(batch.FirstRecordIndex, flags) is { } presented)
-                batch = batch with { Presented = presented };
-            _host.RenderTextHistory(Gfx, TextHistory.GetPresentationBinding(batch.LayoutSlot), batch);
-        }
+        _text.RenderHistoryGroup(Gfx, (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), Read(a[3]), Read(a[4]));
         return StepResult.Next;
     }
 
@@ -84,15 +76,7 @@ public sealed partial class VirtualMachine
     private StepResult OpRedrawRetainedTextGroup(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (TextHistory.TryBuildRedrawBatch(
-                (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), Read(a[3]), Read(a[4]), _advTextStyle,
-                out var redraw))
-        {
-            if (redraw.Records.Any(record => !record.IsRuby)
-                && PresentHistoryGroup(redraw.FirstRecordIndex, (int)Read(a[2])) is { } presented)
-                redraw = redraw with { Presented = presented };
-            _host.RedrawRetainedTextGroup(Gfx, TextHistory.GetPresentationBinding(redraw.LayoutSlot), redraw);
-        }
+        _text.RedrawGroup(Gfx, (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), Read(a[3]), Read(a[4]));
         return StepResult.Next;
     }
 
@@ -100,7 +84,7 @@ public sealed partial class VirtualMachine
     private StepResult OpFindTextHistoryValue(Instruction ins, int pc)
     {
         var a = ins.Args;
-        bool found = TextHistory.TryFindMetadata((int)Read(a[3]), Read(a[4]), out long value);
+        bool found = _text.History.TryFindMetadata((int)Read(a[3]), Read(a[4]), out long value);
         Write(a[0], found ? 1 : 0);
         Write(a[1], value);
         return StepResult.Next;
@@ -110,7 +94,7 @@ public sealed partial class VirtualMachine
     private StepResult OpFindTextHistoryPair(Instruction ins, int pc)
     {
         var a = ins.Args;
-        TextHistory.TryFindVoicePair((int)Read(a[3]), out long voiceId, out long voiceArgument);
+        _text.History.TryFindVoicePair((int)Read(a[3]), out long voiceId, out long voiceArgument);
         Write(a[0], voiceId);
         Write(a[1], voiceArgument);
         return StepResult.Next;
@@ -119,6 +103,6 @@ public sealed partial class VirtualMachine
     // 0x85: bound the backlog to the current ordinary ADV block
     private StepResult OpClearTextHistory(Instruction ins, int pc)
     {
-        TextHistory.Clear(); return StepResult.Next;
+        _text.History.Clear(); return StepResult.Next;
     }
 }

@@ -22,7 +22,7 @@ public class PhysicalFastForwardTests
     {
         public VirtualMachine? Vm;
         public Action<VirtualMachine, int>? AtWait;     // the wait's ordinal, from 0
-        public Action<VirtualMachine, int>? AtReveal;   // inside the host's reveal, after its first tick
+        public Action<VirtualMachine, int>? AtReveal;   // inside the reveal: the text native shows the run
         public Action<VirtualMachine>? AtSleep;
         public readonly List<bool> FastForwardAtReveal = new();
         private int _waits, _reveals;
@@ -33,12 +33,11 @@ public class PhysicalFastForwardTests
             base.WaitForInput(layoutSlot, serviceInputCallback);
         }
 
-        public override AdvRetainedTextRunResult? ShowText(
-            GfxState gfx, AdvTextLayoutPresentationBinding binding, AdvLiveTextRun run, int glyphDelayMilliseconds)
+        public override void RunShown(AdvLiveTextRun run, int glyphDelayMilliseconds)
         {
             FastForwardAtReveal.Add(PhysicalMessageSkip);
             AtReveal?.Invoke(Vm!, _reveals++);
-            return base.ShowText(gfx, binding, run, glyphDelayMilliseconds);
+            base.RunShown(run, glyphDelayMilliseconds);
         }
 
         public override void Sleep(long duration)

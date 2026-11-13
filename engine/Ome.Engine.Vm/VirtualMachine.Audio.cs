@@ -48,7 +48,7 @@ public sealed partial class VirtualMachine
     {
         long voiceId = Read(ins.Args[0]);
         _skip.NoteVoiceStarted();
-        TextHistory.AppendVoice(voiceId, 0, _advTextStyle);
+        _text.History.AppendVoice(voiceId, 0, _text.Style);
         _audio.PlayVoice(voiceId);
         return StepResult.Next;
     }
@@ -58,7 +58,7 @@ public sealed partial class VirtualMachine
     {
         long voiceId = Read(ins.Args[0]);
         _skip.NoteVoiceStarted();
-        TextHistory.AppendVoice(voiceId, 1, _advTextStyle);
+        _text.History.AppendVoice(voiceId, 1, _text.Style);
         _audio.PlayHistoryVoice(voiceId);
         return StepResult.Next;
     }

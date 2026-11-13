@@ -49,6 +49,9 @@ public partial class Main : Godot.Control
     // The shell-services native (milestone 9): the system-menu fields, the menu requests, the dialogs this node shows and
     // the screen mode this node's window shows.
     private ShellServices? _shell;
+    // The text native (milestone 10): the layouts, the reveal, the wait indicator and the message settings, drawn with
+    // this node's glyph rasterizers.
+    private TextManager _text = null!;
     private double _audioOutputLatencySeconds;
     private IDisposable? _glyphRasterizerOwner;
     // The Unicode rasterizer a language draws with when the gameplay one is GDI (localization spec §7.4).
@@ -567,29 +570,34 @@ public partial class Main : Godot.Control
                              new GodotAudioStreamDevice(this, _audioOutputLatencySeconds),
                              _catalog.StartupSettings.DependMovieSound, timeline: _timeline,
                              print: message => GD.Print(message));
+        // The text native (milestone 10) draws with the selected gameplay rasterizer, and with the Unicode one while a
+        // language is active; it reads its message settings from SYS4REG.INI.
+        int glyphCacheCapacity = portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048;
+        _text = new TextManager(
+            _graphics, skipAndAuto, _clock,
+            new TextDevices(
+                surfaceTextRasterizer, engineBuild.Rules.Text.GlyphCoverage,
+                GameplayCacheCapacity: glyphCacheCapacity,
+                Presented: () =>
+                {
+                    PortableTextRenderingPolicy policy = PortableTextRenderingPolicy.Load(portablePolicyResource);
+                    var portable = new GodotTextServerGlyphMaskRasterizer(policy);
+                    _presentedRasterizerOwner = portable;
+                    GD.Print($"[text] presented text uses {portable.BackendInfo.Id}: {portable.BackendInfo.Detail}");
+                    return portable;
+                },
+                PresentedCacheCapacity: glyphCacheCapacity,
+                FontFamilies: InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings),
+                FontMetrics: surfaceTextRasterizer as IFontMetricsProbe),
+            engineBuild.Rules.Text.Ruby.For(_catalog.StartupSettings, SettingsStore?.RubyShiftMode),
+            blankExtentMode: _catalog.StartupSettings.BlankExtentMode == 1,
+            settings: SettingsStore, locator: _locator, timeline: _timeline);
         _host = new EngineHost(
-            this, skipAndAuto, _audio, tick, _graphics, _movies, _saves, _shell, resources, _clock, _locator,
-            surfaceTextRasterizer,
+            this, skipAndAuto, _audio, tick, _graphics, _movies, _saves, _shell, _text, resources, _clock, _locator,
             timeline: _timeline,
-            synchronizeExplicitPresentation: !_selftest,
-            surfaceTextMaskCacheCapacity:
-                portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048,
-            coverageAlpha: engineBuild.Rules.Text.GlyphCoverage)
+            synchronizeExplicitPresentation: !_selftest)
         {
             SleepScale = sleepScale,
-            RubyRules = engineBuild.Rules.Text.Ruby.For(_catalog.StartupSettings, SettingsStore?.RubyShiftMode),
-            FontFamilySource = InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings),
-            FontMetricsProbe = surfaceTextRasterizer as IFontMetricsProbe,
-            BlankExtentMode = _catalog.StartupSettings.BlankExtentMode == 1,
-            PresentedTextRasterizer = () =>
-            {
-                PortableTextRenderingPolicy policy = PortableTextRenderingPolicy.Load(portablePolicyResource);
-                var portable = new GodotTextServerGlyphMaskRasterizer(policy);
-                _presentedRasterizerOwner = portable;
-                GD.Print($"[text] presented text uses {portable.BackendInfo.Id}: {portable.BackendInfo.Detail}");
-                return portable;
-            },
-            PresentedTextMaskCacheCapacity = portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048,
         };
         if (!_selftest && !PrepareLanguage(userArgs, baseCatalog, baseStore, table))
         {
@@ -619,7 +627,8 @@ public partial class Main : Godot.Control
             audio: _audio,
             tick: tick,
             graphics: _graphics,
-            movies: _movies);
+            movies: _movies,
+            text: _text);
         _reference = new ReferenceRenderer(logicalCanvas) { Perf = _perf };
         _gpuRenderer.Perf = _perf;
         _decisionLog = new GfxDecisionLog(_gfxLogPath, _timeline);

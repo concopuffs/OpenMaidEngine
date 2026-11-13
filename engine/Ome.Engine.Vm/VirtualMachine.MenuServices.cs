@@ -38,7 +38,8 @@ public sealed partial class VirtualMachine : IVmMenuServices
     /// MessageSpeed (the per-glyph delay, also ctx+0x14e9c), message:MesWinAlpha and the skip and auto native's
     /// message:AutoMessageTime0/1. Called on the frontend thread while the VM is held for the open dialog.</summary>
     public MessageSettings MessageSettings => new(
-        _messageGlyphDelayMilliseconds, _messageWindowAlphaSetting, _skip.AutoMessageTime0Ms, _skip.AutoMessageTime1Ms);
+        _text.MessageGlyphDelayMilliseconds, _text.MessageWindowAlphaSetting, _skip.AutoMessageTime0Ms,
+        _skip.AutoMessageTime1Ms);
 
     /// <summary>Menu 0x9c64 (IAGEService +0x8c, iage_service_request_hide_window@0x45f700). Native ORs bit 0x80000000
     /// into the service trigger mask while the window is hidden (any trigger ends that wait), and otherwise bit 0x20,
@@ -80,10 +81,8 @@ public sealed partial class VirtualMachine : IVmMenuServices
     /// MesWinAlpha as op 0x141 and the Auto delays as op 0x1b9.</summary>
     private void ApplyMessageSettings(MessageSettings settings)
     {
-        _messageGlyphDelayMilliseconds = System.Math.Max(0, settings.MessageSpeed);
-        _host.SetMessageGlyphDelayMilliseconds(_messageGlyphDelayMilliseconds);
-        _messageWindowAlphaSetting = settings.MesWinAlpha;
-        _host.SetMessageWindowAlphaSetting(_messageWindowAlphaSetting);
+        _text.SetMessageGlyphDelayMilliseconds(settings.MessageSpeed);
+        _text.SetMessageWindowAlphaSetting(settings.MesWinAlpha);
         _skip.SetAutoMessageTime(0, settings.AutoMessageTime0);
         _skip.SetAutoMessageTime(1, settings.AutoMessageTime1);
     }

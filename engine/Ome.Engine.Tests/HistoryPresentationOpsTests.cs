@@ -97,8 +97,9 @@ public class HistoryPresentationOpsTests
                 (0x222, new[] { I(0), I(60000) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost { MessageWindowAlphaSetting = 6 };
+        var host = new RecordingHost();
         var vm = new VirtualMachine(script, Table, host);
+        vm.Text.SetMessageWindowAlphaSetting(6);
         vm.Graphics.CreateSurface(0xc1, 600, 100);
 
         vm.Run();
@@ -127,7 +128,7 @@ public class HistoryPresentationOpsTests
 
         vm.Run();
 
-        Assert.Equal(7, host.MessageWindowAlphaSetting);
+        Assert.Equal(7, vm.Text.MessageWindowAlphaSetting);
         Assert.Equal(7, vm.Globals[0x100]);
     }
 

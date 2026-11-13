@@ -231,23 +231,14 @@ public class AdvTextHistoryTests
         var script = ScriptAssembler.Assemble(Table, "HISTORY_ROWS",
             new List<(int, Operand[])>
             {
-                (0x70, new[] { I(1), I(640), I(160), I(0), I(430) }),
+                (0x70, new[] { I(1), I(50), I(160), I(0), I(430) }),
+                (0x213, new[] { I(1), I(100), I(64) }),
                 (0x6e, new[] { I(0), S(0) }),
                 (0x6f, new[] { I(0) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "ab全cd" });
-        var host = new RecordingHost
-        {
-            OnRetainedText = run => new AdvRetainedTextRunResult(run.Layout.Slot, 0, 5, 50, 30)
-            {
-                Rows =
-                [
-                    new AdvTextRow(0, 3, 100, 47, 175, 71, WrapsAfter: true),
-                    new AdvTextRow(3, 2, 100, 79, 150, 103, WrapsAfter: false),
-                ],
-            },
-        };
-        var vm = new VirtualMachine(script, Table, host);
+        // Half-width glyphs 12 pixels wide, full-width 24: ab全 fills 48 of the layout's 50, and c wraps.
+        var vm = TestText.Vm(script, Table, new RecordingHost(), TestText.Glyphs(TestText.Fixed(24, 12)));
 
         vm.Run();
 
@@ -255,9 +246,9 @@ public class AdvTextHistoryTests
         Assert.Equal(
             new (string, AdvTextHistoryRecordFlags, AdvTextHistoryRect)[]
             {
-                ("ab全", AdvTextHistoryRecordFlags.GroupStart, new(100, 47, 175, 71)),
+                ("ab全", AdvTextHistoryRecordFlags.GroupStart, new(0, 0, 48, 24)),
                 ("", AdvTextHistoryRecordFlags.LineBreak, default),
-                ("cd", AdvTextHistoryRecordFlags.None, new(100, 79, 150, 103)),
+                ("cd", AdvTextHistoryRecordFlags.None, new(0, 30, 24, 54)),
                 ("", AdvTextHistoryRecordFlags.LineBreak, default),
             },
             vm.TextHistory.Records.Select(r => (r.Text, r.Flags, r.Rect)));

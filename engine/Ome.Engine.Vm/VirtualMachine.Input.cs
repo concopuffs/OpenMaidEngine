@@ -22,6 +22,9 @@ public sealed partial class VirtualMachine
         bool outerPageless = _advInputPollPageless;
         _advTextWaitPolling = true;
         _advInputPollPageless = !textPage;
+        // A text page starts the wait indicator from its first frame, and the page's later reveals animate again
+        // (op_0x72_handler clears ctx+0x55108).
+        if (textPage) _text.BeginPageWait(layoutSlot);
         try
         {
             if (textPage) _host.WaitForInput(layoutSlot, ServiceHotspotCallback, CurrentAutoWaitState);
@@ -29,6 +32,8 @@ public sealed partial class VirtualMachine
         }
         finally
         {
+            // Also when a callback ends the run with a native script error (the exception leaves this wait).
+            _text.StopWaitIndicator();
             _advTextWaitPolling = outerWaitPolling;
             _advInputPollPageless = outerPageless;
         }

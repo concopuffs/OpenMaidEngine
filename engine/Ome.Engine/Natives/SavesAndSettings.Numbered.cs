@@ -6,28 +6,24 @@ namespace Ome.Engine.Natives;
 
 /// <summary>
 /// What a numbered save holds besides the save native's own records: the natives that write and read theirs (script
-/// memory's banks, audio's track and sound-effect channels, graphics' surfaces and objects), and the records of the
-/// interpreter (the saved frames) and of text (the history tail and the source glyph objects), which are not natives
-/// yet. The interpreter builds it once and hands it to each save and load, so the save native needs none of them to be
-/// built first.
+/// memory's banks, audio's track and sound-effect channels, graphics' surfaces and objects, text's history tail and the
+/// source glyph objects of presented text), and the interpreter's saved frames, which are not a native. The interpreter
+/// builds it once and hands it to each save and load, so the save native needs none of them to be built first.
 /// </summary>
 /// <param name="captureFrames">The interpreter's saved frames, up to op 0x1ad's boundary; throws
 /// <see cref="InvalidDataException"/> when no frame can be saved.</param>
-/// <param name="sourceTextObjects">The source glyph objects of the presented text (localization spec §8).</param>
 /// <param name="releaseSurfacesOnLoad">(CreateObject &amp; 2) &amp;&amp; (AutoFreeTex &amp; 2): a load releases every
 /// surface before it restores the saved ones (docs/engine-re.md, "AutoFreeTex").</param>
 public sealed class NumberedSaveRecords(
-    ScriptMemory memory, Audio audio, Graphics graphics, AdvTextHistory history,
-    Func<NativeSavedScriptFrame[]> captureFrames, Func<IReadOnlyList<AdvTextSourceObjects>> sourceTextObjects,
-    bool releaseSurfacesOnLoad)
+    ScriptMemory memory, Audio audio, Graphics graphics, TextManager text,
+    Func<NativeSavedScriptFrame[]> captureFrames, bool releaseSurfacesOnLoad)
 {
     public ScriptMemory Memory { get; } = memory;
     public Audio Audio { get; } = audio;
     public Graphics Graphics { get; } = graphics;
-    public AdvTextHistory History { get; } = history;
+    public TextManager Text { get; } = text;
     public bool ReleaseSurfacesOnLoad { get; } = releaseSurfacesOnLoad;
     public NativeSavedScriptFrame[] CaptureFrames() => captureFrames();
-    public IReadOnlyList<AdvTextSourceObjects> SourceTextObjects() => sourceTextObjects();
 }
 
 /// <summary>How a numbered load ended.</summary>
@@ -66,7 +62,7 @@ public sealed partial class SavesAndSettings
         {
             NativeNumberedSaveState state = CaptureNumbered(_store, records);
             byte[] payload = NativeNumberedSaveCodec.Encode(state);
-            byte[] history = NativeTextHistoryCodec.Encode(records.History);
+            byte[] history = records.Text.WriteHistoryTail();
             NativeSystemTime timestamp = NativeSystemTime.FromLocalDateTime(DateTime.Now);
             uint playSeconds = AccumulatedPlaySeconds;
             _store.SaveNumberedFile(slot, payload, history, timestamp, playSeconds);
@@ -108,12 +104,7 @@ public sealed partial class SavesAndSettings
                 // A full load restores the root frame now (script_frame_restore_saved_layout commits); data only
                 // does not.
                 CommitLoadedPlayTime();
-                if (history == null) records.History.Clear();
-                else
-                {
-                    records.History.RestorePersistenceSnapshot(history.Entries, history.Records);
-                    records.History.DropLastGroup();   // the resumed page records it again
-                }
+                records.Text.ReadHistoryTail(history);
                 _loaded = state;
             }
             else _loaded = null;
@@ -199,6 +190,6 @@ public sealed partial class SavesAndSettings
         };
         state = records.Audio.WriteSaveRecords(state);
         state = records.Memory.WriteSaveRecords(state, dimensions);
-        return records.Graphics.WriteSaveRecords(state, gfxRecordSize, records.SourceTextObjects());
+        return records.Graphics.WriteSaveRecords(state, gfxRecordSize, records.Text.SourceTextObjects);
     }
 }

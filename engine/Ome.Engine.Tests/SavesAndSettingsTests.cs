@@ -32,9 +32,11 @@ public class SavesAndSettingsTests
     public void WithoutAStoreEveryNumberedOperationFailsAsNativeReportsIt()
     {
         var saves = new SavesAndSettings();
+        SkipAndAuto skip = SkipAndAuto.WithSystemClock();
+        Graphics graphics = Graphics.Headless();
         var records = new NumberedSaveRecords(
-            new ScriptMemory(), Audio.Silent(SkipAndAuto.WithSystemClock()), Graphics.Headless(), new AdvTextHistory(),
-            () => [], () => [], releaseSurfacesOnLoad: false);
+            new ScriptMemory(), Audio.Silent(skip), graphics, TextManager.Headless(graphics, skip), () => [],
+            releaseSurfacesOnLoad: false);
 
         Assert.Equal(1, saves.SaveNumbered(0, records));
         Assert.Equal(NumberedLoad.Missing, saves.LoadNumbered(0, restoreHistory: true, records));

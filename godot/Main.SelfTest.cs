@@ -27,7 +27,7 @@ public partial class Main
         headless.Run();
         var expected = headless.Emitted.ConvertAll(e => e.Offset);
 
-        var actual = _host.Captured.ConvertAll(c => c.Offset);
+        var actual = _text.Emitted.ConvertAll(c => c.Offset);
         bool ok = actual.Count == expected.Count;
         for (int i = 0; ok && i < actual.Count; i++) ok = actual[i] == expected[i];
         var debugEntries = DebugSceneCatalog.Build(_catalog);
@@ -119,12 +119,12 @@ public partial class Main
             TextColor = 0xffffff,
             FontFace = ImmediateSurfaceTextRenderer.DefaultFontFace,
         };
-        _host.DrawStringToSurface(997, 1, 1, "A姫", immediateStyle);
-        if (_host.UsesSurfaceTextPixels)
+        _text.DrawStringToSurface(997, 1, 1, "A姫", immediateStyle);
+        if (_text.UsesSurfaceTextPixels)
         {
             RgbaImage? pixels = _graphics.CaptureSurfacePixels(997);
-            GlyphRasterizerBackendInfo? backend = _host.SurfaceTextBackendInfo;
-            var cache = _host.SurfaceTextMaskCacheStats;
+            GlyphRasterizerBackendInfo? backend = _text.SurfaceTextBackendInfo;
+            var cache = _text.SurfaceTextMaskCacheStats;
             bool pixelsPresent = pixels != null
                                  && pixels.Pixels.Where((_, index) => index % 4 == 3)
                                      .Any(alpha => alpha != 0);
@@ -187,7 +187,7 @@ public partial class Main
         string liveRetainedTextMode;
         AdvTextLayoutPresentationBinding liveBinding =
             _vm.TextHistory.GetPresentationBinding(1);
-        if (_host.UsesSurfaceTextPixels)
+        if (_text.UsesSurfaceTextPixels)
         {
             static bool InLiveRange(
                 RenderObject item, AdvTextLayoutPresentationBinding binding)
@@ -210,17 +210,17 @@ public partial class Main
                    > liveBinding.ResetCursorX;
 
             _vm.Gfx.EraseRange(liveBinding.FirstObjectHandle + 1, 1);
-            _host.PublishAdvTextLayout(_vm.Gfx, liveBinding);
+            _text.PublishAdvTextLayout(_vm.Gfx, liveBinding);
             bool republishedPartialErase =
                 _vm.Gfx.SnapshotVisibleObjects()
                     .Count(item => InLiveRange(item, liveBinding))
                 == liveObjects.Count;
 
-            _host.SetAdvPagePresentationSuspended(_vm.Gfx, true);
+            _text.SetAdvPagePresentationSuspended(_vm.Gfx, true);
             bool suspended =
                 !_vm.Gfx.SnapshotVisibleObjects()
                     .Any(item => InLiveRange(item, liveBinding));
-            _host.SetAdvPagePresentationSuspended(_vm.Gfx, false);
+            _text.SetAdvPagePresentationSuspended(_vm.Gfx, false);
             bool restored =
                 _vm.Gfx.SnapshotVisibleObjects()
                     .Count(item => InLiveRange(item, liveBinding))
@@ -228,7 +228,7 @@ public partial class Main
 
             _vm.Gfx.EraseRange(
                 liveBinding.FirstObjectHandle, liveBinding.ObjectCapacity);
-            _host.ResetRenderedAdvTextLayout(_vm.Gfx, liveBinding);
+            _text.ResetRenderedAdvTextLayout(_vm.Gfx, liveBinding);
             RgbaImage? resetSurface =
                 _graphics.CaptureSurfacePixels(liveBinding.SourceSurfaceSlot);
             bool reset =
@@ -261,7 +261,7 @@ public partial class Main
             _vm.TextHistory.GetLayoutSnapshot(2);
         AdvTextLayoutPresentationBinding historyBinding =
             _vm.TextHistory.GetPresentationBinding(2);
-        _host.ResetRenderedAdvTextLayout(_vm.Gfx, historyBinding);
+        _text.ResetRenderedAdvTextLayout(_vm.Gfx, historyBinding);
         var historyBatch = new AdvTextHistoryRenderBatch(
             2,
             0,
@@ -270,13 +270,13 @@ public partial class Main
             "History",
             immediateStyle);
         bool historyUsedRetained =
-            _host.RenderTextHistory(
+            _text.RenderTextHistory(
                 _vm.Gfx,
                 historyBinding,
                 historyBatch);
         bool historyRetainedTextOk;
         string historyRetainedTextMode;
-        if (_host.UsesSurfaceTextPixels)
+        if (_text.UsesSurfaceTextPixels)
         {
             RgbaImage? historySurface =
                 _graphics.CaptureSurfacePixels(historyBinding.SourceSurfaceSlot);
@@ -294,8 +294,8 @@ public partial class Main
             _vm.Gfx.EraseRange(
                 historyBinding.FirstObjectHandle,
                 historyBinding.ObjectCapacity);
-            _host.ClearRenderedAdvTextLayout(historyBinding.LayoutSlot);
-            _host.EndTextHistoryPresentation(_vm.Gfx);
+            _text.ClearRenderedAdvTextLayout(historyBinding.LayoutSlot);
+            _text.EndTextHistoryPresentation(_vm.Gfx);
             historyRetainedTextOk &=
                 !_vm.Gfx.SnapshotVisibleObjects()
                     .Any(item =>
@@ -310,7 +310,7 @@ public partial class Main
         else
         {
             historyRetainedTextOk = false;
-            _host.EndTextHistoryPresentation(_vm.Gfx);
+            _text.EndTextHistoryPresentation(_vm.Gfx);
             historyRetainedTextMode = "unavailable";
         }
         Window rootWindow = GetTree().Root;

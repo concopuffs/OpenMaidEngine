@@ -37,7 +37,6 @@ public sealed partial class EngineHost
     // reload's ResetSceneContext clears it.
     private volatile bool _rootReloadInterrupt;
     private bool _stopping => _stopRequested || _rootReloadInterrupt;
-    private volatile bool _advPagePresentationSuspended;
     private volatile bool _modalMovieWaiting;
     private volatile bool _modalMovieCancelled;
     private volatile bool _modalMovieCancelPending;   // CancelNextModalMovie: a held action 4 stops the next movie
@@ -184,13 +183,6 @@ public sealed partial class EngineHost
             Pages++;
             _locator.WaitReached(Pages);
             _frontEnd.PageBreak();
-            lock (_textLock)
-            {
-                _activeWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
-                _waitIndicatorStartedMs = _clock.NowMs;
-                _waitIndicatorEnabled = true;
-                _revealsFinishedUntilWait = false;   // op_0x72_handler clears ctx+0x55108
-            }
         }
         IsWaiting = true;
         _timeline?.State(textPage ? "input-wait" : "input-poll", new() { ["page"] = Pages });
@@ -214,8 +206,7 @@ public sealed partial class EngineHost
                 }
                 while (true)
                 {
-                    bool markerWasEnabled;
-                    lock (_textLock) markerWasEnabled = _waitIndicatorEnabled;
+                    bool markerWasEnabled = _text.WaitIndicatorEnabled;
                     if (scriptSuspended) ResumeScriptAfterPresentation(true);
                     bool keepServicing;
                     try
@@ -230,14 +221,7 @@ public sealed partial class EngineHost
                     // The native callback returns through the shared ADV redraw/wait path, whose op 0x72
                     // re-arms a marker stopped by nested HISTORY. Our blocking host keeps the parent wait
                     // parked, so restore that parent-owned state at the equivalent callback boundary.
-                    lock (_textLock)
-                    {
-                        if (markerWasEnabled && !_waitIndicatorEnabled)
-                        {
-                            _waitIndicatorEnabled = true;
-                            _waitIndicatorStartedMs = _clock.NowMs;
-                        }
-                    }
+                    _text.RestoreWaitIndicator(markerWasEnabled);
                     if (!keepServicing) break;
                 }
                 if (_skip.FastForwardActive)
@@ -260,7 +244,6 @@ public sealed partial class EngineHost
             ResumeScriptAfterPresentation(scriptSuspended);
             // Also when a callback ends the run with a native script error (the exception leaves this wait).
             IsWaiting = false;
-            lock (_textLock) _waitIndicatorEnabled = false;
         }
         _graphics.RequestPresentation();
         _timeline?.State("running", new()
@@ -268,10 +251,6 @@ public sealed partial class EngineHost
             ["input"] = messageSkipped ? "message-skip" : autoAdvanced ? "auto" : "user",
         });
         if (!textPage) return;
-        lock (_textLock)
-        {
-            _advText = "";
-        }
         _frontEnd.ClearPage();
     }
 
@@ -286,11 +265,9 @@ public sealed partial class EngineHost
             _frameSignal.Set();
             return;
         }
-        if (IsTextRevealing)
+        if (_text.FinishRevealOnClick())
         {
-            // adv_text_reveal_service_tick@0x406fa0 sets ctx+0x55108, so the page's later reveals publish at once too.
-            lock (_textLock) _advTextForceComplete = _revealsFinishedUntilWait = true;
-            _timeline?.State("text-reveal-forced-complete", new());
+            // The text native sets ctx+0x55108, so the page's later reveals publish at once too.
             _frameSignal.Set();
             return;
         }
@@ -314,17 +291,6 @@ public sealed partial class EngineHost
         _timeline?.State("effect-input-polled", new() { ["actions"] = actionMask });
         if ((actionMask & (1 << InputBindings.AdvanceAction)) != 0) TryForceActiveTransition("advance");
         return true;
-    }
-
-    public void FinishTextRevealsUntilWait()
-    {
-        lock (_textLock) _revealsFinishedUntilWait = true;
-        _timeline?.State("text-reveal-finish-held", new());
-    }
-
-    public bool TextRevealsFinishedUntilWait
-    {
-        get { lock (_textLock) return _revealsFinishedUntilWait; }
     }
 
     public void CancelNextModalMovie() => _modalMovieCancelPending = true;
@@ -376,7 +342,7 @@ public sealed partial class EngineHost
             // Not the effect wait in progress: native's main tick services run-state 0x400 (and 8) ahead of
             // fast-forward, and those services poll only the EffectSkipOnClick click. Fast-forward reaches the next
             // 0x21c wait (WaitForForegroundTransition).
-            lock (_textLock) _advTextForceComplete = true;
+            _text.CompleteReveal();
             _frameSignal.Set();
             _inputCallbackSignal.Set();
         }
@@ -409,55 +375,6 @@ public sealed partial class EngineHost
             ResumeScriptAfterPresentation(scriptSuspended);
         }
         _timeline?.State("running", new() { ["hidden_window_triggered"] = true });
-    }
-
-    public bool IsAdvPagePresentationSuspended => _advPagePresentationSuspended;
-
-    public void SetAdvPagePresentationSuspended(bool suspended)
-    {
-        _advPagePresentationSuspended = suspended;
-        _timeline?.State(suspended ? "adv-page-suspended" : "adv-page-restored", new());
-    }
-
-    public void SetAdvPagePresentationSuspended(GfxState gfx, bool suspended)
-    {
-        lock (_textLock)
-        {
-            if (suspended)
-            {
-                int slot = IsWaiting && _activeWaitLayout != 0
-                    ? _activeWaitLayout
-                    : _currentAdvLayout;
-                if (_retainedTextLayouts.TryGetValue(
-                        slot, out RetainedAdvTextLayoutPresentation? presentation))
-                    presentation.ErasePublished(gfx);
-                if (_retainedWaitIndicators.TryGetValue(
-                        slot, out RetainedAdvWaitIndicatorPresentation? indicator))
-                    indicator.Erase(gfx);
-                if (_retainedTextLayouts.ContainsKey(slot)
-                    || _retainedWaitIndicators.ContainsKey(slot))
-                    _suspendedRetainedTextLayoutSlot = slot;
-            }
-            else if (_suspendedRetainedTextLayoutSlot != 0)
-            {
-                if (_retainedTextLayouts.TryGetValue(
-                        _suspendedRetainedTextLayoutSlot,
-                        out RetainedAdvTextLayoutPresentation? presentation))
-                    presentation.Republish(gfx);
-                if (_retainedWaitIndicators.TryGetValue(
-                        _suspendedRetainedTextLayoutSlot,
-                        out RetainedAdvWaitIndicatorPresentation? indicator))
-                    indicator.Republish(
-                        gfx,
-                        _clock.NowMs - _waitIndicatorStartedMs,
-                        IsWaiting
-                        && _waitIndicatorEnabled
-                        && _activeWaitLayout == _suspendedRetainedTextLayoutSlot);
-                _suspendedRetainedTextLayoutSlot = 0;
-            }
-        }
-        _graphics.RequestPresentation();
-        SetAdvPagePresentationSuspended(suspended);
     }
 
     public void InputCallbackCompleted(GfxState gfx)
@@ -655,7 +572,7 @@ public sealed partial class EngineHost
     public HostPresentationReason ConsumePresentationReasons()
     {
         GfxState gfx = _graphics.State;
-        UpdateRetainedWaitIndicator(gfx);
+        _text.UpdateWaitIndicators(gfx);
         bool screenTransitionActive = _graphics.ScreenTransitionPending;
         // Native engine_main_tick skips its own gfx_render_frame while a statement block (op 0x1f4) is open,
         // unless run-state 0x400 parks the interpreter on a transition. Explicit present-frame (op 0x20c)
@@ -704,7 +621,7 @@ public sealed partial class EngineHost
 
     private void WakeAllWaits()
     {
-        lock (_textLock) _advTextForceComplete = true;
+        _text.CompleteReveal();
         if (_gate.CurrentCount == 0) _gate.Release();
         _inputCallbackSignal.Set();
         _frameSignal.Set();
@@ -719,27 +636,9 @@ public sealed partial class EngineHost
         // The VM releases the surfaces afterwards when set:AutoFreeTex asks (docs/engine-re.md, "AutoFreeTex").
         // The backbuffer publishes everything again over a clean frame; a pending screen transition goes, and a
         // render target's snapshot stays with its surface.
-        _graphics.ResetScene();
-        lock (_textLock)
-        {
-            _retainedHistoryLayouts.Clear();
-            _liveText.Clear();
-            _retainedTextLayouts.Clear();
-            _activeLiveText = null;
-            _suspendedRetainedTextLayoutSlot = 0;
-            _advText = "";
-            _layoutCursors.Clear();
-            _advTextForceComplete = false;
-            _revealsFinishedUntilWait = false;
-            _waitIndicators.Clear();
-            _waitIndicatorBindings.Clear();
-            _retainedWaitIndicators.Clear();
-            _activeWaitLayout = 0;
-            _waitIndicatorEnabled = false;
-        }
+        _graphics.ResetScene();   // the VM has had the text native reset its layouts (TextManager.ResetScene)
         while (_gate.Wait(0)) { }
         _inputCallbackSignal.WaitOne(0);
-        _advPagePresentationSuspended = false;
         _modalMovieCancelled = false;
         _modalMovieWaiting = false;
         _modalMovieCancelPending = false;
@@ -747,7 +646,6 @@ public sealed partial class EngineHost
         IsWaiting = false;
         IsTransitionWaiting = false;
         IsSleeping = false;
-        IsTextRevealing = false;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
         _graphics.RequestPresentation();
         _frontEnd.ClearPage();

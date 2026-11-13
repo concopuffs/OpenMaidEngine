@@ -221,7 +221,7 @@ public class MenuServicesTests
     }
 
     [Fact]
-    public void MessageSettingsSeedFromTheHostAndTheDialogsOkAppliesThemAtTheNextBoundary()
+    public void MessageSettingsStartAtTheNativesAndTheDialogsOkAppliesThemAtTheNextBoundary()
     {
         // The 設定 dialog reads the four values (VirtualMachine.MessageSettings) and its OK writes them back the way
         // ops 0x1b5, 0x141 and 0x1b9 do, then runs CALLBACK_SETTING.BIN. Ops 0x7f, 0x131 and 0x1b8 read them.
@@ -230,22 +230,23 @@ public class MenuServicesTests
             (0x7f, new[] { G(at) }), (0x131, new[] { G(at + 1) }), (0x1b8, new[] { I(0), G(at + 2) }),
             (0x1b8, new[] { I(1), G(at + 3) }),
         ];
-        var host = new MenuHost { MessageWindowAlphaSetting = 8 };
-        // The Auto delays are the skip and auto native's, which the host seeds from SYS4REG.INI.
+        var host = new MenuHost();
+        // The speed and the window alpha are the text native's (SYS4REG.INI's defaults without a store: 5 and 8); the
+        // Auto delays are the skip and auto native's, which the host seeds from SYS4REG.INI.
         SkipAndAuto skipAndAuto = SkipAndAuto.WithSystemClock();
         skipAndAuto.SetAutoMessageTime(0, 700);
         skipAndAuto.SetAutoMessageTime(1, 2400);
         var vm = new VirtualMachine(Build("MENU_MESSAGE_SETTINGS", [.. Read(0x400), .. Probes(0, 3), .. Read(0x410)]),
                                     Table, host, new VmOptions(), SettingCallback(), skipAndAuto: skipAndAuto);
         host.Vm = vm;
-        Assert.Equal(new MessageSettings(50, 8, 700, 2400), vm.MessageSettings);
+        Assert.Equal(new MessageSettings(5, 8, 700, 2400), vm.MessageSettings);
         host.AtYield[5] = v => v.Shell.RequestMessageSettings(new MessageSettings(20, 3, 1500, 4000));   // after the reads
 
         vm.Run();
 
-        Assert.Equal([50, 8, 700, 2400], Enumerable.Range(0x400, 4).Select(g => vm.Globals.GetValueOrDefault(g)));
+        Assert.Equal([5, 8, 700, 2400], Enumerable.Range(0x400, 4).Select(g => vm.Globals.GetValueOrDefault(g)));
         Assert.Equal([20, 3, 1500, 4000], Enumerable.Range(0x410, 4).Select(g => vm.Globals.GetValueOrDefault(g)));
-        Assert.Equal((20, 3, 1500L, 4000L), (host.MessageGlyphDelayMilliseconds, host.MessageWindowAlphaSetting,
+        Assert.Equal((20, 3, 1500L, 4000L), (vm.Text.MessageGlyphDelayMilliseconds, vm.Text.MessageWindowAlphaSetting,
                                              skipAndAuto.AutoMessageTime0Ms, skipAndAuto.AutoMessageTime1Ms));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(CallbackRan));
     }
@@ -259,7 +260,7 @@ public class MenuServicesTests
         vm.Run();
 
         Assert.Equal((900L, 3000L), (vm.SkipAndAuto.AutoMessageTime0Ms, vm.SkipAndAuto.AutoMessageTime1Ms));
-        Assert.Equal(new MessageSettings(50, 0, 900, 3000), vm.MessageSettings);
+        Assert.Equal(new MessageSettings(5, 8, 900, 3000), vm.MessageSettings);   // the text native's defaults
     }
 
     [Fact]

@@ -8,7 +8,7 @@ public sealed partial class VirtualMachine
     private StepResult OpGetMessageWindowAlpha(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _messageWindowAlphaSetting);
+        Write(a[0], _text.MessageWindowAlphaSetting);
         return StepResult.Next;
     }
 
@@ -16,8 +16,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetMessageWindowAlpha(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _messageWindowAlphaSetting = (int)Read(a[0]);
-        _host.SetMessageWindowAlphaSetting(_messageWindowAlphaSetting);
+        _text.SetMessageWindowAlphaSetting((int)Read(a[0]));
         return StepResult.Next;
     }
 

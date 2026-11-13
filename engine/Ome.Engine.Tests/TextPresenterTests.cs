@@ -452,7 +452,8 @@ public class PresentationSiteTests
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "はい", "黒石", "くろいし", "未訳", "いいえ" });
         var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host) { Presenter = presenter };
+        var vm = new VirtualMachine(script, table, host) { Text = { Presenter = presenter } };
+        vm.Text.SetMessageGlyphDelayMilliseconds(50);
         vm.Run();
         return (host, vm);
     }
@@ -493,7 +494,7 @@ public class PresentationSiteTests
 
         var (host, _) = Run(new TextPresenter(language));
 
-        // The host's delay is 50 ms; a run with no entry keeps it.
+        // The message speed is 50 ms; a run with no entry keeps it.
         Assert.Equal(new[] { presented, presented, 50 }, host.LiveTextRuns.Select(run => run.GlyphDelayMilliseconds));
     }
 

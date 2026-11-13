@@ -5,10 +5,12 @@ using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
+using Ome.Engine.Text;
 
 /// <summary>Shared test doubles: a host that records observable effects, and an in-memory script
-/// provider for synthetic call-script targets.</summary>
-internal class RecordingHost : IHost, IFastForwardListener
+/// provider for synthetic call-script targets. The host also hears the VM's text native (ITextListener), which
+/// draws nothing in a VM given none: its lists record what the native was asked to show and draw.</summary>
+internal class RecordingHost : IHost, IFastForwardListener, ITextListener
 {
     public int Waits;
     public int Presents;
@@ -60,10 +62,6 @@ internal class RecordingHost : IHost, IFastForwardListener
     public readonly List<(int X, int Y)> CursorWarps = new();
     public readonly List<bool> AdvPagePresentationSuspended = new();
     public readonly List<(AdvLiveTextRun Run, int GlyphDelayMilliseconds)> LiveTextRuns = new();
-    public readonly Dictionary<string, int> FontFamilyIndices = new(StringComparer.Ordinal);
-    public readonly Dictionary<int, string> FontFamilyNames = new();
-    public int FontFamilyCount { get; set; } = -1;
-    public int MessageGlyphDelayMilliseconds { get; private set; } = 50;
     public int CursorClearCount;
     public int SceneContextResets;
     public void ReportWarning(string message) => Warnings.Add(message);
@@ -84,94 +82,54 @@ internal class RecordingHost : IHost, IFastForwardListener
         FullwidthTextEdits.Add(request);
         return OnFullwidthTextEdit?.Invoke(request) ?? new(false, request.CurrentText);
     }
-    public void ShowText(int offset, string text) => Lines.Add((offset, text));
-    public void ShowText(AdvLiveTextRun run, int glyphDelayMilliseconds)
+    // ---- the text native (ITextListener) ----
+    public virtual void RunShown(AdvLiveTextRun run, int glyphDelayMilliseconds)
     {
         Lines.Add((run.SourceOffset, run.Text));
         LiveTextRuns.Add((run, glyphDelayMilliseconds));
     }
-    public Func<AdvLiveTextRun, AdvRetainedTextRunResult?>? OnRetainedText;
-    public virtual AdvRetainedTextRunResult? ShowText(
-        GfxState gfx,
-        AdvTextLayoutPresentationBinding binding,
-        AdvLiveTextRun run,
-        int glyphDelayMilliseconds)
-    {
-        ShowText(run, glyphDelayMilliseconds);
-        return OnRetainedText?.Invoke(run);
-    }
-    /// <summary>The source layout a later run of a presented message returns (localization spec §8).</summary>
-    public Func<AdvLiveTextRun, AdvTextSourceLayout?>? OnHiddenText;
+    /// <summary>The later runs of a presented message (localization spec §6.2), which draw nothing.</summary>
     public readonly List<AdvLiveTextRun> HiddenTextRuns = new();
-    public AdvTextSourceLayout? LayoutHiddenTextRun(AdvTextLayoutPresentationBinding binding, AdvLiveTextRun run)
+    public void HiddenRunShown(AdvLiveTextRun run)
     {
-        ShowText(run.SourceOffset, run.Text);
+        Lines.Add((run.SourceOffset, run.Text));
         HiddenTextRuns.Add(run);
-        return OnHiddenText?.Invoke(run);
     }
-    public void SetMessageGlyphDelayMilliseconds(int milliseconds)
-        => MessageGlyphDelayMilliseconds = milliseconds;
-    public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
-    public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
-        => SurfaceStrings.Add((surfaceSlot, x, y, text));
-    public void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style)
-        => SurfaceStrings.Add((surfaceSlot, x, y, text));
-    public int FindFontFamilyIndex(string faceName)
+    public void CursorMoved(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
+    // A string the presenter replaced records the presented text.
+    public void StringDrawn(int surfaceSlot, int x, int y, string text, AdvTextStyle style,
+                            Ome.Engine.Localization.PresentedText? presented)
+        => SurfaceStrings.Add((surfaceSlot, x, y, presented?.Text ?? text));
+    public void HistoryGroupDrawn(AdvTextLayoutPresentationBinding binding, AdvTextHistoryRenderBatch batch)
     {
-        string ordinaryFace = faceName.StartsWith('@') ? faceName[1..] : faceName;
-        return FontFamilyIndices.TryGetValue(ordinaryFace, out int index) ? index : -1;
+        RetainedHistoryRenders.Add((binding, batch));
+        HistoryRenders.Add(batch);
+        ActiveHistoryRenders[batch.LayoutSlot] = batch;
     }
-    public string GetFontFamilyName(int index)
-        => FontFamilyNames.TryGetValue(index, out string? name) ? name : "";
-    public void ClearRenderedAdvTextLayout(int layoutSlot)
+    public void GroupRedrawn(AdvTextLayoutPresentationBinding binding, AdvTextRedrawBatch batch)
+        => Redraws.Add((binding, batch));
+    public void LayoutCleared(int layoutSlot)
     {
         ClearedTextLayouts.Add(layoutSlot);
         ActiveHistoryRenders.Remove(layoutSlot);
     }
-    public void RenderTextHistory(AdvTextHistoryRenderBatch batch)
-    {
-        HistoryRenders.Add(batch);
-        ActiveHistoryRenders[batch.LayoutSlot] = batch;
-    }
-    public bool RenderTextHistory(
-        GfxState gfx,
-        AdvTextLayoutPresentationBinding binding,
-        AdvTextHistoryRenderBatch batch)
-    {
-        RetainedHistoryRenders.Add((binding, batch));
-        RenderTextHistory(batch);
-        return false;
-    }
-    public void RedrawRetainedTextGroup(
-        GfxState gfx,
-        AdvTextLayoutPresentationBinding binding,
-        AdvTextRedrawBatch batch)
-        => Redraws.Add((binding, batch));
-    public void EndTextHistoryPresentation()
+    public void HistoryPresentationEnded()
     {
         HistoryPresentationEnds++;
         ActiveHistoryRenders.Clear();
     }
-    public void EndTextHistoryPresentation(GfxState gfx) => EndTextHistoryPresentation();
-    public int MessageWindowAlphaSetting { get; set; }
-    public void SetMessageWindowAlphaSetting(int value) => MessageWindowAlphaSetting = value;
+    public void WaitIndicatorConfigured(AdvWaitIndicatorConfig config) => WaitIndicators.Add(config);
+    public void WaitIndicatorFollowsLastGlyph(bool enabled) => WaitIndicatorFollowLastGlyphChanges.Add(enabled);
+    public void WaitIndicatorBound(AdvTextLayoutPresentationBinding binding, AdvTextLayoutSnapshot layout)
+        => WaitIndicatorBindings.Add((binding, layout));
+    public void WaitIndicatorEnabled(bool enabled) => WaitIndicatorEnabledChanges.Add(enabled);
+    public void LayoutPublished(int layoutSlot) => PublishedAdvTextLayouts.Add(layoutSlot);
+    public void PageSuspended(bool suspended) => AdvPagePresentationSuspended.Add(suspended);
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
         => PresentedRanges.Add((firstHandle, count));
-    public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) => WaitIndicators.Add(config);
-    public void SetAdvWaitIndicatorFollowLastGlyph(bool enabled)
-        => WaitIndicatorFollowLastGlyphChanges.Add(enabled);
-    public void BindAdvWaitIndicator(
-        AdvTextLayoutPresentationBinding binding,
-        AdvTextLayoutSnapshot layout)
-        => WaitIndicatorBindings.Add((binding, layout));
-    public void SetAdvWaitIndicatorEnabled(bool enabled) => WaitIndicatorEnabledChanges.Add(enabled);
-    public void PublishAdvTextLayout(int layoutSlot) => PublishedAdvTextLayouts.Add(layoutSlot);
-    public void SetAdvPagePresentationSuspended(bool suspended)
-        => AdvPagePresentationSuspended.Add(suspended);
     public void WaitForInput() => Waits++;
     public virtual void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
     {
-        TextRevealsFinishedUntilWait = false;   // op_0x72_handler clears ctx+0x55108
         while (serviceInputCallback()) { }
         WaitForInput();
     }
@@ -276,14 +234,8 @@ internal class RecordingHost : IHost, IFastForwardListener
     }
     public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
         => ModalMovies.Add((resourceId, surfaceSlot, movieFlags));
-    // Native's input latch handing a held click to the next reveal or modal movie (VirtualMachine.InputLatch.cs).
-    public int TextRevealFinishes;
-    public bool TextRevealsFinishedUntilWait { get; private set; }
-    public void FinishTextRevealsUntilWait()
-    {
-        TextRevealFinishes++;
-        TextRevealsFinishedUntilWait = true;
-    }
+    // Native's input latch handing a held click to the next modal movie (VirtualMachine.InputLatch.cs); the text native
+    // keeps what it hands the next reveal (TextManager.TextRevealsFinishedUntilWait).
     public int ModalMovieCancels;
     public void CancelNextModalMovie() => ModalMovieCancels++;
 }
@@ -426,5 +378,68 @@ internal static class GraphicsTestSupport
         var ops = new List<string>();
         vm.Graphics.OpTrace = ops.Add;
         return ops;
+    }
+}
+
+/// <summary>The VM's text native with devices, for tests that need text laid out and drawn: glyphs on a grid, and the
+/// installed fonts the SYS4433 font ops read.</summary>
+internal static class TestText
+{
+    /// <summary>Glyphs on a grid: each cell as tall as the request's pixel height and as wide as
+    /// <paramref name="advance"/> says, inked full but for a space.</summary>
+    internal sealed class GridGlyphs(GlyphRasterPolicy policy, Func<GlyphRasterRequest, int> advance)
+        : IIdentifiedGlyphMaskRasterizer
+    {
+        public GlyphRasterizerBackendInfo BackendInfo { get; } =
+            new("grid", "Grid glyphs", policy, false, "test glyphs on a grid");
+
+        public GlyphMask Rasterize(GlyphRasterRequest request)
+        {
+            int width = advance(request);
+            int ink = request.UnicodeScalar is ' ' or 0x3000 ? 0 : width;
+            int height = request.PixelHeight;
+            return new GlyphMask(ink, height, ink, originX: 0, originY: height, cellAdvanceX: width, cellAdvanceY: 0,
+                                 cellWidth: width, cellHeight: height, Enumerable.Repeat((byte)16, ink * height).ToArray(),
+                                 ascent: height);
+        }
+    }
+
+    private static bool HalfWidth(GlyphRasterRequest request)
+        => request.Cp932Code is { } code ? code <= 0xff : request.UnicodeScalar < 0x80;
+
+    /// <summary>CP932 glyphs <paramref name="fullWidth"/> pixels wide, <paramref name="halfWidth"/> for a single-byte
+    /// code.</summary>
+    public static GridGlyphs Fixed(int fullWidth, int halfWidth)
+        => new(GlyphRasterPolicy.NativeCp932Gray4, request => HalfWidth(request) ? halfWidth : fullWidth);
+
+    /// <summary>CP932 glyphs as wide as their pixel height, half that for a single-byte code.</summary>
+    public static GridGlyphs Square()
+        => new(GlyphRasterPolicy.NativeCp932Gray4,
+               request => HalfWidth(request) ? request.PixelHeight / 2 : request.PixelHeight);
+
+    /// <summary>Unicode glyphs, every one <paramref name="width"/> pixels wide: what presented text draws with.</summary>
+    public static GridGlyphs Unicode(int width) => new(GlyphRasterPolicy.PortableUnicode, _ => width);
+
+    /// <summary>Source text drawn with <paramref name="source"/>, and presented text with <paramref name="presented"/>
+    /// while a language is active.</summary>
+    public static TextDevices Glyphs(GridGlyphs source, GridGlyphs? presented = null)
+        => new(source, GlyphCoverageAlpha.Sixteenths, Presented: presented == null ? null : () => presented);
+
+    /// <summary>Square glyphs, and the installed font families <paramref name="faces"/> in order.</summary>
+    public static TextDevices Fonts(IReadOnlyList<string> faces)
+        => new(Square(), GlyphCoverageAlpha.Sixteenths,
+               FontFamilies: () => [.. faces.Select(face => new EnumeratedFontFamily(face, 0))]);
+
+    /// <summary>A VM whose text native draws with <paramref name="devices"/>, over a headless graphics native.</summary>
+    public static Ome.Engine.Vm.VirtualMachine Vm(Script script, OpcodeTable table, IHost host,
+                                                  TextDevices devices, Ome.Engine.Vm.EngineBuild? build = null,
+                                                  IScriptProvider? provider = null)
+    {
+        var clock = new FrameClock();
+        SkipAndAuto skip = SkipAndAuto.WithSystemClock();
+        var graphics = new Graphics(null, clock, new Sys4LogicalCanvas(0, 0));
+        var text = new TextManager(graphics, skip, clock, devices, RubyLayoutRules.FixedOffsets);
+        return new Ome.Engine.Vm.VirtualMachine(script, table, host, provider: provider, build: build,
+                                                skipAndAuto: skip, graphics: graphics, text: text);
     }
 }

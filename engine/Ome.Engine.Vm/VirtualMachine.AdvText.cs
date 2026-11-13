@@ -1,29 +1,16 @@
 using Ome.Engine.Hosting;
 using Ome.Engine.Localization;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Text;
 
 namespace Ome.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
-    private volatile TextPresenter? _presenter;
-
-    /// <summary>
-    /// The selected language's presenter (localization spec §4, §5.2), or null to draw source text: the source
-    /// language, or a language with no catalog (gate 1). The VM asks it at each presentation site and passes both
-    /// forms to the host; everything the VM keeps (cells, history, saves, the page map) stays source text. The shell
-    /// replaces it when the language changes; the next run uses the new one.
-    /// </summary>
-    public TextPresenter? Presenter
-    {
-        get => _presenter;
-        set => _presenter = value;
-    }
-
     /// <summary>The message whose first run drew its presented sentence (localization spec §6.2), in the frame and
     /// script that run it, with the run that comes next. Its later runs, and the <c>end-text-line</c>s between them,
-    /// draw nothing.</summary>
+    /// draw nothing. It names the interpreter's frames, so it stays here; the presenter is the text native's.</summary>
     private sealed record PresentedMessage(ExecFrame Frame, Script Script, TextMessage Message, int NextRun)
     {
         public bool Holds(ExecFrame frame, Script script)
@@ -36,7 +23,7 @@ public sealed partial class VirtualMachine
     /// <paramref name="operand"/>, with the operand's origin (§5.2). Site entries bind to the running script's own
     /// offsets: the text loader keeps them only for scripts no mod patches (§6.1).</summary>
     private PresentedText? Present(string text, Instruction ins, Operand operand, bool logMiss = true)
-        => _presenter?.Present(text, new TextSite(_cur.Script.Name, ins.Offset), OriginOf(operand), logMiss);
+        => _text.Presents ? _text.Present(text, new TextSite(_cur.Script.Name, ins.Offset), OriginOf(operand), logMiss) : null;
 
     /// <summary>
     /// What one show-text run draws (spec §6.2), and what was looked up for it (<paramref name="lookup"/>, which
@@ -50,7 +37,7 @@ public sealed partial class VirtualMachine
     {
         hidden = false;
         lookup = null;
-        if (_presenter is not { } presenter)
+        if (!_text.Presents)
         {
             _presentedMessage = null;
             return null;
@@ -68,15 +55,14 @@ public sealed partial class VirtualMachine
         var site = new TextSite(_cur.Script.Name, ins.Offset);
         TextMessage? message = null;
         int run = -1;
-        if (presenter.Messages?.MessagesOf(_cur.Script) is { } messages
-            && messages.TryGetRun(pc, out TextMessage found, out int index) && found.Runs.Count > 1)
+        if (_text.TryGetMessageRun(_cur.Script, pc, out TextMessage found, out int index) && found.Runs.Count > 1)
             (message, run) = (found, index);
         bool inMessage = message != null;
         if (message != null && run == 0)
         {
             // Nothing executes between a message's runs, so every operand reads now as it will when its run executes.
             string key = string.Concat(message.Runs.Select(part => ReadStr(part.Text)));
-            if (presenter.Present(key, site) is { Entry: not null } sentence)
+            if (_text.Present(key, site) is { Entry: not null } sentence)
             {
                 _presentedMessage = new PresentedMessage(_cur, _cur.Script, message, 1);
                 lookup = new TextLookup(key, site, null);
@@ -84,7 +70,7 @@ public sealed partial class VirtualMachine
             }
         }
         lookup = new TextLookup(text, site, OriginOf(operand));
-        return presenter.Present(text, site, lookup.Value.Origin, logMiss: !inMessage);
+        return _text.Present(text, site, lookup.Value.Origin, logMiss: !inMessage);
     }
 
     /// <summary>Whether the <c>end-text-line</c> at <paramref name="pc"/> lies inside a presented message, which
@@ -114,80 +100,37 @@ public sealed partial class VirtualMachine
                 return false;
             }
         }
-        Emitted.Add((off, text, _cur.Script.Name));
         int layoutSlot = a.Count > 0 ? (int)Read(a[0]) : 0;
         string[] scriptStack;
         lock (_debugControlLock) scriptStack = _activeFrameNames.ToArray();
         // Presented text carries no ruby: the catalog drops it, as the translators did (§18).
         PresentedText? presented = PresentRun(pc, ins, o, text, out bool hidden, out TextLookup? lookup);
         // The run draws from the presented cursor; its source layout pass starts at the source cursor (§8).
+        AdvTextHistory history = _text.History;
         var liveRun = new AdvLiveTextRun(
-            off, TextHistory.GetDrawSnapshot(layoutSlot), _advTextStyle, text, scriptStack)
+            off, history.GetDrawSnapshot(layoutSlot), _text.Style, text, scriptStack)
         {
             Ruby = string.IsNullOrEmpty(ruby) || presented != null || hidden ? null : ruby,
             SourceRuby = string.IsNullOrEmpty(ruby) ? null : ruby,
-            SourceCursor = TextHistory.SourceCursorApart(layoutSlot),
+            SourceCursor = history.SourceCursorApart(layoutSlot),
             ArmsGlyphTimer = ruby == null || _rules.Text.FuriganaArmsGlyphTimer,
             Presented = presented,
         };
+        // A presented message's lookup span stays open until its last run.
         if (hidden)
         {
-            // The message's first run drew the sentence. History records this run's source rows, and only the source
-            // cursor moves (§6.2, §8).
-            AdvTextSourceLayout? hiddenSource = _host.LayoutHiddenTextRun(
-                TextHistory.GetPresentationBinding(liveRun.Layout.Slot), liveRun);
-            TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: hiddenSource?.Rows,
-                                   ruby: hiddenSource?.Ruby);
-            if (hiddenSource != null) TextHistory.SetSourceCursor(layoutSlot, hiddenSource.CursorX, hiddenSource.CursorY);
-            if (_presentedMessage == null) TextHistory.EndLookupSpan();   // the message's last run
+            _text.ShowHiddenRun(liveRun, layoutSlot, _cur.Script.Name, endsLookupSpan: _presentedMessage == null);
             return true;
         }
-        if (lookup is { } asked) TextHistory.BeginLookupSpan(asked, _presenter!.Language.Tag);
-        AdvTextLayoutPresentationBinding binding =
-            TextHistory.GetPresentationBinding(liveRun.Layout.Slot);
         // A reveal runs (run-state 0x20000000) unless fast-forward or a finished-until-wait page publishes at once. Its
         // tick tests a held action 6 before it polls the latch.
-        bool reveals = _messageGlyphDelayMilliseconds > 0 && !AdvFastForwardActive
-                       && !_host.TextRevealsFinishedUntilWait;
+        bool reveals = _text.MessageGlyphDelayMilliseconds > 0 && !AdvFastForwardActive
+                       && !_text.TextRevealsFinishedUntilWait;
         if (reveals) _skip.ServiceRevealStart(InputBindings);
         OfferHeldTriggersToReveal();
-        AdvRetainedTextRunResult? retained;
-        _advTextRevealing = reveals && !AdvFastForwardActive;
-        try
-        {
-            retained = _host.ShowText(Gfx, binding, liveRun, RevealDelay(presented));
-        }
-        finally
-        {
-            _advTextRevealing = false;
-        }
-        // History records the source rows (split at wraps), so it is written after layout but before the cursors move:
-        // the drawn rows when the host drew the source text where native would, else its source layout pass (§8).
-        AdvTextSourceLayout? source = retained is { } drawn
-            ? drawn.Source ?? new AdvTextSourceLayout(drawn.Rows, drawn.Ruby, drawn.CursorX, drawn.CursorY)
-            : null;
-        TextHistory.AppendText(layoutSlot, off, text, _advTextStyle, rows: source?.Rows, ruby: source?.Ruby);
-        if (retained is { } result)
-            TextHistory.SetRunCursors(result.LayoutSlot, source!.CursorX, source.CursorY, result.CursorX, result.CursorY);
-        // Presented text that needs more rows than its window has is narrowed until it fits, or cut; either is
-        // reported (§7.3).
-        if (retained is { CutRows: > 0 } cut && lookup is { } cutLookup) _presenter?.ReportCut(cutLookup, cut.CutRows);
-        if (retained is { NarrowedToFitPercent: > 0 } narrowed && lookup is { } narrowedLookup)
-            _presenter?.ReportNarrowed(narrowedLookup, narrowed.NarrowedToFitPercent);
-        // A presented message's span stays open until its last run.
-        if (_presentedMessage == null) TextHistory.EndLookupSpan();
+        _text.ShowRun(Gfx, liveRun, layoutSlot, _cur.Script.Name, lookup, endsLookupSpan: _presentedMessage == null);
+        if (_text.IsRevealing) _host.WaitForTextReveal(Gfx, _text);
         return true;
-    }
-
-    /// <summary>The reveal's delay per glyph for a run: a presented run's is scaled by its language's
-    /// <c>glyph_delay_scale</c> (localization spec §7.5), and never reaches zero, so a reveal stays a reveal.</summary>
-    private int RevealDelay(PresentedText? presented)
-    {
-        if (presented == null || _presenter == null || _messageGlyphDelayMilliseconds <= 0) return _messageGlyphDelayMilliseconds;
-        double scale = _presenter.Language.GlyphDelayScale;
-        return scale == 1.0
-            ? _messageGlyphDelayMilliseconds
-            : System.Math.Max(1, (int)System.Math.Round(_messageGlyphDelayMilliseconds * scale));
     }
 
     private StepResult OpShowText(Instruction ins, int pc)
@@ -217,11 +160,11 @@ public sealed partial class VirtualMachine
     private StepResult OpDefineAdvTextLayout(Instruction ins, int pc)
     {
         var a = ins.Args;
-        TextHistory.DefineLayout((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
-                                 (int)Read(a[3]), (int)Read(a[4]));
+        _text.History.DefineLayout((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
+                                   (int)Read(a[3]), (int)Read(a[4]));
         // adv_text_layout_define@0x4550e0 (DrawMode 1) creates the layout's blank surface at
-        // slot layout+0x14; the host allocates its pixels when text is drawn.
-        Gfx.RecordBlankSurfaceCreated(TextHistory.GetLayoutSnapshot((int)Read(a[0])).Slot + 0x14);
+        // slot layout+0x14; the text native allocates its pixels when text is drawn.
+        Gfx.RecordBlankSurfaceCreated(_text.History.GetLayoutSnapshot((int)Read(a[0])).Slot + 0x14);
         return StepResult.Next;
     }
 
@@ -230,14 +173,14 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int requestedSlot = (int)Read(a[0]);
-        TextHistory.ResetLayout(requestedSlot);
-        var layout = TextHistory.GetLayoutSnapshot(requestedSlot);
+        _text.History.ResetLayout(requestedSlot);
+        var layout = _text.History.GetLayoutSnapshot(requestedSlot);
         AdvTextLayoutPresentationBinding binding =
-            TextHistory.GetPresentationBinding(layout.Slot);
+            _text.History.GetPresentationBinding(layout.Slot);
         if (binding.FirstObjectHandle >= 0 && binding.ObjectCapacity > 0)
             Gfx.EraseRange(binding.FirstObjectHandle, binding.ObjectCapacity);
-        _host.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
-        _host.ResetRenderedAdvTextLayout(Gfx, binding);
+        _text.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
+        _text.ResetRenderedAdvTextLayout(Gfx, binding);
         _cur.ReadMessageOffset = ins.Offset;
         Gfx.SnapshotSurfaceRecords();   // native page snapshot that numbered saves write
         _saves.Profile.ReadText.CommitPending();
@@ -249,7 +192,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvTextResetCursor(Instruction ins, int pc)
     {
         var a = ins.Args;
-        TextHistory.SetResetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
+        _text.History.SetResetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
         return StepResult.Next;
     }
 
@@ -257,15 +200,15 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvTextCursor(Instruction ins, int pc)
     {
         var a = ins.Args;
-        TextHistory.SetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
-        _host.SetAdvTextCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return StepResult.Next;
+        _text.History.SetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
+        _text.SetAdvTextCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return StepResult.Next;
     }
 
     // 0x1c1: layout-local right/bottom overflow boundaries
     private StepResult OpSetAdvTextBounds(Instruction ins, int pc)
     {
         var a = ins.Args;
-        TextHistory.SetBounds((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
+        _text.History.SetBounds((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
         return StepResult.Next;
     }
 
@@ -273,7 +216,7 @@ public sealed partial class VirtualMachine
     private StepResult OpConfigureAdvWaitIndicator(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
+        _text.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
             (int)Read(a[8]), Read(a[9])));
@@ -284,7 +227,7 @@ public sealed partial class VirtualMachine
     private StepResult OpConfigureAdvWaitIndicatorGrid(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _host.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
+        _text.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
             (int)Read(a[8]), (int)Read(a[9]), Read(a[10])));
@@ -295,7 +238,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvWaitIndicatorEnabled(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _host.SetAdvWaitIndicatorEnabled(Read(a[0]) != 0);
+        _text.SetAdvWaitIndicatorEnabled(Read(a[0]) != 0);
         return StepResult.Next;
     }
 
@@ -303,7 +246,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvWaitIndicatorFollowLastGlyph(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _host.SetAdvWaitIndicatorFollowLastGlyph(Read(a[0]) != 0);
+        _text.SetAdvWaitIndicatorFollowLastGlyph(Read(a[0]) != 0);
         return StepResult.Next;
     }
 
@@ -313,8 +256,8 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         int requestedSlot = (int)Read(a[0]);
         AdvTextLayoutPresentationBinding binding =
-            TextHistory.GetPresentationBinding(requestedSlot);
-        _host.PublishAdvTextLayout(Gfx, binding);
+            _text.History.GetPresentationBinding(requestedSlot);
+        _text.PublishAdvTextLayout(Gfx, binding);
         return StepResult.Next;
     }
 
@@ -324,10 +267,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         int surface = (int)Read(a[0]), x = (int)Read(a[1]), y = (int)Read(a[2]);
         string text = ReadStr(a[3]);
-        if (Present(text, ins, a[3]) is { } presented)
-            _host.DrawStringToSurface(surface, x, y, text, _advTextStyle, presented);
-        else
-            _host.DrawStringToSurface(surface, x, y, text, _advTextStyle);
+        _text.DrawStringToSurface(surface, x, y, text, _text.Style, Present(text, ins, a[3]));
         return StepResult.Next;
     }
 
@@ -338,80 +278,80 @@ public sealed partial class VirtualMachine
         int x = (int)Read(a[1]);
         string text = FormatIntegerForSurface(
             ref x, unchecked((int)Read(a[3])), (int)Read(a[4]), (int)Read(a[5]));
-        _host.DrawStringToSurface((int)Read(a[0]), x, (int)Read(a[2]), text, _advTextStyle);
+        _text.DrawStringToSurface((int)Read(a[0]), x, (int)Read(a[2]), text, _text.Style);
         return StepResult.Next;
     }
 
     private StepResult OpSetFontSize(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with { PrimaryFontSize = (int)Read(a[0]) }; return StepResult.Next;
+        _text.Style = _text.Style with { PrimaryFontSize = (int)Read(a[0]) }; return StepResult.Next;
     }
 
     private StepResult OpSetRubyFontSize(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with { RubyFontSize = (int)Read(a[0]) }; return StepResult.Next;
+        _text.Style = _text.Style with { RubyFontSize = (int)Read(a[0]) }; return StepResult.Next;
     }
 
     private StepResult OpSetTextLineSpacing(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with { LineSpacing = (int)Read(a[0]) }; return StepResult.Next;
+        _text.Style = _text.Style with { LineSpacing = (int)Read(a[0]) }; return StepResult.Next;
     }
 
     private StepResult OpSetFontBold(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with { Bold = Read(a[0]) != 0 }; return StepResult.Next;
+        _text.Style = _text.Style with { Bold = Read(a[0]) != 0 }; return StepResult.Next;
     }
 
     private StepResult OpSetTextColor(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with { TextColor = Read(a[0]) }; return StepResult.Next;
+        _text.Style = _text.Style with { TextColor = Read(a[0]) }; return StepResult.Next;
     }
 
     private StepResult OpSetTextEffectColor(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with { EffectColor = Read(a[0]) }; return StepResult.Next;
+        _text.Style = _text.Style with { EffectColor = Read(a[0]) }; return StepResult.Next;
     }
 
     private StepResult OpSetTextRenderMode(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with { RenderMode = (int)Read(a[0]) }; return StepResult.Next;
+        _text.Style = _text.Style with { RenderMode = (int)Read(a[0]) }; return StepResult.Next;
     }
 
     private StepResult OpSetTextAspectMode(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with { AspectMode = (int)Read(a[0]) }; return StepResult.Next;
+        _text.Style = _text.Style with { AspectMode = (int)Read(a[0]) }; return StepResult.Next;
     }
 
     private StepResult OpGetFontFamilyCount(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _host.FontFamilyCount); return StepResult.Next;
+        Write(a[0], _text.FontFamilyCount); return StepResult.Next;
     }
 
     private StepResult OpGetFontFamilyName(Instruction ins, int pc)
     {
         var a = ins.Args;
-        WriteStr(a[0], _host.GetFontFamilyName(unchecked((int)Read(a[1])))); return StepResult.Next;
+        WriteStr(a[0], _text.GetFontFamilyName(unchecked((int)Read(a[1])))); return StepResult.Next;
     }
 
     private StepResult OpFindFontFamilyIndex(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _host.FindFontFamilyIndex(ReadStr(a[1]))); return StepResult.Next;
+        Write(a[0], _text.FindFontFamilyIndex(ReadStr(a[1]))); return StepResult.Next;
     }
 
     private StepResult OpSetTextEffectOffset(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with
+        _text.Style = _text.Style with
         {
             EffectOffsetX = (int)Read(a[0]),
             EffectOffsetY = (int)Read(a[1])
@@ -423,7 +363,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvTextLayoutOrigin(Instruction ins, int pc)
     {
         var a = ins.Args;
-        TextHistory.SetLayoutOrigin((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
+        _text.History.SetLayoutOrigin((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
         return StepResult.Next;
     }
 
@@ -431,35 +371,34 @@ public sealed partial class VirtualMachine
     private StepResult OpGetMessageGlyphDelay(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _messageGlyphDelayMilliseconds); return StepResult.Next;
+        Write(a[0], _text.MessageGlyphDelayMilliseconds); return StepResult.Next;
     }
 
     // 0x1b5
     private StepResult OpSetMessageGlyphDelay(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _messageGlyphDelayMilliseconds = System.Math.Max(0, (int)Read(a[0]));
-        _host.SetMessageGlyphDelayMilliseconds(_messageGlyphDelayMilliseconds);
+        _text.SetMessageGlyphDelayMilliseconds((int)Read(a[0]));
         return StepResult.Next;
     }
 
     private StepResult OpEndTextLine(Instruction ins, int pc)
     {
         var a = ins.Args;
-        // The line break moves the layout's cursors; the host's wait indicator can follow the presented one.
+        // The line break moves the layout's cursors; the wait indicator can follow the presented one.
         // Inside a presented message only the source cursor moves: the sentence draws its own breaks (§6.2).
         bool insideMessage = InsidePresentedMessage(pc);
-        TextHistory.EndLine((int)Read(a[0]), _advTextStyle, moveDrawCursor: !insideMessage);
+        _text.History.EndLine((int)Read(a[0]), _text.Style, moveDrawCursor: !insideMessage);
         if (insideMessage) return StepResult.Next;
-        var layout = TextHistory.GetDrawSnapshot((int)Read(a[0]));
-        _host.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
+        var layout = _text.History.GetDrawSnapshot((int)Read(a[0]));
+        _text.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
         return StepResult.Next;
     }
 
     private StepResult OpSetFont(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _advTextStyle = _advTextStyle with { FontFace = ReadStr(a[0]) }; return StepResult.Next;
+        _text.Style = _text.Style with { FontFace = ReadStr(a[0]) }; return StepResult.Next;
     }
 
     private StepResult OpComment(Instruction ins, int pc)
@@ -519,11 +458,11 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int requestedSlot = (int)Read(a[0]);
-        TextHistory.SetWaitIndicatorObjectHandle(requestedSlot, Read(a[1]));
+        _text.History.SetWaitIndicatorObjectHandle(requestedSlot, Read(a[1]));
         AdvTextLayoutSnapshot layout =
-            TextHistory.GetLayoutSnapshot(requestedSlot);
-        _host.BindAdvWaitIndicator(
-            TextHistory.GetPresentationBinding(layout.Slot),
+            _text.History.GetLayoutSnapshot(requestedSlot);
+        _text.BindAdvWaitIndicator(
+            _text.History.GetPresentationBinding(layout.Slot),
             layout);
         return StepResult.Next;
     }
@@ -532,7 +471,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvTextObjectRange(Instruction ins, int pc)
     {
         var a = ins.Args;
-        TextHistory.SetTextObjectRange((int)Read(a[0]), Read(a[1]), Read(a[2]));
+        _text.History.SetTextObjectRange((int)Read(a[0]), Read(a[1]), Read(a[2]));
         return StepResult.Next;
     }
 }

@@ -253,7 +253,7 @@ public class AdvTextOpsTests
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal(50, host.MessageGlyphDelayMilliseconds);
+        Assert.Equal(Ome.Engine.Persistence.Sys4RegIniStore.DefaultMessageSpeed, vm.Text.MessageGlyphDelayMilliseconds);
         Assert.Empty(vm.TextHistory.Entries);
         Assert.Empty(vm.TextHistory.Records);
         Assert.All(host.LiveTextRuns, emitted => Assert.Equal(0, emitted.GlyphDelayMilliseconds));
@@ -292,16 +292,9 @@ public class AdvTextOpsTests
                 (0x2, Array.Empty<Operand>()),
             },
             new[] { "A", "BC" });
-        var host = new RecordingHost
-        {
-            OnRetainedText = run => new AdvRetainedTextRunResult(
-                run.Layout.Slot,
-                FirstGlyphIndex: 0,
-                GlyphCount: run.Text.Length,
-                CursorX: run.Layout.CursorX + run.Text.Length * 4,
-                CursorY: run.Layout.CursorY),
-        };
-        var vm = new VirtualMachine(script, table, host);
+        // Every glyph advances 4 pixels.
+        var host = new RecordingHost();
+        var vm = TestText.Vm(script, table, host, TestText.Glyphs(TestText.Fixed(4, 4)));
 
         vm.Run();
 
@@ -345,7 +338,7 @@ public class AdvTextOpsTests
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal(50, host.MessageGlyphDelayMilliseconds);
+        Assert.Equal(Ome.Engine.Persistence.Sys4RegIniStore.DefaultMessageSpeed, vm.Text.MessageGlyphDelayMilliseconds);
         Assert.Empty(vm.TextHistory.Records);
         Assert.Collection(host.LiveTextRuns,
             first =>
@@ -524,10 +517,9 @@ public class AdvTextOpsTests
                 (0x2de, new[] { new Operand(3, 0x100), new Operand(2, 0) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { face });
-        var host = new RecordingHost();
-        host.FontFamilyIndices["ＭＳ 明朝"] = 7;
-        var vm = new VirtualMachine(script, table, host,
-            build: EngineBuilds.Age433G);
+        // Index 7 of the installed list, as text_find_font_family_index@0x423a50 returns it.
+        var vm = TestText.Vm(script, table, new RecordingHost(),
+            TestText.Fonts([.. Enumerable.Range(0, 7).Select(i => $"Face {i}"), "ＭＳ 明朝"]), EngineBuilds.Age433G);
 
         vm.Run();
 
@@ -537,7 +529,7 @@ public class AdvTextOpsTests
     [Theory]
     [InlineData(-1)]
     [InlineData(37)]
-    public void Sys4433FontFamilyCountUsesTheHostCacheSentinel(int familyCount)
+    public void Sys4433FontFamilyCountUsesTheEmptyListSentinel(int familyCount)
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
         var script = ScriptAssembler.Assemble(table, "KAMIDORI-FONT-COUNT",
@@ -546,9 +538,10 @@ public class AdvTextOpsTests
                 (0x2dc, new[] { new Operand(3, 0x100) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost { FontFamilyCount = familyCount };
-        var vm = new VirtualMachine(script, table, host,
-            build: EngineBuilds.Age433G);
+        // An empty list reads as -1.
+        var vm = TestText.Vm(script, table, new RecordingHost(),
+            TestText.Fonts([.. Enumerable.Range(0, Math.Max(0, familyCount)).Select(i => $"Face {i}")]),
+            EngineBuilds.Age433G);
 
         vm.Run();
 
@@ -568,11 +561,8 @@ public class AdvTextOpsTests
                 (0x2dd, new[] { new Operand(5, 0x100), new Operand(0, index) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost { FontFamilyCount = 2 };
-        host.FontFamilyNames[0] = "MS Gothic";
-        host.FontFamilyNames[1] = "Yu Mincho";
-        var vm = new VirtualMachine(script, table, host,
-            build: EngineBuilds.Age433G);
+        var vm = TestText.Vm(script, table, new RecordingHost(), TestText.Fonts(["MS Gothic", "Yu Mincho"]),
+            EngineBuilds.Age433G);
 
         vm.Run();
 

@@ -246,6 +246,42 @@ public class ProjectBoundaryTests
     }
 
     [Fact]
+    public void TextStateIsPrivateToItsNative()
+    {
+        // The census (docs/superpowers/plans/2026-11-12-engine-layering.md §4, "Text") found the layouts, the reveal,
+        // the wait indicator, the message settings, the fonts and the presenter split between the VM and the host;
+        // milestone 10 gave them to the text native, the presenter inside it (spec §8). The VM keeps _presentedMessage,
+        // the message whose runs it is showing (it names the VM's frames and script), and the host keeps the reveal's
+        // wait until milestone 11.
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        Assert.Empty(typeof(TextManager).GetFields(instance).Where(field => !field.IsPrivate).Select(field => field.Name));
+        string[] census =
+        [
+            "_presenter", "_advTextRevealing", "_stringStores", "_recordsStringStores", "_advTextStyle",
+            "_messageWindowAlphaSetting", "_messageGlyphDelayMilliseconds", "_textLock", "_surfaceTextMaskCache",
+            "_surfaceTextBackendInfo", "_sourceText", "_presentedText", "_presentsText", "_surfaceTextRasterizer",
+            "_presentedTextRasterizer", "_presentedFonts", "_retainedHistoryLayouts", "_liveText", "_retainedTextLayouts",
+            "_activeLiveText", "_suspendedRetainedTextLayoutSlot", "_advText", "_layoutCursors", "_currentAdvLayout",
+            "_glyphTimer", "_textAntialias", "_advTextForceComplete", "_revealsFinishedUntilWait", "_waitIndicators",
+            "_waitIndicatorFollowLastGlyph", "_waitIndicatorBindings", "_retainedWaitIndicators", "_activeWaitLayout",
+            "_waitIndicatorStartedMs", "_waitIndicatorEnabled", "_advPagePresentationSuspended", "_fontFamilies",
+            "_fontRealization",
+        ];
+        string[] properties =
+        [
+            "Presenter", "IsTextRevealing", "Captured", "RubyRules", "FontFamilySource", "FontMetricsProbe",
+            "BlankExtentMode", "PresentedTextRasterizer", "PresentedTextMaskCacheCapacity",
+        ];
+        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
+        {
+            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+            Assert.Empty(keeper.GetProperties(instance).Select(property => property.Name).Intersect(properties));
+        }
+        // What the handlers asked the host to draw is the native's; the host's one text seam is the reveal's wait.
+        Assert.Equal(["WaitForTextReveal"], typeof(IAdvHost).GetMethods().Select(method => method.Name));
+    }
+
+    [Fact]
     public void TheShellsContractsHoldNothingANativeOwns()
     {
         // Milestone 9's done-when: the screen mode, the message toggles and the 設定 values are the shell native's, so

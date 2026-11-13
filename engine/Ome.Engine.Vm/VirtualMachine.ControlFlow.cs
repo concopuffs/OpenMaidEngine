@@ -39,7 +39,7 @@ public sealed partial class VirtualMachine
         _coroutineYieldActive = true;
         // The poll that led here took the input latch (the text wait's poll for Space, the flush before a control's
         // callback); the latch keeps what arrived since, such as a click an effect in the callback held.
-        _host.SetAdvPagePresentationSuspended(Gfx, true);
+        _text.SetAdvPagePresentationSuspended(Gfx, true);
         return _cur.Script.IndexByOffset.GetValueOrDefault(_cur.CoroutineYieldHandlerA, resumePc);
     }
 
@@ -210,7 +210,7 @@ public sealed partial class VirtualMachine
             if (hitCleared) _host.WakeInputCallbackService();
             if (hiddenWindow && WaitInHiddenWindow(resumePc, resumesTextWait) is >= 0 and int handlerB)
                 return StepResult.Jump(handlerB);
-            _host.SetAdvPagePresentationSuspended(Gfx, false);
+            _text.SetAdvPagePresentationSuspended(Gfx, false);
             return resumesTextWait ? StepResult.HotspotReturn : StepResult.Jump(resumePc);
         }
         return StepResult.Next;                       // cold bounded scene-entry path

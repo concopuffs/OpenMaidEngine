@@ -3,8 +3,8 @@
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
-2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio), 7 (graphics), 8 (movies) and 9 (saves,
-settings and shell services) are done on `feature/engine-layering`; §3.3, §4, §5.2, §5.3, §6.2, §6.3, §7.5, §7.6, §8,
+2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio), 7 (graphics), 8 (movies), 9 (saves,
+settings and shell services) and 10 (text) are done on `feature/engine-layering`; §3.3, §4, §5.2, §5.3, §6.2, §6.3, §7.5, §7.6, §8,
 §11, §12 and §13 record what they settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15
 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
@@ -500,6 +500,47 @@ and settings native, which writes the banks into a numbered save, then shell ser
   both to `EngineHost` and the VM. A VM given none builds an empty save native and `ShellServices.Headless`, since
   handler code cannot name a device type. `GameSession` builds both for each scene it runs, so each scene's playtime
   counts from its start, as before.
+
+**As built (milestone 10).** The text native is `Ome.Engine.Natives.TextManager`
+(`engine/Ome.Engine/Natives/TextManager*.cs`), named after native's text manager. `TextManager.cs` holds its
+construction, the fonts, the message settings, op `0x9`'s reset and its save records; `TextManager.Layout.cs` draws
+runs, strings and History groups into the layouts' surfaces and binds them; `TextManager.Reveal.cs` holds the
+show-text runs and the reveal; `TextManager.WaitIndicator.cs` the wait indicator and the page's suspension; and
+`TextManager.Presentation.cs` the presenter, the string stores and History presented again.
+
+- **Its state.** 48 of the census's 51 text rows are the native's private state: the layouts and the backlog
+  (`AdvTextHistory`), the style, the retained layouts and their cursors, the glyph timer and the reveal, the wait
+  indicator, the page's suspension, MessageSpeed, MesWinAlpha and UseAntiFont, the glyph rasterizers and their caches,
+  the installed fonts of SYS4433's ops `0x2dc`-`0x2de`, the presenter and the string stores. The VM keeps the other
+  three: `_presentedMessage` (below), and `Emitted` and `TextHistory`, which return the native's. The host's `_advText`
+  and `_liveText` were written and never read, so they are gone. The libraries the native lays out and presents with
+  (`Ome.Engine/Text/`, `Ome.Engine/Localization/`) stay where they are.
+- **One reveal flag.** Run-state `0x20000000` was two flags, the host's `IsTextRevealing` and the VM's copy of it. It
+  is now the native's `IsRevealing`, which the VM, the host, the front end's input and the driver read. It is set as a
+  run that may reveal starts (a delay, no fast-forward, and the page's reveals not finished), before the run's layout,
+  as native's builder sets it. The host set it after the layout. So a click or a held skip key that arrives during a
+  layout now reaches the reveal. That is this milestone's one change of behaviour, and no driven scenario shows it.
+- **Its devices** (`TextDevices`): the gameplay glyph rasterizer and its coverage format, the rasterizer for presented
+  text, the installed-font source and the font metrics probe. A VM given none builds `TextManager.Headless`, which
+  draws nothing and keeps every layout, cursor, setting and indicator, as a host without text pixels did.
+- **Its listener.** `ITextListener` hears what the native shows and draws: a run, a string, a History group or a
+  redraw, a layout cleared or published, the wait indicator and the page's suspension. It changes nothing; the test
+  hosts and `CaptureHost` see the text through it, and the VM attaches its host when the host implements it. Tests
+  that need text laid out run the real native over grid glyphs (`TestText` in `Ome.Engine.Tests/TestSupport.cs`).
+- **What stays at the VM.** `_presentedMessage`, the message whose runs it is showing, because it names the VM's
+  frames and script. The VM also resolves which string cell an operand names; the native keeps the records. Op
+  `0x72`'s page wait calls the native's `BeginPageWait` and `StopWaitIndicator` around the host's wait.
+- **What stays at the host.** `IAdvHost` holds only `WaitForTextReveal`, the blocking wait that services the native's
+  reveal until it ends; it stays until milestone 11. The host still seeds skip's Auto times from `SYS4REG.INI` and
+  writes the message settings at shutdown; the text native reads and writes its own three.
+- **Its save records** (§5.1, rule 6). `NumberedSaveRecords` takes the native, which writes and reads the history
+  tail and the source glyph objects. Only the interpreter's saved frames are still a callback.
+- **Done when.** `ProjectBoundaryTests` checks that the native's fields are private, that the VM and `EngineHost`
+  keep none of the census's 38 field names and 9 property names, and that `IAdvHost` is the reveal's wait alone.
+- **Construction.** Composition (`godot/Main.cs`) builds the native over the graphics native, skip and auto, the
+  frame clock, the glyph rasterizers and the font list, the build's ruby rules and blank-extent mode, `SYS4REG.INI`,
+  the page locator and the timeline. It hands the native to `EngineHost` and the VM. The native attaches itself to the
+  graphics native as the surface listener that drops the layouts retained on a released surface (census addition 2).
 
 ### 5.3 Time
 
@@ -1152,6 +1193,11 @@ native, and the hide request to the VM. The options panel commits its message se
 and writes `SYS4REG.INI` through the store the save native holds. The driver seeds op `0x60`'s draws on script memory
 (`ScriptMemory.SeedDeterministicRandom`) and reads the screen mode from the shell native.
 
+**As built (milestone 10).** The presenter is the text native's (`TextManager.Presenter`). A language switch
+(`godot/Main.Language.cs`) sets it, with the native's language fonts and its presented-text switch. The handlers ask
+the native to present a run, a message or a length, and never hold the presenter. The options panel's UseAntiFont and
+the driver's reveal state are the native's too.
+
 ## 9. Acceptance
 
 1. **Layering.**
@@ -1446,3 +1492,19 @@ Not covered:
   `wait-state` polls, and one other poll differed: after `himegari-exit-dialog` cancels the 終了 dialog,
   `expect script=TITLE` read the title's idle loop at `0x173` before and `0xe8` after, two offsets that one run of the
   build before shows in turn.
+- **2026-11-13, milestone 10.** Text. The text native, `Ome.Engine.Natives.TextManager`, owns 48 of the census's 51
+  text rows, with the presenter inside it (§5.2 and §8, "As built"). Run-state `0x20000000` is one flag, the native's,
+  set before a run's layout as native's builder sets it; that is the milestone's one change of behaviour. `IAdvHost`
+  holds only the reveal's wait, `EngineHost.Surfaces.cs` and the host's other text code are gone, and the native writes
+  and reads its own records of a numbered save. The test hosts see the text through `ITextListener`, and the tests that
+  faked a layout run the real native over grid glyphs. `ProjectBoundaryTests` checks the census's fields and
+  `IAdvHost`. The suite (1936) and validation at the core, workspace and runtime levels on both games pass. The
+  tolerance was written before measuring. 21 port runs ran on the build before and on the new one under the same
+  display. They cover furigana, the reveal clock, read skip, the input latch, History, saves, the hide control, the 設定
+  options, Kamidori's opening (once more in English through a language package, with a page map) and the two
+  `reference-diff` scenarios. The runs give the same step results; equal `SYS4REG.INI`; pixel-identical shots; saves
+  equal under `save-diff` except for their timestamp and play time; byte-identical page maps; step seconds within 0.5 %
+  (`himegari-reveal-clock` 93.79 and 93.88 s, `himegari-read-skip` 37.78 and 37.77 s); and the same log lines. Two
+  `reference-diff` steps, on SC0000's effect band (pages 14 and 15), counted other pixels over the tolerance. A second
+  run of the new build differed from the first by more than the first did from the build before (page 15: 51,631 and
+  1,246 pixels), so those counts follow the band's phase when the frame is caught.

@@ -29,7 +29,7 @@ public class PresentedMessageTests
     {
         Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100", code, strings);
         var host = new RecordingHost();
-        var vm = new VirtualMachine(script, Table, host) { Presenter = presenter, RecordsStringStores = records };
+        var vm = new VirtualMachine(script, Table, host) { Text = { Presenter = presenter }, RecordsStringStores = records };
         vm.Run();
         Assert.Equal("exit", vm.HaltReason);
         return (host, vm);
@@ -98,50 +98,53 @@ public class PresentedMessageTests
         Assert.Single(host.TextCursors);   // the break moves the cursor: no message was presented
     }
 
-    [Fact]
-    public void AMessageTheHostCutIsReportedOnceWithItsRows()
+    /// <summary>The sentence drawn by a text native into a window 100 pixels wide and <paramref name="height"/> tall,
+    /// with source glyphs 20 pixels wide and presented ones 10: the translation needs four rows (I picked | up that |
+    /// black | stone.), the source two. Returns the misses and the message's site.</summary>
+    private static (TextMissLog Misses, int At) DrawSentence(int height, TextOverflow overflow)
     {
-        // The host draws the presented sentence and cuts two rows of it (spec §7.3).
         var misses = new TextMissLog();
-        Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100", SentenceCode(), Sentence);
-        var host = new RecordingHost
+        Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100",
+            [(0x70, [I(1), I(100), I(height), I(0), I(400)]), (0x213, [I(1), I(100), I(64)]), .. SentenceCode()],
+            Sentence);
+        var vm = TestText.Vm(script, Table, new RecordingHost(), TestText.Glyphs(TestText.Fixed(20, 10), TestText.Unicode(10)));
+        var language = new TextLanguage("en",
+            [TextCatalog.Build("en", [TextEntry.Literal("あの黒石を拾った。", "I picked up that black stone.")])])
         {
-            OnRetainedText = run => run.Presented == null ? null
-                : new AdvRetainedTextRunResult(run.Layout.Slot, 0, 4, 40, 0) { CutRows = 2 },
+            Overflow = overflow,
         };
-        var vm = new VirtualMachine(script, Table, host)
-        {
-            Presenter = Presenter(misses, TextEntry.Literal("あの黒石を拾った。", "I picked up that black stone.")),
-        };
+        vm.Text.Presenter = new TextPresenter(language, misses: misses, messages: new ScriptMessageIndex(Table, Contracts));
+        vm.Text.PresentsText = true;
         vm.Run();
+        Assert.Equal("exit", vm.HaltReason);
+        return (misses, script.Instructions[2].Offset);
+    }
+
+    [Fact]
+    public void AMessageCutToItsWindowIsReportedOnceWithItsRows()
+    {
+        // Two of the four rows fit 60 pixels (a row needs its top plus the 24-pixel font): a language that cuts
+        // overflow draws two and reports two (spec §7.3).
+        var (misses, at) = DrawSentence(height: 60, TextOverflow.Cut);
 
         var written = new StringWriter();
         misses.WriteJsonLines(written);
-        Assert.Equal("{\"source\":\"あの黒石を拾った。\",\"script\":\"SC0100\",\"at\":\"0x0\",\"count\":1,\"rows_cut\":2}",
+        Assert.Equal($"{{\"source\":\"あの黒石を拾った。\",\"script\":\"SC0100\",\"at\":\"0x{at:x}\",\"count\":1,\"rows_cut\":2}}",
                      written.ToString().Trim());
         Assert.Equal((0, 1), (misses.Count, misses.CutCount));
     }
 
     [Fact]
-    public void AMessageTheHostNarrowedToFitIsReportedWithItsWidth()
+    public void AMessageNarrowedToFitItsWindowIsReportedWithItsWidth()
     {
-        // The host narrows the presented sentence to 91 % so that it is not cut (spec §7.3).
-        var misses = new TextMissLog();
-        Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100", SentenceCode(), Sentence);
-        var host = new RecordingHost
-        {
-            OnRetainedText = run => run.Presented == null ? null
-                : new AdvRetainedTextRunResult(run.Layout.Slot, 0, 4, 40, 0) { NarrowedToFitPercent = 91 },
-        };
-        var vm = new VirtualMachine(script, Table, host)
-        {
-            Presenter = Presenter(misses, TextEntry.Literal("あの黒石を拾った。", "I picked up that black stone.")),
-        };
-        vm.Run();
+        // Three rows fit 90 pixels: the language's default narrows the glyphs until the sentence needs three
+        // (I picked up | that black | stone.), so nothing is cut (spec §7.3). At 94 % a glyph advances 9 pixels (9.4
+        // rounded), so I picked up takes 99; at 95 % it advances 10 again.
+        var (misses, at) = DrawSentence(height: 90, TextOverflow.Shrink);
 
         var written = new StringWriter();
         misses.WriteJsonLines(written);
-        Assert.Equal("{\"source\":\"あの黒石を拾った。\",\"script\":\"SC0100\",\"at\":\"0x0\",\"count\":1,\"width_percent\":91}",
+        Assert.Equal($"{{\"source\":\"あの黒石を拾った。\",\"script\":\"SC0100\",\"at\":\"0x{at:x}\",\"count\":1,\"width_percent\":94}}",
                      written.ToString().Trim());
         Assert.Equal((0, 1, 0), (misses.Count, misses.NarrowedCount, misses.CutCount));
     }

@@ -76,8 +76,9 @@ public sealed partial class VirtualMachine
     /// polls.</summary>
     private void OfferHeldTriggersToReveal()
     {
-        if (_messageGlyphDelayMilliseconds <= 0 || AdvFastForwardActive || _host.TextRevealsFinishedUntilWait) return;
-        if ((TakeHeldTriggers() & AdvanceTrigger) != 0) _host.FinishTextRevealsUntilWait();
+        if (_text.MessageGlyphDelayMilliseconds <= 0 || AdvFastForwardActive || _text.TextRevealsFinishedUntilWait)
+            return;
+        if ((TakeHeldTriggers() & AdvanceTrigger) != 0) _text.FinishTextRevealsUntilWait();
     }
 
     /// <summary>The modal movie service (run-state 0x2000, engine_main_tick_with_exception_policy@0x41205d) polls on

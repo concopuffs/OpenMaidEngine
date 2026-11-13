@@ -246,9 +246,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       Movies (the bindings of movies to surfaces, the decoders, their
     │                                       sound, completion, the mask transitions), ScriptMemory (the five
     │                                       banks, the queues and stacks, op 0x60's seeded draws), SavesAndSettings
-    │                                       (the shared profile, the numbered saves, the playtime, SYS4REG.INI) and
+    │                                       (the shared profile, the numbered saves, the playtime, SYS4REG.INI),
     │                                       ShellServices (the system-menu fields, the menu and callback requests,
-    │                                       the diagnostic text, the dialogs, the screen mode)
+    │                                       the diagnostic text, the dialogs, the screen mode) and TextManager (the
+    │                                       layouts and History, the style, the reveal, the wait indicator, the
+    │                                       message settings, the fonts, the presenter, the string stores)
     │   ├── Ome.Engine.Vm/                   the handler layer (superpowers/specs/2026-11-12-engine-layering-design.md
     │                                       §3.3): the interpreter, the handler table and handlers, and the engine
     │                                       builds; references Ome.Engine only and cannot see Ome.Engine.Devices
@@ -388,13 +390,12 @@ turns requests into timed input over an `IDriveBackend`, and the loopback `Drive
 The runtime host is `engine/Ome.Engine/Hosting/EngineHost.cs`, lifted out of `godot/` in engine layering milestone 4
 (`docs/superpowers/specs/2026-11-12-engine-layering-design.md`); it reaches the front end only through
 `Hosting/IFrontEnd.cs`. `EngineHost.cs` retains cross-domain host coordination. Its partial-class companion
-`EngineHost.AdvText.cs` owns live/retained ADV text, surface glyph rasterization and caching,
-history presentation, message-window alpha, and retained wait-indicator configuration/publication.
+`EngineHost.AdvText.cs` holds the reveal's wait (`IAdvHost.WaitForTextReveal`, which services the text native's
+reveal; milestone 11 moves it), seeds skip's Auto times from `SYS4REG.INI` and writes the message settings back at
+shutdown.
 `EngineHost.PresentationInput.cs` owns script/presentation synchronization, waits and timing,
 message-skip/input services, cursor and foreground waits, the waits on the graphics native's publication and screen
-transitions (milestone 11 moves them), and scene-context lifecycle coordination. `EngineHost.Surfaces.cs` is the
-graphics native's surface listener for the text part until the text native exists: it hears that a surface was
-released or replaced (`ISurfaceListener`) and drops the text layouts retained on it. `EngineHost.Movies.cs` owns op
+transitions (milestone 11 moves them), and scene-context lifecycle coordination. `EngineHost.Movies.cs` owns op
 `0x20f`'s modal movie wait over the movie native (milestone 11 moves the waits) and the diagnostic snapshot.
 `EngineHost.Waits.cs` is the one place the host blocks: each wait runs the engine tick on every wake unless it is
 modal (engine layering spec §5.3). `Hosting/ReferenceRenderer.cs` is the reference renderer (spec §6.3): it draws a
@@ -413,8 +414,8 @@ milestone 11; the surface ops are the graphics native's. Pixel capture and repla
 `engine/Ome.Engine/Hosting/ISurfacePixels.cs`, which the graphics native implements; the save thumbnails reach them
 through `engine/Ome.Engine/Persistence/NumberedSaveThumbnails.cs`. `engine/Ome.Engine/Hosting/IInputHost.cs` owns
 modal fullwidth entry, ADV waits/callback servicing, input clock, cursor resources, and skip-state interaction.
-`engine/Ome.Engine/Hosting/IAdvHost.cs` owns live and surface text, history presentation, ADV layout publication,
-message presentation settings, wait indicators, and page-presentation suspension. `IHost` inherits all six focused contracts; every required member and
+`engine/Ome.Engine/Hosting/IAdvHost.cs` holds the reveal's wait alone (text is the text native's since engine
+layering milestone 10). `IHost` inherits all six focused contracts; every required member and
 overload/default chain remains unchanged. The neutral
 `engine/Ome.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie mask work between the VM, host, and
 retained graphics without making `Model` depend on `Hosting`.
@@ -469,15 +470,19 @@ ADV-binding, and presentation labels remain in their respective dispatcher group
 transforms, per-object animation control, frame-time sampling, and the shared animation-clock opcode handler.
 `engine/Ome.Engine.Vm/VirtualMachine.Presentation.cs` owns queued surface-alpha transitions, frame and object-range
 publication, skip-aware blocking fades/crossfades, foreground-transition waits, and graphics command-queue clear.
-`engine/Ome.Engine.Vm/VirtualMachine.AdvText.cs` owns live ADV text emission, layout/cursor/wait-indicator state,
-text style and glyph-delay control, direct surface-string and retained numeric-glyph rendering, and retained
-text/wait-object bindings; text history and input/skip/auto services remain separate.
-`engine/Ome.Engine.Vm/VirtualMachine.TextHistory.cs` owns history recording control, metadata append/navigation,
-retained history rendering, metadata/voice lookup, and history backlog clearing.
-`engine/Ome.Engine.Vm/VirtualMachine.HistoryPresentation.cs` presents a history group again in the current language
-(localization spec §8): by the lookups recorded this session, else by splitting the records' text against unscoped
-entries. `engine/Ome.Engine.Vm/VirtualMachine.TextStores.cs` records which instruction stored each global string, so
-a lookup can try the store's site (spec §5.2).
+`engine/Ome.Engine.Vm/VirtualMachine.AdvText.cs` holds the text handlers: the show-text ops, layouts, cursors, style,
+glyph delay, surface strings, the wait indicator's ops and the message a run belongs to (`_presentedMessage`); each
+calls the text native. `engine/Ome.Engine.Vm/VirtualMachine.TextHistory.cs` holds the History handlers (recording
+control, metadata append/navigation, rendering a group, voice lookup, clearing the backlog).
+`engine/Ome.Engine.Vm/VirtualMachine.TextStores.cs` resolves the global string cell an operand names, for the string
+stores the text native keeps (localization spec §5.2).
+The text native `engine/Ome.Engine/Natives/TextManager.cs` owns the layouts and History (`AdvTextHistory`), the style,
+the glyph rasterizers and caches over its devices (`TextDevices`), the installed fonts, MessageSpeed, MesWinAlpha and
+UseAntiFont, op `0x9`'s reset and its records of a numbered save (the history tail and the source glyph objects). Its
+partials draw runs, strings and History groups into the layouts' surfaces (`Layout`), run the show-text runs and the
+reveal (`Reveal`; `IsRevealing` is run-state `0x20000000`), keep the wait indicator and the page's suspension
+(`WaitIndicator`), and hold the presenter, the string stores and History presented again in the current language
+(`Presentation`, localization spec §8). `ITextListener.cs` is what a listener hears it show and draw.
 `engine/Ome.Engine.Vm/VirtualMachine.AdvServices.cs` owns persistent/active message-skip control, read-skip
 settings and queries, auto-message state/timing, and per-message voice/skip reset opcode dispatch; shared state
 and refresh helpers remain in the VM coordinator because live text and input paths also consume them.
