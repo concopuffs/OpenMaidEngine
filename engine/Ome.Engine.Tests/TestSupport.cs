@@ -40,14 +40,6 @@ internal class RecordingHost : IHost, IFastForwardListener
     public readonly List<int> PublishedAdvTextLayouts = new();
     public readonly List<long> SleptDurations = new();
     public readonly List<long> TimedCallbackWaitDurations = new();
-    public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
-    public readonly List<(long Resource, int Surface, long Flags, long SyncMask, long PositionMs)>
-        PositionedMovies = new();
-    public readonly List<(int Surface, double Rate)> MoviePlaybackRates = new();
-    public readonly List<MovieMaskTransitionRequest> MovieMaskTransitions = new();
-    public System.Action? OnPlayMovie;
-    public long? MovieStopTimeMs;
-    public readonly HashSet<int> ActiveMovieSurfaces = new();
     public readonly List<(long Resource, int Surface, long Flags)> ModalMovies = new();
     public readonly List<(int Surface, long Interval, SurfaceBlackFadeDirection Direction)> SurfaceBlackFades = new();
     public readonly List<(int Surface, long Interval)> SurfaceWhiteFades = new();
@@ -282,28 +274,6 @@ internal class RecordingHost : IHost, IFastForwardListener
         SurfacePatternTransitions.Add(request);
         SurfacePatternForceEndpoints.Add(forceEndpoint);
     }
-    public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long startDelayMs)
-    {
-        Movies.Add((resourceId, surfaceSlot, movieFlags, startDelayMs));
-        OnPlayMovie?.Invoke();
-        return MovieStopTimeMs;
-    }
-    public long? PlayMovieToSurfaceAtPosition(
-        long resourceId, int surfaceSlot, long movieFlags, long startDelayMs, long positionMs)
-    {
-        PositionedMovies.Add((resourceId, surfaceSlot, movieFlags, startDelayMs, positionMs));
-        OnPlayMovie?.Invoke();
-        return MovieStopTimeMs;
-    }
-    public void PlayMovieMaskTransition(GfxState gfx, MovieMaskTransitionRequest request)
-    {
-        MovieMaskTransitions.Add(request);
-        gfx.QueueMovieMaskTransition(request);
-        gfx.CompleteMovieMaskTransition(request.SurfaceSlot);
-    }
-    public bool IsMovieSurfaceActive(int surfaceSlot) => ActiveMovieSurfaces.Contains(surfaceSlot);
-    public void SetMoviePlaybackRate(int surfaceSlot, double rate)
-        => MoviePlaybackRates.Add((surfaceSlot, rate));
     public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
         => ModalMovies.Add((resourceId, surfaceSlot, movieFlags));
     // Native's input latch handing a held click to the next reveal or modal movie (VirtualMachine.InputLatch.cs).

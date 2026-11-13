@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The movie native's runtime, feed and registry are internal; their tests reach them. -->
+    <InternalsVisibleTo Include="Ome.Engine.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Profiles\*.json"
                       LogicalName="Ome.Engine.Profiles.%(Filename)%(Extension)" />
   </ItemGroup>

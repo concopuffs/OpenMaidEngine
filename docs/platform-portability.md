@@ -257,14 +257,14 @@ The live connection is now backend-neutral:
 
 ```
 VM op 0x236 (non-modal) / op 0x20f (modal) / op 0x24d (green-mask transition)
-  -> IHost.PlayMovieToSurface / PlayModalMovieToSurface / PlayMovieMaskTransition
-  -> VFS-owned MoviePayload bytes
+  -> the movie native, Movies.PlayToSurface / PlayMaskTransition (op 0x20f: the host's modal wait, Movies.StartModal)
+  -> VFS-owned MoviePayload bytes (IMovieAssets)
   -> IMovieDecoderFactory
      -> FfmpegMovieDecoder
         -> FfmpegMovieSession -> ome_movie C ABI
   -> newest due RGBA frame -> retained movie surface -> Godot compositor
      or green byte -> exact captured-range alpha mask -> dynamic scratch surface
-  -> timestamped stereo float PCM -> per-playback AudioStreamGenerator
+  -> timestamped stereo float PCM -> MovieAudioFeed -> IAudioStreamDevice (Godot: an AudioStreamGenerator per playback)
 ```
 
 Everything before and after the selected decoder is portable. The replacement decision is an in-process FFmpeg

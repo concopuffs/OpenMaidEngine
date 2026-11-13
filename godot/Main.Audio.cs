@@ -132,7 +132,7 @@ public partial class Main : IAudioDevice
         if (index >= 0) AudioServer.SetBusMute(index, muted);
     }
 
-    private static string AudioBusName(AudioBus bus) => bus switch
+    internal static string AudioBusName(AudioBus bus) => bus switch
     {
         AudioBus.Master => "Master",
         AudioBus.Music => "Music",

@@ -241,15 +241,18 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       group of engine state: SkipAndAuto (Skip, Auto, read skip, fast-forward
     │                                       and its pace), Audio (the 13 channels, the BGM track and envelope, the
     │                                       voice, delayed starts, the mixer), EngineTick (the tick and the
-    │                                       statement block) and Graphics (the retained objects, the surface table
+    │                                       statement block), Graphics (the retained objects, the surface table
     │                                       and its pixels, publication, the screen transition, the frame lowering)
+    │                                       and Movies (the bindings of movies to surfaces, the decoders, their
+    │                                       sound, completion, the mask transitions)
     │   ├── Ome.Engine.Vm/                   the handler layer (superpowers/specs/2026-11-12-engine-layering-design.md
     │                                       §3.3): the interpreter, the handler table and handlers, and the engine
     │                                       builds; references Ome.Engine only and cannot see Ome.Engine.Devices
     │   ├── Ome.Engine.Devices/              the device layer: interfaces of what an operating system or front end
     │                                       does and the plain data they carry (RgbaImage, glyph-mask requests and
     │                                       results, the font family source, the movie decoder, the pace clock, the
-    │                                       audio device, the frame description and its renderer and presenter);
+    │                                       audio device and the audio stream device, the frame description and its
+    │                                       renderer and presenter);
     │                                       references nothing
     │   ├── Ome.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
     │                                       open-maid-script-design.md): operand contracts, intrinsics (Abi/), intermediate
@@ -276,8 +279,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       (Localization/Import/); referenced by
     │                                       Ome.Cli, the Godot port (godot/Main.Mods.cs) and the tests
     │   ├── Ome.Engine.Frontend/             platform-neutral frontend support: diagnostics/options, page
-    │                                       location, performance logging, movie runtime/FFmpeg decoding,
-    │                                       audio alignment, surface registry, WAV sanitization, the
+    │                                       location, performance logging, FFmpeg movie decoding (the
+    │                                       decoder the movie native opens), WAV sanitization, the
     │                                       game-driving control protocol (Control/), and the engine
     │                                       shell's model (Shell/: its commands, menu tree with
     │                                       prune/refresh, state, options, string tables in
@@ -334,7 +337,9 @@ companions keep cohesive surfaces independently navigable without changing the G
 paths: `godot/Main.SelfTest.cs` owns the synthetic threaded/headless regression harness, while
 `godot/Main.Audio.cs` is the audio device (`IAudioDevice`: one stream player per channel, the buses, the ended
 reports) and persists the mixer settings, and
-`godot/Main.Movie.cs` owns decoder staging, movie frame/audio publication, completion, and teardown.
+`godot/GodotAudioStreams.cs` is the stream device the movie native plays a movie's sound through
+(`IAudioStreamDevice`: an `AudioStreamGenerator` player per stream, on its bus); the decoder is
+`FfmpegMovieDecoderFactory` (`engine/Ome.Engine.Frontend/`), and `Main.cs` runs the movie native's frame service.
 `godot/Main.Compositor.cs` draws each frame: the graphics native lowers it to a frame description, the GPU renderer
 (`godot/GpuRetainedRenderer.cs`, an `IFrameRenderer`) draws it or declines it, and otherwise the reference renderer
 (`engine/Ome.Engine/Hosting/ReferenceRenderer.cs`, below) draws it and Main, the `IFramePresenter`, uploads its pixels.
@@ -365,8 +370,9 @@ Both `engine/OmeEngine.sln` and `godot/OME.sln` include the project; Godot and `
 through project references rather than compiling duplicate linked sources. The first owned cluster contains
 `GodotTraceSink`, `StepLimitDiagnosticFormatter`, `GodotVmOptions` and `WindowLaunchOptions`; the logs the host and
 the renderers write (`PageLocatorState`, `TimelineLog`, `PerformanceFrameLog`, and `GfxDecisionLog` for `--gfx-log`)
-are in `engine/Ome.Engine/Diagnostics/`. It also owns the internal movie runtime (the decoder interfaces
-are in `Ome.Engine.Devices`), audio-timeline alignment, and RIFF/WAVE sanitizer; only the
+are in `engine/Ome.Engine/Diagnostics/`. It also owns the RIFF/WAVE sanitizer (the movie runtime and the
+movie sound's alignment are the movie native's since engine layering milestone 8; the decoder interfaces are in
+`Ome.Engine.Devices`); only the
 `OME` and `Ome.Engine.Tests` assemblies receive explicit friend access to that internal API. FFmpeg native interop and the
 asynchronous/paced decoder also live here; the `Ome.MovieCorpusGate` tool receives friend access to the native
 frame-source seam and references this project rather than compiling source links. Reusable movie-corpus discovery,
@@ -383,11 +389,9 @@ history presentation, message-window alpha, and retained wait-indicator configur
 `EngineHost.PresentationInput.cs` owns script/presentation synchronization, waits and timing,
 message-skip/input services, cursor and foreground waits, the waits on the graphics native's publication and screen
 transitions (milestone 11 moves them), and scene-context lifecycle coordination. `EngineHost.Surfaces.cs` is the
-graphics native's partner until the movie and text natives exist: it answers which surfaces a movie owns
-(`IGraphicsMovies`) and hears that a surface was released or replaced (`ISurfaceListener`), stopping its movie and
-dropping the text layouts retained on it. `EngineHost.Movies.cs` owns movie surface bindings (through
-`MovieSurfaceRegistry.cs`), ordinary and modal playback, movie-mask transitions, diagnostic snapshots,
-frame/completion publication, and mask teardown.
+graphics native's surface listener for the text part until the text native exists: it hears that a surface was
+released or replaced (`ISurfaceListener`) and drops the text layouts retained on it. `EngineHost.Movies.cs` owns op
+`0x20f`'s modal movie wait over the movie native (milestone 11 moves the waits) and the diagnostic snapshot.
 `EngineHost.Waits.cs` is the one place the host blocks: each wait runs the engine tick on every wake unless it is
 modal (engine layering spec §5.3). `Hosting/ReferenceRenderer.cs` is the reference renderer (spec §6.3): it draws a
 frame description into its own RGBA buffer, which the front end shows, and defines what each frame item means; a
@@ -514,6 +518,15 @@ target or the backbuffer, the render-target snapshots, and the `0x21`/`0x22`/`0x
 and the frame lowering (`Frame`: the one traversal of the objects, which lowers each frame, effects included, to a
 `FrameDescription`, and a published range to plain items). The frame description and the renderer and presenter
 interfaces are `engine/Ome.Engine.Devices/Graphics/FrameDescription.cs`.
+The movie native `engine/Ome.Engine/Natives/Movies.cs` owns the movie ops (`0x236`, `0x241`, `0x23a`, `0x246`,
+`0x24d`, and the start of op `0x20f`'s modal movie), which playback is bound to which surface (`MovieSurfaceRegistry.cs`)
+and the op `0x24d` mask transitions; it is the graphics native's `IGraphicsMovies` and one of its surface listeners.
+Its partial `Movies.Playback.cs` owns the decoders: the engine thread opens one per playback (`MovieRuntime.cs`, its
+start delay and watchdog) and the front end's frame runs `ServiceFrame`, which stops, adopts, applies rates,
+publishes frames and completes them. `MovieAudioFeed.cs` feeds a playback's PCM to an `IAudioStream` at its
+presentation times (`MovieAudioTimeline.cs`) and paces the decoder by what has been heard. It finds movies through
+`IMovieAssets.cs` (`ResourceMovieAssets` reads the catalog); the decoder is `IMovieDecoderFactory` and the sound
+`IAudioStreamDevice` (`engine/Ome.Engine.Devices/IMovieDecoder.cs`, `Audio/IAudioStreamDevice.cs`).
 `engine/Ome.Engine.Vm/VirtualMachine.DeterministicRandom.cs` owns op `0x60`'s seeded per-call-site streams, which
 the drive step `rand-seed` turns on.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Ome.Engine.Model;
 
-namespace Ome.Engine.Hosting;
+namespace Ome.Engine.Natives;
 
 public readonly record struct MovieSurfaceBinding(long PlaybackId, long ResourceId, int SurfaceSlot,
                                                     long MovieFlags = 0);
@@ -14,9 +14,10 @@ public enum MovieSurfaceReleaseKind { NotBound, Released }
 public readonly record struct MovieSurfaceRelease(MovieSurfaceReleaseKind Kind,
                                                     MovieSurfaceBinding Binding, bool Completed);
 
-/// <summary>Instance-keyed movie/surface ownership. A resource may be played more than once concurrently;
-/// completion and frames therefore belong to a playback, never to the shared asset id.</summary>
-public sealed class MovieSurfaceRegistry
+/// <summary>The movie native's bindings of playbacks to surfaces (<see cref="Movies"/>). A resource may be played more
+/// than once at a time, so completion and frames belong to a playback, never to the shared asset id. The engine thread
+/// binds and releases; the front end's frame publishes frames and the lowering resolves them, so it locks.</summary>
+internal sealed class MovieSurfaceRegistry
 {
     private readonly object _lock = new();
     private readonly Dictionary<int, MovieSurfaceBinding> _bySurface = new();

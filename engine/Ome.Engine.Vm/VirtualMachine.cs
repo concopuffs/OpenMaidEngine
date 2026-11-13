@@ -195,7 +195,7 @@ public sealed partial class VirtualMachine
                           DiagnosticOutputState? diagnosticOutput = null,
                           EngineBuild? build = null, SkipAndAuto? skipAndAuto = null,
                           TimeProvider? playClock = null, Audio? audio = null, EngineTick? tick = null,
-                          Graphics? graphics = null)
+                          Graphics? graphics = null, Movies? movies = null)
     {
         _s = s; _t = t; _handlers = BindHandlers(t); _host = host; _o = o ?? new VmOptions(); _provider = provider;
         // Composition hands over the native its time device belongs to; tests and tools that give none get one over
@@ -207,6 +207,8 @@ public sealed partial class VirtualMachine
         _tick = tick ?? new EngineTick(_audio);
         // Without a front end the graphics native has no catalog and no screen (Graphics.Headless).
         _graphics = graphics ?? Graphics.Headless();
+        // Without a front end no movie resolves (Movies.Headless); composition gives the one over the decoder.
+        _movies = movies ?? Movies.Headless(_graphics);
         _playClock = playClock ?? TimeProvider.System;
         _rules = EngineBuilds.ForVm(build, t).Rules;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -1105,6 +1107,7 @@ public sealed partial class VirtualMachine
         Volatile.Write(ref _systemKeyDisableMask, 0);
         TextHistory.SetRecordingEnabled(true);
         _skip.ResetScene();   // Skip, Auto and read skip start over; run-state 0x08000000 is zeroed
+        _movies.ResetScene();   // every surface's movie object goes; the surfaces stay
         _host.ResetSceneContext();
         // The reset keeps every surface. op_0x9_reset_scene_and_reload_root then runs the release worker over all
         // 1,000 slots only when (CreateObject & 2) && (AutoFreeTex & 1): Kamidori, not Himegari (docs/engine-re.md,
@@ -1245,7 +1248,7 @@ public sealed partial class VirtualMachine
             }
             try
             {
-                if (hostContextEntered) _host.ExitScriptContext();
+                if (hostContextEntered) _host.ExitScriptContext(frame.Script.Name);
             }
             finally
             {

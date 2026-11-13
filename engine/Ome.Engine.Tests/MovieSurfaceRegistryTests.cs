@@ -1,5 +1,6 @@
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 
 public class MovieSurfaceRegistryTests
 {

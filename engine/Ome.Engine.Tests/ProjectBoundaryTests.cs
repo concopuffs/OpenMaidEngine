@@ -201,6 +201,43 @@ public class ProjectBoundaryTests
     }
 
     [Fact]
+    public void MovieStateIsPrivateToItsNative()
+    {
+        // The census (docs/superpowers/plans/2026-11-12-engine-layering.md §4, "Movies" and "The script stack") found
+        // the movie bindings, the mask playbacks and the host's copy of the script stack in the host; milestone 8 gave
+        // the first two to the movie native and removed the third. The host keeps op 0x20f's modal wait and its three
+        // fields until milestone 11.
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        Assert.Empty(typeof(Movies).GetFields(instance).Where(field => !field.IsPrivate).Select(field => field.Name));
+        string[] census =
+        [
+            "_movieSurfaces", "_movieMaskLock", "_movieMasksByPlayback", "_movieMaskPlaybackBySurface",
+            "_scriptContexts", "_rootScene",
+        ];
+        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
+            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+    }
+
+    [Fact]
+    public void TheFrontEndSuppliesOnlyTheMovieDecoder()
+    {
+        // Spec §11, milestone 8: a front end supplies the decoder and a stream for the sound; the movie native runs the
+        // decoders, paces and feeds the sound, and completes the movies. Comments may name its parts.
+        string[] code = Directory.EnumerateFiles(Path.Combine(Paths.Repo, "godot"), "*.cs")
+            .SelectMany(File.ReadAllLines)
+            .Select(line => line.IndexOf("//", StringComparison.Ordinal) is int comment and >= 0 ? line[..comment] : line)
+            .ToArray();
+        foreach (string word in new[]
+                 {
+                     "IMovieDecoder ", "MovieRuntime", "MovieAudioFeed", "MovieAudioTimeline", "MovieSurfaceRegistry",
+                     "TryTakeFrame", "TryTakeAudioChunk", "AdvancePlaybackClock",
+                 })
+            Assert.DoesNotContain(code, line => line.Contains(word, StringComparison.Ordinal));
+        Assert.DoesNotContain(typeof(IFrontEnd).GetMembers(),
+                              member => member.Name.Contains("Movie", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TheGodotAudioDeviceRunsNoEnvelope()
     {
         // Spec §11, milestone 6: the BGM fade, the voice duck and its release are the audio native's; the device

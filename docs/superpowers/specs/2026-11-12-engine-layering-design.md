@@ -3,7 +3,7 @@
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
-2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio) and 7 (graphics) are done on
+2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio), 7 (graphics) and 8 (movies) are done on
 `feature/engine-layering`; §3.3, §4, §5.2, §5.3, §6.2, §6.3, §7.5, §7.6, §11, §12 and §13 record what they
 settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15
 records the history.
@@ -429,6 +429,36 @@ whole-screen transition with its timing; and `Graphics.Frame.cs` the lowering (�
 - **Construction.** Composition (`godot/Main.cs`) builds one native over the catalog, the frame clock and the canvas,
   and hands it to `EngineHost` and the VM; the host attaches itself as both partners.
 
+**As built (milestone 8).** The movie native is `Ome.Engine.Natives.Movies` (`engine/Ome.Engine/Natives/Movies.cs`
+for the ops, the bindings and the mask transitions; `Movies.Playback.cs` for the decoders). What it runs came with
+it and is internal to it: `MovieSurfaceRegistry` from `Hosting/`, `MovieRuntime` and `MovieAudioTimeline` from
+`Ome.Engine.Frontend`, and `godot/MovieAudioOutput.cs` as `MovieAudioFeed`. It finds a movie's file through
+`IMovieAssets` (`ResourceMovieAssets` reads the catalog).
+
+- **Its state.** The census's four host fields (the bindings, and the mask lock and its two maps) are its private
+  fields, and so is what `godot/Main.Movie.cs` held: the opened and playing decoders, their sound feeds, and the
+  requested rates and stops. `ProjectBoundaryTests` checks that its fields are private, that neither the VM nor
+  `EngineHost` keeps one, and that `godot/` names none of its parts.
+- **Its handlers.** Ops `0x236`, `0x241`, `0x23a`, `0x246` and `0x24d` call the native, which the VM's constructor
+  takes; a VM given none builds `Movies.Headless`, where no movie resolves. Op `0x9`'s reset has the native stop every
+  movie, which the host did before.
+- **What stays.** Op `0x20f`'s modal movie is a wait, so the host keeps it and its three fields until milestone 11.
+  It starts the movie through the native (`ResolveModal`, `StartModal`) and waits until the surface's movie is no
+  longer active. The native wakes the host's waits when a movie completes or a mask frame lands, and the effect wait
+  asks the native whether a movie holds it (`HoldsServiceWait`).
+- **The host's script stack is gone.** The host kept a copy of the VM's script stack only so that a movie's log line
+  could name the scene (census, "The script stack"). The VM now passes the running script's name with each movie op,
+  and `ILifecycleHost.ExitScriptContext` takes the name it leaves. The host's diagnostic snapshot lost `CurrentScene`.
+- **Threads, as before.** The engine thread binds a playback and opens its decoder at once, since op `0x23f` reads the
+  stop time right after op `0x236` (§6.2, rule 6). The front end's frame calls `ServiceFrame`, which stops what was
+  stopped, takes the decoders that were opened, applies rates, publishes each decoder's newest frame, feeds the sound
+  and completes the movies; `Main.Movie.cs` did the same on the same thread. Milestone 11 decides the threads. One
+  thing changed: a stop, which `Main` applied in a `CallDeferred`, is applied at the start of the next frame service.
+- **Construction.** Composition (`godot/Main.cs`) builds the native over the graphics native, the catalog's movies,
+  `FfmpegMovieDecoderFactory` and the Godot stream device, and hands it to `EngineHost` and the VM; the native attaches
+  itself to the graphics native as its movie partner and a surface listener. `IFrontEnd` lost its 3 movie members
+  (`TryPlayMovie`, `QueueMoviePlaybackRate`, `StopMovie`).
+
 ### 5.3 Time
 
 **Today.** The VM runs on a task thread (`godot/Main.cs:616`) and blocks inside host calls. Godot's main thread
@@ -638,6 +668,46 @@ outlive its wait.
     stops a voice, the native knows at once, where the host waited for Godot's player to stop.
   - The step results were the same and the step seconds equal: 396.5 s for Kamidori, and 38.3 and 38.25 s for the
     read skip.
+
+**As built (milestone 8).**
+
+- **The decoder** is the one movie part a front end supplies: `IMovieDecoderFactory` and `IMovieDecoder`
+  (`engine/Ome.Engine.Devices/IMovieDecoder.cs`), unchanged. The FFmpeg decoder stays in `Ome.Engine.Frontend`.
+- **The stream device** is new: `Ome.Engine.Devices.IAudioStreamDevice` (`Audio/IAudioStreamDevice.cs`). It opens a
+  stream at a sample rate on a bus, silent when the movie's route is off. A stream starts held, resumes, says how many
+  frames it has room for, takes PCM or silence, reports how much has been heard and how often it ran dry, and plays at
+  a rate. The movie native's feed queues each block at its presentation time and paces the decoder by what has been
+  heard, as `godot/MovieAudioOutput.cs` did.
+- **An exception to rule 1.** A stream is fed, and its heard position read, on the front end's thread, in the movie
+  native's `ServiceFrame`, where `Main.Movie.cs` fed it before; the decoder's frames are taken there too. Milestone 11
+  decides the threads. Opening a decoder stays on the engine thread under rule 6.
+- **The Godot device** is `godot/GodotAudioStreams.cs`: an `AudioStreamPlayer` over an `AudioStreamGenerator` per
+  stream, with a quarter second of buffer, on its bus, at -80 dB when silent. What has been heard is the player's
+  position plus the time since the last mix, less the output's latency.
+- **Tests.** `MoviesNativeTests` and the converted op tests run the real native over a scripted decoder, movie files
+  for every id, a stream device that records what is queued, and a stepped clock (`MovieTestSupport.cs`): start
+  delays, the watchdog, completion, stops on a release, a reset or a second movie, the sound's routes, its first block
+  and its gaps, rates, the mask transition, and shutdown. None needs Godot.
+- **The timing is kept.** The tolerance was written down before measuring: the same movies with the same playback
+  ids, surfaces, flags, delays and stop times; each first frame within a frame of before; a completion within two
+  frames and 50 ms; a stop within a frame; the modal wait ending the same way. 17 runs with `--timeline-log`: two
+  probes that let each game's LOGO play to its end and cancel OP after 5 s, and the 15 port scenarios of milestone 7.
+  - **One run is not repeatable to a frame.** On the build before alone, OP's first frame came 4 to 7 frames after its
+    start. So, before the new build ran, the timing checks were changed to compare the 17 runs as a set: medians within
+    a frame, ranges no wider.
+  - **The display changed under the comparison.** This machine's display went from about 58 to 80-97 frames a second
+    between the first runs of the build before and the runs of the new one. The build before (`2a45bc2`) was run again
+    under the same display, and the figures below compare with that run.
+  - The same 35 movies started in the same order, with the same ids, surfaces, flags, delays and stop times, and every
+    modal wait ended the same way.
+  - The first frame came a median 2 frames after the start for both LOGOs on both builds (about 20 ms). OP's came 7
+    and 6 frames after for Himegari (70 and 61 ms), and 7.5 and 7 for Kamidori (75 and 70 ms).
+  - The three movies that play to their end completed 2 frames (21 ms), 1 frame (8 ms) and 3 frames (17 ms) later.
+    The last, SC0000's `CHAPTER.AGF`, is one frame outside the bound and inside its 50 ms. The build before varies by
+    39 ms on it from run to run.
+  - Every stop was applied one frame after the op that asked for it, where the build before applied it in the same
+    frame. That was the known difference: `Main`'s `CallDeferred` ran in the same frame, and the frame service runs at
+    the start of the next.
 
 ### 6.3 Graphics: a frame description and a reference renderer
 
@@ -1272,3 +1342,18 @@ Not covered:
   on the same day; the machine had become about 0.5 s slower than milestone 6's runs. The saves of
   `himegari-save-load` and `kamidori-history-after-load` are equal under `save-diff` except for their timestamp and
   play time, and their thumbnails, which the native now captures, are byte-identical.
+- **2026-11-13, milestone 8.** Movies. The bindings of movies to surfaces, the decoders, their sound, completion and
+  the mask transitions have one owner, `Ome.Engine.Natives.Movies`, and a front end supplies only the decoder and a
+  stream for the sound, `IAudioStreamDevice` (§5.2 and §6.2, "As built"). `godot/Main.Movie.cs` is gone, `IFrontEnd`
+  lost its 3 movie members, and the host keeps only op `0x20f`'s modal wait until milestone 11. The host's copy of the
+  script stack is gone too. `MoviesNativeTests` test the native without Godot, and `ProjectBoundaryTests` checks that
+  its state is private and that `godot/` names none of its parts. The suite (1914) and validation at the core,
+  workspace and runtime levels on both games pass. The tolerance was written before measuring. One run's movie timing
+  proved not repeatable to a frame, so the timing checks compare the 17 runs as a set. The display's refresh rate
+  changed between the first runs of the build before and the runs of the new one, so the build before was run again
+  under the same display. Against that run the movies keep their timing within the tolerance, with two exceptions
+  (§6.2). A stop lands one frame later, as expected. SC0000's `CHAPTER.AGF` completes 3 frames later, one over the
+  bound, though its 17 ms is inside the 50 ms one and the build before varies by 39 ms on it. The 17 runs give the same step results, apart from where a
+  poll happened to catch the script, which varies as much between two runs of the build before. Their `SYS4REG.INI`
+  are equal and their shots identical. The saves of `himegari-save-load` and `kamidori-history-after-load` are equal
+  under `save-diff` except for their timestamp and play time, and their thumbnails are byte-identical.

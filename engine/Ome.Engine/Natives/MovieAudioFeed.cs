@@ -1,6 +1,9 @@
-using System;
-using Godot;
+using Ome.Engine.Devices;
 
+namespace Ome.Engine.Natives;
+
+/// <summary>Where a movie's sound plays, by its flags and SYS4INI DEPENDMOVIESOUND (<see cref="Model.MovieSoundRoute"/>):
+/// a category's bus, or silence.</summary>
 internal enum MovieAudioRoute
 {
     Muted = 0,
@@ -10,16 +13,19 @@ internal enum MovieAudioRoute
     Movie = 4,
 }
 
-/// <summary>Godot-main-thread PCM sink and sound-hardware clock for one movie playback.</summary>
-internal sealed class MovieAudioOutput : IDisposable
+/// <summary>
+/// Feeds one playback's decoded PCM to an <see cref="IAudioStream"/> and paces the decoder by what has been heard. The
+/// stream starts held and plays once its first block is queued; each block goes in at its presentation time, with
+/// silence before a late block and the head of an early one dropped (<see cref="MovieAudioTimeline"/>). Runs on the
+/// front end's thread, in the movie native's frame service.
+/// </summary>
+internal sealed class MovieAudioFeed : IDisposable
 {
     private const int MaximumPushFrames = 4096;
 
     private readonly IMovieDecoder _decoder;
-    private readonly AudioStreamPlayer _player;
+    private readonly IAudioStream _stream;
     private readonly int _sampleRate;
-    private readonly double _outputLatencySeconds;
-    private AudioStreamGeneratorPlayback? _playback;
     private MovieAudioChunk? _pending;
     private int _pendingOffsetFrames;
     private long _pendingGapFrames;
@@ -34,12 +40,11 @@ internal sealed class MovieAudioOutput : IDisposable
     public MovieAudioRoute Route { get; }
     public long ClockMs => _clockMs;
     public long SubmittedThroughMs => _sampleRate <= 0 ? 0 : _submittedFrames * 1000 / _sampleRate;
-    public int BufferUnderruns => _playback?.GetSkips() ?? 0;
+    public int BufferUnderruns => _started ? _stream.Underruns : 0;
 
-    public MovieAudioOutput(Node owner, IMovieDecoder decoder, MovieAudioRoute route,
-                            double outputLatencySeconds)
+    public MovieAudioFeed(IMovieDecoder decoder, MovieAudioRoute route, IAudioStreamDevice device)
     {
-        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(device);
         _decoder = decoder ?? throw new ArgumentNullException(nameof(decoder));
         MovieAudioInfo info = decoder.AudioInfo
             ?? throw new ArgumentException("movie decoder has no audio stream", nameof(decoder));
@@ -48,30 +53,17 @@ internal sealed class MovieAudioOutput : IDisposable
 
         Route = route;
         _sampleRate = info.SampleRate;
-        _outputLatencySeconds = Math.Max(0, outputLatencySeconds);
-        var generator = new AudioStreamGenerator
-        {
-            MixRate = _sampleRate,
-            BufferLength = 0.25f,
-        };
-        _player = new AudioStreamPlayer
-        {
-            Stream = generator,
-            Bus = RouteBus(route),
-            VolumeDb = route == MovieAudioRoute.Muted ? -80.0f : 0.0f,
-        };
-        owner.AddChild(_player);
+        _stream = device.Open(_sampleRate, BusOf(route), muted: route == MovieAudioRoute.Muted);
     }
 
+    /// <summary>Read the heard position, queue what the stream has room for, and let the decoder's video catch up to
+    /// the sound.</summary>
     public void Update()
     {
         if (_disposed) return;
         if (_started)
         {
-            double audibleSeconds = _player.GetPlaybackPosition()
-                                      + AudioServer.GetTimeSinceLastMix()
-                                      - _outputLatencySeconds;
-            long candidate = (long)Math.Floor(Math.Max(0, audibleSeconds) * 1000.0);
+            long candidate = (long)Math.Floor(Math.Max(0, _stream.HeardSeconds) * 1000.0);
             if (candidate > _clockMs) _clockMs = candidate;
         }
         FeedAvailablePcm();
@@ -107,12 +99,12 @@ internal sealed class MovieAudioOutput : IDisposable
                 _timelineAnchored = true;
             }
 
-            int available = _playback!.GetFramesAvailable();
+            int available = _stream.FramesFree;
             if (available <= 0) return;
             if (_pendingGapFrames > 0)
             {
                 int count = (int)Math.Min(Math.Min(_pendingGapFrames, available), MaximumPushFrames);
-                if (!_playback.PushBuffer(new Vector2[count])) return;
+                if (!_stream.PushSilence(count)) return;
                 FinishPreroll();
                 _pendingGapFrames -= count;
                 _submittedFrames += count;
@@ -127,15 +119,7 @@ internal sealed class MovieAudioOutput : IDisposable
                 continue;
             }
             int frames = Math.Min(Math.Min(remaining, available), MaximumPushFrames);
-            var output = new Vector2[frames];
-            for (int index = 0; index < frames; index++)
-            {
-                int source = checked((_pendingOffsetFrames + index) * 2);
-                output[index] = new Vector2(
-                    _pending.InterleavedStereo[source],
-                    _pending.InterleavedStereo[source + 1]);
-            }
-            if (!_playback.PushBuffer(output)) return;
+            if (!_stream.Push(_pending.InterleavedStereo, _pendingOffsetFrames, frames)) return;
             FinishPreroll();
             _pendingOffsetFrames += frames;
             _submittedFrames += frames;
@@ -149,10 +133,7 @@ internal sealed class MovieAudioOutput : IDisposable
 
     private void Start()
     {
-        _player.Play();
-        _player.StreamPaused = true;
-        _playback = _player.GetStreamPlayback() as AudioStreamGeneratorPlayback
-                    ?? throw new InvalidOperationException("Godot did not create movie audio generator playback");
+        _stream.StartHeld();
         _started = true;
         _prerolling = true;
     }
@@ -161,29 +142,29 @@ internal sealed class MovieAudioOutput : IDisposable
     {
         if (!double.IsFinite(rate) || rate <= 0)
             throw new ArgumentOutOfRangeException(nameof(rate));
-        _player.PitchScale = (float)rate;
+        _stream.SetRate(rate);
     }
 
     private void FinishPreroll()
     {
         if (!_prerolling) return;
         _prerolling = false;
-        _player.StreamPaused = false;
+        _stream.Resume();
     }
 
-    private static StringName RouteBus(MovieAudioRoute route) => route switch
+    // The route's category bus; a muted movie plays silently on the movie bus.
+    private static AudioBus BusOf(MovieAudioRoute route) => route switch
     {
-        MovieAudioRoute.Music => "Music",
-        MovieAudioRoute.SoundEffect => "SFX",
-        MovieAudioRoute.Voice => "Voice",
-        _ => "Movie",
+        MovieAudioRoute.Music => AudioBus.Music,
+        MovieAudioRoute.SoundEffect => AudioBus.SoundEffect,
+        MovieAudioRoute.Voice => AudioBus.Voice,
+        _ => AudioBus.Movie,
     };
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        _player.Stop();
-        _player.QueueFree();
+        _stream.Dispose();
     }
 }

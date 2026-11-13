@@ -3,49 +3,13 @@ using System.Diagnostics;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
 
 public class MovieOpcodeTests
 {
-    private sealed class FakeMovieDecoder : IMovieDecoder
-    {
-        public long? StopTimeMs { get; init; }
-        public long InitialPositionMs { get; init; }
-        public bool IsCompleted { get; set; }
-        public string? Failure { get; set; }
-        public bool Disposed { get; private set; }
-        public RgbaImage? Frame { get; set; }
-
-        public bool TryTakeFrame(out RgbaImage frame)
-        {
-            if (Frame == null) { frame = default!; return false; }
-            frame = Frame;
-            Frame = null;
-            return true;
-        }
-
-        public void Dispose() => Disposed = true;
-    }
-
-    private sealed class FakeMovieDecoderFactory(FakeMovieDecoder decoder) : IMovieDecoderFactory
-    {
-        public string? OpenedName { get; private set; }
-        public byte[]? OpenedBytes { get; private set; }
-        public long OpenedInitialPositionMs { get; private set; }
-        public long? OpenedPresentationDurationMs { get; private set; }
-        public IMovieDecoder Open(
-            string name, byte[] bytes, long initialPositionMs = 0, long? presentationDurationMs = null)
-        {
-            OpenedName = name;
-            OpenedBytes = bytes;
-            OpenedInitialPositionMs = initialPositionMs;
-            OpenedPresentationDurationMs = presentationDurationMs;
-            return decoder;
-        }
-    }
-
     private sealed class FakeFfmpegFrameSource(FfmpegMovieInfo info,
                                                 params FfmpegVideoFrame[] frames) : IFfmpegFrameSource
     {
@@ -622,9 +586,10 @@ public class MovieOpcodeTests
         foreach (var name in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
             session.RunScene(Sys4Loader.Load(Paths.Scripts()[name], table), table, new CaptureHost(), provider: provider);
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
-        var host = new RecordingHost { MovieStopTimeMs = 12016 };   // CHAPTER.AGF's stop time
+        var host = new RecordingHost();
+        var movies = new MovieRig(_ => new FakeMovieDecoder { StopTimeMs = 12016 });   // CHAPTER.AGF's stop time
         var trace = new RecordingTraceSink { TracingSteps = true };
-        var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 20_000_000), provider, trace);
+        var vm = movies.Vm(script, table, host, new VmOptions(MaxSteps: 20_000_000), provider, trace);
         foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
         // SYSTEM4@0x5bf fills adv_layer_surface_slots before any scene runs; this bootstrap skips SYSTEM4 and its
@@ -642,12 +607,12 @@ public class MovieOpcodeTests
         // A Frida probe on native op 0x236 (2026-11-07) saw the movie object created in ctx+0x52bd4[5], layer 1's
         // surface from SC0000's table. Op 0x23f at 0x13f0 reads the same slot, so the scene's next effect wait runs
         // the anim clock for the whole movie.
-        Assert.Contains((0x33L, 5, 2L, 0L), host.Movies);
+        Assert.Contains(new MovieRig.Start(0x33, 5, 2, 0, 0), movies.Starts());
         Assert.Contains(12016L, host.TransitionAnimClocks);
     }
 
     [Fact]
-    public void PlayMovieForwardsNonzeroStartDelayToHost()
+    public void PlayMovieRetainsNonzeroStartDelay()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = ScriptAssembler.Assemble(table, "MOVIE", new List<(int, Operand[])>
@@ -656,13 +621,13 @@ public class MovieOpcodeTests
             (0x236, new[] { new Operand(0, 0x2b10), new Operand(0, 9), new Operand(0, 0), new Operand(3, 0x10) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var movies = new MovieRig();
+        var vm = movies.Vm(script, table, new RecordingHost());
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal(new[] { (0x2b10L, 9, 0L, 750L) }, host.Movies);
+        Assert.Equal([new MovieRig.Start(0x2b10, 9, 0, 750, 0)], movies.Starts());
     }
 
     [Fact]
@@ -675,14 +640,14 @@ public class MovieOpcodeTests
             (0x55, new[] { new Operand(3, 0x1234), new Operand(0, 0x5678) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var movies = new MovieRig();
+        var vm = movies.Vm(script, table, new RecordingHost());
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal(0x5678, vm.Globals[0x1234]);
-        Assert.Equal(new[] { (0x33L, 5, 2L, 0L) }, host.Movies);
+        Assert.Equal([new MovieRig.Start(0x33, 5, 2, 0, 0)], movies.Starts());
         vm.Gfx.BindDraw(1, 5, 0, 0, 1, 1, 0, 0);
         var visible = vm.Gfx.SnapshotVisibleObjects().Single();
         Assert.Equal(0, visible.SurfaceResId);
@@ -703,12 +668,16 @@ public class MovieOpcodeTests
             (0x246, [new Operand(0, 44), new Operand(0, 200)]),
             (0x2, Array.Empty<Operand>()),
         ], []);
-        var host = new RecordingHost { MovieStopTimeMs = 1000 };
-        var vm = new VirtualMachine(script, table, host);
+        var movies = new MovieRig();
+        var vm = movies.Vm(script, table, new RecordingHost());
 
         vm.Run();
+        // The rate waits for the next frame service, which takes the decoder first and then applies it.
+        Assert.Empty(movies.Decoders.Decoders.Single().Rates);
+        movies.ServiceFrame();
 
-        Assert.Equal(new[] { (44, 2.0) }, host.MoviePlaybackRates);
+        Assert.Equal([2.0], movies.Decoders.Decoders.Single().Rates);
+        Assert.Contains(movies.Log, line => line.EndsWith(": 2x"));
     }
 
     [Fact]
@@ -720,13 +689,15 @@ public class MovieOpcodeTests
             (0x246, [new Operand(0, 44), new Operand(0, 200)]),
             (0x2, Array.Empty<Operand>()),
         ], []);
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var movies = new MovieRig();
+        var vm = movies.Vm(script, table, new RecordingHost());
         vm.Gfx.CreateSurface(44);
 
         vm.Run();
+        movies.ServiceFrame();
 
-        Assert.Empty(host.MoviePlaybackRates);
+        Assert.Empty(movies.Decoders.Decoders);
+        Assert.DoesNotContain(movies.Log, line => line.Contains("rate"));
     }
 
     [Fact]
@@ -744,14 +715,13 @@ public class MovieOpcodeTests
             (0x55, [new Operand(3, 0x1235), new Operand(0, 0x5678)]),
             (0x2, Array.Empty<Operand>()),
         ], []);
-        var host = new RecordingHost { MovieStopTimeMs = 1876 };
-        var vm = new VirtualMachine(script, table, host);
+        var movies = new MovieRig(_ => new FakeMovieDecoder { StopTimeMs = 1876, InitialPositionMs = 1875 });
+        var vm = movies.Vm(script, table, new RecordingHost());
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal(new[] { (0x33L, 5, 2L, 0L, 1875L) }, host.PositionedMovies);
-        Assert.Empty(host.Movies);
+        Assert.Equal([new MovieRig.Start(0x33, 5, 2, 0, 1875)], movies.Starts());
         Assert.Equal(1876, vm.Globals[0x1234]);
         Assert.Equal(0x5678, vm.Globals[0x1235]);
     }
@@ -774,21 +744,24 @@ public class MovieOpcodeTests
             (0x55, [new Operand(3, 0x1234), new Operand(0, 0x5678)]),
             (0x2, Array.Empty<Operand>()),
         ], []);
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var movies = new MovieRig();
+        movies.Assets.Unresolved.Add(0x325e);
+        var vm = movies.Vm(script, table, new RecordingHost());
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal(0x5678, vm.Globals[0x1234]);
+        MovieMaskTransitionState transition = vm.Gfx.SnapshotMovieMaskTransitions().Single();
         Assert.Equal(new MovieMaskTransitionRequest(
-            11, 45, 10, 1, -184, 0, 800, 600, 0, 0x325e, 0, 1000),
-            host.MovieMaskTransitions.Single());
-        Assert.True(vm.Gfx.SnapshotMovieMaskTransitions().Single().Completed);
+            11, 45, 10, 1, -184, 0, 800, 600, 0, 0x325e, 0, 1000), transition.Request);
+        // A mask movie that cannot play ends its transition at once.
+        Assert.True(transition.Completed);
+        Assert.Contains("movie mask unresolved MOVIE-MASK:0x325e", movies.Log);
     }
 
     [Fact]
-    public void PlayMovieKeepsCreatedSurfaceBlankDuringSynchronousHostSetup()
+    public void PlayMovieKeepsCreatedSurfaceBlankWhileTheDecoderOpens()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = ScriptAssembler.Assemble(table, "MOVIE-PREROLL", new List<(int, Operand[])>
@@ -802,11 +775,12 @@ public class MovieOpcodeTests
             (0x236, new[] { new Operand(0, 0x33), new Operand(0, 5), new Operand(0, 2), new Operand(0, 0) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
+        var movies = new MovieRig();
         VirtualMachine? vm = null;
         long resourceDuringSetup = -1;
-        host.OnPlayMovie = () => resourceDuringSetup = vm!.Gfx.SnapshotVisibleObjects().Single().SurfaceResId;
-        vm = new VirtualMachine(script, table, host);
+        movies.Decoders.OnOpen += (_, _) =>
+            resourceDuringSetup = vm!.Gfx.SnapshotVisibleObjects().Single().SurfaceResId;
+        vm = movies.Vm(script, table, new RecordingHost());
 
         vm.Run();
 
@@ -826,8 +800,9 @@ public class MovieOpcodeTests
             (0x23f, new[] { new Operand(3, 0x1234), new Operand(0, 5) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost { MovieStopTimeMs = 1876 };
-        var vm = new VirtualMachine(script, table, host);
+        var host = new RecordingHost();
+        var movies = new MovieRig(_ => new FakeMovieDecoder { StopTimeMs = 1876 });
+        var vm = movies.Vm(script, table, host);
 
         vm.Run();
 

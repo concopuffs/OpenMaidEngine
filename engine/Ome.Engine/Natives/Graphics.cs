@@ -15,9 +15,9 @@ namespace Ome.Engine.Natives;
 /// <para>The engine thread runs the ops; the front end's thread lowers frames and resolves textures under the
 /// presentation barrier. Surfaces are replaced, never written in place, so a frame keeps the pixels it was lowered
 /// with.</para>
-/// <para>Two parts of the lifted host remain partners until their natives exist: the movie part answers which
-/// surfaces a movie owns (<see cref="IGraphicsMovies"/>, milestone 8), and it and the text part hear when a surface
-/// is released or replaced (<see cref="ISurfaceListener"/>, milestones 8 and 10).</para>
+/// <para>The movie native (<see cref="Movies"/>) answers which surfaces a movie owns (<see cref="IGraphicsMovies"/>),
+/// and it and the lifted host's text part, until milestone 10, hear when a surface is released or replaced
+/// (<see cref="ISurfaceListener"/>).</para>
 /// </remarks>
 public sealed partial class Graphics : ISurfacePixels
 {
@@ -28,7 +28,7 @@ public sealed partial class Graphics : ISurfacePixels
     private readonly int _screenWidth;
     private readonly int _screenHeight;
     private IGraphicsMovies _movies = NoGraphicsMovies.Instance;
-    private ISurfaceListener? _listener;
+    private ISurfaceListener[] _listeners = [];
 
     /// <param name="resources">The catalog the surfaces load from; null for a run with no assets.</param>
     /// <param name="clock">The engine's frame clock.</param>
@@ -57,11 +57,14 @@ public sealed partial class Graphics : ISurfacePixels
     /// <summary>The logical screen.</summary>
     public Sys4LogicalCanvas Canvas => new(_screenWidth, _screenHeight);
 
-    /// <summary>The movie part of the lifted host (milestone 8 replaces it with the movie native).</summary>
+    /// <summary>The movie native, which answers which surfaces a movie shows (it attaches itself).</summary>
     public void AttachMovies(IGraphicsMovies movies) => _movies = movies ?? NoGraphicsMovies.Instance;
 
-    /// <summary>Who hears that a surface is released or replaced: the lifted host's movie and text parts.</summary>
-    public void Listen(ISurfaceListener listener) => _listener = listener;
+    /// <summary>Add one who hears that a surface is released or replaced: the movie native, and the lifted host's text
+    /// part until milestone 10. Listeners hear in the order they were added. Composition adds them before the engine
+    /// runs.</summary>
+    public void Listen(ISurfaceListener listener)
+        => _listeners = [.. _listeners, listener ?? throw new ArgumentNullException(nameof(listener))];
 
     // ---- presentation requests ----
 
@@ -77,8 +80,8 @@ public sealed partial class Graphics : ISurfacePixels
     public bool TakePresentationRequest() => Interlocked.Exchange(ref _presentRequested, 0) != 0;
 }
 
-/// <summary>The movie part of the lifted host, as the graphics native needs it: which surfaces and resources a movie
-/// shows, and which surfaces a movie mask transition draws into (milestone 8 builds the movie native).</summary>
+/// <summary>The movie native as the graphics native needs it: which surfaces and resources a movie shows, and which
+/// surfaces a movie mask transition draws into.</summary>
 public interface IGraphicsMovies
 {
     /// <summary>A movie mask transition publishes its frames into the surface's own pixels.</summary>
@@ -97,7 +100,7 @@ public interface IGraphicsMovies
     bool IsKnownMovieResource(long resourceId);
 }
 
-/// <summary>Hears what happens to a surface: the lifted host's movie part stops the movies on it, and its text part
+/// <summary>Hears what happens to a surface: the movie native stops the movies on it, and the lifted host's text part
 /// drops the layouts retained on it (implementation plan §3.2, addition 2).</summary>
 public interface ISurfaceListener
 {

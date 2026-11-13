@@ -23,7 +23,7 @@ public sealed partial class Graphics
     private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> packed catalog id
     // slot -> dimensions of the currently allocated surface. Slot 0 begins as the selected game's logical canvas, but
     // op 0x1fa releases it like any other slot; later queries return 0x0. Concurrent: the VM thread allocates and
-    // releases surfaces while the main thread publishes masked movie captures.
+    // releases surfaces while the front end's frame service publishes masked movie captures (the movie native).
     private readonly ConcurrentDictionary<int, (int W, int H)> _slotDims = new();
 
     /// <summary><c>--gfx-log</c>: print set-texture/create-texture slot assignments.</summary>
@@ -240,7 +240,7 @@ public sealed partial class Graphics
     {
         lock (_transitionLock) _renderTargetSnapshots.Remove(slot);
         // Native deletes the slot's movie object first, finished or not.
-        _listener?.SurfaceReleasing(slot);
+        foreach (ISurfaceListener listener in _listeners) listener.SurfaceReleasing(slot);
         lock (_imageLock)
         {
             _surfaceImages.Remove(slot);
@@ -248,12 +248,12 @@ public sealed partial class Graphics
         }
         lock (_resourceLock) _surfaceResources.Remove(slot);
         _slotDims.TryRemove(slot, out _);
-        _listener?.SurfaceReleased(slot);
+        foreach (ISurfaceListener listener in _listeners) listener.SurfaceReleased(slot);
     }
 
     private void ReleaseSurfacePixelRange(int firstSlot, int count)
     {
-        _listener?.SurfaceRangeReleasing(firstSlot, count);
+        foreach (ISurfaceListener listener in _listeners) listener.SurfaceRangeReleasing(firstSlot, count);
         int end = checked(firstSlot + count);
         lock (_transitionLock)
             for (int slot = firstSlot; slot < end; slot++) _renderTargetSnapshots.Remove(slot);
@@ -268,7 +268,7 @@ public sealed partial class Graphics
         }
         lock (_resourceLock)
             for (int slot = firstSlot; slot < end; slot++) _surfaceResources.Remove(slot);
-        _listener?.SurfaceRangeReleased(firstSlot, count);
+        foreach (ISurfaceListener listener in _listeners) listener.SurfaceRangeReleased(firstSlot, count);
         _timeline?.Event("surface-range-release", new() { ["first"] = firstSlot, ["count"] = count });
     }
 
@@ -295,7 +295,7 @@ public sealed partial class Graphics
             _surfaceColorKeys.Remove(slot);
         }
         lock (_resourceLock) _surfaceResources.Remove(slot);
-        _listener?.SurfaceReplaced(slot);
+        foreach (ISurfaceListener listener in _listeners) listener.SurfaceReplaced(slot);
         _slotDims[slot] = (image.Width, image.Height);
         return true;
     }

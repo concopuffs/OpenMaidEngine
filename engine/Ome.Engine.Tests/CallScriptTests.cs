@@ -14,7 +14,7 @@ public class CallScriptTests
     private class NullHost : IHost
     {
         public virtual void EnterScriptContext(string scriptName) { }
-        public virtual void ExitScriptContext() { }
+        public virtual void ExitScriptContext(string scriptName) { }
         public void ShowText(int o, string t) { }
         public void WaitForInput() { }
         public void Sleep(long duration) { }
@@ -46,9 +46,11 @@ public class CallScriptTests
             Events.Add($"enter:{scriptName}");
         }
 
-        public override void ExitScriptContext()
+        // The VM names the script it leaves; a name other than the one entered last shows in the event.
+        public override void ExitScriptContext(string scriptName)
         {
-            Events.Add($"exit:{_contexts.Pop()}");
+            string entered = _contexts.Pop();
+            Events.Add(entered == scriptName ? $"exit:{scriptName}" : $"exit:{scriptName}!={entered}");
         }
 
         public override void SetTexture(long resourceId, int slot) => Textures.Add((resourceId, slot));

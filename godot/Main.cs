@@ -42,6 +42,8 @@ public partial class Main : Godot.Control
     private EngineHost _host = null!;
     private Audio _audio = null!;   // the audio native (engine layering milestone 6): the options panel sets the mixer through it
     private Graphics _graphics = null!;   // the graphics native (milestone 7): surfaces, publication, frame lowering
+    private Movies? _movies;   // the movie native (milestone 8): this node supplies its decoder and its sound streams
+    private double _audioOutputLatencySeconds;
     private IDisposable? _glyphRasterizerOwner;
     // The Unicode rasterizer a language draws with when the gameplay one is GDI (localization spec §7.4).
     private IDisposable? _presentedRasterizerOwner;
@@ -542,14 +544,19 @@ public partial class Main : Godot.Control
         _audio = new Audio(this, new ResourceAudioAssets(resources, message => GD.Print(message)), _clock, skipAndAuto,
                            _audioMixerSettings, _sys4RegIniStore, _timeline);
         var tick = new EngineTick(_audio, _timeline);
-        // The graphics native (milestone 7) owns the surfaces and what each frame publishes; the host's text and movie
-        // parts draw into it, and its waits block on it.
+        // The graphics native (milestone 7) owns the surfaces and what each frame publishes; the movie native and the
+        // host's text part draw into it, and the host's waits block on it. The movie native (milestone 8) plays movies
+        // with the FFmpeg decoder, their sound through this node's stream players, and runs in _Process.
         _graphics = new Graphics(resources, _clock, logicalCanvas, _timeline, message => GD.Print(message))
         {
             TraceOps = _gfxLogPath != null,
         };
+        _movies = new Movies(_graphics, new ResourceMovieAssets(resources), new FfmpegMovieDecoderFactory(),
+                             new GodotAudioStreamDevice(this, _audioOutputLatencySeconds),
+                             _catalog.StartupSettings.DependMovieSound, timeline: _timeline,
+                             print: message => GD.Print(message));
         _host = new EngineHost(
-            this, skipAndAuto, _audio, tick, _graphics, resources, scene, _clock, _locator,
+            this, skipAndAuto, _audio, tick, _graphics, _movies, resources, _clock, _locator,
             surfaceTextRasterizer,
             timeline: _timeline,
             synchronizeExplicitPresentation: !_selftest,
@@ -600,7 +607,8 @@ public partial class Main : Godot.Control
             skipAndAuto: skipAndAuto,
             audio: _audio,
             tick: tick,
-            graphics: _graphics);
+            graphics: _graphics,
+            movies: _movies);
         _reference = new ReferenceRenderer(logicalCanvas) { Perf = _perf };
         _gpuRenderer.Perf = _perf;
         _decisionLog = new GfxDecisionLog(_gfxLogPath, _timeline);
@@ -705,8 +713,7 @@ public partial class Main : Godot.Control
             perf?.RecordPulse(PerformanceFrameLog.Timestamp() - phase);
 
             phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            AdoptPendingMovies();
-            UpdateMovieFrames();
+            _movies?.ServiceFrame(_timelineFrame);
             perf?.RecordMovies(PerformanceFrameLog.Timestamp() - phase);
 
             phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
@@ -819,51 +826,7 @@ public partial class Main : Godot.Control
         {
             long nowMs = _clock.NowMs;
             GodotTraceSnapshot trace = traceOverride ?? _trace.Snapshot();
-            var activeMovies = _movies
-                .OrderBy(pair => pair.Key)
-                .Select(pair =>
-                {
-                    _movieAudio.TryGetValue(pair.Key, out var audio);
-                    return new
-                    {
-                        playback_id = pair.Key,
-                        resource_id = pair.Value.ResourceId,
-                        name = pair.Value.Name,
-                        asset_id = pair.Value.AssetId,
-                        stop_time_ms = pair.Value.Decoder.StopTimeMs,
-                        initial_position_ms = pair.Value.InitialPositionMs,
-                        decoder_completed = pair.Value.Decoder.IsCompleted,
-                        decoder_failure = pair.Value.Decoder.Failure,
-                        first_frame_source_pts_ms = pair.Value.Decoder.FirstFramePresentationTimeMs,
-                        frame_seen = _movieFrameSeen.Contains(pair.Key),
-                        completion_notified = _movieCompletionNotified.Contains(pair.Key),
-                        watchdog_ms = pair.Value.WatchdogMs,
-                        elapsed_ms = (long)Stopwatch.GetElapsedTime(pair.Value.StartedAtTimestamp).TotalMilliseconds,
-                        audio_sample_rate = pair.Value.Decoder.AudioInfo?.SampleRate,
-                        audio_decode_completed = pair.Value.Decoder.AudioInfo == null
-                            ? (bool?)null : pair.Value.Decoder.AudioDecodingCompleted,
-                        audio_route = audio?.Route.ToString(),
-                        audio_clock_ms = audio?.ClockMs,
-                        audio_submitted_through_ms = audio?.SubmittedThroughMs,
-                        audio_buffer_underruns = audio?.BufferUnderruns,
-                    };
-                })
-                .ToArray();
-            var pendingMovies = _pendingMovies
-                .OrderBy(pair => pair.Key)
-                .Select(pair => new
-                {
-                    playback_id = pair.Key,
-                    resource_id = pair.Value.ResourceId,
-                    name = pair.Value.Name,
-                    asset_id = pair.Value.AssetId,
-                    stop_time_ms = pair.Value.Decoder.StopTimeMs,
-                    initial_position_ms = pair.Value.InitialPositionMs,
-                    decoder_completed = pair.Value.Decoder.IsCompleted,
-                    decoder_failure = pair.Value.Decoder.Failure,
-                    first_frame_source_pts_ms = pair.Value.Decoder.FirstFramePresentationTimeMs,
-                })
-                .ToArray();
+            MoviePlaybackDiagnostics? movies = _movies?.PlaybackDiagnostics();
             var snapshot = new
             {
                 format_version = 1,
@@ -880,8 +843,8 @@ public partial class Main : Godot.Control
                 },
                 host = _host.CaptureDiagnosticSnapshot(),
                 gfx = _vm.Gfx.CaptureDiagnosticSnapshot(nowMs),
-                active_movies = activeMovies,
-                pending_movies = pendingMovies,
+                active_movies = movies?.Playing,
+                pending_movies = movies?.Opened,
             };
 
             string directory = _profilePersistence.DiagnosticsDirectory;
@@ -984,12 +947,7 @@ public partial class Main : Godot.Control
             GD.Print($"[perf-log] wrote {_perf.FrameCount} frames / {_perf.RecompositeCount} recomposites -> {_perf.Path}");
             _perf = null;
         }
-        foreach (var audio in _movieAudio.Values) audio.Dispose();
-        _movieAudio.Clear();
-        foreach (var movie in _pendingMovies.Values) movie.Decoder.Dispose();
-        _pendingMovies.Clear();
-        foreach (var movie in _movies.Values) movie.Decoder.Dispose();
-        _movies.Clear();
+        _movies?.Shutdown();
     }
 
     // Write the real-run op/call-site histogram to --trace-histogram <file>. Idempotent; called when the

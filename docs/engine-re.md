@@ -2956,7 +2956,8 @@ rules out the former port behavior, `retained gfx object exists ? 0 : -1`.
 **Port implementation (2026-07-21):** `DirectShowMovieDecoder` now queries
 `IMediaPosition::get_StopTime` after the graph reaches its running state and before synchronous `0x236`
 initialization returns. It applies native seconds-to-milliseconds truncation and hands the value through
-`IHost.PlayMovieToSurface` into a movie-surface record owned by `GfxState`. Decoder construction moved from
+`IHost.PlayMovieToSurface` (the movie native's `Movies.PlayToSurface` since engine layering milestone 8) into a
+movie-surface record owned by `GfxState`. Decoder construction moved from
 the deferred Godot callback to the VM-side synchronous open boundary; the ready decoder is staged in a
 thread-safe pending registry and adopted by the main thread before frame sampling, preserving asynchronous
 presentation. `0x23f` silently returns -1 for an empty movie slot. Native ignores the HRESULT for a non-null
@@ -3175,7 +3176,8 @@ movie-frame-to-mask publication, retained-range capture, per-pixel alpha composi
 movie-completion-driven blocking cleanup. The handlers, sample worker, compositor, and exact helpers are
 named and commented in the saved `/v2` Ghidra image.
 
-**Port implementation (2026-07-29):** `IHost.PlayMovieMaskTransition` carries the complete
+**Port implementation (2026-07-29):** `IHost.PlayMovieMaskTransition` (the movie native's
+`Movies.PlayMaskTransition` since engine layering milestone 8) carries the complete
 twelve-operand request. At dispatch, the port snapshots the old/source retained range into the script-created
 scratch surface (`Graphics.CaptureObjectRange`, the frame lowering's published-range path since engine layering
 milestone 7; `RetainedSurfaceRasterizer` before); the immediately preceding

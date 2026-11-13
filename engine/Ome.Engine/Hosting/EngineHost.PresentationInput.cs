@@ -22,8 +22,6 @@ public enum HostPresentationReason
 
 public sealed partial class EngineHost
 {
-    private readonly object _scriptContextLock = new();
-    private readonly Stack<string> _scriptContexts = new();
     private readonly ScriptPresentationBarrier _presentationBarrier = new();
     private readonly AutoResetEvent _presentationRequestConsumed = new(false);
     private readonly AutoResetEvent _diagnosticMessageCompleted = new(false);
@@ -123,27 +121,21 @@ public sealed partial class EngineHost
         _fullwidthTextEditCompleted.Set();
     }
 
-    private string CurrentScene
-    {
-        get { lock (_scriptContextLock) return _scriptContexts.TryPeek(out var scene) ? scene : _rootScene; }
-    }
-
+    // The VM's frames are the script stack; the host keeps no copy (engine layering plan §3.3).
     public void EnterScriptContext(string scriptName)
     {
         _presentationBarrier.EnterScript();
-        string scene = System.IO.Path.GetFileNameWithoutExtension(scriptName).ToUpperInvariant();
-        lock (_scriptContextLock) _scriptContexts.Push(scene);
-        _timeline?.Event("script-context-enter", new() { ["scene"] = scene });
+        _timeline?.Event("script-context-enter", new() { ["scene"] = SceneOf(scriptName) });
     }
 
-    public void ExitScriptContext()
+    public void ExitScriptContext(string scriptName)
     {
-        string? scene = null;
-        lock (_scriptContextLock)
-            if (_scriptContexts.TryPop(out var popped)) scene = popped;
-        if (scene != null) _timeline?.Event("script-context-exit", new() { ["scene"] = scene });
+        _timeline?.Event("script-context-exit", new() { ["scene"] = SceneOf(scriptName) });
         _presentationBarrier.ExitScript();
     }
+
+    private static string SceneOf(string scriptName)
+        => System.IO.Path.GetFileNameWithoutExtension(scriptName).ToUpperInvariant();
 
     public bool TryEnterPresentation() => _presentationBarrier.TryEnterPresentation();
 
@@ -544,7 +536,7 @@ public sealed partial class EngineHost
         long serviceFlags = gfx.AnimationServiceFlags;
         long animClockMs = gfx.AnimClockDurationTicks;
         bool hasActivePresentation =
-            gfx.PollEffectService(startedAtMs) | HasActiveMoviePresentation();
+            gfx.PollEffectService(startedAtMs) | _movies.HoldsServiceWait;
         if (hasActivePresentation)
         {
             _foregroundGfx = gfx;
@@ -571,7 +563,7 @@ public sealed partial class EngineHost
             if (!hasActivePresentation) return;
             int lastBucket = -1;
             while (!_foregroundTransitionWaitBypassed
-                   && (gfx.PollEffectService(_clock.NowMs) | HasActiveMoviePresentation())
+                   && (gfx.PollEffectService(_clock.NowMs) | _movies.HoldsServiceWait)
                    && !_stopping)
             {
                 // Native's run-state-0x400 service polls every tick (Sleep(0)), so the wait ends within a
@@ -754,10 +746,9 @@ public sealed partial class EngineHost
     public void ResetSceneContext()
     {
         _rootReloadInterrupt = false;
-        // scene_context_init_reset deletes every surface's movie object but keeps the surfaces, decoded asset caches
-        // and process-owned audio/configuration for the reloaded SYSTEM4 root. The VM releases the surfaces afterwards
-        // when set:AutoFreeTex asks (docs/engine-re.md, "AutoFreeTex").
-        StopSurfaceMovies(0, 1000);
+        // scene_context_init_reset deletes every surface's movie object (the VM has had the movie native do it) but
+        // keeps the surfaces, decoded asset caches and process-owned audio/configuration for the reloaded SYSTEM4 root.
+        // The VM releases the surfaces afterwards when set:AutoFreeTex asks (docs/engine-re.md, "AutoFreeTex").
         // The backbuffer publishes everything again over a clean frame; a pending screen transition goes, and a
         // render target's snapshot stays with its surface.
         _graphics.ResetScene();

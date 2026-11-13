@@ -17,8 +17,8 @@ public sealed partial class EngineHost : IHost, IFastForwardListener
     private readonly Audio _audio;        // the auto timer reads channel 12
     private readonly EngineTick _tick;    // every non-modal wait runs it (EngineHost.Waits.cs)
     private readonly Graphics _graphics;  // the surfaces and the publication state; the waits block on them here
+    private readonly Movies _movies;      // op 0x20f's modal wait and the effect wait read it
     private readonly ResourceMap _res;
-    private readonly string _rootScene;
     private readonly Ome.Engine.Hosting.FrameClock _clock;
     private readonly TimelineLog? _timeline;
     private readonly PageLocatorState _locator;
@@ -54,12 +54,13 @@ public sealed partial class EngineHost : IHost, IFastForwardListener
     /// <param name="audio">The audio native the VM runs with: ADV Auto waits for its voice.</param>
     /// <param name="tick">The engine tick the VM runs with: every wait that is not modal runs it each time it
     /// wakes, and presentation waits while its statement block is open.</param>
-    /// <param name="graphics">The graphics native the VM runs with: text and movies draw into its surfaces, the
-    /// presentation waits block on its publication, and the host answers its movie questions and hears its surface
-    /// releases until the movie and text natives exist.</param>
+    /// <param name="graphics">The graphics native the VM runs with: text draws into its surfaces, the presentation
+    /// waits block on its publication, and the host hears its surface releases until the text native exists.</param>
+    /// <param name="movies">The movie native the VM runs with: the host runs op 0x20f's modal wait over it, and an
+    /// effect wait holds while one of its movies does.</param>
     public EngineHost(IFrontEnd frontEnd, SkipAndAuto skipAndAuto, Audio audio, EngineTick tick, Graphics graphics,
+                        Movies movies,
                         ResourceMap res,
-                        string scene,
                         Ome.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator,
                         IGlyphMaskRasterizer surfaceTextRasterizer,
@@ -68,15 +69,16 @@ public sealed partial class EngineHost : IHost, IFastForwardListener
                         bool synchronizeExplicitPresentation = true,
                         int surfaceTextMaskCacheCapacity = 2048)
     {
-        _frontEnd = frontEnd; _res = res; _rootScene = scene; _clock = clock;
+        _frontEnd = frontEnd; _res = res; _clock = clock;
         _skip = skipAndAuto ?? throw new ArgumentNullException(nameof(skipAndAuto));
         _skip.Listen(this);
         _audio = audio ?? throw new ArgumentNullException(nameof(audio));
         _tick = tick ?? throw new ArgumentNullException(nameof(tick));
         _locator = locator; _timeline = timeline;
         _graphics = graphics ?? throw new ArgumentNullException(nameof(graphics));
-        _graphics.AttachMovies(this);
         _graphics.Listen(this);
+        _movies = movies ?? throw new ArgumentNullException(nameof(movies));
+        _movies.WakeWaitsWith(() => _frameSignal.Set());
         _synchronizeExplicitPresentation = synchronizeExplicitPresentation;
         ArgumentNullException.ThrowIfNull(surfaceTextRasterizer);
         _surfaceTextBackendInfo =
@@ -128,7 +130,7 @@ public sealed partial class EngineHost : IHost, IFastForwardListener
 }
 
 public sealed record EngineHostDiagnosticSnapshot(
-    string CurrentScene, bool IsInputWaiting, bool IsTransitionWaiting, bool IsSleeping,
+    bool IsInputWaiting, bool IsTransitionWaiting, bool IsSleeping,
     bool IsTextRevealing, bool IsModalMovieWaiting, bool IsAdvPagePresentationSuspended,
     bool IsMessageSkipActive, bool IsScreenTransitionActive, long TransitionStartedAtMs,
     IReadOnlyList<MovieSurfaceDiagnostic> MovieSurfaces, IReadOnlyList<long> CompletedMoviePlaybackIds);

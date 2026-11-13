@@ -2,9 +2,9 @@ namespace Ome.Engine.Hosting;
 
 public interface ILifecycleHost
 {
-    // Script context is retained for diagnostics/page location; resource operands are universal packed ids.
+    // The VM enters and leaves a script's frame: the presentation barrier counts frames, and --timeline-log records them.
     void EnterScriptContext(string scriptName) { }
-    void ExitScriptContext() { }
+    void ExitScriptContext(string scriptName) { }
 
     void Sleep(long duration);
 
@@ -14,8 +14,8 @@ public interface ILifecycleHost
 
     void FrameYield();
 
-    // Native op 0x9 resets scene-owned host services before reloading root script resource 0. It stops movies but
-    // keeps surfaces; the VM releases them afterwards when set:AutoFreeTex asks (IGraphicsHost.ReleaseSurfaceRange).
+    // Native op 0x9 resets scene-owned host services before reloading root script resource 0. The movie native has
+    // stopped the movies, and the surfaces stay; the VM releases them afterwards when set:AutoFreeTex asks.
     // Global banks, engine configuration, decoded-asset caches, and persistent profile state survive.
     void ResetSceneContext() { }
 

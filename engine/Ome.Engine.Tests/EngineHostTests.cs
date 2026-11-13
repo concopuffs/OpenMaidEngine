@@ -64,14 +64,15 @@ public class EngineHostTests
     /// audio native is a silent one.</summary>
     internal static EngineHost Host(IFrontEnd frontEnd, PageLocatorState locator, FrameClock clock,
                                     SkipAndAuto? skipAndAuto = null, AudioRig? audio = null,
-                                    Graphics? graphics = null)
+                                    Graphics? graphics = null, Movies? movies = null)
     {
         SkipAndAuto skip = audio?.Skip ?? skipAndAuto ?? SkipAndAuto.WithSystemClock();
         Audio native = audio?.Audio ?? Audio.Silent(skip);
         ResourceMap resources = EmptyResources();
+        Graphics surfaces = graphics ?? new Graphics(resources, clock, Canvas);
         return new(frontEnd, skip, native, audio?.Tick ?? new EngineTick(native),
-                   graphics ?? new Graphics(resources, clock, Canvas), resources,
-                   "SC0000", clock, locator, new NoGlyphs(), GlyphCoverageAlpha.Sixteenths,
+                   surfaces, movies ?? Movies.Headless(surfaces), resources,
+                   clock, locator, new NoGlyphs(), GlyphCoverageAlpha.Sixteenths,
                    synchronizeExplicitPresentation: false)
         {
             RubyRules = RubyLayoutRules.FixedOffsets,

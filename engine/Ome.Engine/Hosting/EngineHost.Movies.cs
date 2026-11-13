@@ -1,92 +1,15 @@
-using System;
-using System.Collections.Generic;
-using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 
 namespace Ome.Engine.Hosting;
 
+// The movies are the movie native's (Natives/Movies*.cs). Op 0x20f's modal wait and its three fields stay here with
+// the other waits until milestone 11.
 public sealed partial class EngineHost
 {
-    private readonly MovieSurfaceRegistry _movieSurfaces = new();
-    private sealed record MovieMaskPlayback(
-        GfxState Gfx, MovieMaskTransitionRequest Request, RgbaImage Captured);
-    private readonly object _movieMaskLock = new();
-    private readonly Dictionary<long, MovieMaskPlayback> _movieMasksByPlayback = new();
-    private readonly Dictionary<int, long> _movieMaskPlaybackBySurface = new();
-
-    public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long startDelayMs)
-    {
-        string scene = CurrentScene;
-        var asset = _res.ResolveMovie(resourceId);
-        if (asset == null) { _frontEnd.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
-        StartMovie(asset, resourceId, surfaceSlot, movieFlags, modal: false,
-                   initialPositionMs: 0, startDelayMs: startDelayMs, presentationDurationMs: null,
-                   movieMask: null, out long? stopTimeMs, out _);
-        return stopTimeMs ?? 0;
-    }
-
-    public long? PlayMovieToSurfaceAtPosition(
-        long resourceId, int surfaceSlot, long movieFlags, long startDelayMs, long positionMs)
-    {
-        string scene = CurrentScene;
-        var asset = _res.ResolveMovie(resourceId);
-        if (asset == null) { _frontEnd.Print($"movie unresolved {scene}:0x{resourceId:x}"); return null; }
-        StartMovie(asset, resourceId, surfaceSlot, movieFlags, modal: false,
-                   initialPositionMs: positionMs, startDelayMs: startDelayMs, presentationDurationMs: null,
-                   movieMask: null, out long? stopTimeMs, out _);
-        return stopTimeMs ?? 0;
-    }
-
-    public void PlayMovieMaskTransition(GfxState gfx, MovieMaskTransitionRequest request)
-    {
-        gfx.QueueMovieMaskTransition(request);
-        RgbaImage captured = _graphics.CaptureObjectRange(request.SurfaceSlot, request.SourceRangeStart, request.SourceRangeCount);
-        byte initialFill = request.Mode == 1 ? (byte)0 : (byte)255;
-        PublishMaskedCapture(
-            request.SurfaceSlot, captured,
-            CreateFilledMask(request.Width, request.Height, initialFill), request);
-
-        var asset = _res.ResolveMovie(request.ResourceId);
-        if (asset == null)
-        {
-            _frontEnd.Print($"movie mask unresolved {CurrentScene}:0x{request.ResourceId:x}");
-            PublishMovieMaskTerminal(new MovieMaskPlayback(gfx, request, captured));
-            return;
-        }
-
-        var mask = new MovieMaskPlayback(gfx, request, captured);
-        bool started = StartMovie(
-            asset, request.ResourceId, request.SurfaceSlot, movieFlags: 6,
-            modal: false, initialPositionMs: 0,
-            startDelayMs: request.StartDelayMs,
-            presentationDurationMs: request.DurationMs,
-            movieMask: mask, out long? stopTimeMs, out _);
-        gfx.SetMovieStopTime(request.SurfaceSlot, stopTimeMs ?? 0);
-        if (!started) PublishMovieMaskTerminal(mask);
-    }
-
-    public bool IsMovieSurfaceActive(int surfaceSlot)
-        => _movieSurfaces.IsActive(surfaceSlot);
-
-    public void SetMoviePlaybackRate(int surfaceSlot, double rate)
-    {
-        if (!_movieSurfaces.TryGetBinding(surfaceSlot, out MovieSurfaceBinding binding)) return;
-        _frontEnd.QueueMoviePlaybackRate(binding.PlaybackId, rate);
-        _timeline?.Event("movie-rate", new()
-        {
-            ["surface"] = surfaceSlot,
-            ["playback"] = binding.PlaybackId,
-            ["rate"] = rate,
-        });
-    }
-
     public EngineHostDiagnosticSnapshot CaptureDiagnosticSnapshot()
     {
-        IReadOnlyList<MovieSurfaceDiagnostic> movies = _movieSurfaces.Snapshot();
-        IReadOnlyList<long> completed = _movieSurfaces.CompletedPlaybackIds();
         bool screenTransitionActive = _graphics.ScreenTransitionPending;
         return new EngineHostDiagnosticSnapshot(
-            CurrentScene,
             IsWaiting,
             IsTransitionWaiting,
             IsSleeping,
@@ -96,30 +19,23 @@ public sealed partial class EngineHost
             _skip.FastForwardActive,
             screenTransitionActive,
             TransitionStartedAtMs,
-            movies,
-            completed);
+            _movies.SurfaceDiagnostics(),
+            _movies.CompletedPlaybackIds());
     }
 
     public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
     {
         bool cancelAtStart = _modalMovieCancelPending;
         _modalMovieCancelPending = false;
-        var asset = _res.ResolveMovie(resourceId);
-        if (asset == null)
-        {
-            _frontEnd.Print($"modal movie unresolved packed:0x{resourceId:x}");
-            return;
-        }
+        AssetEntry? asset = _movies.ResolveModal(resourceId);
+        if (asset == null) return;
 
         _modalMovieCancelled = cancelAtStart;
         _modalMovieWaiting = true;
         bool scriptSuspended = false;
         try
         {
-            if (!StartMovie(asset, resourceId, surfaceSlot, movieFlags, modal: true,
-                            initialPositionMs: 0, startDelayMs: 0,
-                            presentationDurationMs: null, movieMask: null,
-                            out _, out long playbackId)) return;
+            if (!_movies.StartModal(asset, resourceId, surfaceSlot, movieFlags, out long playbackId)) return;
             _timeline?.State("modal-movie-wait", new()
             {
                 ["resource"] = resourceId, ["playback"] = playbackId,
@@ -129,14 +45,14 @@ public sealed partial class EngineHost
             RequestSynchronizedPresentation();
             while (!_stopping && !_modalMovieCancelled)
             {
-                if (!_movieSurfaces.IsActive(surfaceSlot)) break;
+                if (!_movies.IsSurfaceActive(surfaceSlot)) break;
                 WaitAndTick(_frameSignal, 50);
             }
 
             // Cancellation is a completed modal presentation from the script's perspective. The
             // wrapper's following surface-release opcode performs the ordinary decoder teardown.
             if (_modalMovieCancelled)
-                _movieSurfaces.Complete(playbackId);
+                _movies.MarkCompleted(playbackId);
             _timeline?.State("running", new()
             {
                 ["modal_movie_complete"] = !_modalMovieCancelled,
@@ -149,156 +65,5 @@ public sealed partial class EngineHost
             _modalMovieWaiting = false;
             _modalMovieCancelled = false;
         }
-    }
-
-    private bool StartMovie(AssetEntry asset, long resourceId, int surfaceSlot, long movieFlags,
-                            bool modal, long initialPositionMs, long startDelayMs,
-                            long? presentationDurationMs, MovieMaskPlayback? movieMask,
-                            out long? stopTimeMs, out long playbackId)
-    {
-        stopTimeMs = null;
-        // A playback is a surface-owned instance, not the shared resource id. BTL can schedule the same
-        // asset on multiple surfaces; replacing one binding must not erase another binding's completion.
-        // The renderer copies samples into the slot's texture, so the created contents stay visible until the first
-        // sample (MovieSurfaceRegistry.Begin). Without them the compositor would take the object for a surfaceless fill.
-        RgbaImage? surfaceContents = null;
-        if (movieMask == null)
-            surfaceContents = _graphics.TakeSurfacePixels(surfaceSlot);
-        MovieSurfaceBinding binding = _movieSurfaces.Begin(
-            surfaceSlot, resourceId, movieFlags, out var replaced, surfaceContents);
-        playbackId = binding.PlaybackId;
-        if (replaced is { } prior)
-        {
-            AbandonMovieMaskPlayback(prior.PlaybackId);
-            ForgetMovieMaskSurface(prior.SurfaceSlot, prior.PlaybackId);
-            _frontEnd.StopMovie(prior.PlaybackId);
-        }
-        if (movieMask != null)
-            lock (_movieMaskLock)
-            {
-                _movieMasksByPlayback[playbackId] = movieMask;
-                _movieMaskPlaybackBySurface[surfaceSlot] = playbackId;
-            }
-        _graphics.ForgetSurfaceColorKey(surfaceSlot);
-        // Movie surfaces inherit the selected game's primary size until a decoded frame supplies content.
-        if (movieMask == null) _graphics.SetSurfaceSize(surfaceSlot, _graphics.Canvas.Width, _graphics.Canvas.Height);
-        else _graphics.SetSurfaceSize(surfaceSlot, movieMask.Captured.Width, movieMask.Captured.Height);
-        try
-        {
-            var movie = _res.ReadMovie(asset);
-            _timeline?.Event("movie-start", new()
-            {
-                ["resource"] = resourceId, ["playback"] = playbackId,
-                ["surface"] = surfaceSlot, ["file"] = movie.Name,
-                ["flags"] = movieFlags, ["modal"] = modal,
-                ["initial_position_ms"] = Math.Max(0, initialPositionMs),
-                ["start_delay_ms"] = Math.Max(0, startDelayMs),
-                ["presentation_duration_ms"] = presentationDurationMs,
-                ["movie_mask"] = movieMask != null,
-            });
-            bool started = _frontEnd.TryPlayMovie(
-                movie.Bytes, movie.Name, playbackId, resourceId, asset.PackedId, movieFlags,
-                initialPositionMs, startDelayMs, presentationDurationMs, out stopTimeMs);
-            if (!started)
-            {
-                stopTimeMs = 0;
-                NotifyMovieCompleted(playbackId);
-            }
-            return started;
-        }
-        catch (System.Exception e)
-        {
-            AbandonMovieMaskPlayback(playbackId);
-            _movieSurfaces.Abandon(playbackId, out _);
-            _graphics.ForgetSurfaceSize(surfaceSlot);
-            stopTimeMs = 0;
-            _frontEnd.Print($"movie read failed {asset.Name}: {e.Message}");
-            return false;
-        }
-    }
-
-    public void PublishMovieFrame(long playbackId, string name, int assetId, RgbaImage frame)
-    {
-        MovieMaskPlayback? maskPlayback;
-        lock (_movieMaskLock) _movieMasksByPlayback.TryGetValue(playbackId, out maskPlayback);
-        if (maskPlayback != null)
-        {
-            var request = maskPlayback.Request;
-            byte initialFill = request.Mode == 1 ? (byte)0 : (byte)255;
-            byte[] mask = MovieMaskSurface.ExtractGreen(
-                frame, request.Width, request.Height, initialFill);
-            PublishMaskedCapture(request.SurfaceSlot, maskPlayback.Captured, mask, request);
-            return;
-        }
-        if (_movieSurfaces.PublishFrame(playbackId, frame, name, assetId))
-            _graphics.RequestPresentation();
-    }
-
-    public void NotifyMovieCompleted(long playbackId)
-    {
-        MovieMaskPlayback? maskPlayback = RemoveMovieMaskPlayback(playbackId);
-        if (maskPlayback != null) PublishMovieMaskTerminal(maskPlayback);
-        if (!_movieSurfaces.Complete(playbackId)) return;
-        _timeline?.Event("movie-complete", new() { ["playback"] = playbackId });
-        _frameSignal.Set();
-    }
-
-    /// <summary>engine_main_tick's surface_movie_is_playing scan: only a movie whose flags have bit 2 set and bit 0
-    /// clear holds an effect wait (<see cref="MovieSurfaceRegistry.HoldsServiceWait"/>).</summary>
-    private bool HasActiveMoviePresentation()
-        => _movieSurfaces.HoldsServiceWait;
-
-    private static byte[] CreateFilledMask(int width, int height, byte fill)
-    {
-        var mask = new byte[checked(System.Math.Max(0, width) * System.Math.Max(0, height))];
-        if (fill != 0) System.Array.Fill(mask, fill);
-        return mask;
-    }
-
-    private void PublishMaskedCapture(
-        int surfaceSlot, RgbaImage captured, byte[] mask, MovieMaskTransitionRequest request)
-    {
-        RgbaImage image = MovieMaskSurface.Apply(
-            captured, mask, System.Math.Max(0, request.Width),
-            System.Math.Max(0, request.Height), request.X, request.Y);
-        _graphics.PublishSurfacePixels(surfaceSlot, image);
-        _graphics.RequestPresentation();
-        _frameSignal.Set();
-    }
-
-    private void PublishMovieMaskTerminal(MovieMaskPlayback playback)
-    {
-        byte terminalFill = playback.Request.Mode == 1 ? (byte)255 : (byte)0;
-        PublishMaskedCapture(
-            playback.Request.SurfaceSlot, playback.Captured,
-            CreateFilledMask(playback.Request.Width, playback.Request.Height, terminalFill),
-            playback.Request);
-        playback.Gfx.CompleteMovieMaskTransition(playback.Request.SurfaceSlot);
-    }
-
-    private MovieMaskPlayback? RemoveMovieMaskPlayback(long playbackId)
-    {
-        lock (_movieMaskLock)
-        {
-            if (!_movieMasksByPlayback.Remove(playbackId, out var playback)) return null;
-            return playback;
-        }
-    }
-
-    private void AbandonMovieMaskPlayback(long playbackId)
-    {
-        MovieMaskPlayback? playback = RemoveMovieMaskPlayback(playbackId);
-        if (playback != null)
-        {
-            ForgetMovieMaskSurface(playback.Request.SurfaceSlot, playbackId);
-            playback.Gfx.CompleteMovieMaskTransition(playback.Request.SurfaceSlot);
-        }
-    }
-
-    private void ForgetMovieMaskSurface(int surfaceSlot, long playbackId)
-    {
-        lock (_movieMaskLock)
-            if (_movieMaskPlaybackBySurface.GetValueOrDefault(surfaceSlot) == playbackId)
-                _movieMaskPlaybackBySurface.Remove(surfaceSlot);
     }
 }

@@ -9,14 +9,6 @@ using Ome.Engine.Model;
 /// </summary>
 public partial class Main : IFrontEnd
 {
-    bool IFrontEnd.TryPlayMovie(byte[] mpegBytes, string assetName, long playbackId, long resourceId, int assetId,
-                                long movieFlags, long initialPositionMs, long startDelayMs,
-                                long? presentationDurationMs, out long? stopTimeMs)
-        => TryPlayMovie(mpegBytes, assetName, playbackId, resourceId, assetId, movieFlags, initialPositionMs,
-                        startDelayMs, presentationDurationMs, out stopTimeMs);
-    void IFrontEnd.QueueMoviePlaybackRate(long playbackId, double rate) => QueueMoviePlaybackRate(playbackId, rate);
-    void IFrontEnd.StopMovie(long playbackId) => CallDeferred(MethodName.StopMovie, playbackId);
-
     void IFrontEnd.PageBreak() => CallDeferred(MethodName.PageBreak);
     void IFrontEnd.ClearPage() => CallDeferred(MethodName.ClearPage);
     void IFrontEnd.SetAgeCursor(byte[] rgba, int width, int height, int hotspotX, int hotspotY)

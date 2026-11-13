@@ -141,9 +141,9 @@ public class BattleFrontierOpsTests
     {
         var table = Table();
         var host = new RecordingHost();
-        host.ActiveMovieSurfaces.Add(7);
         var script = ScriptAssembler.Assemble(table, "BATTLE_CONTROL", new List<(int, Operand[])>
         {
+            (0x236, new[] { I(0x2be3), I(7), I(0), I(0) }),   // a movie plays on surface 7, none on 8
             (0x23a, new[] { G(0x100), I(7) }),
             (0x23a, new[] { G(0x101), I(8) }),
             (0x238, new[] { I(400) }),
@@ -151,7 +151,7 @@ public class BattleFrontierOpsTests
             (0x243, Array.Empty<Operand>()),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, host);
+        var vm = new MovieRig().Vm(script, table, host);
 
         vm.Run();
 

@@ -1,4 +1,4 @@
-using System;
+namespace Ome.Engine.Natives;
 
 internal readonly record struct MovieAudioAdjustment(long GapFrames, int SkipFrames);
 
