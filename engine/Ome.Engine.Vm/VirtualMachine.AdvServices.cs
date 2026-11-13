@@ -13,7 +13,7 @@ public sealed partial class VirtualMachine
         // page. Kamidori's SHOWALLMAP holds the world map on it until a click. Persistent Skip's injected action
         // 6 ends it at the first poll and starts fast-forward again.
         if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return StepResult.Halt; }
-        if (_messageSkipInjected) SetScriptFastForward(true);
+        if (_skip.MessageSkipInjected) _skip.SetScriptFastForward(true);
         WaitAtAdvInputPoll(0, textPage: false);
         return StepResult.Next;
     }
@@ -22,17 +22,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetMessageSkip(Instruction ins, int pc)
     {
         var a = ins.Args;
-        // op_0x88_set_message_skip@0x41f130 writes ctx+0x13dc and ctx+0x550fc alike. Enabling sets no run-state
-        // bit: the next polling text wait starts fast-forward from the injected action 6, so SC0000's Skip button
-        // still sleeps its 100 ms and the page passes once the callback returns into op 0x72. Disabling clears
-        // run-state 0x8000000.
-        _messageSkipEnabled = Read(a[0]) != 0;
-        _messageSkipInjected = _messageSkipEnabled;
-        if (!_messageSkipEnabled)
-        {
-            SetScriptFastForward(false);
-            EndPhysicalFastForward();
-        }
+        _skip.SetMessageSkip(Read(a[0]) != 0);
         return StepResult.Next;
     }
 
@@ -40,48 +30,37 @@ public sealed partial class VirtualMachine
     private StepResult OpGetMessageSkipEnabled(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _messageSkipEnabled ? 1 : 0); return StepResult.Next;
+        Write(a[0], _skip.MessageSkipEnabled ? 1 : 0); return StepResult.Next;
     }
 
     // 0x19b: preserve the toggle while leaving ADV presentation
     private StepResult OpSuspendAdvSkipService(Instruction ins, int pc)
     {
-        _advSkipServiceEnabled = false;
-        _messageSkipInjected = false;   // ctx+0x13dc; the toggle (ctx+0x550fc) survives
-        _messageSkipServiceActive = false;
-        _host.SetMessageSkipActive(false);
-        EndPhysicalFastForward();   // it clears run-state 0x8000000, however started
+        _skip.SuspendAdvSkipService();
         return StepResult.Next;
     }
 
     // 0x19c: recompute active fast-forward on ADV entry
     private StepResult OpResumeAdvSkipService(Instruction ins, int pc)
     {
-        _advSkipServiceEnabled = true;
-        // ctx+0x13dc follows the toggle; a read-skip-only resume leaves it as it was.
-        if (_messageSkipEnabled) _messageSkipInjected = true;
-        else if (!_advReadSkipState) _messageSkipInjected = false;
-        _messageSkipServiceActive =
-            _messageSkipEnabled || _advReadSkipState || _host.IsAdvReadSkipActive;
-        _host.SetMessageSkipActive(_messageSkipServiceActive);
-        EndPhysicalFastForward();   // it rebuilds run-state 0x8000000 from persistent Skip and read-skip only
+        _skip.ResumeAdvSkipService();
         return StepResult.Next;
     }
 
-    // 0x1c7: persistent Skip or host-supplied Ctrl fast-forward
+    // 0x1c7: persistent Skip, read skip or held Ctrl: run-state 0x08000000
     private StepResult OpGetMessageSkip(Instruction ins, int pc)
     {
         var a = ins.Args;
-        // Native persistent state and the independently polled physical action-6 channel both
-        // re-arm the transient run-state bit consumed by this query.
-        Write(a[0], _messageSkipServiceActive || _host.IsMessageSkipActive ? 1 : 0); return StepResult.Next;
+        // Native persistent state and the independently polled physical action-6 channel both re-arm the transient
+        // run-state bit consumed by this query.
+        Write(a[0], AdvFastForwardActive ? 1 : 0); return StepResult.Next;
     }
 
     // 0x1cc: per-message read/click skip service state
     private StepResult OpGetAdvReadSkipState(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _advReadSkipState || _host.IsAdvReadSkipActive ? 1 : 0); return StepResult.Next;
+        Write(a[0], _skip.ReadSkipActive ? 1 : 0); return StepResult.Next;
     }
 
     // 0x1ca: engine setting message:ReadTextSkip
@@ -105,28 +84,28 @@ public sealed partial class VirtualMachine
     private StepResult OpGetAutoMessage(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _autoMessageEnabled ? 1 : 0); return StepResult.Next;
+        Write(a[0], _skip.AutoMessageEnabled ? 1 : 0); return StepResult.Next;
     }
 
     // 0x1b7
     private StepResult OpSetAutoMessage(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _autoMessageEnabled = Read(a[0]) != 0; return StepResult.Next;
+        _skip.SetAutoMessage(Read(a[0]) != 0); return StepResult.Next;
     }
 
     // 0x1b8 (selector 0=post-voice Time0, 1=unvoiced Time1, out)
     private StepResult OpGetAutoMessageTime(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[1], Read(a[0]) == 0 ? _autoMessageTime0Ms : _autoMessageTime1Ms); return StepResult.Next;
+        Write(a[1], Read(a[0]) == 0 ? _skip.AutoMessageTime0Ms : _skip.AutoMessageTime1Ms); return StepResult.Next;
     }
 
     // 0x1b9 (selector, milliseconds)
     private StepResult OpSetAutoMessageTime(Instruction ins, int pc)
     {
         var a = ins.Args;
-        SetAutoMessageTime((int)Read(a[0]), Read(a[1]));
+        _skip.SetAutoMessageTime((int)Read(a[0]), Read(a[1]));
         return StepResult.Next;
     }
 
@@ -136,23 +115,16 @@ public sealed partial class VirtualMachine
         // Native stops channel 12, drops the Skip-queued voice and clears voice_mute_next_flags.
         _host.StopVoice();
         _voiceMuteNextFlags = 0;
-        _autoVoicePending = false; return StepResult.Next;
+        _skip.ClearPendingVoice(); return StepResult.Next;
     }
 
     // 0x101 clears transient input/run bits, not op 0x88 state
     private StepResult OpResetMessageSkipInput(Instruction ins, int pc)
     {
-        // Native also writes the CancelMesSkipOnClick press/release state ctx+0x6da80 = 0, and polls the input
-        // latch, discarding it.
-        _skipClickCancelState = 0;
-        Interlocked.Exchange(ref _skipClickCancelTriggers, 0);
+        // Native polls the input latch and discards it, and resets the skip input (SkipAndAuto.ResetMessageSkipInput:
+        // the click machine, run-state 0x8000000 however it started, and ctx+0x6da74).
         TakeHeldTriggers();
-        // It clears run-state 0x8000000 (0x4170ce), however it started, and sets ctx+0x6da74, so a held action 6
-        // starts no reveal's fast-forward until a reveal runs with it released. Persistent Skip and read-skip start
-        // it again at the next text wait, or when the callback that ran this op returns into op 0x72.
-        SetScriptFastForward(false);
-        EndPhysicalFastForward();
-        lock (_physicalFastForwardLock) _revealPhysicalSkipSuppressed = true;
+        _skip.ResetMessageSkipInput();
         return StepResult.Next;
     }
 
@@ -161,8 +133,7 @@ public sealed partial class VirtualMachine
     /// message. With fast-forward then off it discards the input latch, as op 0x72 does.</summary>
     private void RefreshAdvSkipInputState()
     {
-        ReconcilePhysicalFastForward();
-        if (!PhysicalSkipActionHeld) SetScriptFastForward(false);
+        _skip.RefreshAdvSkipInputState(InputBindings);
         DiscardHeldTriggersUnlessFastForward();
     }
 }

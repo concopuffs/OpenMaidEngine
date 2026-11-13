@@ -267,8 +267,8 @@ public class ForegroundTransitionTests
             (0x21c, System.Array.Empty<Operand>()),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost { MessageSkip = true, AdvReadSkip = true };
-        var vm = new VirtualMachine(scene, table, host);
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(scene, table, host, skipAndAuto: TestSkipAndAuto.ReadSkipping());
 
         vm.Run();
 

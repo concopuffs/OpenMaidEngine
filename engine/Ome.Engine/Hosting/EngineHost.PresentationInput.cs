@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
 
@@ -48,10 +49,6 @@ public sealed partial class EngineHost
     // reload's ResetSceneContext clears it.
     private volatile bool _rootReloadInterrupt;
     private bool _stopping => _stopRequested || _rootReloadInterrupt;
-    private readonly object _messageSkipLock = new();
-    private bool _scriptMessageSkipActive;
-    private bool _physicalMessageSkipActive;
-    private volatile bool _messageSkipActive;
     private volatile bool _advPagePresentationSuspended;
     private volatile bool _modalMovieWaiting;
     private volatile bool _modalMovieCancelled;
@@ -184,7 +181,7 @@ public sealed partial class EngineHost
         // would cost a frame each. Fast-forward waits for a frame at most every 50 ms; the boundaries between publish
         // when the compositor next takes the barrier (docs/engine-re.md, "Fast-forward pace").
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        if (_messageSkipActive && now - _lastSynchronizedPresentationTimestamp < FastForwardPresentationInterval)
+        if (_skip.FastForwardActive && now - _lastSynchronizedPresentationTimestamp < FastForwardPresentationInterval)
             return;
         while (Interlocked.Read(ref _consumedPresentationRequestGeneration) < requested && !_stopping)
             _presentationRequestConsumed.WaitOne(50);
@@ -331,7 +328,7 @@ public sealed partial class EngineHost
                     }
                     if (!keepServicing) break;
                 }
-                if (_messageSkipActive)
+                if (_skip.FastForwardActive)
                 {
                     messageSkipped = true;
                     break;
@@ -458,39 +455,20 @@ public sealed partial class EngineHost
         return false;
     }
 
-    public bool IsMessageSkipActive => _messageSkipActive;
-
-    public void SetMessageSkipActive(bool active)
-        => SetMessageSkipChannel(active, physical: false);
-
-    public void SetPhysicalMessageSkipActive(bool active)
-        => SetMessageSkipChannel(active, physical: true);
-
-    private void SetMessageSkipChannel(bool active, bool physical)
+    /// <summary>What a change of run-state 0x08000000 does here until its natives exist (SkipAndAuto tells the host
+    /// each time a channel is set). Starting completes the reveal and wakes the waits; ending plays the voice that
+    /// fast-forward held back (<see cref="PlayVoice(long, int, bool)"/>).</summary>
+    public void FastForwardChannelSet(FastForwardChannel channel, bool value, bool active, bool changed)
     {
-        bool effective;
-        bool changed;
-        (AudioPayload Audio, int PlaybackVariant, bool Muted)? queued = null;
-        lock (_messageSkipLock)
-        {
-            if (physical) _physicalMessageSkipActive = active;
-            else _scriptMessageSkipActive = active;
-            effective = _scriptMessageSkipActive || _physicalMessageSkipActive;
-            changed = effective != _messageSkipActive;
-            _messageSkipActive = effective;
-            if (changed && !effective)
-            {
-                queued = _queuedSkippedVoice;
-                _queuedSkippedVoice = null;
-            }
-        }
         if (!changed) return;
+        // The voice was held under the native's state lock while fast-forward was on, so it is here to take now.
+        HeldVoice? queued = active ? null : Interlocked.Exchange(ref _queuedSkippedVoice, null);
         _timeline?.State("message-skip", new()
         {
-            ["enabled"] = effective,
-            ["source"] = physical ? "logical-action-6" : "script",
+            ["enabled"] = active,
+            ["source"] = channel == FastForwardChannel.Physical ? "logical-action-6" : "script",
         });
-        if (effective)
+        if (active)
         {
             // Not the effect wait in progress: native's main tick services run-state 0x400 (and 8) ahead of
             // fast-forward, and those services poll only the EffectSkipOnClick click. Fast-forward reaches the next
@@ -500,7 +478,7 @@ public sealed partial class EngineHost
             _inputCallbackSignal.Set();
             return;
         }
-        if (queued != null) DispatchVoice(queued.Value.Audio, queued.Value.PlaybackVariant, queued.Value.Muted);
+        if (queued != null) DispatchVoice(queued.Audio, queued.PlaybackVariant, queued.Muted);
     }
 
     public void WakeInputCallbackService() => _inputCallbackSignal.Set();
@@ -644,7 +622,7 @@ public sealed partial class EngineHost
             // 0x21c included, so this wait starts forced. Service-flags bit 1 suppresses the request; bit 0 does
             // not (it rejects only the EffectSkipOnClick click). Whatever the force leaves running (a movie, a
             // detached object) still holds the wait.
-            if (_messageSkipActive)
+            if (_skip.FastForwardActive)
             {
                 int completed = gfx.ForceCompleteTimedPresentationForFastForward(startedAtMs);
                 _timeline?.State("transition-fast-forward-forced", new() { ["endpoints_completed"] = completed });
@@ -1027,13 +1005,7 @@ public sealed partial class EngineHost
         _diagnosticMessageCompleted.Reset();
         _scriptErrorCompleted.Reset();
         _fullwidthTextEditCompleted.Reset();
-        lock (_messageSkipLock)
-        {
-            _scriptMessageSkipActive = false;
-            _physicalMessageSkipActive = false;
-            _messageSkipActive = false;
-            _queuedSkippedVoice = null;
-        }
+        Interlocked.Exchange(ref _queuedSkippedVoice, null);   // the native zeroed run-state 0x08000000 first
         lock (_scheduledVoiceLock) _scheduledVoice = null;
         System.Threading.Volatile.Write(ref _voiceBgmDuckControl, 0);
         System.Threading.Volatile.Write(ref _statementBlockActive, 0);
@@ -1160,7 +1132,7 @@ public sealed partial class EngineHost
             {
                 if (_stopping) break;
                 // Native: once ADV fast-forward starts, the main loop dispatches ops ahead of the armed sleep timer.
-                if (_messageSkipActive) break;
+                if (_skip.FastForwardActive) break;
                 _frameSignal.WaitOne(_clock.RealMillisecondsUntil(deadline, 50));
             }
         }

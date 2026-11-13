@@ -22,25 +22,16 @@ namespace Ome.Engine.Vm;
 /// Himegari has none, so its initialized system textures survive a numbered load.</param>
 /// <param name="NoSaveDat">Native set:NoSaveDat profile setting. This suppresses the clean-shutdown
 /// shared SAVE.DAT/RT.DAT flush only; successful numbered saves still flush both shared files.</param>
-/// <param name="CancelMessageSkipOnClick">Native set:CancelMesSkipOnClick (SYS4INI CANCELMESSKIPONCLICK).
-/// Nonzero: a completed action-4 click during active fast-forward cancels Skip; 2 also runs CALLBACK_SETTING.BIN.</param>
-/// <param name="FastForwardOpMicroseconds">Wall-clock cost of one op while ADV fast-forward is active (native runs one
-/// op per main-loop iteration). Zero, with <paramref name="FastForwardPageMicroseconds"/> zero, disables pacing
-/// (headless tools and tests); interactive frontends use <see cref="NativeFastForwardOpMicroseconds"/>.</param>
 /// <param name="WheelKeyUpAction">Native set:WheelKeyUp (SYS4INI WHEELKEYUP, registered default 3): the logical action
 /// a wheel-up raises while an ADV text wait polls (<see cref="VirtualMachine.ApplyMouseWheel"/>).</param>
 /// <param name="WheelKeyDownAction">Native set:WheelKeyDown (SYS4INI WHEELKEYDOWN, registered default 1).</param>
-/// <param name="CoexistMessageSkip">Native set:CoexistMesSkip (SYS4INI COEXISTMESSKIP, registered default 0). With
-/// it off, the native menu's Skip toggle clears Auto and its Auto toggle clears Skip; the script ops ignore it.</param>
-/// <param name="FastForwardPageMicroseconds">Additional fast-forward cost of each text wait (op 0x72) passed while
-/// fast-forward is active; interactive frontends use <see cref="NativeFastForwardPageMicroseconds"/>.</param>
+/// <remarks>CancelMesSkipOnClick, CoexistMesSkip and the fast-forward pace are the skip and auto native's
+/// (<c>Ome.Engine.Natives.SkipAndAutoSettings</c>).</remarks>
 public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64,
                                bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false,
                                int NativeStringCodePage = 932, int CreateObject = 2,
                                int AutoFreeTex = 0, bool NoSaveDat = false,
-                               int CancelMessageSkipOnClick = 0, int FastForwardOpMicroseconds = 0,
-                               int WheelKeyUpAction = 3, int WheelKeyDownAction = 1,
-                               bool CoexistMessageSkip = false, int FastForwardPageMicroseconds = 0)
+                               int WheelKeyUpAction = 3, int WheelKeyDownAction = 1)
 {
     /// <summary>The selected profile's id, which labels an unsupported-opcode diagnostic
     /// (<see cref="UnsupportedOpcodeDiagnostic.ProfileId"/>). No behaviour reads it.</summary>
@@ -49,14 +40,4 @@ public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int C
     /// <summary>Probe mode (<c>--probe</c>): an unsupported opcode is reported and skipped instead of halting the
     /// run.</summary>
     public bool ProbeMode { get; init; }
-
-    /// <summary>Native fast-forward cost per op. Text waits timed with Frida under held Ctrl (2026-11-07) fit 15 µs
-    /// per op plus <see cref="NativeFastForwardPageMicroseconds"/> per page: Kamidori's SC0000 (34,851 ops, 140 pages,
-    /// 865 ms) and Himegari's opening pages (12 µs/op, 2.75 ms/page) agree (docs/engine-re.md, "Fast-forward
-    /// pace").</summary>
-    public const int NativeFastForwardOpMicroseconds = 15;
-
-    /// <summary>Native fast-forward cost per text page beyond its ops (see <see cref="NativeFastForwardOpMicroseconds"/>).
-    /// </summary>
-    public const int NativeFastForwardPageMicroseconds = 2400;
 }

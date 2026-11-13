@@ -204,15 +204,15 @@ engine builds declared in one file. Each item below that it covers names the mil
 still handled on their own. Each change should be behaviour-neutral and pass the spec's acceptance 4: the suite, the
 `oms-rebuild` trace gate, the drive scenarios, `save-diff`, and timing or frame-time captures where they apply.
 
-- **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:1085-1154`)
-  assigns 38 fields from many partials, and `EngineHost.ResetSceneContext` (`EngineHost.PresentationInput.cs`)
+- **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:1055`)
+  assigns fields from many partials (the skip and auto state, since milestone 5, through `SkipAndAuto.ResetScene`), and `EngineHost.ResetSceneContext` (`EngineHost.PresentationInput.cs`)
   does the same on the host. Scene state added without a line in these methods survives タイトルに戻る. That is how
   the host's dialog events stayed signalled until 2026-11-10, when each was reset by hand. Done when a root reload
   rebuilds scene-lifetime state instead of clearing it, so a new field cannot be missed, and a test shows a reload
   keeps no scene state from before it. Planned: layering spec, as each native takes its state; closed at milestone
   12.
 - **Two instruction loops.** `RunFrame` (`VirtualMachine.cs:1177`) and `RunWaitCallback` (`:1676`) each run the
-  per-instruction services (`ServiceInstructionBoundary`, `ApplyIgnoredDwords`, `FrameYield`, `PaceFastForwardOp`),
+  per-instruction services (`ServiceInstructionBoundary`, `ApplyIgnoredDwords`, `FrameYield`, the pace's `SkipAndAuto.PaceOp`),
   and each maps a step's `StepResult` kind to an outcome. Until 2026-11-10 the callback loop ignored a halt and
   skipped those services. Done when one loop serves frames and callbacks. Planned: layering spec, milestone 11
   (spec §5.4); the typed step result came with milestone 1.
@@ -222,14 +222,14 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   were a fault that matched no filter: a halt inside a callback, `ModPackageException` at launch, and a drive command
   that threw. All three are fixed. Done when each layer has one documented fault type that its filters name, and the
   VM turns any fault raised during a step into a halt, with a reason and a trace event, in one place.
-- **VM state has no owners.** Any of the 29 files can write any field. The skip and auto-message flags are the most
-  shared: `_messageSkipServiceActive` is used in 7 files, and `_messageSkipInjected` and `_advTextWaitPolling` in 5
-  each. Integer-cell normalisation (under Robustness) and the bounds checks on script-controlled indices also have
+- **VM state has no owners.** Any of the VM's files can write any field. The skip and auto-message flags were the
+  most shared (`_messageSkipServiceActive` in 7 files, `_messageSkipInjected` in 5); since milestone 5 (2026-11-12)
+  they are private to the skip-and-auto native, `engine/Ome.Engine/Natives/SkipAndAuto*.cs`. `_advTextWaitPolling`
+  is still used in 5. Integer-cell normalisation (under Robustness) and the bounds checks on script-controlled indices also have
   no single home. Done when each group of state is private to one type that others change through named methods:
   memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. The
   census of every field (milestone 2, `docs/superpowers/plans/2026-11-12-engine-layering.md`) names each one's owner;
-  the skip and auto state gets its owner next (milestone 5), because audio and other natives read it; the waits move
-  last (milestone 11).
+  skip and auto has its owner; audio is next (milestone 6); the waits move last (milestone 11).
 - **The host's threads have no stated ownership.** `EngineHost` holds nine lock objects, six `AutoResetEvent`s,
   a `ManualResetEventSlim` and a `SemaphoreSlim`, and nothing documents which fields each lock guards or the lock
   order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`

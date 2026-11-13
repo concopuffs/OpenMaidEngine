@@ -1,6 +1,7 @@
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 using System.Text;
@@ -35,6 +36,7 @@ public sealed partial class VirtualMachine
     private readonly OpcodeTable _t;
     private readonly Handler?[] _handlers;   // _t's opcodes bound to their handlers (VirtualMachine.Handlers.cs)
     private readonly IHost _host;
+    private readonly SkipAndAuto _skip;
     private readonly VmOptions _o;
     // The engine build's rules (Ome.Engine.Vm/EngineBuilds.cs). The VM never reads the build's id or ABI.
     private readonly EngineRules _rules;
@@ -79,13 +81,10 @@ public sealed partial class VirtualMachine
     // input. It is clear while that wait runs a hotspot callback, as native clears the bit on dispatch and the
     // callback's ret re-runs the wait.
     private volatile bool _advTextWaitPolling;
+    private volatile bool _advTextRevealing;   // run-state 0x20000000: a reveal is running in the host
     private bool _advInputPollPageless;   // the polling wait is op 0xfa's
     private int _heldInputCallbackMask;
     private int _queuedInputCallbackMask;
-    private bool _autoMessageEnabled;
-    private long _autoMessageTime0Ms = 500;
-    private long _autoMessageTime1Ms = 2000;
-    private bool _autoVoicePending;
     private const int VoiceMuteRequested = 0x1, VoiceMutePromoted = 0x10000;
     private int _voiceMuteNextFlags;          // native voice_mute_next_flags (ctx+0x1493c), ops 0x1d5/0xc4/0x1bd/0x1bc
     private bool _statementBlockActive;       // native statement_block_active (ctx+0x5f2fc), ops 0x1f4/0x1f5
@@ -95,10 +94,6 @@ public sealed partial class VirtualMachine
     private volatile bool _stopRequested;
     private volatile bool _rootReloadRequested;   // frontend 終了 dialog: タイトルに戻る
     private bool _sharedProfileShutdownHandled;
-    private volatile bool _messageSkipEnabled;         // ctx+0x550fc message_skip_display_enabled: the Skip toggle
-    private volatile bool _messageSkipServiceActive;   // run-state 0x08000000 as scripts and the Skip toggles set it
-    private bool _messageSkipInjected;                 // ctx+0x13dc message_skip_enabled: Skip a text wait acts on
-    private bool _advReadSkipState;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     private int _messageWindowAlphaSetting;
     private int _messageGlyphDelayMilliseconds;
@@ -136,8 +131,10 @@ public sealed partial class VirtualMachine
     /// <summary>The native script error that ended the run (AGE's エラーが発生しました box), or null.</summary>
     public DiagnosticMessage? ScriptError { get; private set; }
     public long Steps { get; private set; }
-    public bool AutoMessageEnabled => _autoMessageEnabled;
-    public bool MessageSkipEnabled => _messageSkipEnabled;
+    /// <summary>The skip and auto native this VM's handlers call (Ome.Engine/Natives/SkipAndAuto.cs).</summary>
+    public SkipAndAuto SkipAndAuto => _skip;
+    public bool AutoMessageEnabled => _skip.AutoMessageEnabled;
+    public bool MessageSkipEnabled => _skip.MessageSkipEnabled;
     public int SystemMenuActionsEnabled => _systemMenuActionsEnabled;
     public uint SystemMenuShowDelayMilliseconds => _systemMenuShowDelayMilliseconds;
     /// <summary>Op 0x10f's system-key disable mask (EngineCtx +0x6da7c), read by the frontend's F1 and F10 handling.
@@ -197,11 +194,14 @@ public sealed partial class VirtualMachine
                           INativeDatStore? nativeDatStore = null,
                           AudioMixerSettings? audioMixerSettings = null,
                           DiagnosticOutputState? diagnosticOutput = null,
-                          EngineBuild? build = null, IPaceClock? paceClock = null,
+                          EngineBuild? build = null, SkipAndAuto? skipAndAuto = null,
                           TimeProvider? playClock = null)
     {
         _s = s; _t = t; _handlers = BindHandlers(t); _host = host; _o = o ?? new VmOptions(); _provider = provider;
-        _paceClock = paceClock ?? new StopwatchPaceClock();
+        // Composition hands over the native its time device belongs to; tests and tools that give none get one over
+        // the system clock. A host that keeps the effects of fast-forward (the lifted host, a test's fake) hears it.
+        _skip = skipAndAuto ?? SkipAndAuto.WithSystemClock();
+        if (host is IFastForwardListener listener) _skip.Listen(listener);
         _playClock = playClock ?? TimeProvider.System;
         _rules = EngineBuilds.ForVm(build, t).Rules;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -213,8 +213,6 @@ public sealed partial class VirtualMachine
         _nativeDatStore = nativeDatStore;
         _messageWindowAlphaSetting = host.MessageWindowAlphaSetting;
         _messageGlyphDelayMilliseconds = System.Math.Max(0, host.MessageGlyphDelayMilliseconds);
-        _autoMessageTime0Ms = host.AutoMessageTime0Milliseconds;
-        _autoMessageTime1Ms = host.AutoMessageTime1Milliseconds;
         ResetPlayTime();
         // AGE constructs the container (base 0 from now) before it reads SAVE.DAT, whose playtime only lands pending.
         _pendingPlaySeconds = _sharedProfile.AccumulatedPlaySeconds;
@@ -477,48 +475,28 @@ public sealed partial class VirtualMachine
         return -1;
     }
 
-    /// <summary>
-    /// The read-skip block that ops 0x6e, 0x71 and 0x72 share and the menu bar's read-skip toggle repeats
-    /// (op_0x71_reset_adv_text_layout@0x41e540; docs/engine-re.md, "Read skip and ctx+0x13dc"). With
-    /// message:ReadTextSkip on, a read message sets run-state 0x08000000 and adv_read_skip_state; an unread one clears
-    /// adv_read_skip_state only while persistent Skip is off. It never ends fast-forward, and never starts it from
-    /// persistent Skip, so a layout reset outside ADV (after op 0x19b) leaves it off.
-    /// </summary>
+    /// <summary>The read-skip block that ops 0x6e, 0x71 and 0x72 share and the menu bar's read-skip toggle repeats
+    /// (SkipAndAuto.ApplyReadTextSkip): message:ReadTextSkip and whether ReadTextDB holds the current message.</summary>
     private void ApplyReadTextSkip()
     {
-        if (!_sharedProfile.ReadMessageSkipEnabled)
-        {
-            _advReadSkipState = false;
-            return;
-        }
-        if (_sharedProfile.ReadText.IsMessageRead(_cur.Script.PackedId, CurrentReadMessageIndex()))
-        {
-            _advReadSkipState = true;
-            SetScriptFastForward(true);
-        }
-        else if (!_messageSkipEnabled)
-        {
-            _advReadSkipState = false;
-        }
+        bool readTextSkip = _sharedProfile.ReadMessageSkipEnabled;
+        _skip.ApplyReadTextSkip(readTextSkip, readTextSkip
+            && _sharedProfile.ReadText.IsMessageRead(_cur.Script.PackedId, CurrentReadMessageIndex()));
     }
 
     /// <summary>The entry of op_0x72_handler, which also runs when a hotspot callback's ret re-runs the waiting op: the
-    /// read-skip block, then run-state 0x8000000 cleared unless the message is read or action 6 is held. Persistent
-    /// Skip (ctx+0x13dc) sets it again as the wait polls its injected action 6, so the page still passes. Last, it
-    /// polls the input latch and discards it.</summary>
+    /// read-skip block, then the skip native's text-wait entry (SkipAndAuto.EnterTextWait). Last, it polls the input
+    /// latch and discards it.</summary>
     private void EnterTextWait()
     {
         ApplyReadTextSkip();
-        if (!_advReadSkipState) SetScriptFastForward(_messageSkipInjected);
-        ReconcilePhysicalFastForward();
+        _skip.EnterTextWait(InputBindings);
         DiscardHeldTriggersUnlessFastForward();
     }
 
-    private void SetScriptFastForward(bool active)
-    {
-        _messageSkipServiceActive = active;
-        _host.SetMessageSkipActive(active);
-    }
+    /// <summary>A physical input changed: the skip native decides whether action 6 starts or ends fast-forward.</summary>
+    private void OnPhysicalSkipInputChanged()
+        => _skip.PhysicalInputChanged(InputBindings, _advTextWaitPolling, _advTextRevealing);
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
     private int GlobalPointer(int index)
@@ -1111,29 +1089,19 @@ public sealed partial class VirtualMachine
         // A return to title reloads the root the natural way: TITLE runs, and nothing ends the run at a scene's return.
         _hostedSceneEntry = null;
         _hostedScenePackedId = null;
-        _autoMessageEnabled = false;
-        _autoVoicePending = false;
         _voiceMuteNextFlags = 0;
         _statementBlockActive = false;   // a root reload abandons every open block with its frames
         _statementBlockDepth = 0;
-        _messageSkipEnabled = false;
-        _messageSkipServiceActive = false;
-        _messageSkipInjected = false;
-        _advReadSkipState = false;
-        _skipClickCancelState = 0;
-        _skipClickCancelTriggers = 0;
         _settingCallbackPending = false;
         _windowCallbackPending = false;
         _menuToggles.Clear();
         _menuTogglesPending = false;
-        _advSkipServiceEnabled = true;
         _advTextStyle = AdvTextStyle.Default;
         _systemMenuActionsEnabled = 1;
         _systemMenuShowDelayMilliseconds = 0;
         Volatile.Write(ref _systemKeyDisableMask, 0);
         TextHistory.SetRecordingEnabled(true);
-        _host.SetMessageSkipActive(false);
-        EndPhysicalFastForward();   // scene_context_init_reset zeroes the run state; a held key starts nothing
+        _skip.ResetScene();   // Skip, Auto and read skip start over; run-state 0x08000000 is zeroed
         _host.ResetSceneContext();
         // The reset keeps every surface. op_0x9_reset_scene_and_reload_root then runs the release worker over all
         // 1,000 slots only when (CreateObject & 2) && (AutoFreeTex & 1): Kamidori, not Himegari (docs/engine-re.md,
@@ -1234,7 +1202,7 @@ public sealed partial class VirtualMachine
                     if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
                     StepResult step = ApplyIgnoredDwords(frame, pc, Step(frame.Script.Instructions[pc], pc));
                     _host.FrameYield();
-                    PaceFastForwardOp();
+                    _skip.PaceOp();
                     if (step.Kind == StepKind.FrameReturn) { outcome = FrameOutcome.Returned; break; }
                     if (step.Kind == StepKind.RootReload) { outcome = FrameOutcome.RootReload; break; }
                     if (step.Kind == StepKind.Halt) { outcome = FrameOutcome.Halted; break; }
@@ -1700,7 +1668,7 @@ public sealed partial class VirtualMachine
                 if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, _cur.Script.Instructions[pc], _depth));
                 StepResult step = ApplyIgnoredDwords(_cur, pc, Step(_cur.Script.Instructions[pc], pc));
                 _host.FrameYield();
-                PaceFastForwardOp();
+                _skip.PaceOp();
                 if (step.Kind == StepKind.RootReload) throw new RootReloadRequestedException();
                 if (step.Kind is StepKind.HotspotReturn or StepKind.FrameReturn) break;
                 if (step.Kind == StepKind.Halt) throw new VmHaltException();

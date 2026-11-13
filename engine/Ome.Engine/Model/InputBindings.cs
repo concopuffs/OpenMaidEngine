@@ -16,6 +16,10 @@ public sealed class InputBindings
     /// (EffectSkipOnClick 1) and cancels a modal movie.</summary>
     public const int AdvanceAction = 4;
 
+    /// <summary>Logical action 6, Ctrl, C and Backspace in both games: held, it fast-forwards ADV text (run-state
+    /// 0x08000000; <c>Ome.Engine.Natives.SkipAndAuto</c>).</summary>
+    public const int FastForwardAction = 6;
+
     private readonly object _lock = new();
     private readonly int[] _keyboardActions = Enumerable.Repeat(-1, 256).ToArray();
     private readonly int[] _mouseButtonSlots = new int[2];

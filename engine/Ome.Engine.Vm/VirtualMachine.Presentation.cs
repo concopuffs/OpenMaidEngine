@@ -73,7 +73,7 @@ public sealed partial class VirtualMachine
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
         _host.FadeSurfaceWithBlack(
             Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.FromBlack,
-            _messageSkipServiceActive || _host.IsMessageSkipActive);
+            AdvFastForwardActive);
         return StepResult.Next;
     }
 
@@ -85,7 +85,7 @@ public sealed partial class VirtualMachine
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
         _host.FadeSurfaceWithBlack(
             Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.ToBlack,
-            _messageSkipServiceActive || _host.IsMessageSkipActive);
+            AdvFastForwardActive);
         return StepResult.Next;
     }
 
@@ -97,7 +97,7 @@ public sealed partial class VirtualMachine
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
         _host.FadeSurfaceToWhite(
             Gfx, (int)Read(a[0]), Read(a[1]),
-            _messageSkipServiceActive || _host.IsMessageSkipActive);
+            AdvFastForwardActive);
         return StepResult.Next;
     }
 
@@ -110,7 +110,7 @@ public sealed partial class VirtualMachine
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
         _host.CrossfadeSurfaces(
             Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]),
-            _messageSkipServiceActive || _host.IsMessageSkipActive);
+            AdvFastForwardActive);
         return StepResult.Next;
     }
 
@@ -126,7 +126,7 @@ public sealed partial class VirtualMachine
             new SurfacePatternTransitionRequest(
                 (int)Read(a[0]), Read(a[1]), (int)Read(a[2]),
                 (SurfacePatternTransitionMode)(4 + (int)Read(a[3]))),
-            _messageSkipServiceActive || _host.IsMessageSkipActive || Read(a[2]) <= 0);
+            AdvFastForwardActive || Read(a[2]) <= 0);
         return StepResult.Next;
     }
 
@@ -140,7 +140,7 @@ public sealed partial class VirtualMachine
             new SurfacePatternTransitionRequest(
                 (int)Read(a[0]), Read(a[1]), (int)Read(a[2]),
                 (SurfacePatternTransitionMode)(8 + (int)Read(a[3]))),
-            _messageSkipServiceActive || _host.IsMessageSkipActive || Read(a[2]) <= 0);
+            AdvFastForwardActive || Read(a[2]) <= 0);
         return StepResult.Next;
     }
 

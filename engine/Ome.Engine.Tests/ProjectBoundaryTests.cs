@@ -2,7 +2,9 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Ome.Engine.Hosting;
+using Ome.Engine.Devices;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
 using Ome.Engine.Vm;
@@ -37,6 +39,7 @@ public class ProjectBoundaryTests
     [InlineData(typeof(EnumeratedFontFamily))]
     [InlineData(typeof(IMovieDecoder))]
     [InlineData(typeof(IMovieDecoderFactory))]
+    [InlineData(typeof(IPaceClock))]
     public void DeviceTypesLiveInTheDeviceAssembly(Type type) => Assert.Same(Devices, type.Assembly);
 
     [Fact]
@@ -98,6 +101,37 @@ public class ProjectBoundaryTests
         }
         Assert.Contains(("Main", nameof(IFrontEnd)), bases);
         Assert.Empty(bases.Where(pair => host.Contains(pair.Base)));
+    }
+
+    [Fact]
+    public void TheVmTakesNoPaceClock()
+    {
+        // Milestone 5: fast-forward pacing belongs to the skip-and-auto native, which composition builds with a clock.
+        IEnumerable<Type> parameters = typeof(VirtualMachine).GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .SelectMany(constructor => constructor.GetParameters()).Select(parameter => parameter.ParameterType);
+        Assert.DoesNotContain(typeof(IPaceClock), parameters);
+        Assert.Contains(typeof(SkipAndAuto), parameters);
+        Assert.Contains(typeof(IPaceClock), typeof(SkipAndAuto).GetConstructors().SelectMany(c => c.GetParameters()).Select(p => p.ParameterType));
+    }
+
+    [Fact]
+    public void SkipAndAutoStateIsPrivateToItsNative()
+    {
+        // The census (docs/superpowers/plans/2026-11-12-engine-layering.md §4, "Skip and auto") found this state in the
+        // VM and the host; milestone 5 gave it one owner, and neither keeps a copy.
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        Assert.Empty(typeof(SkipAndAuto).GetFields(instance).Where(field => !field.IsPrivate).Select(field => field.Name));
+        string[] census =
+        [
+            "_paceClock", "_fastForwardPacing", "_fastForwardOwedMs", "_fastForwardStartMs", "_fastForwardPagePassed",
+            "_advSkipServiceEnabled", "_physicalFastForwardLock", "_physicalSkipActionHeld", "_revealPhysicalSkipSuppressed",
+            "_skipClickCancelState", "_skipClickCancelTriggers", "_autoMessageEnabled", "_autoMessageTime0Ms",
+            "_autoMessageTime1Ms", "_autoVoicePending", "_messageSkipEnabled", "_messageSkipServiceActive",
+            "_messageSkipInjected", "_advReadSkipState", "_autoMessageTime0Milliseconds", "_autoMessageTime1Milliseconds",
+            "_messageSkipLock", "_scriptMessageSkipActive", "_physicalMessageSkipActive", "_messageSkipActive",
+        ];
+        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
+            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
     }
 
     private static IEnumerable<Type> Signature(MemberInfo member) => member switch

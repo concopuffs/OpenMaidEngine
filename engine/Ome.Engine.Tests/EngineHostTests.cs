@@ -1,6 +1,7 @@
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
 using Xunit;
@@ -75,8 +76,9 @@ public class EngineHostTests
         public byte[] ReadAll(AssetEntry entry) => throw new FileNotFoundException(entry.Name);
     }
 
-    private static EngineHost Host(IFrontEnd frontEnd, PageLocatorState locator, FrameClock clock)
-        => new(frontEnd, new ResourceMap(Sys4AssetCatalog.Parse(Sys4StartupSettingsTests.BuildCatalog()), new NoAssets()),
+    private static EngineHost Host(IFrontEnd frontEnd, PageLocatorState locator, FrameClock clock,
+                                   SkipAndAuto? skipAndAuto = null)
+        => new(frontEnd, skipAndAuto ?? SkipAndAuto.WithSystemClock(), new ResourceMap(Sys4AssetCatalog.Parse(Sys4StartupSettingsTests.BuildCatalog()), new NoAssets()),
                "SC0000", clock, locator, Canvas, new NoGlyphs(), GlyphCoverageAlpha.Sixteenths,
                synchronizeExplicitPresentation: false)
         {
@@ -102,6 +104,22 @@ public class EngineHostTests
             ["StopBgm", "ApplyAudioVolume", "ApplyAudioRouteEnabled", "FadeBgm", "CompleteBgmFade",
              "StopVoiceForMessageSkip", "IsSoundChannelPlaying"],
             frontEnd.Calls);
+    }
+
+    [Fact]
+    public void TheHostReadsFastForwardFromTheSkipAndAutoNative()
+    {
+        var frontEnd = new NothingFrontEnd();
+        using var locator = new PageLocatorState("SC0000", null);
+        SkipAndAuto skipAndAuto = SkipAndAuto.WithSystemClock();
+        EngineHost host = Host(frontEnd, locator, new FrameClock(), skipAndAuto);
+
+        Assert.False(host.CaptureDiagnosticSnapshot().IsMessageSkipActive);
+        skipAndAuto.SetPhysicalFastForward(true);
+        Assert.True(host.CaptureDiagnosticSnapshot().IsMessageSkipActive);
+        skipAndAuto.SetPhysicalFastForward(false);
+        Assert.False(host.CaptureDiagnosticSnapshot().IsMessageSkipActive);
+        Assert.Empty(frontEnd.Calls);   // no voice was held back, so ending fast-forward plays nothing
     }
 
     [Fact]

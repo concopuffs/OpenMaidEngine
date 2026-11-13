@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
@@ -10,6 +11,9 @@ using Xunit;
 /// open statement block.</summary>
 public class MessageSkipClickCancelTests
 {
+    private static SkipAndAuto CancelOnClick(int setting)
+        => SkipAndAuto.WithSystemClock(new SkipAndAutoSettings(CancelMessageSkipOnClick: setting));
+
     private const int Probe = 0x200;
 
     /// <summary>Drives physical mouse slot 0 (action 4 by default) at chosen instruction boundaries.</summary>
@@ -56,7 +60,7 @@ public class MessageSkipClickCancelTests
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = BuildProbeScript(table, "CANCEL_SKIP", 8);
         var host = new ClickHost();
-        var vm = new VirtualMachine(script, table, host, new VmOptions(CancelMessageSkipOnClick: 1));
+        var vm = new VirtualMachine(script, table, host, skipAndAuto: CancelOnClick(1));
         host.Vm = vm;
         // Yield n follows instruction n-1. Fast-forward is on from boundary 3 (state 1); the press is held at
         // boundary 4 (state 2) and released before boundary 6, which cancels before probe 3 runs.
@@ -79,7 +83,7 @@ public class MessageSkipClickCancelTests
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = BuildProbeScript(table, "CANCEL_SKIP_TRIGGER", 6);
         var host = new ClickHost();
-        var vm = new VirtualMachine(script, table, host, new VmOptions(CancelMessageSkipOnClick: 1));
+        var vm = new VirtualMachine(script, table, host, skipAndAuto: CancelOnClick(1));
         host.Vm = vm;
         bool latched = false;
         host.AtYield[4] = v => latched = v.TryLatchMessageSkipCancelClick();
@@ -130,7 +134,7 @@ public class MessageSkipClickCancelTests
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
         var host = new ClickHost();
-        var vm = new VirtualMachine(script, table, host, new VmOptions(CancelMessageSkipOnClick: 1));
+        var vm = new VirtualMachine(script, table, host, skipAndAuto: CancelOnClick(1));
         host.Vm = vm;
         host.AtYield[3] = v => v.UpdatePhysicalMouseButtonState(0, true);
         // Released once fast-forward runs again, where state 2 would have cancelled.
@@ -153,7 +157,7 @@ public class MessageSkipClickCancelTests
         var provider = new MapProvider(new Dictionary<long, Script>(),
             new Dictionary<string, Script>(StringComparer.OrdinalIgnoreCase) { ["CALLBACK_SETTING.BIN"] = callback });
         var host = new ClickHost();
-        var vm = new VirtualMachine(script, table, host, new VmOptions(CancelMessageSkipOnClick: 2), provider);
+        var vm = new VirtualMachine(script, table, host, null, provider, skipAndAuto: CancelOnClick(2));
         host.Vm = vm;
         // Instructions: 0x1ca, 0x88, 0x19c, 0x1f4, six probes, 0x1f5, ...; cancel lands inside the block.
         host.AtYield[5] = v => v.UpdatePhysicalMouseButtonState(0, true);

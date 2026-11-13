@@ -33,7 +33,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         // sleep_op_0xc8@0x420ec0 arms nothing while ADV fast-forward (run-state 0x08000000) is active.
-        if (_messageSkipServiceActive || _host.IsMessageSkipActive) return StepResult.Next;
+        if (AdvFastForwardActive) return StepResult.Next;
         _host.Sleep(Read(a[0])); return StepResult.Next;
     }
 

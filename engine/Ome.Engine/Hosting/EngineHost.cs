@@ -3,15 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
 using Ome.Engine.Diagnostics;
 
 namespace Ome.Engine.Hosting;
 
-public sealed partial class EngineHost : IHost, ISurfacePixels
+public sealed partial class EngineHost : IHost, ISurfacePixels, IFastForwardListener
 {
     private readonly IFrontEnd _frontEnd;
+    private readonly SkipAndAuto _skip;
     private readonly ResourceMap _res;
     private readonly string _rootScene;
     private readonly int _screenWidth;
@@ -45,7 +47,11 @@ public sealed partial class EngineHost : IHost, ISurfacePixels
 
     /// <summary>Glyph masks the presented-text rasterizer's cache keeps.</summary>
     public int PresentedTextMaskCacheCapacity { get; init; } = 2048;
-    public EngineHost(IFrontEnd frontEnd, ResourceMap res, string scene, Ome.Engine.Hosting.FrameClock clock,
+    /// <param name="skipAndAuto">The skip and auto native the VM runs with: the host reads fast-forward from it, keeps
+    /// the Auto delays in it for SYS4REG.INI, and keeps what a fast-forward change does here until those natives
+    /// exist.</param>
+    public EngineHost(IFrontEnd frontEnd, SkipAndAuto skipAndAuto, ResourceMap res, string scene,
+                        Ome.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
                         IGlyphMaskRasterizer surfaceTextRasterizer,
                         GlyphCoverageAlpha coverageAlpha,
@@ -54,6 +60,8 @@ public sealed partial class EngineHost : IHost, ISurfacePixels
                         int surfaceTextMaskCacheCapacity = 2048)
     {
         _frontEnd = frontEnd; _res = res; _rootScene = scene; _clock = clock;
+        _skip = skipAndAuto ?? throw new ArgumentNullException(nameof(skipAndAuto));
+        _skip.Listen(this);
         _locator = locator; _timeline = timeline;
         _screenWidth = logicalCanvas.Width;
         _screenHeight = logicalCanvas.Height;

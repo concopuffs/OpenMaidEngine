@@ -99,9 +99,9 @@ public sealed partial class VirtualMachine
         if (held == 0) return;
         if (TryActivateInputActions(held)) return;
         if ((held & (1 << AdvWaitCoroutineYieldAction)) != 0 && TryRequestAdvWaitCoroutineYield()) return;
-        if ((held & FastForwardActionMask) != 0)
+        if ((held & (1 << Ome.Engine.Model.InputBindings.FastForwardAction)) != 0)
         {
-            StartPhysicalFastForwardFromLatchedTrigger();
+            if (!_skip.StartPhysicalFastForwardFromLatchedTrigger(InputBindings)) _host.EndInputWait();
             return;
         }
         if ((held & AdvanceTrigger) == 0) return;

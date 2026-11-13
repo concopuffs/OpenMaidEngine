@@ -237,12 +237,16 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       screenshot BMP naming, profile-owned state, identity, and
     │                                       serialized bank dimensions
+    │   ├── Ome.Engine/Natives/              engine natives (engine layering spec §5.2), each the one owner of a
+    │                                       group of engine state: SkipAndAuto (Skip, Auto, read skip, fast-forward
+    │                                       and its pace)
     │   ├── Ome.Engine.Vm/                   the handler layer (superpowers/specs/2026-11-12-engine-layering-design.md
     │                                       §3.3): the interpreter, the handler table and handlers, and the engine
     │                                       builds; references Ome.Engine only and cannot see Ome.Engine.Devices
     │   ├── Ome.Engine.Devices/              the device layer: interfaces of what an operating system or front end
     │                                       does and the plain data they carry (RgbaImage, glyph-mask requests and
-    │                                       results, the font family source, the movie decoder); references nothing
+    │                                       results, the font family source, the movie decoder, the pace clock);
+    │                                       references nothing
     │   ├── Ome.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
     │                                       open-maid-script-design.md): operand contracts, intrinsics (Abi/), intermediate
     │                                       form and byte-exact decoder/encoder (Ir/), lexer/parser/AST (Syntax/),
@@ -480,8 +484,11 @@ and native-style random-modulo dispatch; shared storage/address helpers remain i
 ADV coroutine handler save/yield/resume, and bounded labeled-yield dispatch; process/root exit and cross-script
 lifecycle are routed separately. `engine/Ome.Engine.Vm/VirtualMachine.InputLatch.cs` owns native's input latch: the
 triggers held while nothing polls (effects under `EffectSkipOnClick` 0, the ADV coroutine yield), the services that
-take them, and the discard points. `engine/Ome.Engine.Vm/VirtualMachine.PhysicalFastForward.cs` owns fast-forward
-from a held action 6 (Ctrl): its two start paths, op `0x101`'s reveal suppression and the clears.
+take them, and the discard points. The skip-and-auto native `engine/Ome.Engine/Natives/SkipAndAuto.cs` owns Skip,
+Auto, read skip and run-state `0x08000000`; its partials own fast-forward from a held action 6 (`PhysicalInput`: the
+two start paths, op `0x101`'s reveal suppression and the clears), the click cancel (`ClickCancel`) and the
+fast-forward pace (`Pace`). Composition builds it and hands the same instance to the VM and to `EngineHost`, which
+listens for fast-forward changes (`IFastForwardListener`).
 `engine/Ome.Engine.Vm/VirtualMachine.DeterministicRandom.cs` owns op `0x60`'s seeded per-call-site streams, which
 the drive step `rand-seed` turns on.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root

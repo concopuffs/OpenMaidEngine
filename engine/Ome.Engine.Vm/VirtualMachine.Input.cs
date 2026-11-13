@@ -35,11 +35,10 @@ public sealed partial class VirtualMachine
         _sharedProfile.ReadText.QueueMessage(
             _cur.Script.PackedId, CurrentReadMessageIndex(),
             _cur.Script.ReadMessageOffsets.Count);
-        _fastForwardPagePassed = true;   // PaceFastForwardOp charges the page if fast-forward passed it
+        _skip.PagePassed();   // pacing charges the page if fast-forward passed it
     }
 
-    private AdvAutoWaitState CurrentAutoWaitState()
-        => new(_autoMessageEnabled, _autoVoicePending, _autoMessageTime0Ms, _autoMessageTime1Ms);
+    private AdvAutoWaitState CurrentAutoWaitState() => _skip.AutoWaitState;
 
     private StepResult OpWaitForInput(Instruction ins, int pc)
     {
@@ -143,7 +142,7 @@ public sealed partial class VirtualMachine
         // Depth with the return pc still pushed, so 再試行 and 無視 resume with it on the stack.
         long now = _host.InputClockMilliseconds;
         if (now - _mouseCallbackArmedAtMs < _mouseCallbackIntervalMs
-            && !(_messageSkipServiceActive || _host.IsMessageSkipActive))
+            && !(AdvFastForwardActive))
             return StepResult.Next;
         _mouseCallbackArmedAtMs = now;
         if (_mouseCallbackTarget == -1) return StepResult.Next;

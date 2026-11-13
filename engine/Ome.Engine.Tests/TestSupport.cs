@@ -3,11 +3,12 @@ using System.Linq;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 
 /// <summary>Shared test doubles: a host that records observable effects, and an in-memory script
 /// provider for synthetic call-script targets.</summary>
-internal class RecordingHost : IHost, ISurfacePixels
+internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
 {
     public int Waits;
     public int Presents;
@@ -15,10 +16,11 @@ internal class RecordingHost : IHost, ISurfacePixels
     /// <summary>The anim-clock duration each op 0x21c wait starts with.</summary>
     public readonly List<long> TransitionAnimClocks = new();
     public int InputCallbackFrames;
-    public bool MessageSkip;
-    public bool ScriptMessageSkip;
-    public bool PhysicalMessageSkip;
-    public bool AdvReadSkip;
+    // Run-state 0x08000000 and its two channels as the VM's skip and auto native last reported them. A VM built with
+    // this host tells it (VirtualMachine's constructor); to start a run with fast-forward on, set the native's channel.
+    public bool MessageSkip { get; private set; }
+    public bool ScriptMessageSkip { get; private set; }
+    public bool PhysicalMessageSkip { get; private set; }
     public readonly List<(int Offset, string Text)> Lines = new();
     public readonly List<(int Slot, int X, int Y)> TextCursors = new();
     public readonly List<(int Surface, int X, int Y, string Text)> SurfaceStrings = new();
@@ -147,13 +149,6 @@ internal class RecordingHost : IHost, ISurfacePixels
     }
     public void SetMessageGlyphDelayMilliseconds(int milliseconds)
         => MessageGlyphDelayMilliseconds = milliseconds;
-    public long AutoMessageTime0Milliseconds { get; set; } = 500;
-    public long AutoMessageTime1Milliseconds { get; set; } = 2000;
-    public void SetAutoMessageTime(int selector, long milliseconds)
-    {
-        if (selector == 0) AutoMessageTime0Milliseconds = milliseconds;
-        else if (selector == 1) AutoMessageTime1Milliseconds = milliseconds;
-    }
     public RgbaImage? CaptureSurfacePixels(int slot)
         => SurfacePixels.TryGetValue(slot, out var image) ? image : null;
     public bool ReplaceSurfacePixels(int slot, RgbaImage image)
@@ -268,20 +263,22 @@ internal class RecordingHost : IHost, ISurfacePixels
     public virtual void ResetSceneContext() => SceneContextResets++;
     public int RootReloadInterrupts;
     public virtual void InterruptForRootReload() => RootReloadInterrupts++;
-    public bool IsMessageSkipActive => MessageSkip;
-    public void SetMessageSkipActive(bool active)
+    // MessageSkipChanges records run-state 0x08000000 after each script-channel set, PhysicalMessageSkipChanges each
+    // action-6 set, changed or not.
+    public void FastForwardChannelSet(FastForwardChannel channel, bool value, bool active, bool changed)
     {
-        ScriptMessageSkip = active;
-        MessageSkip = ScriptMessageSkip || PhysicalMessageSkip;
-        MessageSkipChanges.Add(MessageSkip);
+        MessageSkip = active;
+        if (channel == FastForwardChannel.Script)
+        {
+            ScriptMessageSkip = value;
+            MessageSkipChanges.Add(active);
+        }
+        else
+        {
+            PhysicalMessageSkip = value;
+            PhysicalMessageSkipChanges.Add(value);
+        }
     }
-    public void SetPhysicalMessageSkipActive(bool active)
-    {
-        PhysicalMessageSkip = active;
-        MessageSkip = ScriptMessageSkip || PhysicalMessageSkip;
-        PhysicalMessageSkipChanges.Add(active);
-    }
-    public bool IsAdvReadSkipActive => AdvReadSkip;
     public void PresentFrame(GfxState gfx)
     {
         Presents++;
@@ -499,5 +496,25 @@ internal sealed class ClockedHost(ManualPlayClock clock) : RecordingHost
     {
         base.Sleep(duration);
         clock.NowMs += duration;
+    }
+}
+
+/// <summary>Skip and auto natives in the states tests start from.</summary>
+internal static class TestSkipAndAuto
+{
+    /// <summary>Action 6's fast-forward already on, as a run under held Ctrl starts.</summary>
+    public static SkipAndAuto HoldingFastForward()
+    {
+        SkipAndAuto skipAndAuto = SkipAndAuto.WithSystemClock();
+        skipAndAuto.SetPhysicalFastForward(true);
+        return skipAndAuto;
+    }
+
+    /// <summary>Read skip on: message:ReadTextSkip set and the current message read, as a text wait leaves it.</summary>
+    public static SkipAndAuto ReadSkipping()
+    {
+        SkipAndAuto skipAndAuto = SkipAndAuto.WithSystemClock();
+        skipAndAuto.ApplyReadTextSkip(readTextSkip: true, messageRead: true);
+        return skipAndAuto;
     }
 }

@@ -1,15 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Ome.Engine.Devices;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
 
 /// <summary>Native ADV fast-forward pace: one op per main-loop iteration at a fixed cost, and op 0xc8 sleep arms
-/// nothing while run-state 0x08000000 is set (sleep_op_0xc8@0x420ec0). Pacing runs on a virtual
-/// <see cref="IPaceClock"/> here: time moves only when pacing sleeps or a test says a host service blocked, so the
-/// schedule is checked exactly instead of timed.</summary>
+/// nothing while run-state 0x08000000 is set (sleep_op_0xc8@0x420ec0). Pacing is the skip and auto native's
+/// (<see cref="SkipAndAuto"/>), built here over a virtual <see cref="IPaceClock"/>: time moves only when pacing sleeps
+/// or a test says a host service blocked, so the schedule is checked exactly instead of timed.</summary>
 public class FastForwardPaceTests
 {
     /// <summary>A pace clock whose time moves only by pacing's sleeps and by an optional blocking service.</summary>
@@ -67,10 +69,10 @@ public class FastForwardPaceTests
                                         (int Read, double Ms)? block = null, int pageMicroseconds = 0)
     {
         var clock = new VirtualPaceClock { Block = block };
-        new VirtualMachine(script, table, new RecordingHost(),
-                           new VmOptions(FastForwardOpMicroseconds: opMicroseconds,
-                                         FastForwardPageMicroseconds: pageMicroseconds),
-                           paceClock: clock).Run();
+        var skipAndAuto = new SkipAndAuto(
+            new SkipAndAutoSettings(FastForwardOpMicroseconds: opMicroseconds, FastForwardPageMicroseconds: pageMicroseconds),
+            clock);
+        new VirtualMachine(script, table, new RecordingHost(), skipAndAuto: skipAndAuto).Run();
         return clock;
     }
 
@@ -106,8 +108,11 @@ public class FastForwardPaceTests
         new VirtualMachine(Build(table, "SLEEP_SKIP", skip: true, 0, (0xc8, new[] { I(1000) })), table, skipped).Run();
         Assert.Empty(skipped.SleptDurations);
 
-        var physical = new RecordingHost { MessageSkip = true };
-        new VirtualMachine(Build(table, "SLEEP_CTRL", skip: false, 0, (0xc8, new[] { I(1000) })), table, physical).Run();
+        var physical = new RecordingHost();
+        var held = SkipAndAuto.WithSystemClock();
+        held.SetPhysicalFastForward(true);   // action 6 held: fast-forward without persistent Skip
+        new VirtualMachine(Build(table, "SLEEP_CTRL", skip: false, 0, (0xc8, new[] { I(1000) })), table, physical,
+                           skipAndAuto: held).Run();
         Assert.Empty(physical.SleptDurations);
 
         var normal = new RecordingHost();
@@ -132,13 +137,13 @@ public class FastForwardPaceTests
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         VirtualPaceClock clock = Run(table, Build(table, "PACE_NATIVE", skip: true, 2000),
-                                     VmOptions.NativeFastForwardOpMicroseconds);
+                                     SkipAndAutoSettings.NativeFastForwardOpMicroseconds);
 
         // 2002 ops at 15 µs owe 30.03 ms. Pacing sleeps 1 ms whenever at least 1 ms is owed, so it ends less than
         // 1 ms behind the schedule and never ahead of it.
         Assert.Equal(2002, clock.Reads);
         Assert.All(clock.Sleeps, sleep => Assert.Equal(1, sleep));
-        Assert.Equal(2002 * VmOptions.NativeFastForwardOpMicroseconds / 1000, clock.Sleeps.Sum());
+        Assert.Equal(2002 * SkipAndAutoSettings.NativeFastForwardOpMicroseconds / 1000, clock.Sleeps.Sum());
     }
 
     [Fact]
@@ -182,6 +187,25 @@ public class FastForwardPaceTests
         // let every remaining op run unpaced.
         Assert.Equal(202, clock.Reads);
         Assert.Equal(Enumerable.Repeat(2, 202 - 1 - 50), clock.Sleeps);
+    }
+
+    [Fact]
+    public void TheNativePacesWithoutAVm()
+    {
+        var clock = new VirtualPaceClock();
+        var skipAndAuto = new SkipAndAuto(
+            new SkipAndAutoSettings(FastForwardOpMicroseconds: 1000, FastForwardPageMicroseconds: 3000), clock);
+
+        skipAndAuto.PaceOp();   // fast-forward off: nothing read, nothing slept
+        skipAndAuto.SetScriptFastForward(true);
+        skipAndAuto.PaceOp();
+        skipAndAuto.PagePassed();
+        skipAndAuto.PaceOp();
+        skipAndAuto.SetScriptFastForward(false);
+        skipAndAuto.PaceOp();
+
+        Assert.Equal(2, clock.Reads);
+        Assert.Equal(new[] { 1, 4 }, clock.Sleeps);
     }
 
     private static Operand I(long value) => new(0, value);

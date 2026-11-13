@@ -3,8 +3,8 @@
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
-2 (census), 3 (projects) and 4 (the lift) are done on `feature/engine-layering`; §3.3, §4, §6.2, §6.3, §7.5, §7.6,
-§11, §12 and §13 record what they settled. The census is in the implementation plan,
+2 (census), 3 (projects), 4 (the lift) and 5 (skip and auto) are done on `feature/engine-layering`; §3.3, §4, §5.2,
+§6.2, §6.3, §7.5, §7.6, §11, §12 and §13 record what they settled. The census is in the implementation plan,
 `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
@@ -212,6 +212,12 @@ a time source. `INativeDatStore` and `IAssetStore` stay too (§6.4).
     `DisableTransitiveProjectReferences`;
   - `IHost` and its seven interfaces name no device type.
 
+**As built (milestone 5).** `IPaceClock` is `engine/Ome.Engine.Devices/Time/IPaceClock.cs`. It is the one moved type
+that changed namespace, to `Ome.Engine.Devices`: its old one was the handler layer's (`Ome.Engine.Vm`), which a
+device type cannot keep, and no code outside the VM and its tests named it. The system clock is a private class of
+the skip-and-auto native (§5.2). `ProjectBoundaryTests` lists `IPaceClock` with the device types and checks that no
+constructor of `VirtualMachine` takes one.
+
 ### 3.4 What today's types become
 
 - **`IHost` and its seven interfaces become the natives' interfaces.** They are already written at the right level
@@ -335,6 +341,35 @@ lacks: the tick function of §5.3 owns the statement block (ops `0x1f4`/`0x1f5`)
 
 So that state gets one owner in milestone 5, before any native that reads it. Fast-forward pacing goes with it,
 because it reads only the fast-forward state and the clock. The waits themselves move last (milestone 11).
+
+**As built (milestone 5).** The native is `Ome.Engine.Natives.SkipAndAuto` (`engine/Ome.Engine/Natives/`):
+`SkipAndAuto.cs` holds Skip (op `0x88`, ctx `+0x550fc`), the injected action 6 (`+0x13dc`), read skip, Auto, the
+auto-message times and the ADV skip service of ops `0x19b`/`0x19c`; `PhysicalInput` holds fast-forward from a held
+action 6, `ClickCancel` the press/release machine of set:CancelMesSkipOnClick, and `Pace` the pacing.
+
+- **Its state.** The census's 25 fields (19 in the VM, 6 in the host) are its private fields, and neither the VM nor
+  `EngineHost` keeps one (`ProjectBoundaryTests`). Two pairs became one field each, as plan §3.3 said: run-state
+  `0x08000000`, which the VM (`_messageSkipServiceActive`) and the host (`_messageSkipActive` with its two channel
+  fields) both kept, is `_fastForward`, joined from a script and a physical channel under one lock; and the
+  auto-message times, which the VM copied from the host, live only here.
+- **Its rules.** `SkipAndAutoSettings` holds set:CancelMesSkipOnClick, COEXISTMESSKIP and the two pace costs, which
+  left `VmOptions`. `GodotVmOptions.CreateSkipAndAuto` fills them from SYS4INI and native's costs.
+- **Construction.** Composition (`godot/Main.cs`) builds one native over the system clock and hands it to
+  `EngineHost` and `VirtualMachine`. The VM's constructor takes the native and no `IPaceClock`; without one it builds
+  its own, with pacing off, as tests and headless tools had it.
+- **Telling the host.** The native calls an `IFastForwardListener` after each channel change, on the thread that made
+  it, outside its state lock (inside the input lock for a physical change, so a release and a reveal's first tick keep
+  one order). `EngineHost` is the listener: when fast-forward starts it completes the reveal and wakes the waits, and
+  when it ends it plays the voice that skip held back, as plan §3.2 says. The held voice stays in the host until the
+  audio native (milestone 6); the host holds it under the native's lock (`WhileFastForward`), so a voice requested as
+  fast-forward ends is either held and then played by the listener, or played at once. The host reads fast-forward
+  and the auto-message times from the native; `IInputHost` lost its four skip members and `IAdvHost` the auto-message
+  times.
+- **What stays in the VM.** The waits (milestone 11); the read-text lookup, whose answer `ApplyReadTextSkip` is given;
+  and the interpreter's part of the click cancel, which flushes the input triggers, clears message:ReadTextSkip and
+  queues `CALLBACK_SETTING.BIN` (§5.4: a native never runs a script).
+- **No interface yet.** The native is a sealed class: tests build the real one with settings and a virtual clock
+  (`FastForwardPaceTests`, which also pace it without a VM), so no fake needs an interface.
 
 ### 5.3 Time
 
@@ -1016,3 +1051,14 @@ Not covered:
   for animation phase and the build label, and `himegari-read-skip` keeps its time (37.7 s). The saves of
   `himegari-save-load` and `kamidori-history-after-load` are equal under `save-diff` except for their timestamp and
   play time, and their thumbnails are byte-identical.
+- **2026-11-12, milestone 5.** The skip and auto state has one owner, `Ome.Engine.Natives.SkipAndAuto` (§5.2, "As
+  built"), and `IPaceClock` is a device (§3.3, "As built"). The VM's constructor takes the native and no clock;
+  `FastForwardPaceTests` pace the native, with and without a VM, and `ProjectBoundaryTests` checks that its fields are
+  private and that neither the VM nor `EngineHost` keeps a census field of skip and auto. The suite (1862) and
+  validation at the core, workspace and runtime levels on both games pass. The ten port scenarios of milestone 4 and
+  four more that drive skip and auto (`himegari-menu-bar`, `-hover-after-click`, `-effect-skip-on-click` and
+  `-effect-waits`, run before and after from the same tree) give the same step results with equal `SYS4REG.INI`; their
+  shots are identical except for animation phase and the build label. `himegari-read-skip` keeps its time (37.7 s),
+  and its read skip runs from `SC0000@0x2ec` to `0xa15` in 30 ms (32 ms before). The saves of `himegari-save-load` and
+  `kamidori-history-after-load` are equal under `save-diff` except for their timestamp and play time, and their
+  thumbnails are byte-identical.

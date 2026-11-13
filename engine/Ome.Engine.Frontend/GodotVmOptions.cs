@@ -1,3 +1,4 @@
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 
@@ -20,11 +21,19 @@ public static class GodotVmOptions
             CreateObject: settings.CreateObject,
             AutoFreeTex: settings.AutoFreeTex,
             NoSaveDat: selftest,
-            CancelMessageSkipOnClick: settings.CancelMessageSkipOnClick,
-            FastForwardOpMicroseconds: VmOptions.NativeFastForwardOpMicroseconds,
-            FastForwardPageMicroseconds: VmOptions.NativeFastForwardPageMicroseconds,
             WheelKeyUpAction: settings.WheelKeyUpAction,
-            WheelKeyDownAction: settings.WheelKeyDownAction,
-            CoexistMessageSkip: settings.CoexistMessageSkip);
+            WheelKeyDownAction: settings.WheelKeyDownAction);
+    }
+
+    /// <summary>The interactive session's skip and auto settings: the profile's CancelMesSkipOnClick and CoexistMesSkip,
+    /// and native's fast-forward pace.</summary>
+    public static SkipAndAutoSettings CreateSkipAndAuto(Sys4StartupSettings? startupSettings = null)
+    {
+        Sys4StartupSettings settings = startupSettings ?? Sys4StartupSettings.Empty;
+        return new(
+            CancelMessageSkipOnClick: settings.CancelMessageSkipOnClick,
+            CoexistMessageSkip: settings.CoexistMessageSkip,
+            FastForwardOpMicroseconds: SkipAndAutoSettings.NativeFastForwardOpMicroseconds,
+            FastForwardPageMicroseconds: SkipAndAutoSettings.NativeFastForwardPageMicroseconds);
     }
 }

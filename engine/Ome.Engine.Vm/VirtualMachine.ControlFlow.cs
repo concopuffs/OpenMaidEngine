@@ -90,7 +90,7 @@ public sealed partial class VirtualMachine
                 // op 0x88(1) or the native menu's Skip toggle ends this wait. Fast-forward alone (read-skip) does not.
                 ApplyMenuToggles();
                 return TakeHeldTriggers() != 0
-                       || _messageSkipInjected || _stopRequested || _rootReloadRequested;
+                       || _skip.MessageSkipInjected || _stopRequested || _rootReloadRequested;
             });
         }
         finally

@@ -1,4 +1,5 @@
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 
@@ -65,10 +66,11 @@ public class MenuServicesTests
             new Dictionary<string, Script>(StringComparer.OrdinalIgnoreCase) { ["CALLBACK_SETTING.BIN"] = callback });
     }
 
-    private static (VirtualMachine Vm, MenuHost Host) Start(Script script, VmOptions? options = null)
+    private static (VirtualMachine Vm, MenuHost Host) Start(Script script, SkipAndAutoSettings? settings = null)
     {
         var host = new MenuHost();
-        var vm = new VirtualMachine(script, Table, host, options ?? new VmOptions(), SettingCallback());
+        var vm = new VirtualMachine(script, Table, host, new VmOptions(), SettingCallback(),
+                                    skipAndAuto: SkipAndAuto.WithSystemClock(settings));
         host.Vm = vm;
         return (vm, host);
     }
@@ -95,7 +97,7 @@ public class MenuServicesTests
     public void CoexistMesSkipKeepsAutoOnWithSkip()
     {
         var (vm, host) = Start(Build("MENU_COEXIST", [(0x1b7, new[] { I(1) }), .. Probes(0, 4)]),
-                               new VmOptions(CoexistMessageSkip: true));
+                               new SkipAndAutoSettings(CoexistMessageSkip: true));
         host.AtYield[3] = v => v.RequestMenuMessageSkipToggle();
 
         vm.Run();
@@ -228,12 +230,13 @@ public class MenuServicesTests
             (0x7f, new[] { G(at) }), (0x131, new[] { G(at + 1) }), (0x1b8, new[] { I(0), G(at + 2) }),
             (0x1b8, new[] { I(1), G(at + 3) }),
         ];
-        var host = new MenuHost
-        {
-            MessageWindowAlphaSetting = 8, AutoMessageTime0Milliseconds = 700, AutoMessageTime1Milliseconds = 2400,
-        };
+        var host = new MenuHost { MessageWindowAlphaSetting = 8 };
+        // The Auto delays are the skip and auto native's, which the host seeds from SYS4REG.INI.
+        SkipAndAuto skipAndAuto = SkipAndAuto.WithSystemClock();
+        skipAndAuto.SetAutoMessageTime(0, 700);
+        skipAndAuto.SetAutoMessageTime(1, 2400);
         var vm = new VirtualMachine(Build("MENU_MESSAGE_SETTINGS", [.. Read(0x400), .. Probes(0, 3), .. Read(0x410)]),
-                                    Table, host, new VmOptions(), SettingCallback());
+                                    Table, host, new VmOptions(), SettingCallback(), skipAndAuto: skipAndAuto);
         host.Vm = vm;
         Assert.Equal(new VmMessageSettings(50, 8, 700, 2400), vm.MessageSettings);
         host.AtYield[5] = v => v.RequestMessageSettings(new VmMessageSettings(20, 3, 1500, 4000));   // after the reads
@@ -243,19 +246,19 @@ public class MenuServicesTests
         Assert.Equal([50, 8, 700, 2400], Enumerable.Range(0x400, 4).Select(g => vm.Globals.GetValueOrDefault(g)));
         Assert.Equal([20, 3, 1500, 4000], Enumerable.Range(0x410, 4).Select(g => vm.Globals.GetValueOrDefault(g)));
         Assert.Equal((20, 3, 1500L, 4000L), (host.MessageGlyphDelayMilliseconds, host.MessageWindowAlphaSetting,
-                                             host.AutoMessageTime0Milliseconds, host.AutoMessageTime1Milliseconds));
+                                             skipAndAuto.AutoMessageTime0Ms, skipAndAuto.AutoMessageTime1Ms));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(CallbackRan));
     }
 
     [Fact]
-    public void AutoMessageTimeOpcodeWritesTheSettingThroughTheHost()
+    public void AutoMessageTimeOpcodeWritesTheSettingIntoTheSkipAndAutoNative()
     {
-        var (vm, host) = Start(Build("AUTO_TIME_WRITE",
+        var (vm, _) = Start(Build("AUTO_TIME_WRITE",
             (0x1b9, new[] { I(0), I(900) }), (0x1b9, new[] { I(1), I(3000) }), (0x1b9, new[] { I(2), I(1) })));
 
         vm.Run();
 
-        Assert.Equal((900L, 3000L), (host.AutoMessageTime0Milliseconds, host.AutoMessageTime1Milliseconds));
+        Assert.Equal((900L, 3000L), (vm.SkipAndAuto.AutoMessageTime0Ms, vm.SkipAndAuto.AutoMessageTime1Ms));
         Assert.Equal(new VmMessageSettings(50, 0, 900, 3000), vm.MessageSettings);
     }
 

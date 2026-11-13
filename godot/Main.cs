@@ -9,6 +9,7 @@ using Godot;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
@@ -545,8 +546,10 @@ public partial class Main : Godot.Control
             selectedTextBackend.Detail);
         if (textBackend == "auto" && exactUnavailable != null)
             GD.Print($"[text] exact backend unavailable; selected portable: {exactUnavailable}");
+        // The skip and auto native the host reads and the VM's handlers call (engine layering milestone 5).
+        SkipAndAuto skipAndAuto = SkipAndAuto.WithSystemClock(GodotVmOptions.CreateSkipAndAuto(_catalog.StartupSettings));
         _host = new EngineHost(
-            this, resources, scene, _clock, _locator, logicalCanvas,
+            this, skipAndAuto, resources, scene, _clock, _locator, logicalCanvas,
             surfaceTextRasterizer,
             timeline: _timeline,
             synchronizeExplicitPresentation: !_selftest,
@@ -595,7 +598,8 @@ public partial class Main : Godot.Control
             sharedProfile: sharedProfile,
             nativeDatStore: nativeSaveStore,
             audioMixerSettings: _audioMixerSettings,
-            build: engineBuild);
+            build: engineBuild,
+            skipAndAuto: skipAndAuto);
         _compositor = new SoftwareCompositor(_host, _vm.Gfx, _clock, logicalCanvas, _gfxLogPath)
         {
             Perf = _perf,

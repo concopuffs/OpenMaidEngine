@@ -534,7 +534,7 @@ The meaningful consumer catalog is:
 | `CLICKONUP` | Copied at `0x488080` into `g_dwClickOnUp@0x5c6030`. When nonzero, `age_main_window_proc` latches mouse clicks (`input_latch_mouse_click@0x485e20`) on `WM_LBUTTONUP`/`WM_RBUTTONUP` instead of the down messages. That latch is the trigger for ADV page advance, hotspot clicks, bound actions (right-click → `MENU.BIN`) and movie/transition skips; see *Driving native AGE* below. Himegari has 1. | Active input timing; port implemented (`Sys4StartupSettings.ClickOnUp`) |
 | `CANCELMESSKIPONCLICK` | Himegari overrides the zero fallback with 2, enabling `adv_interpreter_tick`'s press/release click-cancel state machine for active fast-forward; value 2 also launches `CALLBACK_SETTING.BIN`. See "Click cancels Skip" below. | Active ADV input behavior; port implemented (`Sys4StartupSettings.CancelMessageSkipOnClick`) |
 | `CONTROLDISIBLECURSOR` | The spelling is native. The "cursor" is the page-wait indicator. With value 0, `adv_input_service_poll` calls `adv_wait_indicator_stop@0x4051c0` (erase the indicator, clear run-state `0x40000000`) before it runs a bound-action or hover callback. Value 1 skips that call, so the indicator keeps running under the callback. | Both games set 1, which is the port's behavior (callbacks leave the indicator alone); value 0 is not modelled (2026-11-04) |
-| `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. Their only callers are IAGEService `+0x84`/`+0x88` (vtable `0x578034`, global object `0x5c5f10`), which the menu bar's ｵｰﾄﾒｯｾｰｼﾞ and ﾒｯｾｰｼﾞｽｷｯﾌﾟ call ("Native menu bar"); no opcode reaches them, and the script menus' ops `0x88`/`0x1b7` ignore the setting. | Modelled for the menu toggles (`VmOptions.CoexistMessageSkip`); inert on the script path (both shipped games have 1) |
+| `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. Their only callers are IAGEService `+0x84`/`+0x88` (vtable `0x578034`, global object `0x5c5f10`), which the menu bar's ｵｰﾄﾒｯｾｰｼﾞ and ﾒｯｾｰｼﾞｽｷｯﾌﾟ call ("Native menu bar"); no opcode reaches them, and the script menus' ops `0x88`/`0x1b7` ignore the setting. | Modelled for the menu toggles (`SkipAndAutoSettings.CoexistMessageSkip`); inert on the script path (both shipped games have 1) |
 | `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The registered default is 0, which a new profile writes; the 設定 dialog's その他 page sets it ("Native menu bar"). When it is 1, the effect services (run-state bits `0x8`, `0x10`, `0x80` and `0x100`, and `0x400` unless service-flags bit 0 is set) poll the input latch; logical action 4 forces the effect to its terminal frame (delta `0x10000000`, or the force-complete worker for `0x400`). With 0 nothing polls during the effect, and the click stays latched for the next service ("Effect skipping and the input latch"). | Active visual-effect input policy; the port reads it live from `SYS4REG.INI` and matches native on both settings |
 | `REDRAWTEXTONKEY` | Value 1 lets a wheel action at an ADV text wait step the text view (`FUN_00453520` ±1, serviced by `adv_text_view_service_tick@0x410d30`) and launch `CALLBACK_TEXT.BIN` under run-state `0x100000`. | Inert: both games set 0, and the port does not model value 1 (2026-11-04) |
 | `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. While an ADV text wait polls, a wheel turn raises that action instead of feeding op `0x10d`; every scene binds action 8 to History ("Mouse wheel at an ADV text wait"). The `message:WheelKey*OnTW` copies have no reader. | Active ADV input binding; port implemented (`Sys4StartupSettings.WheelKeyUpAction`, 2026-11-04) |
@@ -3519,8 +3519,8 @@ fast-forward. A held physical action 6 restarts fast-forward at the next reveal,
 that ("Physical fast-forward" below). `CALLBACK_SETTING.BIN` redraws the
 message window and nameplate when `system_flow_request == 1` and `G[0x6bf]` is set.
 
-The port implements this in `VirtualMachine.SkipClickCancel.cs`: the machine runs at each instruction boundary
-while fast-forward is active, the frontend latches an action-4 click to it instead of hotspots or page advance,
+The port implements this in the skip-and-auto native (`engine/Ome.Engine/Natives/SkipAndAuto.ClickCancel.cs`), which
+`VirtualMachine.SkipClickCancel.cs` runs at each instruction boundary while fast-forward is active, the frontend latches an action-4 click to it instead of hotspots or page advance,
 and the mode-2 callback runs nested at the first boundary outside an open statement block (the native launch
 queue suspends the frame and runs the script in reserved frame 37; its statement-block close dispatches a
 deferred launch). A native run on 2026-11-03 confirmed the behaviour: after the SC0000 page-1 Skip button, one
@@ -3535,7 +3535,7 @@ is clear. While it is set, the handler replaces `ctx+0x6dbf4/+0x6dbf8` with the 
 of starting it. When Skip/read-skip input ends, `adv_interpreter_tick` starts that latest voice and clears the
 queue; skipped voices do not accumulate.
 
-**Port implementation.** The VM owns persistent op-`0x88` state and keeps op `0x19a` separate from the
+**Port implementation.** The skip-and-auto native (`SkipAndAuto`) owns persistent op-`0x88` state and keeps op `0x19a` separate from the
 combined op-`0x1c7` persistent/host-input query. `EngineHost` completes text reveal and stable message waits
 while Skip is active; the existing `0x1c7` transition branches continue to publish their completed endpoints.
 Voice requests replace one host-side deferred payload during Skip and the latest payload starts when
@@ -3568,12 +3568,12 @@ were nearly free, and its time went to three `0xc8` sleeps it still honoured (ab
 sleep at `SC0000@0x1342`) and 61 synchronized `0x20c` presentations (about 0.6 s).
 
 The port now matches this. `0xc8` returns at once while fast-forward is active, and the Godot host ends an
-in-progress sleep when fast-forward starts. `VirtualMachine.FastForwardPace.cs` paces fast-forward ops against a
-wall-clock deadline of `VmOptions.FastForwardOpMicroseconds` per op, with
-`VmOptions.NativeFastForwardOpMicroseconds = 374` in the Godot frontend and pacing off in headless tools and
-tests. Time already spent blocked in host services counts toward the budget, up to 100 ms of credit. A run that
-leaves fast-forward and returns starts a new schedule. Pacing reads its time and sleeps through the VM's
-`IPaceClock` (a Stopwatch and `Thread.Sleep` by default). `FastForwardPaceTests` passes a virtual clock that moves
+in-progress sleep when fast-forward starts. The pace (since engine layering milestone 5
+`engine/Ome.Engine/Natives/SkipAndAuto.Pace.cs`) holds fast-forward ops to a wall-clock deadline of
+`SkipAndAutoSettings.FastForwardOpMicroseconds` per op, then 374 µs in the Godot frontend, with pacing off in
+headless tools and tests. Time already spent blocked in host services counts toward the budget, up to 100 ms of credit. A run that
+leaves fast-forward and returns starts a new schedule. Pacing reads its time and sleeps through the native's
+`IPaceClock`, a device (a Stopwatch and `Thread.Sleep` by default). `FastForwardPaceTests` passes a virtual clock that moves
 only when pacing sleeps or a simulated service blocks, so it checks the schedule, the 1 ms sleep granularity, the
 credit cap and the restart exactly, without measuring wall time. The same measurement then took 5.08 s. That 374 µs
 constant was superseded on 2026-11-07 by a cost per op plus a cost per page, timed on both games ("Fast-forward through
@@ -6648,7 +6648,7 @@ ahead of the `0x40` and `0x08000000` (fast-forward) branch at `0x4124ba`. The fa
 The port forces at the start of `WaitForForegroundTransition` while fast-forward is active
 (`GfxState.ForceCompleteTimedPresentationForFastForward`, which yields to bit 1, leaves detached channels and movie
 masks alone, and ends the anim-clock window). It no longer forces a wait already in progress when Skip starts
-(`SetMessageSkipChannel`).
+(`EngineHost.FastForwardChannelSet`, the host's listener on the skip-and-auto native).
 
 **The anim-clock window holds the effect wait.** `gfx_animation_service_poll@0x407640` (SYS4433 `0x4079b0`) is called
 only from the `0x400` service. While op `0x238`'s window runs, it returns 1. The window's start is seeded at the first
@@ -6675,8 +6675,8 @@ It fits a cost per op plus a cost per text page:
 | Himegari opening pages | | | | 12.3 µs | 2.75 ms |
 
 The 2026-11-03 figure of 374 µs per op ("Fast-forward pace" above) included stalls that are not op costs, such as
-op `0x236`'s movie graph build at Himegari `SC0000@0x13c8`. `VmOptions.NativeFastForwardOpMicroseconds` is now 15
-and `NativeFastForwardPageMicroseconds` is 2400. `VirtualMachine.FastForwardPace.cs` charges the page cost for each
+op `0x236`'s movie graph build at Himegari `SC0000@0x13c8`. `SkipAndAutoSettings.NativeFastForwardOpMicroseconds` is now
+15 and `NativeFastForwardPageMicroseconds` is 2400. `SkipAndAuto.Pace.cs` charges the page cost for each
 text wait that fast-forward passes.
 
 The port's synchronized presentation (`0x20c`, `RequestSynchronizedPresentation`) waits for the main thread's next
@@ -6713,8 +6713,8 @@ stops at `SC2000@0xaf5`:
 - SC2000's op `0x19b` at `0x85e` ends the fast-forward;
 - the reveal of 「ここが最終試験の会場となる迷宮だ」 finds the suppression set, and its text wait sees no new key-down.
 
-The port used to follow the held state, so it skipped on into AIM. `VirtualMachine.PhysicalFastForward.cs` now
-implements both start paths, the suppression and every clear. Tests: `PhysicalFastForwardTests` and
+The port used to follow the held state, so it skipped on into AIM. The skip-and-auto native
+(`engine/Ome.Engine/Natives/SkipAndAuto.PhysicalInput.cs`) now implements both start paths, the suppression and every clear. Tests: `PhysicalFastForwardTests` and
 `InputLatchTests.AFastForwardKeyHeldThroughHandlerBStartsFastForwardAtTheWaitSpaceParked`. A latched key-down that
 op `0x7c` returns to the parked wait counts as a fresh trigger.
 
@@ -6762,8 +6762,9 @@ running on the field, the next click hit Kamidori's `CancelMesSkipOnClick = 2` c
 CALLBACK_SETTING, so the port's SC2500 stopped on pages native skipped. With Skip on from the prologue, both targets
 now reach SC2500's BUNKI choice.
 
-**Port.** `VirtualMachine`: `_messageSkipEnabled` (`0x550fc`), `_messageSkipInjected` (`0x13dc`),
-`_messageSkipServiceActive` (the run-state bit), `ApplyReadTextSkip` (the shared block) and `SetScriptFastForward`.
+**Port.** The skip-and-auto native (`engine/Ome.Engine/Natives/SkipAndAuto.cs`): `_messageSkipEnabled` (`0x550fc`),
+`_messageSkipInjected` (`0x13dc`), `_fastForward` (the run-state bit, joining a script and a physical channel),
+`ApplyReadTextSkip` (the shared block) and `SetScriptFastForward`.
 Ops `0x88`, `0x101`, `0x19b`, `0x19c`, `0x72`, `0xfa` and `0x1ca`, the menu toggles and the click cancel follow the
 table (op `0xfa` since 2026-11-09; before then the port had it end fast-forward with no poll after it). `EnterTextWait` is op `0x72`'s entry, and `ServiceHotspotCallback` runs it again after a callback returns. The
 hidden-window wait ends on `_messageSkipInjected`, the injected action 6, rather than on fast-forward. Until

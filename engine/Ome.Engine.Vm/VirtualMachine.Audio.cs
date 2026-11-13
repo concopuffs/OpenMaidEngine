@@ -98,7 +98,7 @@ public sealed partial class VirtualMachine
         if ((_voiceMuteNextFlags & VoiceMutePromoted) != 0) _voiceMuteNextFlags = 0;
         else if ((_voiceMuteNextFlags & VoiceMuteRequested) != 0) _voiceMuteNextFlags |= VoiceMutePromoted;
         bool muted = (_voiceMuteNextFlags & VoiceMuteRequested) != 0;
-        _autoVoicePending = true;
+        _skip.NoteVoiceStarted();
         TextHistory.AppendVoice(Read(a[0]), 0, _advTextStyle);
         _host.PlayVoice(Read(a[0]), 0, muted); return StepResult.Next;
     }
@@ -109,7 +109,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         // History replay always plays audibly and consumes any pending 0x1d5 request.
         if ((_voiceMuteNextFlags & (VoiceMuteRequested | VoiceMutePromoted)) != 0) _voiceMuteNextFlags = 0;
-        _autoVoicePending = true;
+        _skip.NoteVoiceStarted();
         TextHistory.AppendVoice(Read(a[0]), 1, _advTextStyle);
         _host.PlayVoice(Read(a[0]), 1, false); return StepResult.Next;
     }
@@ -201,7 +201,7 @@ public sealed partial class VirtualMachine
         // Native op 0xc2 arms a background fade (run-state 0x200) and the script continues. An
         // already-active ADV fast-forward applies the fade endpoint immediately; a normal advance
         // click does not set that skip state and therefore retains the authored duration.
-        bool forceEndpoint = _messageSkipServiceActive || _host.IsMessageSkipActive;
+        bool forceEndpoint = AdvFastForwardActive;
         _host.FadeBgm(targetBasisPoints, forceEndpoint ? 0 : durationMs);
         _bgmFadeTarget = targetBasisPoints;
         ServiceBgmFade(complete: false);   // a zero-length fade has already ended

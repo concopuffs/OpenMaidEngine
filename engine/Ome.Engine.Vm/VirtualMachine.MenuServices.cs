@@ -36,14 +36,11 @@ public sealed partial class VirtualMachine : IVmMenuServices
 
     private readonly ConcurrentQueue<MenuRequest> _menuToggles = new();
     private volatile bool _menuTogglesPending;
-    // ctx+0x55100 adv_skip_service_enabled: scene_context_init_reset sets it, op 0x19b clears it, op 0x19c sets it.
-    // The menu's Skip and Auto toggles change the active fast-forward state only while it is set.
-    private bool _advSkipServiceEnabled = true;
 
     /// <summary>What AGERC's refresh reads. Called on the frontend thread while the VM is held for an open menu.</summary>
     public VmMenuState MenuState => new(
-        MessageSkip: _messageSkipEnabled,
-        AutoMessage: _autoMessageEnabled,
+        MessageSkip: _skip.MessageSkipEnabled,
+        AutoMessage: _skip.AutoMessageEnabled,
         ReadTextSkip: _sharedProfile.ReadMessageSkipEnabled,
         HiddenWindow: _hiddenWindowWaiting,
         TextWait: _advTextWaitPolling,
@@ -53,7 +50,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
     /// <summary>The message settings as the 設定 dialog reads them. Called on the frontend thread while the VM is held
     /// for the open dialog.</summary>
     public VmMessageSettings MessageSettings => new(
-        _messageGlyphDelayMilliseconds, _messageWindowAlphaSetting, _autoMessageTime0Ms, _autoMessageTime1Ms);
+        _messageGlyphDelayMilliseconds, _messageWindowAlphaSetting, _skip.AutoMessageTime0Ms, _skip.AutoMessageTime1Ms);
 
     /// <summary>The 設定 dialog's OK (agerc_settings_apply, then IAGEService +0x20 launching CALLBACK_SETTING.BIN):
     /// MessageSpeed as op 0x1b5 sets it (IAGEService +0x10 writes ctx+0x14e9c), MesWinAlpha as op 0x141 and the Auto
@@ -99,7 +96,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
         {
             switch (request.Kind)
             {
-                case MenuToggle.MessageSkip: ToggleMessageSkipFromMenu(); break;
+                case MenuToggle.MessageSkip: _skip.ToggleMessageSkipFromMenu(); break;
                 case MenuToggle.AutoMessage: ToggleAutoMessageFromMenu(); break;
                 case MenuToggle.ReadMessageSkip: ToggleReadMessageSkipFromMenu(); break;
                 case MenuToggle.MessageSettings: ApplyMessageSettings(request.Settings); break;
@@ -111,44 +108,12 @@ public sealed partial class VirtualMachine : IVmMenuServices
         }
     }
 
-    /// <summary>adv_toggle_skip_mode: flip persistent Skip (enabling clears Auto unless set:CoexistMesSkip). With the
-    /// skip service enabled, enabling starts fast-forward at once: it ends a text wait, completes a reveal and stops
-    /// the wait indicator. Disabling clears only the active flag (ctx+0x13dc) and leaves run-state 0x08000000, so
-    /// fast-forward runs on until op 0xfa or 0x19c recomputes it at the next page.</summary>
-    private void ToggleMessageSkipFromMenu()
-    {
-        if (!_messageSkipEnabled)
-        {
-            if (!_o.CoexistMessageSkip) _autoMessageEnabled = false;
-            _messageSkipEnabled = true;
-        }
-        else
-        {
-            _messageSkipEnabled = false;
-        }
-        if (!_advSkipServiceEnabled) return;
-        _messageSkipInjected = _messageSkipEnabled;   // ctx+0x13dc follows only while the service is enabled
-        if (!_messageSkipEnabled) return;
-        SetScriptFastForward(true);
-    }
-
-    /// <summary>adv_toggle_auto_mode: flip Auto (enabling clears Skip unless set:CoexistMesSkip). Native arms its sleep
-    /// timer with AutoMessageTime1 unless a voice is pending; the port's text wait arms its auto timer the same way
-    /// when it first sees Auto enabled. With the skip service enabled, enabling also clears run-state 0x80000000, so a
-    /// polling text wait ends at once and the next page comes without input. It sets ctx+0x13dc (the injected skip
-    /// action) from the persistent Skip but leaves run-state 0x08000000, which the port's active fast-forward flag
-    /// stands for, to the next page's op 0xfa.</summary>
+    /// <summary>adv_toggle_auto_mode (SkipAndAuto.ToggleAutoMessageFromMenu). Enabling Auto with the skip service
+    /// enabled clears run-state 0x80000000, so a polling text wait ends at once and the next page comes without
+    /// input.</summary>
     private void ToggleAutoMessageFromMenu()
     {
-        if (_autoMessageEnabled)
-        {
-            _autoMessageEnabled = false;
-            return;
-        }
-        _autoMessageEnabled = true;
-        if (!_o.CoexistMessageSkip) _messageSkipEnabled = false;
-        if (_advSkipServiceEnabled) _messageSkipInjected = _messageSkipEnabled;
-        if (_advSkipServiceEnabled && _advTextWaitPolling) _host.EndInputWait();
+        if (_skip.ToggleAutoMessageFromMenu() && _advTextWaitPolling) _host.EndInputWait();
     }
 
     private void ApplyMessageSettings(VmMessageSettings settings)
@@ -157,18 +122,8 @@ public sealed partial class VirtualMachine : IVmMenuServices
         _host.SetMessageGlyphDelayMilliseconds(_messageGlyphDelayMilliseconds);
         _messageWindowAlphaSetting = settings.MesWinAlpha;
         _host.SetMessageWindowAlphaSetting(_messageWindowAlphaSetting);
-        SetAutoMessageTime(0, settings.AutoMessageTime0);
-        SetAutoMessageTime(1, settings.AutoMessageTime1);
-    }
-
-    /// <summary>Op 0x1b9's write: selector 0 is message:AutoMessageTime0 (after a voice), 1 is AutoMessageTime1
-    /// (unvoiced); other selectors write nothing.</summary>
-    private void SetAutoMessageTime(int selector, long milliseconds)
-    {
-        if (selector == 0) _autoMessageTime0Ms = milliseconds;
-        else if (selector == 1) _autoMessageTime1Ms = milliseconds;
-        else return;
-        _host.SetAutoMessageTime(selector, milliseconds);
+        _skip.SetAutoMessageTime(0, settings.AutoMessageTime0);
+        _skip.SetAutoMessageTime(1, settings.AutoMessageTime1);
     }
 
     /// <summary>0x406cd0: toggle message:ReadTextSkip, then (at a text wait) re-check the current message against
@@ -177,12 +132,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
     {
         _sharedProfile.ReadMessageSkipEnabled = !_sharedProfile.ReadMessageSkipEnabled;
         if (!_advTextWaitPolling) return;
-        if (!_sharedProfile.ReadMessageSkipEnabled)
-        {
-            _advReadSkipState = false;
-            return;
-        }
-        ApplyReadTextSkip();
+        ApplyReadTextSkip();   // with the setting off, it clears adv_read_skip_state
     }
 
     /// <summary>Run a queued CALLBACK_SETTING.BIN or CALLBACK_WINDOW.BIN from a text wait's input service, nested in

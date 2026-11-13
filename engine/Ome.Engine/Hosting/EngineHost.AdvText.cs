@@ -105,8 +105,6 @@ public sealed partial class EngineHost
     private readonly PeriodTimer _glyphTimer = new();
     private int _messageGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
     private volatile int _messageWindowAlphaSetting = Sys4RegIniStore.DefaultMesWinAlpha;
-    private long _autoMessageTime0Milliseconds = Sys4RegIniStore.DefaultAutoMessageTime0;
-    private long _autoMessageTime1Milliseconds = Sys4RegIniStore.DefaultAutoMessageTime1;
     private Sys4RegIniStore? _messageSettingsStore;
     // Text manager +0x544 (message:UseAntiFont): GGO_GRAY4_BITMAP glyphs when set, GGO_BITMAP when clear. Both games
     // enable it; hosts without a settings file keep that.
@@ -165,20 +163,11 @@ public sealed partial class EngineHost
         _timeline?.Event("text-antialias", new() { ["enabled"] = enabled });
     }
 
-    public long AutoMessageTime0Milliseconds => Interlocked.Read(ref _autoMessageTime0Milliseconds);
-    public long AutoMessageTime1Milliseconds => Interlocked.Read(ref _autoMessageTime1Milliseconds);
-
-    public void SetAutoMessageTime(int selector, long milliseconds)
-    {
-        if (selector == 0) Interlocked.Exchange(ref _autoMessageTime0Milliseconds, milliseconds);
-        else if (selector == 1) Interlocked.Exchange(ref _autoMessageTime1Milliseconds, milliseconds);
-    }
-
     /// <summary>
-    /// Seed MessageSpeed, MesWinAlpha and AutoMessageTime0/1 from SYS4REG.INI [message] (native defaults when
-    /// absent). Changes are written back by <see cref="FlushMessageSettings"/> at shutdown, with ReadTextSkip, as AGE
-    /// rewrites SYS4REG.INI when it quits; MAMES/ITMES/SKMES/INFOMES briefly set the delay to 0 per description, so no
-    /// per-op write. Call before the VM is constructed: it reads them once.
+    /// Seed MessageSpeed, MesWinAlpha and AutoMessageTime0/1 (into the skip and auto native) from SYS4REG.INI
+    /// [message], native defaults when absent. Changes are written back by <see cref="FlushMessageSettings"/> at
+    /// shutdown, with ReadTextSkip, as AGE rewrites SYS4REG.INI when it quits; MAMES/ITMES/SKMES/INFOMES briefly set the
+    /// delay to 0 per description, so no per-op write. Call before the VM is constructed: it reads the first two once.
     /// </summary>
     public void UseMessageSettingsStore(Sys4RegIniStore store)
     {
@@ -190,9 +179,9 @@ public sealed partial class EngineHost
         }
         _messageWindowAlphaSetting = store.LoadMessageInt(
             Sys4RegIniStore.MesWinAlphaKey, Sys4RegIniStore.DefaultMesWinAlpha);
-        SetAutoMessageTime(0, store.LoadMessageInt(
+        _skip.SetAutoMessageTime(0, store.LoadMessageInt(
             Sys4RegIniStore.AutoMessageTime0Key, Sys4RegIniStore.DefaultAutoMessageTime0));
-        SetAutoMessageTime(1, store.LoadMessageInt(
+        _skip.SetAutoMessageTime(1, store.LoadMessageInt(
             Sys4RegIniStore.AutoMessageTime1Key, Sys4RegIniStore.DefaultAutoMessageTime1));
         _textAntialias = store.TextAntialiasEnabled;
     }
@@ -208,9 +197,9 @@ public sealed partial class EngineHost
             _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.MesWinAlphaKey, _messageWindowAlphaSetting);
             // The registry keeps a 32-bit value: op 0x1b9's operand wraps as AGE's int does.
             _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.AutoMessageTime0Key,
-                                                 unchecked((int)AutoMessageTime0Milliseconds));
+                                                 unchecked((int)_skip.AutoMessageTime0Ms));
             _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.AutoMessageTime1Key,
-                                                 unchecked((int)AutoMessageTime1Milliseconds));
+                                                 unchecked((int)_skip.AutoMessageTime1Ms));
             _messageSettingsStore.SaveReadTextSkip(readTextSkip);
         }
         catch (Exception error) when (
@@ -385,9 +374,9 @@ public sealed partial class EngineHost
             _advText = run.Text;
             _currentAdvLayout = run.Layout.Slot;
             // Read skip takes the blocking builder (no timer); a finished-until-wait reveal still arms it.
-            bool incremental = revealGlyphCount > 0 && delay > 0 && !_messageSkipActive;
+            bool incremental = revealGlyphCount > 0 && delay > 0 && !_skip.FastForwardActive;
             if (incremental && run.ArmsGlyphTimer) _glyphTimer.Arm(_clock.NowMs, delay);
-            _advTextForceComplete = _messageSkipActive || _revealsFinishedUntilWait;
+            _advTextForceComplete = _skip.FastForwardActive || _revealsFinishedUntilWait;
             IsTextRevealing = incremental && !_advTextForceComplete;
         }
         _timeline?.State("text-reveal", new()

@@ -149,7 +149,7 @@ public sealed partial class VirtualMachine
         // tick tests a held action 6 before it polls the latch.
         bool reveals = _messageGlyphDelayMilliseconds > 0 && !AdvFastForwardActive
                        && !_host.TextRevealsFinishedUntilWait;
-        if (reveals) ServicePhysicalSkipAtRevealStart();
+        if (reveals) _skip.ServiceRevealStart(InputBindings);
         OfferHeldTriggersToReveal();
         AdvRetainedTextRunResult? retained;
         _advTextRevealing = reveals && !AdvFastForwardActive;

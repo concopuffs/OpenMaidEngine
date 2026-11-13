@@ -204,11 +204,11 @@ public class SfxOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var ordinaryHost = new RecordingHost();
-        var physicalSkipHost = new RecordingHost { MessageSkip = true };
+        var physicalSkipHost = new RecordingHost();
         var persistentSkipHost = new RecordingHost();
 
         new VirtualMachine(script, table, ordinaryHost).Run();
-        new VirtualMachine(script, table, physicalSkipHost).Run();
+        new VirtualMachine(script, table, physicalSkipHost, skipAndAuto: TestSkipAndAuto.HoldingFastForward()).Run();
         new VirtualMachine(persistentSkipScript, table, persistentSkipHost).Run();
 
         Assert.Equal((0, 3000L), Assert.Single(ordinaryHost.BgmFades));

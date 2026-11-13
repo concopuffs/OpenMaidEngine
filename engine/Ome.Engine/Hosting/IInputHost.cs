@@ -50,18 +50,4 @@ public interface IInputHost
     void SetCursorResource(long resourceId) { }
     void ClearCursorResource() { }
     void WarpCursor(int virtualX, int virtualY) { }
-
-    // Native 0x1c7/0x1cc query two distinct ADV skip channels. Headless and non-interactive
-    // hosts default to normal playback; the Godot host supplies the live interactive values.
-    void SetMessageSkipActive(bool active) { }
-
-    // Logical action 6 is the native hold-to-fast-forward channel. Keep it separate from the
-    // persistent op-0x88 channel so releasing the key cannot turn off the user's Skip toggle.
-    void SetPhysicalMessageSkipActive(bool active) { }
-
-    bool IsMessageSkipActive => false;
-
-    // Optional diagnostic override. Native ReadTextDB state is VM/profile-owned; interactive hosts
-    // normally leave this false.
-    bool IsAdvReadSkipActive => false;
 }

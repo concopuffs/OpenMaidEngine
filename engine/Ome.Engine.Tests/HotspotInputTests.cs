@@ -700,8 +700,8 @@ public class HotspotInputTests
             (0x1c7, new[] { G(0x147) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost { AdvReadSkip = true };
-        var vm = new VirtualMachine(script, table, host);
+        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, host, skipAndAuto: TestSkipAndAuto.ReadSkipping());
 
         vm.Run();
 
@@ -725,7 +725,7 @@ public class HotspotInputTests
             (0x1c7, new[] { G(0x148) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost { AdvReadSkip = true };
+        var host = new RecordingHost();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();

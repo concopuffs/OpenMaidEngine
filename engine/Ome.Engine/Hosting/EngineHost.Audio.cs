@@ -9,7 +9,9 @@ public sealed partial class EngineHost
 {
     private readonly string?[] _sfxNames = new string?[10];              // SC0000 native channel subset
     private int _voiceBgmDuckControl;
-    private (AudioPayload Audio, int PlaybackVariant, bool Muted)? _queuedSkippedVoice;
+    // native message_skip_queued_voice_id/arg: the last voice started while fast-forward ran, played when it ends
+    private sealed record HeldVoice(AudioPayload Audio, int PlaybackVariant, bool Muted);
+    private HeldVoice? _queuedSkippedVoice;
     private readonly object _scheduledVoiceLock = new();
     private (AudioPayload Audio, int PlaybackVariant, uint DelayMs, uint? StartMs)? _scheduledVoice;
     private int _statementBlockActive;   // ops 0x1f4/0x1f5: delayed starts and the tick's own render wait for the close
@@ -58,17 +60,10 @@ public sealed partial class EngineHost
         _timeline?.Event("voice", new() { ["id"] = id, ["file"] = audio?.Name,
             ["playback_variant"] = playbackVariant, ["muted"] = muted });
         if (audio == null) return;
-        bool queuedForSkip;
+        var held = new HeldVoice(audio, playbackVariant, muted);
         bool firstQueued = false;
-        lock (_messageSkipLock)
-        {
-            queuedForSkip = _messageSkipActive;
-            if (queuedForSkip)
-            {
-                firstQueued = _queuedSkippedVoice == null;
-                _queuedSkippedVoice = (audio, playbackVariant, muted);
-            }
-        }
+        bool queuedForSkip = _skip.WhileFastForward(
+            () => firstQueued = Interlocked.Exchange(ref _queuedSkippedVoice, held) == null);
         if (queuedForSkip)
         {
             if (firstQueued) _frontEnd.StopVoiceForMessageSkip();
@@ -113,7 +108,7 @@ public sealed partial class EngineHost
     public void StopVoice()
     {
         // Op 0x1bc: native stops channel 12 and clears message_skip_queued_voice_id/arg.
-        lock (_messageSkipLock) _queuedSkippedVoice = null;
+        Interlocked.Exchange(ref _queuedSkippedVoice, null);
         _timeline?.Event("voice-stop", new());
         _frontEnd.StopVoiceForMessageSkip();
     }

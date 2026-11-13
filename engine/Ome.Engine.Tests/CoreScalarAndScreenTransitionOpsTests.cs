@@ -350,9 +350,9 @@ public class CoreScalarAndScreenTransitionOpsTests
                 }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost { MessageSkip = true };
+        var host = new RecordingHost();
 
-        new VirtualMachine(script, table, host).Run();
+        new VirtualMachine(script, table, host, skipAndAuto: TestSkipAndAuto.HoldingFastForward()).Run();
 
         Assert.Equal(new[] { true }, host.SurfaceBlackFadeForceEndpoints);
         Assert.Equal(new[] { true }, host.SurfaceCrossfadeForceEndpoints);

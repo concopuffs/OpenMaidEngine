@@ -1,4 +1,7 @@
-namespace Ome.Engine.Vm;
+using System.Diagnostics;
+using Ome.Engine.Devices;
+
+namespace Ome.Engine.Natives;
 
 /// <summary>
 /// Native ADV fast-forward pace. While run-state 0x08000000 is set, engine_main_tick_with_exception_policy@0x411840
@@ -9,13 +12,13 @@ namespace Ome.Engine.Vm;
 /// (op 0xc8 sleep is a no-op under fast-forward), plus the work of each text page it passes.
 ///
 /// The port reproduces it with a wall-clock deadline: op n of a fast-forward run may not start before start plus the
-/// costs of the ops before it, each <see cref="VmOptions.FastForwardOpMicroseconds"/>, and
-/// <see cref="VmOptions.FastForwardPageMicroseconds"/> more for a text wait. Time the VM already spends blocked in host
-/// services (synchronized 0x20c presentation, for example) counts toward the budget, up to
-/// <see cref="FastForwardCreditCapMs"/>, so the total approaches native's. Time and waits come from the VM's
-/// <see cref="IPaceClock"/> (constructor <c>paceClock</c>; a Stopwatch and Thread.Sleep by default).
+/// costs of the ops before it, each <see cref="SkipAndAutoSettings.FastForwardOpMicroseconds"/>, and
+/// <see cref="SkipAndAutoSettings.FastForwardPageMicroseconds"/> more for a text wait. Time the VM already spends
+/// blocked in host services (synchronized 0x20c presentation, for example) counts toward the budget, up to
+/// <see cref="FastForwardCreditCapMs"/>, so the total approaches native's. Time and waits come from the
+/// <see cref="IPaceClock"/> this native was built with.
 /// </summary>
-public sealed partial class VirtualMachine
+public sealed partial class SkipAndAuto
 {
     private const long FastForwardCreditCapMs = 100;
 
@@ -25,12 +28,16 @@ public sealed partial class VirtualMachine
     private double _fastForwardStartMs;
     private bool _fastForwardPagePassed;   // the op just run was a text wait
 
-    private void PaceFastForwardOp()
+    /// <summary>A text wait ended: the next <see cref="PaceOp"/> charges the page if fast-forward passed it.</summary>
+    public void PagePassed() => _fastForwardPagePassed = true;
+
+    /// <summary>After each op (both instruction loops): under fast-forward, sleep until the op's deadline.</summary>
+    public void PaceOp()
     {
         bool page = _fastForwardPagePassed;
         _fastForwardPagePassed = false;
-        if (_o.FastForwardOpMicroseconds <= 0 && _o.FastForwardPageMicroseconds <= 0) return;
-        if (!AdvFastForwardActive)
+        if (Settings.FastForwardOpMicroseconds <= 0 && Settings.FastForwardPageMicroseconds <= 0) return;
+        if (!_fastForward)
         {
             _fastForwardPacing = false;
             return;
@@ -42,8 +49,8 @@ public sealed partial class VirtualMachine
             _fastForwardOwedMs = 0;
             _fastForwardStartMs = now;
         }
-        _fastForwardOwedMs += _o.FastForwardOpMicroseconds / 1000.0;
-        if (page) _fastForwardOwedMs += _o.FastForwardPageMicroseconds / 1000.0;
+        _fastForwardOwedMs += Settings.FastForwardOpMicroseconds / 1000.0;
+        if (page) _fastForwardOwedMs += Settings.FastForwardPageMicroseconds / 1000.0;
         double target = _fastForwardStartMs + _fastForwardOwedMs;
         double credit = now - target;
         if (credit > FastForwardCreditCapMs)
@@ -54,5 +61,15 @@ public sealed partial class VirtualMachine
         }
         // Sleep in whole milliseconds once at least one is owed; the deadline carries the remainder.
         if (credit <= -1.0) _paceClock.Sleep((int)(-credit));
+    }
+
+    /// <summary>The system pace clock: a Stopwatch started with the native, and Thread.Sleep.</summary>
+    private sealed class SystemPaceClock : IPaceClock
+    {
+        private readonly Stopwatch _watch = Stopwatch.StartNew();
+
+        public double NowMs => _watch.Elapsed.TotalMilliseconds;
+
+        public void Sleep(int milliseconds) => Thread.Sleep(milliseconds);
     }
 }

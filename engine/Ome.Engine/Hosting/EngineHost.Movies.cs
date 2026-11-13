@@ -97,7 +97,7 @@ public sealed partial class EngineHost
             IsTextRevealing,
             _modalMovieWaiting,
             _advPagePresentationSuspended,
-            _messageSkipActive,
+            _skip.FastForwardActive,
             screenTransitionActive,
             TransitionStartedAtMs,
             movies,
