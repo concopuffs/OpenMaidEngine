@@ -5567,12 +5567,34 @@ Measured with `tools/drive.py` from the click on 始める (New Game) on a fresh
 | Position when the click returns | `SC0000@0x7fa` (`play-bgm 5`) | `SC0000@0x7c6`, `waiting=sleep` | `SC0000@0x123df` 0.2 s later |
 | First text page (`0x83f`) | 1.81 s | 5.02 s | 1.88 s |
 
-**Port.** The VM keeps the pending target (`VirtualMachine.Audio.cs`, `_bgmFadeTarget`, the analogue of `0x200`). The
-host runs the envelope and releases the source itself when it reaches a zero target. The play, force-play and stop
-ops and a numbered load first end a running fade through `IAudioHost.CompleteBgmFade`. Op `0xc0` and a numbered save
-settle a fade that has run its course (`IsBgmFadeActive` false), so a fade to zero clears the retained track when it
-ends. Godot's tween applies each step through `ApplyBgmVolume` and commits only the endpoint, so a re-armed fade starts
-from the committed level, as native's does. The 設定 dialog's music-route toggle no longer cancels a running fade:
+**A fade under the 終了 dialog stops, then catches up (2026-11-12).** The engine layering design (spec §5.3, §13)
+asked whether a modal dialog stops native's fade. `tools/frida/capture_sfx_trace.py` was attached to native Himegari
+driven with `tools/drive.py native`. SC0000 page 15 (wait `0x125f`) was clicked, which arms the 3000 ms fade to zero at
+`0x126c`, and the 終了 dialog was opened at once (`close-request`), held 4 s and cancelled. `bgm_fade_tick` ran
+once, 30 ms after `bgm_fade_arm` (progress 0). It did not run again until 144 ms after the dialog closed, 4035 ms
+after the first tick. That call received 133 elapsed periods (30 ms each) and completed the fade, and no tick
+followed. Without a dialog the ticks are regular: the duck release before it (5000 to 10000 over 1 s) ticked every
+10 ms, one step each.
+
+So AGERC's dialog, run inside the window procedure, freezes the main loop: no fade step, delayed SFX or voice start, or
+duck release runs while it is open, and the level holds. The fade's period timer (`ctx+0x5f400`) keeps counting real
+time, though, so the first tick after the dialog applies every period that elapsed and the fade ends when it would
+have ended without the dialog. A modal movie is different. Op `0x20f` is run-state `0x2000`, which
+`engine_main_tick_with_exception_policy` services inside the main loop, after the delayed SFX and voice starts at the
+top of each iteration and the duck release and fade tick at `0x411e48`/`0x411e65`. So those services keep running
+during a modal movie. The trace is kept as `m6-native-fade-modal-trace.jsonl` in the session's scratch folder only; the
+committed `build/games/himegari/native-sfx-trace.jsonl` is unchanged.
+
+**Port.** The audio native owns the fade (`engine/Ome.Engine/Natives/Audio.Bgm.cs`, its `BgmFade` record the
+analogue of `0x200`; engine layering milestone 6, 2026-11-12). The engine tick runs it (`ServiceFade`), at each
+instruction boundary and on each wake of a non-modal wait: the level is computed from the frame-clock time since the
+arm, in native's whole steps, so under a modal dialog it holds and the first tick after makes up the time, as above.
+At the end it commits the target, and a zero target releases the source and clears the retained track. The play,
+force-play and stop ops and a numbered load first end a running fade (`CompleteScriptFade`). Op `0xc0` and a
+numbered save settle a fade that has run its course, so a fade to zero clears the retained track when it ends. A
+step applies its level to channel 11 without committing it, so a re-armed fade starts from the committed level, as
+native's does. The device (`godot/Main.Audio.cs`) only sets the volume it is sent. The 設定 dialog's music-route
+toggle does not cancel a running fade:
 in native only the tick and those BGM ops clear `0x200` (every `AND …, 0xfffffdff` in the image), so the fade goes on
 whatever the route. The SYS4422 and SYS4433 profiles share this code.
 
@@ -7543,12 +7565,12 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
 
 **Port status (2026-11-03).**
 
-- **`0x1d5`.** `VirtualMachine` keeps `voice_mute_next_flags` with the native `0xc4` / `0x1bd` / `0x1bc`
-  transitions and passes `muted` to `IAudioHost.PlayVoice(id, variant, muted)`. Godot plays a muted voice at
-  -80 dB, so completion and Auto timing are unchanged. Live: with "その他" voices off, every `MAN999.OGG` line in
+- **`0x1d5`.** The audio native keeps `voice_mute_next_flags` with the native `0xc4` / `0x1bd` / `0x1bc`
+  transitions (`Audio.Voice.cs`; until milestone 6 the VM kept them) and plays a muted voice on channel 12 at
+  volume 0 (-100 dB), so completion and Auto timing are unchanged. Live: with "その他" voices off, every `MAN999.OGG` line in
   SC0000 played muted, while the `LILA*.OGG` lines stayed audible.
-- **`0x1bc`.** It now also stops the voice (`IAudioHost.StopVoice`) and drops a Skip-queued voice.
-- **`0x1bf`.** It reaches `IAudioHost.ArmVoiceBgmDuckRelease`, which applies the `0x1cf` one-shot stage. Godot now
+- **`0x1bc`.** It now also stops the voice and drops a Skip-queued voice (`Audio.ResetMessageVoiceState`).
+- **`0x1bf`.** It reaches `Audio.ArmVoiceBgmDuckRelease`, which applies the `0x1cf` one-shot stage. The tick
   restores ducked BGM only once the release is armed and the voice is idle, with no `0xc2` fade and bit 0 clear.
   It no longer restores at voice completion alone. A delayed voice start arms it too.
 - **Duck release fade (2026-11-03).** The release at `engine_main_tick` `0x411e12` swaps run-state `0x4000`
@@ -7558,11 +7580,11 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
   native volume curve; "linear in amplitude" here was corrected 2026-11-04). The result is a one-second fade from
   the ducked level to full volume (target 10000, not the level saved at `ctx+0x6dbe8`). The duck
   itself stays instant: `voice_bgm_duck_begin` arms step 10 and ticks 100 periods at once. While the release
-  fade holds `0x200`, a new voice does not duck. The port matches: `Main.FadeBackFromVoiceBgmDuck` owns the
-  BGM envelope as an explicit fade does, in 100 basis-point-level steps over one second.
-- **Statement blocks.** `VirtualMachine` tracks the flag and depth and reports the outermost open and close to
-  `IAudioHost.SetStatementBlockActive`. Godot withholds delayed voice service (`0x2c0`) and delayed SFX starts
-  (`0x2bf`) until the close.
+  fade holds `0x200`, a new voice does not duck. The port matches: the audio native's `ServiceDuckRelease` arms a
+  fade that owns the BGM envelope as an explicit fade does, in 100 basis-point-level steps over one second.
+- **Statement blocks.** The engine tick (`engine/Ome.Engine/Natives/EngineTick.cs`, milestone 6) keeps the flag
+  and depth; ops `0x1f4`/`0x1f5` open and close it. While the outermost block is open the tick withholds the delayed
+  voice (`0x2c0`) and delayed SFX starts (`0x2bf`), and the host withholds its presentation.
   - **Render withholding.** `ConsumePresentationReasons` reports nothing while a block is open, unless an explicit
     present (`HostRequest`) is pending or a transition is active (`IsTransitionWaiting` / screen transition, the
     `0x400` equivalent). Retained changes stay pending for the next present.

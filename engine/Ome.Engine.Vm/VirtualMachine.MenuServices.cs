@@ -140,7 +140,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
     private bool ServiceWaitSettingCallback()
     {
         ApplyMenuToggles();
-        if (_statementBlockActive || TakePendingCallbackScript() is not { } callback) return false;
+        if (_tick.StatementBlockOpen || TakePendingCallbackScript() is not { } callback) return false;
         bool waitPolling = _advTextWaitPolling;
         _advTextWaitPolling = false;
         try

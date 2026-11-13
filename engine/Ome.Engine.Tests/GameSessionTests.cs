@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
@@ -22,22 +23,6 @@ public class GameSessionTests
         IndexByOffset = new Dictionary<int, int> { { 0, 0 } },
         Strings = new Dictionary<int, string>(),
     };
-
-    private sealed class VoiceCountHost : IHost
-    {
-        public int Voices;
-        public List<int> Emitted = new();
-        public void ShowText(int o, string t) => Emitted.Add(o);
-        public void WaitForInput() { }
-        public void Sleep(long duration) { }
-        public void FrameYield() { }
-        public void CreateTexture(int s, int w, int h) { }
-        public void SetTexture(long r, int s) { }
-        public void DrawTexture(int s, int sx, int sy, int w, int h, int dx, int dy) { }
-        public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
-        public void PlayBgm(long id) { }
-        public void PlayVoice(long id) => Voices++;
-    }
 
     [Fact]
     public void StatePersistsAcrossScenes()
@@ -171,15 +156,23 @@ public class GameSessionTests
         // Lily's lines are gated on form flags G[0xa57/8/9]; unseeded => all skipped (0 voices on her lines).
         // Seeding form A (0xa57=1) makes her lines execute -> more play-voice calls. Proven finding (audio).
         var scriptPath = Paths.Scripts()["SC0000.BIN"];
-        var unseeded = new VoiceCountHost();
-        new GameSession().RunScene(Sys4Loader.Load(scriptPath, Table), Table, unseeded);
+        int unseeded = VoicesPlayed(new GameSession(), scriptPath);
 
         var s = new GameSession();
         s.Seed(0xa57, 1);
-        var seeded = new VoiceCountHost();
-        s.RunScene(Sys4Loader.Load(scriptPath, Table), Table, seeded);
+        int seeded = VoicesPlayed(s, scriptPath);
 
-        Assert.True(seeded.Voices > unseeded.Voices,
-            $"seeding form flag should fire more voices: unseeded={unseeded.Voices} seeded={seeded.Voices}");
+        Assert.True(seeded > unseeded,
+            $"seeding form flag should fire more voices: unseeded={unseeded} seeded={seeded}");
+    }
+
+    // The voices a run of the scene plays, on an audio native over a recording device.
+    private static int VoicesPlayed(GameSession session, string scriptPath)
+    {
+        var device = new RecordingAudioDevice();
+        session.RunScene(Sys4Loader.Load(scriptPath, Table), Table, new CaptureHost(),
+                         audio: skip => new Audio(device, new TestAudioAssets(), new FrameClock(), skip,
+                                                  session.AudioMixerSettings));
+        return device.Voices.Count;
     }
 }

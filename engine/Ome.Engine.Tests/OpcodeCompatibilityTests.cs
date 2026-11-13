@@ -63,11 +63,11 @@ public class OpcodeCompatibilityTests
         }, Array.Empty<string>());
 
         var normalTrace = new RecordingTraceSink();
-        var host = new RecordingHost();
-        host.PlayingSoundChannels.Add(11);
+        var rig = new AudioRig();
+        rig.Audio.PlayBgm(5);   // channel 11 plays
         var normal = new VirtualMachine(
-            script, table, host, sink: normalTrace,
-            build: EngineBuilds.Age433G);
+            script, table, new RecordingHost(), sink: normalTrace,
+            build: EngineBuilds.Age433G, skipAndAuto: rig.Skip, audio: rig.Audio, tick: rig.Tick);
         normal.Run();
 
         Assert.Null(normal.CompatibilityFailure);

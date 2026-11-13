@@ -20,26 +20,6 @@ public class EngineHostTests
         public List<string> Calls { get; } = [];
         private void Note(string name) { lock (Calls) Calls.Add(name); }
 
-        public void PlayBgm(byte[] oggBytes, string assetName) => Note(nameof(PlayBgm));
-        public void RestartBgm(byte[] oggBytes, string assetName, int startMode) => Note(nameof(RestartBgm));
-        public void StopBgm() => Note(nameof(StopBgm));
-        public void FadeBgm(int targetBasisPoints, int steps, double realDurationSeconds) => Note(nameof(FadeBgm));
-        public void CompleteBgmFade() => Note(nameof(CompleteBgmFade));
-        public int QueueVoicePlayback() { Note(nameof(QueueVoicePlayback)); return 1; }
-        public void PlayVoice(byte[] oggBytes, string assetName, int generation, bool duckBgm, int duckTargetPercent,
-                              bool muted) => Note(nameof(PlayVoice));
-        public void StopVoiceForMessageSkip() => Note(nameof(StopVoiceForMessageSkip));
-        public void ArmVoiceBgmDuckRelease() => Note(nameof(ArmVoiceBgmDuckRelease));
-        public bool IsVoicePlaybackActive => false;
-        public void LoadSoundEffect(byte[] wavBytes, string assetName, int channel) => Note(nameof(LoadSoundEffect));
-        public void StartSoundEffect(int channel, int startMode) => Note(nameof(StartSoundEffect));
-        public void ScheduleSoundEffectStart(int channel, int startMode, double realDelaySeconds)
-            => Note(nameof(ScheduleSoundEffectStart));
-        public void CancelScheduledSoundEffectStarts() => Note(nameof(CancelScheduledSoundEffectStarts));
-        public void ReleaseSoundEffect(int channel) => Note(nameof(ReleaseSoundEffect));
-        public bool IsSoundChannelPlaying(int channel) { Note(nameof(IsSoundChannelPlaying)); return false; }
-        public void ApplyAudioVolume(int category, int basisPoints) => Note(nameof(ApplyAudioVolume));
-        public void ApplyAudioRouteEnabled(int category, bool enabled) => Note(nameof(ApplyAudioRouteEnabled));
         public bool TryPlayMovie(byte[] mpegBytes, string assetName, long playbackId, long resourceId, int assetId,
                                  long movieFlags, long initialPositionMs, long startDelayMs,
                                  long? presentationDurationMs, out long? stopTimeMs)
@@ -76,14 +56,26 @@ public class EngineHostTests
         public byte[] ReadAll(AssetEntry entry) => throw new FileNotFoundException(entry.Name);
     }
 
-    private static EngineHost Host(IFrontEnd frontEnd, PageLocatorState locator, FrameClock clock,
-                                   SkipAndAuto? skipAndAuto = null)
-        => new(frontEnd, skipAndAuto ?? SkipAndAuto.WithSystemClock(), new ResourceMap(Sys4AssetCatalog.Parse(Sys4StartupSettingsTests.BuildCatalog()), new NoAssets()),
-               "SC0000", clock, locator, Canvas, new NoGlyphs(), GlyphCoverageAlpha.Sixteenths,
-               synchronizeExplicitPresentation: false)
+    /// <summary>A catalog with no sounds, over a store with no files.</summary>
+    internal static ResourceMap EmptyResources()
+        => new(Sys4AssetCatalog.Parse(Sys4StartupSettingsTests.BuildCatalog()), new NoAssets());
+
+    /// <summary>The lifted host over a front end, with the natives it runs with. Without an <see cref="AudioRig"/> the
+    /// audio native is a silent one.</summary>
+    internal static EngineHost Host(IFrontEnd frontEnd, PageLocatorState locator, FrameClock clock,
+                                    SkipAndAuto? skipAndAuto = null, AudioRig? audio = null)
+    {
+        SkipAndAuto skip = audio?.Skip ?? skipAndAuto ?? SkipAndAuto.WithSystemClock();
+        Audio native = audio?.Audio ?? Audio.Silent(skip);
+        return new(frontEnd, skip, native, audio?.Tick ?? new EngineTick(native), EmptyResources(),
+                   "SC0000", clock, locator, Canvas, new NoGlyphs(), GlyphCoverageAlpha.Sixteenths,
+                   synchronizeExplicitPresentation: false)
         {
             RubyRules = RubyLayoutRules.FixedOffsets,
         };
+    }
+
+    internal static IFrontEnd NothingAtAll() => new NothingFrontEnd();
 
     [Fact]
     public void TheHostsCommandsReachTheFrontEndInTheOrderSent()
@@ -92,18 +84,12 @@ public class EngineHostTests
         using var locator = new PageLocatorState("SC0000", null);
         EngineHost host = Host(frontEnd, locator, new FrameClock());
 
-        host.StopBgm();
-        host.ApplyAudioVolume(0, 5000);
-        host.ApplyAudioRouteEnabled(1, false);
-        host.FadeBgm(0, 500);
-        host.CompleteBgmFade();
-        host.StopVoice();
-        Assert.False(host.IsSoundChannelPlaying(3));
+        host.WarpCursor(3, 4);
+        host.ClearCursorResource();
+        host.RequestScreenMode(windowed: true);
+        host.ResetSceneContext();
 
-        Assert.Equal(
-            ["StopBgm", "ApplyAudioVolume", "ApplyAudioRouteEnabled", "FadeBgm", "CompleteBgmFade",
-             "StopVoiceForMessageSkip", "IsSoundChannelPlaying"],
-            frontEnd.Calls);
+        Assert.Equal(["WarpAgeCursor", "ClearAgeCursor", "RequestScreenModeFromScript", "ClearPage"], frontEnd.Calls);
     }
 
     [Fact]
@@ -119,20 +105,6 @@ public class EngineHostTests
         Assert.True(host.CaptureDiagnosticSnapshot().IsMessageSkipActive);
         skipAndAuto.SetPhysicalFastForward(false);
         Assert.False(host.CaptureDiagnosticSnapshot().IsMessageSkipActive);
-        Assert.Empty(frontEnd.Calls);   // no voice was held back, so ending fast-forward plays nothing
-    }
-
-    [Fact]
-    public void AnAssetTheCatalogLacksSendsNothing()
-    {
-        var frontEnd = new NothingFrontEnd();
-        using var locator = new PageLocatorState("SC0000", null);
-        EngineHost host = Host(frontEnd, locator, new FrameClock());
-
-        host.PlayBgm(0x1234);
-        host.LoadSoundEffect(0x1234, 2);
-        host.StartSoundEffect(2);
-
         Assert.Empty(frontEnd.Calls);
     }
 

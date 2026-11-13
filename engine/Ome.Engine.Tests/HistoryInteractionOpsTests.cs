@@ -74,6 +74,7 @@ public class HistoryInteractionOpsTests
     private sealed class Sc0000HistoryVoiceHost : RecordingHost
     {
         public VirtualMachine Vm = null!;
+        public RecordingAudioDevice Device = null!;
         private long _now;
         private int _modalSleeps;
         private bool _pressedVoiceRow;
@@ -102,7 +103,7 @@ public class HistoryInteractionOpsTests
                 Vm.UpdateMouseButtonState(0x1, false);
                 Vm.QueueInputCallback(10);
             }
-            if (VoiceRequests.Count > 0) throw new StopAfterHistoryVoiceException();
+            if (Device.Voices.Count > 0) throw new StopAfterHistoryVoiceException();
         }
 
         public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
@@ -111,8 +112,7 @@ public class HistoryInteractionOpsTests
             bool hasRecentVoice = Vm.TextHistory.Entries.TakeLast(5)
                 .Any(entry => Vm.TextHistory.TryFindVoicePair(entry.FirstRecordIndex, out _, out _));
             if (!hasRecentVoice) return;
-            Voices.Clear();
-            VoiceRequests.Clear();
+            Device.Plays.Clear();
             Vm.UpdatePointer(684, 572);
             while (serviceInputCallback()) { }
             Assert.True(Vm.TryActivatePointer(684, 572));
@@ -330,8 +330,9 @@ public class HistoryInteractionOpsTests
     public void RealHistoryVoicedRowDispatchesItsRetainedVoicePair()
     {
         var scripts = Sys4ScriptProvider.Load(Table);
-        var host = new Sc0000HistoryVoiceHost();
-        var vm = new VirtualMachine(scripts.RequireByName("SC0000.BIN"), Table, host,
+        var rig = new AudioRig();
+        var host = new Sc0000HistoryVoiceHost { Device = rig.Device };
+        var vm = rig.Vm(scripts.RequireByName("SC0000.BIN"), Table, host,
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
         SeedSystem4Services(scripts, vm);
@@ -343,7 +344,8 @@ public class HistoryInteractionOpsTests
         Assert.True(vm.TextHistory.TryFindVoicePair(batch.FirstRecordIndex,
             out long expectedVoice, out long expectedVariant));
         Assert.Equal((0x24L, 0L), (expectedVoice, expectedVariant));
-        Assert.Equal(new[] { (expectedVoice, checked((int)expectedVariant)) }, host.VoiceRequests);
+        Assert.Equal(new[] { (expectedVoice, false) }, rig.Device.Voices);
+        Assert.Equal(expectedVariant, rig.Audio.VoicePlaybackVariant);
 
         var resources = ResourceMap.Load();
         var voice = Assert.IsType<AssetEntry>(resources.ResolveVoice(expectedVoice));

@@ -44,28 +44,6 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
     public readonly List<int> PublishedAdvTextLayouts = new();
     public readonly List<long> SleptDurations = new();
     public readonly List<long> TimedCallbackWaitDurations = new();
-    public readonly List<(long Resource, int Channel)> SfxLoads = new();
-    public readonly List<long> Voices = new();
-    public readonly List<(long Id, int PlaybackVariant)> VoiceRequests = new();
-    public readonly List<(long Id, int PlaybackVariant, long DelayMs)> ScheduledVoiceRequests = new();
-    public readonly List<long> VoiceBgmDuckControls = new();
-    public readonly List<(long Id, int PlaybackVariant, bool Muted)> VoicePlaybacks = new();
-    public int VoiceStops;
-    public int VoiceBgmDuckReleaseArms;
-    public readonly List<bool> StatementBlockChanges = new();
-    public readonly List<int> SfxStarts = new();
-    public readonly List<(int Channel, int StartMode)> SfxStartRequests = new();
-    public readonly List<(int Channel, int StartMode, long DelayMs)> ScheduledSfxStarts = new();
-    public readonly List<int> SfxReleases = new();
-    public readonly List<long> BgmTracks = new();
-    public readonly List<(long Track, int StartMode)> BgmRestartRequests = new();
-    public int BgmStops;
-    public readonly List<(int Target, long Duration)> BgmFades = new();
-    public long BgmFadeRemainingMs;
-    public int BgmFadeCompletions;
-    public readonly List<(int Category, int BasisPoints)> AudioVolumeChanges = new();
-    public readonly List<(int Category, bool Enabled)> AudioRouteChanges = new();
-    public readonly HashSet<int> PlayingSoundChannels = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask)> Movies = new();
     public readonly List<(long Resource, int Surface, long Flags, long SyncMask, long PositionMs)>
         PositionedMovies = new();
@@ -249,10 +227,13 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
     public void SetCursorResource(long resourceId) => CursorResources.Add(resourceId);
     public void ClearCursorResource() => CursorClearCount++;
     public void WarpCursor(int virtualX, int virtualY) => CursorWarps.Add((virtualX, virtualY));
+    /// <summary>The clock an <see cref="AudioRig"/>'s natives run on: each sleep moves it by the sleep's
+    /// length.</summary>
+    public FrameClock? Clock { get; set; }
     public virtual void Sleep(long duration)
     {
         SleptDurations.Add(duration);
-        BgmFadeRemainingMs = Math.Max(0, BgmFadeRemainingMs - duration);
+        Clock?.Advance(duration / 1000.0);
     }
     public virtual void WaitForTimedCallbackDeadline(long duration)
     {
@@ -325,53 +306,6 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
     public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy)
         => TextureDraws.Add((slot, sx, sy, w, h, dx, dy));
     public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
-    public void PlayBgm(long id) => BgmTracks.Add(id);
-    public void RestartBgm(long id, int startMode) => BgmRestartRequests.Add((id, startMode));
-    public void StopBgm() => BgmStops++;
-    public void PlayVoice(long id) => Voices.Add(id);
-    public void PlayVoice(long id, int playbackVariant)
-    {
-        Voices.Add(id);
-        VoiceRequests.Add((id, playbackVariant));
-    }
-    public void PlayVoice(long id, int playbackVariant, bool muted)
-    {
-        VoicePlaybacks.Add((id, playbackVariant, muted));
-        PlayVoice(id, playbackVariant);
-    }
-    public void StopVoice() => VoiceStops++;
-    public void ArmVoiceBgmDuckRelease() => VoiceBgmDuckReleaseArms++;
-    public void SetStatementBlockActive(bool active) => StatementBlockChanges.Add(active);
-    public void SetVoiceBgmDuckControl(long flags) => VoiceBgmDuckControls.Add(flags);
-    public void ScheduleVoicePlayback(long id, int playbackVariant, long delayMs)
-        => ScheduledVoiceRequests.Add((id, playbackVariant, delayMs));
-    public void LoadSoundEffect(long resourceId, int channel) => SfxLoads.Add((resourceId, channel));
-    public void StartSoundEffect(int channel) => StartSoundEffect(channel, 0);
-    public void StartSoundEffect(int channel, int startMode)
-    {
-        SfxStarts.Add(channel);
-        SfxStartRequests.Add((channel, startMode));
-    }
-    public void ScheduleSoundEffectStart(int channel, int startMode, long delayMs)
-        => ScheduledSfxStarts.Add((channel, startMode, delayMs));
-    public void ReleaseSoundEffect(int channel) => SfxReleases.Add(channel);
-    // An op 0xc2 fade runs in the background until the script's sleeps have spent its duration or a BGM op ends it.
-    public void FadeBgm(int targetPercent, long durationMs)
-    {
-        BgmFades.Add((targetPercent, durationMs));
-        BgmFadeRemainingMs = durationMs;
-    }
-    public bool IsBgmFadeActive => BgmFadeRemainingMs > 0;
-    public void CompleteBgmFade()
-    {
-        BgmFadeCompletions++;
-        BgmFadeRemainingMs = 0;
-    }
-    public bool IsSoundChannelPlaying(int channel) => PlayingSoundChannels.Contains(channel);
-    public void ApplyAudioVolume(int category, int basisPoints)
-        => AudioVolumeChanges.Add((category, basisPoints));
-    public void ApplyAudioRouteEnabled(int category, bool enabled)
-        => AudioRouteChanges.Add((category, enabled));
     public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long startDelayMs)
     {
         Movies.Add((resourceId, surfaceSlot, movieFlags, startDelayMs));

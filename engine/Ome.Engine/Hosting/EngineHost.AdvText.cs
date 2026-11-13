@@ -423,7 +423,7 @@ public sealed partial class EngineHost
                 if (presentation.PublishedGlyphCount != before)
                     Interlocked.Exchange(ref _presentRequested, 1);
                 if (IsTextRevealing)
-                    _frameSignal.WaitOne(due is long deadline ? _clock.RealMillisecondsUntil(deadline, 50) : 50);
+                    WaitAndTick(_frameSignal, due is long deadline ? _clock.RealMillisecondsUntil(deadline, 50) : 50);
             }
         }
         finally

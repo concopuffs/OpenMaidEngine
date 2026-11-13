@@ -40,6 +40,7 @@ public partial class Main : Godot.Control
     private double _fpsHudUpdateSeconds;
     private VirtualMachine _vm = null!;
     private EngineHost _host = null!;
+    private Audio _audio = null!;   // the audio native (engine layering milestone 6): the options panel sets the mixer through it
     private IDisposable? _glyphRasterizerOwner;
     // The Unicode rasterizer a language draws with when the gameplay one is GDI (localization spec §7.4).
     private IDisposable? _presentedRasterizerOwner;
@@ -294,19 +295,7 @@ public partial class Main : Godot.Control
             catch { /* fall back to the default font */ }
         }
 
-        _bgm = new AudioStreamPlayer();
-        _voice = new AudioStreamPlayer();
-        EnsureAudioBuses();
-        _bgm.Bus = "Music";
-        _voice.Bus = "Voice";
-        AddChild(_bgm);
-        AddChild(_voice);
-        for (int i = 0; i < _sfx.Length; i++)
-        {
-            _sfx[i] = new AudioStreamPlayer();
-            _sfx[i].Bus = "SFX";
-            AddChild(_sfx[i]);
-        }
+        CreateAudioChannels();
         _audioOutputLatencySeconds = AudioServer.GetOutputLatency();
 
         _selftest = System.Array.IndexOf(userArgs, "--selftest") >= 0;
@@ -426,7 +415,6 @@ public partial class Main : Godot.Control
             }
             _audioMixerSettings.Changed += PersistAudioMixerSettings;
         }
-        ApplyAudioMixerSnapshot(_audioMixerSettings.Snapshot());
         InitScreenMode(userArgs);
 
         // Full op handling everywhere: the provider lets call-script load & run subroutines. Selftest
@@ -546,10 +534,15 @@ public partial class Main : Godot.Control
             selectedTextBackend.Detail);
         if (textBackend == "auto" && exactUnavailable != null)
             GD.Print($"[text] exact backend unavailable; selected portable: {exactUnavailable}");
-        // The skip and auto native the host reads and the VM's handlers call (engine layering milestone 5).
+        // The skip and auto native the host reads and the VM's handlers call (engine layering milestone 5), and the audio
+        // native over this node's players with the engine tick that runs it (milestone 6). The audio native applies the
+        // mixer settings now and on every change; their Changed event persists them.
         SkipAndAuto skipAndAuto = SkipAndAuto.WithSystemClock(GodotVmOptions.CreateSkipAndAuto(_catalog.StartupSettings));
+        _audio = new Audio(this, new ResourceAudioAssets(resources, message => GD.Print(message)), _clock, skipAndAuto,
+                           _audioMixerSettings, _sys4RegIniStore, _timeline);
+        var tick = new EngineTick(_audio, _timeline);
         _host = new EngineHost(
-            this, skipAndAuto, resources, scene, _clock, _locator, logicalCanvas,
+            this, skipAndAuto, _audio, tick, resources, scene, _clock, _locator, logicalCanvas,
             surfaceTextRasterizer,
             timeline: _timeline,
             synchronizeExplicitPresentation: !_selftest,
@@ -597,9 +590,10 @@ public partial class Main : Godot.Control
             provider, sink,
             sharedProfile: sharedProfile,
             nativeDatStore: nativeSaveStore,
-            audioMixerSettings: _audioMixerSettings,
             build: engineBuild,
-            skipAndAuto: skipAndAuto);
+            skipAndAuto: skipAndAuto,
+            audio: _audio,
+            tick: tick);
         _compositor = new SoftwareCompositor(_host, _vm.Gfx, _clock, logicalCanvas, _gfxLogPath)
         {
             Perf = _perf,
@@ -701,14 +695,11 @@ public partial class Main : Godot.Control
         try
         {
             long phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
+            ReportEndedAudioChannels();   // before the pulse, so the engine thread it wakes sees them
             _host?.PulseFrame();
             perf?.RecordPulse(PerformanceFrameLog.Timestamp() - phase);
 
             phase = perf != null ? PerformanceFrameLog.Timestamp() : 0;
-            UpdateVoicePlaybackState();
-            UpdateVoiceBgmDuckRelease();
-            ReleaseWithheldSoundEffectStarts();
-            UpdateSoundChannelPlaybackState();
             AdoptPendingMovies();
             UpdateMovieFrames();
             perf?.RecordMovies(PerformanceFrameLog.Timestamp() - phase);

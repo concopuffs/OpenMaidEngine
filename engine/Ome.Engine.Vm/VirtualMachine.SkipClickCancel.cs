@@ -31,14 +31,16 @@ public sealed partial class VirtualMachine
         return true;
     }
 
-    /// <summary>The services native's tick runs before dispatching an op: the click-cancel machine (with
-    /// CANCELMESSKIPONCLICK set), queued native-menu toggles, then any queued CALLBACK_SETTING.BIN or
-    /// CALLBACK_WINDOW.BIN launch. Non-null only when the callback ends the enclosing frame.</summary>
+    /// <summary>The services native's tick runs before dispatching an op: the engine tick (EngineTick: the natives'
+    /// timed work), the click-cancel machine (with CANCELMESSKIPONCLICK set), queued native-menu toggles, then any
+    /// queued CALLBACK_SETTING.BIN or CALLBACK_WINDOW.BIN launch. Non-null only when the callback ends the enclosing
+    /// frame.</summary>
     private FrameOutcome? ServiceInstructionBoundary()
     {
+        _tick.Service();
         if (_skip.ServiceClickCancel(InputBindings)) CancelMessageSkipFromClick();
         ApplyMenuToggles();
-        if (_statementBlockActive || TakePendingCallbackScript() is not { } callback) return null;
+        if (_tick.StatementBlockOpen || TakePendingCallbackScript() is not { } callback) return null;
         return RunCallbackScript(callback);
     }
 

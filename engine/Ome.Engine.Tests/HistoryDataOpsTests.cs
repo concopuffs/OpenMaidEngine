@@ -211,13 +211,14 @@ public class HistoryDataOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var host = new HistoryVoiceHost();
-        var vm = new VirtualMachine(script, Table, host, textHistory: history);
+        var rig = new AudioRig();
+        var vm = rig.Vm(script, Table, host, textHistory: history);
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal(new long[] { 77 }, host.Voices);
-        Assert.Equal(new[] { (77L, 1) }, host.VoiceRequests);
+        Assert.Equal(new[] { (77L, false) }, rig.Device.Voices);
+        Assert.Equal(1, rig.Audio.VoicePlaybackVariant);
         Assert.True(host.AutoState.VoicePending);
         var voice = Assert.Single(history.Records);
         Assert.Equal(AdvTextHistoryRecordKind.Voice, voice.Kind);
@@ -235,12 +236,13 @@ public class HistoryDataOpsTests
                 (0x1bd, new[] { I(88) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, Table, host, textHistory: history);
+        var rig = new AudioRig();
+        var vm = rig.Vm(script, Table, new RecordingHost(), textHistory: history);
 
         vm.Run();
 
-        Assert.Equal(new[] { (88L, 1) }, host.VoiceRequests);
+        Assert.Equal(new[] { (88L, false) }, rig.Device.Voices);
+        Assert.Equal(1, rig.Audio.VoicePlaybackVariant);
         Assert.Empty(history.Records);
     }
 }

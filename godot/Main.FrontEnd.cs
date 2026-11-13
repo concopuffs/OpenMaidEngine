@@ -9,36 +9,6 @@ using Ome.Engine.Model;
 /// </summary>
 public partial class Main : IFrontEnd
 {
-    void IFrontEnd.PlayBgm(byte[] oggBytes, string assetName) => CallDeferred(MethodName.PlayBgm, oggBytes, assetName);
-    void IFrontEnd.RestartBgm(byte[] oggBytes, string assetName, int startMode)
-        => CallDeferred(MethodName.RestartBgm, oggBytes, assetName, startMode);
-    void IFrontEnd.StopBgm() => CallDeferred(MethodName.StopBgm);
-    void IFrontEnd.FadeBgm(int targetBasisPoints, int steps, double realDurationSeconds)
-        => CallDeferred(MethodName.FadeBgm, targetBasisPoints, steps, realDurationSeconds);
-    void IFrontEnd.CompleteBgmFade() => CallDeferred(MethodName.CompleteBgmFade);
-
-    int IFrontEnd.QueueVoicePlayback() => QueueVoicePlayback();
-    void IFrontEnd.PlayVoice(byte[] oggBytes, string assetName, int generation, bool duckBgm, int duckTargetPercent,
-                             bool muted)
-        => CallDeferred(MethodName.PlayVoice, oggBytes, assetName, generation, duckBgm, duckTargetPercent, muted);
-    void IFrontEnd.StopVoiceForMessageSkip() => CallDeferred(MethodName.StopVoiceForMessageSkip);
-    void IFrontEnd.ArmVoiceBgmDuckRelease() => CallDeferred(MethodName.ArmVoiceBgmDuckRelease);
-    bool IFrontEnd.IsVoicePlaybackActive => IsVoicePlaybackActive;
-
-    void IFrontEnd.LoadSoundEffect(byte[] wavBytes, string assetName, int channel)
-        => CallDeferred(MethodName.LoadSoundEffect, wavBytes, assetName, channel);
-    void IFrontEnd.StartSoundEffect(int channel, int startMode)
-        => CallDeferred(MethodName.StartSoundEffect, channel, startMode);
-    void IFrontEnd.ScheduleSoundEffectStart(int channel, int startMode, double realDelaySeconds)
-        => CallDeferred(MethodName.ScheduleSoundEffectStart, channel, startMode, realDelaySeconds);
-    void IFrontEnd.CancelScheduledSoundEffectStarts() => CallDeferred(MethodName.CancelScheduledSoundEffectStarts);
-    void IFrontEnd.ReleaseSoundEffect(int channel) => CallDeferred(MethodName.ReleaseSoundEffect, channel);
-    bool IFrontEnd.IsSoundChannelPlaying(int channel) => IsSoundChannelPlaying(channel);
-    void IFrontEnd.ApplyAudioVolume(int category, int basisPoints)
-        => CallDeferred(MethodName.ApplyAudioVolume, category, basisPoints);
-    void IFrontEnd.ApplyAudioRouteEnabled(int category, bool enabled)
-        => CallDeferred(MethodName.ApplyAudioRouteEnabled, category, enabled);
-
     bool IFrontEnd.TryPlayMovie(byte[] mpegBytes, string assetName, long playbackId, long resourceId, int assetId,
                                 long movieFlags, long initialPositionMs, long startDelayMs,
                                 long? presentationDurationMs, out long? stopTimeMs)

@@ -34,7 +34,7 @@ public class AudioMixerOpcodeTests
     public void MixerOpcodesRoundTripCategoriesAndApplyLiveChanges()
     {
         var settings = new AudioMixerSettings();
-        var host = new RecordingHost();
+        var rig = new AudioRig(settings);
         Script scene = ScriptAssembler.Assemble(Table, "CONFIG_MIXER",
         [
             (0xc6, [I(0), I(8000)]),
@@ -47,7 +47,7 @@ public class AudioMixerOpcodeTests
             (0xc7, [I(2), G(14)]),
             Exit(),
         ], []);
-        var vm = new VirtualMachine(scene, Table, host, audioMixerSettings: settings);
+        var vm = rig.Vm(scene, Table, new RecordingHost());
 
         vm.Run();
 
@@ -56,14 +56,17 @@ public class AudioMixerOpcodeTests
         Assert.Equal(AudioMixerSettings.UnconfiguredVolume, vm.Globals[12]);
         Assert.Equal(0, vm.Globals[13]);
         Assert.Equal(1, vm.Globals[14]);
-        Assert.Equal([(0, 8000), (3, 4500)], host.AudioVolumeChanges);
-        Assert.Equal([(1, false)], host.AudioRouteChanges);
+        Assert.Equal(["bus-volume Master " + RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(8000)),
+                      "bus-volume Voice " + RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(4500)),
+                      "stop 11", "bus-mute Music True"],
+                     rig.Device.Commands);
+        Assert.True(settings.TryGetVolume(3, out int stored) && stored == 4500);   // the settings it persists from
     }
 
     [Fact]
     public void RouteSetterIsIdempotentLikeNativeWorkers()
     {
-        var host = new RecordingHost();
+        var rig = new AudioRig();
         Script scene = ScriptAssembler.Assemble(Table, "CONFIG_ROUTE",
         [
             (0x1ba, [I(2), I(0)]),
@@ -73,9 +76,10 @@ public class AudioMixerOpcodeTests
             Exit(),
         ], []);
 
-        new VirtualMachine(scene, Table, host).Run();
+        rig.Vm(scene, Table, new RecordingHost()).Run();
 
-        Assert.Equal([(2, false), (2, true)], host.AudioRouteChanges);
+        Assert.Equal(["bus-mute SoundEffect True", "bus-mute SoundEffect False"],
+                     rig.Device.CommandsStartingWith("bus-mute"));
     }
 
     [Fact]
@@ -197,6 +201,7 @@ public class AudioMixerOpcodeTests
     public void InvalidMixerCategoriesWarnAndLeaveOutputsUntouched()
     {
         var host = new RecordingHost();
+        var rig = new AudioRig();
         Script scene = ScriptAssembler.Assemble(Table, "CONFIG_INVALID",
         [
             (0xc5, [I(5), G(30)]),
@@ -205,7 +210,7 @@ public class AudioMixerOpcodeTests
             (0x1ba, [I(5), I(1)]),
             Exit(),
         ], []);
-        var vm = new VirtualMachine(scene, Table, host);
+        var vm = rig.Vm(scene, Table, host);
         vm.Globals[30] = 123;
         vm.Globals[31] = 456;
 
@@ -214,7 +219,6 @@ public class AudioMixerOpcodeTests
         Assert.Equal(123, vm.Globals[30]);
         Assert.Equal(456, vm.Globals[31]);
         Assert.Equal(4, host.Warnings.Count);
-        Assert.Empty(host.AudioVolumeChanges);
-        Assert.Empty(host.AudioRouteChanges);
+        Assert.Empty(rig.Device.Commands);
     }
 }

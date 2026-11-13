@@ -1,67 +1,155 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using Godot;
+using Ome.Engine.Devices;
 using Ome.Engine.Model;
 using Ome.Engine.Persistence;
 
-public partial class Main
+/// <summary>
+/// The Godot audio device (engine layering spec §6.1, milestone 6): one stream player per channel of the audio native
+/// (sound effects 0..9, BGM 11, voice 12) and Godot's buses. It only plays what it is told: the BGM envelope, the voice
+/// duck, delayed starts and whether a channel plays are the native's (<c>Ome.Engine.Natives.Audio</c>).
+/// <para>The contract of spec §6.2. Each command is deferred to the main thread, in the order sent, as the host's
+/// audio calls were before. Once a frame, before the engine thread is woken, a channel whose play ran out is reported
+/// ended.</para>
+/// </summary>
+public partial class Main : IAudioDevice
 {
-    private AudioStreamPlayer _bgm = null!;                // looping background music
-    private Tween? _bgmFadeTween;                         // native run-state 0x200: an op 0xc2 fade or the duck release
-    private int _bgmFadeTarget;
-    private bool _bgmFadeReleasesAtZero;
-    private AudioStreamPlayer _voice = null!;              // interrupt-on-new voice
-    private int _bgmPlaying;
-    private int _voiceQueuedGeneration;
-    private int _voiceStartedGeneration;
-    private int _voiceCompletedGeneration;
-    private bool _voiceBgmDuckActive;
-    private int _voiceBgmDuckGeneration;
-    private int _voiceBgmDuckRestoreLevel = AudioMixerSettings.MaximumVolume;
-    // Native bgm object +0x420: the committed BGM envelope level in basis points. The player's volume is
-    // NativeAudioVolume.ToDecibels(level) except during a fade, whose steps apply interpolated levels; the
-    // Master and Music buses carry the mixer settings, and decibels add where native multiplies the levels.
-    private int _bgmLevel = AudioMixerSettings.MaximumVolume;
-    private bool _voiceBgmDuckReleaseArmed;               // native voice_bgm_duck_release_armed (op 0x1bf)
-    private readonly System.Collections.Generic.List<Action> _sfxStartsWithheld = new(); // statement block open
-    private readonly AudioStreamPlayer[] _sfx = new AudioStreamPlayer[10]; // SC0000 channels 0..9
-    private readonly int[] _sfxGenerations = new int[10];
-    private readonly int[] _sfxPlaying = new int[10];
+    private const int AudioChannelCount = 13;
+    private readonly AudioStreamPlayer[] _audioChannels = new AudioStreamPlayer[AudioChannelCount];
+    private readonly int[] _audioChannelPlayIds = new int[AudioChannelCount];   // main thread: the play each runs, 0 none
+    private readonly ConcurrentQueue<AudioChannelEnded> _audioEnded = new();
     private AudioMixerSettings _audioMixerSettings = null!;
     private Sys4RegIniStore? _sys4RegIniStore;
 
-    // Decode VFS-owned bytes in Godot. Ordinary BGM loops; forced starts retain AGE's
-    // loop/one-shot mode. Voice plays once, cutting off any prior line.
-    public void PlayBgm(byte[] oggBytes, string assetName)
-        => StartBgm(oggBytes, assetName, 1);
-
-    public void RestartBgm(byte[] oggBytes, string assetName, int startMode)
-        => StartBgm(oggBytes, assetName, startMode);
-
-    private void StartBgm(byte[] oggBytes, string assetName, int startMode)
+    private void CreateAudioChannels()
     {
-        var stream = AudioStreamOggVorbis.LoadFromBuffer(oggBytes);
-        if (stream == null) { GD.Print($"OGG load failed {assetName}"); return; }
-        stream.Loop = startMode != 0;
-        // FadeBgm is marshalled from the VM thread and starts on the next Godot frame, while the VM's
-        // fade deadline begins immediately, so the VM can see a fade as ended (and request the next track
-        // without CompleteBgmFade) just before the tween reaches its endpoint. Do not let that orphaned tween
-        // mute or release the new stream after this method restores its normal gain.
-        CancelBgmFade();
-        SetBgmLevel(AudioMixerSettings.MaximumVolume);
-        _bgm.Stream = stream;
-        _bgm.Play();
-        System.Threading.Volatile.Write(ref _bgmPlaying, 1);
+        EnsureAudioBuses();
+        for (int channel = 0; channel < AudioChannelCount; channel++)
+        {
+            _audioChannels[channel] = new AudioStreamPlayer();
+            AddChild(_audioChannels[channel]);
+        }
     }
 
-    public void StopBgm()
+    void IAudioDevice.Load(int channel, AudioBus bus, AudioClip clip)
+        => Callable.From(() => LoadAudioChannel(channel, bus, clip)).CallDeferred();
+
+    void IAudioDevice.Play(int channel, bool loop, float volumeDb, int playId)
+        => Callable.From(() => PlayAudioChannel(channel, loop, volumeDb, playId)).CallDeferred();
+
+    void IAudioDevice.Stop(int channel) => Callable.From(() => StopAudioChannel(channel, unload: false)).CallDeferred();
+
+    void IAudioDevice.Unload(int channel) => Callable.From(() => StopAudioChannel(channel, unload: true)).CallDeferred();
+
+    void IAudioDevice.SetVolume(int channel, float volumeDb)
+        => Callable.From(() => SetAudioChannelVolume(channel, volumeDb)).CallDeferred();
+
+    void IAudioDevice.SetBusVolume(AudioBus bus, float volumeDb)
+        => Callable.From(() => SetAudioBusVolume(bus, volumeDb)).CallDeferred();
+
+    void IAudioDevice.SetBusMuted(AudioBus bus, bool muted)
+        => Callable.From(() => SetAudioBusMuted(bus, muted)).CallDeferred();
+
+    bool IAudioDevice.TryTakeEnded(out AudioChannelEnded ended) => _audioEnded.TryDequeue(out ended);
+
+    private AudioStreamPlayer? AudioChannel(int channel)
+        => (uint)channel < AudioChannelCount ? _audioChannels[channel] : null;
+
+    // Decode the VFS-owned bytes. A wave goes through RiffWaveSanitizer, a Godot-only compatibility boundary: the VFS
+    // and the engine keep the original bytes, and Godot sees an AGE-compatible first-RIFF copy without CP932 INFO
+    // metadata.
+    private void LoadAudioChannel(int channel, AudioBus bus, AudioClip clip)
     {
-        RestoreVoiceBgmDuck();
-        CancelBgmFade();
-        _bgm.Stop();
-        _bgm.Stream = null;
-        SetBgmLevel(AudioMixerSettings.MaximumVolume);
-        System.Threading.Volatile.Write(ref _bgmPlaying, 0);
+        if (AudioChannel(channel) is not { } player) return;
+        _audioChannelPlayIds[channel] = 0;
+        player.Stop();
+        player.Stream = null;
+        player.Bus = AudioBusName(bus);
+        AudioStream? stream = clip.Encoding == AudioEncoding.OggVorbis
+            ? AudioStreamOggVorbis.LoadFromBuffer(clip.Bytes)
+            : AudioStreamWav.LoadFromBuffer(RiffWaveSanitizer.PrepareForGodot(clip.Bytes));
+        if (stream == null) GD.Print($"{(clip.Encoding == AudioEncoding.OggVorbis ? "OGG" : "WAV")} load failed {clip.Name}");
+        player.Stream = stream;
+    }
+
+    private void PlayAudioChannel(int channel, bool loop, float volumeDb, int playId)
+    {
+        if (AudioChannel(channel) is not { } player) return;
+        if (player.Stream == null)
+        {
+            _audioChannelPlayIds[channel] = 0;
+            _audioEnded.Enqueue(new AudioChannelEnded(channel, playId));
+            return;
+        }
+        switch (player.Stream)
+        {
+            case AudioStreamOggVorbis ogg: ogg.Loop = loop; break;
+            case AudioStreamWav wav:
+                wav.LoopMode = loop ? AudioStreamWav.LoopModeEnum.Forward : AudioStreamWav.LoopModeEnum.Disabled;
+                break;
+        }
+        player.VolumeDb = volumeDb;
+        player.Play();
+        _audioChannelPlayIds[channel] = playId;
+    }
+
+    private void StopAudioChannel(int channel, bool unload)
+    {
+        if (AudioChannel(channel) is not { } player) return;
+        _audioChannelPlayIds[channel] = 0;
+        player.Stop();
+        if (unload) player.Stream = null;
+    }
+
+    private void SetAudioChannelVolume(int channel, float volumeDb)
+    {
+        if (AudioChannel(channel) is { } player) player.VolumeDb = volumeDb;
+    }
+
+    // Main thread, once a frame before PulseFrame: a play that ran out is reported, so the woken engine thread sees it.
+    private void ReportEndedAudioChannels()
+    {
+        for (int channel = 0; channel < AudioChannelCount; channel++)
+        {
+            int playId = _audioChannelPlayIds[channel];
+            if (playId == 0 || _audioChannels[channel].Playing) continue;
+            _audioChannelPlayIds[channel] = 0;
+            _audioEnded.Enqueue(new AudioChannelEnded(channel, playId));
+        }
+    }
+
+    private static void SetAudioBusVolume(AudioBus bus, float volumeDb)
+    {
+        int index = AudioServer.GetBusIndex(AudioBusName(bus));
+        if (index >= 0) AudioServer.SetBusVolumeDb(index, volumeDb);
+    }
+
+    private static void SetAudioBusMuted(AudioBus bus, bool muted)
+    {
+        int index = AudioServer.GetBusIndex(AudioBusName(bus));
+        if (index >= 0) AudioServer.SetBusMute(index, muted);
+    }
+
+    private static string AudioBusName(AudioBus bus) => bus switch
+    {
+        AudioBus.Master => "Master",
+        AudioBus.Music => "Music",
+        AudioBus.SoundEffect => "SFX",
+        AudioBus.Voice => "Voice",
+        AudioBus.Movie => "Movie",
+        _ => "Master",
+    };
+
+    private static void EnsureAudioBuses()
+    {
+        foreach (string name in new[] { "Music", "SFX", "Voice", "Movie" })
+        {
+            if (AudioServer.GetBusIndex(name) >= 0) continue;
+            AudioServer.AddBus();
+            AudioServer.SetBusName(AudioServer.BusCount - 1, name);
+        }
     }
 
     private void PersistAudioMixerSettings(AudioMixerSettingsSnapshot snapshot)
@@ -77,360 +165,4 @@ public partial class Main
                 $"[settings] audio mixer save failed; runtime setting remains active: {error.Message}");
         }
     }
-
-    private void ApplyAudioMixerSnapshot(AudioMixerSettingsSnapshot snapshot)
-    {
-        for (int category = 0; category < AudioMixerSettings.CategoryCount; category++)
-            ApplyAudioVolume(category, snapshot.Volumes[category]);
-        for (int category = (int)AudioMixerCategory.Music;
-             category < AudioMixerSettings.CategoryCount;
-             category++)
-            SetAudioBusMuted(category, !snapshot.Routes[category]);
-    }
-
-    public void ApplyAudioVolume(int category, int basisPoints)
-    {
-        string? busName = AudioBusName(category);
-        if (busName == null) return;
-        int bus = AudioServer.GetBusIndex(busName);
-        if (bus < 0) return;
-        // -1 is native's unconfigured sentinel: the hardware default gain stays (full scale here).
-        int effectiveBasisPoints = basisPoints < 0 ? AudioMixerSettings.MaximumVolume : basisPoints;
-        AudioServer.SetBusVolumeDb(bus, NativeAudioVolume.ToDecibels(effectiveBasisPoints));
-    }
-
-    public void ApplyAudioRouteEnabled(int category, bool enabled)
-    {
-        if (category == (int)AudioMixerCategory.Music)
-        {
-            RestoreVoiceBgmDuck();
-            // A running op 0xc2 fade goes on: native's engine tick advances it whatever the route, and the VM
-            // settles it by its own deadline, so a fade to zero must still release the source when it ends.
-            if (enabled)
-            {
-                if (_bgm.Stream != null)
-                {
-                    _bgm.Play();
-                    System.Threading.Volatile.Write(ref _bgmPlaying, 1);
-                }
-            }
-            else
-            {
-                _bgm.Stop();
-                System.Threading.Volatile.Write(ref _bgmPlaying, 0);
-            }
-        }
-        else if (!enabled && category == (int)AudioMixerCategory.SoundEffect)
-        {
-            CancelScheduledSoundEffectStarts();
-            foreach (AudioStreamPlayer player in _sfx) player.Stop();
-        }
-        else if (!enabled && category == (int)AudioMixerCategory.Voice)
-            StopVoiceForMessageSkip();
-
-        SetAudioBusMuted(category, !enabled);
-    }
-
-    private static void SetAudioBusMuted(int category, bool muted)
-    {
-        string? busName = AudioBusName(category);
-        if (busName == null) return;
-        int bus = AudioServer.GetBusIndex(busName);
-        if (bus >= 0) AudioServer.SetBusMute(bus, muted);
-    }
-
-    private static string? AudioBusName(int category) => category switch
-    {
-        (int)AudioMixerCategory.Master => "Master",
-        (int)AudioMixerCategory.Music => "Music",
-        (int)AudioMixerCategory.SoundEffect => "SFX",
-        (int)AudioMixerCategory.Voice => "Voice",
-        (int)AudioMixerCategory.Movie => "Movie",
-        _ => null,
-    };
-
-    public int QueueVoicePlayback()
-        => System.Threading.Interlocked.Increment(ref _voiceQueuedGeneration);
-
-    public bool IsVoicePlaybackActive
-        => System.Threading.Volatile.Read(ref _voiceCompletedGeneration)
-           < System.Threading.Volatile.Read(ref _voiceQueuedGeneration);
-
-    public void PlayVoice(byte[] oggBytes, string assetName, int generation, bool duckBgm, int duckTargetPercent,
-        bool muted)
-    {
-        var stream = AudioStreamOggVorbis.LoadFromBuffer(oggBytes);
-        if (stream == null)
-        {
-            GD.Print($"OGG load failed {assetName}");
-            CompleteVoiceGeneration(generation);
-            return;
-        }
-        // Native voice_bgm_duck_begin ducks whenever 0x1cf bit 0 is clear, muted voices included. A
-        // suppressed start leaves an earlier duck in place; only the tick's armed release restores it.
-        if (duckBgm)
-            BeginVoiceBgmDuck(generation, duckTargetPercent);
-        stream.Loop = false;
-        _voice.Stream = stream;
-        _voice.VolumeDb = muted ? NativeAudioVolume.ToDecibels(0) : 0.0f;   // op 0x1d5: channel 12 at volume 0, timing unchanged
-        System.Threading.Volatile.Write(ref _voiceStartedGeneration, generation);
-        _voice.Play();
-    }
-
-    public void StopVoiceForMessageSkip()
-    {
-        _voice.Stop();
-        CompleteVoiceGeneration(System.Threading.Volatile.Read(ref _voiceQueuedGeneration));
-    }
-
-    private void UpdateVoicePlaybackState()
-    {
-        int started = System.Threading.Volatile.Read(ref _voiceStartedGeneration);
-        if (started > System.Threading.Volatile.Read(ref _voiceCompletedGeneration) && !_voice.Playing)
-            CompleteVoiceGeneration(started);
-    }
-
-    private void CompleteVoiceGeneration(int generation)
-    {
-        int current;
-        do
-        {
-            current = System.Threading.Volatile.Read(ref _voiceCompletedGeneration);
-            if (current >= generation) return;
-        }
-        while (System.Threading.Interlocked.CompareExchange(
-                   ref _voiceCompletedGeneration, generation, current) != current);
-    }
-
-    public void ArmVoiceBgmDuckRelease() => _voiceBgmDuckReleaseArmed = true;
-
-    // Native engine_main_tick (0x411e12): with BGM ducked, restore it once the voice has ended, the
-    // release is armed (op 0x1bf or a delayed voice start), no explicit BGM fade owns the envelope and
-    // 0x1cf bit 0 is clear. So BGM stays ducked between lines until the next line arms the release.
-    private void UpdateVoiceBgmDuckRelease()
-    {
-        if (!_voiceBgmDuckActive || !_voiceBgmDuckReleaseArmed || IsVoicePlaybackActive) return;
-        if (_bgmFadeTween != null || (_host?.VoiceBgmDuckSuppressed ?? false)) return;
-        FadeBackFromVoiceBgmDuck();
-    }
-
-    // The release swaps run-state 0x4000 for the 0x200 BGM fade: bgm_fade_arm(10000, 1) on a 10 ms period
-    // timer, and bgm_fade_tick@0x464960 adds one progress point per elapsed period up to 100. The level runs
-    // linearly in basis points from the ducked level to full (target 10000, not the saved pre-duck level)
-    // over one second, through the native volume curve. While it runs, voice_bgm_duck_begin refuses to duck,
-    // as for an explicit 0xc2 fade.
-    private const double VoiceBgmDuckReleaseSeconds = 1.0;
-    private const int VoiceBgmDuckReleaseSteps = 100;
-
-    private void FadeBackFromVoiceBgmDuck()
-    {
-        _voiceBgmDuckActive = false;
-        _voiceBgmDuckGeneration = 0;
-        _voiceBgmDuckReleaseArmed = false;
-        StartBgmLevelFade(AudioMixerSettings.MaximumVolume, VoiceBgmDuckReleaseSteps, VoiceBgmDuckReleaseSeconds);
-    }
-
-    private void SetBgmLevel(int basisPoints)
-    {
-        _bgmLevel = System.Math.Clamp(basisPoints, 0, AudioMixerSettings.MaximumVolume);
-        ApplyBgmVolume(_bgmLevel);
-    }
-
-    // A fade step: bgm_fade_tick applies the interpolated level without committing it (+0x420 changes only at
-    // 100 %), so a fade re-armed mid-way starts again from the last committed level.
-    private void ApplyBgmVolume(int basisPoints)
-        => _bgm.VolumeDb = NativeAudioVolume.ToDecibels(
-            System.Math.Clamp(basisPoints, 0, AudioMixerSettings.MaximumVolume));
-
-    // bgm_fade_tick@0x464960: the level at progress p is (from × (100 − p) + target × p) / 100, applied in
-    // whole steps; the target is committed when the fade completes, and an op 0xc2 fade that reaches zero
-    // releases the source (bgm_stop_release).
-    private void StartBgmLevelFade(int target, int steps, double realDurationSeconds, bool releaseAtZero = false)
-    {
-        int from = _bgmLevel;
-        target = System.Math.Clamp(target, 0, AudioMixerSettings.MaximumVolume);
-        var tween = CreateTween();
-        _bgmFadeTween = tween;
-        _bgmFadeTarget = target;
-        _bgmFadeReleasesAtZero = releaseAtZero;
-        tween.Finished += () =>
-        {
-            if (!ReferenceEquals(_bgmFadeTween, tween)) return;
-            _bgmFadeTween = null;
-            CommitBgmFadeEndpoint(target, releaseAtZero);
-        };
-        tween.TweenMethod(Callable.From<float>(progress =>
-        {
-            int points = (int)System.Math.Floor(progress * steps) * (100 / steps);
-            ApplyBgmVolume(NativeAudioVolume.InterpolateFade(from, target, points));
-        }), 0.0f, 1.0f, realDurationSeconds);
-    }
-
-    private void ReleaseWithheldSoundEffectStarts()
-    {
-        if (_sfxStartsWithheld.Count == 0 || (_host?.StatementBlockActive ?? false)) return;
-        Action[] starts = _sfxStartsWithheld.ToArray();
-        _sfxStartsWithheld.Clear();
-        foreach (Action start in starts) start();
-    }
-
-    private void BeginVoiceBgmDuck(int generation, int targetPercent)
-    {
-        // Native voice ducking is suppressed while an explicit 0xc2 BGM fade owns the envelope.
-        if (_bgmFadeTween != null) return;
-        if (!_voiceBgmDuckActive)
-            _voiceBgmDuckRestoreLevel = _bgmLevel;
-        _voiceBgmDuckActive = true;
-        _voiceBgmDuckGeneration = generation;
-        _voiceBgmDuckReleaseArmed = false;
-        // voice_bgm_duck_begin: MusicFadeOnVoicePlayingVol × 100 basis points (0 reads as 100), applied at
-        // once by a terminal fade tick.
-        int target = targetPercent * 100;
-        SetBgmLevel(target == 0 ? 100 : target);
-    }
-
-    private void RestoreVoiceBgmDuck()
-    {
-        if (!_voiceBgmDuckActive) return;
-        SetBgmLevel(_voiceBgmDuckRestoreLevel);
-        _voiceBgmDuckActive = false;
-        _voiceBgmDuckGeneration = 0;
-        _voiceBgmDuckReleaseArmed = false;
-    }
-
-    public void LoadSoundEffect(byte[] wavBytes, string assetName, int channel)
-    {
-        if ((uint)channel >= (uint)_sfx.Length) return;
-        _sfxGenerations[channel]++;
-        _sfx[channel].Stop();
-        _sfx[channel].Stream = null;
-        System.Threading.Volatile.Write(ref _sfxPlaying[channel], 0);
-        // This is intentionally a Godot-only compatibility boundary. The VFS and engine retain the
-        // original WAV bytes; Godot sees an AGE-compatible first-RIFF copy without CP932 INFO metadata.
-        byte[] godotWav = RiffWaveSanitizer.PrepareForGodot(wavBytes);
-        var stream = AudioStreamWav.LoadFromBuffer(godotWav);
-        if (stream == null) { GD.Print($"WAV load failed {assetName}"); return; }
-        stream.LoopMode = AudioStreamWav.LoopModeEnum.Disabled;
-        _sfx[channel].VolumeDb = 0;
-        _sfx[channel].Stream = stream;
-    }
-
-    public void StartSoundEffect(int channel) => StartSoundEffect(channel, 0);
-
-    public void StartSoundEffect(int channel, int startMode)
-    {
-        if ((uint)channel >= (uint)_sfx.Length || _sfx[channel].Stream == null) return;
-        if (_sfx[channel].Stream is AudioStreamWav wav)
-            wav.LoopMode = startMode == 0
-                ? AudioStreamWav.LoopModeEnum.Disabled
-                : AudioStreamWav.LoopModeEnum.Forward;
-        _sfx[channel].Play();
-        System.Threading.Volatile.Write(ref _sfxPlaying[channel], 1);
-    }
-
-    public void ScheduleSoundEffectStart(int channel, int startMode, double realDelaySeconds)
-    {
-        if ((uint)channel >= (uint)_sfx.Length || _sfx[channel].Stream == null) return;
-        int generation = _sfxGenerations[channel];
-        void StartIfCurrent()
-        {
-            if (_sfxGenerations[channel] != generation || _sfx[channel].Stream == null) return;
-            if (_host?.StatementBlockActive ?? false)
-            {
-                // Native tick withholds delayed SFX starts while a statement block (op 0x1f4) is open.
-                _sfxStartsWithheld.Add(StartIfCurrent);
-                return;
-            }
-            if (_sfx[channel].Stream is AudioStreamWav wav)
-                wav.LoopMode = startMode == 0
-                    ? AudioStreamWav.LoopModeEnum.Disabled
-                    : AudioStreamWav.LoopModeEnum.Forward;
-            _sfx[channel].Play();
-            System.Threading.Volatile.Write(ref _sfxPlaying[channel], 1);
-        }
-        if (realDelaySeconds <= 0)
-        {
-            StartIfCurrent();
-            return;
-        }
-        GetTree().CreateTimer(realDelaySeconds).Timeout += StartIfCurrent;
-    }
-
-    public void CancelScheduledSoundEffectStarts()
-    {
-        // Native scene_context_init_reset calls sfx_clear_scheduled_starts. Generation invalidation
-        // cancels the timer callbacks without stopping active sounds or unloading their channel streams.
-        for (int channel = 0; channel < _sfxGenerations.Length; channel++)
-            _sfxGenerations[channel]++;
-    }
-
-    public void ReleaseSoundEffect(int channel)
-    {
-        if ((uint)channel >= (uint)_sfx.Length) return;
-        _sfxGenerations[channel]++;
-        _sfx[channel].Stop();
-        _sfx[channel].Stream = null;
-        System.Threading.Volatile.Write(ref _sfxPlaying[channel], 0);
-    }
-
-    public bool IsSoundChannelPlaying(int channel) => channel switch
-    {
-        >= 0 and < 10 => System.Threading.Volatile.Read(ref _sfxPlaying[channel]) != 0,
-        11 => System.Threading.Volatile.Read(ref _bgmPlaying) != 0,
-        12 => IsVoicePlaybackActive,
-        _ => false,
-    };
-
-    private void UpdateSoundChannelPlaybackState()
-    {
-        if (System.Threading.Volatile.Read(ref _bgmPlaying) != 0 && !_bgm.Playing)
-            System.Threading.Volatile.Write(ref _bgmPlaying, 0);
-        for (int channel = 0; channel < _sfx.Length; channel++)
-            if (System.Threading.Volatile.Read(ref _sfxPlaying[channel]) != 0
-                && !_sfx[channel].Playing)
-                System.Threading.Volatile.Write(ref _sfxPlaying[channel], 0);
-    }
-
-    // Op 0xc2 target is a level in basis points (CONFIG passes setting × 100), not a percent. The fade runs in the
-    // background; the VM does not wait for it.
-    public void FadeBgm(int targetBasisPoints, int steps, double realDurationSeconds)
-    {
-        RestoreVoiceBgmDuck();
-        CancelBgmFade();
-        if (realDurationSeconds <= 0) { CommitBgmFadeEndpoint(targetBasisPoints, true); return; }
-        StartBgmLevelFade(targetBasisPoints, steps, realDurationSeconds, releaseAtZero: true);
-    }
-
-    // Ops 0xb7/0xb8/0xb9/0xbf end a running fade before they act: bgm_fade_tick(..., 100) applies its endpoint.
-    public void CompleteBgmFade()
-    {
-        if (_bgmFadeTween == null) return;   // it has already ended
-        CancelBgmFade();
-        CommitBgmFadeEndpoint(_bgmFadeTarget, _bgmFadeReleasesAtZero);
-    }
-
-    private void CommitBgmFadeEndpoint(int target, bool releaseAtZero)
-    {
-        if (releaseAtZero && target <= 0) StopBgm();
-        else SetBgmLevel(target);
-    }
-
-    private void CancelBgmFade()
-    {
-        var tween = _bgmFadeTween;
-        _bgmFadeTween = null;
-        if (tween?.IsValid() == true)
-            tween.Kill();
-    }
-
-    private static void EnsureAudioBuses()
-    {
-        foreach (string name in new[] { "Music", "SFX", "Voice", "Movie" })
-        {
-            if (AudioServer.GetBusIndex(name) >= 0) continue;
-            AudioServer.AddBus();
-            AudioServer.SetBusName(AudioServer.BusCount - 1, name);
-        }
-    }
-
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Godot;
+using Ome.Engine.Devices;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
@@ -74,37 +75,26 @@ public partial class Main
         AssetEntry bgmEntry = _catalog.Files.First(entry =>
             entry.Name.EndsWith(".OGG", StringComparison.OrdinalIgnoreCase));
         AudioPayload bgm = selftestResources.ReadAudio(bgmEntry);
-        FadeBgm(0, 100, 10.0);
-        bool bgmFadeStarted = _bgmFadeTween?.IsValid() == true;
-        PlayBgm(bgm.Bytes, bgm.Name);
-        bool bgmReplacementCancelsFade = bgmFadeStarted
-                                         && _bgmFadeTween == null
-                                         && System.Math.Abs(_bgm.VolumeDb) < 0.001f;
-        RestartBgm(bgm.Bytes, bgm.Name, 0);
-        bool bgmOneShotModeOk = (_bgm.Stream as AudioStreamOggVorbis)?.Loop == false;
-        RestartBgm(bgm.Bytes, bgm.Name, 1);
-        bool bgmLoopModeOk = (_bgm.Stream as AudioStreamOggVorbis)?.Loop == true;
-        // A BGM op first ends a running op 0xc2 fade (bgm_fade_tick(..., 100)); a zero target releases the source.
-        FadeBgm(0, 100, 10.0);
-        CompleteBgmFade();
-        bool bgmFadeCompletionReleases = _bgm.Stream == null && !_bgm.Playing && _bgmFadeTween == null;
-        RestartBgm(bgm.Bytes, bgm.Name, 1);
-        // Voice duck release: native fades back to full over 1 s and refuses a new duck meanwhile.
-        BeginVoiceBgmDuck(1, 50);
-        float duckedDb = _bgm.VolumeDb;
-        _voiceBgmDuckReleaseArmed = true;
-        if (!IsVoicePlaybackActive) UpdateVoiceBgmDuckRelease();
-        bool releaseFading = _bgmFadeTween?.IsValid() == true && !_voiceBgmDuckActive;
-        BeginVoiceBgmDuck(2, 50);
-        bool voiceDuckReleaseFadeOk = releaseFading
-                                      && !_voiceBgmDuckActive
-                                      && System.Math.Abs(duckedDb - NativeAudioVolume.ToDecibels(5000)) < 0.001f
-                                      && System.Math.Abs(_bgm.VolumeDb - duckedDb) < 0.001f;
-        StopBgm();
-        bool bgmStopReleaseOk = _bgm.Stream == null
-                                && !_bgm.Playing
-                                && _bgmFadeTween == null
-                                && System.Math.Abs(_bgm.VolumeDb) < 0.001f;
+        // The audio device (engine layering milestone 6), applied here as its deferred commands apply: the native's
+        // start modes reach the stream, a volume reaches the player, an unload drops the stream, and a play with
+        // nothing to play is reported ended at once. The envelope, ducking and delays are the native's
+        // (AudioNativeTests).
+        const int selfTestChannel = Ome.Engine.Natives.Audio.BgmChannel;
+        var clip = new AudioClip(bgm.Name, bgm.Bytes, AudioEncoding.OggVorbis);
+        LoadAudioChannel(selfTestChannel, AudioBus.Music, clip);
+        PlayAudioChannel(selfTestChannel, loop: false, volumeDb: 0, playId: 1);
+        bool bgmOneShotModeOk = (_audioChannels[selfTestChannel].Stream as AudioStreamOggVorbis)?.Loop == false
+                                && _audioChannels[selfTestChannel].Bus == "Music";
+        PlayAudioChannel(selfTestChannel, loop: true, volumeDb: 0, playId: 2);
+        bool bgmLoopModeOk = (_audioChannels[selfTestChannel].Stream as AudioStreamOggVorbis)?.Loop == true;
+        SetAudioChannelVolume(selfTestChannel, NativeAudioVolume.ToDecibels(5000));
+        bool audioVolumeOk = System.Math.Abs(_audioChannels[selfTestChannel].VolumeDb - NativeAudioVolume.ToDecibels(5000)) < 0.001f;
+        StopAudioChannel(selfTestChannel, unload: true);
+        bool bgmStopReleaseOk = _audioChannels[selfTestChannel].Stream == null && !_audioChannels[selfTestChannel].Playing;
+        while (_audioEnded.TryDequeue(out _)) { }
+        PlayAudioChannel(selfTestChannel, loop: false, volumeDb: 0, playId: 3);
+        bool emptyPlayEndsOk = _audioEnded.TryDequeue(out AudioChannelEnded ended)
+                               && ended == new AudioChannelEnded(selfTestChannel, 3);
         IReadOnlyList<(int X, int Y)> outline =
             AgeGlyphMaskCompositor.GetMode3OutlineOffsets(1, 1);
         bool textEffectModesOk =
@@ -357,8 +347,8 @@ public partial class Main
             clearedPolicy == new BackbufferPublicationPolicy(false, false);
         ok &= launcherOk && sleepMinimumOk && sleepPresentationOk && inputTranslationOk && cp932WavMetadataOk
               && firstRiffBoundaryOk
-              && bgmReplacementCancelsFade && bgmOneShotModeOk && bgmLoopModeOk && bgmFadeCompletionReleases
-              && bgmStopReleaseOk && voiceDuckReleaseFadeOk && textEffectModesOk && fontCalibrationOk
+              && bgmOneShotModeOk && bgmLoopModeOk && audioVolumeOk
+              && bgmStopReleaseOk && emptyPlayEndsOk && textEffectModesOk && fontCalibrationOk
               && immediateSurfaceTextOk
               && liveRetainedTextOk
               && historyRetainedTextOk
@@ -367,7 +357,7 @@ public partial class Main
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
                          $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
                          $"first-riff-boundary=ok; " +
-                         $"bgm-fade-replacement=ok; bgm-start-modes-stop=ok; " +
+                         $"audio-device=ok; " +
                          $"text-effect-modes=ok; font-calibration=ok; " +
                          $"immediate-surface-text={immediateSurfaceTextMode}; " +
                          $"live-adv-text={liveRetainedTextMode}; " +
@@ -380,11 +370,9 @@ public partial class Main
                       $"sleep-presentation={sleepPresentationOk}; " +
                       $"native-key-translation={inputTranslationOk}; cp932-wav-info={cp932WavMetadataOk}; " +
                       $"first-riff-boundary={firstRiffBoundaryOk}; " +
-                      $"bgm-fade-replacement={bgmReplacementCancelsFade}; " +
-                      $"bgm-one-shot={bgmOneShotModeOk}; bgm-loop={bgmLoopModeOk}; " +
-                      $"bgm-fade-completion={bgmFadeCompletionReleases}; " +
-                      $"bgm-stop-release={bgmStopReleaseOk}; " +
-                      $"voice-duck-release-fade={voiceDuckReleaseFadeOk}; " +
+                      $"audio-one-shot={bgmOneShotModeOk}; audio-loop={bgmLoopModeOk}; " +
+                      $"audio-volume={audioVolumeOk}; audio-unload={bgmStopReleaseOk}; " +
+                      $"audio-empty-play-ends={emptyPlayEndsOk}; " +
                       $"text-effect-modes={textEffectModesOk}; font-calibration={fontCalibrationOk}; " +
                       $"immediate-surface-text={immediateSurfaceTextOk}({immediateSurfaceTextMode}); " +
                       $"live-adv-text={liveRetainedTextOk}({liveRetainedTextMode}); " +

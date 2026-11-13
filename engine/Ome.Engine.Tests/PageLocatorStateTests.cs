@@ -28,7 +28,7 @@ public class PageLocatorStateTests
                 Assert.NotNull(warning);
                 Assert.Contains(map, warning);
                 locator.Step("SC0000.BIN", 0x10);
-                locator.Wait(1);
+                locator.WaitReached(1);
                 Assert.StartsWith("SC0000 P001 · wait SC0000@0x10", locator.CurrentDisplay);
             }
             Assert.Equal(0, new FileInfo(map).Length);
@@ -50,7 +50,7 @@ public class PageLocatorStateTests
             {
                 Assert.Null(warning);
                 locator.Step("SC0000.BIN", 0x10);
-                locator.Wait(1);
+                locator.WaitReached(1);
             }
             string[] lines = File.ReadAllLines(map);
             Assert.Single(lines);
@@ -102,7 +102,7 @@ public class PageLocatorStateTests
             locator.Text(0x70, "After a blank row", null, Run(140, lastInk: 210, firstWord: 60));
             locator.Text(0x80, "Wil", null, Run(400, lastInk: 36, firstWord: 36, layout: 9));   // the name plate
             locator.Text(0x90, "Cleared", null, Run(400, lastInk: 84, firstWord: 84, layout: 9)); // back to its start
-            locator.Wait(1);
+            locator.WaitReached(1);
         })[0];
 
         Assert.Equal("It was a long line that reached\nthe edge. (aside)\nShort.\n Indented\n\nAfter a blank row\nWil\nCleared",
@@ -121,7 +121,7 @@ public class PageLocatorStateTests
         {
             locator.Text(0x10, "王政が崩壊すると、", null, Run(0, lastInk: 590, firstWord: 0));
             locator.Text(0x20, "国は", null, Run(28, lastInk: 48, firstWord: 10));   // 590+10 fits only with no space
-            locator.Wait(1);
+            locator.WaitReached(1);
         })[0];
         Assert.Equal(["break"], page.GetProperty("breaks").EnumerateArray().Select(item => item.GetString()));
     }
@@ -134,10 +134,10 @@ public class PageLocatorStateTests
             locator.Text(0x10, "一行目", "The first message, drawn whole", Run(0, lastInk: 72, firstWord: 24));
             locator.Text(0x20, "二行目", "", Run(28, lastInk: 72, firstWord: 24));            // drawn by the first run
             locator.Text(0x30, "次の文", "The next one", Run(56, lastInk: 72, firstWord: 24), cut: true);
-            locator.Wait(1);
+            locator.WaitReached(1);
             locator.Text(0x40, "続き", "", Run(0, lastInk: 48, firstWord: 24));
-            locator.Wait(2);
-            locator.Wait(3);
+            locator.WaitReached(2);
+            locator.WaitReached(3);
         });
 
         Assert.Equal("一行目\n二行目\n次の文", pages[0].GetProperty("dialogue").GetString());

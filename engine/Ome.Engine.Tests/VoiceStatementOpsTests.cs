@@ -11,16 +11,16 @@ public class VoiceStatementOpsTests
 {
     private static readonly Operand[] None = Array.Empty<Operand>();
 
-    private static (VirtualMachine Vm, RecordingHost Host) Run(params (int, Operand[])[] ops)
+    private static (VirtualMachine Vm, AudioRig Rig) Run(params (int, Operand[])[] ops)
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var list = new List<(int, Operand[])>(ops) { (0x2, None) };
         var script = ScriptAssembler.Assemble(table, "VOICE", list, Array.Empty<string>());
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var rig = new AudioRig();
+        var vm = rig.Vm(script, table, new RecordingHost());
         vm.Run();
         Assert.Equal("exit", vm.HaltReason);
-        return (vm, host);
+        return (vm, rig);
     }
 
     private static Operand Imm(long value) => new(0, value);
@@ -28,51 +28,61 @@ public class VoiceStatementOpsTests
     [Fact]
     public void MuteNextVoiceSilencesOnlyTheFollowingVoice()
     {
-        var (_, host) = Run(
+        var (_, rig) = Run(
             (0x1d5, None), (0xc4, new[] { Imm(10) }),   // muted: the request is promoted to 0x10001
             (0xc4, new[] { Imm(11) }),                  // a promoted request belongs to the earlier voice
             (0x1d5, None), (0x1d5, None), (0xc4, new[] { Imm(12) }),
             (0xc4, new[] { Imm(13) }));
 
-        Assert.Equal([(10L, 0, true), (11L, 0, false), (12L, 0, true), (13L, 0, false)], host.VoicePlaybacks);
+        Assert.Equal([(10L, true), (11L, false), (12L, true), (13L, false)], rig.Device.Voices);
     }
 
     [Fact]
     public void ResetMessageVoiceStateStopsTheVoiceAndClearsAMuteRequest()
     {
-        var (_, host) = Run(
+        var (_, rig) = Run(
             (0x1d5, None), (0x1bc, None), (0xc4, new[] { Imm(10) }),
             (0x1d5, None), (0xc4, new[] { Imm(11) }), (0x1bc, None), (0xc4, new[] { Imm(12) }));
 
-        Assert.Equal([(10L, 0, false), (11L, 0, true), (12L, 0, false)], host.VoicePlaybacks);
-        Assert.Equal(2, host.VoiceStops);
+        Assert.Equal([(10L, false), (11L, true), (12L, false)], rig.Device.Voices);
+        Assert.Equal(2, rig.Device.CommandsStartingWith("stop 12").Count);
+        Assert.True(rig.Audio.IsVoicePlaying);
     }
 
     [Fact]
     public void HistoryVoiceIsAudibleAndConsumesAMuteRequest()
     {
-        var (_, host) = Run((0x1d5, None), (0x1bd, new[] { Imm(10) }), (0xc4, new[] { Imm(11) }));
+        var (_, rig) = Run((0x1d5, None), (0x1bd, new[] { Imm(10) }), (0xc4, new[] { Imm(11) }));
 
-        Assert.Equal([(10L, 1, false), (11L, 0, false)], host.VoicePlaybacks);
+        Assert.Equal([(10L, false), (11L, false)], rig.Device.Voices);
+        Assert.Equal(0, rig.Audio.VoicePlaybackVariant);
+        Assert.Equal(1, Run((0x1bd, new[] { Imm(10) })).Rig.Audio.VoicePlaybackVariant);
     }
 
     [Fact]
-    public void ArmVoiceDuckReleaseReachesTheHost()
+    public void ArmVoiceDuckReleaseFadesTheBgmBackOnceTheVoiceEnds()
     {
-        var (_, host) = Run((0xc4, new[] { Imm(10) }), (0x1bf, None), (0x1bf, None));
+        var (_, rig) = Run((0xbf, new[] { Imm(5) }), (0xc4, new[] { Imm(10) }), (0x1bf, None));
+        string ducked = $"volume 11 {RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(5000))}";
+        Assert.Equal([ducked], rig.Device.CommandsStartingWith("volume 11"));   // sound:MusicFadeOnVoicePlayingVolume 50
 
-        Assert.Equal(2, host.VoiceBgmDuckReleaseArms);
+        rig.Advance(500);
+        Assert.Single(rig.Device.CommandsStartingWith("volume 11"));   // the voice still plays: the duck holds
+        rig.Device.End(12);
+        rig.Advance(0);   // the end is reported: the release starts
+        rig.Advance(1000);
+        Assert.Equal($"volume 11 {RecordingAudioDevice.Db(0)}", rig.Device.CommandsStartingWith("volume 11")[^1]);
     }
 
     [Fact]
-    public void OnlyTheOutermostStatementBlockReachesTheHost()
+    public void OnlyTheOutermostStatementBlockCloses()
     {
-        var (_, host) = Run(
-            (0x1f4, None), (0x1f4, None), (0x1f5, None), (0x1f5, None),
-            (0x1f5, None),                              // an unmatched close is ignored, as natively
-            (0x1f4, None), (0x1f5, None));
+        (int, Operand[]) open = (0x1f4, None), close = (0x1f5, None);
 
-        Assert.Equal([true, false, true, false], host.StatementBlockChanges);
+        Assert.True(Run(open, open, close).Rig.Tick.StatementBlockOpen);
+        Assert.False(Run(open, open, close, close).Rig.Tick.StatementBlockOpen);
+        Assert.True(Run(open, close, close, open).Rig.Tick.StatementBlockOpen);   // an unmatched close is ignored
+        Assert.False(Run(open, close, close, open, close).Rig.Tick.StatementBlockOpen);
     }
 
     [Fact]

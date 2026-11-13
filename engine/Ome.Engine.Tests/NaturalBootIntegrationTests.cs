@@ -120,8 +120,9 @@ public class NaturalBootIntegrationTests
             _kamidoriAdvAudioBaseline = AudioRequestCount;
         }
 
-        private int AudioRequestCount => BgmTracks.Count + BgmRestartRequests.Count
-            + Voices.Count + SfxLoads.Count;
+        public RecordingAudioDevice? AudioDevice;
+
+        private int AudioRequestCount => AudioDevice?.Commands.Count ?? 0;
 
         public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
         {
@@ -304,12 +305,13 @@ public class NaturalBootIntegrationTests
         var scripts = new Sys4ScriptProvider(
             table, catalog, new Sys4AssetStore(catalog, gameRoot, looseRoots));
         // Kamidori's 1024x576 title menu begins at x=606; its first row spans y=286..340.
-        var host = new NewGameInputHost(700, 300);
+        var rig = new AudioRig();
+        var host = new NewGameInputHost(700, 300) { AudioDevice = rig.Device, Clock = rig.Clock };
         var sink = new KamidoriNaturalBootSink();
         var vm = new VirtualMachine(
             scripts.RequireByName(profile.NaturalBootScript), table, host,
             new VmOptions(MaxSteps: 5_000_000), scripts, sink,
-            build: EngineBuilds.ForProfile(profile));
+            build: EngineBuilds.ForProfile(profile), skipAndAuto: rig.Skip, audio: rig.Audio, tick: rig.Tick);
         host.Vm = vm;
         sink.OnEnter = name =>
         {

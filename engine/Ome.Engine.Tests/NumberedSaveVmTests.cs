@@ -198,6 +198,7 @@ public class NumberedSaveVmTests
             var liveHistory = new AdvTextHistory();
             var trace = new RecordingTraceSink();
             var host = new RecordingHost();
+            var audio = new AudioRig();
             var vm = new VirtualMachine(
                 loader, Table, host, provider: new MapProvider(
                     new()
@@ -209,7 +210,8 @@ public class NumberedSaveVmTests
                     {
                         ["CALLBACK_LOAD.BIN"] = callback,
                     }),
-                sink: trace, textHistory: liveHistory, nativeDatStore: store);
+                sink: trace, textHistory: liveHistory, nativeDatStore: store,
+                skipAndAuto: audio.Skip, audio: audio.Audio, tick: audio.Tick);
             vm.Globals[0x10] = 999;
             vm.Globals[0x123] = 999;
             vm.Globals[0x124] = 777;           // past the saved integer prefix
@@ -233,11 +235,12 @@ public class NumberedSaveVmTests
             Assert.Equal("復帰", vm.GlobalStrings[0]);
             Assert.Equal(0x123, vm.GlobalPointers[0]);
             Assert.False(vm.GlobalStrings.ContainsKey(1));
-            Assert.Equal([24L], host.BgmTracks);
-            Assert.Equal(
-                [(0x3321L, 1), (0x2aeaL, 2)],
-                host.SfxLoads);
-            Assert.Equal(Enumerable.Range(0, 10), host.SfxReleases);
+            Assert.Equal([24L], audio.Device.BgmTracks);
+            Assert.Equal(["load 1 SoundEffect sfx:13089", "load 2 SoundEffect sfx:10986"],   // 0x3321 and 0x2aea
+                         audio.Device.CommandsStartingWith("load ").Where(load => !load.StartsWith("load 11 ")));
+            Assert.Equal(Enumerable.Range(0, 10).Select(channel => $"unload {channel}"),
+                         audio.Device.CommandsStartingWith("unload "));
+            Assert.Equal([0L, 0x3321, 0x2aea, 0, 0, 0, 0, 0, 0, 0], audio.Audio.SoundEffectResourceIds);
             // The saved page's group is dropped (text_history_deserialize), since the resumed page records it again.
             Assert.Equal("履歴復帰", liveHistory.Records.Single().Text);
             Assert.Equal(2, liveHistory.Entries.Count);
@@ -525,7 +528,8 @@ public class NumberedSaveVmTests
             history.DefineLayout(1, 100, 50, 0, 0);
             history.AppendText(1, 0, "live", AdvTextStyle.Default);
             var host = new RecordingHost();
-            var vm = new VirtualMachine(FullLoadScript(), Table, host, textHistory: history, nativeDatStore: store);
+            var audio = new AudioRig();
+            var vm = audio.Vm(FullLoadScript(), Table, host, textHistory: history, nativeDatStore: store);
             vm.Globals[0x10] = 999;
             vm.Globals[0x123] = 999;
             vm.GlobalStrings[0] = "live";
@@ -539,9 +543,7 @@ public class NumberedSaveVmTests
             Assert.Equal(999, vm.Globals[0x10]);           // a load zeroes every bank before copying the saved prefix
             Assert.Equal(999, vm.Globals[0x123]);
             Assert.Equal("live", vm.GlobalStrings[0]);
-            Assert.Empty(host.BgmTracks);
-            Assert.Empty(host.SfxLoads);
-            Assert.Empty(host.SfxReleases);
+            Assert.Empty(audio.Device.Commands);   // a failed load touches no channel
             Assert.Equal("live", Assert.Single(history.Records).Text);
             GfxSurfacePersistenceState surface = Assert.Single(vm.Gfx.CapturePersistenceSnapshot().Surfaces);
             Assert.Equal((15, 0x3383L), (surface.Slot, surface.ResourceId));

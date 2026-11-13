@@ -82,7 +82,7 @@ public sealed partial class EngineHost
         // A root reload's WakeAllWaits may have left the event set with no dialog waiting: drop it before showing.
         _diagnosticMessageCompleted.Reset();
         _frontEnd.ShowAgeDiagnostic(message);
-        while (!_stopping && !_diagnosticMessageCompleted.WaitOne(50)) { }
+        while (!_stopping && !WaitModal(_diagnosticMessageCompleted, 50)) { }
     }
 
     public void CompleteDiagnosticMessage() => _diagnosticMessageCompleted.Set();
@@ -99,7 +99,7 @@ public sealed partial class EngineHost
         });
         _scriptErrorCompleted.Reset();
         _frontEnd.ShowAgeScriptError(message);
-        while (!_stopping && !_scriptErrorCompleted.WaitOne(50)) { }
+        while (!_stopping && !WaitModal(_scriptErrorCompleted, 50)) { }
         if (_stopRequested) return ScriptErrorChoice.Abort;
         if (_rootReloadInterrupt) return ScriptErrorChoice.Retry;
         return _scriptErrorChoice;
@@ -123,7 +123,7 @@ public sealed partial class EngineHost
         });
         _fullwidthTextEditCompleted.Reset();
         _frontEnd.ShowAgeFullwidthTextEditor(request.InitialText);
-        while (!_stopping && !_fullwidthTextEditCompleted.WaitOne(50)) { }
+        while (!_stopping && !WaitModal(_fullwidthTextEditCompleted, 50)) { }
         lock (_fullwidthTextEditLock) return _fullwidthTextEditResult;
     }
 
@@ -184,7 +184,7 @@ public sealed partial class EngineHost
         if (_skip.FastForwardActive && now - _lastSynchronizedPresentationTimestamp < FastForwardPresentationInterval)
             return;
         while (Interlocked.Read(ref _consumedPresentationRequestGeneration) < requested && !_stopping)
-            _presentationRequestConsumed.WaitOne(50);
+            WaitAndTick(_presentationRequestConsumed, 50);
         _lastSynchronizedPresentationTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
     }
 
@@ -270,7 +270,7 @@ public sealed partial class EngineHost
         if (textPage)
         {
             Pages++;
-            _locator.Wait(Pages);
+            _locator.WaitReached(Pages);
             _frontEnd.PageBreak();
             lock (_textLock)
             {
@@ -297,7 +297,7 @@ public sealed partial class EngineHost
                 // input nor lets Auto time out until it closes.
                 if (!_frontendModalRelease.IsSet)
                 {
-                    _frontendModalRelease.Wait(50);
+                    WaitModal(_frontendModalRelease, 50);
                     continue;
                 }
                 while (true)
@@ -333,13 +333,13 @@ public sealed partial class EngineHost
                     messageSkipped = true;
                     break;
                 }
-                if (autoTimer.Poll(autoWaitState(), _frontEnd.IsVoicePlaybackActive, _clock.NowMs))
+                if (autoTimer.Poll(autoWaitState(), _audio.IsVoicePlaying, _clock.NowMs))
                 {
                     autoAdvanced = true;
                     break;
                 }
                 if (_gate.Wait(0)) break;
-                WaitHandle.WaitAny(new[] { _gate.AvailableWaitHandle, _inputCallbackSignal, _frameSignal });
+                WaitAnyAndTick(new[] { _gate.AvailableWaitHandle, _inputCallbackSignal, _frameSignal });
                 if (_gate.Wait(0)) break;
             }
         }
@@ -456,13 +456,11 @@ public sealed partial class EngineHost
     }
 
     /// <summary>What a change of run-state 0x08000000 does here until its natives exist (SkipAndAuto tells the host
-    /// each time a channel is set). Starting completes the reveal and wakes the waits; ending plays the voice that
-    /// fast-forward held back (<see cref="PlayVoice(long, int, bool)"/>).</summary>
+    /// each time a channel is set). Starting completes the reveal and wakes the waits. (The audio native hears the end
+    /// itself and plays the voice fast-forward held back.)</summary>
     public void FastForwardChannelSet(FastForwardChannel channel, bool value, bool active, bool changed)
     {
         if (!changed) return;
-        // The voice was held under the native's state lock while fast-forward was on, so it is here to take now.
-        HeldVoice? queued = active ? null : Interlocked.Exchange(ref _queuedSkippedVoice, null);
         _timeline?.State("message-skip", new()
         {
             ["enabled"] = active,
@@ -476,9 +474,7 @@ public sealed partial class EngineHost
             lock (_textLock) _advTextForceComplete = true;
             _frameSignal.Set();
             _inputCallbackSignal.Set();
-            return;
         }
-        if (queued != null) DispatchVoice(queued.Audio, queued.PlaybackVariant, queued.Muted);
     }
 
     public void WakeInputCallbackService() => _inputCallbackSignal.Set();
@@ -501,7 +497,7 @@ public sealed partial class EngineHost
         {
             RequestSynchronizedPresentation();
             while (!_stopping && !triggered())
-                WaitHandle.WaitAny(new WaitHandle[] { _inputCallbackSignal, _frameSignal }, 50);
+                WaitAnyAndTick(new WaitHandle[] { _inputCallbackSignal, _frameSignal }, 50);
         }
         finally
         {
@@ -641,7 +637,7 @@ public sealed partial class EngineHost
                 // Native's run-state-0x400 service polls every tick (Sleep(0)), so the wait ends within a
                 // millisecond of its effect. On the real-time clock this wait polls as often; a frame-stepped
                 // clock moves only with frames.
-                _frameSignal.WaitOne(_clock.IsRealTime ? 1 : 50);
+                WaitAndTick(_frameSignal, _clock.IsRealTime ? 1 : 50);
                 if (_timeline == null) continue;
                 var active = gfx.SnapshotForegroundTransitions(_clock.NowMs);
                 var directional = gfx.SnapshotDirectionalBlurRangeTransitions(_clock.NowMs);
@@ -849,7 +845,7 @@ public sealed partial class EngineHost
                     complete = _screenTransition == null || _screenTransition.Forced
                         || _clock.NowMs - start >= duration;
                 if (complete) break;
-                _frameSignal.WaitOne(_clock.RealMillisecondsUntil(start + duration, 50));
+                WaitAndTick(_frameSignal, _clock.RealMillisecondsUntil(start + duration, 50));
             }
             // Publish the exact target endpoint before the following surface releases/root reload.
             lock (_screenTransitionLock)
@@ -861,7 +857,7 @@ public sealed partial class EngineHost
             {
                 lock (_screenTransitionLock)
                     if (_screenTransition == null) break;
-                _frameSignal.WaitOne(50);
+                WaitAndTick(_frameSignal, 50);
             }
         }
         finally
@@ -905,6 +901,8 @@ public sealed partial class EngineHost
     // Native retained-object writes are not front-buffer writes. Publish explicit/service-boundary dirtiness
     // once, then continue only while the sampled retained scene can actually change. The wait atlas advances
     // its ordinary retained source cell here so it contributes only when the frame actually changes.
+    private bool _presentationWithheldByStatementBlock;   // main thread only: brackets the timeline's withheld stretches
+
     public HostPresentationReason ConsumePresentationReasons(GfxState gfx)
     {
         UpdateRetainedWaitIndicator(gfx);
@@ -914,7 +912,7 @@ public sealed partial class EngineHost
         // unless run-state 0x400 parks the interpreter on a transition. Explicit present-frame (op 0x20c)
         // still renders. Scripts that keep a block open across a wait (ADDEXP, MES) call present-frame
         // themselves. Leave the retained-state reasons pending so the next explicit present publishes them.
-        bool withheld = StatementBlockActive
+        bool withheld = _tick.StatementBlockOpen
             && System.Threading.Volatile.Read(ref _presentRequested) == 0
             && !screenTransitionActive && !IsTransitionWaiting;
         if (withheld != _presentationWithheldByStatementBlock)
@@ -1005,10 +1003,6 @@ public sealed partial class EngineHost
         _diagnosticMessageCompleted.Reset();
         _scriptErrorCompleted.Reset();
         _fullwidthTextEditCompleted.Reset();
-        Interlocked.Exchange(ref _queuedSkippedVoice, null);   // the native zeroed run-state 0x08000000 first
-        lock (_scheduledVoiceLock) _scheduledVoice = null;
-        System.Threading.Volatile.Write(ref _voiceBgmDuckControl, 0);
-        System.Threading.Volatile.Write(ref _statementBlockActive, 0);
         _advPagePresentationSuspended = false;
         _modalMovieCancelled = false;
         _modalMovieWaiting = false;
@@ -1021,41 +1015,13 @@ public sealed partial class EngineHost
         IsTextRevealing = false;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
         System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
-        _frontEnd.CancelScheduledSoundEffectStarts();
         _frontEnd.ClearPage();
         _timeline?.State("scene-context-reset", new() { ["surfaces"] = LiveSurfaceSlots() });
     }
 
-    // Main thread, once per rendered frame: releases a VM thread parked in Sleep or a presentation/input wait.
-    public void PulseFrame()
-    {
-        (AudioPayload Audio, int PlaybackVariant)? due = null;
-        lock (_scheduledVoiceLock)
-        {
-            // Native defers delayed voice service while a statement block (op 0x1f4) is open.
-            if (_scheduledVoice is { } pending && !StatementBlockActive)
-            {
-                uint now = unchecked((uint)_clock.NowMs);
-                if (!pending.StartMs.HasValue)
-                    _scheduledVoice = pending with { StartMs = now };
-                else if (unchecked(now - pending.StartMs.Value) >= pending.DelayMs)
-                {
-                    due = (pending.Audio, pending.PlaybackVariant);
-                    _scheduledVoice = null;
-                }
-            }
-        }
-        if (due.HasValue)
-        {
-            _timeline?.Event("voice-scheduled-start", new()
-            {
-                ["file"] = due.Value.Audio.Name, ["playback_variant"] = due.Value.PlaybackVariant,
-            });
-            DispatchVoice(due.Value.Audio, due.Value.PlaybackVariant, false);
-            ArmVoiceBgmDuckRelease();   // native tick 0x411aae repeats op 0x1bf after a delayed start
-        }
-        _frameSignal.Set();
-    }
+    // Main thread, once per rendered frame: releases a VM thread parked in Sleep or a presentation/input wait, which
+    // then runs the engine tick (EngineHost.Waits.cs).
+    public void PulseFrame() => _frameSignal.Set();
 
     // Native dispatch remains burst-fast between explicit presentation/sleep/input services even when
     // message Skip removes those services. Per-op frame pacing turns ordinary skipped setup/cleanup bursts
@@ -1081,7 +1047,7 @@ public sealed partial class EngineHost
     public void FrameYield()
     {
         if (_frontendModalRelease.IsSet) return;
-        while (!_stopping && !_frontendModalRelease.Wait(50)) { }
+        while (!_stopping && !WaitModal(_frontendModalRelease, 50)) { }
     }
 
     // op 0xc8: block the VM background thread while the main-thread compositor keeps presenting retained state.
@@ -1123,7 +1089,7 @@ public sealed partial class EngineHost
             // callback fires every 50 ms. Waiting here for the compositor rounded each short sleep up to a display
             // frame: Kamidori FIELD's callback ran every 50 or 67 ms, and its 100-call help overlay came late
             // (docs/engine-re.md, "Short sleeps do not wait for the display").
-            switch (SleepPresentationFor(duration, StatementBlockActive))
+            switch (SleepPresentationFor(duration, _tick.StatementBlockOpen))
             {
                 case SleepPresentation.Immediate: RequestPresentation(); break;
                 case SleepPresentation.Synchronized: RequestSynchronizedPresentation(); break;
@@ -1133,7 +1099,7 @@ public sealed partial class EngineHost
                 if (_stopping) break;
                 // Native: once ADV fast-forward starts, the main loop dispatches ops ahead of the armed sleep timer.
                 if (_skip.FastForwardActive) break;
-                _frameSignal.WaitOne(_clock.RealMillisecondsUntil(deadline, 50));
+                WaitAndTick(_frameSignal, _clock.RealMillisecondsUntil(deadline, 50));
             }
         }
         finally
@@ -1153,7 +1119,7 @@ public sealed partial class EngineHost
         // Keep the script-side presentation barrier held. Native run-state 0x40 advances the timer
         // and message pump but suppresses ordinary retained rendering until the callback's explicit 0x222.
         while (_clock.NowMs < deadline && !_stopping)
-            _frameSignal.WaitOne(_clock.RealMillisecondsUntil(deadline, 50));
+            WaitAndTick(_frameSignal, _clock.RealMillisecondsUntil(deadline, 50));
         _timeline?.State("running", new() { ["timed_callback_due"] = true });
     }
 

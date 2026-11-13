@@ -14,6 +14,8 @@ public sealed partial class EngineHost : IHost, ISurfacePixels, IFastForwardList
 {
     private readonly IFrontEnd _frontEnd;
     private readonly SkipAndAuto _skip;
+    private readonly Audio _audio;        // the auto timer reads channel 12
+    private readonly EngineTick _tick;    // every non-modal wait runs it (EngineHost.Waits.cs)
     private readonly ResourceMap _res;
     private readonly string _rootScene;
     private readonly int _screenWidth;
@@ -50,7 +52,11 @@ public sealed partial class EngineHost : IHost, ISurfacePixels, IFastForwardList
     /// <param name="skipAndAuto">The skip and auto native the VM runs with: the host reads fast-forward from it, keeps
     /// the Auto delays in it for SYS4REG.INI, and keeps what a fast-forward change does here until those natives
     /// exist.</param>
-    public EngineHost(IFrontEnd frontEnd, SkipAndAuto skipAndAuto, ResourceMap res, string scene,
+    /// <param name="audio">The audio native the VM runs with: ADV Auto waits for its voice.</param>
+    /// <param name="tick">The engine tick the VM runs with: every wait that is not modal runs it each time it
+    /// wakes, and presentation waits while its statement block is open.</param>
+    public EngineHost(IFrontEnd frontEnd, SkipAndAuto skipAndAuto, Audio audio, EngineTick tick, ResourceMap res,
+                        string scene,
                         Ome.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator, Sys4LogicalCanvas logicalCanvas,
                         IGlyphMaskRasterizer surfaceTextRasterizer,
@@ -62,6 +68,8 @@ public sealed partial class EngineHost : IHost, ISurfacePixels, IFastForwardList
         _frontEnd = frontEnd; _res = res; _rootScene = scene; _clock = clock;
         _skip = skipAndAuto ?? throw new ArgumentNullException(nameof(skipAndAuto));
         _skip.Listen(this);
+        _audio = audio ?? throw new ArgumentNullException(nameof(audio));
+        _tick = tick ?? throw new ArgumentNullException(nameof(tick));
         _locator = locator; _timeline = timeline;
         _screenWidth = logicalCanvas.Width;
         _screenHeight = logicalCanvas.Height;

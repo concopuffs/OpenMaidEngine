@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
 
+// The BGM and sound effect ops through the audio native (Ome.Engine.Natives.Audio) over a recording device.
 public class SfxOpsTests
 {
     [Fact]
@@ -22,15 +24,17 @@ public class SfxOpsTests
                 (0xbf, new[] { new Operand(0, 25) }), // fade-to-zero cleared the current track
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var rig = new AudioRig();
+        var vm = rig.Vm(script, table, new RecordingHost());
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal([24L, 25L, 25L], host.BgmTracks);
-        Assert.Equal((0, 0L), Assert.Single(host.BgmFades));
-        Assert.Equal(0, host.BgmStops);   // the host releases the source its zero-target fade reaches
+        Assert.Equal([24L, 25L, 25L], rig.Device.BgmTracks);
+        // The zero-length fade to zero released the source at once.
+        Assert.Equal(["load 11 Music bgm:24", "play 11 bgm:24 loop 0.0dB", "load 11 Music bgm:25",
+                      "play 11 bgm:25 loop 0.0dB", "unload 11", "load 11 Music bgm:25", "play 11 bgm:25 loop 0.0dB"],
+                     rig.Device.Commands);
     }
 
     // Native op 0xc2 sets run-state 0x200 and returns; the engine tick runs the fade while ops keep dispatching.
@@ -52,17 +56,18 @@ public class SfxOpsTests
                 (0xc0, new[] { new Operand(3, trackAfterPlay) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
+        var rig = new AudioRig();
         var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var vm = rig.Vm(script, table, host);
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal([100L], host.SleptDurations);
-        Assert.Equal((0, 3000L), Assert.Single(host.BgmFades));
-        Assert.Equal(1, host.BgmFadeCompletions);
         Assert.Equal(5, vm.Globals[trackDuringFade]);
-        Assert.Equal([5L, 5L], host.BgmTracks);   // the same id starts again: the faded source was released
+        // 100 ms of a 3000 ms fade from full: progress 3, so the level is 9700 basis points when op 0xbf ends it.
+        Assert.Contains($"volume 11 {RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(9700))}", rig.Device.Commands);
+        Assert.Equal([5L, 5L], rig.Device.BgmTracks);   // the same id starts again: the faded source was released
         Assert.Equal(5, vm.Globals[trackAfterPlay]);
     }
 
@@ -81,15 +86,15 @@ public class SfxOpsTests
                 (0xbf, new[] { new Operand(0, 5) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var rig = new AudioRig();
+        var vm = rig.Vm(script, table, new RecordingHost());
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal(0, vm.Globals[trackAfterFade]);
-        Assert.Equal(0, host.BgmFadeCompletions);   // nothing was left to end
-        Assert.Equal([5L, 5L], host.BgmTracks);
+        Assert.Equal([5L, 5L], rig.Device.BgmTracks);
+        Assert.Single(rig.Device.CommandsStartingWith("unload 11"));   // the tick released it at the fade's end
     }
 
     [Fact]
@@ -113,21 +118,23 @@ public class SfxOpsTests
                 (0xc0, new[] { new Operand(3, currentAfterRestart) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var rig = new AudioRig();
+        var vm = rig.Vm(script, table, new RecordingHost());
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal([24L, 25L], host.BgmTracks);
-        Assert.Equal([(24L, 1), (24L, 1), (24L, 0), (25L, 0)], host.BgmRestartRequests);
-        Assert.Equal(2, host.BgmStops);
+        Assert.Equal(
+            [("bgm:24", true), ("bgm:24", true), ("bgm:24", true), ("bgm:24", false), ("bgm:25", false),
+             ("bgm:25", true)],
+            rig.Device.Plays.Where(play => play.Channel == Audio.BgmChannel).Select(play => (play.Clip, play.Loop)));
+        Assert.Equal(2, rig.Device.CommandsStartingWith("unload 11").Count);
         Assert.Equal(0, vm.Globals[currentAfterStop]);
         Assert.Equal(25, vm.Globals[currentAfterRestart]);
     }
 
     [Fact]
-    public void Sc0000AudioLifecycleDelayAndDuckControlReachHost()
+    public void Sc0000AudioLifecycleDelayAndDuckControlReachTheDevice()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = ScriptAssembler.Assemble(table, "SFX",
@@ -137,52 +144,68 @@ public class SfxOpsTests
                 (0xb5, new[] { new Operand(0, 0) }),
                 (0xb4, new[] { new Operand(0, 0x2aea), new Operand(0, 9) }),
                 (0xba, new[] { new Operand(0, 9) }),
+                (0xb4, new[] { new Operand(0, 0x2b00), new Operand(0, 4) }),
                 (0x1cf, new[] { new Operand(0, 1) }),
                 (0x2bf, new[] { new Operand(0, 4), new Operand(0, 0), new Operand(0, 100) }),
                 (0xb6, new[] { new Operand(0, 0) }),
-                (0xc2, new[] { new Operand(0, 25), new Operand(0, 3000) }),
-                (0xd9, Array.Empty<Operand>()),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
-        var vm = new VirtualMachine(script, table, host);
+        var rig = new AudioRig();
+        var vm = rig.Vm(script, table, new RecordingHost());
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal([(0x28L, 0), (0x2aeaL, 9)], host.SfxLoads);
-        Assert.Equal([0, 9], host.SfxStarts);
-        Assert.Equal([(0, 0), (9, 1)], host.SfxStartRequests);
-        Assert.Equal(1, Assert.Single(host.VoiceBgmDuckControls));
-        Assert.Equal((4, 0, 100L), Assert.Single(host.ScheduledSfxStarts));
-        Assert.Equal(0, Assert.Single(host.SfxReleases));
-        Assert.Equal((25, 3000L), Assert.Single(host.BgmFades));
+        Assert.Equal(["load 0 SoundEffect sfx:40", "play 0 sfx:40 once 0.0dB", "load 9 SoundEffect sfx:10986",
+                      "play 9 sfx:10986 loop 0.0dB", "load 4 SoundEffect sfx:11008", "unload 0"],
+                     rig.Device.Commands);
+        Assert.Equal([0L, 0, 0, 0, 0x2b00, 0, 0, 0, 0, 0x2aea], rig.Audio.SoundEffectResourceIds);   // channel 0 was released
+        Assert.False(rig.Audio.IsChannelPlaying(0));
+
+        rig.Advance(99);
+        Assert.Empty(rig.Device.PlayedOn(4));   // the delayed start waits 100 ms
+        rig.Advance(1);
+        Assert.Equal(["sfx:11008"], rig.Device.PlayedOn(4));
     }
 
     [Fact]
-    public void SoundChannelPlayingQueryWritesNormalizedHostState()
+    public void SoundChannelPlayingQueryAnswersFromTheNative()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
         const int bgmResult = 0x100;
         const int unavailableResult = 0x101;
+        const int endedResult = 0x102;
         var script = ScriptAssembler.Assemble(table, "SOUND-PLAYING",
             new List<(int, Operand[])>
             {
-                (0x1be, new[] { new Operand(3, bgmResult), new Operand(0, 11) }),
+                (0xbf, new[] { new Operand(0, 7) }),
+                (0x1be, new[] { new Operand(3, bgmResult), new Operand(0, 11) }),   // at once, before the device
                 (0x1be, new[] { new Operand(3, unavailableResult), new Operand(0, 10) }),
+                (0xc8, new[] { new Operand(0, 20) }),
+                (0x1be, new[] { new Operand(3, endedResult), new Operand(0, 11) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
-        host.PlayingSoundChannels.Add(11);
-        var vm = new VirtualMachine(script, table, host,
-            build: EngineBuilds.Age433G);
+        var rig = new AudioRig();
+        var host = new EndingHost(rig.Device, Audio.BgmChannel);
+        var vm = new VirtualMachine(script, table, host, build: EngineBuilds.Age433G,
+                                    skipAndAuto: rig.Skip, audio: rig.Audio, tick: rig.Tick);
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal(1, vm.Globals[bgmResult]);
         Assert.Equal(0, vm.Globals[unavailableResult]);
+        Assert.Equal(0, vm.Globals[endedResult]);   // the device reported the track ran out during the sleep
         Assert.Null(vm.CompatibilityFailure);
+    }
+
+    private sealed class EndingHost(RecordingAudioDevice device, int channel) : RecordingHost
+    {
+        public override void Sleep(long duration)
+        {
+            base.Sleep(duration);
+            device.End(channel);
+        }
     }
 
     [Fact]
@@ -192,27 +215,29 @@ public class SfxOpsTests
         var script = ScriptAssembler.Assemble(table, "BGM-FADE-SKIP",
             new List<(int, Operand[])>
             {
+                (0xbf, new[] { new Operand(0, 5) }),
                 (0xc2, new[] { new Operand(0, 0), new Operand(0, 3000) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var persistentSkipScript = ScriptAssembler.Assemble(table, "BGM-FADE-PERSISTENT-SKIP",
             new List<(int, Operand[])>
             {
+                (0xbf, new[] { new Operand(0, 5) }),
                 (0x88, new[] { new Operand(0, 1) }),
                 (0x19c, Array.Empty<Operand>()),   // ADV entry starts fast-forward from persistent Skip
                 (0xc2, new[] { new Operand(0, 0), new Operand(0, 3000) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var ordinaryHost = new RecordingHost();
-        var physicalSkipHost = new RecordingHost();
-        var persistentSkipHost = new RecordingHost();
+        var ordinary = new AudioRig();
+        var physicalSkip = new AudioRig(skip: TestSkipAndAuto.HoldingFastForward());
+        var persistentSkip = new AudioRig();
 
-        new VirtualMachine(script, table, ordinaryHost).Run();
-        new VirtualMachine(script, table, physicalSkipHost, skipAndAuto: TestSkipAndAuto.HoldingFastForward()).Run();
-        new VirtualMachine(persistentSkipScript, table, persistentSkipHost).Run();
+        ordinary.Vm(script, table, new RecordingHost()).Run();
+        physicalSkip.Vm(script, table, new RecordingHost()).Run();
+        persistentSkip.Vm(persistentSkipScript, table, new RecordingHost()).Run();
 
-        Assert.Equal((0, 3000L), Assert.Single(ordinaryHost.BgmFades));
-        Assert.Equal((0, 0L), Assert.Single(physicalSkipHost.BgmFades));
-        Assert.Equal((0, 0L), Assert.Single(persistentSkipHost.BgmFades));
+        Assert.DoesNotContain("unload 11", ordinary.Device.Commands);   // still fading
+        Assert.Contains("unload 11", physicalSkip.Device.Commands);    // the endpoint at once
+        Assert.Contains("unload 11", persistentSkip.Device.Commands);
     }
 }

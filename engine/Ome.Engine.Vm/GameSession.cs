@@ -2,6 +2,7 @@ using System.Text.Json;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 
 namespace Ome.Engine.Vm;
@@ -50,11 +51,14 @@ public sealed class GameSession
     public SceneResult RunScene(Script script, OpcodeTable table, IHost host,
                                 VmOptions? options = null, IScriptProvider? provider = null,
                                 ITraceSink? sink = null,
-                                EngineBuild? build = null)
+                                EngineBuild? build = null, Func<SkipAndAuto, Audio>? audio = null)
     {
+        // Each run has its own skip and auto native, and an audio native over it (audio builds one; without it the run
+        // plays nothing). The mixer settings are the session's.
+        SkipAndAuto skip = SkipAndAuto.WithSystemClock();
         var vm = new VirtualMachine(
             script, table, host, options, provider, sink, TextHistory, SharedProfile, NativeDatStore,
-            AudioMixerSettings, DiagnosticOutput, build);
+            DiagnosticOutput, build, skip, audio: audio?.Invoke(skip) ?? Audio.Silent(skip, AudioMixerSettings));
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalFloats) vm.GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;

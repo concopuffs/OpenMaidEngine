@@ -134,6 +134,38 @@ public class ProjectBoundaryTests
             Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
     }
 
+    [Fact]
+    public void AudioAndTickStateIsPrivateToTheirNatives()
+    {
+        // The census (docs/superpowers/plans/2026-11-12-engine-layering.md §4, "Engine tick" and "Audio") found this
+        // state in the VM and the host; milestone 6 gave it to the audio native and the engine tick. The host keeps
+        // _presentationWithheldByStatementBlock, which only brackets the timeline's withheld stretches on the front
+        // end's thread (spec §5.3, "As built").
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        foreach (Type native in new[] { typeof(Audio), typeof(EngineTick) })
+            Assert.Empty(native.GetFields(instance).Where(field => !field.IsPrivate).Select(field => field.Name));
+        string[] census =
+        [
+            "_statementBlockActive", "_statementBlockDepth", "_audioMixerSettings", "_currentBgmTrackId",
+            "_bgmFadeTarget", "_loadedSoundEffectResourceIds", "_voiceMuteNextFlags", "_sfxNames", "_voiceBgmDuckControl",
+            "_queuedSkippedVoice", "_scheduledVoiceLock", "_scheduledVoice", "_bgmFadeDeadlineMs",
+        ];
+        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
+            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+    }
+
+    [Fact]
+    public void TheGodotAudioDeviceRunsNoEnvelope()
+    {
+        // Spec §11, milestone 6: the BGM fade, the voice duck and its release are the audio native's; the device
+        // (godot/Main.Audio.cs) plays what it is told. Comments may name them.
+        string[] code = File.ReadAllLines(Path.Combine(Paths.Repo, "godot", "Main.Audio.cs"))
+            .Select(line => line.IndexOf("//", StringComparison.Ordinal) is int comment and >= 0 ? line[..comment] : line)
+            .ToArray();
+        foreach (string word in new[] { "Tween", "Duck", "Fade" })
+            Assert.DoesNotContain(code, line => line.Contains(word, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static IEnumerable<Type> Signature(MemberInfo member) => member switch
     {
         MethodInfo method => method.GetParameters().Select(parameter => parameter.ParameterType).Append(method.ReturnType),

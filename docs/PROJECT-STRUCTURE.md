@@ -239,14 +239,16 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       serialized bank dimensions
     │   ├── Ome.Engine/Natives/              engine natives (engine layering spec §5.2), each the one owner of a
     │                                       group of engine state: SkipAndAuto (Skip, Auto, read skip, fast-forward
-    │                                       and its pace)
+    │                                       and its pace), Audio (the 13 channels, the BGM track and envelope, the
+    │                                       voice, delayed starts, the mixer) and EngineTick (the tick and the
+    │                                       statement block)
     │   ├── Ome.Engine.Vm/                   the handler layer (superpowers/specs/2026-11-12-engine-layering-design.md
     │                                       §3.3): the interpreter, the handler table and handlers, and the engine
     │                                       builds; references Ome.Engine only and cannot see Ome.Engine.Devices
     │   ├── Ome.Engine.Devices/              the device layer: interfaces of what an operating system or front end
     │                                       does and the plain data they carry (RgbaImage, glyph-mask requests and
-    │                                       results, the font family source, the movie decoder, the pace clock);
-    │                                       references nothing
+    │                                       results, the font family source, the movie decoder, the pace clock, the
+    │                                       audio device); references nothing
     │   ├── Ome.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
     │                                       open-maid-script-design.md): operand contracts, intrinsics (Abi/), intermediate
     │                                       form and byte-exact decoder/encoder (Ir/), lexer/parser/AST (Syntax/),
@@ -328,7 +330,8 @@ Windows-hosted `tools/export-linux-x64.ps1` remains a Linux-export development p
 `godot/Main.cs` retains the front-end's startup and runtime coordination. Behavior-neutral partial-class
 companions keep cohesive surfaces independently navigable without changing the Godot node type or invocation
 paths: `godot/Main.SelfTest.cs` owns the synthetic threaded/headless regression harness, while
-`godot/Main.Audio.cs` owns BGM, voice, sound-effect, mixer-routing/persistence, and audio-bus control, and
+`godot/Main.Audio.cs` is the audio device (`IAudioDevice`: one stream player per channel, the buses, the ended
+reports) and persists the mixer settings, and
 `godot/Main.Movie.cs` owns decoder staging, movie frame/audio publication, completion, and teardown.
 `godot/Main.Compositor.cs` owns the GPU path, chooses between it and the software path each frame, and uploads the
 software path's frame; the software path itself is `engine/Ome.Engine/Hosting/SoftwareCompositor.cs` (below).
@@ -379,25 +382,23 @@ scene-context lifecycle coordination. `EngineHost.Surfaces.cs` owns decoded-imag
 surface pixels/resources/dimensions, fill/copy/resolve operations, render-target publication, and surface/range
 teardown. `EngineHost.Movies.cs` owns movie surface bindings (through `MovieSurfaceRegistry.cs`), ordinary and modal
 playback, movie-mask transitions, diagnostic snapshots, frame/completion publication, and mask teardown.
-`EngineHost.Audio.cs` owns BGM, voice and SFX resolution/dispatch, delayed voice state, volume/routing
-control, and the background BGM fade's deadline and completion; presentation/input retains the message-skip, reset, and frame-pulse consumers
-of that state through the sealed partial class. `Hosting/SoftwareCompositor.cs` is the software path: it composes the
+`EngineHost.Waits.cs` is the one place the host blocks: each wait runs the engine tick on every wake unless it is
+modal (engine layering spec §5.3). `Hosting/SoftwareCompositor.cs` is the software path: it composes the
 visible retained objects into its own RGBA buffer, which the front end uploads; `Hosting/BlurRangeSources.cs` is the
 blur-range rule it shares with the GPU path.
 
 `engine/Ome.Engine/Hosting/IHost.cs` remains the aggregate runtime host accepted by the VM and existing host
 implementations. `engine/Ome.Engine/Hosting/IDiagnosticHost.cs` owns recoverable-warning and modal-diagnostic
 reporting contracts, while `engine/Ome.Engine/Hosting/ILifecycleHost.cs` owns script-context entry/exit, sleep and
-timed-deadline waiting, frame yield, and scene reset. `engine/Ome.Engine/Hosting/IAudioHost.cs` owns BGM, voice,
-SFX, fade, volume, and route-control contracts, including the compatibility overload/default chains used by
-simple hosts. `engine/Ome.Engine/Hosting/IMovieHost.cs` owns ordinary, positioned, mask-transition, activity-query,
+timed-deadline waiting, frame yield, and scene reset. Audio is not a host contract: the VM calls the audio native
+(below). `engine/Ome.Engine/Hosting/IMovieHost.cs` owns ordinary, positioned, mask-transition, activity-query,
 and modal movie playback contracts. `engine/Ome.Engine/Hosting/IGraphicsHost.cs` owns mutable surfaces,
 retained-range/frame presentation, transitions, texture lifecycle, draw, and size contracts. Pixel capture and
 replace are `engine/Ome.Engine/Hosting/ISurfacePixels.cs`, outside `IHost` because they carry a device type; the
 save thumbnails reach them through `engine/Ome.Engine/Persistence/NumberedSaveThumbnails.cs`. `engine/Ome.Engine/Hosting/IInputHost.cs` owns modal fullwidth entry, ADV waits/callback servicing,
 input clock, cursor resources, and skip-state interaction. `engine/Ome.Engine/Hosting/IAdvHost.cs` owns live and
 surface text, history presentation, ADV layout publication, message presentation settings, wait indicators, and
-page-presentation suspension. `IHost` inherits all seven focused contracts; every required member and
+page-presentation suspension. `IHost` inherits all six focused contracts; every required member and
 overload/default chain remains unchanged. The neutral
 `engine/Ome.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie mask work between the VM, host, and
 retained graphics without making `Model` depend on `Hosting`.
@@ -438,9 +439,8 @@ structured diagnostic for an opcode with no handler. `EngineBuilds.cs` declares 
 build the port reproduces (4.24J, 4.33G) as its parent plus changes, and the VM takes the build's rules; the rule
 types sit beside the natives that read them (`Text/TextRules.cs`, `Model/GfxRules.cs`, `Persistence/SettingsRules.cs`,
 `Persistence/SaveRules.cs`; `superpowers/specs/2026-11-12-engine-layering-design.md` §7).
-Its partial-class companion `engine/Ome.Engine.Vm/VirtualMachine.Audio.cs` owns VM audio
-state, BGM restart semantics, and the BGM/voice/SFX/mixer opcode handler; `Step` retains the audio labels and
-routes that family into the handler. `engine/Ome.Engine.Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/
+Its partial-class companion `engine/Ome.Engine.Vm/VirtualMachine.Audio.cs` holds the BGM, voice, SFX and mixer
+handlers, each a call to the audio native. `engine/Ome.Engine.Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/
 positioned movie playback, movie surface metadata/activity queries, and movie-mask transition dispatch; `Step`
 likewise retains and routes the movie labels. `engine/Ome.Engine.Vm/VirtualMachine.Surface.cs` owns per-script
 reload-policy reset/configuration, surface allocation/loading, texture binding and sizing, mutable surface
@@ -489,6 +489,14 @@ Auto, read skip and run-state `0x08000000`; its partials own fast-forward from a
 two start paths, op `0x101`'s reveal suppression and the clears), the click cancel (`ClickCancel`) and the
 fast-forward pace (`Pace`). Composition builds it and hands the same instance to the VM and to `EngineHost`, which
 listens for fast-forward changes (`IFastForwardListener`).
+The audio native `engine/Ome.Engine/Natives/Audio.cs` owns the 13 channels' playing state and its tick step; its
+partials own the retained BGM track and envelope, the op `0xc2` fade and the voice duck with its release (`Bgm`),
+the voice that fast-forward holds back, the mute request and the delayed voice (`Voice`), the sound effect channels
+and their delayed starts (`SoundEffects`), and the mixer levels, routes and a numbered load's audio (`Mixer`). It
+finds sounds through `IAudioAssets.cs` (`ResourceAudioAssets` reads the catalog) and drives an `IAudioDevice`
+(`engine/Ome.Engine.Devices/Audio/`, with the headless `SilentAudioDevice`). `engine/Ome.Engine/Natives/EngineTick.cs`
+is the engine tick: it runs the natives' timed work at each instruction boundary and inside the host's waits, and
+owns the statement block of ops `0x1f4`/`0x1f5`.
 `engine/Ome.Engine.Vm/VirtualMachine.DeterministicRandom.cs` owns op `0x60`'s seeded per-call-site streams, which
 the drive step `rand-seed` turns on.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root

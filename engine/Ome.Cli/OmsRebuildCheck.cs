@@ -57,8 +57,6 @@ internal static class OmsRebuildCheck
         public void SetTexture(long resourceId, int slot) { }
         public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY) { }
         public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
-        public void PlayBgm(long id) { }
-        public void PlayVoice(long id) { }
     }
 
     /// <summary>Records frames and executed instructions as packed longs: kind, depth, opcode and pc. A step that

@@ -85,10 +85,6 @@ public sealed partial class VirtualMachine
     private bool _advInputPollPageless;   // the polling wait is op 0xfa's
     private int _heldInputCallbackMask;
     private int _queuedInputCallbackMask;
-    private const int VoiceMuteRequested = 0x1, VoiceMutePromoted = 0x10000;
-    private int _voiceMuteNextFlags;          // native voice_mute_next_flags (ctx+0x1493c), ops 0x1d5/0xc4/0x1bd/0x1bc
-    private bool _statementBlockActive;       // native statement_block_active (ctx+0x5f2fc), ops 0x1f4/0x1f5
-    private int _statementBlockDepth;         // native statement_block_depth (ctx+0x5f300): nested opens
     private bool _tickPresentationEnabled;    // native tick_presentation_enabled (ctx+0x99294), ops 0x21b/0x247
     private bool _initialRootRun = true;
     private volatile bool _stopRequested;
@@ -192,23 +188,24 @@ public sealed partial class VirtualMachine
                           IScriptProvider? provider = null, ITraceSink? sink = null,
                           AdvTextHistory? textHistory = null, SharedProfile? sharedProfile = null,
                           INativeDatStore? nativeDatStore = null,
-                          AudioMixerSettings? audioMixerSettings = null,
                           DiagnosticOutputState? diagnosticOutput = null,
                           EngineBuild? build = null, SkipAndAuto? skipAndAuto = null,
-                          TimeProvider? playClock = null)
+                          TimeProvider? playClock = null, Audio? audio = null, EngineTick? tick = null)
     {
         _s = s; _t = t; _handlers = BindHandlers(t); _host = host; _o = o ?? new VmOptions(); _provider = provider;
         // Composition hands over the native its time device belongs to; tests and tools that give none get one over
         // the system clock. A host that keeps the effects of fast-forward (the lifted host, a test's fake) hears it.
         _skip = skipAndAuto ?? SkipAndAuto.WithSystemClock();
         if (host is IFastForwardListener listener) _skip.Listen(listener);
+        // The audio native and the tick come from composition too; without them the VM runs with a silent one.
+        _audio = audio ?? Audio.Silent(_skip);
+        _tick = tick ?? new EngineTick(_audio);
         _playClock = playClock ?? TimeProvider.System;
         _rules = EngineBuilds.ForVm(build, t).Rules;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         _nativeStringEncoding = Encoding.GetEncoding(_o.NativeStringCodePage);
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
         _sharedProfile = sharedProfile ?? new SharedProfile();
-        _audioMixerSettings = audioMixerSettings ?? new AudioMixerSettings();
         _diagnosticOutput = diagnosticOutput ?? new DiagnosticOutputState();
         _nativeDatStore = nativeDatStore;
         _messageWindowAlphaSetting = host.MessageWindowAlphaSetting;
@@ -1089,9 +1086,8 @@ public sealed partial class VirtualMachine
         // A return to title reloads the root the natural way: TITLE runs, and nothing ends the run at a scene's return.
         _hostedSceneEntry = null;
         _hostedScenePackedId = null;
-        _voiceMuteNextFlags = 0;
-        _statementBlockActive = false;   // a root reload abandons every open block with its frames
-        _statementBlockDepth = 0;
+        _audio.ResetScene();
+        _tick.ResetScene();   // a root reload abandons every open block with its frames
         _settingCallbackPending = false;
         _windowCallbackPending = false;
         _menuToggles.Clear();
@@ -1335,11 +1331,10 @@ public sealed partial class VirtualMachine
         NativeNumberedSaveState basis = _retainedNativeNumberedState
             ?? NativeNumberedSaveCodec.Empty(frames, gfxRecordSize);
         var gfx = NativeGfxPersistenceCodec.Capture(Gfx, gfxRecordSize, _host.SourceTextObjects);
-        ServiceBgmFade(complete: false);   // a fade to zero that has ended has cleared the retained track
         return basis with
         {
-            BgmTrackId = unchecked((int)_currentBgmTrackId),
-            SoundEffectResourceIds = _loadedSoundEffectResourceIds
+            BgmTrackId = unchecked((int)_audio.CurrentBgmTrack),   // a fade to zero that has ended has cleared it
+            SoundEffectResourceIds = _audio.SoundEffectResourceIds
                 .Select(id => unchecked((int)id)).ToArray(),
             Frames = frames,
             IntegerGlobals = DenseValues(Globals, dimensions.IntegerGlobals),
@@ -1419,17 +1414,8 @@ public sealed partial class VirtualMachine
         ReplaceBank(GlobalPointers, state.PointerGlobals, value => value != 0);
         ReplaceBank(GlobalStringPointers, state.PointerStrings, value => value != 0);
 
-        ServiceBgmFade(complete: true);   // a running fade must not clear the restored track when it ends
-        _currentBgmTrackId = unchecked((uint)state.BgmTrackId);
-        if (_currentBgmTrackId == 0) _host.FadeBgm(0, 0);
-        else _host.PlayBgm(_currentBgmTrackId);
-        for (int channel = 0; channel < _loadedSoundEffectResourceIds.Length; channel++)
-        {
-            _host.ReleaseSoundEffect(channel);
-            long resourceId = unchecked((uint)state.SoundEffectResourceIds[channel]);
-            _loadedSoundEffectResourceIds[channel] = resourceId;
-            if (resourceId != 0) _host.LoadSoundEffect(resourceId, channel);
-        }
+        _audio.RestoreSaved(unchecked((uint)state.BgmTrackId),
+            state.SoundEffectResourceIds.Select(id => (long)unchecked((uint)id)).ToArray());
 
         // save_data_deserialize_and_begin_restore: (CreateObject & 2) && (AutoFreeTex & 2) runs the release worker over
         // every slot (docs/engine-re.md, "AutoFreeTex").

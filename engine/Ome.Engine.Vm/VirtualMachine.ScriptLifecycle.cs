@@ -166,16 +166,14 @@ public sealed partial class VirtualMachine
     // 0x1f4 stmt-begin: the outermost open withholds delayed audio starts and queued callback scripts
     private StepResult OpStmtBegin(Instruction ins, int pc)
     {
-        if (_statementBlockActive) _statementBlockDepth++;
-        else { _statementBlockActive = true; _host.SetStatementBlockActive(true); }
+        _tick.OpenStatementBlock();
         return StepResult.Next;
     }
 
     // 0x1f5 stmt-end: the outermost close releases them
     private StepResult OpStmtEnd(Instruction ins, int pc)
     {
-        if (_statementBlockDepth > 0) _statementBlockDepth--;
-        else if (_statementBlockActive) { _statementBlockActive = false; _host.SetStatementBlockActive(false); }
+        _tick.CloseStatementBlock();
         return StepResult.Next;
     }
 }

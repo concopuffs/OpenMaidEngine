@@ -1,8 +1,10 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Ome.Engine.Diagnostics;
+using Ome.Engine.Devices;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
@@ -660,14 +662,17 @@ if (command == "run")
 
 if (command == "audio")
 {
-    // audio <SCENE.BIN> — run the scene and dump executed play-bgm/play-voice ops in order,
-    // each resolved via ResourceMap (same rule as the Godot host). Diagnostic only.
+    // audio <SCENE.BIN> — run the scene and dump the BGM and voice starts and BGM stops in order, each resolved via
+    // ResourceMap (the resolvers the audio native uses). Diagnostic only.
     var sceneName = args[1];
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
     var res = new ResourceMap(
         catalog, assetStore, Console.Error.WriteLine, assetOptions.AllowBmpAsAgf);
-    var host = new AudioTraceHost(res);
-    var vm = new VirtualMachine(ScriptByName(sceneName), table, host, build: engineBuild);
+    var trace = new AudioTrace(res);
+    var skip = SkipAndAuto.WithSystemClock();
+    var audio = new Audio(trace, trace, new FrameClock(), skip, new AudioMixerSettings());
+    var vm = new VirtualMachine(ScriptByName(sceneName), table, new CaptureHost(), build: engineBuild,
+                                skipAndAuto: skip, audio: audio);
     // optional: seed globals, e.g. `audio SC0000.BIN 0xa57=1` to set Lily's form-A flag
     foreach (var s in args.Skip(2))
     {
@@ -677,8 +682,8 @@ if (command == "audio")
         vm.Globals[k] = v;
     }
     vm.Run();
-    Console.WriteLine($"{sceneName}: {host.Events.Count} audio ops (halt: {vm.HaltReason})");
-    foreach (var (kind, id, resolved) in host.Events)
+    Console.WriteLine($"{sceneName}: {trace.Events.Count} audio ops (halt: {vm.HaltReason})");
+    foreach (var (kind, id, resolved) in trace.Events)
         Console.WriteLine($"  {kind,-10} 0x{id:x2} -> {resolved}");
     return 0;
 }
@@ -1042,36 +1047,51 @@ sealed class TraceSetup : IDisposable
     { int i = Array.IndexOf(a, key); return i >= 0 && i + 1 < a.Length ? a[i + 1] : null; }
 }
 
-sealed class AudioTraceHost : IHost
+/// <summary>The `audio` diagnostic: the audio native's lookups and BGM commands, in order. A lookup is a start the
+/// native made (it looks a sound up only to start it); the BGM channel's play gives its mode, and its unload a stop or
+/// a release. Sound effects are not traced.</summary>
+sealed class AudioTrace(ResourceMap res) : IAudioAssets, IAudioDevice
 {
-    private readonly ResourceMap _res;
+    private readonly ResourceAudioAssets _assets = new(res, Console.Error.WriteLine);
+    private readonly Queue<AudioChannelEnded> _ended = new();
     public List<(string Kind, long Id, string Resolved)> Events { get; } = new();
-    public AudioTraceHost(ResourceMap res) { _res = res; }
-    public void PlayBgm(long id)                        // BGM: direct name, not the manifest
+
+    public AudioClip? Bgm(long trackId)                 // BGM: direct name, not the manifest
     {
-        var entry = _res.ResolveBgm(id);
-        Events.Add(("play-bgm", id, entry != null ? $"{entry.Archive} {entry.Name}" : $"BGM{id:D3}.OGG <missing>"));
+        var entry = res.ResolveBgm(trackId);
+        Events.Add(("play-bgm", trackId, entry != null ? $"{entry.Archive} {entry.Name}" : $"BGM{trackId:D3}.OGG <missing>"));
+        return _assets.Bgm(trackId);
     }
-    public void RestartBgm(long id, int startMode)
+
+    public AudioClip? Voice(long voiceId)               // voice: universal packed catalog id
     {
-        var entry = _res.ResolveBgm(id);
-        string resolved = entry != null ? $"{entry.Archive} {entry.Name}" : $"BGM{id:D3}.OGG <missing>";
-        Events.Add((startMode == 0 ? "restart-bgm-once" : "restart-bgm-loop", id, resolved));
+        var entry = res.ResolveVoice(voiceId);
+        Events.Add(("play-voice", voiceId, entry == null ? "<unresolved>" : $"{entry.Archive} {entry.Name}"));
+        return _assets.Voice(voiceId);
     }
-    public void StopBgm() => Events.Add(("stop-bgm", 0, ""));
-    public void PlayVoice(long id)                      // voice: universal packed catalog id
+
+    public AudioClip? SoundEffect(long resourceId) => null;
+
+    public void Load(int channel, AudioBus bus, AudioClip clip) { }
+
+    public void Play(int channel, bool loop, float volumeDb, int playId)
     {
-        var e = _res.ResolveVoice(id);
-        Events.Add(("play-voice", id, e == null ? "<unresolved>" : $"{e.Archive} {e.Name}"));
+        if (channel == Audio.BgmChannel && !loop && Events.Count > 0 && Events[^1].Kind == "play-bgm")
+            Events[^1] = Events[^1] with { Kind = "play-bgm-once" };
+        _ended.Enqueue(new AudioChannelEnded(channel, playId));   // nothing plays: every play ends at once
     }
-    public void ShowText(int offset, string text) { }
-    public void WaitForInput() { }
-    public void Sleep(long duration) { }
-    public void FrameYield() { }
-    public void CreateTexture(int slot, int width, int height) { }
-    public void SetTexture(long resourceId, int slot) { }
-    public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY) { }
-    public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
+
+    public void Stop(int channel) { }
+
+    public void Unload(int channel)
+    {
+        if (channel == Audio.BgmChannel) Events.Add(("stop-bgm", 0, ""));
+    }
+
+    public void SetVolume(int channel, float volumeDb) { }
+    public void SetBusVolume(AudioBus bus, float volumeDb) { }
+    public void SetBusMuted(AudioBus bus, bool muted) { }
+    public bool TryTakeEnded(out AudioChannelEnded ended) => _ended.TryDequeue(out ended);
 }
 
 sealed class GfxTraceHost : IHost

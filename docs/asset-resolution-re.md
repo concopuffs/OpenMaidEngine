@@ -125,7 +125,7 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    - **BGM** (`play-bgm`) → **DIRECT LITERAL NAME**, `id → BGM{id:03d}.OGG` (DATA3), not the packed
      resource table. Confirmed by ear (`play-bgm 5→BGM005`, `8→BGM008`) and proven
      by `play-bgm 0x23→BGM035.OGG` — a real standalone track (BGM set skips 030-034) the old scene model mis-resolved
-     to a graphics entry. Implemented as `ResourceMap.ResolveBgm(id)`; `EngineHost.PlayBgm` uses it.
+     to a graphics entry. Implemented as `ResourceMap.ResolveBgm(id)`; the audio native reads it through `ResourceAudioAssets.Bgm`.
      The prior "Frida-confirmed play-bgm 5→BGM006" record was a mis-attribution.
 
    Lily silent = correct (form-gated on `G[0xa57/0xa58/0xa59]`, unseeded). SFX WAV entries use universal

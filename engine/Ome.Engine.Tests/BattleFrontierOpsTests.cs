@@ -152,16 +152,21 @@ public class BattleFrontierOpsTests
     public void DelayedCombatVoice_ForwardsAllSchedulingOperands()
     {
         var table = Table();
-        var host = new RecordingHost();
+        var rig = new AudioRig();
         var script = ScriptAssembler.Assemble(table, "BATTLE_VOICE", new List<(int, Operand[])>
         {
             (0x2c0, new[] { I(123), I(0), I(275) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
 
-        new VirtualMachine(script, table, host).Run();
+        rig.Vm(script, table, new RecordingHost()).Run();
 
-        Assert.Equal((123L, 0, 275L), Assert.Single(host.ScheduledVoiceRequests));
+        // The delay counts from the first tick, which the run's last instruction boundary was.
+        rig.Advance(274);
+        Assert.Empty(rig.Device.Voices);
+        rig.Advance(1);
+        Assert.Equal([(123L, false)], rig.Device.Voices);
+        Assert.Equal(0, rig.Audio.VoicePlaybackVariant);
     }
 
     private sealed class SequencedClockHost : RecordingHost

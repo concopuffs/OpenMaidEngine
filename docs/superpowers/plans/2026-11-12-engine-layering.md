@@ -3,11 +3,13 @@
 **Date:** 2026-11-12
 **Spec:** `docs/superpowers/specs/2026-11-12-engine-layering-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps the census of milestone 2 and what it settles about the later milestones.
-**Status:** milestones 0, 1, 3, 4 and 5 are built (spec §15). Milestone 2, the census below, was measured at `18d4d1b` on
+**Status:** milestones 0, 1, 3, 4, 5 and 6 are built (spec §15). Milestone 2, the census below, was measured at `18d4d1b` on
 `feature/engine-layering`; since milestone 4 the host it names `GodotAdvHost` is `EngineHost`, in
 `engine/Ome.Engine/Hosting/`, and its file names below drop the prefix (`AdvText` is `EngineHost.AdvText.cs`). Since
 milestone 5 the skip and auto fields of §4 are the private state of `engine/Ome.Engine/Natives/SkipAndAuto*.cs`
-(spec §5.2, "As built"). Next: milestone 6.
+(spec §5.2, "As built"). Since milestone 6 the audio fields are the audio native's (`engine/Ome.Engine/Natives/Audio*.cs`)
+and the engine tick's are `engine/Ome.Engine/Natives/EngineTick.cs`'s, except the host's
+`_presentationWithheldByStatementBlock`, which stays in the host (spec §5.3, "As built"). Next: milestone 7.
 
 Paths are relative to `age-reimpl/`.
 

@@ -113,8 +113,7 @@ public sealed partial class VirtualMachine
     private StepResult OpResetMessageVoiceState(Instruction ins, int pc)
     {
         // Native stops channel 12, drops the Skip-queued voice and clears voice_mute_next_flags.
-        _host.StopVoice();
-        _voiceMuteNextFlags = 0;
+        _audio.ResetMessageVoiceState();
         _skip.ClearPendingVoice(); return StepResult.Next;
     }
 

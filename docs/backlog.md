@@ -54,6 +54,12 @@ it; git history keeps the record.
 
   No difference has been seen. Done when `display:AspectMode` and the display scale are modelled or shown
   unreachable.
+- **Delayed starts wait for a statement block's close even during a transition.** Native's tick runs the delayed SFX
+  and voice starts (ops `0x2bf`, `0x2c0`) inside an open block when run-state `0x400` is set, a park on an animation
+  or surface transition (`engine-re.md`, "Statement blocks"). The engine tick (`Natives/EngineTick.cs`) withholds
+  them in every open block, as the host did before milestone 6, because the tick does not yet know when a transition
+  parks the interpreter. No scene where it matters has been seen. Done when the tick runs them under a block during a
+  transition park (graphics native, layering milestone 7) and a test covers it.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
@@ -229,8 +235,10 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   no single home. Done when each group of state is private to one type that others change through named methods:
   memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. The
   census of every field (milestone 2, `docs/superpowers/plans/2026-11-12-engine-layering.md`) names each one's owner;
-  skip and auto has its owner; audio is next (milestone 6); the waits move last (milestone 11).
-- **The host's threads have no stated ownership.** `EngineHost` holds nine lock objects, six `AutoResetEvent`s,
+  skip and auto has its owner, and since milestone 6 (2026-11-12) so do audio (`Natives/Audio*.cs`) and the statement
+  block (`Natives/EngineTick.cs`); graphics is next (milestone 7); the waits move last (milestone 11).
+- **The host's threads have no stated ownership.** `EngineHost` holds seven lock objects (nine until milestones 5
+  and 6 moved the skip and delayed-voice locks into their natives), six `AutoResetEvent`s,
   a `ManualResetEventSlim` and a `SemaphoreSlim`, and nothing documents which fields each lock guards or the lock
   order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`
   now. Since milestone 4 (2026-11-12) the host's calls to the main thread are typed: it calls `IFrontEnd`, which

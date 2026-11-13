@@ -228,7 +228,8 @@ public sealed class PageLocatorState : System.IDisposable
     /// katakana.</summary>
     internal static bool IsWide(int scalar) => scalar >= 0x80 && scalar is not (>= 0xff61 and <= 0xff9f);
 
-    public void Wait(int page)
+    /// <summary>The page reached a text wait: record it and its locator. Records only; nothing blocks.</summary>
+    public void WaitReached(int page)
     {
         lock (_lock)
         {

@@ -3,8 +3,8 @@
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
-2 (census), 3 (projects), 4 (the lift) and 5 (skip and auto) are done on `feature/engine-layering`; §3.3, §4, §5.2,
-§6.2, §6.3, §7.5, §7.6, §11, §12 and §13 record what they settled. The census is in the implementation plan,
+2 (census), 3 (projects), 4 (the lift), 5 (skip and auto) and 6 (audio) are done on `feature/engine-layering`; §3.3,
+§4, §5.2, §5.3, §6.2, §6.3, §7.5, §7.6, §11, §12 and §13 record what they settled. The census is in the implementation plan,
 `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
@@ -371,6 +371,36 @@ action 6, `ClickCancel` the press/release machine of set:CancelMesSkipOnClick, a
 - **No interface yet.** The native is a sealed class: tests build the real one with settings and a virtual clock
   (`FastForwardPaceTests`, which also pace it without a VM), so no fake needs an interface.
 
+**As built (milestone 6).** The audio native is `Ome.Engine.Natives.Audio` (`engine/Ome.Engine/Natives/Audio*.cs`).
+`Audio.cs` keeps whether each of the 13 channels plays and the native's step of the tick. `Bgm` holds the retained
+track and the envelope (the op `0xc2` fade, the voice duck and its release); `Voice` the op `0x1d5` mute request, the
+voice that fast-forward holds back and the delayed voice of op `0x2c0`; `SoundEffects` channels 0..9 and their delayed
+starts (op `0x2bf`); and `Mixer` the levels, the routes and a numbered load's audio part. It finds sounds through
+`IAudioAssets` (`ResourceAudioAssets` reads the catalog).
+
+- **Its state.** The census's 11 fields are its private fields or gone, and neither the VM nor `EngineHost` keeps one
+  (`ProjectBoundaryTests`). The VM's pending fade target and the host's fade deadline are one `BgmFade` record, and the
+  VM's mixer settings and the host's bus calls are the native's. The voice that fast-forward holds back
+  (`_queuedSkippedVoice`) is the native's too, so the native, not the host, listens for the end of fast-forward
+  (`IFastForwardListener`) and plays it.
+- **Time.** The native reads the engine's `FrameClock`. Each time the tick runs, a fade's level is computed from the
+  time since the fade was armed, in native's whole steps. So a fade advances only when the tick runs, and the first
+  tick after a modal wait makes up the time, as native's period timer does (§13).
+- **Construction.** Composition (`godot/Main.cs`) builds one native over the Godot device, the catalog's sounds, the
+  frame clock, the skip native, the mixer settings and `SYS4REG.INI`, which it reads at each voice start for the duck
+  settings (plan §3.2). It hands the native to `EngineHost` and the VM. A VM given none builds a silent one
+  (`Audio.Silent`). `GameSession.RunScene` takes a factory, so the native it is given is built over the run's own skip
+  native.
+- **Changes in behaviour**, each toward native's:
+  - One delayed sound effect start waits per channel, as native's `SetDelay` slot holds one; before, several could.
+  - A delayed voice's delay counts from the first tick outside a statement block, up to a frame sooner than the next
+    frame pulse that started it before.
+  - The fade and the duck release run on the frame clock, so they follow the driver's `speed`; Godot's tween ran on
+    Godot's own time.
+  - A sound effect stored as OGG decodes; Godot decoded every sound effect as a wave before.
+- **Not modelled, as before:** the delayed starts that native's tick runs inside a statement block while a transition
+  parks the interpreter (run-state `0x400`; `docs/backlog.md`).
+
 ### 5.3 Time
 
 **Today.** The VM runs on a task thread (`godot/Main.cs:616`) and blocks inside host calls. Godot's main thread
@@ -414,6 +444,17 @@ run the tick too, and nothing changes.
 
 **A test keeps the list whole.** Every wait in the host blocks through one helper that runs the tick each frame,
 unless it is told the wait is modal. A test fails on any other blocking call (`WaitOne`, `Wait`) in the host.
+
+**As built (milestone 6).** The tick is `Ome.Engine.Natives.EngineTick`. `Service()` runs the audio native's step,
+which is all the timed work that has moved so far, and the tick owns the statement block (plan §3.2, addition 1).
+`ServiceInstructionBoundary` calls it first. In the host every blocking call goes through `EngineHost.Waits.cs`:
+`WaitAndTick` and `WaitAnyAndTick` block until one wake and then run the tick, and `WaitModal` blocks without it. The
+table's rows hold: the three dialogs and the front-end modal hold (`FrameYield` and the hold inside the input poll) are
+modal, and every other wait runs the tick. The modal movie runs it, since native services its main loop during one
+(§13). The host keeps `_presentationWithheldByStatementBlock`, which only marks, on the front end's thread, where the
+timeline's withheld stretches begin and end; it reads the block from the tick. `EngineHostWaitTests` is the test: it
+fails on any blocking call in `EngineHost*.cs` outside the helper, and it checks that a fade goes on while the host
+sleeps, stops under a modal hold, and catches up at the next tick.
 
 **Part 2: the engine thread is native's main loop** (milestone 11).
 
@@ -533,6 +574,42 @@ outlive its wait.
   and applied each in the frame that sent it or the next. On the Kamidori run 515 were applied in the same frame and
   134 in the next before the lift, 522 and 127 after; the median lag was 5.0 ms and 4.9 ms. No call waited more than
   one frame on either build.
+
+**As built (milestone 6).**
+
+- **The audio device** is `Ome.Engine.Devices.IAudioDevice` (`engine/Ome.Engine.Devices/Audio/`). Its commands load
+  a clip on a channel and bus, play it (looping or once, at a volume, with a play id), stop it, unload it, and set a
+  channel's volume or a bus's volume and mute. Its one report, `TryTakeEnded`, gives a play that ran out. A play with
+  no clip, or with one the device cannot decode, ends at once; a stopped play is not reported. `SilentAudioDevice` is
+  the headless one.
+- **The native holds every answer** (rules 4 and 5). It sets a channel playing when it starts it and clears it when it
+  stops it or takes the report, and it ignores a report of an earlier play. No query reaches the device.
+- **The Godot device** is `godot/Main.Audio.cs`: one `AudioStreamPlayer` per channel, and the buses. Each command is
+  deferred to the main thread in the order sent, as the host's calls were. Once a frame, before it wakes the engine
+  thread, it reports the channels whose play ended. It runs no fade tween and no duck. The workaround at `:46-49` (a
+  tween orphaned by a track change) has nothing left to guard. `IFrontEnd` lost its 16 audio members: 14 remain, with
+  the two for the log.
+- **Tests.** `AudioNativeTests` and the converted op tests run the real native over `RecordingAudioDevice`, which
+  keeps every command, and a stepped clock; none needs Godot. `ProjectBoundaryTests` checks that `Main.Audio.cs` has
+  no tween, fade or duck. The Godot self-test checks the device: a channel loads and plays once and looping, on its
+  bus, takes a volume and unloads, and an empty play ends at once.
+- **The timing is kept.** The tolerance was written down before measuring: against the build before, the medians of
+  the start lags, fade ends and duck times within a frame and their maxima within two, the same counts, the same step
+  results, and step seconds within 5 %. `kamidori-opening-pages.steps` and `himegari-read-skip.steps` ran on the build
+  before (`4b376f6`) and the new one, with `--timeline-log` and the same temporary probe in both: at the start of each
+  frame, an event for each channel whose playing state, volume or stream had changed.
+  - Both builds started the same 7 BGM tracks, 79 voices and 27 sound effects. The probe saw 26 on the build before
+    only because two starts on one channel fell in one frame there.
+  - From the request to the channel playing, the median was 8.1 ms before and 8.4 ms after for Kamidori's 77 voices,
+    and 11.7 and 9.6 ms for its BGM.
+  - Kamidori's four fades took their first step a median 37 ms after the request before and 28 ms after. They ended
+    a median 15.5 and 14.2 ms past their authored length, at most 57.6 and 19.4 ms, each at the same level or with the
+    source released.
+  - All 17 ducks fell to -10 dB in the frame their voice started. The 15 releases began a median 13.5 and 13.0 ms
+    after the voice ended and took 988 and 995 ms. One release began a frame sooner on the new build: when op `0x1bc`
+    stops a voice, the native knows at once, where the host waited for Godot's player to stop.
+  - The step results were the same and the step seconds equal: 396.5 s for Kamidori, and 38.3 and 38.25 s for the
+    read skip.
 
 ### 6.3 Graphics: a frame description and a reference renderer
 
@@ -951,7 +1028,7 @@ Every design question is decided (§2). These facts are not verified yet; each n
 
 | What | Where it matters | Measured by |
 |---|---|---|
-| That native's BGM fade stops while a modal dialog is open | §5.3, §2 decision 10 | A native trace before milestone 6 lands: hook native's fade tick (Himegari's `bgm_fade_tick@0x464960`) under Frida, start a fade, and open the 終了 dialog (`close-request`) while it runs. The same run checks whether native's modal movie (op `0x20f`) keeps its main loop's services running. |
+| That native's BGM fade stops while a modal dialog is open | §5.3, §2 decision 10 | Before milestone 6, with a Frida trace of `bgm_fade_tick@0x464960` while the 終了 dialog was open: the fade stops, and the first tick after the dialog makes up the time, so the fade ends when it would have. The modal movie (op `0x20f`) keeps the services running (`docs/engine-re.md`, "A fade under the 終了 dialog stops, then catches up") |
 | That an engine-thread loop keeps today's frame timing | §5.3, part 2 | Milestone 11: `--timeline-log` runs of the drive scenarios, against a tolerance set before measuring |
 | How many tests assert on state that moves from the VM into a native | §12 | Milestone 2: 311 test methods, 152 beyond script memory (plan §3.4) |
 | That `DisableTransitiveProjectReferences` keeps device types out of handler compiles | §3.3 | Milestone 3: a compile that is meant to fail |
@@ -1062,3 +1139,16 @@ Not covered:
   and its read skip runs from `SC0000@0x2ec` to `0xa15` in 30 ms (32 ms before). The saves of `himegari-save-load` and
   `kamidori-history-after-load` are equal under `save-diff` except for their timestamp and play time, and their
   thumbnails are byte-identical.
+- **2026-11-12, milestone 6.** The audio pilot. The audio state has one owner, `Ome.Engine.Natives.Audio`, the tick
+  is `Ome.Engine.Natives.EngineTick`, and the audio device is `IAudioDevice` (§5.2, §5.3 and §6.2, "As built").
+  `godot/Main.Audio.cs` runs no fade tween and no duck, and its workaround is gone. Before the work began, a Frida trace
+  settled §13's first row: native's fade stops under the 終了 dialog and catches up at the next tick, and the modal
+  movie keeps the services running. `AudioNativeTests` test the native without Godot, `EngineHostWaitTests` holds the
+  host's waits to §5.3's table, and `ProjectBoundaryTests` checks that the audio and tick state is private and that the
+  Godot device runs no envelope. The suite (1887) and validation at the core, workspace and runtime levels on both
+  games pass. A probed run of `kamidori-opening-pages` and `himegari-read-skip` before and after keeps the audio timing
+  within the tolerance written down before measuring (§6.2). The 14 port scenarios of milestone 5 give the same step
+  results with equal `SYS4REG.INI`. Their shots are identical except for animation phase and the build label, and
+  `himegari-read-skip` keeps its time (37.7 s). The saves of `himegari-save-load` and `kamidori-history-after-load` are
+  equal under `save-diff` except for their timestamp and play time, so the BGM and sound effect records the native now
+  writes are unchanged, and their thumbnails are byte-identical.

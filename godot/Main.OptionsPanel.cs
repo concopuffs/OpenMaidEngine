@@ -360,23 +360,17 @@ public partial class Main
 
         // The sound object starts every level at 10000; sound:VolumeN = -1 never replaces it.
         public int Volume(int category) =>
-            main._audioMixerSettings.TryGetVolume(category, out int level) && level >= 0
+            main._audio.TryGetVolume(category, out int level) && level >= 0
                 ? level
                 : AudioMixerSettings.MaximumVolume;
 
-        public void ApplyVolume(int category, int basisPoints) => main.ApplyAudioVolume(category, basisPoints);
+        public void ApplyVolume(int category, int basisPoints) => main._audio.PreviewVolume(category, basisPoints);
 
-        public void SaveVolume(int category, int basisPoints) =>
-            main._audioMixerSettings.TrySetVolume(category, basisPoints);
+        public void SaveVolume(int category, int basisPoints) => main._audio.TrySetVolume(category, basisPoints);
 
-        public bool RouteEnabled(int category) =>
-            main._audioMixerSettings.TryGetRouteEnabled(category, out bool enabled) && enabled;
+        public bool RouteEnabled(int category) => main._audio.TryGetRouteEnabled(category, out bool enabled) && enabled;
 
-        public void SetRouteEnabled(int category, bool enabled)
-        {
-            if (main._audioMixerSettings.TrySetRouteEnabled(category, enabled, out bool changed) && changed)
-                main.ApplyAudioRouteEnabled(category, enabled);
-        }
+        public void SetRouteEnabled(int category, bool enabled) => main._audio.TrySetRouteEnabled(category, enabled);
 
         public void ApplyMessageSettings(VmMessageSettings settings) => main._vm?.RequestMessageSettings(settings);
     }

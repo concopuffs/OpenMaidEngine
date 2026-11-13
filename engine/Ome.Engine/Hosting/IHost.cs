@@ -1,6 +1,6 @@
 namespace Ome.Engine.Hosting;
 
-public interface IHost : IDiagnosticHost, ILifecycleHost, IAudioHost, IMovieHost, IGraphicsHost, IInputHost,
+public interface IHost : IDiagnosticHost, ILifecycleHost, IMovieHost, IGraphicsHost, IInputHost,
                          IAdvHost
 {
 }

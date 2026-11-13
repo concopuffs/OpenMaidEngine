@@ -134,7 +134,7 @@ public sealed partial class EngineHost
             while (!_stopping && !_modalMovieCancelled)
             {
                 if (!_movieSurfaces.IsActive(surfaceSlot)) break;
-                _frameSignal.WaitOne(50);
+                WaitAndTick(_frameSignal, 50);
             }
 
             // Cancellation is a completed modal presentation from the script's perspective. The
