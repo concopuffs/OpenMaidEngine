@@ -61,7 +61,7 @@ public sealed partial class VirtualMachine
     private TextSite? OriginOfCell(int cell)
     {
         if (!_stringStores.TryGetValue(cell, out StringStore store)) return null;
-        if (string.Equals(Gs(GlobalStrings, cell), store.Text, StringComparison.Ordinal)) return store.Origin;
+        if (string.Equals(_memory.String(cell), store.Text, StringComparison.Ordinal)) return store.Origin;
         _stringStores.Remove(cell);
         return null;
     }
@@ -76,7 +76,7 @@ public sealed partial class VirtualMachine
     {
         if (!_recordsStringStores || !TryGlobalStringCell(destination, out int cell)) return;
         TextSite? inherited = copiedFrom is { } source ? OriginOf(source) : null;
-        _stringStores[cell] = new StringStore(inherited ?? SiteAt(pc), Gs(GlobalStrings, cell));
+        _stringStores[cell] = new StringStore(inherited ?? SiteAt(pc), _memory.String(cell));
     }
 
     /// <summary>After <c>lookup-array</c> copied a string out of a table cell at <paramref name="source"/>: the
@@ -85,7 +85,7 @@ public sealed partial class VirtualMachine
     {
         if (!_recordsStringStores || !TryGlobalStringCell(destination, out int cell)) return;
         TextSite? inherited = TryGlobalStringCell(source, out int from) ? OriginOfCell(from) : null;
-        _stringStores[cell] = new StringStore(inherited ?? SiteAt(pc), Gs(GlobalStrings, cell));
+        _stringStores[cell] = new StringStore(inherited ?? SiteAt(pc), _memory.String(cell));
     }
 
     /// <summary>What a length opcode at <paramref name="pc"/> returns for the presented form of

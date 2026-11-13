@@ -3,6 +3,7 @@ using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using System.Buffers.Binary;
+using Ome.Engine.Natives;
 
 public class NumberedSaveVmTests
 {
@@ -38,7 +39,7 @@ public class NumberedSaveVmTests
             history.DefineLayout(1, 400, 120, 75, 340);
             history.AppendText(1, 0x40, "保存", AdvTextStyle.Default);
             var vm = new VirtualMachine(
-                script, Table, new RecordingHost(), textHistory: history, nativeDatStore: store);
+                script, Table, new RecordingHost(), textHistory: history, saves: new SavesAndSettings(store: store));
             vm.Globals[0x123] = 456;
             vm.GlobalFloats[0] = BitConverter.SingleToInt32Bits(2.5f);
             vm.GlobalStrings[4] = "姫狩り";
@@ -210,7 +211,7 @@ public class NumberedSaveVmTests
                     {
                         ["CALLBACK_LOAD.BIN"] = callback,
                     }),
-                sink: trace, textHistory: liveHistory, nativeDatStore: store,
+                sink: trace, textHistory: liveHistory, saves: new SavesAndSettings(store: store),
                 skipAndAuto: audio.Skip, audio: audio.Audio, tick: audio.Tick);
             vm.Globals[0x10] = 999;
             vm.Globals[0x123] = 999;
@@ -327,7 +328,7 @@ public class NumberedSaveVmTests
                     [0x89] = child,
                     [0x91] = saveUi,
                 }),
-                nativeDatStore: store);
+                saves: new SavesAndSettings(store: store));
 
             vm.Run();
 
@@ -361,7 +362,7 @@ public class NumberedSaveVmTests
                     [0x91] = saveUi,
                 }),
                 sink: trace,
-                nativeDatStore: store);
+                saves: new SavesAndSettings(store: store));
 
             roundTrippedVm.Run();
 
@@ -424,7 +425,7 @@ public class NumberedSaveVmTests
                     [0x88] = resumed,
                     [0x89] = child,
                 }),
-                nativeDatStore: store);
+                saves: new SavesAndSettings(store: store));
 
             vm.Run();
 
@@ -485,7 +486,7 @@ public class NumberedSaveVmTests
             var installed = new Dictionary<long, Script>();
             if (rootInstalled) installed[0x88] = resumed;   // 0x89 is never installed
             var vm = new VirtualMachine(FullLoadScript(), Table, new RecordingHost(),
-                                        provider: new MapProvider(installed), nativeDatStore: store);
+                                        provider: new MapProvider(installed), saves: new SavesAndSettings(store: store));
 
             vm.Run();
 
@@ -608,7 +609,7 @@ public class NumberedSaveVmTests
             var vm = new VirtualMachine(
                 loader, Table, host,
                 provider: new MapProvider(new() { [0x88] = resumed, [0x89] = child }),
-                nativeDatStore: store);
+                saves: new SavesAndSettings(store: store));
             host.Vm = vm;
 
             vm.Run();
@@ -656,7 +657,7 @@ public class NumberedSaveVmTests
             var vm = new VirtualMachine(
                 loader, Table, host,
                 new VmOptions(CreateObject: createObject, AutoFreeTex: autoFreeTex),
-                nativeDatStore: store);
+                saves: new SavesAndSettings(store: store));
             vm.Graphics.LoadSurface(15, 0x3383, 0);
             List<string> surfaceOps = vm.TraceSurfaceOps();
 
@@ -749,8 +750,7 @@ public class NumberedSaveVmTests
             Assert.True(profile.Load(store));
             var clock = new ManualPlayClock { NowMs = startMs };
             var vm = new VirtualMachine(SaveSlotScript("SAVER.BIN", 0x77, 2, SleepMs(sleepMs)), Table,
-                                        new ClockedHost(clock), sharedProfile: profile, nativeDatStore: store,
-                                        playClock: clock);
+                                        new ClockedHost(clock), saves: new SavesAndSettings(profile: profile, store: store, playClock: clock));
 
             vm.Run();
 
@@ -811,7 +811,7 @@ public class NumberedSaveVmTests
             var vm = new VirtualMachine(
                 loader, Table, host,
                 provider: new MapProvider(new() { [0x88] = resumed, [0x89] = child, [0x91] = saveUi }),
-                nativeDatStore: store, playClock: clock);
+                saves: new SavesAndSettings(store: store, playClock: clock));
 
             vm.Run();
 
@@ -837,7 +837,7 @@ public class NumberedSaveVmTests
             var clock = new ManualPlayClock();
             Script script = SaveSlotScript("DATA_ONLY.BIN", 0x77, 2,
                 SleepMs(10_000), (0x19f, [new Operand(LocalInt, 1), new Operand(Immediate, 1)]), SleepMs(5_000));
-            var vm = new VirtualMachine(script, Table, new ClockedHost(clock), nativeDatStore: store, playClock: clock);
+            var vm = new VirtualMachine(script, Table, new ClockedHost(clock), saves: new SavesAndSettings(store: store, playClock: clock));
 
             vm.Run();
 
@@ -864,7 +864,7 @@ public class NumberedSaveVmTests
             Script script = SaveSlotScript("COMMIT.BIN", 0x77, 2,
                 SleepMs(10_000), (0x19f, [new Operand(LocalInt, 1), new Operand(Immediate, 1)]), SleepMs(4_000),
                 (0xad, Array.Empty<Operand>()), SleepMs(5_000));
-            var vm = new VirtualMachine(script, Table, new ClockedHost(clock), nativeDatStore: store, playClock: clock);
+            var vm = new VirtualMachine(script, Table, new ClockedHost(clock), saves: new SavesAndSettings(store: store, playClock: clock));
 
             vm.Run();
 
@@ -890,7 +890,7 @@ public class NumberedSaveVmTests
             Script system4 = SaveSlotScript("SYSTEM4.BIN", 0x7, 1, SleepMs(3_000));
             var vm = new VirtualMachine(initial, Table, new ClockedHost(clock),
                                         provider: new MapProvider(new() { [0] = system4 }),
-                                        nativeDatStore: store, playClock: clock);
+                                        saves: new SavesAndSettings(store: store, playClock: clock));
 
             vm.Run();
 

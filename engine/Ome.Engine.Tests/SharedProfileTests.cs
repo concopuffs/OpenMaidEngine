@@ -3,6 +3,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
+using Ome.Engine.Natives;
 
 public class SharedProfileTests
 {
@@ -177,7 +178,7 @@ public class SharedProfileTests
         }, ["リリィ", "changed", "使い魔"]);
         var profile = new SharedProfile();
         var vm = new VirtualMachine(
-            script, table, new RecordingHost(), sharedProfile: profile);
+            script, table, new RecordingHost(), saves: new SavesAndSettings(profile: profile));
         vm.Globals[0x701] = 999;
         vm.GlobalStrings[0x801] = "not empty";
 
@@ -270,7 +271,7 @@ public class SharedProfileTests
         profile.MarkCatalogResourceOpened(5407);
         profile.MarkCatalogResourceOpened(0x01000011);
         var vm = new VirtualMachine(
-            script, table, new RecordingHost(), sharedProfile: profile);
+            script, table, new RecordingHost(), saves: new SavesAndSettings(profile: profile));
 
         vm.Run();
 

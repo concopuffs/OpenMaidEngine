@@ -48,7 +48,7 @@ public partial class Main
         _menuBar = new NativeMenuBar(_menuItems)
         {
             SystemMenu = WindowSystemMenu.Create(fullscreen: false),
-            IgnoreF10 = () => _vm != null && (_vm.SystemKeyDisableMask & 0x200) != 0,   // WM_SYSKEYDOWN VK_F10: return 0
+            IgnoreF10 = () => _shell != null && (_shell.SystemKeyDisableMask & 0x200) != 0,   // WM_SYSKEYDOWN VK_F10: return 0
         };
         _menuBar.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _menuBar.Opened += OnMenuOpened;
@@ -62,7 +62,7 @@ public partial class Main
     /// AGE's window, its menu bar included). Fullscreen has no bar.</summary>
     private bool RouteMenuBarInput(InputEvent e)
     {
-        if (_menuBar == null || _vm == null || _host == null || !_windowed) return false;
+        if (_menuBar == null || _vm == null || _host == null || !Windowed) return false;
         if (_exitConfirmation != null || _scriptErrorDialog != null || _fullwidthTextEditor != null
             || _screenshotFolderDialog != null || _optionsPanel != null || _debugSceneLauncher?.Visible == true)
             return false;
@@ -105,7 +105,7 @@ public partial class Main
 
     /// <summary>The shell's state snapshot, rebuilt each time a surface opens; null before the VM exists.</summary>
     private ShellState? ShellSnapshot() =>
-        _vm == null ? null : new ShellState(_windowed, _vm.MenuState);
+        _vm == null ? null : new ShellState(Windowed, _vm.MenuState);
 
     /// <summary>A menu command, as age_main_window_proc's WM_COMMAND and AGERC's agerc_menu_command run it: the shell's
     /// commands, then the window menu's.</summary>
@@ -115,7 +115,7 @@ public partial class Main
         if (_vm == null) return;
         if (ShellCommands.Find(id) is { } command)
         {
-            command.Run(Shell, _vm);
+            command.Run(Shell, _shell!, _vm);
             return;
         }
         switch (id)
@@ -146,10 +146,10 @@ public partial class Main
     private System.Text.Json.Nodes.JsonObject ChooseMenuCommand(int id)
     {
         if (_menuItems == null) throw new DriveProtocolException("this run has no menu bar");
-        if (!_windowed && (_menuStrip == null || !_menuStripShown))
+        if (!Windowed && (_menuStrip == null || !_menuStripShown))
             throw new DriveProtocolException(
                 "fullscreen detaches the menu bar: show the top-edge strip first (hold the pointer on the top edge)");
-        IReadOnlyList<MenuItem> items = _windowed ? _menuItems : _menuStrip!.Bar.Items;
+        IReadOnlyList<MenuItem> items = Windowed ? _menuItems : _menuStrip!.Bar.Items;
         RefreshMenu();
         if (ShellCommands.Find(id) is not { } command || ShellSnapshot() is not { } state)
             throw new DriveProtocolException($"the shell has no command 0x{id:x}");
@@ -164,7 +164,7 @@ public partial class Main
             ["checked"] = item.Checked,
         };
         if (!item.Enabled) throw new DriveProtocolException($"menu command 0x{id:x} ({label}) is grayed");
-        if (_windowed) ExecuteMenuCommand(id);
+        if (Windowed) ExecuteMenuCommand(id);
         else ExecuteStripCommand(id);
         return result;
     }

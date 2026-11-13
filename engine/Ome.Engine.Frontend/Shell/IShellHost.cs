@@ -2,28 +2,20 @@ namespace Ome.Engine.Frontend.Shell;
 
 /// <summary>
 /// The frontend services the engine shell's commands reach (docs/superpowers/specs/2026-11-09-engine-shell-design.md,
-/// §4.1). These run on the frontend's main thread: the screen mode, the screenshot and its folder, quitting, returning
-/// to the title, holding the VM, and opening the shell's own surfaces. VM services such as the message toggles and the
-/// message settings are not here (<see cref="Ome.Engine.Vm.IVmMenuServices"/>): they keep their own queues on the VM,
-/// so a toggle still applies on the VM thread.
+/// §4.1). These run on the frontend's main thread: the screenshot and its folder, quitting, returning to the title,
+/// holding the VM, and opening the shell's own surfaces. What the engine owns is not here: the message toggles, the
+/// 設定 values and the screen mode are the shell-services native's (<see cref="Ome.Engine.Natives.ShellServices"/>),
+/// which queues the toggles for the VM thread, and the hide request is the interpreter's
+/// (<see cref="Ome.Engine.Vm.IVmMenuServices"/>).
 /// </summary>
 public interface IShellHost
 {
-    /// <summary>True while the game runs in a window (IAGEService +0x08).</summary>
-    bool Windowed { get; }
-
     /// <summary>An unforced close, as native's WM_CLOSE(0): the 終了 dialog asks, unless the game is minimized.</summary>
     void RequestClose();
 
     /// <summary>Open the options panel at <paramref name="section"/>; for <see cref="ShellSection.Info"/>,
     /// <paramref name="diagnostics"/> picks the diagnostics over the about view.</summary>
     void OpenPanel(ShellSection section, bool diagnostics = false);
-
-    /// <summary>Switch to a window or to fullscreen as IAGEService +0x1c does (display_toggle_screen_mode_and_menu_bar),
-    /// which queues CALLBACK_WINDOW.BIN. False when the game is already in that mode or display:ForceScreen keeps the
-    /// window.</summary>
-    /// <param name="source">What asked, for the log.</param>
-    bool SwitchScreenMode(bool windowed, string source);
 
     /// <summary>表示画面を保存: save the presented frame as a BMP in the image folder (IAGEService +0xa4,
     /// engine_save_screenshot_bmp).</summary>

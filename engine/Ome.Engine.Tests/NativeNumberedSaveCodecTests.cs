@@ -3,6 +3,7 @@ using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using System.Buffers.Binary;
+using Ome.Engine.Natives;
 
 public class NativeNumberedSaveCodecTests
 {
@@ -438,7 +439,7 @@ public class NativeNumberedSaveCodecTests
                 (0x19e, [new Operand(3, 0x110001), new Operand(0, 1)]),
                 (0x2, Array.Empty<Operand>()),
             ], []);
-            var vm = new VirtualMachine(script, table, new RecordingHost(), nativeDatStore: store);
+            var vm = new VirtualMachine(script, table, new RecordingHost(), saves: new SavesAndSettings(store: store));
             vm.Run();
             Assert.Equal(0, vm.Globals[0x110000]);
             Assert.Equal(0, vm.Globals[0x110001]);

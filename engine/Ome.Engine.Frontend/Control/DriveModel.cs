@@ -94,10 +94,10 @@ public sealed record DriveState(IReadOnlyList<DriveFrame> Frames, string? Waitin
 /// <c>rand-seed</c>, in total and per call site (<c>SCRIPT@0xOFFSET</c>, as frames are named).</summary>
 public static class DriveRandomReport
 {
-    public static JsonObject ToJson(uint? seed, Ome.Engine.Vm.DeterministicRandomSummary drawn)
+    public static JsonObject ToJson(uint? seed, Ome.Engine.Natives.DeterministicRandomSummary drawn)
     {
         var sites = new JsonObject();
-        foreach (Ome.Engine.Vm.DeterministicRandomSite site in drawn.Sites)
+        foreach (Ome.Engine.Natives.DeterministicRandomSite site in drawn.Sites)
             sites[new DriveFrame(DriveFrame.NormalizeScript(site.Script), site.Offset).Location] = site.Draws;
         return new JsonObject
         {

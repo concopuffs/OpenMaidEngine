@@ -5,6 +5,7 @@ using System.Reflection;
 using Ome.Engine.Frontend.Control;
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 using Ome.Engine.Vm;
 using Godot;
@@ -79,7 +80,7 @@ public partial class Main
         bool fromSettings = section != ShellSection.Info || diagnostics;
         var context = new OptionsPanel.Context(
             _shellStrings, draft, opened, new Vector2I(_screenWidth, _screenHeight), PanelWindowSizes(opened),
-            () => _windowed, toWindow => SwitchScreenMode(toWindow, "the options panel"), _forceScreen, About(),
+            () => Windowed, toWindow => SwitchScreenMode(toWindow, "the options panel"), ForceScreen, About(),
             Diagnostics(), OmeIcon, _languageLaunch?.Languages() ?? []);
         var panel = new OptionsPanel(context, section);
         panel.Committed += edited => CloseOptionsPanel(panel, draft, opened, edited, fromSettings);
@@ -247,7 +248,7 @@ public partial class Main
                                                  : new Vector2I(options.WindowWidth, options.WindowHeight);
         int bar = _menuItems != null ? NativeMenuBar.BarHeight : 0;
         _windowedSize = new Vector2I(game.X, game.Y + (int)Math.Round(bar * (double)game.Y / _screenHeight));
-        if (_windowed) DisplayServer.WindowSetSize(_windowedSize);
+        if (Windowed) DisplayServer.WindowSetSize(_windowedSize);
         GD.Print($"[options] window size {game.X}x{game.Y} (window {_windowedSize.X}x{_windowedSize.Y})");
     }
 
@@ -331,9 +332,9 @@ public partial class Main
     /// </summary>
     private sealed class SettingsHost(Main main) : IShellSettingsHost
     {
-        private Sys4RegIniStore? Store => main._sys4RegIniStore;
+        private Sys4RegIniStore? Store => main.SettingsStore;
 
-        public VmMessageSettings MessageSettings => main._vm?.MessageSettings ?? new VmMessageSettings(
+        public MessageSettings MessageSettings => main._vm?.MessageSettings ?? new MessageSettings(
             Sys4RegIniStore.DefaultMessageSpeed, Sys4RegIniStore.DefaultMesWinAlpha,
             Sys4RegIniStore.DefaultAutoMessageTime0, Sys4RegIniStore.DefaultAutoMessageTime1);
 
@@ -372,6 +373,6 @@ public partial class Main
 
         public void SetRouteEnabled(int category, bool enabled) => main._audio.TrySetRouteEnabled(category, enabled);
 
-        public void ApplyMessageSettings(VmMessageSettings settings) => main._vm?.RequestMessageSettings(settings);
+        public void ApplyMessageSettings(MessageSettings settings) => main._shell?.RequestMessageSettings(settings);
     }
 }

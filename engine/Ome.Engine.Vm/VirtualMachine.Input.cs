@@ -32,7 +32,7 @@ public sealed partial class VirtualMachine
             _advTextWaitPolling = outerWaitPolling;
             _advInputPollPageless = outerPageless;
         }
-        _sharedProfile.ReadText.QueueMessage(
+        _saves.Profile.ReadText.QueueMessage(
             _cur.Script.PackedId, CurrentReadMessageIndex(),
             _cur.Script.ReadMessageOffsets.Count);
         _skip.PagePassed();   // pacing charges the page if fast-forward passed it

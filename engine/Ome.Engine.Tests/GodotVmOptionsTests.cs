@@ -11,11 +11,11 @@ public class GodotVmOptionsTests
         Assert.Equal(long.MaxValue, interactive.MaxSteps);
         Assert.Equal(int.MaxValue, interactive.EmitCap);
         Assert.True(interactive.IgnoreExitRequests);
-        Assert.False(interactive.NoSaveDat);
+        Assert.False(GodotVmOptions.NoSaveDat(selftest: false));
 
         Assert.Equal(GodotVmOptions.DiagnosticMaxSteps, selftest.MaxSteps);
         Assert.Equal(new VmOptions().EmitCap, selftest.EmitCap);
         Assert.False(selftest.IgnoreExitRequests);
-        Assert.True(selftest.NoSaveDat);
+        Assert.True(GodotVmOptions.NoSaveDat(selftest: true));
     }
 }

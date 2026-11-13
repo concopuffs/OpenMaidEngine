@@ -1,5 +1,6 @@
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 
 namespace Ome.Engine.Vm;
@@ -10,7 +11,7 @@ public sealed partial class VirtualMachine
     private StepResult OpIsCatalogResourceUnlocked(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _sharedProfile.IsCatalogResourceUnlocked(Read(a[1])) ? 1 : 0);
+        Write(a[0], _saves.Profile.IsCatalogResourceUnlocked(Read(a[1])) ? 1 : 0);
         return StepResult.Next;
     }
 
@@ -18,29 +19,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSaveNumberedSlot(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (_nativeDatStore == null)
-        {
-            Write(a[0], 1);
-            return StepResult.Next;
-        }
-        try
-        {
-            int slot = unchecked((int)Read(a[1]));
-            NativeNumberedSaveState state = CaptureNumberedState();
-            byte[] payload = NativeNumberedSaveCodec.Encode(state);
-            byte[] history = NativeTextHistoryCodec.Encode(TextHistory);
-            NativeSystemTime timestamp = NativeSystemTime.FromLocalDateTime(DateTime.Now);
-            uint playSeconds = AccumulatedPlaySeconds();
-            _nativeDatStore.SaveNumberedFile(slot, payload, history, timestamp, playSeconds);
-            _sharedProfile.Save(_nativeDatStore, timestamp, playSeconds);
-            Write(a[0], 0);
-        }
-        catch (Exception error) when (
-            error is IOException or UnauthorizedAccessException or InvalidDataException
-            or ArgumentOutOfRangeException or OverflowException)
-        {
-            Write(a[0], 1);
-        }
+        Write(a[0], _saves.SaveNumbered(unchecked((int)Read(a[1])), _saveRecords));
         return StepResult.Next;
     }
 
@@ -70,17 +49,17 @@ public sealed partial class VirtualMachine
     // 0xad: op_0xad_commit_pending_playtime (no shipped script uses it)
     private StepResult OpCommitPendingPlaytime(Instruction ins, int pc)
     {
-        CommitLoadedPlayTime();
+        _saves.CommitLoadedPlayTime();
         return StepResult.Next;
     }
 
     // 0xae
     private StepResult OpContinueSaveLoadStackRestore(Instruction ins, int pc)
     {
-        if (_loadedNumberedState == null || _restoreFrameIndex < 0)
+        if (_saves.RestoringFrames is not { } savedFrames || _restoreFrameIndex < 0)
             return StepResult.Next;
-        NativeSavedScriptFrame saved = _loadedNumberedState.Frames[_restoreFrameIndex];
-        bool terminal = _restoreFrameIndex == _loadedNumberedState.Frames.Count - 1;
+        NativeSavedScriptFrame saved = savedFrames[_restoreFrameIndex];
+        bool terminal = _restoreFrameIndex == savedFrames.Count - 1;
         if (terminal)
         {
             // Native restores the saved top frame as the numbered-save boundary selected by
@@ -88,15 +67,15 @@ public sealed partial class VirtualMachine
             // SAVE/menu helper frames instead of serializing the currently open modal stack.
             lock (_debugControlLock) _saveResumeFrame = _cur;
             _cur.RestoredSaveFrame = null;
-            _loadedNumberedState = null;
+            _saves.EndRestore();
             _restoreFrameIndex = -1;
             return StepResult.Jump(ResolveTableOffset(_cur.Script, _cur.Script.ReadMessageOffsets, saved.ResumeIndex, pc + 1));
         }
 
         int parentIndex = _restoreFrameIndex;
-        NativeSavedScriptFrame childSaved = _loadedNumberedState.Frames[parentIndex + 1];
+        NativeSavedScriptFrame childSaved = savedFrames[parentIndex + 1];
         Script child = ResolveSavedScript(childSaved);
-        CommitLoadedPlayTime();   // script_frame_restore_saved_layout for the child frame
+        _saves.CommitLoadedPlayTime();   // script_frame_restore_saved_layout for the child frame
         _restoreFrameIndex = parentIndex + 1;
         FrameOutcome childOutcome = RunFrame(
             CreateRestoredFrame(child, childSaved), FrameCause.SaveRestore,
@@ -115,20 +94,9 @@ public sealed partial class VirtualMachine
     private StepResult OpQueryNumberedSaveMetadata(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (_nativeDatStore == null)
+        int result = _saves.QueryNumbered(unchecked((int)Read(a[1])), out NativeSaveMetadata? metadata);
+        if (result == 0 && metadata != null)
         {
-            Write(a[0], 1);
-            return StepResult.Next;
-        }
-        try
-        {
-            NativeSaveMetadata? metadata =
-                _nativeDatStore.QueryNumberedMetadata(unchecked((int)Read(a[1])));
-            if (metadata == null)
-            {
-                Write(a[0], 1);
-                return StepResult.Next;
-            }
             Write(a[2], metadata.Timestamp.Year);
             Write(a[3], metadata.Timestamp.Month);
             Write(a[4], metadata.Timestamp.Day);
@@ -136,13 +104,8 @@ public sealed partial class VirtualMachine
             Write(a[6], metadata.Timestamp.Minute);
             Write(a[7], metadata.Timestamp.Second);
             Write(a[8], unchecked((int)metadata.AccumulatedPlaySeconds));
-            Write(a[0], 0);
         }
-        catch (EndOfStreamException) { Write(a[0], 2); }
-        catch (InvalidDataException) { Write(a[0], 2); }
-        catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
-        catch (IOException) { Write(a[0], 1); }
-        catch (UnauthorizedAccessException) { Write(a[0], 1); }
+        Write(a[0], result);
         return StepResult.Next;
     }
 
@@ -150,11 +113,7 @@ public sealed partial class VirtualMachine
     private StepResult OpDeleteNumberedSave(Instruction ins, int pc)
     {
         var a = ins.Args;
-        try
-        {
-            Write(a[0], _nativeDatStore?.DeleteNumberedPair(unchecked((int)Read(a[1]))) ?? 2);
-        }
-        catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
+        Write(a[0], _saves.DeleteNumbered(unchecked((int)Read(a[1]))));
         return StepResult.Next;
     }
 
@@ -162,14 +121,7 @@ public sealed partial class VirtualMachine
     private StepResult OpCopyNumberedSave(Instruction ins, int pc)
     {
         var a = ins.Args;
-        try
-        {
-            Write(a[0], _nativeDatStore?.CopyNumberedPair(
-                unchecked((int)Read(a[1])), unchecked((int)Read(a[2]))) ?? 2);
-        }
-        catch (ArgumentOutOfRangeException) { Write(a[0], 2); }
-        catch (IOException) { Write(a[0], 2); }
-        catch (UnauthorizedAccessException) { Write(a[0], 2); }
+        Write(a[0], _saves.CopyNumbered(unchecked((int)Read(a[1])), unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
 
@@ -184,8 +136,7 @@ public sealed partial class VirtualMachine
     private StepResult OpWriteNumberedSaveThumbnail(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], NumberedSaveThumbnails.Write(
-            _graphics, _nativeDatStore, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
+        Write(a[0], _saves.WriteThumbnail(_graphics, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
 
@@ -193,8 +144,7 @@ public sealed partial class VirtualMachine
     private StepResult OpLoadNumberedSaveThumbnail(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], NumberedSaveThumbnails.Load(
-            _graphics, _nativeDatStore, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
+        Write(a[0], _saves.LoadThumbnail(_graphics, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
 
@@ -207,7 +157,7 @@ public sealed partial class VirtualMachine
             HaltReason ??= $"shared-profile-int-lvalue-type:{a[0].Type}";
             return StepResult.Halt;
         }
-        _sharedProfile.StoreInteger(address, Read(a[0]));
+        _saves.Profile.StoreInteger(address, Read(a[0]));
         return StepResult.Next;
     }
 
@@ -220,7 +170,7 @@ public sealed partial class VirtualMachine
             HaltReason ??= $"shared-profile-int-lvalue-type:{a[0].Type}";
             return StepResult.Halt;
         }
-        Write(a[0], _sharedProfile.LoadInteger(address));
+        Write(a[0], _saves.Profile.LoadInteger(address));
         return StepResult.Next;
     }
 
@@ -233,7 +183,7 @@ public sealed partial class VirtualMachine
             HaltReason ??= $"shared-profile-string-lvalue-type:{a[0].Type}";
             return StepResult.Halt;
         }
-        _sharedProfile.StoreString(address, ReadStr(a[0]));
+        _saves.Profile.StoreString(address, ReadStr(a[0]));
         return StepResult.Next;
     }
 
@@ -246,7 +196,7 @@ public sealed partial class VirtualMachine
             HaltReason ??= $"shared-profile-string-lvalue-type:{a[0].Type}";
             return StepResult.Halt;
         }
-        WriteStr(a[0], _sharedProfile.LoadString(address));
+        WriteStr(a[0], _saves.Profile.LoadString(address));
         return StepResult.Next;
     }
 }

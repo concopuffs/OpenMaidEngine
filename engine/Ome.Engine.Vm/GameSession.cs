@@ -54,11 +54,15 @@ public sealed class GameSession
                                 EngineBuild? build = null, Func<SkipAndAuto, Audio>? audio = null)
     {
         // Each run has its own skip and auto native, and an audio native over it (audio builds one; without it the run
-        // plays nothing). The mixer settings are the session's.
+        // plays nothing). The mixer settings are the session's. Its save native reads and writes the session's profile
+        // and store, and its shell native appends to the session's diagnostic text.
         SkipAndAuto skip = SkipAndAuto.WithSystemClock();
+        var shell = ShellServices.Headless(DiagnosticOutput);
+        shell.WakeWaitsWith(host.WakeInputCallbackService);
         var vm = new VirtualMachine(
-            script, table, host, options, provider, sink, TextHistory, SharedProfile, NativeDatStore,
-            DiagnosticOutput, build, skip, audio: audio?.Invoke(skip) ?? Audio.Silent(skip, AudioMixerSettings));
+            script, table, host, options, provider, sink, TextHistory,
+            saves: new SavesAndSettings(SharedProfile, NativeDatStore), shell: shell, build: build, skipAndAuto: skip,
+            audio: audio?.Invoke(skip) ?? Audio.Silent(skip, AudioMixerSettings));
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalFloats) vm.GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;

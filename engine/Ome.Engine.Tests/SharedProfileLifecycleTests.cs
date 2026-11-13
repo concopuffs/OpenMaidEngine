@@ -2,6 +2,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
+using Ome.Engine.Natives;
 
 public class SharedProfileLifecycleTests
 {
@@ -27,7 +28,7 @@ public class SharedProfileLifecycleTests
             var vm = NewVm(profile, store);
 
             vm.Run();
-            SharedProfileShutdownFlushResult result = vm.FlushSharedProfileOnShutdown();
+            SharedProfileShutdownFlushResult result = vm.Saves.FlushSharedProfileOnShutdown();
 
             Assert.Equal(SharedProfileShutdownFlushOutcome.Saved, result.Outcome);
             Assert.True(File.Exists(Path.Combine(root, DirectoryNativeDatStore.SharedFileName)));
@@ -65,9 +66,9 @@ public class SharedProfileLifecycleTests
             var store = new DirectoryNativeDatStore(root, Identity);
             var profile = new SharedProfile();
             profile.StoreInteger(1, 2);
-            var vm = NewVm(profile, store, new VmOptions(NoSaveDat: true));
+            var vm = NewVm(profile, store, noSaveDat: true);
 
-            SharedProfileShutdownFlushResult result = vm.FlushSharedProfileOnShutdown();
+            SharedProfileShutdownFlushResult result = vm.Saves.FlushSharedProfileOnShutdown();
 
             Assert.Equal(SharedProfileShutdownFlushOutcome.Suppressed, result.Outcome);
             Assert.False(File.Exists(Path.Combine(root, DirectoryNativeDatStore.SharedFileName)));
@@ -97,8 +98,8 @@ public class SharedProfileLifecycleTests
                 ],
                 []);
             var vm = new VirtualMachine(
-                script, Table, new RecordingHost(), new VmOptions(NoSaveDat: true),
-                sharedProfile: profile, nativeDatStore: store);
+                script, Table, new RecordingHost(),
+                saves: new SavesAndSettings(profile: profile, store: store, noSaveDat: true));
 
             vm.Run();
 
@@ -124,8 +125,8 @@ public class SharedProfileLifecycleTests
             profile.StoreInteger(1, 2);
             var vm = NewVm(profile, store);
 
-            SharedProfileShutdownFlushResult first = vm.FlushSharedProfileOnShutdown();
-            SharedProfileShutdownFlushResult second = vm.FlushSharedProfileOnShutdown();
+            SharedProfileShutdownFlushResult first = vm.Saves.FlushSharedProfileOnShutdown();
+            SharedProfileShutdownFlushResult second = vm.Saves.FlushSharedProfileOnShutdown();
 
             Assert.Equal(SharedProfileShutdownFlushOutcome.Saved, first.Outcome);
             Assert.Equal(SharedProfileShutdownFlushOutcome.AlreadyHandled, second.Outcome);
@@ -154,7 +155,7 @@ public class SharedProfileLifecycleTests
             var vm = NewVm(loaded, store, playClock: clock);
             clock.NowMs += 31_000;
 
-            SharedProfileShutdownFlushResult result = vm.FlushSharedProfileOnShutdown();
+            SharedProfileShutdownFlushResult result = vm.Saves.FlushSharedProfileOnShutdown();
 
             // Native AGE: SAVE.DAT's playtime only lands in the container's pending value, so a run that loads no
             // slot writes its own run time (31 s after 31 s at the title, 2026-11-07).
@@ -180,8 +181,8 @@ public class SharedProfileLifecycleTests
             profile.StoreInteger(1, 2);
             var vm = NewVm(profile, store);
 
-            SharedProfileShutdownFlushResult first = vm.FlushSharedProfileOnShutdown();
-            SharedProfileShutdownFlushResult second = vm.FlushSharedProfileOnShutdown();
+            SharedProfileShutdownFlushResult first = vm.Saves.FlushSharedProfileOnShutdown();
+            SharedProfileShutdownFlushResult second = vm.Saves.FlushSharedProfileOnShutdown();
 
             Assert.Equal(SharedProfileShutdownFlushOutcome.Failed, first.Outcome);
             Assert.NotNull(first.Error);
@@ -197,14 +198,14 @@ public class SharedProfileLifecycleTests
     private static VirtualMachine NewVm(
         SharedProfile profile,
         INativeDatStore store,
-        VmOptions? options = null,
+        bool noSaveDat = false,
         TimeProvider? playClock = null)
     {
         Script script = ScriptAssembler.Assemble(
             Table, "SHARED_SHUTDOWN.BIN", [(0x2, Array.Empty<Operand>())], []);
         return new VirtualMachine(
-            script, Table, new RecordingHost(), options,
-            sharedProfile: profile, nativeDatStore: store, playClock: playClock);
+            script, Table, new RecordingHost(),
+            saves: new SavesAndSettings(profile: profile, store: store, playClock: playClock, noSaveDat: noSaveDat));
     }
 
     private static string NewTemporaryDirectory()

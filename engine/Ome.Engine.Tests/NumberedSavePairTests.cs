@@ -3,6 +3,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
+using Ome.Engine.Natives;
 
 public class NumberedSavePairTests
 {
@@ -156,7 +157,7 @@ public class NumberedSavePairTests
                 (0x1ab, [G(113), I(5)]),
                 (0x2, []),
             ], []);
-            var vm = new VirtualMachine(script, Table, host, nativeDatStore: store);
+            var vm = new VirtualMachine(script, Table, host, saves: new SavesAndSettings(store: store));
             vm.Graphics.PublishSurfacePixels(7, new RgbaImage(1, 1, [10, 20, 30, 255]));
 
             vm.Run();

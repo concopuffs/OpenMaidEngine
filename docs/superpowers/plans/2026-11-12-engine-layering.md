@@ -3,7 +3,7 @@
 **Date:** 2026-11-12
 **Spec:** `docs/superpowers/specs/2026-11-12-engine-layering-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps the census of milestone 2 and what it settles about the later milestones.
-**Status:** milestones 0, 1, 3, 4, 5, 6, 7 and 8 are built (spec §15). Milestone 2, the census below, was measured at
+**Status:** milestones 0, 1, 3, 4, 5, 6, 7, 8 and 9 are built (spec §15). Milestone 2, the census below, was measured at
 `18d4d1b` on `feature/engine-layering`; since milestone 4 the host it names `GodotAdvHost` is `EngineHost`, in
 `engine/Ome.Engine/Hosting/`, and its file names below drop the prefix (`AdvText` is `EngineHost.AdvText.cs`). Since
 milestone 5 the skip and auto fields of §4 are the private state of `engine/Ome.Engine/Natives/SkipAndAuto*.cs`
@@ -18,7 +18,11 @@ milestone 11, and the VM's `_tickPresentationEnabled`, which only its two ops re
 (`_movieSurfaces`, `_movieMaskLock` and the two mask maps) are the movie native's (`engine/Ome.Engine/Natives/Movies*.cs`;
 spec §5.2, "As built"), except op `0x20f`'s three modal wait fields, which stay in the host until milestone 11; the
 host's copy of the script stack (`_scriptContexts`, `_rootScene`) is gone, since the VM names the script with each
-movie op. Next: milestone 9.
+movie op. Since milestone 9 the fields of §4's script memory, saves and settings, and shell services are the private
+state of `engine/Ome.Engine/Natives/ScriptMemory*.cs`, `SavesAndSettings*.cs` and `ShellServices*.cs` (spec §5.2,
+"As built"), except the five banks, which the VM keeps as properties that return the native's, and `ScriptError`,
+which stays on the VM as the run's outcome; the host's six dialog fields became the shell native's dialog requests.
+Next: milestone 10.
 
 Paths are relative to `age-reimpl/`.
 

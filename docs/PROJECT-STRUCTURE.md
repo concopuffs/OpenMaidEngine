@@ -243,8 +243,12 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       voice, delayed starts, the mixer), EngineTick (the tick and the
     │                                       statement block), Graphics (the retained objects, the surface table
     │                                       and its pixels, publication, the screen transition, the frame lowering)
-    │                                       and Movies (the bindings of movies to surfaces, the decoders, their
-    │                                       sound, completion, the mask transitions)
+    │                                       Movies (the bindings of movies to surfaces, the decoders, their
+    │                                       sound, completion, the mask transitions), ScriptMemory (the five
+    │                                       banks, the queues and stacks, op 0x60's seeded draws), SavesAndSettings
+    │                                       (the shared profile, the numbered saves, the playtime, SYS4REG.INI) and
+    │                                       ShellServices (the system-menu fields, the menu and callback requests,
+    │                                       the diagnostic text, the dialogs, the screen mode)
     │   ├── Ome.Engine.Vm/                   the handler layer (superpowers/specs/2026-11-12-engine-layering-design.md
     │                                       §3.3): the interpreter, the handler table and handlers, and the engine
     │                                       builds; references Ome.Engine only and cannot see Ome.Engine.Devices
@@ -252,7 +256,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       does and the plain data they carry (RgbaImage, glyph-mask requests and
     │                                       results, the font family source, the movie decoder, the pace clock, the
     │                                       audio device and the audio stream device, the frame description and its
-    │                                       renderer and presenter);
+    │                                       renderer and presenter, the window);
     │                                       references nothing
     │   ├── Ome.Script/                      Open Maid Script toolchain (docs/superpowers/specs/2026-10-06-
     │                                       open-maid-script-design.md): operand contracts, intrinsics (Abi/), intermediate
@@ -527,8 +531,21 @@ publishes frames and completes them. `MovieAudioFeed.cs` feeds a playback's PCM 
 presentation times (`MovieAudioTimeline.cs`) and paces the decoder by what has been heard. It finds movies through
 `IMovieAssets.cs` (`ResourceMovieAssets` reads the catalog); the decoder is `IMovieDecoderFactory` and the sound
 `IAudioStreamDevice` (`engine/Ome.Engine.Devices/IMovieDecoder.cs`, `Audio/IAudioStreamDevice.cs`).
-`engine/Ome.Engine.Vm/VirtualMachine.DeterministicRandom.cs` owns op `0x60`'s seeded per-call-site streams, which
-the drive step `rand-seed` turns on.
+The script memory native `engine/Ome.Engine/Natives/ScriptMemory.cs` owns the five global banks (the VM's `Globals` and
+its siblings return them), the engine's string encoding, the queues and stacks of ops `0x132`-`0x139`, op `0x9`'s bank
+reset and the banks' sections of a numbered save; its partial `ScriptMemory.Random.cs` owns op `0x60`'s seeded
+per-call-site streams, which the drive step `rand-seed` turns on.
+The save and settings native `engine/Ome.Engine/Natives/SavesAndSettings.cs` owns the shared profile, the save store,
+`SYS4REG.INI` (the front end's shell reads and writes the keys AGERC owned through it), the playtime clock and the
+shutdown flush (`set:NoSaveDat`); its partial `SavesAndSettings.Numbered.cs` owns ops `0x19e`-`0x1a1` and `0x1ab`-`0x1af`
+and decides a numbered save's order: each native writes and reads its own records (`NumberedSaveRecords`; audio's in
+`Audio.Mixer.cs`, graphics' in `Graphics.Saves.cs`).
+The shell-services native `engine/Ome.Engine/Natives/ShellServices.cs` owns ops `0x142`, `0x148`/`0x149` and `0x10f`'s
+system-menu fields, the menu commands queued for the interpreter (`TakeMenuRequests`), the callback scripts they and a
+screen-mode switch launch (`TakeCallbackScript`), and ops `0x1b2`-`0x1b4`'s text. Its partials own the dialogs
+(`Dialogs`: each a request the front end completes through `IShellDialogs`; a stop or a reset cancels it) and the
+screen mode (`ScreenMode`: every switch, `display:ScreenMode` and `ForceScreen`, op `0x2cf`'s request), which the front
+end shows through `engine/Ome.Engine.Devices/Window/IWindowDevice.cs`.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state

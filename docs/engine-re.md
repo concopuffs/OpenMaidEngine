@@ -1902,10 +1902,11 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   and models op 1 (`Prune`) and op 0 (`Refresh`). `godot/NativeMenuBar.cs` draws the bar and the popups with the
   measured geometry. The window grows by the bar's height; shots, the cursor mapping and the dialogs place the game
   below it.
-- **Commands.** `ShellCommands` names each command id and runs it through `IShellHost` and `IVmMenuServices`. 終了
-  sends the asking close. The four ﾒｯｾｰｼﾞ items call the VM's menu services (`RequestMenuMessageSkipToggle`,
-  `…AutoMessageToggle`, `…ReadMessageSkipToggle`, `RequestMenuHideWindow`). The VM applies them at its next
-  instruction boundary or text-wait service, then runs `CALLBACK_SETTING.BIN`. Ending a text wait from Auto goes
+- **Commands.** `ShellCommands` names each command id and runs it through `IShellHost`, the shell-services native
+  (`ShellServices`) and `IVmMenuServices`. 終了 sends the asking close. Three ﾒｯｾｰｼﾞ items queue requests at the shell
+  native (`RequestMessageSkipToggle`, `…AutoMessageToggle`, `…ReadMessageSkipToggle`); the VM applies them at its next
+  instruction boundary or text-wait service, then runs `CALLBACK_SETTING.BIN`. The fourth asks the VM at once
+  (`RequestMenuHideWindow`). Ending a text wait from Auto goes
   through `IInputHost.EndInputWait`. 設定's section commands, 動作環境 and ﾊﾞｰｼﾞｮﾝ情報 open the shell's options panel
   (below), so every install has them; the port reads nothing from AGERC.DLL.
 - **Screenshots.** `godot/Main.Screenshot.cs` saves through `ScreenshotBmpStore` (`engine/Ome.Engine/Persistence`).
@@ -2069,10 +2070,11 @@ then reaches the game. While the strip's menu loop runs, the game holds, as it d
 **Port** (`godot/Main.ScreenMode.cs`, `godot/SystemMenuStrip.cs`, `VirtualMachine.ScreenMode.cs`):
 
 - **Switches.** ﾌﾙｽｸﾘｰﾝ, ｳｲﾝﾄﾞｳ, Alt+Enter, the maximize box, the strip's restore button and op `0x2cf` all switch.
-  Op `0x2cf` asks the host (`ILifecycleHost.RequestScreenMode`), and the frontend switches at its next frame. A
-  switch to the current mode does nothing, and `display:ForceScreen` 1 keeps the window. Each switch queues
-  `CALLBACK_WINDOW.BIN` (`VirtualMachine.RequestWindowCallback`). It runs where `CALLBACK_SETTING.BIN` would: at the
-  next instruction boundary, or inside a polling text wait.
+  The shell-services native decides each (`ShellServices.SwitchScreenMode`, `Natives/ShellServices.ScreenMode.cs`);
+  op `0x2cf` records a request there, which the front end's next frame takes (`ServiceFrame`). A switch to the current
+  mode does nothing, and `display:ForceScreen` 1 keeps the window. Each switch stores `display:ScreenMode`, tells the
+  window (`IWindowDevice`) and queues `CALLBACK_WINDOW.BIN`. It runs where `CALLBACK_SETTING.BIN` would: at the next
+  instruction boundary, or inside a polling text wait.
 - **Startup.** The game starts in the mode `display:ScreenMode` names. A run without `SYS4REG.INI` (self-test,
   read-only persistence) or with `--windowed` starts windowed.
 - **Fullscreen.** The port uses a modern fullscreen rather than native's exclusive mode: a borderless window over
@@ -2768,8 +2770,9 @@ next implementation slice; native ordering, including SYSTEM4's apparently odd p
 be preserved. A compatible host seam therefore needs synchronous modal presentation on the UI thread and
 the current script coordinate; it is not a general shell-command interface.
 
-The port implements the trio with a `GameSession`-shared `DiagnosticOutputState`. Godot marshals the
-completed prompt to the main thread through `OS.Alert` and parks the VM until dismissal; headless
+The port implements the trio in the shell-services native, over a `DiagnosticOutputState` that a `GameSession` shares
+across its scene VMs. The box is a request the front end completes (`DiagnosticBox`): Godot shows it on the main thread
+through `OS.Alert`, and the VM waits until dismissal; headless
 `CaptureHost` records the same effect. The accumulator clears after the synchronous call returns, so
 FIELD's unpresented line and SYSTEM4's unusual post-clear CRLF retain their native lifetime and ordering.
 
@@ -3843,7 +3846,7 @@ INIT2 at `0x23c` and reaches `0xae` at `0x23f`.
 A cell past the prefix that no prologue writes therefore reads 0 after any load. Native measurements after a load
 from MENU: `G[0x62428]` = 0, `G[0x6242d]` = 4 (the `0x1ca` copy) and `G[0x66381]` = SO026A.AGF's id (INIT2).
 `G[0x62428]` is SC0000's MENU-busy flag, which the right-click handler sets before `call-script MENU.BIN` and a load
-from MENU never clears ("Native menu bar"). The port matches: `ApplyNumberedState` clears each bank before applying
+from MENU never clears ("Native menu bar"). The port matches: script memory's `ReadSaveRecords` clears each bank before applying
 the prefix, and `InstalledSave00ContinuesToRestoredGameplayPollWhenPresent` checks INIT2's tables after a load. It
 had preserved the cells past the prefix until 2026-11-05, which left `G[0x62428]` set after a load from MENU and
 deferred every `CALLBACK_SETTING.BIN` redraw.
@@ -6841,7 +6844,8 @@ in a timed loop, changes only its own later values.
   bytes there before it hooks. The hook must be a probe, a bare function. An `onEnter` object makes Frida take the
   site for a function entry and swap `[esp]`, here the handler's saved ESI, for its leave trampoline. AGE then
   faulted in the main tick reading `[esi+0xa51a0]`.
-- Port: `VirtualMachine.DeterministicRandom.cs`. Like native, the port now draws before it reads the bound, so a
+- Port: script memory's `Natives/ScriptMemory.Random.cs` (before engine layering milestone 9,
+  `VirtualMachine.DeterministicRandom.cs`). Like native, the port now draws before it reads the bound, so a
   zero bound spends a draw too.
 - The step's result counts the draws per site since the previous `rand-seed`. Equal counts mean equal values.
 

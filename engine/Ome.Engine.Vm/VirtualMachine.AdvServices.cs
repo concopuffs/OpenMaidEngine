@@ -68,7 +68,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         // op_0x1ca_set_read_message_skip@0x41f880 only writes the setting; the next page reads it.
-        _sharedProfile.ReadMessageSkipEnabled = Read(a[0]) != 0;
+        _saves.Profile.ReadMessageSkipEnabled = Read(a[0]) != 0;
         return StepResult.Next;
     }
 
@@ -76,7 +76,7 @@ public sealed partial class VirtualMachine
     private StepResult OpGetReadMessageSkip(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _sharedProfile.ReadMessageSkipEnabled ? 1 : 0);
+        Write(a[0], _saves.Profile.ReadMessageSkipEnabled ? 1 : 0);
         return StepResult.Next;
     }
 

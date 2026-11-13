@@ -21,7 +21,9 @@ public partial class Main : IAudioDevice
     private readonly int[] _audioChannelPlayIds = new int[AudioChannelCount];   // main thread: the play each runs, 0 none
     private readonly ConcurrentQueue<AudioChannelEnded> _audioEnded = new();
     private AudioMixerSettings _audioMixerSettings = null!;
-    private Sys4RegIniStore? _sys4RegIniStore;
+    /// <summary>SYS4REG.INI, the save and settings native's (null without one: a self-test, read-only persistence).
+    /// </summary>
+    private Sys4RegIniStore? SettingsStore => _saves?.Settings;
 
     private void CreateAudioChannels()
     {
@@ -156,7 +158,7 @@ public partial class Main : IAudioDevice
     {
         try
         {
-            _sys4RegIniStore?.Save(snapshot);
+            SettingsStore?.Save(snapshot);
         }
         catch (Exception error) when (
             error is IOException or UnauthorizedAccessException or InvalidDataException)

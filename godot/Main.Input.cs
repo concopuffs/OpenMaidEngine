@@ -5,6 +5,7 @@ using Godot;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 using Ome.Engine.Profiles;
 using Ome.Engine.Vm;
@@ -91,7 +92,7 @@ public partial class Main
         TrySaveScreenshotFromKey(e);
         if (e is InputEventMouseMotion motion)
         {
-            if (!_windowed) NoteTopEdgePointer(motion.Position);   // the strip's top-edge dwell
+            if (!Windowed) NoteTopEdgePointer(motion.Position);   // the strip's top-edge dwell
             var p = ToNativeScreen(motion.Position);
             _vm.UpdatePointer(p.X, p.Y);
             return;
@@ -105,7 +106,7 @@ public partial class Main
             // 0x10d reads and clears it (HISTORY scrolls by its sign). VirtualMachine.ApplyMouseWheel has the rules.
             int direction = wheel.ButtonIndex == MouseButton.WheelUp ? 1 : -1;
             int steps = System.Math.Max(1, (int)System.Math.Round(wheel.Factor));
-            bool advanceOnWheel = _sys4RegIniStore?.LoadMessageInt(Sys4RegIniStore.AdvanceMesOnWheelKey, 0) == 1;
+            bool advanceOnWheel = SettingsStore?.LoadMessageInt(Sys4RegIniStore.AdvanceMesOnWheelKey, 0) == 1;
             MouseWheelOutcome outcome = _vm.ApplyMouseWheel(direction * 120 * steps, advanceOnWheel,
                                                             _host.IsTextRevealing);
             if (outcome == MouseWheelOutcome.Advance
@@ -277,7 +278,7 @@ public partial class Main
     private static bool HasAdvanceAction(int mask) => (mask & (1 << VirtualMachine.AdvanceAction)) != 0;
 
     /// <summary>system:EffectSkipOnClick, read on each trigger: the 設定 dialog's その他 page writes it.</summary>
-    private bool EffectSkipOnClick => _sys4RegIniStore?.LoadInt("system", "EffectSkipOnClick", 0) == 1;
+    private bool EffectSkipOnClick => SettingsStore?.LoadInt("system", "EffectSkipOnClick", 0) == 1;
 
     /// <summary>A trigger while an effect service parks the VM. With EffectSkipOnClick 1 the effect polls it (action 4
     /// skips the effect, anything else is dropped); otherwise native's input latch holds it for the next service that
@@ -425,8 +426,9 @@ public partial class Main
     }
 
     /// <summary>Op 0x1b4's box, in the shell's language (the driven run's log keeps AGE's Japanese).</summary>
-    public void ShowAgeDiagnostic(DiagnosticMessage message)
+    private void ShowAgeDiagnostic(DiagnosticBox box)
     {
+        DiagnosticMessage message = box.Message;
         try
         {
             // A driven run (--control) has nobody to dismiss a modal box, and OS.Alert would block the main thread
@@ -444,14 +446,15 @@ public partial class Main
         }
         finally
         {
-            _host?.CompleteDiagnosticMessage();
+            box.Close();
         }
     }
 
     /// <summary>AGE's interpreter error box (中止/再試行/無視) in the shell's language, shown for driven runs too: the
     /// driver answers it with `answer`, as it answers the native box, and reads it in Japanese.</summary>
-    public void ShowAgeScriptError(DiagnosticMessage message)
+    private void ShowAgeScriptError(ScriptErrorBox box)
     {
+        DiagnosticMessage message = box.Message;
         if (_scriptErrorDialog != null)
         {
             GD.PushWarning("[vm] replaced an already-open script error box");
@@ -466,7 +469,7 @@ public partial class Main
             if (_scriptErrorDialog == dialog) _scriptErrorDialog = null;
             GD.Print($"[vm] script error answered: {choice}");
             FreezePresentedFrame(false);
-            _host?.CompleteScriptError(choice);
+            box.Answer(choice);
             dialog.QueueFree();
         };
         FreezePresentedFrame(true);
@@ -474,7 +477,7 @@ public partial class Main
         dialog.Open(new Vector2I(_screenWidth, _screenHeight));
     }
 
-    public void ShowAgeFullwidthTextEditor(string initialText)
+    private void ShowAgeFullwidthTextEditor(TextEntry entry)
     {
         if (_fullwidthTextEditor != null)
         {
@@ -487,11 +490,11 @@ public partial class Main
         editor.EditCompleted += (accepted, text) =>
         {
             if (_fullwidthTextEditor == editor) _fullwidthTextEditor = null;
-            _host?.CompleteFullwidthTextEdit(accepted, text);
+            entry.Answer(accepted, text);
             editor.QueueFree();
         };
         AddChild(editor);
-        editor.Open(initialText);
+        editor.Open(entry.Request.InitialText);
     }
 
 }

@@ -25,7 +25,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetSystemMenuEnabled(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _systemMenuActionsEnabled = unchecked((int)Read(a[0]));
+        _shell.SystemMenuActionsEnabled = unchecked((int)Read(a[0]));
         return StepResult.Next;
     }
 
@@ -33,7 +33,7 @@ public sealed partial class VirtualMachine
     private StepResult OpGetSystemMenuShowDelay(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], unchecked((int)_systemMenuShowDelayMilliseconds));
+        Write(a[0], unchecked((int)_shell.SystemMenuShowDelayMilliseconds));
         return StepResult.Next;
     }
 
@@ -41,7 +41,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetSystemMenuShowDelay(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _systemMenuShowDelayMilliseconds = unchecked((uint)Read(a[0]));
+        _shell.SystemMenuShowDelayMilliseconds = unchecked((uint)Read(a[0]));
         return StepResult.Next;
     }
 
@@ -49,7 +49,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetSystemKeyDisableMask(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Volatile.Write(ref _systemKeyDisableMask, unchecked((int)Read(a[0])));
+        _shell.SystemKeyDisableMask = unchecked((int)Read(a[0]));
         return StepResult.Next;
     }
 }

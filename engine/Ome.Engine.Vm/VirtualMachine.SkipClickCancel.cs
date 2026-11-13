@@ -13,10 +13,6 @@ namespace Ome.Engine.Vm;
 /// </summary>
 public sealed partial class VirtualMachine
 {
-    private const string SettingCallbackScript = "CALLBACK_SETTING.BIN";
-
-    private bool _settingCallbackPending;     // CALLBACK_SETTING.BIN queued by a mode-2 cancel or a menu toggle
-
     private bool AdvFastForwardActive => _skip.FastForwardActive;
 
     /// <summary>True while a completed action-4 click would cancel fast-forward instead of reaching hotspots.</summary>
@@ -32,15 +28,15 @@ public sealed partial class VirtualMachine
     }
 
     /// <summary>The services native's tick runs before dispatching an op: the engine tick (EngineTick: the natives'
-    /// timed work), the click-cancel machine (with CANCELMESSKIPONCLICK set), queued native-menu toggles, then any
-    /// queued CALLBACK_SETTING.BIN or CALLBACK_WINDOW.BIN launch. Non-null only when the callback ends the enclosing
+    /// timed work), the click-cancel machine (with CANCELMESSKIPONCLICK set), the shell native's queued menu commands,
+    /// then any queued CALLBACK_SETTING.BIN or CALLBACK_WINDOW.BIN launch. Non-null only when the callback ends the enclosing
     /// frame.</summary>
     private FrameOutcome? ServiceInstructionBoundary()
     {
         _tick.Service();
         if (_skip.ServiceClickCancel(InputBindings)) CancelMessageSkipFromClick();
         ApplyMenuToggles();
-        if (_tick.StatementBlockOpen || TakePendingCallbackScript() is not { } callback) return null;
+        if (_tick.StatementBlockOpen || _shell.TakeCallbackScript() is not { } callback) return null;
         return RunCallbackScript(callback);
     }
 
@@ -48,9 +44,9 @@ public sealed partial class VirtualMachine
     {
         Interlocked.Exchange(ref _queuedInputCallbackMask, 0);   // input_flush_action_triggers
         TakeHeldTriggers();
-        _sharedProfile.ReadMessageSkipEnabled = false;
+        _saves.Profile.ReadMessageSkipEnabled = false;
         _skip.CancelMessageSkipFromClick();
-        if (_skip.Settings.CancelMessageSkipOnClick == 2) _settingCallbackPending = true;
+        if (_skip.Settings.CancelMessageSkipOnClick == 2) _shell.RequestSettingCallback();
     }
 
     private FrameOutcome? RunCallbackScript(string name)

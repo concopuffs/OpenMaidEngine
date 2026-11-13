@@ -2,6 +2,8 @@ using System.Text.RegularExpressions;
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
+using Ome.Engine.Natives;
+using Ome.Engine.Devices;
 
 /// <summary>
 /// The engine shell's model (docs/superpowers/specs/2026-11-09-engine-shell-design.md, §4.2-§6): the command table,
@@ -209,29 +211,26 @@ public class ShellModelTests
     private sealed class Recorder : IShellHost, IVmMenuServices
     {
         public readonly List<string> Calls = [];
-        public bool Windowed => true;
         public VmMenuState MenuState => default;
         public void RequestClose() => Calls.Add("close");
         public void OpenPanel(ShellSection section, bool diagnostics) =>
             Calls.Add($"panel {section}{(diagnostics ? " diagnostics" : "")}");
-        public bool SwitchScreenMode(bool windowed, string source)
-        {
-            Calls.Add(windowed ? "window" : "fullscreen");
-            return true;
-        }
         public void SaveScreenshot() => Calls.Add("screenshot");
         public void ChooseImageFolder() => Calls.Add("folder");
         public void Quit() => Calls.Add("quit");
         public void ReturnToTitle() => Calls.Add("title");
         public void HoldVm(bool hold) => Calls.Add($"hold {hold}");
-        public void RequestMenuMessageSkipToggle() => Calls.Add("skip");
-        public void RequestMenuAutoMessageToggle() => Calls.Add("auto");
-        public void RequestMenuReadMessageSkipToggle() => Calls.Add("read-skip");
         public bool RequestMenuHideWindow()
         {
             Calls.Add("hide");
             return true;
         }
+    }
+
+    /// <summary>The shell native's window: records each mode it is told to show.</summary>
+    private sealed class RecordingWindow(List<string> calls) : IWindowDevice
+    {
+        public void ShowScreenMode(bool windowed) => calls.Add(windowed ? "window" : "fullscreen");
     }
 
     [Theory]
@@ -252,9 +251,24 @@ public class ShellModelTests
     public void EachCommandCallsItsService(string name, string call)
     {
         var recorder = new Recorder();
+        var shell = new ShellServices(window: new RecordingWindow(recorder.Calls));
+        if (name == "windowed")
+        {
+            shell.SwitchScreenMode(windowed: false, "the test");   // ｳｲﾝﾄﾞｳ switches from fullscreen
+            recorder.Calls.Clear();
+        }
+        shell.TakeMenuRequests();
 
-        ShellCommands.Find(name)!.Run(recorder, recorder);
+        ShellCommands.Find(name)!.Run(recorder, shell, recorder);
 
+        // The message toggles are requests the shell native queues for the interpreter.
+        recorder.Calls.AddRange(shell.TakeMenuRequests().Select(request => request.Kind switch
+        {
+            ShellMenuRequestKind.MessageSkipToggle => "skip",
+            ShellMenuRequestKind.AutoMessageToggle => "auto",
+            ShellMenuRequestKind.ReadMessageSkipToggle => "read-skip",
+            _ => request.Kind.ToString(),
+        }));
         Assert.Equal([call], recorder.Calls);
     }
 

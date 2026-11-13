@@ -114,9 +114,9 @@ public sealed class ScreenshotBmpTests : IDisposable
             (0x2, Array.Empty<Operand>()),
         ], []);
         var vm = new VirtualMachine(scene, Table, new RecordingHost());
-        Assert.Equal(0, vm.SystemKeyDisableMask);
+        Assert.Equal(0, vm.Shell.SystemKeyDisableMask);
         vm.Run();
-        Assert.Equal(0x201, vm.SystemKeyDisableMask);
+        Assert.Equal(0x201, vm.Shell.SystemKeyDisableMask);
 
         Script reloading = ScriptAssembler.Assemble(Table, "SC0000.BIN",
         [
@@ -126,6 +126,6 @@ public sealed class ScreenshotBmpTests : IDisposable
         var provider = new MapProvider(new Dictionary<long, Script> { [0] = system4 });
         var reset = new VirtualMachine(reloading, Table, new RecordingHost(), provider: provider);
         reset.Run();
-        Assert.Equal(0, reset.SystemKeyDisableMask);
+        Assert.Equal(0, reset.Shell.SystemKeyDisableMask);
     }
 }

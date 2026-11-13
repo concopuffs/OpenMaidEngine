@@ -35,10 +35,6 @@ public class EngineHostTests
         public void SetAgeCursor(byte[] rgba, int width, int height, int hotspotX, int hotspotY) => Note(nameof(SetAgeCursor));
         public void ClearAgeCursor() => Note(nameof(ClearAgeCursor));
         public void WarpAgeCursor(int virtualX, int virtualY) => Note(nameof(WarpAgeCursor));
-        public void ShowAgeDiagnostic(DiagnosticMessage message) => Note(nameof(ShowAgeDiagnostic));
-        public void ShowAgeScriptError(DiagnosticMessage message) => Note(nameof(ShowAgeScriptError));
-        public void ShowAgeFullwidthTextEditor(string initialText) => Note(nameof(ShowAgeFullwidthTextEditor));
-        public void RequestScreenModeFromScript(bool windowed) => Note(nameof(RequestScreenModeFromScript));
         public void Print(string message) { }
         public void Warn(string message) { }
     }
@@ -64,14 +60,16 @@ public class EngineHostTests
     /// audio native is a silent one.</summary>
     internal static EngineHost Host(IFrontEnd frontEnd, PageLocatorState locator, FrameClock clock,
                                     SkipAndAuto? skipAndAuto = null, AudioRig? audio = null,
-                                    Graphics? graphics = null, Movies? movies = null)
+                                    Graphics? graphics = null, Movies? movies = null,
+                                    SavesAndSettings? saves = null, ShellServices? shell = null)
     {
         SkipAndAuto skip = audio?.Skip ?? skipAndAuto ?? SkipAndAuto.WithSystemClock();
         Audio native = audio?.Audio ?? Audio.Silent(skip);
         ResourceMap resources = EmptyResources();
         Graphics surfaces = graphics ?? new Graphics(resources, clock, Canvas);
         return new(frontEnd, skip, native, audio?.Tick ?? new EngineTick(native),
-                   surfaces, movies ?? Movies.Headless(surfaces), resources,
+                   surfaces, movies ?? Movies.Headless(surfaces), saves ?? new SavesAndSettings(),
+                   shell ?? ShellServices.Headless(), resources,
                    clock, locator, new NoGlyphs(), GlyphCoverageAlpha.Sixteenths,
                    synchronizeExplicitPresentation: false)
         {
@@ -90,10 +88,9 @@ public class EngineHostTests
 
         host.WarpCursor(3, 4);
         host.ClearCursorResource();
-        host.RequestScreenMode(windowed: true);
         host.ResetSceneContext();
 
-        Assert.Equal(["WarpAgeCursor", "ClearAgeCursor", "RequestScreenModeFromScript", "ClearPage"], frontEnd.Calls);
+        Assert.Equal(["WarpAgeCursor", "ClearAgeCursor", "ClearPage"], frontEnd.Calls);
     }
 
     [Fact]

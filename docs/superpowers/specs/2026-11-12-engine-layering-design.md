@@ -3,9 +3,9 @@
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
-2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio), 7 (graphics) and 8 (movies) are done on
-`feature/engine-layering`; §3.3, §4, §5.2, §5.3, §6.2, §6.3, §7.5, §7.6, §11, §12 and §13 record what they
-settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15
+2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio), 7 (graphics), 8 (movies) and 9 (saves,
+settings and shell services) are done on `feature/engine-layering`; §3.3, §4, §5.2, §5.3, §6.2, §6.3, §7.5, §7.6, §8,
+§11, §12 and §13 record what they settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15
 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
@@ -459,6 +459,48 @@ it and is internal to it: `MovieSurfaceRegistry` from `Hosting/`, `MovieRuntime`
   itself to the graphics native as its movie partner and a surface listener. `IFrontEnd` lost its 3 movie members
   (`TryPlayMovie`, `QueueMoviePlaybackRate`, `StopMovie`).
 
+**As built (milestone 9).** Three natives, in the order census addition 3 set: script memory first, then the save
+and settings native, which writes the banks into a numbered save, then shell services.
+
+- **Script memory** is `Ome.Engine.Natives.ScriptMemory` (`engine/Ome.Engine/Natives/ScriptMemory.cs`). It owns the
+  five banks (integers, floats, strings and the two pointer banks), the engine's string encoding, the integer queues
+  and stacks of ops `0x132`-`0x139`, op `0x9`'s reset of them, and the banks' sections of a numbered save. Its partial
+  `ScriptMemory.Random.cs` owns op `0x60`'s seeded draws, which the driver's `rand-seed` turns on. The VM's `Globals`
+  and its siblings return the native's banks.
+- **Saves and settings** is `Ome.Engine.Natives.SavesAndSettings` (`SavesAndSettings.cs`, `SavesAndSettings.Numbered.cs`).
+  It owns the shared profile, the save store, `SYS4REG.INI`, the save container's playtime clock and the shutdown
+  flush. Native's `set:NoSaveDat`, which was a VM option, is an argument of its constructor. Ops `0x19e`-`0x1a1` and
+  `0x1ab`-`0x1af` call it.
+- **Each native writes its own records** (§5.1, rule 6). A numbered save holds script memory's banks, audio's track
+  and channels (`Audio.Mixer.cs`) and graphics' surfaces and objects (`Graphics.Saves.cs`), and the save native
+  decides their order. What is not a native yet (the interpreter's saved frames, text's history tail and source glyph
+  objects) it reaches through `NumberedSaveRecords`, which the VM builds once and passes to each save and load. So the
+  save native needs no other native to be built before it.
+- **Shell services** is `Ome.Engine.Natives.ShellServices` (`ShellServices.cs`, `.Dialogs.cs`, `.ScreenMode.cs`). It
+  owns the system-menu fields of ops `0x142`, `0x148`/`0x149` and `0x10f`; the menu toggles and 設定 values the shell
+  queues for the interpreter; the two callback scripts they launch, each once, `CALLBACK_SETTING.BIN` before
+  `CALLBACK_WINDOW.BIN`; ops `0x1b2`-`0x1b4`'s text; the dialogs; and the screen mode (§6.2, "As built"). Op `0x9`'s
+  reset drops its requests and callbacks, restores the system-menu fields and cancels the dialogs. The diagnostic text
+  is kept: it lives in native's `EngineCtx`, and a `GameSession` shares it across its scene VMs as before
+  (`DiagnosticOutputState`).
+- **What stays at the VM.** `MenuState` and `MessageSettings` read several natives, so the VM composes them (census
+  addition 4). It applies the queued requests where it did, at an instruction boundary and inside a polling text
+  wait, and then asks the shell native for `CALLBACK_SETTING.BIN`. `RequestMenuHideWindow` stays on
+  `IVmMenuServices` because it answers at once. `ScriptError` stays on the VM as the run's outcome. The host still
+  seeds the message settings at start and flushes them at shutdown, since their values are text's and skip's until
+  milestone 10; it reads `SYS4REG.INI` through the save native.
+- **Done when.** `IShellHost` lost `Windowed` and `SwitchScreenMode`, and `IVmMenuServices` its three toggles.
+  `IShellHost` holds only front-end services (close, the panel, the screenshot and its folder, quit, the title, the
+  hold), and `IVmMenuServices` the menu state and the hide request. `ProjectBoundaryTests` checks both lists, that the
+  three natives' fields are private, and that the VM and `EngineHost` keep none of the 32 census fields that moved.
+  The census's other six for these natives stay as the VM's properties: the five banks, which return the native's,
+  and `ScriptError`.
+- **Construction.** Composition (`godot/Main.cs`) builds the save native over the shared profile, the save store and
+  `SYS4REG.INI`, and the shell native over `SYS4REG.INI` and the window and dialogs, which `Main` implements; it hands
+  both to `EngineHost` and the VM. A VM given none builds an empty save native and `ShellServices.Headless`, since
+  handler code cannot name a device type. `GameSession` builds both for each scene it runs, so each scene's playtime
+  counts from its start, as before.
+
 ### 5.3 Time
 
 **Today.** The VM runs on a task thread (`godot/Main.cs:616`) and blocks inside host calls. Godot's main thread
@@ -708,6 +750,29 @@ outlive its wait.
   - Every stop was applied one frame after the op that asked for it, where the build before applied it in the same
     frame. That was the known difference: `Main`'s `CallDeferred` ran in the same frame, and the frame service runs at
     the start of the next.
+
+**As built (milestone 9).**
+
+- **The window** is a device: `Ome.Engine.Devices.IWindowDevice` (`engine/Ome.Engine.Devices/Window/IWindowDevice.cs`),
+  with one command, show a window or fullscreen. The shell native decides each switch (`SwitchScreenMode`). A switch
+  to the current mode does nothing, and so does one to a window under `display:ForceScreen`; any other stores
+  `display:ScreenMode`, tells the window and queues `CALLBACK_WINDOW.BIN`. Op `0x2cf` records a request, which the
+  front end's next frame takes (`ServiceFrame`), as before. Godot's window (`godot/Main.ScreenMode.cs`) hides the menu
+  strip, remembers the window's rectangle when it goes fullscreen, and lays the screen out. The size and the close
+  request stay on `IShellHost`.
+- **A dialog is a request.** The shell native opens each one, a `DiagnosticBox` (op `0x1b4`), a `ScriptErrorBox` or
+  a `TextEntry` (op `0x144`), and hands it to the front end through `IShellDialogs`. The front end answers it from its
+  own thread. The first answer wins, and an answer after a cancel is dropped. A stop or a scene reset cancels every
+  open dialog, so a late answer cannot answer the next one. The host's six completion fields, which a stale signal
+  could carry over, are gone.
+- **`IShellDialogs` is not a device.** It carries AGE's vocabulary (the error box's three choices, the
+  full-width text entry), so it is the native's seam in `Ome.Engine` (`Natives/ShellServices.Dialogs.cs`), as §6.4 has
+  it for the save store.
+- **The waits stay in the host** until milestone 11. It opens a box and waits on its `Closed` handle in a modal wait
+  that a stop ends. Godot shows the boxes on its main thread (`godot/Main.FrontEnd.cs`, through `CallDeferred`), as
+  before.
+- **`IFrontEnd` lost four members**: the three `ShowAge*` and `RequestScreenModeFromScript`. `ILifecycleHost` lost
+  `RequestScreenMode`.
 
 ### 6.3 Graphics: a frame description and a reference renderer
 
@@ -1081,6 +1146,12 @@ natives:
   bind to a facade that `Ome.Engine.Vm` offers. Its script memory (`vm.g`, `vm.gf`, `vm.gs`) binds to the
   script-memory native. That is for the Lua spec to settle; this design only makes it possible.
 
+**As built (milestone 9).** The shell's commands (`Ome.Engine.Frontend/Shell/ShellCommands.cs`) run over
+`IShellHost`, the shell-services native and `IVmMenuServices`. The ﾒｯｾｰｼﾞ toggles and the screen mode go to the
+native, and the hide request to the VM. The options panel commits its message settings to the native too, and reads
+and writes `SYS4REG.INI` through the store the save native holds. The driver seeds op `0x60`'s draws on script memory
+(`ScriptMemory.SeedDeterministicRandom`) and reads the screen mode from the shell native.
+
 ## 9. Acceptance
 
 1. **Layering.**
@@ -1357,3 +1428,21 @@ Not covered:
   poll happened to catch the script, which varies as much between two runs of the build before. Their `SYS4REG.INI`
   are equal and their shots identical. The saves of `himegari-save-load` and `kamidori-history-after-load` are equal
   under `save-diff` except for their timestamp and play time, and their thumbnails are byte-identical.
+- **2026-11-13, milestone 9.** Saves, settings and shell services. Script memory (`Ome.Engine.Natives.ScriptMemory`),
+  the save and settings native (`SavesAndSettings`) and the shell-services native (`ShellServices`) own the census's
+  fields for them (§5.2, "As built"). Each native writes and reads its own records of a numbered save, in the order
+  the save native decides. The shell-services native owns the menu and callback requests, the system-menu fields, the
+  diagnostic text, the dialogs and the screen mode. The window is a device (`IWindowDevice`), and a dialog is a
+  request that a stop or a reset cancels, so the host's six dialog fields are gone (§6.2, "As built"). `IShellHost`
+  holds only front-end services and `IVmMenuServices` the menu state and the hide request; the shell and the driver
+  call the natives (§8, "As built"). `ProjectBoundaryTests` checks the two contracts and the census's fields, and
+  `ScriptMemoryTests`, `SavesAndSettingsTests` and `ShellServicesTests` test the natives without Godot. The suite
+  (1935) and validation at the core, workspace and runtime levels on both games pass. The tolerance was written before
+  measuring. The 20 port scenarios that use the menu bar, the shell, the dialogs, the saves and the settings ran on
+  the build before and the new one under the same display. They give the same step results, apart from where a poll
+  caught the script; equal `SYS4REG.INI`; identical shots, screenshots, thumbnails and `RT.DAT`; saves equal under
+  `save-diff` except for their timestamp and play time; step seconds within 0.4 % (`himegari-read-skip` 37.74 and
+  37.77 s); and the same display, persistence, settings and script-error log lines. The tolerance named only
+  `wait-state` polls, and one other poll differed: after `himegari-exit-dialog` cancels the 終了 dialog,
+  `expect script=TITLE` read the title's idle loop at `0x173` before and `0xe8` after, two offsets that one run of the
+  build before shows in turn.

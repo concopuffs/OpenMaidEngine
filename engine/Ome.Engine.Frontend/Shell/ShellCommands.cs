@@ -1,3 +1,4 @@
+using Ome.Engine.Natives;
 using Ome.Engine.Vm;
 
 namespace Ome.Engine.Frontend.Shell;
@@ -35,7 +36,9 @@ public sealed class ShellCommand
     public Func<ShellState, bool>? CheckedRule { get; init; }
     /// <summary>A label key that depends on the state, or null for <see cref="LabelKey"/>.</summary>
     public Func<ShellState, string>? LabelRule { get; init; }
-    public required Action<IShellHost, IVmMenuServices> Action { get; init; }
+    /// <summary>What the command does: through the front end's services, the shell-services native (the message
+    /// toggles, the screen mode) or the interpreter (the hide request).</summary>
+    public required Action<IShellHost, ShellServices, IVmMenuServices> Action { get; init; }
 
     public bool IsEnabled(ShellState state) =>
         (!SystemMenuGated || state.Vm.SystemMenuEnabled) && EnabledRule(state);
@@ -49,7 +52,7 @@ public sealed class ShellCommand
     public string Text(ShellStrings strings, ShellState state) =>
         AcceleratorKey == null ? strings[LabelKeyFor(state)] : $"{strings[LabelKeyFor(state)]}\t{strings[AcceleratorKey]}";
 
-    public void Run(IShellHost host, IVmMenuServices vm) => Action(host, vm);
+    public void Run(IShellHost host, ShellServices shell, IVmMenuServices vm) => Action(host, shell, vm);
 }
 
 /// <summary>The shell's command table (spec §5.1). ｾｰﾌﾞ/ﾛｰﾄﾞ (0x9c43/0x9c44) and the 設定 radio groups are not commands:
@@ -69,29 +72,29 @@ public static class ShellCommands
         {
             Name = "exit", Id = Exit, Kind = ShellCommandKind.Action, LabelKey = "command.exit",
             AcceleratorKey = "command.exit.accelerator",
-            Action = (host, _) => host.RequestClose(),   // age_main_window_proc: PostMessage(WM_CLOSE, 0)
+            Action = (host, _, _) => host.RequestClose(),   // age_main_window_proc: PostMessage(WM_CLOSE, 0)
         },
         new()
         {
             Name = "save-screen", Id = SaveScreen, Kind = ShellCommandKind.Action, LabelKey = "command.save-screen",
-            Action = (host, _) => host.SaveScreenshot(),   // IAGEService +0xa4: engine_save_screenshot_bmp
+            Action = (host, _, _) => host.SaveScreenshot(),   // IAGEService +0xa4: engine_save_screenshot_bmp
         },
         new()
         {
             Name = "image-folder", Id = ImageFolder, Kind = ShellCommandKind.Action, LabelKey = "command.image-folder",
-            Action = (host, _) => host.ChooseImageFolder(),   // agerc_choose_screenshot_folder: SHBrowseForFolder
+            Action = (host, _, _) => host.ChooseImageFolder(),   // agerc_choose_screenshot_folder: SHBrowseForFolder
         },
         new()
         {
             Name = "skip", Id = MessageSkip, Kind = ShellCommandKind.Toggle, LabelKey = "command.skip",
             SystemMenuGated = true, CheckedRule = s => s.Vm.MessageSkip,   // +0x04: the persistent Skip
-            Action = (_, vm) => vm.RequestMenuMessageSkipToggle(),   // +0x88: adv_toggle_skip_mode
+            Action = (_, shell, _) => shell.RequestMessageSkipToggle(),   // +0x88: adv_toggle_skip_mode
         },
         new()
         {
             Name = "read-skip", Id = ReadMessageSkip, Kind = ShellCommandKind.Toggle, LabelKey = "command.read-skip",
             SystemMenuGated = true, CheckedRule = s => s.Vm.ReadTextSkip,   // message:ReadTextSkip
-            Action = (_, vm) => vm.RequestMenuReadMessageSkipToggle(),   // +0xd8: adv_toggle_read_skip_and_refresh
+            Action = (_, shell, _) => shell.RequestReadMessageSkipToggle(),   // +0xd8: adv_toggle_read_skip_and_refresh
         },
         new()
         {
@@ -102,55 +105,55 @@ public static class ShellCommands
             SystemMenuGated = true,
             EnabledRule = s => s.Vm.HiddenWindow || (s.Vm.TextWait && s.Vm.YieldHandler),
             LabelRule = s => s.Vm.HiddenWindow ? "command.hide.hidden" : "command.hide",
-            Action = (_, vm) => vm.RequestMenuHideWindow(),   // +0x8c: iage_service_request_hide_window
+            Action = (_, _, vm) => vm.RequestMenuHideWindow(),   // +0x8c: iage_service_request_hide_window
         },
         new()
         {
             Name = "auto", Id = AutoMessage, Kind = ShellCommandKind.Toggle, LabelKey = "command.auto",
             SystemMenuGated = true, CheckedRule = s => s.Vm.AutoMessage,   // +0x0c
-            Action = (_, vm) => vm.RequestMenuAutoMessageToggle(),   // +0x84: adv_toggle_auto_mode
+            Action = (_, shell, _) => shell.RequestAutoMessageToggle(),   // +0x84: adv_toggle_auto_mode
         },
         new()
         {
             Name = "message-settings", Id = MessageSettings, Kind = ShellCommandKind.Section,
             LabelKey = "command.message-settings", SystemMenuGated = true, Section = ShellSection.Message,
-            Action = (host, _) => host.OpenPanel(ShellSection.Message),
+            Action = (host, _, _) => host.OpenPanel(ShellSection.Message),
         },
         new()
         {
             Name = "fullscreen", Id = FullScreen, Kind = ShellCommandKind.Radio, LabelKey = "command.fullscreen",
             CheckedRule = s => !s.Windowed,
-            Action = (host, _) => host.SwitchScreenMode(windowed: false, "menu ﾌﾙｽｸﾘｰﾝ"),   // IAGEService +0x1c(0)
+            Action = (_, shell, _) => shell.SwitchScreenMode(windowed: false, "menu ﾌﾙｽｸﾘｰﾝ"),   // IAGEService +0x1c(0)
         },
         new()
         {
             Name = "windowed", Id = Windowed, Kind = ShellCommandKind.Radio, LabelKey = "command.windowed",
             CheckedRule = s => s.Windowed,
-            Action = (host, _) => host.SwitchScreenMode(windowed: true, "menu ｳｲﾝﾄﾞｳ"),   // IAGEService +0x1c(1)
+            Action = (_, shell, _) => shell.SwitchScreenMode(windowed: true, "menu ｳｲﾝﾄﾞｳ"),   // IAGEService +0x1c(1)
         },
         new()
         {
             Name = "sound-settings", Id = SoundSettings, Kind = ShellCommandKind.Section,
             LabelKey = "command.sound-settings", SystemMenuGated = true, Section = ShellSection.Sound,
-            Action = (host, _) => host.OpenPanel(ShellSection.Sound),
+            Action = (host, _, _) => host.OpenPanel(ShellSection.Sound),
         },
         new()
         {
             Name = "other-settings", Id = OtherSettings, Kind = ShellCommandKind.Section,
             LabelKey = "command.other-settings", SystemMenuGated = true, Section = ShellSection.Other,
-            Action = (host, _) => host.OpenPanel(ShellSection.Other),
+            Action = (host, _, _) => host.OpenPanel(ShellSection.Other),
         },
         new()
         {
             Name = "system-info", Id = SystemInfo, Kind = ShellCommandKind.Section, LabelKey = "command.system-info",
             Section = ShellSection.Info, Diagnostics = true,
-            Action = (host, _) => host.OpenPanel(ShellSection.Info, diagnostics: true),
+            Action = (host, _, _) => host.OpenPanel(ShellSection.Info, diagnostics: true),
         },
         new()
         {
             Name = "version", Id = VersionInfo, Kind = ShellCommandKind.Section, LabelKey = "command.version",
             Section = ShellSection.Info,
-            Action = (host, _) => host.OpenPanel(ShellSection.Info),
+            Action = (host, _, _) => host.OpenPanel(ShellSection.Info),
         },
     ];
 

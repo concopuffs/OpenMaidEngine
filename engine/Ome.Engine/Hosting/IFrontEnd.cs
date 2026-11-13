@@ -7,7 +7,8 @@ namespace Ome.Engine.Hosting;
 /// the host called before it was lifted into <c>Ome.Engine</c>, and the log (engine layering spec §6.2, milestone 4).
 /// Milestone 6 took out the 16 audio members: the audio native drives an <c>IAudioDevice</c> instead. Milestone 8 took
 /// out the 3 movie members: the movie native opens the front end's decoder and plays the sound through an
-/// <c>IAudioStreamDevice</c>.
+/// <c>IAudioStreamDevice</c>. Milestone 9 took out the 4 dialog and window members: the shell-services native opens the
+/// front end's dialogs (<c>IShellDialogs</c>) and shows the screen mode through an <c>IWindowDevice</c>.
 /// </summary>
 /// <remarks>
 /// <para>Commands return at once. The front end applies them later on its own thread, in the order they were sent;
@@ -25,13 +26,6 @@ public interface IFrontEnd
     void SetAgeCursor(byte[] rgba, int width, int height, int hotspotX, int hotspotY);
     void ClearAgeCursor();
     void WarpAgeCursor(int virtualX, int virtualY);
-
-    // ---- dialogs and window ----
-    void ShowAgeDiagnostic(DiagnosticMessage message);
-    void ShowAgeScriptError(DiagnosticMessage message);
-    void ShowAgeFullwidthTextEditor(string initialText);
-    /// <summary><i>Immediate.</i> The front end switches at its next frame.</summary>
-    void RequestScreenModeFromScript(bool windowed);
 
     // ---- log ----
     /// <summary><i>Immediate.</i> A line for the run's log.</summary>

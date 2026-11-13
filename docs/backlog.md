@@ -217,10 +217,12 @@ engine builds declared in one file. Each item below that it covers names the mil
 still handled on their own. Each change should be behaviour-neutral and pass the spec's acceptance 4: the suite, the
 `oms-rebuild` trace gate, the drive scenarios, `save-diff`, and timing or frame-time captures where they apply.
 
-- **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:1055`)
-  assigns fields from many partials (the skip and auto state, since milestone 5, through `SkipAndAuto.ResetScene`), and `EngineHost.ResetSceneContext` (`EngineHost.PresentationInput.cs`)
-  does the same on the host. Scene state added without a line in these methods survives タイトルに戻る. That is how
-  the host's dialog events stayed signalled until 2026-11-10, when each was reset by hand. Done when a root reload
+- **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:991`)
+  assigns fields from many partials (each native's state, since milestones 5 to 9, through its `ResetScene`), and
+  `EngineHost.ResetSceneContext` (`EngineHost.PresentationInput.cs`) does the same on the host. Scene state added
+  without a line in these methods survives タイトルに戻る. That is how the host's dialog events stayed signalled until
+  2026-11-10, when each was reset by hand; since milestone 9 (2026-11-13) a dialog is a request that the reset
+  cancels. Done when a root reload
   rebuilds scene-lifetime state instead of clearing it, so a new field cannot be missed, and a test shows a reload
   keeps no scene state from before it. Planned: layering spec, as each native takes its state; closed at milestone
   12.
@@ -243,8 +245,10 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. The
   census of every field (milestone 2, `docs/superpowers/plans/2026-11-12-engine-layering.md`) names each one's owner;
   skip and auto has its owner, and since milestone 6 (2026-11-12) so do audio (`Natives/Audio*.cs`) and the statement
-  block (`Natives/EngineTick.cs`), and since milestone 7 graphics (`Natives/Graphics*.cs`: the surface table,
-  publication and the screen transition); the waits move last (milestone 11).
+  block (`Natives/EngineTick.cs`), since milestone 7 graphics (`Natives/Graphics*.cs`: the surface table,
+  publication and the screen transition), since milestone 8 movies, and since milestone 9 (2026-11-13) the memory
+  banks (`Natives/ScriptMemory*.cs`), the saves and the play clock (`Natives/SavesAndSettings*.cs`) and the menu
+  (`Natives/ShellServices*.cs`); the waits move last (milestone 11).
 - **The host's threads have no stated ownership.** `EngineHost` holds four lock objects (nine until milestones 5
   to 7 moved the skip, delayed-voice, image, screen-transition and backbuffer locks into their natives), six
   `AutoResetEvent`s,
@@ -257,9 +261,11 @@ still handled on their own. Each change should be behaviour-neutral and pass the
 - **Modal dialogs are separate fields.** `Main` keeps the 終了 dialog (`_exitConfirmation`), the script error box,
   the options panel, the screenshot folder dialog and the full-width editor in their own fields, plus a hold
   counter (`_frontendModalHolds`). Input routing, the drive `dialogs` and `answer` steps and screen-mode changes each
-  test the fields: they are used in 7 files. On the host, each dialog is an event plus a result field that the
-  scene reset must clear by hand (the item above). Done when one owner knows which modal is open, routing and the
-  drive steps ask it, and a reset cancels any pending dialog request.
+  test the fields: they are used in 7 files. The host's half is done: since engine layering milestone 9
+  (2026-11-13) the error box, the diagnostic box and the full-width editor are requests of the shell-services native
+  (`Natives/ShellServices.Dialogs.cs`) that `Main` completes and a stop or a reset cancels, where the host kept an
+  event and a result field for each. Done when one owner knows which modal is open, and routing and the drive steps
+  ask it.
 - **`Main` has no seams.** `_Ready` is 542 lines (`Main.cs:76-617`) of flag parsing, session building and wiring, and
   12 files read `_screenWidth`. Launch-flag parsing has its own item under Robustness. Done when startup, the frame
   pipeline and each front-end concern (audio, movies, compositing, the shell, input, driving, screenshots) own their

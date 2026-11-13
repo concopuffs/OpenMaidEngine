@@ -24,12 +24,6 @@ public sealed partial class EngineHost
 {
     private readonly ScriptPresentationBarrier _presentationBarrier = new();
     private readonly AutoResetEvent _presentationRequestConsumed = new(false);
-    private readonly AutoResetEvent _diagnosticMessageCompleted = new(false);
-    private readonly AutoResetEvent _scriptErrorCompleted = new(false);
-    private volatile ScriptErrorChoice _scriptErrorChoice;
-    private readonly AutoResetEvent _fullwidthTextEditCompleted = new(false);
-    private readonly object _fullwidthTextEditLock = new();
-    private FullwidthTextEditResult _fullwidthTextEditResult;
     private readonly bool _synchronizeExplicitPresentation;
     private long _explicitPresentationRequestGeneration;
     private long _consumedPresentationRequestGeneration;
@@ -66,13 +60,9 @@ public sealed partial class EngineHost
             ["caption"] = message.Caption,
             ["text"] = message.Text,
         });
-        // A root reload's WakeAllWaits may have left the event set with no dialog waiting: drop it before showing.
-        _diagnosticMessageCompleted.Reset();
-        _frontEnd.ShowAgeDiagnostic(message);
-        while (!_stopping && !WaitModal(_diagnosticMessageCompleted, 50)) { }
+        DiagnosticBox box = _shell.OpenDiagnostic(message);
+        while (!_stopping && !WaitModal(box.Closed, 50)) { }
     }
-
-    public void CompleteDiagnosticMessage() => _diagnosticMessageCompleted.Set();
 
     /// <summary>The interpreter error box (中止/再試行/無視): the VM thread blocks until the dialog answers. A stop
     /// aborts; a root reload (タイトルに戻る) retries, so the VM reaches its next opcode boundary and reloads.</summary>
@@ -84,41 +74,24 @@ public sealed partial class EngineHost
             ["caption"] = message.Caption,
             ["text"] = message.Text,
         });
-        _scriptErrorCompleted.Reset();
-        _frontEnd.ShowAgeScriptError(message);
-        while (!_stopping && !WaitModal(_scriptErrorCompleted, 50)) { }
+        ScriptErrorBox box = _shell.OpenScriptError(message);
+        while (!_stopping && !WaitModal(box.Closed, 50)) { }
         if (_stopRequested) return ScriptErrorChoice.Abort;
         if (_rootReloadInterrupt) return ScriptErrorChoice.Retry;
-        return _scriptErrorChoice;
-    }
-
-    public void CompleteScriptError(ScriptErrorChoice choice)
-    {
-        _scriptErrorChoice = choice;
-        _scriptErrorCompleted.Set();
+        return box.Choice;
     }
 
     public FullwidthTextEditResult EditFullwidthString(FullwidthTextEditRequest request)
     {
         if (_stopping) return new(false, request.CurrentText);
-        lock (_fullwidthTextEditLock)
-            _fullwidthTextEditResult = new(false, request.CurrentText);
         _timeline?.Event("fullwidth-text-edit", new()
         {
             ["current"] = request.CurrentText,
             ["initial"] = request.InitialText,
         });
-        _fullwidthTextEditCompleted.Reset();
-        _frontEnd.ShowAgeFullwidthTextEditor(request.InitialText);
-        while (!_stopping && !WaitModal(_fullwidthTextEditCompleted, 50)) { }
-        lock (_fullwidthTextEditLock) return _fullwidthTextEditResult;
-    }
-
-    public void CompleteFullwidthTextEdit(bool accepted, string text)
-    {
-        lock (_fullwidthTextEditLock)
-            _fullwidthTextEditResult = new(accepted, text);
-        _fullwidthTextEditCompleted.Set();
+        TextEntry entry = _shell.OpenTextEntry(request);
+        while (!_stopping && !WaitModal(entry.Closed, 50)) { }
+        return entry.Result;   // not accepted with the current text, unless answered
     }
 
     // The VM's frames are the script stack; the host keeps no copy (engine layering plan §3.3).
@@ -723,9 +696,6 @@ public sealed partial class EngineHost
         WakeAllWaits();
     }
 
-    /// <summary>Op 0x2cf: Main switches at its next frame (Main.ScreenMode.cs).</summary>
-    public void RequestScreenMode(bool windowed) => _frontEnd.RequestScreenModeFromScript(windowed);
-
     public void InterruptForRootReload()
     {
         _rootReloadInterrupt = true;
@@ -738,9 +708,7 @@ public sealed partial class EngineHost
         if (_gate.CurrentCount == 0) _gate.Release();
         _inputCallbackSignal.Set();
         _frameSignal.Set();
-        _diagnosticMessageCompleted.Set();
-        _scriptErrorCompleted.Set();
-        _fullwidthTextEditCompleted.Set();
+        _shell.CancelDialogs();   // an answer that comes later is dropped, so it cannot answer the next dialog
     }
 
     public void ResetSceneContext()
@@ -771,10 +739,6 @@ public sealed partial class EngineHost
         }
         while (_gate.Wait(0)) { }
         _inputCallbackSignal.WaitOne(0);
-        // WakeAllWaits set these for a dialog that may not have been open; a stale signal would answer the next one.
-        _diagnosticMessageCompleted.Reset();
-        _scriptErrorCompleted.Reset();
-        _fullwidthTextEditCompleted.Reset();
         _advPagePresentationSuspended = false;
         _modalMovieCancelled = false;
         _modalMovieWaiting = false;

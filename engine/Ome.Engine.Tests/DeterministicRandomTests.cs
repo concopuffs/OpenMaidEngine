@@ -6,6 +6,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
+using Ome.Engine.Natives;
 
 /// <summary>Op 0x60's deterministic mode (drive step rand-seed; docs/engine-re.md, "Op 0x60 randomness"). The vectors
 /// are the ones tools/drive/native-agent.js computes, checked against an independent Python implementation.</summary>
@@ -17,20 +18,20 @@ public class DeterministicRandomTests
     public void TheStreamIsMsvcRand()
     {
         uint state = 1;   // srand(1)
-        int[] drawn = Enumerable.Range(0, 5).Select(_ => VirtualMachine.DeterministicRandomNext(ref state)).ToArray();
+        int[] drawn = Enumerable.Range(0, 5).Select(_ => ScriptMemory.DeterministicRandomNext(ref state)).ToArray();
         Assert.Equal(new[] { 41, 18467, 6334, 26500, 19169 }, drawn);
     }
 
     [Fact]
     public void EachCallSiteHasItsOwnStreamFromTheSeed()
     {
-        uint state = VirtualMachine.DeterministicRandomInitialState(2, 0x123, 0x24e);
+        uint state = ScriptMemory.DeterministicRandomInitialState(2, 0x123, 0x24e);
         Assert.Equal(0x7e7bf277u, state);
-        int[] drawn = Enumerable.Range(0, 3).Select(_ => VirtualMachine.DeterministicRandomNext(ref state)).ToArray();
+        int[] drawn = Enumerable.Range(0, 3).Select(_ => ScriptMemory.DeterministicRandomNext(ref state)).ToArray();
         Assert.Equal(new[] { 18559, 10023, 18824 }, drawn);
 
-        uint wide = VirtualMachine.DeterministicRandomInitialState(0xffffffff, 0x01000a3f, 0x940a);
-        Assert.Equal(1265, VirtualMachine.DeterministicRandomNext(ref wide));
+        uint wide = ScriptMemory.DeterministicRandomInitialState(0xffffffff, 0x01000a3f, 0x940a);
+        Assert.Equal(1265, ScriptMemory.DeterministicRandomNext(ref wide));
     }
 
     [Fact]
@@ -45,14 +46,14 @@ public class DeterministicRandomTests
         }, Array.Empty<string>());
         var vm = new VirtualMachine(script, table, new RecordingHost());
 
-        Assert.Null(vm.SeedDeterministicRandom(9).Seed);
+        Assert.Null(vm.Memory.SeedDeterministicRandom(9).Seed);
         vm.Run();
-        DeterministicRandomSummary drawn = vm.SeedDeterministicRandom(null);
+        DeterministicRandomSummary drawn = vm.Memory.SeedDeterministicRandom(null);
 
         int First(int offset)
         {
-            uint state = VirtualMachine.DeterministicRandomInitialState(9, script.PackedId, offset);
-            return VirtualMachine.DeterministicRandomNext(ref state);
+            uint state = ScriptMemory.DeterministicRandomInitialState(9, script.PackedId, offset);
+            return ScriptMemory.DeterministicRandomNext(ref state);
         }
         Assert.Equal(First(script.Instructions[0].Offset) % 30000, vm.Globals[0x100]);
         Assert.Equal(First(script.Instructions[1].Offset) % 7, vm.Globals[0x101]);
@@ -60,7 +61,7 @@ public class DeterministicRandomTests
         Assert.Equal(2, drawn.Draws);
         Assert.Equal(new[] { (script.Instructions[0].Offset, 1), (script.Instructions[1].Offset, 1) },
                      drawn.Sites.Select(site => (site.Offset, site.Draws)));
-        Assert.Equal(0, vm.SeedDeterministicRandom(null).Draws);
+        Assert.Equal(0, vm.Memory.SeedDeterministicRandom(null).Draws);
     }
 
     [Fact]

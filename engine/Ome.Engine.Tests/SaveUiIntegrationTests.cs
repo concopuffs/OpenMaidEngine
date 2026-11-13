@@ -4,6 +4,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
+using Ome.Engine.Natives;
 
 [Trait("Category", "Workspace")]
 public class SaveUiIntegrationTests
@@ -191,8 +192,7 @@ public class SaveUiIntegrationTests
             var vm = new VirtualMachine(
                 scripts.RequireByName("SAVE.BIN"), Table, host,
                 new VmOptions(MaxSteps: 500_000), scripts,
-                sharedProfile: loadedProfile,
-                nativeDatStore: store);
+                saves: new SavesAndSettings(profile: loadedProfile, store: store));
             List<string> surfaceOps = vm.TraceSurfaceOps();
 
             Assert.Throws<MenuReadyException>(() => vm.Run());
@@ -255,7 +255,7 @@ public class SaveUiIntegrationTests
             var vm = new VirtualMachine(
                 nativeScripts.RequireByName("SAVE.BIN"), Table, host,
                 new VmOptions(MaxSteps: 1_000_000), provider, trace,
-                nativeDatStore: store);
+                saves: new SavesAndSettings(store: store));
             host.Vm = vm;
             vm.Globals[0x6241b] = 1; // LOAD mode
             vm.Globals[0x696] = 0;   // caller allows direct load without the optional confirmation
@@ -296,8 +296,7 @@ public class SaveUiIntegrationTests
             nativeScripts.RequireByName("SAVE.BIN"), Table, host,
             new VmOptions(MaxSteps: 1_000_000), provider,
             new StopAtInstalledResumeSink(),
-            sharedProfile: sharedProfile,
-            nativeDatStore: store);
+            saves: new SavesAndSettings(profile: sharedProfile, store: store));
         host.Vm = vm;
         vm.Globals[0x4] = unchecked((uint)sharedProfile.LoadInteger(0x5c3));
         vm.Globals[0x6241b] = 1;
@@ -326,8 +325,7 @@ public class SaveUiIntegrationTests
             scripts.RequireByName("SAVE.BIN"), Table, host,
             new VmOptions(MaxSteps: 1_000_000), scripts,
             new InstalledContinuationSink(state),
-            sharedProfile: sharedProfile,
-            nativeDatStore: store);
+            saves: new SavesAndSettings(profile: sharedProfile, store: store));
         host.Vm = vm;
         vm.Globals[0x4] = unchecked((uint)sharedProfile.LoadInteger(0x5c3));
         vm.Globals[0x6241b] = 1;
@@ -381,7 +379,7 @@ public class SaveUiIntegrationTests
             shared.Load(store);
             var vm = new VirtualMachine(loader, table, new RecordingHost(),
                 new VmOptions(MaxSteps: 1_000_000), scripts, sink,
-                sharedProfile: shared, nativeDatStore: store);
+                saves: new SavesAndSettings(profile: shared, store: store));
             Exception? outcome = Record.Exception(() => vm.Run());
             Assert.True(outcome is InstalledResumeReachedException,
                 $"outcome={outcome}; halt={vm.HaltReason}; steps={vm.Steps}; terminal={terminalScript.Name}");

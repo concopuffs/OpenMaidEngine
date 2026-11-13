@@ -45,7 +45,7 @@ public partial class Main
     }
 
     private string SaveBmpPath
-        => _sys4RegIniStore?.LoadString(ScreenshotBmpStore.SaveBmpPathSection, ScreenshotBmpStore.SaveBmpPathKey, "")
+        => SettingsStore?.LoadString(ScreenshotBmpStore.SaveBmpPathSection, ScreenshotBmpStore.SaveBmpPathKey, "")
            ?? "";
 
     /// <summary>engine_save_screenshot_bmp: write <paramref name="frame"/>, the game's presented 800×600 frame without
@@ -69,7 +69,7 @@ public partial class Main
     private bool TrySaveScreenshotFromKey(InputEvent e)
     {
         if (e is not InputEventKey { Pressed: true, Keycode: Key.F1 }) return false;
-        if (_vm == null || (_vm.SystemKeyDisableMask & 1) != 0) return false;
+        if (_vm == null || _shell == null || (_shell.SystemKeyDisableMask & 1) != 0) return false;
         if (_exitConfirmation != null || _scriptErrorDialog != null || _fullwidthTextEditor != null
             || _screenshotFolderDialog != null || _optionsPanel != null)
             return false;
@@ -101,7 +101,7 @@ public partial class Main
         _screenshotFolderDialog = null;
         if (folder != null)
         {
-            _sys4RegIniStore?.SaveString(ScreenshotBmpStore.SaveBmpPathSection, ScreenshotBmpStore.SaveBmpPathKey,
+            SettingsStore?.SaveString(ScreenshotBmpStore.SaveBmpPathSection, ScreenshotBmpStore.SaveBmpPathKey,
                                          folder);
             GD.Print($"[menu] system:SaveBMPPath = {folder}");
         }

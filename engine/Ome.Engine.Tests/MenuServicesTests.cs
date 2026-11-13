@@ -79,7 +79,7 @@ public class MenuServicesTests
     public void SkipToggleStartsFastForwardClearsAutoAndRunsTheSettingCallback()
     {
         var (vm, host) = Start(Build("MENU_SKIP", [(0x1b7, new[] { I(1) }), .. Probes(0, 6)]));
-        host.AtYield[3] = v => v.RequestMenuMessageSkipToggle();
+        host.AtYield[3] = v => v.Shell.RequestMessageSkipToggle();
 
         vm.Run();
 
@@ -98,7 +98,7 @@ public class MenuServicesTests
     {
         var (vm, host) = Start(Build("MENU_COEXIST", [(0x1b7, new[] { I(1) }), .. Probes(0, 4)]),
                                new SkipAndAutoSettings(CoexistMessageSkip: true));
-        host.AtYield[3] = v => v.RequestMenuMessageSkipToggle();
+        host.AtYield[3] = v => v.Shell.RequestMessageSkipToggle();
 
         vm.Run();
 
@@ -112,7 +112,7 @@ public class MenuServicesTests
         // Op 0x19b clears ctx+0x55100: the toggle sets only the persistent Skip until op 0x19c recomputes.
         var (vm, host) = Start(Build("MENU_SUSPENDED",
             [(0x19b, Array.Empty<Operand>()), .. Probes(0, 4), (0x19c, Array.Empty<Operand>()), .. Probes(4, 1)]));
-        host.AtYield[3] = v => v.RequestMenuMessageSkipToggle();
+        host.AtYield[3] = v => v.Shell.RequestMessageSkipToggle();
 
         vm.Run();
 
@@ -128,7 +128,7 @@ public class MenuServicesTests
         var (vm, host) = Start(Build("MENU_SKIP_OFF",
             [(0x88, new[] { I(1) }), (0x19c, Array.Empty<Operand>()), .. Probes(0, 4), (0xfa, Array.Empty<Operand>()),
              .. Probes(4, 1)]));
-        host.AtYield[3] = v => v.RequestMenuMessageSkipToggle();
+        host.AtYield[3] = v => v.Shell.RequestMessageSkipToggle();
 
         vm.Run();
 
@@ -141,7 +141,7 @@ public class MenuServicesTests
     public void AutoToggleAtATextWaitClearsSkipAndEndsTheWait()
     {
         var (vm, host) = Start(Build("MENU_AUTO", (0x88, new[] { I(1) }), (0x72, new[] { I(0) })));
-        host.AtWait = v => v.RequestMenuAutoMessageToggle();
+        host.AtWait = v => v.Shell.RequestAutoMessageToggle();
 
         vm.Run();
 
@@ -155,7 +155,7 @@ public class MenuServicesTests
     public void AutoToggleWithTheSkipServiceSuspendedLeavesTheWait()
     {
         var (vm, host) = Start(Build("MENU_AUTO_SUSPENDED", (0x19b, Array.Empty<Operand>()), (0x72, new[] { I(0) })));
-        host.AtWait = v => v.RequestMenuAutoMessageToggle();
+        host.AtWait = v => v.Shell.RequestAutoMessageToggle();
 
         vm.Run();
 
@@ -167,7 +167,7 @@ public class MenuServicesTests
     public void AutoToggleTurnsAutoOffWithoutTouchingTheWait()
     {
         var (vm, host) = Start(Build("MENU_AUTO_OFF", (0x1b7, new[] { I(1) }), (0x72, new[] { I(0) })));
-        host.AtWait = v => v.RequestMenuAutoMessageToggle();
+        host.AtWait = v => v.Shell.RequestAutoMessageToggle();
 
         vm.Run();
 
@@ -180,7 +180,7 @@ public class MenuServicesTests
     {
         var (vm, host) = Start(Build("MENU_READ_SKIP",
             [(0x1cb, new[] { G(ReadSkipBefore) }), .. Probes(0, 3), (0x1cb, new[] { G(ReadSkipAfter) })]));
-        host.AtYield[2] = v => v.RequestMenuReadMessageSkipToggle();
+        host.AtYield[2] = v => v.Shell.RequestReadMessageSkipToggle();
 
         vm.Run();
 
@@ -197,9 +197,9 @@ public class MenuServicesTests
         var host = new MenuHost();
         var vm = new VirtualMachine(Build("MENU_READ_SKIP_SAVED",
                 [(0x1cb, new[] { G(ReadSkipBefore) }), .. Probes(0, 3), (0x1cb, new[] { G(ReadSkipAfter) })]),
-            Table, host, new VmOptions(), SettingCallback(), sharedProfile: profile);
+            Table, host, new VmOptions(), SettingCallback(), saves: new SavesAndSettings(profile: profile));
         host.Vm = vm;
-        host.AtYield[2] = v => v.RequestMenuReadMessageSkipToggle();
+        host.AtYield[2] = v => v.Shell.RequestReadMessageSkipToggle();
         Assert.True(vm.MenuState.ReadTextSkip);
 
         vm.Run();
@@ -238,8 +238,8 @@ public class MenuServicesTests
         var vm = new VirtualMachine(Build("MENU_MESSAGE_SETTINGS", [.. Read(0x400), .. Probes(0, 3), .. Read(0x410)]),
                                     Table, host, new VmOptions(), SettingCallback(), skipAndAuto: skipAndAuto);
         host.Vm = vm;
-        Assert.Equal(new VmMessageSettings(50, 8, 700, 2400), vm.MessageSettings);
-        host.AtYield[5] = v => v.RequestMessageSettings(new VmMessageSettings(20, 3, 1500, 4000));   // after the reads
+        Assert.Equal(new MessageSettings(50, 8, 700, 2400), vm.MessageSettings);
+        host.AtYield[5] = v => v.Shell.RequestMessageSettings(new MessageSettings(20, 3, 1500, 4000));   // after the reads
 
         vm.Run();
 
@@ -259,7 +259,7 @@ public class MenuServicesTests
         vm.Run();
 
         Assert.Equal((900L, 3000L), (vm.SkipAndAuto.AutoMessageTime0Ms, vm.SkipAndAuto.AutoMessageTime1Ms));
-        Assert.Equal(new VmMessageSettings(50, 0, 900, 3000), vm.MessageSettings);
+        Assert.Equal(new MessageSettings(50, 0, 900, 3000), vm.MessageSettings);
     }
 
     [Fact]

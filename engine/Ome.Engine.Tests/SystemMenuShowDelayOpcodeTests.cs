@@ -20,11 +20,11 @@ public class SystemMenuShowDelayOpcodeTests
         ], []);
         var vm = new VirtualMachine(system4, Table, new RecordingHost());
 
-        Assert.Equal(0u, vm.SystemMenuShowDelayMilliseconds);
+        Assert.Equal(0u, vm.Shell.SystemMenuShowDelayMilliseconds);
 
         vm.Run();
 
-        Assert.Equal(1000u, vm.SystemMenuShowDelayMilliseconds);
+        Assert.Equal(1000u, vm.Shell.SystemMenuShowDelayMilliseconds);
         Assert.Equal(1000, vm.Globals[0x100]);
     }
 
@@ -41,7 +41,7 @@ public class SystemMenuShowDelayOpcodeTests
 
         vm.Run();
 
-        Assert.Equal(0x80000001u, vm.SystemMenuShowDelayMilliseconds);
+        Assert.Equal(0x80000001u, vm.Shell.SystemMenuShowDelayMilliseconds);
         Assert.Equal(unchecked((int)0x80000001u), vm.Globals[0x100]);
     }
 
@@ -64,7 +64,7 @@ public class SystemMenuShowDelayOpcodeTests
 
         vm.Run();
 
-        Assert.Equal(0u, vm.SystemMenuShowDelayMilliseconds);
+        Assert.Equal(0u, vm.Shell.SystemMenuShowDelayMilliseconds);
         Assert.Equal(0, vm.Globals[0x100]);
         Assert.Equal(1, host.SceneContextResets);
     }

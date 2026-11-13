@@ -209,7 +209,7 @@ public partial class Main
         public void SetSpeed(double factor) => main._clock.Speed = factor;
 
         public System.Text.Json.Nodes.JsonObject RandSeed(uint? seed)
-            => DriveRandomReport.ToJson(seed, main._vm.SeedDeterministicRandom(seed));
+            => DriveRandomReport.ToJson(seed, main._vm.Memory.SeedDeterministicRandom(seed));
 
         public void Close() => main.GetTree().Quit(0);
 
@@ -222,12 +222,12 @@ public partial class Main
         public System.Text.Json.Nodes.JsonObject Window(bool minimize)
         {
             DisplayServer.WindowSetMode(minimize ? DisplayServer.WindowMode.Minimized
-                                        : main._windowed ? DisplayServer.WindowMode.Windowed
+                                        : main.Windowed ? DisplayServer.WindowMode.Windowed
                                         : DisplayServer.WindowMode.Fullscreen);
             return new System.Text.Json.Nodes.JsonObject
             {
                 ["minimized"] = DisplayServer.WindowGetMode() == DisplayServer.WindowMode.Minimized,
-                ["windowed"] = main._windowed,
+                ["windowed"] = main.Windowed,
             };
         }
 

@@ -1,3 +1,4 @@
+using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
@@ -6,13 +7,13 @@ namespace Ome.Engine.Frontend.Shell;
 
 /// <summary>
 /// What the options panel reads and changes in the engine (docs/superpowers/specs/2026-11-09-engine-shell-design.md,
-/// §4.1): AGE:IAGEService on the audio mixer and the VM, and the AGE:reg settings registry that SYS4REG.INI stores, as
-/// AGERC's 設定 reached them.
+/// §4.1): AGE:IAGEService on the audio mixer, the VM and the shell-services native, and the AGE:reg settings registry
+/// that SYS4REG.INI stores, as AGERC's 設定 reached them.
 /// </summary>
 public interface IShellSettingsHost
 {
     /// <summary>message:MessageSpeed, MesWinAlpha and AutoMessageTime0/1 as the engine holds them.</summary>
-    VmMessageSettings MessageSettings { get; }
+    MessageSettings MessageSettings { get; }
 
     /// <summary>AGE:reg +4 (get int), with the registered default.</summary>
     int LoadInt(string section, string key, int defaultValue);
@@ -42,7 +43,7 @@ public interface IShellSettingsHost
 
     /// <summary>The ﾒｯｾｰｼﾞ values' registry writes (MessageSpeed also through IAGEService +0x10), then
     /// CALLBACK_SETTING.BIN, which IAGEService +0x20 launches.</summary>
-    void ApplyMessageSettings(VmMessageSettings settings);
+    void ApplyMessageSettings(MessageSettings settings);
 }
 
 /// <summary>
@@ -106,7 +107,7 @@ public sealed class ShellOptionsDraft
     // The page controls' opening states (agerc_settings_dialog_proc's WM_INITDIALOG for each page).
     private int Read(ShellOption option)
     {
-        VmMessageSettings message = _host.MessageSettings;
+        MessageSettings message = _host.MessageSettings;
         return option.Name switch
         {
             "message-speed" => message.MessageSpeed,
@@ -174,7 +175,7 @@ public sealed class ShellOptionsDraft
             }
         }
         // mk:mksh goes through AGE:reg +0x14, which never reaches SYS4REG.INI; page 104 has no control for it anyway.
-        _host.ApplyMessageSettings(new VmMessageSettings(
+        _host.ApplyMessageSettings(new MessageSettings(
             Value("message-speed"), Value("window-opacity"), Value("auto-wait-voice"), Value("auto-wait-text")));
         foreach (ShellOption option in ShellOptions.All) _opened[option] = _values[option];
         return true;

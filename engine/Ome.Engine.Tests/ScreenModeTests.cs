@@ -1,11 +1,13 @@
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
+using Ome.Engine.Natives;
+using Ome.Engine.Devices;
 
 /// <summary>
-/// The VM's part of AGE's screen mode (docs/engine-re.md, "Screen mode"): op 0x2cf asks the frontend for a mode
-/// (op_0x2cf_handler@0x425370 passes operand 0 or 1 to display_toggle_screen_mode_and_menu_bar@0x412df0), and a
-/// switch the frontend performed runs CALLBACK_WINDOW.BIN as the native switch launches it.
+/// The VM's part of AGE's screen mode (docs/engine-re.md, "Screen mode"): op 0x2cf asks the shell-services native for
+/// a mode (op_0x2cf_handler@0x425370 passes operand 0 or 1 to display_toggle_screen_mode_and_menu_bar@0x412df0), which
+/// switches at the front end's next frame, and a switch runs CALLBACK_WINDOW.BIN as the native switch launches it.
 /// </summary>
 public class ScreenModeTests
 {
@@ -14,21 +16,27 @@ public class ScreenModeTests
     private static Operand I(long value) => new(0, value);
     private static Operand G(long address) => new(3, address);
 
-    private sealed class ScreenModeHost : RecordingHost, Ome.Engine.Hosting.IHost   // re-implemented for RequestScreenMode
+    /// <summary>The shell native's window: records each mode it shows.</summary>
+    private sealed class RecordingWindow : IWindowDevice
+    {
+        public readonly List<bool> Shown = new();
+        public void ShowScreenMode(bool windowed) => Shown.Add(windowed);
+    }
+
+    private sealed class ScreenModeHost : RecordingHost
     {
         public VirtualMachine? Vm;
-        public readonly List<bool> Requests = new();
         public readonly Dictionary<int, Action<VirtualMachine>> AtYield = new();
         public Action<VirtualMachine>? AtWait;
+        public bool ServiceFrames;   // run the front end's frame service at each yield
         public int EndedWaits;
         private int _yields;
-
-        public void RequestScreenMode(bool windowed) => Requests.Add(windowed);
 
         public override void FrameYield()
         {
             _yields++;
             if (Vm != null && AtYield.TryGetValue(_yields, out var act)) act(Vm);
+            if (ServiceFrames) Vm?.Shell.ServiceFrame();
         }
 
         public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
@@ -51,39 +59,64 @@ public class ScreenModeTests
         new List<(int, Operand[])> { (0x55, new[] { G(flag), I(1) }), (0x2, Array.Empty<Operand>()) },
         Array.Empty<string>());
 
-    private static (VirtualMachine Vm, ScreenModeHost Host) Start(Script script)
+    private static (VirtualMachine Vm, ScreenModeHost Host) Start(Script script, RecordingWindow? window = null)
     {
         var host = new ScreenModeHost();
+        var shell = new ShellServices(window: window);
+        shell.WakeWaitsWith(((Ome.Engine.Hosting.IHost)host).WakeInputCallbackService);
         var provider = new MapProvider(new Dictionary<long, Script>(),
             new Dictionary<string, Script>(StringComparer.OrdinalIgnoreCase)
             {
                 ["CALLBACK_WINDOW.BIN"] = Callback("CALLBACK_WINDOW", WindowCallbackRan),
                 ["CALLBACK_SETTING.BIN"] = Callback("CALLBACK_SETTING", SettingCallbackRan),
             });
-        var vm = new VirtualMachine(script, Table, host, new VmOptions(), provider);
+        var vm = new VirtualMachine(script, Table, host, new VmOptions(), provider, shell: shell);
         host.Vm = vm;
         return (vm, host);
     }
 
     [Fact]
-    public void Op0x2cfAsksTheHostForAWindowOrFullscreenAndIgnoresOtherValues()
+    public void Op0x2cfAsksForAWindowOrFullscreenAndIgnoresOtherValues()
     {
+        var window = new RecordingWindow();
         var (vm, host) = Start(Build("SCREEN_MODE_OP",
-            (0x2cf, new[] { I(1) }), (0x2cf, new[] { I(0) }), (0x2cf, new[] { I(2) }), (0x2cf, new[] { I(-1) })));
+            (0x2cf, new[] { I(1) }), (0x1c7, new[] { G(Probe) }),        // already a window: nothing
+            (0x2cf, new[] { I(0) }), (0x1c7, new[] { G(Probe + 1) }),    // fullscreen
+            (0x2cf, new[] { I(2) }), (0x1c7, new[] { G(Probe + 2) }),    // ignored
+            (0x2cf, new[] { I(-1) }), (0x1c7, new[] { G(Probe + 3) }),   // ignored
+            (0x2cf, new[] { I(1) }), (0x1c7, new[] { G(Probe + 4) })), window);
+        host.ServiceFrames = true;
 
         vm.Run();
 
-        Assert.Equal([true, false], host.Requests);
+        Assert.Equal([false, true], window.Shown);
+        Assert.True(vm.Shell.Windowed);
         Assert.Equal(1, vm.Globals.GetValueOrDefault(Done));
-        // The op only asks: CALLBACK_WINDOW.BIN waits for the frontend's switch.
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(WindowCallbackRan));   // each switch ran CALLBACK_WINDOW.BIN
+    }
+
+    [Fact]
+    public void Op0x2cfOnlyAsksTheFrontEndSwitchesAtItsNextFrame()
+    {
+        var window = new RecordingWindow();
+        var (vm, _) = Start(Build("SCREEN_MODE_ASK", (0x2cf, new[] { I(0) })), window);
+
+        vm.Run();
+
+        // No frame ran: the mode, the window and CALLBACK_WINDOW.BIN wait for the front end.
+        Assert.True(vm.Shell.Windowed);
+        Assert.Empty(window.Shown);
         Assert.Equal(0, vm.Globals.GetValueOrDefault(WindowCallbackRan));
+        vm.Shell.ServiceFrame();
+        Assert.False(vm.Shell.Windowed);
+        Assert.Equal([false], window.Shown);
     }
 
     [Fact]
     public void ASwitchRunsCallbackWindowAtTheNextInstructionBoundary()
     {
         var (vm, host) = Start(Build("SCREEN_MODE_SWITCH", Probes(6)));
-        host.AtYield[3] = v => v.RequestWindowCallback();
+        host.AtYield[3] = v => v.Shell.SwitchScreenMode(windowed: false, "the test");
 
         vm.Run();
 
@@ -96,7 +129,7 @@ public class ScreenModeTests
     public void ASwitchDuringATextWaitRunsCallbackWindowInsideTheWait()
     {
         var (vm, host) = Start(Build("SCREEN_MODE_WAIT", (0x72, new[] { I(0) })));
-        host.AtWait = v => v.RequestWindowCallback();
+        host.AtWait = v => v.Shell.SwitchScreenMode(windowed: false, "the test");
 
         vm.Run();
 
@@ -110,8 +143,8 @@ public class ScreenModeTests
         var (vm, host) = Start(Build("SCREEN_MODE_BOTH", Probes(6)));
         host.AtYield[2] = v =>
         {
-            v.RequestMenuMessageSkipToggle();
-            v.RequestWindowCallback();
+            v.Shell.RequestMessageSkipToggle();
+            v.Shell.SwitchScreenMode(windowed: false, "the test");
         };
 
         vm.Run();

@@ -1,6 +1,7 @@
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
+using Ome.Engine.Natives;
 
 /// <summary>
 /// The options panel's model (docs/superpowers/specs/2026-11-09-engine-shell-design.md, §5.3-§5.6, §7.1): the layout
@@ -24,7 +25,7 @@ public class ShellPanelTests
         public readonly Dictionary<(string, string), int> Registry = [];
         public readonly int[] Volumes = [10000, 8000, 6050, 10000];
         public readonly bool[] Routes = [true, true, true, false];
-        public VmMessageSettings MessageSettings { get; set; } = new(5, 8, 500, 2000);
+        public MessageSettings MessageSettings { get; set; } = new(5, 8, 500, 2000);
 
         public int LoadInt(string section, string key, int defaultValue) =>
             Registry.TryGetValue((section, key), out int value) ? value : defaultValue;
@@ -53,7 +54,7 @@ public class ShellPanelTests
             Calls.Add($"route {category}={enabled}");
         }
 
-        public void ApplyMessageSettings(VmMessageSettings settings) =>
+        public void ApplyMessageSettings(MessageSettings settings) =>
             Calls.Add($"message {settings.MessageSpeed} {settings.MesWinAlpha} {settings.AutoMessageTime0} " +
                       $"{settings.AutoMessageTime1}; CALLBACK_SETTING");
     }
@@ -132,7 +133,7 @@ public class ShellPanelTests
     [Fact]
     public void TheDraftOpensOnTheEngineValuesSnappedToTheControls()
     {
-        var host = new Host { MessageSettings = new VmMessageSettings(150, 8, 1250, 2000) };
+        var host = new Host { MessageSettings = new MessageSettings(150, 8, 1250, 2000) };
         host.Registry[("message", "UseAntiFont")] = 0;
         host.Registry[("sound", "MusicFadeOnVoicePlayingVolume")] = 30;
 

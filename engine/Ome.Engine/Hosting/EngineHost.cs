@@ -18,6 +18,8 @@ public sealed partial class EngineHost : IHost, IFastForwardListener
     private readonly EngineTick _tick;    // every non-modal wait runs it (EngineHost.Waits.cs)
     private readonly Graphics _graphics;  // the surfaces and the publication state; the waits block on them here
     private readonly Movies _movies;      // op 0x20f's modal wait and the effect wait read it
+    private readonly SavesAndSettings _saves;   // SYS4REG.INI's [message] keys, and message:ReadTextSkip at shutdown
+    private readonly ShellServices _shell;      // the dialogs the modal waits wait on
     private readonly ResourceMap _res;
     private readonly Ome.Engine.Hosting.FrameClock _clock;
     private readonly TimelineLog? _timeline;
@@ -56,10 +58,14 @@ public sealed partial class EngineHost : IHost, IFastForwardListener
     /// wakes, and presentation waits while its statement block is open.</param>
     /// <param name="graphics">The graphics native the VM runs with: text draws into its surfaces, the presentation
     /// waits block on its publication, and the host hears its surface releases until the text native exists.</param>
+    /// <param name="saves">The save and settings native the VM runs with: the host seeds its message settings from
+    /// SYS4REG.INI's [message] and writes them back at shutdown (<see cref="FlushMessageSettings"/>).</param>
+    /// <param name="shell">The shell-services native the VM runs with: the host's modal waits wait on its dialogs, a
+    /// stop cancels them, and its menu requests wake a text wait.</param>
     /// <param name="movies">The movie native the VM runs with: the host runs op 0x20f's modal wait over it, and an
     /// effect wait holds while one of its movies does.</param>
     public EngineHost(IFrontEnd frontEnd, SkipAndAuto skipAndAuto, Audio audio, EngineTick tick, Graphics graphics,
-                        Movies movies,
+                        Movies movies, SavesAndSettings saves, ShellServices shell,
                         ResourceMap res,
                         Ome.Engine.Hosting.FrameClock clock,
                         PageLocatorState locator,
@@ -79,6 +85,10 @@ public sealed partial class EngineHost : IHost, IFastForwardListener
         _graphics.Listen(this);
         _movies = movies ?? throw new ArgumentNullException(nameof(movies));
         _movies.WakeWaitsWith(() => _frameSignal.Set());
+        _saves = saves ?? throw new ArgumentNullException(nameof(saves));
+        _shell = shell ?? throw new ArgumentNullException(nameof(shell));
+        _shell.WakeWaitsWith(WakeInputCallbackService);   // a menu request reaches a text wait at once
+        if (_saves.Settings is { } settings) SeedMessageSettings(settings);
         _synchronizeExplicitPresentation = synchronizeExplicitPresentation;
         ArgumentNullException.ThrowIfNull(surfaceTextRasterizer);
         _surfaceTextBackendInfo =

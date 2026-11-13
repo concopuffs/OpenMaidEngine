@@ -1,4 +1,5 @@
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 
 namespace Ome.Engine.Vm;
 
@@ -202,15 +203,8 @@ public sealed partial class VirtualMachine
     // 0x132: 11 safe logical slots; native's admitted id 10 aliases stack 0
     private StepResult OpResetIntQueue(Instruction ins, int pc)
     {
-        var a = ins.Args;
-        int queueId = unchecked((int)Read(a[0]));
-        if ((uint)queueId >= (uint)_intQueues.Length)
-        {
-            HaltReason ??= $"int-queue-id-out-of-range:{queueId}";
-            return StepResult.Halt;
-        }
-        _intQueues[queueId] = new Queue<int>(0x100);
-        return StepResult.Next;
+        int queueId = unchecked((int)Read(ins.Args[0]));
+        return CollectionStep(_memory.ResetQueue(queueId), "queue", queueId);
     }
 
     // 0x133 (queue_id, value)
@@ -218,18 +212,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int queueId = unchecked((int)Read(a[0]));
-        if ((uint)queueId >= (uint)_intQueues.Length)
-        {
-            HaltReason ??= $"int-queue-id-out-of-range:{queueId}";
-            return StepResult.Halt;
-        }
-        if (_intQueues[queueId] is not { } queue)
-        {
-            HaltReason ??= $"int-queue-uninitialized:{queueId}";
-            return StepResult.Halt;
-        }
-        queue.Enqueue(unchecked((int)Read(a[1])));
-        return StepResult.Next;
+        return CollectionStep(_memory.Enqueue(queueId, unchecked((int)Read(a[1]))), "queue", queueId);
     }
 
     // 0x134 (queue_id, out_success, out_value)
@@ -237,17 +220,9 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int queueId = unchecked((int)Read(a[0]));
-        if ((uint)queueId >= (uint)_intQueues.Length)
-        {
-            HaltReason ??= $"int-queue-id-out-of-range:{queueId}";
-            return StepResult.Halt;
-        }
-        if (_intQueues[queueId] is not { } queue)
-        {
-            HaltReason ??= $"int-queue-uninitialized:{queueId}";
-            return StepResult.Halt;
-        }
-        if (queue.TryDequeue(out int value))
+        ScriptCollectionStatus status = _memory.TryDequeue(queueId, out bool taken, out int value);
+        if (status != ScriptCollectionStatus.Done) return CollectionStep(status, "queue", queueId);
+        if (taken)
         {
             Write(a[1], 1);
             Write(a[2], value);
@@ -264,15 +239,8 @@ public sealed partial class VirtualMachine
     // 0x137 (stack_id)
     private StepResult OpResetIntStack(Instruction ins, int pc)
     {
-        var a = ins.Args;
-        int stackId = unchecked((int)Read(a[0]));
-        if ((uint)stackId >= (uint)_intStacks.Length)
-        {
-            HaltReason ??= $"int-stack-id-out-of-range:{stackId}";
-            return StepResult.Halt;
-        }
-        _intStacks[stackId] = new Stack<int>(0x100);
-        return StepResult.Next;
+        int stackId = unchecked((int)Read(ins.Args[0]));
+        return CollectionStep(_memory.ResetStack(stackId), "stack", stackId);
     }
 
     // 0x138 (stack_id, value)
@@ -280,13 +248,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int stackId = unchecked((int)Read(a[0]));
-        if ((uint)stackId >= (uint)_intStacks.Length)
-        {
-            HaltReason ??= $"int-stack-id-out-of-range:{stackId}";
-            return StepResult.Halt;
-        }
-        _intStacks[stackId].Push(unchecked((int)Read(a[1])));
-        return StepResult.Next;
+        return CollectionStep(_memory.Push(stackId, unchecked((int)Read(a[1]))), "stack", stackId);
     }
 
     // 0x139 (stack_id, out_success, out_value)
@@ -294,12 +256,9 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int stackId = unchecked((int)Read(a[0]));
-        if ((uint)stackId >= (uint)_intStacks.Length)
-        {
-            HaltReason ??= $"int-stack-id-out-of-range:{stackId}";
-            return StepResult.Halt;
-        }
-        if (_intStacks[stackId].TryPop(out int value))
+        ScriptCollectionStatus status = _memory.TryPop(stackId, out bool taken, out int value);
+        if (status != ScriptCollectionStatus.Done) return CollectionStep(status, "stack", stackId);
+        if (taken)
         {
             Write(a[1], 1);
             Write(a[2], value);
@@ -311,6 +270,23 @@ public sealed partial class VirtualMachine
             Write(a[1], 0);
         }
         return StepResult.Next;
+    }
+
+    /// <summary>An integer queue or stack op's step: an id out of range, or a queue never reset, halts the run.
+    /// </summary>
+    private StepResult CollectionStep(ScriptCollectionStatus status, string kind, int id)
+    {
+        switch (status)
+        {
+            case ScriptCollectionStatus.OutOfRange:
+                HaltReason ??= $"int-{kind}-id-out-of-range:{id}";
+                return StepResult.Halt;
+            case ScriptCollectionStatus.Uninitialized:
+                HaltReason ??= $"int-{kind}-uninitialized:{id}";
+                return StepResult.Halt;
+            default:
+                return StepResult.Next;
+        }
     }
 
     private StepResult OpBitSet(Instruction ins, int pc)
@@ -348,7 +324,8 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         // Native draws before it reads the bound, so a zero bound still spends a draw.
-        int drawn = DrawOp60(pc);
+        Instruction site = _cur.Script.Instructions[pc];
+        int drawn = _memory.DrawRandom(_cur.Script.Name, _cur.Script.PackedId, site.Offset);
         long bound = Read(a[1]);
         if (bound == 0)
         {

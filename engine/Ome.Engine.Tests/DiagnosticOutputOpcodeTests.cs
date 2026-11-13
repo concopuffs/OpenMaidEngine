@@ -28,7 +28,7 @@ public class DiagnosticOutputOpcodeTests
         var host = new RecordingHost();
         VirtualMachine? vm = null;
         var pendingAtPresentation = new List<string>();
-        host.OnDiagnosticMessage = _ => pendingAtPresentation.Add(vm!.PendingDiagnosticText);
+        host.OnDiagnosticMessage = _ => pendingAtPresentation.Add(vm!.Shell.PendingDiagnosticText);
         vm = new VirtualMachine(scene, Table, host);
         vm.Globals[0x100] = -3;
 
@@ -51,7 +51,7 @@ public class DiagnosticOutputOpcodeTests
             "\n\nデバック情報：\n" +
             "FILE=SYSTEM4.BIN ADDRESS=C LINE=-1 COMMAND=-(436) DEPTH=0\n",
             host.Diagnostics[1].Text);
-        Assert.Equal("", vm.PendingDiagnosticText);
+        Assert.Equal("", vm.Shell.PendingDiagnosticText);
     }
 
     [Fact]

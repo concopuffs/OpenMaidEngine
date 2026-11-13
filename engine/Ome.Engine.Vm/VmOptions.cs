@@ -20,17 +20,16 @@ namespace Ome.Engine.Vm;
 /// bit 1 releases all 1000 surfaces before a numbered load restores its flagged records, so only those come back; bit 0
 /// releases them at op 0x9's root reload (the scene reset itself keeps every surface). Kamidori sets 3;
 /// Himegari has none, so its initialized system textures survive a numbered load.</param>
-/// <param name="NoSaveDat">Native set:NoSaveDat profile setting. This suppresses the clean-shutdown
-/// shared SAVE.DAT/RT.DAT flush only; successful numbered saves still flush both shared files.</param>
 /// <param name="WheelKeyUpAction">Native set:WheelKeyUp (SYS4INI WHEELKEYUP, registered default 3): the logical action
 /// a wheel-up raises while an ADV text wait polls (<see cref="VirtualMachine.ApplyMouseWheel"/>).</param>
 /// <param name="WheelKeyDownAction">Native set:WheelKeyDown (SYS4INI WHEELKEYDOWN, registered default 1).</param>
 /// <remarks>CancelMesSkipOnClick, CoexistMesSkip and the fast-forward pace are the skip and auto native's
-/// (<c>Ome.Engine.Natives.SkipAndAutoSettings</c>).</remarks>
+/// (<c>Ome.Engine.Natives.SkipAndAutoSettings</c>), and NoSaveDat is the save and settings native's
+/// (<c>Ome.Engine.Natives.SavesAndSettings</c>).</remarks>
 public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int CallDepthCap = 64,
                                bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false,
                                int NativeStringCodePage = 932, int CreateObject = 2,
-                               int AutoFreeTex = 0, bool NoSaveDat = false,
+                               int AutoFreeTex = 0,
                                int WheelKeyUpAction = 3, int WheelKeyDownAction = 1)
 {
     /// <summary>The selected profile's id, which labels an unsupported-opcode diagnostic

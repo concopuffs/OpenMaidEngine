@@ -43,6 +43,12 @@ public partial class Main : Godot.Control
     private Audio _audio = null!;   // the audio native (engine layering milestone 6): the options panel sets the mixer through it
     private Graphics _graphics = null!;   // the graphics native (milestone 7): surfaces, publication, frame lowering
     private Movies? _movies;   // the movie native (milestone 8): this node supplies its decoder and its sound streams
+    // The save and settings native (milestone 9): the shared profile, the numbered saves and SYS4REG.INI, which the shell
+    // also reads and writes (SettingsStore).
+    private SavesAndSettings? _saves;
+    // The shell-services native (milestone 9): the system-menu fields, the menu requests, the dialogs this node shows and
+    // the screen mode this node's window shows.
+    private ShellServices? _shell;
     private double _audioOutputLatencySeconds;
     private IDisposable? _glyphRasterizerOwner;
     // The Unicode rasterizer a language draws with when the gameplay one is GDI (localization spec §7.4).
@@ -378,6 +384,7 @@ public partial class Main : Godot.Control
         GD.Print($"[profile] opcode-layers={string.Join(",", table.ResolvedLayers)} " +
                  $"contracts={table.Count}");
         INativeDatStore? nativeSaveStore = null;
+        Sys4RegIniStore? settingsStore = null;
         var sharedProfile = new SharedProfile();
         _audioMixerSettings = new AudioMixerSettings();
         if (!_selftest && profilePersistence.WritesEnabled)
@@ -403,13 +410,13 @@ public partial class Main : Godot.Control
             }
             try
             {
-                _sys4RegIniStore = Sys4RegIniStore.ForPath(
+                settingsStore = Sys4RegIniStore.ForPath(
                     catalog.StartupSettings, profilePersistence.NativePaths.Sys4RegIniPath,
                     engineBuild.Rules.Settings);
-                _audioMixerSettings = _sys4RegIniStore.Load();
+                _audioMixerSettings = settingsStore.Load();
                 // SYS4REG.INI holds 既読ﾒｯｾｰｼﾞ ｽｷｯﾌﾟ; the shared profile carries it while the game runs.
-                sharedProfile.ReadMessageSkipEnabled = _sys4RegIniStore.LoadReadTextSkip();
-                GD.Print($"[settings] native engine options={_sys4RegIniStore.FilePath}");
+                sharedProfile.ReadMessageSkipEnabled = settingsStore.LoadReadTextSkip();
+                GD.Print($"[settings] native engine options={settingsStore.FilePath}");
             }
             catch (Exception error) when (
                 error is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -418,6 +425,11 @@ public partial class Main : Godot.Control
             }
             _audioMixerSettings.Changed += PersistAudioMixerSettings;
         }
+        // The save and settings native and the shell-services native (engine layering milestone 9). A self-test writes
+        // no shared profile at shutdown (set:NoSaveDat). This node is the shell's window and shows its dialogs.
+        _saves = new SavesAndSettings(sharedProfile, nativeSaveStore, settingsStore,
+                                      noSaveDat: GodotVmOptions.NoSaveDat(_selftest));
+        _shell = new ShellServices(settingsStore, window: this, dialogs: this, print: message => GD.Print(message));
         InitScreenMode(userArgs);
 
         // Full op handling everywhere: the provider lets call-script load & run subroutines. Selftest
@@ -542,7 +554,7 @@ public partial class Main : Godot.Control
         // mixer settings now and on every change; their Changed event persists them.
         SkipAndAuto skipAndAuto = SkipAndAuto.WithSystemClock(GodotVmOptions.CreateSkipAndAuto(_catalog.StartupSettings));
         _audio = new Audio(this, new ResourceAudioAssets(resources, message => GD.Print(message)), _clock, skipAndAuto,
-                           _audioMixerSettings, _sys4RegIniStore, _timeline);
+                           _audioMixerSettings, SettingsStore, _timeline);
         var tick = new EngineTick(_audio, _timeline);
         // The graphics native (milestone 7) owns the surfaces and what each frame publishes; the movie native and the
         // host's text part draw into it, and the host's waits block on it. The movie native (milestone 8) plays movies
@@ -556,7 +568,7 @@ public partial class Main : Godot.Control
                              _catalog.StartupSettings.DependMovieSound, timeline: _timeline,
                              print: message => GD.Print(message));
         _host = new EngineHost(
-            this, skipAndAuto, _audio, tick, _graphics, _movies, resources, _clock, _locator,
+            this, skipAndAuto, _audio, tick, _graphics, _movies, _saves, _shell, resources, _clock, _locator,
             surfaceTextRasterizer,
             timeline: _timeline,
             synchronizeExplicitPresentation: !_selftest,
@@ -565,7 +577,7 @@ public partial class Main : Godot.Control
             coverageAlpha: engineBuild.Rules.Text.GlyphCoverage)
         {
             SleepScale = sleepScale,
-            RubyRules = engineBuild.Rules.Text.Ruby.For(_catalog.StartupSettings, _sys4RegIniStore?.RubyShiftMode),
+            RubyRules = engineBuild.Rules.Text.Ruby.For(_catalog.StartupSettings, SettingsStore?.RubyShiftMode),
             FontFamilySource = InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings),
             FontMetricsProbe = surfaceTextRasterizer as IFontMetricsProbe,
             BlankExtentMode = _catalog.StartupSettings.BlankExtentMode == 1,
@@ -579,7 +591,6 @@ public partial class Main : Godot.Control
             },
             PresentedTextMaskCacheCapacity = portableTextPolicy?.GlyphMaskCacheCapacity ?? 2048,
         };
-        if (_sys4RegIniStore != null) _host.UseMessageSettingsStore(_sys4RegIniStore);
         if (!_selftest && !PrepareLanguage(userArgs, baseCatalog, baseStore, table))
         {
             GetTree().Quit(2);
@@ -601,8 +612,8 @@ public partial class Main : Godot.Control
                 ProbeMode = selectedProfile.ProbeMode,
             },
             provider, sink,
-            sharedProfile: sharedProfile,
-            nativeDatStore: nativeSaveStore,
+            saves: _saves,
+            shell: _shell,
             build: engineBuild,
             skipAndAuto: skipAndAuto,
             audio: _audio,
@@ -926,8 +937,8 @@ public partial class Main : Godot.Control
 
         if (!_selftest && _vm != null)
         {
-            _host?.FlushMessageSettings(_vm.MenuState.ReadTextSkip);
-            SharedProfileShutdownFlushResult flush = _vm.FlushSharedProfileOnShutdown();
+            _host?.FlushMessageSettings();
+            SharedProfileShutdownFlushResult flush = _saves!.FlushSharedProfileOnShutdown();
             if (flush.Outcome == SharedProfileShutdownFlushOutcome.Saved)
                 GD.Print("[persistence] clean shutdown wrote SAVE.DAT and RT.DAT");
             else if (flush.Outcome == SharedProfileShutdownFlushOutcome.Failed)

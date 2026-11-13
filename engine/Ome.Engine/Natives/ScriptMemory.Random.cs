@@ -1,4 +1,4 @@
-namespace Ome.Engine.Vm;
+namespace Ome.Engine.Natives;
 
 /// <summary>One op-0x60 call site's draws under a seed: the script and the op's dword offset.</summary>
 public sealed record DeterministicRandomSite(string Script, uint PackedId, int Offset, int Draws);
@@ -15,7 +15,7 @@ public sealed record DeterministicRandomSummary(uint? Seed, int Draws, IReadOnly
 /// The k-th draw at a site is then the same on both targets whatever else ran, and a site drawn a different number
 /// of times on the two (a timed loop) cannot shift any other. tools/drive/native-agent.js computes the same streams
 /// inside native AGE.</summary>
-public sealed partial class VirtualMachine
+public sealed partial class ScriptMemory
 {
     private readonly object _deterministicRandomLock = new();
     private uint? _deterministicRandomSeed;
@@ -30,7 +30,7 @@ public sealed partial class VirtualMachine
     }
 
     /// <summary>Start drawing op 0x60 from <paramref name="seed"/>'s streams, or from the game's own generator when
-    /// null. Every stream restarts. Returns what was drawn since the previous call.</summary>
+    /// null. Every stream restarts. Returns what was drawn since the previous call. Safe from any thread.</summary>
     public DeterministicRandomSummary SeedDeterministicRandom(uint? seed)
     {
         lock (_deterministicRandomLock)
@@ -60,19 +60,17 @@ public sealed partial class VirtualMachine
         return (int)((state >> 16) & 0x7FFF);
     }
 
-    /// <summary>The value op 0x60 at <paramref name="pc"/> of the current frame draws before taking its bound.</summary>
-    private int DrawOp60(int pc)
+    /// <summary>The value op 0x60 draws before taking its bound, at the op whose dword offset is
+    /// <paramref name="offset"/> in <paramref name="script"/> (packed id <paramref name="packedId"/>).</summary>
+    public int DrawRandom(string script, uint packedId, int offset)
     {
         lock (_deterministicRandomLock)
         {
             if (_deterministicRandomSeed is not uint seed) return System.Random.Shared.Next(0x8000);
-            Model.Script script = _cur.Script;
-            int offset = script.Instructions[pc].Offset;
-            if (!_deterministicRandomSites.TryGetValue((script.PackedId, offset), out DeterministicRandomStream? stream))
+            if (!_deterministicRandomSites.TryGetValue((packedId, offset), out DeterministicRandomStream? stream))
             {
-                stream = new DeterministicRandomStream(script.Name,
-                    DeterministicRandomInitialState(seed, script.PackedId, offset));
-                _deterministicRandomSites.Add((script.PackedId, offset), stream);
+                stream = new DeterministicRandomStream(script, DeterministicRandomInitialState(seed, packedId, offset));
+                _deterministicRandomSites.Add((packedId, offset), stream);
             }
             uint state = stream.State;
             int value = DeterministicRandomNext(ref state);

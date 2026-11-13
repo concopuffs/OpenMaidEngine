@@ -19,11 +19,11 @@ public class SystemMenuGuardOpcodeTests
         ], []);
         var vm = new VirtualMachine(config, Table, new RecordingHost());
 
-        Assert.Equal(1, vm.SystemMenuActionsEnabled);
+        Assert.Equal(1, vm.Shell.SystemMenuActionsEnabled);
 
         vm.Run();
 
-        Assert.Equal(-7, vm.SystemMenuActionsEnabled);
+        Assert.Equal(-7, vm.Shell.SystemMenuActionsEnabled);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class SystemMenuGuardOpcodeTests
 
         vm.Run();
 
-        Assert.Equal(1, vm.SystemMenuActionsEnabled);
+        Assert.Equal(1, vm.Shell.SystemMenuActionsEnabled);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class SystemMenuGuardOpcodeTests
 
         vm.Run();
 
-        Assert.Equal(1, vm.SystemMenuActionsEnabled);
+        Assert.Equal(1, vm.Shell.SystemMenuActionsEnabled);
         Assert.Equal(1, host.SceneContextResets);
     }
 }

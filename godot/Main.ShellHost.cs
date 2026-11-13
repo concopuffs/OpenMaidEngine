@@ -2,8 +2,9 @@ using Ome.Engine.Frontend.Shell;
 
 /// <summary>
 /// The engine shell's frontend services (<see cref="IShellHost"/>; docs/superpowers/specs/2026-11-09-engine-shell-design.md
-/// §4.1). The shell's commands (<see cref="ShellCommands"/>) and the 終了 dialog's outcomes reach the screen mode, the
-/// screenshot, quitting, returning to the title, the VM hold and the shell's own surfaces through it.
+/// §4.1). The shell's commands (<see cref="ShellCommands"/>) and the 終了 dialog's outcomes reach the screenshot,
+/// quitting, returning to the title, the VM hold and the shell's own surfaces through it; the screen mode and the
+/// message toggles are the shell-services native's.
 /// </summary>
 public partial class Main : IShellHost
 {
@@ -12,14 +13,10 @@ public partial class Main : IShellHost
 
     private IShellHost Shell => this;
 
-    bool IShellHost.Windowed => _windowed;
-
     void IShellHost.RequestClose() => RequestUnforcedClose();   // PostMessage(WM_CLOSE, 0): the 終了 dialog
 
     /// <summary>The options panel (Main.OptionsPanel.cs), which replaces AGERC's 設定 and ﾊﾞｰｼﾞｮﾝ情報.</summary>
     void IShellHost.OpenPanel(ShellSection section, bool diagnostics) => OpenOptionsPanel(section, diagnostics);
-
-    bool IShellHost.SwitchScreenMode(bool windowed, string source) => SwitchScreenMode(windowed, source);
 
     void IShellHost.SaveScreenshot() => SaveScreenshotFromMenu();
 

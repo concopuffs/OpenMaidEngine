@@ -105,7 +105,6 @@ public sealed partial class EngineHost
     private readonly PeriodTimer _glyphTimer = new();
     private int _messageGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
     private volatile int _messageWindowAlphaSetting = Sys4RegIniStore.DefaultMesWinAlpha;
-    private Sys4RegIniStore? _messageSettingsStore;
     // Text manager +0x544 (message:UseAntiFont): GGO_GRAY4_BITMAP glyphs when set, GGO_BITMAP when clear. Both games
     // enable it; hosts without a settings file keep that.
     private volatile bool _textAntialias = true;
@@ -164,14 +163,14 @@ public sealed partial class EngineHost
     }
 
     /// <summary>
-    /// Seed MessageSpeed, MesWinAlpha and AutoMessageTime0/1 (into the skip and auto native) from SYS4REG.INI
-    /// [message], native defaults when absent. Changes are written back by <see cref="FlushMessageSettings"/> at
-    /// shutdown, with ReadTextSkip, as AGE rewrites SYS4REG.INI when it quits; MAMES/ITMES/SKMES/INFOMES briefly set the
-    /// delay to 0 per description, so no per-op write. Call before the VM is constructed: it reads the first two once.
+    /// Seed MessageSpeed, MesWinAlpha and AutoMessageTime0/1 (into the skip and auto native) from the save native's
+    /// SYS4REG.INI [message], native defaults when absent. Changes are written back by
+    /// <see cref="FlushMessageSettings"/> at shutdown, with ReadTextSkip, as AGE rewrites SYS4REG.INI when it quits;
+    /// MAMES/ITMES/SKMES/INFOMES briefly set the delay to 0 per description, so no per-op write. The constructor runs
+    /// it, before the VM is constructed: the VM reads the first two once.
     /// </summary>
-    public void UseMessageSettingsStore(Sys4RegIniStore store)
+    private void SeedMessageSettings(Sys4RegIniStore store)
     {
-        _messageSettingsStore = store;
         int speed = store.LoadMessageInt(Sys4RegIniStore.MessageSpeedKey, Sys4RegIniStore.DefaultMessageSpeed);
         lock (_textLock)
         {
@@ -186,21 +185,24 @@ public sealed partial class EngineHost
         _textAntialias = store.TextAntialiasEnabled;
     }
 
-    /// <param name="readTextSkip">message:ReadTextSkip, which the shared profile carried while the game ran.</param>
-    public void FlushMessageSettings(bool readTextSkip)
+    /// <summary>The shutdown write of the message settings into the save native's SYS4REG.INI, with
+    /// message:ReadTextSkip, which the shared profile carried while the game ran. The values are the host's and the
+    /// skip and auto native's until the text native owns the first two.</summary>
+    public void FlushMessageSettings()
     {
         // Unconditional, like AGE on quit: the write also leaves every key AGE binds (Sys4RegIniStore).
-        if (_messageSettingsStore == null) return;
+        if (_saves.Settings is not { } store) return;
+        bool readTextSkip = _saves.Profile.ReadMessageSkipEnabled;
         try
         {
-            _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.MessageSpeedKey, MessageGlyphDelayMilliseconds);
-            _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.MesWinAlphaKey, _messageWindowAlphaSetting);
+            store.SaveMessageInt(Sys4RegIniStore.MessageSpeedKey, MessageGlyphDelayMilliseconds);
+            store.SaveMessageInt(Sys4RegIniStore.MesWinAlphaKey, _messageWindowAlphaSetting);
             // The registry keeps a 32-bit value: op 0x1b9's operand wraps as AGE's int does.
-            _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.AutoMessageTime0Key,
+            store.SaveMessageInt(Sys4RegIniStore.AutoMessageTime0Key,
                                                  unchecked((int)_skip.AutoMessageTime0Ms));
-            _messageSettingsStore.SaveMessageInt(Sys4RegIniStore.AutoMessageTime1Key,
+            store.SaveMessageInt(Sys4RegIniStore.AutoMessageTime1Key,
                                                  unchecked((int)_skip.AutoMessageTime1Ms));
-            _messageSettingsStore.SaveReadTextSkip(readTextSkip);
+            store.SaveReadTextSkip(readTextSkip);
         }
         catch (Exception error) when (
             error is System.IO.IOException or UnauthorizedAccessException or System.IO.InvalidDataException)

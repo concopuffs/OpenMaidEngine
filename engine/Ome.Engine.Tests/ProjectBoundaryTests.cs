@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Ome.Engine.Hosting;
 using Ome.Engine.Devices;
+using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Model;
 using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
@@ -216,6 +217,48 @@ public class ProjectBoundaryTests
         ];
         foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
             Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+    }
+
+    [Fact]
+    public void ScriptMemorySaveAndShellStateIsPrivateToItsNatives()
+    {
+        // The census (docs/superpowers/plans/2026-11-12-engine-layering.md §4, "Script memory", "Saves and settings"
+        // and "Shell services") found this state in the VM and the host; milestone 9 gave it to the script memory, save
+        // and settings, and shell-services natives. The VM keeps the banks' forwarders (Globals and the rest), the
+        // saved frame its full load restores next, and ScriptError, the run's outcome.
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        foreach (Type native in new[] { typeof(ScriptMemory), typeof(SavesAndSettings), typeof(ShellServices) })
+            Assert.Empty(native.GetFields(instance).Where(field => !field.IsPrivate).Select(field => field.Name));
+        string[] census =
+        [
+            "_deterministicRandomLock", "_deterministicRandomSeed", "_deterministicRandomDraws",
+            "_deterministicRandomSites", "_nativeStringEncoding", "_intQueues", "_intStacks",
+            "_sharedProfile", "_nativeDatStore", "_sharedProfileShutdownLock", "_loadedNumberedState",
+            "_retainedNativeNumberedState", "_playClock", "_playBaseSeconds", "_playStartSeconds", "_pendingPlaySeconds",
+            "_sharedProfileShutdownHandled", "_messageSettingsStore",
+            "_menuToggles", "_menuTogglesPending", "_windowCallbackPending", "_settingCallbackPending",
+            "_diagnosticOutput", "_systemMenuActionsEnabled", "_systemMenuShowDelayMilliseconds", "_systemKeyDisableMask",
+            "_diagnosticMessageCompleted", "_scriptErrorCompleted", "_scriptErrorChoice", "_fullwidthTextEditCompleted",
+            "_fullwidthTextEditLock", "_fullwidthTextEditResult",
+        ];
+        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
+            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+    }
+
+    [Fact]
+    public void TheShellsContractsHoldNothingANativeOwns()
+    {
+        // Milestone 9's done-when: the screen mode, the message toggles and the 設定 values are the shell native's, so
+        // the front end's shell services and the interpreter's menu services keep only what neither native owns.
+        Assert.Equal(["ChooseImageFolder", "HoldVm", "OpenPanel", "Quit", "RequestClose", "ReturnToTitle", "SaveScreenshot"],
+                     typeof(IShellHost).GetMethods().Select(method => method.Name).Order());
+        Assert.Empty(typeof(IShellHost).GetProperties());
+        Assert.Equal(["get_MenuState", "RequestMenuHideWindow"],
+                     typeof(IVmMenuServices).GetMethods().Select(method => method.Name).Order());
+        // The dialogs and the window are the shell native's seams, not the lifted host's.
+        Assert.DoesNotContain(typeof(IFrontEnd).GetMembers(),
+                              member => member.Name.Contains("ShowAge", StringComparison.Ordinal)
+                                        || member.Name.Contains("ScreenMode", StringComparison.Ordinal));
     }
 
     [Fact]

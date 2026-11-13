@@ -7,6 +7,10 @@ public static class GodotVmOptions
 {
     public const long DiagnosticMaxSteps = 20_000_000;
 
+    /// <summary>Native set:NoSaveDat for the session's save native: a self-test writes no shared profile at shutdown.
+    /// </summary>
+    public static bool NoSaveDat(bool selftest) => selftest;
+
     /// <summary>The interactive session's options; <paramref name="startupSettings"/> (the selected profile's
     /// SYS4INI settings trailer) supplies the native settings the VM applies.</summary>
     public static VmOptions Create(bool selftest, bool ignoreExitRequests, Sys4StartupSettings? startupSettings = null)
@@ -20,7 +24,6 @@ public static class GodotVmOptions
             IgnoreExitRequests: ignoreExitRequests,
             CreateObject: settings.CreateObject,
             AutoFreeTex: settings.AutoFreeTex,
-            NoSaveDat: selftest,
             WheelKeyUpAction: settings.WheelKeyUpAction,
             WheelKeyDownAction: settings.WheelKeyDownAction);
     }

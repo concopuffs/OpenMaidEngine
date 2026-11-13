@@ -171,7 +171,7 @@ internal sealed class AudioRig
     {
         if (host is RecordingHost recording) recording.Clock = Clock;
         return new VirtualMachine(script, table, host, options, provider, textHistory: textHistory,
-                                  nativeDatStore: nativeDatStore, skipAndAuto: Skip, audio: Audio, tick: Tick);
+                                  saves: new SavesAndSettings(store: nativeDatStore), skipAndAuto: Skip, audio: Audio, tick: Tick);
     }
 
     /// <summary>Move the clock and run the tick, as a wait's wake does.</summary>

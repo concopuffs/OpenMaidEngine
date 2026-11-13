@@ -1,4 +1,5 @@
 using System;
+using Ome.Engine.Devices;
 using Ome.Engine.Frontend.Shell;
 using Godot;
 
@@ -9,44 +10,37 @@ using Godot;
 /// and VirtualFullScreen say. Without the menu bar, the top-edge strip (<see cref="SystemMenuStrip"/>) offers the menu:
 /// a pointer held on the screen's top two rows past op 0x149's delay, or Alt, shows it.</para>
 /// <para>Switches come from menu 0x9c5a ﾌﾙｽｸﾘｰﾝ and 0x9c5b ｳｲﾝﾄﾞｳ, Alt+Enter, the maximize box, the strip's restore
-/// button and op 0x2cf. A switch to the current mode does nothing; display:ForceScreen 1 keeps a window. Each switch
-/// stores display:ScreenMode (native writes it at exit; the port writes the same value at once) and runs
-/// CALLBACK_WINDOW.BIN. The game starts in the mode display:ScreenMode names (engine_initialize_graphics_from_settings:
-/// a new profile's 0 is fullscreen).</para>
+/// button and op 0x2cf. The shell-services native decides each (Ome.Engine/Natives/ShellServices.ScreenMode.cs): a
+/// switch to the current mode does nothing, display:ForceScreen 1 keeps a window, and a switch stores
+/// display:ScreenMode and runs CALLBACK_WINDOW.BIN. The game starts in the mode display:ScreenMode names. This node is
+/// the native's window (<see cref="IWindowDevice"/>): it shows the mode the native chose.</para>
 /// </summary>
-public partial class Main
+public partial class Main : IWindowDevice
 {
     private const ulong StripDwellTickMilliseconds = 100;   // age_main_window_proc's SetTimer(1, 100)
 
-    private bool _windowed = true;              // display_windowed (ctx+0x9a298)
-    private bool _forceScreen;                  // display:ForceScreen 1: a window stays a window
     private Vector2I _windowedSize, _windowedPosition;
-    private int _requestedScreenMode = -1;      // op 0x2cf's target (1 window, 0 fullscreen), from the VM thread
     private SystemMenuStrip? _menuStrip;
     private CanvasLayer? _menuStripLayer;
     private bool _menuStripShown;
     private ulong? _stripDwellStartMs;          // g_dwSystemMenuDwellStartMs, armed by the top two rows
     private ulong _stripDwellNextTickMs;
 
-    /// <summary>engine_initialize_graphics_from_settings: display_windowed = (display:ScreenMode != 0).
-    /// <c>--windowed</c> starts a window without changing the setting; so does a run without SYS4REG.INI (self-test,
-    /// read-only persistence).</summary>
+    /// <summary>display_windowed (ctx+0x9a298), the shell native's: a window until it starts.</summary>
+    private bool Windowed => _shell?.Windowed ?? true;
+
+    /// <summary>display:ForceScreen 1: a window stays a window.</summary>
+    private bool ForceScreen => _shell?.ForceScreen == true;
+
+    /// <summary>engine_initialize_graphics_from_settings (ShellServices.StartScreenMode). <c>--windowed</c> starts a
+    /// window without changing the setting.</summary>
     private void InitScreenMode(string[] userArgs)
     {
         Window root = GetTree().Root;
         _windowedSize = root.Size;
         _windowedPosition = root.Position;
-        _forceScreen = _sys4RegIniStore?.LoadInt("display", "ForceScreen", 0) == 1;
-        bool windowed = _sys4RegIniStore == null || _sys4RegIniStore.LoadInt("display", "ScreenMode", 0) != 0
-                        || Array.IndexOf(userArgs, "--windowed") >= 0;
         CreateMenuStrip();
-        GD.Print($"[display] starting {(windowed ? "in a window" : "fullscreen")} " +
-                 $"(display:ScreenMode={_sys4RegIniStore?.LoadInt("display", "ScreenMode", 0).ToString() ?? "none"}" +
-                 $"{(Array.IndexOf(userArgs, "--windowed") >= 0 ? ", --windowed" : "")}, " +
-                 $"ForceScreen={(_forceScreen ? 1 : 0)})");
-        if (windowed) return;
-        _windowed = false;
-        ApplyScreenLayout();
+        _shell!.StartScreenMode(windowedArgument: Array.IndexOf(userArgs, "--windowed") >= 0);
     }
 
     /// <summary>The strip holds its own copy of the shell's menu, pruned as the bar is (native's WM_INITDIALOG:
@@ -72,24 +66,17 @@ public partial class Main
         _menuStrip.LayoutStrip(new Vector2I(_screenWidth, _screenHeight));
     }
 
-    /// <summary>display_toggle_screen_mode_and_menu_bar: switch to <paramref name="windowed"/>, or do nothing when the
-    /// game is already there or display:ForceScreen keeps the window. True when the mode changed.</summary>
-    private bool SwitchScreenMode(bool windowed, string source)
+    /// <summary>display_toggle_screen_mode_and_menu_bar (ShellServices.SwitchScreenMode). True when the mode changed.
+    /// </summary>
+    private bool SwitchScreenMode(bool windowed, string source) => _shell?.SwitchScreenMode(windowed, source) ?? false;
+
+    /// <summary>The shell native switched (or started fullscreen): hide the strip, keep the window's rectangle when
+    /// leaving it, and lay the game out for the mode.</summary>
+    void IWindowDevice.ShowScreenMode(bool windowed)
     {
-        if (windowed == _windowed) return false;
-        if (_windowed && _forceScreen)
-        {
-            GD.Print($"[display] {source}: display:ForceScreen=1 keeps the window");
-            return false;
-        }
         HideMenuStrip("a screen-mode switch");
-        if (_windowed) RememberWindowedRect();
-        _windowed = windowed;
+        if (!windowed) RememberWindowedRect();
         ApplyScreenLayout();
-        _sys4RegIniStore?.SaveInt("display", "ScreenMode", windowed ? 1 : 0);
-        _vm?.RequestWindowCallback();   // script_launch_by_name("CALLBACK_WINDOW.BIN")
-        GD.Print($"[display] {source}: {(windowed ? "window" : "fullscreen")}; CALLBACK_WINDOW.BIN queued");
-        return true;
     }
 
     private void RememberWindowedRect()
@@ -103,17 +90,17 @@ public partial class Main
     /// client area starts at the top.</summary>
     private void ApplyScreenLayout()
     {
-        _menuBarHeight = _windowed && _menuItems != null ? NativeMenuBar.BarHeight : 0;
+        _menuBarHeight = Windowed && _menuItems != null ? NativeMenuBar.BarHeight : 0;
         Window root = GetTree().Root;
         root.ContentScaleSize = new Vector2I(_screenWidth, _screenHeight + _menuBarHeight);
         OffsetTop = _menuBarHeight;
-        if (_menuBarLayer != null) _menuBarLayer.Visible = _windowed;
-        if (!_windowed) _menuBar?.Close();
+        if (_menuBarLayer != null) _menuBarLayer.Visible = Windowed;
+        if (!Windowed) _menuBar?.Close();
         Win32Dialog.GameClientOrigin = new Vector2I(0, _menuBarHeight);
         if (_exitDim != null) _exitDim.OffsetTop = _menuBarHeight;
         if (_frozenFrame != null) _frozenFrame.OffsetTop = _menuBarHeight;
         if (_optionsPanel != null) _optionsPanel.OffsetTop = _menuBarHeight;
-        if (_windowed)
+        if (Windowed)
         {
             DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed);
             DisplayServer.WindowSetSize(_windowedSize);
@@ -125,25 +112,20 @@ public partial class Main
         }
     }
 
-    /// <summary>Op 0x2cf, from the VM thread: the frontend switches at its next frame.</summary>
-    internal void RequestScreenModeFromScript(bool windowed)
-        => System.Threading.Volatile.Write(ref _requestedScreenMode, windowed ? 1 : 0);
-
     /// <summary>Per frame: op 0x2cf's request, the maximize box, the strip's dwell timer and what hides the strip.
     /// </summary>
     private void ProcessScreenMode()
     {
-        int requested = System.Threading.Interlocked.Exchange(ref _requestedScreenMode, -1);
-        if (requested >= 0) SwitchScreenMode(requested == 1, "op 0x2cf");
+        _shell?.ServiceFrame();   // op 0x2cf's request
 
         DisplayServer.WindowMode mode = DisplayServer.WindowGetMode();
-        if (_windowed && mode == DisplayServer.WindowMode.Maximized)
+        if (Windowed && mode == DisplayServer.WindowMode.Maximized)
         {
             // WM_SYSCOMMAND SC_MAXIMIZE goes fullscreen; with display:ForceScreen 1 AGE ignores it.
-            if (_forceScreen) DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed);
+            if (ForceScreen) DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed);
             else SwitchScreenMode(windowed: false, "the maximize box");
         }
-        else if (_windowed && mode == DisplayServer.WindowMode.Windowed)
+        else if (Windowed && mode == DisplayServer.WindowMode.Windowed)
         {
             RememberWindowedRect();
         }
@@ -187,11 +169,11 @@ public partial class Main
     /// held, in fullscreen and with no host UI open, show the strip.</summary>
     private void TickStripDwell()
     {
-        if (_stripDwellStartMs is not { } start || _vm == null) return;
+        if (_stripDwellStartMs is not { } start || _vm == null || _shell == null) return;
         ulong elapsed = Time.GetTicksMsec() - start;
-        if (elapsed <= _vm.SystemMenuShowDelayMilliseconds) return;
+        if (elapsed <= _shell.SystemMenuShowDelayMilliseconds) return;
         if (Input.IsMouseButtonPressed(MouseButton.Left) || Input.IsMouseButtonPressed(MouseButton.Right)) return;
-        if (_windowed || HostUiActive()) return;
+        if (Windowed || HostUiActive()) return;
         ShowMenuStrip("the top edge");
     }
 
@@ -200,7 +182,7 @@ public partial class Main
     private void ShowMenuStrip(string source)
     {
         _stripDwellStartMs = null;   // the dwell resets and its timer is killed
-        if (_menuStrip == null || _menuStripShown || _windowed) return;
+        if (_menuStrip == null || _menuStripShown || Windowed) return;
         _menuStripShown = true;
         FreezePresentedFrame(true);
         _menuStrip.ResetState();
@@ -311,7 +293,7 @@ public partial class Main
                     else if (key.Keycode is Key.Enter or Key.KpEnter && key.AltPressed)
                     {
                         HideMenuStrip("Alt+Enter");   // SC_KEYMENU 0xd: hide, then the opposite of the current mode
-                        SwitchScreenMode(!_windowed, "Alt+Enter on the strip");
+                        SwitchScreenMode(!Windowed, "Alt+Enter on the strip");
                     }
                 }
                 return true;   // the strip has the keyboard focus, and the game's input polling is off
@@ -328,10 +310,10 @@ public partial class Main
         if (e is not InputEventKey { Pressed: true, Echo: false } key || HostUiActive()) return false;
         if (key.Keycode is Key.Enter or Key.KpEnter && key.AltPressed)
         {
-            if (!_forceScreen) SwitchScreenMode(!_windowed, "Alt+Enter");
+            if (!ForceScreen) SwitchScreenMode(!Windowed, "Alt+Enter");
             return true;
         }
-        if (key.Keycode == Key.Alt && !_windowed)
+        if (key.Keycode == Key.Alt && !Windowed)
         {
             ShowMenuStrip("Alt");
             return true;

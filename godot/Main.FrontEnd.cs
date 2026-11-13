@@ -1,13 +1,13 @@
 using Godot;
 using Ome.Engine.Hosting;
-using Ome.Engine.Model;
+using Ome.Engine.Natives;
 
 /// <summary>
-/// <see cref="IFrontEnd"/>, the calls the lifted <see cref="EngineHost"/> makes (engine layering spec, milestone 4).
-/// Each command is deferred to the main thread exactly as the host deferred it before the lift; the immediate members
-/// run on the caller's thread.
+/// <see cref="IFrontEnd"/>, the calls the lifted <see cref="EngineHost"/> makes (engine layering spec, milestone 4), and
+/// <see cref="IShellDialogs"/>, the dialogs the shell-services native opens (milestone 9). Each command is deferred to
+/// the main thread exactly as the host deferred it before the lift; the immediate members run on the caller's thread.
 /// </summary>
-public partial class Main : IFrontEnd
+public partial class Main : IFrontEnd, IShellDialogs
 {
     void IFrontEnd.PageBreak() => CallDeferred(MethodName.PageBreak);
     void IFrontEnd.ClearPage() => CallDeferred(MethodName.ClearPage);
@@ -16,14 +16,12 @@ public partial class Main : IFrontEnd
     void IFrontEnd.ClearAgeCursor() => CallDeferred(MethodName.ClearAgeCursor);
     void IFrontEnd.WarpAgeCursor(int virtualX, int virtualY) => CallDeferred(MethodName.WarpAgeCursor, virtualX, virtualY);
 
-    // A DiagnosticMessage is not a Variant, so these two defer a callable rather than a method name.
-    void IFrontEnd.ShowAgeDiagnostic(DiagnosticMessage message) => Callable.From(() => ShowAgeDiagnostic(message)).CallDeferred();
-    void IFrontEnd.ShowAgeScriptError(DiagnosticMessage message)
-        => Callable.From(() => ShowAgeScriptError(message)).CallDeferred();
-    void IFrontEnd.ShowAgeFullwidthTextEditor(string initialText)
-        => CallDeferred(MethodName.ShowAgeFullwidthTextEditor, initialText);
-    void IFrontEnd.RequestScreenModeFromScript(bool windowed) => RequestScreenModeFromScript(windowed);
-
     void IFrontEnd.Print(string message) => GD.Print(message);
     void IFrontEnd.Warn(string message) => GD.PushWarning(message);
+
+    // A dialog is not a Variant, so these defer a callable rather than a method name.
+    void IShellDialogs.ShowDiagnostic(DiagnosticBox box) => Callable.From(() => ShowAgeDiagnostic(box)).CallDeferred();
+    void IShellDialogs.ShowScriptError(ScriptErrorBox box) => Callable.From(() => ShowAgeScriptError(box)).CallDeferred();
+    void IShellDialogs.ShowTextEntry(TextEntry entry)
+        => Callable.From(() => ShowAgeFullwidthTextEditor(entry)).CallDeferred();
 }

@@ -4,6 +4,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
+using Ome.Engine.Natives;
 
 public class ReadTextDatabaseTests
 {
@@ -111,7 +112,7 @@ public class ReadTextDatabaseTests
         Script sc0000 = scripts.RequireByName("SC0000.BIN");
         var profile = new SharedProfile();
         var vm = new VirtualMachine(sc0000, table, new RecordingHost(),
-            new VmOptions(MaxSteps: 200_000), scripts, sharedProfile: profile);
+            new VmOptions(MaxSteps: 200_000), scripts, saves: new SavesAndSettings(profile: profile));
 
         // Each wait queues its message and the following op 0x71 commits it; the headless host returns
         // from every wait at once, so the scene reads on until it exits or reaches the step limit.
@@ -205,7 +206,7 @@ public class ReadTextDatabaseTests
         var profile = new SharedProfile();
 
         var first = new VirtualMachine(
-            script, table, new RecordingHost(), sharedProfile: profile);
+            script, table, new RecordingHost(), saves: new SavesAndSettings(profile: profile));
         first.Run();
 
         Assert.Equal(1, first.Globals[0x100]);
@@ -217,7 +218,7 @@ public class ReadTextDatabaseTests
 
         var secondHost = new RecordingHost();
         var second = new VirtualMachine(
-            script, table, secondHost, sharedProfile: profile);
+            script, table, secondHost, saves: new SavesAndSettings(profile: profile));
         second.Run();
 
         Assert.Equal(1, second.Globals[0x101]);

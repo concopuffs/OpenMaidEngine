@@ -1,5 +1,6 @@
 using Ome.Engine.Devices;
 using Ome.Engine.Model;
+using Ome.Engine.Persistence;
 
 namespace Ome.Engine.Natives;
 
@@ -100,6 +101,20 @@ public sealed partial class Audio
     };
 
     // ---- numbered saves ----
+
+    /// <summary>The audio records of a numbered save: the BGM track (a fade to zero that has ended has cleared it) and
+    /// each sound-effect channel's loaded sound.</summary>
+    public NativeNumberedSaveState WriteSaveRecords(NativeNumberedSaveState state)
+        => state with
+        {
+            BgmTrackId = unchecked((int)CurrentBgmTrack),
+            SoundEffectResourceIds = SoundEffectResourceIds.Select(id => unchecked((int)id)).ToArray(),
+        };
+
+    /// <summary>A numbered load's audio records (<see cref="RestoreSaved"/>).</summary>
+    public void ReadSaveRecords(NativeNumberedSaveState state)
+        => RestoreSaved(unchecked((uint)state.BgmTrackId),
+                        state.SoundEffectResourceIds.Select(id => (long)unchecked((uint)id)).ToArray());
 
     /// <summary>A numbered load's audio part (save_data_deserialize_and_begin_restore): a running op 0xc2 fade ends
     /// first, so it cannot clear the restored track; the saved track starts (no track releases the source), and each

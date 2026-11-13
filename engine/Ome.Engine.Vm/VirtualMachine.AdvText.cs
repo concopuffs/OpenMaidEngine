@@ -240,7 +240,7 @@ public sealed partial class VirtualMachine
         _host.ResetRenderedAdvTextLayout(Gfx, binding);
         _cur.ReadMessageOffset = ins.Offset;
         Gfx.SnapshotSurfaceRecords();   // native page snapshot that numbered saves write
-        _sharedProfile.ReadText.CommitPending();
+        _saves.Profile.ReadText.CommitPending();
         ApplyReadTextSkip();
         return StepResult.Next;
     }

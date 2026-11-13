@@ -183,7 +183,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         string text = ReadStr(a[1]);
         Write(a[0], PresentedLength(a[1], text, pc, TextLengthKind.Characters)
-                    ?? Cp932Text.CharacterLength(text, _nativeStringEncoding));
+                    ?? Cp932Text.CharacterLength(text, _memory.Encoding));
         return StepResult.Next;
     }
 
@@ -195,7 +195,7 @@ public sealed partial class VirtualMachine
             ReadStr(a[1]),
             unchecked((int)Read(a[2])),
             unchecked((int)Read(a[3])),
-            _nativeStringEncoding));
+            _memory.Encoding));
         return StepResult.Next;
     }
 }

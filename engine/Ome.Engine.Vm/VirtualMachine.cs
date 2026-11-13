@@ -10,19 +10,6 @@ namespace Ome.Engine.Vm;
 /// <summary>A stable identity/snapshot of the exact script frame currently executing.</summary>
 public sealed record DebugFrameSnapshot(long FrameId, string CurrentScript, IReadOnlyList<string> CallStack);
 
-public enum SharedProfileShutdownFlushOutcome
-{
-    Saved,
-    AlreadyHandled,
-    Suppressed,
-    StoreUnavailable,
-    Failed,
-}
-
-public readonly record struct SharedProfileShutdownFlushResult(
-    SharedProfileShutdownFlushOutcome Outcome,
-    string? Error = null);
-
 public sealed partial class VirtualMachine
 {
     private const long NoJump = 0xFFFFFFFF;
@@ -41,32 +28,21 @@ public sealed partial class VirtualMachine
     private readonly VmOptions _o;
     // The engine build's rules (Ome.Engine.Vm/EngineBuilds.cs). The VM never reads the build's id or ABI.
     private readonly EngineRules _rules;
-    private readonly Encoding _nativeStringEncoding;
+    private readonly ScriptMemory _memory;
     private readonly IScriptProvider? _provider;
-    private readonly SharedProfile _sharedProfile;
-    private readonly DiagnosticOutputState _diagnosticOutput;
-    private readonly INativeDatStore? _nativeDatStore;
+    private readonly SavesAndSettings _saves;
+    private readonly NumberedSaveRecords _saveRecords;   // what a numbered save holds besides the save native's own
+    private readonly ShellServices _shell;
     private static readonly bool _diagSetTexture = System.Environment.GetEnvironmentVariable("OME_DIAG_SETTEX") == "1";
     private ExecFrame _cur = null!;
     private int _depth;
     private readonly ITraceSink _sink;
     private readonly object _interactiveLock = new();
     private readonly object _debugControlLock = new();
-    private readonly object _sharedProfileShutdownLock = new();
     private readonly List<string> _activeFrameNames = new();
     private readonly List<ExecFrame> _activeExecutionFrames = new();
     private ExecFrame? _saveResumeFrame;
-    private NativeNumberedSaveState? _loadedNumberedState;
-    private NativeNumberedSaveState? _retainedNativeNumberedState;
-    private int _restoreFrameIndex = -1;
-    // The save container's playtime clock (docs/engine-re.md, "Playtime"): a save stores now + base - start in whole
-    // seconds. Construction and op 0x9 zero it from now; reading a save container sets only the pending value, which
-    // a full load's frame restores and op 0xad commit as the new base. Native's now is timeGetTime(), milliseconds
-    // since Windows started; TimeProvider.System's timestamp has the same origin.
-    private readonly TimeProvider _playClock;
-    private uint _playBaseSeconds;
-    private long _playStartSeconds;
-    private uint _pendingPlaySeconds;
+    private int _restoreFrameIndex = -1;   // the saved frame a full load restores next (SavesAndSettings.RestoringFrames)
     private ExecFrame? _debugActiveFrame;
     private long _debugActiveFrameId;
     private long _debugNextFrameId;
@@ -90,36 +66,24 @@ public sealed partial class VirtualMachine
     private bool _initialRootRun = true;
     private volatile bool _stopRequested;
     private volatile bool _rootReloadRequested;   // frontend 終了 dialog: タイトルに戻る
-    private bool _sharedProfileShutdownHandled;
     private AdvTextStyle _advTextStyle = AdvTextStyle.Default;
     private int _messageWindowAlphaSetting;
     private int _messageGlyphDelayMilliseconds;
-    // EngineCtx +0xa0d10: AGERC queries this through IAGEService to gray its native
-    // settings/save menu actions while CONFIG owns the scripted settings screen.
-    private int _systemMenuActionsEnabled = 1;
-    // EngineCtx +0x5511c: unsigned TIMER_SHOWMENU dwell threshold. Native op 0x148
-    // returns the same dword through the VM's signed integer-cell representation.
-    private uint _systemMenuShowDelayMilliseconds;
-    // EngineCtx +0x6da7c, op 0x10f: the window procedure's system-key disable mask. Bit 0 suppresses F1's screenshot
-    // BMP, bit 9 (0x200) swallows F10's menu-bar focus. Scene reset clears it.
-    private int _systemKeyDisableMask;
     private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
-    // Eleven safely isolated handler-addressable FIFO slots. Native physically owns ten at
-    // +0x55130; its admitted id 10 aliases stack slot zero. ATSEEK/MVSEEK use FIFO slot zero.
-    private readonly Queue<int>?[] _intQueues = new Queue<int>?[11];
-    // Eleven safely isolated handler-addressable LIFO slots. Native constructs ten at +0x55158
-    // on every scene reset; its admitted id 10 aliases numeric-glyph-style storage.
-    private readonly Stack<int>[] _intStacks = CreateIntegerStacks();
     // Opcodes 0x06/0x08 load scripts into numbered EngineCtx frame slots and invoke them later.
     // Unlike ordinary call-script frames, native non-adjacent slots survive return with locals intact.
     private readonly Dictionary<int, PreloadedScriptSlot> _preloadedScriptSlots = new();
     public long CallScriptDispatches { get; private set; }
 
-    public Dictionary<int, long> Globals { get; } = new();
-    public Dictionary<int, long> GlobalFloats { get; } = new();
-    public Dictionary<int, string> GlobalStrings { get; } = new();
-    public Dictionary<int, int> GlobalPointers { get; } = new();
-    public Dictionary<int, int> GlobalStringPointers { get; } = new();
+    /// <summary>The script memory native this VM's handlers read and write (Ome.Engine/Natives/ScriptMemory.cs).
+    /// </summary>
+    public ScriptMemory Memory => _memory;
+    // The banks, as tools and tests read them (spec §3.4): script memory's.
+    public Dictionary<int, long> Globals => _memory.Integers;
+    public Dictionary<int, long> GlobalFloats => _memory.Floats;
+    public Dictionary<int, string> GlobalStrings => _memory.Strings;
+    public Dictionary<int, int> GlobalPointers => _memory.Pointers;
+    public Dictionary<int, int> GlobalStringPointers => _memory.StringPointers;
     /// <summary>The retained objects and surface records: the graphics native's state.</summary>
     public GfxState Gfx => _graphics.State;
     /// <summary>The graphics native this VM's handlers call (Ome.Engine/Natives/Graphics*.cs).</summary>
@@ -135,12 +99,13 @@ public sealed partial class VirtualMachine
     public SkipAndAuto SkipAndAuto => _skip;
     public bool AutoMessageEnabled => _skip.AutoMessageEnabled;
     public bool MessageSkipEnabled => _skip.MessageSkipEnabled;
-    public int SystemMenuActionsEnabled => _systemMenuActionsEnabled;
-    public uint SystemMenuShowDelayMilliseconds => _systemMenuShowDelayMilliseconds;
-    /// <summary>Op 0x10f's system-key disable mask (EngineCtx +0x6da7c), read by the frontend's F1 and F10 handling.
-    /// Written on the VM thread; a frontend read sees the last completed write.</summary>
-    public int SystemKeyDisableMask => Volatile.Read(ref _systemKeyDisableMask);
-    public string PendingDiagnosticText => _diagnosticOutput.PendingText;
+    /// <summary>The save and settings native this VM's handlers call (Ome.Engine/Natives/SavesAndSettings*.cs).
+    /// </summary>
+    public SavesAndSettings Saves => _saves;
+    /// <summary>The shell-services native this VM's handlers call (Ome.Engine/Natives/ShellServices*.cs): the
+    /// system-menu fields, the menu requests and callbacks, the diagnostic text, the dialogs and the screen mode.
+    /// </summary>
+    public ShellServices Shell => _shell;
     /// <summary>
     /// Zero-based active-frame cutoff selected by opcode 0x1ad, or null when no surviving marker
     /// exists. A numbered-save serializer consumes this boundary in the full payload slice.
@@ -190,12 +155,11 @@ public sealed partial class VirtualMachine
 
     public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
                           IScriptProvider? provider = null, ITraceSink? sink = null,
-                          AdvTextHistory? textHistory = null, SharedProfile? sharedProfile = null,
-                          INativeDatStore? nativeDatStore = null,
-                          DiagnosticOutputState? diagnosticOutput = null,
+                          AdvTextHistory? textHistory = null, SavesAndSettings? saves = null,
+                          ShellServices? shell = null,
                           EngineBuild? build = null, SkipAndAuto? skipAndAuto = null,
-                          TimeProvider? playClock = null, Audio? audio = null, EngineTick? tick = null,
-                          Graphics? graphics = null, Movies? movies = null)
+                          Audio? audio = null, EngineTick? tick = null,
+                          Graphics? graphics = null, Movies? movies = null, ScriptMemory? memory = null)
     {
         _s = s; _t = t; _handlers = BindHandlers(t); _host = host; _o = o ?? new VmOptions(); _provider = provider;
         // Composition hands over the native its time device belongs to; tests and tools that give none get one over
@@ -209,19 +173,25 @@ public sealed partial class VirtualMachine
         _graphics = graphics ?? Graphics.Headless();
         // Without a front end no movie resolves (Movies.Headless); composition gives the one over the decoder.
         _movies = movies ?? Movies.Headless(_graphics);
-        _playClock = playClock ?? TimeProvider.System;
         _rules = EngineBuilds.ForVm(build, t).Rules;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        _nativeStringEncoding = Encoding.GetEncoding(_o.NativeStringCodePage);
+        // Without composition the banks start empty in a script memory of the options' code page.
+        _memory = memory ?? new ScriptMemory(_o.NativeStringCodePage);
         _sink = sink ?? NullTraceSink.Instance; TextHistory = textHistory ?? new AdvTextHistory();
-        _sharedProfile = sharedProfile ?? new SharedProfile();
-        _diagnosticOutput = diagnosticOutput ?? new DiagnosticOutputState();
-        _nativeDatStore = nativeDatStore;
+        // Without composition there is no save store: a numbered save fails, and the shared profile starts empty.
+        _saves = saves ?? new SavesAndSettings();
+        // Without composition the shell native has no window and no dialogs, and a menu request wakes this VM's host.
+        if (shell == null)
+        {
+            shell = ShellServices.Headless();
+            shell.WakeWaitsWith(host.WakeInputCallbackService);
+        }
+        _shell = shell;
         _messageWindowAlphaSetting = host.MessageWindowAlphaSetting;
         _messageGlyphDelayMilliseconds = System.Math.Max(0, host.MessageGlyphDelayMilliseconds);
-        ResetPlayTime();
-        // AGE constructs the container (base 0 from now) before it reads SAVE.DAT, whose playtime only lands pending.
-        _pendingPlaySeconds = _sharedProfile.AccumulatedPlaySeconds;
+        _saveRecords = new NumberedSaveRecords(
+            _memory, _audio, _graphics, TextHistory, CaptureSavedFrames, () => _host.SourceTextObjects,
+            releaseSurfacesOnLoad: (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0);
     }
 
     /// <summary>Request a clean stop at the next opcode boundary.</summary>
@@ -252,41 +222,6 @@ public sealed partial class VirtualMachine
     {
         _rootReloadRequested = true;
         _host.InterruptForRootReload();
-    }
-
-    /// <summary>
-    /// Match AGE's accepted-WM_CLOSE shared-profile lifecycle. The native NoSaveDat setting gates only
-    /// this shutdown write; numbered-save opcode 0x19e continues to flush shared state independently.
-    /// Repeated frontend teardown notifications are handled without rotating backups more than once.
-    /// </summary>
-    public SharedProfileShutdownFlushResult FlushSharedProfileOnShutdown()
-    {
-        lock (_sharedProfileShutdownLock)
-        {
-            if (_sharedProfileShutdownHandled)
-                return new(SharedProfileShutdownFlushOutcome.AlreadyHandled);
-            _sharedProfileShutdownHandled = true;
-
-            if (_o.NoSaveDat)
-                return new(SharedProfileShutdownFlushOutcome.Suppressed);
-            if (_nativeDatStore == null)
-                return new(SharedProfileShutdownFlushOutcome.StoreUnavailable);
-
-            try
-            {
-                _sharedProfile.Save(
-                    _nativeDatStore,
-                    NativeSystemTime.FromLocalDateTime(DateTime.Now),
-                    AccumulatedPlaySeconds());
-                return new(SharedProfileShutdownFlushOutcome.Saved);
-            }
-            catch (Exception error) when (
-                error is IOException or UnauthorizedAccessException or InvalidDataException
-                or ArgumentOutOfRangeException or OverflowException)
-            {
-                return new(SharedProfileShutdownFlushOutcome.Failed, error.Message);
-            }
-        }
     }
 
     /// <summary>Queue global writes and return only the identified active frame at its next opcode boundary.
@@ -485,9 +420,9 @@ public sealed partial class VirtualMachine
     /// (SkipAndAuto.ApplyReadTextSkip): message:ReadTextSkip and whether ReadTextDB holds the current message.</summary>
     private void ApplyReadTextSkip()
     {
-        bool readTextSkip = _sharedProfile.ReadMessageSkipEnabled;
+        bool readTextSkip = _saves.Profile.ReadMessageSkipEnabled;
         _skip.ApplyReadTextSkip(readTextSkip, readTextSkip
-            && _sharedProfile.ReadText.IsMessageRead(_cur.Script.PackedId, CurrentReadMessageIndex()));
+            && _saves.Profile.ReadText.IsMessageRead(_cur.Script.PackedId, CurrentReadMessageIndex()));
     }
 
     /// <summary>The entry of op_0x72_handler, which also runs when a hotspot callback's ret re-runs the waiting op: the
@@ -505,11 +440,9 @@ public sealed partial class VirtualMachine
         => _skip.PhysicalInputChanged(InputBindings, _advTextWaitPolling, _advTextRevealing);
 
     private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
-    private int GlobalPointer(int index)
-        => GlobalPointers.TryGetValue(index, out int value) ? value : unchecked((int)Gi(Globals, index));
-    private int GlobalStringPointer(int index)
-        => GlobalStringPointers.TryGetValue(index, out int value) ? value : unchecked((int)Gi(Globals, index));
-    private long ReadGlobal(int k) => Gi(Globals, k);
+    private int GlobalPointer(int index) => _memory.IntegerPointer(index);
+    private int GlobalStringPointer(int index) => _memory.StringPointer(index);
+    private long ReadGlobal(int k) => _memory.Integer(k);
     private static string Gs(Dictionary<int, string> d, int k) => d.TryGetValue(k, out var v) ? v : "";
     // Ops 0x53/0x54 are native CDQ+IDIV: truncate toward zero, remainder takes the dividend's sign.
     private static long NativeDiv(long a, long b) => b == 0 ? 0 : a / b;
@@ -579,8 +512,8 @@ public sealed partial class VirtualMachine
     {
         T_IMM => op.Value,
         T_GINT => ReadGlobal((int)op.Value),
-        T_GFLOAT => Gi(GlobalFloats, (int)op.Value),
-        T_GPTR => Gi(Globals, GlobalPointer((int)op.Value)),
+        T_GFLOAT => _memory.Float((int)op.Value),
+        T_GPTR => _memory.Integer(GlobalPointer((int)op.Value)),
         T_LINT => Gi(_cur.Locals.I, (int)op.Value),
         T_LFLOAT => Gi(_cur.Locals.F, (int)op.Value),
         T_LPTR => ReadIntCell(Ga(_cur.Locals.P, (int)op.Value)),
@@ -591,9 +524,9 @@ public sealed partial class VirtualMachine
     {
         switch (op.Type)
         {
-            case T_GINT: Globals[(int)op.Value] = val; break;
-            case T_GFLOAT: GlobalFloats[(int)op.Value] = val; break;
-            case T_GPTR: Globals[GlobalPointer((int)op.Value)] = val; break;
+            case T_GINT: _memory.SetInteger((int)op.Value, val); break;
+            case T_GFLOAT: _memory.SetFloat((int)op.Value, val); break;
+            case T_GPTR: _memory.SetInteger(GlobalPointer((int)op.Value), val); break;
             case T_LINT: _cur.Locals.I[(int)op.Value] = val; break;
             case T_LFLOAT: _cur.Locals.F[(int)op.Value] = val; break;
             case T_LPTR: WriteIntCell(Ga(_cur.Locals.P, (int)op.Value), val); break;
@@ -607,8 +540,8 @@ public sealed partial class VirtualMachine
     private string ReadStr(Operand op) => op.Type switch
     {
         T_STR => _cur.Script.GetString((int)op.Value),
-        T_GSTR => Gs(GlobalStrings, (int)op.Value),
-        T_GSTRPTR => Gs(GlobalStrings, GlobalStringPointer((int)op.Value)),
+        T_GSTR => _memory.String((int)op.Value),
+        T_GSTRPTR => _memory.String(GlobalStringPointer((int)op.Value)),
         T_LSTR => Gs(_cur.Locals.S, (int)op.Value),
         T_LSTRPTR => ReadStringCell(Ga(_cur.Locals.SP, (int)op.Value)),
         T_IMM or T_GINT or T_GPTR or T_LINT or T_LPTR => AsciiToFullwidth(
@@ -635,18 +568,14 @@ public sealed partial class VirtualMachine
     {
         switch (op.Type)
         {
-            case T_GSTR: GlobalStrings[(int)op.Value] = val; break;
-            case T_GSTRPTR: GlobalStrings[GlobalStringPointer((int)op.Value)] = val; break;
+            case T_GSTR: _memory.SetString((int)op.Value, val); break;
+            case T_GSTRPTR: _memory.SetString(GlobalStringPointer((int)op.Value), val); break;
             case T_LSTR: _cur.Locals.S[(int)op.Value] = val; break;
             case T_LSTRPTR: WriteStringCell(Ga(_cur.Locals.SP, (int)op.Value), val); break;
         }
     }
 
-    private int NativeStringByteLength(string value)
-    {
-        int nul = value.IndexOf('\0');
-        return _nativeStringEncoding.GetByteCount(nul < 0 ? value : value[..nul]);
-    }
+    private int NativeStringByteLength(string value) => _memory.ByteLength(value);
 
     private string FormatIntegerForSurface(ref int x, int value, int fieldWidth, int flags)
     {
@@ -702,7 +631,7 @@ public sealed partial class VirtualMachine
     {
         VmAddressSpace.LocalInteger => Gi(_cur.Locals.I, address.Address),
         VmAddressSpace.LocalFloat => Gi(_cur.Locals.F, address.Address),
-        _ => Gi(Globals, address.Address),
+        _ => _memory.Integer(address.Address),
     };
 
     private void WriteIntCell(VmAddress address, long value)
@@ -711,19 +640,19 @@ public sealed partial class VirtualMachine
         {
             case VmAddressSpace.LocalInteger: _cur.Locals.I[address.Address] = value; break;
             case VmAddressSpace.LocalFloat: _cur.Locals.F[address.Address] = value; break;
-            default: Globals[address.Address] = value; break;
+            default: _memory.SetInteger(address.Address, value); break;
         }
     }
 
     private string ReadStringCell(VmAddress address)
         => address.Space == VmAddressSpace.LocalString
             ? Gs(_cur.Locals.S, address.Address)
-            : Gs(GlobalStrings, address.Address);
+            : _memory.String(address.Address);
 
     private void WriteStringCell(VmAddress address, string value)
     {
         if (address.Space == VmAddressSpace.LocalString) _cur.Locals.S[address.Address] = value;
-        else GlobalStrings[address.Address] = value;
+        else _memory.SetString(address.Address, value);
     }
 
     private VmAddress BaseAddr(Operand op) => op.Type switch
@@ -759,8 +688,8 @@ public sealed partial class VirtualMachine
         {
             case T_LPTR: _cur.Locals.P[(int)destination.Value] = address; return true;
             case T_LSTRPTR: _cur.Locals.SP[(int)destination.Value] = address; return true;
-            case T_GPTR: GlobalPointers[(int)destination.Value] = address.Address; return true;
-            case T_GSTRPTR: GlobalStringPointers[(int)destination.Value] = address.Address; return true;
+            case T_GPTR: _memory.SetPointer((int)destination.Value, address.Address); return true;
+            case T_GSTRPTR: _memory.SetStringPointer((int)destination.Value, address.Address); return true;
             default: return false;
         }
     }
@@ -781,12 +710,12 @@ public sealed partial class VirtualMachine
         int address = checked((int)destination.Value + index);
         switch (destination.Type)
         {
-            case T_GINT: Globals[address] = value; break;
-            case T_GFLOAT: GlobalFloats[address] = value; break;
+            case T_GINT: _memory.SetInteger(address, value); break;
+            case T_GFLOAT: _memory.SetFloat(address, value); break;
             case T_LINT: _cur.Locals.I[address] = value; break;
             case T_LFLOAT: _cur.Locals.F[address] = value; break;
             case T_GPTR:
-                Globals[checked(GlobalPointer((int)destination.Value) + index)] = value;
+                _memory.SetInteger(checked(GlobalPointer((int)destination.Value) + index), value);
                 break;
             case T_LPTR: WriteIntCell(Ga(_cur.Locals.P, (int)destination.Value).Offset(index), value); break;
         }
@@ -799,10 +728,10 @@ public sealed partial class VirtualMachine
             T_LINT => Gi(_cur.Locals.I, checked((int)operand.Value + offset)),
             T_LFLOAT => Gi(_cur.Locals.F, checked((int)operand.Value + offset)),
             T_GINT => ReadGlobal(checked((int)operand.Value + offset)),
-            T_GFLOAT => Gi(GlobalFloats, checked((int)operand.Value + offset)),
+            T_GFLOAT => _memory.Float(checked((int)operand.Value + offset)),
             T_LPTR => ReadIntCell(Ga(_cur.Locals.P, (int)operand.Value).Offset(offset)),
-            T_GPTR => Gi(Globals, checked(GlobalPointer((int)operand.Value) + offset)),
-            _ => Gi(Globals, checked((int)operand.Value + offset)),
+            T_GPTR => _memory.Integer(checked(GlobalPointer((int)operand.Value) + offset)),
+            _ => _memory.Integer(checked((int)operand.Value + offset)),
         };
     }
 
@@ -833,7 +762,7 @@ public sealed partial class VirtualMachine
     }
 
     private DiagnosticMessage BuildDiagnosticMessage(Instruction instruction)
-        => AgeBox(new AgeBoxParts(AgeBoxMessage.Script(_diagnosticOutput.PendingText), DiagnosticLocation(instruction),
+        => AgeBox(new AgeBoxParts(AgeBoxMessage.Script(_shell.PendingDiagnosticText), DiagnosticLocation(instruction),
                                   Prompt: false));
 
     /// <summary>An AGE box in AGE's wording, with its parts for a host that presents it in another language.</summary>
@@ -979,7 +908,7 @@ public sealed partial class VirtualMachine
             }
             catch (NumberedRestoreRequestedException)
             {
-                if (_loadedNumberedState == null) throw;
+                if (_saves.RestoringFrames == null) throw;
                 restoreRequested = true;
                 outcome = FrameOutcome.Halted;
             }
@@ -1004,7 +933,7 @@ public sealed partial class VirtualMachine
                         if (callbackOutcome is FrameOutcome.Halted or FrameOutcome.ExitRequested) break;
                         if (callbackOutcome == FrameOutcome.RootReload)
                         {
-                            _loadedNumberedState = null;
+                            _saves.EndRestore();
                             Script? reloadedRoot = ReloadRootOrNull();
                             if (reloadedRoot == null) break;
                             root = reloadedRoot;
@@ -1013,10 +942,11 @@ public sealed partial class VirtualMachine
                             continue;
                         }
                     }
-                    root = ResolveSavedScript(_loadedNumberedState!.Frames[0]);
+                    IReadOnlyList<NativeSavedScriptFrame> savedFrames = _saves.RestoringFrames!;
+                    root = ResolveSavedScript(savedFrames[0]);
                     rootEntry = 0;
                     _restoreFrameIndex = 0;
-                    restoredRootFrame = _loadedNumberedState.Frames[0];
+                    restoredRootFrame = savedFrames[0];
                     cause = FrameCause.SaveRestore;
                     continue;
                 }
@@ -1064,10 +994,9 @@ public sealed partial class VirtualMachine
         _initialRootRun = false;   // op_0x9_reset_scene_and_reload_root: SYSTEM4 skips LOGO/OP from now on
         ResetGlobalBanks();
         Gfx.ResetSceneContext();
-        ResetPlayTime();   // op_0x9: save_container_playtime_reset after the hotspot resets
+        _saves.ResetScene();   // op_0x9: save_container_playtime_reset after the hotspot resets
         _valueSwitchTargets.Clear();
         _preloadedScriptSlots.Clear();
-        ResetIntegerStacks();
         // scene_context_init_reset@0x40b3b0 clears coroutine_runstate, the timed sequence and every callback owner
         // (-1). It keeps the 0xcc target, which no script dispatches before registering again; the port clears it
         // with its owner.
@@ -1097,14 +1026,8 @@ public sealed partial class VirtualMachine
         _hostedScenePackedId = null;
         _audio.ResetScene();
         _tick.ResetScene();   // a root reload abandons every open block with its frames
-        _settingCallbackPending = false;
-        _windowCallbackPending = false;
-        _menuToggles.Clear();
-        _menuTogglesPending = false;
+        _shell.ResetScene();   // the system-menu fields, queued menu commands and callbacks; an open dialog is cancelled
         _advTextStyle = AdvTextStyle.Default;
-        _systemMenuActionsEnabled = 1;
-        _systemMenuShowDelayMilliseconds = 0;
-        Volatile.Write(ref _systemKeyDisableMask, 0);
         TextHistory.SetRecordingEnabled(true);
         _skip.ResetScene();   // Skip, Auto and read skip start over; run-state 0x08000000 is zeroed
         _movies.ResetScene();   // every surface's movie object goes; the surfaces stay
@@ -1116,34 +1039,13 @@ public sealed partial class VirtualMachine
             _graphics.ReleaseSurfaceRange(0, 1000);
     }
 
-    /// <summary>op_0x9_reset_scene_and_reload_root, after disposing the frames and before scene_context_init_reset:
-    /// every integer global becomes the encoded zero, and the float, string, integer-pointer and string-pointer banks
-    /// are zeroed (both bank sets under set:EnableMemFlip). Resource 0 re-authors what it needs from the
-    /// configuration and the shared profile, so state a scene left behind (Kamidori's field flag 0x428c) is gone.</summary>
+    /// <summary>op_0x9's bank reset and scene_context_init_reset's stacks (ScriptMemory.ResetScene), and the string
+    /// stores' origins with them.</summary>
     private void ResetGlobalBanks()
     {
-        Globals.Clear();
-        GlobalFloats.Clear();
-        GlobalStrings.Clear();
-        GlobalPointers.Clear();
-        GlobalStringPointers.Clear();
+        _memory.ResetScene();
         ClearStringStores();
     }
-
-    private static Stack<int>[] CreateIntegerStacks()
-    {
-        var stacks = new Stack<int>[11];
-        for (int i = 0; i < stacks.Length; i++)
-            stacks[i] = new Stack<int>(0x100);
-        return stacks;
-    }
-
-    private void ResetIntegerStacks()
-    {
-        for (int i = 0; i < _intStacks.Length; i++)
-            _intStacks[i] = new Stack<int>(0x100);
-    }
-
 
     private FrameOutcome RunFrame(ExecFrame frame, FrameCause cause, long callId = 0)
     {
@@ -1266,7 +1168,7 @@ public sealed partial class VirtualMachine
             return false;
         _hostedSceneEntry = null;
         foreach (var (address, value) in entry.CoordinatorWrites)
-            Globals[address] = value;
+            _memory.SetInteger(address, value);
         _hostedScenePackedId = entry.ScenePackedId;
         return true;
     }
@@ -1279,18 +1181,16 @@ public sealed partial class VirtualMachine
         {
             if (!ReferenceEquals(_debugFrameReturnRequest?.Frame, frame)) return false;
             foreach (var (address, value) in _debugFrameReturnRequest.GlobalWrites)
-                Globals[address] = value;
+                _memory.SetInteger(address, value);
             _debugFrameReturnRequest = null;
             return true;
         }
     }
 
-    private NativeNumberedSaveState CaptureNumberedState()
+    /// <summary>The interpreter's records of a numbered save (NumberedSaveRecords): each active frame up to op 0x1ad's
+    /// boundary, as context_state_serialize@0x40d320 writes it.</summary>
+    private NativeSavedScriptFrame[] CaptureSavedFrames()
     {
-        NativeSaveBankDimensions dimensions = _nativeDatStore?.Identity.BankDimensions
-            ?? throw new InvalidDataException(
-                "The selected native persistence identity has no numbered-save bank dimensions.");
-
         ExecFrame[] active;
         int cutoff;
         lock (_debugControlLock)
@@ -1334,121 +1234,17 @@ public sealed partial class VirtualMachine
             };
         }
 
-        int gfxRecordSize = _nativeDatStore.Identity.NumberedGfxRecordSize;
-        NativeNumberedSaveState basis = _retainedNativeNumberedState
-            ?? NativeNumberedSaveCodec.Empty(frames, gfxRecordSize);
-        var gfx = NativeGfxPersistenceCodec.Capture(Gfx, gfxRecordSize, _host.SourceTextObjects);
-        return basis with
-        {
-            BgmTrackId = unchecked((int)_audio.CurrentBgmTrack),   // a fade to zero that has ended has cleared it
-            SoundEffectResourceIds = _audio.SoundEffectResourceIds
-                .Select(id => unchecked((int)id)).ToArray(),
-            Frames = frames,
-            IntegerGlobals = DenseValues(Globals, dimensions.IntegerGlobals),
-            FloatGlobals = DenseValues(GlobalFloats, dimensions.FloatGlobals),
-            StringGlobals = DenseStrings(GlobalStrings, dimensions.StringGlobals),
-            PointerGlobals = DensePointerValues(GlobalPointers, dimensions.PointerGlobals),
-            PointerStrings = DensePointerValues(GlobalStringPointers, dimensions.PointerStrings),
-            LocalPointerScratch = new int[dimensions.LocalPointerScratch],
-            SurfaceRecords = gfx.SurfaceRecords,
-            GfxObjects = gfx.Objects,
-            RangeTransformFirst = gfx.RangeFirst,
-            RangeTransformCount = gfx.RangeCount,
-            RangeTransformRecord = gfx.RangeRecord,
-            GraphicsRecordSize = gfxRecordSize,
-        };
+        return frames;
     }
 
+    /// <summary>Ops 0x19f and 0x1a1 (SavesAndSettings.LoadNumbered). A failed load, or one of the data only,
+    /// leaves no frame to restore.</summary>
     private bool TryLoadNumberedState(int slot, bool restoreHistory)
     {
-        if (_nativeDatStore == null) return false;
-        try
-        {
-            NativeNumberedSaveFile? file = _nativeDatStore.LoadNumberedFile(slot);
-            if (file == null) return false;
-            NativeNumberedSaveState state = NativeNumberedSaveCodec.Decode(
-                file.Document.Payload, _nativeDatStore.Identity.NumberedGfxRecordSize);
-            // Decode all of it before changing anything, so a damaged graphics record or history tail fails the load
-            // with the live globals, audio and history untouched.
-            GfxPersistenceSnapshot gfxSnapshot = NativeGfxPersistenceCodec.Decode(state);
-            NativeTextHistoryCodec.Decoded? history = restoreHistory && file.HistoryTail.Length != 0
-                ? NativeTextHistoryCodec.Decode(file.HistoryTail)
-                : null;
-            ApplyNumberedState(state, gfxSnapshot);
-            _retainedNativeNumberedState = state;
-            _pendingPlaySeconds = file.Document.Metadata.AccumulatedPlaySeconds;
-            // A full load restores the root frame now (script_frame_restore_saved_layout commits); data only does not.
-            if (restoreHistory) CommitLoadedPlayTime();
-            if (restoreHistory)
-            {
-                if (history == null) TextHistory.Clear();
-                else
-                {
-                    TextHistory.RestorePersistenceSnapshot(history.Entries, history.Records);
-                    TextHistory.DropLastGroup();   // the resumed page records it again
-                }
-                _loadedNumberedState = state;
-            }
-            else
-            {
-                _loadedNumberedState = null;
-                _restoreFrameIndex = -1;
-            }
-            return true;
-        }
-        catch (Exception error) when (
-            error is IOException or UnauthorizedAccessException or InvalidDataException
-            or ArgumentOutOfRangeException or OverflowException)
-        {
-            _loadedNumberedState = null;
+        NumberedLoad outcome = _saves.LoadNumbered(slot, restoreHistory, _saveRecords);
+        if (outcome == NumberedLoad.Failed || (outcome == NumberedLoad.Loaded && !restoreHistory))
             _restoreFrameIndex = -1;
-            return false;
-        }
-    }
-
-    private void ApplyNumberedState(NativeNumberedSaveState state, GfxPersistenceSnapshot gfxSnapshot)
-    {
-        // Layout 3 of save_data_deserialize_and_begin_restore@0x40fd10 zeroes each global bank in full, to its live
-        // size (ctx+0x53c7c..0x53c90; Himegari 1419442 integers and 18180 strings), and only then copies the saved
-        // prefixes (402459 integers, 789 strings). The cells past a prefix are therefore zero after any load until a
-        // restored frame re-authors them: every saved script re-runs its prologue from its entry to op 0xae, and
-        // SYSTEM4's (LOADCONFIG or INITCONFIG, the 0x1ca table copy, INIT2 and its *INIT data tables) precedes its 0xae.
-        // Script flags past the prefix such as G[0x62428], which SC0000 sets around its MENU.BIN call and a load from
-        // MENU never clears, read zero again (native-read 2026-11-05; docs/engine-re.md, "Native menu bar").
-        ReplaceBank(Globals, state.IntegerGlobals.Select(value => (long)value).ToArray(), value => value != 0);
-        ReplaceBank(GlobalFloats, state.FloatGlobals.Select(value => (long)value).ToArray(), value => value != 0);
-        ReplaceBank(GlobalStrings, state.StringGlobals, value => value.Length != 0);
-        ReplaceBank(GlobalPointers, state.PointerGlobals, value => value != 0);
-        ReplaceBank(GlobalStringPointers, state.PointerStrings, value => value != 0);
-
-        _audio.RestoreSaved(unchecked((uint)state.BgmTrackId),
-            state.SoundEffectResourceIds.Select(id => (long)unchecked((uint)id)).ToArray());
-
-        // save_data_deserialize_and_begin_restore: (CreateObject & 2) && (AutoFreeTex & 2) runs the release worker over
-        // every slot (docs/engine-re.md, "AutoFreeTex").
-        bool releaseAllSurfaces = (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0;
-        if (releaseAllSurfaces) _graphics.ReleaseSurfaceRange(0, 1000);
-        var restoredSurfaces = Gfx.CapturePersistenceSnapshot().Surfaces
-            .ToDictionary(item => item.Slot);
-        foreach (GfxSurfacePersistenceState surface in gfxSnapshot.Surfaces
-                     .Where(item => item.ReloadOnRestore && item.ResourceId >= 0))
-            restoredSurfaces[surface.Slot] = surface;
-        Gfx.RestorePersistenceSnapshot(gfxSnapshot with
-        {
-            Surfaces = restoredSurfaces.Values.OrderBy(item => item.Slot).ToArray(),
-        });
-        // The restore loop reopens each flagged record through gfx_surface_load_asset, which also rewrites
-        // that slot's live record; the rest of the live and snapshot tables are not replaced by the load.
-        foreach (GfxSurfacePersistenceState surface in gfxSnapshot.Surfaces
-                     .Where(item => item.ReloadOnRestore && item.ResourceId >= 0))
-            _graphics.ReloadSurface(surface.Slot, surface.ResourceId, surface.ColorKey);
-    }
-
-    private static void ReplaceBank<T>(Dictionary<int, T> bank, IReadOnlyList<T> values, Func<T, bool> retain)
-    {
-        bank.Clear();
-        for (int i = 0; i < values.Count; i++)
-            if (retain(values[i])) bank[i] = values[i];
+        return outcome == NumberedLoad.Loaded;
     }
 
     private Script ResolveSavedScript(NativeSavedScriptFrame frame)
@@ -1507,55 +1303,6 @@ public sealed partial class VirtualMachine
         for (int i = 0; i < table.Count; i++)
             if (table[i] == offset) return i;
         return -1;
-    }
-
-    private static int[] DenseValues(IReadOnlyDictionary<int, long> source, int fixedCount)
-    {
-        var result = new int[fixedCount];
-        foreach ((int index, long value) in source)
-            if ((uint)index < (uint)result.Length) result[index] = unchecked((int)value);
-        return result;
-    }
-
-    private static int[] DensePointerValues(IReadOnlyDictionary<int, int> source, int fixedCount)
-    {
-        var result = new int[fixedCount];
-        foreach ((int index, int value) in source)
-            if ((uint)index < (uint)result.Length) result[index] = value;
-        return result;
-    }
-
-    private static string[] DenseStrings(IReadOnlyDictionary<int, string> source, int fixedCount)
-    {
-        var result = Enumerable.Repeat(string.Empty, fixedCount).ToArray();
-        foreach ((int index, string value) in source)
-            if ((uint)index < (uint)result.Length) result[index] = value;
-        return result;
-    }
-
-    /// <summary>save_container_encode_and_write@0x42fac0's playtime: timeGetTime() / 1000 + base - start, each
-    /// truncated to whole seconds on its own.</summary>
-    private uint AccumulatedPlaySeconds() =>
-        unchecked((uint)(PlayClockSeconds() + _playBaseSeconds - _playStartSeconds));
-
-    private long PlayClockSeconds() => _playClock.GetTimestamp() / _playClock.TimestampFrequency;
-
-    /// <summary>save_container_playtime_reset@0x42fa80 (SYS4433 @0x4304c0), from the container's construction and op
-    /// 0x9: base and pending 0, counting from now.</summary>
-    private void ResetPlayTime()
-    {
-        _playBaseSeconds = 0;
-        _pendingPlaySeconds = 0;
-        _playStartSeconds = PlayClockSeconds();
-    }
-
-    /// <summary>save_container_playtime_commit_pending@0x4306c0 (SYS4433 @0x431090), which
-    /// script_frame_restore_saved_layout runs for each frame a full load restores (layouts 2 and 3): the loaded
-    /// playtime becomes the base, counting from now.</summary>
-    private void CommitLoadedPlayTime()
-    {
-        _playBaseSeconds = _pendingPlaySeconds;
-        _playStartSeconds = PlayClockSeconds();
     }
 
     private bool ServiceHotspotCallback()
