@@ -14,8 +14,6 @@ public sealed partial class EngineHost
     private readonly Dictionary<long, MovieMaskPlayback> _movieMasksByPlayback = new();
     private readonly Dictionary<int, long> _movieMaskPlaybackBySurface = new();
 
-    public bool IsMovieSurfaceBound(int surfaceSlot) => _movieSurfaces.IsBound(surfaceSlot);
-
     public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long startDelayMs)
     {
         string scene = CurrentScene;
@@ -42,8 +40,7 @@ public sealed partial class EngineHost
     public void PlayMovieMaskTransition(GfxState gfx, MovieMaskTransitionRequest request)
     {
         gfx.QueueMovieMaskTransition(request);
-        RgbaImage captured = CaptureRetainedRange(
-            gfx, request.SurfaceSlot, request.SourceRangeStart, request.SourceRangeCount);
+        RgbaImage captured = _graphics.CaptureObjectRange(request.SurfaceSlot, request.SourceRangeStart, request.SourceRangeCount);
         byte initialFill = request.Mode == 1 ? (byte)0 : (byte)255;
         PublishMaskedCapture(
             request.SurfaceSlot, captured,
@@ -87,8 +84,7 @@ public sealed partial class EngineHost
     {
         IReadOnlyList<MovieSurfaceDiagnostic> movies = _movieSurfaces.Snapshot();
         IReadOnlyList<long> completed = _movieSurfaces.CompletedPlaybackIds();
-        bool screenTransitionActive;
-        lock (_screenTransitionLock) screenTransitionActive = _screenTransition != null;
+        bool screenTransitionActive = _graphics.ScreenTransitionPending;
         return new EngineHostDiagnosticSnapshot(
             CurrentScene,
             IsWaiting,
@@ -167,7 +163,7 @@ public sealed partial class EngineHost
         // sample (MovieSurfaceRegistry.Begin). Without them the compositor would take the object for a surfaceless fill.
         RgbaImage? surfaceContents = null;
         if (movieMask == null)
-            lock (_imageLock) _surfaceImages.Remove(surfaceSlot, out surfaceContents);
+            surfaceContents = _graphics.TakeSurfacePixels(surfaceSlot);
         MovieSurfaceBinding binding = _movieSurfaces.Begin(
             surfaceSlot, resourceId, movieFlags, out var replaced, surfaceContents);
         playbackId = binding.PlaybackId;
@@ -183,11 +179,10 @@ public sealed partial class EngineHost
                 _movieMasksByPlayback[playbackId] = movieMask;
                 _movieMaskPlaybackBySurface[surfaceSlot] = playbackId;
             }
-        lock (_imageLock) _surfaceColorKeys.Remove(surfaceSlot);
+        _graphics.ForgetSurfaceColorKey(surfaceSlot);
         // Movie surfaces inherit the selected game's primary size until a decoded frame supplies content.
-        _slotDims[surfaceSlot] = movieMask == null
-            ? (_screenWidth, _screenHeight)
-            : (movieMask.Captured.Width, movieMask.Captured.Height);
+        if (movieMask == null) _graphics.SetSurfaceSize(surfaceSlot, _graphics.Canvas.Width, _graphics.Canvas.Height);
+        else _graphics.SetSurfaceSize(surfaceSlot, movieMask.Captured.Width, movieMask.Captured.Height);
         try
         {
             var movie = _res.ReadMovie(asset);
@@ -215,7 +210,7 @@ public sealed partial class EngineHost
         {
             AbandonMovieMaskPlayback(playbackId);
             _movieSurfaces.Abandon(playbackId, out _);
-            _slotDims.TryRemove(surfaceSlot, out _);
+            _graphics.ForgetSurfaceSize(surfaceSlot);
             stopTimeMs = 0;
             _frontEnd.Print($"movie read failed {asset.Name}: {e.Message}");
             return false;
@@ -236,7 +231,7 @@ public sealed partial class EngineHost
             return;
         }
         if (_movieSurfaces.PublishFrame(playbackId, frame, name, assetId))
-            System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+            _graphics.RequestPresentation();
     }
 
     public void NotifyMovieCompleted(long playbackId)
@@ -253,29 +248,6 @@ public sealed partial class EngineHost
     private bool HasActiveMoviePresentation()
         => _movieSurfaces.HoldsServiceWait;
 
-    private RgbaImage CaptureRetainedRange(
-        GfxState gfx, int targetSlot, long firstHandle, int count)
-    {
-        var dimensions = _slotDims.GetValueOrDefault(
-            targetSlot, (W: _screenWidth, H: _screenHeight));
-        int width = System.Math.Max(0, dimensions.W);
-        int height = System.Math.Max(0, dimensions.H);
-        var captured = new RgbaImage(width, height, new byte[checked(width * height * 4)]);
-        IReadOnlyList<RenderObject> visible = gfx.SnapshotVisibleObjects(_clock.NowMs);
-        RetainedSurfaceRasterizer.CompositeRange(
-            captured, visible, firstHandle, System.Math.Max(0, count),
-            item =>
-            {
-                var resolved = gfx.TryGetSourceSlot(item.Handle, out int sourceSlot)
-                    ? ResolveSurfaceTexture(sourceSlot, item.SurfaceResId)
-                    : ResolveResIdTexture(item.SurfaceResId);
-                return resolved == null
-                    ? null
-                    : RgbaSurfaceOps.WithColorKey(resolved.Value.Image, item.ColorKey);
-            });
-        return captured;
-    }
-
     private static byte[] CreateFilledMask(int width, int height, byte fill)
     {
         var mask = new byte[checked(System.Math.Max(0, width) * System.Math.Max(0, height))];
@@ -289,9 +261,8 @@ public sealed partial class EngineHost
         RgbaImage image = MovieMaskSurface.Apply(
             captured, mask, System.Math.Max(0, request.Width),
             System.Math.Max(0, request.Height), request.X, request.Y);
-        lock (_imageLock) _surfaceImages[surfaceSlot] = image;
-        _slotDims[surfaceSlot] = (image.Width, image.Height);
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.PublishSurfacePixels(surfaceSlot, image);
+        _graphics.RequestPresentation();
         _frameSignal.Set();
     }
 

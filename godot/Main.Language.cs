@@ -132,7 +132,7 @@ public partial class Main
         _languageAssets.Select(selection.Lookup);
         if (!startup)
         {
-            _host?.ForgetDecodedImages();
+            _graphics?.ForgetDecodedImages();
             _gpuRenderer?.ForgetStaticTextures();
             ForgetPreparedPixels();
         }

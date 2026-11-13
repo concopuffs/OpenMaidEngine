@@ -155,6 +155,52 @@ public class ProjectBoundaryTests
     }
 
     [Fact]
+    public void GraphicsStateIsPrivateToItsNative()
+    {
+        // The census (docs/superpowers/plans/2026-11-12-engine-layering.md §4, "Graphics") found the surface table and
+        // the publication and screen transition state in the host; milestone 7 gave them to the graphics native. The
+        // host keeps the waits that block on them until milestone 11: the presentation barrier and request
+        // generations, _foregroundGfx, _foregroundTransitionWaitBypassed and _transitionStartedAtMs.
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        Assert.Empty(typeof(Graphics).GetFields(instance).Where(field => !field.IsPrivate).Select(field => field.Name));
+        string[] census =
+        [
+            "_screenTransitionLock", "_renderTargetSnapshots", "_backbufferRangeLock", "_backbufferRange",
+            "_backbufferPublicationPreservesExistingPixels", "_backbufferClearPending", "_screenTransition",
+            "_presentRequested", "_terminalSample", "_imageLock", "_images", "_surfaceImages", "_surfaceColorKeys",
+            "_surfaceResources", "_slotDims", "_screenWidth", "_screenHeight",
+        ];
+        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
+            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+    }
+
+    [Fact]
+    public void TheFrontEndDrawsFrameDescriptions()
+    {
+        // Spec §11, milestone 7: the object traversal is written once, in the graphics native's lowering
+        // (Natives/Graphics.Frame.cs), and the front end's drawing reads frame descriptions, not the object model.
+        // Comments may name them.
+        foreach (string file in new[] { "Main.Compositor.cs", "GpuRetainedRenderer.cs" })
+        {
+            string[] code = File.ReadAllLines(Path.Combine(Paths.Repo, "godot", file))
+                .Select(line => line.IndexOf("//", StringComparison.Ordinal) is int comment and >= 0 ? line[..comment] : line)
+                .ToArray();
+            foreach (string word in new[] { "RenderObject", "GfxState", ".Gfx", "SnapshotVisibleObjects", "Transform2DMath" })
+                Assert.DoesNotContain(code, line => line.Contains(word, StringComparison.Ordinal));
+        }
+        string[] traversals = Directory.EnumerateFiles(Path.Combine(Paths.Repo, "engine"), "*.cs", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(Path.Combine(Paths.Repo, "godot"), "*.cs", SearchOption.AllDirectories))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                           && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                           && !path.Contains("Ome.Engine.Tests"))
+            .Where(path => File.ReadAllText(path).Contains("Transform2DMath.Build(", StringComparison.Ordinal))
+            .Select(path => Path.GetFileName(path))
+            .Where(name => !name.StartsWith("GfxState", StringComparison.Ordinal))   // the object model samples its range transform
+            .ToArray();
+        Assert.Equal(["Graphics.Frame.cs"], traversals);
+    }
+
+    [Fact]
     public void TheGodotAudioDeviceRunsNoEnvelope()
     {
         // Spec §11, milestone 6: the BGM fade, the voice duck and its release are the audio native's; the device

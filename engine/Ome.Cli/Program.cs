@@ -699,7 +699,9 @@ if (command == "gfx")
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
     var res = new ResourceMap(
         catalog, assetStore, Console.Error.WriteLine, assetOptions.AllowBmpAsAgf);
-    var host = new GfxTraceHost(res);
+    var host = new GfxTraceHost();
+    var traced = new List<string>();
+    var graphics = new Graphics(res, new FrameClock(), catalog.LogicalCanvas) { OpTrace = traced.Add };
     var session = new GameSession();
     foreach (var s in args.Where(a => a.Contains('=')))
     {
@@ -721,13 +723,14 @@ if (command == "gfx")
         }
     var target = ScriptByName(sceneName);
     // With --boot, run the target like the real engine (call-scripts on) so subroutine-driven setup runs.
-    var vm = boot ? new VirtualMachine(target, table, host, new VmOptions(MaxSteps: 20_000_000), provider, build: engineBuild)
-                  : new VirtualMachine(target, table, host, build: engineBuild);
+    var vm = boot ? new VirtualMachine(target, table, host, new VmOptions(MaxSteps: 20_000_000), provider,
+                                       build: engineBuild, graphics: graphics)
+                  : new VirtualMachine(target, table, host, build: engineBuild, graphics: graphics);
     foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
     foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
     vm.Run();
-    Console.WriteLine($"{sceneName}: {host.Events.Count} texture ops (halt: {vm.HaltReason})");
-    foreach (var line in host.Events) Console.WriteLine("  " + line);
+    Console.WriteLine($"{sceneName}: {traced.Count} texture ops (halt: {vm.HaltReason})");
+    foreach (var line in traced) Console.WriteLine("  " + line);
     var gfxObjs = vm.Gfx.Objects.OrderBy(o => o.Slot).ToList();
     Console.WriteLine($"  gfx objects: {gfxObjs.Count} -> " +
         string.Join(", ", gfxObjs.Select(o => $"0x{o.Handle:x}=slot{o.Slot}")));
@@ -1094,50 +1097,9 @@ sealed class AudioTrace(ResourceMap res) : IAudioAssets, IAudioDevice
     public bool TryTakeEnded(out AudioChannelEnded ended) => _ended.TryDequeue(out ended);
 }
 
+// The gfx command's host: the surface ops are the graphics native's, which traces them (Graphics.OpTrace).
 sealed class GfxTraceHost : IHost
 {
-    private readonly ResourceMap _res;
-    private readonly Dictionary<int, string?> _slotAsset = new(); // slot -> resolved AGF name (or null)
-    // slot -> dimensions of the currently allocated surface. Slot 0 starts as the engine's primary surface.
-    private readonly Dictionary<int, (int W, int H)> _slotDims = new() { { 0, (800, 600) } };
-    public List<string> Events { get; } = new();
-    public GfxTraceHost(ResourceMap res) { _res = res; }
-
-    public (int Width, int Height) GetTextureSize(int slot)
-    {
-        var d = _slotDims.TryGetValue(slot, out var v) ? v : (0, 0);
-        Events.Add($"get-tex-size slot={slot} -> {d.Item1}x{d.Item2}");
-        return d;
-    }
-
-    public void SetTexture(long resId, int slot)
-    {
-        var e = _res.ResolveTexture(resId);
-        RgbaImage? image = e != null ? _res.DecodeTexture(e) : null;
-        _slotAsset[slot] = e?.Name;
-        _slotDims[slot] = image != null ? (image.Width, image.Height) : (0, 0);
-        Events.Add($"set-texture slot={slot} res=0x{resId:x} -> {(e?.Name ?? "<unresolved>")}"
-                   + (image == null ? " [NO AGF]" : ""));
-    }
-
-    public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy)
-    {
-        _slotAsset.TryGetValue(slot, out var asset);
-        Events.Add($"draw-texture slot={slot} src=({sx},{sy} {w}x{h}) dst=({dx},{dy}) "
-                   + $"file={(asset ?? "<none>")}");
-    }
-
-    public void CreateTexture(int slot, int width, int height)
-    {
-        _slotDims[slot] = (width, height);
-        Events.Add($"create-texture slot={slot} {width}x{height}");
-    }
-    public void ReleaseSurface(int slot)
-    {
-        _slotAsset.Remove(slot);
-        _slotDims.Remove(slot);
-        Events.Add($"release-surface slot={slot}");
-    }
     public void ShowText(int offset, string text) { }
     public void WaitForInput() { }
     public void Sleep(long duration) { }

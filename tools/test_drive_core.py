@@ -594,6 +594,41 @@ def test_option_step():
           "option results describe the option and the listed values")
 
 
+def test_reference_diff_step():
+    check(core.step_capabilities(core.parse_step("reference-diff on")) == {"reference-diff"},
+          "reference-diff needs the reference-diff capability")
+    check("reference-diff" not in core.SHARED_CAPABILITIES and "reference-diff" not in native.CAPABILITIES,
+          "native AGE has no reference renderer")
+    check(raises(core.parse_step, "reference-diff a/b", contains="plain file name"), "a path is refused")
+    check(raises(core.parse_step, "reference-diff page tolerance=1.5", contains="whole number"),
+          "a fractional tolerance is refused")
+    check(raises(core.parse_step, "reference-diff", contains="takes 1..1"), "reference-diff needs on or a name")
+
+    calls = []
+    def answer(request):
+        calls.append(request)
+        if request.get("op") != "reference-diff":
+            return {"ok": True, "result": {"frames": [{"script": "SC0000", "offset": 4}]}}
+        if request.get("arm"):
+            return {"ok": True, "result": {"armed": True}}
+        return {"ok": True, "result": {"renderer": "gpu", "over": 0, "max": 2, "mean": 0.01, "bbox": None,
+                                       "path": request["path"]}}
+    server = FakeServer(answer)
+    with tempfile.TemporaryDirectory() as directory:
+        with core.Client(server.port, "secret") as client:
+            executor = core.Executor(client, core.Profile(points={}), Path(directory))
+            results = []
+            ok = executor.run(core.parse_steps(["reference-diff on", "reference-diff page tolerance=5"]),
+                              results.append)
+    diffs = [call for call in calls if call.get("op") == "reference-diff"]
+    check(ok and diffs[0].get("arm") is True, "on arms the reference")
+    check(diffs[1]["tolerance"] == 5 and Path(diffs[1]["path"]).name == "page"
+          and Path(diffs[1]["path"]).is_absolute(), "a name compares into shots/ with the tolerance")
+    check(results[1]["renderer"] == "gpu" and results[1]["max"] == 2, "the comparison comes back")
+    check("renderer=gpu" in core.describe(results[1]) and "max=2" in core.describe(results[1]),
+          "describe shows the comparison")
+
+
 def test_language_step():
     check(core.language_tag(" PT_BR ") == "pt-br" and core.language_tag("x-pseudo") == "x-pseudo",
           "tags read as the port normalizes them")
@@ -682,6 +717,7 @@ def main():
     test_menu_step()
     test_option_step()
     test_language_step()
+    test_reference_diff_step()
     test_settings_trailer()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0

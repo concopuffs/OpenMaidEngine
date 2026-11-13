@@ -35,7 +35,7 @@ public class GfxLifecycleOpsTests
     }
 
     [Fact]
-    public void RenderTargetSelectionAndClearReachTheHostIncludingBackbufferRestore()
+    public void RenderTargetSelectionAndClearReachTheSurfaceAndTheBackbuffer()
     {
         var table = T();
         var host = new RecordingHost();
@@ -49,10 +49,16 @@ public class GfxLifecycleOpsTests
         }, System.Array.Empty<string>());
 
         var vm = new VirtualMachine(scene, table, host);
+        vm.Graphics.PublishSurfacePixels(7, GraphicsTestSupport.Image(2, 2, (x, y) => [9, 9, 9, 255]));
+        Assert.True(vm.Graphics.PresentFrame());   // the backbuffer now keeps its pixels
         vm.Run();
 
-        Assert.Equal(new[] { 7, -1 }, host.ClearedRenderTargets);
+        Assert.Equal(new byte[4], vm.Graphics.PixelAt(7, 1, 1));
         Assert.Equal(-1, vm.Gfx.CurrentRenderTargetSlot);
+        // The backbuffer's clear lands at its next publication, once.
+        var objects = new List<RenderObject>();
+        Assert.False(vm.Graphics.SnapshotBackbufferObjects(0, objects).PreserveExistingPixels);
+        Assert.True(vm.Graphics.SnapshotBackbufferObjects(0, objects).PreserveExistingPixels);
     }
 
     [Fact]
@@ -95,6 +101,7 @@ public class GfxLifecycleOpsTests
         var visible = vm.Gfx.SnapshotVisibleObjects();
         Assert.Equal(0x11, Assert.Single(visible, item => item.Handle == 0x100).SurfaceResId);
         Assert.Equal(0, Assert.Single(visible, item => item.Handle == 0x101).SurfaceResId);
-        Assert.Equal((42, 958), Assert.Single(host.ReleasedSurfaceRanges));
+        Assert.Equal(0x11, vm.Graphics.SurfaceResource(1));
+        Assert.Null(vm.Graphics.SurfaceResource(42));
     }
 }

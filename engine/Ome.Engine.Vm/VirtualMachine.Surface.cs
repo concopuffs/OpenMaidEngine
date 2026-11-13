@@ -30,9 +30,8 @@ public sealed partial class VirtualMachine
     private StepResult OpCreateTexture(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _host.ReleaseSurface((int)Read(a[0]));
-        Gfx.CreateSurface((int)Read(a[0]));
-        _host.CreateTexture((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return StepResult.Next;
+        _graphics.CreateSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
+        return StepResult.Next;
     }
 
     // 0x1f9 (resId)(slot)(colorkey) — load a file into the slot's surface
@@ -43,11 +42,9 @@ public sealed partial class VirtualMachine
         if (_diagSetTexture)   // OME_DIAG_SETTEX: log the SLOT operand source (literal vs which global) — grey-BG slot dig
             System.Console.Error.WriteLine($"[settex] resId=0x{resourceId:x} slot={(int)Read(a[1])} " +
                 $"slotOp=(type={a[1].Type} val=0x{a[1].Value:x}){(a[1].Type == 3 ? $" G[0x{a[1].Value:x}]" : "")}");
-        _host.ReleaseSurface((int)Read(a[1]));
         long colorKey = a.Count > 2 ? Read(a[2]) : -1;
-        Gfx.SetSurface((int)Read(a[1]), resourceId, colorKey);
-        _host.SetTexture(resourceId, (int)Read(a[1]), colorKey);
-        return StepResult.Next;   // host still tracks dims for get-texture-size
+        _graphics.LoadSurface((int)Read(a[1]), resourceId, colorKey);
+        return StepResult.Next;
     }
 
     // 0x248 (edge pixels)
@@ -67,9 +64,7 @@ public sealed partial class VirtualMachine
         // the CPU compositor does not need the D3D subclass distinction.
         long resourceId = Read(a[0]);
         int surfaceSlot = (int)Read(a[1]);
-        _host.ReleaseSurface(surfaceSlot);
-        Gfx.SetSurface(surfaceSlot, resourceId, Read(a[2]), rawTextureMode: true);
-        _host.SetTexture(resourceId, surfaceSlot, Read(a[2]));
+        _graphics.LoadSurface(surfaceSlot, resourceId, Read(a[2]), rawTextureMode: true);
         return StepResult.Next;
     }
 
@@ -77,17 +72,16 @@ public sealed partial class VirtualMachine
     private StepResult OpDrawTexture(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.BindDraw(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
-                     (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]));
-        _host.DrawTexture((int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
-                          (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])); return StepResult.Next;   // IHost seam (oracle log; Godot no-ops)
+        _graphics.DrawTexture(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
+                              (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]));
+        return StepResult.Next;
     }
 
     // 0x208 (slot) (out_w) (out_h)
     private StepResult OpGetTextureSize(Instruction ins, int pc)
     {
         var a = ins.Args;
-        var (gw, gh) = _host.GetTextureSize((int)Read(a[0]));
+        var (gw, gh) = _graphics.SurfaceSize((int)Read(a[0]));
         Write(a[1], gw); Write(a[2], gh);
         return StepResult.Next;
     }
@@ -96,8 +90,7 @@ public sealed partial class VirtualMachine
     private StepResult OpFillSurfaceRect(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.MarkSurfaceContentWritten((int)Read(a[0]));
-        _host.FillSurfaceRect(new SurfaceRectFill(
+        _graphics.FillSurfaceRect(new SurfaceRectFill(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
             (int)System.Math.Min(Read(a[5]), 255), Read(a[6]) & 0x00ff_ffff));
         return StepResult.Next;
@@ -107,8 +100,7 @@ public sealed partial class VirtualMachine
     private StepResult OpCopySurfaceRect(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.MarkSurfaceContentWritten((int)Read(a[1]));
-        _host.CopySurfaceRect(new SurfaceRectCopy(
+        _graphics.CopySurfaceRect(new SurfaceRectCopy(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])));
         return StepResult.Next;
@@ -118,8 +110,7 @@ public sealed partial class VirtualMachine
     private StepResult OpScaleCopySurfaceRect(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.MarkSurfaceContentWritten((int)Read(a[1]));
-        _host.CopySurfaceRect(new SurfaceRectCopy(
+        _graphics.CopySurfaceRect(new SurfaceRectCopy(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
             (int)Read(a[8]), (int)Read(a[9])));
@@ -136,22 +127,20 @@ public sealed partial class VirtualMachine
     // 0x20e: clear color to black and depth to one
     private StepResult OpClearRenderTarget(Instruction ins, int pc)
     {
-        _host.ClearRenderTarget(Gfx.CurrentRenderTargetSlot); return StepResult.Next;
+        _graphics.ClearRenderTarget(); return StepResult.Next;
     }
 
     // 0x1fa (surface slot)
     private StepResult OpGfxElemRelease(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _host.ReleaseSurface((int)Read(a[0]));
-        Gfx.ClearSurface((int)Read(a[0]));
+        _graphics.ReleaseSurface((int)Read(a[0]));
         return StepResult.Next;
     }
 
     // 0x23d: native fixed range [42,1000)
     private StepResult OpReleaseTransientSurfaces(Instruction ins, int pc)
     {
-        Gfx.ReleaseSurfaceRange(42, 1000 - 42);
-        _host.ReleaseSurfaceRange(42, 1000 - 42); return StepResult.Next;
+        _graphics.ReleaseSurfaceRange(42, 1000 - 42); return StepResult.Next;
     }
 }

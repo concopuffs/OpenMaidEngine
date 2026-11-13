@@ -1,17 +1,19 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Ome.Engine.Devices;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Model;
 
 /// <summary>
-/// Godot-native presentation of AGE's sampled retained objects. Static decoded/color-key variants are
-/// uploaded once; pooled Sprite2D canvas items retain their GPU resources between presentation boundaries.
-/// GfxState remains the backend-neutral source of truth and the software compositor remains the oracle.
-/// Objects sample as native's D3D9 sprite does (docs/engine-re.md, "Object sampling"): bilinear for any
-/// transform other than an integer translation, clamped to the texture's edge rather than the source region.
+/// The GPU renderer (engine layering spec §6.3, part 3): draws frame descriptions with pooled Sprite2D canvas items.
+/// Static decoded/color-key variants are uploaded once; the canvas items keep their GPU resources between
+/// presentation boundaries. The reference renderer (Ome.Engine.Hosting.ReferenceRenderer) defines each item, and
+/// this must match it within the stated tolerance. Objects sample as native's D3D9 sprite does (docs/engine-re.md,
+/// "Object sampling"): bilinear for any transform other than an integer translation, clamped to the texture's edge
+/// rather than the source region.
 /// </summary>
-internal sealed class GpuRetainedRenderer : IDisposable
+internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
 {
     internal readonly record struct FrameStats(int DrawItems, int TextureUploads, long TextureUploadTicks);
 
@@ -31,6 +33,7 @@ internal sealed class GpuRetainedRenderer : IDisposable
     private readonly CanvasItemMaterial _additiveMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Add };
     private readonly ImageTexture _whiteTexture;
     private readonly Shader _lerpShader;
+    private readonly Shader _additiveLerpShader;
     private PerformanceFrameLog? _perf;
     private int _used;
     private int _textureUploads;
@@ -42,6 +45,49 @@ internal sealed class GpuRetainedRenderer : IDisposable
         set => _stage.Visible = value;
     }
 
+    /// <summary><c>--perf-log</c>'s per-frame counters for the frames this draws.</summary>
+    public PerformanceFrameLog? Perf { get; set; }
+
+    /// <summary>
+    /// Draw <paramref name="frame"/>, or decline it untouched: a whole-screen transition (it needs the flattened
+    /// whole-screen target) goes to the reference renderer.
+    /// </summary>
+    public bool TryDraw(FrameDescription frame)
+    {
+        if (frame.ScreenTransition != null) return false;
+        List<FrameItem> items = frame.Items;
+
+        BeginFrame(frame.AppendLayers, Perf);
+        // A frame that starts clean shows its background colour under the items, as the reference clears to it.
+        if (!frame.PreserveExistingPixels && frame.BackgroundRgb != 0)
+        {
+            var screen = new Affine2D(1, 0, 0, 1, 0, 0);
+            Perf?.RecordFillLayer();
+            if (DrawFill(frame.Width, frame.Height, screen, frame.BackgroundRgb, 1f))
+                Perf?.RecordGpuLayer(frame.Width, frame.Height, screen, frame.Width, frame.Height,
+                                     dynamic: false, BlendKind.Alpha);
+        }
+        for (int index = 0; index < items.Count; index++)
+        {
+            FrameItem item = items[index];
+            if (item.Kind == FrameItemKind.Fill)
+            {
+                if (DrawFill(item.Width, item.Height, item.Matrix, item.Tint, item.Opacity))
+                    Perf?.RecordGpuLayer(item.Width, item.Height, item.Matrix, frame.Width, frame.Height,
+                                         dynamic: false, BlendKind.Alpha);
+            }
+            else if (DrawTexture(item.Pixels!, item.AssetId, item.ColorKey,
+                         item.SourceX, item.SourceY, item.Width, item.Height, item.Matrix, item.Tint,
+                         item.TintStrength, item.Opacity, item.MultiplyTint, item.Dynamic, item.DynamicKey,
+                         item.Blend))
+                Perf?.RecordGpuLayer(item.Width, item.Height, item.Matrix, frame.Width, frame.Height,
+                                     item.Dynamic, item.Blend);
+        }
+        FrameStats stats = EndFrame();
+        Perf?.RecordGpu(stats.DrawItems, stats.TextureUploads, stats.TextureUploadTicks);
+        return true;
+    }
+
     public GpuRetainedRenderer(Node parent)
     {
         _stage = new Node2D { Name = "GpuRetainedStage", Visible = false };
@@ -51,21 +97,23 @@ internal sealed class GpuRetainedRenderer : IDisposable
         white.SetData(1, 1, false, Image.Format.Rgba8, new byte[] { 255, 255, 255, 255 });
         _whiteTexture = ImageTexture.CreateFromImage(white);
 
-        _lerpShader = new Shader
-        {
-            Code = """
-                shader_type canvas_item;
-                render_mode blend_mix, unshaded;
-                uniform vec3 ome_tint = vec3(1.0);
-                uniform float ome_strength = 0.0;
-                void fragment() {
-                    vec4 source = texture(TEXTURE, UV);
-                    source.rgb = mix(source.rgb, ome_tint, ome_strength);
-                    COLOR = source * COLOR;
-                }
-                """
-        };
+        _lerpShader = new Shader { Code = LerpShaderCode("blend_mix") };
+        _additiveLerpShader = new Shader { Code = LerpShaderCode("blend_add") };
     }
+
+    // A LERP tint moves texel RGB toward the tint by the strength, then the item's opacity scales alpha and the item
+    // blends source-over or, additive, SRCALPHA/ONE: the reference renderer's order (SoftwareAffineRasterizer).
+    private static string LerpShaderCode(string blendMode) => $$"""
+        shader_type canvas_item;
+        render_mode {{blendMode}}, unshaded;
+        uniform vec3 ome_tint = vec3(1.0);
+        uniform float ome_strength = 0.0;
+        void fragment() {
+            vec4 source = texture(TEXTURE, UV);
+            source.rgb = mix(source.rgb, ome_tint, ome_strength);
+            COLOR = source * COLOR;
+        }
+        """;
 
     public void BeginFrame(bool preserveExistingLayers, PerformanceFrameLog? perf = null)
     {
@@ -221,14 +269,15 @@ internal sealed class GpuRetainedRenderer : IDisposable
             var key = (tint & 0x00ff_ffff, tintStrength, blend);
             if (!_lerpMaterials.TryGetValue(key, out var material))
             {
-                material = new ShaderMaterial { Shader = _lerpShader };
+                material = new ShaderMaterial
+                {
+                    Shader = blend == BlendKind.Additive ? _additiveLerpShader : _lerpShader,
+                };
                 material.SetShaderParameter("ome_tint", new Vector3(
                     ((tint >> 16) & 0xff) / 255f,
                     ((tint >> 8) & 0xff) / 255f,
                     (tint & 0xff) / 255f));
                 material.SetShaderParameter("ome_strength", tintStrength / 255f);
-                // LERP-tint objects observed so far use source-over. If an additive LERP mode appears,
-                // keep the frame on the software oracle until it has a dedicated shader blend variant.
                 _lerpMaterials.Add(key, material);
             }
             return material;
@@ -282,6 +331,7 @@ internal sealed class GpuRetainedRenderer : IDisposable
         foreach (var material in _lerpMaterials.Values) material.Dispose();
         foreach (var texture in _textures.Values) texture.Texture.Dispose();
         _lerpShader.Dispose();
+        _additiveLerpShader.Dispose();
         _items.Clear();
         _textures.Clear();
         _lerpMaterials.Clear();

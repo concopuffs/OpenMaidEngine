@@ -1,0 +1,35 @@
+# Port only (scenarios/port/): the GPU renderer against the reference renderer on the same frames (engine layering
+# milestone 7, spec §6.3). `reference-diff on` makes the reference draw every frame as well; each `reference-diff NAME`
+# compares the settled screen with the reference's drawing of the same frame description and writes
+# shots/NAME-gpu.png, -reference.png and -diff.png. Integer frames (title, ADV pages, history) should show max <= 3;
+# pages 14 and 15 draw SC0000's effect band, whose scaled layers (`transformed`) differ by filtering (spec §6.3).
+# Run on a fresh sandbox:
+#   py -3.11 -X utf8 tools/drive.py port start
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/port/himegari-reference-diff.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+reference-diff on
+wait 1
+reference-diff himegari-title
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+reference-diff himegari-gamestart
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=90  # page 1
+settle
+reference-diff himegari-page1
+wait-state top=SC0000@0xe0f click=adv.next every=1.5 timeout=240    # page 14, over the effect band's scaled CG
+settle
+reference-diff himegari-page14
+click adv.next
+wait 0.9
+reference-diff himegari-page15-effect                                # mid-effect: two scaled layers
+wait-state top=SC0000@0x133c click=adv.next every=1.5 timeout=240   # page 17
+settle
+reference-diff himegari-page17
+wheel up 1
+wait-state script=HISTORY timeout=10
+wait 2
+reference-diff himegari-history

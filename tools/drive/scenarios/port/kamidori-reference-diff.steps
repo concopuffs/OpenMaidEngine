@@ -1,0 +1,28 @@
+# Port only (scenarios/port/): the GPU renderer against the reference renderer on the same frames (engine layering
+# milestone 7, spec §6.3), through Kamidori's opening to the first stage's field and its map. `reference-diff on`
+# makes the reference draw every frame as well; each `reference-diff NAME` compares the screen with the reference's
+# drawing of the same frame description and writes shots/NAME-gpu.png, -reference.png and -diff.png. Run on a fresh
+# sandbox:
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port run tools/drive/scenarios/port/kamidori-reference-diff.steps
+
+rand-seed 13
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+reference-diff on
+wait 1
+reference-diff kamidori-title
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+reference-diff kamidori-gamestart
+click newgame.begin
+wait-state script=SC0000 timeout=60
+settle timeout=60
+reference-diff kamidori-sc0000
+wait-state script=FIELD click=adv.next every=2.5 timeout=1200
+wait 3
+reference-diff kamidori-field                # the stage's first event over the map
+wait-state top=FIELD@0x1495 click=adv.next every=2.5 timeout=600   # the map, idle
+wait 3
+reference-diff kamidori-field-map            # the map's scaled cells

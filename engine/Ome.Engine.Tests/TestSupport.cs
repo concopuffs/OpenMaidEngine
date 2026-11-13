@@ -8,7 +8,7 @@ using Ome.Engine.Sys4;
 
 /// <summary>Shared test doubles: a host that records observable effects, and an in-memory script
 /// provider for synthetic call-script targets.</summary>
-internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
+internal class RecordingHost : IHost, IFastForwardListener
 {
     public int Waits;
     public int Presents;
@@ -31,11 +31,7 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
     public readonly List<(AdvTextLayoutPresentationBinding Binding, AdvTextRedrawBatch Batch)> Redraws = new();
     public int HistoryPresentationEnds;
     public readonly List<int> ClearedTextLayouts = new();
-    public readonly List<SurfaceRectFill> SurfaceFills = new();
-    public readonly List<SurfaceRectCopy> SurfaceCopies = new();
     public readonly List<(long First, long Count)> PresentedRanges = new();
-    public readonly List<(int Slot, int SourceX, int SourceY, int Width, int Height, int X, int Y)>
-        TextureDraws = new();
     public readonly List<AdvWaitIndicatorConfig> WaitIndicators = new();
     public readonly List<bool> WaitIndicatorFollowLastGlyphChanges = new();
     public readonly List<(AdvTextLayoutPresentationBinding Binding, AdvTextLayoutSnapshot Layout)>
@@ -53,8 +49,6 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
     public long? MovieStopTimeMs;
     public readonly HashSet<int> ActiveMovieSurfaces = new();
     public readonly List<(long Resource, int Surface, long Flags)> ModalMovies = new();
-    public readonly List<int> ClearedRenderTargets = new();
-    public readonly List<(int First, int Count)> ReleasedSurfaceRanges = new();
     public readonly List<(int Surface, long Interval, SurfaceBlackFadeDirection Direction)> SurfaceBlackFades = new();
     public readonly List<(int Surface, long Interval)> SurfaceWhiteFades = new();
     public readonly List<(int Source, int Target, long Interval)> SurfaceCrossfades = new();
@@ -63,7 +57,6 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
     public readonly List<bool> SurfaceWhiteFadeForceEndpoints = new();
     public readonly List<bool> SurfaceCrossfadeForceEndpoints = new();
     public readonly List<bool> SurfacePatternForceEndpoints = new();
-    public readonly List<(long Resource, int Slot)> Textures = new();
     public readonly List<bool> MessageSkipChanges = new();
     public readonly List<bool> PhysicalMessageSkipChanges = new();
     public readonly List<string> Warnings = new();
@@ -78,7 +71,6 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
     public readonly Dictionary<string, int> FontFamilyIndices = new(StringComparer.Ordinal);
     public readonly Dictionary<int, string> FontFamilyNames = new();
     public int FontFamilyCount { get; set; } = -1;
-    public readonly Dictionary<int, RgbaImage> SurfacePixels = new();
     public int MessageGlyphDelayMilliseconds { get; private set; } = 50;
     public int CursorClearCount;
     public int SceneContextResets;
@@ -127,13 +119,6 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
     }
     public void SetMessageGlyphDelayMilliseconds(int milliseconds)
         => MessageGlyphDelayMilliseconds = milliseconds;
-    public RgbaImage? CaptureSurfacePixels(int slot)
-        => SurfacePixels.TryGetValue(slot, out var image) ? image : null;
-    public bool ReplaceSurfacePixels(int slot, RgbaImage image)
-    {
-        SurfacePixels[slot] = image;
-        return true;
-    }
     public void SetAdvTextCursor(int layoutSlot, int x, int y) => TextCursors.Add((layoutSlot, x, y));
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text)
         => SurfaceStrings.Add((surfaceSlot, x, y, text));
@@ -178,8 +163,6 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
     public void EndTextHistoryPresentation(GfxState gfx) => EndTextHistoryPresentation();
     public int MessageWindowAlphaSetting { get; set; }
     public void SetMessageWindowAlphaSetting(int value) => MessageWindowAlphaSetting = value;
-    public void FillSurfaceRect(SurfaceRectFill fill) => SurfaceFills.Add(fill);
-    public void CopySurfaceRect(SurfaceRectCopy copy) => SurfaceCopies.Add(copy);
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
         => PresentedRanges.Add((firstHandle, count));
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config) => WaitIndicators.Add(config);
@@ -299,13 +282,6 @@ internal class RecordingHost : IHost, ISurfacePixels, IFastForwardListener
         SurfacePatternTransitions.Add(request);
         SurfacePatternForceEndpoints.Add(forceEndpoint);
     }
-    public void CreateTexture(int slot, int w, int h) { }
-    public void SetTexture(long resId, int slot) => Textures.Add((resId, slot));
-    public void ClearRenderTarget(int surfaceSlot) => ClearedRenderTargets.Add(surfaceSlot);
-    public void ReleaseSurfaceRange(int firstSlot, int count) => ReleasedSurfaceRanges.Add((firstSlot, count));
-    public void DrawTexture(int slot, int sx, int sy, int w, int h, int dx, int dy)
-        => TextureDraws.Add((slot, sx, sy, w, h, dx, dy));
-    public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
     public long? PlayMovieToSurface(long resourceId, int surfaceSlot, long movieFlags, long startDelayMs)
     {
         Movies.Add((resourceId, surfaceSlot, movieFlags, startDelayMs));
@@ -450,5 +426,35 @@ internal static class TestSkipAndAuto
         SkipAndAuto skipAndAuto = SkipAndAuto.WithSystemClock();
         skipAndAuto.ApplyReadTextSkip(readTextSkip: true, messageRead: true);
         return skipAndAuto;
+    }
+}
+
+/// <summary>Surfaces for tests that run the real graphics native over no assets.</summary>
+internal static class GraphicsTestSupport
+{
+    /// <summary>A <paramref name="width"/> × <paramref name="height"/> image whose pixels <paramref name="pixel"/>
+    /// gives as RGBA.</summary>
+    public static RgbaImage Image(int width, int height, Func<int, int, byte[]> pixel)
+    {
+        var pixels = new byte[width * height * 4];
+        for (int y = 0; y < height; y++)
+        for (int x = 0; x < width; x++)
+            pixel(x, y).CopyTo(pixels, (y * width + x) * 4);
+        return new RgbaImage(width, height, pixels);
+    }
+
+    /// <summary>Surface <paramref name="slot"/>'s RGBA at (<paramref name="x"/>, <paramref name="y"/>).</summary>
+    public static byte[] PixelAt(this Graphics graphics, int slot, int x, int y)
+    {
+        RgbaImage image = graphics.SurfacePixels(slot) ?? throw new InvalidOperationException($"surface {slot} has no pixels");
+        return image.Pixels.AsSpan((y * image.Width + x) * 4, 4).ToArray();
+    }
+
+    /// <summary>The graphics native's surface ops from now on, one line each (<see cref="Graphics.OpTrace"/>).</summary>
+    public static List<string> TraceSurfaceOps(this Ome.Engine.Vm.VirtualMachine vm)
+    {
+        var ops = new List<string>();
+        vm.Graphics.OpTrace = ops.Add;
+        return ops;
     }
 }

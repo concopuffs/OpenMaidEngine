@@ -394,7 +394,7 @@ public sealed partial class EngineHost
         if (!IsTextRevealing)
         {
             presentation.PublishThrough(gfx, checked(result.FirstGlyphIndex + revealGlyphCount));
-            Interlocked.Exchange(ref _presentRequested, 1);
+            _graphics.RequestPresentation();
             _timeline?.State("running", new() { ["text_reveal_complete"] = true });
             return result;
         }
@@ -405,7 +405,7 @@ public sealed partial class EngineHost
         bool scriptSuspended = SuspendScriptForPresentation();
         try
         {
-            Interlocked.Exchange(ref _presentRequested, 1);
+            _graphics.RequestPresentation();
             int ticks = 0;
             while (IsTextRevealing && !_stopping)
             {
@@ -421,7 +421,7 @@ public sealed partial class EngineHost
                 presentation.PublishThrough(
                     gfx, presentation.PublicationTarget(result.FirstGlyphIndex, revealGlyphCount, ticks));
                 if (presentation.PublishedGlyphCount != before)
-                    Interlocked.Exchange(ref _presentRequested, 1);
+                    _graphics.RequestPresentation();
                 if (IsTextRevealing)
                     WaitAndTick(_frameSignal, due is long deadline ? _clock.RealMillisecondsUntil(deadline, 50) : 50);
             }
@@ -456,7 +456,7 @@ public sealed partial class EngineHost
                 $"ADV layout {run.Layout.Slot} has invalid dimensions " +
                 $"{run.Layout.Width}x{run.Layout.Height}.");
 
-        RgbaImage destination = ResolveSurfacePixels(binding.SourceSurfaceSlot)
+        RgbaImage destination = _graphics.SurfacePixels(binding.SourceSurfaceSlot)
             ?? new RgbaImage(
                 run.Layout.Width,
                 run.Layout.Height,
@@ -628,9 +628,7 @@ public sealed partial class EngineHost
             };
         }
 
-        lock (_imageLock)
-            _surfaceImages[binding.SourceSurfaceSlot] = updated;
-        _slotDims[binding.SourceSurfaceSlot] = (updated.Width, updated.Height);
+        _graphics.PublishSurfacePixels(binding.SourceSurfaceSlot, updated);
         gfx.CreateSurface(binding.SourceSurfaceSlot);
     }
 
@@ -684,9 +682,9 @@ public sealed partial class EngineHost
         int surfaceSlot, int x, int y, string text, AdvTextStyle style, TextPipeline pipeline,
         Ome.Engine.Localization.PresentedText? presented)
     {
-        RgbaImage? destination = ResolveSurfacePixels(surfaceSlot);
+        RgbaImage? destination = _graphics.SurfacePixels(surfaceSlot);
         if (destination == null
-            && _slotDims.TryGetValue(surfaceSlot, out var dimensions)
+            && _graphics.TryGetSurfaceSize(surfaceSlot, out var dimensions)
             && dimensions.W > 0
             && dimensions.H > 0)
             destination = new RgbaImage(
@@ -739,8 +737,8 @@ public sealed partial class EngineHost
                 placed = $"source {placedAgainst.Left}..{placedAgainst.Right}, width {percent}%, shifts {string.Join(",", shifts)}";
         }
 
-        lock (_imageLock) _surfaceImages[surfaceSlot] = updated;
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.PublishSurfacePixels(surfaceSlot, updated, updateSize: false);
+        _graphics.RequestPresentation();
         return placed;
     }
 
@@ -795,18 +793,17 @@ public sealed partial class EngineHost
                 _suspendedRetainedTextLayoutSlot = 0;
         }
 
-        if (_slotDims.TryGetValue(
+        if (_graphics.TryGetSurfaceSize(
                 binding.SourceSurfaceSlot, out var dimensions)
             && dimensions.W > 0
             && dimensions.H > 0)
         {
-            lock (_imageLock)
-                _surfaceImages[binding.SourceSurfaceSlot] = new RgbaImage(
-                    dimensions.W,
-                    dimensions.H,
-                    new byte[checked(dimensions.W * dimensions.H * 4)]);
+            _graphics.PublishSurfacePixels(
+                binding.SourceSurfaceSlot,
+                new RgbaImage(dimensions.W, dimensions.H, new byte[checked(dimensions.W * dimensions.H * 4)]),
+                updateSize: false);
         }
-        Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         _timeline?.Event("adv-text-layout-reset", new()
         {
             ["layout"] = binding.LayoutSlot,
@@ -848,7 +845,7 @@ public sealed partial class EngineHost
         {
             _retainedHistoryLayouts.Add(batch.LayoutSlot);
         }
-        Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         _timeline?.Event("history-render", new()
         {
             ["layout"] = batch.LayoutSlot,
@@ -879,7 +876,7 @@ public sealed partial class EngineHost
             || binding.FirstObjectHandle < 0
             || binding.ObjectCapacity <= 0)
             return;
-        (int width, int height) = _slotDims.TryGetValue(binding.SourceSurfaceSlot, out var dimensions)
+        (int width, int height) = _graphics.TryGetSurfaceSize(binding.SourceSurfaceSlot, out var dimensions)
                                   && dimensions.W > 0 && dimensions.H > 0
             ? (dimensions.W, dimensions.H)
             : (batch.Layout.Width, batch.Layout.Height);
@@ -911,9 +908,7 @@ public sealed partial class EngineHost
             }
         }
 
-        lock (_imageLock)
-            _surfaceImages[binding.SourceSurfaceSlot] = updated;
-        _slotDims[binding.SourceSurfaceSlot] = (width, height);
+        _graphics.PublishSurfacePixels(binding.SourceSurfaceSlot, updated);
         gfx.CreateSurface(binding.SourceSurfaceSlot);
         gfx.EraseRange(binding.FirstObjectHandle, binding.ObjectCapacity);
         if (bind && presentation != null)
@@ -921,7 +916,7 @@ public sealed partial class EngineHost
             if (presentation.PublishedGlyphCount > 0) presentation.Republish(gfx);
             else presentation.PublishThrough(gfx, presentation.Glyphs.Count);
         }
-        Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         _timeline?.Event("text-redraw", new()
         {
             ["layout"] = batch.LayoutSlot,
@@ -977,7 +972,7 @@ public sealed partial class EngineHost
             presentation.ErasePublished(gfx);
         foreach (int surfaceSlot in surfaceSlots)
             ClearAllocatedSurfacePixels(surfaceSlot);
-        Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         _timeline?.Event("history-presentation-end", new()
         {
             ["retained_layouts"] = retained.Length,
@@ -986,15 +981,14 @@ public sealed partial class EngineHost
 
     private void ClearAllocatedSurfacePixels(int surfaceSlot)
     {
-        if (!_slotDims.TryGetValue(surfaceSlot, out var dimensions)
+        if (!_graphics.TryGetSurfaceSize(surfaceSlot, out var dimensions)
             || dimensions.W <= 0
             || dimensions.H <= 0)
             return;
-        lock (_imageLock)
-            _surfaceImages[surfaceSlot] = new RgbaImage(
-                dimensions.W,
-                dimensions.H,
-                new byte[checked(dimensions.W * dimensions.H * 4)]);
+        _graphics.PublishSurfacePixels(
+            surfaceSlot,
+            new RgbaImage(dimensions.W, dimensions.H, new byte[checked(dimensions.W * dimensions.H * 4)]),
+            updateSize: false);
     }
 
     public int MessageWindowAlphaSetting => _messageWindowAlphaSetting;
@@ -1086,13 +1080,13 @@ public sealed partial class EngineHost
             if (enabled && !_waitIndicatorEnabled) _waitIndicatorStartedMs = _clock.NowMs;
             _waitIndicatorEnabled = enabled;
         }
-        Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         _timeline?.Event("wait-indicator-enabled", new() { ["enabled"] = enabled });
     }
 
     public void PublishAdvTextLayout(int layoutSlot)
     {
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         _timeline?.Event("adv-text-layout-publish", new() { ["layout"] = layoutSlot });
     }
 

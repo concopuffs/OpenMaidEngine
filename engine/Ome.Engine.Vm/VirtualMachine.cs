@@ -37,6 +37,7 @@ public sealed partial class VirtualMachine
     private readonly Handler?[] _handlers;   // _t's opcodes bound to their handlers (VirtualMachine.Handlers.cs)
     private readonly IHost _host;
     private readonly SkipAndAuto _skip;
+    private readonly Graphics _graphics;
     private readonly VmOptions _o;
     // The engine build's rules (Ome.Engine.Vm/EngineBuilds.cs). The VM never reads the build's id or ABI.
     private readonly EngineRules _rules;
@@ -119,7 +120,10 @@ public sealed partial class VirtualMachine
     public Dictionary<int, string> GlobalStrings { get; } = new();
     public Dictionary<int, int> GlobalPointers { get; } = new();
     public Dictionary<int, int> GlobalStringPointers { get; } = new();
-    public GfxState Gfx { get; } = new();
+    /// <summary>The retained objects and surface records: the graphics native's state.</summary>
+    public GfxState Gfx => _graphics.State;
+    /// <summary>The graphics native this VM's handlers call (Ome.Engine/Natives/Graphics*.cs).</summary>
+    public Graphics Graphics => _graphics;
     public InputBindings InputBindings { get; } = new();
     public List<(int Offset, string Text, string Script)> Emitted { get; } = new();
     public string? HaltReason { get; private set; }
@@ -190,7 +194,8 @@ public sealed partial class VirtualMachine
                           INativeDatStore? nativeDatStore = null,
                           DiagnosticOutputState? diagnosticOutput = null,
                           EngineBuild? build = null, SkipAndAuto? skipAndAuto = null,
-                          TimeProvider? playClock = null, Audio? audio = null, EngineTick? tick = null)
+                          TimeProvider? playClock = null, Audio? audio = null, EngineTick? tick = null,
+                          Graphics? graphics = null)
     {
         _s = s; _t = t; _handlers = BindHandlers(t); _host = host; _o = o ?? new VmOptions(); _provider = provider;
         // Composition hands over the native its time device belongs to; tests and tools that give none get one over
@@ -200,6 +205,8 @@ public sealed partial class VirtualMachine
         // The audio native and the tick come from composition too; without them the VM runs with a silent one.
         _audio = audio ?? Audio.Silent(_skip);
         _tick = tick ?? new EngineTick(_audio);
+        // Without a front end the graphics native has no catalog and no screen (Graphics.Headless).
+        _graphics = graphics ?? Graphics.Headless();
         _playClock = playClock ?? TimeProvider.System;
         _rules = EngineBuilds.ForVm(build, t).Rules;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -1103,10 +1110,7 @@ public sealed partial class VirtualMachine
         // 1,000 slots only when (CreateObject & 2) && (AutoFreeTex & 1): Kamidori, not Himegari (docs/engine-re.md,
         // "AutoFreeTex").
         if ((_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 1) != 0)
-        {
-            Gfx.ReleaseSurfaceRange(0, 1000);
-            _host.ReleaseSurfaceRange(0, 1000);
-        }
+            _graphics.ReleaseSurfaceRange(0, 1000);
     }
 
     /// <summary>op_0x9_reset_scene_and_reload_root, after disposing the frames and before scene_context_init_reset:
@@ -1420,11 +1424,7 @@ public sealed partial class VirtualMachine
         // save_data_deserialize_and_begin_restore: (CreateObject & 2) && (AutoFreeTex & 2) runs the release worker over
         // every slot (docs/engine-re.md, "AutoFreeTex").
         bool releaseAllSurfaces = (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0;
-        if (releaseAllSurfaces)
-        {
-            Gfx.ReleaseSurfaceRange(0, 1000);
-            _host.ReleaseSurfaceRange(0, 1000);
-        }
+        if (releaseAllSurfaces) _graphics.ReleaseSurfaceRange(0, 1000);
         var restoredSurfaces = Gfx.CapturePersistenceSnapshot().Surfaces
             .ToDictionary(item => item.Slot);
         foreach (GfxSurfacePersistenceState surface in gfxSnapshot.Surfaces
@@ -1438,10 +1438,7 @@ public sealed partial class VirtualMachine
         // that slot's live record; the rest of the live and snapshot tables are not replaced by the load.
         foreach (GfxSurfacePersistenceState surface in gfxSnapshot.Surfaces
                      .Where(item => item.ReloadOnRestore && item.ResourceId >= 0))
-        {
-            Gfx.SetSurface(surface.Slot, surface.ResourceId, surface.ColorKey);
-            _host.SetTexture(surface.ResourceId, surface.Slot, surface.ColorKey);
-        }
+            _graphics.ReloadSurface(surface.Slot, surface.ResourceId, surface.ColorKey);
     }
 
     private static void ReplaceBank<T>(Dictionary<int, T> bank, IReadOnlyList<T> values, Func<T, bool> retain)

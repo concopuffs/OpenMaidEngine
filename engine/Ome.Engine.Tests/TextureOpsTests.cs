@@ -9,17 +9,10 @@ public class TextureOpsTests
 {
     private sealed class RecHost : IHost
     {
-        public List<(long resId, int slot)> Sets = new();
-        public List<(int slot, int w, int h)> Draws = new();
-        public int Creates;
         public void ShowText(int o, string t) { }
         public void WaitForInput() { }
         public void Sleep(long duration) { }
         public void FrameYield() { }
-        public void CreateTexture(int slot, int w, int h) => Creates++;
-        public void SetTexture(long resId, int slot) => Sets.Add((resId, slot));
-        public void DrawTexture(int slot, int srcX, int srcY, int w, int h, int dstX, int dstY) => Draws.Add((slot, w, h));
-        public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
         public void PlayBgm(long id) { }
         public void PlayVoice(long id) { }
     }
@@ -42,12 +35,13 @@ public class TextureOpsTests
             provider.RequireByName(launch.RootScript), table, host, new VmOptions(MaxSteps: 20_000_000), provider,
             build: EngineBuilds.ForProfile(profile));
         vm.HostScene(new HostedSceneEntry(launch.CoordinatorScript, scene.PackedId, writes));
+        List<string> surfaceOps = vm.TraceSurfaceOps();
         vm.Run();   // headless, the scene ends polling INPUTNAME's name entry (SC0000@0xe632) until the step limit
 
-        Assert.True(host.Creates > 0, "create-texture should fire");
+        Assert.Contains(surfaceOps, op => op.StartsWith("create-texture "));
         // SYSTEM4's boot and ADV setup fill the handle/slot tables, so the first bg uses its assigned slot.
-        Assert.Contains(host.Sets, s => s.resId == 0x23 && s.slot == 5);
-        Assert.Contains(host.Draws, d => d.slot == 5 && d.w == 0x320 && d.h == 0x258);
+        Assert.Contains(surfaceOps, op => op.StartsWith("set-texture slot=5 res=0x23 "));
+        Assert.Contains(surfaceOps, op => op.StartsWith("draw-texture slot=5 ") && op.Contains(" 800x600) "));
         // AE001H is the ritual/magic-circle sheet. At the post-effect transition SC0000 explicitly queries its
         // retained object, erases the object group, and releases the returned slot; it must not survive the scene.
         Assert.DoesNotContain(vm.Gfx.SnapshotVisibleObjects(), o => o.SurfaceResId == 0x37);

@@ -218,7 +218,8 @@ public class NumberedSaveVmTests
             vm.Globals[0x510] = 5;             // past it too; RESUMED.BIN's prologue re-authors it
             vm.GlobalStrings[0] = "stale";
             vm.GlobalStrings[1] = "static-unit-name";   // past the saved string prefix
-            vm.Gfx.SetSurface(15, 0x3383, 0);
+            vm.Graphics.LoadSurface(15, 0x3383, 0);
+            List<string> surfaceOps = vm.TraceSurfaceOps();
 
             vm.Run();
 
@@ -248,9 +249,9 @@ public class NumberedSaveVmTests
             Assert.Contains(
                 vm.Gfx.CapturePersistenceSnapshot().Surfaces,
                 item => item.Slot == 15 && item.ResourceId == 0x3383);
-            Assert.Contains(host.Textures, item => item == (0x1234, 3));
-            Assert.DoesNotContain(host.Textures, item => item.Slot == 15);
-            Assert.Empty(host.ReleasedSurfaceRanges);
+            Assert.Contains(surfaceOps, op => op.StartsWith("set-texture slot=3 res=0x1234 "));
+            Assert.DoesNotContain(surfaceOps, op => op.Contains(" slot=15 "));
+            Assert.DoesNotContain(surfaceOps, op => op.StartsWith("release-surface-range "));
             RenderObject restoredObject = Assert.Single(vm.Gfx.SnapshotVisibleObjects());
             Assert.Equal(0x1234, restoredObject.SurfaceResId);
             Assert.Equal((50, 60), (restoredObject.DstX, restoredObject.DstY));
@@ -656,18 +657,19 @@ public class NumberedSaveVmTests
                 loader, Table, host,
                 new VmOptions(CreateObject: createObject, AutoFreeTex: autoFreeTex),
                 nativeDatStore: store);
-            vm.Gfx.SetSurface(15, 0x3383, 0);
+            vm.Graphics.LoadSurface(15, 0x3383, 0);
+            List<string> surfaceOps = vm.TraceSurfaceOps();
 
             vm.Run();
 
-            Assert.Equal(released, host.ReleasedSurfaceRanges.Contains((0, 1000)));
+            Assert.Equal(released, surfaceOps.Contains("release-surface-range first=0 count=1000"));
             Assert.Equal(!released, vm.Gfx.CapturePersistenceSnapshot().Surfaces.Any(item => item.Slot == 15));
             Assert.Contains(
                 vm.Gfx.CapturePersistenceSnapshot().Surfaces,
                 item => item.Slot == 3
                     && item.ResourceId == 0x1234
                     && item.ReloadOnRestore);
-            Assert.Contains(host.Textures, item => item == (0x1234, 3));
+            Assert.Contains(surfaceOps, op => op.StartsWith("set-texture slot=3 res=0x1234 "));
             Assert.Equal("exit", vm.HaltReason);
         }
         finally

@@ -7,6 +7,7 @@ using Godot;
 using Ome.Engine.Devices;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
+using Ome.Engine.Natives;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
@@ -111,7 +112,7 @@ public partial class Main
             && ImmediateSurfaceTextRenderer.NativePixelHeight(33) == 31;
         bool immediateSurfaceTextOk;
         string immediateSurfaceTextMode;
-        _host.CreateTexture(997, 64, 24);
+        _graphics.CreateSurface(997, 64, 24);
         var immediateStyle = AdvTextStyle.Default with
         {
             PrimaryFontSize = 16,
@@ -121,7 +122,7 @@ public partial class Main
         _host.DrawStringToSurface(997, 1, 1, "A姫", immediateStyle);
         if (_host.UsesSurfaceTextPixels)
         {
-            RgbaImage? pixels = _host.CaptureSurfacePixels(997);
+            RgbaImage? pixels = _graphics.CaptureSurfacePixels(997);
             GlyphRasterizerBackendInfo? backend = _host.SurfaceTextBackendInfo;
             var cache = _host.SurfaceTextMaskCacheStats;
             bool pixelsPresent = pixels != null
@@ -141,16 +142,16 @@ public partial class Main
                 gpuAccepted &= stats.DrawItems == 1 && stats.TextureUploads == 1;
             }
 
-            _host.CreateTexture(996, 64, 24);
-            _host.CopySurfaceRect(new SurfaceRectCopy(
+            _graphics.CreateSurface(996, 64, 24);
+            _graphics.CopySurfaceRect(new SurfaceRectCopy(
                 997, 996, 0, 0, 64, 24, 0, 0));
-            RgbaImage? copied = _host.CaptureSurfacePixels(996);
+            RgbaImage? copied = _graphics.CaptureSurfacePixels(996);
             bool copiedPixels = pixels != null
                                 && copied != null
                                 && pixels.Pixels.SequenceEqual(copied.Pixels);
-            _host.FillSurfaceRect(new SurfaceRectFill(
+            _graphics.FillSurfaceRect(new SurfaceRectFill(
                 996, 0, 0, 64, 24, 0, 0));
-            RgbaImage? cleared = _host.CaptureSurfacePixels(996);
+            RgbaImage? cleared = _graphics.CaptureSurfacePixels(996);
             bool clearedPixels = cleared != null && cleared.Pixels.All(value => value == 0);
             immediateSurfaceTextOk =
                 pixelsPresent
@@ -180,8 +181,8 @@ public partial class Main
             immediateSurfaceTextOk = false;
             immediateSurfaceTextMode = "unavailable";
         }
-        _host.ReleaseSurface(996);
-        _host.ReleaseSurface(997);
+        _graphics.ReleaseSurface(996);
+        _graphics.ReleaseSurface(997);
         bool liveRetainedTextOk;
         string liveRetainedTextMode;
         AdvTextLayoutPresentationBinding liveBinding =
@@ -196,7 +197,7 @@ public partial class Main
                 .Where(item => InLiveRange(item, liveBinding))
                 .ToArray();
             RgbaImage? liveSurface =
-                _host.CaptureSurfacePixels(liveBinding.SourceSurfaceSlot);
+                _graphics.CaptureSurfacePixels(liveBinding.SourceSurfaceSlot);
             bool builtCompleteLine =
                 liveObjects.Count == "HelloWorldSub".Length
                 && liveObjects.Select(item => item.Handle)
@@ -229,7 +230,7 @@ public partial class Main
                 liveBinding.FirstObjectHandle, liveBinding.ObjectCapacity);
             _host.ResetRenderedAdvTextLayout(_vm.Gfx, liveBinding);
             RgbaImage? resetSurface =
-                _host.CaptureSurfacePixels(liveBinding.SourceSurfaceSlot);
+                _graphics.CaptureSurfacePixels(liveBinding.SourceSurfaceSlot);
             bool reset =
                 resetSurface != null
                 && resetSurface.Pixels.All(value => value == 0)
@@ -278,7 +279,7 @@ public partial class Main
         if (_host.UsesSurfaceTextPixels)
         {
             RgbaImage? historySurface =
-                _host.CaptureSurfacePixels(historyBinding.SourceSurfaceSlot);
+                _graphics.CaptureSurfacePixels(historyBinding.SourceSurfaceSlot);
             historyRetainedTextOk =
                 historyUsedRetained
                 && _vm.Gfx.SnapshotVisibleObjects()
@@ -301,7 +302,7 @@ public partial class Main
                         item.Handle >= historyBinding.FirstObjectHandle
                         && item.Handle - historyBinding.FirstObjectHandle
                            < historyBinding.ObjectCapacity)
-                && _host.CaptureSurfacePixels(historyBinding.SourceSurfaceSlot)
+                && _graphics.CaptureSurfacePixels(historyBinding.SourceSurfaceSlot)
                     ?.Pixels.All(value => value == 0) == true;
             historyRetainedTextMode =
                 $"retained-glyphs;used={historyUsedRetained}";
@@ -316,7 +317,7 @@ public partial class Main
         bool logicalCanvasOk = _host.LogicalCanvas == new Sys4LogicalCanvas(_screenWidth, _screenHeight)
                                && _screen.GetWidth() == _screenWidth
                                && _screen.GetHeight() == _screenHeight
-                               && _compositor.Pixels.Length == checked(_screenWidth * _screenHeight * 4)
+                               && _reference.Pixels.Length == checked(_screenWidth * _screenHeight * 4)
                                && rootWindow.ContentScaleSize
                                   == new Vector2I(_screenWidth, _screenHeight + _menuBarHeight)
                                && _windowOptions == WindowLaunchOptions.Resolve(
@@ -325,24 +326,22 @@ public partial class Main
         var backbufferSnapshot = new List<RenderObject>();
         _host.PresentFrame(_vm.Gfx);
         BackbufferPublicationPolicy fullPolicy =
-            _host.SnapshotBackbufferObjects(
-                _vm.Gfx, _clock.NowMs, backbufferSnapshot);
+            _graphics.SnapshotBackbufferObjects(_clock.NowMs, backbufferSnapshot);
         bool backbufferPreservationOk =
             fullPolicy
                 == new BackbufferPublicationPolicy(
                     PreserveExistingPixels: true,
                     AppendGpuLayers: backbufferSnapshot.Count == 0)
-            && EngineHost.ResolveBackbufferPublicationPolicy(
+            && Ome.Engine.Natives.Graphics.ResolveBackbufferPublicationPolicy(
                 true, GfxHandleRange.All, 1)
                 == new BackbufferPublicationPolicy(true, false)
-            && EngineHost.ResolveBackbufferPublicationPolicy(
+            && Ome.Engine.Natives.Graphics.ResolveBackbufferPublicationPolicy(
                 true, new GfxHandleRange(0, 60000), 1)
                 == new BackbufferPublicationPolicy(true, true);
-        _host.ClearRenderTarget(-1);
+        _graphics.ClearRenderTarget();
         _host.PresentFrame(_vm.Gfx);
         BackbufferPublicationPolicy clearedPolicy =
-            _host.SnapshotBackbufferObjects(
-                _vm.Gfx, _clock.NowMs, backbufferSnapshot);
+            _graphics.SnapshotBackbufferObjects(_clock.NowMs, backbufferSnapshot);
         backbufferPreservationOk &=
             clearedPolicy == new BackbufferPublicationPolicy(false, false);
         ok &= launcherOk && sleepMinimumOk && sleepPresentationOk && inputTranslationOk && cp932WavMetadataOk

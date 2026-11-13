@@ -20,10 +20,6 @@ public enum HostPresentationReason
     DiscreteSourceCell = 16,
 }
 
-public readonly record struct BackbufferPublicationPolicy(
-    bool PreserveExistingPixels,
-    bool AppendGpuLayers);
-
 public sealed partial class EngineHost
 {
     private readonly object _scriptContextLock = new();
@@ -53,21 +49,14 @@ public sealed partial class EngineHost
     private volatile bool _modalMovieWaiting;
     private volatile bool _modalMovieCancelled;
     private volatile bool _modalMovieCancelPending;   // CancelNextModalMovie: a held action 4 stops the next movie
+    // The waits below block on the graphics native's publication and transitions (Natives/Graphics.Transitions.cs);
+    // what parks, the barrier, the request generations and the wait flags stay here until milestone 11.
     private GfxState? _foregroundGfx;
     private volatile bool _foregroundTransitionWaitBypassed;
-    private readonly object _screenTransitionLock = new();
-    private readonly Dictionary<int, IReadOnlyList<RenderObject>> _renderTargetSnapshots = new();
-    private readonly object _backbufferRangeLock = new();
-    private GfxHandleRange _backbufferRange = GfxHandleRange.All;
-    private bool _backbufferPublicationPreservesExistingPixels;
-    private bool _backbufferClearPending;
-    private LegacyScreenTransition? _screenTransition;
     public volatile bool IsWaiting;
     public volatile bool IsTransitionWaiting;
     public volatile bool IsSleeping;
     public bool IsModalMovieWaiting => _modalMovieWaiting;
-    private int _presentRequested = 1;
-    private readonly List<RenderObject> _terminalSample = new();   // VM thread only: WaitForForegroundTransition
     private long _transitionStartedAtMs = -1;
     public long TransitionStartedAtMs => System.Threading.Interlocked.Read(ref _transitionStartedAtMs);
 
@@ -168,7 +157,7 @@ public sealed partial class EngineHost
     private long RequestPresentation()
     {
         long requested = Interlocked.Increment(ref _explicitPresentationRequestGeneration);
-        Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         return requested;
     }
 
@@ -190,17 +179,7 @@ public sealed partial class EngineHost
 
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
     {
-        if (gfx.CurrentRenderTargetSlot >= 0)
-        {
-            PublishObjectRangeToSurface(gfx, firstHandle, count);
-            return;
-        }
-        lock (_backbufferRangeLock)
-        {
-            _backbufferRange = new GfxHandleRange(firstHandle, count);
-            _backbufferPublicationPreservesExistingPixels = true;
-        }
-        _timeline?.Event("present-object-range", new() { ["first"] = firstHandle, ["count"] = count });
+        if (!_graphics.PresentObjectRange(firstHandle, count)) return;
         // Native backbuffer 0x222 ends its D3D scene and calls Present before returning. Snapshot this
         // exact retained state before its callback can mutate or release the capture surface.
         bool scriptSuspended = SuspendScriptForPresentation();
@@ -212,38 +191,6 @@ public sealed partial class EngineHost
         {
             ResumeScriptAfterPresentation(scriptSuspended);
         }
-    }
-
-    public BackbufferPublicationPolicy SnapshotBackbufferObjects(
-        GfxState gfx, long nowMs, List<RenderObject> snapshot)
-    {
-        gfx.SnapshotVisibleObjects(nowMs, snapshot);
-        GfxHandleRange range;
-        bool preserveExistingPixels;
-        lock (_backbufferRangeLock)
-        {
-            range = _backbufferRange;
-            preserveExistingPixels =
-                _backbufferPublicationPreservesExistingPixels && !_backbufferClearPending;
-            _backbufferClearPending = false;
-        }
-        int write = 0;
-        for (int read = 0; read < snapshot.Count; read++)
-            if (range.Contains(snapshot[read].Handle)) snapshot[write++] = snapshot[read];
-        if (write < snapshot.Count) snapshot.RemoveRange(write, snapshot.Count - write);
-        return ResolveBackbufferPublicationPolicy(
-            preserveExistingPixels, range, snapshot.Count);
-    }
-
-    public static BackbufferPublicationPolicy ResolveBackbufferPublicationPolicy(
-        bool preserveExistingPixels, GfxHandleRange range, int visibleObjectCount)
-    {
-        // Native preservation is a pixel rule, not permission to retain an unbounded history of
-        // Godot Sprite2D nodes. Partial ranges must overlay. A nonempty full redraw compacts the GPU
-        // stage, while an empty full redraw leaves the preceding stage untouched.
-        bool appendGpuLayers = preserveExistingPixels
-                               && (range != GfxHandleRange.All || visibleObjectCount == 0);
-        return new BackbufferPublicationPolicy(preserveExistingPixels, appendGpuLayers);
     }
 
     public volatile int Pages;   // VM-thread page counter (incremented before IsWaiting so shot-gating can't race)
@@ -350,7 +297,7 @@ public sealed partial class EngineHost
             IsWaiting = false;
             lock (_textLock) _waitIndicatorEnabled = false;
         }
-        Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         _timeline?.State("running", new()
         {
             ["input"] = messageSkipped ? "message-skip" : autoAdvanced ? "auto" : "user",
@@ -397,7 +344,7 @@ public sealed partial class EngineHost
         if (!effectSkipOnClick || !IsTransitionWaiting) return false;
         bool polls;
         if (_foregroundGfx is { } foreground) polls = (foreground.AnimationServiceFlags & 1) == 0;
-        else lock (_screenTransitionLock) polls = _screenTransition != null;
+        else polls = _graphics.ScreenTransitionPending;
         if (!polls) return false;
         _timeline?.State("effect-input-polled", new() { ["actions"] = actionMask });
         if ((actionMask & (1 << InputBindings.AdvanceAction)) != 0) TryForceActiveTransition("advance");
@@ -436,21 +383,14 @@ public sealed partial class EngineHost
                 return true;
             }
         }
-        if (IsTransitionWaiting)
+        if (IsTransitionWaiting && _graphics.ForceScreenTransition())
         {
-            lock (_screenTransitionLock)
+            _timeline?.State("screen-transition-forced-complete", new()
             {
-                if (_screenTransition != null)
-                {
-                    _screenTransition.Forced = true;
-                    _timeline?.State("screen-transition-forced-complete", new()
-                    {
-                        ["source"] = source,
-                    });
-                    _frameSignal.Set();
-                    return true;
-                }
-            }
+                ["source"] = source,
+            });
+            _frameSignal.Set();
+            return true;
         }
         return false;
     }
@@ -551,15 +491,15 @@ public sealed partial class EngineHost
                 _suspendedRetainedTextLayoutSlot = 0;
             }
         }
-        Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         SetAdvPagePresentationSuspended(suspended);
     }
 
     public void InputCallbackCompleted(GfxState gfx)
     {
         // Callback completion itself is not native graphics dirtiness. Any retained writes made by the
-        // callback are published through GfxState's mutation generation; host-owned surface writes set
-        // _presentRequested at their actual mutation sites. FIELD services a 50 ms hover callback even
+        // callback are published through GfxState's mutation generation; surface writes request presentation from
+        // the graphics native at their actual mutation sites. FIELD services a 50 ms hover callback even
         // while the pointer is idle, so an unconditional request here recreates its sleep-poll overdraw.
     }
 
@@ -664,9 +604,7 @@ public sealed partial class EngineHost
             // the next burst starts from the committed endpoints (or the forced ones), and the next compositor
             // frame presents them or that burst's result. Waiting for that frame would hold the VM for a frame
             // and its render (docs/engine-re.md, "Service waits end on the engine clock").
-            gfx.SnapshotVisibleObjects(_clock.NowMs, _terminalSample);
-            _terminalSample.Clear();
-            Interlocked.Exchange(ref _presentRequested, 1);
+            _graphics.CommitTerminalSample();
         }
         finally
         {
@@ -681,34 +619,7 @@ public sealed partial class EngineHost
 
     public void PresentFrame(GfxState gfx)
     {
-        if (gfx.CurrentRenderTargetSlot >= 0)
-        {
-            int slot = gfx.CurrentRenderTargetSlot;
-            var snapshot = gfx.SnapshotVisibleObjects(_clock.NowMs);
-            PublishObjectRangeToSurface(gfx, 0, long.MaxValue, snapshot);
-            lock (_screenTransitionLock) _renderTargetSnapshots[slot] = snapshot;
-            _timeline?.Event("render-target-snapshot", new()
-            {
-                ["surface"] = slot, ["objects"] = snapshot.Count,
-            });
-            return;
-        }
-        lock (_backbufferRangeLock)
-        {
-            _backbufferRange = GfxHandleRange.All;
-            // Native gfx_render_frame draws every visible retained object over the current target.
-            // It does not clear first; backbuffer clearing is the separate explicit opcode 0x20e.
-            _backbufferPublicationPreservesExistingPixels = true;
-        }
-        long nowMs = _clock.NowMs;
-        int started = gfx.StartForegroundTransitions(nowMs);
-        gfx.SeedOneShotChannels(nowMs);   // gfx_render_frame samples, so seeds, every visible channel
-        int completed = gfx.CompleteForegroundTransitions(nowMs);
-        if (started > 0 || completed > 0)
-            _timeline?.State("transition-skip-complete", new()
-            {
-                ["started"] = started, ["completed"] = completed,
-            });
+        if (!_graphics.PresentFrame()) return;
         bool scriptSuspended = SuspendScriptForPresentation();
         try
         {
@@ -723,142 +634,44 @@ public sealed partial class EngineHost
     public void FadeSurfaceWithBlack(
         GfxState gfx, int surface, long intervalArgument, SurfaceBlackFadeDirection direction,
         bool forceEndpoint = false)
-    {
-        long start = _clock.NowMs;
-        IReadOnlyList<RenderObject> captured;
-        lock (_screenTransitionLock)
-            captured = _renderTargetSnapshots.TryGetValue(surface, out var snapshot)
-                ? snapshot : System.Array.Empty<RenderObject>();
-
-        IReadOnlyList<RenderObject> black = System.Array.Empty<RenderObject>();
-        IReadOnlyList<RenderObject> source =
-            direction == SurfaceBlackFadeDirection.FromBlack ? black : captured;
-        IReadOnlyList<RenderObject> target =
-            direction == SurfaceBlackFadeDirection.FromBlack ? captured : black;
-        RunLegacyScreenTransition(source, target, start, intervalArgument, forceEndpoint, new()
-        {
-            ["kind"] = "surface-black-fade",
-            ["surface"] = surface,
-            ["direction"] = direction == SurfaceBlackFadeDirection.FromBlack
-                ? "from-black" : "to-black",
-        });
-    }
+        => WaitForScreenTransition(_graphics.StartSurfaceBlackFade(surface, intervalArgument, direction, forceEndpoint));
 
     public void CrossfadeSurfaces(
         GfxState gfx, int sourceSurface, int targetSurface, long intervalArgument,
         bool forceEndpoint = false)
-    {
-        IReadOnlyList<RenderObject> source;
-        IReadOnlyList<RenderObject> target;
-        long start = _clock.NowMs;
-        lock (_screenTransitionLock)
-        {
-            source = _renderTargetSnapshots.TryGetValue(sourceSurface, out var capturedSource)
-                ? capturedSource : System.Array.Empty<RenderObject>();
-            target = _renderTargetSnapshots.TryGetValue(targetSurface, out var capturedTarget)
-                ? capturedTarget : gfx.SnapshotVisibleObjects(start);
-        }
-        RunLegacyScreenTransition(source, target, start, intervalArgument, forceEndpoint, new()
-        {
-            ["kind"] = "surface-crossfade",
-            ["source"] = sourceSurface,
-            ["target"] = targetSurface,
-        });
-    }
+        => WaitForScreenTransition(
+            _graphics.StartSurfaceCrossfade(sourceSurface, targetSurface, intervalArgument, forceEndpoint));
 
     public void FadeSurfaceToWhite(
         GfxState gfx, int surface, long intervalArgument, bool forceEndpoint = false)
-    {
-        long start = _clock.NowMs;
-        IReadOnlyList<RenderObject> captured;
-        lock (_screenTransitionLock)
-            captured = _renderTargetSnapshots.TryGetValue(surface, out var snapshot)
-                ? snapshot : System.Array.Empty<RenderObject>();
-
-        RunLegacyScreenTransition(
-            captured, System.Array.Empty<RenderObject>(), start, intervalArgument, forceEndpoint,
-            new()
-            {
-                ["kind"] = "surface-white-fade",
-                ["surface"] = surface,
-                ["direction"] = "to-white",
-            }, overlayRgb: 0xffffff);
-    }
+        => WaitForScreenTransition(_graphics.StartSurfaceWhiteFade(surface, intervalArgument, forceEndpoint));
 
     public void RevealSurfaceWithPattern(
         GfxState gfx, SurfacePatternTransitionRequest request, bool forceEndpoint = false)
-    {
-        long start = _clock.NowMs;
-        IReadOnlyList<RenderObject> target;
-        lock (_screenTransitionLock)
-            target = _renderTargetSnapshots.TryGetValue(request.Surface, out var captured)
-                ? captured : gfx.SnapshotVisibleObjects(start);
-        IReadOnlyList<RenderObject> source = gfx.SnapshotVisibleObjects(start);
-        long duration = LegacyScreenTransitionTiming.PatternDurationMilliseconds(
-            _screenWidth, _screenHeight, request.IntervalMilliseconds,
-            request.Divisions, request.Mode);
-        RunLegacyScreenTransition(source, target, start, request.IntervalMilliseconds,
-            forceEndpoint || duration == 0, new()
-            {
-                ["kind"] = "surface-pattern-reveal",
-                ["surface"] = request.Surface,
-                ["divisions"] = request.Divisions,
-                ["mode"] = (int)request.Mode,
-                ["presentation_policy"] = "crossfade-approximation",
-            }, durationOverride: duration);
-    }
+        => WaitForScreenTransition(_graphics.StartSurfacePatternReveal(request, forceEndpoint));
 
-    // The native 0x21/0x22/0x25 family advances an 8-bit alpha accumulator. Values <=64 use
-    // the operand as the timer interval and step alpha by sixteen; larger values divide the
-    // interval by sixteen and step alpha by one. This reproduces its blocking wall-clock duration.
-    private void RunLegacyScreenTransition(
-        IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
-        long start, long intervalArgument, bool forceEndpoint,
-        Dictionary<string, object?> timelineDetail, long overlayRgb = 0,
-        long? durationOverride = null)
+    // The engine thread blocks while the screen transition runs, then until the compositor has drawn its endpoint.
+    private void WaitForScreenTransition(ScreenTransitionStart transition)
     {
-        long duration = durationOverride
-            ?? LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
-        lock (_screenTransitionLock)
-            _screenTransition = new LegacyScreenTransition(source, target, start, duration, overlayRgb)
-            {
-                Forced = forceEndpoint,
-            };
+        long start = transition.StartMs;
+        long duration = transition.DurationMs;
         _foregroundGfx = null;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, start);
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
         IsTransitionWaiting = true;
-        timelineDetail["interval_argument"] = intervalArgument;
-        timelineDetail["duration_ms"] = duration;
-        timelineDetail["source_objects"] = source.Count;
-        timelineDetail["target_objects"] = target.Count;
-        timelineDetail["forced"] = forceEndpoint;
-        _timeline?.State("screen-transition-start", timelineDetail);
+        _timeline?.State("screen-transition-start", transition.Detail);
         bool scriptSuspended = SuspendScriptForPresentation();
         try
         {
             RequestSynchronizedPresentation();
-            while (!_stopping)
-            {
-                bool complete;
-                lock (_screenTransitionLock)
-                    complete = _screenTransition == null || _screenTransition.Forced
-                        || _clock.NowMs - start >= duration;
-                if (complete) break;
+            while (!_stopping && !_graphics.ScreenTransitionDue(_clock.NowMs))
                 WaitAndTick(_frameSignal, _clock.RealMillisecondsUntil(start + duration, 50));
-            }
             // Publish the exact target endpoint before the following surface releases/root reload.
-            lock (_screenTransitionLock)
-                if (_screenTransition != null) _screenTransition.Forced = true;
+            _graphics.ForceScreenTransition();
             RequestSynchronizedPresentation();
             // Do not let the VM release both source surfaces (or immediately reload SYSTEM4) until the
             // main thread has actually published the terminal target frame.
-            while (!_stopping)
-            {
-                lock (_screenTransitionLock)
-                    if (_screenTransition == null) break;
+            while (!_stopping && _graphics.ScreenTransitionPending)
                 WaitAndTick(_frameSignal, 50);
-            }
         }
         finally
         {
@@ -869,51 +682,22 @@ public sealed partial class EngineHost
         _timeline?.State("running", new() { ["screen_transition_complete"] = true });
     }
 
-    /// <summary>Whether a screen transition is pending, without consuming a forced one (the path that draws it
-    /// takes it through <see cref="TrySnapshotScreenTransition"/>).</summary>
-    public bool HasScreenTransition
-    {
-        get { lock (_screenTransitionLock) return _screenTransition != null; }
-    }
-
-    /// <summary>The pending screen transition. A forced (completed) one is handed out once: its terminal frame is
-    /// drawn by this caller, so only the path that draws calls this.</summary>
-    public bool TrySnapshotScreenTransition(out LegacyScreenTransitionSnapshot snapshot)
-    {
-        lock (_screenTransitionLock)
-        {
-            if (_screenTransition == null)
-            {
-                snapshot = default;
-                return false;
-            }
-            double progress = _screenTransition.Forced ? 1.0
-                : System.Math.Clamp((_clock.NowMs - _screenTransition.StartMs)
-                    / (double)_screenTransition.DurationMs, 0.0, 1.0);
-            snapshot = new LegacyScreenTransitionSnapshot(
-                _screenTransition.Source, _screenTransition.Target, progress,
-                _screenTransition.OverlayRgb);
-            if (_screenTransition.Forced) _screenTransition = null;
-            return true;
-        }
-    }
-
     // Native retained-object writes are not front-buffer writes. Publish explicit/service-boundary dirtiness
     // once, then continue only while the sampled retained scene can actually change. The wait atlas advances
     // its ordinary retained source cell here so it contributes only when the frame actually changes.
     private bool _presentationWithheldByStatementBlock;   // main thread only: brackets the timeline's withheld stretches
 
-    public HostPresentationReason ConsumePresentationReasons(GfxState gfx)
+    public HostPresentationReason ConsumePresentationReasons()
     {
+        GfxState gfx = _graphics.State;
         UpdateRetainedWaitIndicator(gfx);
-        bool screenTransitionActive;
-        lock (_screenTransitionLock) screenTransitionActive = _screenTransition != null;
+        bool screenTransitionActive = _graphics.ScreenTransitionPending;
         // Native engine_main_tick skips its own gfx_render_frame while a statement block (op 0x1f4) is open,
         // unless run-state 0x400 parks the interpreter on a transition. Explicit present-frame (op 0x20c)
         // still renders. Scripts that keep a block open across a wait (ADDEXP, MES) call present-frame
         // themselves. Leave the retained-state reasons pending so the next explicit present publishes them.
         bool withheld = _tick.StatementBlockOpen
-            && System.Threading.Volatile.Read(ref _presentRequested) == 0
+            && !_graphics.PresentationRequested
             && !screenTransitionActive && !IsTransitionWaiting;
         if (withheld != _presentationWithheldByStatementBlock)
         {
@@ -922,7 +706,7 @@ public sealed partial class EngineHost
         }
         if (withheld) return HostPresentationReason.None;
         var reasons = HostPresentationReason.None;
-        if (System.Threading.Interlocked.Exchange(ref _presentRequested, 0) != 0)
+        if (_graphics.TakePresentationRequest())
         {
             reasons |= HostPresentationReason.HostRequest;
             long requested = Interlocked.Read(ref _explicitPresentationRequestGeneration);
@@ -974,12 +758,9 @@ public sealed partial class EngineHost
         // and process-owned audio/configuration for the reloaded SYSTEM4 root. The VM releases the surfaces afterwards
         // when set:AutoFreeTex asks (docs/engine-re.md, "AutoFreeTex").
         StopSurfaceMovies(0, 1000);
-        lock (_backbufferRangeLock)
-        {
-            _backbufferRange = GfxHandleRange.All;
-            _backbufferPublicationPreservesExistingPixels = false;
-            _backbufferClearPending = false;
-        }
+        // The backbuffer publishes everything again over a clean frame; a pending screen transition goes, and a
+        // render target's snapshot stays with its surface.
+        _graphics.ResetScene();
         lock (_textLock)
         {
             _retainedHistoryLayouts.Clear();
@@ -1008,15 +789,14 @@ public sealed partial class EngineHost
         _modalMovieWaiting = false;
         _modalMovieCancelPending = false;
         _foregroundGfx = null;
-        lock (_screenTransitionLock) _screenTransition = null;   // a render target's snapshot stays with its surface
         IsWaiting = false;
         IsTransitionWaiting = false;
         IsSleeping = false;
         IsTextRevealing = false;
         System.Threading.Interlocked.Exchange(ref _transitionStartedAtMs, -1);
-        System.Threading.Interlocked.Exchange(ref _presentRequested, 1);
+        _graphics.RequestPresentation();
         _frontEnd.ClearPage();
-        _timeline?.State("scene-context-reset", new() { ["surfaces"] = LiveSurfaceSlots() });
+        _timeline?.State("scene-context-reset", new() { ["surfaces"] = _graphics.LiveSurfaceSlots() });
     }
 
     // Main thread, once per rendered frame: releases a VM thread parked in Sleep or a presentation/input wait, which
@@ -1121,31 +901,5 @@ public sealed partial class EngineHost
         while (_clock.NowMs < deadline && !_stopping)
             WaitAndTick(_frameSignal, _clock.RealMillisecondsUntil(deadline, 50));
         _timeline?.State("running", new() { ["timed_callback_due"] = true });
-    }
-
-    // ---- texture ops (run on the VM thread; marshal Godot node work to the main thread) ----
-}
-
-public readonly record struct LegacyScreenTransitionSnapshot(
-    IReadOnlyList<RenderObject> Source, IReadOnlyList<RenderObject> Target, double Progress,
-    long OverlayRgb);
-
-internal sealed class LegacyScreenTransition
-{
-    public IReadOnlyList<RenderObject> Source { get; }
-    public IReadOnlyList<RenderObject> Target { get; }
-    public long StartMs { get; }
-    public long DurationMs { get; }
-    public long OverlayRgb { get; }
-    public bool Forced { get; set; }
-
-    public LegacyScreenTransition(IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
-                                  long startMs, long durationMs, long overlayRgb)
-    {
-        Source = source;
-        Target = target;
-        StartMs = startMs;
-        DurationMs = durationMs;
-        OverlayRgb = overlayRgb;
     }
 }

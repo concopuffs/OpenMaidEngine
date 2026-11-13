@@ -193,10 +193,14 @@ public class SaveUiIntegrationTests
                 new VmOptions(MaxSteps: 500_000), scripts,
                 sharedProfile: loadedProfile,
                 nativeDatStore: store);
+            List<string> surfaceOps = vm.TraceSurfaceOps();
 
             Assert.Throws<MenuReadyException>(() => vm.Run());
 
-            RgbaImage thumbnail = Assert.Single(host.SurfacePixels.Values);
+            // The thumbnail is the one surface with its pixels.
+            RgbaImage thumbnail = Assert.Single(
+                vm.Graphics.LiveSurfaceSlots().Select(vm.Graphics.SurfacePixels).OfType<RgbaImage>(),
+                image => image.Pixels.Length > 0 && image.Pixels[0] == 0x12);
             Assert.Equal((112, 84), (thumbnail.Width, thumbnail.Height));
             Assert.Equal(new byte[] { 0x12, 0x34, 0x56, 0xff }, thumbnail.Pixels[..4]);
             Assert.Contains(host.SurfaceStrings, item => item.Text == "2026");
@@ -210,8 +214,8 @@ public class SaveUiIntegrationTests
             Assert.Equal((0, 96), (objects[0x13137].SrcX, objects[0x13138].SrcX));   // level 80
             Assert.Equal((96, 108), (objects[0x13146].SrcX, objects[0x13147].SrcX)); // growth 98
             Assert.Equal((108, 72), (objects[0x13155].SrcX, objects[0x13156].SrcX)); // personality 69
-            Assert.Equal(3, host.TextureDraws.Count(
-                item => item.Slot == 193 && item.Width == 17 && item.Height == 17));
+            Assert.Equal(3, surfaceOps.Count(
+                op => op.StartsWith("draw-texture slot=193 ") && op.Contains(" 17x17) ")));
         }
         finally
         {

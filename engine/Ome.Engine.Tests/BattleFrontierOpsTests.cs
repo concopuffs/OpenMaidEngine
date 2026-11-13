@@ -16,7 +16,7 @@ public class BattleFrontierOpsTests
     private static Operand G(int address) => new(GlobalInt, address);
 
     [Fact]
-    public void SurfaceRectCopy_ForwardsTheCompleteBlitRequest()
+    public void SurfaceRectCopy_CopiesTheSourceRectangleToTheDestination()
     {
         var table = Table();
         var script = ScriptAssembler.Assemble(table, "SURFACE_COPY", new List<(int, Operand[])>
@@ -24,16 +24,22 @@ public class BattleFrontierOpsTests
             (0x207, new[] { I(72), I(67), I(12), I(15), I(3), I(4), I(30), I(33) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+        // Source 72: each pixel's red is its x and green its y. Destination 67: blank.
+        vm.Graphics.PublishSurfacePixels(72, GraphicsTestSupport.Image(20, 20, (x, y) => [(byte)x, (byte)y, 0, 255]));
+        vm.Graphics.CreateSurface(67, 40, 40);
 
-        new VirtualMachine(script, table, host).Run();
+        vm.Run();
 
-        Assert.Equal(new SurfaceRectCopy(72, 67, 12, 15, 3, 4, 30, 33),
-                     Assert.Single(host.SurfaceCopies));
+        // (12, 15) 3 x 4 lands at (30, 33).
+        Assert.Equal(new byte[] { 12, 15, 0, 255 }, vm.Graphics.PixelAt(67, 30, 33));
+        Assert.Equal(new byte[] { 14, 18, 0, 255 }, vm.Graphics.PixelAt(67, 32, 36));
+        Assert.Equal(new byte[4], vm.Graphics.PixelAt(67, 33, 33));
+        Assert.Equal(new byte[4], vm.Graphics.PixelAt(67, 30, 37));
     }
 
     [Fact]
-    public void ScaledSurfaceRectCopy_ForwardsIndependentRectangleSizes()
+    public void ScaledSurfaceRectCopy_ScalesIntoTheDestinationRectangle()
     {
         var table = Table();
         var script = ScriptAssembler.Assemble(table, "SCALED_SURFACE_COPY", new List<(int, Operand[])>
@@ -42,12 +48,20 @@ public class BattleFrontierOpsTests
                             I(0), I(0), I(384), I(216) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var vm = new VirtualMachine(script, table, new RecordingHost());
+        // Source 2: the left half red, the right half blue. Destination 193: blank and larger than the copy.
+        vm.Graphics.PublishSurfacePixels(2, GraphicsTestSupport.Image(1024, 576,
+            (x, y) => x < 512 ? [255, 0, 0, 255] : [0, 0, 255, 255]));
+        vm.Graphics.CreateSurface(193, 400, 300);
 
-        new VirtualMachine(script, table, host).Run();
+        vm.Run();
 
-        Assert.Equal(new SurfaceRectCopy(2, 193, 0, 0, 1024, 576, 0, 0, 384, 216),
-                     Assert.Single(host.SurfaceCopies));
+        Assert.Equal(new byte[] { 255, 0, 0, 255 }, vm.Graphics.PixelAt(193, 0, 0));
+        Assert.Equal(new byte[] { 255, 0, 0, 255 }, vm.Graphics.PixelAt(193, 190, 215));
+        Assert.Equal(new byte[] { 0, 0, 255, 255 }, vm.Graphics.PixelAt(193, 193, 0));
+        Assert.Equal(new byte[] { 0, 0, 255, 255 }, vm.Graphics.PixelAt(193, 383, 215));
+        Assert.Equal(new byte[4], vm.Graphics.PixelAt(193, 384, 0));
+        Assert.Equal(new byte[4], vm.Graphics.PixelAt(193, 0, 216));
     }
 
     [Fact]

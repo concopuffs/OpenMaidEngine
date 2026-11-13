@@ -10,8 +10,4 @@ public sealed class CaptureHost : IHost
     public void WaitForInput() { }
     public void Sleep(long duration) { }
     public void FrameYield() { }
-    public void CreateTexture(int slot, int width, int height) { }
-    public void SetTexture(long resourceId, int slot) { }
-    public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY) { }
-    public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
 }

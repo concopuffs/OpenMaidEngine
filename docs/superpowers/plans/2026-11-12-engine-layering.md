@@ -3,13 +3,18 @@
 **Date:** 2026-11-12
 **Spec:** `docs/superpowers/specs/2026-11-12-engine-layering-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps the census of milestone 2 and what it settles about the later milestones.
-**Status:** milestones 0, 1, 3, 4, 5 and 6 are built (spec §15). Milestone 2, the census below, was measured at `18d4d1b` on
-`feature/engine-layering`; since milestone 4 the host it names `GodotAdvHost` is `EngineHost`, in
+**Status:** milestones 0, 1, 3, 4, 5, 6 and 7 are built (spec §15). Milestone 2, the census below, was measured at
+`18d4d1b` on `feature/engine-layering`; since milestone 4 the host it names `GodotAdvHost` is `EngineHost`, in
 `engine/Ome.Engine/Hosting/`, and its file names below drop the prefix (`AdvText` is `EngineHost.AdvText.cs`). Since
 milestone 5 the skip and auto fields of §4 are the private state of `engine/Ome.Engine/Natives/SkipAndAuto*.cs`
 (spec §5.2, "As built"). Since milestone 6 the audio fields are the audio native's (`engine/Ome.Engine/Natives/Audio*.cs`)
 and the engine tick's are `engine/Ome.Engine/Natives/EngineTick.cs`'s, except the host's
-`_presentationWithheldByStatementBlock`, which stays in the host (spec §5.3, "As built"). Next: milestone 7.
+`_presentationWithheldByStatementBlock`, which stays in the host (spec §5.3, "As built"). Since milestone 7 the graphics
+fields are the graphics native's (`engine/Ome.Engine/Natives/Graphics*.cs`; spec §5.2, "As built"), except the fields
+of the waits that block on them (`_presentationBarrier`, `_presentationRequestConsumed`,
+`_synchronizeExplicitPresentation`, the two request generations, `_lastSynchronizedPresentationTimestamp`,
+`_foregroundGfx`, `_foregroundTransitionWaitBypassed` and `_transitionStartedAtMs`), which stay in the host until
+milestone 11, and the VM's `_tickPresentationEnabled`, which only its two ops read. Next: milestone 8.
 
 Paths are relative to `age-reimpl/`.
 

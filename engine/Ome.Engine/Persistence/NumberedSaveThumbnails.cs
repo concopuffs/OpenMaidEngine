@@ -13,12 +13,12 @@ public static class NumberedSaveThumbnails
 {
     /// <summary>Op 0x1ae: encode surface <paramref name="surface"/> and store it as save <paramref name="slot"/>'s
     /// thumbnail.</summary>
-    public static int Write(IGraphicsHost graphics, INativeDatStore? store, int slot, int surface)
+    public static int Write(ISurfacePixels? graphics, INativeDatStore? store, int slot, int surface)
     {
         if (store == null) return 1;
         try
         {
-            var image = (graphics as ISurfacePixels)?.CaptureSurfacePixels(surface);
+            var image = graphics?.CaptureSurfacePixels(surface);
             if (image == null) return 2;
             store.SaveNumberedThumbnail(slot, NumberedThumbnailCodec.Encode(image));
             return 0;
@@ -28,7 +28,7 @@ public static class NumberedSaveThumbnails
 
     /// <summary>Op 0x1af: decode save <paramref name="slot"/>'s thumbnail into surface
     /// <paramref name="surface"/>.</summary>
-    public static int Load(IGraphicsHost graphics, INativeDatStore? store, int slot, int surface)
+    public static int Load(ISurfacePixels? graphics, INativeDatStore? store, int slot, int surface)
     {
         if (store == null) return 1;
         try
@@ -36,7 +36,7 @@ public static class NumberedSaveThumbnails
             byte[]? encoded = store.LoadNumberedThumbnail(slot);
             if (encoded == null) return 1;
             var image = NumberedThumbnailCodec.Decode(encoded);
-            return (graphics as ISurfacePixels)?.ReplaceSurfacePixels(surface, image) == true ? 0 : 2;
+            return graphics?.ReplaceSurfacePixels(surface, image) == true ? 0 : 2;
         }
         catch (Exception error) when (ResultOf(error) is int result) { return result; }
     }

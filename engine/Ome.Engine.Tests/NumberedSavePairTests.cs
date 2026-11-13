@@ -145,7 +145,6 @@ public class NumberedSavePairTests
             var store = new DirectoryNativeDatStore(root, Identity);
             store.SaveNumbered(4, [1, 2, 3, 4], Timestamp, 54321);
             var host = new RecordingHost();
-            host.SurfacePixels[7] = new RgbaImage(1, 1, [10, 20, 30, 255]);
             Script script = ScriptAssembler.Assemble(Table, "NUMBERED_SAVE_OPS",
             [
                 (0x1a0, [
@@ -158,6 +157,7 @@ public class NumberedSavePairTests
                 (0x2, []),
             ], []);
             var vm = new VirtualMachine(script, Table, host, nativeDatStore: store);
+            vm.Graphics.PublishSurfacePixels(7, new RgbaImage(1, 1, [10, 20, 30, 255]));
 
             vm.Run();
 
@@ -171,7 +171,7 @@ public class NumberedSavePairTests
             Assert.Equal(54321, vm.Globals[107]);
             Assert.Equal(0, vm.Globals[110]);
             Assert.Equal(0, vm.Globals[111]);
-            Assert.Equal(new byte[] { 10, 20, 30, 255 }, host.SurfacePixels[8].Pixels);
+            Assert.Equal(new byte[] { 10, 20, 30, 255 }, vm.Graphics.SurfacePixels(8)!.Pixels);
             Assert.Equal(0, vm.Globals[112]);
             Assert.Equal(0, vm.Globals[113]);
             Assert.Null(store.LoadNumbered(5));

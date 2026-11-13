@@ -1,4 +1,5 @@
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Text;
 
@@ -103,21 +104,22 @@ public class ImmediateSurfaceTextRendererTests
         var textSurface = Image(8, 8);
         renderer.Render(textSurface, 1, 1, "AA", Style());
 
-        var gfx = new GfxState();
-        gfx.CreateSurface(2);
+        var graphics = Graphics.Headless();
+        GfxState gfx = graphics.State;
+        graphics.CreateSurface(2, 8, 8);
+        graphics.PublishSurfacePixels(2, textSurface);
         gfx.BindDraw(10, 2, 1, 1, 1, 1, 0, 0);
         gfx.SetCurrentScale(10, (200, 200, 100));
         gfx.SetCurrentTranslation(10, (3, 2, 0));
         gfx.SetObjectColorResolved(10, 128, 0x00ff00);
 
-        var occluder = new RgbaImage(1, 1, [9, 8, 7, 255]);
-        gfx.SetSurface(3, 0x3000, -1);
+        graphics.CreateSurface(3, 1, 1);
+        graphics.PublishSurfacePixels(3, new RgbaImage(1, 1, [9, 8, 7, 255]));
         gfx.BindDraw(20, 3, 0, 0, 1, 1, 3, 2);
 
         var destination = Image(8, 8);
         IReadOnlyList<RenderObject> visible = gfx.SnapshotVisibleObjects();
-        int rendered = RetainedSurfaceRasterizer.CompositeRange(
-            destination, visible, 10, 1, _ => textSurface);
+        int rendered = graphics.DrawObjectRange(destination, visible, 10, 1);
 
         // The doubled one-pixel region covers 2x2 pixels. Objects sample bilinearly as native's D3D9 sprite does, and
         // the texture clamp reads past the region, so each pixel takes 192/256 x 192/256 of the white texel and the
@@ -127,8 +129,7 @@ public class ImmediateSurfaceTextRendererTests
         Assert.Equal((0, 39, 0, 71), Pixel(destination, 4, 2));
         Assert.Equal((0, 0, 0, 0), Pixel(destination, 5, 2));
 
-        RetainedSurfaceRasterizer.CompositeRange(
-            destination, visible, 20, 1, _ => occluder);
+        graphics.DrawObjectRange(destination, visible, 20, 1);
         Assert.Equal((9, 8, 7, 255), Pixel(destination, 3, 2));
     }
 
@@ -139,8 +140,10 @@ public class ImmediateSurfaceTextRendererTests
         var textSurface = Image(8, 8);
         renderer.Render(textSurface, 1, 1, "A", Style());
 
-        var gfx = new GfxState();
-        gfx.CreateSurface(2);
+        var graphics = Graphics.Headless();
+        GfxState gfx = graphics.State;
+        graphics.CreateSurface(2, 8, 8);
+        graphics.PublishSurfacePixels(2, textSurface);
         gfx.BindDraw(10, 2, 1, 1, 1, 1, 2, 3);
         gfx.SetObjectColorResolved(10, 255, 0xffffff);
         gfx.SetAnimatedObjectColorResolved(
@@ -149,8 +152,7 @@ public class ImmediateSurfaceTextRendererTests
         IReadOnlyList<RenderObject> midpoint = gfx.SnapshotVisibleObjects(nowMs: 1050);
         var destination = Image(8, 8);
 
-        RetainedSurfaceRasterizer.CompositeRange(
-            destination, midpoint, 10, 1, _ => textSurface);
+        graphics.DrawObjectRange(destination, midpoint, 10, 1);
 
         Assert.InRange(Pixel(destination, 2, 3).A, 126, 128);
         Assert.Equal(0, gfx.SnapshotVisibleObjects(nowMs: 1100).Single().Alpha);

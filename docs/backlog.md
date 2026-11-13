@@ -10,6 +10,13 @@ it; git history keeps the record.
 
 ## Engine fidelity
 
+- **DEBUGMAP, run as a direct scene, exits without showing the map.** `--scene DEBUGMAP` (entered as the F4 launcher
+  does) runs 128,557 steps and ends on `exit` within six seconds, with nothing drawn. On 2026-07-22 the same entry
+  reached the dungeon map and was the `FIELD` performance case (`docs/phase-a-slice-plan.md`, "P1 capture 2"). It was
+  seen on 2026-11-12 at `1d819e9`, before engine layering milestone 7, and is the same after it; when it began is not
+  known, and neither is what DEBUGMAP checks before it exits. The `FIELD` performance captures use Kamidori's field
+  from a save meanwhile. Done when a native run through the F4 launcher shows what DEBUGMAP does, and the port does
+  the same.
 - **Engine shell menu bar: undriven cases, and optional look differences.** The bar, the fullscreen strip and 終了
   come from the shell model, and 設定, ﾊﾞｰｼﾞｮﾝ情報 and 動作環境 are the options panel
   (`superpowers/specs/2026-11-09-engine-shell-design.md`). Every command either game can reach does what native's
@@ -59,7 +66,7 @@ it; git history keeps the record.
   or surface transition (`engine-re.md`, "Statement blocks"). The engine tick (`Natives/EngineTick.cs`) withholds
   them in every open block, as the host did before milestone 6, because the tick does not yet know when a transition
   parks the interpreter. No scene where it matters has been seen. Done when the tick runs them under a block during a
-  transition park (graphics native, layering milestone 7) and a test covers it.
+  transition park (the waits, layering milestone 11: the transition waits are still the host's) and a test covers it.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
@@ -181,9 +188,9 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
   immediate in an arithmetic or compare op, so this is latent for retail scripts and live for mod bytecode. Done
   when every integer cell holds one canonical form, written in one place (see "VM state has no owners" under
   Architecture), and a test round-trips a high-bit value through an immediate, a write, a save and a load.
-- **The port's image and texture caches never evict.** `EngineHost._images`
-  (`engine/Ome.Engine/Hosting/EngineHost.Surfaces.cs`), `SoftwareCompositor._pixelCache`
-  (`engine/Ome.Engine/Hosting/SoftwareCompositor.cs`) and `GpuRetainedRenderer`'s `_textures` and `_lerpMaterials` keep
+- **The port's image and texture caches never evict.** The graphics native's `_images`
+  (`engine/Ome.Engine/Natives/Graphics.Surfaces.cs`), `ReferenceRenderer._pixelCache`
+  (`engine/Ome.Engine/Hosting/ReferenceRenderer.cs`) and `GpuRetainedRenderer`'s `_textures` and `_lerpMaterials` keep
   every entry for the session: about 1.9 MB of RAM per 800×600 image, and again in VRAM. A long session grows without
   bound. Done when each cache has a bound or a release point (a scene change, a released surface) and a long driven
   session shows flat memory.
@@ -236,9 +243,11 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. The
   census of every field (milestone 2, `docs/superpowers/plans/2026-11-12-engine-layering.md`) names each one's owner;
   skip and auto has its owner, and since milestone 6 (2026-11-12) so do audio (`Natives/Audio*.cs`) and the statement
-  block (`Natives/EngineTick.cs`); graphics is next (milestone 7); the waits move last (milestone 11).
-- **The host's threads have no stated ownership.** `EngineHost` holds seven lock objects (nine until milestones 5
-  and 6 moved the skip and delayed-voice locks into their natives), six `AutoResetEvent`s,
+  block (`Natives/EngineTick.cs`), and since milestone 7 graphics (`Natives/Graphics*.cs`: the surface table,
+  publication and the screen transition); the waits move last (milestone 11).
+- **The host's threads have no stated ownership.** `EngineHost` holds four lock objects (nine until milestones 5
+  to 7 moved the skip, delayed-voice, image, screen-transition and backbuffer locks into their natives), six
+  `AutoResetEvent`s,
   a `ManualResetEventSlim` and a `SemaphoreSlim`, and nothing documents which fields each lock guards or the lock
   order. `_slotDims` was written from both threads without a lock until 2026-11-10; it is a `ConcurrentDictionary`
   now. Since milestone 4 (2026-11-12) the host's calls to the main thread are typed: it calls `IFrontEnd`, which
@@ -256,30 +265,37 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   pipeline and each front-end concern (audio, movies, compositing, the shell, input, driving, screenshots) own their
   fields; `_Process` calls them in an explicit order rather than Godot's node order; and the screen geometry is one
   shared object.
-- **The render traversal is written three times.** `Main.Compositor.cs` has a GPU path (`TryRecompositeGpu` and
-  its range helpers), `Hosting/SoftwareCompositor.cs` a software path (`Compose`) over the same retained objects, and
-  `Sys4/RetainedSurfaceRasterizer.cs` walks them a third time. A rule fixed in one can be missed in the others. Done
-  when one Godot-free traversal drives both the GPU and the software output, and the rasterizer either shares it or
-  documents why its rules differ. Planned: layering spec, milestone 7 (the frame description and the reference
-  renderer, spec §6.3).
-- **Normal play still uses the software compositor.** `TryRecompositeGpu` (`godot/Main.Compositor.cs`) hands the
-  frame to `RecompositeSoftware` in three cases:
-  - A whole-screen transition runs (`_host.HasScreenTransition`): AGE's blocking transitions between two complete
-    frames, which are the black and white fades, `0x25`'s crossfade and the `0x27`/`0x28` strip reveals. Kamidori's
-    title fades to and from Game Start are among them. Native (mode 4) flattens the target frame into one surface
-    and blends it over the captured source frame (`CompositeFlattenedTransitionTarget`). Fading each object on the
-    GPU would dim the frame and let layers show through each other, so the GPU path needs an offscreen target it
-    does not have.
-  - An object has an additive LERP tint: there is no shader variant, and neither game has shown one.
-  - `--gfx-log` or `--timeline-log` is on.
+- **The GPU renderer declines screen transitions.** `GpuRetainedRenderer.TryDraw` (`godot/GpuRetainedRenderer.cs`)
+  leaves a frame description to the reference renderer (`engine/Ome.Engine/Hosting/ReferenceRenderer.cs`) while a
+  whole-screen transition runs (the description's `ScreenTransition`), and `Main.Recomposite`
+  (`godot/Main.Compositor.cs`) sends it every frame of a `--gfx-log` or `--timeline-log` run. The screen transitions
+  are AGE's blocking transitions between two complete frames: the black and white fades, `0x25`'s crossfade and the
+  `0x27`/`0x28` strip reveals. Kamidori's title fades to and from Game Start are among them. Native (mode 4) flattens
+  the target frame into one surface and blends it over the captured source frame
+  (`ReferenceRenderer.DrawFlattenedTransitionTarget`). Fading each item on the GPU would dim the frame and let layers
+  show through each other, so the GPU renderer needs an offscreen target it does not have.
 
-  So every rule and cache lives twice. Until 2026-11-11 a language switch cleared the GPU's textures but not the
-  software path's `_pixelCache`, so fades showed the old language's images. Done when the GPU path draws screen
-  transitions through an offscreen texture (a `SubViewport`) blended over the captured source and has the additive
-  LERP-tint variant, and the software path runs only when chosen (`--render-backend software`, the two logs) as the
-  reference. A driven fade's GPU frames must match the software path's within a stated tolerance. The layering spec
-  leaves this open (its §10), but its milestone 7 gives the GPU path the reference renderer and the test that
-  compares the two.
+  The reference renderer's frames can take tens of milliseconds (engine layering spec §6.3). Also, where a full
+  redraw draws over the previous frame (`PreserveExistingPixels` without `AppendLayers`), the reference keeps the old
+  pixels under what the frame does not cover and the GPU renderer shows black there; no driven frame has shown it.
+  Done when the GPU renderer draws screen transitions through an offscreen texture (a `SubViewport`) blended over the
+  captured source and keeps the uncovered pixels, and the reference renderer draws only when chosen
+  (`--render-backend software`, the two logs). Check it with the driver's `reference-diff` on a driven fade, within
+  the tolerance of the engine layering spec §6.3, "As built".
+
+- **The two renderers filter scaled layers differently.** Where a texture item is scaled or rotated, the GPU renderer
+  (Godot's linear filter, blending in floats) and the reference renderer
+  (`engine/Ome.Engine/Model/SoftwareAffineRasterizer.cs`: D3D9's bilinear with 8-bit weights, blending in integers)
+  differ by a few levels, in fine stripes across the layer.
+  The driver's `reference-diff` found it in Himegari's SC0000 effect band
+  (`tools/drive/scenarios/port/himegari-reference-diff.steps`): on page 14 and mid-effect on page 15 a full-screen CG
+  is drawn scaled under additive light, and 0.3 % and 10 % of the frame's pixels differ by more than 3 levels, at
+  most 6. The tolerance set before measuring allowed 1 % of a frame (engine layering spec §6.3, "As built"). The
+  difference predates milestone 7: the GPU path's pixels there are the same as before (`himegari-effect-waits.steps`'
+  page 14 shot), and the two paths filtered this way before. Kamidori's field, 214 scaled map cells, differs by at
+  most 3. Neither renderer has been compared with native's output on a scaled layer. Done when a native capture of
+  such a frame shows which filter matches AGE, the other renderer is brought to it, and `reference-diff` keeps those
+  pages within 1 %.
 
 ## Open Maid Script
 

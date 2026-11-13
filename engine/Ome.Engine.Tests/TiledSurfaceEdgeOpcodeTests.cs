@@ -23,7 +23,8 @@ public class TiledSurfaceEdgeOpcodeTests
         vm.Run();
 
         Assert.Equal(128, vm.Gfx.TiledSurfaceEdgeLength);
-        Assert.Equal((0x32daL, 0x3e), Assert.Single(host.Textures));
+        Assert.Equal([0x3e], vm.Graphics.LiveSurfaceSlots());
+        Assert.Equal(0x32da, vm.Graphics.SurfaceResource(0x3e));
         var surface = Assert.Single(vm.Gfx.CapturePersistenceSnapshot().Surfaces);
         Assert.Equal((0x3e, 0x32daL), (surface.Slot, surface.ResourceId));
     }

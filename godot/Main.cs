@@ -41,6 +41,7 @@ public partial class Main : Godot.Control
     private VirtualMachine _vm = null!;
     private EngineHost _host = null!;
     private Audio _audio = null!;   // the audio native (engine layering milestone 6): the options panel sets the mixer through it
+    private Graphics _graphics = null!;   // the graphics native (milestone 7): surfaces, publication, frame lowering
     private IDisposable? _glyphRasterizerOwner;
     // The Unicode rasterizer a language draws with when the gameplay one is GDI (localization spec §7.4).
     private IDisposable? _presentedRasterizerOwner;
@@ -541,8 +542,14 @@ public partial class Main : Godot.Control
         _audio = new Audio(this, new ResourceAudioAssets(resources, message => GD.Print(message)), _clock, skipAndAuto,
                            _audioMixerSettings, _sys4RegIniStore, _timeline);
         var tick = new EngineTick(_audio, _timeline);
+        // The graphics native (milestone 7) owns the surfaces and what each frame publishes; the host's text and movie
+        // parts draw into it, and its waits block on it.
+        _graphics = new Graphics(resources, _clock, logicalCanvas, _timeline, message => GD.Print(message))
+        {
+            TraceOps = _gfxLogPath != null,
+        };
         _host = new EngineHost(
-            this, skipAndAuto, _audio, tick, resources, scene, _clock, _locator, logicalCanvas,
+            this, skipAndAuto, _audio, tick, _graphics, resources, scene, _clock, _locator,
             surfaceTextRasterizer,
             timeline: _timeline,
             synchronizeExplicitPresentation: !_selftest,
@@ -551,7 +558,6 @@ public partial class Main : Godot.Control
             coverageAlpha: engineBuild.Rules.Text.GlyphCoverage)
         {
             SleepScale = sleepScale,
-            TraceOps = _gfxLogPath != null,
             RubyRules = engineBuild.Rules.Text.Ruby.For(_catalog.StartupSettings, _sys4RegIniStore?.RubyShiftMode),
             FontFamilySource = InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings),
             FontMetricsProbe = surfaceTextRasterizer as IFontMetricsProbe,
@@ -593,12 +599,11 @@ public partial class Main : Godot.Control
             build: engineBuild,
             skipAndAuto: skipAndAuto,
             audio: _audio,
-            tick: tick);
-        _compositor = new SoftwareCompositor(_host, _vm.Gfx, _clock, logicalCanvas, _gfxLogPath)
-        {
-            Perf = _perf,
-            Timeline = _timeline,
-        };
+            tick: tick,
+            graphics: _graphics);
+        _reference = new ReferenceRenderer(logicalCanvas) { Perf = _perf };
+        _gpuRenderer.Perf = _perf;
+        _decisionLog = new GfxDecisionLog(_gfxLogPath, _timeline);
         if (scripts != null && selectedProfile.Profile.DebugSceneLaunch != null)
         {
             _debugSceneEntries = DebugSceneCatalog.Build(scripts.Catalog);
@@ -714,7 +719,7 @@ public partial class Main : Godot.Control
             {
                 if (presentationEntered)
                 {
-                    presentationReasons = _host!.ConsumePresentationReasons(_vm!.Gfx);
+                    presentationReasons = _host!.ConsumePresentationReasons();
                     shouldRecomposite = presentationReasons != HostPresentationReason.None;
                     perf?.RecordPresentationReasons((int)presentationReasons);
                     perf?.RecordShouldRecomposite(PerformanceFrameLog.Timestamp() - phase);

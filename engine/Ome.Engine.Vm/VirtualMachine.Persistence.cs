@@ -185,7 +185,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         Write(a[0], NumberedSaveThumbnails.Write(
-            _host, _nativeDatStore, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
+            _graphics, _nativeDatStore, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
 
@@ -194,7 +194,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         Write(a[0], NumberedSaveThumbnails.Load(
-            _host, _nativeDatStore, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
+            _graphics, _nativeDatStore, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
 

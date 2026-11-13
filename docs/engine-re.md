@@ -3176,8 +3176,9 @@ movie-completion-driven blocking cleanup. The handlers, sample worker, composito
 named and commented in the saved `/v2` Ghidra image.
 
 **Port implementation (2026-07-29):** `IHost.PlayMovieMaskTransition` carries the complete
-twelve-operand request. At dispatch, Godot snapshots the old/source retained range through
-`RetainedSurfaceRasterizer` into the script-created scratch surface; the immediately preceding
+twelve-operand request. At dispatch, the port snapshots the old/source retained range into the script-created
+scratch surface (`Graphics.CaptureObjectRange`, the frame lowering's published-range path since engine layering
+milestone 7; `RetainedSurfaceRasterizer` before); the immediately preceding
 `draw-texture` command key therefore displays that captured range without a second compositor model.
 Mask playback remains instance-keyed in the ordinary movie registry, but frame publication is redirected:
 `MovieMaskSurface.ExtractGreen` copies logical top-down RGBA green bytes into the requested mask dimensions,

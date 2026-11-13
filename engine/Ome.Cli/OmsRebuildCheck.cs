@@ -53,10 +53,6 @@ internal static class OmsRebuildCheck
         public void WaitForInput() => _now += FrameMilliseconds;
         public void Sleep(long duration) => _now += Math.Max(1, duration);
         public void FrameYield() => _now += FrameMilliseconds;
-        public void CreateTexture(int slot, int width, int height) { }
-        public void SetTexture(long resourceId, int slot) { }
-        public void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY) { }
-        public (int Width, int Height) GetTextureSize(int slot) => (0, 0);
     }
 
     /// <summary>Records frames and executed instructions as packed longs: kind, depth, opcode and pc. A step that

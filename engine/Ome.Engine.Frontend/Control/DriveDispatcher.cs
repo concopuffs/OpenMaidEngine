@@ -44,6 +44,13 @@ public interface IDriveBackend
     /// <summary>Choose <paramref name="tag"/> (normalized) in the options panel's language list and commit it as 決定
     /// does; returns {language, previous, languages} (capability "language", the port's).</summary>
     JsonObject Language(string tag) => throw new DriveProtocolException("'language' has no implementation here");
+    /// <summary>With <paramref name="path"/> null, start drawing every frame with the reference renderer as well
+    /// (returns {armed}); otherwise compare the screen with the reference's drawing of the same frame, write
+    /// <paramref name="path"/>-gpu.png, -reference.png and -diff.png, and return the comparison: {renderer, pixels,
+    /// over, max, mean, bbox} with <paramref name="tolerance"/> per channel (capability "reference-diff", the
+    /// port's).</summary>
+    JsonObject ReferenceDiff(string? path, int tolerance)
+        => throw new DriveProtocolException("'reference-diff' has no implementation here");
     /// <summary>Draw op 0x60 from <paramref name="seed"/>'s per-site streams, or from the game's own generator when
     /// null; returns what op 0x60 drew since the previous call (capability "rand").</summary>
     JsonObject RandSeed(uint? seed) => throw new DriveProtocolException("'rand-seed' has no implementation here");
@@ -254,6 +261,16 @@ public sealed class DriveDispatcher
                 if (!LanguageTag.IsWellFormed(tag))
                     throw new DriveProtocolException($"'{tag}' is not a language tag such as ja, en or pt-br");
                 return Immediate(request, reply, () => _backend.Language(tag));
+            }
+            case "reference-diff":
+            {
+                RequireCapability("reference-diff");
+                string? path = request.Bool("arm") ? null : request.Text("path");
+                if (path != null && !Path.IsPathFullyQualified(path))
+                    throw new DriveProtocolException($"reference-diff needs an absolute path, got '{path}'");
+                int tolerance = request.Has("tolerance") ? request.Int("tolerance") : 3;
+                if (tolerance is < 0 or > 255) throw new DriveProtocolException("tolerance is 0..255 per channel");
+                return Immediate(request, reply, () => _backend.ReferenceDiff(path, tolerance));
             }
             default:
                 throw new DriveProtocolException(

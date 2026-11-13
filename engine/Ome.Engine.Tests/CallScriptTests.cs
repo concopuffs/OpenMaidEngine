@@ -145,7 +145,7 @@ public class CallScriptTests
 
         vm.Run();
 
-        Assert.Equal(new[] { (7L, 1), (7L, 2), (7L, 3) }, host.Textures);
+        Assert.Equal(new long?[] { 7, 7, 7 }, new[] { 1, 2, 3 }.Select(vm.Graphics.SurfaceResource));
         Assert.Equal(new[] { "enter:CALLER", "enter:CALLEE", "exit:CALLEE", "exit:CALLER" }, host.Events);
     }
 }

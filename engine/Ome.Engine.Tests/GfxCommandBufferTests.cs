@@ -184,7 +184,8 @@ public class GfxCommandBufferTests
 
         vm.Run();
 
-        Assert.Equal((0x32daL, 0x3e), Assert.Single(host.Textures));
+        Assert.Equal([0x3e], vm.Graphics.LiveSurfaceSlots());
+        Assert.Equal(0x32da, vm.Graphics.SurfaceResource(0x3e));
         var visible = Assert.Single(vm.Gfx.SnapshotVisibleObjects());
         Assert.Equal(0x32da, visible.SurfaceResId);
         Assert.Equal(0, visible.ColorKey);

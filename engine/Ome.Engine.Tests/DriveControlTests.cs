@@ -76,6 +76,12 @@ public class DriveControlTests
             ChosenLanguage = tag;
             return new JsonObject { ["language"] = tag, ["previous"] = "ja" };
         }
+        public List<(string? Path, int Tolerance)> Diffs { get; } = [];
+        public JsonObject ReferenceDiff(string? path, int tolerance)
+        {
+            Diffs.Add((path, tolerance));
+            return path == null ? new JsonObject { ["armed"] = true } : new JsonObject { ["over"] = 0 };
+        }
     }
 
     private static DriveState At(string location, string? waiting = null, bool busy = false, params string[] outer)
@@ -332,6 +338,29 @@ public class DriveControlTests
             (string?)Run(new DriveDispatcher(without), without, """{"id":4,"op":"option","name":"se","value":0}""")["error"]);
         Assert.Contains("'options' is not supported",
             (string?)Run(new DriveDispatcher(without), without, """{"id":5,"op":"options"}""")["error"]);
+    }
+
+    [Fact]
+    public void ReferenceDiffArmsOrComparesAndNeedsTheCapability()
+    {
+        var backend = new FakeBackend { Capabilities = new[] { "reference-diff" } };
+        var dispatcher = new DriveDispatcher(backend);
+        string path = Path.Combine(Path.GetTempPath(), "page");
+        Assert.True((bool)Run(dispatcher, backend, """{"id":1,"op":"reference-diff","arm":true}""")["ok"]!);
+        var compared = Run(dispatcher, backend,
+            new JsonObject { ["id"] = 2, ["op"] = "reference-diff", ["path"] = path, ["tolerance"] = 5 }.ToJsonString());
+        Assert.True((bool)compared["ok"]!);
+        Assert.Equal([(null, 3), (path, 5)], backend.Diffs);
+        Assert.Contains("absolute path",
+            (string?)Run(dispatcher, backend, """{"id":3,"op":"reference-diff","path":"page"}""")["error"]);
+        Assert.Contains("0..255",
+            (string?)Run(dispatcher, backend,
+                new JsonObject { ["id"] = 4, ["op"] = "reference-diff", ["path"] = path, ["tolerance"] = 300 }
+                    .ToJsonString())["error"]);
+
+        var without = new FakeBackend { Capabilities = new[] { "options" } };
+        Assert.Contains("'reference-diff' is not supported",
+            (string?)Run(new DriveDispatcher(without), without, """{"id":5,"op":"reference-diff","arm":true}""")["error"]);
     }
 
     [Fact]

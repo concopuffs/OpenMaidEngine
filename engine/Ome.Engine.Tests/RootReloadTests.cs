@@ -101,15 +101,18 @@ public class RootReloadTests
         var vm = new VirtualMachine(initial, table, host,
             new VmOptions(CreateObject: createObject, AutoFreeTex: autoFreeTex),
             provider: new MapProvider(new Dictionary<long, Script> { [0] = system4 }));
-        vm.Gfx.SetSurface(5, 0x23, 0);
-        vm.Gfx.CreateSurface(21);
+        vm.Graphics.LoadSurface(5, 0x23, 0);
+        vm.Graphics.CreateSurface(21, 4, 4);
+        List<string> surfaceOps = vm.TraceSurfaceOps();
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
         Assert.Equal(-1, vm.Globals[0x211]);   // the reset clears the record either way
         Assert.Equal(1, host.SceneContextResets);
-        Assert.Equal(released ? new[] { (0, 1000) } : Array.Empty<(int, int)>(), host.ReleasedSurfaceRanges);
+        Assert.Equal(released ? ["release-surface-range first=0 count=1000"] : Array.Empty<string>(),
+                     surfaceOps.Where(op => op.StartsWith("release-surface-range ")));
+        Assert.Equal(released ? Array.Empty<int>() : new[] { 5, 21 }, vm.Graphics.LiveSurfaceSlots());
         Assert.Equal(
             released ? Array.Empty<int>() : new[] { 5, 21 },
             vm.Gfx.CapturePersistenceSnapshot().Surfaces.Select(item => item.Slot));

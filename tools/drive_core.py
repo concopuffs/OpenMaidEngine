@@ -572,9 +572,14 @@ STEPS = {
     "language": _spec(1, 1, "", "language TAG                  choose the port's language in its options panel (OME "
                       "section) and commit it as 決定 does: menus, game text and language assets switch at once, and "
                       "OME.INI keeps it (port)", "language"),
+    "reference-diff": _spec(1, 1, "tolerance",
+                            "reference-diff on|NAME [tolerance=N]  on: the reference renderer draws every frame too; "
+                            "NAME: compare the screen with its drawing of the same frame (run settled), counting "
+                            "pixels with a channel more than N (default 3) apart; writes shots/NAME-gpu.png, "
+                            "-reference.png, -diff.png (port)", "reference-diff"),
     "close": _spec(0, 0, "timeout", "close [timeout=S]             quit the game and end the session"),
 }
-NUMERIC_OPTIONS = {"hold", "timeout", "quiet", "threshold", "every"}
+NUMERIC_OPTIONS = {"hold", "timeout", "quiet", "threshold", "every", "tolerance"}
 LOCATION = re.compile(r"^([^@\s]+?)(?:\.bin)?@(0x[0-9a-f]+|\d+)$", re.IGNORECASE)
 
 
@@ -654,6 +659,11 @@ def _validate(step: Step) -> None:
         option_value(*step.args)
     elif step.name == "language":
         language_tag(step.args[0])
+    elif step.name == "reference-diff":
+        if step.args[0] != "on" and not re.fullmatch(r"[\w.-]+", step.args[0]):
+            raise DriveError("reference-diff takes on or a plain file name (letters, digits, . _ -)")
+        if "tolerance" in step.options and not step.options["tolerance"].isdigit():
+            raise DriveError("reference-diff tolerance is a whole number of levels per channel")
     elif step.name == "wait":
         try:
             float(step.args[0])
@@ -1023,6 +1033,14 @@ class Executor:
             return self.client.call("options")
         elif step.name == "language":
             return self.client.call("language", tag=language_tag(step.args[0]))
+        elif step.name == "reference-diff":
+            if step.args[0] == "on":
+                return self.client.call("reference-diff", arm=True)
+            self.shots.mkdir(parents=True, exist_ok=True)
+            path = (self.shots / step.args[0]).resolve()
+            result = self.client.call("reference-diff", path=str(path),
+                                      tolerance=int(options.get("tolerance", 3)))
+            return {**result, "location": self.location()}
         elif step.name == "close":
             timeout = float(options.get("timeout", 20))
             result = self.client.call("close", timeout=timeout + REPLY_MARGIN_S, timeout_ms=int(timeout * 1000))
@@ -1062,7 +1080,7 @@ def describe(result: dict[str, Any]) -> str:
     details = []
     for key in ("error", "path", "location", "settled", "pokes", "seconds", "answered", "exit_code",
                 "cursor_moved_to", "label", "checked", "seed", "previous_seed", "draws", "option", "value",
-                "section", "language", "previous"):
+                "section", "language", "previous", "armed", "renderer", "items", "transformed", "over", "max", "mean", "bbox"):
         if key in result and result[key] is not None:
             details.append(f"{key}={result[key]}")
     if "frames" in result:

@@ -63,12 +63,15 @@ public class EngineHostTests
     /// <summary>The lifted host over a front end, with the natives it runs with. Without an <see cref="AudioRig"/> the
     /// audio native is a silent one.</summary>
     internal static EngineHost Host(IFrontEnd frontEnd, PageLocatorState locator, FrameClock clock,
-                                    SkipAndAuto? skipAndAuto = null, AudioRig? audio = null)
+                                    SkipAndAuto? skipAndAuto = null, AudioRig? audio = null,
+                                    Graphics? graphics = null)
     {
         SkipAndAuto skip = audio?.Skip ?? skipAndAuto ?? SkipAndAuto.WithSystemClock();
         Audio native = audio?.Audio ?? Audio.Silent(skip);
-        return new(frontEnd, skip, native, audio?.Tick ?? new EngineTick(native), EmptyResources(),
-                   "SC0000", clock, locator, Canvas, new NoGlyphs(), GlyphCoverageAlpha.Sixteenths,
+        ResourceMap resources = EmptyResources();
+        return new(frontEnd, skip, native, audio?.Tick ?? new EngineTick(native),
+                   graphics ?? new Graphics(resources, clock, Canvas), resources,
+                   "SC0000", clock, locator, new NoGlyphs(), GlyphCoverageAlpha.Sixteenths,
                    synchronizeExplicitPresentation: false)
         {
             RubyRules = RubyLayoutRules.FixedOffsets,
@@ -109,21 +112,25 @@ public class EngineHostTests
     }
 
     [Fact]
-    public void TheSoftwareCompositorRendersAFrame()
+    public void TheReferenceRendererDrawsTheLoweredFrame()
     {
         var frontEnd = new NothingFrontEnd();
         using var locator = new PageLocatorState("SC0000", null);
         var clock = new FrameClock();
-        EngineHost host = Host(frontEnd, locator, clock);
-        var gfx = new GfxState();
+        var graphics = new Graphics(EmptyResources(), clock, Canvas);
+        EngineHost host = Host(frontEnd, locator, clock, graphics: graphics);
+        GfxState gfx = graphics.State;
         gfx.SetDisplayBackgroundColor(0x204060);
-        host.CreateTexture(1, 4, 3);
-        host.FillSurfaceRect(new SurfaceRectFill(1, 0, 0, 4, 3, 255, 0xff0000));
-        gfx.BindDraw(0x10, 1, 0, 0, 4, 3, 5, 6);   // object 0x10 draws surface 1's 4x3 at (5, 6)
+        graphics.CreateSurface(1, 4, 3);
+        graphics.FillSurfaceRect(new SurfaceRectFill(1, 0, 0, 4, 3, 255, 0xff0000));
+        graphics.DrawTexture(0x10, 1, 0, 0, 4, 3, 5, 6);   // object 0x10 draws surface 1's 4x3 at (5, 6)
 
-        var compositor = new SoftwareCompositor(host, gfx, clock, Canvas);
-        compositor.Compose(sampledVisible: null, preserveExistingPixels: false, page: 0);
+        var frame = graphics.LowerFrame(clock.NowMs);
+        var compositor = new ReferenceRenderer(Canvas);
+        compositor.Draw(frame);
 
+        Assert.Equal(0x204060, frame.BackgroundRgb);
+        Assert.Single(frame.Items);
         Assert.Equal(Canvas.RgbaByteCount, compositor.Pixels.Length);
         byte[] background = [0x20, 0x40, 0x60, 255], red = [255, 0, 0, 255];
         Assert.Equal(background, Pixel(compositor, 0, 0));
@@ -134,6 +141,6 @@ public class EngineHostTests
         Assert.Empty(frontEnd.Calls);
     }
 
-    private static byte[] Pixel(SoftwareCompositor compositor, int x, int y)
+    private static byte[] Pixel(ReferenceRenderer compositor, int x, int y)
         => compositor.Pixels.AsSpan((y * compositor.Width + x) * 4, 4).ToArray();
 }

@@ -99,12 +99,16 @@ public class HistoryPresentationOpsTests
             }, Array.Empty<string>());
         var host = new RecordingHost { MessageWindowAlphaSetting = 6 };
         var vm = new VirtualMachine(script, Table, host);
+        vm.Graphics.CreateSurface(0xc1, 600, 100);
 
         vm.Run();
 
         Assert.Equal(6, vm.Globals[0x100]);
-        Assert.Equal(new SurfaceRectFill(0xc1, 0, 30, 600, 30, 255, 0x123456),
-            Assert.Single(host.SurfaceFills));
+        // The fill's alpha operand 999 lands as 255.
+        Assert.Equal(new byte[] { 0x12, 0x34, 0x56, 255 }, vm.Graphics.PixelAt(0xc1, 0, 30));
+        Assert.Equal(new byte[] { 0x12, 0x34, 0x56, 255 }, vm.Graphics.PixelAt(0xc1, 599, 59));
+        Assert.Equal(new byte[4], vm.Graphics.PixelAt(0xc1, 0, 29));
+        Assert.Equal(new byte[4], vm.Graphics.PixelAt(0xc1, 0, 60));
         Assert.Equal((0L, 60000L), Assert.Single(host.PresentedRanges));
     }
 

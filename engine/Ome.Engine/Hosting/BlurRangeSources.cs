@@ -4,7 +4,7 @@ namespace Ome.Engine.Hosting;
 
 /// <summary>
 /// The objects a frame's directional and radial blurs draw. A blur draws its source range itself, so ordinary
-/// z-order skips those objects. Both compositors use it.
+/// z-order skips those objects. The frame lowering uses it (Natives/Graphics.Frame.cs).
 /// </summary>
 public sealed class BlurRangeSources
 {

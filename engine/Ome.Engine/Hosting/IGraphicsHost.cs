@@ -2,10 +2,14 @@ using Ome.Engine.Model;
 
 namespace Ome.Engine.Hosting;
 
+/// <summary>
+/// The presentation waits the graphics ops block on. The ops' state is the graphics native's
+/// (<see cref="Natives.Graphics"/>): a handler calls the native, and these members only present and wait until
+/// milestone 11 moves the waits (docs/superpowers/specs/2026-11-12-engine-layering-design.md §5.3). Each
+/// <see cref="GfxState"/> passed is the native's state.
+/// </summary>
 public interface IGraphicsHost
 {
-    void FillSurfaceRect(SurfaceRectFill fill) { }
-    void CopySurfaceRect(SurfaceRectCopy copy) { }
     void PresentObjectRange(GfxState gfx, long firstHandle, long count) { }
 
     // Normal playback reaches op 0x21c and parks until a queued 0x223 transition completes. The
@@ -26,21 +30,4 @@ public interface IGraphicsHost
         bool forceEndpoint = false) { }
     void RevealSurfaceWithPattern(
         GfxState gfx, SurfacePatternTransitionRequest request, bool forceEndpoint = false) { }
-
-    void CreateTexture(int slot, int width, int height);
-
-    void SetTexture(long resourceId, int slot);
-    void SetTexture(long resourceId, int slot, long colorKey) => SetTexture(resourceId, slot);
-    void ReleaseSurface(int slot) { }
-
-    /// <summary>Clear the selected target's pixels; -1 denotes the main backbuffer.</summary>
-    void ClearRenderTarget(int surfaceSlot) { }
-
-    void ReleaseSurfaceRange(int firstSlot, int count)
-    {
-        for (int slot = firstSlot; slot < firstSlot + count; slot++) ReleaseSurface(slot);
-    }
-
-    void DrawTexture(int slot, int srcX, int srcY, int width, int height, int dstX, int dstY);
-    (int Width, int Height) GetTextureSize(int slot);
 }

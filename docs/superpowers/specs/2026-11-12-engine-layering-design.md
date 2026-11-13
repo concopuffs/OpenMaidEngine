@@ -3,9 +3,10 @@
 **Date:** 2026-11-12
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
-2 (census), 3 (projects), 4 (the lift), 5 (skip and auto) and 6 (audio) are done on `feature/engine-layering`; §3.3,
-§4, §5.2, §5.3, §6.2, §6.3, §7.5, §7.6, §11, §12 and §13 record what they settled. The census is in the implementation plan,
-`docs/superpowers/plans/2026-11-12-engine-layering.md`. §15 records the history.
+2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio) and 7 (graphics) are done on
+`feature/engine-layering`; §3.3, §4, §5.2, §5.3, §6.2, §6.3, §7.5, §7.6, §11, §12 and §13 record what they
+settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15
+records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
 `vm-map/opcodes.toml`, and the open work it covers in `docs/backlog.md` (§14), which points here.
@@ -401,6 +402,33 @@ starts (op `0x2bf`); and `Mixer` the levels, the routes and a numbered load's au
 - **Not modelled, as before:** the delayed starts that native's tick runs inside a statement block while a transition
   parks the interpreter (run-state `0x400`; `docs/backlog.md`).
 
+**As built (milestone 7).** The graphics native is `Ome.Engine.Natives.Graphics`
+(`engine/Ome.Engine/Natives/Graphics*.cs`). `Graphics.cs` holds the retained objects (`State`, the `GfxState` that
+the VM's `Gfx` returns), the presentation request and the two partners below; `Graphics.Surfaces.cs` the surface
+table; `Graphics.Transitions.cs` what ops `0x222` and `0x20c` publish, the render-target snapshots and the
+whole-screen transition with its timing; and `Graphics.Frame.cs` the lowering (§6.3, "As built").
+
+- **Its state.** The census's 17 host fields of the surface table, the publication and the screen transition are its
+  private fields, and neither the VM nor `EngineHost` keeps one (`ProjectBoundaryTests`). The image, screen-transition
+  and backbuffer locks came with them. A surface's pixels are an `RgbaImage` that each change replaces: a fill, a
+  copy, text drawn into the surface and a movie mask's capture each publish a new image, so a frame keeps the pixels
+  it was lowered with.
+- **What stays.** The host keeps the waits that block on a publication or a screen transition, and their fields,
+  until milestone 11: the presentation barrier, the request generations and their event, `_foregroundGfx`,
+  `_foregroundTransitionWaitBypassed` and `_transitionStartedAtMs`. `IGraphicsHost` keeps only the ops that block (the
+  present of ops `0x222` and `0x20c`, the foreground transition wait and the four screen fades), and each is passed
+  the native's state. The VM keeps `_tickPresentationEnabled`, which ops `0x21b`/`0x247` only store and read back.
+- **Its handlers.** The VM's surface handlers (create, load, draw, release, size, fill, copy, the render-target clear
+  and the thumbnails' capture and replace) call the native, which the VM's constructor takes. A VM given none builds
+  `Graphics.Headless()`, with no catalog and no screen: a created surface has its size, and nothing loads.
+- **Its partners (census addition 2).** Until the movie and text natives exist, the lifted host is both. It answers
+  which surfaces and resources a movie shows (`IGraphicsMovies`, milestone 8), and it listens (`ISurfaceListener`):
+  before a surface or a range is released it takes the movie off it, as native deletes the slot's movie object first;
+  after, it stops that movie and drops the text layouts retained on the surface; and when op `0x1af` replaces a
+  surface's pixels with a thumbnail, it drops them too.
+- **Construction.** Composition (`godot/Main.cs`) builds one native over the catalog, the frame clock and the canvas,
+  and hands it to `EngineHost` and the VM; the host attaches itself as both partners.
+
 ### 5.3 Time
 
 **Today.** The VM runs on a task thread (`godot/Main.cs:616`) and blocks inside host calls. Godot's main thread
@@ -682,6 +710,82 @@ uploads the buffer (`Image.SetData`, `ImageTexture.Update`). The rules both path
 blur-range sources (`Hosting/BlurRangeSources.cs`), a blur's sample matrix (`SoftwareCompositor.BlurSampleAffine`)
 and the patterned transition's crossfade (`SoftwareCompositor.CrossfadeApproximation`). Which path draws is
 unchanged. Milestone 7 makes this class the reference renderer by giving it the frame description to read.
+
+**As built (milestone 7).**
+
+- **The frame description** is `Ome.Engine.Devices.FrameDescription`
+  (`engine/Ome.Engine.Devices/Graphics/FrameDescription.cs`), with the renderer `IFrameRenderer` and the presenter
+  `IFramePresenter`; `Affine2D` and `BlendKind` moved into `Ome.Engine.Devices` with it. A frame has a background
+  colour, `PreserveExistingPixels`, `AppendLayers` (for a retained renderer: the items add to the previous frame's
+  layers, as a partial publication does), the items bottom first, and an optional `FrameScreenTransition` (source
+  items, target items, overlay colour, alpha 0..256). An item is a textured quad or a fill, with one matrix, an
+  opacity, a tint (a multiply, or a LERP of a strength), a blend and a colour key. A texture says what a renderer may
+  cache: a static image by its asset id, a dynamic surface by its key, whose pixels change only by replacement.
+  Effects are lowered to items: a surface transition draws its target range at the sampled progress (the patterned
+  one as the crossfade approximation both paths used), and a blur draws its samples. Only the whole-screen transition
+  stays an effect, because its target is flattened before it is blended.
+- **One traversal.** `Graphics.LowerFrame` lowers the backbuffer's visible objects, or a screen transition's source
+  and target frames, once a frame. The decisions `--gfx-log` and `--timeline-log` print (`GfxDecisionLog`) and the perf
+  counters come from it, with the same text as before. A published range (ops `0x222` and `0x20c` into a render
+  target, a movie mask's capture) is lowered by the plain rules `Sys4/RetainedSurfaceRasterizer.cs` had, kept as they
+  were and not yet checked against native: each object in the range as its texture or its fill, no effects, fills
+  sized to the destination, nothing for a source rectangle that starts off its texture. That class is deleted, and
+  `ProjectBoundaryTests` checks that only the lowering builds an object's matrix (`Transform2DMath.Build`; `GfxState`
+  samples its range transform itself).
+- **The reference renderer** is `Ome.Engine.Hosting.ReferenceRenderer`, the software compositor reading a frame
+  description; its code defines what each field of an item means. A screen transition draws as native's mode 4: the
+  source frame opaque, then the target flattened over a clear of the overlay colour and blended over it at the alpha.
+- **The GPU renderer** (`godot/GpuRetainedRenderer.cs`) is an `IFrameRenderer`. It declines a frame with a screen
+  transition, and `Main.Recomposite` (`godot/Main.Compositor.cs`) then has the reference renderer draw it and shows
+  its pixels (`Main` is the `IFramePresenter`). Every frame of a `--gfx-log` or `--timeline-log` run is the
+  reference's, as before. Neither file names `RenderObject` or `GfxState` (`ProjectBoundaryTests`).
+- **Changes in behaviour:**
+  - The GPU renderer draws the background colour of a frame that starts clean; it drew black. The reference drew it.
+  - It draws an additive item with a LERP tint, with an additive copy of its LERP shader; before, any visible object
+    with that tint sent the frame to the software path. No frame has one: only static colour mode 1 blends
+    additively, and it tints by multiplying (`GfxState.Presentation.cs`), so the case was a guard that never fired.
+  - A declined frame is lowered once; the snapshot was taken twice.
+  - The perf counters `gpu_blur_scan`, `gpu_transform` and `gpu_object_lookup` time the lowering, for every frame.
+- **Which thread renders.** The front end's main thread lowers each frame and draws it, under the presentation
+  barrier, as before. The pixels a description refers to never change, since surfaces are replaced (§5.2, "As
+  built"). The description itself is reused from frame to frame, which keeps the GPU path's allocations down, so a
+  renderer on a thread of its own would need two descriptions handed between the threads. Nothing needs that yet, and
+  milestone 11 decides the threads.
+- **The tolerance**, written before measuring: every shot drawn by the GPU, unless the frame is one it declines by
+  design; frames whose items are all whole-pixel moves within 3 levels per channel; frames with scaled, rotated or
+  fractionally placed items with at most 1 % of the frame's pixels more than 3 apart, inside those items, and none
+  more than 64 apart; and no missing, extra or misplaced layer on the difference image. The known sources of
+  difference are blending arithmetic (the reference truncates integers, the GPU rounds floats), the GPU's own
+  bilinear filtering, and the LERP-tint shader.
+- **The comparison.** The port's driver step `reference-diff` (`docs/tools-reference.md`) has a second reference
+  renderer draw every frame description too, and compares the screen with its drawing of the same frame. Two port
+  scenarios run it, `tools/drive/scenarios/port/himegari-reference-diff.steps` and `kamidori-reference-diff.steps`.
+  Every shot was drawn by the GPU:
+
+  | Shot | Draws (scaled) | Over 3 | Largest |
+  |---|---|---|---|
+  | Himegari title, GAMESTART, SC0000 pages 1 and 17, the history | 10 to 103 (0 to 2) | 0 | 3 |
+  | Himegari page 14, over the effect band's scaled CG | 40 (2) | 1,334 (0.3 %) | 5 |
+  | Himegari page 15, mid-effect | 9 (2) | 49,268 (10.3 %) | 6 |
+  | Kamidori title, GAMESTART, SC0000 | 11 to 50 (0) | 0 | 2 |
+  | Kamidori's first field: its event, and the idle map | 249 and 278 (208 and 214) | 0 | 3 |
+
+  A pass over SC0000's pages 1 to 25, two or three shots a page, gave the same: of 74 shots, all are within 3 levels
+  except four on pages 14 and 15, which differ by up to 6 levels on 0.2 % to 5.9 % of the frame. Two of those and
+  page 15 above exceed the 1 % bound; their difference images show fine stripes across one full-screen CG drawn
+  scaled under additive light, and nothing else. That is the two renderers' filtering, which
+  this milestone did not change: the GPU's pixels on page 14 are the same as before
+  (`himegari-effect-waits.steps`). It is accepted here and is a backlog item ("The two renderers filter scaled
+  layers differently"), to settle against native's output.
+- **Speed.** `--perf-log` captures of the optimized build, two runs of each workload before (`1d819e9`) and after,
+  per drawn frame of main-thread time, median, p95 and p99:
+  - Kamidori's field at 蒼月の南湖畔 (5,562 frames of about 410 draws, 320 of them scaled): 0.461, 0.479 and
+    0.533 ms before, 0.449, 0.470 and 0.516 ms after.
+  - SC0000's effect band (3,896 and 3,899 frames): 0.019, 0.549 and 0.651 ms before, 0.019, 0.553 and 0.659 ms
+    after.
+
+  The allocations per frame are the same or fewer (448 bytes on the field; at p99 2,424 bytes before and 1,648
+  after in the band). The lowering's work (blur scan, matrices, slot lookup) takes 0.07 ms of a field frame.
 
 ### 6.4 Files
 
@@ -1035,7 +1139,7 @@ Every design question is decided (§2). These facts are not verified yet; each n
 | That the lift's typed calls keep `CallDeferred`'s timing | §12 | Milestone 4: they do (§6.2, "As built") |
 | Whether the 22 operand-access rows need any code; the port may already read those operands correctly | §7.2 | Milestone 0: one does (below) |
 | What the 125 revision differences are, and whether they come to about ten rules | §7.2 | Backlog, "Triage the opcode revision diff" |
-| That building a frame description for every frame keeps the GPU path's frame times | §6.3 | Milestone 7: `--perf-log` captures of `FIELD` and SC0000's effect band |
+| That building a frame description for every frame keeps the GPU path's frame times | §6.3 | Milestone 7: it does; `FIELD` and SC0000's effect band are as fast as before (§6.3, "As built") |
 | Whether Himegari's engine dump is 4.22 or 4.24J | §7.1 | Milestone 0: 4.24J |
 | Whether `expectedPackedSaveVersion` is the engine's or the game's | §7.5 | Milestone 0: the game's |
 
@@ -1058,12 +1162,13 @@ From `docs/backlog.md`, `## Architecture`:
 - "The host's threads have no stated ownership" — typed calls in milestone 4, the locks in milestone 11.
 - "Two instruction loops" — the typed step result in milestone 1; one loop in milestone 11 (§5.4).
 - "The Godot front end has no unit tests" — milestone 4.
-- "The render traversal is written three times" — milestone 7.
+- "The render traversal is written three times" — milestone 7, which closed it.
 
 Not covered:
 
-- "Normal play still uses the software compositor". Finishing the GPU path is a non-goal. Milestone 7 gives it the
-  reference to match and the test that compares.
+- "Normal play still uses the software compositor", since milestone 7 "The GPU renderer declines screen transitions".
+  Finishing the GPU path is a non-goal. Milestone 7 gave it the reference to match and the step that compares
+  (`reference-diff`).
 - "`Main` has no seams" (§10).
 - "No single error path".
 - "Modal dialogs are separate fields". The dialogs device gives the host's side a request object (§6.2); `Main`'s
@@ -1152,3 +1257,18 @@ Not covered:
   `himegari-read-skip` keeps its time (37.7 s). The saves of `himegari-save-load` and `kamidori-history-after-load` are
   equal under `save-diff` except for their timestamp and play time, so the BGM and sound effect records the native now
   writes are unchanged, and their thumbnails are byte-identical.
+- **2026-11-12, milestone 7.** Graphics. The surface table, the publication and the screen transition have one
+  owner, `Ome.Engine.Natives.Graphics`, which lowers each frame to a frame description that the GPU renderer and the
+  reference renderer both read (§5.2 and §6.3, "As built"). The object traversal is written once, and
+  `RetainedSurfaceRasterizer` is gone; `ProjectBoundaryTests` checks that the graphics state is private, that only the
+  lowering builds an object's matrix, and that the front end's drawing names neither `RenderObject` nor `GfxState`.
+  The native tells a listener when a surface is released or replaced (census addition 2). The tolerance for the GPU
+  against the reference was written before measuring; the new driver step `reference-diff` met it on every shot
+  except frames of SC0000's effect band, where the renderers' filtering of a scaled CG differs by up to 6 levels on up
+  to 10 % of the frame, as it did before (backlog). The `FIELD` and effect-band frame times are no worse (§13). The suite (1893) and
+  validation at the core, workspace and runtime levels on both games pass. The 15 port scenarios of milestone 6 give
+  the same step results with equal `SYS4REG.INI` (`himegari-script-error` run with its mod), and their shots are
+  identical except for animation phase. `himegari-read-skip` takes 38.2 s on this build and on `1d819e9` alike, run
+  on the same day; the machine had become about 0.5 s slower than milestone 6's runs. The saves of
+  `himegari-save-load` and `kamidori-history-after-load` are equal under `save-diff` except for their timestamp and
+  play time, and their thumbnails, which the native now captures, are byte-identical.
