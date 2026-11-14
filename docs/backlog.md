@@ -161,6 +161,24 @@ it; git history keeps the record.
   the same on `develop` (`1d7a39e`), so this predates the engine layering work. The scenario's History pictures match
   native. Done when the records match, or the field is shown to be a stamp and listed with `save-diff`'s expected
   differences (`tools-reference.md`).
+- **Sweep for ops that are still stubbed.** An op counts as implemented once the handler table binds its name
+  (`VirtualMachine.Implements`), and both games' catalog reports list no unsupported op
+  (`build/games/<profile>/catalog-opcode-coverage.json`). So a handler that only stores its operand, or models one
+  path of several, counts the same as a complete one, and nothing lists the gaps. Known cases:
+  - op `0x21b` stores its value, and op `0x247` reads it back, but there is no draw-mode-1 tick render gate
+    (`engine-re.md`, "Statement blocks"); both games use `0x21b`;
+  - op `0x140` outside the ADV labelled-yield pattern emits a `Stub` trace and goes on
+    (`VirtualMachine.ControlFlow.cs`);
+  - op `0xd8`'s timer and op `0x1d9` have no handler; neither game's scripts use them.
+
+  The registry's markers are stale too:
+  - `noop_headless = true` is still set on ops `0x1bf`, `0x1d5`, `0x1f4` and `0x1f5`, which the port models;
+  - 255 catalog-only ops say "the port currently traces and skips it", though an op without a handler halts unless
+    `--probe` is given (`VirtualMachine.StepInstruction`).
+
+  Done when the sweep has compared each bound handler with its native handler and listed each one that does less.
+  Each listed gap is then fixed or gets its own item here, and the registry's `noop_headless` flags and stub summaries
+  say what the port does.
 
 ## Robustness
 
