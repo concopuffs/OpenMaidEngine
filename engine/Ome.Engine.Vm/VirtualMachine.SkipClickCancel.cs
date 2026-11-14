@@ -42,7 +42,7 @@ public sealed partial class VirtualMachine
 
     private void CancelMessageSkipFromClick()
     {
-        Interlocked.Exchange(ref _scene.QueuedInputCallbackMask, 0);   // input_flush_action_triggers
+        _scene.QueuedInputCallbackMask = 0;   // input_flush_action_triggers
         TakeHeldTriggers();
         _saves.Profile.ReadMessageSkipEnabled = false;
         _skip.CancelMessageSkipFromClick();

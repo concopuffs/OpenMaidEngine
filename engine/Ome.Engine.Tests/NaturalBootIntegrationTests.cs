@@ -124,14 +124,14 @@ public class NaturalBootIntegrationTests
 
         private int AudioRequestCount => AudioDevice?.Commands.Count ?? 0;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             if (_stopAtKamidoriAdvPage && Lines.Count > _kamidoriAdvLineBaseline)
                 throw new ReachedKamidoriAdvPageException(
                     "SC0000.BIN", Lines[^1].Text,
                     Vm.Gfx.SnapshotVisibleObjects().Count,
                     AudioRequestCount - _kamidoriAdvAudioBaseline);
-            base.WaitForInput(layoutSlot, serviceInputCallback);
+            base.WaitForInput(serviceInputCallback);
         }
 
         public override void Sleep(long duration)

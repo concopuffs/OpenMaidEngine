@@ -128,8 +128,10 @@ public partial class Main
     }
 
     /// <summary>The language assets of the selection's chain (spec §12). A switch takes effect when an asset is next
-    /// loaded, so the host drops what it decoded, the GPU renderer what it uploaded, and the software compositor
-    /// (screen transitions, and frames the GPU path declines) what it prepared.</summary>
+    /// loaded, so the graphics native drops what it decoded, the GPU renderer what it uploaded, and the reference
+    /// renderers (screen transitions, frames the GPU path declines, reference-diff's shadow) what they prepared. A
+    /// frame lowered before the switch can still be drawn after it; the renderers prepare an asset again when its
+    /// decoded image changes, so that frame cannot leave the old file in their caches.</summary>
     private void SelectLanguageAssets(LanguageSelection selection, bool startup)
     {
         if (_languageAssets == null) return;

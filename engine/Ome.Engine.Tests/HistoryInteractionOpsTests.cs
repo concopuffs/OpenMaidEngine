@@ -57,7 +57,7 @@ public class HistoryInteractionOpsTests
             }
         }
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Waits++;
             if (Waits < _openAtWait) return;
@@ -106,7 +106,7 @@ public class HistoryInteractionOpsTests
             if (Device.Voices.Count > 0) throw new StopAfterHistoryVoiceException();
         }
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Waits++;
             bool hasRecentVoice = Vm.TextHistory.Entries.TakeLast(5)
@@ -147,7 +147,7 @@ public class HistoryInteractionOpsTests
             if (HistoryRowsChanged) throw new StopAfterHistoryWheelException();
         }
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Waits++;
             if (Waits < 8) return;

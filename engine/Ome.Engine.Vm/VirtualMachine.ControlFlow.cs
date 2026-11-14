@@ -5,8 +5,8 @@ namespace Ome.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
-    private volatile bool _hiddenWindowWaiting;       // run-state 0x4000000: the engine waits for any trigger
-    private volatile bool _hiddenWindowWheelTriggers; // ...with the text wait's 0x80000000, so the wheel is one
+    private bool _hiddenWindowWaiting;                // run-state 0x4000000: the engine waits for any trigger
+    private bool _hiddenWindowWheelTriggers;          // ...with the text wait's 0x80000000, so the wheel is one
     private int _advWaitCoroutineYieldRequested;      // logical action 5 reached a polling ADV text wait
 
     private void ResetCoroutineYield()
@@ -57,7 +57,7 @@ public sealed partial class VirtualMachine
     public bool TryRequestAdvWaitCoroutineYield()
     {
         if (!_advTextWaitPolling) return false;
-        Volatile.Write(ref _advWaitCoroutineYieldRequested, 1);
+        _advWaitCoroutineYieldRequested = 1;
         _waits.WakeInputCallbackService();
         return true;
     }

@@ -11,15 +11,15 @@ namespace Ome.Engine.Natives;
 public sealed partial class InputAndWaits
 {
     /// <summary>
-    /// Op 0x72's text wait for the page on layout <paramref name="layoutSlot"/>, or op 0xfa's poll with no page
-    /// (<paramref name="textPage"/> false: no page break or locator page, no wait indicator, the text stays). It runs
-    /// the interpreter's callbacks (<paramref name="serviceInputCallback"/>, true while another is ready) until a click,
+    /// Op 0x72's text wait for the page (the interpreter has begun its wait on the page's layout), or op 0xfa's poll
+    /// with no page (<paramref name="textPage"/> false: no page break or locator page, no wait indicator, the text
+    /// stays). It runs the interpreter's callbacks (<paramref name="serviceInputCallback"/>, true while another is ready) until a click,
     /// fast-forward or Auto ends it. Callback completion itself is not native graphics dirtiness: a callback's retained
     /// writes publish through GfxState's mutation generation and its surface writes through the graphics native, so
     /// FIELD's 50 ms hover callback does not redraw an idle frame.
     /// </summary>
-    public void WaitAtAdvInputPoll(int layoutSlot, Func<bool> serviceInputCallback,
-                                   Func<AdvAutoWaitState> autoWaitState, bool textPage)
+    public void WaitAtAdvInputPoll(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState,
+                                   bool textPage)
     {
         if (textPage)
         {

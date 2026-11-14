@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
+using Ome.Engine.Diagnostics;
+using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
@@ -71,6 +75,66 @@ public class RootReloadRequestTests
         Assert.Equal(1, vm.Globals.GetValueOrDefault(AfterWait));
         Assert.False(vm.Globals.ContainsKey(SceneFlag));          // the reset zeroed the global banks
         Assert.Equal("exit", vm.HaltReason);
+    }
+
+    /// <summary>The first callback script asked for by name is held at its lookup until the test lets it go; ids
+    /// resolve at once.</summary>
+    private sealed class HeldCallbackProvider(Dictionary<long, Script> scripts, Script callback) : IScriptProvider
+    {
+        public ManualResetEventSlim CallbackRequested { get; } = new(false);
+        public ManualResetEventSlim ReleaseCallback { get; } = new(false);
+
+        public Script? GetById(long id) => scripts.TryGetValue(id, out Script? script) ? script : null;
+
+        public Script? GetByName(string name)
+        {
+            if (!CallbackRequested.IsSet)
+            {
+                CallbackRequested.Set();
+                VmRunThread.AwaitSignal(ReleaseCallback, "was let go of the callback");
+            }
+            return callback;
+        }
+    }
+
+    [Fact]
+    public void ARequestTheReloadTookBeforeItsWakeRanLeavesTheNewRootsWaitBlocking()
+    {
+        // The request arrives while the instruction boundary looks up a menu's callback script, so its wake is posted.
+        // The callback's first instruction takes the reload, and the root's loop returns straight to op 0x9's reset
+        // without pumping; the new root's op 0xfa poll then pumps the late wake, which must not end it.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        Script first = ScriptAssembler.Assemble(table, "FIRST", [(0x2, [])], []);
+        Script callback = ScriptAssembler.Assemble(table, "CALLBACK", [(0x2, [])], []);
+        Script root = ScriptAssembler.Assemble(table, "SYSTEM4.BIN", [
+            (0xfa, []),                               // the new root's first input wait
+            (0x55, [G(AfterWait), I(1)]),             // reached only if the wait ended
+            (0x2, []),
+        ], []);
+        var provider = new HeldCallbackProvider(new Dictionary<long, Script> { [0] = root }, callback);
+        using var locator = new PageLocatorState("FIRST", null);
+        HeadlessNativesTests.NativeSet natives = HeadlessNativesTests.Natives(locator, new FrameClock());
+        VirtualMachine vm = natives.Vm(first, table, provider: provider);
+        natives.Shell.RequestSettingCallback();   // the 設定 menu's callback, taken at the first instruction boundary
+
+        Task run = Task.Run(() => natives.Waits.RunEngine(() => vm.Run()));
+        VmRunThread.AwaitSignal(provider.CallbackRequested, "looked up the callback");
+        vm.RequestRootReload();
+        provider.ReleaseCallback.Set();
+
+        var guard = System.Diagnostics.Stopwatch.StartNew();
+        while (!natives.Waits.IsWaiting && !run.IsCompleted)
+        {
+            if (guard.Elapsed > VmRunThread.HangGuard) throw new TimeoutException("the new root never waited");
+            Thread.Sleep(1);
+        }
+        bool waiting = natives.Waits.IsWaiting;
+        natives.Waits.Stop();
+        if (!run.Wait(VmRunThread.HangGuard)) throw new TimeoutException("the VM run did not end");
+        run.GetAwaiter().GetResult();
+
+        Assert.True(waiting, $"the new root's wait ended at once ({vm.HaltReason})");
+        Assert.False(vm.Globals.ContainsKey(AfterWait));
     }
 
     private static Operand I(long value) => new(0, value);

@@ -699,6 +699,13 @@ but a few files have become navigation and ownership bottlenecks: `VirtualMachin
 `Main.cs`, `GodotAdvHost.cs`, and `extract_init.py`. Repository entry points are also partly machine-local,
 and the test project recompiles frontend/tool sources by link instead of consuming one production assembly.
 
+*Superseded in part (2026-11-13).* Engine layering
+([spec](superpowers/specs/2026-11-12-engine-layering-design.md)) replaced the host that steps 2 and 3 below split
+and the contracts they introduced. `GodotAdvHost` became `EngineHost` in its milestone 4; by milestone 12
+`EngineHost`, `IHost` and the focused host contracts (`IAdvHost`, `IAudioHost`, `IGraphicsHost`, `IInputHost` and the
+rest) are gone. The natives in `engine/Ome.Engine/Natives/` own what the host held, and the VM takes
+`IInputAndWaits`. The steps record that earlier work as it was done.
+
 This is a maintenance effort, not a runtime redesign. Preserve bytecode behavior, native-format
 compatibility, current command paths, generated-file ownership, and the one-engine/many-profiles direction.
 Each step should land in bounded commits with the full validation level appropriate to the touched boundary;

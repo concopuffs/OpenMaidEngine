@@ -79,7 +79,7 @@ public class HostedSceneEntryTests
         public VirtualMachine Vm = null!;
         public bool ClickConsumed = true;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Vm.UpdatePointer(20, 30);
             while (serviceInputCallback()) { }

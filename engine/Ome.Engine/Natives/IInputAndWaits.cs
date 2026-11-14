@@ -61,8 +61,9 @@ public interface IInputAndWaits
     // the movies, and the surfaces stay; the VM releases them afterwards when set:AutoFreeTex asks.
     void ResetSceneContext() { }
 
-    // A front-end return-to-title request (VirtualMachine.RequestRootReload): end every blocking wait now so
-    // the VM reaches an opcode boundary. Waits stay interrupted until the reset calls ResetSceneContext.
+    // A front-end return-to-title request (VirtualMachine.RequestRootReload) for waits that do not supply
+    // StopAndReload: end every blocking wait now so the VM reaches an opcode boundary. Waits stay interrupted until
+    // the reset calls ResetSceneContext. Waits that supply it are woken by the request on that copy.
     void InterruptForRootReload() { }
 
     // ---- the modal movie ----
@@ -75,7 +76,8 @@ public interface IInputAndWaits
     void CancelNextModalMovie() { }
 
     // ---- presentation and screen transitions ----
-    // Each GfxState passed is the graphics native's state.
+    // Each GfxState passed is the graphics native's state. The input and waits native has its own reference to it; a
+    // stand-in, which has none, reaches the state through the argument.
 
     void PresentObjectRange(GfxState gfx, long firstHandle, long count) { }
 
@@ -111,33 +113,33 @@ public interface IInputAndWaits
         while (text.ServiceReveal(gfx) != null) { }
     }
 
+    // Op 0x72's page wait. The interpreter has begun the page's wait on its layout (TextManager.BeginPageWait).
     void WaitForInput();
-    void WaitForInput(int layoutSlot) => WaitForInput();
 
     // An interactive native services script callbacks on the engine thread while the enclosing ADV page remains
     // parked. The callback returns true while another queued input callback is ready to run.
-    void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+    void WaitForInput(Func<bool> serviceInputCallback)
     {
         while (serviceInputCallback()) { }
-        WaitForInput(layoutSlot);
+        WaitForInput();
     }
 
-    void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
-                      Func<AdvAutoWaitState> autoWaitState)
-        => WaitForInput(layoutSlot, serviceInputCallback);
+    void WaitForInput(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
+        => WaitForInput(serviceInputCallback);
 
     // Op 0xfa's wait: native run-state 0x80000000, the input poll of a text wait, with no page. There is no wait
     // indicator or page break, the text stays, and Auto has no timer of its own: native polls the shared timer that the
     // last page or sleep armed, which has normally expired, so an unvoiced Auto ends the wait at once. A stand-in
     // without a page model treats it as a text wait.
     void WaitForAdvInputPoll(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
-        => WaitForInput(0, serviceInputCallback, autoWaitState);
+        => WaitForInput(serviceInputCallback, autoWaitState);
 
     void WakeInputCallbackService() { }
     // Native clearing run-state 0x80000000 from a service call: the polling text wait returns as if the page were
     // advanced. Called on the engine thread from the wait's input callback.
     void EndInputWait() { }
-    void InputCallbackCompleted(GfxState gfx) { }
+    // A wait's callback ended and the waiting frame's hotspots are armed again (stand-ins count them).
+    void InputCallbackCompleted() { }
 
     // Native run-state 0x4000000, the hidden-window wait: the engine keeps presenting frames and polls the triggered
     // actions until any arrives. Return once triggered() is true (it consumes the trigger) or the engine stops;

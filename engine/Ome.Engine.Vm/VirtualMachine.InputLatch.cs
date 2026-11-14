@@ -45,23 +45,18 @@ public sealed partial class VirtualMachine
     private int _heldTriggers;   // logical action bits; bit 31 is the native menu's hide-window request
 
     /// <summary>The triggers the latch holds (logical action bits).</summary>
-    public int HeldTriggers => Volatile.Read(ref _heldTriggers);
+    public int HeldTriggers => _heldTriggers;
 
     /// <summary>Hold triggered logical actions (bit = 1 &lt;&lt; action) in the latch while nothing polls it. The
     /// frontend calls this for a trigger that arrives during an effect service that does not poll.</summary>
     public void HoldTriggers(int actionMask)
     {
         if (actionMask == 0) return;
-        int before, after;
-        do
-        {
-            before = Volatile.Read(ref _heldTriggers);
-            after = before | actionMask;
-        } while (Interlocked.CompareExchange(ref _heldTriggers, after, before) != before);
+        _heldTriggers |= actionMask;
         _waits.WakeInputCallbackService();
     }
 
-    private int TakeHeldTriggers() => Interlocked.Exchange(ref _heldTriggers, 0);
+    private int TakeHeldTriggers() => Take(ref _heldTriggers);
 
     /// <summary>Op 0x72's entry and op 0xfa poll the latch and discard it unless run-state 0x8000000
     /// (fast-forward) is on.</summary>

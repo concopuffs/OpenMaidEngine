@@ -24,7 +24,8 @@ public interface IVmMenuServices
 /// </summary>
 public sealed partial class VirtualMachine : IVmMenuServices
 {
-    /// <summary>What AGERC's refresh reads. Called on the frontend thread while the VM is held for an open menu.</summary>
+    /// <summary>What AGERC's refresh reads. The front end reads it through the waits' Invoke, on the engine
+    /// thread.</summary>
     public VmMenuState MenuState => new(
         MessageSkip: _skip.MessageSkipEnabled,
         AutoMessage: _skip.AutoMessageEnabled,
@@ -36,7 +37,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
 
     /// <summary>The message settings as the 設定 dialog reads them (agerc_settings_message_page_proc): message:
     /// MessageSpeed (the per-glyph delay, also ctx+0x14e9c), message:MesWinAlpha and the skip and auto native's
-    /// message:AutoMessageTime0/1. Called on the frontend thread while the VM is held for the open dialog.</summary>
+    /// message:AutoMessageTime0/1. The front end reads them through the waits' Invoke, on the engine thread.</summary>
     public MessageSettings MessageSettings => new(
         _text.MessageGlyphDelayMilliseconds, _text.MessageWindowAlphaSetting, _skip.AutoMessageTime0Ms,
         _skip.AutoMessageTime1Ms);

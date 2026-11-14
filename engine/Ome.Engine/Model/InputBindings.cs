@@ -91,7 +91,7 @@ public sealed class InputBindings
     public int JoystickButtonActionMask(int physicalButton)
     {
         if ((uint)physicalButton >= 32) return 0;
-        return JoystickButtonActionMaskLocked(physicalButton);
+        return JoystickButtonActions(physicalButton);
     }
 
     public void UpdateKeyboardVirtualKey(int virtualKey, bool pressed)
@@ -147,11 +147,11 @@ public sealed class InputBindings
 
         for (int physicalButton = 0; physicalButton < 32; physicalButton++)
             if ((_heldJoystickButtons & (1u << physicalButton)) != 0)
-                mask |= JoystickButtonActionMaskLocked(physicalButton);
+                mask |= JoystickButtonActions(physicalButton);
         return mask;
     }
 
-    private int JoystickButtonActionMaskLocked(int physicalButton)
+    private int JoystickButtonActions(int physicalButton)
     {
         int mask = 0;
         // Native loops input_action_count slots and uses x86's masked shift for slot+4.

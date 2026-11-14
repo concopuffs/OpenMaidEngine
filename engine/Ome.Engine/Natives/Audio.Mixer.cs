@@ -125,9 +125,9 @@ public sealed partial class Audio
         else StartBgm(_bgmTrack, startMode: 1, forced: false);
         for (int channel = 0; channel < SoundEffectChannelCount; channel++)
         {
-            ReleaseSoundEffectLocked(channel);
+            ReleaseSoundEffectChannel(channel);
             long resourceId = channel < soundEffectResourceIds.Count ? soundEffectResourceIds[channel] : 0;
-            if (resourceId != 0) LoadSoundEffectLocked(resourceId, channel);
+            if (resourceId != 0) LoadSoundEffectChannel(resourceId, channel);
         }
         UpdateTimedWork();
     }

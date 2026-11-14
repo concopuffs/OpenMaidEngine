@@ -12,7 +12,7 @@ namespace Ome.Engine.Natives;
 // ask the text native; they do not hold the presenter (engine layering spec §8, "Localization").
 public sealed partial class TextManager
 {
-    private volatile TextPresenter? _presenter;
+    private TextPresenter? _presenter;
 
     /// <summary>
     /// The selected language's presenter, or null to draw source text: the source language, or a language with no
@@ -64,7 +64,7 @@ public sealed partial class TextManager
     /// <summary>The instruction that stored a global string cell's text, and that text.</summary>
     private readonly record struct StringStore(TextSite Origin, string Text);
 
-    private volatile bool _recordsStringStores;
+    private bool _recordsStringStores;
 
     /// <summary>
     /// Whether every write to a global string cell records its instruction and text (§5.2), so a string drawn far from

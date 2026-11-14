@@ -43,21 +43,17 @@ public sealed partial class InputAndWaits : IInputAndWaits
 
     void IInputAndWaits.WaitForTextReveal(GfxState gfx, TextManager text) => WaitForTextReveal(gfx);
 
-    void IInputAndWaits.WaitForInput() => WaitAtAdvInputPoll(0, static () => false, static () => default, textPage: true);
+    void IInputAndWaits.WaitForInput() => WaitAtAdvInputPoll(static () => false, static () => default, textPage: true);
 
-    void IInputAndWaits.WaitForInput(int layoutSlot)
-        => WaitAtAdvInputPoll(layoutSlot, static () => false, static () => default, textPage: true);
+    void IInputAndWaits.WaitForInput(Func<bool> serviceInputCallback)
+        => WaitAtAdvInputPoll(serviceInputCallback, static () => default, textPage: true);
 
-    void IInputAndWaits.WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
-        => WaitAtAdvInputPoll(layoutSlot, serviceInputCallback, static () => default, textPage: true);
-
-    void IInputAndWaits.WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
-                                     Func<AdvAutoWaitState> autoWaitState)
-        => WaitAtAdvInputPoll(layoutSlot, serviceInputCallback, autoWaitState, textPage: true);
+    void IInputAndWaits.WaitForInput(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
+        => WaitAtAdvInputPoll(serviceInputCallback, autoWaitState, textPage: true);
 
     // Op 0xfa: the same poll with no page (no page break or locator page, no wait indicator, the text stays).
     void IInputAndWaits.WaitForAdvInputPoll(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
-        => WaitAtAdvInputPoll(0, serviceInputCallback, autoWaitState, textPage: false);
+        => WaitAtAdvInputPoll(serviceInputCallback, autoWaitState, textPage: false);
 
     // ---- the AGE cursor (ops 0x86, 0x87 and 0x10a) ----
 

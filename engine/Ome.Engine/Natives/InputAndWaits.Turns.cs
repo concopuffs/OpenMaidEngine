@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using Ome.Engine.Devices;
 using Ome.Engine.Diagnostics;
@@ -100,7 +101,9 @@ public sealed partial class InputAndWaits
             _turnRequested = true;
         }
         _frameSignal.Set();
-        long deadline = Environment.TickCount64 + Math.Max(0, timeoutMs);
+        // Stopwatch, not Environment.TickCount64: the tick count steps about every 15.6 ms on Windows, so a 4 ms
+        // deadline measured on it would hold the front end anywhere from no time to a whole tick.
+        long deadline = Stopwatch.GetTimestamp() + Math.Max(0, timeoutMs) * Stopwatch.Frequency / 1000;
         lock (_turnLock)
         {
             while (_turn != TurnState.None)
@@ -110,7 +113,7 @@ public sealed partial class InputAndWaits
                     Monitor.Wait(_turnLock);
                     continue;
                 }
-                long remaining = deadline - Environment.TickCount64;
+                long remaining = deadline - Stopwatch.GetTimestamp();
                 if (remaining <= 0)
                 {
                     _turnAbandoned = true;
@@ -119,7 +122,7 @@ public sealed partial class InputAndWaits
                     _turnLowering = null;
                     break;
                 }
-                Monitor.Wait(_turnLock, (int)remaining);
+                Monitor.Wait(_turnLock, (int)Math.Max(1, (remaining * 1000 + Stopwatch.Frequency - 1) / Stopwatch.Frequency));
             }
             return TakePublishedLocked(out late);
         }

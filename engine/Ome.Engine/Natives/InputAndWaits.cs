@@ -52,8 +52,8 @@ public sealed partial class InputAndWaits : IFastForwardListener
         public volatile bool TransitionWaiting;
         public volatile bool Sleeping;
         public volatile bool ModalMovieWaiting;
-        public volatile bool ModalMovieCancelled;
-        public volatile bool ModalMovieCancelPending;   // CancelNextModalMovie: a held action 4 stops the next movie
+        public bool ModalMovieCancelled;
+        public bool ModalMovieCancelPending;   // CancelNextModalMovie: a held action 4 stops the next movie
         public GfxState? ForegroundGfx;
         public long TransitionStartedAtMs = -1;
     }
@@ -154,12 +154,17 @@ public sealed partial class InputAndWaits : IFastForwardListener
     /// <summary>End every wait now and keep them ended: the engine is stopping.</summary>
     public void Stop() => _stopAndReload.RequestStop();
 
-    /// <summary>A return to title from outside the script (VirtualMachine.RequestRootReload): end every wait now, so the
-    /// interpreter reaches an opcode boundary. Waits stay ended until the reload's scene reset.</summary>
+    /// <summary>A return to title from outside the script, for an interpreter that does not share
+    /// <see cref="StopAndReload"/>: end every wait now, so it reaches an opcode boundary. Waits stay ended until the
+    /// reload's scene reset. An interpreter built with this native asks through the shared copy instead.</summary>
     public void InterruptForRootReload() => _stopAndReload.RequestReload();
 
+    // Posted by a request from the front end's thread, so it runs at the engine thread's next pump. The interpreter
+    // reads the flags at each instruction boundary before it pumps, so a reload's scene reset can come first: then the
+    // request was taken and the new root's waits must not end.
     private void WakeAllWaits()
     {
+        if (!_stopAndReload.StopRequested && !_stopAndReload.ReloadRequested) return;
         _text.CompleteReveal();
         if (_gate.CurrentCount == 0) _gate.Release();
         _inputCallbackSignal.Set();

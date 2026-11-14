@@ -47,7 +47,7 @@ public sealed class AudioMixerSettings
         AudioMixerSettingsSnapshot snapshot;
         if ((uint)category >= CategoryCount) return false;
         _volumes[category] = checked((int)basisPoints);
-        snapshot = SnapshotLocked();
+        snapshot = CreateSnapshot();
         Changed?.Invoke(snapshot);
         return true;
     }
@@ -75,7 +75,7 @@ public sealed class AudioMixerSettings
         if (changed)
         {
             _routes[category] = enabled;
-            snapshot = SnapshotLocked();
+            snapshot = CreateSnapshot();
         }
         if (snapshot != null) Changed?.Invoke(snapshot);
         return true;
@@ -83,7 +83,7 @@ public sealed class AudioMixerSettings
 
     public AudioMixerSettingsSnapshot Snapshot()
     {
-        return SnapshotLocked();
+        return CreateSnapshot();
     }
 
     public void Replace(AudioMixerSettingsSnapshot snapshot)
@@ -110,6 +110,6 @@ public sealed class AudioMixerSettings
                     $"Audio mixer volume {value} is outside {UnconfiguredVolume}..{MaximumVolume}.");
     }
 
-    private AudioMixerSettingsSnapshot SnapshotLocked()
+    private AudioMixerSettingsSnapshot CreateSnapshot()
         => new(_volumes.ToArray(), _routes.ToArray());
 }

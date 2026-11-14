@@ -47,7 +47,7 @@ public sealed partial class VirtualMachine
     // Native run-state bit 0x80000000: an ADV wait (op 0x72's text wait, or op 0xfa's poll with no page) is polling
     // input. It is clear while that wait runs a hotspot callback, as native clears the bit on dispatch and the
     // callback's ret re-runs the wait.
-    private volatile bool _advTextWaitPolling;
+    private bool _advTextWaitPolling;
     private bool _advInputPollPageless;   // the polling wait is op 0xfa's
     // The stop and return-to-title requests: the input and waits native's copy when the VM is built with it, so a
     // request ends its waits too (engine layering plan §3.3).
@@ -161,7 +161,7 @@ public sealed partial class VirtualMachine
         // The yield came from an ADV text wait (adv_input_service_poll's action-5 entry), so the saved run state holds
         // the wait (0x80000000): op 0x7c returns to the parked wait rather than to an instruction.
         public bool CoroutineResumesTextWait;
-        public volatile bool CoroutineYieldActive;      // CoroutineResumePc is set; read when input is routed
+        public bool CoroutineYieldActive;      // CoroutineResumePc is set; read when input is routed
         // The op-0xcc mouse callback is engine state, not frame state (op 0xcd checks the registrant).
         public int MouseCallbackTarget = -1;
         public Script? MouseCallbackOwner;
@@ -191,10 +191,10 @@ public sealed partial class VirtualMachine
         ArgumentNullException.ThrowIfNull(waits);
         _s = s; _t = t; _handlers = BindHandlers(t); _waits = waits; _o = o ?? new VmOptions(); _provider = provider;
         // Composition hands over the native its time device belongs to; tests and tools that give none get one over
-        // the system clock. A stand-in for the waits that keeps the effects of fast-forward (a test's fake) hears it;
-        // the input and waits native listens to its own skip and auto native.
+        // the system clock. Waits that keep the effects of fast-forward hear it: the input and waits native already
+        // listens to its own skip and auto native, and Listen adds a listener once.
         _skip = skipAndAuto ?? SkipAndAuto.WithSystemClock();
-        if (waits is IFastForwardListener listener and not InputAndWaits) _skip.Listen(listener);
+        if (waits is IFastForwardListener listener) _skip.Listen(listener);
         // The audio native and the tick come from composition too; without them the VM runs with a silent one.
         _audio = audio ?? Audio.Silent(_skip);
         _tick = tick ?? new EngineTick(_audio);
@@ -256,8 +256,8 @@ public sealed partial class VirtualMachine
     /// </summary>
     public void RequestRootReload()
     {
-        _stopAndReload.RequestReload();
-        _waits.InterruptForRootReload();
+        _stopAndReload.RequestReload();   // waits that share this copy (InputAndWaits) wake from it
+        if (!ReferenceEquals(_stopAndReload, _waits.StopAndReload)) _waits.InterruptForRootReload();
     }
 
     /// <summary>Queue global writes and return only the identified active frame at its next opcode boundary.
@@ -276,7 +276,7 @@ public sealed partial class VirtualMachine
     public void UpdatePointer(int x, int y)
     {
         bool wake;
-        wake = MovePointerLocked(x, y);
+        wake = MovePointerTo(x, y);
         if (wake) _waits.WakeInputCallbackService();
     }
 
@@ -287,7 +287,7 @@ public sealed partial class VirtualMachine
         bool consumed = false;
         // Windows delivers a WM_MOUSEMOVE before a button message at a new point. The click itself hit-tests
         // nothing: it activates the current hit, which op 0x7c may have cleared under a still pointer.
-        MovePointerLocked(x, y);
+        MovePointerTo(x, y);
         if (_scene.InteractiveFrame != null)
             consumed = _scene.InteractiveFrame.Hotspots.Activate();
         if (consumed) _waits.WakeInputCallbackService();
@@ -296,7 +296,7 @@ public sealed partial class VirtualMachine
 
     /// <summary>The WM_MOUSEMOVE path: <c>age_main_window_proc</c> hit-tests a move only at a point other than the last
     /// move's (call at 0x48690f).</summary>
-    private bool MovePointerLocked(int x, int y)
+    private bool MovePointerTo(int x, int y)
     {
         if (x == _pointerX && y == _pointerY) return false;
         _pointerX = x; _pointerY = y;
@@ -320,7 +320,7 @@ public sealed partial class VirtualMachine
     public void QueueMouseWheelDelta(int delta)
     {
         if (delta == 0) return;
-        Interlocked.Add(ref _scene.MouseWheelDelta, delta);
+        _scene.MouseWheelDelta += delta;
         _waits.WakeInputCallbackService();
     }
 
@@ -361,7 +361,7 @@ public sealed partial class VirtualMachine
         }
         if (textRevealing && advanceMessageOnWheel)
         {
-            int total = Interlocked.Exchange(ref _scene.MouseWheelDelta, 0) + delta;
+            int total = Take(ref _scene.MouseWheelDelta) + delta;
             return total < 0 ? MouseWheelOutcome.Advance : MouseWheelOutcome.Dropped;
         }
         QueueMouseWheelDelta(delta);
@@ -417,24 +417,19 @@ public sealed partial class VirtualMachine
             _waits.WakeInputCallbackService();
             return;
         }
-        int bit = 1 << index;
-        int before, after;
-        do
-        {
-            before = Volatile.Read(ref _scene.QueuedInputCallbackMask);
-            after = before | bit;
-        } while (Interlocked.CompareExchange(ref _scene.QueuedInputCallbackMask, after, before) != before);
+        _scene.QueuedInputCallbackMask |= 1 << index;
         _waits.WakeInputCallbackService();
     }
 
-    private static void UpdateMaskBit(ref int field, int bit, bool set)
+    // The engine thread owns the interpreter's state (engine layering spec §5.3): the front end's input reaches it
+    // routed (InputAndWaits.Events.cs), so these are plain reads and writes.
+    private static void UpdateMaskBit(ref int field, int bit, bool set) => field = set ? field | bit : field & ~bit;
+
+    private static int Take(ref int field)
     {
-        int before, after;
-        do
-        {
-            before = Volatile.Read(ref field);
-            after = set ? before | bit : before & ~bit;
-        } while (Interlocked.CompareExchange(ref field, after, before) != before);
+        int value = field;
+        field = 0;
+        return value;
     }
 
     private int CurrentReadMessageIndex()
@@ -821,7 +816,7 @@ public sealed partial class VirtualMachine
     {
         ScriptErrorChoice choice = ShowScriptError(error, Math.Min(_cur.Pc + 1, _cur.Script.Instructions.Count - 1));
         if (choice == ScriptErrorChoice.Ignore)
-            Interlocked.Add(ref _cur.IgnoredDwords, InstructionDwords(_cur.Script, _cur.Pc));
+            _cur.IgnoredDwords += InstructionDwords(_cur.Script, _cur.Pc);
         return choice;
     }
 
@@ -884,9 +879,9 @@ public sealed partial class VirtualMachine
     {
         if (!step.Continues) return step;
         int next = step.NextPc(pc);
-        if (Volatile.Read(ref frame.IgnoredDwords) == 0 || (uint)next >= (uint)frame.Script.Instructions.Count)
+        if (frame.IgnoredDwords == 0 || (uint)next >= (uint)frame.Script.Instructions.Count)
             return step;
-        int offset = frame.Script.Instructions[next].Offset + Interlocked.Exchange(ref frame.IgnoredDwords, 0);
+        int offset = frame.Script.Instructions[next].Offset + Take(ref frame.IgnoredDwords);
         if (frame.Script.IndexByOffset.TryGetValue(offset, out int index)) return StepResult.Jump(index);
         HaltReason ??= $"script-error-ignored: {frame.Script.Name} resumed at 0x{offset:x}, outside its instructions";
         return StepResult.Halt;
@@ -1147,7 +1142,7 @@ public sealed partial class VirtualMachine
 
     private bool TryConsumeDebugFrameReturn(ExecFrame frame)
     {
-        if (Volatile.Read(ref _scene.DebugFrameReturnRequest) is not { } pending
+        if (_scene.DebugFrameReturnRequest is not { } pending
             || !ReferenceEquals(pending.Frame, frame)) return false;
         if (!ReferenceEquals(_scene.DebugFrameReturnRequest?.Frame, frame)) return false;
         foreach (var (address, value) in _scene.DebugFrameReturnRequest.GlobalWrites)
@@ -1277,7 +1272,7 @@ public sealed partial class VirtualMachine
         RouteHeldTriggersAtTextWait();
         // adv_input_service_poll takes op-0x97 bound actions first, which Godot activates before it requests the
         // action-5 yield, so a pending request comes before the hover and click callbacks queued after it.
-        if (Interlocked.Exchange(ref _advWaitCoroutineYieldRequested, 0) != 0 && ServiceAdvWaitCoroutineYield())
+        if (Take(ref _advWaitCoroutineYieldRequested) != 0 && ServiceAdvWaitCoroutineYield())
             return true;
         // A native menu command's toggle and its CALLBACK_SETTING.BIN, which native's launch queue runs from the tick.
         if (ServiceWaitSettingCallback()) return true;
@@ -1415,7 +1410,7 @@ public sealed partial class VirtualMachine
         // pointer, so restore the still-running parent before rearming its rebuilt registry.
         if (_scene.InteractiveFrame == null && _cur.Hotspots.HasDefinitions) _scene.InteractiveFrame = _cur;
         _scene.InteractiveFrame?.Hotspots.RearmAfterCallback(_pointerX, _pointerY);
-        _waits.InputCallbackCompleted(Gfx);
+        _waits.InputCallbackCompleted();
     }
 
     /// <summary>The longest run of cells or entries one instruction may write from a script-controlled count. Native

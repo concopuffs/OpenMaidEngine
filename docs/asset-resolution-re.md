@@ -8,12 +8,13 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
 
 ## What's already landed
 
-- **Graphics ops wired** (A2b-background, engine-driven): `create-texture 0x1f8` `(slot,w,h)`,
-  `set-texture 0x1f9` `(resId,slot)`, `draw-texture 0x1fb` `(slot,x,y,w,h)` promoted from VM stubs to
-  typed `IHost` methods; `CaptureHost` no-ops them (A1 trace-diff/A2a selftest stay green). The VM
-  now *drives* graphics; only resolution + backend rendering remain.
-- **Audio ops WIRED (2026-07-06):** `play-bgm 0xbf` / `play-voice 0xc4` → `IHost.PlayBgm/PlayVoice` →
-  same resolver → OGG via Godot `AudioStreamPlayer`. See step 4 below.
+- **Graphics ops wired** (A2b-background, engine-driven): `create-texture 0x1f8` `(slot,w,h)`, `set-texture 0x1f9`
+  `(resId,slot)`, `draw-texture 0x1fb` `(slot,x,y,w,h)` promoted from VM stubs to typed host methods, which the
+  headless hosts no-oped (A1 trace-diff/A2a selftest stayed green). Today the graphics native owns them
+  (`Natives/Graphics.Surfaces.cs`; a headless run gets one without a screen). The VM now *drives* graphics; only
+  resolution + backend rendering remain.
+- **Audio ops WIRED (2026-07-06):** `play-bgm 0xbf` / `play-voice 0xc4` → host `PlayBgm/PlayVoice` (today the audio
+  native, `Natives/Audio*.cs`) → same resolver → OGG via Godot `AudioStreamPlayer`. See step 4 below.
 - **Tools:** `tools/convert_agf.py` (AGF→BMP for *stills* via `AGF2BMP2AGF.exe`); `tools/frida/`
   (runtime capture harness — see its README); Frida core installed (17.15.3).
 
@@ -90,20 +91,19 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    surface mode: `0x1f9` creates ordinary mode 0, while `0x249` creates the tiled large-image mode 1 wrapper.
    FIELD's `0x32da..0x32dd` map sheets and SYSTEM4's `0x337e` SO001 are ordinary examples of the universal
    base indexes used throughout the corpus, not special fallback cases.
-3. **Wire the backend.** **✅ FIRST-PASS RENDER LANDED (2026-07-06).** `Ome.Engine/Sys4/ResourceMap.cs`
-   (Resolve + BMP path) + `EngineHost` texture ops → `TextureRect` compositing behind the dialogue;
-   `IHost.DrawTexture` extended with dst x/y; 800×600 window; `convert_agf.py --scene` pre-converts a
-   scene's manifest AGFs → BMP. The full-screen **event-CG layer renders end-to-end** from the executed
-   bytecode. **Historical limitations at first landing (subsequently resolved in the Phase-A graphics
-   slices):** sprites + `BG*` (routed through the CG-load subroutine) had garbage geometry because native
-   graphics ops were stubbed (`0x208` get-texture-size + the sprite position/animation chain); fades
-   (`AE*`) drew opaque (no alpha); the slot
-   model approximated the game's immediate-mode blit-onto-slot-0 canvas. See `docs/phase-a-slice-plan.md`
-   (A2b section) for the implementation history and current retained-object model.
+3. **Wire the backend.** **✅ FIRST-PASS RENDER LANDED (2026-07-06).** `Ome.Engine/Sys4/ResourceMap.cs` (Resolve + BMP
+   path) + the host's texture ops (today the graphics native's) → `TextureRect` compositing behind the dialogue; the
+   host's `DrawTexture` extended with dst x/y; 800×600 window; `convert_agf.py --scene` pre-converts a scene's
+   manifest AGFs → BMP. The full-screen **event-CG layer renders end-to-end** from the executed bytecode. **Historical
+   limitations at first landing (subsequently resolved in the Phase-A graphics slices):** sprites + `BG*` (routed
+   through the CG-load subroutine) had garbage geometry because native graphics ops were stubbed (`0x208`
+   get-texture-size + the sprite position/animation chain); fades (`AE*`) drew opaque (no alpha); the slot model
+   approximated the game's immediate-mode blit-onto-slot-0 canvas. See `docs/phase-a-slice-plan.md` (A2b section) for
+   the implementation history and current retained-object model.
 
    **System chrome ownership (resolved 2026-07-20).** The normal Godot entry now runs SYSTEM4 as the live
    root, so its SO000/SO001 loads, ADV-layout definitions, and retained slot initialization execute through
-   `EngineHost` before TITLE and child scenes. Asset lookup decodes VFS-owned AGF bytes directly and does
+   the graphics native before TITLE and child scenes. Asset lookup decodes VFS-owned AGF bytes directly and does
    not depend on a scene-limited converted BMP. `CALLBACK_WINDOW.BIN` consequently inherits slot `0x11`
    with SO001 and can crop its textbox/buttons normally. The explicit `--scene SC0000 --boot` diagnostic
    still injects the same known inherited layout and surface state because it intentionally bypasses
@@ -113,13 +113,12 @@ highest-risk area of the port. This doc is the steering state; it feeds the A2b 
    id supplied by bytecode, and nested helpers/sibling scripts use the same global base/append catalogs.
    Script-context bracketing remains useful for diagnostics/page location, but it must not alter texture,
    voice, cursor, SFX, or movie resolution.
-4. **Audio.** **BGM/voice/SFX wired; VFS bytes complete (2026-07-11); packed-raw SFX corrected 2026-07-20.** `IHost.PlayBgm/PlayVoice` +
-   VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1); `ResourceMap.ReadAudio` opens the
-   resolved catalog entry through `IAssetStore`; `EngineHost` passes the bytes to `Main`'s players
-   (`AudioStreamOggVorbis.LoadFromBuffer`; BGM loops, voice interrupt-on-new). Non-Godot hosts no-op it
-   → `--selftest`/8-8 byte-identical. SC0000 fires 18 BGM + 198 voice. **By-ear VALIDATED
-   (2026-07-06):** voices play on their lines (`play-voice` med→HIGH). **BUT the two audio ops use DIFFERENT
-   addressing:**
+4. **Audio.** **BGM/voice/SFX wired; VFS bytes complete (2026-07-11); packed-raw SFX corrected 2026-07-20.** The
+   host's `PlayBgm/PlayVoice` (today the audio native) + VM dispatch (`play-bgm` 0xbf / `play-voice` 0xc4, both argc 1);
+   `ResourceMap.ReadAudio` opens the resolved catalog entry through `IAssetStore`; the host passed the bytes to
+   `Main`'s players (`AudioStreamOggVorbis.LoadFromBuffer`; BGM loops, voice interrupt-on-new). Non-Godot hosts no-op
+   it → `--selftest`/8-8 byte-identical. SC0000 fires 18 BGM + 198 voice. **By-ear VALIDATED (2026-07-06):** voices
+   play on their lines (`play-voice` med→HIGH). **BUT the two audio ops use DIFFERENT addressing:**
    - **Voice** (`play-voice`) → the universal packed SYS4INI/AAI resource contract shared with textures
      and movies. Native passes the bytecode operand unchanged to `asset_open_indexed_entry`.
    - **BGM** (`play-bgm`) → **DIRECT LITERAL NAME**, `id → BGM{id:03d}.OGG` (DATA3), not the packed
@@ -150,7 +149,7 @@ A2b-background: **steps 1–3 landed; step 2's packed resolver was corrected 202
 runtime operands are already universal packed ids, and every typed runtime facade now uses that contract.
 `tools/resolve_asset.py` and
 `build/games/himegari/asset-sections.json` remain grouping/correlation diagnostics, not runtime inputs. Step 3 = **first-pass
-render** (ResourceMap + EngineHost texture ops → TextureRect compositing): the full-screen event-CG
+render** (ResourceMap + the host's texture ops → TextureRect compositing): the full-screen event-CG
 layer renders end-to-end from the bytecode. Remaining (next chunk): the **graphics geometry/blend
 subsystem** — native geometry ops (`0x208` + sprite position/animation) so sprites/`BG*` position, plus
 alpha/blend for fades + chromakey. See `docs/phase-a-slice-plan.md` (A2b). Audio (step 4): voice uses the
@@ -550,18 +549,17 @@ corpus is `LOGO.BIN (0x335f,42,4)`, `OP.BIN (0x3364,42,4)`, and
 Native `0x20f` also arms modal run-state `0x2000`; unlike `0x236`, these six-instruction wrapper scripts
 depend on the movie service itself to park until EOF/input cancellation before they release surface 42.
 
-`ResourceMap.ResolveMovie` supplies that typed universal lookup, while `ReadMovie` remains the MPEG
-signature gate. `IHost.PlayModalMovieToSurface` is distinct from the non-modal call for lifecycle only: Godot
-reuses the asynchronous FFmpeg decoder and retained compositor but parks the VM thread until EOF
-or mouse/Accept/Cancel input. The wrapper's following release then tears down the completed/cancelled movie.
-Native attaches the movie renderer to the already-created target without replacing that surface's resource
-identity or color key. The port now does the same: `MovieSurfaceRegistry` resolves the live instance pixels while
-the VM retains the mutable surface's `resourceId=0, colorKey=-1`. The former synthetic `colorKey=0` binding made
-exact-black MPEG pixels transparent and was not part of the native asset-resolution contract.
-The FFmpeg backend now renders embedded audio through an engine-owned synchronized path rather than an
-unmanaged default-device side path. Timestamped stereo float PCM feeds a per-playback Godot
-`AudioStreamGenerator`; the sound-hardware position drives video presentation, and modal cancellation or
-surface cleanup releases both sides together.
+`ResourceMap.ResolveMovie` supplies that typed universal lookup, while `ReadMovie` remains the MPEG signature gate.
+The modal wait (`InputAndWaits.PlayModalMovieToSurface`, over `Movies.StartModal`) is distinct from the non-modal call
+for lifecycle only: it reuses the asynchronous FFmpeg decoder and retained compositor but parks the VM thread until
+EOF or mouse/Accept/Cancel input. The wrapper's following release then tears down the completed/cancelled movie.
+Native attaches the movie renderer to the already-created target without replacing that surface's resource identity or
+color key. The port now does the same: `MovieSurfaceRegistry` resolves the live instance pixels while the VM retains
+the mutable surface's `resourceId=0, colorKey=-1`. The former synthetic `colorKey=0` binding made exact-black MPEG
+pixels transparent and was not part of the native asset-resolution contract. The FFmpeg backend now renders embedded
+audio through an engine-owned synchronized path rather than an unmanaged default-device side path. Timestamped stereo
+float PCM feeds a per-playback Godot `AudioStreamGenerator`; the sound-hardware position drives video presentation,
+and modal cancellation or surface cleanup releases both sides together.
 
 **Kamidori extension correction (2026-08-19):** Kamidori keeps the same MPEG program-stream payload
 contract but names its startup records literally `LOGO.MPG` (`0x4432`) and `OP.MPG` (`0x4533`) in

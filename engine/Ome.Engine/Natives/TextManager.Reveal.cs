@@ -58,7 +58,7 @@ public sealed partial class TextManager
         if (lookup is { } asked && presenter != null) History.BeginLookupSpan(asked, presenter.Language.Tag);
         int delay = RevealDelay(run.Presented, presenter);
         IsRevealing = delay > 0 && !_skip.FastForwardActive && !TextRevealsFinishedUntilWait;
-        Tell(listener => listener.RunShown(run, delay));
+        foreach (ITextListener listener in _listeners) listener.RunShown(run, delay);
         AdvRetainedTextRunResult? retained = _sourceText != null
             ? DrawRun(gfx, History.GetPresentationBinding(run.Layout.Slot), run, delay)
             : null;
@@ -89,7 +89,7 @@ public sealed partial class TextManager
     public void ShowHiddenRun(AdvLiveTextRun run, int layoutSlot, string script, bool endsLookupSpan)
     {
         Emitted.Add((run.SourceOffset, run.Text, script));
-        Tell(listener => listener.HiddenRunShown(run));
+        foreach (ITextListener listener in _listeners) listener.HiddenRunShown(run);
         AdvTextSourceLayout? source = LayoutHiddenTextRun(History.GetPresentationBinding(run.Layout.Slot), run);
         History.AppendText(layoutSlot, run.SourceOffset, run.Text, Style, rows: source?.Rows, ruby: source?.Ruby);
         if (source != null) History.SetSourceCursor(layoutSlot, source.CursorX, source.CursorY);

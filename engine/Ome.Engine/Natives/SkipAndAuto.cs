@@ -24,7 +24,7 @@ public sealed partial class SkipAndAuto
     // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
     private sealed class Scene
     {
-        public volatile bool MessageSkipEnabled;   // ctx+0x550fc message_skip_display_enabled: the Skip toggle
+        public bool MessageSkipEnabled;   // ctx+0x550fc message_skip_display_enabled: the Skip toggle
         public bool MessageSkipInjected;           // ctx+0x13dc message_skip_enabled: Skip a text wait acts on
         public bool ReadSkipActive;                // adv_read_skip_state
         // ctx+0x55100 adv_skip_service_enabled: scene_context_init_reset sets it, op 0x19b clears it, op 0x19c sets it.
@@ -41,7 +41,7 @@ public sealed partial class SkipAndAuto
     // The fast-forward channels outlive a scene: the reset ends them through their setters, which tell the listeners.
     private bool _scriptFastForward;             // run-state 0x08000000 as scripts and the Skip toggles set it
     private bool _physicalFastForward;           // run-state 0x08000000 from logical action 6
-    private volatile bool _fastForward;          // run-state 0x08000000: either channel
+    private bool _fastForward;                   // run-state 0x08000000: either channel
     // message:AutoMessageTime0/1 (registered defaults 500/2000 ms): ops 0x1b8/0x1b9 and the 設定 dialog read and write
     // them, and SYS4REG.INI keeps them (ReadSettings, and the save native's shutdown write).
     private long _autoMessageTime0Ms = Sys4RegIniStore.DefaultAutoMessageTime0;
@@ -100,7 +100,7 @@ public sealed partial class SkipAndAuto
         active = _scriptFastForward || _physicalFastForward;
         changed = active != _fastForward;
         _fastForward = active;
-        foreach (IFastForwardListener listener in Volatile.Read(ref _listeners))
+        foreach (IFastForwardListener listener in _listeners)
             listener.FastForwardChannelSet(channel, value, active, changed);
     }
 
@@ -155,7 +155,7 @@ public sealed partial class SkipAndAuto
     public void ResetMessageSkipInput()
     {
         _scene.ClickCancelState = 0;
-        Interlocked.Exchange(ref _scene.ClickCancelTriggers, 0);
+        _scene.ClickCancelTriggers = 0;
         SetScriptFastForward(false);
         EndPhysicalFastForward();
         _revealPhysicalSkipSuppressed = true;
@@ -254,17 +254,17 @@ public sealed partial class SkipAndAuto
     public void SetAutoMessage(bool enabled) => _scene.AutoMessageEnabled = enabled;
 
     /// <summary>message:AutoMessageTime0: Auto's delay after a voice.</summary>
-    public long AutoMessageTime0Ms => Interlocked.Read(ref _autoMessageTime0Ms);
+    public long AutoMessageTime0Ms => _autoMessageTime0Ms;
 
     /// <summary>message:AutoMessageTime1: Auto's delay on an unvoiced page.</summary>
-    public long AutoMessageTime1Ms => Interlocked.Read(ref _autoMessageTime1Ms);
+    public long AutoMessageTime1Ms => _autoMessageTime1Ms;
 
     /// <summary>Op 0x1b9's write, the 設定 dialog's and SYS4REG.INI's: selector 0 is message:AutoMessageTime0 (after a
     /// voice), 1 is AutoMessageTime1 (unvoiced); other selectors write nothing.</summary>
     public void SetAutoMessageTime(int selector, long milliseconds)
     {
-        if (selector == 0) Interlocked.Exchange(ref _autoMessageTime0Ms, milliseconds);
-        else if (selector == 1) Interlocked.Exchange(ref _autoMessageTime1Ms, milliseconds);
+        if (selector == 0) _autoMessageTime0Ms = milliseconds;
+        else if (selector == 1) _autoMessageTime1Ms = milliseconds;
     }
 
     /// <summary>Read AutoMessageTime0/1 from SYS4REG.INI's [message], native defaults when absent; composition runs it

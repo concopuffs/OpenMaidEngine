@@ -66,16 +66,21 @@ public sealed partial class Graphics
 
     // ---- presentation requests ----
 
-    private int _presentRequested = 1;
+    private bool _presentRequested = true;
 
     /// <summary>Something changed that the next frame must show (a surface write, an explicit present).</summary>
-    public void RequestPresentation() => Interlocked.Exchange(ref _presentRequested, 1);
+    public void RequestPresentation() => _presentRequested = true;
 
     /// <summary>Whether a presentation is requested and not yet taken.</summary>
-    public bool PresentationRequested => Volatile.Read(ref _presentRequested) != 0;
+    public bool PresentationRequested => _presentRequested;
 
     /// <summary>Take the pending request: true once per request.</summary>
-    public bool TakePresentationRequest() => Interlocked.Exchange(ref _presentRequested, 0) != 0;
+    public bool TakePresentationRequest()
+    {
+        bool requested = _presentRequested;
+        _presentRequested = false;
+        return requested;
+    }
 }
 
 /// <summary>The movie native as the graphics native needs it: which surfaces and resources a movie shows, and which

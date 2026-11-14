@@ -17,7 +17,7 @@ public class HotspotInputTests
         public bool ClickConsumed;
         public bool SecondClickConsumed;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Waits++;
 
@@ -45,7 +45,7 @@ public class HotspotInputTests
         public bool Consumed;
         public bool DuplicateConsumed;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Waits++;
             Assert.False(Vm.TryActivateInputActions(1 << 6));
@@ -61,7 +61,7 @@ public class HotspotInputTests
         public bool MenuActionConsumed;
         public bool ParentHotspotsRearmed;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             MenuActionConsumed = Vm.TryActivateInputActions(1 << 7);
             while (serviceInputCallback()) { }
@@ -113,7 +113,7 @@ public class HotspotInputTests
         public VirtualMachine Vm = null!;
         public bool SawHistoryHover;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Vm.UpdatePointer(684, 572);
             while (serviceInputCallback()) { }
@@ -126,7 +126,7 @@ public class HotspotInputTests
     {
         public VirtualMachine Vm = null!;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+        public override void WaitForInput(Func<bool> serviceInputCallback,
                                           Func<AdvAutoWaitState> autoWaitState)
         {
             Vm.UpdatePointer(728, 572);
@@ -141,7 +141,7 @@ public class HotspotInputTests
     {
         public AdvAutoWaitState State;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+        public override void WaitForInput(Func<bool> serviceInputCallback,
                                           Func<AdvAutoWaitState> autoWaitState)
         {
             while (serviceInputCallback()) { }
@@ -170,7 +170,7 @@ public class HotspotInputTests
         public long HoverFlagAfterRestore = -1;
         public bool? SameSpotClickConsumed;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Vm.UpdatePointer(772, 582);
             while (serviceInputCallback()) { }
@@ -225,7 +225,7 @@ public class HotspotInputTests
             }
         }
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Vm.UpdatePointer(772, 572);
             while (serviceInputCallback()) { }
@@ -281,7 +281,7 @@ public class HotspotInputTests
         public VirtualMachine Vm = null!;
         public readonly List<long> EntersAfterStep = new();
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Waits++;
             void Step(Action action)
@@ -422,7 +422,7 @@ public class HotspotInputTests
         public VirtualMachine Vm = null!;
         public readonly List<bool> Activations = new();
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             for (int click = 0; click < 2; click++)
             {
@@ -893,7 +893,7 @@ public class HotspotInputTests
         public bool? StillClickConsumed;
         public bool? MovedClickConsumed;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             void Step(Action action)
             {
@@ -1169,7 +1169,7 @@ public class HotspotInputTests
             else if (MenuSleeps == 46) RightButton(false);
         }
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Opened = RightButton(true);
             while (serviceInputCallback()) { }
@@ -1206,7 +1206,7 @@ public class HotspotInputTests
         public VirtualMachine Vm = null!;
         public IReadOnlyList<VmFrameLocation>? AfterCallback;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Waits++;
             Assert.True(Vm.TryActivatePointer(30, 40));
@@ -1249,7 +1249,7 @@ public class HotspotInputTests
         public VirtualMachine Vm = null!;
         public bool ServiceReturned;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Waits++;
             Assert.True(Vm.TryActivatePointer(30, 40));

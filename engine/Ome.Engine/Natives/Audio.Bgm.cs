@@ -45,7 +45,7 @@ public sealed partial class Audio
     {
         CompleteScriptFade();
         if (trackId != 0) _bgmTrack = trackId;
-        if (_bgmTrack == 0) StopBgmLocked();
+        if (_bgmTrack == 0) StopBgmSource();
         else StartBgm(_bgmTrack, startMode, forced: true);
         UpdateTimedWork();
     }
@@ -55,7 +55,7 @@ public sealed partial class Audio
     {
         CompleteScriptFade();
         _bgmTrack = 0;
-        StopBgmLocked();
+        StopBgmSource();
         UpdateTimedWork();
     }
 
@@ -73,10 +73,11 @@ public sealed partial class Audio
     /// <summary>Op 0xc2: fade the BGM envelope to a level in basis points (CONFIG passes the setting × 100) and return.
     /// The tick runs the fade while the script goes on; at its end the level is committed, and a zero target releases
     /// the source and clears the retained track (bgm_fade_tick@0x464960). Under ADV fast-forward native applies the
-    /// endpoint at once; an advance click sets no fast-forward, so it keeps the authored length.</summary>
+    /// endpoint at once; an advance click sets no fast-forward, so it keeps the authored length. A run on a standing
+    /// clock applies it at once too (settleFadesAtOnce).</summary>
     public void FadeBgm(int targetBasisPoints, long durationMs)
     {
-        long ms = _skip.FastForwardActive ? 0 : Math.Clamp(durationMs, 0, 60_000);
+        long ms = _skip.FastForwardActive || _settleFadesAtOnce ? 0 : Math.Clamp(durationMs, 0, 60_000);
         _timeline?.Event("bgm-fade", new() { ["target_basis_points"] = targetBasisPoints, ["duration_ms"] = ms });
         RestoreDuck();
         _fade = null;
@@ -124,7 +125,7 @@ public sealed partial class Audio
         PlayChannel(BgmChannel, _bgmLoop, NativeAudioVolume.ToDecibels(FullLevel));
     }
 
-    private void StopBgmLocked()
+    private void StopBgmSource()
     {
         _timeline?.Event("bgm-stop", new());
         ReleaseBgmSource();

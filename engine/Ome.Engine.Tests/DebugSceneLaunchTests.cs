@@ -201,7 +201,7 @@ public class DebugSceneLaunchTests
         private readonly SemaphoreSlim _gate = new(0, 1);
         public ManualResetEventSlim WaitEntered { get; } = new(false);
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+        public override void WaitForInput(Func<bool> serviceInputCallback,
                                           Func<AdvAutoWaitState> autoWaitState)
         {
             Waits++;

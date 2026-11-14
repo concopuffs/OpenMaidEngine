@@ -32,10 +32,10 @@ public class MenuServicesTests
             if (Vm != null && AtYield.TryGetValue(_yields, out var act)) act(Vm);
         }
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             if (Vm != null) AtWait?.Invoke(Vm);
-            base.WaitForInput(layoutSlot, serviceInputCallback);
+            base.WaitForInput(serviceInputCallback);
         }
 
         public override void EndInputWait() => EndedWaits++;

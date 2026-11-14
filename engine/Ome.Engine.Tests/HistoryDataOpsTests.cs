@@ -15,7 +15,7 @@ public class HistoryDataOpsTests
     {
         public AdvAutoWaitState AutoState;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+        public override void WaitForInput(Func<bool> serviceInputCallback,
                                           Func<AdvAutoWaitState> autoWaitState)
         {
             AutoState = autoWaitState();

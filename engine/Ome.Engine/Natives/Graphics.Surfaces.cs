@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
@@ -21,7 +20,7 @@ public sealed partial class Graphics
     private readonly Dictionary<int, long> _surfaceResources = new();    // surface slot -> packed catalog id
     // slot -> dimensions of the currently allocated surface. Slot 0 begins as the selected game's logical canvas, but
     // op 0x1fa releases it like any other slot; later queries return 0x0.
-    private readonly ConcurrentDictionary<int, (int W, int H)> _slotDims = new();
+    private readonly Dictionary<int, (int W, int H)> _slotDims = new();
 
     /// <summary><c>--gfx-log</c>: print set-texture/create-texture slot assignments.</summary>
     public bool TraceOps { get; set; }
@@ -232,7 +231,7 @@ public sealed partial class Graphics
         _surfaceImages.Remove(slot);
         _surfaceColorKeys.Remove(slot);
         _surfaceResources.Remove(slot);
-        _slotDims.TryRemove(slot, out _);
+        _slotDims.Remove(slot);
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceReleased(slot);
     }
 
@@ -245,7 +244,7 @@ public sealed partial class Graphics
         {
             _surfaceImages.Remove(slot);
             _surfaceColorKeys.Remove(slot);
-            _slotDims.TryRemove(slot, out _);
+            _slotDims.Remove(slot);
         }
         for (int slot = firstSlot; slot < end; slot++) _surfaceResources.Remove(slot);
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceRangeReleased(firstSlot, count);
@@ -315,7 +314,7 @@ public sealed partial class Graphics
     public void SetSurfaceSize(int slot, int width, int height) => _slotDims[slot] = (width, height);
 
     /// <summary>Forget a surface's size (a movie that failed to start).</summary>
-    public void ForgetSurfaceSize(int slot) => _slotDims.TryRemove(slot, out _);
+    public void ForgetSurfaceSize(int slot) => _slotDims.Remove(slot);
 
     /// <summary>The surface's size, if it has one.</summary>
     public bool TryGetSurfaceSize(int slot, out (int W, int H) size) => _slotDims.TryGetValue(slot, out size);

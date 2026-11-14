@@ -12,7 +12,7 @@ public class WaitForInputTests
         public bool SawDormantParentCallback;
         public bool SawParentCallbackRestored;
 
-        public override void WaitForInput(int layoutSlot, System.Func<bool> serviceInputCallback)
+        public override void WaitForInput(System.Func<bool> serviceInputCallback)
         {
             Waits++;
             SawDormantParentCallback =

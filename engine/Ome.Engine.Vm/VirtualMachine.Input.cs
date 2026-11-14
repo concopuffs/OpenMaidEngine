@@ -17,7 +17,7 @@ public sealed partial class VirtualMachine : IInterpreterInput
     /// current message as read.</summary>
     private void WaitAtAdvInputPoll(int layoutSlot, bool textPage)
     {
-        Volatile.Write(ref _advWaitCoroutineYieldRequested, 0); // a request belongs to the wait it reached
+        _advWaitCoroutineYieldRequested = 0; // a request belongs to the wait it reached
         bool outerWaitPolling = _advTextWaitPolling;
         bool outerPageless = _advInputPollPageless;
         _advTextWaitPolling = true;
@@ -27,7 +27,7 @@ public sealed partial class VirtualMachine : IInterpreterInput
         if (textPage) _text.BeginPageWait(layoutSlot);
         try
         {
-            if (textPage) _waits.WaitForInput(layoutSlot, ServiceHotspotCallback, CurrentAutoWaitState);
+            if (textPage) _waits.WaitForInput(ServiceHotspotCallback, CurrentAutoWaitState);
             else _waits.WaitForAdvInputPoll(ServiceHotspotCallback, CurrentAutoWaitState);
         }
         finally
@@ -174,8 +174,8 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpPollJoyCallbackInput(Instruction ins, int pc)
     {
         _cur.PendingInputCallbackMask = InputBindings.PollActionMask()
-            | Volatile.Read(ref _scene.HeldInputCallbackMask)
-            | Interlocked.Exchange(ref _scene.QueuedInputCallbackMask, 0);
+            | _scene.HeldInputCallbackMask
+            | Take(ref _scene.QueuedInputCallbackMask);
         _cur.InputCallbackScanIndex = 0;
         return StepResult.Next;
     }
@@ -218,7 +218,7 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpGetMouseButtonState(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], Volatile.Read(ref _scene.MouseButtonState)); return StepResult.Next;
+        Write(a[0], _scene.MouseButtonState); return StepResult.Next;
     }
 
     // 0x106: active-device capability, zero when absent
@@ -232,7 +232,7 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpConsumeMouseWheelDelta(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], Interlocked.Exchange(ref _scene.MouseWheelDelta, 0)); return StepResult.Next;
+        Write(a[0], Take(ref _scene.MouseWheelDelta)); return StepResult.Next;
     }
 
     // 0x109

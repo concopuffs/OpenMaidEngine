@@ -81,13 +81,17 @@ internal sealed class FakeMovieAssets : IMovieAssets
 {
     public readonly HashSet<long> Unresolved = new();
 
+    /// <summary>When set, every read throws it, as a missing or unreadable archive does.</summary>
+    public Exception? ReadFailure { get; set; }
+
     public static string NameOf(long resourceId) => $"M{resourceId:X4}.AGF";
 
     public AssetEntry? Resolve(long resourceId) => Unresolved.Contains(resourceId)
         ? null
         : new AssetEntry(NameOf(resourceId), "TEST.ALF", 0, 4, RawIndex: (int)(resourceId & 0xffffff));
 
-    public MoviePayload Read(AssetEntry movie) => new(movie.Name, [0, 0, 1, 0xba]);
+    public MoviePayload Read(AssetEntry movie)
+        => ReadFailure != null ? throw ReadFailure : new(movie.Name, [0, 0, 1, 0xba]);
 }
 
 /// <summary>A stream that records what is queued on it; a test sets what has been heard.</summary>

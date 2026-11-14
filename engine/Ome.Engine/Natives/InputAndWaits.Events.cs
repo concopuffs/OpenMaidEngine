@@ -20,6 +20,11 @@ public sealed partial class InputAndWaits
 
     private readonly System.Collections.Concurrent.ConcurrentQueue<InputEvent> _input = new();
     private int _advanceQueued;   // SignalInput's advance waits in the queue: a second one adds nothing
+    // The newest pointer position not yet routed (under _turnLock). Moves coalesce: only the newest matters, and only
+    // the first since the engine thread last took one wakes it. Any other event queues the position it follows first,
+    // so the order the events arrived in holds.
+    private bool _pointerPending;
+    private int _pendingPointerX, _pendingPointerY;
     /// <summary>Native AGE's logical action 4: it advances, finishes a reveal, skips an effect or cancels a movie.</summary>
     private const int AdvanceAction = InputBindings.AdvanceAction;
 
@@ -38,8 +43,26 @@ public sealed partial class InputAndWaits
     public void RouteInputTo(IInterpreterInput interpreter)
         => _interpreter = interpreter ?? throw new System.ArgumentNullException(nameof(interpreter));
 
-    /// <summary>The pointer moved to native client pixel (<paramref name="x"/>, <paramref name="y"/>).</summary>
-    public void PointerMoved(int x, int y) => Queue(new(InputKind.Pointer, x, y));
+    /// <summary>The pointer moved to native client pixel (<paramref name="x"/>, <paramref name="y"/>). Moves the engine
+    /// thread has not taken yet coalesce into the newest one.</summary>
+    public void PointerMoved(int x, int y)
+    {
+        lock (_turnLock)
+        {
+            if (_engineThreadId == 0 || _engineThreadId == Environment.CurrentManagedThreadId)
+            {
+                RouteQueuedInput();   // what came before it first
+                Route(new(InputKind.Pointer, x, y));
+                return;
+            }
+            bool first = !_pointerPending;
+            _pointerPending = true;
+            _pendingPointerX = x;
+            _pendingPointerY = y;
+            if (!first) return;
+        }
+        QueueWork();
+    }
 
     /// <summary>
     /// A wheel turned: a WM_MOUSEWHEEL delta (signed multiples of WHEEL_DELTA, 120). At an ADV text wait its sign raises
@@ -94,15 +117,37 @@ public sealed partial class InputAndWaits
                 Route(input);
                 return;
             }
+            QueuePendingPointerLocked();
             _input.Enqueue(input);
         }
         QueueWork();
     }
 
-    /// <summary>The engine thread: route the input the front end queued, in the order it arrived.</summary>
+    private void QueuePendingPointerLocked()
+    {
+        if (!_pointerPending) return;
+        _pointerPending = false;
+        _input.Enqueue(new(InputKind.Pointer, _pendingPointerX, _pendingPointerY));
+    }
+
+    /// <summary>The engine thread: route the input the front end queued, in the order it arrived, then the newest
+    /// pointer position if a move came after it.</summary>
     private void RouteQueuedInput()
     {
-        while (_input.TryDequeue(out InputEvent input)) Route(input);
+        while (true)
+        {
+            if (!_input.TryDequeue(out InputEvent input))
+            {
+                lock (_turnLock)
+                {
+                    if (_input.IsEmpty && !_pointerPending) return;
+                    // A pending position is newer than everything queued (queuing an event takes it first).
+                    QueuePendingPointerLocked();
+                }
+                continue;
+            }
+            Route(input);
+        }
     }
 
     private void Route(InputEvent input)

@@ -34,7 +34,7 @@ public class MouseWheelInputTests
         public bool PollingAtWait, PollingAfterCallback;
         public MouseWheelOutcome Down, DownWithAdvance, Up;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Waits++;
             PollingAtWait = Vm.IsAdvTextWaitPolling;
@@ -145,7 +145,7 @@ public class MouseWheelInputTests
         public VirtualMachine Vm = null!;
         public MouseWheelOutcome Up;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Up = Vm.ApplyMouseWheel(120, advanceMessageOnWheel: false, textRevealing: false);
             while (serviceInputCallback()) { }

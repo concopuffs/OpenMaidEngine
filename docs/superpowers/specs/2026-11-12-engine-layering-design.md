@@ -7,7 +7,7 @@ design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0
 settings and shell services), 10 (text), 11 (input, waits and the engine loop) and 12 (close) are done on
 `feature/engine-layering`; §3.3, §4, §5.1, §5.2, §5.3, §5.4, §6.2, §6.3, §6.5, §6.6, §7.5, §7.6, §8,
 §11, §12 and §13 record what they settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15
-records the history.
+records the history, including the branch review's thirteen findings, fixed on the branch on 2026-11-14.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
 projects, and how engine builds are declared. Native findings stay in `docs/engine-re.md`, opcode facts in
 `vm-map/opcodes.toml`, and the open work it covers in `docs/backlog.md` (§14), which points here.
@@ -832,10 +832,10 @@ auto, script memory, the saves native, the VM's interactive and debug-control st
 
 | Lock or handle | Where | Guards | Threads |
 |---|---|---|---|
-| `_turnLock` | `InputAndWaits.Turns.cs` | Which thread is the engine's, the turn's handshake and the diagnostics it carries, the published frame, and the request queue. Nothing runs under it except a turn or a request that the front end runs while no engine thread runs | Both. It is the one lock between them, and no other lock is taken under it |
+| `_turnLock`, and `_turnRequested` (`volatile`), the engine's check for a turn without taking it | `InputAndWaits.Turns.cs` | Which thread is the engine's, the turn's handshake and the diagnostics it carries, the published frame, and the request queue. Nothing runs under it except a turn or a request that the front end runs while no engine thread runs | Both. It is the one lock between them, and no other lock is taken under it |
 | `_frameSignal` (`AutoResetEvent`) | `InputAndWaits.cs` | The engine thread's one wake: a turn, input, a request, a serviced movie frame, a stop | Set by both; only the engine thread waits on it |
 | `_workQueued` (an int) | `InputAndWaits.Turns.cs` | That input, a request or a serviced movie frame is waiting. Read without a lock first, then taken by `Interlocked.Exchange`, which is a full fence, so a wake cannot be lost | Set by both, taken by the engine |
-| `_input` (`ConcurrentQueue`), `_advanceQueued` | `InputAndWaits.Events.cs` | The front end's input events, and the one advance `SignalInput` may queue | Front end enqueues, engine routes |
+| `_input` (`ConcurrentQueue`), `_advanceQueued`, the pending pointer (under `_turnLock`) | `InputAndWaits.Events.cs` | The front end's input events, the one advance `SignalInput` may queue, and the latest pointer position not yet taken (moves coalesce into one event, which keeps its place among the others) | Front end enqueues, engine routes |
 | `Request.Done` (`ManualResetEventSlim`) | `InputAndWaits.Turns.cs` | A request's completion | Engine sets it, the asker waits |
 | `_frontendModalRelease` (`ManualResetEventSlim`) | `InputAndWaits.Sleep.cs` | A front-end modal hold (the options panel, the 終了 dialog, the screenshot folder): while it is reset, the engine thread waits at `FrameYield`, modally, and still answers turns | Front end sets and resets it, engine waits |
 | `_gate` (`SemaphoreSlim`), `_inputCallbackSignal` (`AutoResetEvent`) | `InputAndWaits.cs` | A click or Auto ends a text wait; input or a menu request reaches a wait's callbacks. They are handles because a wait blocks on one of them together with `_frameSignal` (`_blockHandles`) | `_gate`: engine only, since input is routed there. `_inputCallbackSignal`: also set by the shell native's menu requests from the front end |
@@ -854,11 +854,11 @@ auto, script memory, the saves native, the VM's interactive and debug-control st
 | The decoder's events and locks; `FfmpegMovieNative._decodeLock` | `Ome.Engine.Frontend/FfmpegMovie*.cs` | The decode thread's frames and audio, cancel and first frame | The decoder's own thread and the front end |
 | `GodotTraceSink._snapshotLock` and its queue; `DriveServer._calls` | `Ome.Engine.Frontend/` | The trace ring that the stall diagnostic reads; the driver's calls, which the front end takes each frame (`Pump`) | The engine's trace and the front end; the driver's socket and the front end |
 
-The VM keeps a few `volatile` fields and `Interlocked` updates from the old input thread: `_advTextWaitPolling`, the
-coroutine-yield flags, the input latch, the wheel delta and the queued callback mask. The skip-and-auto native
-keeps its `volatile` toggles, the Auto times and the click-cancel count. The text native keeps its `volatile` settings
-and reveal flag. Each of these is written and read on the engine thread now, so they are harmless and order nothing.
-Backlog "The host's threads have no stated ownership" is closed by this table.
+Milestone 11 left a few `volatile` fields and `Interlocked` updates from the old input thread in the VM, the
+skip-and-auto native, the text native, audio, graphics and the engine tick. They were written and read on the engine
+thread only, so the branch review (2026-11-14) made them plain fields: a field the front end reads off the engine
+thread is in this table, and no other field in the natives or the VM is `volatile`. Backlog "The host's threads have
+no stated ownership" is closed by this table.
 
 ### 5.4 Requests to the interpreter
 
@@ -1868,3 +1868,45 @@ Not covered:
     ends at the hosted scene's return by develop's design (`f32b463f`). DEBUGMAP writes state, asks for `FIELD` and returns, so it ends at once. The F4
     launcher reaches `FIELD` on the branch, as `DebugSceneLaunchTests` checks. `docs/tools-reference.md` now says so
     and the item is gone.
+- **2026-11-14, the branch review.** A review of the branch before the merge
+  (`engine-layering-branch-review-2026-11-13.md`) reported thirteen findings, all fixed on the branch:
+  - **1. Movie masks.** A missing pair of braces bound every movie's surface to its playback as a mask. Only a mask
+    transition does so now, so an ordinary movie's frames show over what the script writes to its surface.
+    `MoviesNativeTests` covers that and a movie whose file cannot be read.
+  - **2. The frame-turn timeout.** The 4 ms deadline is measured on `Stopwatch`; `Environment.TickCount64` steps about
+    every 15.6 ms, so a turn could wait four times as long.
+  - **3. A late return-to-title wake.** A posted wake can run after op `0x9`'s reset; `WakeAllWaits` now does nothing
+    unless a stop or reload is still asked, so it cannot end the new root's first wait. The VM interrupts the waits
+    itself only when they do not share its `StopAndReload`. `RootReloadRequestTests` holds the menu callback's script
+    lookup to make the race happen; the test fails without the guard.
+  - **4. A fade in a headless run.** An audio native over a standing clock (`Audio.Silent`, the CLI's `audio` command)
+    settles a timed BGM fade at once, so op `0xc0` reads 0 after a fade to silence.
+  - **5 and 7. Pixels kept across a language switch.** A frame lowered before the switch could be drawn after the
+    renderer forgot its pixels and cache the old language's image again. Both renderers now prepare a static asset
+    again when its decoded image is another instance (`ReferenceRendererTests`), and `ForgetPreparedPixels` also
+    clears the `reference-diff` shadow renderer. Dropping the late frames instead would be wrong, since a published
+    frame can be partial.
+  - **6. Living references.** `docs/engine-re.md`, `docs/asset-resolution-re.md`, `docs/tools-reference.md`, the
+    roadmap and `vm-map/opcodes.toml` name the current owners instead of the deleted host classes. The phase A and B
+    results logs are left as written.
+  - **8. Pointer moves.** Moves the engine thread has not taken coalesce into the newest one; only the first wakes it,
+    and any other event queues the pending position first, so the order holds. Godot already accumulates mouse motion
+    to about one event per display frame, so few runs change.
+  - **9. The integer-translation test.** The `reference-diff` count of transformed draws calls
+    `SoftwareAffineRasterizer.IsIntegerTranslation`; `WholePixelMove` is deleted.
+  - **10. Unread parameters.** `WaitForInput` no longer takes the layout slot, which the interpreter passes to
+    `TextManager.BeginPageWait` itself, and `InputCallbackCompleted` no longer takes `GfxState`. The other `GfxState`
+    parameters stay, because stand-ins read them.
+  - **11. Cross-thread machinery.** Engine-thread-only fields in the VM and the natives are plain (the CAS loops,
+    `Interlocked` and `Volatile` updates, `volatile` flags and `ConcurrentDictionary _slotDims`), and the `*Locked`
+    helpers are renamed. What the front end does read is in §5.3's table, which gained `_turnRequested` and the
+    pending pointer.
+  - **12. Text listeners.** `Tell` is gone; each text op tells its listeners in a `foreach`, which allocates nothing.
+  - **13. The fast-forward listener.** The VM listens for fast-forward through any waits that implement
+    `IFastForwardListener`, not by testing for the concrete `InputAndWaits`.
+  - **Measured.** The suite has 1955 tests, and core validation passes. The 21 port runs (`m12r` against `m12g`) are
+    within tolerance: saves, INI and page maps equal, seconds within 0.6 %. Four scenarios differ, none from these fixes.
+    The earlier `himegari-reveal-clock` run had kept the shot of the scenario before it. History's input loop was
+    caught at `0x161` instead of `0x14d`. SC0000 pages 14 and 15 change their `reference-diff` counts, which rule 7
+    exempts. And a `shot` on Kamidori's title caught its 50 ms hover callback at `0x9ab` once, where three more runs
+    and every earlier one caught the idle loop at `0xfb`, with identical pixels.

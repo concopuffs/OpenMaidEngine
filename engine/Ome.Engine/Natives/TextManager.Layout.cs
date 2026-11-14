@@ -338,7 +338,7 @@ public sealed partial class TextManager
         _scene.LayoutCursors[slot] = (x, y);
         RebuildRetainedWaitIndicator(slot);
         _timeline?.Event("text-cursor", new() { ["slot"] = layoutSlot, ["x"] = x, ["y"] = y });
-        Tell(listener => listener.CursorMoved(layoutSlot, x, y));
+        foreach (ITextListener listener in _listeners) listener.CursorMoved(layoutSlot, x, y);
     }
 
     /// <summary>Op 0x204/0x205 (adv_text_draw_string_to_surface): rasterize <paramref name="text"/> into a numbered
@@ -347,7 +347,7 @@ public sealed partial class TextManager
     public void DrawStringToSurface(int surfaceSlot, int x, int y, string text, AdvTextStyle style,
                                     Ome.Engine.Localization.PresentedText? presented = null)
     {
-        Tell(listener => listener.StringDrawn(surfaceSlot, x, y, text, style, presented));
+        foreach (ITextListener listener in _listeners) listener.StringDrawn(surfaceSlot, x, y, text, style, presented);
         if (_sourceText == null) return;
         TextPipeline pipeline = presented != null ? _presentedText!.Value : ActiveText;
         string? placed = DrawStringPixels(surfaceSlot, x, y, text, style, pipeline, presented);
@@ -458,7 +458,7 @@ public sealed partial class TextManager
             _scene.AdvTextForceComplete = false;
             IsRevealing = false;
         }
-        Tell(listener => listener.LayoutCleared(layoutSlot));
+        foreach (ITextListener listener in _listeners) listener.LayoutCleared(layoutSlot);
     }
 
     /// <summary>Op 0x71: a layout's retained glyphs and History binding go, and its surface is cleared.</summary>
@@ -474,7 +474,7 @@ public sealed partial class TextManager
         }
         if (_scene.SuspendedRetainedTextLayoutSlot == binding.LayoutSlot)
             _scene.SuspendedRetainedTextLayoutSlot = 0;
-        Tell(listener => listener.LayoutCleared(binding.LayoutSlot));
+        foreach (ITextListener listener in _listeners) listener.LayoutCleared(binding.LayoutSlot);
         if (_sourceText == null) return;
 
         if (_graphics.TryGetSurfaceSize(
@@ -504,7 +504,7 @@ public sealed partial class TextManager
         AdvTextLayoutPresentationBinding binding,
         AdvTextHistoryRenderBatch batch)
     {
-        Tell(listener => listener.HistoryGroupDrawn(binding, batch));
+        foreach (ITextListener listener in _listeners) listener.HistoryGroupDrawn(binding, batch);
         if (_sourceText == null) return false;
         // A presented group (localization spec §8) wraps in the target layout as live presented text does.
         var run = new AdvLiveTextRun(
@@ -557,7 +557,7 @@ public sealed partial class TextManager
         AdvTextLayoutPresentationBinding binding,
         AdvTextRedrawBatch batch)
     {
-        Tell(listener => listener.GroupRedrawn(binding, batch));
+        foreach (ITextListener listener in _listeners) listener.GroupRedrawn(binding, batch);
         if (_sourceText == null) return;
         if (binding.LayoutSlot != batch.LayoutSlot
             || binding.FirstObjectHandle < 0
@@ -650,7 +650,7 @@ public sealed partial class TextManager
         foreach (int slot in _scene.RetainedHistoryLayouts)
             _scene.RetainedTextLayouts.Remove(slot);
         _scene.RetainedHistoryLayouts.Clear();
-        Tell(listener => listener.HistoryPresentationEnded());
+        foreach (ITextListener listener in _listeners) listener.HistoryPresentationEnded();
         if (_sourceText == null) return;
 
         foreach (RetainedAdvTextLayoutPresentation presentation in retained)

@@ -31,7 +31,7 @@ public sealed partial class SkipAndAuto
     public bool TryLatchCancelClick()
     {
         if (!ClickCancelArmed) return false;
-        Interlocked.Increment(ref _scene.ClickCancelTriggers);
+        _scene.ClickCancelTriggers++;
         return true;
     }
 
@@ -43,10 +43,11 @@ public sealed partial class SkipAndAuto
         if (Settings.CancelMessageSkipOnClick == 0) return false;
         if (!_fastForward)
         {
-            Interlocked.Exchange(ref _scene.ClickCancelTriggers, 0);
+            _scene.ClickCancelTriggers = 0;
             return false;
         }
-        bool clicked = Interlocked.Exchange(ref _scene.ClickCancelTriggers, 0) != 0;
+        bool clicked = _scene.ClickCancelTriggers != 0;
+        _scene.ClickCancelTriggers = 0;
         bool held = (input.PollActionMask() & AdvanceActionMask) != 0;
         if (held || clicked)
         {

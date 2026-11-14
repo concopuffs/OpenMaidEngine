@@ -128,14 +128,14 @@ internal class RecordingWaits : IInputAndWaits, IFastForwardListener, ITextListe
     public void PresentObjectRange(GfxState gfx, long firstHandle, long count)
         => PresentedRanges.Add((firstHandle, count));
     public void WaitForInput() => Waits++;
-    public virtual void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+    public virtual void WaitForInput(Func<bool> serviceInputCallback)
     {
         while (serviceInputCallback()) { }
         WaitForInput();
     }
-    public virtual void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback,
+    public virtual void WaitForInput(Func<bool> serviceInputCallback,
                                      Func<AdvAutoWaitState> autoWaitState)
-        => WaitForInput(layoutSlot, serviceInputCallback);
+        => WaitForInput(serviceInputCallback);
     // Op 0xfa's poll: no page, so it counts apart from Waits. Each records whether fast-forward was on at its entry.
     public readonly List<bool> AdvInputPolls = new();
     public virtual void WaitForAdvInputPoll(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
@@ -143,7 +143,7 @@ internal class RecordingWaits : IInputAndWaits, IFastForwardListener, ITextListe
         AdvInputPolls.Add(MessageSkip);
         while (serviceInputCallback()) { }
     }
-    public void InputCallbackCompleted(GfxState gfx) => InputCallbackFrames++;
+    public void InputCallbackCompleted() => InputCallbackFrames++;
     public virtual void EndInputWait() { }
     // Each hidden-window wait runs this first (a test supplies the input that ends it) and then takes the trigger.
     public Action? ServiceTriggerWaitStarted;

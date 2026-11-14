@@ -39,10 +39,10 @@ public class ScreenModeTests
             if (ServiceFrames) Vm?.Shell.ServiceFrame();
         }
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             if (Vm != null) AtWait?.Invoke(Vm);
-            base.WaitForInput(layoutSlot, serviceInputCallback);
+            base.WaitForInput(serviceInputCallback);
         }
 
         public override void EndInputWait() => EndedWaits++;

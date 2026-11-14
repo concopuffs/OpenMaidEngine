@@ -25,14 +25,14 @@ public class HiddenWindowWaitTests
         public bool RequestYieldAtWait;
         public bool? YieldRequested;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             if (RequestYieldAtWait)
             {
                 RequestYieldAtWait = false;
                 YieldRequested = Vm!.TryRequestAdvWaitCoroutineYield();
             }
-            base.WaitForInput(layoutSlot, serviceInputCallback);
+            base.WaitForInput(serviceInputCallback);
         }
     }
 

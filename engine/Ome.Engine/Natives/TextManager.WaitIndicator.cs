@@ -24,7 +24,7 @@ public sealed partial class TextManager
             ["terminal_frame"] = config.TerminalFrame,
             ["period_ms"] = config.FramePeriodMs,
         });
-        Tell(listener => listener.WaitIndicatorConfigured(config));
+        foreach (ITextListener listener in _listeners) listener.WaitIndicatorConfigured(config);
     }
 
     public void SetAdvWaitIndicatorFollowLastGlyph(bool enabled)
@@ -33,7 +33,7 @@ public sealed partial class TextManager
         foreach (int layoutSlot in _scene.WaitIndicators.Keys.ToArray())
             RebuildRetainedWaitIndicator(layoutSlot);
         _timeline?.Event("wait-indicator-follow-last-glyph", new() { ["enabled"] = enabled });
-        Tell(listener => listener.WaitIndicatorFollowsLastGlyph(enabled));
+        foreach (ITextListener listener in _listeners) listener.WaitIndicatorFollowsLastGlyph(enabled);
     }
 
     public void BindAdvWaitIndicator(
@@ -49,7 +49,7 @@ public sealed partial class TextManager
             ["origin_x"] = layout.OriginX,
             ["origin_y"] = layout.OriginY,
         });
-        Tell(listener => listener.WaitIndicatorBound(binding, layout));
+        foreach (ITextListener listener in _listeners) listener.WaitIndicatorBound(binding, layout);
     }
 
     private void RebuildRetainedWaitIndicator(int layoutSlot)
@@ -86,14 +86,14 @@ public sealed partial class TextManager
         _scene.WaitIndicatorEnabled = enabled;
         _graphics.RequestPresentation();
         _timeline?.Event("wait-indicator-enabled", new() { ["enabled"] = enabled });
-        Tell(listener => listener.WaitIndicatorEnabled(enabled));
+        foreach (ITextListener listener in _listeners) listener.WaitIndicatorEnabled(enabled);
     }
 
     private void PublishAdvTextLayout(int layoutSlot)
     {
         _graphics.RequestPresentation();
         _timeline?.Event("adv-text-layout-publish", new() { ["layout"] = layoutSlot });
-        Tell(listener => listener.LayoutPublished(layoutSlot));
+        foreach (ITextListener listener in _listeners) listener.LayoutPublished(layoutSlot);
     }
 
     /// <summary>Op 0x1fb: a layout's retained glyphs and wait indicator are bound again.</summary>
@@ -177,7 +177,7 @@ public sealed partial class TextManager
     {
         _scene.AdvPagePresentationSuspended = suspended;
         _timeline?.State(suspended ? "adv-page-suspended" : "adv-page-restored", new());
-        Tell(listener => listener.PageSuspended(suspended));
+        foreach (ITextListener listener in _listeners) listener.PageSuspended(suspended);
     }
 
     /// <summary>The page's glyphs and indicator are unbound while a callback hides the window, and bound again after:

@@ -27,10 +27,10 @@ public class PhysicalFastForwardTests
         public readonly List<bool> FastForwardAtReveal = new();
         private int _waits, _reveals;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             AtWait?.Invoke(Vm!, _waits++);
-            base.WaitForInput(layoutSlot, serviceInputCallback);
+            base.WaitForInput(serviceInputCallback);
         }
 
         public override void RunShown(AdvLiveTextRun run, int glyphDelayMilliseconds)

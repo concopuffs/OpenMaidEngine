@@ -289,6 +289,34 @@ public class MoviesNativeTests
     }
 
     [Fact]
+    public void AnOrdinaryMovieShowsItsFramesOverWhatTheScriptWritesToItsSurface()
+    {
+        RgbaImage frame = Frame(green: 0x40);
+        MovieRig rig = RigWithSurface(decoder: _ => new FakeMovieDecoder { StopTimeMs = 1000, Frame = frame });
+        rig.Movies.PlayToSurface("BTL", 0x2be3, 9, 0, 0);
+
+        Assert.False(((IGraphicsMovies)rig.Movies).IsMaskedSurface(9));
+        rig.ServiceFrame();
+        rig.Graphics.FillSurfaceRect(new SurfaceRectFill(9, 0, 0, 4, 4, 255, 0xff0000));
+
+        SurfaceTexture? shown = rig.Graphics.ResolveSurfaceTexture(9, 0);
+        Assert.NotNull(shown);
+        Assert.Same(frame, shown.Value.Image);
+    }
+
+    [Fact]
+    public void AMovieWhoseFileCannotBeReadLeavesItsSurfaceUnmasked()
+    {
+        MovieRig rig = RigWithSurface();
+        rig.Assets.ReadFailure = new IOException("archive missing");
+
+        Assert.Equal(0, rig.Movies.PlayToSurface("BTL", 0x2be3, 9, 0, 0));
+
+        Assert.False(((IGraphicsMovies)rig.Movies).IsMaskedSurface(9));
+        Assert.Contains($"movie read failed {FakeMovieAssets.NameOf(0x2be3)}: archive missing", rig.Log);
+    }
+
+    [Fact]
     public void ShutdownDisposesEveryDecoderAndStream()
     {
         MovieRig rig = RigWithSurface(

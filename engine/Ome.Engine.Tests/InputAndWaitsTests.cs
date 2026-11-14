@@ -198,7 +198,7 @@ public class InputAndWaitsTests
         var interpreter = new FakeInterpreter { KeyAction = InputBindings.AdvanceAction, Polling = true };
         InputAndWaits waits = RoutedWaits(interpreter, clickOnUp: false);
         Task wait = Task.Run(() => waits.RunEngine(
-            () => waits.WaitAtAdvInputPoll(0, static () => false, static () => default, textPage: true)));
+            () => waits.WaitAtAdvInputPoll(static () => false, static () => default, textPage: true)));
         Assert.True(SpinWait.SpinUntil(() => waits.IsWaiting, TimeSpan.FromSeconds(10)));
 
         waits.Key(0x0d, pressed: false);   // a release raises nothing
@@ -221,6 +221,33 @@ public class InputAndWaitsTests
         waits.Invoke(static () => { });   // input queued before a request is routed before it runs
         Assert.Equal("hold 0x10", interpreter.Calls[^1]);
         Assert.All(interpreter.Threads, thread => Assert.Equal(engine.ThreadId, thread));
+    }
+
+    [Fact]
+    public void PointerMovesNotYetTakenCoalesceAndKeepTheirPlaceAmongTheOtherInput()
+    {
+        var interpreter = new FakeInterpreter { MouseAction = InputBindings.AdvanceAction, Polling = false };
+        InputAndWaits waits = RoutedWaits(interpreter, clickOnUp: false);
+        using var busy = new ManualResetEventSlim(false);
+        using var started = new ManualResetEventSlim(false);
+        Task engine = Task.Run(() => waits.RunEngine(() =>
+        {
+            started.Set();
+            busy.Wait();          // inside an instruction: nothing pumps
+            waits.FrameYield();   // the instruction boundary takes the front end's messages
+        }));
+        Assert.True(started.Wait(TimeSpan.FromSeconds(10)));
+
+        waits.PointerMoved(1, 1);
+        waits.PointerMoved(2, 2);
+        waits.MouseButton(0, pressed: true, 2, 2);
+        waits.PointerMoved(3, 3);
+        waits.PointerMoved(4, 4);
+        busy.Set();
+        Assert.True(engine.Wait(TimeSpan.FromSeconds(10)));
+
+        Assert.Equal(["pointer 2,2", "pointer 2,2", "button 1 down", "physical 0 down", "hold 0x10", "pointer 4,4"],
+                     interpreter.Calls);
     }
 
     [Fact]

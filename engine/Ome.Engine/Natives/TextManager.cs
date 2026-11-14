@@ -85,16 +85,16 @@ public sealed partial class TextManager : ISurfaceListener
     private readonly Lazy<TextPipeline>? _presentedText;
     private IGlyphMaskRasterizer? _presentedTextRasterizer;
     private Func<string, IReadOnlyList<string>?>? _presentedFonts;
-    private volatile bool _presentsText;
+    private bool _presentsText;
 
     private readonly Lazy<EnumeratedFontFamily[]> _fontFamilies;
     private readonly Lazy<AspectFontRealization?> _fontRealization;
 
     private int _messageGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
-    private volatile int _messageWindowAlphaSetting = Sys4RegIniStore.DefaultMesWinAlpha;
+    private int _messageWindowAlphaSetting = Sys4RegIniStore.DefaultMesWinAlpha;
     // Text manager +0x544 (message:UseAntiFont): GGO_GRAY4_BITMAP glyphs when set, GGO_BITMAP when clear. Both games
     // enable it; a text manager without a settings file keeps that.
-    private volatile bool _textAntialias = true;
+    private bool _textAntialias = true;
 
     /// <summary>The shown text, for tools, <c>GameSession</c> and the self-test: each run's source offset, text and
     /// script, hidden runs too. The engine thread appends to it.</summary>
@@ -124,14 +124,14 @@ public sealed partial class TextManager : ISurfaceListener
         // ctx+0x55108: a click (or a held action 4) finished a reveal; every later reveal publishes at once until op 0x72.
         public bool RevealsFinishedUntilWait;
         public RevealState? Reveal;
-        public volatile bool IsRevealing;
+        public bool IsRevealing;
         public readonly Dictionary<int, AdvWaitIndicatorConfig> WaitIndicators = new();
         public readonly Dictionary<int, (AdvTextLayoutPresentationBinding Binding, AdvTextLayoutSnapshot Layout)> WaitIndicatorBindings = new();
         public readonly Dictionary<int, RetainedAdvWaitIndicatorPresentation> RetainedWaitIndicators = new();
         public int ActiveWaitLayout;
         public bool WaitIndicatorEnabled;
         public int SuspendedRetainedTextLayoutSlot;
-        public volatile bool AdvPagePresentationSuspended;
+        public bool AdvPagePresentationSuspended;
         // The string stores (§5.2): op 0x9 zeroes the string bank, so every record goes with it.
         public readonly Dictionary<int, StringStore> StringStores = new();
         // Op 0x1b1's mode, text-manager+0x56c (SYS4433 +0x570): the reset sets it to 0, fixed layout-origin anchoring.
@@ -215,11 +215,6 @@ public sealed partial class TextManager : ISurfaceListener
     {
         ArgumentNullException.ThrowIfNull(listener);
         if (Array.IndexOf(_listeners, listener) < 0) _listeners = [.. _listeners, listener];
-    }
-
-    private void Tell(Action<ITextListener> call)
-    {
-        foreach (ITextListener listener in _listeners) call(listener);
     }
 
     /// <summary>Where the text manager learns whether the engine thread is in an input wait: the wait indicator shows

@@ -8,7 +8,7 @@ namespace Ome.Engine.Natives;
 // endpoint. Their state is the graphics native's (Natives/Graphics.Transitions.cs); what parks is here.
 public sealed partial class InputAndWaits
 {
-    private volatile bool _foregroundTransitionWaitBypassed;
+    private bool _foregroundTransitionWaitBypassed;
 
     /// <summary>When the effect wait in progress started on the engine clock, or -1 (the debug auto-clicker reads
     /// it).</summary>

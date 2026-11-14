@@ -22,7 +22,9 @@ public sealed class ReferenceRenderer
     // front end, which avoids a read-back per item.
     private readonly byte[] _pixels;
     private byte[] _transitionSourcePixels = [];
-    private sealed record CachedPixels(int Width, int Height, byte[] Rgba);
+    // Source: the decoded pixels the entry was prepared from. A static asset's decoded image is one instance until the
+    // graphics native forgets it (a language switch), so another instance under the same key is the newer file.
+    private sealed record CachedPixels(int Width, int Height, byte[] Rgba, byte[] Source);
     private readonly Dictionary<(int AssetId, long Key), CachedPixels> _pixelCache = new();
 
     public ReferenceRenderer(Sys4LogicalCanvas canvas)
@@ -153,7 +155,7 @@ public sealed class ReferenceRenderer
         else
         {
             var cacheKey = (item.AssetId, item.ColorKey);
-            if (!_pixelCache.TryGetValue(cacheKey, out var cached))
+            if (!_pixelCache.TryGetValue(cacheKey, out var cached) || !ReferenceEquals(cached.Source, decoded.Pixels))
             {
                 byte[] pixels = decoded.Pixels;
                 if (BlendMath.HasColorKey(item.ColorKey))
@@ -161,7 +163,7 @@ public sealed class ReferenceRenderer
                     pixels = (byte[])pixels.Clone();
                     BakeColorKey(pixels, item.ColorKey);
                 }
-                cached = new CachedPixels(decoded.Width, decoded.Height, pixels);
+                cached = new CachedPixels(decoded.Width, decoded.Height, pixels, decoded.Pixels);
                 _pixelCache[cacheKey] = cached;
             }
             sourceWidth = cached.Width;

@@ -39,6 +39,7 @@ public sealed partial class Audio : IFastForwardListener
     private readonly AudioMixerSettings _mixer;
     private readonly Sys4RegIniStore? _settings;
     private readonly TimelineLog? _timeline;
+    private readonly bool _settleFadesAtOnce;
 
     private readonly bool[] _playing = new bool[ChannelCount];
     private readonly int[] _playIds = new int[ChannelCount];
@@ -70,8 +71,11 @@ public sealed partial class Audio : IFastForwardListener
     /// <param name="settings">SYS4REG.INI, for the voice duck settings read at each voice start; none uses native's
     /// registered defaults.</param>
     /// <param name="timeline">The timeline log, if one is kept.</param>
+    /// <param name="settleFadesAtOnce">For a run whose clock nothing advances (a headless VM or tool): an op 0xc2 fade
+    /// applies its endpoint at once, as under fast-forward, since on a standing clock it would never end.</param>
     public Audio(IAudioDevice device, IAudioAssets assets, FrameClock clock, SkipAndAuto skip,
-                 AudioMixerSettings mixer, Sys4RegIniStore? settings = null, TimelineLog? timeline = null)
+                 AudioMixerSettings mixer, Sys4RegIniStore? settings = null, TimelineLog? timeline = null,
+                 bool settleFadesAtOnce = false)
     {
         _device = device ?? throw new ArgumentNullException(nameof(device));
         _assets = assets ?? throw new ArgumentNullException(nameof(assets));
@@ -80,22 +84,24 @@ public sealed partial class Audio : IFastForwardListener
         _mixer = mixer ?? throw new ArgumentNullException(nameof(mixer));
         _settings = settings;
         _timeline = timeline;
+        _settleFadesAtOnce = settleFadesAtOnce;
         _skip.Listen(this);
         ApplyMixer(_mixer.Snapshot());
     }
 
-    /// <summary>A native that plays nothing: no sounds, a silent device and a clock that stands still. Tests and tools
-    /// that give the VM no audio native get one.</summary>
+    /// <summary>A native that plays nothing: no sounds, a silent device and a clock that stands still, so a script
+    /// fade settles at once. Tests and tools that give the VM no audio native get one.</summary>
     public static Audio Silent(SkipAndAuto skip, AudioMixerSettings? mixer = null)
-        => new(new SilentAudioDevice(), NoAudioAssets.Instance, new FrameClock(), skip, mixer ?? new AudioMixerSettings());
+        => new(new SilentAudioDevice(), NoAudioAssets.Instance, new FrameClock(), skip,
+               mixer ?? new AudioMixerSettings(), settleFadesAtOnce: true);
 
     /// <summary>Op 0x1be: whether a channel plays (0..9 sound effects, 11 BGM, 12 voice; any other channel is
     /// silent).</summary>
     public bool IsChannelPlaying(int channel)
-        => (uint)channel < ChannelCount && Volatile.Read(ref _playing[channel]);
+        => (uint)channel < ChannelCount && _playing[channel];
 
     /// <summary>Whether a voice plays on channel 12 (ADV Auto waits for it).</summary>
-    public bool IsVoicePlaying => Volatile.Read(ref _playing[VoiceChannel]);
+    public bool IsVoicePlaying => _playing[VoiceChannel];
 
     /// <summary>The engine tick's audio step (spec §5.3, part 1). In native's order (engine_main_tick@0x411840): take
     /// the device's reports; the delayed sound effect and voice starts, unless the tick withholds them (an open statement
@@ -123,7 +129,7 @@ public sealed partial class Audio : IFastForwardListener
     private void ChannelEnded(AudioChannelEnded ended)
     {
         if ((uint)ended.Channel >= ChannelCount || _playIds[ended.Channel] != ended.PlayId) return;   // an older play
-        Volatile.Write(ref _playing[ended.Channel], false);
+        _playing[ended.Channel] = false;
     }
 
     private void UpdateTimedWork()
@@ -135,19 +141,19 @@ public sealed partial class Audio : IFastForwardListener
     {
         int playId = ++_lastPlayId;
         _playIds[channel] = playId;
-        Volatile.Write(ref _playing[channel], true);
+        _playing[channel] = true;
         _device.Play(channel, loop, volumeDb, playId);
     }
 
     private void StopChannel(int channel)
     {
-        Volatile.Write(ref _playing[channel], false);
+        _playing[channel] = false;
         _device.Stop(channel);
     }
 
     private void UnloadChannel(int channel)
     {
-        Volatile.Write(ref _playing[channel], false);
+        _playing[channel] = false;
         _device.Unload(channel);
     }
 

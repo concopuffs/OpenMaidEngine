@@ -84,7 +84,8 @@ public class SceneReloadTests
         [
             // The front end's frame turns, input queue, requests and modal holds, and the engine thread.
             "_turn", "_turnRequested", "_turnAbandoned", "_turnPerf", "_turnDecisions", "_turnLowering", "_published",
-            "_publishedLate", "_workQueued", "_requests", "_input", "_advanceQueued", "_frontendModalHolds",
+            "_publishedLate", "_workQueued", "_requests", "_input", "_pointerPending", "_pendingPointerX",
+            "_pendingPointerY", "_advanceQueued", "_frontendModalHolds",
             "_blockHandles", "_engineThreadId", "SleepScale",
             // The run's page counts (the reset posts a notice).
             "_pages", "_pageNotices",

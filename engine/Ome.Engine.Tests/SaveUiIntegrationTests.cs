@@ -78,11 +78,10 @@ public class SaveUiIntegrationTests
 
     private sealed class ContinueInstalledLoadHost(InstalledContinuationState state) : ClickFirstSlotHost
     {
-        public override void WaitForInput(
-            int layoutSlot, Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
+        public override void WaitForInput(Func<bool> serviceInputCallback, Func<AdvAutoWaitState> autoWaitState)
         {
             if (state.TerminalRestoreEntered) throw new InstalledGameplayPollReachedException();
-            base.WaitForInput(layoutSlot, serviceInputCallback, autoWaitState);
+            base.WaitForInput(serviceInputCallback, autoWaitState);
         }
 
         public override void Sleep(long duration)

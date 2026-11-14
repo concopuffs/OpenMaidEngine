@@ -203,8 +203,10 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
             RequestStop(prior.PlaybackId);
         }
         if (mask != null)
+        {
             _masksByPlayback[playbackId] = mask;
             _maskPlaybackBySurface[surfaceSlot] = playbackId;
+        }
         _graphics.ForgetSurfaceColorKey(surfaceSlot);
         // Movie surfaces inherit the selected game's primary size until a decoded frame supplies content.
         if (mask == null) _graphics.SetSurfaceSize(surfaceSlot, _graphics.Canvas.Width, _graphics.Canvas.Height);

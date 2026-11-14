@@ -12,8 +12,8 @@ namespace Ome.Engine.Natives;
 /// withhold presentation, and the interpreter defers callback scripts (docs/engine-re.md, "Statement blocks"). The delayed
 /// starts go on under a block while op 0x21c's effect wait parks the interpreter, as native's do under run-state 0x400.</para>
 /// </summary>
-/// <remarks>Threads: the engine thread runs the tick and the statement block ops; the front end reads
-/// <see cref="StatementBlockOpen"/> from its own.</remarks>
+/// <remarks>Threads: the engine thread only; the tick, the statement block ops and every reader of
+/// <see cref="StatementBlockOpen"/> run on it.</remarks>
 public sealed class EngineTick
 {
     private readonly Audio _audio;
@@ -22,7 +22,7 @@ public sealed class EngineTick
     // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
     private sealed class Scene
     {
-        public volatile bool StatementBlockOpen;   // statement_block_active (ctx+0x5f2fc)
+        public bool StatementBlockOpen;   // statement_block_active (ctx+0x5f2fc)
         public int StatementBlockDepth;            // statement_block_depth (ctx+0x5f300): opens nested inside it
     }
 

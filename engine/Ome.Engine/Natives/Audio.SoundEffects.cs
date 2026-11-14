@@ -14,7 +14,7 @@ public sealed partial class Audio
     /// <summary>Op 0xb4: load a sound effect on a channel (0..9), replacing what it held.</summary>
     public void LoadSoundEffect(long resourceId, int channel)
     {
-        LoadSoundEffectLocked(resourceId, channel);
+        LoadSoundEffectChannel(resourceId, channel);
         UpdateTimedWork();
     }
 
@@ -43,7 +43,7 @@ public sealed partial class Audio
     /// <summary>Op 0xb6: stop a channel and drop its sound.</summary>
     public void ReleaseSoundEffect(int channel)
     {
-        ReleaseSoundEffectLocked(channel);
+        ReleaseSoundEffectChannel(channel);
         UpdateTimedWork();
     }
 
@@ -53,7 +53,7 @@ public sealed partial class Audio
         get { return _soundEffectResourceIds.ToArray(); }
     }
 
-    private void LoadSoundEffectLocked(long resourceId, int channel)
+    private void LoadSoundEffectChannel(long resourceId, int channel)
     {
         if (!IsSoundEffectChannel(channel)) return;
         _soundEffectResourceIds[channel] = resourceId;
@@ -62,11 +62,11 @@ public sealed partial class Audio
         _scene.DelayedStarts[channel] = null;
         _timeline?.Event("sfx-load", new() { ["resource"] = resourceId, ["channel"] = channel, ["file"] = clip?.Name });
         if (clip == null) return;
-        Volatile.Write(ref _playing[channel], false);
+        _playing[channel] = false;
         _device.Load(channel, AudioBus.SoundEffect, clip);
     }
 
-    private void ReleaseSoundEffectLocked(int channel)
+    private void ReleaseSoundEffectChannel(int channel)
     {
         if (!IsSoundEffectChannel(channel)) return;
         _soundEffectResourceIds[channel] = 0;

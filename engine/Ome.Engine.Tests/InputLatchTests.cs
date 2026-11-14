@@ -32,7 +32,7 @@ public class InputLatchTests
         public int EndedWaits;
         public bool RequestYieldAtWait;
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             HeldAtWait ??= Vm!.HeldTriggers;
             AtWait?.Invoke(Vm!);
@@ -41,7 +41,7 @@ public class InputLatchTests
                 RequestYieldAtWait = false;
                 Assert.True(Vm!.TryRequestAdvWaitCoroutineYield());
             }
-            base.WaitForInput(layoutSlot, serviceInputCallback);
+            base.WaitForInput(serviceInputCallback);
         }
 
         public override void FrameYield()

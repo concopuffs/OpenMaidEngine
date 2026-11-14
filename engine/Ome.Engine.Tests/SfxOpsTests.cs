@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Ome.Engine.Model;
 using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
@@ -95,6 +96,32 @@ public class SfxOpsTests
         Assert.Equal(0, vm.Globals[trackAfterFade]);
         Assert.Equal([5L, 5L], rig.Device.BgmTracks);
         Assert.Single(rig.Device.CommandsStartingWith("unload 11"));   // the tick released it at the fade's end
+    }
+
+    // Given no audio native the VM runs on a silent one, whose clock stands still (the CLI's run, play, sweep, trace
+    // and oms-rebuild, GameSession): a timed fade settles at once, as a headless host's did before the audio native.
+    [Fact]
+    public void WithoutAnAudioNativeATimedFadeToZeroSettlesAtOnce()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        const int trackAfterFade = 0x100;
+        var script = ScriptAssembler.Assemble(table, "BGM-FADE-HEADLESS",
+            new List<(int, Operand[])>
+            {
+                (0xbf, new[] { new Operand(0, 5) }),
+                (0xc2, new[] { new Operand(0, 0), new Operand(0, 3000) }),
+                (0xc0, new[] { new Operand(3, trackAfterFade) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(0, vm.Globals[trackAfterFade]);
+        const BindingFlags Instance = BindingFlags.NonPublic | BindingFlags.Instance;
+        object audio = typeof(VirtualMachine).GetField("_audio", Instance)!.GetValue(vm)!;
+        Assert.False((bool)typeof(Audio).GetField("_timedWork", Instance)!.GetValue(audio)!);   // nothing left to run
     }
 
     [Fact]

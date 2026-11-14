@@ -2143,10 +2143,11 @@ It is an isolated implementation slice and has no dependency on the remaining op
 IAGEService getter, AGERC menu refresher, and typed EngineCtx field are annotated in the saved Ghidra
 programs.
 
-The port retains the complete signed dword on `VirtualMachine`, initializes it to one, replaces it on each
-`0x142` call, and restores one during opcode-`0x9` root scene-context reset. It calls no `IHost` service: treating
-the flag as a game-input or persistence switch would broaden its native effect. The Godot frontend's menu refresh
-reads it (`VmMenuState.SystemMenuEnabled`) and grays the same items, on the bar and on the fullscreen strip.
+The port retains the complete signed dword on `VirtualMachine`, initializes it to one, replaces it on each `0x142`
+call, and restores one during opcode-`0x9` root scene-context reset. It calls no other native and no front-end
+service: treating the flag as a game-input or persistence switch would broaden its native effect. The Godot frontend's
+menu refresh reads it (`VmMenuState.SystemMenuEnabled`) and grays the same items, on the bar and on the fullscreen
+strip.
 
 ### System-menu top-edge reveal delay — opcodes `0x148` / `0x149` (2026-07-29)
 
@@ -2179,7 +2180,7 @@ again. The handlers, timer/reveal workers, EngineCtx field, AGERC dispatcher/dia
 are named/commented in the saved Ghidra programs.
 
 The VM retains the field as a `uint`, sign-extends the getter's dword into the existing script integer-cell
-representation, and restores zero in the opcode-`0x9` scene reset. It makes no `IHost` call: the Godot frontend
+representation, and restores zero in the opcode-`0x9` scene reset. It calls no other native: the Godot frontend
 reads `SystemMenuShowDelayMilliseconds` for its own dwell (`godot/Main.ScreenMode.cs`). Focused coverage includes
 SYSTEM4's 1000-millisecond setting/getter pair, a high-bit dword round trip, and root-reload lifetime.
 
@@ -2280,8 +2281,8 @@ Handler resolved via the dispatch table (`ctx[0x26c93+0xc8]` = `param_1[0x26d5b]
 **Port equivalent (implemented):** our VM runs on a background thread (like `wait-for-input`), so blocking that
 thread for `duration` ms while the main-thread compositor (`Main.Recomposite` in `_Process`) keeps presenting is
 behaviorally equivalent to the native non-blocking timer. This correctly reproduces the **explicit one-shot
-sleeps** (the dramatic 1000/750/200 ms holds). Headless/CLI hosts no-op `Sleep` (parity). `IHost.Sleep(long)` +
-VM `case "sleep"`; see `vm-map/opcodes.toml` 0xc8. **It does not pace ordinary opcode bursts.** The later
+sleeps** (the dramatic 1000/750/200 ms holds). Headless/CLI waits no-op `Sleep` (parity). `InputAndWaits.Sleep` +
+the VM's `OpSleep`; see `vm-map/opcodes.toml` 0xc8. **It does not pace ordinary opcode bursts.** The later
 native presentation trace proved that back-to-back retained mutations execute within milliseconds and are
 first published at the following `0x20c`/`0x21c`, sleep, or stable input boundary. An earlier claim that the
 opening was generally sleep-paced was inherited without execution evidence and is superseded.
@@ -2300,12 +2301,12 @@ calls `timeBeginPeriod`, so `kernel32!Sleep(1)` lasts about a millisecond. A pol
 (`op_0xcd_dispatch_mouse_callback@0x417e10`) fires the op-`0xcc` callback once `timeGetTime()` minus the last firing
 reaches the interval, and re-arms from that moment, so a 50 ms callback runs about every 50 ms.
 
-The port's `EngineHost.Sleep` used to request a synchronized presentation on every sleep and wait for the
-compositor to take it, which happens once per display frame. Each `sleep 1` then lasted up to a frame (16.7 ms at
-60 Hz), and the 50 ms callback fired after three or four frames: every 50 or 67 ms. FIELD's callback
-(`label_1498`) counts its calls in local `0x2f53` while nothing is selected, and draws the help overlay (texture
-`0x41` at object `0xc350 + 0x7cf`) once the count passes 100 (`label_c4c6`). Native showed it about 5 s after the
-last input; the port showed it about half a second later.
+The port's sleep (now `InputAndWaits.Sleep`) used to request a synchronized presentation on every sleep and wait for
+the compositor to take it, which happens once per display frame. Each `sleep 1` then lasted up to a frame (16.7 ms at
+60 Hz), and the 50 ms callback fired after three or four frames: every 50 or 67 ms. FIELD's callback (`label_1498`)
+counts its calls in local `0x2f53` while nothing is selected, and draws the help overlay (texture `0x41` at object
+`0xc350 + 0x7cf`) once the count passes 100 (`label_c4c6`). Native showed it about 5 s after the last input; the port
+showed it about half a second later.
 
 A sleep under 10 ms now requests presentation without waiting for it, and only waits its own real time. The
 compositor still publishes whenever it finds the script parked in the sleep. Longer sleeps still synchronize as
@@ -2515,8 +2516,8 @@ Op `0x1f9` loads its AGF synchronously, inside the op, in these steps:
 Native keeps no decoded image, so loading the same AGF again costs as much as the first time.
 
 A Frida probe timed each op with `QueryPerformanceCounter`, hooking AGE.EXE functions only. It ran on the
-`himegari-effect-waits.steps` run from boot to SC0000's page 14. The port times are `EngineHost.SetTexture`'s
-decode in the same run:
+`himegari-effect-waits.steps` run from boot to SC0000's page 14. The port times are op `0x1f9`'s
+decode (`Graphics.LoadSurface`) in the same run:
 
 | Load (resource) | Native op | of which LZSS | Port, optimized | Port, Debug build |
 |---|---|---|---|---|
@@ -2529,7 +2530,7 @@ decode in the same run:
 | AE001D again | 3.60 ms | 1.77 ms | 0.00 ms (cached) | 0.00 ms (cached) |
 
 The port decodes an AGF on its first load (`AgfDecoder`) and caches the RGBA image by packed id
-(`EngineHost.Decode`). With the JIT optimizing, each load is within about 1.6 ms of native's, and repeat loads cost
+(`Graphics.Decode`). With the JIT optimizing, each load is within about 1.6 ms of native's, and repeat loads cost
 nothing. `drive.py port` runs Godot's Debug configuration, where the JIT optimizer is disabled unless it is started
 with `--optimize` (`tools-reference.md`, "Port timing"). There the same decodes take two to three times as long. A standalone benchmark of `AgfDecoder` gives the same split: EV052DA takes
 3.94 ms optimized and 9.20 ms in Debug.
@@ -2978,7 +2979,7 @@ rules out the former port behavior, `retained gfx object exists ? 0 : -1`.
 **Port implementation (2026-07-21):** `DirectShowMovieDecoder` now queries
 `IMediaPosition::get_StopTime` after the graph reaches its running state and before synchronous `0x236`
 initialization returns. It applies native seconds-to-milliseconds truncation and hands the value through
-`IHost.PlayMovieToSurface` (the movie native's `Movies.PlayToSurface` since engine layering milestone 8) into a
+the movie native's `Movies.PlayToSurface` into a
 movie-surface record owned by `GfxState`. Decoder construction moved from
 the deferred Godot callback to the VM-side synchronous open boundary; the ready decoder is staged in a
 thread-safe pending registry and adopted by the main thread before frame sampling, preserving asynchronous
@@ -3198,8 +3199,7 @@ movie-frame-to-mask publication, retained-range capture, per-pixel alpha composi
 movie-completion-driven blocking cleanup. The handlers, sample worker, compositor, and exact helpers are
 named and commented in the saved `/v2` Ghidra image.
 
-**Port implementation (2026-07-29):** `IHost.PlayMovieMaskTransition` (the movie native's
-`Movies.PlayMaskTransition` since engine layering milestone 8) carries the complete
+**Port implementation (2026-07-29):** the movie native's `Movies.PlayMaskTransition` carries the complete
 twelve-operand request. At dispatch, the port snapshots the old/source retained range into the script-created
 scratch surface (`Graphics.CaptureObjectRange`, the frame lowering's published-range path since engine layering
 milestone 7; `RetainedSurfaceRasterizer` before); the immediately preceding
@@ -3574,7 +3574,7 @@ the affected handlers, interpreter tick, and settings-default initializer are na
 `adv_interpreter_tick`'s one-op dispatch as one rendered frame per opcode only while Skip was active.
 That contradicted the synchronized native trace above: the outer service calls the dispatcher in fast bursts,
 and Ctrl measured about 7,738 operand fetches/sec rather than one per display frame. The artificial
-`EngineHost.FrameYield` wait made the setup/cleanup bytecode between skipped fades take seconds even though
+host `FrameYield` wait made the setup/cleanup bytecode between skipped fades take seconds even though
 the fades themselves correctly jumped to their endpoints. `FrameYield` is nonblocking again; only explicit
 presentation, sleep, and input services own wall-clock time. Since engine layering milestone 11 it is
 `InputAndWaits.FrameYield`, where the engine thread answers the front end's frame turn without waiting for the display.
@@ -4385,13 +4385,13 @@ surfaces `0xc0/0xc1`; that existing exit boundary now tells the host to discard 
 The semantic text/index records remain untouched, so reopening History rebuilds fresh rows while exiting
 cannot leave the old labels above the resumed ADV page.
 
-Stored voice replay now follows the native split. Ordinary op `0xc4` and History op `0x1bd` share the
-packed-resource resolver, Skip replacement queue, and Auto voice-pending state, but carry variants 0 and 1
-respectively through `IHost.PlayVoice`. Both append their pair to the backlog when recording is enabled;
-History's surrounding `0x1bb(0)` suppression prevents the replay from recording itself. Native
-`voice_play_indexed_asset@0x488330` stores that variant in the channel-12 sound-buffer state before starting
-playback. Its precise audible meaning remains unproven, so the Godot host retains it through its queue and
-timeline rather than inventing different playback behavior.
+Stored voice replay now follows the native split. Ordinary op `0xc4` and History op `0x1bd` share the packed-resource
+resolver, Skip replacement queue, and Auto voice-pending state, but carry variants 0 and 1 respectively through the
+audio native (`Audio.PlayVoice`, `Audio.PlayHistoryVoice`). Both append their pair to the backlog when recording is
+enabled; History's surrounding `0x1bb(0)` suppression prevents the replay from recording itself. Native
+`voice_play_indexed_asset@0x488330` stores that variant in the channel-12 sound-buffer state before starting playback.
+Its precise audible meaning remains unproven, so the audio native keeps it (`Audio.VoicePlaybackVariant`) and its
+timeline records it, rather than inventing different playback behavior.
 
 A live replay trace exposed a corrected prerequisite on that path. The clicked SC0000 row found voice pair
 `{0x24,0}` but returned at `HISTORY.BIN@0x9ee` because its required type-2 metadata lookup failed. Native
@@ -5449,7 +5449,7 @@ channel comes from `G[0x6242d]`.
 and executes `0xb5(2)` whenever mouse/joy selection changes. Each activation path loads raw id `0x3321`
 (`SE015.WAV`) into channel 1 and immediately starts it; GAMESTART additionally uses raw `0x2aeb`
 (`SE013.WAV`). A synchronized Godot trace captured repeated hover starts and the Game Start activation, but
-each preceding load recorded `file:null`: `EngineHost.LoadSoundEffect` applied the active script's
+each preceding load recorded `file:null`: the port's load (now `Audio.LoadSoundEffect`) applied the active script's
 scene-local manifest, and TITLE has only 14 local entries. `ResourceMap.ResolveSoundEffect` now uses the
 native packed lookup and filters the selected record to OGG/WAV before the existing byte/player path.
 The corrected synchronized trace resolves and starts `SE020`, `SE015`, and `SE013` through
@@ -5501,14 +5501,13 @@ logical loop versus one-shot, not a mixer flag. A compatible implementation must
 host seam with explicit restart and loop ownership, preserve `0xbf`'s current idempotence, treat operand
 zero through the VM's retained track, and make `0xb8` clear that retained state.
 
-The port now implements that split directly. `IHost.RestartBgm(track,startMode)` is distinct from ordinary
-`PlayBgm`, so `0xbf` remains same-track-idempotent while `0xb7`/`0xb9` always replace the stream. The VM
-resolves operand zero through `_currentBgmTrackId`; zero with no retained track calls the same idempotent
-stop path as native. `StopBgm` clears the VM track and makes Godot cancel voice ducking and any deferred
-fade, stop the player, release its stream, and restore neutral gain. Godot sets `AudioStreamOggVorbis.Loop`
-from the native start mode. A `0xc2` fade that reaches target zero releases the source the same way (since
-2026-11-07 the host does so when the background fade ends), replacing the former silent-but-still-bound Godot
-stream with native release behavior.
+The port now implements that split directly, in the audio native (`Natives/Audio.Bgm.cs`).
+`Audio.RestartBgm(track, startMode)` is distinct from ordinary `PlayBgm`, so `0xbf` remains same-track-idempotent
+while `0xb7`/`0xb9` always replace the stream. Operand zero reads the native's retained track; zero with no retained
+track stops, as native does. `StopBgm` clears the retained track, ends the voice duck and any fade, and releases
+channel 11, whose envelope starts again at full. The start mode decides whether the device loops the track. A `0xc2`
+fade that reaches target zero releases the source the same way when the tick ends it, replacing the former
+silent-but-still-bound Godot stream with native release behavior.
 A focused regression covers same-track restart, zero aliasing, loop/one-shot selection, track replacement,
 stop/clear, fade-to-zero release, and restart after stop; the threaded self-test exercises both loop modes
 and real stop/release.
@@ -5545,12 +5544,13 @@ character cells, copies that text into both `0x144` operands, then calls `0x2c6`
 the VM worker blocks while Godot's main thread presents a LineEdit dialog, validates the CP932 byte limit
 and full-width-only rule, and signals the worker on accept or cancel. No save/profile format is involved.
 
-**Port implementation (2026-07-29).** `Cp932Text` now owns the byte-level character count, substring,
-and AGERC acceptance rules. The VM dispatches all three handlers and exposes the modal as an explicit
-accept/cancel `IHost` exchange, so cancellation cannot overwrite operand 1. Godot uses a main-thread
-`FullwidthTextEditorDialog` while its VM worker waits; over-16-byte and non-double-byte submissions retain
-focus and show AGERC's exact Japanese errors. The helper operates on the C-string prefix and encodes through
-the configured native code page, avoiding both UTF-16 indexing and accidental splitting of CP932 pairs.
+**Port implementation (2026-07-29).** `Cp932Text` now owns the byte-level character count, substring, and AGERC
+acceptance rules. The VM dispatches all three handlers and exposes the modal as an explicit accept/cancel exchange
+(`InputAndWaits.EditFullwidthString`, through the shell native's text entry), so cancellation cannot overwrite operand
+1. Godot uses a main-thread `FullwidthTextEditorDialog` while its VM worker waits; over-16-byte and non-double-byte
+submissions retain focus and show AGERC's exact Japanese errors. The helper operates on the C-string prefix and
+encodes through the configured native code page, avoiding both UTF-16 indexing and accidental splitting of CP932
+pairs.
 
 `0xc2` is BGM rather than SFX. During ordinary execution, `op_0xc2_bgm_fade@0x4204c0` sets run-state `0x200`,
 arms the service timer, and calls `bgm_fade_arm@0x464830`. `bgm_fade_tick@0x464960` linearly interpolates
@@ -6140,7 +6140,7 @@ skipped instructions across seven distinct scripts and reduces the effectful-gap
 distinct opcodes / 28 instructions.
 
 The same manual pass exposed a resource-addressing issue after `0x6c` was fixed: ROOM did execute
-`play-voice`, but `EngineHost` attempted only inferred SC-section resolution. ROOM's voice operands
+`play-voice`, but the port's voice load attempted only inferred SC-section resolution. ROOM's voice operands
 `0x3365..0x3376` are universal packed SYS4INI indices (for example `0x3365` is `EUA0016.OGG`). The first
 compatibility fix tried an SC section and then a type-checked base-catalog fallback. Subsequent native RE
 proved there is no first stage: ROOM and SC scripts alike pass an already absolute packed id directly to
@@ -6536,13 +6536,13 @@ The shipped flags hold no wait through a movie itself:
   clock to the latest layer stop time from op `0x23f` (`0x32b2`).
 
 **Port.** `MovieSurfaceRegistry.HoldsServiceWait` applies the same predicate to the flags each binding keeps from its
-movie op, until the surface is released. `EngineHost.HasActiveMoviePresentation` reads it for `0x21c` and the
-foreground-transition waits. Before this, any unfinished movie held the wait. Kamidori's first-battle SHOWGROW then
-sat about 9.3 s after Engage, against native's 6.5 s; it now sits 6.3 s. SC0000's chapter wait is unchanged:
-native 1.63 s, port 1.68 s. Test: `MovieSurfaceRegistryTests.OnlyFlagsWithBit2SetAndBit0ClearHoldTheServiceWait`.
-*Correction (2026-11-07):* that 1.63 s wait is not the movie's. The wait that should cover the movie fell to 5 s on the
-port once the movie stopped holding it, because op `0x23f` read the wrong surface. See "SC0000's chapter movie plays
-on surface 5", below.
+movie op, until the surface is released. The effect waits read it (`Movies.HoldsServiceWait`, in
+`InputAndWaits.Transitions.cs`) for `0x21c` and the foreground transitions. Before this, any unfinished movie held the
+wait. Kamidori's first-battle SHOWGROW then sat about 9.3 s after Engage, against native's 6.5 s; it now sits 6.3 s.
+SC0000's chapter wait is unchanged: native 1.63 s, port 1.68 s. Test:
+`MovieSurfaceRegistryTests.OnlyFlagsWithBit2SetAndBit0ClearHoldTheServiceWait`. *Correction (2026-11-07):* that 1.63 s
+wait is not the movie's. The wait that should cover the movie fell to 5 s on the port once the movie stopped holding
+it, because op `0x23f` read the wrong surface. See "SC0000's chapter movie plays on surface 5", below.
 
 #### A surface release deletes its movie (2026-11-07)
 
@@ -6634,11 +6634,11 @@ Op `0x236` requires the destination texture to exist, and `CMovieTextureRenderer
 the first sample, through the whole start delay, the object therefore shows the zeroed texture, which the additive
 blend leaves invisible.
 
-**Port.** `EngineHost.StartMovie` dropped the slot's created image when it bound the movie. Before the first frame
-the object had neither a texture nor a surface resource, and `Main.Compositor` drew it as a surfaceless fill in the
-object's white tint. `MovieSurfaceRegistry.Begin` now takes the surface's contents at bind time, and
-`TryResolveSurface` serves them until `PublishFrame` supplies a sample. A movie mask keeps its own path. Test:
-`MovieSurfaceRegistryTests.SurfaceShowsItsCreatedContentsUntilTheFirstSample`. A 0.25 s capture of a 魔弾 attack
+**Port.** The movie start (now `Movies.StartMovie`) dropped the slot's created image when it bound the movie. Before
+the first frame the object had neither a texture nor a surface resource, and `Main.Compositor` drew it as a
+surfaceless fill in the object's white tint. `MovieSurfaceRegistry.Begin` now takes the surface's contents at bind
+time, and `TryResolveSurface` serves them until `PublishFrame` supplies a sample. A movie mask keeps its own path.
+Test: `MovieSurfaceRegistryTests.SurfaceShowsItsCreatedContentsUntilTheFirstSample`. A 0.25 s capture of a 魔弾 attack
 on 木漏れ日の深緑地 (slot 009, `rand-seed 13`) shows no white box.
 
 **Battle timing.** The same battle, with the VM position sampled every 0.1 s on both targets, reaches ADDEXP at 4.67 s
@@ -6698,7 +6698,7 @@ ahead of the `0x40` and `0x08000000` (fast-forward) branch at `0x4124ba`. The fa
 The port forces at the start of `WaitForForegroundTransition` while fast-forward is active
 (`GfxState.ForceCompleteTimedPresentationForFastForward`, which yields to bit 1, leaves detached channels and movie
 masks alone, and ends the anim-clock window). It no longer forces a wait already in progress when Skip starts
-(`EngineHost.FastForwardChannelSet`, the host's listener on the skip-and-auto native).
+(`InputAndWaits.FastForwardChannelSet`, the waits' listener on the skip-and-auto native).
 
 **The anim-clock window holds the effect wait.** `gfx_animation_service_poll@0x407640` (SYS4433 `0x4079b0`) is called
 only from the `0x400` service. While op `0x238`'s window runs, it returns 1. The window's start is seeded at the first
@@ -7138,7 +7138,7 @@ the port:
   them for the field HUD's turn/control/mana/level/HP/SP/FS values.
 
 This path creates ordinary retained graphics objects, so the existing atlas decode and compositor are
-the correct backend; it is not an immediate `EngineHost.DrawTexture` raster operation. The port models
+the correct backend; it is not an immediate raster operation. The port models
 all eleven handler-addressable indices as safe independent `GfxState` records rather than reproducing
 native index 10's adjacent-memory overwrite. Each `0x23b` call erases its full destination-handle capacity
 and then uses the ordinary
@@ -7631,7 +7631,7 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
     click on SC0000 withholds about 90 ms at `0x21b`. The save/load scenario passes.
   - **Sleeps (2026-11-08).** `sleep_op_0xc8@0x420ec0` never sets run-state `0x400`: under 10 ms it calls kernel32
     `Sleep` inline, and from 10 ms it sets run-state bit 1 and arms the timer. So native renders nothing while a
-    sleep inside a block runs. `EngineHost.Sleep` used to request a presentation on every sleep, which the render
+    sleep inside a block runs. The port's sleep used to request a presentation on every sleep, which the render
     withholding lets through, so a strip button's new icon showed during its 100 ms sleep instead of at the close.
     It now requests none while a block is open (`InputAndWaits.SleepPresentationFor`, checked by the Godot
     self-test). A scan of both games' disassembly (2026-11-08) finds sleeps lexically inside a block only in

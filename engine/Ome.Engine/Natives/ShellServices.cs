@@ -110,8 +110,8 @@ public sealed partial class ShellServices
     /// <summary>Op 0x142's gate: 0 while CONFIG runs, when the native menu grays its settings commands.</summary>
     public int SystemMenuActionsEnabled
     {
-        get => Volatile.Read(ref _scene.SystemMenuActionsEnabled);
-        set => Volatile.Write(ref _scene.SystemMenuActionsEnabled, value);
+        get => _scene.SystemMenuActionsEnabled;
+        set => _scene.SystemMenuActionsEnabled = value;
     }
 
     /// <summary>Ops 0x148/0x149: how long the pointer must rest on the screen's top edge before the fullscreen

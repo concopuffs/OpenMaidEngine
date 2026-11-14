@@ -22,7 +22,9 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         public required ImageTexture Texture;
         public required int Width;
         public required int Height;
-        public byte[]? LastPixels;
+        // The pixels the upload came from. A static asset's decoded image is one instance until the graphics native
+        // forgets it (a language switch), so another instance under the same key is the newer file.
+        public required byte[] SourcePixels;
     }
 
     private readonly Node2D _stage;
@@ -212,7 +214,9 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
     private Texture2D ResolveTexture(RgbaImage source, int assetId, long colorKey, bool dynamic, long dynamicKey)
     {
         // One movie resource may play concurrently on multiple surfaces. Static assets share one upload;
-        // dynamic surfaces use their surface/playback identity so one frame cannot overwrite another.
+        // dynamic surfaces use their surface/playback identity so one frame cannot overwrite another. Either uploads
+        // again when its pixels are another array: a dynamic surface's next sample, or a static asset decoded again
+        // after a language switch (so a frame lowered before the switch cannot leave the old file cached).
         var key = (assetId, colorKey, dynamic ? dynamicKey : 0);
         if (!_textures.TryGetValue(key, out var cached))
         {
@@ -227,12 +231,12 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
                 Texture = texture,
                 Width = source.Width,
                 Height = source.Height,
-                LastPixels = dynamic ? source.Pixels : null,
+                SourcePixels = source.Pixels,
             };
             _textures.Add(key, cached);
         }
-        else if (dynamic && (!ReferenceEquals(cached.LastPixels, source.Pixels) ||
-                             cached.Width != source.Width || cached.Height != source.Height))
+        else if (!ReferenceEquals(cached.SourcePixels, source.Pixels) ||
+                 cached.Width != source.Width || cached.Height != source.Height)
         {
             byte[] pixels = PreparePixels(source.Pixels, colorKey);
             using var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8, pixels);
@@ -247,7 +251,7 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
             }
             _textureUploadTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started;
             _textureUploads++;
-            cached.LastPixels = source.Pixels;
+            cached.SourcePixels = source.Pixels;
         }
         return cached.Texture;
     }

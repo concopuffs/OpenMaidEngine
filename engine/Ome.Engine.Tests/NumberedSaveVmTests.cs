@@ -561,10 +561,10 @@ public class NumberedSaveVmTests
         public VirtualMachine Vm = null!;
         public readonly List<IReadOnlyList<VmFrameLocation>> Captures = new();
 
-        public override void WaitForInput(int layoutSlot, Func<bool> serviceInputCallback)
+        public override void WaitForInput(Func<bool> serviceInputCallback)
         {
             Captures.Add(Vm.CaptureFrameLocations());
-            base.WaitForInput(layoutSlot, serviceInputCallback);
+            base.WaitForInput(serviceInputCallback);
         }
     }
 

@@ -36,9 +36,14 @@ public partial class Main : IFramePresenter
 
     private string? _gfxLogPath;                // --gfx-log <file>: log per-object draw/skip CHANGES
 
-    /// <summary>Drops the prepared pixels of every catalog image, so the reference renderer takes each one again: after
-    /// a language switch, its language assets apply (localization spec §12). Main thread, as the renderer.</summary>
-    private void ForgetPreparedPixels() => _reference.ForgetPreparedPixels();
+    /// <summary>Drops the prepared pixels of every catalog image, so the reference renderers (the fallback and
+    /// reference-diff's shadow) take each one again: after a language switch, its language assets apply (localization
+    /// spec §12). Main thread, as the renderers.</summary>
+    private void ForgetPreparedPixels()
+    {
+        _reference.ForgetPreparedPixels();
+        _shadowReference?.ForgetPreparedPixels();
+    }
 
     // The engine thread, just before a frame turn lowers: --perf-log notes the instruction the frame presents.
     private void NotePresentationCoordinate()
@@ -176,14 +181,11 @@ public partial class Main : IFramePresenter
             foreach (FrameItem item in list)
             {
                 items++;
-                if (item.Kind == FrameItemKind.Texture && !WholePixelMove(item.Matrix)) transformed++;
+                if (item.Kind == FrameItemKind.Texture && !SoftwareAffineRasterizer.IsIntegerTranslation(item.Matrix))
+                    transformed++;   // the draws the GPU renderer filters, by its own rule
             }
         return (items, transformed);
     }
-
-    private static bool WholePixelMove(Affine2D m)
-        => m.XX == 1 && m.YY == 1 && m.XY == 0 && m.YX == 0
-           && m.TX == Math.Floor(m.TX) && m.TY == Math.Floor(m.TY);
 
     private static void SavePng(Image image, string path)
     {

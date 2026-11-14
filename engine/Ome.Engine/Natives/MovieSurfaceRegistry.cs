@@ -37,7 +37,7 @@ internal sealed class MovieSurfaceRegistry
                                      out MovieSurfaceBinding? replaced, RgbaImage? surfaceContents = null)
     {
         replaced = _bySurface.TryGetValue(surfaceSlot, out var prior) ? prior : null;
-        if (replaced.HasValue) RemoveLocked(prior);
+        if (replaced.HasValue) RemoveBinding(prior);
         var binding = new MovieSurfaceBinding(++_nextPlaybackId, resourceId, surfaceSlot, movieFlags);
         _knownMovieResources.Add(resourceId);
         _bySurface[surfaceSlot] = binding;
@@ -138,14 +138,14 @@ internal sealed class MovieSurfaceRegistry
         if (!_bySurface.TryGetValue(surfaceSlot, out var binding))
             return new MovieSurfaceRelease(MovieSurfaceReleaseKind.NotBound, default, false);
         bool completed = _completed.Contains(binding.PlaybackId);
-        RemoveLocked(binding);
+        RemoveBinding(binding);
         return new MovieSurfaceRelease(MovieSurfaceReleaseKind.Released, binding, completed);
     }
 
     public bool Abandon(long playbackId, out MovieSurfaceBinding binding)
     {
         if (!_byPlayback.TryGetValue(playbackId, out binding)) return false;
-        RemoveLocked(binding);
+        RemoveBinding(binding);
         return true;
     }
 
@@ -156,7 +156,7 @@ internal sealed class MovieSurfaceRegistry
             .Where(binding => binding.SurfaceSlot >= firstSlot && binding.SurfaceSlot < end)
             .OrderBy(binding => binding.SurfaceSlot)
             .ToArray();
-        foreach (var binding in released) RemoveLocked(binding);
+        foreach (var binding in released) RemoveBinding(binding);
         return released;
     }
 
@@ -179,7 +179,7 @@ internal sealed class MovieSurfaceRegistry
         return _completed.OrderBy(id => id).ToArray();
     }
 
-    private void RemoveLocked(MovieSurfaceBinding binding)
+    private void RemoveBinding(MovieSurfaceBinding binding)
     {
         _bySurface.Remove(binding.SurfaceSlot);
         _byPlayback.Remove(binding.PlaybackId);
