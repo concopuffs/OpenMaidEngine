@@ -98,7 +98,7 @@ public class SharedProfileLifecycleTests
                 ],
                 []);
             var vm = new VirtualMachine(
-                script, Table, new RecordingHost(),
+                script, Table, new RecordingWaits(),
                 saves: new SavesAndSettings(profile: profile, store: store, noSaveDat: true));
 
             vm.Run();
@@ -204,7 +204,7 @@ public class SharedProfileLifecycleTests
         Script script = ScriptAssembler.Assemble(
             Table, "SHARED_SHUTDOWN.BIN", [(0x2, Array.Empty<Operand>())], []);
         return new VirtualMachine(
-            script, Table, new RecordingHost(),
+            script, Table, new RecordingWaits(),
             saves: new SavesAndSettings(profile: profile, store: store, playClock: playClock, noSaveDat: noSaveDat));
     }
 

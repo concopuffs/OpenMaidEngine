@@ -22,7 +22,7 @@ public class CallbackOwnershipTests
         => "Depth が不正です INNER != OUTER\n\nデバック情報：\n"
            + $"FILE=INNER ADDRESS={address:X} LINE=-1 COMMAND=-({opcode}) DEPTH=1\n";
 
-    private static VirtualMachine Build(Script outer, Script inner, RecordingHost host)
+    private static VirtualMachine Build(Script outer, Script inner, RecordingWaits host)
         => new(outer, Table, host, provider: new MapProvider(new() { [5] = inner }));
 
     private static Script MouseCallbackOuter()
@@ -46,7 +46,7 @@ public class CallbackOwnershipTests
     [Fact]
     public void MouseCallbackRegisteredByTheCallerIsADepthErrorAtTheCalleesDispatch()
     {
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         host.ScriptErrorAnswers.Enqueue(ScriptErrorChoice.Retry); // runs op 0xcd again; interval 0, so it is due again
         var vm = Build(MouseCallbackOuter(), MouseCallbackInner(), host);
 
@@ -64,7 +64,7 @@ public class CallbackOwnershipTests
     {
         // Op 0xcd pushes the return pc before its owner check. After 無視 the dispatch's successor runs, and its ret
         // pops that stale return pc, which runs the successor again before the frame returns.
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         host.ScriptErrorAnswers.Enqueue(ScriptErrorChoice.Ignore);
         var vm = Build(MouseCallbackOuter(), MouseCallbackInner(), host);
 
@@ -95,7 +95,7 @@ public class CallbackOwnershipTests
             (0x55, new[] { G(0x130), I(1) }),           // 1
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         host.ScriptErrorAnswers.Enqueue(ScriptErrorChoice.Retry); // nothing changed before the throw: raised again
         var vm = Build(outer, inner, host);
 
@@ -129,7 +129,7 @@ public class CallbackOwnershipTests
             (0x55, new[] { G(0x140), I(1) }),                   // 3
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         host.ScriptErrorAnswers.Enqueue(ScriptErrorChoice.Retry);
         host.ScriptErrorAnswers.Enqueue(ScriptErrorChoice.Ignore);
         var vm = Build(outer, inner, host);
@@ -163,7 +163,7 @@ public class CallbackOwnershipTests
             (0x55, new[] { G(0x151), I(1) }),           // 6: INNER's callback
             (0x5, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = Build(outer, inner, host);
 
         vm.Run();

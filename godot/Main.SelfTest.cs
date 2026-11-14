@@ -23,7 +23,7 @@ public partial class Main
         // The live run's table, which runs the build's ABI as EngineBuilds.ForVm requires.
         var table = _opcodeTable;
         var (script, provider) = BuildSelfTestScene(table);
-        var headless = new VirtualMachine(script, table, new CaptureHost(), null, provider, build: _engineBuild);
+        var headless = new VirtualMachine(script, table, new HeadlessWaits(), null, provider, build: _engineBuild);
         headless.Run();
         var expected = headless.Emitted.ConvertAll(e => e.Offset);
 
@@ -314,7 +314,7 @@ public partial class Main
             historyRetainedTextMode = "unavailable";
         }
         Window rootWindow = GetTree().Root;
-        bool logicalCanvasOk = _host.LogicalCanvas == new Sys4LogicalCanvas(_screenWidth, _screenHeight)
+        bool logicalCanvasOk = _graphics.Canvas == new Sys4LogicalCanvas(_screenWidth, _screenHeight)
                                && _screen.GetWidth() == _screenWidth
                                && _screen.GetHeight() == _screenHeight
                                && _reference.Pixels.Length == checked(_screenWidth * _screenHeight * 4)
@@ -467,13 +467,6 @@ public partial class Main
                 Exit(),
             },
             new[] { "Hello", "World" });
-        return (caller, new SelfTestProvider(callee));
-    }
-
-    private sealed class SelfTestProvider : IScriptProvider
-    {
-        private readonly Script _callee;
-        public SelfTestProvider(Script callee) => _callee = callee;
-        public Script? GetById(long id) => id == 5 ? _callee : null;
+        return (caller, new ScriptMap(new Dictionary<long, Script> { [5] = callee }));
     }
 }

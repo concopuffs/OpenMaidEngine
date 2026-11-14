@@ -35,7 +35,7 @@ public class SyntheticSceneTests
             new List<(int, Operand[])> { ShowText(0), Wait(), ShowText(1), CallScript(5), MovGG(0x30, 0x31), Exit() },
             new[] { "Hello", "World" });
 
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(caller, t, host, null, new MapProvider(new() { [5] = callee }));
         vm.Run();
 

@@ -176,7 +176,7 @@ internal sealed class MovieRig
     }
 
     /// <summary>A VM whose ops reach this rig's graphics and movie natives.</summary>
-    public VirtualMachine Vm(Script script, OpcodeTable table, IHost host, VmOptions? options = null,
+    public VirtualMachine Vm(Script script, OpcodeTable table, IInputAndWaits host, VmOptions? options = null,
                              IScriptProvider? provider = null, ITraceSink? sink = null)
         => new(script, table, host, options, provider, sink, graphics: Graphics, movies: Movies);
 

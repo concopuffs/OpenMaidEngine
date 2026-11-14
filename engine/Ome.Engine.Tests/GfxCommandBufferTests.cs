@@ -30,7 +30,7 @@ public class GfxCommandBufferTests
             GetGeom3(1, 5, 6, 7),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         Assert.Equal(10, vm.Globals[5]);
         Assert.Equal(20, vm.Globals[6]);
@@ -51,7 +51,7 @@ public class GfxCommandBufferTests
             (0x1fb, new[] { G(1), G(2), I(0), I(0), G(4), G(4), G(3), G(3) }),
             Query(11, 1), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         Assert.Equal(0, vm.Globals[10]);
         Assert.Equal(6, vm.Globals[11]);
@@ -74,7 +74,7 @@ public class GfxCommandBufferTests
             (0x1fb, new[] { G(1), G(5), I(0), I(0), G(6), G(6), G(2), G(2) }),
             Query(11, 1), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost(), build: EngineBuilds.ForProfile(GameProfileRegistry.BuiltIn.Find(profile)!));
+        var vm = new VirtualMachine(scene, t, new RecordingWaits(), build: EngineBuilds.ForProfile(GameProfileRegistry.BuiltIn.Find(profile)!));
         vm.Run();
         Assert.NotNull(vm.Gfx.TryGet(0xcb2a));
         Assert.Equal(unboundSlot, vm.Globals[10]);
@@ -94,7 +94,7 @@ public class GfxCommandBufferTests
             (0x1fb, new[] { G(1), G(2), I(0), I(0), I(8), I(8), I(0), I(0) }),   // draw-texture: visible
             BlitColor(1, 2, 3, 4, 5), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         var o = vm.Gfx.TryGet(0x1000)!;
         Assert.Equal(0x80_112233L, o.OneShotColorTarget);
@@ -112,7 +112,7 @@ public class GfxCommandBufferTests
             MovGI(1, 0x1000), MovGI(2, 0), MovGI(3, 500), MovGI(4, 0x80), MovGI(5, 0xffffff),
             BlitColor(1, 2, 3, 4, 5), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         var o = vm.Gfx.TryGet(0x1000)!;
         Assert.False(o.OneShotColorEnabled);
@@ -136,7 +136,7 @@ public class GfxCommandBufferTests
             (0x21a, new[] { G(2), G(20), G(21), G(22) }),       // read B back
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         Assert.Equal((100L, 500L), (vm.Globals[10], vm.Globals[11]));   // A intact
         Assert.Equal((300L, 100L), (vm.Globals[20], vm.Globals[21]));   // B intact, no cross-contamination
@@ -160,7 +160,7 @@ public class GfxCommandBufferTests
             DrawTex(1, 2, 3, 4, 5, 6),     // object 0xA draws surface 4 at (0,0)
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         var vis = vm.Gfx.SnapshotVisibleObjects();
         Assert.Single(vis);
@@ -179,7 +179,7 @@ public class GfxCommandBufferTests
             (0x1fb, new[] { I(0x100), I(0x3e), I(0), I(0), I(100), I(100), I(20), I(30) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(scene, t, host);
 
         vm.Run();

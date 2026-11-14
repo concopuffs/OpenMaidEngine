@@ -17,7 +17,7 @@ public class SleepDispatchTests
         var script = ScriptAssembler.Assemble(table, "SLEEPTEST",
             new List<(int, Operand[])> { Sleep(200), Show(0), Sleep(1000), Exit() }, new[] { "hi" });
 
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
         vm.Run();
 

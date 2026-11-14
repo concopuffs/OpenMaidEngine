@@ -18,7 +18,7 @@ public class SystemMenuShowDelayOpcodeTests
             (0x148, [G(0x100)]),
             Exit(),
         ], []);
-        var vm = new VirtualMachine(system4, Table, new RecordingHost());
+        var vm = new VirtualMachine(system4, Table, new RecordingWaits());
 
         Assert.Equal(0u, vm.Shell.SystemMenuShowDelayMilliseconds);
 
@@ -37,7 +37,7 @@ public class SystemMenuShowDelayOpcodeTests
             (0x148, [G(0x100)]),
             Exit(),
         ], []);
-        var vm = new VirtualMachine(system4, Table, new RecordingHost());
+        var vm = new VirtualMachine(system4, Table, new RecordingWaits());
 
         vm.Run();
 
@@ -59,7 +59,7 @@ public class SystemMenuShowDelayOpcodeTests
             (0x9, Array.Empty<Operand>()),
         ], []);
         var provider = new MapProvider(new Dictionary<long, Script> { [0] = reloadedSystem4 });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(initial, Table, host, provider: provider);
 
         vm.Run();

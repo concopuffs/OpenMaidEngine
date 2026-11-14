@@ -25,7 +25,7 @@ public class SfxOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var rig = new AudioRig();
-        var vm = rig.Vm(script, table, new RecordingHost());
+        var vm = rig.Vm(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -57,7 +57,7 @@ public class SfxOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var rig = new AudioRig();
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = rig.Vm(script, table, host);
 
         vm.Run();
@@ -87,7 +87,7 @@ public class SfxOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var rig = new AudioRig();
-        var vm = rig.Vm(script, table, new RecordingHost());
+        var vm = rig.Vm(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -119,7 +119,7 @@ public class SfxOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var rig = new AudioRig();
-        var vm = rig.Vm(script, table, new RecordingHost());
+        var vm = rig.Vm(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -151,7 +151,7 @@ public class SfxOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var rig = new AudioRig();
-        var vm = rig.Vm(script, table, new RecordingHost());
+        var vm = rig.Vm(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -199,7 +199,7 @@ public class SfxOpsTests
         Assert.Null(vm.CompatibilityFailure);
     }
 
-    private sealed class EndingHost(RecordingAudioDevice device, int channel) : RecordingHost
+    private sealed class EndingHost(RecordingAudioDevice device, int channel) : RecordingWaits
     {
         public override void Sleep(long duration)
         {
@@ -232,9 +232,9 @@ public class SfxOpsTests
         var physicalSkip = new AudioRig(skip: TestSkipAndAuto.HoldingFastForward());
         var persistentSkip = new AudioRig();
 
-        ordinary.Vm(script, table, new RecordingHost()).Run();
-        physicalSkip.Vm(script, table, new RecordingHost()).Run();
-        persistentSkip.Vm(persistentSkipScript, table, new RecordingHost()).Run();
+        ordinary.Vm(script, table, new RecordingWaits()).Run();
+        physicalSkip.Vm(script, table, new RecordingWaits()).Run();
+        persistentSkip.Vm(persistentSkipScript, table, new RecordingWaits()).Run();
 
         Assert.DoesNotContain("unload 11", ordinary.Device.Commands);   // still fading
         Assert.Contains("unload 11", physicalSkip.Device.Commands);    // the endpoint at once

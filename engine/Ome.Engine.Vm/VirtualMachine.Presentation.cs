@@ -60,7 +60,7 @@ public sealed partial class VirtualMachine
     // 0x20c: read/message-skip path snaps a queued transition to its endpoint
     private StepResult OpPresentFrame(Instruction ins, int pc)
     {
-        _host.PresentFrame(Gfx); return StepResult.Next;
+        _waits.PresentFrame(Gfx); return StepResult.Next;
     }
 
     // 0x21: blocking black -> captured full-frame surface
@@ -71,7 +71,7 @@ public sealed partial class VirtualMachine
         if (AdvFastForwardActive) MarkScratchIfFinalizeFills(Read(a[0]));
         else MarkLegacyTransitionScratchWritten();
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
-        _host.FadeSurfaceWithBlack(
+        _waits.FadeSurfaceWithBlack(
             Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.FromBlack,
             AdvFastForwardActive);
         return StepResult.Next;
@@ -83,7 +83,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         MarkLegacyTransitionScratchWritten();   // begin (mode 1) or, under fast-forward, finalize(-1) fills 0x20
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
-        _host.FadeSurfaceWithBlack(
+        _waits.FadeSurfaceWithBlack(
             Gfx, (int)Read(a[0]), Read(a[1]), SurfaceBlackFadeDirection.ToBlack,
             AdvFastForwardActive);
         return StepResult.Next;
@@ -95,7 +95,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         MarkLegacyTransitionScratchWritten();   // begin (mode 3) or, under fast-forward, finalize(-1) fills 0x20
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
-        _host.FadeSurfaceToWhite(
+        _waits.FadeSurfaceToWhite(
             Gfx, (int)Read(a[0]), Read(a[1]),
             AdvFastForwardActive);
         return StepResult.Next;
@@ -108,7 +108,7 @@ public sealed partial class VirtualMachine
         // Mode 4 never touches 0x20; under fast-forward the handler finalizes on the target.
         if (AdvFastForwardActive) MarkScratchIfFinalizeFills(Read(a[1]));
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
-        _host.CrossfadeSurfaces(
+        _waits.CrossfadeSurfaces(
             Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]),
             AdvFastForwardActive);
         return StepResult.Next;
@@ -121,7 +121,7 @@ public sealed partial class VirtualMachine
         // or under fast-forward, the handler finalizes on the surface.
         if (Read(a[3]) is >= 0 and <= 4 && (AdvFastForwardActive || Read(a[2]) <= 0))
             MarkScratchIfFinalizeFills(Read(a[0]));
-        _host.RevealSurfaceWithPattern(
+        _waits.RevealSurfaceWithPattern(
             Gfx,
             new SurfacePatternTransitionRequest(
                 (int)Read(a[0]), Read(a[1]), (int)Read(a[2]),
@@ -135,7 +135,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         if (Read(a[3]) is >= 0 and <= 4 && (AdvFastForwardActive || Read(a[2]) <= 0))
             MarkScratchIfFinalizeFills(Read(a[0]));
-        _host.RevealSurfaceWithPattern(
+        _waits.RevealSurfaceWithPattern(
             Gfx,
             new SurfacePatternTransitionRequest(
                 (int)Read(a[0]), Read(a[1]), (int)Read(a[2]),
@@ -147,7 +147,7 @@ public sealed partial class VirtualMachine
     // 0x21c: normal foreground-transition scheduler/resume boundary
     private StepResult OpMarkFrameYield(Instruction ins, int pc)
     {
-        _host.WaitForForegroundTransition(Gfx); return StepResult.Next;
+        _waits.WaitForForegroundTransition(Gfx); return StepResult.Next;
     }
 
     // 0x224: retained compositor does not use this native queue
@@ -160,7 +160,7 @@ public sealed partial class VirtualMachine
     private StepResult OpPresentGfxObjectRange(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _host.PresentObjectRange(Gfx, Read(a[0]), Read(a[1])); return StepResult.Next;
+        _waits.PresentObjectRange(Gfx, Read(a[0]), Read(a[1])); return StepResult.Next;
     }
 
     // 0x21b

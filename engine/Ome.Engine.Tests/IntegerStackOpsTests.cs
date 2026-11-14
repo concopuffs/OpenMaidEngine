@@ -39,7 +39,7 @@ public class IntegerStackOpsTests
             (0x55, [G(0x108), L(0)]),
             Exit(),
         ], []);
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
 
         vm.Run();
 
@@ -65,7 +65,7 @@ public class IntegerStackOpsTests
             (0x139, [I(0), G(0x102), G(0x103)]),
             Exit(),
         ], []);
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
 
         vm.Run();
 
@@ -92,7 +92,7 @@ public class IntegerStackOpsTests
             (0x9, Array.Empty<Operand>()),
         ], []);
         var provider = new MapProvider(new Dictionary<long, Script> { [0] = reloadedSystem4 });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(initial, Table, host, provider: provider);
 
         vm.Run();

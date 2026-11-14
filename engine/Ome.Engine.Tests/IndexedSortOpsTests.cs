@@ -34,7 +34,7 @@ public class IndexedSortOpsTests
 
         var vm = new VirtualMachine(
             ScriptAssembler.Assemble(table, "INDEX_SORT", ops, Array.Empty<string>()),
-            table, new RecordingHost());
+            table, new RecordingWaits());
         long[] primaryKeys = { 4, -2, 4, 1, int.MaxValue };
         for (int i = 0; i < primaryKeys.Length; i++) vm.Globals[0x100 + i] = primaryKeys[i];
 
@@ -62,7 +62,7 @@ public class IndexedSortOpsTests
             (move, new[] { new Operand(GlobalInt, 0x200), new Operand(LocalInt, 0) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 

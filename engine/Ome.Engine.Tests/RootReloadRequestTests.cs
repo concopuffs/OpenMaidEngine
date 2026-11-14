@@ -14,7 +14,7 @@ public class RootReloadRequestTests
 {
     private const int InitialFlag = 0x7400, SceneFlag = 0x7401, AfterWait = 0x7402;
 
-    private sealed class InterruptibleSleepHost : RecordingHost
+    private sealed class InterruptibleSleepHost : RecordingWaits
     {
         private readonly ManualResetEventSlim _interrupted = new(false);
         public ManualResetEventSlim FirstSleepEntered { get; } = new(false);

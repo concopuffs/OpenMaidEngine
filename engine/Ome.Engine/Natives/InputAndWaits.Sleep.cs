@@ -69,7 +69,7 @@ public sealed partial class InputAndWaits
         long ms = NormalizeSleepMilliseconds(duration, SleepScale);
         long deadline = _clock.NowMs + ms;
         _timeline?.State("sleep", new() { ["duration_ms"] = ms, ["deadline_ms"] = deadline });
-        _sleeping = true;
+        _scene.Sleeping = true;
         bool scriptSuspended = SuspendScriptForPresentation();
         try
         {
@@ -94,7 +94,7 @@ public sealed partial class InputAndWaits
         {
             ResumeScriptAfterPresentation(scriptSuspended);
         }
-        _sleeping = false;
+        _scene.Sleeping = false;
         _timeline?.State("running", new() { ["sleep_complete"] = true });
     }
 

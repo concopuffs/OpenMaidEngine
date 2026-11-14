@@ -37,12 +37,12 @@ public class FormattedIntegerSurfaceOpsTests
         Assert.Equal((0x2a, 40, 22, "６１"), Assert.Single(host.SurfaceStrings));
     }
 
-    private static RecordingHost Run(params (int Opcode, Operand[] Args)[] instructions)
+    private static RecordingWaits Run(params (int Opcode, Operand[] Args)[] instructions)
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var body = new List<(int, Operand[])>(instructions) { (0x2, Array.Empty<Operand>()) };
         var script = ScriptAssembler.Assemble(table, "FORMAT_INTEGER", body, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host).Run();
 

@@ -23,7 +23,7 @@ public class ScreenModeTests
         public void ShowScreenMode(bool windowed) => Shown.Add(windowed);
     }
 
-    private sealed class ScreenModeHost : RecordingHost
+    private sealed class ScreenModeHost : RecordingWaits
     {
         public VirtualMachine? Vm;
         public readonly Dictionary<int, Action<VirtualMachine>> AtYield = new();
@@ -63,7 +63,7 @@ public class ScreenModeTests
     {
         var host = new ScreenModeHost();
         var shell = new ShellServices(window: window);
-        shell.WakeWaitsWith(((Ome.Engine.Hosting.IHost)host).WakeInputCallbackService);
+        shell.WakeWaitsWith(((IInputAndWaits)host).WakeInputCallbackService);
         var provider = new MapProvider(new Dictionary<long, Script>(),
             new Dictionary<string, Script>(StringComparer.OrdinalIgnoreCase)
             {

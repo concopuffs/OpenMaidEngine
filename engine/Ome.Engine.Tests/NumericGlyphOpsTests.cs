@@ -24,7 +24,7 @@ public class NumericGlyphOpsTests
             (0x23b, new[] { I(1000), I(0), I(value), I(100), I(20), I(capacity), I(flags) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
         vm.Run();
         return vm;
     }
@@ -75,7 +75,7 @@ public class NumericGlyphOpsTests
                 (0x23b, new[] { I(1000), I(0), I(42), I(100), I(30), I(3), I(0) }),
                 Exit(),
             }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost(),
+        var vm = new VirtualMachine(scene, table, new RecordingWaits(),
             build: EngineBuilds.Age433G);
 
         vm.Run();
@@ -105,7 +105,7 @@ public class NumericGlyphOpsTests
             (0x23b, new[] { I(200), I(2), I(7), I(5), I(6), I(3), I(0) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
 
         vm.Run();
 
@@ -138,10 +138,10 @@ public class NumericGlyphOpsTests
                 Exit(),
             }, System.Array.Empty<string>());
 
-        var invalidVm = new VirtualMachine(invalidRegistration, table, new RecordingHost());
-        var unregisteredVm = new VirtualMachine(unregisteredDraw, table, new RecordingHost());
+        var invalidVm = new VirtualMachine(invalidRegistration, table, new RecordingWaits());
+        var unregisteredVm = new VirtualMachine(unregisteredDraw, table, new RecordingWaits());
         var invalidExtendedVm = new VirtualMachine(
-            invalidExtendedRegistration, sys4433, new RecordingHost(),
+            invalidExtendedRegistration, sys4433, new RecordingWaits(),
             build: EngineBuilds.Age433G);
         invalidVm.Run();
         unregisteredVm.Run();
@@ -166,7 +166,7 @@ public class NumericGlyphOpsTests
             (0x55, new[] { G(101), L(1) }),
             Exit(),
         }, new[] { "AB姫", "リリィ" });
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
 
         vm.Run();
 
@@ -189,7 +189,7 @@ public class NumericGlyphOpsTests
             (0x55, new[] { G(102), L(2) }),
             Exit(),
         }, new[] { "AB姫", "リリィ", "AB\0姫" });
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
 
         vm.Run();
 

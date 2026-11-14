@@ -53,7 +53,7 @@ public class AppendAutorunTests
             [0x01000000] = first,
             [0x02000000] = second,
         });
-        var vm = new VirtualMachine(root, table, new RecordingHost(), provider: provider);
+        var vm = new VirtualMachine(root, table, new RecordingWaits(), provider: provider);
 
         vm.Run();
 
@@ -75,7 +75,7 @@ public class AppendAutorunTests
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
         var provider = new MountedProvider(new[] { 1 }, new Dictionary<long, Script>());
-        var vm = new VirtualMachine(root, table, new RecordingHost(), provider: provider);
+        var vm = new VirtualMachine(root, table, new RecordingWaits(), provider: provider);
 
         vm.Run();
 

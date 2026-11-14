@@ -15,7 +15,7 @@ public sealed partial class VirtualMachine
     private StepResult OpGetInitialRootRun(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], _initialRootRun ? 1 : 0);
+        Write(a[0], _scene.InitialRootRun ? 1 : 0);
         return StepResult.Next;
     }
 
@@ -126,7 +126,7 @@ public sealed partial class VirtualMachine
             return StepResult.Halt;
         }
         int entry = script.IndexByOffset.TryGetValue(0, out int loadedEntry) ? loadedEntry : 0;
-        _preloadedScriptSlots[slot] = new PreloadedScriptSlot(id, new ExecFrame(script, entry));
+        _scene.PreloadedScriptSlots[slot] = new PreloadedScriptSlot(id, new ExecFrame(script, entry));
         return StepResult.Next;
     }
 
@@ -140,7 +140,7 @@ public sealed partial class VirtualMachine
             HaltReason ??= $"preloaded-script-slot-out-of-range:{slot}";
             return StepResult.Halt;
         }
-        if (!_preloadedScriptSlots.TryGetValue(slot, out var loaded))
+        if (!_scene.PreloadedScriptSlots.TryGetValue(slot, out var loaded))
         {
             HaltReason ??= $"preloaded-script-slot-empty:{slot}";
             return StepResult.Halt;

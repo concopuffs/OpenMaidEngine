@@ -61,7 +61,7 @@ public class CoroutineHostModelTests
         const int output = 0x6be, setupCount = 0x7000, slot = 0x7001, observed = 0x7002;
         var sink = new RecordingTraceSink { TracingSteps = true };
         var vm = DeveloperEntry(new VirtualMachine(
-            SceneLoop(0x10, setupCount, slot, observed), Table, new CaptureHost(), sink: sink));
+            SceneLoop(0x10, setupCount, slot, observed), Table, new HeadlessWaits(), sink: sink));
         vm.Globals[output] = 0x10; // stale value from a previous scene: already equal to this scene's terminal
         vm.Run();
 
@@ -78,7 +78,7 @@ public class CoroutineHostModelTests
     {
         // The loop head is at 0x10, but the script still says 0x77: its code moved without relocating the immediate.
         var vm = DeveloperEntry(new VirtualMachine(
-            SceneLoop(0x77, 0x7000, 0x7001, 0x7002), Table, new CaptureHost()));
+            SceneLoop(0x77, 0x7000, 0x7001, 0x7002), Table, new HeadlessWaits()));
         vm.Run();
 
         Assert.Equal("coroutine-yield-terminal@0x20: terminal 0x77 is not the scene loop head 0x10", vm.HaltReason);
@@ -117,7 +117,7 @@ public class CoroutineHostModelTests
     {
         const int setupCount = 0x7000, slot = 0x7001, observed = 0x7002;
         var vm = DeveloperEntry(new VirtualMachine(
-            CommentedSceneLoop(0x0e, setupCount, slot, observed), Table, new CaptureHost()));
+            CommentedSceneLoop(0x0e, setupCount, slot, observed), Table, new HeadlessWaits()));
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
@@ -127,7 +127,7 @@ public class CoroutineHostModelTests
 
         // An immediate in front of the comment run still names something other than the loop head.
         var stale = DeveloperEntry(new VirtualMachine(
-            CommentedSceneLoop(0x07, setupCount, slot, observed), Table, new CaptureHost()));
+            CommentedSceneLoop(0x07, setupCount, slot, observed), Table, new HeadlessWaits()));
         stale.Run();
         Assert.Equal("coroutine-yield-terminal@0x20: terminal 0x7 is not the scene loop head 0x11", stale.HaltReason);
     }
@@ -148,7 +148,7 @@ public class CoroutineHostModelTests
             Strings = new Dictionary<int, string> { [0x2000] = "BIN", [0x2001] = "SC????.BIN" },
         };
         var sink = new RecordingTraceSink { TracingSteps = true };
-        var vm = new VirtualMachine(script, Table, new CaptureHost(), sink: sink);
+        var vm = new VirtualMachine(script, Table, new HeadlessWaits(), sink: sink);
         vm.Globals[0x699] = 123;
         vm.Run();
 
@@ -165,7 +165,7 @@ public class CoroutineHostModelTests
             Ins(5, 0x7c),
             Ins(6, Op("exit")));
         var sink = new RecordingTraceSink { TracingSteps = true };
-        var vm = new VirtualMachine(script, Table, new CaptureHost(), sink: sink);
+        var vm = new VirtualMachine(script, Table, new HeadlessWaits(), sink: sink);
         vm.Run();
 
         Assert.DoesNotContain(sink.Events, e => e.Kind == TraceEventKind.Stub && (e.Opcode == 0x7b || e.Opcode == 0x7c));
@@ -177,7 +177,7 @@ public class CoroutineHostModelTests
     {
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], Table);
         var sink = new RecordingTraceSink { TracingSteps = true };
-        var vm = DeveloperEntry(new VirtualMachine(script, Table, new CaptureHost(),
+        var vm = DeveloperEntry(new VirtualMachine(script, Table, new HeadlessWaits(),
             new VmOptions(HaltAtWaitForInput: true), sink: sink));
         vm.Run();
 

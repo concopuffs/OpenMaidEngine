@@ -645,7 +645,7 @@ if (command == "catalog-scan")
 if (command == "run")
 {
     var script = Sys4Loader.Load(args[1], table);
-    var runHost = new CaptureHost();
+    var runHost = new HeadlessWaits();
     using var trace = TraceSetup.Build(args, table);
     // Faithful by default: halt at wait-for-input (no player => stop, don't plow past prompts). --plow opts
     // into the old walk-every-page behavior (dialogue coverage). See VmOptions.HaltAtWaitForInput.
@@ -671,7 +671,7 @@ if (command == "audio")
     var trace = new AudioTrace(res);
     var skip = SkipAndAuto.WithSystemClock();
     var audio = new Audio(trace, trace, new FrameClock(), skip, new AudioMixerSettings());
-    var vm = new VirtualMachine(ScriptByName(sceneName), table, new CaptureHost(), build: engineBuild,
+    var vm = new VirtualMachine(ScriptByName(sceneName), table, new HeadlessWaits(), build: engineBuild,
                                 skipAndAuto: skip, audio: audio);
     // optional: seed globals, e.g. `audio SC0000.BIN 0xa57=1` to set Lily's form-A flag
     foreach (var s in args.Skip(2))
@@ -699,7 +699,7 @@ if (command == "gfx")
     var sceneKey = Path.GetFileNameWithoutExtension(sceneName).ToUpperInvariant();
     var res = new ResourceMap(
         catalog, assetStore, Console.Error.WriteLine, assetOptions.AllowBmpAsAgf);
-    var host = new GfxTraceHost();
+    var waits = new GfxTraceWaits();
     var traced = new List<string>();
     var graphics = new Graphics(res, new FrameClock(), catalog.LogicalCanvas) { OpTrace = traced.Add };
     var session = new GameSession();
@@ -718,14 +718,14 @@ if (command == "gfx")
     if (boot)
         foreach (string b in selectedProfile.Profile.DirectSceneDiagnostics!.DataBootstrapScripts)
         {
-            var bs = session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider, build: engineBuild);
+            var bs = session.RunScene(ScriptByName(b), table, new HeadlessWaits(), null, provider, build: engineBuild);
             Console.WriteLine($"[boot] {b}: {bs.Steps} steps (halt: {bs.Halt})");
         }
     var target = ScriptByName(sceneName);
     // With --boot, run the target like the real engine (call-scripts on) so subroutine-driven setup runs.
-    var vm = boot ? new VirtualMachine(target, table, host, new VmOptions(MaxSteps: 20_000_000), provider,
+    var vm = boot ? new VirtualMachine(target, table, waits, new VmOptions(MaxSteps: 20_000_000), provider,
                                        build: engineBuild, graphics: graphics)
-                  : new VirtualMachine(target, table, host, build: engineBuild, graphics: graphics);
+                  : new VirtualMachine(target, table, waits, build: engineBuild, graphics: graphics);
     foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
     foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
     vm.Run();
@@ -766,7 +766,7 @@ if (command == "init-image")
                         ?? throw new InvalidOperationException($"not a script: {name}");
         var ints = new Dictionary<int, long>(session.Globals);
         var strings = new Dictionary<int, string>(session.GlobalStrings);
-        var result = session.RunScene(script, table, new CaptureHost(), initOptions, provider, build: engineBuild);
+        var result = session.RunScene(script, table, new HeadlessWaits(), initOptions, provider, build: engineBuild);
         var intDelta = session.Globals
             .Where(kv => !ints.TryGetValue(kv.Key, out long old) || old != kv.Value)
             .OrderBy(kv => kv.Key)
@@ -830,7 +830,7 @@ if (command == "play")
     foreach (var name in scenes)
     {
         var script = ScriptByName(name);
-        var r = session.RunScene(script, table, new CaptureHost(), playOpts, provider, trace.Sink, build: engineBuild);
+        var r = session.RunScene(script, table, new HeadlessWaits(), playOpts, provider, trace.Sink, build: engineBuild);
         totalLines += r.Emitted.Count;
         Console.WriteLine($"  {name,-14} {r.Emitted.Count,4} lines, {r.Steps,7} steps (halt: {r.Halt})");
         // --show N prints each scene's first N emitted lines.
@@ -865,7 +865,7 @@ if (command == "sweep")
             return 2;
         }
         foreach (string s in diagnosticPolicy.DataTableBootstrapScripts)
-            bootSession.RunScene(ScriptByName(s), table, new CaptureHost(), null, provider, build: engineBuild);
+            bootSession.RunScene(ScriptByName(s), table, new HeadlessWaits(), null, provider, build: engineBuild);
         baseline = bootSession.ToJson();
         Console.WriteLine($"[boot] baseline = {bootSession.Globals.Count} globals; running {names.Count} scenes from it.");
     }
@@ -884,7 +884,7 @@ if (command == "sweep")
     {
         var session = Fresh();
         if (seeded) foreach (var (k, v) in seeds) session.Seed(k, v);
-        return session.RunScene(ScriptByName(name), table, new CaptureHost(), sweepOpts, provider, build: engineBuild).Emitted.Count;
+        return session.RunScene(ScriptByName(name), table, new HeadlessWaits(), sweepOpts, provider, build: engineBuild).Emitted.Count;
     }
 
     if (seeds.Count > 0)
@@ -907,7 +907,7 @@ if (command == "sweep")
     foreach (var name in names)
     {
         var session = Fresh();
-        var r = session.RunScene(ScriptByName(name), table, new CaptureHost(), sweepOpts, provider, trace.Sink, build: engineBuild);
+        var r = session.RunScene(ScriptByName(name), table, new HeadlessWaits(), sweepOpts, provider, trace.Sink, build: engineBuild);
         var halt = r.Halt ?? "null";
         haltDist[halt] = haltDist.GetValueOrDefault(halt) + 1;
         totalLines += r.Emitted.Count;
@@ -958,9 +958,9 @@ if (command == "trace")
         }
         if (boot && si < 0)   // --state already carries boot state; don't re-run the *INIT prefix
             foreach (string b in selectedProfile.Profile.DirectSceneDiagnostics!.DataBootstrapScripts)
-                session.RunScene(ScriptByName(b), table, new CaptureHost(), null, provider, build: engineBuild);
+                session.RunScene(ScriptByName(b), table, new HeadlessWaits(), null, provider, build: engineBuild);
         var sink = new JsonOffsetTraceSink(target.Name);
-        var vm = new VirtualMachine(target, table, new CaptureHost(),
+        var vm = new VirtualMachine(target, table, new HeadlessWaits(),
                                     new VmOptions(HaltAtWaitForInput: true, MaxSteps: 20_000_000), provider, sink, build: engineBuild);
         foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
@@ -978,7 +978,7 @@ if (command == "trace")
     var trace = new SortedDictionary<string, object>(StringComparer.Ordinal);
     foreach (var name in provider.ScriptNames.Where(n => scene.IsMatch(n)).OrderBy(n => n, StringComparer.Ordinal))
     {
-        var vm = new VirtualMachine(ScriptByName(name), table, new CaptureHost(), build: engineBuild);
+        var vm = new VirtualMachine(ScriptByName(name), table, new HeadlessWaits(), build: engineBuild);
         vm.Run();
         trace[name] = new { offsets = vm.Emitted.Select(e => e.Offset).ToArray(), halt = vm.HaltReason, steps = vm.Steps };
     }
@@ -1097,13 +1097,11 @@ sealed class AudioTrace(ResourceMap res) : IAudioAssets, IAudioDevice
     public bool TryTakeEnded(out AudioChannelEnded ended) => _ended.TryDequeue(out ended);
 }
 
-// The gfx command's host: the surface ops are the graphics native's, which traces them (Graphics.OpTrace).
-sealed class GfxTraceHost : IHost
+// The gfx command's waits, which return at once: the surface ops are the graphics native's, which traces them
+// (Graphics.OpTrace).
+sealed class GfxTraceWaits : IInputAndWaits
 {
-    public void ShowText(int offset, string text) { }
     public void WaitForInput() { }
     public void Sleep(long duration) { }
     public void FrameYield() { }
-    public void PlayBgm(long id) { }
-    public void PlayVoice(long id) { }
 }

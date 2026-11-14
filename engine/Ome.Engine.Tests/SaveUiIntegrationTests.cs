@@ -34,7 +34,7 @@ public class SaveUiIntegrationTests
         }
     }
 
-    private sealed class StopAtFirstMenuPollHost : RecordingHost
+    private sealed class StopAtFirstMenuPollHost : RecordingWaits
     {
         public override void Sleep(long duration)
         {
@@ -43,7 +43,7 @@ public class SaveUiIntegrationTests
         }
     }
 
-    private class ClickFirstSlotHost : RecordingHost
+    private class ClickFirstSlotHost : RecordingWaits
     {
         private long _now;
         private bool _pressed;
@@ -377,7 +377,7 @@ public class SaveUiIntegrationTests
                 [(0x1a1, [new Operand(9, 0), new Operand(0, 0)]), (0x2, [])], []), uint.MaxValue);
             var shared = new SharedProfile();
             shared.Load(store);
-            var vm = new VirtualMachine(loader, table, new RecordingHost(),
+            var vm = new VirtualMachine(loader, table, new RecordingWaits(),
                 new VmOptions(MaxSteps: 1_000_000), scripts, sink,
                 saves: new SavesAndSettings(profile: shared, store: store));
             Exception? outcome = Record.Exception(() => vm.Run());

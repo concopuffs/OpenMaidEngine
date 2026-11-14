@@ -31,11 +31,11 @@ public class PresentedHistoryTests
     /// <summary>The page run by a text native that lays text out on a grid: source glyphs are 20 pixels wide and
     /// presented glyphs 10, and with a presenter the language is active, so every run draws with the presented glyphs.
     /// </summary>
-    private static (RecordingHost Host, VirtualMachine Vm, Ome.Engine.Model.Script Script) Run(
+    private static (RecordingWaits Host, VirtualMachine Vm, Ome.Engine.Model.Script Script) Run(
         TextPresenter? presenter, IReadOnlyList<(int, Operand[])> code, IReadOnlyList<string> strings)
     {
         Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100", code, strings);
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = TestText.Vm(script, Table, host, TestText.Glyphs(TestText.Fixed(20, 10), TestText.Unicode(10)));
         vm.Text.Presenter = presenter;
         vm.Text.PresentsText = presenter != null;
@@ -206,7 +206,7 @@ public class PresentedHistoryTests
         byte[] Saved(TextPresenter? presenter)
         {
             Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100", Page, PageStrings);
-            var vm = new VirtualMachine(script, Table, new RecordingHost()) { Text = { Presenter = presenter } };
+            var vm = new VirtualMachine(script, Table, new RecordingWaits()) { Text = { Presenter = presenter } };
             vm.Run();
             Assert.Equal("exit", vm.HaltReason);
             return Ome.Engine.Persistence.NativeTextHistoryCodec.Encode(vm.TextHistory);

@@ -26,7 +26,7 @@ public class GfxAnimationDetachTests
             Exit(),
         }, System.Array.Empty<string>());
 
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
         vm.Run();
 
         Assert.Equal(1, vm.Gfx.TryGet(0x100)!.OneShotAnimationControlFlags);

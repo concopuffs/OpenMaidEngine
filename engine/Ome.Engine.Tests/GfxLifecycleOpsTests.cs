@@ -26,7 +26,7 @@ public class GfxLifecycleOpsTests
             Exit(),
         }, System.Array.Empty<string>());
 
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
         vm.Run();
 
         var visible = Assert.Single(vm.Gfx.SnapshotVisibleObjects());
@@ -38,7 +38,7 @@ public class GfxLifecycleOpsTests
     public void RenderTargetSelectionAndClearReachTheSurfaceAndTheBackbuffer()
     {
         var table = T();
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var scene = ScriptAssembler.Assemble(table, "GFX-TARGET", new List<(int, Operand[])>
         {
             (0x20d, new[] { I(7) }),
@@ -71,7 +71,7 @@ public class GfxLifecycleOpsTests
             (0x80, new[] { I(1) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
 
         vm.Run();
 
@@ -83,7 +83,7 @@ public class GfxLifecycleOpsTests
     public void BulkReleaseDropsOnlyTransientSurfaceRange()
     {
         var table = T();
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var scene = ScriptAssembler.Assemble(table, "GFX-RELEASE", new List<(int, Operand[])>
         {
             Mov(1, 1), Mov(2, 42), Mov(3, 0x11), Mov(4, 0x22),

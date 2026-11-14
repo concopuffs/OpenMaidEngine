@@ -53,7 +53,7 @@ public class StringComparisonOpsTests
             (move, new[] { new Operand(GlobalInt, 0x504), new Operand(LocalInt, 4) }),
             (0x2, Array.Empty<Operand>()),
         }, new[] { "姫狩り", "姫狩り", "姫狩り違い" });
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.GlobalStrings[0x301] = "姫狩り違い";
         vm.GlobalStrings[0x302] = "姫狩り";
         vm.Globals[0x400] = 0x302;
@@ -86,7 +86,7 @@ public class StringComparisonOpsTests
             (0x55, new[] { new Operand(GlobalInt, 0x600), new Operand(Immediate, 99) }),
             (0x2, Array.Empty<Operand>()),
         }, new[] { "?" });
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.GlobalStrings[0x52d] = "?";
         vm.Globals[0x600] = 1;
 
@@ -137,7 +137,7 @@ public class StringComparisonOpsTests
             (move, new[] { new Operand(GlobalInt, 0x504), new Operand(LocalInt, 4) }),
             (0x2, Array.Empty<Operand>()),
         }, new[] { "姫狩り", "姫狩り", "姫狩り違い" });
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.GlobalStrings[0x301] = "姫狩り違い";
         vm.GlobalStrings[0x302] = "姫狩り";
         vm.Globals[0x400] = 0x302;
@@ -168,7 +168,7 @@ public class StringComparisonOpsTests
             (move, new[] { new Operand(GlobalInt, 0x600), new Operand(LocalInt, 0x99) }),
             (0x2, Array.Empty<Operand>()),
         }, new[] { "" });
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 

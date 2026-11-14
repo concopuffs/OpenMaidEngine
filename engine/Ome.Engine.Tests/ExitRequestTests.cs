@@ -17,7 +17,7 @@ public class ExitRequestTests
             (0x1, Array.Empty<Operand>()),
             (0x55, new[] { G(0x7000), I(1) }),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -39,7 +39,7 @@ public class ExitRequestTests
             (0x1, Array.Empty<Operand>()),
             (0x55, new[] { G(0x7002), I(1) }),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(root, table, new RecordingHost(), provider: new MapProvider(new()
+        var vm = new VirtualMachine(root, table, new RecordingWaits(), provider: new MapProvider(new()
         {
             [1] = child,
         }));
@@ -61,7 +61,7 @@ public class ExitRequestTests
             (0x55, new[] { G(0x7000), I(1) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost(),
+        var vm = new VirtualMachine(script, table, new RecordingWaits(),
             new VmOptions(IgnoreExitRequests: true));
 
         vm.Run();

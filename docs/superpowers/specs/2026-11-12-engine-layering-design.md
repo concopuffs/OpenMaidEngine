@@ -4,8 +4,8 @@
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
 2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio), 7 (graphics), 8 (movies), 9 (saves,
-settings and shell services), 10 (text) and 11 (input, waits and the engine loop) are done on
-`feature/engine-layering`; §3.3, §4, §5.2, §5.3, §5.4, §6.2, §6.3, §7.5, §7.6, §8,
+settings and shell services), 10 (text), 11 (input, waits and the engine loop) and 12 (close) are done on
+`feature/engine-layering`; §3.3, §4, §5.1, §5.2, §5.3, §5.4, §6.2, §6.3, §6.5, §6.6, §7.5, §7.6, §8,
 §11, §12 and §13 record what they settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15
 records the history.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its
@@ -220,6 +220,25 @@ device type cannot keep, and no code outside the VM and its tests named it. The 
 the skip-and-auto native (§5.2). `ProjectBoundaryTests` lists `IPaceClock` with the device types and checks that no
 constructor of `VirtualMachine` takes one.
 
+**As built (milestone 12): acceptance 1.** `ProjectBoundaryTests` takes the natives' interfaces from the `Ome.Engine`
+assembly: every interface it exports, except the seams through which the natives reach what the front end and the
+platform supply. Each seam is listed with its reason:
+
+- `IShellDialogs`: the dialogs device in all but its place. Its boxes carry AGE's messages and op `0x144`'s name entry,
+  so it stays in `Ome.Engine`, and `Main`'s modal dialogs are not restructured (§10, §14).
+- `IAssetStore` and `INativeDatStore`: files (§6.4).
+- `IScriptProvider`: the scripts the interpreter loads.
+- `IAudioAssets` and `IMovieAssets`: the sounds and movies the devices play.
+- `ITraceSink`: the trace.
+- `IFontMetricsProbe`: a glyph rasterizer's metrics.
+
+Three tests check acceptance 1:
+
+- no native interface names a device type;
+- none is named "host", and the lift's types are gone;
+- no `godot/` type lists a native interface among its bases. The scan finds `Main`'s `ICursorDevice`, which shows
+  that it reads the bases.
+
 ### 3.4 What today's types become
 
 - **`IHost` and its seven interfaces become the natives' interfaces.** They are already written at the right level
@@ -315,6 +334,32 @@ The fade reads the skip state, which is why that state gets an owner before the 
 7. **No revision names.** A native reads the rules it was given.
 8. **No device types in its interface** (§3.3).
 9. **A native never runs a script** (§5.4).
+
+**As built (milestone 12): rule 5.** Each owner of scene state keeps it in a private nested class, `Scene`, and op
+`0x9`'s reset builds a new one (`_scene = new()`). The reset then runs native's actions: a release worker, a
+presentation request, the other natives' resets.
+
+- **The owners** are the VM, nine natives (script memory, audio, the engine tick, graphics, input and waits, the save
+  native's playtime, the shell services, skip and auto, text) and the graphics native's `GfxState`.
+- **What moved in.** Exactly the fields the resets cleared moved in, each starting at the value the reset gave it, so
+  the move changes nothing. Two scenes start otherwise, and their constructors say so:
+  - the VM's first scene is the run's initial root run;
+  - `GfxState`'s first live surface-record table is the boot one, with scratch surfaces `0x24` and `0x25` created.
+- **Two more joined.** The text native's string stores joined its scene, so the VM's separate clear went. The VM's
+  `PresentedMessage` joined the VM's scene: it names a frame, so a reloaded root never continued it.
+- **The movie native has no scene.** Its movies belong to surfaces, and the reset deletes them all with the release
+  worker.
+- **What is kept.** A field kept across a reload is the run's (counters, the frame stack), the process's (the
+  surfaces, playing sound, the screen mode, the settings) or the front end's (frame turns, the input queue). Four
+  fields that nothing resets were not checked against native's `scene_context_init_reset`: `_tickPresentationEnabled`,
+  `DefaultObjectSlot`, the numeric glyph styles and the wait indicator's follow mode (`docs/backlog.md`, "Fields op
+  0x9 keeps").
+- **The tests.** `SceneReloadTests` checks three things:
+  - every field of each owner is its scene, a part (read-only and not a collection), or on its list of what it keeps
+    across a reload, grouped with reasons;
+  - the reset methods assign, increment and clear no field but the scene (a source scan, which a sample checks);
+  - a script that leaves state in every scene and then reloads ends with each scene as it is after a reload from a
+    script that left nothing.
 
 ### 5.2 The subsystems
 
@@ -586,6 +631,28 @@ share its one copy.
   any blocking call in `InputAndWaits*.cs` or `EngineHost*.cs` outside `.Blocking.cs` and `.Turns.cs`. It also checks
   the routing and the two threads (§5.3).
 
+**As built (milestone 12).** The lift is gone. `EngineHost`, `IFrontEnd`, `IHost` and its seven interfaces,
+`IWaitListener` and `ISurfacePixels` are deleted.
+
+- **The VM's interface to the waits.** It is `IInputAndWaits` (`Natives/IInputAndWaits.cs`), named after its native
+  (§2, decision 13).
+  - It is `IHost`'s parts merged, with the same members, so a test's stand-in only changed its base.
+  - It adds two members that the VM's constructor reads: `RouteInputTo` and `StopAndReload`.
+  - `InputAndWaits` implements it (`InputAndWaits.Interpreter.cs`). So do the stand-ins: `Hosting/HeadlessWaits.cs`
+    (formerly `CaptureHost`), the tests' `RecordingWaits`, and `Ome.Cli`'s `SimulatedClockWaits` and `GfxTraceWaits`.
+- **What `EngineHost` kept went to natives and a device.**
+  - The cursor is a device, `ICursorDevice` (`Ome.Engine.Devices/Window/`), which `Main` implements. The input and
+    waits native decodes the CUR resource.
+  - The skip and auto native reads the Auto delays at composition (`ReadSettings`).
+  - The save native writes the message settings at shutdown (`FlushMessageSettingsOnShutdown`): the text settings,
+    the skip and auto settings and the read-text skip.
+  - The thumbnails take the graphics native.
+- **The front end polls.** The page notices that went through `IWaitListener` and `IFrontEnd` are now a counter,
+  `InputAndWaits.PageNotices`. A text wait's start and end raise it, and so does a scene reset. Each frame the front
+  end reads it, and `Pages`, for its status line and the locator HUD. The stall diagnostic reads
+  `CaptureDiagnosticSnapshot()`.
+- **`PresentationReason`** (`Natives/`) replaces `HostPresentationReason`, and `Requested` replaces `HostRequest`.
+
 ### 5.3 Time
 
 **Today.** The VM runs on a task thread (`godot/Main.cs:616`) and blocks inside host calls. Godot's main thread
@@ -768,10 +835,10 @@ auto, script memory, the saves native, the VM's interactive and debug-control st
 | `_frontendModalRelease` (`ManualResetEventSlim`) | `InputAndWaits.Sleep.cs` | A front-end modal hold (the options panel, the 終了 dialog, the screenshot folder): while it is reset, the engine thread waits at `FrameYield`, modally, and still answers turns | Front end sets and resets it, engine waits |
 | `_gate` (`SemaphoreSlim`), `_inputCallbackSignal` (`AutoResetEvent`) | `InputAndWaits.cs` | A click or Auto ends a text wait; input or a menu request reaches a wait's callbacks. They are handles because a wait blocks on one of them together with `_frameSignal` (`_blockHandles`) | `_gate`: engine only, since input is routed there. `_inputCallbackSignal`: also set by the shell native's menu requests from the front end |
 | `StopAndReload`'s two flags (`volatile`) | `StopAndReload.cs` | The stop and the return to title | Front end writes, both read; asking posts the wake |
-| The wait flags `_waiting`, `_transitionWaiting`, `_sleeping`, `_pages`, `_modalMovieWaiting` (`volatile`), `_transitionStartedAtMs` (`Interlocked`) | `InputAndWaits*.cs` | What the engine waits for. The front end's self-test and capture clickers (`--selftest`, `--shot`, `--shot-sequence`, `--transition-click-ms`) read them as status | Engine writes, front end reads |
+| The wait flags `Waiting`, `TransitionWaiting`, `Sleeping`, `ModalMovieWaiting` (`volatile`) and `TransitionStartedAtMs` (`Interlocked`), fields of the scene object `_scene` (`volatile`; op `0x9`'s reset replaces it, milestone 12); the page counters `_pages` and `_pageNotices` (`volatile`) | `InputAndWaits*.cs` | What the engine waits for. The front end's self-test and capture clickers (`--selftest`, `--shot`, `--shot-sequence`, `--transition-click-ms`) read them as status, and since milestone 12 its status line and the locator HUD poll the page counters each frame | Engine writes, front end reads |
 | `ShellDialog.Sync`, `_closed` (`ManualResetEventSlim`), the open-dialog list | `ShellServices.Dialogs.cs` | A dialog's answer and state, its close, and the dialogs a stop cancels | Engine opens and cancels, front end answers |
 | The menu queue (`ConcurrentQueue`, `volatile` pending flag) and `_windowed` | `ShellServices.cs`, `.ScreenMode.cs` | Menu toggles and screen-mode switches; the screen mode | Front end writes, engine takes |
-| `SystemKeyDisableMask`, `SystemMenuShowDelayMilliseconds` | `ShellServices.cs` | Ops `0x10f` and `0x148`, read by the front end's key and menu-bar handling. Word-sized and written by one thread, so a read is at most a frame late | Engine writes, front end reads |
+| `SystemKeyDisableMask`, `SystemMenuShowDelayMilliseconds`, fields of the scene object `_scene` (`volatile`; op `0x9`'s reset replaces it, milestone 12) | `ShellServices.cs` | Ops `0x10f` and `0x148`, read by the front end's key and menu-bar handling. Word-sized and written by one thread, so a read is at most a frame late | Engine writes, front end reads |
 | `_serviced`, `_opened`, `_requestedRates`, `_requestedStops` (concurrent collections) | `Movies.Playback.cs` | The decoders' handoff: frames and completions the front end serviced, the movies it opened, and the rates and stops the engine asked for | Front end services, engine publishes and asks |
 | The audio device's ended queue (`ConcurrentQueue`) | `godot/Main.Audio.cs`, `SilentAudioDevice` | Channels that ended, reported to the engine (§6.2, rule 3) | Device enqueues, engine drains |
 | `FrameClock._speedLock` | `Hosting/FrameClock.cs` | The clock's speed scale and the sample it scales | The driver's `speed` sets it; both threads read the clock |
@@ -1192,10 +1259,22 @@ One set of devices that presents and plays nothing serves `Ome.Cli` and the test
 hosts stand in for the whole host today. Afterwards a headless run uses the real natives over these devices, so it
 runs the same engine code as Godot does, and the reference renderer gives it real frames.
 
+**As built (milestone 12).** `CaptureHost` is `Hosting/HeadlessWaits.cs`, a stand-in for the input and waits native
+that records what it is asked and blocks on nothing. `Ome.Cli`'s tools keep their own stand-ins for that native
+(`SimulatedClockWaits`, `GfxTraceWaits`). `HeadlessNativesTests` runs the real natives over devices that do nothing:
+
+- a script runs on an engine thread;
+- the test thread takes a frame turn each frame and draws the frame description with the reference renderer;
+- it clicks once a drawn frame shows the script's surface, and checks the pixels.
+
 ### 6.6 The Godot front end afterwards
 
 `godot/` implements device interfaces and builds the engine. It holds no class that implements a native's
 interface, and no rule about AGE's objects.
+
+**As built (milestone 12).** `godot/` implements `IAudioDevice`, `IAudioStreamDevice`, `IWindowDevice`,
+`ICursorDevice` and `IFrameRenderer`, and `IShellDialogs`, the one seam that §3.3's note on acceptance 1 explains.
+`Main.cs` composes the natives.
 
 ## 7. Engine builds
 
@@ -1557,7 +1636,8 @@ From `docs/backlog.md`, `## Architecture`:
 - "Opcode dispatch is kept in three hand-written lists" — milestone 1.
 - "Revision behaviour is one boolean" — milestone 0.
 - "VM state has no owners" — the census in milestone 2, then milestones 5 to 11.
-- "Scene reset clears fields one by one" — as each native takes its state; closed at milestone 12.
+- "Scene reset clears fields one by one" — as each native takes its state; milestone 12 closed it (§5.1, "As
+  built (milestone 12): rule 5").
 - "The host's threads have no stated ownership" — typed calls in milestone 4, the locks in milestone 11, which
   closed it (§5.3, "As built (milestone 11)").
 - "Two instruction loops" — the typed step result in milestone 1; one loop in milestone 11, which closed it (§5.4).
@@ -1734,3 +1814,28 @@ Not covered:
   now takes about 1 ms, and a transition or a reveal ends at its length instead of at the next frame. Native's Frida
   measurements of the same waits agree with the new times. Backlog "Two instruction loops" and "The host's threads
   have no stated ownership" are closed.
+- **2026-11-13, milestone 12.** Close, built on `feature/engine-layering`.
+  - **The lift is gone.** `EngineHost`, `IFrontEnd`, `IHost` and its seven interfaces, `IWaitListener` and
+    `ISurfacePixels` are deleted. The VM reaches the input and waits native through `IInputAndWaits`, named after it.
+    The cursor is a device. The Auto delays went to the skip-and-auto native and the shutdown write of the message
+    settings to the save native, and the front end polls the page notices (§5.2, "As built (milestone 12)").
+  - **One object per scene.** Each owner of scene state keeps it in one object that op `0x9`'s reset builds again
+    (§5.1, "As built (milestone 12): rule 5"). Backlog "Scene reset clears fields one by one" is closed. Its narrower
+    follow-up, four kept fields not checked against native, is a new backlog item.
+  - **Acceptance 1, 5 and 6 hold in full.** `ProjectBoundaryTests` checks the first (§3.3, "As built (milestone 12):
+    acceptance 1"), `HeadlessNativesTests` the second (§6.5) and `SceneReloadTests` the third.
+  - **The gates.** The suite (1947) and validation at the core, workspace and runtime levels on both games pass.
+  - **The port runs.** The tolerance was written before measuring. The 21 port runs of milestone 11 ran on the new
+    build and were compared with milestone 11's runs of the same day, under the same display. They give:
+    - the same step results, apart from where a step caught a polling loop;
+    - equal `SYS4REG.INI` and pixel-identical shots;
+    - saves equal under `save-diff` except for their timestamp and play time, with byte-identical thumbnails and page
+      maps;
+    - step seconds within 0.6 % (`himegari-reveal-clock` 93.93 and 93.92 s, `himegari-read-skip` 37.75 and 37.73 s);
+    - the same log lines.
+  - **What the tolerance did not name.** It named only `wait-state` and `expect` polls. Two other steps read History's
+    input loop at another point: a `shot` in `kamidori-furigana` and a `state` in `kamidori-history-after-load`.
+    The loop was at `0x14d` (after its `sleep 1`) or `0x161` (the `ret` after its `present-frame`). The build before
+    caught each scenario at the offset the new build caught the other at. A second run of the new build caught the
+    shot at a third point, `0x150`, so the location follows when the step lands. The one `reference-diff` count that
+    changed is on SC0000's page 15, which the tolerance's rule 7 exempts.

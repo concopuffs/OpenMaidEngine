@@ -172,7 +172,7 @@ public sealed partial class VirtualMachine
         string current = ReadStr(a[0]);
         string initial = ReadStr(a[1]);
         FullwidthTextEditResult result =
-            _host.EditFullwidthString(new(current, initial));
+            _waits.EditFullwidthString(new(current, initial));
         if (result.Accepted) WriteStr(a[0], result.Text);
         return StepResult.Next;
     }

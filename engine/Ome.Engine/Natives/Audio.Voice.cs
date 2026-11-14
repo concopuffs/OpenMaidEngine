@@ -13,11 +13,7 @@ public sealed partial class Audio
     private sealed record VoiceStart(AudioClip Clip, int PlaybackVariant, bool Muted);
     private sealed record DelayedVoice(AudioClip Clip, int PlaybackVariant, uint DelayMs, uint? StartMs);
 
-    private int _voiceMuteFlags;
     private int _voicePlaybackVariant;       // kept in channel 12's sound-buffer state by voice_play_indexed_asset
-    // message_skip_queued_voice_id/arg: the last voice started while fast-forward ran, played when it ends.
-    private VoiceStart? _heldVoice;
-    private DelayedVoice? _delayedVoice;     // op 0x2c0's pending request (voice_schedule_delayed_playback@0x488480)
 
     /// <summary>The playback variant channel 12 last started with: 0 for a line (op 0xc4), 1 for a History replay
     /// (op 0x1bd). Its audible meaning is unproven; the port only keeps it.</summary>
@@ -30,9 +26,9 @@ public sealed partial class Audio
     /// 12 at volume 0, so its completion keeps Auto's timing.</summary>
     public void PlayVoice(long voiceId)
     {
-        if ((_voiceMuteFlags & VoiceMutePromoted) != 0) _voiceMuteFlags = 0;
-        else if ((_voiceMuteFlags & VoiceMuteRequested) != 0) _voiceMuteFlags |= VoiceMutePromoted;
-        StartVoice(voiceId, 0, muted: (_voiceMuteFlags & VoiceMuteRequested) != 0);
+        if ((_scene.VoiceMuteFlags & VoiceMutePromoted) != 0) _scene.VoiceMuteFlags = 0;
+        else if ((_scene.VoiceMuteFlags & VoiceMuteRequested) != 0) _scene.VoiceMuteFlags |= VoiceMutePromoted;
+        StartVoice(voiceId, 0, muted: (_scene.VoiceMuteFlags & VoiceMuteRequested) != 0);
         UpdateTimedWork();
     }
 
@@ -40,7 +36,7 @@ public sealed partial class Audio
     /// pending op 0x1d5 request.</summary>
     public void PlayHistoryVoice(long voiceId)
     {
-        if ((_voiceMuteFlags & (VoiceMuteRequested | VoiceMutePromoted)) != 0) _voiceMuteFlags = 0;
+        if ((_scene.VoiceMuteFlags & (VoiceMuteRequested | VoiceMutePromoted)) != 0) _scene.VoiceMuteFlags = 0;
         StartVoice(voiceId, 1, muted: false);
         UpdateTimedWork();
     }
@@ -48,15 +44,15 @@ public sealed partial class Audio
     /// <summary>Op 0x1d5: the next op 0xc4 voice plays at volume 0.</summary>
     public void MuteNextVoice()
     {
-        _voiceMuteFlags = VoiceMuteRequested;
+        _scene.VoiceMuteFlags = VoiceMuteRequested;
     }
 
     /// <summary>Op 0x1bc's audio part: stop channel 12, drop the voice fast-forward held back and clear the op 0x1d5
     /// request.</summary>
     public void ResetMessageVoiceState()
     {
-        _heldVoice = null;
-        _voiceMuteFlags = 0;
+        _scene.HeldVoice = null;
+        _scene.VoiceMuteFlags = 0;
         _timeline?.Event("voice-stop", new());
         StopChannel(VoiceChannel);
         UpdateTimedWork();
@@ -72,7 +68,7 @@ public sealed partial class Audio
             ["id"] = voiceId, ["file"] = clip?.Name, ["playback_variant"] = playbackVariant,
             ["delay_ms"] = unchecked((uint)delayMs),
         });
-        _delayedVoice = clip == null ? null : new DelayedVoice(clip, playbackVariant, unchecked((uint)delayMs), null);
+        _scene.DelayedVoice = clip == null ? null : new DelayedVoice(clip, playbackVariant, unchecked((uint)delayMs), null);
         UpdateTimedWork();
     }
 
@@ -80,8 +76,8 @@ public sealed partial class Audio
     void IFastForwardListener.FastForwardChannelSet(FastForwardChannel channel, bool value, bool active, bool changed)
     {
         if (!changed || active) return;
-        if (_heldVoice is not { } held) return;
-        _heldVoice = null;
+        if (_scene.HeldVoice is not { } held) return;
+        _scene.HeldVoice = null;
         DispatchVoice(held.Clip, held.PlaybackVariant, held.Muted);
         UpdateTimedWork();
     }
@@ -96,7 +92,7 @@ public sealed partial class Audio
         // A voice requested while fast-forward runs is held and played by the notice of its end; otherwise it plays
         // now.
         bool first = false;
-        if (_skip.WhileFastForward(() => { first = _heldVoice == null; _heldVoice = start; }))
+        if (_skip.WhileFastForward(() => { first = _scene.HeldVoice == null; _scene.HeldVoice = start; }))
         {
             if (first) StopChannel(VoiceChannel);
             return;
@@ -110,7 +106,7 @@ public sealed partial class Audio
         // 設定 dialog's ｻｳﾝﾄﾞ page sets both. It ducks whenever op 0x1cf bit 0 is clear, muted voices included; a
         // suppressed start leaves an earlier duck in place.
         (bool duckOnVoice, int duckPercent) = DuckSettings();
-        if (duckOnVoice && (_duckControl & 1) == 0) BeginDuck(duckPercent);
+        if (duckOnVoice && (_scene.DuckControl & 1) == 0) BeginDuck(duckPercent);
         _voicePlaybackVariant = playbackVariant;
         _device.Load(VoiceChannel, AudioBus.Voice, clip);
         PlayChannel(VoiceChannel, loop: false,
@@ -134,15 +130,15 @@ public sealed partial class Audio
 
     private void ServiceDelayedVoice(long now)
     {
-        if (_delayedVoice is not { } pending) return;
+        if (_scene.DelayedVoice is not { } pending) return;
         uint now32 = unchecked((uint)now);
         if (!pending.StartMs.HasValue)
         {
-            _delayedVoice = pending with { StartMs = now32 };
+            _scene.DelayedVoice = pending with { StartMs = now32 };
             return;
         }
         if (unchecked(now32 - pending.StartMs.Value) < pending.DelayMs) return;
-        _delayedVoice = null;
+        _scene.DelayedVoice = null;
         _timeline?.Event("voice-scheduled-start", new()
         {
             ["file"] = pending.Clip.Name, ["playback_variant"] = pending.PlaybackVariant,

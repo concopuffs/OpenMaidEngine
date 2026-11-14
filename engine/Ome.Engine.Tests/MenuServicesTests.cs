@@ -18,7 +18,7 @@ public class MenuServicesTests
     private static Operand G(long address) => new(3, address);
 
     /// <summary>Runs an action at chosen instruction boundaries or when the text wait starts.</summary>
-    private sealed class MenuHost : RecordingHost
+    private sealed class MenuHost : RecordingWaits
     {
         public VirtualMachine? Vm;
         public readonly Dictionary<int, Action<VirtualMachine>> AtYield = new();

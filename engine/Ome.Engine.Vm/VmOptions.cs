@@ -4,7 +4,7 @@ namespace Ome.Engine.Vm;
 /// authored inline string more than this many times. Native AGE has no such limit; the interactive session passes
 /// <see cref="int.MaxValue"/> (GodotVmOptions).</param>
 /// <param name="HaltAtWaitForInput">When true, the VM halts (reason "wait-for-input") at op 0x72, and at op 0xfa
-/// when it would wait, instead of calling the host and continuing. This is the FAITHFUL headless semantics: with no player to click,
+/// when it would wait, instead of calling the waits and continuing. This is the FAITHFUL headless semantics: with no player to click,
 /// "the scene is waiting for input" means stop here — not pretend the click already happened and plow on
 /// through every prompt into code no real playthrough reaches (which is what made a headless SC0000 spin
 /// 493k× in the name-entry poll loop). Leave false for interactive frontends that really block on input

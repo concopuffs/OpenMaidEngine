@@ -60,7 +60,7 @@ public class TraceSinkTests
             new List<(int, Operand[])> { (0x3, new[] { new Operand(0, 5) }), (0x2, Array.Empty<Operand>()) },
             Array.Empty<string>());
         var sink = new RecordingTraceSink();
-        var vm = new VirtualMachine(caller, t, new RecordingHost(), null,
+        var vm = new VirtualMachine(caller, t, new RecordingWaits(), null,
                                     new MapProvider(new() { [5] = callee }), sink);
         vm.Run();
 
@@ -86,11 +86,11 @@ public class TraceSinkTests
         var s = ScriptAssembler.Assemble(t, "S", body, Array.Empty<string>());
 
         var off = new RecordingTraceSink { TracingSteps = false };
-        new VirtualMachine(s, t, new RecordingHost(), null, null, off).Run();
+        new VirtualMachine(s, t, new RecordingWaits(), null, null, off).Run();
         Assert.Empty(off.Events.Where(e => e.Kind == TraceEventKind.Step));
 
         var on = new RecordingTraceSink { TracingSteps = true };
-        new VirtualMachine(s, t, new RecordingHost(), null, null, on).Run();
+        new VirtualMachine(s, t, new RecordingWaits(), null, null, on).Run();
         Assert.Equal(2, on.Events.Count(e => e.Kind == TraceEventKind.Step));
     }
 }

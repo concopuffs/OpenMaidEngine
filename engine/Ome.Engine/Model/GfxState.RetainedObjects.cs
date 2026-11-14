@@ -97,37 +97,25 @@ public sealed partial class GfxState
         public long TranslationCycleStartMs = -1;
     }
 
-    // ---- geometry/draw object store (V18/V24/draw bind, the compositor's input) ----
-    // Populated lazily by the geometry SET ops and draw-texture. Op 0x215 queries this same native map and
-    // returns the object's live source slot (obj+4), or -1 when the handle has not been drawn/bound yet.
-    private readonly Dictionary<long, GfxObject> _objects = new();
-    // Native composition is handle-ascending z order. Mutations maintain this small index so snapshots do
-    // not rebuild/sort a dictionary-sized LINQ buffer, while hot handle lookup remains O(1).
-    private readonly List<long> _orderedObjectHandles = new();
     private readonly NumericGlyphStyle[] _numericGlyphStyles = new NumericGlyphStyle[11];
 
-    // Ops 0x229-0x22e address one embedded gfx-object record outside the ordinary object map. Its sampled
-    // matrix is post-multiplied onto only the selected handle range during native composition. FIELD uses
-    // this as its map camera while the surrounding dungeon UI remains screen-fixed.
-    private long _rangeTransformFirst, _rangeTransformCount;
-    private GfxObject _rangeTransform = new();
 
-    public long CurrentObject { get; private set; }
+    public long CurrentObject { get => _scene.CurrentObject; private set => _scene.CurrentObject = value; }
     /// <summary>EngineCtx+0x14e08, selected by op 0x80 and used by op 0x1d9 when its slot is zero.</summary>
     public int DefaultObjectSlot { get; private set; }
 
     /// <summary>Live geometry objects and the surface slot they draw from — for the CLI gfx oracle.</summary>
     public IEnumerable<(long Handle, int Slot)> Objects
     {
-        get { foreach (var kv in _objects) yield return (kv.Key, kv.Value.SourceSlot); }
+        get { foreach (var kv in _scene.Objects) yield return (kv.Key, kv.Value.SourceSlot); }
     }
 
     public GfxObject GetOrCreate(long handle)
     {
-        if (!_objects.TryGetValue(handle, out var o))
+        if (!_scene.Objects.TryGetValue(handle, out var o))
         {
             o = new GfxObject();
-            _objects[handle] = o;
+            _scene.Objects[handle] = o;
             InsertOrderedHandle(handle);
         }
         CurrentObject = handle;
@@ -155,37 +143,37 @@ public sealed partial class GfxState
     /// anchor/pivot. This does not create or mutate an ordinary retained object.</summary>
     public void SetRangeTransform(long first, long count, (long X, long Y, long Z) anchor)
     {
-        _rangeTransformFirst = first;
-        _rangeTransformCount = System.Math.Max(0, count);
-        _rangeTransform = new GfxObject { V18 = anchor };
+        _scene.RangeTransformFirst = first;
+        _scene.RangeTransformCount = System.Math.Max(0, count);
+        _scene.RangeTransform = new GfxObject { V18 = anchor };
         MarkRetainedMutation();
     }
 
     /// <summary>Op 0x22a: immediately replace the embedded range transform's current scale.</summary>
     public void SetRangeScaleCurrent((long X, long Y, long Z) percent)
     {
-        _rangeTransform.TransformMarked = true;   // owner+0x490, the embedded record's +0x68
-        _rangeTransform.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+        _scene.RangeTransform.TransformMarked = true;   // owner+0x490, the embedded record's +0x68
+        _scene.RangeTransform.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
         MarkRetainedMutation();
     }
 
     /// <summary>Op 0x22c: immediately replace the embedded range transform's current translation.</summary>
     public void SetRangeTranslationCurrent((long X, long Y, long Z) translation)
     {
-        _rangeTransform.TransformMarked = true;
-        _rangeTransform.TranslationCurrent = translation;
+        _scene.RangeTransform.TransformMarked = true;
+        _scene.RangeTransform.TranslationCurrent = translation;
         MarkRetainedMutation();
     }
 
     /// <summary>Op 0x22d: arm the range transform's delayed one-shot scale target.</summary>
     public void SetRangeScaleChannel(long delayMs, long durationMs, (long X, long Y, long Z) percent)
     {
-        _rangeTransform.TransformMarked = true;
-        _rangeTransform.ScaleDelayMs = delayMs;
-        _rangeTransform.ScaleDurationMs = durationMs;
-        _rangeTransform.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
-        _rangeTransform.ScaleEnabled = durationMs > 0;
-        _rangeTransform.OneShotStartMs = -1;
+        _scene.RangeTransform.TransformMarked = true;
+        _scene.RangeTransform.ScaleDelayMs = delayMs;
+        _scene.RangeTransform.ScaleDurationMs = durationMs;
+        _scene.RangeTransform.ScaleTarget = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+        _scene.RangeTransform.ScaleEnabled = durationMs > 0;
+        _scene.RangeTransform.OneShotStartMs = -1;
         MarkRetainedMutation();
     }
 
@@ -193,12 +181,12 @@ public sealed partial class GfxState
     public void SetRangeRotationChannel(long delayMs, long durationMs,
                                         (long X, long Y, long Z) axis, long angleDegrees)
     {
-        _rangeTransform.TransformMarked = true;
-        _rangeTransform.RotationDelayMs = delayMs;
-        _rangeTransform.RotationDurationMs = durationMs;
-        _rangeTransform.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
-        _rangeTransform.RotationChannelEnabled = durationMs > 0;
-        _rangeTransform.OneShotStartMs = -1;
+        _scene.RangeTransform.TransformMarked = true;
+        _scene.RangeTransform.RotationDelayMs = delayMs;
+        _scene.RangeTransform.RotationDurationMs = durationMs;
+        _scene.RangeTransform.RotationTarget = (axis.X, axis.Y, axis.Z, angleDegrees);
+        _scene.RangeTransform.RotationChannelEnabled = durationMs > 0;
+        _scene.RangeTransform.OneShotStartMs = -1;
         MarkRetainedMutation();
     }
 
@@ -208,21 +196,21 @@ public sealed partial class GfxState
     public void SetRangeTranslationChannel(long delayMs, long durationMs,
                                            (long X, long Y, long Z) target)
     {
-        _rangeTransform.TransformMarked = true;
-        _rangeTransform.TranslationDelayMs = delayMs;
-        _rangeTransform.TranslationDurationMs = durationMs;
-        _rangeTransform.TranslationTarget = target;
-        _rangeTransform.TranslationEnabled = durationMs > 0;
-        _rangeTransform.OneShotStartMs = -1;
+        _scene.RangeTransform.TransformMarked = true;
+        _scene.RangeTransform.TranslationDelayMs = delayMs;
+        _scene.RangeTransform.TranslationDurationMs = durationMs;
+        _scene.RangeTransform.TranslationTarget = target;
+        _scene.RangeTransform.TranslationEnabled = durationMs > 0;
+        _scene.RangeTransform.OneShotStartMs = -1;
         MarkRetainedMutation();
     }
 
     /// <summary>Op 0x21d: clone the native 0x2d4-byte retained-object record from source to destination.</summary>
     public bool CloneObject(long sourceHandle, long destinationHandle)
     {
-        if (!_objects.TryGetValue(sourceHandle, out var s)) return false;
-        bool destinationIsNew = !_objects.ContainsKey(destinationHandle);
-        _objects[destinationHandle] = CloneState(s);
+        if (!_scene.Objects.TryGetValue(sourceHandle, out var s)) return false;
+        bool destinationIsNew = !_scene.Objects.ContainsKey(destinationHandle);
+        _scene.Objects[destinationHandle] = CloneState(s);
         if (destinationIsNew) InsertOrderedHandle(destinationHandle);
         CurrentObject = destinationHandle;
         MarkRetainedMutation();
@@ -239,24 +227,24 @@ public sealed partial class GfxState
             return;
         }
 
-        bool hasFirst = _objects.TryGetValue(firstHandle, out var first);
-        bool hasSecond = _objects.TryGetValue(secondHandle, out var second);
+        bool hasFirst = _scene.Objects.TryGetValue(firstHandle, out var first);
+        bool hasSecond = _scene.Objects.TryGetValue(secondHandle, out var second);
         if (hasFirst && hasSecond)
         {
-            _objects[firstHandle] = CloneState(second!);
-            _objects[secondHandle] = CloneState(first!);
+            _scene.Objects[firstHandle] = CloneState(second!);
+            _scene.Objects[secondHandle] = CloneState(first!);
         }
         else if (hasFirst)
         {
-            _objects.Remove(firstHandle);
-            _objects[secondHandle] = CloneState(first!);
+            _scene.Objects.Remove(firstHandle);
+            _scene.Objects[secondHandle] = CloneState(first!);
             RemoveOrderedHandle(firstHandle);
             InsertOrderedHandle(secondHandle);
         }
         else if (hasSecond)
         {
-            _objects.Remove(secondHandle);
-            _objects[firstHandle] = CloneState(second!);
+            _scene.Objects.Remove(secondHandle);
+            _scene.Objects[firstHandle] = CloneState(second!);
             RemoveOrderedHandle(secondHandle);
             InsertOrderedHandle(firstHandle);
         }
@@ -266,13 +254,13 @@ public sealed partial class GfxState
     /// <summary>The live object.</summary>
     public GfxObject? TryGet(long handle)
     {
-        return _objects.TryGetValue(handle, out var o) ? o : null;
+        return _scene.Objects.TryGetValue(handle, out var o) ? o : null;
     }
 
     /// <summary>A present object's source slot (obj+4).</summary>
     public bool TryGetSourceSlot(long handle, out int slot)
     {
-        if (_objects.TryGetValue(handle, out var o))
+        if (_scene.Objects.TryGetValue(handle, out var o))
         {
             slot = o.SourceSlot;
             return true;
@@ -289,7 +277,7 @@ public sealed partial class GfxState
     /// slot 0 by default, for any present object.</summary>
     public int QuerySlot(long handle, bool unboundReadsAbsent = false)
     {
-        return _objects.TryGetValue(handle, out var o) && (o.Visible || !unboundReadsAbsent) ? o.SourceSlot : -1;
+        return _scene.Objects.TryGetValue(handle, out var o) && (o.Visible || !unboundReadsAbsent) ? o.SourceSlot : -1;
     }
 
     /// <summary>Opcode 0x216 reads the live surface record's resource id (owner+0x700), not an object field or the
@@ -302,21 +290,21 @@ public sealed partial class GfxState
     public long QueryField(long idx)
     {
         if (idx is >= 0 and < SurfaceRecordCount)
-            return _surfaceRecords[(int)idx * SurfaceRecordDwords + RecordResourceId];
+            return _scene.SurfaceRecords[(int)idx * SurfaceRecordDwords + RecordResourceId];
         if (idx is >= SurfaceRecordCount and < 2 * SurfaceRecordCount)
-            return _surfaceRecordSnapshot[((int)idx - SurfaceRecordCount) * SurfaceRecordDwords + RecordResourceId];
+            return _scene.SurfaceRecordSnapshot[((int)idx - SurfaceRecordCount) * SurfaceRecordDwords + RecordResourceId];
         return idx == -1 ? 0 : -1;
     }
 
     public void Release(long handle)
     {
-        bool removedTransition = _radialBlurTransitions.Remove(handle)
-                                 | _directionalBlurTransitions.Remove(handle)
-                                 | _patternedSurfaceTransitions.Remove(handle);
-        if (_objects.Remove(handle))
+        bool removedTransition = _scene.RadialBlurTransitions.Remove(handle)
+                                 | _scene.DirectionalBlurTransitions.Remove(handle)
+                                 | _scene.PatternedSurfaceTransitions.Remove(handle);
+        if (_scene.Objects.Remove(handle))
         {
-            int index = _orderedObjectHandles.BinarySearch(handle);
-            if (index >= 0) _orderedObjectHandles.RemoveAt(index);
+            int index = _scene.OrderedObjectHandles.BinarySearch(handle);
+            if (index >= 0) _scene.OrderedObjectHandles.RemoveAt(index);
             MarkRetainedMutation();
         }
         else if (removedTransition) MarkRetainedMutation();
@@ -336,11 +324,11 @@ public sealed partial class GfxState
     /// <summary>Op 0x1f6: clear every retained gfx-object record without releasing surface resources.</summary>
     public void ClearRetainedObjects()
     {
-        _objects.Clear();
-        _orderedObjectHandles.Clear();
-        _radialBlurTransitions.Clear();
-        _directionalBlurTransitions.Clear();
-        _patternedSurfaceTransitions.Clear();
+        _scene.Objects.Clear();
+        _scene.OrderedObjectHandles.Clear();
+        _scene.RadialBlurTransitions.Clear();
+        _scene.DirectionalBlurTransitions.Clear();
+        _scene.PatternedSurfaceTransitions.Clear();
         CurrentObject = 0;
         ClearAnimationServiceForObjectClear();
         MarkRetainedMutation();
@@ -474,13 +462,13 @@ public sealed partial class GfxState
 
     private void InsertOrderedHandle(long handle)
     {
-        int index = _orderedObjectHandles.BinarySearch(handle);
-        if (index < 0) _orderedObjectHandles.Insert(~index, handle);
+        int index = _scene.OrderedObjectHandles.BinarySearch(handle);
+        if (index < 0) _scene.OrderedObjectHandles.Insert(~index, handle);
     }
 
     private void RemoveOrderedHandle(long handle)
     {
-        int index = _orderedObjectHandles.BinarySearch(handle);
-        if (index >= 0) _orderedObjectHandles.RemoveAt(index);
+        int index = _scene.OrderedObjectHandles.BinarySearch(handle);
+        if (index >= 0) _scene.OrderedObjectHandles.RemoveAt(index);
     }
 }

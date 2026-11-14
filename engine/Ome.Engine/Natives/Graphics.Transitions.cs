@@ -24,10 +24,18 @@ public sealed partial class Graphics
 {
     // surface slot -> the objects op 0x222/0x20c last published into it; the screen transitions draw from them.
     private readonly Dictionary<int, IReadOnlyList<RenderObject>> _renderTargetSnapshots = new();
-    private ScreenTransition? _screenTransition;
-    private GfxHandleRange _backbufferRange = GfxHandleRange.All;
-    private bool _backbufferPublicationPreservesExistingPixels;
-    private bool _backbufferClearPending;
+
+    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
+    private sealed class Scene
+    {
+        public ScreenTransition? ScreenTransition;
+        public GfxHandleRange BackbufferRange = GfxHandleRange.All;
+        public bool BackbufferPublicationPreservesExistingPixels;
+        public bool BackbufferClearPending;
+    }
+
+    private Scene _scene = new();
+
     private readonly List<RenderObject> _terminalSample = new();   // engine thread only: CommitTerminalSample
 
     // ---- publication (ops 0x222 and 0x20c) ----
@@ -42,8 +50,8 @@ public sealed partial class Graphics
             PublishObjectRangeToSurface(firstHandle, count);
             return false;
         }
-        _backbufferRange = new GfxHandleRange(firstHandle, count);
-        _backbufferPublicationPreservesExistingPixels = true;
+        _scene.BackbufferRange = new GfxHandleRange(firstHandle, count);
+        _scene.BackbufferPublicationPreservesExistingPixels = true;
         _timeline?.Event("present-object-range", new() { ["first"] = firstHandle, ["count"] = count });
         return true;
     }
@@ -66,8 +74,8 @@ public sealed partial class Graphics
             });
             return false;
         }
-        _backbufferRange = GfxHandleRange.All;
-        _backbufferPublicationPreservesExistingPixels = true;
+        _scene.BackbufferRange = GfxHandleRange.All;
+        _scene.BackbufferPublicationPreservesExistingPixels = true;
         long nowMs = _clock.NowMs;
         int started = State.StartForegroundTransitions(nowMs);
         State.SeedOneShotChannels(nowMs);   // gfx_render_frame samples, so seeds, every visible channel
@@ -97,10 +105,10 @@ public sealed partial class Graphics
         State.SnapshotVisibleObjects(nowMs, snapshot);
         GfxHandleRange range;
         bool preserveExistingPixels;
-        range = _backbufferRange;
+        range = _scene.BackbufferRange;
         preserveExistingPixels =
-            _backbufferPublicationPreservesExistingPixels && !_backbufferClearPending;
-        _backbufferClearPending = false;
+            _scene.BackbufferPublicationPreservesExistingPixels && !_scene.BackbufferClearPending;
+        _scene.BackbufferClearPending = false;
         int write = 0;
         for (int read = 0; read < snapshot.Count; read++)
             if (range.Contains(snapshot[read].Handle)) snapshot[write++] = snapshot[read];
@@ -249,7 +257,7 @@ public sealed partial class Graphics
         Dictionary<string, object?> detail, long overlayRgb = 0, long? durationOverride = null)
     {
         long duration = durationOverride ?? LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
-        _screenTransition = new ScreenTransition(source, target, start, duration, overlayRgb)
+        _scene.ScreenTransition = new ScreenTransition(source, target, start, duration, overlayRgb)
         {
             Forced = forceEndpoint,
         };
@@ -265,22 +273,22 @@ public sealed partial class Graphics
     /// <summary>A screen transition is pending: running, or forced and not yet drawn.</summary>
     public bool ScreenTransitionPending
     {
-        get { return _screenTransition != null; }
+        get { return _scene.ScreenTransition != null; }
     }
 
     /// <summary>The screen transition has nothing left to run at <paramref name="nowMs"/> (none, forced, or past its
     /// end).</summary>
     public bool ScreenTransitionDue(long nowMs)
     {
-        return _screenTransition == null || _screenTransition.Forced
-            || nowMs - _screenTransition.StartMs >= _screenTransition.DurationMs;
+        return _scene.ScreenTransition == null || _scene.ScreenTransition.Forced
+            || nowMs - _scene.ScreenTransition.StartMs >= _scene.ScreenTransition.DurationMs;
     }
 
     /// <summary>Force the pending screen transition to its endpoint; false when there is none.</summary>
     public bool ForceScreenTransition()
     {
-        if (_screenTransition == null) return false;
-        _screenTransition.Forced = true;
+        if (_scene.ScreenTransition == null) return false;
+        _scene.ScreenTransition.Forced = true;
         return true;
     }
 
@@ -288,17 +296,17 @@ public sealed partial class Graphics
     /// once: its terminal frame is drawn by this caller, so only the path that draws calls this.</summary>
     public bool TrySnapshotScreenTransition(long nowMs, out LegacyScreenTransitionSnapshot snapshot)
     {
-        if (_screenTransition == null)
+        if (_scene.ScreenTransition == null)
         {
             snapshot = default;
             return false;
         }
-        double progress = _screenTransition.Forced ? 1.0
-            : System.Math.Clamp((nowMs - _screenTransition.StartMs)
-                / (double)_screenTransition.DurationMs, 0.0, 1.0);
+        double progress = _scene.ScreenTransition.Forced ? 1.0
+            : System.Math.Clamp((nowMs - _scene.ScreenTransition.StartMs)
+                / (double)_scene.ScreenTransition.DurationMs, 0.0, 1.0);
         snapshot = new LegacyScreenTransitionSnapshot(
-            _screenTransition.Source, _screenTransition.Target, progress, _screenTransition.OverlayRgb);
-        if (_screenTransition.Forced) _screenTransition = null;
+            _scene.ScreenTransition.Source, _scene.ScreenTransition.Target, progress, _scene.ScreenTransition.OverlayRgb);
+        if (_scene.ScreenTransition.Forced) _scene.ScreenTransition = null;
         return true;
     }
 
@@ -306,10 +314,7 @@ public sealed partial class Graphics
     /// screen transition goes. A render target's captured objects stay with its surface.</summary>
     public void ResetScene()
     {
-        _backbufferRange = GfxHandleRange.All;
-        _backbufferPublicationPreservesExistingPixels = false;
-        _backbufferClearPending = false;
-        _screenTransition = null;
+        _scene = new();
         RequestPresentation();
     }
 

@@ -178,7 +178,7 @@ public sealed partial class Graphics
         int surfaceSlot = State.CurrentRenderTargetSlot;
         if (surfaceSlot < 0)
         {
-            _backbufferClearPending = true;
+            _scene.BackbufferClearPending = true;
         }
         else
         {

@@ -8,8 +8,7 @@ using Xunit;
 
 /// <summary>
 /// The input and waits native (engine layering milestone 11). Every wait that blocks the engine thread runs the engine
-/// tick, unless it is modal (spec §5.3, part 1): the engine thread blocks only through <c>InputAndWaits.Blocking.cs</c>
-/// and the lifted host not at all, a fade goes on while a sleep waits, and it stops under a modal hold and catches up
+/// tick, unless it is modal (spec §5.3, part 1): the engine thread blocks only through <c>InputAndWaits.Blocking.cs</c>, a fade goes on while a sleep waits, and it stops under a modal hold and catches up
 /// after, as native's does under the 終了 dialog (docs/engine-re.md). The front end's thread reaches the engine thread
 /// only through queued input, frame turns and requests (spec §5.3, part 2; <c>InputAndWaits.Turns.cs</c>).
 /// </summary>
@@ -29,10 +28,9 @@ public class InputAndWaitsTests
     {
         string engine = Path.Combine(Paths.Repo, "engine", "Ome.Engine");
         string[] waits = Directory.GetFiles(Path.Combine(engine, "Natives"), "InputAndWaits*.cs");
-        string[] host = Directory.GetFiles(Path.Combine(engine, "Hosting"), "EngineHost*.cs");
         foreach (string name in BlockingFiles) Assert.Contains(waits, file => Path.GetFileName(file) == name);
         var found = new List<string>();
-        foreach (string file in waits.Concat(host).Where(file => !BlockingFiles.Contains(Path.GetFileName(file))))
+        foreach (string file in waits.Where(file => !BlockingFiles.Contains(Path.GetFileName(file))))
         {
             string[] lines = File.ReadAllLines(file);
             for (int i = 0; i < lines.Length; i++)
@@ -51,7 +49,7 @@ public class InputAndWaitsTests
     {
         var rig = new AudioRig();
         using var locator = new PageLocatorState("SC0000", null);
-        InputAndWaits waits = EngineHostTests.HostAndWaits(EngineHostTests.NothingAtAll(), locator, rig.Clock, audio: rig).Waits;
+        InputAndWaits waits = HeadlessNativesTests.Waits(locator, rig.Clock, audio: rig);
         rig.Audio.PlayBgm(5);
         rig.Audio.FadeBgm(0, 1000);
         rig.Device.Commands.Clear();
@@ -71,7 +69,7 @@ public class InputAndWaitsTests
     {
         var rig = new AudioRig();
         using var locator = new PageLocatorState("SC0000", null);
-        InputAndWaits waits = EngineHostTests.HostAndWaits(EngineHostTests.NothingAtAll(), locator, rig.Clock, audio: rig).Waits;
+        InputAndWaits waits = HeadlessNativesTests.Waits(locator, rig.Clock, audio: rig);
         rig.Audio.PlayBgm(5);
         rig.Audio.FadeBgm(0, 1000);
         rig.Device.Commands.Clear();

@@ -4,10 +4,11 @@ using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
+using Ome.Engine.Natives;
 
 public class TextureOpsTests
 {
-    private sealed class RecHost : IHost
+    private sealed class RecWaits : IInputAndWaits
     {
         public void ShowText(int o, string t) { }
         public void WaitForInput() { }
@@ -30,7 +31,7 @@ public class TextureOpsTests
         var writes = new Dictionary<int, long>();
         foreach (var seed in launch.CoordinatorWrites) writes[seed.Address] = seed.Value;
         writes[launch.PackedScriptIdAddress] = scene.PackedId;
-        var host = new RecHost();
+        var host = new RecWaits();
         var vm = new VirtualMachine(
             provider.RequireByName(launch.RootScript), table, host, new VmOptions(MaxSteps: 20_000_000), provider,
             build: EngineBuilds.ForProfile(profile));

@@ -23,11 +23,12 @@ public sealed partial class InputAndWaits
     {
         if (textPage)
         {
-            int page = ++_pages;
+            int page = _pages + 1;
             _locator.WaitReached(page);
-            Tell(listener => listener.PageWaitStarted(page));
+            _pages = page;
+            PostPageNotice();
         }
-        _waiting = true;
+        _scene.Waiting = true;
         _timeline?.State(textPage ? "input-wait" : "input-poll", new() { ["page"] = _pages });
         var autoTimer = new AdvAutoAdvanceTimer(unvoicedDeadlineDue: !textPage);
         bool autoAdvanced = false;
@@ -86,15 +87,14 @@ public sealed partial class InputAndWaits
         {
             ResumeScriptAfterPresentation(scriptSuspended);
             // Also when a callback ends the run with a native script error (the exception leaves this wait).
-            _waiting = false;
+            _scene.Waiting = false;
         }
         _graphics.RequestPresentation();
         _timeline?.State("running", new()
         {
             ["input"] = messageSkipped ? "message-skip" : autoAdvanced ? "auto" : "user",
         });
-        if (!textPage) return;
-        Tell(static listener => listener.PageCleared());
+        if (textPage) PostPageNotice();
     }
 
     /// <summary>
@@ -105,9 +105,9 @@ public sealed partial class InputAndWaits
     /// </summary>
     private void Advance()
     {
-        if (_modalMovieWaiting)
+        if (_scene.ModalMovieWaiting)
         {
-            _modalMovieCancelled = true;
+            _scene.ModalMovieCancelled = true;
             _timeline?.State("modal-movie-cancel", new());
             _frameSignal.Set();
             return;
@@ -119,7 +119,7 @@ public sealed partial class InputAndWaits
             return;
         }
         if (TryForceActiveTransition("advance")) return;
-        if (_waiting && _gate.CurrentCount == 0) _gate.Release();
+        if (_scene.Waiting && _gate.CurrentCount == 0) _gate.Release();
     }
 
     /// <summary>Input arrived that a wait's callbacks may take: wake the wait so it hands the interpreter its
@@ -130,7 +130,7 @@ public sealed partial class InputAndWaits
     /// click would make it. Called on the engine thread from the wait's input callback.</summary>
     public void EndInputWait()
     {
-        if (_waiting && _gate.CurrentCount == 0) _gate.Release();
+        if (_scene.Waiting && _gate.CurrentCount == 0) _gate.Release();
     }
 
     /// <summary>

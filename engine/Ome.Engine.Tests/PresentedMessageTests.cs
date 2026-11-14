@@ -24,11 +24,11 @@ public class PresentedMessageTests
         => new(new TextLanguage("en", [TextCatalog.Build("en", entries)]), misses: misses,
                messages: new ScriptMessageIndex(Table, Contracts));
 
-    private static (RecordingHost Host, VirtualMachine Vm) Run(TextPresenter? presenter,
+    private static (RecordingWaits Host, VirtualMachine Vm) Run(TextPresenter? presenter,
         IReadOnlyList<(int, Operand[])> code, IReadOnlyList<string> strings, bool records = true)
     {
         Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100", code, strings);
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, Table, host) { Text = { Presenter = presenter }, RecordsStringStores = records };
         vm.Run();
         Assert.Equal("exit", vm.HaltReason);
@@ -107,7 +107,7 @@ public class PresentedMessageTests
         Ome.Engine.Model.Script script = ScriptAssembler.Assemble(Table, "SC0100",
             [(0x70, [I(1), I(100), I(height), I(0), I(400)]), (0x213, [I(1), I(100), I(64)]), .. SentenceCode()],
             Sentence);
-        var vm = TestText.Vm(script, Table, new RecordingHost(), TestText.Glyphs(TestText.Fixed(20, 10), TestText.Unicode(10)));
+        var vm = TestText.Vm(script, Table, new RecordingWaits(), TestText.Glyphs(TestText.Fixed(20, 10), TestText.Unicode(10)));
         var language = new TextLanguage("en",
             [TextCatalog.Build("en", [TextEntry.Literal("あの黒石を拾った。", "I picked up that black stone.")])])
         {

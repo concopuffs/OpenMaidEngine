@@ -98,7 +98,7 @@ public sealed partial class SavesAndSettings
             records.Audio.ReadSaveRecords(state);
             records.Graphics.ReadSaveRecords(gfxSnapshot, records.ReleaseSurfacesOnLoad);
             _retained = state;
-            _pendingPlaySeconds = file.Document.Metadata.AccumulatedPlaySeconds;
+            _scene.PendingPlaySeconds = file.Document.Metadata.AccumulatedPlaySeconds;
             if (restoreHistory)
             {
                 // A full load restores the root frame now (script_frame_restore_saved_layout commits); data only
@@ -167,11 +167,11 @@ public sealed partial class SavesAndSettings
     }
 
     /// <summary>Op 0x1ae (<see cref="NumberedSaveThumbnails.Write"/>).</summary>
-    public int WriteThumbnail(ISurfacePixels graphics, int slot, int surface)
+    public int WriteThumbnail(Graphics graphics, int slot, int surface)
         => NumberedSaveThumbnails.Write(graphics, _store, slot, surface);
 
     /// <summary>Op 0x1af (<see cref="NumberedSaveThumbnails.Load"/>).</summary>
-    public int LoadThumbnail(ISurfacePixels graphics, int slot, int surface)
+    public int LoadThumbnail(Graphics graphics, int slot, int surface)
         => NumberedSaveThumbnails.Load(graphics, _store, slot, surface);
 
     /// <summary>A numbered save's records, in native's order of the payload: the save native's carried records and

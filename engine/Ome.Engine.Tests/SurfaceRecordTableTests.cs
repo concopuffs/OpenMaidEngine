@@ -17,7 +17,7 @@ public class SurfaceRecordTableTests
     {
         var list = new List<(int, Operand[])>(ops) { (0x2, Array.Empty<Operand>()) };
         var vm = new VirtualMachine(
-            ScriptAssembler.Assemble(table, "SURFACES", list, Array.Empty<string>()), table, new RecordingHost());
+            ScriptAssembler.Assemble(table, "SURFACES", list, Array.Empty<string>()), table, new RecordingWaits());
         vm.Run();
         Assert.True(vm.HaltReason == "exit", vm.HaltReason);
         return vm.Gfx;

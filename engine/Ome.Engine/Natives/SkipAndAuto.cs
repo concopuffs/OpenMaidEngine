@@ -21,21 +21,31 @@ public sealed partial class SkipAndAuto
 {
     private IFastForwardListener[] _listeners = [];
 
-    private volatile bool _messageSkipEnabled;   // ctx+0x550fc message_skip_display_enabled: the Skip toggle
-    private bool _messageSkipInjected;           // ctx+0x13dc message_skip_enabled: Skip a text wait acts on
+    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
+    private sealed class Scene
+    {
+        public volatile bool MessageSkipEnabled;   // ctx+0x550fc message_skip_display_enabled: the Skip toggle
+        public bool MessageSkipInjected;           // ctx+0x13dc message_skip_enabled: Skip a text wait acts on
+        public bool ReadSkipActive;                // adv_read_skip_state
+        // ctx+0x55100 adv_skip_service_enabled: scene_context_init_reset sets it, op 0x19b clears it, op 0x19c sets it.
+        // The menu's Skip and Auto toggles change the active fast-forward state only while it is set.
+        public bool AdvSkipServiceEnabled = true;
+        public bool AutoMessageEnabled;
+        public bool AutoVoicePending;              // a voice started since the last op 0x1bc
+        public int ClickCancelState;      // native ctx+0x6da80
+        public int ClickCancelTriggers;   // latched action-4 click triggers since the last tick
+    }
+
+    private Scene _scene = new();
+
+    // The fast-forward channels outlive a scene: the reset ends them through their setters, which tell the listeners.
     private bool _scriptFastForward;             // run-state 0x08000000 as scripts and the Skip toggles set it
     private bool _physicalFastForward;           // run-state 0x08000000 from logical action 6
     private volatile bool _fastForward;          // run-state 0x08000000: either channel
-    private bool _readSkipActive;                // adv_read_skip_state
-    // ctx+0x55100 adv_skip_service_enabled: scene_context_init_reset sets it, op 0x19b clears it, op 0x19c sets it.
-    // The menu's Skip and Auto toggles change the active fast-forward state only while it is set.
-    private bool _advSkipServiceEnabled = true;
-    private bool _autoMessageEnabled;
     // message:AutoMessageTime0/1 (registered defaults 500/2000 ms): ops 0x1b8/0x1b9 and the 設定 dialog read and write
-    // them, and SYS4REG.INI keeps them (the lifted host loads and saves them).
+    // them, and SYS4REG.INI keeps them (ReadSettings, and the save native's shutdown write).
     private long _autoMessageTime0Ms = Sys4RegIniStore.DefaultAutoMessageTime0;
     private long _autoMessageTime1Ms = Sys4RegIniStore.DefaultAutoMessageTime1;
-    private bool _autoVoicePending;              // a voice started since the last op 0x1bc
 
     /// <param name="settings">The SYS4INI settings and the pace this native reads.</param>
     /// <param name="paceClock">The time device fast-forward pacing reads and sleeps on.</param>
@@ -65,14 +75,14 @@ public sealed partial class SkipAndAuto
     public bool FastForwardActive => _fastForward;
 
     /// <summary>ctx+0x550fc, the persistent Skip toggle (op 0x19a reads it; the menu shows it).</summary>
-    public bool MessageSkipEnabled => _messageSkipEnabled;
+    public bool MessageSkipEnabled => _scene.MessageSkipEnabled;
 
     /// <summary>ctx+0x13dc: persistent Skip as a text wait acts on it. While it is set, the wait's poll adds action 6
     /// and starts fast-forward again.</summary>
-    public bool MessageSkipInjected => _messageSkipInjected;
+    public bool MessageSkipInjected => _scene.MessageSkipInjected;
 
     /// <summary>adv_read_skip_state (op 0x1cc reads it).</summary>
-    public bool ReadSkipActive => _readSkipActive;
+    public bool ReadSkipActive => _scene.ReadSkipActive;
 
     /// <summary>Set or clear the script channel of run-state 0x08000000.</summary>
     public void SetScriptFastForward(bool active) => SetChannel(FastForwardChannel.Script, active);
@@ -111,8 +121,8 @@ public sealed partial class SkipAndAuto
     /// run-state 0x8000000.</summary>
     public void SetMessageSkip(bool enabled)
     {
-        _messageSkipEnabled = enabled;
-        _messageSkipInjected = enabled;
+        _scene.MessageSkipEnabled = enabled;
+        _scene.MessageSkipInjected = enabled;
         if (enabled) return;
         SetScriptFastForward(false);
         EndPhysicalFastForward();
@@ -121,8 +131,8 @@ public sealed partial class SkipAndAuto
     /// <summary>Op 0x19b: leave ADV presentation, keeping the toggle.</summary>
     public void SuspendAdvSkipService()
     {
-        _advSkipServiceEnabled = false;
-        _messageSkipInjected = false;   // ctx+0x13dc; the toggle (ctx+0x550fc) survives
+        _scene.AdvSkipServiceEnabled = false;
+        _scene.MessageSkipInjected = false;   // ctx+0x13dc; the toggle (ctx+0x550fc) survives
         SetScriptFastForward(false);
         EndPhysicalFastForward();   // it clears run-state 0x8000000, however started
     }
@@ -130,11 +140,11 @@ public sealed partial class SkipAndAuto
     /// <summary>Op 0x19c: recompute active fast-forward on ADV entry.</summary>
     public void ResumeAdvSkipService()
     {
-        _advSkipServiceEnabled = true;
+        _scene.AdvSkipServiceEnabled = true;
         // ctx+0x13dc follows the toggle; a read-skip-only resume leaves it as it was.
-        if (_messageSkipEnabled) _messageSkipInjected = true;
-        else if (!_readSkipActive) _messageSkipInjected = false;
-        SetScriptFastForward(_messageSkipEnabled || _readSkipActive);
+        if (_scene.MessageSkipEnabled) _scene.MessageSkipInjected = true;
+        else if (!_scene.ReadSkipActive) _scene.MessageSkipInjected = false;
+        SetScriptFastForward(_scene.MessageSkipEnabled || _scene.ReadSkipActive);
         EndPhysicalFastForward();   // it rebuilds run-state 0x8000000 from persistent Skip and read skip only
     }
 
@@ -144,8 +154,8 @@ public sealed partial class SkipAndAuto
     /// text wait, or when the callback that ran the op returns into op 0x72.</summary>
     public void ResetMessageSkipInput()
     {
-        _clickCancelState = 0;
-        Interlocked.Exchange(ref _clickCancelTriggers, 0);
+        _scene.ClickCancelState = 0;
+        Interlocked.Exchange(ref _scene.ClickCancelTriggers, 0);
         SetScriptFastForward(false);
         EndPhysicalFastForward();
         _revealPhysicalSkipSuppressed = true;
@@ -164,17 +174,17 @@ public sealed partial class SkipAndAuto
     {
         if (!readTextSkip)
         {
-            _readSkipActive = false;
+            _scene.ReadSkipActive = false;
             return;
         }
         if (messageRead)
         {
-            _readSkipActive = true;
+            _scene.ReadSkipActive = true;
             SetScriptFastForward(true);
         }
-        else if (!_messageSkipEnabled)
+        else if (!_scene.MessageSkipEnabled)
         {
-            _readSkipActive = false;
+            _scene.ReadSkipActive = false;
         }
     }
 
@@ -183,7 +193,7 @@ public sealed partial class SkipAndAuto
     /// Skip (ctx+0x13dc) sets it again as the wait polls its injected action 6, so the page still passes.</summary>
     public void EnterTextWait(InputBindings input)
     {
-        if (!_readSkipActive) SetScriptFastForward(_messageSkipInjected);
+        if (!_scene.ReadSkipActive) SetScriptFastForward(_scene.MessageSkipInjected);
         ReconcilePhysicalFastForward(input);
     }
 
@@ -202,18 +212,18 @@ public sealed partial class SkipAndAuto
     /// run-state 0x08000000, so fast-forward runs on until op 0xfa or 0x19c recomputes it at the next page.</summary>
     public void ToggleMessageSkipFromMenu()
     {
-        if (!_messageSkipEnabled)
+        if (!_scene.MessageSkipEnabled)
         {
-            if (!Settings.CoexistMessageSkip) _autoMessageEnabled = false;
-            _messageSkipEnabled = true;
+            if (!Settings.CoexistMessageSkip) _scene.AutoMessageEnabled = false;
+            _scene.MessageSkipEnabled = true;
         }
         else
         {
-            _messageSkipEnabled = false;
+            _scene.MessageSkipEnabled = false;
         }
-        if (!_advSkipServiceEnabled) return;
-        _messageSkipInjected = _messageSkipEnabled;   // ctx+0x13dc follows only while the service is enabled
-        if (!_messageSkipEnabled) return;
+        if (!_scene.AdvSkipServiceEnabled) return;
+        _scene.MessageSkipInjected = _scene.MessageSkipEnabled;   // ctx+0x13dc follows only while the service is enabled
+        if (!_scene.MessageSkipEnabled) return;
         SetScriptFastForward(true);
     }
 
@@ -226,22 +236,22 @@ public sealed partial class SkipAndAuto
     /// <returns>Whether the toggle clears run-state 0x80000000: the caller ends a polling text wait.</returns>
     public bool ToggleAutoMessageFromMenu()
     {
-        if (_autoMessageEnabled)
+        if (_scene.AutoMessageEnabled)
         {
-            _autoMessageEnabled = false;
+            _scene.AutoMessageEnabled = false;
             return false;
         }
-        _autoMessageEnabled = true;
-        if (!Settings.CoexistMessageSkip) _messageSkipEnabled = false;
-        if (_advSkipServiceEnabled) _messageSkipInjected = _messageSkipEnabled;
-        return _advSkipServiceEnabled;
+        _scene.AutoMessageEnabled = true;
+        if (!Settings.CoexistMessageSkip) _scene.MessageSkipEnabled = false;
+        if (_scene.AdvSkipServiceEnabled) _scene.MessageSkipInjected = _scene.MessageSkipEnabled;
+        return _scene.AdvSkipServiceEnabled;
     }
 
     /// <summary>Auto (ops 0x1b6/0x1b7 and the menu's toggle).</summary>
-    public bool AutoMessageEnabled => _autoMessageEnabled;
+    public bool AutoMessageEnabled => _scene.AutoMessageEnabled;
 
     /// <summary>Op 0x1b7.</summary>
-    public void SetAutoMessage(bool enabled) => _autoMessageEnabled = enabled;
+    public void SetAutoMessage(bool enabled) => _scene.AutoMessageEnabled = enabled;
 
     /// <summary>message:AutoMessageTime0: Auto's delay after a voice.</summary>
     public long AutoMessageTime0Ms => Interlocked.Read(ref _autoMessageTime0Ms);
@@ -257,29 +267,40 @@ public sealed partial class SkipAndAuto
         else if (selector == 1) Interlocked.Exchange(ref _autoMessageTime1Ms, milliseconds);
     }
 
+    /// <summary>Read AutoMessageTime0/1 from SYS4REG.INI's [message], native defaults when absent; composition runs it
+    /// before the interpreter does. <see cref="WriteSettings"/> writes them back at shutdown.</summary>
+    public void ReadSettings(Sys4RegIniStore store)
+    {
+        SetAutoMessageTime(0, store.LoadMessageInt(
+            Sys4RegIniStore.AutoMessageTime0Key, Sys4RegIniStore.DefaultAutoMessageTime0));
+        SetAutoMessageTime(1, store.LoadMessageInt(
+            Sys4RegIniStore.AutoMessageTime1Key, Sys4RegIniStore.DefaultAutoMessageTime1));
+    }
+
+    /// <summary>The shutdown write of AutoMessageTime0/1 into SYS4REG.INI. The registry keeps a 32-bit value: op
+    /// 0x1b9's operand wraps as AGE's int does.</summary>
+    public void WriteSettings(Sys4RegIniStore store)
+    {
+        store.SaveMessageInt(Sys4RegIniStore.AutoMessageTime0Key, unchecked((int)AutoMessageTime0Ms));
+        store.SaveMessageInt(Sys4RegIniStore.AutoMessageTime1Key, unchecked((int)AutoMessageTime1Ms));
+    }
+
     /// <summary>A voice started (ops 0xc4 and 0x1bd): Auto waits for it and then AutoMessageTime0.</summary>
-    public void NoteVoiceStarted() => _autoVoicePending = true;
+    public void NoteVoiceStarted() => _scene.AutoVoicePending = true;
 
     /// <summary>Op 0x1bc's part: no voice is pending any more.</summary>
-    public void ClearPendingVoice() => _autoVoicePending = false;
+    public void ClearPendingVoice() => _scene.AutoVoicePending = false;
 
     /// <summary>What a text wait's Auto timer reads.</summary>
     public AdvAutoWaitState AutoWaitState
-        => new(_autoMessageEnabled, _autoVoicePending, AutoMessageTime0Ms, AutoMessageTime1Ms);
+        => new(_scene.AutoMessageEnabled, _scene.AutoVoicePending, AutoMessageTime0Ms, AutoMessageTime1Ms);
 
     /// <summary>scene_context_init_reset's part: Skip, Auto, read skip and the click machine start over, the skip
     /// service is enabled, and run-state 0x08000000 is zeroed (a held action 6 starts nothing). The delays and the
     /// action-6 history are kept.</summary>
     public void ResetScene()
     {
-        _autoMessageEnabled = false;
-        _autoVoicePending = false;
-        _messageSkipEnabled = false;
-        _messageSkipInjected = false;
-        _readSkipActive = false;
-        _clickCancelState = 0;
-        Interlocked.Exchange(ref _clickCancelTriggers, 0);
-        _advSkipServiceEnabled = true;
+        _scene = new();
         SetScriptFastForward(false);
         EndPhysicalFastForward();
     }

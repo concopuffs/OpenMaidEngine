@@ -107,7 +107,36 @@ public sealed partial class TextManager : ISurfaceListener
 
     /// <summary>The text manager's style (the font, size, colour, effect and aspect ops): what a run, a draw-string and
     /// a History group draw in. Op 0x9 resets it.</summary>
-    public AdvTextStyle Style { get; set; } = AdvTextStyle.Default;
+    public AdvTextStyle Style { get => _scene.Style; set => _scene.Style = value; }
+
+    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
+    private sealed class Scene
+    {
+        public AdvTextStyle Style = AdvTextStyle.Default;
+        public readonly HashSet<int> RetainedHistoryLayouts = new();
+        public readonly Dictionary<int, RetainedAdvTextLayoutPresentation> RetainedTextLayouts = new();
+        // The layout of the last run shown: releasing or resetting it stops that run's reveal.
+        public int ActiveRunLayout;
+        // Each layout's pending record (left, top): AGE draws into the layout's last 20-byte record and pushes the next one
+        // at the cursor, which op 0x7a, op 0x6f and a reset move. The follow-last-glyph wait indicator anchors here.
+        public readonly Dictionary<int, (int X, int Y)> LayoutCursors = new();
+        public bool AdvTextForceComplete;
+        // ctx+0x55108: a click (or a held action 4) finished a reveal; every later reveal publishes at once until op 0x72.
+        public bool RevealsFinishedUntilWait;
+        public RevealState? Reveal;
+        public volatile bool IsRevealing;
+        public readonly Dictionary<int, AdvWaitIndicatorConfig> WaitIndicators = new();
+        public readonly Dictionary<int, (AdvTextLayoutPresentationBinding Binding, AdvTextLayoutSnapshot Layout)> WaitIndicatorBindings = new();
+        public readonly Dictionary<int, RetainedAdvWaitIndicatorPresentation> RetainedWaitIndicators = new();
+        public int ActiveWaitLayout;
+        public bool WaitIndicatorEnabled;
+        public int SuspendedRetainedTextLayoutSlot;
+        public volatile bool AdvPagePresentationSuspended;
+        // The string stores (§5.2): op 0x9 zeroes the string bank, so every record goes with it.
+        public readonly Dictionary<int, StringStore> StringStores = new();
+    }
+
+    private Scene _scene = new();
 
     /// <param name="graphics">The graphics native: text draws into its surfaces, and the text manager hears its
     /// surface releases (the layouts retained on a surface go with its pixels).</param>
@@ -338,28 +367,13 @@ public sealed partial class TextManager : ISurfaceListener
     // ---- op 0x9 ----
 
     /// <summary>Op 0x9 (scene_context_init_reset): every layout's retained glyphs, cursors and wait indicator, the
-    /// reveal and the page's suspension go, the style starts over and History records again. The backlog, the
-    /// settings, the current layout, the glyph timer and the fonts stay; op 0x9 zeroes the string stores with the banks
-    /// (<see cref="ClearStringStores"/>).</summary>
+    /// reveal, the page's suspension and the string stores go (op 0x9 zeroes the string bank), the style starts over and
+    /// History records again. The backlog, the settings, the current layout, the glyph timer and the fonts stay.
+    /// </summary>
     public void ResetScene()
     {
-        Style = AdvTextStyle.Default;
+        _scene = new();
         History.SetRecordingEnabled(true);
-        _retainedHistoryLayouts.Clear();
-        _retainedTextLayouts.Clear();
-        _activeRunLayout = 0;
-        _suspendedRetainedTextLayoutSlot = 0;
-        _layoutCursors.Clear();
-        _advTextForceComplete = false;
-        _revealsFinishedUntilWait = false;
-        _waitIndicators.Clear();
-        _waitIndicatorBindings.Clear();
-        _retainedWaitIndicators.Clear();
-        _activeWaitLayout = 0;
-        _waitIndicatorEnabled = false;
-        _reveal = null;
-        _advPagePresentationSuspended = false;
-        IsRevealing = false;
     }
 
     // ---- a numbered save's records (spec §5.1, rule 6) ----
@@ -391,28 +405,28 @@ public sealed partial class TextManager : ISurfaceListener
     void ISurfaceListener.SurfaceRangeReleased(int firstSlot, int count)
     {
         int end = checked(firstSlot + count);
-        foreach (int layoutSlot in _retainedTextLayouts
+        foreach (int layoutSlot in _scene.RetainedTextLayouts
                      .Where(pair =>
                          pair.Value.Binding.SourceSurfaceSlot >= firstSlot
                          && pair.Value.Binding.SourceSurfaceSlot < end)
                      .Select(pair => pair.Key)
                      .ToArray())
-            _retainedTextLayouts.Remove(layoutSlot);
-        _retainedHistoryLayouts.RemoveWhere(layoutSlot =>
-            !_retainedTextLayouts.ContainsKey(layoutSlot));
+            _scene.RetainedTextLayouts.Remove(layoutSlot);
+        _scene.RetainedHistoryLayouts.RemoveWhere(layoutSlot =>
+            !_scene.RetainedTextLayouts.ContainsKey(layoutSlot));
     }
 
     void ISurfaceListener.SurfaceReplaced(int slot) => DropTextLayoutsOn(slot);
 
     private void DropTextLayoutsOn(int slot)
     {
-        foreach (int layoutSlot in _retainedTextLayouts
+        foreach (int layoutSlot in _scene.RetainedTextLayouts
                      .Where(pair => pair.Value.Binding.SourceSurfaceSlot == slot)
                      .Select(pair => pair.Key)
                      .ToArray())
         {
-            _retainedTextLayouts.Remove(layoutSlot);
-            _retainedHistoryLayouts.Remove(layoutSlot);
+            _scene.RetainedTextLayouts.Remove(layoutSlot);
+            _scene.RetainedHistoryLayouts.Remove(layoutSlot);
         }
     }
 }

@@ -47,7 +47,7 @@ public class RootReloadTests
             [1] = child,
             [2] = deepest,
         });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var trace = new RecordingTraceSink();
         var vm = new VirtualMachine(initial, table, host, provider: provider, sink: trace);
         vm.Globals[0x2ff] = 0x1234;
@@ -97,7 +97,7 @@ public class RootReloadTests
             (0x216, new[] { G(0x211), I(5) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(initial, table, host,
             new VmOptions(CreateObject: createObject, AutoFreeTex: autoFreeTex),
             provider: new MapProvider(new Dictionary<long, Script> { [0] = system4 }));
@@ -135,7 +135,7 @@ public class RootReloadTests
             (0x55, new[] { G(0x300), G(0x428c) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(initial, table, new RecordingHost(),
+        var vm = new VirtualMachine(initial, table, new RecordingWaits(),
             provider: new MapProvider(new Dictionary<long, Script> { [0] = system4 }));
         vm.Globals[0x2ff] = 0x1234;
         vm.GlobalFloats[1] = BitConverter.SingleToInt32Bits(2.5f);
@@ -171,7 +171,7 @@ public class RootReloadTests
         {
             (0x9, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
         vm.Gfx.SetSurface(5, 0x33, 0);
         vm.Gfx.BindDraw(0x100, 5, 0, 0, 1, 1, 0, 0);

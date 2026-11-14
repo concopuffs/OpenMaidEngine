@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Godot;
 using Ome.Engine.Hosting;
+using Ome.Engine.Natives;
 using Ome.Engine.Frontend.Control;
 
 // The driving protocol's port backend (docs/superpowers/specs/2026-11-03-game-driving-design.md §5). With
@@ -150,15 +151,15 @@ public partial class Main
         public DriveState CaptureState() => main._waits.Invoke(() =>
         {
             IReadOnlyList<DriveFrame> frames = DriveFrame.FromVm(main._vm.CaptureFrameLocations());
-            EngineHostDiagnosticSnapshot host = main._host.CaptureDiagnosticSnapshot();
+            WaitsDiagnosticSnapshot waits = main._waits.CaptureDiagnosticSnapshot();
             string? waiting =
-                host.IsModalMovieWaiting ? DriveWaiting.Movie
-                : host.IsTransitionWaiting ? DriveWaiting.Transition
-                : host.IsInputWaiting ? DriveWaiting.Input
-                : host.IsSleeping && main._vm.IsRawInputCallbackActive ? DriveWaiting.Menu
-                : host.IsSleeping ? DriveWaiting.Sleep
+                waits.IsModalMovieWaiting ? DriveWaiting.Movie
+                : waits.IsTransitionWaiting ? DriveWaiting.Transition
+                : waits.IsInputWaiting ? DriveWaiting.Input
+                : waits.IsSleeping && main._vm.IsRawInputCallbackActive ? DriveWaiting.Menu
+                : waits.IsSleeping ? DriveWaiting.Sleep
                 : null;
-            return new DriveState(frames, waiting, host.IsTextRevealing || host.IsScreenTransitionActive);
+            return new DriveState(frames, waiting, waits.IsTextRevealing || waits.IsScreenTransitionActive);
         });
 
         public void Pointer(int x, int y) => main.InjectDrivePointer(x, y);

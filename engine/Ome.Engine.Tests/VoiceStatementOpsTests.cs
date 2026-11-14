@@ -17,7 +17,7 @@ public class VoiceStatementOpsTests
         var list = new List<(int, Operand[])>(ops) { (0x2, None) };
         var script = ScriptAssembler.Assemble(table, "VOICE", list, Array.Empty<string>());
         var rig = new AudioRig();
-        var vm = rig.Vm(script, table, new RecordingHost());
+        var vm = rig.Vm(script, table, new RecordingWaits());
         vm.Run();
         Assert.Equal("exit", vm.HaltReason);
         return (vm, rig);

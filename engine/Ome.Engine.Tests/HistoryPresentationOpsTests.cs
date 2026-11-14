@@ -33,7 +33,7 @@ public class HistoryPresentationOpsTests
         return history;
     }
 
-    private static RecordingHost RunHistoryRender(AdvTextHistory history, Operand[] renderOperands)
+    private static RecordingWaits RunHistoryRender(AdvTextHistory history, Operand[] renderOperands)
     {
         var script = ScriptAssembler.Assemble(Table, "HISTORY_RENDER",
             new List<(int, Operand[])>
@@ -49,7 +49,7 @@ public class HistoryPresentationOpsTests
                 (0x1d1, renderOperands),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         new VirtualMachine(script, Table, host, textHistory: history).Run();
         return host;
     }
@@ -97,7 +97,7 @@ public class HistoryPresentationOpsTests
                 (0x222, new[] { I(0), I(60000) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, Table, host);
         vm.Text.SetMessageWindowAlphaSetting(6);
         vm.Graphics.CreateSurface(0xc1, 600, 100);
@@ -123,7 +123,7 @@ public class HistoryPresentationOpsTests
                 (0x131, new[] { G(0x100) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, Table, host);
 
         vm.Run();
@@ -141,7 +141,7 @@ public class HistoryPresentationOpsTests
                 (0x71, new[] { I(5) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, Table, host).Run();
 
@@ -154,9 +154,9 @@ public class HistoryPresentationOpsTests
     {
         var scripts = Sys4ScriptProvider.Load(Table);
         var session = new GameSession();
-        session.RunScene(scripts.RequireByName("SC0000.BIN"), Table, new RecordingHost(),
+        session.RunScene(scripts.RequireByName("SC0000.BIN"), Table, new RecordingWaits(),
             new VmOptions(MaxSteps: 1_000_000, HaltAtWaitForInput: true), scripts);
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         var result = session.RunScene(scripts.RequireByName("HISTORY.BIN"), Table, host,
             new VmOptions(MaxSteps: 2_000_000, HaltAtWaitForInput: true), scripts);

@@ -164,12 +164,12 @@ internal sealed class AudioRig
     public Audio Audio { get; }
     public EngineTick Tick { get; }
 
-    /// <summary>A VM over this rig. A <see cref="RecordingHost"/>'s sleeps move the rig's clock.</summary>
-    public VirtualMachine Vm(Script script, OpcodeTable table, IHost host, VmOptions? options = null,
+    /// <summary>A VM over this rig. A <see cref="RecordingWaits"/>'s sleeps move the rig's clock.</summary>
+    public VirtualMachine Vm(Script script, OpcodeTable table, IInputAndWaits host, VmOptions? options = null,
                              IScriptProvider? provider = null, AdvTextHistory? textHistory = null,
                              INativeDatStore? nativeDatStore = null)
     {
-        if (host is RecordingHost recording) recording.Clock = Clock;
+        if (host is RecordingWaits recording) recording.Clock = Clock;
         return new VirtualMachine(script, table, host, options, provider, textHistory: textHistory,
                                   saves: new SavesAndSettings(store: nativeDatStore), skipAndAuto: Skip, audio: Audio, tick: Tick);
     }

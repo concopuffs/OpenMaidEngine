@@ -195,10 +195,10 @@ public sealed partial class InputAndWaits
             return;
         }
         long allocated = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-        HostPresentationReason reasons = ConsumePresentationReasons();
+        PresentationReason reasons = ConsumePresentationReasons();
         perf?.RecordPresentationReasons((int)reasons);
         perf?.RecordShouldRecomposite(PerformanceFrameLog.Timestamp() - phase);
-        if (reasons != HostPresentationReason.None)
+        if (reasons != PresentationReason.None)
         {
             lowering?.Invoke();
             FrameDescription frame = _graphics.LowerFrame(_clock.NowMs, perf, decisions);

@@ -1,4 +1,4 @@
-using Ome.Engine.Hosting;
+using Ome.Engine.Natives;
 
 namespace Ome.Engine.Persistence;
 
@@ -13,7 +13,7 @@ public static class NumberedSaveThumbnails
 {
     /// <summary>Op 0x1ae: encode surface <paramref name="surface"/> and store it as save <paramref name="slot"/>'s
     /// thumbnail.</summary>
-    public static int Write(ISurfacePixels? graphics, INativeDatStore? store, int slot, int surface)
+    public static int Write(Graphics? graphics, INativeDatStore? store, int slot, int surface)
     {
         if (store == null) return 1;
         try
@@ -28,7 +28,7 @@ public static class NumberedSaveThumbnails
 
     /// <summary>Op 0x1af: decode save <paramref name="slot"/>'s thumbnail into surface
     /// <paramref name="surface"/>.</summary>
-    public static int Load(ISurfacePixels? graphics, INativeDatStore? store, int slot, int surface)
+    public static int Load(Graphics? graphics, INativeDatStore? store, int slot, int surface)
     {
         if (store == null) return 1;
         try

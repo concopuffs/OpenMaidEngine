@@ -23,7 +23,7 @@ public sealed partial class VirtualMachine
     public bool TryLatchMessageSkipCancelClick()
     {
         if (!_skip.TryLatchCancelClick()) return false;
-        _host.WakeInputCallbackService();
+        _waits.WakeInputCallbackService();
         return true;
     }
 
@@ -42,7 +42,7 @@ public sealed partial class VirtualMachine
 
     private void CancelMessageSkipFromClick()
     {
-        Interlocked.Exchange(ref _queuedInputCallbackMask, 0);   // input_flush_action_triggers
+        Interlocked.Exchange(ref _scene.QueuedInputCallbackMask, 0);   // input_flush_action_triggers
         TakeHeldTriggers();
         _saves.Profile.ReadMessageSkipEnabled = false;
         _skip.CancelMessageSkipFromClick();

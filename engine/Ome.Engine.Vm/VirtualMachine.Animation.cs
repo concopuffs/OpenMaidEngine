@@ -52,7 +52,7 @@ public sealed partial class VirtualMachine
     // 0x23c: previous <- current; current <- monotonic time
     private StepResult OpSampleFrameTime(Instruction ins, int pc)
     {
-        Gfx.SampleFrameTime(_host.InputClockMilliseconds); return StepResult.Next;
+        Gfx.SampleFrameTime(_waits.InputClockMilliseconds); return StepResult.Next;
     }
 
     // 0x202 (handle)(delay)(duration)(alpha)(color) — one-shot color

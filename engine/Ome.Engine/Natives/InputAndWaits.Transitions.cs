@@ -8,13 +8,11 @@ namespace Ome.Engine.Natives;
 // endpoint. Their state is the graphics native's (Natives/Graphics.Transitions.cs); what parks is here.
 public sealed partial class InputAndWaits
 {
-    private GfxState? _foregroundGfx;
     private volatile bool _foregroundTransitionWaitBypassed;
-    private long _transitionStartedAtMs = -1;
 
     /// <summary>When the effect wait in progress started on the engine clock, or -1 (the debug auto-clicker reads
     /// it).</summary>
-    public long TransitionStartedAtMs => Interlocked.Read(ref _transitionStartedAtMs);
+    public long TransitionStartedAtMs => Interlocked.Read(ref _scene.TransitionStartedAtMs);
 
     /// <summary>A triggered action while an effect service parks the VM (<see cref="IsTransitionWaiting"/>). With
     /// system:EffectSkipOnClick 1 the service polls native's input latch every tick
@@ -24,9 +22,9 @@ public sealed partial class InputAndWaits
     /// does.</summary>
     public bool TryPollEffectTriggers(int actionMask, bool effectSkipOnClick)
     {
-        if (!effectSkipOnClick || !_transitionWaiting) return false;
+        if (!effectSkipOnClick || !_scene.TransitionWaiting) return false;
         bool polls;
-        if (_foregroundGfx is { } foreground) polls = (foreground.AnimationServiceFlags & 1) == 0;
+        if (_scene.ForegroundGfx is { } foreground) polls = (foreground.AnimationServiceFlags & 1) == 0;
         else polls = _graphics.ScreenTransitionPending;
         if (!polls) return false;
         _timeline?.State("effect-input-polled", new() { ["actions"] = actionMask });
@@ -36,9 +34,9 @@ public sealed partial class InputAndWaits
 
     private bool TryForceActiveTransition(string source)
     {
-        if (_transitionWaiting && _foregroundGfx != null)
+        if (_scene.TransitionWaiting && _scene.ForegroundGfx != null)
         {
-            bool accepted = _foregroundGfx.TryCompleteClickSkippableTimedPresentation(
+            bool accepted = _scene.ForegroundGfx.TryCompleteClickSkippableTimedPresentation(
                 _clock.NowMs, out int completed);
             if (accepted)
             {
@@ -53,7 +51,7 @@ public sealed partial class InputAndWaits
                 return true;
             }
         }
-        if (_transitionWaiting && _graphics.ForceScreenTransition())
+        if (_scene.TransitionWaiting && _graphics.ForceScreenTransition())
         {
             _timeline?.State("screen-transition-forced-complete", new()
             {
@@ -79,9 +77,9 @@ public sealed partial class InputAndWaits
             gfx.PollEffectService(startedAtMs) | _movies.HoldsServiceWait;
         if (hasActivePresentation)
         {
-            _foregroundGfx = gfx;
-            Interlocked.Exchange(ref _transitionStartedAtMs, _clock.NowMs);
-            _transitionWaiting = true;
+            _scene.ForegroundGfx = gfx;
+            Interlocked.Exchange(ref _scene.TransitionStartedAtMs, _clock.NowMs);
+            _scene.TransitionWaiting = true;
             _timeline?.State("transition-start", new()
             {
                 ["count"] = started, ["service_flags"] = serviceFlags, ["anim_clock_ms"] = animClockMs,
@@ -142,10 +140,10 @@ public sealed partial class InputAndWaits
         {
             ResumeScriptAfterPresentation(scriptSuspended);
         }
-        _transitionWaiting = false;
+        _scene.TransitionWaiting = false;
         _foregroundTransitionWaitBypassed = false;
-        Interlocked.Exchange(ref _transitionStartedAtMs, -1);
-        _foregroundGfx = null;
+        Interlocked.Exchange(ref _scene.TransitionStartedAtMs, -1);
+        _scene.ForegroundGfx = null;
         _timeline?.State("running", new() { ["transition_complete"] = true });
     }
 
@@ -156,9 +154,9 @@ public sealed partial class InputAndWaits
     {
         long start = transition.StartMs;
         long duration = transition.DurationMs;
-        _foregroundGfx = null;
-        Interlocked.Exchange(ref _transitionStartedAtMs, start);
-        _transitionWaiting = true;
+        _scene.ForegroundGfx = null;
+        Interlocked.Exchange(ref _scene.TransitionStartedAtMs, start);
+        _scene.TransitionWaiting = true;
         _timeline?.State("screen-transition-start", transition.Detail);
         bool scriptSuspended = SuspendScriptForPresentation();
         try
@@ -178,8 +176,8 @@ public sealed partial class InputAndWaits
         {
             ResumeScriptAfterPresentation(scriptSuspended);
         }
-        _transitionWaiting = false;
-        Interlocked.Exchange(ref _transitionStartedAtMs, -1);
+        _scene.TransitionWaiting = false;
+        Interlocked.Exchange(ref _scene.TransitionStartedAtMs, -1);
         _timeline?.State("running", new() { ["screen_transition_complete"] = true });
     }
 }

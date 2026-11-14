@@ -1,6 +1,7 @@
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Ome.Script.Abi;
@@ -38,18 +39,16 @@ internal static class OmsRebuildCheck
         }
     }
 
-    /// <summary>A capture host on simulated time: the input clock advances only with sleeps and frame yields, so
+    /// <summary>Headless waits on simulated time: the input clock advances only with sleeps and frame yields, so
     /// timed callbacks fire at the same instruction in both runs instead of following the wall clock. The VM yields
     /// after every step; steps a patch probe inserted are <see cref="Discounted"/>, so they take no time.</summary>
-    private sealed class SimulatedClockHost : IHost
+    private sealed class SimulatedClockWaits : IInputAndWaits
     {
         private const long FrameMilliseconds = 16;
         private long _now;
         public long Discounted { get; set; }
-        public List<(int Offset, string Text)> Emitted { get; } = new();
         public long InputClockMilliseconds => _now - Discounted * FrameMilliseconds;
         public void ShowDiagnosticMessage(DiagnosticMessage message) { }
-        public void ShowText(int offset, string text) => Emitted.Add((offset, text));
         public void WaitForInput() => _now += FrameMilliseconds;
         public void Sleep(long duration) => _now += Math.Max(1, duration);
         public void FrameYield() => _now += FrameMilliseconds;
@@ -150,9 +149,9 @@ internal static class OmsRebuildCheck
             var session = new GameSession();
             foreach (string name in bootScripts)
             {
-                var host = new SimulatedClockHost();
-                session.RunScene(provider.RequireByName(name), table, host, options, provider,
-                    probed ? new StepRecorder(InsertedStep, () => host.Discounted++) : null, build);
+                var waits = new SimulatedClockWaits();
+                session.RunScene(provider.RequireByName(name), table, waits, options, provider,
+                    probed ? new StepRecorder(InsertedStep, () => waits.Discounted++) : null, build);
             }
             return session.ToJson();
         }
@@ -169,9 +168,9 @@ internal static class OmsRebuildCheck
                                                                          VmOptions playOptions, bool probed)
             {
                 var session = GameSession.FromJson(baseline);
-                var host = new SimulatedClockHost();
-                var recorder = probed ? new StepRecorder(InsertedStep, () => host.Discounted++) : new StepRecorder();
-                SceneResult result = session.RunScene(provider.RequireByName(scene), table, host, playOptions,
+                var waits = new SimulatedClockWaits();
+                var recorder = probed ? new StepRecorder(InsertedStep, () => waits.Discounted++) : new StepRecorder();
+                SceneResult result = session.RunScene(provider.RequireByName(scene), table, waits, playOptions,
                     provider, recorder, build);
                 return (recorder, result, session.ToJson());
             }

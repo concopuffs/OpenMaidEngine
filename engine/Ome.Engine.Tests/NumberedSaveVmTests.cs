@@ -39,7 +39,7 @@ public class NumberedSaveVmTests
             history.DefineLayout(1, 400, 120, 75, 340);
             history.AppendText(1, 0x40, "保存", AdvTextStyle.Default);
             var vm = new VirtualMachine(
-                script, Table, new RecordingHost(), textHistory: history, saves: new SavesAndSettings(store: store));
+                script, Table, new RecordingWaits(), textHistory: history, saves: new SavesAndSettings(store: store));
             vm.Globals[0x123] = 456;
             vm.GlobalFloats[0] = BitConverter.SingleToInt32Bits(2.5f);
             vm.GlobalStrings[4] = "姫狩り";
@@ -198,7 +198,7 @@ public class NumberedSaveVmTests
                 NativeSystemTime.FromLocalDateTime(DateTime.Now), 123);
             var liveHistory = new AdvTextHistory();
             var trace = new RecordingTraceSink();
-            var host = new RecordingHost();
+            var host = new RecordingWaits();
             var audio = new AudioRig();
             var vm = new VirtualMachine(
                 loader, Table, host, provider: new MapProvider(
@@ -321,7 +321,7 @@ public class NumberedSaveVmTests
                 1, NativeNumberedSaveCodec.Encode(source), [],
                 NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
             var vm = new VirtualMachine(
-                loader, Table, new RecordingHost(),
+                loader, Table, new RecordingWaits(),
                 provider: new MapProvider(new()
                 {
                     [0x88] = resumed,
@@ -354,7 +354,7 @@ public class NumberedSaveVmTests
             ], []), 0x9a);
             var trace = new RecordingTraceSink();
             var roundTrippedVm = new VirtualMachine(
-                reloader, Table, new RecordingHost(),
+                reloader, Table, new RecordingWaits(),
                 provider: new MapProvider(new()
                 {
                     [0x88] = resumed,
@@ -418,7 +418,7 @@ public class NumberedSaveVmTests
                 1, NativeNumberedSaveCodec.Encode(source), [],
                 NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
             var vm = new VirtualMachine(
-                loader, Table, new RecordingHost(),
+                loader, Table, new RecordingWaits(),
                 provider: new MapProvider(new()
                 {
                     [0] = reloaded,
@@ -485,7 +485,7 @@ public class NumberedSaveVmTests
                 NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
             var installed = new Dictionary<long, Script>();
             if (rootInstalled) installed[0x88] = resumed;   // 0x89 is never installed
-            var vm = new VirtualMachine(FullLoadScript(), Table, new RecordingHost(),
+            var vm = new VirtualMachine(FullLoadScript(), Table, new RecordingWaits(),
                                         provider: new MapProvider(installed), saves: new SavesAndSettings(store: store));
 
             vm.Run();
@@ -529,7 +529,7 @@ public class NumberedSaveVmTests
             var history = new AdvTextHistory();
             history.DefineLayout(1, 100, 50, 0, 0);
             history.AppendText(1, 0, "live", AdvTextStyle.Default);
-            var host = new RecordingHost();
+            var host = new RecordingWaits();
             var audio = new AudioRig();
             var vm = audio.Vm(FullLoadScript(), Table, host, textHistory: history, nativeDatStore: store);
             vm.Globals[0x10] = 999;
@@ -556,7 +556,7 @@ public class NumberedSaveVmTests
         }
     }
 
-    private sealed class FrameCapturingHost : RecordingHost
+    private sealed class FrameCapturingHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public readonly List<IReadOnlyList<VmFrameLocation>> Captures = new();
@@ -653,7 +653,7 @@ public class NumberedSaveVmTests
             store.SaveNumberedFile(
                 1, NativeNumberedSaveCodec.Encode(state), [],
                 NativeSystemTime.FromLocalDateTime(DateTime.Now), 0);
-            var host = new RecordingHost();
+            var host = new RecordingWaits();
             var vm = new VirtualMachine(
                 loader, Table, host,
                 new VmOptions(CreateObject: createObject, AutoFreeTex: autoFreeTex),
@@ -687,7 +687,7 @@ public class NumberedSaveVmTests
             (0x259, Array.Empty<Operand>()),
             (0x2, Array.Empty<Operand>()),
         ], []);
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
         vm.Gfx.SetSurface(15, 0x3383, 0);
         vm.Gfx.SetSurfacePersistenceFlags(15, 1);
 
@@ -710,7 +710,7 @@ public class NumberedSaveVmTests
             (0x258, [new Operand(Immediate, 15), new Operand(Immediate, 0)]),
             (0x2, Array.Empty<Operand>()),
         ], []);
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
         vm.Gfx.SetSurface(15, 0x3383, 0);
         vm.Gfx.SetSurface(16, 0x3384, 0);
 

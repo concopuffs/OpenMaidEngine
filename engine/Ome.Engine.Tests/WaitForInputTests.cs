@@ -6,7 +6,7 @@ using Xunit;
 
 public class WaitForInputTests
 {
-    private sealed class NestedWaitHost : RecordingHost
+    private sealed class NestedWaitHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public bool SawDormantParentCallback;
@@ -42,7 +42,7 @@ public class WaitForInputTests
             new List<(int, Operand[])> { ShowText(0), Wait(), ShowText(1), Wait(), Exit() },
             new[] { "page one", "page two" });
 
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(scene, t, host);
         vm.Run();
 

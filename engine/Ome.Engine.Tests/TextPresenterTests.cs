@@ -437,7 +437,7 @@ public class TextPresenterTests : IDisposable
 /// keeps stays source text.</summary>
 public class PresentationSiteTests
 {
-    private static (RecordingHost Host, VirtualMachine Vm) Run(TextPresenter? presenter)
+    private static (RecordingWaits Host, VirtualMachine Vm) Run(TextPresenter? presenter)
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         static Operand I(long value) => new(0, value);
@@ -451,7 +451,7 @@ public class PresentationSiteTests
                 (0x204, new[] { I(13), I(1), I(1), S(4) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "はい", "黒石", "くろいし", "未訳", "いいえ" });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host) { Text = { Presenter = presenter } };
         vm.Text.SetMessageGlyphDelayMilliseconds(50);
         vm.Run();

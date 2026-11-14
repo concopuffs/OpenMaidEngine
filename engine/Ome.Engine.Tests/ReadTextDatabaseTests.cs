@@ -111,7 +111,7 @@ public class ReadTextDatabaseTests
         var scripts = Sys4ScriptProvider.Load(table);
         Script sc0000 = scripts.RequireByName("SC0000.BIN");
         var profile = new SharedProfile();
-        var vm = new VirtualMachine(sc0000, table, new RecordingHost(),
+        var vm = new VirtualMachine(sc0000, table, new RecordingWaits(),
             new VmOptions(MaxSteps: 200_000), scripts, saves: new SavesAndSettings(profile: profile));
 
         // Each wait queues its message and the following op 0x71 commits it; the headless host returns
@@ -206,7 +206,7 @@ public class ReadTextDatabaseTests
         var profile = new SharedProfile();
 
         var first = new VirtualMachine(
-            script, table, new RecordingHost(), saves: new SavesAndSettings(profile: profile));
+            script, table, new RecordingWaits(), saves: new SavesAndSettings(profile: profile));
         first.Run();
 
         Assert.Equal(1, first.Globals[0x100]);
@@ -216,7 +216,7 @@ public class ReadTextDatabaseTests
         Assert.True(profile.ReadText.IsMessageRead(script.PackedId, 0));
         Assert.True(profile.ReadText.IsMessageRead(script.PackedId, 1));
 
-        var secondHost = new RecordingHost();
+        var secondHost = new RecordingWaits();
         var second = new VirtualMachine(
             script, table, secondHost, saves: new SavesAndSettings(profile: profile));
         second.Run();

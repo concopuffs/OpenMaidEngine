@@ -161,7 +161,7 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
     /// clear holds an effect wait (<see cref="MovieSurfaceRegistry.HoldsServiceWait"/>).</summary>
     public bool HoldsServiceWait => _surfaces.HoldsServiceWait;
 
-    /// <summary>Op 0x20f's movie, before the host's modal wait begins; null, with a log line, when the resource names
+    /// <summary>Op 0x20f's movie, before the input and waits native's modal wait begins; null, with a log line, when the resource names
     /// none.</summary>
     public AssetEntry? ResolveModal(long resourceId)
     {
@@ -391,7 +391,7 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
 
     // ---- diagnostics ----
 
-    /// <summary>The bound surfaces, for the host's diagnostic snapshot.</summary>
+    /// <summary>The bound surfaces, for the waits' diagnostic snapshot.</summary>
     public IReadOnlyList<MovieSurfaceDiagnostic> SurfaceDiagnostics() => _surfaces.Snapshot();
 
     /// <summary>The completed playbacks still bound.</summary>

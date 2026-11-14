@@ -11,7 +11,7 @@ public class HotspotInputTests
 {
     private sealed class StopAtFirstWaitException : Exception { }
 
-    private sealed class InteractiveHost : RecordingHost
+    private sealed class InteractiveHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public bool ClickConsumed;
@@ -39,7 +39,7 @@ public class HotspotInputTests
         }
     }
 
-    private sealed class BoundActionHost : RecordingHost
+    private sealed class BoundActionHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public bool Consumed;
@@ -55,7 +55,7 @@ public class HotspotInputTests
         }
     }
 
-    private sealed class Sc0000MenuHost : RecordingHost
+    private sealed class Sc0000MenuHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public bool MenuActionConsumed;
@@ -108,7 +108,7 @@ public class HotspotInputTests
         }
     }
 
-    private sealed class Sc0000HoverHost : RecordingHost
+    private sealed class Sc0000HoverHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public bool SawHistoryHover;
@@ -122,7 +122,7 @@ public class HotspotInputTests
         }
     }
 
-    private sealed class Sc0000MessageSkipHost : RecordingHost
+    private sealed class Sc0000MessageSkipHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
 
@@ -137,7 +137,7 @@ public class HotspotInputTests
         }
     }
 
-    private sealed class AutoStateHost : RecordingHost
+    private sealed class AutoStateHost : RecordingWaits
     {
         public AdvAutoWaitState State;
 
@@ -150,7 +150,7 @@ public class HotspotInputTests
         }
     }
 
-    private sealed class MessageSkipCadenceHost : RecordingHost
+    private sealed class MessageSkipCadenceHost : RecordingWaits
     {
         public int ActiveSkipYields;
         public override void FrameYield()
@@ -161,7 +161,7 @@ public class HotspotInputTests
 
     // Retail hide window (G[0x62425] = 0): the x=772 control or Space enters handler A, which skips HIDEWIN.BIN and
     // leaves the frame in the engine's hidden-window wait. A click ends it; handler B restores the page.
-    private sealed class Sc0000RetailHideHost : RecordingHost
+    private sealed class Sc0000RetailHideHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public bool UseSpace;
@@ -196,7 +196,7 @@ public class HotspotInputTests
         }
     }
 
-    private sealed class Sc0000HideWindowHost : RecordingHost
+    private sealed class Sc0000HideWindowHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         private long _now;
@@ -276,7 +276,7 @@ public class HotspotInputTests
         Assert.False(vm.TryActivatePointer(30, 40)); // the script frame has exited, so no hotspot remains active
     }
 
-    private sealed class HoverAfterClickHost : RecordingHost
+    private sealed class HoverAfterClickHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public readonly List<long> EntersAfterStep = new();
@@ -417,7 +417,7 @@ public class HotspotInputTests
         Assert.Equal("exit", vm.HaltReason);
     }
 
-    private sealed class TwoClickHost : RecordingHost
+    private sealed class TwoClickHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public readonly List<bool> Activations = new();
@@ -497,7 +497,7 @@ public class HotspotInputTests
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
         var trace = new RecordingTraceSink { TracingSteps = true };
-        var vm = new VirtualMachine(script, table, new RecordingHost(),
+        var vm = new VirtualMachine(script, table, new RecordingWaits(),
             new VmOptions(HaltAtWaitForInput: true), sink: trace);
         vm.Globals[0x6c1] = 1; // inherited SYSTEM4 adv_chrome_enabled state seeded by Godot Main
 
@@ -538,7 +538,7 @@ public class HotspotInputTests
             (0x1b7, new[] { I(0) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -613,7 +613,7 @@ public class HotspotInputTests
             (0x1c7, new[] { G(0x13e) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -646,7 +646,7 @@ public class HotspotInputTests
             (0x1c7, new[] { G(0x146) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -677,7 +677,7 @@ public class HotspotInputTests
             (0x1c7, new[] { G(0x146) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -700,7 +700,7 @@ public class HotspotInputTests
             (0x1c7, new[] { G(0x147) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host, skipAndAuto: TestSkipAndAuto.ReadSkipping());
 
         vm.Run();
@@ -725,7 +725,7 @@ public class HotspotInputTests
             (0x1c7, new[] { G(0x148) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -750,7 +750,7 @@ public class HotspotInputTests
             (0x1c7, new[] { G(0x148) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -769,7 +769,7 @@ public class HotspotInputTests
             (0xfa, Array.Empty<Operand>()),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host, new VmOptions(HaltAtWaitForInput: true));
 
         vm.Run();
@@ -798,7 +798,7 @@ public class HotspotInputTests
             (0x1c7, new[] { G(0x14b) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -842,7 +842,7 @@ public class HotspotInputTests
             (0x87, Array.Empty<Operand>()),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host).Run();
 
@@ -886,7 +886,7 @@ public class HotspotInputTests
         Assert.Equal(!useSpace, host.SameSpotClickConsumed);
     }
 
-    private sealed class ResumeClearsHitHost : RecordingHost
+    private sealed class ResumeClearsHitHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public readonly List<(long Enters, long Leaves)> AfterStep = new();
@@ -1040,7 +1040,7 @@ public class HotspotInputTests
             (0x55, new[] { G(0x162), I(1) }),
             (0x7c, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -1064,7 +1064,7 @@ public class HotspotInputTests
             (0x136, new[] { G(0x168), I(1) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -1080,7 +1080,7 @@ public class HotspotInputTests
             (0x135, new[] { G(0x169), I(32) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -1102,7 +1102,7 @@ public class HotspotInputTests
             (0x108, new[] { G(0x172) }),
             (0x5, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.UpdatePointer(321, 456);
         vm.UpdateMouseButtonState(0x1, true);
 
@@ -1127,7 +1127,7 @@ public class HotspotInputTests
             (0x55, new[] { G(0x180), I(1) }),
             (0x5, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.UpdateInputCallbackState(0, true);
 
         vm.Run();
@@ -1137,7 +1137,7 @@ public class HotspotInputTests
 
     /// <summary>Right-click the way Godot's _Input does: raw button bit, physical-to-logical action, then the
     /// bound-hotspot bridge on press.</summary>
-    private sealed class Sc0000MenuReopenHost : RecordingHost
+    private sealed class Sc0000MenuReopenHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         private long _now;
@@ -1201,7 +1201,7 @@ public class HotspotInputTests
         Assert.True(host.Reopened, host.Trail);
     }
 
-    private sealed class CallbackLocationHost : RecordingHost
+    private sealed class CallbackLocationHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public IReadOnlyList<VmFrameLocation>? AfterCallback;
@@ -1244,7 +1244,7 @@ public class HotspotInputTests
         Assert.Equal(script.Instructions[3].Offset, frame.ResumeOffset);
     }
 
-    private sealed class ClickOnceHost : RecordingHost
+    private sealed class ClickOnceHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public bool ServiceReturned;

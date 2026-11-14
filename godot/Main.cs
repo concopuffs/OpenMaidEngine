@@ -39,7 +39,6 @@ public partial class Main : Godot.Control
     private Label _fpsHud = null!;
     private double _fpsHudUpdateSeconds;
     private VirtualMachine _vm = null!;
-    private EngineHost _host = null!;
     // The input and waits native (milestone 11): every wait, and the engine thread's loop. This thread reaches the
     // engine only through it: queued input, a frame turn each frame, and requests (InputAndWaits.Turns.cs).
     private InputAndWaits _waits = null!;
@@ -84,7 +83,7 @@ public partial class Main : Godot.Control
     private bool _selftest;
     private string? _shotPath;                 // --shot <png>: capture a page then quit (dev tool)
     private int _shotPage = 1;                  // --shot-page <n>: which page to capture (default 1)
-    private volatile int _pageCount;
+    private int _pageNoticesSeen, _pagesSeen;   // the waits native's page notices the status line and HUD took
     private int _shotSettle;
     private int _shotSettleTarget = 3;          // --shot-settle <frames>: settle N frames before grabbing (to
                                                 // capture mid-tween — the anim clock keeps running while parked)
@@ -597,13 +596,14 @@ public partial class Main : Godot.Control
         // The input and waits native (milestone 11) runs every wait the VM blocks in, over the natives above; the lifted
         // host keeps what is left (the cursor, the Auto delays' seed and the message settings' shutdown write).
         _waits = new InputAndWaits(skipAndAuto, _audio, tick, _graphics, _movies, _shell, _text, _clock, _locator,
-                                   _timeline, synchronizeExplicitPresentation: !_selftest, settings: SettingsStore)
+                                   _timeline, synchronizeExplicitPresentation: !_selftest, settings: SettingsStore,
+                                   cursors: resources, cursor: this)
         {
             SleepScale = sleepScale,
             ClickOnUp = _catalog.StartupSettings.ClickOnUp,
         };
-        _host = new EngineHost(this, skipAndAuto, _graphics, _movies, _saves, _text, _waits, resources, _clock,
-                               _timeline);
+        // The Auto delays come from SYS4REG.INI's [message] (the save native writes them back at shutdown).
+        if (_saves.Settings is { } messageSettings) skipAndAuto.ReadSettings(messageSettings);
         if (!_selftest && !PrepareLanguage(userArgs, baseCatalog, baseStore, table))
         {
             GetTree().Quit(2);
@@ -618,7 +618,7 @@ public partial class Main : Godot.Control
         Ome.Engine.Diagnostics.ITraceSink sink = _trace;
         if (histFile != null) { _hist = new Ome.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Ome.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
-        _vm = new VirtualMachine(script, table, _host,
+        _vm = new VirtualMachine(script, table, _waits,
             GodotVmOptions.Create(_selftest, nativeDebugMenu, _catalog.StartupSettings) with
             {
                 ProfileId = selectedProfile.Profile.Id,
@@ -633,8 +633,7 @@ public partial class Main : Godot.Control
             tick: tick,
             graphics: _graphics,
             movies: _movies,
-            text: _text,
-            waits: _waits);
+            text: _text);
         _reference = new ReferenceRenderer(logicalCanvas) { Perf = _perf };
         _gpuRenderer.Perf = _perf;
         _decisionLog = new GfxDecisionLog(_gfxLogPath, _timeline);
@@ -713,6 +712,7 @@ public partial class Main : Godot.Control
         PumpDriveServer();
         FlushTextMisses(delta);
         ProcessScreenMode();
+        ServicePageNotices();
         if (_fpsHud != null && _fpsHud.Visible)
         {
             _fpsHudUpdateSeconds += delta;
@@ -780,7 +780,7 @@ public partial class Main : Godot.Control
                     _shotDone = true;
                     var img = CaptureGameImage();
                     img?.SavePng(_shotPath);
-                    GD.Print($"SHOT saved page {_pageCount} -> {_shotPath}");
+                    GD.Print($"SHOT saved page {_waits.Pages} -> {_shotPath}");
                     ReportSubroutines();
                     GetTree().Quit(0);
                 }
@@ -841,9 +841,9 @@ public partial class Main : Godot.Control
             long nowMs = _clock.NowMs;
             GodotTraceSnapshot trace = traceOverride ?? _trace.Snapshot();
             MoviePlaybackDiagnostics? movies = _movies?.PlaybackDiagnostics();
-            // The host's and graphics' state is the engine thread's: ask it, and say so when it does not answer.
+            // The waits' and graphics' state is the engine thread's: ask it, and say so when it does not answer.
             bool engineAnswered = _waits.TryInvoke(
-                () => ((object)_host.CaptureDiagnosticSnapshot(), (object)_vm.Gfx.CaptureDiagnosticSnapshot(nowMs)),
+                () => ((object)_waits.CaptureDiagnosticSnapshot(), (object)_vm.Gfx.CaptureDiagnosticSnapshot(nowMs)),
                 DiagnosticAnswerTimeoutMs, out var engineState);
             var snapshot = new
             {
@@ -860,7 +860,7 @@ public partial class Main : Godot.Control
                     trace,
                 },
                 engine_thread_answered = engineAnswered,
-                host = engineAnswered ? engineState.Item1 : null,
+                waits = engineAnswered ? engineState.Item1 : null,
                 gfx = engineAnswered ? engineState.Item2 : null,
                 active_movies = movies?.Playing,
                 pending_movies = movies?.Opened,
@@ -921,7 +921,8 @@ public partial class Main : Godot.Control
         StopDriveServer();
         bool vmStopped = true;
         if (_vm != null) _vm.RequestStop();
-        _host?.Stop();
+        CallDeferred(MethodName.ClearAgeCursor);
+        _waits?.Stop();
         if (_vmTask != null)
         {
             try
@@ -948,7 +949,8 @@ public partial class Main : Godot.Control
 
         if (!_selftest && _vm != null)
         {
-            _host?.FlushMessageSettings();
+            if (_saves!.FlushMessageSettingsOnShutdown(_text!, _vm.SkipAndAuto) is { } settingsError)
+                GD.PushWarning($"[settings] message settings save failed: {settingsError}");
             SharedProfileShutdownFlushResult flush = _saves!.FlushSharedProfileOnShutdown();
             if (flush.Outcome == SharedProfileShutdownFlushOutcome.Saved)
                 GD.Print("[persistence] clean shutdown wrote SAVE.DAT and RT.DAT");
@@ -989,15 +991,19 @@ public partial class Main : Godot.Control
         catch (System.Exception e) { GD.Print($"[trace-histogram] write failed: {e.Message}"); }
     }
 
-    public void PageBreak()
+    /// <summary>The waits native's page notices (<see cref="InputAndWaits.PageNotices"/>): a text wait starting or
+    /// ending its page, or a scene reset, clears the status line, and a new page refreshes the locator HUD.</summary>
+    private void ServicePageNotices()
     {
-        _pageCount++;
+        if (_waits == null) return;
+        int notices = _waits.PageNotices;
+        if (notices == _pageNoticesSeen) return;
+        _pageNoticesSeen = notices;
         _status.Text = "";
+        int pages = _waits.Pages;
+        if (pages == _pagesSeen) return;
+        _pagesSeen = pages;
         if (_locatorHudVisible) _locatorHud.Text = _locator.CurrentDisplay;
-    }
-    public void ClearPage()
-    {
-        _status.Text = "";
     }
     public void ShowEnd() => _status.Text = "— end —";
 

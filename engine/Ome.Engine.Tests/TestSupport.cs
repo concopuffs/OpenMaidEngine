@@ -10,7 +10,7 @@ using Ome.Engine.Text;
 /// <summary>Shared test doubles: a host that records observable effects, and an in-memory script
 /// provider for synthetic call-script targets. The host also hears the VM's text native (ITextListener), which
 /// draws nothing in a VM given none: its lists record what the native was asked to show and draw.</summary>
-internal class RecordingHost : IHost, IFastForwardListener, ITextListener
+internal class RecordingWaits : IInputAndWaits, IFastForwardListener, ITextListener
 {
     public int Waits;
     public int Presents;
@@ -322,7 +322,7 @@ internal sealed class ManualPlayClock : TimeProvider
 
 /// <summary>A recording host whose op-0xc8 sleeps advance <paramref name="clock"/>, so a script spends exact time.
 /// </summary>
-internal sealed class ClockedHost(ManualPlayClock clock) : RecordingHost
+internal sealed class ClockedHost(ManualPlayClock clock) : RecordingWaits
 {
     public override void Sleep(long duration)
     {
@@ -431,7 +431,7 @@ internal static class TestText
                FontFamilies: () => [.. faces.Select(face => new EnumeratedFontFamily(face, 0))]);
 
     /// <summary>A VM whose text native draws with <paramref name="devices"/>, over a headless graphics native.</summary>
-    public static Ome.Engine.Vm.VirtualMachine Vm(Script script, OpcodeTable table, IHost host,
+    public static Ome.Engine.Vm.VirtualMachine Vm(Script script, OpcodeTable table, IInputAndWaits host,
                                                   TextDevices devices, Ome.Engine.Vm.EngineBuild? build = null,
                                                   IScriptProvider? provider = null)
     {

@@ -17,7 +17,7 @@ public class SystemMenuGuardOpcodeTests
             (0x142, [I(-7)]),
             Exit(),
         ], []);
-        var vm = new VirtualMachine(config, Table, new RecordingHost());
+        var vm = new VirtualMachine(config, Table, new RecordingWaits());
 
         Assert.Equal(1, vm.Shell.SystemMenuActionsEnabled);
 
@@ -35,7 +35,7 @@ public class SystemMenuGuardOpcodeTests
             (0x142, [I(1)]),
             Exit(),
         ], []);
-        var vm = new VirtualMachine(config, Table, new RecordingHost());
+        var vm = new VirtualMachine(config, Table, new RecordingWaits());
 
         vm.Run();
 
@@ -55,7 +55,7 @@ public class SystemMenuGuardOpcodeTests
             (0x9, Array.Empty<Operand>()),
         ], []);
         var provider = new MapProvider(new Dictionary<long, Script> { [0] = system4 });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(config, Table, host, provider: provider);
 
         vm.Run();

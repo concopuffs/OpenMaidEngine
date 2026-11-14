@@ -17,8 +17,6 @@ public sealed partial class VirtualMachine
             => ReferenceEquals(frame, Frame) && ReferenceEquals(script, Script);
     }
 
-    private PresentedMessage? _presentedMessage;
-
     /// <summary>The presented form of a string the instruction at <paramref name="ins"/> draws from
     /// <paramref name="operand"/>, with the operand's origin (§5.2). Site entries bind to the running script's own
     /// offsets: the text loader keeps them only for scripts no mod patches (§6.1).</summary>
@@ -39,19 +37,19 @@ public sealed partial class VirtualMachine
         lookup = null;
         if (!_text.Presents)
         {
-            _presentedMessage = null;
+            _scene.PresentedMessage = null;
             return null;
         }
-        if (_presentedMessage is { } active && active.Holds(_cur, _cur.Script)
+        if (_scene.PresentedMessage is { } active && active.Holds(_cur, _cur.Script)
             && active.Message.Runs[active.NextRun].InstructionIndex == pc)
         {
-            _presentedMessage = active.NextRun + 1 < active.Message.Runs.Count
+            _scene.PresentedMessage = active.NextRun + 1 < active.Message.Runs.Count
                 ? active with { NextRun = active.NextRun + 1 }
                 : null;
             hidden = true;
             return null;
         }
-        _presentedMessage = null;
+        _scene.PresentedMessage = null;
         var site = new TextSite(_cur.Script.Name, ins.Offset);
         TextMessage? message = null;
         int run = -1;
@@ -64,7 +62,7 @@ public sealed partial class VirtualMachine
             string key = string.Concat(message.Runs.Select(part => ReadStr(part.Text)));
             if (_text.Present(key, site) is { Entry: not null } sentence)
             {
-                _presentedMessage = new PresentedMessage(_cur, _cur.Script, message, 1);
+                _scene.PresentedMessage = new PresentedMessage(_cur, _cur.Script, message, 1);
                 lookup = new TextLookup(key, site, null);
                 return sentence;
             }
@@ -76,7 +74,7 @@ public sealed partial class VirtualMachine
     /// <summary>Whether the <c>end-text-line</c> at <paramref name="pc"/> lies inside a presented message, which
     /// draws its own line breaks (§6.2).</summary>
     private bool InsidePresentedMessage(int pc)
-        => _presentedMessage is { } active && active.Holds(_cur, _cur.Script)
+        => _scene.PresentedMessage is { } active && active.Holds(_cur, _cur.Script)
            && pc > active.Message.Runs[active.NextRun - 1].InstructionIndex
            && pc < active.Message.Runs[active.NextRun].InstructionIndex;
 
@@ -119,7 +117,7 @@ public sealed partial class VirtualMachine
         // A presented message's lookup span stays open until its last run.
         if (hidden)
         {
-            _text.ShowHiddenRun(liveRun, layoutSlot, _cur.Script.Name, endsLookupSpan: _presentedMessage == null);
+            _text.ShowHiddenRun(liveRun, layoutSlot, _cur.Script.Name, endsLookupSpan: _scene.PresentedMessage == null);
             return true;
         }
         // A reveal runs (run-state 0x20000000) unless fast-forward or a finished-until-wait page publishes at once. Its
@@ -128,8 +126,8 @@ public sealed partial class VirtualMachine
                        && !_text.TextRevealsFinishedUntilWait;
         if (reveals) _skip.ServiceRevealStart(InputBindings);
         OfferHeldTriggersToReveal();
-        _text.ShowRun(Gfx, liveRun, layoutSlot, _cur.Script.Name, lookup, endsLookupSpan: _presentedMessage == null);
-        if (_text.IsRevealing) _host.WaitForTextReveal(Gfx, _text);
+        _text.ShowRun(Gfx, liveRun, layoutSlot, _cur.Script.Name, lookup, endsLookupSpan: _scene.PresentedMessage == null);
+        if (_text.IsRevealing) _waits.WaitForTextReveal(Gfx, _text);
         return true;
     }
 

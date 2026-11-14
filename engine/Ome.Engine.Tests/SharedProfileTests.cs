@@ -178,7 +178,7 @@ public class SharedProfileTests
         }, ["リリィ", "changed", "使い魔"]);
         var profile = new SharedProfile();
         var vm = new VirtualMachine(
-            script, table, new RecordingHost(), saves: new SavesAndSettings(profile: profile));
+            script, table, new RecordingWaits(), saves: new SavesAndSettings(profile: profile));
         vm.Globals[0x701] = 999;
         vm.GlobalStrings[0x801] = "not empty";
 
@@ -216,8 +216,8 @@ public class SharedProfileTests
         }, []);
         var session = new GameSession();
 
-        session.RunScene(store, table, new RecordingHost());
-        session.RunScene(load, table, new RecordingHost());
+        session.RunScene(store, table, new RecordingWaits());
+        session.RunScene(load, table, new RecordingWaits());
 
         Assert.Equal(42, session.Globals[0x900]);
         Assert.Equal(42, session.SharedProfile.LoadInteger(0x900));
@@ -271,7 +271,7 @@ public class SharedProfileTests
         profile.MarkCatalogResourceOpened(5407);
         profile.MarkCatalogResourceOpened(0x01000011);
         var vm = new VirtualMachine(
-            script, table, new RecordingHost(), saves: new SavesAndSettings(profile: profile));
+            script, table, new RecordingWaits(), saves: new SavesAndSettings(profile: profile));
 
         vm.Run();
 

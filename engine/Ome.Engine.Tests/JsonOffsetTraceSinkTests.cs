@@ -25,7 +25,7 @@ public class JsonOffsetTraceSinkTests
         };
         var s = ScriptAssembler.Assemble(t, "S.BIN", body, Array.Empty<string>());
         var sink = new JsonOffsetTraceSink("S.BIN");
-        new VirtualMachine(s, t, new RecordingHost(), null, null, sink).Run();
+        new VirtualMachine(s, t, new RecordingWaits(), null, null, sink).Run();
         Assert.Equal(new[] { 0, 5 }, sink.Offsets);
     }
 
@@ -45,7 +45,7 @@ public class JsonOffsetTraceSinkTests
             Array.Empty<string>());
 
         var sink = new JsonOffsetTraceSink("CALLER.BIN");
-        var vm = new VirtualMachine(caller, t, new RecordingHost(), null,
+        var vm = new VirtualMachine(caller, t, new RecordingWaits(), null,
                                     new MapProvider(new() { [5] = callee }), sink);
         vm.Run();
 

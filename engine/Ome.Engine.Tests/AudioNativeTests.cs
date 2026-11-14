@@ -288,7 +288,7 @@ public class AudioNativeTests
         Assert.Empty(rig.Device.Commands);
         Assert.True(rig.Audio.IsChannelPlaying(Audio.BgmChannel));
 
-        var empty = new AudioRig(assets: new ResourceAudioAssets(EngineHostTests.EmptyResources()));
+        var empty = new AudioRig(assets: new ResourceAudioAssets(HeadlessNativesTests.EmptyResources()));
         empty.Audio.PlayBgm(0x1234);
         empty.Audio.LoadSoundEffect(0x1234, 2);
         empty.Audio.StartSoundEffect(2, 0);

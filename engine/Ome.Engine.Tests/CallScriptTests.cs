@@ -4,6 +4,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
+using Ome.Engine.Natives;
 
 public class CallScriptTests
 {
@@ -11,7 +12,7 @@ public class CallScriptTests
     // Operand types: imm=0, global-int=3, local-int=9.
     private const uint OP_EXIT = 0x2, OP_CALLSCRIPT = 0x3, OP_MOV = 0x55, OP_SETTEXTURE = 0x1f9;
 
-    private class NullHost : IHost
+    private class NullWaits : IInputAndWaits
     {
         public virtual void EnterScriptContext(string scriptName) { }
         public virtual void ExitScriptContext(string scriptName) { }
@@ -34,7 +35,7 @@ public class CallScriptTests
         public Script? GetById(long id) => _m.TryGetValue(id, out var s) ? s : null;
     }
 
-    private sealed class ContextHost : NullHost
+    private sealed class ContextHost : NullWaits
     {
         private readonly Stack<string> _contexts = new();
         public List<string> Events { get; } = new();
@@ -80,7 +81,7 @@ public class CallScriptTests
             OP_CALLSCRIPT, 0, 5,
             OP_MOV, 3, 0x11, 3, 0x10,
             OP_EXIT);
-        var host = new NullHost();
+        var host = new NullWaits();
         var sink = new RecordingTraceSink();
         var vm = new VirtualMachine(caller, t, host, null, new MapProvider(new() { [5] = callee }), sink);
         vm.Run();
@@ -95,7 +96,7 @@ public class CallScriptTests
     {
         var t = Table();
         var caller = Asm(t, "CALLER", OP_CALLSCRIPT, 0, 5, OP_EXIT);
-        var host = new NullHost();
+        var host = new NullWaits();
         var sink = new RecordingTraceSink();
         var vm = new VirtualMachine(caller, t, host, null, null, sink);   // no provider
         vm.Run();
@@ -108,7 +109,7 @@ public class CallScriptTests
     {
         var t = Table();
         var caller = Asm(t, "CALLER", OP_CALLSCRIPT, 0, 99, OP_EXIT);
-        var vm = new VirtualMachine(caller, t, new NullHost(), null, new MapProvider(new()));
+        var vm = new VirtualMachine(caller, t, new NullWaits(), null, new MapProvider(new()));
         vm.Run();
         Assert.StartsWith("callscript-unresolved", vm.HaltReason);
     }
@@ -125,7 +126,7 @@ public class CallScriptTests
             OP_CALLSCRIPT, 0, 5,                 // call-script 5 (callee sets ITS local 0 = 42)
             OP_MOV, 3, 0x20, 9, 0,               // g[0x20] = l[0]
             OP_EXIT);
-        var vm = new VirtualMachine(caller, t, new NullHost(), null, new MapProvider(new() { [5] = callee }));
+        var vm = new VirtualMachine(caller, t, new NullWaits(), null, new MapProvider(new() { [5] = callee }));
         vm.Run();
         Assert.Equal(1, vm.Globals[0x20]);   // caller's local 0 unchanged by callee's local 0
     }

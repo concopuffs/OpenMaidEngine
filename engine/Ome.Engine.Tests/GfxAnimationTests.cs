@@ -419,7 +419,7 @@ public class GfxAnimationTests
             (0x21f, new[] { G(1), G(2), G(3), G(4), G(5), G(6), G(7) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         var o = vm.Gfx.TryGet(0x1000)!;
         Assert.Equal((800.0, 500.0, 0.0), o.TranslationTarget);
@@ -439,7 +439,7 @@ public class GfxAnimationTests
             MovGI(1, 0xcb8e), MovGI(2, 210), MovGI(3, 240), MovGI(4, 100),
             (0x1fd, new[] { G(1), G(2), G(3), G(4) }), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         Assert.Equal((2.1, 2.4, 1.0), vm.Gfx.TryGet(0xcb8e)!.ScaleCurrent);
     }
@@ -456,7 +456,7 @@ public class GfxAnimationTests
             (0x238, new[] { G(6) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         var o = vm.Gfx.TryGet(0x1000)!;
         Assert.Equal((0L, 0L, 5L), o.RotationAxis);
@@ -478,7 +478,7 @@ public class GfxAnimationTests
             (0x233, new[] { G(1), G(2), G(3), G(4), G(5) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
 
         vm.Run();
 
@@ -499,7 +499,7 @@ public class GfxAnimationTests
             (0x235, new[] { G(1), G(2), G(3), G(4), G(5) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
 
         vm.Run();
 
@@ -572,7 +572,7 @@ public class GfxAnimationTests
             (0x230, new[] { G(1) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Gfx.SetSurface(1, 5, -1);
         vm.Gfx.BindDraw(0x1000, 1, 0, 0, 64, 64, 0, 0);
         vm.Gfx.SetColorAnim(0x1000, 400, GfxState.PackColor(0x80, 0xff0000));
@@ -590,7 +590,7 @@ public class GfxAnimationTests
             GfxPresentationReason.RetainedMutation,
             vm.Gfx.ConsumePresentationReasons(1000));
 
-        var createOnly = new VirtualMachine(scene, t, new RecordingHost());
+        var createOnly = new VirtualMachine(scene, t, new RecordingWaits());
         createOnly.Run();
         Assert.NotNull(createOnly.Gfx.TryGet(0x1000));
     }
@@ -605,7 +605,7 @@ public class GfxAnimationTests
             (0x1ff, new[] { G(1), G(2), G(3), G(4) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         var o = vm.Gfx.TryGet(0xcb20)!;
         Assert.Equal((12.0, 34.0, 5.0), o.TranslationCurrent);
@@ -622,7 +622,7 @@ public class GfxAnimationTests
             (0x1fe, new[] { G(1), G(2), G(3), G(4), G(5) }),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
 
         vm.Run();
 
@@ -642,7 +642,7 @@ public class GfxAnimationTests
             (0x243, System.Array.Empty<Operand>()),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         Assert.Equal(0, vm.Gfx.AnimClockDurationTicks);
         Assert.Equal(2, vm.Gfx.AnimClockGeneration);

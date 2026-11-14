@@ -3,7 +3,7 @@ namespace Ome.Engine.Model;
 public sealed partial class GfxState
 {
     /// <summary>The D3D render target selected by op 0x20d. -1 denotes the main backbuffer.</summary>
-    public int CurrentRenderTargetSlot { get; private set; } = -1;
+    public int CurrentRenderTargetSlot { get => _scene.CurrentRenderTargetSlot; private set => _scene.CurrentRenderTargetSlot = value; }
     /// <summary>Legacy mode-1 surface tile edge selected by op 0x248. The portable backend retains
     /// the native process-global value for parity but stores every surface as one contiguous image.</summary>
     public int TiledSurfaceEdgeLength { get; private set; }
@@ -13,12 +13,6 @@ public sealed partial class GfxState
     // Created surfaces have real pixels but no asset resource id. Keep their class separate from both
     // loaded textures and truly surfaceless objects because native mode-0 consumes packed alpha differently.
     private readonly HashSet<int> _createdSurfaces = new();
-    // Native surface record +0x08. Ordinary create/load/release workers leave this bit unchanged;
-    // the numbered-save restore loop consults it to decide which asset-backed surfaces to reopen.
-    private readonly HashSet<int> _reloadableSurfaces = new();
-    // A separate entry models the native CMovieToTexture object attached to a surface. A null value means
-    // the movie object exists but its host decoder supplied no usable IMediaPosition stop time.
-    private readonly Dictionary<int, long?> _movieStopTimesMs = new();
 
     // Native surface-record tables (docs/sys4-format-notes.md "numbered save"): the gfx manager keeps a live
     // 1,000 x 0x14 table at +0x700 and a page snapshot at +0x5520. Workers write live fields in place
@@ -29,8 +23,6 @@ public sealed partial class GfxState
     private const int SurfaceRecordDwords = 5;
     private const int RecordResourceId = 0, RecordColorKey = 1, RecordReload = 2, RecordPolicy = 3,
         RecordCreated = 4;
-    private readonly int[] _surfaceRecords = NewBootSurfaceRecordTable();
-    private readonly int[] _surfaceRecordSnapshot = NewSurfaceRecordTable();
 
     private static int[] NewSurfaceRecordTable()
     {
@@ -57,7 +49,7 @@ public sealed partial class GfxState
 
     private void WriteSurfaceRecord(int slot, int field, int value)
     {
-        if ((uint)slot < SurfaceRecordCount) _surfaceRecords[slot * SurfaceRecordDwords + field] = value;
+        if ((uint)slot < SurfaceRecordCount) _scene.SurfaceRecords[slot * SurfaceRecordDwords + field] = value;
     }
 
     /// <summary>Native 0x1f9/0x249 colorkey packing: a negative operand is "no key" (0), otherwise
@@ -96,14 +88,14 @@ public sealed partial class GfxState
     /// (op_0x71_reset_adv_text_layout@0x41e540 memcpy ctx+0x46d14 -> ctx+0x4bb34).</summary>
     public void SnapshotSurfaceRecords()
     {
-        Array.Copy(_surfaceRecords, _surfaceRecordSnapshot, _surfaceRecords.Length);
+        Array.Copy(_scene.SurfaceRecords, _scene.SurfaceRecordSnapshot, _scene.SurfaceRecords.Length);
     }
 
     /// <summary>The 20,000 snapshot bytes context_state_serialize copies into a numbered save.</summary>
     public byte[] CaptureNativeSurfaceRecords()
     {
-        var bytes = new byte[_surfaceRecordSnapshot.Length * 4];
-        Buffer.BlockCopy(_surfaceRecordSnapshot, 0, bytes, 0, bytes.Length);
+        var bytes = new byte[_scene.SurfaceRecordSnapshot.Length * 4];
+        Buffer.BlockCopy(_scene.SurfaceRecordSnapshot, 0, bytes, 0, bytes.Length);
         return bytes;
     }
 
@@ -124,7 +116,7 @@ public sealed partial class GfxState
         WriteSurfaceRecord(slot, RecordCreated, 0);
         _surfaces[slot] = (resId, colorKey);
         _createdSurfaces.Remove(slot);
-        _movieStopTimesMs.Remove(slot);
+        _scene.MovieStopTimesMs.Remove(slot);
         MarkRetainedMutation();
     }
 
@@ -133,12 +125,12 @@ public sealed partial class GfxState
     /// separate from loading a texture because AGE's create/load/release workers preserve both.</summary>
     public void SetSurfacePersistenceFlags(int slot, long flags)
     {
-        if ((flags & 1) != 0) _reloadableSurfaces.Add(slot);
-        else _reloadableSurfaces.Remove(slot);
+        if ((flags & 1) != 0) _scene.ReloadableSurfaces.Add(slot);
+        else _scene.ReloadableSurfaces.Remove(slot);
         if ((uint)slot >= SurfaceRecordCount) return;
         int at = slot * SurfaceRecordDwords;
-        _surfaceRecords[at + RecordReload] = _surfaceRecordSnapshot[at + RecordReload] = (int)(flags & 1);
-        _surfaceRecords[at + RecordPolicy] = _surfaceRecordSnapshot[at + RecordPolicy] =
+        _scene.SurfaceRecords[at + RecordReload] = _scene.SurfaceRecordSnapshot[at + RecordReload] = (int)(flags & 1);
+        _scene.SurfaceRecords[at + RecordPolicy] = _scene.SurfaceRecordSnapshot[at + RecordPolicy] =
             (int)((flags >> 1) & 1);
     }
 
@@ -146,11 +138,11 @@ public sealed partial class GfxState
     /// both tables.</summary>
     public void ClearSurfaceReloadPolicies()
     {
-        _reloadableSurfaces.Clear();
-        for (int at = 0; at < _surfaceRecords.Length; at += SurfaceRecordDwords)
+        _scene.ReloadableSurfaces.Clear();
+        for (int at = 0; at < _scene.SurfaceRecords.Length; at += SurfaceRecordDwords)
         {
-            _surfaceRecords[at + RecordReload] = _surfaceRecordSnapshot[at + RecordReload] = 0;
-            _surfaceRecords[at + RecordPolicy] = _surfaceRecordSnapshot[at + RecordPolicy] = 0;
+            _scene.SurfaceRecords[at + RecordReload] = _scene.SurfaceRecordSnapshot[at + RecordReload] = 0;
+            _scene.SurfaceRecords[at + RecordPolicy] = _scene.SurfaceRecordSnapshot[at + RecordPolicy] = 0;
         }
     }
 
@@ -158,14 +150,14 @@ public sealed partial class GfxState
     /// deliberately distinguishes a movie surface with unavailable metadata from an empty movie slot.</summary>
     public void SetMovieStopTime(int slot, long? stopTimeMs)
     {
-        _movieStopTimesMs[slot] = stopTimeMs;
+        _scene.MovieStopTimesMs[slot] = stopTimeMs;
     }
 
     /// <summary>Op 0x23f query. False means no movie object occupies the slot; true with a null value
     /// means the movie exists but its stop-time query failed or returned unusable metadata.</summary>
     public bool TryGetMovieStopTime(int slot, out long? stopTimeMs)
     {
-        return _movieStopTimesMs.TryGetValue(slot, out stopTimeMs);
+        return _scene.MovieStopTimesMs.TryGetValue(slot, out stopTimeMs);
     }
 
     /// <summary>Op 0x20d: select a surface as the D3D render target; values at or above 1000 restore the
@@ -184,9 +176,9 @@ public sealed partial class GfxState
             WriteSurfaceRecord(slot, RecordResourceId, -1);   // retained_gfx_release_surface
             _surfaces.Remove(slot);
             _createdSurfaces.Remove(slot);
-            _movieStopTimesMs.Remove(slot);
-            _surfaceTransitions.Remove(slot);
-            _movieMaskTransitions.Remove(slot);
+            _scene.MovieStopTimesMs.Remove(slot);
+            _scene.SurfaceTransitions.Remove(slot);
+            _scene.MovieMaskTransitions.Remove(slot);
         }
         if (CurrentRenderTargetSlot >= firstSlot && CurrentRenderTargetSlot < end)
             CurrentRenderTargetSlot = -1;
@@ -199,7 +191,7 @@ public sealed partial class GfxState
         WriteSurfaceRecord(slot, RecordCreated, 1);
         _surfaces[slot] = (0, -1); // create-texture: real mutable pixels, no asset id or color key
         _createdSurfaces.Add(slot);
-        _movieStopTimesMs.Remove(slot);
+        _scene.MovieStopTimesMs.Remove(slot);
         MarkRetainedMutation();
     }
 
@@ -210,9 +202,9 @@ public sealed partial class GfxState
         WriteSurfaceRecord(slot, RecordResourceId, -1);
         _surfaces.Remove(slot);
         _createdSurfaces.Remove(slot);
-        _movieStopTimesMs.Remove(slot);
-        _surfaceTransitions.Remove(slot);
-        _movieMaskTransitions.Remove(slot);
+        _scene.MovieStopTimesMs.Remove(slot);
+        _scene.SurfaceTransitions.Remove(slot);
+        _scene.MovieMaskTransitions.Remove(slot);
         MarkRetainedMutation();
     }
 }

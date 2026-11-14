@@ -145,7 +145,7 @@ public class NumberedSavePairTests
         {
             var store = new DirectoryNativeDatStore(root, Identity);
             store.SaveNumbered(4, [1, 2, 3, 4], Timestamp, 54321);
-            var host = new RecordingHost();
+            var host = new RecordingWaits();
             Script script = ScriptAssembler.Assemble(Table, "NUMBERED_SAVE_OPS",
             [
                 (0x1a0, [
@@ -249,7 +249,7 @@ public class NumberedSavePairTests
         return root;
     }
 
-    private sealed class MarkerObservingHost : RecordingHost
+    private sealed class MarkerObservingHost : RecordingWaits
     {
         public VirtualMachine Vm { get; set; } = null!;
         public List<int?> ObservedDepths { get; } = new();

@@ -1,7 +1,7 @@
 namespace Ome.Engine.Diagnostics;
 
 /// <summary>The engine's diagnostics seam. The VM emits typed <see cref="TraceEvent"/>s here; any
-/// consumer (CLI, Godot, tests) supplies a sink instead of reimplementing IHost. Observe-only:
+/// consumer (CLI, Godot, tests) supplies a sink instead of standing in for a native. Observe-only:
 /// a sink never reads/writes VM state or influences control flow (that guarantees trace parity).</summary>
 public interface ITraceSink
 {

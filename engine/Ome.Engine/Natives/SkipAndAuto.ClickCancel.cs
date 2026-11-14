@@ -22,8 +22,6 @@ public sealed partial class SkipAndAuto
 {
     private const int AdvanceActionMask = 1 << InputBindings.AdvanceAction;
 
-    private int _clickCancelState;      // native ctx+0x6da80
-    private int _clickCancelTriggers;   // latched action-4 click triggers since the last tick
 
     /// <summary>True while a completed action-4 click would cancel fast-forward instead of reaching hotspots.</summary>
     public bool ClickCancelArmed => Settings.CancelMessageSkipOnClick != 0 && _fastForward;
@@ -33,7 +31,7 @@ public sealed partial class SkipAndAuto
     public bool TryLatchCancelClick()
     {
         if (!ClickCancelArmed) return false;
-        Interlocked.Increment(ref _clickCancelTriggers);
+        Interlocked.Increment(ref _scene.ClickCancelTriggers);
         return true;
     }
 
@@ -45,18 +43,18 @@ public sealed partial class SkipAndAuto
         if (Settings.CancelMessageSkipOnClick == 0) return false;
         if (!_fastForward)
         {
-            Interlocked.Exchange(ref _clickCancelTriggers, 0);
+            Interlocked.Exchange(ref _scene.ClickCancelTriggers, 0);
             return false;
         }
-        bool clicked = Interlocked.Exchange(ref _clickCancelTriggers, 0) != 0;
+        bool clicked = Interlocked.Exchange(ref _scene.ClickCancelTriggers, 0) != 0;
         bool held = (input.PollActionMask() & AdvanceActionMask) != 0;
         if (held || clicked)
         {
-            if (_clickCancelState == 1) _clickCancelState = 2;
+            if (_scene.ClickCancelState == 1) _scene.ClickCancelState = 2;
             return false;
         }
-        if (_clickCancelState == 2) return true;
-        _clickCancelState = 1;
+        if (_scene.ClickCancelState == 2) return true;
+        _scene.ClickCancelState = 1;
         return false;
     }
 
@@ -64,10 +62,10 @@ public sealed partial class SkipAndAuto
     /// action 6 starts fast-forward again at the next reveal.</summary>
     public void CancelMessageSkipFromClick()
     {
-        _clickCancelState = 0;
-        _messageSkipEnabled = false;
-        _messageSkipInjected = false;
-        _readSkipActive = false;
+        _scene.ClickCancelState = 0;
+        _scene.MessageSkipEnabled = false;
+        _scene.MessageSkipInjected = false;
+        _scene.ReadSkipActive = false;
         SetScriptFastForward(false);
         EndPhysicalFastForward();
     }

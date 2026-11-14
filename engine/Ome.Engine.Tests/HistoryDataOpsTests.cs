@@ -11,7 +11,7 @@ public class HistoryDataOpsTests
     private static Operand G(int address) => new(T_GINT, address);
     private static Operand L(int address) => new(T_LINT, address);
 
-    private sealed class HistoryVoiceHost : RecordingHost
+    private sealed class HistoryVoiceHost : RecordingWaits
     {
         public AdvAutoWaitState AutoState;
 
@@ -53,7 +53,7 @@ public class HistoryDataOpsTests
             BodyDwords = body,
         };
 
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
@@ -93,7 +93,7 @@ public class HistoryDataOpsTests
                 (0x55, new[] { G(0x101), I(-1) }),                     // 32
                 (0x2, Array.Empty<Operand>()),                         // 37
             }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
         vm.Globals[0x100] = selector;
 
         vm.Run();
@@ -116,7 +116,7 @@ public class HistoryDataOpsTests
                 (0x55, new[] { G(0x101), I(-1) }),                     // 19
                 (0x2, Array.Empty<Operand>()),                         // 24
             }, new[] { "３" });
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
         vm.Globals[0x100] = 3;
 
         vm.Run();
@@ -154,7 +154,7 @@ public class HistoryDataOpsTests
                 (0x55, new[] { G(0x105), L(5) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingHost(), textHistory: history);
+        var vm = new VirtualMachine(script, Table, new RecordingWaits(), textHistory: history);
 
         vm.Run();
 
@@ -237,7 +237,7 @@ public class HistoryDataOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var rig = new AudioRig();
-        var vm = rig.Vm(script, Table, new RecordingHost(), textHistory: history);
+        var vm = rig.Vm(script, Table, new RecordingWaits(), textHistory: history);
 
         vm.Run();
 

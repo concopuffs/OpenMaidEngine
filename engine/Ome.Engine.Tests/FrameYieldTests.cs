@@ -3,10 +3,11 @@ using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
+using Ome.Engine.Natives;
 
 public class FrameYieldTests
 {
-    private sealed class CountingHost : IHost
+    private sealed class CountingWaits : IInputAndWaits
     {
         public long Yields;
         public void FrameYield() => Yields++;
@@ -27,7 +28,7 @@ public class FrameYieldTests
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = Sys4Loader.Load(Paths.Scripts()["INITCONFIG.BIN"], table);
-        var host = new CountingHost();
+        var host = new CountingWaits();
         var vm = new VirtualMachine(script, table, host);
         vm.Run();
         Assert.True(vm.Steps > 0);

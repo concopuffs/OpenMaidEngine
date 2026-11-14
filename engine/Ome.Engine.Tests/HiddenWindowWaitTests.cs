@@ -19,7 +19,7 @@ public class HiddenWindowWaitTests
     private static Operand I(long value) => new(T_IMM, value);
     private static Operand G(int address) => new(T_GINT, address);
 
-    private sealed class YieldHost : RecordingHost
+    private sealed class YieldHost : RecordingWaits
     {
         public VirtualMachine? Vm;
         public bool RequestYieldAtWait;
@@ -78,7 +78,7 @@ public class HiddenWindowWaitTests
     [Fact]
     public void HandlerAEndingAtTheResumeWaitsHiddenUntilATriggerThenRunsHandlerB()
     {
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(ControlYield(), Table, host);
         VmFrameLocation? waitingAt = null;
         bool latched = false;
@@ -105,7 +105,7 @@ public class HiddenWindowWaitTests
     public void HandlerAYieldingAgainLeavesForHandlerBWithoutTheHiddenWait()
     {
         // The HIDEWIN.BIN path (Kamidori, or G[0x62425] set): handler A's second op 0x199 enters handler B.
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(ControlYield(handlerAYieldsAgain: true), Table, host);
 
         vm.Run();
@@ -118,7 +118,7 @@ public class HiddenWindowWaitTests
     [Fact]
     public void HiddenWaitWithoutHandlerBReturnsToThePageOnTheTrigger()
     {
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(ControlYield(handlerB: -1), Table, host);
 
         vm.Run();
@@ -134,7 +134,7 @@ public class HiddenWindowWaitTests
     public void YieldWithNoHandlerADoesNothingEvenWithHandlerB()
     {
         // op_0x199_yield_adv_coroutine@0x416440 takes handler B only while a yield is entered.
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(ControlYield(handlerA: -1), Table, host);
 
         vm.Run();
@@ -149,7 +149,7 @@ public class HiddenWindowWaitTests
     public void TheSkipStateEndsTheHiddenWaitWithoutInput()
     {
         // input_poll_triggered_action_mask injects action 6 while the persistent Skip state (ctx+0x13dc) is set.
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(SkipThenControlYield(), Table, host);
 
         vm.Run();
@@ -178,7 +178,7 @@ public class HiddenWindowWaitTests
     public void ControlYieldWheelAccumulatesInsteadOfEndingTheWait()
     {
         // The run state is 0x4000000 alone, so age_main_window_proc accumulates the delta for op 0x10d.
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(ControlYield(), Table, host);
         MouseWheelOutcome? outcome = null;
         host.ServiceTriggerWaitStarted = () => outcome = vm.ApplyMouseWheel(-120, false, false);
@@ -234,7 +234,7 @@ public class HiddenWindowWaitTests
     [Fact]
     public void ActionFiveOutsideATextWaitIsNotAYield()
     {
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(ControlYield(), Table, host);
 
         Assert.False(vm.TryRequestAdvWaitCoroutineYield());

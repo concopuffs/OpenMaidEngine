@@ -12,10 +12,8 @@ public sealed partial class GfxState
     /// running, and when the retained objects are cleared.</summary>
     public const long AnimationServiceFlagsOneShot = 0x10000;
     public long AnimationServiceFlags { get; private set; }
-    public uint PreviousFrameTimeMilliseconds { get; private set; }
-    public uint CurrentFrameTimeMilliseconds { get; private set; }
-    private long _previousFrameTimeMs;
-    private long _currentFrameTimeMs;
+    public uint PreviousFrameTimeMilliseconds { get => _scene.PreviousFrameTimeMilliseconds; private set => _scene.PreviousFrameTimeMilliseconds = value; }
+    public uint CurrentFrameTimeMilliseconds { get => _scene.CurrentFrameTimeMilliseconds; private set => _scene.CurrentFrameTimeMilliseconds = value; }
 
     /// <summary>Ops 0x202/0x203: record a packed 0xAARRGGBB color/alpha modulation on the object and mark it
     /// HasColor so the compositor applies alpha+tint (vs the opaque default).</summary>
@@ -166,8 +164,8 @@ public sealed partial class GfxState
     /// marked by op 0x242 bit 0 keep sampling asynchronously.</summary>
     private void ForceCompleteOneShotChannels()
     {
-        CommitOneShotChannels(_rangeTransform);
-        foreach (var o in _objects.Values)
+        CommitOneShotChannels(_scene.RangeTransform);
+        foreach (var o in _scene.Objects.Values)
         {
             if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
             CommitOneShotChannels(o);
@@ -269,7 +267,7 @@ public sealed partial class GfxState
     /// This is independent of both the delayed target at obj+0x1ac and draw/base position V24.</summary>
     public bool TryQueryTranslationCurrent(long handle, out (double X, double Y, double Z) current)
     {
-        if (_objects.TryGetValue(handle, out var o))
+        if (_scene.Objects.TryGetValue(handle, out var o))
         {
             current = o.TranslationCurrent;
             return true;
@@ -283,7 +281,7 @@ public sealed partial class GfxState
     public bool TryQueryRotationCurrent(
         long handle, out (double X, double Y, double Z, double Angle) current)
     {
-        if (_objects.TryGetValue(handle, out var o))
+        if (_scene.Objects.TryGetValue(handle, out var o))
         {
             current = o.RotationCurrent;
             return true;
@@ -404,8 +402,8 @@ public sealed partial class GfxState
 
     public void SampleFrameTime(long nowMilliseconds)
     {
-        _previousFrameTimeMs = _currentFrameTimeMs;
-        _currentFrameTimeMs = nowMilliseconds;
+        _scene.PreviousFrameTimeMs = _scene.CurrentFrameTimeMs;
+        _scene.CurrentFrameTimeMs = nowMilliseconds;
         PreviousFrameTimeMilliseconds = CurrentFrameTimeMilliseconds;
         CurrentFrameTimeMilliseconds = unchecked((uint)nowMilliseconds);
     }

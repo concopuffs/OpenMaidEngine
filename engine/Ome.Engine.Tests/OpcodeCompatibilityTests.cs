@@ -66,7 +66,7 @@ public class OpcodeCompatibilityTests
         var rig = new AudioRig();
         rig.Audio.PlayBgm(5);   // channel 11 plays
         var normal = new VirtualMachine(
-            script, table, new RecordingHost(), sink: normalTrace,
+            script, table, new RecordingWaits(), sink: normalTrace,
             build: EngineBuilds.Age433G, skipAndAuto: rig.Skip, audio: rig.Audio, tick: rig.Tick);
         normal.Run();
 
@@ -92,7 +92,7 @@ public class OpcodeCompatibilityTests
             table, catalog, new Sys4AssetStore(catalog, gameRoot, gameRoot));
         Script title = scripts.RequireByName("TITLE.BIN");
         var vm = new VirtualMachine(
-            title, table, new CaptureHost(), new VmOptions(MaxSteps: 100_000), scripts,
+            title, table, new HeadlessWaits(), new VmOptions(MaxSteps: 100_000), scripts,
             build: EngineBuilds.Age433G);
 
         vm.Run();
@@ -137,7 +137,7 @@ public class OpcodeCompatibilityTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         var vm = new VirtualMachine(
-            probe, table, new RecordingHost(),
+            probe, table, new RecordingWaits(),
             build: EngineBuilds.Age433G);
 
         vm.Run();

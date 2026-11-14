@@ -22,7 +22,7 @@ public class InputLatchTests
     private static Operand G(int address) => new(3, address);
     private static Operand S(int index) => new(2, index);
 
-    private sealed class LatchHost : RecordingHost
+    private sealed class LatchHost : RecordingWaits
     {
         public VirtualMachine? Vm;
         public Action<VirtualMachine>? AtWait;          // a text wait starts (after op 0x72's entry), before it polls

@@ -63,7 +63,7 @@ public partial class Main
     {
         // A modal message box disables AGE's window, so neither its close button nor ESC can ask meanwhile.
         if (_exitConfirmation != null || _scriptErrorDialog != null || _optionsPanel != null) return;
-        if (_vm == null || _host == null || _done || _selftest)
+        if (_vm == null || _waits == null || _done || _selftest)
         {
             GetTree().Quit(0);
             return;

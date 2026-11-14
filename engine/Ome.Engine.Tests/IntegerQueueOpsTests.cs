@@ -44,7 +44,7 @@ public class IntegerQueueOpsTests
             (0x55, new[] { G(0x108), L(0) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -76,7 +76,7 @@ public class IntegerQueueOpsTests
             (0x55, new[] { G(0x120), L(0) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(root, table, new RecordingHost(),
+        var vm = new VirtualMachine(root, table, new RecordingWaits(),
             provider: new MapProvider(new Dictionary<long, Script> { [0x500] = worker }));
 
         vm.Run();
@@ -98,7 +98,7 @@ public class IntegerQueueOpsTests
             (0x8, new[] { I(0x1f) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(root, table, new RecordingHost(),
+        var vm = new VirtualMachine(root, table, new RecordingWaits(),
             provider: new MapProvider(new Dictionary<long, Script> { [0x3381] = mvseek }));
         SeedSearchGrid(vm, movementPoints: 3);
 
@@ -148,7 +148,7 @@ public class IntegerQueueOpsTests
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var script = Sys4Loader.Load(Paths.Scripts()[name], table);
-        return new VirtualMachine(script, table, new RecordingHost());
+        return new VirtualMachine(script, table, new RecordingWaits());
     }
 
     private static void SeedSearchGrid(VirtualMachine vm, int movementPoints)

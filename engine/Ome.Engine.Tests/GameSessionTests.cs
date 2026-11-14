@@ -29,10 +29,10 @@ public class GameSessionTests
     {
         var session = new GameSession();
         // Scene A writes G[0x5000] = 42.
-        session.RunScene(MovScript(0x5000, T_IMM, 0x2a), Table, new CaptureHost());
+        session.RunScene(MovScript(0x5000, T_IMM, 0x2a), Table, new HeadlessWaits());
         Assert.Equal(0x2a, session.Globals[0x5000]);
         // Scene B copies G[0x5000] -> G[0x5001]; it must SEE A's write.
-        session.RunScene(MovScript(0x5001, T_GINT, 0x5000), Table, new CaptureHost());
+        session.RunScene(MovScript(0x5001, T_GINT, 0x5000), Table, new HeadlessWaits());
         Assert.Equal(0x2a, session.Globals[0x5001]);
     }
 
@@ -41,7 +41,7 @@ public class GameSessionTests
     {
         var session = new GameSession();
         session.Seed(0x5000, 99);
-        session.RunScene(MovScript(0x5001, T_GINT, 0x5000), Table, new CaptureHost());
+        session.RunScene(MovScript(0x5001, T_GINT, 0x5000), Table, new HeadlessWaits());
         Assert.Equal(99, session.Globals[0x5001]);
     }
 
@@ -51,11 +51,11 @@ public class GameSessionTests
     {
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], Table);
         // single run
-        var host1 = new CaptureHost();
+        var host1 = new HeadlessWaits();
         new VirtualMachine(script, Table, host1).Run();
         var single = host1.Emitted.Select(e => e.Offset).ToList();
         // via session
-        var host2 = new CaptureHost();
+        var host2 = new HeadlessWaits();
         var r = new GameSession().RunScene(Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], Table), Table, host2);
         var viaSession = r.Emitted.Select(e => e.Offset).ToList();
         Assert.Equal(single, viaSession);
@@ -70,7 +70,7 @@ public class GameSessionTests
         // global bank (the game's boot behavior). Cross-check vs the static extraction (build/games/himegari/data/SKINIT.json):
         // skill id 1 = "飛行" at global-string 0x23a3, field G[0xa6e5b] = 30.
         var session = new GameSession();
-        var r = session.RunScene(Sys4Loader.Load(Paths.Scripts()["SKINIT.BIN"], Table), Table, new CaptureHost());
+        var r = session.RunScene(Sys4Loader.Load(Paths.Scripts()["SKINIT.BIN"], Table), Table, new HeadlessWaits());
         Assert.Equal("exit", r.Halt);
         Assert.Equal("飛行", session.GlobalStrings[0x23a3]);
         Assert.Equal(30, session.Globals[0xa6e5b]);
@@ -129,7 +129,7 @@ public class GameSessionTests
         s.Seed(0x10, 1);
         s.SeedString(0x30, "stale");
 
-        s.RunScene(reset, Table, new RecordingHost(), provider: new MapProvider(new Dictionary<long, Script> { [0] = root }));
+        s.RunScene(reset, Table, new RecordingWaits(), provider: new MapProvider(new Dictionary<long, Script> { [0] = root }));
 
         Assert.False(s.Globals.ContainsKey(0x10));
         Assert.False(s.GlobalStrings.ContainsKey(0x30));
@@ -141,7 +141,7 @@ public class GameSessionTests
     public void BootedStateSurvivesSnapshot()
     {
         var s = new GameSession();
-        s.RunScene(Sys4Loader.Load(Paths.Scripts()["SKINIT.BIN"], Table), Table, new CaptureHost());
+        s.RunScene(Sys4Loader.Load(Paths.Scripts()["SKINIT.BIN"], Table), Table, new HeadlessWaits());
         var t = GameSession.FromJson(s.ToJson());   // snapshot the expensive booted state, rebuild
         Assert.Equal("飛行", t.GlobalStrings[0x23a3]);
         Assert.Equal(30, t.Globals[0xa6e5b]);
@@ -170,7 +170,7 @@ public class GameSessionTests
     private static int VoicesPlayed(GameSession session, string scriptPath)
     {
         var device = new RecordingAudioDevice();
-        session.RunScene(Sys4Loader.Load(scriptPath, Table), Table, new CaptureHost(),
+        session.RunScene(Sys4Loader.Load(scriptPath, Table), Table, new HeadlessWaits(),
                          audio: skip => new Audio(device, new TestAudioAssets(), new FrameClock(), skip,
                                                   session.AudioMixerSettings));
         return device.Voices.Count;

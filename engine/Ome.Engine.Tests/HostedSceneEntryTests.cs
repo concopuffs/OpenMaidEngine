@@ -45,7 +45,7 @@ public class HostedSceneEntryTests
     public void HostedRun_SkipsTheInitialRunReturnsTheCoordinatorAtEntryAndEndsAtTheScenesReturn()
     {
         var (root, provider) = HostingRoot();
-        var vm = new VirtualMachine(root, Table, new RecordingHost(), provider: provider);
+        var vm = new VirtualMachine(root, Table, new RecordingWaits(), provider: provider);
         vm.Globals[0x55] = 3;   // boot state the handoff overrides
         vm.HostScene(new HostedSceneEntry("TITLE.BIN", SceneId,
             new Dictionary<int, long> { [0x699] = SceneId, [0x55] = 7 }));
@@ -63,7 +63,7 @@ public class HostedSceneEntryTests
     public void UnhostedRun_RunsTheCoordinatorAndTheRootOnAfterTheScene()
     {
         var (root, provider) = HostingRoot();
-        var vm = new VirtualMachine(root, Table, new RecordingHost(), provider: provider);
+        var vm = new VirtualMachine(root, Table, new RecordingWaits(), provider: provider);
         vm.Globals[0x699] = SceneId;
 
         vm.Run();
@@ -74,7 +74,7 @@ public class HostedSceneEntryTests
         Assert.Equal(1, vm.Globals[0x104]);
     }
 
-    private sealed class OrphanArmHost : RecordingHost
+    private sealed class OrphanArmHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public bool ClickConsumed = true;

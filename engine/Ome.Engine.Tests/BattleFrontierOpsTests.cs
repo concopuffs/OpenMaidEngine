@@ -24,7 +24,7 @@ public class BattleFrontierOpsTests
             (0x207, new[] { I(72), I(67), I(12), I(15), I(3), I(4), I(30), I(33) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         // Source 72: each pixel's red is its x and green its y. Destination 67: blank.
         vm.Graphics.PublishSurfacePixels(72, GraphicsTestSupport.Image(20, 20, (x, y) => [(byte)x, (byte)y, 0, 255]));
         vm.Graphics.CreateSurface(67, 40, 40);
@@ -48,7 +48,7 @@ public class BattleFrontierOpsTests
                             I(0), I(0), I(384), I(216) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         // Source 2: the left half red, the right half blue. Destination 193: blank and larger than the copy.
         vm.Graphics.PublishSurfacePixels(2, GraphicsTestSupport.Image(1024, 576,
             (x, y) => x < 512 ? [255, 0, 0, 255] : [0, 0, 255, 255]));
@@ -77,7 +77,7 @@ public class BattleFrontierOpsTests
             (0x55, new[] { new Operand(GlobalString, 0x501), new Operand(LocalString, 0) }),
             (0x2, Array.Empty<Operand>()),
         }, new[] { "/99" });
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.GlobalStrings[0x500] = "17";
 
         vm.Run();
@@ -102,7 +102,7 @@ public class BattleFrontierOpsTests
             (0x1c8, new[] { new Operand(GlobalString, 0x504), I(-7) }),
             (0x2, Array.Empty<Operand>()),
         }, new[] { "素材", "個" });
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.Globals[0x100] = 12;
         vm.Globals[0x101] = 3;
 
@@ -140,7 +140,7 @@ public class BattleFrontierOpsTests
     public void MovieActivityAndAnimationServiceFlags_ControlBattlePollingAndReset()
     {
         var table = Table();
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var script = ScriptAssembler.Assemble(table, "BATTLE_CONTROL", new List<(int, Operand[])>
         {
             (0x236, new[] { I(0x2be3), I(7), I(0), I(0) }),   // a movie plays on surface 7, none on 8
@@ -173,7 +173,7 @@ public class BattleFrontierOpsTests
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
 
-        rig.Vm(script, table, new RecordingHost()).Run();
+        rig.Vm(script, table, new RecordingWaits()).Run();
 
         // The delay counts from the first tick, which the run's last instruction boundary was.
         rig.Advance(274);
@@ -183,7 +183,7 @@ public class BattleFrontierOpsTests
         Assert.Equal(0, rig.Audio.VoicePlaybackVariant);
     }
 
-    private sealed class SequencedClockHost : RecordingHost
+    private sealed class SequencedClockHost : RecordingWaits
     {
         private readonly Queue<long> _samples;
         public SequencedClockHost(params long[] samples) => _samples = new Queue<long>(samples);

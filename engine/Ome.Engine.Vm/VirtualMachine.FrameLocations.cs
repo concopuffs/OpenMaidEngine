@@ -12,7 +12,7 @@ public sealed record VmFrameLocation(string Script, int ResumeOffset, int Curren
 public sealed partial class VirtualMachine
 {
     /// <summary>Every active frame, outermost first. Callable from any thread; the result is stable while the VM
-    /// thread is blocked in a host call (an input wait, sleep, transition or modal movie).</summary>
+    /// thread is blocked in a wait (an input wait, sleep, transition or modal movie).</summary>
     public IReadOnlyList<VmFrameLocation> CaptureFrameLocations()
     {
         ExecFrame[] active;

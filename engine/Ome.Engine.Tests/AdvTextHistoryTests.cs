@@ -26,7 +26,7 @@ public class AdvTextHistoryTests
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "first", "second" });
 
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
@@ -85,7 +85,7 @@ public class AdvTextHistoryTests
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "hidden", "retained" });
 
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
         vm.Run();
 
         Assert.False(vm.TextHistory.RecordingSuppressed);
@@ -186,8 +186,8 @@ public class AdvTextHistoryTests
             }, new[] { text });
 
         var session = new GameSession();
-        session.RunScene(Scene("FIRST", "one"), Table, new RecordingHost());
-        session.RunScene(Scene("SECOND", "two"), Table, new RecordingHost());
+        session.RunScene(Scene("FIRST", "one"), Table, new RecordingWaits());
+        session.RunScene(Scene("SECOND", "two"), Table, new RecordingWaits());
 
         Assert.Equal(new[] { "one", "two" }, session.TextHistory.Records.Select(r => r.Text));
         Assert.Equal(new[]
@@ -203,7 +203,7 @@ public class AdvTextHistoryTests
     {
         var scripts = Sys4ScriptProvider.Load(Table);
         var scene = scripts.RequireByName("SC0000.BIN");
-        var vm = new VirtualMachine(scene, Table, new RecordingHost(),
+        var vm = new VirtualMachine(scene, Table, new RecordingWaits(),
             new VmOptions(MaxSteps: 1_000_000, HaltAtWaitForInput: true), scripts);
 
         vm.Run();
@@ -238,7 +238,7 @@ public class AdvTextHistoryTests
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "ab全cd" });
         // Half-width glyphs 12 pixels wide, full-width 24: ab全 fills 48 of the layout's 50, and c wraps.
-        var vm = TestText.Vm(script, Table, new RecordingHost(), TestText.Glyphs(TestText.Fixed(24, 12)));
+        var vm = TestText.Vm(script, Table, new RecordingWaits(), TestText.Glyphs(TestText.Fixed(24, 12)));
 
         vm.Run();
 

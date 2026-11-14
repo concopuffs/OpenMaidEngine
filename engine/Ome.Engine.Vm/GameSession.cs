@@ -48,7 +48,7 @@ public sealed class GameSession
     public void SeedString(int addr, string value) => GlobalStrings[addr] = value;
 
     /// <summary>Run one scene: seed a fresh VM from session state, execute, merge final state back.</summary>
-    public SceneResult RunScene(Script script, OpcodeTable table, IHost host,
+    public SceneResult RunScene(Script script, OpcodeTable table, IInputAndWaits waits,
                                 VmOptions? options = null, IScriptProvider? provider = null,
                                 ITraceSink? sink = null,
                                 EngineBuild? build = null, Func<SkipAndAuto, Audio>? audio = null)
@@ -58,9 +58,9 @@ public sealed class GameSession
         // and store, and its shell native appends to the session's diagnostic text.
         SkipAndAuto skip = SkipAndAuto.WithSystemClock();
         var shell = ShellServices.Headless(DiagnosticOutput);
-        shell.WakeWaitsWith(host.WakeInputCallbackService);
+        shell.WakeWaitsWith(waits.WakeInputCallbackService);
         var vm = new VirtualMachine(
-            script, table, host, options, provider, sink, TextHistory,
+            script, table, waits, options, provider, sink, TextHistory,
             saves: new SavesAndSettings(SharedProfile, NativeDatStore), shell: shell, build: build, skipAndAuto: skip,
             audio: audio?.Invoke(skip) ?? Audio.Silent(skip, AudioMixerSettings));
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;

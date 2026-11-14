@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
@@ -32,7 +33,6 @@ public sealed partial class InputAndWaits : IFastForwardListener
     private readonly FrameClock _clock;
     private readonly PageLocatorState _locator;
     private readonly TimelineLog? _timeline;
-    private IWaitListener[] _listeners = [];
 
     private readonly SemaphoreSlim _gate = new(0, 1);                       // a click or Auto ends a text wait
     private readonly AutoResetEvent _inputCallbackSignal = new(false);      // input arrived for a wait's callbacks
@@ -42,10 +42,24 @@ public sealed partial class InputAndWaits : IFastForwardListener
     // reload's scene reset takes it. The interpreter reads the same requests.
     private readonly StopAndReload _stopAndReload = new();
     private bool Stopping => _stopAndReload.StopRequested || _stopAndReload.ReloadRequested;
-    private volatile bool _waiting;
-    private volatile bool _transitionWaiting;
-    private volatile bool _sleeping;
     private volatile int _pages;   // engine-thread page counter, raised before the wait shows as waiting
+    private volatile int _pageNotices;
+
+    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
+    private sealed class Scene
+    {
+        public volatile bool Waiting;
+        public volatile bool TransitionWaiting;
+        public volatile bool Sleeping;
+        public volatile bool ModalMovieWaiting;
+        public volatile bool ModalMovieCancelled;
+        public volatile bool ModalMovieCancelPending;   // CancelNextModalMovie: a held action 4 stops the next movie
+        public GfxState? ForegroundGfx;
+        public long TransitionStartedAtMs = -1;
+    }
+
+    // Volatile: the front end reads the wait flags from its own thread (spec §5.3's table).
+    private volatile Scene _scene = new();
 
     /// <param name="skipAndAuto">The skip and auto native: fast-forward ends a text wait and a sleep, and starting it
     /// finishes the reveal and wakes every wait.</param>
@@ -66,12 +80,18 @@ public sealed partial class InputAndWaits : IFastForwardListener
     /// it (the self-test and the tests, which have no frames).</param>
     /// <param name="settings">SYS4REG.INI, which the input routing reads on each trigger (message:AdvanceMesOnWheel,
     /// system:EffectSkipOnClick).</param>
+    /// <param name="cursors">The resources the AGE cursor's CUR records come from (ops 0x86 and 0x87); without them a
+    /// script's cursor is not shown.</param>
+    /// <param name="cursor">The front end's cursor device, which shows and moves the AGE cursor.</param>
     public InputAndWaits(SkipAndAuto skipAndAuto, Audio audio, EngineTick tick, Graphics graphics, Movies movies,
                          ShellServices shell, TextManager text, FrameClock clock, PageLocatorState locator,
                          TimelineLog? timeline = null, bool synchronizeExplicitPresentation = true,
-                         Persistence.Sys4RegIniStore? settings = null)
+                         Persistence.Sys4RegIniStore? settings = null, Sys4.ResourceMap? cursors = null,
+                         Devices.ICursorDevice? cursor = null)
     {
         _settings = settings;
+        _cursors = cursors;
+        _cursor = cursor;
         _skip = skipAndAuto ?? throw new ArgumentNullException(nameof(skipAndAuto));
         _audio = audio ?? throw new ArgumentNullException(nameof(audio));
         _tick = tick ?? throw new ArgumentNullException(nameof(tick));
@@ -88,29 +108,40 @@ public sealed partial class InputAndWaits : IFastForwardListener
         _skip.Listen(this);
         _movies.WakeWaitsWith(QueueWork);   // its frame service's frames and completions wait for the engine thread
         _shell.WakeWaitsWith(WakeInputCallbackService);   // a menu request reaches a text wait at once
-        _text.ReadInputWaitFrom(() => _waiting);           // the wait indicator shows only in an input wait
-    }
-
-    /// <summary>Add a listener that hears of the text waits' pages (<see cref="IWaitListener"/>).</summary>
-    public void Listen(IWaitListener listener)
-    {
-        ArgumentNullException.ThrowIfNull(listener);
-        if (Array.IndexOf(_listeners, listener) < 0) _listeners = [.. _listeners, listener];
-    }
-
-    private void Tell(Action<IWaitListener> call)
-    {
-        foreach (IWaitListener listener in _listeners) call(listener);
+        _text.ReadInputWaitFrom(() => _scene.Waiting);           // the wait indicator shows only in an input wait
     }
 
     /// <summary>A text wait or op 0xfa's poll waits for input (native run-state 0x80000000).</summary>
-    public bool IsWaiting => _waiting;
+    public bool IsWaiting => _scene.Waiting;
     /// <summary>An effect or a screen transition parks the engine thread (run-state 0x400).</summary>
-    public bool IsTransitionWaiting => _transitionWaiting;
+    public bool IsTransitionWaiting => _scene.TransitionWaiting;
     /// <summary>A script sleep (op 0xc8) parks the engine thread.</summary>
-    public bool IsSleeping => _sleeping;
-    /// <summary>The run's text pages so far; the driver and the front end's page counter read it.</summary>
+    public bool IsSleeping => _scene.Sleeping;
+    /// <summary>The run's text pages so far, raised as each text wait starts; the driver and the front end read it (a
+    /// new page clears the front end's status line).</summary>
     public int Pages => _pages;
+    /// <summary>Raised when a text wait starts its page and when it ends it, and at a scene reset: the front end clears
+    /// its status line when it changes.</summary>
+    public int PageNotices => _pageNotices;
+
+    // Engine thread: a page ended or the scene was reset.
+    private void PostPageNotice() => _pageNotices++;
+
+    /// <summary>What the waits and the natives they block on are doing, for the driver's state and the front end's
+    /// stall diagnostic. Read on the engine thread.</summary>
+    public WaitsDiagnosticSnapshot CaptureDiagnosticSnapshot()
+        => new(
+            _scene.Waiting,
+            _scene.TransitionWaiting,
+            _scene.Sleeping,
+            _text.IsRevealing,
+            _scene.ModalMovieWaiting,
+            _text.IsAdvPagePresentationSuspended,
+            _skip.FastForwardActive,
+            _graphics.ScreenTransitionPending,
+            TransitionStartedAtMs,
+            _movies.SurfaceDiagnostics(),
+            _movies.CompletedPlaybackIds());
 
     /// <summary>The front end, once per rendered frame when it asks for no frame turn (the self-test): wakes a wait
     /// parked on a frame, which then runs the engine tick.</summary>
@@ -148,16 +179,9 @@ public sealed partial class InputAndWaits : IFastForwardListener
         _graphics.ResetScene();   // the VM has had the text native reset its layouts (TextManager.ResetScene)
         while (_gate.Wait(0)) { }
         _inputCallbackSignal.WaitOne(0);
-        _modalMovieCancelled = false;
-        _modalMovieWaiting = false;
-        _modalMovieCancelPending = false;
-        _foregroundGfx = null;
-        _waiting = false;
-        _transitionWaiting = false;
-        _sleeping = false;
-        Interlocked.Exchange(ref _transitionStartedAtMs, -1);
+        _scene = new();
         _graphics.RequestPresentation();
-        Tell(static listener => listener.PageCleared());
+        PostPageNotice();
         _timeline?.State("scene-context-reset", new() { ["surfaces"] = _graphics.LiveSurfaceSlots() });
     }
 
@@ -183,3 +207,10 @@ public sealed partial class InputAndWaits : IFastForwardListener
         }
     }
 }
+
+/// <summary>The waits' state for a diagnostic (<see cref="InputAndWaits.CaptureDiagnosticSnapshot"/>).</summary>
+public sealed record WaitsDiagnosticSnapshot(
+    bool IsInputWaiting, bool IsTransitionWaiting, bool IsSleeping,
+    bool IsTextRevealing, bool IsModalMovieWaiting, bool IsAdvPagePresentationSuspended,
+    bool IsMessageSkipActive, bool IsScreenTransitionActive, long TransitionStartedAtMs,
+    IReadOnlyList<MovieSurfaceDiagnostic> MovieSurfaces, IReadOnlyList<long> CompletedMoviePlaybackIds);

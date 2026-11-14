@@ -113,7 +113,7 @@ public sealed partial class InputAndWaits
     /// the sampled retained scene can change. The wait indicator advances its retained source cell here, so it counts
     /// only when the frame changes.
     /// </summary>
-    private HostPresentationReason ConsumePresentationReasons()
+    private PresentationReason ConsumePresentationReasons()
     {
         GfxState gfx = _graphics.State;
         _text.UpdateWaitIndicators(gfx);
@@ -124,27 +124,27 @@ public sealed partial class InputAndWaits
         // themselves. Leave the retained-state reasons pending so the next explicit present publishes them.
         bool withheld = _tick.StatementBlockOpen
             && !_graphics.PresentationRequested
-            && !screenTransitionActive && !_transitionWaiting;
+            && !screenTransitionActive && !_scene.TransitionWaiting;
         if (withheld != _presentationWithheldByStatementBlock)
         {
             _presentationWithheldByStatementBlock = withheld;
             _timeline?.Event("statement-block-presentation", new() { ["withheld"] = withheld });
         }
-        if (withheld) return HostPresentationReason.None;
-        var reasons = HostPresentationReason.None;
+        if (withheld) return PresentationReason.None;
+        var reasons = PresentationReason.None;
         if (_graphics.TakePresentationRequest())
         {
-            reasons |= HostPresentationReason.HostRequest;
+            reasons |= PresentationReason.Requested;
             _consumedPresentationRequestGeneration = _explicitPresentationRequestGeneration;
         }
-        if (screenTransitionActive) reasons |= HostPresentationReason.ScreenTransition;
+        if (screenTransitionActive) reasons |= PresentationReason.ScreenTransition;
         GfxPresentationReason gfxReasons = gfx.ConsumePresentationReasons(_clock.NowMs);
         if ((gfxReasons & GfxPresentationReason.RetainedMutation) != 0)
-            reasons |= HostPresentationReason.RetainedMutation;
+            reasons |= PresentationReason.RetainedMutation;
         if ((gfxReasons & GfxPresentationReason.ContinuousChannel) != 0)
-            reasons |= HostPresentationReason.ContinuousChannel;
+            reasons |= PresentationReason.ContinuousChannel;
         if ((gfxReasons & GfxPresentationReason.DiscreteSourceCell) != 0)
-            reasons |= HostPresentationReason.DiscreteSourceCell;
+            reasons |= PresentationReason.DiscreteSourceCell;
         return reasons;
     }
 }

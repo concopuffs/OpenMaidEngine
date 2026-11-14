@@ -19,7 +19,7 @@ using Xunit;
 public class ProjectBoundaryTests
 {
     private static readonly Assembly Handlers = typeof(VirtualMachine).Assembly;
-    private static readonly Assembly Natives = typeof(IHost).Assembly;
+    private static readonly Assembly Natives = typeof(InputAndWaits).Assembly;
     private static readonly Assembly Devices = typeof(RgbaImage).Assembly;
 
     [Fact]
@@ -68,13 +68,41 @@ public class ProjectBoundaryTests
         Assert.Equal("true", Property("Ome.Engine.Vm", "DisableTransitiveProjectReferences"));
     }
 
-    [Fact]
-    public void TheVmsHostInterfacesNameNoDeviceType()
+    /// <summary>
+    /// The natives' interfaces (spec §9, acceptance 1): every interface the Ome.Engine assembly exports, except the
+    /// seams the natives call out through to what the front end and the platform supply, each with its reason.
+    /// </summary>
+    private static readonly Dictionary<Type, string> OutwardSeams = new()
     {
-        // A native interface member that carries a device type cannot be called from handler code (CS0012), so the
-        // host the VM is given must not have one (spec §3.3; ISurfacePixels holds the two that did).
+        // The dialogs device in all but its place (spec §6.1): its boxes carry AGE's messages and op 0x144's name
+        // entry, so it stays in Ome.Engine, and Main's modal dialogs are not restructured (spec §10, §14).
+        [typeof(IShellDialogs)] = "dialogs",
+        // No file device until a platform needs one (spec §6.4).
+        [typeof(IAssetStore)] = "files",
+        [typeof(Ome.Engine.Persistence.INativeDatStore)] = "files",
+        // The scripts the interpreter loads, from the game's catalog or a self-test's own.
+        [typeof(IScriptProvider)] = "scripts",
+        // The game's sounds and movies, which the audio and movie natives read through the resource map
+        // (ResourceAudioAssets, ResourceMovieAssets) and hand to their devices as device data; tests give their own.
+        [typeof(IAudioAssets)] = "sounds",
+        [typeof(IMovieAssets)] = "movies",
+        // The trace consumers (the CLI, the front end's logs, the tests).
+        [typeof(Ome.Engine.Diagnostics.ITraceSink)] = "trace",
+        // A glyph rasterizer's metrics, which the GDI rasterizer gives.
+        [typeof(IFontMetricsProbe)] = "glyphs",
+    };
+
+    private static Type[] NativeInterfaces()
+        => Natives.GetExportedTypes().Where(type => type.IsInterface && !OutwardSeams.ContainsKey(type)).ToArray();
+
+    [Fact]
+    public void NoNativeInterfaceNamesADeviceType()
+    {
+        // A native interface member that carries a device type cannot be called from handler code (CS0012), so none
+        // may have one (spec §3.3).
+        Assert.Contains(typeof(IInputAndWaits), NativeInterfaces());
         var offenders = new List<string>();
-        foreach (Type contract in typeof(IHost).GetInterfaces().Append(typeof(IHost)))
+        foreach (Type contract in NativeInterfaces())
         foreach (MemberInfo member in contract.GetMembers())
         foreach (Type used in Signature(member).SelectMany(Expand))
             if (used.Assembly == Devices)
@@ -83,13 +111,23 @@ public class ProjectBoundaryTests
     }
 
     [Fact]
-    public void NoGodotTypeImplementsTheHost()
+    public void NoNativeInterfaceIsNamedHost()
     {
-        // Milestone 4 lifted the host into Ome.Engine (EngineHost); godot/ keeps the front end and device
-        // implementations, and reaches the host only through its class. Main implements IFrontEnd, which shows the
-        // scan reads base lists.
-        string[] host = typeof(IHost).GetInterfaces().Append(typeof(IHost)).Append(typeof(ISurfacePixels))
-            .Select(type => type.Name).ToArray();
+        // Spec §2, decision 13: the host's interfaces were renamed after their natives in milestone 12, and the lift's
+        // own (EngineHost, IFrontEnd) are gone.
+        Assert.Empty(NativeInterfaces().Where(type => type.Name.Contains("Host", StringComparison.Ordinal))
+                         .Select(type => type.Name));
+        foreach (string gone in new[] { "IHost", "IFrontEnd", "EngineHost", "IAdvHost", "IGraphicsHost", "IInputHost",
+                                        "ILifecycleHost", "IMovieHost", "IDiagnosticHost", "ISurfacePixels" })
+            Assert.DoesNotContain(Natives.GetExportedTypes(), type => type.Name == gone);
+    }
+
+    [Fact]
+    public void GodotImplementsNoNativeInterface()
+    {
+        // godot/ implements device interfaces and builds the engine (spec §6.6). The scan reads base lists: Main is the
+        // cursor device, which shows that it finds them.
+        string[] natives = NativeInterfaces().Select(type => type.Name).ToArray();
         var declaration = new Regex(@"\b(?:class|record|struct)\s+(\w+)[^{;=]*?:\s*([^{;]+?)(?:\bwhere\b|\{|;)");
         var bases = new List<(string Type, string Base)>();
         foreach (string path in Directory.EnumerateFiles(Path.Combine(Paths.Repo, "godot"), "*.cs", SearchOption.AllDirectories))
@@ -100,8 +138,8 @@ public class ProjectBoundaryTests
             foreach (Match name in Regex.Matches(match.Groups[2].Value, @"[A-Za-z_][\w.]*"))
                 bases.Add((match.Groups[1].Value, name.Value.Split('.')[^1]));
         }
-        Assert.Contains(("Main", nameof(IFrontEnd)), bases);
-        Assert.Empty(bases.Where(pair => host.Contains(pair.Base)));
+        Assert.Contains(("Main", nameof(ICursorDevice)), bases);
+        Assert.Empty(bases.Where(pair => natives.Contains(pair.Base)));
     }
 
     [Fact]
@@ -131,8 +169,7 @@ public class ProjectBoundaryTests
             "_messageSkipInjected", "_advReadSkipState", "_autoMessageTime0Milliseconds", "_autoMessageTime1Milliseconds",
             "_messageSkipLock", "_scriptMessageSkipActive", "_physicalMessageSkipActive", "_messageSkipActive",
         ];
-        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
-            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+        Assert.Empty(typeof(VirtualMachine).GetFields(instance).Select(field => field.Name).Intersect(census));
     }
 
     [Fact]
@@ -151,8 +188,7 @@ public class ProjectBoundaryTests
             "_bgmFadeTarget", "_loadedSoundEffectResourceIds", "_voiceMuteNextFlags", "_sfxNames", "_voiceBgmDuckControl",
             "_queuedSkippedVoice", "_scheduledVoiceLock", "_scheduledVoice", "_bgmFadeDeadlineMs",
         ];
-        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
-            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+        Assert.Empty(typeof(VirtualMachine).GetFields(instance).Select(field => field.Name).Intersect(census));
     }
 
     [Fact]
@@ -171,8 +207,7 @@ public class ProjectBoundaryTests
             "_presentRequested", "_terminalSample", "_imageLock", "_images", "_surfaceImages", "_surfaceColorKeys",
             "_surfaceResources", "_slotDims", "_screenWidth", "_screenHeight",
         ];
-        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
-            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+        Assert.Empty(typeof(VirtualMachine).GetFields(instance).Select(field => field.Name).Intersect(census));
     }
 
     [Fact]
@@ -215,8 +250,7 @@ public class ProjectBoundaryTests
             "_movieSurfaces", "_movieMaskLock", "_movieMasksByPlayback", "_movieMaskPlaybackBySurface",
             "_scriptContexts", "_rootScene",
         ];
-        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
-            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+        Assert.Empty(typeof(VirtualMachine).GetFields(instance).Select(field => field.Name).Intersect(census));
     }
 
     [Fact]
@@ -241,8 +275,7 @@ public class ProjectBoundaryTests
             "_diagnosticMessageCompleted", "_scriptErrorCompleted", "_scriptErrorChoice", "_fullwidthTextEditCompleted",
             "_fullwidthTextEditLock", "_fullwidthTextEditResult",
         ];
-        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
-            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
+        Assert.Empty(typeof(VirtualMachine).GetFields(instance).Select(field => field.Name).Intersect(census));
     }
 
     [Fact]
@@ -250,8 +283,8 @@ public class ProjectBoundaryTests
     {
         // The census (docs/superpowers/plans/2026-11-12-engine-layering.md §4, "Text") found the layouts, the reveal,
         // the wait indicator, the message settings, the fonts and the presenter split between the VM and the host;
-        // milestone 10 gave them to the text native, the presenter inside it (spec §8). The VM keeps _presentedMessage,
-        // the message whose runs it is showing (it names the VM's frames and script), and the host keeps the reveal's
+        // milestone 10 gave them to the text native, the presenter inside it (spec §8). The VM keeps the message whose
+        // runs it is showing (its scene's PresentedMessage) (it names the VM's frames and script), and the host keeps the reveal's
         // wait until milestone 11.
         const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         Assert.Empty(typeof(TextManager).GetFields(instance).Where(field => !field.IsPrivate).Select(field => field.Name));
@@ -272,21 +305,17 @@ public class ProjectBoundaryTests
             "Presenter", "IsTextRevealing", "Captured", "RubyRules", "FontFamilySource", "FontMetricsProbe",
             "BlankExtentMode", "PresentedTextRasterizer", "PresentedTextMaskCacheCapacity",
         ];
-        foreach (Type keeper in new[] { typeof(VirtualMachine), typeof(EngineHost) })
-        {
-            Assert.Empty(keeper.GetFields(instance).Select(field => field.Name).Intersect(census));
-            Assert.Empty(keeper.GetProperties(instance).Select(property => property.Name).Intersect(properties));
-        }
-        // What the handlers asked the host to draw is the native's; the host's one text seam is the reveal's wait.
-        Assert.Equal(["WaitForTextReveal"], typeof(IAdvHost).GetMethods().Select(method => method.Name));
+        Assert.Empty(typeof(VirtualMachine).GetFields(instance).Select(field => field.Name).Intersect(census));
+        Assert.Empty(typeof(VirtualMachine).GetProperties(instance).Select(property => property.Name)
+                         .Intersect(properties));
     }
 
     [Fact]
     public void TheWaitsAreTheInputAndWaitsNatives()
     {
         // The census (plan §4, "Input and waits") found the waits' handles and flags in the host, with the presentation
-        // waits' fields that milestones 7 and 8 left there; milestone 11 gave them to the input and waits native. The
-        // lifted host keeps no lock, wait handle or wait flag.
+        // waits' fields that milestones 7 and 8 left there; milestone 11 gave them to the input and waits native, and
+        // milestone 12 removed the lifted host.
         const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         Assert.Empty(typeof(InputAndWaits).GetFields(instance).Where(field => !field.IsPrivate).Select(field => field.Name));
         string[] census =
@@ -298,15 +327,10 @@ public class ProjectBoundaryTests
             "_foregroundTransitionWaitBypassed", "_transitionStartedAtMs", "_modalMovieWaiting", "_modalMovieCancelled",
             "_modalMovieCancelPending", "_presentationWithheldByStatementBlock",
         ];
-        Assert.Empty(typeof(EngineHost).GetFields(instance).Select(field => field.Name).Intersect(census));
-        Assert.Empty(typeof(EngineHost).GetMembers(instance).Select(member => member.Name)
-                         .Intersect(["IsWaiting", "IsTransitionWaiting", "IsSleeping", "Pages", "SleepScale"]));
-        Assert.Empty(typeof(EngineHost).GetFields(instance).Where(field =>
-            typeof(System.Threading.WaitHandle).IsAssignableFrom(field.FieldType)
-            || field.FieldType == typeof(System.Threading.SemaphoreSlim)
-            || field.FieldType == typeof(System.Threading.ManualResetEventSlim)
-            || field.FieldType == typeof(System.Threading.ReaderWriterLockSlim)
-            || field.FieldType == typeof(object)));
+        Assert.Empty(typeof(VirtualMachine).GetFields(instance).Select(field => field.Name).Intersect(census));
+        // Milestone 12: the VM calls the native through its interface, which the native implements; nothing between.
+        Assert.Equal(typeof(IInputAndWaits), typeof(VirtualMachine).GetField("_waits", instance)!.FieldType);
+        Assert.Contains(typeof(IInputAndWaits), typeof(InputAndWaits).GetInterfaces());
         // What a game input does is the native's (InputAndWaits.Events.cs): the front end passes device events and
         // routes none to the interpreter (the driver may still read its state). Comments may name its members.
         string[] code = Directory.EnumerateFiles(Path.Combine(Paths.Repo, "godot"), "*.cs")
@@ -327,10 +351,6 @@ public class ProjectBoundaryTests
         Assert.Empty(typeof(IShellHost).GetProperties());
         Assert.Equal(["get_MenuState", "RequestMenuHideWindow"],
                      typeof(IVmMenuServices).GetMethods().Select(method => method.Name).Order());
-        // The dialogs and the window are the shell native's seams, not the lifted host's.
-        Assert.DoesNotContain(typeof(IFrontEnd).GetMembers(),
-                              member => member.Name.Contains("ShowAge", StringComparison.Ordinal)
-                                        || member.Name.Contains("ScreenMode", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -348,8 +368,6 @@ public class ProjectBoundaryTests
                      "TryTakeFrame", "TryTakeAudioChunk", "AdvancePlaybackClock",
                  })
             Assert.DoesNotContain(code, line => line.Contains(word, StringComparison.Ordinal));
-        Assert.DoesNotContain(typeof(IFrontEnd).GetMembers(),
-                              member => member.Name.Contains("Movie", StringComparison.Ordinal));
     }
 
     [Fact]

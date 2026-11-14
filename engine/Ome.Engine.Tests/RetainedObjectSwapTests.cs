@@ -19,7 +19,7 @@ public class RetainedObjectSwapTests
             (0x55, new[]{G(1), I(100)}), (0x55, new[]{G(2), I(200)}),
             (0x214, new[]{G(1), G(2)}), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
         vm.Gfx.BindDraw(100, 3, 1, 2, 30, 40, 10, 20);
         vm.Gfx.SetCurrentRotation(100, (1, 0, 0), 30);
         vm.Gfx.TryGet(100)!.NativePersistenceRecord = [0x11, 0x12];
@@ -47,7 +47,7 @@ public class RetainedObjectSwapTests
         {
             (0x214, new[]{G(1), G(2)}), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
         vm.Globals[1] = 100;
         vm.Globals[2] = 200;
         vm.Gfx.BindDraw(100, 3, 1, 2, 30, 40, 10, 20);
@@ -69,7 +69,7 @@ public class RetainedObjectSwapTests
         {
             (0x214, new[]{I(100), I(200)}), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost());
+        var vm = new VirtualMachine(scene, table, new RecordingWaits());
 
         vm.Run();
 

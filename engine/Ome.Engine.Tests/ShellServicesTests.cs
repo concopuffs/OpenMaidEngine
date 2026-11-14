@@ -234,20 +234,20 @@ public class ShellServicesTests
     }
 
     [Fact]
-    public void TheHostsModalWaitEndsWithTheAnswerOrAStop()
+    public void TheModalWaitEndsWithTheAnswerOrAStop()
     {
         var answering = new AnsweringDialogs(ScriptErrorChoice.Retry);
         using var locator = new PageLocatorState("SC0000", null);
-        EngineHost host = EngineHostTests.Host(EngineHostTests.NothingAtAll(), locator, new FrameClock(),
-                                               shell: new ShellServices(dialogs: answering));
+        InputAndWaits waits = HeadlessNativesTests.Waits(locator, new FrameClock(),
+                                                         shell: new ShellServices(dialogs: answering));
 
-        Assert.Equal(ScriptErrorChoice.Retry, host.ShowScriptError(Box));
+        Assert.Equal(ScriptErrorChoice.Retry, waits.ShowScriptError(Box));
 
         // A dialog nobody answers: a stop cancels it, and the wait ends with 中止.
         using var locator2 = new PageLocatorState("SC0000", null);
         var silent = new RecordingDialogs();
-        EngineHost stopped = EngineHostTests.Host(EngineHostTests.NothingAtAll(), locator2, new FrameClock(),
-                                                  shell: new ShellServices(dialogs: silent));
+        InputAndWaits stopped = HeadlessNativesTests.Waits(locator2, new FrameClock(),
+                                                           shell: new ShellServices(dialogs: silent));
         var waiting = Task.Run(() => stopped.ShowScriptError(Box));
         SpinWait.SpinUntil(() => silent.Shown.Count == 1, TimeSpan.FromSeconds(10));
         stopped.Stop();

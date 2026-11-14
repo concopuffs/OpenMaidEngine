@@ -22,7 +22,6 @@ public sealed partial class Audio
     private int _bgmLevel = FullLevel;       // bgm object +0x420: the committed envelope level, basis points
     private int _bgmChannelLevel = FullLevel;   // the level channel 11 was last given (a fade step is not committed)
     private BgmFade? _fade;
-    private int _duckControl;                // op 0x1cf: bit 0 suppresses the duck and its release; 0x10000 one-shot
     private bool _duckActive;                // run-state 0x4000
     private int _duckRestoreLevel = FullLevel;
     private bool _duckReleaseArmed;          // voice_bgm_duck_release_armed (op 0x1bf, a delayed voice start)
@@ -100,7 +99,7 @@ public sealed partial class Audio
     /// release.</summary>
     public void SetVoiceBgmDuckControl(long flags)
     {
-        _duckControl = unchecked((int)flags);
+        _scene.DuckControl = unchecked((int)flags);
         _timeline?.State("voice-bgm-duck-control", new() { ["flags"] = flags });
         UpdateTimedWork();
     }
@@ -220,15 +219,15 @@ public sealed partial class Audio
 
     private void ArmDuckRelease()
     {
-        if ((_duckControl & 0x10000) != 0) _duckControl = 0;
-        if ((_duckControl & 1) != 0) return;
+        if ((_scene.DuckControl & 0x10000) != 0) _scene.DuckControl = 0;
+        if ((_scene.DuckControl & 1) != 0) return;
         _duckReleaseArmed = true;
     }
 
     // engine_main_tick@0x411e12: with BGM ducked, once the voice has ended, the release is armed, no fade owns the
     // envelope and op 0x1cf bit 0 is clear. So BGM stays ducked between lines until the next line arms the release.
     private bool DuckReleaseDue()
-        => _duckActive && _duckReleaseArmed && _fade == null && (_duckControl & 1) == 0 && !_playing[VoiceChannel];
+        => _duckActive && _duckReleaseArmed && _fade == null && (_scene.DuckControl & 1) == 0 && !_playing[VoiceChannel];
 
     // The release swaps run-state 0x4000 for a 0x200 fade to full (10000, not the level saved at the duck), which a
     // new voice does not duck while it runs.

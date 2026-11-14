@@ -37,16 +37,23 @@ public sealed partial class ScriptMemory
     /// the next table, which the port keeps as an eleventh slot of each.</summary>
     private const int CollectionSlots = 11;
 
-    private readonly Dictionary<int, long> _integers = new();
-    private readonly Dictionary<int, long> _floats = new();
-    private readonly Dictionary<int, string> _strings = new();
-    private readonly Dictionary<int, int> _pointers = new();
-    private readonly Dictionary<int, int> _stringPointers = new();
+    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
+    private sealed class Scene
+    {
+        public readonly Dictionary<int, long> Integers = new();
+        public readonly Dictionary<int, long> Floats = new();
+        public readonly Dictionary<int, string> Strings = new();
+        public readonly Dictionary<int, int> Pointers = new();
+        public readonly Dictionary<int, int> StringPointers = new();
+        // Native constructs the stacks on every scene reset.
+        public readonly Stack<int>[] Stacks = CreateStacks();
+    }
+
+    private Scene _scene = new();
+
     private readonly Encoding _encoding;
     // Op 0x132 creates a queue; ATSEEK/MVSEEK use queue 0. A queue lives for the run (a scene reset keeps it).
     private readonly Queue<int>?[] _queues = new Queue<int>?[CollectionSlots];
-    // Native constructs the stacks on every scene reset.
-    private readonly Stack<int>[] _stacks = CreateStacks();
 
     /// <param name="codePage">The code page the string ops measure bytes and characters in (VmOptions'
     /// NativeStringCodePage; 932 for both games).</param>
@@ -57,48 +64,48 @@ public sealed partial class ScriptMemory
     }
 
     /// <summary>The integer bank (operand type 3).</summary>
-    public Dictionary<int, long> Integers => _integers;
+    public Dictionary<int, long> Integers => _scene.Integers;
 
     /// <summary>The float bank (operand type 4), each cell a float's bits.</summary>
-    public Dictionary<int, long> Floats => _floats;
+    public Dictionary<int, long> Floats => _scene.Floats;
 
     /// <summary>The string bank (operand type 5).</summary>
-    public Dictionary<int, string> Strings => _strings;
+    public Dictionary<int, string> Strings => _scene.Strings;
 
     /// <summary>The integer pointer cells (operand type 6): the integer address each names.</summary>
-    public Dictionary<int, int> Pointers => _pointers;
+    public Dictionary<int, int> Pointers => _scene.Pointers;
 
     /// <summary>The string pointer cells (operand type 8): the string address each names.</summary>
-    public Dictionary<int, int> StringPointers => _stringPointers;
+    public Dictionary<int, int> StringPointers => _scene.StringPointers;
 
     /// <summary>The encoding the string ops measure in.</summary>
     public Encoding Encoding => _encoding;
 
-    public long Integer(int address) => _integers.TryGetValue(address, out long value) ? value : 0;
+    public long Integer(int address) => _scene.Integers.TryGetValue(address, out long value) ? value : 0;
 
-    public long Float(int address) => _floats.TryGetValue(address, out long value) ? value : 0;
+    public long Float(int address) => _scene.Floats.TryGetValue(address, out long value) ? value : 0;
 
-    public string String(int address) => _strings.TryGetValue(address, out string? value) ? value : "";
+    public string String(int address) => _scene.Strings.TryGetValue(address, out string? value) ? value : "";
 
-    public void SetInteger(int address, long value) => _integers[address] = value;
+    public void SetInteger(int address, long value) => _scene.Integers[address] = value;
 
-    public void SetFloat(int address, long value) => _floats[address] = value;
+    public void SetFloat(int address, long value) => _scene.Floats[address] = value;
 
-    public void SetString(int address, string value) => _strings[address] = value;
+    public void SetString(int address, string value) => _scene.Strings[address] = value;
 
-    public void SetPointer(int index, int address) => _pointers[index] = address;
+    public void SetPointer(int index, int address) => _scene.Pointers[index] = address;
 
-    public void SetStringPointer(int index, int address) => _stringPointers[index] = address;
+    public void SetStringPointer(int index, int address) => _scene.StringPointers[index] = address;
 
     /// <summary>The integer address pointer cell <paramref name="index"/> names. A cell never set as a pointer reads
     /// the integer cell of that index, as native's banks overlap.</summary>
     public int IntegerPointer(int index)
-        => _pointers.TryGetValue(index, out int value) ? value : unchecked((int)Integer(index));
+        => _scene.Pointers.TryGetValue(index, out int value) ? value : unchecked((int)Integer(index));
 
     /// <summary>The string address string pointer cell <paramref name="index"/> names (as
     /// <see cref="IntegerPointer"/>).</summary>
     public int StringPointer(int index)
-        => _stringPointers.TryGetValue(index, out int value) ? value : unchecked((int)Integer(index));
+        => _scene.StringPointers.TryGetValue(index, out int value) ? value : unchecked((int)Integer(index));
 
     /// <summary>A string's length in the engine's bytes, up to its first NUL.</summary>
     public int ByteLength(string value)
@@ -138,16 +145,16 @@ public sealed partial class ScriptMemory
     /// <summary>Op 0x137: an empty stack at <paramref name="id"/>.</summary>
     public ScriptCollectionStatus ResetStack(int id)
     {
-        if ((uint)id >= (uint)_stacks.Length) return ScriptCollectionStatus.OutOfRange;
-        _stacks[id] = new Stack<int>(0x100);
+        if ((uint)id >= (uint)_scene.Stacks.Length) return ScriptCollectionStatus.OutOfRange;
+        _scene.Stacks[id] = new Stack<int>(0x100);
         return ScriptCollectionStatus.Done;
     }
 
     /// <summary>Op 0x138.</summary>
     public ScriptCollectionStatus Push(int id, int value)
     {
-        if ((uint)id >= (uint)_stacks.Length) return ScriptCollectionStatus.OutOfRange;
-        _stacks[id].Push(value);
+        if ((uint)id >= (uint)_scene.Stacks.Length) return ScriptCollectionStatus.OutOfRange;
+        _scene.Stacks[id].Push(value);
         return ScriptCollectionStatus.Done;
     }
 
@@ -156,8 +163,8 @@ public sealed partial class ScriptMemory
     {
         taken = false;
         value = 0;
-        if ((uint)id >= (uint)_stacks.Length) return ScriptCollectionStatus.OutOfRange;
-        taken = _stacks[id].TryPop(out value);
+        if ((uint)id >= (uint)_scene.Stacks.Length) return ScriptCollectionStatus.OutOfRange;
+        taken = _scene.Stacks[id].TryPop(out value);
         return ScriptCollectionStatus.Done;
     }
 
@@ -168,27 +175,18 @@ public sealed partial class ScriptMemory
     /// the shared profile, so state a scene left behind (Kamidori's field flag 0x428c) is gone. scene_context_init_reset
     /// then constructs the stacks again; the queues stay.
     /// </summary>
-    public void ResetScene()
-    {
-        _integers.Clear();
-        _floats.Clear();
-        _strings.Clear();
-        _pointers.Clear();
-        _stringPointers.Clear();
-        for (int i = 0; i < _stacks.Length; i++)
-            _stacks[i] = new Stack<int>(0x100);
-    }
+    public void ResetScene() => _scene = new();
 
     /// <summary>The five banks' sections of a numbered save, each the dense prefix the profile's dimensions give.
     /// </summary>
     public NativeNumberedSaveState WriteSaveRecords(NativeNumberedSaveState state, NativeSaveBankDimensions dimensions)
         => state with
         {
-            IntegerGlobals = DenseValues(_integers, dimensions.IntegerGlobals),
-            FloatGlobals = DenseValues(_floats, dimensions.FloatGlobals),
-            StringGlobals = DenseStrings(_strings, dimensions.StringGlobals),
-            PointerGlobals = DensePointerValues(_pointers, dimensions.PointerGlobals),
-            PointerStrings = DensePointerValues(_stringPointers, dimensions.PointerStrings),
+            IntegerGlobals = DenseValues(_scene.Integers, dimensions.IntegerGlobals),
+            FloatGlobals = DenseValues(_scene.Floats, dimensions.FloatGlobals),
+            StringGlobals = DenseStrings(_scene.Strings, dimensions.StringGlobals),
+            PointerGlobals = DensePointerValues(_scene.Pointers, dimensions.PointerGlobals),
+            PointerStrings = DensePointerValues(_scene.StringPointers, dimensions.PointerStrings),
         };
 
     /// <summary>
@@ -202,11 +200,11 @@ public sealed partial class ScriptMemory
     /// </summary>
     public void ReadSaveRecords(NativeNumberedSaveState state)
     {
-        ReplaceBank(_integers, state.IntegerGlobals.Select(value => (long)value).ToArray(), value => value != 0);
-        ReplaceBank(_floats, state.FloatGlobals.Select(value => (long)value).ToArray(), value => value != 0);
-        ReplaceBank(_strings, state.StringGlobals, value => value.Length != 0);
-        ReplaceBank(_pointers, state.PointerGlobals, value => value != 0);
-        ReplaceBank(_stringPointers, state.PointerStrings, value => value != 0);
+        ReplaceBank(_scene.Integers, state.IntegerGlobals.Select(value => (long)value).ToArray(), value => value != 0);
+        ReplaceBank(_scene.Floats, state.FloatGlobals.Select(value => (long)value).ToArray(), value => value != 0);
+        ReplaceBank(_scene.Strings, state.StringGlobals, value => value.Length != 0);
+        ReplaceBank(_scene.Pointers, state.PointerGlobals, value => value != 0);
+        ReplaceBank(_scene.StringPointers, state.PointerStrings, value => value != 0);
     }
 
     private static Stack<int>[] CreateStacks()

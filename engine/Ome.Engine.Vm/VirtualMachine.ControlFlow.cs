@@ -5,26 +5,17 @@ namespace Ome.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
-    // The op-0x199 yield is engine state (coroutine_runstate +0x6dbc8, resume offset +0x6dbcc, owner +0x5f6bc).
-    // The resume is held as an instruction index: op 0x7c only takes it in a frame of the owner's script.
-    private bool _coroutineYieldEntered;      // coroutine_runstate 0x4000000
-    private int? _coroutineResumePc;          // coroutine_runstate 0x2000000 with its resume offset
-    private Script? _coroutineYieldOwner;
-    // The yield came from an ADV text wait (adv_input_service_poll's action-5 entry), so the saved run state holds
-    // the wait (0x80000000): op 0x7c returns to the parked wait rather than to an instruction.
-    private bool _coroutineResumesTextWait;
-    private volatile bool _coroutineYieldActive;      // _coroutineResumePc is set; read when input is routed
     private volatile bool _hiddenWindowWaiting;       // run-state 0x4000000: the engine waits for any trigger
     private volatile bool _hiddenWindowWheelTriggers; // ...with the text wait's 0x80000000, so the wheel is one
     private int _advWaitCoroutineYieldRequested;      // logical action 5 reached a polling ADV text wait
 
     private void ResetCoroutineYield()
     {
-        _coroutineYieldEntered = false;
-        _coroutineResumePc = null;
-        _coroutineYieldOwner = null;
-        _coroutineResumesTextWait = false;
-        _coroutineYieldActive = false;
+        _scene.CoroutineYieldEntered = false;
+        _scene.CoroutineResumePc = null;
+        _scene.CoroutineYieldOwner = null;
+        _scene.CoroutineResumesTextWait = false;
+        _scene.CoroutineYieldActive = false;
     }
 
     /// <summary>Enter the frame's op-0x7b handler A with the yield saved (coroutine_runstate gets the run state plus
@@ -32,11 +23,11 @@ public sealed partial class VirtualMachine
     /// for a text wait it is the instruction after the wait, which is where native's frame pc stands.</summary>
     private int EnterCoroutineYieldHandlerA(int resumePc, bool resumesTextWait)
     {
-        _coroutineResumePc = resumePc;
-        _coroutineYieldOwner = _cur.Script;
-        _coroutineYieldEntered = true;
-        _coroutineResumesTextWait = resumesTextWait;
-        _coroutineYieldActive = true;
+        _scene.CoroutineResumePc = resumePc;
+        _scene.CoroutineYieldOwner = _cur.Script;
+        _scene.CoroutineYieldEntered = true;
+        _scene.CoroutineResumesTextWait = resumesTextWait;
+        _scene.CoroutineYieldActive = true;
         // The poll that led here took the input latch (the text wait's poll for Space, the flush before a control's
         // callback); the latch keeps what arrived since, such as a click an effect in the callback held.
         _text.SetAdvPagePresentationSuspended(Gfx, true);
@@ -47,7 +38,7 @@ public sealed partial class VirtualMachine
     /// Native runs the handlers with no input service and parks in the hidden-window wait, so a triggered action
     /// only latches for that wait. Not while a nested script's raw input callbacks own input (HIDEWIN.BIN).</summary>
     public bool IsAdvCoroutineYieldInputLatched
-        => (_coroutineYieldActive || _hiddenWindowWaiting) && !IsRawInputCallbackActive;
+        => (_scene.CoroutineYieldActive || _hiddenWindowWaiting) && !IsRawInputCallbackActive;
 
     /// <summary>Hold triggered logical actions (bit = 1 &lt;&lt; action) in the input latch while a yield is under way
     /// (<see cref="HoldTriggers"/>): the hidden-window wait takes them, or the text wait op 0x7c returns to. True means
@@ -67,7 +58,7 @@ public sealed partial class VirtualMachine
     {
         if (!_advTextWaitPolling) return false;
         Volatile.Write(ref _advWaitCoroutineYieldRequested, 1);
-        _host.WakeInputCallbackService();
+        _waits.WakeInputCallbackService();
         return true;
     }
 
@@ -84,7 +75,7 @@ public sealed partial class VirtualMachine
         _hiddenWindowWaiting = true;
         try
         {
-            _host.WaitForServiceTrigger(() =>
+            _waits.WaitForServiceTrigger(() =>
             {
                 // input_poll_triggered_action_mask@0x460880 adds action 6 while persistent Skip (ctx+0x13dc) is set, so
                 // op 0x88(1) or the native menu's Skip toggle ends this wait. Fast-forward alone (read-skip) does not.
@@ -102,10 +93,10 @@ public sealed partial class VirtualMachine
         if (_cur.CoroutineYieldHandlerB == -1
             || !_cur.Script.IndexByOffset.TryGetValue(_cur.CoroutineYieldHandlerB, out int handlerB))
             return -1;
-        _coroutineResumePc = resumePc;
-        _coroutineYieldOwner = _cur.Script;
-        _coroutineResumesTextWait = resumesTextWait;
-        _coroutineYieldActive = true;
+        _scene.CoroutineResumePc = resumePc;
+        _scene.CoroutineYieldOwner = _cur.Script;
+        _scene.CoroutineResumesTextWait = resumesTextWait;
+        _scene.CoroutineYieldActive = true;
         return handlerB;
     }
 
@@ -144,19 +135,19 @@ public sealed partial class VirtualMachine
 
     private StepResult OpBeginValueSwitch(Instruction ins, int pc)
     {
-        _valueSwitchTargets.Clear(); return StepResult.Next;
+        _scene.ValueSwitchTargets.Clear(); return StepResult.Next;
     }
 
     private StepResult OpAddValueSwitchCase(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _valueSwitchTargets[ReadStr(a[0])] = checked((int)Read(a[1])); return StepResult.Next;
+        _scene.ValueSwitchTargets[ReadStr(a[0])] = checked((int)Read(a[1])); return StepResult.Next;
     }
 
     private StepResult OpValueSwitchJump(Instruction ins, int pc)
     {
         var a = ins.Args;
-        int target = _valueSwitchTargets.TryGetValue(ReadStr(a[0]), out int matched)
+        int target = _scene.ValueSwitchTargets.TryGetValue(ReadStr(a[0]), out int matched)
             ? matched : checked((int)Read(a[1]));
         return StepResult.Jump(_cur.Script.IndexByOffset.GetValueOrDefault(target, pc + 1));
     }
@@ -178,37 +169,37 @@ public sealed partial class VirtualMachine
         // owner and enters handler A, or does nothing without one. A yield while one is entered leaves for
         // handler B, with the resume still armed. Either way it clears the service trigger mask (ctx+0xa0ce8).
         // The port keeps no such mask apart from the input latch, which op 0x199 leaves alone.
-        if (!_coroutineYieldEntered)
+        if (!_scene.CoroutineYieldEntered)
             return StepResult.Jump(_cur.CoroutineYieldHandlerA == -1
                 ? pc + 1
                 : EnterCoroutineYieldHandlerA(pc + 1, resumesTextWait: false));
         if (_cur.CoroutineYieldHandlerB == -1) return StepResult.Next;
-        _coroutineYieldEntered = false;
+        _scene.CoroutineYieldEntered = false;
         return StepResult.Jump(_cur.Script.IndexByOffset.GetValueOrDefault(_cur.CoroutineYieldHandlerB, pc + 1));
     }
 
     // 0x7c: restore the PC saved by op 0x199
     private StepResult OpCoroutineResume(Instruction ins, int pc)
     {
-        if (_coroutineResumePc is int resumePc)
+        if (_scene.CoroutineResumePc is int resumePc)
         {
             // op_0x7c_handler@0x417cb0: a resume saved by another script raises Depth before anything changes,
             // so 再試行 raises it again. Op 0x7c records no instruction length before the throw, so native's
             // 無視 skips by the previous handler's; the port skips the 0x7c itself.
-            if (_coroutineYieldOwner is { } owner && !IsSameScript(owner, _cur.Script))
+            if (_scene.CoroutineYieldOwner is { } owner && !IsSameScript(owner, _cur.Script))
                 return StepResult.Jump(RaiseInstructionScriptError(DepthError(owner), pc));
             // Op 0x7c restores coroutine_runstate & ~0x2000000. Unless handler B came through a second op
             // 0x199, that keeps op 0x199's 0x4000000: the hidden-window wait (Himegari's handler A takes this
             // path, as adv_hide_window_enabled G[0x62425] is 0 in retail). The page stays hidden until
             // handler B's own op 0x7c.
-            bool hiddenWindow = _coroutineYieldEntered;
-            bool resumesTextWait = _coroutineResumesTextWait;
+            bool hiddenWindow = _scene.CoroutineYieldEntered;
+            bool resumesTextWait = _scene.CoroutineResumesTextWait;
             ResetCoroutineYield();
             // Op 0x7c also clears the current hotspot hit (ctx+0xc6f8) and keeps the hovered record: the
             // next poll leaves it, and only a pointer move hits it again.
             bool hitCleared;
-            hitCleared = _interactiveFrame?.Hotspots.InvalidateHit() == true;
-            if (hitCleared) _host.WakeInputCallbackService();
+            hitCleared = _scene.InteractiveFrame?.Hotspots.InvalidateHit() == true;
+            if (hitCleared) _waits.WakeInputCallbackService();
             if (hiddenWindow && WaitInHiddenWindow(resumePc, resumesTextWait) is >= 0 and int handlerB)
                 return StepResult.Jump(handlerB);
             _text.SetAdvPagePresentationSuspended(Gfx, false);

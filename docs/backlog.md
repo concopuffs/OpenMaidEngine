@@ -174,6 +174,17 @@ it; git history keeps the record.
   the same on `develop` (`1d7a39e`), so this predates the engine layering work. The scenario's History pictures match
   native. Done when the records match, or the field is shown to be a stamp and listed with `save-diff`'s expected
   differences (`tools-reference.md`).
+- **Fields op `0x9` keeps that native's reset was not checked for.** Since engine layering milestone 12 (2026-11-13)
+  each owner's scene state is one object that op `0x9`'s reset builds again, and `SceneReloadTests` lists what each
+  owner keeps across a reload, with reasons. Nothing in the port resets four of the kept fields, and native's
+  `scene_context_init_reset@0x40b3b0` (SYS4433 `0x40c2b0`) has not been checked for them:
+  - the VM's `_tickPresentationEnabled` (ops `0x21b` and `0x247`, `ctx+0x99294`);
+  - `GfxState.DefaultObjectSlot` (op `0x80`, `ctx+0x14e08`);
+  - `GfxState`'s numeric glyph styles (`register-numeric-glyph-style` and its extended form);
+  - the text native's `_waitIndicatorFollowLastGlyph` (`set-adv-wait-indicator-follow-last-glyph`).
+
+  Done when each is checked in the decompilation. A field that native's reset sets moves into its owner's `Scene`,
+  starting at native's value. A field that native keeps gets that reason on its line in `SceneReloadTests`.
 
 ## Robustness
 
@@ -208,7 +219,7 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
 ## Architecture
 
 Structural problems the 2026-11-10 codebase review found in `VirtualMachine` (29 partial files), `GodotAdvHost` (6;
-`EngineHost` in `Ome.Engine` since milestone 4 of the design below) and `Main` (15). A partial class only changes which
+lifted into `Ome.Engine` as `EngineHost` in milestone 4 of the design below, and removed in milestone 12) and `Main` (15). A partial class only changes which
 file a member is in, so any file can still read or write any field. The review proposed one migration for all of them
 (`vm-host-main-restructure-design-2026-11-10.md` at the workspace root, outside this repository); that plan was not
 adopted. On 2026-11-12 the engine layering design was accepted instead
@@ -217,16 +228,6 @@ engine builds declared in one file. Each item below that it covers names the mil
 still handled on their own. Each change should be behaviour-neutral and pass the spec's acceptance 4: the suite, the
 `oms-rebuild` trace gate, the drive scenarios, `save-diff`, and timing or frame-time captures where they apply.
 
-- **Scene reset clears fields one by one.** `ResetSceneContextForRootReload` (`VirtualMachine.cs:991`)
-  assigns fields from many partials (each native's state, since milestones 5 to 10, through its `ResetScene`), and
-  `InputAndWaits.ResetScene` (`Natives/InputAndWaits.cs`, the host's reset since milestone 11) does the same for the
-  waits. Scene state added
-  without a line in these methods survives タイトルに戻る. That is how the host's dialog events stayed signalled until
-  2026-11-10, when each was reset by hand; since milestone 9 (2026-11-13) a dialog is a request that the reset
-  cancels. Done when a root reload
-  rebuilds scene-lifetime state instead of clearing it, so a new field cannot be missed, and a test shows a reload
-  keeps no scene state from before it. Planned: layering spec, as each native takes its state; closed at milestone
-  12.
 - **No single error path.** The VM reports a fault in several ways: 57 `HaltReason` assignments, `VmHaltException`,
   the native error dialog (`ShowScriptError`), host warnings (`ReportWarning`), and exceptions that end the VM
   thread. The mod linker, the OMS compiler and the CLI each keep their own catch filters. Three of the review's bugs

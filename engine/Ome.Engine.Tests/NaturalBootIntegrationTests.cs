@@ -84,7 +84,7 @@ public class NaturalBootIntegrationTests
         }
     }
 
-    private sealed class NewGameInputHost : RecordingHost
+    private sealed class NewGameInputHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         private readonly int _titlePointerX;
@@ -338,7 +338,7 @@ public class NaturalBootIntegrationTests
 
         var sink = new StopAfterChmenuRosterSink();
         var menuVm = new VirtualMachine(boot.Scripts.RequireByName("CHMENU.BIN"), boot.Table,
-            new RecordingHost(), new VmOptions(MaxSteps: 5_000_000), boot.Scripts, sink);
+            new RecordingWaits(), new VmOptions(MaxSteps: 5_000_000), boot.Scripts, sink);
         sink.Vm = menuVm;
         foreach (var (address, value) in boot.Vm.Globals) menuVm.Globals[address] = value;
         foreach (var (address, value) in boot.Vm.GlobalStrings) menuVm.GlobalStrings[address] = value;

@@ -3,9 +3,9 @@ using Ome.Engine.Natives;
 
 namespace Ome.Engine.Hosting;
 
-/// <summary>A headless host for tools and tests: it records the diagnostic boxes and, as it hears the VM's text native,
-/// each run shown.</summary>
-public sealed class CaptureHost : IHost, ITextListener
+/// <summary>The waits of a headless run, for tools and tests: each returns at once (a text wait as if clicked), and it
+/// records the diagnostic boxes and, as it hears the VM's text native, each run shown.</summary>
+public sealed class HeadlessWaits : IInputAndWaits, ITextListener
 {
     public List<(int Offset, string Text)> Emitted { get; } = new();
     public List<DiagnosticMessage> Diagnostics { get; } = new();

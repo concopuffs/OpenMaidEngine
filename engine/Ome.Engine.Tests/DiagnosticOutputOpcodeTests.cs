@@ -25,7 +25,7 @@ public class DiagnosticOutputOpcodeTests
             (0x1b4, []),
             Exit(),
         ], ["invalid mode=", "tail"]);
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         VirtualMachine? vm = null;
         var pendingAtPresentation = new List<string>();
         host.OnDiagnosticMessage = _ => pendingAtPresentation.Add(vm!.Shell.PendingDiagnosticText);
@@ -69,7 +69,7 @@ public class DiagnosticOutputOpcodeTests
             (0x1b4, []),
             Exit(),
         ], [":", "/", "/"]);
-        var host = new CaptureHost();
+        var host = new HeadlessWaits();
         var vm = new VirtualMachine(scene, Table, host);
         vm.GlobalFloats[0x10] = BitConverter.SingleToInt32Bits(1.25f);
         vm.Globals[0x20] = 0x30;
@@ -99,9 +99,9 @@ public class DiagnosticOutputOpcodeTests
             (0x1b4, []),
             Exit(),
         ], ["system diagnostic"]);
-        var host = new CaptureHost();
+        var host = new HeadlessWaits();
 
-        session.RunScene(field, Table, new CaptureHost());
+        session.RunScene(field, Table, new HeadlessWaits());
         Assert.Equal("field diagnostic\r\n", session.DiagnosticOutput.PendingText);
         session.RunScene(system, Table, host);
 

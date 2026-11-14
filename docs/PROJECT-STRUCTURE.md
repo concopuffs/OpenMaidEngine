@@ -352,7 +352,8 @@ reports) and persists the mixer settings, and
 (`godot/GpuRetainedRenderer.cs`, an `IFrameRenderer`) draws it or declines it, and otherwise the reference renderer
 (`engine/Ome.Engine/Hosting/ReferenceRenderer.cs`, below) draws it and Main, the `IFramePresenter`, uploads its pixels.
 It also runs the driver's `reference-diff`, which draws every frame with the reference too and compares the two.
-`godot/Main.FrontEnd.cs` is Main's `IFrontEnd`, the calls the lifted host makes. `godot/Main.Input.cs` owns
+`godot/Main.FrontEnd.cs` is Main's cursor device (`ICursorDevice`) and its dialogs (`IShellDialogs`).
+`godot/Main.Input.cs` owns
 Godot input routing, locator/debug hotkeys, debug-scene dispatch, cursor control, native alerts, and
 full-width text entry. `godot/Main.Drive.cs` owns the `--control` driving backend: the control server's lifetime,
 injected input events, exclusive input, and the port side of the protocol (state, screenshots, speed, close).
@@ -389,32 +390,20 @@ command-line entry point and output writer. `Control/` holds the game-driving pr
 (`docs/superpowers/specs/2026-11-03-game-driving-design.md`): its JSON model and conditions, the dispatcher that
 turns requests into timed input over an `IDriveBackend`, and the loopback `DriveServer`.
 
-The runtime host is `engine/Ome.Engine/Hosting/EngineHost.cs`, lifted out of `godot/` in engine layering milestone 4
-(`docs/superpowers/specs/2026-11-12-engine-layering-design.md`); it reaches the front end only through
-`Hosting/IFrontEnd.cs`. Since milestone 11 it holds no lock, wait handle or wait flag: it keeps the `IHost` members the
-VM calls, each a call to the native that does the work, and the diagnostic snapshot (`EngineHost.cs`). Its partials
-are `EngineHost.Waits.cs`, which hands every wait to the input and waits native, `EngineHost.Cursor.cs` (the AGE
-cursor of ops `0x86`, `0x87` and `0x10a`) and `EngineHost.Settings.cs` (it seeds skip's Auto times from `SYS4REG.INI`
-and writes the message settings back at shutdown). `Hosting/HostPresentationReason.cs` names why a frame is drawn
-again. Milestone 12 removes the host. `Hosting/ReferenceRenderer.cs` is the reference renderer (spec §6.3): it draws a
-frame description into its own RGBA buffer, which the front end shows, and defines what each frame item means; a
-render-target publication draws with its rules. `Hosting/BlurRangeSources.cs` is the blur-range rule the lowering
-uses.
+The VM reaches the input and waits native through `engine/Ome.Engine/Natives/IInputAndWaits.cs`, which the native
+implements (`Natives/InputAndWaits.Interpreter.cs`): the diagnostics and script errors, the script context, sleeps and
+the frame yield, the scene reset, the modal movie, the presentation waits and fades, the ADV waits and callback
+servicing, the input clock and the cursor. Engine layering milestone 12 removed the lifted host (`EngineHost`) and its
+interfaces (`docs/superpowers/specs/2026-11-12-engine-layering-design.md`, §5.2). `Hosting/HeadlessWaits.cs` stands
+in for the native where nothing waits (the CLI, the self-test, the tests): it records what it is asked and blocks on
+nothing. `Hosting/IScriptProvider.cs` is the scripts the interpreter loads, with `ScriptMap` for a fixed set.
+`Natives/PresentationReason.cs` names why a frame is drawn again. `Hosting/ReferenceRenderer.cs` is the reference
+renderer (spec §6.3): it draws a frame description into its own RGBA buffer, which the front end shows, and defines
+what each frame item means; a render-target publication draws with its rules. `Hosting/BlurRangeSources.cs` is the
+blur-range rule the lowering uses. The save thumbnails go through `engine/Ome.Engine/Persistence/
+NumberedSaveThumbnails.cs`, over the graphics native's surfaces.
 
-`engine/Ome.Engine/Hosting/IHost.cs` remains the aggregate runtime host accepted by the VM and existing host
-implementations. `engine/Ome.Engine/Hosting/IDiagnosticHost.cs` owns recoverable-warning and modal-diagnostic
-reporting contracts, while `engine/Ome.Engine/Hosting/ILifecycleHost.cs` owns script-context entry/exit, sleep and
-timed-deadline waiting, frame yield, and scene reset. Audio is not a host contract: the VM calls the audio native
-(below). `engine/Ome.Engine/Hosting/IMovieHost.cs` owns ordinary, positioned, mask-transition, activity-query,
-and modal movie playback contracts. `engine/Ome.Engine/Hosting/IGraphicsHost.cs` keeps the presentation ops
-that block (ops `0x222` and `0x20c`, the foreground transition wait, the four screen fades), which the host hands to
-the input and waits native; the surface ops are the graphics native's. Pixel capture and replace are
-`engine/Ome.Engine/Hosting/ISurfacePixels.cs`, which the graphics native implements; the save thumbnails reach them
-through `engine/Ome.Engine/Persistence/NumberedSaveThumbnails.cs`. `engine/Ome.Engine/Hosting/IInputHost.cs` owns
-modal fullwidth entry, ADV waits/callback servicing, input clock, cursor resources, and skip-state interaction.
-`engine/Ome.Engine/Hosting/IAdvHost.cs` holds the reveal's wait alone (text is the text native's since engine
-layering milestone 10). `IHost` inherits all six focused contracts; every required member and
-overload/default chain remains unchanged. The neutral
+The neutral
 `engine/Ome.Engine/Model/MovieMaskTransitionRequest.cs` record carries movie mask work between the VM, host, and
 retained graphics without making `Model` depend on `Hosting`.
 `engine/Ome.Engine.Devices/Model/RgbaImage.cs` owns the format-independent packed RGBA image transported between
@@ -469,7 +458,7 @@ transforms, per-object animation control, frame-time sampling, and the shared an
 `engine/Ome.Engine.Vm/VirtualMachine.Presentation.cs` owns queued surface-alpha transitions, frame and object-range
 publication, skip-aware blocking fades/crossfades, foreground-transition waits, and graphics command-queue clear.
 `engine/Ome.Engine.Vm/VirtualMachine.AdvText.cs` holds the text handlers: the show-text ops, layouts, cursors, style,
-glyph delay, surface strings, the wait indicator's ops and the message a run belongs to (`_presentedMessage`); each
+glyph delay, surface strings, the wait indicator's ops and the message a run belongs to (the VM scene's `PresentedMessage`); each
 calls the text native. `engine/Ome.Engine.Vm/VirtualMachine.TextHistory.cs` holds the History handlers (recording
 control, metadata append/navigation, rendering a group, voice lookup, clearing the backlog).
 `engine/Ome.Engine.Vm/VirtualMachine.TextStores.cs` resolves the global string cell an operand names, for the string
@@ -506,8 +495,9 @@ triggers held while nothing polls (effects under `EffectSkipOnClick` 0, the ADV 
 take them, and the discard points. The skip-and-auto native `engine/Ome.Engine/Natives/SkipAndAuto.cs` owns Skip,
 Auto, read skip and run-state `0x08000000`; its partials own fast-forward from a held action 6 (`PhysicalInput`: the
 two start paths, op `0x101`'s reveal suppression and the clears), the click cancel (`ClickCancel`) and the
-fast-forward pace (`Pace`). Composition builds it and hands the same instance to the VM and to `EngineHost`, which
-listens for fast-forward changes (`IFastForwardListener`).
+fast-forward pace (`Pace`). Composition builds it and hands the same instance to the VM and to the natives that
+listen for fast-forward changes (`IFastForwardListener`: the audio native and the input and waits native). It reads
+the Auto delays from `SYS4REG.INI` at composition (`ReadSettings`).
 The audio native `engine/Ome.Engine/Natives/Audio.cs` owns the 13 channels' playing state and its tick step; its
 partials own the retained BGM track and envelope, the op `0xc2` fade and the voice duck with its release (`Bgm`),
 the voice that fast-forward holds back, the mute request and the delayed voice (`Voice`), the sound effect channels
@@ -539,8 +529,9 @@ its siblings return them), the engine's string encoding, the queues and stacks o
 reset and the banks' sections of a numbered save; its partial `ScriptMemory.Random.cs` owns op `0x60`'s seeded
 per-call-site streams, which the drive step `rand-seed` turns on.
 The save and settings native `engine/Ome.Engine/Natives/SavesAndSettings.cs` owns the shared profile, the save store,
-`SYS4REG.INI` (the front end's shell reads and writes the keys AGERC owned through it), the playtime clock and the
-shutdown flush (`set:NoSaveDat`); its partial `SavesAndSettings.Numbered.cs` owns ops `0x19e`-`0x1a1` and `0x1ab`-`0x1af`
+`SYS4REG.INI` (the front end's shell reads and writes the keys AGERC owned through it), the playtime clock, the
+shutdown flush (`set:NoSaveDat`) and the shutdown write of the message settings (`FlushMessageSettingsOnShutdown`);
+its partial `SavesAndSettings.Numbered.cs` owns ops `0x19e`-`0x1a1` and `0x1ab`-`0x1af`
 and decides a numbered save's order: each native writes and reads its own records (`NumberedSaveRecords`; audio's in
 `Audio.Mixer.cs`, graphics' in `Graphics.Saves.cs`).
 The shell-services native `engine/Ome.Engine/Natives/ShellServices.cs` owns ops `0x142`, `0x148`/`0x149` and `0x10f`'s
@@ -559,7 +550,9 @@ holds the effect and screen transition waits; `Presentation` holds the synchroni
 thread may present; `Modal` holds op `0x20f`'s movie and the dialog waits; `Turns` holds the engine thread
 (`RunEngine`), the front end's frame turn (`RunFrameTurn`, which returns the frame description to draw) and its
 requests (`Invoke`, `TryInvoke`). `Natives/StopAndReload.cs` holds the stop and the return to title, one copy for the
-waits and the interpreter; `Natives/IWaitListener.cs` tells the front end of the text waits' pages.
+waits and the interpreter. The front end reads the text waits' pages by polling `PageNotices` and `Pages`. The VM
+calls the native through `Natives/IInputAndWaits.cs` (above), and the native shows the cursor through the device
+`engine/Ome.Engine.Devices/Window/ICursorDevice.cs`.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state

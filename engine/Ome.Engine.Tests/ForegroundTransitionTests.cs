@@ -79,7 +79,7 @@ public class ForegroundTransitionTests
             }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost(),
+        var vm = new VirtualMachine(scene, table, new RecordingWaits(),
             build: EngineBuilds.Age433G);
         vm.Globals[10] = 8;
         vm.Globals[11] = 16;
@@ -193,7 +193,7 @@ public class ForegroundTransitionTests
             }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost(),
+        var vm = new VirtualMachine(scene, table, new RecordingWaits(),
             build: EngineBuilds.Age433G);
         vm.Globals[10] = 100;
         vm.Globals[11] = -90;
@@ -225,7 +225,7 @@ public class ForegroundTransitionTests
             }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, table, new RecordingHost(),
+        var vm = new VirtualMachine(scene, table, new RecordingWaits(),
             build: EngineBuilds.Age433G);
 
         vm.Run();
@@ -267,7 +267,7 @@ public class ForegroundTransitionTests
             (0x21c, System.Array.Empty<Operand>()),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(scene, table, host, skipAndAuto: TestSkipAndAuto.ReadSkipping());
 
         vm.Run();

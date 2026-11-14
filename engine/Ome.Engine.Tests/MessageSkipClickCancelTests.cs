@@ -17,7 +17,7 @@ public class MessageSkipClickCancelTests
     private const int Probe = 0x200;
 
     /// <summary>Drives physical mouse slot 0 (action 4 by default) at chosen instruction boundaries.</summary>
-    private sealed class ClickHost : RecordingHost
+    private sealed class ClickHost : RecordingWaits
     {
         public VirtualMachine? Vm;
         public readonly Dictionary<int, Action<VirtualMachine>> AtYield = new();

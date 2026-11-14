@@ -20,7 +20,7 @@ public class RecoverTests
         var noop = ScriptAssembler.Assemble(table, "NOOP",
             new List<(int, Ome.Engine.Model.Operand[])> { (0x2, System.Array.Empty<Ome.Engine.Model.Operand>()) },
             System.Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new CaptureHost(), null, new AnyProvider(noop));
+        var vm = new VirtualMachine(script, table, new HeadlessWaits(), null, new AnyProvider(noop));
 
         int unit = 0;
         vm.Globals[0x152616] = unit;

@@ -61,7 +61,7 @@ public class GfxRangeTransformTests
             (0x22e, new[] { I(0), I(300), I(0), I(0), I(1), I(90) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.Gfx.SetSurface(1, 1, -1);
         vm.Gfx.BindDraw(10, 1, 0, 0, 1, 1, 410, 300);
         vm.Gfx.BindDraw(20, 1, 0, 0, 1, 1, 410, 300);
@@ -96,7 +96,7 @@ public class GfxRangeTransformTests
             (0x220, new[] { I(50001), I(0), I(300), I(100), I(50), I(0) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Gfx.SetSurface(1, 1, -1);
         vm.Gfx.BindDraw(1, 1, 0, 0, 1, 1, 500, 350);
@@ -130,7 +130,7 @@ public class GfxRangeTransformTests
             (0x22a, new[] { I(100), I(100), I(100) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 

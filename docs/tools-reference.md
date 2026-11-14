@@ -453,7 +453,7 @@ diagnostic events over the `Ome.Engine.Diagnostics.ITraceSink` seam — scene/su
 (indented by call depth), call-script dispatch with resolved name, and the final halt+step count — to
 console or a file. Add `--trace-steps` for per-instruction opcode/arg + stub-op detail (high volume;
 gated). Absent ⇒ no tracing (`NullTraceSink`, byte-identical run). This is an **engine** fact stream:
-frontends consume it instead of reimplementing a diagnostic `IHost`. Example: `play SC0000.BIN --trace`
+frontends consume it instead of reimplementing a diagnostic stand-in for the waits native. Example: `play SC0000.BIN --trace`
 shows `» SC0000.BIN (enter, TopScene)` → `call-script 0xee =INPUTNAME.BIN (resolved)` → `halt: …`.
 
 **Aggregating / filtered diagnostics** (added 2026-07-08 after a full `--trace-steps` dump proved unusable

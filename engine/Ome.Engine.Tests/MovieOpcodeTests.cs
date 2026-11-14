@@ -542,7 +542,7 @@ public class MovieOpcodeTests
             (0x130, new[] { new Operand(3, 0x101) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(root, table, host,
             provider: new MapProvider(new Dictionary<long, Script> { [0] = reloadedRoot }));
 
@@ -563,7 +563,7 @@ public class MovieOpcodeTests
             (0x55, new[] { new Operand(3, 0x1234), new Operand(0, 0x5678) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -584,9 +584,9 @@ public class MovieOpcodeTests
         var provider = Sys4ScriptProvider.Load(table);
         var session = new GameSession();
         foreach (var name in new[] { "INITCONFIG.BIN", "INIT2.BIN", "INIT.BIN" })
-            session.RunScene(Sys4Loader.Load(Paths.Scripts()[name], table), table, new CaptureHost(), provider: provider);
+            session.RunScene(Sys4Loader.Load(Paths.Scripts()[name], table), table, new HeadlessWaits(), provider: provider);
         var script = Sys4Loader.Load(Paths.Scripts()["SC0000.BIN"], table);
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var movies = new MovieRig(_ => new FakeMovieDecoder { StopTimeMs = 12016 });   // CHAPTER.AGF's stop time
         var trace = new RecordingTraceSink { TracingSteps = true };
         var vm = movies.Vm(script, table, host, new VmOptions(MaxSteps: 20_000_000), provider, trace);
@@ -622,7 +622,7 @@ public class MovieOpcodeTests
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
         var movies = new MovieRig();
-        var vm = movies.Vm(script, table, new RecordingHost());
+        var vm = movies.Vm(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -641,7 +641,7 @@ public class MovieOpcodeTests
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
         var movies = new MovieRig();
-        var vm = movies.Vm(script, table, new RecordingHost());
+        var vm = movies.Vm(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -669,7 +669,7 @@ public class MovieOpcodeTests
             (0x2, Array.Empty<Operand>()),
         ], []);
         var movies = new MovieRig();
-        var vm = movies.Vm(script, table, new RecordingHost());
+        var vm = movies.Vm(script, table, new RecordingWaits());
 
         vm.Run();
         // The rate waits for the next frame service, which takes the decoder first and then applies it.
@@ -690,7 +690,7 @@ public class MovieOpcodeTests
             (0x2, Array.Empty<Operand>()),
         ], []);
         var movies = new MovieRig();
-        var vm = movies.Vm(script, table, new RecordingHost());
+        var vm = movies.Vm(script, table, new RecordingWaits());
         vm.Gfx.CreateSurface(44);
 
         vm.Run();
@@ -716,7 +716,7 @@ public class MovieOpcodeTests
             (0x2, Array.Empty<Operand>()),
         ], []);
         var movies = new MovieRig(_ => new FakeMovieDecoder { StopTimeMs = 1876, InitialPositionMs = 1875 });
-        var vm = movies.Vm(script, table, new RecordingHost());
+        var vm = movies.Vm(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -746,7 +746,7 @@ public class MovieOpcodeTests
         ], []);
         var movies = new MovieRig();
         movies.Assets.Unresolved.Add(0x325e);
-        var vm = movies.Vm(script, table, new RecordingHost());
+        var vm = movies.Vm(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -780,7 +780,7 @@ public class MovieOpcodeTests
         long resourceDuringSetup = -1;
         movies.Decoders.OnOpen += (_, _) =>
             resourceDuringSetup = vm!.Gfx.SnapshotVisibleObjects().Single().SurfaceResId;
-        vm = movies.Vm(script, table, new RecordingHost());
+        vm = movies.Vm(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -800,7 +800,7 @@ public class MovieOpcodeTests
             (0x23f, new[] { new Operand(3, 0x1234), new Operand(0, 5) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var movies = new MovieRig(_ => new FakeMovieDecoder { StopTimeMs = 1876 });
         var vm = movies.Vm(script, table, host);
 
@@ -824,7 +824,7 @@ public class MovieOpcodeTests
             (0x23f, new[] { new Operand(3, 0x1234), new Operand(0, 5) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
         vm.Gfx.GetOrCreate(5); // retained-object existence is unrelated to the native movie-object slot
 
@@ -845,7 +845,7 @@ public class MovieOpcodeTests
             (0x23a, new[] { new Operand(3, 0x1235), new Operand(0, 5) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();

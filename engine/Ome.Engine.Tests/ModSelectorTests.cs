@@ -413,7 +413,7 @@ public sealed class ModSelectorTests : IDisposable
             (0x143, Array.Empty<Operand>()),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(root, Table, new RecordingHost(), provider: provider);
+        var vm = new VirtualMachine(root, Table, new RecordingWaits(), provider: provider);
         vm.Run();
 
         // example.lib's AUTO (selector 2) ran before example.app's MAIN (selector 3), which called HELLO across mods.

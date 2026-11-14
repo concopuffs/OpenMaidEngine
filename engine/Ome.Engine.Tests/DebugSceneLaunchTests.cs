@@ -53,7 +53,7 @@ public class DebugSceneLaunchTests
         var scripts = Sys4ScriptProvider.Load(table);
         var sink = new LaunchDebugMapAndStopAfterPage8Sink();
         var vm = new VirtualMachine(
-            scripts.RequireByName("SYSTEM4.BIN"), table, new CaptureHost(),
+            scripts.RequireByName("SYSTEM4.BIN"), table, new HeadlessWaits(),
             new VmOptions(MaxSteps: 1_000_000), scripts, sink);
         sink.Vm = vm;
 
@@ -196,7 +196,7 @@ public class DebugSceneLaunchTests
         Assert.Equal(1, vm.Globals[0x7302]);
     }
 
-    private sealed class BlockingWaitHost : RecordingHost
+    private sealed class BlockingWaitHost : RecordingWaits
     {
         private readonly SemaphoreSlim _gate = new(0, 1);
         public ManualResetEventSlim WaitEntered { get; } = new(false);
@@ -212,7 +212,7 @@ public class DebugSceneLaunchTests
         public void SignalInput() => _gate.Release();
     }
 
-    private sealed class BlockingSleepHost : RecordingHost
+    private sealed class BlockingSleepHost : RecordingWaits
     {
         private readonly SemaphoreSlim _gate = new(0, 1);
         public ManualResetEventSlim SleepEntered { get; } = new(false);

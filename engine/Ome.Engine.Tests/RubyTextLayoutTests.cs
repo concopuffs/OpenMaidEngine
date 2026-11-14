@@ -226,7 +226,7 @@ public class RubyTextLayoutTests
                 (0x196, new[] { I(0), S(0), S(1) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "叛乱", "はんらん" });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host, build: EngineBuilds.Age433G).Run();
 
@@ -247,7 +247,7 @@ public class RubyTextLayoutTests
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "今にも", "篝火", "かがりび" });
         // Square glyphs: 今にも is 72 pixels and 篝火 48, かがりび at the ruby's 8 pixels 32 above it.
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = TestText.Vm(script, Table, host, TestText.Glyphs(TestText.Square()));
 
         vm.Run();

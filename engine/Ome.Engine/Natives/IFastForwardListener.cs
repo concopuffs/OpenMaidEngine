@@ -13,9 +13,9 @@ public enum FastForwardChannel
 }
 
 /// <summary>
-/// Told each time a fast-forward channel of <see cref="SkipAndAuto"/> is set, changed or not. The lifted host keeps
-/// what a change does elsewhere until those natives exist (implementation plan §3.2): when fast-forward starts it
-/// completes the reveal and wakes the waits, and when it ends it plays the voice it held back.
+/// Told each time a fast-forward channel of <see cref="SkipAndAuto"/> is set, changed or not, so what a change does
+/// elsewhere happens there: when fast-forward starts the input and waits native completes the reveal and wakes the
+/// waits, and when it ends the audio native plays the voice it held back.
 /// </summary>
 /// <remarks>Called on the thread that set the channel, after the state lock is released. A physical set calls it
 /// inside the input lock, so the effects of two action-6 decisions do not interleave.</remarks>

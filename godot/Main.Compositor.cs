@@ -68,7 +68,7 @@ public partial class Main : IFramePresenter
         _gpuRenderer.Visible = false;
         _screenView.Visible = true;
         _reference.Draw(frame);
-        if (diagnostic && !late) _decisionLog.Record(_clock.NowMs, _pageCount);
+        if (diagnostic && !late) _decisionLog.Record(_clock.NowMs, _waits.Pages);
         Present(_reference.Pixels, _reference.Width, _reference.Height);
         _perf?.EndRecomposite();
     }

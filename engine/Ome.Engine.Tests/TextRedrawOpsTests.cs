@@ -28,7 +28,7 @@ public class TextRedrawOpsTests
             (0x82, [G(0x11), G(0x12), I(2), I(0xffffff), I(0x123456)]),
             (0x2, Array.Empty<Operand>()),
         ], []);
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, Table, host, textHistory: history);
 
         vm.Run();
@@ -91,7 +91,7 @@ public class TextRedrawOpsTests
             (0x83, [G(0x10), G(0x11), G(0x12)]),
             (0x2, Array.Empty<Operand>()),
         ], []);
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
 
         vm.Run();
 

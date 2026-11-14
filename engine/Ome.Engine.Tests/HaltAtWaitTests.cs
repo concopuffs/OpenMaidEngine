@@ -23,7 +23,7 @@ public class HaltAtWaitTests
     public void Default_PlowsPastWait_EmitsBothPages()
     {
         var t = Table();
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(TwoPage(t), t, host);   // default VmOptions => HaltAtWaitForInput=false
         vm.Run();
         Assert.Equal(2, host.Lines.Count);          // both pages emitted (plow)
@@ -34,7 +34,7 @@ public class HaltAtWaitTests
     public void HaltAtWait_StopsAtFirstWait_EmitsOnlyFirstPage()
     {
         var t = Table();
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(TwoPage(t), t, host, new VmOptions(HaltAtWaitForInput: true));
         vm.Run();
         Assert.Single(host.Lines);                  // only page A ran; halted at the wait

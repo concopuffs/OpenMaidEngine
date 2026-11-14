@@ -14,9 +14,6 @@ public sealed partial class TextManager
 {
     // ctx+0x5f630, the reveal's glyph timer: op 0x6e arms it, op 0x196 keeps polling the previous arm.
     private readonly PeriodTimer _glyphTimer = new();
-    private bool _advTextForceComplete;
-    // ctx+0x55108: a click (or a held action 4) finished a reveal; every later reveal publishes at once until op 0x72.
-    private bool _revealsFinishedUntilWait;
 
     /// <summary>The run being revealed: its presentation, its glyph range, the ticks that publish it and how many have
     /// passed.</summary>
@@ -28,7 +25,6 @@ public sealed partial class TextManager
         public int TickCount;
         public int Ticks;
     }
-    private RevealState? _reveal;
 
     /// <summary>
     /// Run-state 0x20000000: a run is revealing. Set as a run that may reveal starts (a delay, no fast-forward, and the
@@ -38,14 +34,13 @@ public sealed partial class TextManager
     /// </summary>
     public bool IsRevealing
     {
-        get => _isRevealing;
-        private set => _isRevealing = value;
+        get => _scene.IsRevealing;
+        private set => _scene.IsRevealing = value;
     }
-    private volatile bool _isRevealing;
 
     /// <summary>
     /// A show-text run (ops 0x6e and 0x196): drawn into its layout's surface and bound, then published at once, or armed
-    /// for the reveal (<see cref="IsRevealing"/>), which the host's wait runs through <see cref="ServiceReveal"/>.
+    /// for the reveal (<see cref="IsRevealing"/>), which the input and waits native's reveal wait runs through <see cref="ServiceReveal"/>.
     /// History records the run's source rows, so it holds what the source-language run would have recorded, and the
     /// layout's cursors move (localization spec §8). Without devices nothing is drawn: History records one row at the
     /// cursor, and the result is null.
@@ -129,20 +124,20 @@ public sealed partial class TextManager
                 presentation.PublishableGlyphCount - result.FirstGlyphIndex));
         // A tick publishes one record, or a chained group after a ruby (adv_text_publish_next_glyph@0x451220).
         int revealTicks = presentation.PublicationTicks(result.FirstGlyphIndex, revealGlyphCount);
-        _activeRunLayout = run.Layout.Slot;
+        _scene.ActiveRunLayout = run.Layout.Slot;
         _currentAdvLayout = run.Layout.Slot;
         // Read skip takes the blocking builder (no timer); a finished-until-wait reveal still arms it.
         bool incremental = revealGlyphCount > 0 && delay > 0 && !_skip.FastForwardActive;
         if (incremental && run.ArmsGlyphTimer) _glyphTimer.Arm(_clock.NowMs, delay);
-        _advTextForceComplete = _skip.FastForwardActive || _revealsFinishedUntilWait;
-        _reveal = new RevealState
+        _scene.AdvTextForceComplete = _skip.FastForwardActive || _scene.RevealsFinishedUntilWait;
+        _scene.Reveal = new RevealState
         {
             Presentation = presentation,
             FirstGlyphIndex = result.FirstGlyphIndex,
             GlyphCount = revealGlyphCount,
             TickCount = revealTicks,
         };
-        IsRevealing = incremental && !_advTextForceComplete;
+        IsRevealing = incremental && !_scene.AdvTextForceComplete;
         _timeline?.State("text-reveal", new()
         {
             ["offset"] = $"0x{run.SourceOffset:x}",
@@ -157,7 +152,7 @@ public sealed partial class TextManager
 
         if (!IsRevealing)
         {
-            _reveal = null;
+            _scene.Reveal = null;
             presentation.PublishThrough(gfx, checked(result.FirstGlyphIndex + revealGlyphCount));
             _graphics.RequestPresentation();
             _timeline?.State("running", new() { ["text_reveal_complete"] = true });
@@ -173,9 +168,9 @@ public sealed partial class TextManager
     /// </summary>
     public int? ServiceReveal(GfxState gfx)
     {
-        if (!IsRevealing || _reveal is not { } reveal) return null;
+        if (!IsRevealing || _scene.Reveal is not { } reveal) return null;
         long? due;
-        if (_advTextForceComplete) reveal.Ticks = reveal.TickCount;
+        if (_scene.AdvTextForceComplete) reveal.Ticks = reveal.TickCount;
         else if (_glyphTimer.Poll(_clock.NowMs) >= 0) reveal.Ticks++;
         if (reveal.Ticks >= reveal.TickCount) IsRevealing = false;
         due = _glyphTimer.NextDueMs;
@@ -187,7 +182,7 @@ public sealed partial class TextManager
             _graphics.RequestPresentation();
         if (!IsRevealing)
         {
-            _reveal = null;
+            _scene.Reveal = null;
             return null;
         }
         return due is long deadline ? _clock.RealMillisecondsUntil(deadline, 50) : 50;
@@ -199,7 +194,7 @@ public sealed partial class TextManager
     public bool FinishRevealOnClick()
     {
         if (!IsRevealing) return false;
-        _advTextForceComplete = _revealsFinishedUntilWait = true;
+        _scene.AdvTextForceComplete = _scene.RevealsFinishedUntilWait = true;
         _timeline?.State("text-reveal-forced-complete", new());
         return true;
     }
@@ -207,19 +202,19 @@ public sealed partial class TextManager
     /// <summary>Fast-forward started, or the engine is stopping: the reveal in progress publishes the rest.</summary>
     public void CompleteReveal()
     {
-        _advTextForceComplete = true;
+        _scene.AdvTextForceComplete = true;
     }
 
     /// <summary>A held action 4 (the VM's input latch): the page's reveals publish at once until op 0x72.</summary>
     public void FinishTextRevealsUntilWait()
     {
-        _revealsFinishedUntilWait = true;
+        _scene.RevealsFinishedUntilWait = true;
         _timeline?.State("text-reveal-finish-held", new());
     }
 
     /// <summary>Whether ctx+0x55108 is set: while it is, a reveal publishes without polling the input latch.</summary>
     public bool TextRevealsFinishedUntilWait
     {
-        get { return _revealsFinishedUntilWait; }
+        get { return _scene.RevealsFinishedUntilWait; }
     }
 }

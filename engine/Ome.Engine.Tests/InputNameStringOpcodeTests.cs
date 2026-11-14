@@ -42,7 +42,7 @@ public class InputNameStringOpcodeTests
             Exit(),
         ], []);
         var trace = new RecordingTraceSink { TracingSteps = true };
-        var vm = new VirtualMachine(script, Table, new RecordingHost(), sink: trace);
+        var vm = new VirtualMachine(script, Table, new RecordingWaits(), sink: trace);
         vm.GlobalStrings[0x700] = "AリｱB";
 
         vm.Run();
@@ -67,7 +67,7 @@ public class InputNameStringOpcodeTests
             (0x2c8, [LSP(0), LS(0), I(0), I(0)]),
             Exit(),
         ], ["魔王"]);
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
 
         vm.Run();
 
@@ -87,7 +87,7 @@ public class InputNameStringOpcodeTests
             (move, [GS(0x621), LS(1)]),
             Exit(),
         ], ["魔王", "魔王"]);
-        var host = new RecordingHost
+        var host = new RecordingWaits
         {
             OnFullwidthTextEdit = _ => new(true, "リリィ"),
         };
@@ -113,7 +113,7 @@ public class InputNameStringOpcodeTests
             (move, [GS(0x630), LS(0)]),
             Exit(),
         ], ["魔王", "初期値"]);
-        var host = new RecordingHost
+        var host = new RecordingWaits
         {
             OnFullwidthTextEdit = _ => new(false, "破棄される文字列"),
         };

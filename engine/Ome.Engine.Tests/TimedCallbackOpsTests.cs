@@ -10,7 +10,7 @@ public class TimedCallbackOpsTests
     private static Operand I(long value) => new(T_IMM, value);
     private static Operand G(int address) => new(T_GINT, address);
 
-    private sealed class ClockHost(long overshootMs = 0) : RecordingHost
+    private sealed class ClockHost(long overshootMs = 0) : RecordingWaits
     {
         private long _now;
         public override long InputClockMilliseconds => _now;
@@ -22,7 +22,7 @@ public class TimedCallbackOpsTests
         }
     }
 
-    private sealed class NonPresentingClockHost : RecordingHost
+    private sealed class NonPresentingClockHost : RecordingWaits
     {
         private long _now;
         public override long InputClockMilliseconds => _now;
@@ -96,7 +96,7 @@ public class TimedCallbackOpsTests
 
     /// <summary>A click arrives while the sequence waits for its first entry: the frontend holds it in the input latch,
     /// as nothing polls but timed_callback_sequence_tick.</summary>
-    private sealed class ClickDuringFirstWaitHost : RecordingHost
+    private sealed class ClickDuringFirstWaitHost : RecordingWaits
     {
         private long _now;
         public VirtualMachine? Vm;

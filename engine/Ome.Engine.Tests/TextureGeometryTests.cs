@@ -24,7 +24,7 @@ public class TextureGeometryTests
             IndexByOffset = new Dictionary<int, int> { { 0, 0 } },
             Strings = new Dictionary<int, string>(),
         };
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.Globals[50] = 9;
         vm.Graphics.CreateSurface(9, 0x140, 0xC8);
         vm.Run();

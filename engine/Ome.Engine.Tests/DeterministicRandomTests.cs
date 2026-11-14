@@ -44,7 +44,7 @@ public class DeterministicRandomTests
             (0x60, new[] { new Operand(GlobalInt, 0x101), new Operand(Imm, 7) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         Assert.Null(vm.Memory.SeedDeterministicRandom(9).Seed);
         vm.Run();

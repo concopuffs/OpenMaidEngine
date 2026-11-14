@@ -24,7 +24,7 @@ public class AnimChannelTests
             (0x227, new[]{G(10), G(1), G(11), G(12), G(13), G(14)}),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
 
         Assert.Equal(0, vm.Globals[10]);
@@ -41,7 +41,7 @@ public class AnimChannelTests
         {
             (0x227, new[]{G(10), G(1), G(11), G(12), G(13), G(14)}), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Globals[1] = 0x4f8;
         vm.Gfx.BindDraw(0x4f8, 1, 0, 0, 1, 1, 0, 0);
         vm.Gfx.TryGet(0x4f8)!.RotationCurrent = (1.9, -2.9, 0.9, -45.75);
@@ -62,7 +62,7 @@ public class AnimChannelTests
             (0x55, new[]{G(13), I(9)}), (0x55, new[]{G(14), I(10)}),
             (0x227, new[]{G(10), G(1), G(11), G(12), G(13), G(14)}), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
 
         Assert.Equal(1, vm.Globals[10]);
@@ -88,7 +88,7 @@ public class AnimChannelTests
             (0x228, new[]{G(10), G(1), G(11), G(12), G(13)}),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         Assert.Equal(12, vm.Globals[11]);
         Assert.Equal(34, vm.Globals[12]);
@@ -107,7 +107,7 @@ public class AnimChannelTests
             (0x55, new[]{G(12), I(8)}), (0x55, new[]{G(13), I(9)}),
             (0x228, new[]{G(10), G(1), G(11), G(12), G(13)}), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         Assert.Equal(1, vm.Globals[10]);
         Assert.Equal((7L, 8L, 9L), (vm.Globals[11], vm.Globals[12], vm.Globals[13]));
@@ -128,7 +128,7 @@ public class AnimChannelTests
             (0x220, new[]{G(1), G(2), I(500), G(11), G(22), G(13)}),
             Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Gfx.BindDraw(0xcb20, 4, 0, 0, 800, 500, 0, 50);
         vm.Gfx.SetCurrentTranslation(0xcb20, (0, 600, 0));
         vm.Gfx.SetTranslationChannel(0xcb20, 0, 0, (0, 600, 0));
@@ -148,7 +148,7 @@ public class AnimChannelTests
             (0x55, new[]{G(3), new Operand(0,0x80)}), (0x55, new[]{G(4), new Operand(0,0xFF0000)}),
             (0x232, new[]{G(1), G(2), G(3), G(4)}), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         var o = vm.Gfx.TryGet(0x1000)!;
         Assert.True(o.ColorAnim);
@@ -167,7 +167,7 @@ public class AnimChannelTests
             (0x51, new[]{G(4), I(0), G(4)}),
             (0x232, new[]{G(1), G(2), G(3), G(4)}), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         vm.Run();
         var o = vm.Gfx.TryGet(0xcb8e)!;
         Assert.Equal(0xffffffff, o.Color);
@@ -187,7 +187,7 @@ public class AnimChannelTests
             (0x55, new[]{G(4), new Operand(0,28)}), (0x55, new[]{G(5), new Operand(0,7)}), (0x55, new[]{G(6), new Operand(0,2)}),
             (0x239, new[]{G(1), G(2), G(3), G(4), G(5), G(6)}), Exit(),
         }, System.Array.Empty<string>());
-        var vm = new VirtualMachine(scene, t, new RecordingHost());
+        var vm = new VirtualMachine(scene, t, new RecordingWaits());
         if (visible)
         {
             vm.Gfx.SetSurface(1, resId: 5, colorKey: -1);

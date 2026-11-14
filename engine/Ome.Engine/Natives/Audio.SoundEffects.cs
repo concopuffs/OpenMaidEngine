@@ -10,7 +10,6 @@ public sealed partial class Audio
 
     private readonly string?[] _soundEffectNames = new string?[SoundEffectChannelCount];
     private readonly long[] _soundEffectResourceIds = new long[SoundEffectChannelCount];   // numbered saves
-    private readonly DelayedStart?[] _delayedStarts = new DelayedStart?[SoundEffectChannelCount];
 
     /// <summary>Op 0xb4: load a sound effect on a channel (0..9), replacing what it held.</summary>
     public void LoadSoundEffect(long resourceId, int channel)
@@ -37,7 +36,7 @@ public sealed partial class Audio
         long ms = Math.Clamp(delayMs, 0, 60_000);
         _timeline?.Event("sfx-start-scheduled", new() { ["channel"] = channel,
             ["start_mode"] = startMode, ["delay_ms"] = ms, ["file"] = _soundEffectNames[channel] });
-        _delayedStarts[channel] = new DelayedStart(startMode, _clock.NowMs + ms);
+        _scene.DelayedStarts[channel] = new DelayedStart(startMode, _clock.NowMs + ms);
         UpdateTimedWork();
     }
 
@@ -60,7 +59,7 @@ public sealed partial class Audio
         _soundEffectResourceIds[channel] = resourceId;
         AudioClip? clip = _assets.SoundEffect(resourceId);
         _soundEffectNames[channel] = clip?.Name;
-        _delayedStarts[channel] = null;
+        _scene.DelayedStarts[channel] = null;
         _timeline?.Event("sfx-load", new() { ["resource"] = resourceId, ["channel"] = channel, ["file"] = clip?.Name });
         if (clip == null) return;
         Volatile.Write(ref _playing[channel], false);
@@ -73,7 +72,7 @@ public sealed partial class Audio
         _soundEffectResourceIds[channel] = 0;
         _timeline?.Event("sfx-release", new() { ["channel"] = channel, ["file"] = _soundEffectNames[channel] });
         _soundEffectNames[channel] = null;
-        _delayedStarts[channel] = null;
+        _scene.DelayedStarts[channel] = null;
         UnloadChannel(channel);
     }
 
@@ -81,8 +80,8 @@ public sealed partial class Audio
     {
         for (int channel = 0; channel < SoundEffectChannelCount; channel++)
         {
-            if (_delayedStarts[channel] is not { } start || now < start.DueMs) continue;
-            _delayedStarts[channel] = null;
+            if (_scene.DelayedStarts[channel] is not { } start || now < start.DueMs) continue;
+            _scene.DelayedStarts[channel] = null;
             if (_soundEffectNames[channel] == null) continue;
             _timeline?.Event("sfx-scheduled-start", new() { ["channel"] = channel,
                 ["start_mode"] = start.StartMode, ["file"] = _soundEffectNames[channel] });
@@ -92,12 +91,12 @@ public sealed partial class Audio
 
     private bool HasDelayedSoundEffect()
     {
-        foreach (DelayedStart? start in _delayedStarts)
+        foreach (DelayedStart? start in _scene.DelayedStarts)
             if (start.HasValue) return true;
         return false;
     }
 
-    private void CancelDelayedSoundEffects() => Array.Clear(_delayedStarts);
+    private void CancelDelayedSoundEffects() => Array.Clear(_scene.DelayedStarts);
 
     private static bool IsSoundEffectChannel(int channel) => (uint)channel < SoundEffectChannelCount;
 }

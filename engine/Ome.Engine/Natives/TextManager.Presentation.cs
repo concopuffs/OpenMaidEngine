@@ -64,14 +64,13 @@ public sealed partial class TextManager
     /// <summary>The instruction that stored a global string cell's text, and that text.</summary>
     private readonly record struct StringStore(TextSite Origin, string Text);
 
-    private readonly Dictionary<int, StringStore> _stringStores = new();
     private volatile bool _recordsStringStores;
 
     /// <summary>
     /// Whether every write to a global string cell records its instruction and text (§5.2), so a string drawn far from
     /// where a table stored it is still scoped to the store. On whenever the mounted stack defines a language, selected
     /// or not, so a language switch during play is exact for the boot tables; off with no language in the stack
-    /// (gate 1). The records are not saved; op 0x9 zeroes them with the banks.
+    /// (gate 1). The records are not saved; op 0x9 zeroes the string bank, and the scene reset drops them with it.
     /// </summary>
     public bool RecordsStringStores
     {
@@ -84,9 +83,9 @@ public sealed partial class TextManager
     /// write changed the cell.</summary>
     public TextSite? OriginOfCell(int cell, string text)
     {
-        if (!_stringStores.TryGetValue(cell, out StringStore store)) return null;
+        if (!_scene.StringStores.TryGetValue(cell, out StringStore store)) return null;
         if (string.Equals(text, store.Text, StringComparison.Ordinal)) return store.Origin;
-        _stringStores.Remove(cell);
+        _scene.StringStores.Remove(cell);
         return null;
     }
 
@@ -95,11 +94,8 @@ public sealed partial class TextManager
     /// <see cref="RecordsStringStores"/> is off.</summary>
     public void RecordStringStore(int cell, TextSite origin, string text)
     {
-        if (_recordsStringStores) _stringStores[cell] = new StringStore(origin, text);
+        if (_recordsStringStores) _scene.StringStores[cell] = new StringStore(origin, text);
     }
-
-    /// <summary>Op 0x9 zeroes the string bank, so every record goes with it.</summary>
-    public void ClearStringStores() => _stringStores.Clear();
 
     // ---- History's groups (ops 0x1d1 and 0x82) ----
 

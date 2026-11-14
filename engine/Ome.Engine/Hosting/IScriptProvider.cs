@@ -15,3 +15,9 @@ public interface IScriptProvider
     /// ascending order and executes record zero from each catalog.</summary>
     IReadOnlyList<int> MountedAppendSelectors => Array.Empty<int>();
 }
+
+/// <summary>A fixed set of scripts by call-script id, for a self-test or a tool that builds its own scripts.</summary>
+public sealed class ScriptMap(IReadOnlyDictionary<long, Script> scripts) : IScriptProvider
+{
+    public Script? GetById(long id) => scripts.GetValueOrDefault(id);
+}

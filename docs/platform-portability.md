@@ -12,7 +12,8 @@ The VM and content pipeline are already mostly platform-neutral:
 - `Ome.Engine` uses managed .NET for script loading, bytecode execution, SYS4 catalog parsing, bounded
   ALF/AAI reads, LZSS, AGF-to-RGBA8 decode, and retained graphics state.
 - Godot owns ordinary graphics presentation, input, BGM, voice, and SFX playback.
-- Effectful bytecode operations cross `Hosting/IHost.cs`; the VM does not call native OS APIs.
+- Effectful bytecode operations call the natives (`Ome.Engine/Natives/`), which reach the platform only through
+  the device interfaces of `Ome.Engine.Devices`; the VM does not call native OS APIs.
 - Movie payloads arrive from `IAssetStore` as owned bytes and decoded frames enter the compositor as the
   platform-neutral `RgbaImage` type.
 - Files have no device of their own: `INativeDatStore` and `IAssetStore` reach the disk through .NET's file API.

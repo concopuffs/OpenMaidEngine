@@ -24,7 +24,7 @@ public class AdvTextOpsTests
                 (0x6e, new[] { I(0), S(3) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "ＭＳ 明朝", "ＭＳ ゴシック", "mincho", "gothic" });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -53,7 +53,7 @@ public class AdvTextOpsTests
                 (0x6e, new[] { I(0), S(1) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "shadow", "outline" });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -83,7 +83,7 @@ public class AdvTextOpsTests
                 (0x7a, new[] { new Operand(0, 1), new Operand(0, 75), new Operand(0, 47) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
         vm.GlobalStrings[0x317] = "speaker";
 
@@ -111,7 +111,7 @@ public class AdvTextOpsTests
                 (0x6e, new[] { new Operand(0, 0), new Operand(2, 1) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "「", "！」" });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
         vm.GlobalStrings[0x279] = "リリィ";
 
@@ -143,7 +143,7 @@ public class AdvTextOpsTests
                 (0x6e, new[] { I(9), new Operand(5, 0x322) }),
                 (ret, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
         vm.GlobalStrings[0x322] = "Melodiana";
 
@@ -174,7 +174,7 @@ public class AdvTextOpsTests
                 (0x6e, new[] { I(1), new Operand(2, 0) }),
                 (ret, Array.Empty<Operand>()),
             }, new[] { "same authored line" });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -199,7 +199,7 @@ public class AdvTextOpsTests
                 (0x71, new[] { new Operand(0, 1) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -247,7 +247,7 @@ public class AdvTextOpsTests
                 (0x1bb, new[] { I(1) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "row1a", "row1b", "row2a", "row2b", "row3a", "row3b" });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -293,7 +293,7 @@ public class AdvTextOpsTests
             },
             new[] { "A", "BC" });
         // Every glyph advances 4 pixels.
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = TestText.Vm(script, table, host, TestText.Glyphs(TestText.Fixed(4, 4)));
 
         vm.Run();
@@ -331,7 +331,7 @@ public class AdvTextOpsTests
                 (0x1bb, new[] { I(1) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(caller, table, host, provider: scripts);
         vm.Globals[0x1560e7] = 7;
 
@@ -409,7 +409,7 @@ public class AdvTextOpsTests
                 (0x1f7, new[] { I(0xd6d8), I(0x1f4) }),  // SC0000 transition teardown
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, table, host);
 
         vm.Run();
@@ -433,7 +433,7 @@ public class AdvTextOpsTests
                 }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host).Run();
 
@@ -456,7 +456,7 @@ public class AdvTextOpsTests
                 }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host,
             build: EngineBuilds.Age433G).Run();
@@ -477,7 +477,7 @@ public class AdvTextOpsTests
                 (0x1b1, new[] { new Operand(0, 0) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host,
             build: EngineBuilds.Age433G).Run();
@@ -496,7 +496,7 @@ public class AdvTextOpsTests
                 (0x6e, new[] { new Operand(0, 0), new Operand(2, 0) }),
                 (0x2, Array.Empty<Operand>()),
             }, new[] { "aspect-aware" });
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host,
             build: EngineBuilds.Age433G).Run();
@@ -518,7 +518,7 @@ public class AdvTextOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, new[] { face });
         // Index 7 of the installed list, as text_find_font_family_index@0x423a50 returns it.
-        var vm = TestText.Vm(script, table, new RecordingHost(),
+        var vm = TestText.Vm(script, table, new RecordingWaits(),
             TestText.Fonts([.. Enumerable.Range(0, 7).Select(i => $"Face {i}"), "ＭＳ 明朝"]), EngineBuilds.Age433G);
 
         vm.Run();
@@ -539,7 +539,7 @@ public class AdvTextOpsTests
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
         // An empty list reads as -1.
-        var vm = TestText.Vm(script, table, new RecordingHost(),
+        var vm = TestText.Vm(script, table, new RecordingWaits(),
             TestText.Fonts([.. Enumerable.Range(0, Math.Max(0, familyCount)).Select(i => $"Face {i}")]),
             EngineBuilds.Age433G);
 
@@ -561,7 +561,7 @@ public class AdvTextOpsTests
                 (0x2dd, new[] { new Operand(5, 0x100), new Operand(0, index) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var vm = TestText.Vm(script, table, new RecordingHost(), TestText.Fonts(["MS Gothic", "Yu Mincho"]),
+        var vm = TestText.Vm(script, table, new RecordingWaits(), TestText.Fonts(["MS Gothic", "Yu Mincho"]),
             EngineBuilds.Age433G);
 
         vm.Run();
@@ -583,7 +583,7 @@ public class AdvTextOpsTests
                 (0x212, new[] { I(1), I(0xd674) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host).Run();
 
@@ -625,7 +625,7 @@ public class AdvTextOpsTests
                 (0x1ce, new[] { new Operand(0, 0) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host).Run();
 

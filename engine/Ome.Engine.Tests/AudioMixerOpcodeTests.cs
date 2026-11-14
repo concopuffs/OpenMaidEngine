@@ -47,7 +47,7 @@ public class AudioMixerOpcodeTests
             (0xc7, [I(2), G(14)]),
             Exit(),
         ], []);
-        var vm = rig.Vm(scene, Table, new RecordingHost());
+        var vm = rig.Vm(scene, Table, new RecordingWaits());
 
         vm.Run();
 
@@ -76,7 +76,7 @@ public class AudioMixerOpcodeTests
             Exit(),
         ], []);
 
-        rig.Vm(scene, Table, new RecordingHost()).Run();
+        rig.Vm(scene, Table, new RecordingWaits()).Run();
 
         Assert.Equal(["bus-mute SoundEffect True", "bus-mute SoundEffect False"],
                      rig.Device.CommandsStartingWith("bus-mute"));
@@ -99,8 +99,8 @@ public class AudioMixerOpcodeTests
             Exit(),
         ], []);
 
-        session.RunScene(setter, Table, new RecordingHost());
-        session.RunScene(getter, Table, new RecordingHost());
+        session.RunScene(setter, Table, new RecordingWaits());
+        session.RunScene(getter, Table, new RecordingWaits());
 
         Assert.Equal(6250, session.Globals[20]);
         Assert.Equal(0, session.Globals[21]);
@@ -200,7 +200,7 @@ public class AudioMixerOpcodeTests
     [Fact]
     public void InvalidMixerCategoriesWarnAndLeaveOutputsUntouched()
     {
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var rig = new AudioRig();
         Script scene = ScriptAssembler.Assemble(Table, "CONFIG_INVALID",
         [

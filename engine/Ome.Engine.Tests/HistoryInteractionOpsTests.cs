@@ -24,7 +24,7 @@ public class HistoryInteractionOpsTests
         Assert.Equal(16, InputBindingBootstrap.Apply(systemScript, vm.InputBindings));
     }
 
-    private sealed class Sc0000HistoryCloseHost : RecordingHost
+    private sealed class Sc0000HistoryCloseHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         private readonly int _openAtWait;
@@ -71,7 +71,7 @@ public class HistoryInteractionOpsTests
         }
     }
 
-    private sealed class Sc0000HistoryVoiceHost : RecordingHost
+    private sealed class Sc0000HistoryVoiceHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public RecordingAudioDevice Device = null!;
@@ -120,7 +120,7 @@ public class HistoryInteractionOpsTests
         }
     }
 
-    private sealed class Sc0000HistoryWheelHost : RecordingHost
+    private sealed class Sc0000HistoryWheelHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         private readonly Dictionary<int, int> _before = new();
@@ -168,7 +168,7 @@ public class HistoryInteractionOpsTests
                 (0x10d, new[] { G(0x101) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
         vm.QueueMouseWheelDelta(120);
         vm.QueueMouseWheelDelta(-360);
 
@@ -239,7 +239,7 @@ public class HistoryInteractionOpsTests
                 (0x55, new[] { G(0x101), L(11) }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
 
         vm.Run();
 
@@ -275,7 +275,7 @@ public class HistoryInteractionOpsTests
         ops.Add((0x55, new[] { G(0x101), L(50) }));
         ops.Add((0x2, Array.Empty<Operand>()));
         var script = ScriptAssembler.Assemble(Table, "HIT_RECT", ops, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
 
         vm.Run();
 

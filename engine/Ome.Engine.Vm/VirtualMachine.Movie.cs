@@ -5,8 +5,8 @@ namespace Ome.Engine.Vm;
 
 public sealed partial class VirtualMachine
 {
-    // The movie native (Ome.Engine/Natives/Movies.cs) plays every movie op but 0x20f's modal wait, which the host
-    // keeps until milestone 11.
+    // The movie native (Ome.Engine/Natives/Movies.cs) plays every movie op but 0x20f's modal wait, which is the input
+    // and waits native's (IInputAndWaits.PlayModalMovieToSurface).
     private readonly Movies _movies;
 
     // 0x20f (packed resource)(surface)(movie flags)
@@ -16,12 +16,12 @@ public sealed partial class VirtualMachine
         long resourceId = Read(a[0]);
         int surfaceSlot = (int)Read(a[1]);
         // Modal and non-modal paths share packed resolution and retained-surface composition.
-        // The distinct host entry point owns only 0x20f's blocking lifecycle. Native attaches its
+        // The waits' distinct entry point owns only 0x20f's blocking lifecycle. Native attaches its
         // renderer to the existing mutable target; it does not reload that surface with resource
         // id/movie bytes or apply color key 0. Keep the created surface's no-key state so MPEG
         // black remains opaque.
         OfferHeldTriggersToModalMovie();
-        _host.PlayModalMovieToSurface(resourceId, surfaceSlot, Read(a[2]));
+        _waits.PlayModalMovieToSurface(resourceId, surfaceSlot, Read(a[2]));
         return StepResult.Next;
     }
 
@@ -33,7 +33,7 @@ public sealed partial class VirtualMachine
         int surfaceSlot = (int)Read(a[1]);
         // Graph construction is synchronous. Keep the existing created surface blank during that
         // boundary; publishing the movie resource first would let a concurrent compositor mistake
-        // the MPEG payload's .AGF name for a still image before the host registers/decodes it.
+        // the MPEG payload's .AGF name for a still image before the movie native registers/decodes it.
         long? stopTimeMs = _movies.PlayToSurface(_cur.Script.Name, resourceId, surfaceSlot, Read(a[2]), Read(a[3]));
         // Native replaces the pixels of the already-created surface without changing its resource
         // identity or color key. The movie native's playback-to-surface binding resolves the live frame.
@@ -70,7 +70,7 @@ public sealed partial class VirtualMachine
         }
         if (!stopTimeMs.HasValue)
         {
-            _host.ReportWarning(
+            _waits.ReportWarning(
                 $"movie stop-time unavailable {_cur.Script.Name}@0x{ins.Offset:x} " +
                 $"surface={surfaceSlot}; returning -1");
             Write(a[0], -1);

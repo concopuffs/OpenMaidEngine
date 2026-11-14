@@ -58,7 +58,7 @@ public sealed partial class VirtualMachine
             before = Volatile.Read(ref _heldTriggers);
             after = before | actionMask;
         } while (Interlocked.CompareExchange(ref _heldTriggers, after, before) != before);
-        _host.WakeInputCallbackService();
+        _waits.WakeInputCallbackService();
     }
 
     private int TakeHeldTriggers() => Interlocked.Exchange(ref _heldTriggers, 0);
@@ -85,7 +85,7 @@ public sealed partial class VirtualMachine
     /// its first tick: a held action 4 stops the movie. It does not read EffectSkipOnClick.</summary>
     private void OfferHeldTriggersToModalMovie()
     {
-        if ((TakeHeldTriggers() & AdvanceTrigger) != 0) _host.CancelNextModalMovie();
+        if ((TakeHeldTriggers() & AdvanceTrigger) != 0) _waits.CancelNextModalMovie();
     }
 
     /// <summary>adv_input_service_poll@0x411230 at a text wait that resumed without re-running op 0x72. Op 0x7c
@@ -102,12 +102,12 @@ public sealed partial class VirtualMachine
         if ((held & (1 << AdvWaitCoroutineYieldAction)) != 0 && TryRequestAdvWaitCoroutineYield()) return;
         if ((held & (1 << Ome.Engine.Model.InputBindings.FastForwardAction)) != 0)
         {
-            if (!_skip.StartPhysicalFastForwardFromLatchedTrigger(InputBindings)) _host.EndInputWait();
+            if (!_skip.StartPhysicalFastForwardFromLatchedTrigger(InputBindings)) _waits.EndInputWait();
             return;
         }
         if ((held & AdvanceTrigger) == 0) return;
         bool activated;
-        activated = _interactiveFrame?.Hotspots.Activate() == true;
-        if (!activated) _host.EndInputWait();
+        activated = _scene.InteractiveFrame?.Hotspots.Activate() == true;
+        if (!activated) _waits.EndInputWait();
     }
 }

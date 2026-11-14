@@ -153,7 +153,7 @@ public sealed partial class VirtualMachine
         if (_audio.TryGetVolume(category, out int basisPoints))
             Write(a[1], basisPoints);
         else
-            _host.ReportWarning($"audio volume category out of range: {category}");
+            _waits.ReportWarning($"audio volume category out of range: {category}");
         return StepResult.Next;
     }
 
@@ -163,7 +163,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         int category = unchecked((int)Read(a[0]));
         if (!_audio.TrySetVolume(category, Read(a[1])))
-            _host.ReportWarning($"audio volume category out of range: {category}");
+            _waits.ReportWarning($"audio volume category out of range: {category}");
         return StepResult.Next;
     }
 
@@ -175,7 +175,7 @@ public sealed partial class VirtualMachine
         if (_audio.TryGetRouteEnabled(category, out bool enabled))
             Write(a[1], enabled ? 1 : 0);
         else
-            _host.ReportWarning($"audio route category out of range: {category}");
+            _waits.ReportWarning($"audio route category out of range: {category}");
         return StepResult.Next;
     }
 
@@ -185,7 +185,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         int category = unchecked((int)Read(a[0]));
         if (!_audio.TrySetRouteEnabled(category, Read(a[1]) != 0))
-            _host.ReportWarning($"audio route category out of range: {category}");
+            _waits.ReportWarning($"audio route category out of range: {category}");
         return StepResult.Next;
     }
 }

@@ -47,6 +47,19 @@ public sealed partial class Audio : IFastForwardListener
     // the duck release is due. Read at every instruction boundary.
     private bool _timedWork;
 
+    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
+    private sealed class Scene
+    {
+        public int DuckControl;                // op 0x1cf: bit 0 suppresses the duck and its release; 0x10000 one-shot
+        public readonly DelayedStart?[] DelayedStarts = new DelayedStart?[SoundEffectChannelCount];
+        public int VoiceMuteFlags;
+        // message_skip_queued_voice_id/arg: the last voice started while fast-forward ran, played when it ends.
+        public VoiceStart? HeldVoice;
+        public DelayedVoice? DelayedVoice;     // op 0x2c0's pending request (voice_schedule_delayed_playback@0x488480)
+    }
+
+    private Scene _scene = new();
+
     /// <param name="device">The sound output.</param>
     /// <param name="assets">Where sounds are found.</param>
     /// <param name="clock">The engine clock: fades and delays run on it.</param>
@@ -114,7 +127,7 @@ public sealed partial class Audio : IFastForwardListener
     }
 
     private void UpdateTimedWork()
-        => _timedWork = _fade != null || _delayedVoice != null || HasDelayedSoundEffect() || DuckReleaseDue();
+        => _timedWork = _fade != null || _scene.DelayedVoice != null || HasDelayedSoundEffect() || DuckReleaseDue();
 
     // ---- channels ----
 
@@ -145,11 +158,7 @@ public sealed partial class Audio : IFastForwardListener
     /// (sfx_clear_scheduled_starts) without stopping what plays or unloading a channel.</summary>
     public void ResetScene()
     {
-        _heldVoice = null;
-        _delayedVoice = null;
-        _duckControl = 0;
-        _voiceMuteFlags = 0;
-        CancelDelayedSoundEffects();
+        _scene = new();
         UpdateTimedWork();
     }
 }

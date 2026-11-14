@@ -68,7 +68,7 @@ public partial class Main
     /// </summary>
     private bool ApplyGameLanguage(string language, bool startup)
     {
-        if (_languageLaunch == null || _vm == null || _host == null)
+        if (_languageLaunch == null || _vm == null || _waits == null)
         {
             if (!startup) UseShellStrings(ShellStrings.Load(language));
             return true;

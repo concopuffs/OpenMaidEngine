@@ -145,14 +145,14 @@ public sealed partial class InputAndWaits
         // button-down otherwise. Menus read the polled state above, so a menu opened by this click starts with the
         // button already up, as natively.
         if (pressed == ClickOnUp) return false;
-        if (_modalMovieWaiting)
+        if (_scene.ModalMovieWaiting)
         {
             Advance();
             return true;
         }
         // While an effect service parks the VM, the trigger goes to the effect's poll or to the input latch, never to a
         // hotspot under the effect or to a page wait (RouteEffectTrigger).
-        if (_transitionWaiting)
+        if (_scene.TransitionWaiting)
         {
             if (action >= 0) RouteEffectTrigger(1 << action);
             return true;
@@ -184,14 +184,14 @@ public sealed partial class InputAndWaits
     {
         int action = _interpreter.UpdateKeyboardVirtualKeyState(virtualKey, pressed);
         if (!pressed || action < 0) return false;
-        if (_transitionWaiting)
+        if (_scene.TransitionWaiting)
         {
             RouteEffectTrigger(1 << action);
             return true;
         }
         if (_interpreter.TryLatchAdvCoroutineYieldTrigger(1 << action)) return true;
         if (action == AdvanceAction && _interpreter.TryLatchMessageSkipCancelClick()) return true;
-        if (!_modalMovieWaiting && !_interpreter.IsAdvTextWaitPolling)
+        if (!_scene.ModalMovieWaiting && !_interpreter.IsAdvTextWaitPolling)
         {
             RouteUnpolledTrigger(1 << action);
             return true;
@@ -199,7 +199,7 @@ public sealed partial class InputAndWaits
         if (_interpreter.TryActivateInputActions(1 << action)) return true;
         if (action == HideWindowAction && _interpreter.TryRequestAdvWaitCoroutineYield()) return true;
         if (action != AdvanceAction) return false;
-        if (_modalMovieWaiting)
+        if (_scene.ModalMovieWaiting)
         {
             Advance();
             return true;
@@ -212,13 +212,13 @@ public sealed partial class InputAndWaits
     {
         int actionMask = _interpreter.UpdateJoystickButtonState(physicalButton, pressed);
         if (!pressed) return false;
-        if (actionMask != 0 && _transitionWaiting)
+        if (actionMask != 0 && _scene.TransitionWaiting)
         {
             RouteEffectTrigger(actionMask);
             return true;
         }
         if (_interpreter.TryLatchAdvCoroutineYieldTrigger(actionMask)) return true;
-        if (actionMask != 0 && !_modalMovieWaiting && !_interpreter.IsAdvTextWaitPolling)
+        if (actionMask != 0 && !_scene.ModalMovieWaiting && !_interpreter.IsAdvTextWaitPolling)
         {
             RouteUnpolledTrigger(actionMask);
             return true;
@@ -228,7 +228,7 @@ public sealed partial class InputAndWaits
             && _interpreter.TryRequestAdvWaitCoroutineYield())
             return true;
         if (!HasAdvanceAction(actionMask)) return false;
-        if (_modalMovieWaiting)
+        if (_scene.ModalMovieWaiting)
         {
             Advance();
             return true;

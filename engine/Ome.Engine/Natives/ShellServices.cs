@@ -57,21 +57,29 @@ public sealed partial class ShellServices
     private readonly Action<string> _print;
     private Action _wake = static () => { };
 
-    // Queued from the front end's thread, taken on the engine thread.
-    private readonly ConcurrentQueue<Queued> _requests = new();
-    private volatile bool _requestsPending;
-    // Engine thread: the callback scripts native's launch queue would hold.
-    private bool _settingCallbackPending;   // CALLBACK_SETTING.BIN: a menu toggle, the 設定 OK, a mode-2 click cancel
-    private bool _windowCallbackPending;    // CALLBACK_WINDOW.BIN: a screen-mode switch
-    // EngineCtx +0xa0d10 (op 0x142): AGERC queries this through IAGEService to gray its native settings/save menu
-    // actions while CONFIG owns the scripted settings screen.
-    private int _systemMenuActionsEnabled = 1;
-    // EngineCtx +0x5511c (ops 0x148/0x149): unsigned TIMER_SHOWMENU dwell threshold. Native op 0x148 returns the same
-    // dword through the VM's signed integer-cell representation.
-    private uint _systemMenuShowDelayMilliseconds;
-    // EngineCtx +0x6da7c (op 0x10f): the window procedure's system-key disable mask. Bit 0 suppresses F1's screenshot
-    // BMP, bit 9 (0x200) swallows F10's menu-bar focus.
-    private int _systemKeyDisableMask;
+    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
+    private sealed class Scene
+    {
+        // Queued from the front end's thread, taken on the engine thread.
+        public readonly ConcurrentQueue<Queued> Requests = new();
+        public volatile bool RequestsPending;
+        // Engine thread: the callback scripts native's launch queue would hold.
+        public bool SettingCallbackPending;   // CALLBACK_SETTING.BIN: a menu toggle, the 設定 OK, a mode-2 click cancel
+        public bool WindowCallbackPending;    // CALLBACK_WINDOW.BIN: a screen-mode switch
+        // EngineCtx +0xa0d10 (op 0x142): AGERC queries this through IAGEService to gray its native settings/save menu
+        // actions while CONFIG owns the scripted settings screen.
+        public int SystemMenuActionsEnabled = 1;
+        // EngineCtx +0x5511c (ops 0x148/0x149): unsigned TIMER_SHOWMENU dwell threshold. Native op 0x148 returns the same
+        // dword through the VM's signed integer-cell representation.
+        public uint SystemMenuShowDelayMilliseconds;
+        // EngineCtx +0x6da7c (op 0x10f): the window procedure's system-key disable mask. Bit 0 suppresses F1's screenshot
+        // BMP, bit 9 (0x200) swallows F10's menu-bar focus.
+        public int SystemKeyDisableMask;
+    }
+
+    // Volatile: the front end reads the system-key mask and the show delay, and queues its requests, from its own
+    // thread (spec §5.3's table).
+    private volatile Scene _scene = new();
 
     /// <param name="settings">SYS4REG.INI: display:ScreenMode and ForceScreen. Null when the run has none.</param>
     /// <param name="window">The window a screen-mode switch shows; without one a switch changes only the state.</param>
@@ -94,8 +102,7 @@ public sealed partial class ShellServices
     /// a new one by default.</summary>
     public static ShellServices Headless(DiagnosticOutputState? diagnostics = null) => new(diagnostics: diagnostics);
 
-    /// <summary>What to call when a menu request is queued: the lifted host's waits, so a text wait takes it at once
-    /// (until milestone 11).</summary>
+    /// <summary>What to call when a menu request is queued: the waits' wake, so a text wait takes it at once.</summary>
     public void WakeWaitsWith(Action wake) => _wake = wake ?? throw new ArgumentNullException(nameof(wake));
 
     // ---- the system menu ----
@@ -103,24 +110,24 @@ public sealed partial class ShellServices
     /// <summary>Op 0x142's gate: 0 while CONFIG runs, when the native menu grays its settings commands.</summary>
     public int SystemMenuActionsEnabled
     {
-        get => Volatile.Read(ref _systemMenuActionsEnabled);
-        set => Volatile.Write(ref _systemMenuActionsEnabled, value);
+        get => Volatile.Read(ref _scene.SystemMenuActionsEnabled);
+        set => Volatile.Write(ref _scene.SystemMenuActionsEnabled, value);
     }
 
     /// <summary>Ops 0x148/0x149: how long the pointer must rest on the screen's top edge before the fullscreen
     /// strip shows (system_menu_top_edge_dwell_timer_tick@0x486280).</summary>
     public uint SystemMenuShowDelayMilliseconds
     {
-        get => Volatile.Read(ref _systemMenuShowDelayMilliseconds);
-        set => Volatile.Write(ref _systemMenuShowDelayMilliseconds, value);
+        get => Volatile.Read(ref _scene.SystemMenuShowDelayMilliseconds);
+        set => Volatile.Write(ref _scene.SystemMenuShowDelayMilliseconds, value);
     }
 
     /// <summary>Op 0x10f's system-key disable mask, read by the front end's F1 and F10 handling. Written on the engine
     /// thread; a front-end read sees the last completed write.</summary>
     public int SystemKeyDisableMask
     {
-        get => Volatile.Read(ref _systemKeyDisableMask);
-        set => Volatile.Write(ref _systemKeyDisableMask, value);
+        get => Volatile.Read(ref _scene.SystemKeyDisableMask);
+        set => Volatile.Write(ref _scene.SystemKeyDisableMask, value);
     }
 
     // ---- menu requests and the callbacks they launch ----
@@ -141,19 +148,19 @@ public sealed partial class ShellServices
         => QueueMenu(new(ShellMenuRequestKind.MessageSettings, settings));
 
     /// <summary>True while requests wait for <see cref="TakeMenuRequests"/>.</summary>
-    public bool HasMenuRequests => _requestsPending;
+    public bool HasMenuRequests => _scene.RequestsPending;
 
     /// <summary>The queued menu commands, oldest first, for the interpreter to apply on the engine thread; each is
     /// followed by CALLBACK_SETTING.BIN (<see cref="RequestSettingCallback"/>), as AGERC's command handler launches it
     /// after the service call. A screen-mode switch in the queue requests CALLBACK_WINDOW.BIN here.</summary>
     public IReadOnlyList<ShellMenuRequest> TakeMenuRequests()
     {
-        if (!_requestsPending) return [];
-        _requestsPending = false;
+        if (!_scene.RequestsPending) return [];
+        _scene.RequestsPending = false;
         List<ShellMenuRequest>? taken = null;
-        while (_requests.TryDequeue(out Queued queued))
+        while (_scene.Requests.TryDequeue(out Queued queued))
         {
-            if (queued.Kind == QueuedKind.ScreenModeSwitched) _windowCallbackPending = true;
+            if (queued.Kind == QueuedKind.ScreenModeSwitched) _scene.WindowCallbackPending = true;
             else (taken ??= []).Add(queued.Request);
         }
         return taken ?? (IReadOnlyList<ShellMenuRequest>)[];
@@ -161,21 +168,21 @@ public sealed partial class ShellServices
 
     /// <summary>Queue CALLBACK_SETTING.BIN (engine thread): after a menu command, or set:CancelMesSkipOnClick 2's
     /// cancel (script_launch_queue_enqueue@0x40f820).</summary>
-    public void RequestSettingCallback() => _settingCallbackPending = true;
+    public void RequestSettingCallback() => _scene.SettingCallbackPending = true;
 
     /// <summary>The next queued callback script, in the order native's launch queue would hold them, or null. The
     /// interpreter runs it at its next instruction boundary outside a statement block, or from a text wait's input
     /// service.</summary>
     public string? TakeCallbackScript()
     {
-        if (_settingCallbackPending)
+        if (_scene.SettingCallbackPending)
         {
-            _settingCallbackPending = false;
+            _scene.SettingCallbackPending = false;
             return SettingCallbackScript;
         }
-        if (_windowCallbackPending)
+        if (_scene.WindowCallbackPending)
         {
-            _windowCallbackPending = false;
+            _scene.WindowCallbackPending = false;
             return WindowCallbackScript;
         }
         return null;
@@ -196,13 +203,7 @@ public sealed partial class ShellServices
     /// commands and callbacks go with the frames they were for; an open dialog is cancelled.</summary>
     public void ResetScene()
     {
-        _settingCallbackPending = false;
-        _windowCallbackPending = false;
-        _requests.Clear();
-        _requestsPending = false;
-        SystemMenuActionsEnabled = 1;
-        SystemMenuShowDelayMilliseconds = 0;
-        SystemKeyDisableMask = 0;
+        _scene = new();
         CancelDialogs();
     }
 
@@ -210,8 +211,8 @@ public sealed partial class ShellServices
 
     private void Queue(Queued queued)
     {
-        _requests.Enqueue(queued);
-        _requestsPending = true;
+        _scene.Requests.Enqueue(queued);
+        _scene.RequestsPending = true;
         _wake();
     }
 }

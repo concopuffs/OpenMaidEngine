@@ -64,7 +64,7 @@ public class OpcodeHandlerTableTests
             (0x4, Enumerable.Repeat(new Operand(0, 0), Catalog.Argc(0x4)).ToArray()),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Catalog, new RecordingHost());
+        var vm = new VirtualMachine(script, Catalog, new RecordingWaits());
 
         vm.Run();
 

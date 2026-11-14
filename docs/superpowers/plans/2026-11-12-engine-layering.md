@@ -3,7 +3,7 @@
 **Date:** 2026-11-12
 **Spec:** `docs/superpowers/specs/2026-11-12-engine-layering-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps the census of milestone 2 and what it settles about the later milestones.
-**Status:** milestones 0, 1, 3, 4, 5, 6, 7, 8, 9, 10 and 11 are built (spec §15). Milestone 2, the census below, was measured at
+**Status:** milestones 0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11 and 12 are built (spec §15); the plan is complete. Milestone 2, the census below, was measured at
 `18d4d1b` on `feature/engine-layering`; since milestone 4 the host it names `GodotAdvHost` is `EngineHost`, in
 `engine/Ome.Engine/Hosting/`, and its file names below drop the prefix (`AdvText` is `EngineHost.AdvText.cs`). Since
 milestone 5 the skip and auto fields of §4 are the private state of `engine/Ome.Engine/Natives/SkipAndAuto*.cs`
@@ -29,7 +29,9 @@ properties that return the native's; the host's `_advText` and `_liveText` were 
 waits fields of §4, with the fields milestones 7 and 8 left there for the waits, are the private state of
 `engine/Ome.Engine/Natives/InputAndWaits*.cs` and `StopAndReload.cs` (spec §5.2, "As built"). The VM's 24 input rows
 stay at the VM as the interpreter's, which the native reaches through `IInterpreterInput`, and `_interactiveLock` is
-gone with the input thread (spec §5.3). Next: milestone 12.
+gone with the input thread (spec §5.3). Since milestone 12 the host is gone: what it kept went to the natives and a
+cursor device (spec §5.2, "As built (milestone 12)"), and each owner's scene fields are one object that op `0x9`'s
+reset builds again (spec §5.1, "As built (milestone 12): rule 5"); the VM's `_presentedMessage` is in its scene.
 
 Paths are relative to `age-reimpl/`.
 

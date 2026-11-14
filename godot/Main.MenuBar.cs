@@ -64,7 +64,7 @@ public partial class Main
     /// AGE's window, its menu bar included). Fullscreen has no bar.</summary>
     private bool RouteMenuBarInput(InputEvent e)
     {
-        if (_menuBar == null || _vm == null || _host == null || !Windowed) return false;
+        if (_menuBar == null || _vm == null || _waits == null || !Windowed) return false;
         if (_exitConfirmation != null || _scriptErrorDialog != null || _fullwidthTextEditor != null
             || _screenshotFolderDialog != null || _optionsPanel != null || _debugSceneLauncher?.Visible == true)
             return false;

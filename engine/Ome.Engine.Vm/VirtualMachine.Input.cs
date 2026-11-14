@@ -8,9 +8,6 @@ namespace Ome.Engine.Vm;
 // to these members.
 public sealed partial class VirtualMachine : IInterpreterInput
 {
-    // The op-0xcc mouse callback is engine state, not frame state (op 0xcd checks the registrant).
-    private int _mouseCallbackTarget = -1;
-    private Script? _mouseCallbackOwner;
     private long _mouseCallbackIntervalMs;
     private long _mouseCallbackArmedAtMs;
 
@@ -30,8 +27,8 @@ public sealed partial class VirtualMachine : IInterpreterInput
         if (textPage) _text.BeginPageWait(layoutSlot);
         try
         {
-            if (textPage) _host.WaitForInput(layoutSlot, ServiceHotspotCallback, CurrentAutoWaitState);
-            else _host.WaitForAdvInputPoll(ServiceHotspotCallback, CurrentAutoWaitState);
+            if (textPage) _waits.WaitForInput(layoutSlot, ServiceHotspotCallback, CurrentAutoWaitState);
+            else _waits.WaitForAdvInputPoll(ServiceHotspotCallback, CurrentAutoWaitState);
         }
         finally
         {
@@ -60,10 +57,10 @@ public sealed partial class VirtualMachine : IInterpreterInput
         bool wakeAtWait = false;
         if (_cur.Hotspots.HasDefinitions && !_cur.Hotspots.Armed)
         {
-            _interactiveFrame = _cur;
+            _scene.InteractiveFrame = _cur;
             wakeAtWait = _cur.Hotspots.Arm(_pointerX, _pointerY);
         }
-        if (wakeAtWait) _host.WakeInputCallbackService();
+        if (wakeAtWait) _waits.WakeInputCallbackService();
         WaitAtAdvInputPoll((int)Read(a[0]), textPage: true);
         return StepResult.Next;
     }
@@ -81,7 +78,7 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpCancelHotspotWait(Instruction ins, int pc)
     {
         _cur.Hotspots.Reset();
-        if (ReferenceEquals(_interactiveFrame, _cur)) _interactiveFrame = null;
+        if (ReferenceEquals(_scene.InteractiveFrame, _cur)) _scene.InteractiveFrame = null;
         return StepResult.Next;
     }
 
@@ -89,9 +86,9 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpArmHotspotWait(Instruction ins, int pc)
     {
         bool wake;
-        _interactiveFrame = _cur;
+        _scene.InteractiveFrame = _cur;
         wake = _cur.Hotspots.Arm(_pointerX, _pointerY);
-        if (wake) _host.WakeInputCallbackService();
+        if (wake) _waits.WakeInputCallbackService();
         return StepResult.Next;
     }
 
@@ -108,13 +105,13 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpSetCursorResource(Instruction ins, int pc)
     {
         var a = ins.Args;
-        _host.SetCursorResource(Read(a[0])); return StepResult.Next;
+        _waits.SetCursorResource(Read(a[0])); return StepResult.Next;
     }
 
     // 0x87
     private StepResult OpClearCursorResource(Instruction ins, int pc)
     {
-        _host.ClearCursorResource(); return StepResult.Next;
+        _waits.ClearCursorResource(); return StepResult.Next;
     }
 
     // 0xcc (poll interval ms, local target dword offset)
@@ -123,11 +120,11 @@ public sealed partial class VirtualMachine : IInterpreterInput
         var a = ins.Args;
         // op_0xcc_register_mouse_callback@0x420f70: one engine-wide registration (target +0x5f684, owner
         // +0x5f6ac, interval timer +0x5f320). A registration from any frame replaces the earlier one.
-        _mouseCallbackTarget = (int)Read(a[1]);
-        _mouseCallbackOwner = _cur.Script;
+        _scene.MouseCallbackTarget = (int)Read(a[1]);
+        _scene.MouseCallbackOwner = _cur.Script;
         _mouseCallbackIntervalMs = System.Math.Max(0, Read(a[0]));
-        _mouseCallbackArmedAtMs = _host.InputClockMilliseconds;
-        _rawInputFrame = _cur;
+        _mouseCallbackArmedAtMs = _waits.InputClockMilliseconds;
+        _scene.RawInputFrame = _cur;
         return StepResult.Next;
     }
 
@@ -137,16 +134,16 @@ public sealed partial class VirtualMachine : IInterpreterInput
         // op_0xcd_dispatch_mouse_callback@0x417e10: once the interval has passed (at once under fast-forward),
         // restart it, push the return pc and jump to the target. A target registered by another script raises
         // Depth with the return pc still pushed, so 再試行 and 無視 resume with it on the stack.
-        long now = _host.InputClockMilliseconds;
+        long now = _waits.InputClockMilliseconds;
         if (now - _mouseCallbackArmedAtMs < _mouseCallbackIntervalMs
             && !(AdvFastForwardActive))
             return StepResult.Next;
         _mouseCallbackArmedAtMs = now;
-        if (_mouseCallbackTarget == -1) return StepResult.Next;
+        if (_scene.MouseCallbackTarget == -1) return StepResult.Next;
         _cur.CallStack.Add(pc + 1);
-        if (_mouseCallbackOwner is { } owner && !IsSameScript(owner, _cur.Script))
+        if (_scene.MouseCallbackOwner is { } owner && !IsSameScript(owner, _cur.Script))
             return StepResult.Jump(RaiseInstructionScriptError(DepthError(owner), pc));
-        if (_cur.Script.IndexByOffset.TryGetValue(_mouseCallbackTarget, out int target)) return StepResult.Jump(target);
+        if (_cur.Script.IndexByOffset.TryGetValue(_scene.MouseCallbackTarget, out int target)) return StepResult.Jump(target);
         _cur.CallStack.RemoveAt(_cur.CallStack.Count - 1);
         return StepResult.Next;
     }
@@ -177,8 +174,8 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpPollJoyCallbackInput(Instruction ins, int pc)
     {
         _cur.PendingInputCallbackMask = InputBindings.PollActionMask()
-            | Volatile.Read(ref _heldInputCallbackMask)
-            | Interlocked.Exchange(ref _queuedInputCallbackMask, 0);
+            | Volatile.Read(ref _scene.HeldInputCallbackMask)
+            | Interlocked.Exchange(ref _scene.QueuedInputCallbackMask, 0);
         _cur.InputCallbackScanIndex = 0;
         return StepResult.Next;
     }
@@ -221,21 +218,21 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpGetMouseButtonState(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], Volatile.Read(ref _mouseButtonState)); return StepResult.Next;
+        Write(a[0], Volatile.Read(ref _scene.MouseButtonState)); return StepResult.Next;
     }
 
     // 0x106: active-device capability, zero when absent
     private StepResult OpGetJoystickButtonCount(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], System.Math.Max(0, _host.JoystickButtonCount)); return StepResult.Next;
+        Write(a[0], System.Math.Max(0, _waits.JoystickButtonCount)); return StepResult.Next;
     }
 
     // 0x10d
     private StepResult OpConsumeMouseWheelDelta(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], Interlocked.Exchange(ref _mouseWheelDelta, 0)); return StepResult.Next;
+        Write(a[0], Interlocked.Exchange(ref _scene.MouseWheelDelta, 0)); return StepResult.Next;
     }
 
     // 0x109
@@ -256,7 +253,7 @@ public sealed partial class VirtualMachine : IInterpreterInput
         int x = (int)Read(a[0]);
         int y = (int)Read(a[1]);
         UpdatePointer(x, y);
-        _host.WarpCursor(x, y);
+        _waits.WarpCursor(x, y);
         return StepResult.Next;
     }
 

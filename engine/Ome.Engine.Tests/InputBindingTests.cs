@@ -37,7 +37,7 @@ public class InputBindingTests
             (0x10c, new[] { I(4), I(0x2c) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
 
         vm.Run();
 
@@ -56,7 +56,7 @@ public class InputBindingTests
             (0x109, new[] { G(0x710), G(0x711) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(script, Table, host);
 
         vm.Run();
@@ -96,7 +96,7 @@ public class InputBindingTests
             (0x106, new[] { G(0x710) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost { JoystickButtonCount = 14 };
+        var host = new RecordingWaits { JoystickButtonCount = 14 };
         var vm = new VirtualMachine(script, Table, host);
 
         vm.Run();
@@ -117,7 +117,7 @@ public class InputBindingTests
             (0x55, new[] { G(0x700), I(1) }),    // offset 11
             (0x5, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
 
         vm.Run();
 
@@ -140,7 +140,7 @@ public class InputBindingTests
             (0x55, new[] { G(0x702), I(1) }),     // offset 22
             (0x5, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
         vm.UpdateInputCallbackState(0, true);
         vm.UpdateInputCallbackState(1, true);
         vm.UpdateInputCallbackState(3, true); // bit survives polling but is outside count and is ignored
@@ -162,7 +162,7 @@ public class InputBindingTests
             (opcode, args),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingHost());
+        var vm = new VirtualMachine(script, Table, new RecordingWaits());
 
         vm.Run();
 

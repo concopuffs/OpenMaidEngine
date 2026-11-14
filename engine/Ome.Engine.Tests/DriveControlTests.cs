@@ -611,7 +611,7 @@ public class DriveControlTests
 
     // ------------------------------------------------------------------------------------------- VM frames
 
-    private sealed class CapturingHost : RecordingHost
+    private sealed class CapturingHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public readonly List<IReadOnlyList<VmFrameLocation>> Captures = new();

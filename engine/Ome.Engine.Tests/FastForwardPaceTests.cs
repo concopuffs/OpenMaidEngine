@@ -72,7 +72,7 @@ public class FastForwardPaceTests
         var skipAndAuto = new SkipAndAuto(
             new SkipAndAutoSettings(FastForwardOpMicroseconds: opMicroseconds, FastForwardPageMicroseconds: pageMicroseconds),
             clock);
-        new VirtualMachine(script, table, new RecordingHost(), skipAndAuto: skipAndAuto).Run();
+        new VirtualMachine(script, table, new RecordingWaits(), skipAndAuto: skipAndAuto).Run();
         return clock;
     }
 
@@ -104,18 +104,18 @@ public class FastForwardPaceTests
     public void SleepIsSkippedWhileFastForwardIsActive()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
-        var skipped = new RecordingHost();
+        var skipped = new RecordingWaits();
         new VirtualMachine(Build(table, "SLEEP_SKIP", skip: true, 0, (0xc8, new[] { I(1000) })), table, skipped).Run();
         Assert.Empty(skipped.SleptDurations);
 
-        var physical = new RecordingHost();
+        var physical = new RecordingWaits();
         var held = SkipAndAuto.WithSystemClock();
         held.SetPhysicalFastForward(true);   // action 6 held: fast-forward without persistent Skip
         new VirtualMachine(Build(table, "SLEEP_CTRL", skip: false, 0, (0xc8, new[] { I(1000) })), table, physical,
                            skipAndAuto: held).Run();
         Assert.Empty(physical.SleptDurations);
 
-        var normal = new RecordingHost();
+        var normal = new RecordingWaits();
         new VirtualMachine(Build(table, "SLEEP_NORMAL", skip: false, 0, (0xc8, new[] { I(1000) })), table, normal).Run();
         Assert.Equal(new long[] { 1000 }, normal.SleptDurations);
     }

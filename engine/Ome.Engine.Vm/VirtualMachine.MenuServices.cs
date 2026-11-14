@@ -74,7 +74,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
     /// input.</summary>
     private void ToggleAutoMessageFromMenu()
     {
-        if (_skip.ToggleAutoMessageFromMenu() && _advTextWaitPolling) _host.EndInputWait();
+        if (_skip.ToggleAutoMessageFromMenu() && _advTextWaitPolling) _waits.EndInputWait();
     }
 
     /// <summary>The 設定 dialog's OK: MessageSpeed as op 0x1b5 sets it (IAGEService +0x10 writes ctx+0x14e9c),

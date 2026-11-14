@@ -812,7 +812,7 @@ A native drive confirmed this (`tools/drive/scenarios/himegari-exit-dialog.steps
   code 0, and the shutdown flush writes `SAVE.DAT`, as native does under run-state `0x1000000`. The port reads
   the window's state instead of keeping the bit.
 - **タイトルに戻る:** after 250 ms, `VirtualMachine.RequestRootReload` runs. It wakes any blocking host wait through
-  `ILifecycleHost.InterruptForRootReload`. The current frame stops at its next opcode boundary (a hotspot callback
+  `IInputAndWaits.InterruptForRootReload`. The current frame stops at its next opcode boundary (a hotspot callback
   unwinds too), and op `0x9`'s reset and root reload follow.
 
 The port's drive of the same scenario passes. Its return to TITLE takes 0.28 s, with no logos. The minimized-close
@@ -1907,7 +1907,7 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   native (`RequestMessageSkipToggle`, `…AutoMessageToggle`, `…ReadMessageSkipToggle`); the VM applies them at its next
   instruction boundary or text-wait service, then runs `CALLBACK_SETTING.BIN`. The fourth asks the VM at once
   (`RequestMenuHideWindow`). Ending a text wait from Auto goes
-  through `IInputHost.EndInputWait`. 設定's section commands, 動作環境 and ﾊﾞｰｼﾞｮﾝ情報 open the shell's options panel
+  through `IInputAndWaits.EndInputWait`. 設定's section commands, 動作環境 and ﾊﾞｰｼﾞｮﾝ情報 open the shell's options panel
   (below), so every install has them; the port reads nothing from AGERC.DLL.
 - **Screenshots.** `godot/Main.Screenshot.cs` saves through `ScreenshotBmpStore` (`engine/Ome.Engine/Persistence`).
   表示画面を保存 saves the frame frozen when the menu opened; F1 saves the current frame unless
@@ -2772,8 +2772,8 @@ the current script coordinate; it is not a general shell-command interface.
 
 The port implements the trio in the shell-services native, over a `DiagnosticOutputState` that a `GameSession` shares
 across its scene VMs. The box is a request the front end completes (`DiagnosticBox`): Godot shows it on the main thread
-through `OS.Alert`, and the VM waits until dismissal; headless
-`CaptureHost` records the same effect. The accumulator clears after the synchronous call returns, so
+through `OS.Alert`, and the VM waits until dismissal; the
+headless waits (`HeadlessWaits`) record the same effect. The accumulator clears after the synchronous call returns, so
 FIELD's unpresented line and SYSTEM4's unusual post-clear CRLF retain their native lifetime and ordering.
 
 **Follow-up resolution (2026-07-10):** `0x21f` is the one-shot axis-angle channel and is implemented with
@@ -4688,7 +4688,7 @@ A calls `HIDEWIN.BIN` unconditionally, then yields again into handler B.
   - the owner;
   - whether the resume is a text wait.
 - Op `0x7c` with the yield still entered calls `WaitInHiddenWindow`.
-  - That sets the frame location to the resume and blocks in `IInputHost.WaitForServiceTrigger`. The wait ends on a
+  - That sets the frame location to the resume and blocks in `IInputAndWaits.WaitForServiceTrigger`. The wait ends on a
     latched trigger, the Skip service, a stop or a root reload.
   - It then enters handler B, or returns to the resume when the frame has none.
 - `TryRequestAdvWaitCoroutineYield` is the Space entry. `ServiceHotspotCallback` runs it before queued hotspot
@@ -5364,7 +5364,7 @@ op `0x1b1` (`SYSTEM4@0xb7`, text manager `+0x570`); Himegari never does. In foll
 (`+0x50`) plus the left/top of the layout's last 20-byte glyph record (`*(layout+0x30) - 0x10`). The builders always
 draw into the last record and then push the next one at the cursor, so that record is the pending one just past the
 last glyph. Op `0x6f`'s line end, op `0x7a` and a layout reset move it. The port used to anchor on the last glyph's own
-left, one cell left of native. The text native now keeps each layout's cursor (`_layoutCursors`), set by every drawn
+left, one cell left of native. The text native now keeps each layout's cursor (its scene's `LayoutCursors`), set by every drawn
 run and by `SetAdvTextCursor`, which op `0x6f` now calls too. On `SC0000@0xfa2` the indicator now lands where
 native draws it.
 
@@ -6402,7 +6402,7 @@ page 18 reveals its 35 glyphs in two runs around the furigana かがりび.
   and op-`0x97` bindings. Any other mapped click, key or joystick trigger goes through `Main.RouteUnpolledTrigger`: a
   running reveal's poll takes action 4 and drops the rest, and otherwise the trigger is held in the latch.
 - A held action 4 reaches the text native as `TextManager.FinishTextRevealsUntilWait` (kept until the next text
-  wait) or the host as `IMovieHost.CancelNextModalMovie`.
+  wait) or the host as `IInputAndWaits.CancelNextModalMovie`.
 - Op `0xd5` polls the latch before and after each wait for the next entry (`TryAbortTimedCallbackSequence`; the
   literal entry intervals in both games are 33 ms at most), and flushes it at cursor 0.
 - Tests: `InputLatchTests` and `TimedCallbackOpsTests` (synthesized).
@@ -6793,12 +6793,12 @@ running on the field, the next click hit Kamidori's `CancelMesSkipOnClick = 2` c
 CALLBACK_SETTING, so the port's SC2500 stopped on pages native skipped. With Skip on from the prologue, both targets
 now reach SC2500's BUNKI choice.
 
-**Port.** The skip-and-auto native (`engine/Ome.Engine/Natives/SkipAndAuto.cs`): `_messageSkipEnabled` (`0x550fc`),
-`_messageSkipInjected` (`0x13dc`), `_fastForward` (the run-state bit, joining a script and a physical channel),
+**Port.** The skip-and-auto native (`engine/Ome.Engine/Natives/SkipAndAuto.cs`): its scene's `MessageSkipEnabled` (`0x550fc`) and
+`MessageSkipInjected` (`0x13dc`), `_fastForward` (the run-state bit, joining a script and a physical channel),
 `ApplyReadTextSkip` (the shared block) and `SetScriptFastForward`.
 Ops `0x88`, `0x101`, `0x19b`, `0x19c`, `0x72`, `0xfa` and `0x1ca`, the menu toggles and the click cancel follow the
 table (op `0xfa` since 2026-11-09; before then the port had it end fast-forward with no poll after it). `EnterTextWait` is op `0x72`'s entry, and `ServiceHotspotCallback` runs it again after a callback returns. The
-hidden-window wait ends on `_messageSkipInjected`, the injected action 6, rather than on fast-forward. Until
+hidden-window wait ends on `MessageSkipInjected`, the injected action 6, rather than on fast-forward. Until
 2026-11-08, op `0x88(1)` started fast-forward at once, which skipped the Skip button's 100 ms sleep, and op `0x101`
 left a script-started fast-forward running. No sweep had reported either. The guard is not modelled, being
 unreachable. Tests:
@@ -7370,7 +7370,7 @@ the same route replayed from a save (k1clean slot 011, turn 25 of 木漏れ日�
 with identical shots until one click takes both through `SC0010@0xb424` to `SC0010@0xd08`.
 
 **Port.** `VirtualMachine` runs op `0xfa`'s entry (`RefreshAdvSkipInputState`). With fast-forward off it enters the
-same poll as op `0x72` (`WaitAtAdvInputPoll`) through `IInputHost.WaitForAdvInputPoll`, starting fast-forward first
+same poll as op `0x72` (`WaitAtAdvInputPoll`) through `IInputAndWaits.WaitForAdvInputPoll`, starting fast-forward first
 when persistent Skip is injected. The Godot host runs the text wait's loop for it without a page break, locator page,
 wait indicator or text clear. Its Auto timer is due at once unless a voice is pending (`AdvAutoAdvanceTimer`'s
 `unvoicedDeadlineDue`). A hotspot callback's `ret` after op `0xfa`'s poll would land 3 dwords back, inside the
@@ -7775,11 +7775,11 @@ departure.
         and clears `coroutine_runstate` and the timed schedule, but keeps the `0xcc` target.
       - No other code writes the mouse or timed fields, so they survive a save load.
   - **Port (fixed 2026-11-03; answers 2026-11-04):**
-    - **Owner check.** The port's hotspot registry is the owning frame (`_interactiveFrame`). It used to dequeue the
+    - **Owner check.** The port's hotspot registry is the owning frame (the VM scene's `InteractiveFrame`). It used to dequeue the
       owner's callback offset and look it up in the *running* script, so the click was silently dropped, or, had the
       offset existed there, ran unrelated code. `VirtualMachine.ServiceHotspotCallback` now raises the native error
       when the owner is not the running frame. The text matches native's byte for byte.
-    - **The box.** The error goes through `IDiagnosticHost.ShowScriptError`, which returns a `ScriptErrorChoice`.
+    - **The box.** The error goes through `IInputAndWaits.ShowScriptError`, which returns a `ScriptErrorChoice`.
       Godot shows `ScriptErrorDialog`: native's caption and text, 中止(&A)/再試行(&R)/無視(&I), 再試行 as the default
       button, no cancel and a disabled ✕. It has the native box's MessageBox layout, over a frozen frame (see "Port
       appearance" under the close policy).

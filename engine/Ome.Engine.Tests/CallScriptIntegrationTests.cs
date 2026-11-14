@@ -2,11 +2,12 @@ using Ome.Engine.Hosting;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
+using Ome.Engine.Natives;
 
 [Trait("Category", "Workspace")]
 public class CallScriptIntegrationTests
 {
-    private sealed class NullHost : IHost
+    private sealed class NullWaits : IInputAndWaits
     {
         public void ShowText(int o, string t) { }
         public void WaitForInput() { }
@@ -28,7 +29,7 @@ public class CallScriptIntegrationTests
         var t = OpcodeTableJson.Load(Paths.OpcodesJson);
         var provider = Sys4ScriptProvider.Load(t);
         var script = Sys4Loader.Load(Paths.Scripts()["ADDILL.BIN"], t);
-        var host = new NullHost();
+        var host = new NullWaits();
         var vm = new VirtualMachine(script, t, host, null, provider);
         vm.Run();
         Assert.Equal(2, vm.CallScriptDispatches); // ADDILLSUB + CALCREVISE both dispatched
@@ -44,7 +45,7 @@ public class CallScriptIntegrationTests
         var provider = Sys4ScriptProvider.Load(t);
         var bunki = provider.GetById(0x143);   // BUNKI.BIN
         Assert.NotNull(bunki);
-        var vm = new VirtualMachine(bunki!, t, new NullHost(), null, provider);
+        var vm = new VirtualMachine(bunki!, t, new NullWaits(), null, provider);
         vm.Run();
         // Reaching a frame-return at the top = clean "exit"; never "ret-underflow".
         Assert.NotEqual("ret-underflow", vm.HaltReason);

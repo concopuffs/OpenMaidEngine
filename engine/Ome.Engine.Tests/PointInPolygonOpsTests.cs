@@ -34,7 +34,7 @@ public class PointInPolygonOpsTests
 
         var vm = new VirtualMachine(
             ScriptAssembler.Assemble(table, "POINT_IN_POLYGON", operations, Array.Empty<string>()),
-            table, new RecordingHost());
+            table, new RecordingWaits());
 
         vm.Run();
 

@@ -16,10 +16,9 @@ namespace Ome.Engine.Natives;
 /// frame turns. Surfaces are replaced, never written in place, so the front end draws a frame with the pixels it was
 /// lowered with while the engine thread goes on.</para>
 /// <para>The movie native (<see cref="Movies"/>) answers which surfaces a movie owns (<see cref="IGraphicsMovies"/>),
-/// and it and the lifted host's text part, until milestone 10, hear when a surface is released or replaced
-/// (<see cref="ISurfaceListener"/>).</para>
+/// and it and the text native hear when a surface is released or replaced (<see cref="ISurfaceListener"/>).</para>
 /// </remarks>
-public sealed partial class Graphics : ISurfacePixels
+public sealed partial class Graphics
 {
     private readonly ResourceMap? _res;
     private readonly FrameClock _clock;
@@ -60,9 +59,8 @@ public sealed partial class Graphics : ISurfacePixels
     /// <summary>The movie native, which answers which surfaces a movie shows (it attaches itself).</summary>
     public void AttachMovies(IGraphicsMovies movies) => _movies = movies ?? NoGraphicsMovies.Instance;
 
-    /// <summary>Add one who hears that a surface is released or replaced: the movie native, and the lifted host's text
-    /// part until milestone 10. Listeners hear in the order they were added. Composition adds them before the engine
-    /// runs.</summary>
+    /// <summary>Add one who hears that a surface is released or replaced: the movie native and the text native.
+    /// Listeners hear in the order they were added. Composition adds them before the engine runs.</summary>
     public void Listen(ISurfaceListener listener)
         => _listeners = [.. _listeners, listener ?? throw new ArgumentNullException(nameof(listener))];
 
@@ -100,8 +98,8 @@ public interface IGraphicsMovies
     bool IsKnownMovieResource(long resourceId);
 }
 
-/// <summary>Hears what happens to a surface: the movie native stops the movies on it, and the lifted host's text part
-/// drops the layouts retained on it (implementation plan §3.2, addition 2).</summary>
+/// <summary>Hears what happens to a surface: the movie native stops the movies on it, and the text native drops the
+/// layouts retained on it (implementation plan §3.2, addition 2).</summary>
 public interface ISurfaceListener
 {
     /// <summary>Before surface <paramref name="slot"/> is released: native deletes the slot's movie first.</summary>

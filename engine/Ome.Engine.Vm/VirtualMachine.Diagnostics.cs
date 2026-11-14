@@ -22,10 +22,10 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
-    // 0x1b4: synchronous host prompt, then erase
+    // 0x1b4: synchronous modal prompt (the waits' dialog wait), then erase
     private StepResult OpShowAndClearDiagnostic(Instruction instruction, int pc)
     {
-        _host.ShowDiagnosticMessage(BuildDiagnosticMessage(instruction));
+        _waits.ShowDiagnosticMessage(BuildDiagnosticMessage(instruction));
         _shell.ClearDiagnostic();
         return StepResult.Next;
     }

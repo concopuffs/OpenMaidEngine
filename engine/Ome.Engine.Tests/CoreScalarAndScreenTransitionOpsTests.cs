@@ -25,7 +25,7 @@ public class CoreScalarAndScreenTransitionOpsTests
         };
 
         var vm = new VirtualMachine(ScriptAssembler.Assemble(table, "ZERO_RANGE", ops, Array.Empty<string>()), table,
-                                    new RecordingHost());
+                                    new RecordingWaits());
         vm.Run();
 
         Assert.All(Enumerable.Range(0x2e49, 3), address => Assert.Equal(0, vm.Globals[address]));
@@ -46,7 +46,7 @@ public class CoreScalarAndScreenTransitionOpsTests
             (0x2, Array.Empty<Operand>()),
         };
         Script script = ScriptAssembler.Assemble(table, "OVERFLOW.BIN", ops, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -67,7 +67,7 @@ public class CoreScalarAndScreenTransitionOpsTests
             (0x2, Array.Empty<Operand>()),
         };
         Script script = ScriptAssembler.Assemble(table, "OVERFLOW.BIN", ops, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         vm.Run();
 
@@ -101,7 +101,7 @@ public class CoreScalarAndScreenTransitionOpsTests
         };
 
         var vm = new VirtualMachine(ScriptAssembler.Assemble(table, "DIV_MOD", ops, Array.Empty<string>()), table,
-                                    new RecordingHost());
+                                    new RecordingWaits());
         vm.Run();
 
         Assert.Equal(quotient, vm.Globals[0x100]);
@@ -134,7 +134,7 @@ public class CoreScalarAndScreenTransitionOpsTests
         };
 
         var vm = new VirtualMachine(ScriptAssembler.Assemble(table, "WRAP32", ops, Array.Empty<string>()), table,
-                                    new RecordingHost());
+                                    new RecordingWaits());
         vm.Run();
 
         Assert.Equal(int.MinValue, vm.Globals[0x100]);
@@ -159,7 +159,7 @@ public class CoreScalarAndScreenTransitionOpsTests
         };
 
         var vm = new VirtualMachine(ScriptAssembler.Assemble(table, "RANDOM_MODULO", ops, Array.Empty<string>()), table,
-                                    new RecordingHost());
+                                    new RecordingWaits());
         vm.Run();
 
         Assert.InRange(vm.Globals[0x100], 0, 3);
@@ -175,7 +175,7 @@ public class CoreScalarAndScreenTransitionOpsTests
                 (0x25a, new[] { new Operand(Imm, 0x123456) }),
                 (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost(),
+        var vm = new VirtualMachine(script, table, new RecordingWaits(),
             build: EngineBuilds.Age433G);
 
         vm.Run();
@@ -193,7 +193,7 @@ public class CoreScalarAndScreenTransitionOpsTests
             (0x22, new[] { new Operand(Imm, 2), new Operand(Imm, 65) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host).Run();
 
@@ -217,7 +217,7 @@ public class CoreScalarAndScreenTransitionOpsTests
             (0x25, new[] { new Operand(Imm, 1), new Operand(Imm, 2), new Operand(Imm, 10) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host).Run();
 
@@ -277,7 +277,7 @@ public class CoreScalarAndScreenTransitionOpsTests
             (0x24, new[] { new Operand(Imm, 1), new Operand(Imm, 80) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host,
             build: EngineBuilds.Age433G).Run();
@@ -306,7 +306,7 @@ public class CoreScalarAndScreenTransitionOpsTests
                 }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host,
             build: EngineBuilds.Age433G).Run();
@@ -350,7 +350,7 @@ public class CoreScalarAndScreenTransitionOpsTests
                 }),
                 (0x2, Array.Empty<Operand>()),
             }, Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
 
         new VirtualMachine(script, table, host, skipAndAuto: TestSkipAndAuto.HoldingFastForward()).Run();
 

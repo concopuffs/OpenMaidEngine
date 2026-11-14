@@ -17,7 +17,7 @@ public class TiledSurfaceEdgeOpcodeTests
             (0x249, new[] { I(0x32da), I(0x3e), I(0) }),
             (0x2, System.Array.Empty<Operand>()),
         }, System.Array.Empty<string>());
-        var host = new RecordingHost();
+        var host = new RecordingWaits();
         var vm = new VirtualMachine(scene, table, host);
 
         vm.Run();

@@ -34,7 +34,7 @@ public class DiagnosticsSinkTests
                                          (0x2, Array.Empty<Operand>()) }, Array.Empty<string>());
 
         var hist = new HistogramTraceSink();
-        new VirtualMachine(main, t, new RecordingHost(), null, new MapProvider(new() { [5] = sub }), hist).Run();
+        new VirtualMachine(main, t, new RecordingWaits(), null, new MapProvider(new() { [5] = sub }), hist).Run();
 
         Assert.Equal(2, hist.OpCount(0x55));   // one mov in each frame
         Assert.Equal(2, hist.OpCount(0x2));    // one exit in each frame
@@ -58,7 +58,7 @@ public class DiagnosticsSinkTests
         var sw = new StringWriter();
         var filter = new HashSet<int> { 0xc8 };
         var sink = new TextTraceSink(sw, t, includeSteps: false, opFilter: filter);
-        new VirtualMachine(scene, t, new RecordingHost(), null, null, sink).Run();
+        new VirtualMachine(scene, t, new RecordingWaits(), null, null, sink).Run();
 
         var outp = sw.ToString();
         Assert.Contains("F:0001 sleep", outp);   // filtered op appears, tagged with its script + pc

@@ -18,7 +18,7 @@ public class PhysicalFastForwardTests
     private static Operand G(int address) => new(3, address);
     private static Operand S(int index) => new(2, index);
 
-    private sealed class FastForwardHost : RecordingHost
+    private sealed class FastForwardHost : RecordingWaits
     {
         public VirtualMachine? Vm;
         public Action<VirtualMachine, int>? AtWait;     // the wait's ordinal, from 0

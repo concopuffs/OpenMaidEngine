@@ -28,7 +28,7 @@ public class MouseWheelInputTests
             (0x5, Array.Empty<Operand>()),
         }, Array.Empty<string>());
 
-    private sealed class WheelAtWaitHost : RecordingHost
+    private sealed class WheelAtWaitHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public bool PollingAtWait, PollingAfterCallback;
@@ -107,7 +107,7 @@ public class MouseWheelInputTests
             (0x10d, new[] { G(0x120) }),
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingHost());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
 
         // The reveal service reads and clears the counter only with AdvanceMesOnWheel=1, and finishes the reveal only
         // when the total it read is negative.
@@ -140,7 +140,7 @@ public class MouseWheelInputTests
 
     private sealed class StopAtHistoryException : Exception { }
 
-    private sealed class WheelUpAtFirstWaitHost : RecordingHost
+    private sealed class WheelUpAtFirstWaitHost : RecordingWaits
     {
         public VirtualMachine Vm = null!;
         public MouseWheelOutcome Up;

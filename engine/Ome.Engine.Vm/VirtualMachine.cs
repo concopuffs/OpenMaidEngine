@@ -22,7 +22,8 @@ public sealed partial class VirtualMachine
     private readonly Script _s;
     private readonly OpcodeTable _t;
     private readonly Handler?[] _handlers;   // _t's opcodes bound to their handlers (VirtualMachine.Handlers.cs)
-    private readonly IHost _host;
+    // The input and waits native (Ome.Engine/Natives/InputAndWaits*.cs), or a stand-in whose waits return at once.
+    private readonly IInputAndWaits _waits;
     private readonly SkipAndAuto _skip;
     private readonly Graphics _graphics;
     private readonly VmOptions _o;
@@ -40,35 +41,18 @@ public sealed partial class VirtualMachine
     private readonly ITraceSink _sink;
     private readonly List<string> _activeFrameNames = new();
     private readonly List<ExecFrame> _activeExecutionFrames = new();
-    private ExecFrame? _saveResumeFrame;
     private int _restoreFrameIndex = -1;   // the saved frame a full load restores next (SavesAndSettings.RestoringFrames)
-    private ExecFrame? _debugActiveFrame;
-    private long _debugActiveFrameId;
     private long _debugNextFrameId;
-    private DebugFrameReturnRequest? _debugFrameReturnRequest;
-    private HostedSceneEntry? _hostedSceneEntry;   // pending until the coordinator frame enters
-    private long? _hostedScenePackedId;            // set once the coordinator returned, until the scene enters
-    private ExecFrame? _interactiveFrame;
-    private ExecFrame? _rawInputFrame;
     private int _pointerX = int.MinValue, _pointerY = int.MinValue;
-    private int _mouseButtonState;
-    private int _mouseWheelDelta;
     // Native run-state bit 0x80000000: an ADV wait (op 0x72's text wait, or op 0xfa's poll with no page) is polling
     // input. It is clear while that wait runs a hotspot callback, as native clears the bit on dispatch and the
     // callback's ret re-runs the wait.
     private volatile bool _advTextWaitPolling;
     private bool _advInputPollPageless;   // the polling wait is op 0xfa's
-    private int _heldInputCallbackMask;
-    private int _queuedInputCallbackMask;
     private bool _tickPresentationEnabled;    // native tick_presentation_enabled (ctx+0x99294), ops 0x21b/0x247
-    private bool _initialRootRun = true;
     // The stop and return-to-title requests: the input and waits native's copy when the VM is built with it, so a
     // request ends its waits too (engine layering plan §3.3).
     private readonly StopAndReload _stopAndReload;
-    private readonly Dictionary<string, int> _valueSwitchTargets = new(StringComparer.Ordinal);
-    // Opcodes 0x06/0x08 load scripts into numbered EngineCtx frame slots and invoke them later.
-    // Unlike ordinary call-script frames, native non-adjacent slots survive return with locals intact.
-    private readonly Dictionary<int, PreloadedScriptSlot> _preloadedScriptSlots = new();
     public long CallScriptDispatches { get; private set; }
 
     /// <summary>The script memory native this VM's handlers read and write (Ome.Engine/Natives/ScriptMemory.cs).
@@ -111,7 +95,7 @@ public sealed partial class VirtualMachine
     {
         get
         {
-            int index = _saveResumeFrame == null ? -1 : _activeExecutionFrames.IndexOf(_saveResumeFrame);
+            int index = _scene.SaveResumeFrame == null ? -1 : _activeExecutionFrames.IndexOf(_scene.SaveResumeFrame);
             return index >= 0 ? index : null;
         }
     }
@@ -123,14 +107,14 @@ public sealed partial class VirtualMachine
         get
         {
             ExecFrame? rawInputFrame;
-            rawInputFrame = _rawInputFrame;
+            rawInputFrame = _scene.RawInputFrame;
             if (rawInputFrame == null) return false;
-            return ReferenceEquals(rawInputFrame, _debugActiveFrame);
+            return ReferenceEquals(rawInputFrame, _scene.DebugActiveFrame);
         }
     }
     public string? RawInputCallbackScriptName
     {
-        get { return _rawInputFrame?.Script.Name; }
+        get { return _scene.RawInputFrame?.Script.Name; }
     }
     /// <summary>The text native this VM's handlers call (Ome.Engine/Natives/TextManager*.cs): the layouts and
     /// History, the style, the reveal, the wait indicator, the message settings and the presenter.</summary>
@@ -143,27 +127,73 @@ public sealed partial class VirtualMachine
     {
         get
         {
-            return _debugActiveFrame == null
+            return _scene.DebugActiveFrame == null
                 ? null
-                : new DebugFrameSnapshot(_debugActiveFrameId, _debugActiveFrame.Script.Name,
+                : new DebugFrameSnapshot(_scene.DebugActiveFrameId, _scene.DebugActiveFrame.Script.Name,
                                          _activeFrameNames.ToArray());
         }
     }
 
-    public VirtualMachine(Script s, OpcodeTable t, IHost host, VmOptions? o = null,
+    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
+    private sealed class Scene
+    {
+        public ExecFrame? SaveResumeFrame;
+        public ExecFrame? DebugActiveFrame;
+        public long DebugActiveFrameId;
+        public DebugFrameReturnRequest? DebugFrameReturnRequest;
+        public HostedSceneEntry? HostedSceneEntry;   // pending until the coordinator frame enters
+        public long? HostedScenePackedId;            // set once the coordinator returned, until the scene enters
+        public ExecFrame? InteractiveFrame;
+        public ExecFrame? RawInputFrame;
+        public int MouseButtonState;
+        public int MouseWheelDelta;
+        public int HeldInputCallbackMask;
+        public int QueuedInputCallbackMask;
+        public bool InitialRootRun;   // the run's first root run (SYSTEM4 plays LOGO and OP); a reloaded scene's is not
+        public readonly Dictionary<string, int> ValueSwitchTargets = new(StringComparer.Ordinal);
+        // Opcodes 0x06/0x08 load scripts into numbered EngineCtx frame slots and invoke them later.
+        // Unlike ordinary call-script frames, native non-adjacent slots survive return with locals intact.
+        public readonly Dictionary<int, PreloadedScriptSlot> PreloadedScriptSlots = new();
+        // The op-0x199 yield is engine state (coroutine_runstate +0x6dbc8, resume offset +0x6dbcc, owner +0x5f6bc).
+        // The resume is held as an instruction index: op 0x7c only takes it in a frame of the owner's script.
+        public bool CoroutineYieldEntered;      // coroutine_runstate 0x4000000
+        public int? CoroutineResumePc;          // coroutine_runstate 0x2000000 with its resume offset
+        public Script? CoroutineYieldOwner;
+        // The yield came from an ADV text wait (adv_input_service_poll's action-5 entry), so the saved run state holds
+        // the wait (0x80000000): op 0x7c returns to the parked wait rather than to an instruction.
+        public bool CoroutineResumesTextWait;
+        public volatile bool CoroutineYieldActive;      // CoroutineResumePc is set; read when input is routed
+        // The op-0xcc mouse callback is engine state, not frame state (op 0xcd checks the registrant).
+        public int MouseCallbackTarget = -1;
+        public Script? MouseCallbackOwner;
+        // The op-0xd3..0xd5 timed sequence is engine state (entries +0x5f694, guard +0x5f6b8), shared by every frame.
+        public readonly List<TimedCallback> TimedCallbacks = new();
+        public int TimedCallbackCursor;
+        public long TimedCallbackStartedAtMs;
+        public int TimedCallbackAbortOffset = -1;
+        public Script? TimedCallbackGuard;
+        // The message a frame shows run by run (VirtualMachine.AdvText.cs).
+        public PresentedMessage? PresentedMessage;
+    }
+
+    private Scene _scene = new() { InitialRootRun = true };
+
+    public VirtualMachine(Script s, OpcodeTable t, IInputAndWaits waits, VmOptions? o = null,
                           IScriptProvider? provider = null, ITraceSink? sink = null,
                           AdvTextHistory? textHistory = null, SavesAndSettings? saves = null,
                           ShellServices? shell = null,
                           EngineBuild? build = null, SkipAndAuto? skipAndAuto = null,
                           Audio? audio = null, EngineTick? tick = null,
                           Graphics? graphics = null, Movies? movies = null, ScriptMemory? memory = null,
-                          TextManager? text = null, InputAndWaits? waits = null)
+                          TextManager? text = null)
     {
-        _s = s; _t = t; _handlers = BindHandlers(t); _host = host; _o = o ?? new VmOptions(); _provider = provider;
+        ArgumentNullException.ThrowIfNull(waits);
+        _s = s; _t = t; _handlers = BindHandlers(t); _waits = waits; _o = o ?? new VmOptions(); _provider = provider;
         // Composition hands over the native its time device belongs to; tests and tools that give none get one over
-        // the system clock. A host that keeps the effects of fast-forward (the lifted host, a test's fake) hears it.
+        // the system clock. A stand-in for the waits that keeps the effects of fast-forward (a test's fake) hears it;
+        // the input and waits native listens to its own skip and auto native.
         _skip = skipAndAuto ?? SkipAndAuto.WithSystemClock();
-        if (host is IFastForwardListener listener) _skip.Listen(listener);
+        if (waits is IFastForwardListener listener and not InputAndWaits) _skip.Listen(listener);
         // The audio native and the tick come from composition too; without them the VM runs with a silent one.
         _audio = audio ?? Audio.Silent(_skip);
         _tick = tick ?? new EngineTick(_audio);
@@ -172,11 +202,11 @@ public sealed partial class VirtualMachine
         // Without a front end no movie resolves (Movies.Headless); composition gives the one over the decoder.
         _movies = movies ?? Movies.Headless(_graphics);
         // Without a front end the text native draws nothing (TextManager.Headless); it keeps the history it is given,
-        // which a GameSession shares across its scenes. A host that listens to text (a test's fake) hears it.
+        // which a GameSession shares across its scenes. A stand-in for the waits that listens to text (a test's fake) hears it.
         if (text != null && textHistory != null && !ReferenceEquals(text.History, textHistory))
             throw new ArgumentException("A text native keeps its own history.", nameof(textHistory));
         _text = text ?? TextManager.Headless(_graphics, _skip, history: textHistory);
-        if (host is ITextListener textListener) _text.Listen(textListener);
+        if (waits is ITextListener textListener) _text.Listen(textListener);
         _rules = EngineBuilds.ForVm(build, t).Rules;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         // Without composition the banks start empty in a script memory of the options' code page.
@@ -184,19 +214,19 @@ public sealed partial class VirtualMachine
         _sink = sink ?? NullTraceSink.Instance;
         // Without composition there is no save store: a numbered save fails, and the shared profile starts empty.
         _saves = saves ?? new SavesAndSettings();
-        // Without composition the shell native has no window and no dialogs, and a menu request wakes this VM's host.
+        // Without composition the shell native has no window and no dialogs, and a menu request wakes this VM's waits.
         if (shell == null)
         {
             shell = ShellServices.Headless();
-            shell.WakeWaitsWith(host.WakeInputCallbackService);
+            shell.WakeWaitsWith(waits.WakeInputCallbackService);
         }
         _shell = shell;
         _saveRecords = new NumberedSaveRecords(
             _memory, _audio, _graphics, _text, CaptureSavedFrames,
             releaseSurfacesOnLoad: (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0);
         // The input and waits native routes the front end's input to this interpreter's hotspots and callbacks.
-        waits?.RouteInputTo(this);
-        _stopAndReload = waits?.StopAndReload ?? new StopAndReload();
+        waits.RouteInputTo(this);
+        _stopAndReload = waits.StopAndReload ?? new StopAndReload();
     }
 
     /// <summary>Request a clean stop at the next opcode boundary.</summary>
@@ -209,24 +239,24 @@ public sealed partial class VirtualMachine
     {
         ArgumentNullException.ThrowIfNull(entry);
         ArgumentException.ThrowIfNullOrWhiteSpace(entry.CoordinatorScript);
-        _hostedSceneEntry = entry with
+        _scene.HostedSceneEntry = entry with
         {
             CoordinatorWrites = new Dictionary<int, long>(entry.CoordinatorWrites),
         };
-        _hostedScenePackedId = null;
-        _initialRootRun = false;
+        _scene.HostedScenePackedId = null;
+        _scene.InitialRootRun = false;
     }
 
     /// <summary>
     /// Return to title from outside the script: native's 終了 dialog (AGERC dialog 3) answers 2 for
     /// タイトルに戻る, and the window procedure's WM_CLOSE path (FUN_00405740) then calls
     /// op_0x9_reset_scene_and_reload_root directly. The port ends every active frame at its next opcode
-    /// boundary, interrupting any host wait, and runs the same scene reset and resource-0 reload as op 0x9.
+    /// boundary, interrupting any wait, and runs the same scene reset and resource-0 reload as op 0x9.
     /// </summary>
     public void RequestRootReload()
     {
         _stopAndReload.RequestReload();
-        _host.InterruptForRootReload();
+        _waits.InterruptForRootReload();
     }
 
     /// <summary>Queue global writes and return only the identified active frame at its next opcode boundary.
@@ -234,10 +264,10 @@ public sealed partial class VirtualMachine
     public bool TryRequestDebugFrameReturn(long frameId, IReadOnlyDictionary<int, long> globalWrites)
     {
         ArgumentNullException.ThrowIfNull(globalWrites);
-        if (_debugActiveFrame == null || _debugActiveFrameId != frameId
-            || _debugFrameReturnRequest != null) return false;
-        _debugFrameReturnRequest = new DebugFrameReturnRequest(
-            _debugActiveFrame, new Dictionary<int, long>(globalWrites));
+        if (_scene.DebugActiveFrame == null || _scene.DebugActiveFrameId != frameId
+            || _scene.DebugFrameReturnRequest != null) return false;
+        _scene.DebugFrameReturnRequest = new DebugFrameReturnRequest(
+            _scene.DebugActiveFrame, new Dictionary<int, long>(globalWrites));
         return true;
     }
 
@@ -246,7 +276,7 @@ public sealed partial class VirtualMachine
     {
         bool wake;
         wake = MovePointerLocked(x, y);
-        if (wake) _host.WakeInputCallbackService();
+        if (wake) _waits.WakeInputCallbackService();
     }
 
     /// <summary>Queue the activation callback of the armed hotspot under the pointer. True means the click was
@@ -257,9 +287,9 @@ public sealed partial class VirtualMachine
         // Windows delivers a WM_MOUSEMOVE before a button message at a new point. The click itself hit-tests
         // nothing: it activates the current hit, which op 0x7c may have cleared under a still pointer.
         MovePointerLocked(x, y);
-        if (_interactiveFrame != null)
-            consumed = _interactiveFrame.Hotspots.Activate();
-        if (consumed) _host.WakeInputCallbackService();
+        if (_scene.InteractiveFrame != null)
+            consumed = _scene.InteractiveFrame.Hotspots.Activate();
+        if (consumed) _waits.WakeInputCallbackService();
         return consumed;
     }
 
@@ -269,7 +299,7 @@ public sealed partial class VirtualMachine
     {
         if (x == _pointerX && y == _pointerY) return false;
         _pointerX = x; _pointerY = y;
-        return _interactiveFrame?.Hotspots.MovePointer(x, y) == true;
+        return _scene.InteractiveFrame?.Hotspots.MovePointer(x, y) == true;
     }
 
     /// <summary>Queue the first armed hotspot callback bound by op 0x97 to any action in
@@ -277,20 +307,20 @@ public sealed partial class VirtualMachine
     public bool TryActivateInputActions(int actionMask)
     {
         bool consumed;
-        consumed = _interactiveFrame?.Hotspots.ActivateBoundActions(actionMask) == true;
-        if (consumed) _host.WakeInputCallbackService();
+        consumed = _scene.InteractiveFrame?.Hotspots.ActivateBoundActions(actionMask) == true;
+        if (consumed) _waits.WakeInputCallbackService();
         return consumed;
     }
 
     /// <summary>Update one native mouse-button bit (left=0x1, right=0x2 in Himegari).</summary>
-    public void UpdateMouseButtonState(int bit, bool pressed) => UpdateMaskBit(ref _mouseButtonState, bit, pressed);
+    public void UpdateMouseButtonState(int bit, bool pressed) => UpdateMaskBit(ref _scene.MouseButtonState, bit, pressed);
 
     /// <summary>Accumulate a signed native mouse-wheel delta until op 0x10d consumes it.</summary>
     public void QueueMouseWheelDelta(int delta)
     {
         if (delta == 0) return;
-        Interlocked.Add(ref _mouseWheelDelta, delta);
-        _host.WakeInputCallbackService();
+        Interlocked.Add(ref _scene.MouseWheelDelta, delta);
+        _waits.WakeInputCallbackService();
     }
 
     /// <summary>True while an ADV text wait polls input with no hotspot callback running (native run-state
@@ -330,7 +360,7 @@ public sealed partial class VirtualMachine
         }
         if (textRevealing && advanceMessageOnWheel)
         {
-            int total = Interlocked.Exchange(ref _mouseWheelDelta, 0) + delta;
+            int total = Interlocked.Exchange(ref _scene.MouseWheelDelta, 0) + delta;
             return total < 0 ? MouseWheelOutcome.Advance : MouseWheelOutcome.Dropped;
         }
         QueueMouseWheelDelta(delta);
@@ -342,15 +372,15 @@ public sealed partial class VirtualMachine
     public void UpdateInputCallbackState(int index, bool pressed)
     {
         if ((uint)index >= 32) return;
-        UpdateMaskBit(ref _heldInputCallbackMask, 1 << index, pressed);
-        _host.WakeInputCallbackService();
+        UpdateMaskBit(ref _scene.HeldInputCallbackMask, 1 << index, pressed);
+        _waits.WakeInputCallbackService();
     }
 
     public int UpdateKeyboardVirtualKeyState(int virtualKey, bool pressed)
     {
         InputBindings.UpdateKeyboardVirtualKey(virtualKey, pressed);
         OnPhysicalSkipInputChanged();
-        _host.WakeInputCallbackService();
+        _waits.WakeInputCallbackService();
         return InputBindings.KeyboardAction(virtualKey);
     }
 
@@ -358,7 +388,7 @@ public sealed partial class VirtualMachine
     {
         InputBindings.UpdateMouseButton(physicalButton, pressed);
         OnPhysicalSkipInputChanged();
-        _host.WakeInputCallbackService();
+        _waits.WakeInputCallbackService();
         return InputBindings.MouseAction(physicalButton);
     }
 
@@ -366,14 +396,14 @@ public sealed partial class VirtualMachine
     {
         InputBindings.UpdateJoystickButton(physicalButton, pressed);
         OnPhysicalSkipInputChanged();
-        _host.WakeInputCallbackService();
+        _waits.WakeInputCallbackService();
         return InputBindings.JoystickButtonActionMask(physicalButton);
     }
 
     public void UpdateJoystickAxisState(int axis, double value)
     {
         InputBindings.UpdateJoystickAxis(axis, value);
-        _host.WakeInputCallbackService();
+        _waits.WakeInputCallbackService();
     }
 
     /// <summary>Queue a one-shot logical action for diagnostics/tests. The native no-input callback is
@@ -383,17 +413,17 @@ public sealed partial class VirtualMachine
         if ((uint)index >= 32) return;
         if (index == InputBindings.ActionCount)
         {
-            _host.WakeInputCallbackService();
+            _waits.WakeInputCallbackService();
             return;
         }
         int bit = 1 << index;
         int before, after;
         do
         {
-            before = Volatile.Read(ref _queuedInputCallbackMask);
+            before = Volatile.Read(ref _scene.QueuedInputCallbackMask);
             after = before | bit;
-        } while (Interlocked.CompareExchange(ref _queuedInputCallbackMask, after, before) != before);
-        _host.WakeInputCallbackService();
+        } while (Interlocked.CompareExchange(ref _scene.QueuedInputCallbackMask, after, before) != before);
+        _waits.WakeInputCallbackService();
     }
 
     private static void UpdateMaskBit(ref int field, int bit, bool set)
@@ -763,7 +793,7 @@ public sealed partial class VirtualMachine
         => AgeBox(new AgeBoxParts(AgeBoxMessage.Script(_shell.PendingDiagnosticText), DiagnosticLocation(instruction),
                                   Prompt: false));
 
-    /// <summary>An AGE box in AGE's wording, with its parts for a host that presents it in another language.</summary>
+    /// <summary>An AGE box in AGE's wording, with its parts for a front end that presents it in another language.</summary>
     private static DiagnosticMessage AgeBox(AgeBoxParts parts)
         => new(AgeBoxText.JapaneseText(AgeBoxText.Caption), AgeBoxText.Compose(parts, AgeBoxText.JapaneseText), parts);
 
@@ -831,7 +861,7 @@ public sealed partial class VirtualMachine
         string text = error.Text(AgeBoxText.JapaneseText);
         DiagnosticMessage message = AgeBox(new AgeBoxParts(error,
             DiagnosticLocation(_cur.Script.Instructions[coordinateIndex]), Prompt: true));
-        ScriptErrorChoice choice = _host.ShowScriptError(message);
+        ScriptErrorChoice choice = _waits.ShowScriptError(message);
         if (choice is ScriptErrorChoice.Retry or ScriptErrorChoice.Ignore) return choice;
         ScriptError = message;
         HaltReason ??= "script-error: " + text;
@@ -989,40 +1019,24 @@ public sealed partial class VirtualMachine
     private void ResetSceneContextForRootReload()
     {
         _stopAndReload.ReloadTaken();
-        _initialRootRun = false;   // op_0x9_reset_scene_and_reload_root: SYSTEM4 skips LOGO/OP from now on
-        ResetGlobalBanks();
+        // op_0x9_reset_scene_and_reload_root zeroes the banks (with the string stores' origins, the text native's) and
+        // scene_context_init_reset constructs the stacks (ScriptMemory.ResetScene).
+        _memory.ResetScene();
         Gfx.ResetSceneContext();
         _saves.ResetScene();   // op_0x9: save_container_playtime_reset after the hotspot resets
-        _valueSwitchTargets.Clear();
-        _preloadedScriptSlots.Clear();
         // scene_context_init_reset@0x40b3b0 clears coroutine_runstate, the timed sequence and every callback owner
         // (-1). It keeps the 0xcc target, which no script dispatches before registering again; the port clears it
-        // with its owner.
-        ResetCoroutineYield();
-        ResetTimedCallbackSequence();
-        _mouseCallbackTarget = -1;
-        _mouseCallbackOwner = null;
-        _interactiveFrame = null;
-        _rawInputFrame = null;
-        _mouseButtonState = 0;
-        _mouseWheelDelta = 0;
-        _heldInputCallbackMask = 0;
-        _queuedInputCallbackMask = 0;
+        // with its owner. The scene is no longer the run's first (SYSTEM4 skips LOGO/OP from now on), and a return to
+        // title reloads the root the natural way: TITLE runs, and nothing ends the run at a scene's return.
+        _scene = new();
         TakeHeldTriggers();   // scene_context_init_reset polls the input latch and discards it
-        _debugActiveFrame = null;
-        _debugActiveFrameId = 0;
-        _debugFrameReturnRequest = null;
-        _saveResumeFrame = null;
-        // A return to title reloads the root the natural way: TITLE runs, and nothing ends the run at a scene's return.
-        _hostedSceneEntry = null;
-        _hostedScenePackedId = null;
         _audio.ResetScene();
         _tick.ResetScene();   // a root reload abandons every open block with its frames
         _shell.ResetScene();   // the system-menu fields, queued menu commands and callbacks; an open dialog is cancelled
-        _text.ResetScene();    // the layouts, the reveal and the indicator go; the style starts over, History records
+        _text.ResetScene();    // the layouts, the reveal, the indicator and the string stores go; the style starts over
         _skip.ResetScene();   // Skip, Auto and read skip start over; run-state 0x08000000 is zeroed
         _movies.ResetScene();   // every surface's movie object goes; the surfaces stay
-        _host.ResetSceneContext();
+        _waits.ResetSceneContext();
         // The reset keeps every surface. op_0x9_reset_scene_and_reload_root then runs the release worker over all
         // 1,000 slots only when (CreateObject & 2) && (AutoFreeTex & 1): Kamidori, not Himegari (docs/engine-re.md,
         // "AutoFreeTex").
@@ -1030,33 +1044,25 @@ public sealed partial class VirtualMachine
             _graphics.ReleaseSurfaceRange(0, 1000);
     }
 
-    /// <summary>op_0x9's bank reset and scene_context_init_reset's stacks (ScriptMemory.ResetScene), and the string
-    /// stores' origins with them.</summary>
-    private void ResetGlobalBanks()
-    {
-        _memory.ResetScene();
-        _text.ClearStringStores();
-    }
-
     private FrameOutcome RunFrame(ExecFrame frame, FrameCause cause, long callId = 0)
     {
         ExecFrame? previousInteractiveFrame;
         ExecFrame? previousRawInputFrame;
-        previousInteractiveFrame = _interactiveFrame;
-        previousRawInputFrame = _rawInputFrame;
+        previousInteractiveFrame = _scene.InteractiveFrame;
+        previousRawInputFrame = _scene.RawInputFrame;
         var prev = _cur; _cur = frame; _depth++;
         ExecFrame? previousDebugActiveFrame;
         long previousDebugActiveFrameId;
-        previousDebugActiveFrame = _debugActiveFrame;
-        previousDebugActiveFrameId = _debugActiveFrameId;
-        _debugActiveFrame = frame;
-        _debugActiveFrameId = ++_debugNextFrameId;
+        previousDebugActiveFrame = _scene.DebugActiveFrame;
+        previousDebugActiveFrameId = _scene.DebugActiveFrameId;
+        _scene.DebugActiveFrame = frame;
+        _scene.DebugActiveFrameId = ++_debugNextFrameId;
         _activeFrameNames.Add(frame.Script.Name);
         _activeExecutionFrames.Add(frame);
         bool hostContextEntered = false;
         try
         {
-            _host.EnterScriptContext(frame.Script.Name);
+            _waits.EnterScriptContext(frame.Script.Name);
             hostContextEntered = true;
             _sink.Emit(TraceEvent.FrameEnter(frame.Script.Name, _depth, cause, callId));
             var outcome = FrameOutcome.RanOff;
@@ -1069,9 +1075,9 @@ public sealed partial class VirtualMachine
                     _sink.Emit(TraceEvent.FrameExit(frame.Script.Name, _depth, FrameOutcome.DebugReturned.ToString()));
                     return FrameOutcome.DebugReturned;
                 }
-                if (_hostedScenePackedId == callId)
+                if (_scene.HostedScenePackedId == callId)
                 {
-                    _hostedScenePackedId = null;
+                    _scene.HostedScenePackedId = null;
                     hostedScene = true;
                 }
             }
@@ -1100,22 +1106,22 @@ public sealed partial class VirtualMachine
         }
         finally
         {
-            if (ReferenceEquals(_debugFrameReturnRequest?.Frame, frame)) _debugFrameReturnRequest = null;
-            if (ReferenceEquals(_saveResumeFrame, frame)) _saveResumeFrame = null;
+            if (ReferenceEquals(_scene.DebugFrameReturnRequest?.Frame, frame)) _scene.DebugFrameReturnRequest = null;
+            if (ReferenceEquals(_scene.SaveResumeFrame, frame)) _scene.SaveResumeFrame = null;
             if (_activeFrameNames.Count > 0) _activeFrameNames.RemoveAt(_activeFrameNames.Count - 1);
             if (_activeExecutionFrames.Count > 0)
                 _activeExecutionFrames.RemoveAt(_activeExecutionFrames.Count - 1);
-            _debugActiveFrame = previousDebugActiveFrame;
-            _debugActiveFrameId = previousDebugActiveFrameId;
+            _scene.DebugActiveFrame = previousDebugActiveFrame;
+            _scene.DebugActiveFrameId = previousDebugActiveFrameId;
             if (cause == FrameCause.CallScript)
-                _interactiveFrame = previousInteractiveFrame?.Hotspots.Armed == true
+                _scene.InteractiveFrame = previousInteractiveFrame?.Hotspots.Armed == true
                     ? previousInteractiveFrame : null;
-            else if (ReferenceEquals(_interactiveFrame, frame))
-                _interactiveFrame = null;
-            if (ReferenceEquals(_rawInputFrame, frame)) _rawInputFrame = previousRawInputFrame;
+            else if (ReferenceEquals(_scene.InteractiveFrame, frame))
+                _scene.InteractiveFrame = null;
+            if (ReferenceEquals(_scene.RawInputFrame, frame)) _scene.RawInputFrame = previousRawInputFrame;
             try
             {
-                if (hostContextEntered) _host.ExitScriptContext(frame.Script.Name);
+                if (hostContextEntered) _waits.ExitScriptContext(frame.Script.Name);
             }
             finally
             {
@@ -1128,24 +1134,24 @@ public sealed partial class VirtualMachine
     /// developer menu returns its choice, and arms the end of the run at the scene's return.</summary>
     private bool TryReturnHostedCoordinator(ExecFrame frame)
     {
-        if (_hostedSceneEntry is not { } entry
+        if (_scene.HostedSceneEntry is not { } entry
             || !frame.Script.Name.Equals(entry.CoordinatorScript, StringComparison.OrdinalIgnoreCase))
             return false;
-        _hostedSceneEntry = null;
+        _scene.HostedSceneEntry = null;
         foreach (var (address, value) in entry.CoordinatorWrites)
             _memory.SetInteger(address, value);
-        _hostedScenePackedId = entry.ScenePackedId;
+        _scene.HostedScenePackedId = entry.ScenePackedId;
         return true;
     }
 
     private bool TryConsumeDebugFrameReturn(ExecFrame frame)
     {
-        if (Volatile.Read(ref _debugFrameReturnRequest) is not { } pending
+        if (Volatile.Read(ref _scene.DebugFrameReturnRequest) is not { } pending
             || !ReferenceEquals(pending.Frame, frame)) return false;
-        if (!ReferenceEquals(_debugFrameReturnRequest?.Frame, frame)) return false;
-        foreach (var (address, value) in _debugFrameReturnRequest.GlobalWrites)
+        if (!ReferenceEquals(_scene.DebugFrameReturnRequest?.Frame, frame)) return false;
+        foreach (var (address, value) in _scene.DebugFrameReturnRequest.GlobalWrites)
             _memory.SetInteger(address, value);
-        _debugFrameReturnRequest = null;
+        _scene.DebugFrameReturnRequest = null;
         return true;
     }
 
@@ -1156,7 +1162,7 @@ public sealed partial class VirtualMachine
         ExecFrame[] active;
         int cutoff;
         active = _activeExecutionFrames.ToArray();
-        cutoff = _saveResumeFrame == null ? active.Length - 1 : Array.IndexOf(active, _saveResumeFrame);
+        cutoff = _scene.SaveResumeFrame == null ? active.Length - 1 : Array.IndexOf(active, _scene.SaveResumeFrame);
         if (cutoff < 0)
             throw new InvalidDataException("No active script frame is available for a numbered save.");
 
@@ -1276,8 +1282,8 @@ public sealed partial class VirtualMachine
         if (ServiceWaitSettingCallback()) return true;
         int target;
         ExecFrame owner;
-        if (_interactiveFrame == null || !_interactiveFrame.Hotspots.TryDequeue(out target)) return false;
-        owner = _interactiveFrame;
+        if (_scene.InteractiveFrame == null || !_scene.InteractiveFrame.Hotspots.TryDequeue(out target)) return false;
+        owner = _scene.InteractiveFrame;
         // Native keeps one hotspot table and records the script that registered it (+0x7494 of the table at
         // ctx+0x5248). Every hotspot dispatch from an ADV wait first checks that owner against the running frame
         // (FUN_004079b0): a script `run` from a scene whose menu bindings are still armed cannot take them, and AGE
@@ -1321,7 +1327,7 @@ public sealed partial class VirtualMachine
             return false;
         // The handlers run with the wait's poll stopped (native clears run-state 0x80000000), so no hover or click
         // dispatches until the frame is back on the wait; RearmAfterWaitCallback resumes it.
-        _interactiveFrame?.Hotspots.SuspendDispatch();
+        _scene.InteractiveFrame?.Hotspots.SuspendDispatch();
         RunWaitCallback(EnterCoroutineYieldHandlerA(_cur.Pc + 1, resumesTextWait: true));
         RearmAfterWaitCallback();
         return true;
@@ -1386,7 +1392,7 @@ public sealed partial class VirtualMachine
             }
             if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
             StepResult step = ApplyIgnoredDwords(frame, pc, Step(frame.Script.Instructions[pc], pc));
-            _host.FrameYield();
+            _waits.FrameYield();
             _skip.PaceOp();
             switch (step.Kind)
             {
@@ -1406,9 +1412,9 @@ public sealed partial class VirtualMachine
         // History/Hide callbacks cancel the active registry, run a nested script, then republish the
         // parent frame's definitions. Nested RunFrame deliberately clears the disarmed interactive
         // pointer, so restore the still-running parent before rearming its rebuilt registry.
-        if (_interactiveFrame == null && _cur.Hotspots.HasDefinitions) _interactiveFrame = _cur;
-        _interactiveFrame?.Hotspots.RearmAfterCallback(_pointerX, _pointerY);
-        _host.InputCallbackCompleted(Gfx);
+        if (_scene.InteractiveFrame == null && _cur.Hotspots.HasDefinitions) _scene.InteractiveFrame = _cur;
+        _scene.InteractiveFrame?.Hotspots.RearmAfterCallback(_pointerX, _pointerY);
+        _waits.InputCallbackCompleted(Gfx);
     }
 
     /// <summary>The longest run of cells or entries one instruction may write from a script-controlled count. Native
