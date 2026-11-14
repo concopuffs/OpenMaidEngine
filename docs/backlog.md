@@ -174,17 +174,6 @@ it; git history keeps the record.
   the same on `develop` (`1d7a39e`), so this predates the engine layering work. The scenario's History pictures match
   native. Done when the records match, or the field is shown to be a stamp and listed with `save-diff`'s expected
   differences (`tools-reference.md`).
-- **Fields op `0x9` keeps that native's reset was not checked for.** Since engine layering milestone 12 (2026-11-13)
-  each owner's scene state is one object that op `0x9`'s reset builds again, and `SceneReloadTests` lists what each
-  owner keeps across a reload, with reasons. Nothing in the port resets four of the kept fields, and native's
-  `scene_context_init_reset@0x40b3b0` (SYS4433 `0x40c2b0`) has not been checked for them:
-  - the VM's `_tickPresentationEnabled` (ops `0x21b` and `0x247`, `ctx+0x99294`);
-  - `GfxState.DefaultObjectSlot` (op `0x80`, `ctx+0x14e08`);
-  - `GfxState`'s numeric glyph styles (`register-numeric-glyph-style` and its extended form);
-  - the text native's `_waitIndicatorFollowLastGlyph` (`set-adv-wait-indicator-follow-last-glyph`).
-
-  Done when each is checked in the decompilation. A field that native's reset sets moves into its owner's `Scene`,
-  starting at native's value. A field that native keeps gets that reason on its line in `SceneReloadTests`.
 
 ## Robustness
 

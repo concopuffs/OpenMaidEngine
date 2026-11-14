@@ -49,7 +49,6 @@ public sealed partial class VirtualMachine
     // callback's ret re-runs the wait.
     private volatile bool _advTextWaitPolling;
     private bool _advInputPollPageless;   // the polling wait is op 0xfa's
-    private bool _tickPresentationEnabled;    // native tick_presentation_enabled (ctx+0x99294), ops 0x21b/0x247
     // The stop and return-to-title requests: the input and waits native's copy when the VM is built with it, so a
     // request ends its waits too (engine layering plan §3.3).
     private readonly StopAndReload _stopAndReload;
@@ -174,6 +173,8 @@ public sealed partial class VirtualMachine
         public Script? TimedCallbackGuard;
         // The message a frame shows run by run (VirtualMachine.AdvText.cs).
         public PresentedMessage? PresentedMessage;
+        // Native tick_presentation_enabled (ctx+0x99294; SYS4433 +0x9d73c), ops 0x21b/0x247. The reset sets it to 0.
+        public bool TickPresentationEnabled;
     }
 
     private Scene _scene = new() { InitialRootRun = true };

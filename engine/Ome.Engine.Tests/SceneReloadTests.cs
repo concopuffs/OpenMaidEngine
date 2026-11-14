@@ -44,8 +44,6 @@ public class SceneReloadTests
             "_pointerX", "_pointerY", "_heldTriggers",
             // Read only with a mouse callback target (the scene's), and set when one registers.
             "_mouseCallbackIntervalMs", "_mouseCallbackArmedAtMs",
-            // Not reset; native's reset is not checked for it (docs/backlog.md).
-            "_tickPresentationEnabled",
         ],
         [typeof(ScriptMemory)] =
         [
@@ -81,8 +79,6 @@ public class SceneReloadTests
             "AnimClockDurationTicks", "AnimClockGeneration", "_animClockStartMs", "AnimationServiceFlags",
             // Count up so the renderer republishes.
             "_mutationGeneration", "_publishedMutationGeneration",
-            // Not reset; native's reset is not checked for them (docs/backlog.md).
-            "DefaultObjectSlot", "_numericGlyphStyles",
         ],
         [typeof(InputAndWaits)] =
         [
@@ -131,8 +127,6 @@ public class SceneReloadTests
             "_waitIndicatorStartedMs",
             // The runs shown (a tool's record) and parts set after construction.
             "Emitted", "_inputWaiting", "_listeners",
-            // Not reset; native's reset is not checked for it (docs/backlog.md).
-            "_waitIndicatorFollowLastGlyph",
         ],
     };
 
@@ -226,6 +220,10 @@ public class SceneReloadTests
             (0x222, [I(0x10), I(1)]),                                       // the backbuffer's published range
             (0x229, [I(0x10), I(1), I(2), I(3), I(4)]),                     // the range transform
             (0x20d, [I(1)]),                                                // a render target selected
+            (0x21b, [I(1)]),                                                // tick presentation on
+            (0x80, [I(7)]),                                                 // the default object slot
+            (0x13a, [I(0), I(1), I(0), I(0), I(8), I(8)]),                  // a numeric glyph style
+            (0x1b1, [I(1)]),                                                // the wait indicator follows the last glyph
         ];
 
         Dictionary<string, string> clean = SceneDumps([(0x9, [])], reload: true);

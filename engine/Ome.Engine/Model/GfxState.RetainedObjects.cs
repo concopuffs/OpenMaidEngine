@@ -97,12 +97,10 @@ public sealed partial class GfxState
         public long TranslationCycleStartMs = -1;
     }
 
-    private readonly NumericGlyphStyle[] _numericGlyphStyles = new NumericGlyphStyle[11];
-
-
     public long CurrentObject { get => _scene.CurrentObject; private set => _scene.CurrentObject = value; }
-    /// <summary>EngineCtx+0x14e08, selected by op 0x80 and used by op 0x1d9 when its slot is zero.</summary>
-    public int DefaultObjectSlot { get; private set; }
+    /// <summary>EngineCtx+0x14e08, selected by op 0x80 and used by op 0x1d9 when its slot is zero; 1 after a
+    /// reset.</summary>
+    public int DefaultObjectSlot { get => _scene.DefaultObjectSlot; private set => _scene.DefaultObjectSlot = value; }
 
     /// <summary>Live geometry objects and the surface slot they draw from — for the CLI gfx oracle.</summary>
     public IEnumerable<(long Handle, int Slot)> Objects
@@ -397,8 +395,8 @@ public sealed partial class GfxState
                                           int sourceCellSpacing = 0,
                                           int destinationCellSpacing = 0)
     {
-        if ((uint)styleIndex >= (uint)_numericGlyphStyles.Length) return false;
-        _numericGlyphStyles[styleIndex] =
+        if ((uint)styleIndex >= (uint)_scene.NumericGlyphStyles.Length) return false;
+        _scene.NumericGlyphStyles[styleIndex] =
             new NumericGlyphStyle(surfaceSlot, atlasX, atlasY, digitWidth, digitHeight,
                                   sourceCellSpacing, destinationCellSpacing);
         return true;
@@ -410,10 +408,10 @@ public sealed partial class GfxState
     public bool DrawDecimalGlyphs(long baseHandle, int styleIndex, int value, int x, int y,
                                   int digitCapacity, int flags)
     {
-        if ((uint)styleIndex >= (uint)_numericGlyphStyles.Length
-            || !_numericGlyphStyles[styleIndex].Registered) return false;
+        if ((uint)styleIndex >= (uint)_scene.NumericGlyphStyles.Length
+            || !_scene.NumericGlyphStyles[styleIndex].Registered) return false;
 
-        NumericGlyphStyle style = _numericGlyphStyles[styleIndex];
+        NumericGlyphStyle style = _scene.NumericGlyphStyles[styleIndex];
         EraseRange(baseHandle, digitCapacity);
         int sourceCellAdvance = unchecked(style.DigitWidth + style.SourceCellSpacing);
         int destinationCellAdvance =

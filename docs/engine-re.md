@@ -698,6 +698,25 @@ The scene reset owns interpreter run state, ADV input/skip/auto state, retained 
 queues, text/render buffers, and the surface records and movies of the 1000 slots (their textures survive unless
 `AutoFreeTex` asks; "AutoFreeTex" below).
 
+**Four fields the scene reset also sets (2026-11-13).** Engine layering milestone 12's reload test listed four
+fields the port kept across op `0x9` without evidence. The decompiled resets of both engines set all four (SYS4422
+`scene_context_init_reset@0x40b3b0`, SYS4433 `scene_context_init_reset_sys4433@0x40c2b0`):
+
+- `tick_presentation_enabled` (ops `0x21b`/`0x247`): `ctx+0x99294` (SYS4433 `+0x9d73c`) = 0.
+- The default object slot (op `0x80`): 1. The reset calls `adv_text_manager_initialize@0x456800` with ECX = the
+  text manager at `ctx+0x14940`, and the initializer writes `+0x4c8` = 1, which is `ctx+0x14e08`. In SYS4433
+  `text_manager_initialize@0x458c10` runs with ECX = `ctx+0x14938` and writes `+0x4cc` = 1 (`ctx+0x14e04`, which
+  SYS4433's `op_0x80@0x41ce60` writes). Construction runs the same reset, so a game starts with slot 1 too.
+- The numeric glyph styles (ops `0x13a`/`0x2da`): `memset(ctx+0x55180, 0, 200)` clears records 0-9 (SYS4433
+  `memset(ctx+0x5940c, 0, 0x118)`). The handler-admitted record 10 overlaps the return-stack table, which the same
+  reset zeroes first (`ctx+0x55248`, SYS4433 `+0x59524`, `0xa0` bytes), so all eleven are clear.
+- The wait indicator's follow mode (op `0x1b1`): 0. The text manager's initializer zeroes `+0x56c` (SYS4433
+  `+0x570`), and the reset then zeroes `ctx+0x14eac` (SYS4433 `+0x14ea8`) once more.
+
+The port keeps each in its owner's scene (the VM's `TickPresentationEnabled`, `GfxState`'s `DefaultObjectSlot` and
+`NumericGlyphStyles`, the text native's `WaitIndicatorFollowLastGlyph`). Nothing in the port reads the default slot
+yet, because op `0x1d9` is a stub.
+
 **Op `0x9` zeroes the global banks (2026-11-07).** Between disposing the frames and `scene_context_init_reset`, the
 handler clears every global bank, once per bank set (two when `set:EnableMemFlip` is on):
 

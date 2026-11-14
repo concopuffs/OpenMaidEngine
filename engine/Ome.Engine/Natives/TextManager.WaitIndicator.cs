@@ -10,7 +10,6 @@ namespace Ome.Engine.Natives;
 // the input and waits native's text wait, which calls RestoreWaitIndicator after each input callback.
 public sealed partial class TextManager
 {
-    private bool _waitIndicatorFollowLastGlyph;
     private long _waitIndicatorStartedMs;
 
     public void ConfigureAdvWaitIndicator(AdvWaitIndicatorConfig config)
@@ -30,7 +29,7 @@ public sealed partial class TextManager
 
     public void SetAdvWaitIndicatorFollowLastGlyph(bool enabled)
     {
-        _waitIndicatorFollowLastGlyph = enabled;
+        _scene.WaitIndicatorFollowLastGlyph = enabled;
         foreach (int layoutSlot in _scene.WaitIndicators.Keys.ToArray())
             RebuildRetainedWaitIndicator(layoutSlot);
         _timeline?.Event("wait-indicator-follow-last-glyph", new() { ["enabled"] = enabled });
@@ -69,7 +68,7 @@ public sealed partial class TextManager
         // the pending record at the cursor, just past the last glyph.
         int anchorX = 0;
         int anchorY = 0;
-        if (_waitIndicatorFollowLastGlyph && _scene.LayoutCursors.TryGetValue(layoutSlot, out var cursor))
+        if (_scene.WaitIndicatorFollowLastGlyph && _scene.LayoutCursors.TryGetValue(layoutSlot, out var cursor))
             (anchorX, anchorY) = cursor;
         _scene.RetainedWaitIndicators[layoutSlot] =
             new RetainedAdvWaitIndicatorPresentation(

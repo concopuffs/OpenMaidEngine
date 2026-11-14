@@ -33,7 +33,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x144e0` | `sfx_channel_resource_ids` | `int` | base of ten packed resource ids retained by the sound-effect facade; op 0xb4 loads a channel, op 0xb6 clears it, and numbered-save layouts restore then reopen every positive id |
 | `0x1493c` | `voice_mute_next_flags` | `uint` | voice-facade +0x434: op 0x1d5 sets 1; op 0xc4 promotes it to 0x10001 so voice_play_indexed_asset plays that voice at volume 0, and the following voice (or op 0x1bc) clears it |
 | `0x14d54` | `adv_text_layout_ptr_table` | `void*` | text_manager at ctx+0x14940 plus layout pointer table +0x414; ops 0x212/0x213 configure each layout's wait-indicator handle and retained glyph-object range at layout+0x64/+0x68/+0x6c |
-| `0x14e08` | `gfx_default_object_slot` | `int` | op 0x80 selected slot; op 0x1d9 substitutes it when its explicit object-slot operand is zero |
+| `0x14e08` | `gfx_default_object_slot` | `int` | text-manager+0x4c8; op 0x80 selected slot; op 0x1d9 substitutes it when its explicit object-slot operand is zero; adv_text_manager_initialize@0x456800 sets it to 1, so it is 1 at construction and after op 0x9's scene_context_init_reset |
 | `0x14e0c` | `text_primary_font_height` | `int` | primary LOGFONTA.lfHeight at text-manager+0x4cc; stored as a negative pixel height and updated by op 0x75 |
 | `0x14e10` | `text_primary_font_width` | `int` | primary LOGFONTA.lfWidth at text-manager+0x4d0; op 0x75 stores negative half the requested font size |
 | `0x14e1c` | `text_primary_font_weight` | `int` | primary LOGFONTA.lfWeight at text-manager+0x4dc; op 0x2bd writes 700 for enabled or zero for disabled |
@@ -45,7 +45,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x14ea0` | `text_line_spacing` | `int` | extra pixel leading between text lines; defaults to 6, op 0x8b writes it |
 | `0x14ea4` | `text_effect_offset_x` | `int` | text-manager+0x564; op 0x1a4 horizontal displacement for mode 1 or ellipse radius for mode 3 |
 | `0x14ea8` | `text_effect_offset_y` | `int` | text-manager+0x568; op 0x1a4 vertical displacement for mode 1 or ellipse radius for mode 3 |
-| `0x14eac` | `adv_wait_indicator_follow_last_glyph` | `int` | text-manager+0x56c; op 0x1b1 selects fixed layout-origin anchoring (0) or adds the final retained glyph record's left/top to the wait-indicator destination (1) |
+| `0x14eac` | `adv_wait_indicator_follow_last_glyph` | `int` | text-manager+0x56c; op 0x1b1 selects fixed layout-origin anchoring (0) or adds the final retained glyph record's left/top to the wait-indicator destination (1); adv_text_manager_initialize and scene_context_init_reset both set it to 0 |
 | `0x14f45` | `script_frame_index` | `int` | call-script frame index (0x1e-dword frames) |
 | `0x46188` | `renderer_device_state` | `int` | embedded D3D9 device/render state; op 0x20e passes this base to the target/depth clear worker |
 | `0x46598` | `d3d9_device` | `void*` | IDirect3DDevice9 pointer at renderer_device_state+0x410; op 0x20e invokes vtable Clear +0xac |
@@ -156,7 +156,7 @@ Applied only to Ghidra `/v2/range_00400000.bin` at image base `0x400000`; 249036
 | `0x6f8b8` | `script_launch_dispatch_active` | `int` | suppresses immediate dispatch while op 0x143 batches mounted append record-zero ids and while a queued script is active |
 | `0x9928c` | `save_frame_boundary_index` | `int` | highest script-frame index included by numbered-save layouts 2/3; -1 falls back to cur_ctx_index; op 0x1ad marks current frame and op 0x2 clears after unwinding below it |
 | `0x99290` | `gfx_draw_mode` | `int` | loaded from set:DrawMode during runtime initialization; Himegari uses mode 1, selecting the cached GetGlyphOutline text path |
-| `0x99294` | `tick_presentation_enabled` | `int` | op 0x21b stores (operand != 0); under gfx_draw_mode 1 the outer tick advances frame_timer_current and may render only when set or run-state 0x2400 is active; op 0x247 queries it |
+| `0x99294` | `tick_presentation_enabled` | `int` | op 0x21b stores (operand != 0); under gfx_draw_mode 1 the outer tick advances frame_timer_current and may render only when set or run-state 0x2400 is active; op 0x247 queries it; scene_context_init_reset sets it to 0 |
 | `0x9a298` | `display_windowed` | `int` | nonzero while AGE runs windowed (read 1 live with SYS4REG display.ScreenMode=1 and an 806x649 framed window, 2026-11-03). age_main_window_proc: WM_ACTIVATE(WA_INACTIVE) disables input polling only when set; when zero (fullscreen), WM_ACTIVATEAPP re-tops the window and centres the cursor at the next WM_PAINT; SC_KEYMENU+Enter toggles the mode through display_toggle_screen_mode_and_menu_bar@0x412df0, which attaches the native menu bar (menu 110) to a window and detaches it for fullscreen; zero also gates the top-edge system-menu strip, which only fullscreen reveals |
 | `0x9b240` | `presentation_suspended_for_dialog` | `int` | draw mode 1 only: engine_suspend_presentation_for_dialog@0x405e10 (IAGEService +0x14, which agerc_menu_command calls before its dialogs only in fullscreen) sets 1 alongside run-state 0x200000; engine_resume_presentation_after_dialog@0x405fc0 (+0x18) clears both. The game frame stays as last presented, undimmed |
 | `0x9b24c` | `dispatch_table` | `void*` | opcode->handler table base [0x400]; handler(op) = *(0x9b24c + op*4) |

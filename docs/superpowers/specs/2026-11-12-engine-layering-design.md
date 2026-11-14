@@ -350,10 +350,15 @@ presentation request, the other natives' resets.
 - **The movie native has no scene.** Its movies belong to surfaces, and the reset deletes them all with the release
   worker.
 - **What is kept.** A field kept across a reload is the run's (counters, the frame stack), the process's (the
-  surfaces, playing sound, the screen mode, the settings) or the front end's (frame turns, the input queue). Four
-  fields that nothing resets were not checked against native's `scene_context_init_reset`: `_tickPresentationEnabled`,
-  `DefaultObjectSlot`, the numeric glyph styles and the wait indicator's follow mode (`docs/backlog.md`, "Fields op
-  0x9 keeps").
+  surfaces, playing sound, the screen mode, the settings) or the front end's (frame turns, the input queue).
+- **Four more, from native.** Four fields that nothing reset were checked against native's
+  `scene_context_init_reset`, which sets them all on both engines. So they joined their scenes at native's values:
+  - tick presentation (0);
+  - the default object slot (1);
+  - the numeric glyph styles (all clear);
+  - the wait indicator's follow mode (0).
+
+  `docs/engine-re.md` ("Four fields the scene reset also sets") has the decode.
 - **The tests.** `SceneReloadTests` checks three things:
   - every field of each owner is its scene, a part (read-only and not a collection), or on its list of what it keeps
     across a reload, grouped with reasons;
@@ -1821,7 +1826,7 @@ Not covered:
     settings to the save native, and the front end polls the page notices (§5.2, "As built (milestone 12)").
   - **One object per scene.** Each owner of scene state keeps it in one object that op `0x9`'s reset builds again
     (§5.1, "As built (milestone 12): rule 5"). Backlog "Scene reset clears fields one by one" is closed. Its narrower
-    follow-up, four kept fields not checked against native, is a new backlog item.
+    follow-up was four kept fields not checked against native (below).
   - **Acceptance 1, 5 and 6 hold in full.** `ProjectBoundaryTests` checks the first (§3.3, "As built (milestone 12):
     acceptance 1"), `HeadlessNativesTests` the second (§6.5) and `SceneReloadTests` the third.
   - **The gates.** The suite (1947) and validation at the core, workspace and runtime levels on both games pass.
@@ -1839,3 +1844,12 @@ Not covered:
     caught each scenario at the offset the new build caught the other at. A second run of the new build caught the
     shot at a third point, `0x150`, so the location follows when the step lands. The one `reference-diff` count that
     changed is on SC0000's page 15, which the tolerance's rule 7 exempts.
+- **2026-11-13, after milestone 12.** The four kept fields that had not been checked against native's reset were
+  checked in the decompilation of both engines' `scene_context_init_reset`. It sets all four: tick presentation to 0,
+  the default object slot to 1 (in its text manager's initializer, which construction runs too), every numeric glyph
+  style to clear, and the wait indicator's follow mode to 0. Each joined its owner's scene at that value (§5.1, "As
+  built (milestone 12): rule 5"), `SceneReloadTests` dirties each, and the backlog item is closed. Two of them
+  change nothing a run shows: the port only stores and queries tick presentation, and nothing reads the default slot
+  (op `0x1d9`, its native reader, is a stub). The glyph styles and the follow mode now clear at a reload as native's
+  do. No port run was compared before and after that change. `himegari-exit-dialog`, whose return to title runs the
+  reload, passes on the new build.

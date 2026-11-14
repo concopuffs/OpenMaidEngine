@@ -134,6 +134,8 @@ public sealed partial class TextManager : ISurfaceListener
         public volatile bool AdvPagePresentationSuspended;
         // The string stores (§5.2): op 0x9 zeroes the string bank, so every record goes with it.
         public readonly Dictionary<int, StringStore> StringStores = new();
+        // Op 0x1b1's mode, text-manager+0x56c (SYS4433 +0x570): the reset sets it to 0, fixed layout-origin anchoring.
+        public bool WaitIndicatorFollowLastGlyph;
     }
 
     private Scene _scene = new();

@@ -166,14 +166,14 @@ public sealed partial class VirtualMachine
     // 0x21b
     private StepResult OpSetTickPresentation(Instruction ins, int pc)
     {
-        _tickPresentationEnabled = Read(ins.Args[0]) != 0;
+        _scene.TickPresentationEnabled = Read(ins.Args[0]) != 0;
         return StepResult.Next;
     }
 
     // 0x247
     private StepResult OpQueryTickPresentation(Instruction ins, int pc)
     {
-        Write(ins.Args[0], _tickPresentationEnabled ? 1 : 0);
+        Write(ins.Args[0], _scene.TickPresentationEnabled ? 1 : 0);
         return StepResult.Next;
     }
 }
