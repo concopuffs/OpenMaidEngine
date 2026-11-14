@@ -1,6 +1,7 @@
 using System.Text;
 using Ome.Engine.Localization;
 using Ome.Engine.Model;
+using Ome.Engine.Text;
 using Ome.Engine.Sys4;
 using Ome.Script.Abi;
 using Ome.Script.Compile;
@@ -66,6 +67,10 @@ public sealed class ScriptTranslationImporter
     private readonly TextOpcodes _text;
     private readonly int? _drawString, _setString, _concat;
     private readonly ComposedStringFinder _composed;
+    // The operand that names a face, by font opcode; and the string cells the corpus passes there (locals by script).
+    private readonly Dictionary<int, int> _faceOperand = new();
+    private readonly HashSet<long> _globalFaceCells = [];
+    private readonly HashSet<(string Script, long Cell)> _localFaceCells = [];
 
     public ScriptTranslationImporter(OpcodeTable table, OpcodeContracts contracts, string language)
     {
@@ -76,14 +81,21 @@ public sealed class ScriptTranslationImporter
         _setString = table.ByLabel("set-string");
         _concat = table.ByLabel("concat");
         _composed = new ComposedStringFinder(table, contracts);
+        foreach ((string label, int operand) in FaceOperands)
+            if (table.ByLabel(label) is { } opcode) _faceOperand[opcode] = operand;
         Language = language;
     }
+
+    private static readonly (string Label, int Operand)[] FaceOperands =
+        [("set-font", 0), ("find-font-family-index", 1), ("get-font-family-name", 0)];
 
     public string Language { get; }
 
     public ScriptImport Import(IEnumerable<ScriptTranslationPair> pairs, ImportReport report)
     {
         report.Language = Language;
+        _globalFaceCells.Clear();
+        _localFaceCells.Clear();
         var occurrences = new List<TextOccurrence>();
         var fingerprints = new Dictionary<string, string>(StringComparer.Ordinal);
         // Scripts are finished in their order once every translated line is measured: a script with few lines
@@ -105,6 +117,7 @@ public sealed class ScriptTranslationImporter
                 continue;
             }
             fingerprints[script] = OmsPatchPlan.FingerprintOf(pair.Base);
+            CollectFaceCells(script, baseScript!);
             ScriptMessages messages = MessageSegmenter.Segment(baseScript!, _text,
                 ScriptAlignment.BranchTargets(baseScript!, _contracts));
             if (pair.Base.AsSpan().SequenceEqual(pair.Translated))
@@ -187,6 +200,7 @@ public sealed class ScriptTranslationImporter
         {
             if (messages.TryGetRun(k, out _, out _)) continue;
             Instruction instruction = code.Instructions[k];
+            if (StoresFaceName(script, instruction)) continue;
             foreach (Operand operand in instruction.Args)
             {
                 if (!MessageSegmenter.TryGetLiteral(code, operand, out string literal) || literal.Length == 0) continue;
@@ -314,6 +328,14 @@ public sealed class ScriptTranslationImporter
             if (messages.TryGetRun(k, out _, out _)) continue;
             Instruction source = b[k], target = t[map[k]];
             string label = Label(source.Opcode);
+            if (StoresFaceName(script, source))
+            {
+                if (MessageSegmenter.TryGetLiteral(code, source.Args[1], out string face)
+                    && MessageSegmenter.TryGetLiteral(translated, target.Args[1], out string changedFace)
+                    && face != changedFace)
+                    report.Literals.FontFaces.Add(new ReportedLiteral(script, source.Offset, label, face, changedFace));
+                continue;
+            }
             OccurrenceKind? kind = LiteralKind(source);
             for (int a = 0; a < source.Args.Count; a++)
             {
@@ -663,10 +685,10 @@ public sealed class ScriptTranslationImporter
         return Cells(plain[..end]);
     }
 
-    /// <summary>Width in half cells, as the engine measures text: a character's CP932 byte count.</summary>
-    internal static int Cells(string text) => Cp932.GetByteCount(text);
+    /// <summary>Width in half cells, as the engine measures and lays out text (<see cref="CharacterCells"/>).</summary>
+    internal static int Cells(string text) => CharacterCells.HalfCells(text);
 
-    private static bool IsWide(char c) => Cp932.GetByteCount(stackalloc char[] { c }) == 2;
+    private static bool IsWide(char c) => CharacterCells.IsFullWidth(c);
 
     private static void TrimEndSpaces(StringBuilder text)
     {
@@ -703,6 +725,28 @@ public sealed class ScriptTranslationImporter
             : OccurrenceKind.StoredLiteral;
 
     private const int GlobalStringType = 5, LocalStringType = 0xb;
+
+    /// <summary>Notes every string cell <paramref name="code"/> passes to a font opcode as a face.</summary>
+    private void CollectFaceCells(string script, Ome.Engine.Model.Script code)
+    {
+        foreach (Instruction instruction in code.Instructions)
+        {
+            if (!_faceOperand.TryGetValue(instruction.Opcode, out int a) || a >= instruction.Args.Count) continue;
+            Operand cell = instruction.Args[a];
+            if (cell.Type == GlobalStringType) _globalFaceCells.Add(cell.Value);
+            else if (cell.Type == LocalStringType) _localFaceCells.Add((script, cell.Value));
+        }
+    }
+
+    /// <summary>Whether <paramref name="instruction"/> is a <c>set-string</c> into a cell some script passes to a font
+    /// opcode (<see cref="FaceOperands"/>): its literal names a face, which is the game's setting, not text.</summary>
+    private bool StoresFaceName(string script, Instruction instruction)
+    {
+        if (instruction.Opcode != _setString || instruction.Args.Count < 2) return false;
+        Operand cell = instruction.Args[0];
+        return cell.Type == GlobalStringType ? _globalFaceCells.Contains(cell.Value)
+            : cell.Type == LocalStringType && _localFaceCells.Contains((script, cell.Value));
+    }
 
     /// <summary>
     /// Review R2: the text the translation wrote into an empty stored line goes, after <c>\n</c>, into the entry of

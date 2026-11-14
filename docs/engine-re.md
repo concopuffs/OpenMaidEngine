@@ -584,7 +584,8 @@ and pinning the real handler plus its paired reader resolves the service:
   A missing key returns **zero**. The old `string-lookup-set` label described neither its type nor effect.
 - **The consumer is shared `SAVE.DAT`.** `shared_profile_payload_write@0x430a20` enumerates this table
   and writes its entry count followed by one 12-byte key and one 32-bit value per entry. It is invoked by
-  `shared_profile_save@0x40c950`. `shared_profile_payload_read@0x431070`, called by
+  `shared_profile_save@0x40c950`. AGE writes the file when it quits (the exit path below): driven on a fresh sandbox
+  (Kamidori 4.33F, 2026-11-14), there is no `SAVE.DAT` before native stops, a config change included. `shared_profile_payload_read@0x431070`, called by
   `shared_profile_load@0x40ccd0`, reconstructs the same table with insert-or-assign. Numbered
   `SAVE##.DAT` paths use the surrounding state object only for container metadata/timing; they do not
   enumerate this table. `RT.DAT` independently stores `ReadTextDB`.
@@ -7947,8 +7948,9 @@ Removal keeps the order of the rest, and each family keeps its `lfPitchAndFamily
 
 **Port.** `FontFamilyCatalog` applies the rules over an `IFontFamilySource`. `WindowsGdiFontFamilySource` makes the
 same ANSI GDI calls on a DISPLAY information context and reads the 32-bit registry view. On this machine the port's
-list equals the one dumped from native AGE: 37 families in the same order. Tests: `FontFamilyCatalogTests`
-(synthesized font system).
+list equals the one dumped from native AGE: 37 families in the same order. Off Windows, `OpenTypeFontFamilySource`
+lists the installed font files by GDI's rules ("What GDI derives from a font file", below). Tests:
+`FontFamilyCatalogTests` (synthesized font system).
 
 #### Aspect-mode font calibration (2026-11-07)
 
@@ -8029,6 +8031,102 @@ from `AspectFontRealization.ReferenceBlackBoxWidth`, which measures 激 with `GG
 the reference raster. Tests: `AspectGlyphPlacementTests` and
 `WindowsGdiGlyphMaskRasterizerTests.TheAspectReferenceBlackBoxIsTheEmbeddedBitmapsNotTheAntialiasedRasters`. Kamidori's
 「 now lands on native's pixels.
+
+#### GDI simulated bold (2026-11-14)
+
+AGE asks for its fonts at the primary weight, 700 for Kamidori's ADV text. ＭＳ ゴシック, ＭＳ 明朝 and ＭＳ Ｐゴシック have
+no bold style, so GDI emboldens them itself. Measured with `GetGlyphOutline` `GGO_GRAY4_BITMAP` against the same
+request at weight 400, from 12 to 50 pixels:
+
+- The inked box is the regular one plus one column: each row's coverage is the regular glyph's plus the regular
+  glyph shifted one column right, capped at 16.
+- `gmptGlyphOrigin`, the box's height and `tmAscent` do not change.
+- `gmCellIncX` grows by one, so a full-width ＭＳ ゴシック glyph at 22 pixels advances 23, not 22. A blank glyph stays
+  blank and still advances one more.
+
+From 52 pixels GDI emboldens the outline instead, which this rule does not describe; no shipped layout draws that
+large.
+
+The translated Kamidori install draws its English in ＭＳ ゴシック bold (`localization-import-test.md`, rule 9), so
+every glyph and every cell there is simulated bold. Localization gate 12 found it: the port drew the face regular, a
+pixel thinner and 22 wide.
+
+**Port.** `Ome.Engine/Text/SimulatedBold.cs`. The Windows GDI rasterizer gets it from GDI; the text server rasterizer
+applies it to a bold request that the font answers at a regular weight (`FontGetWeight` below 600, no embolden).
+Tests: `SimulatedBoldTests` (synthetic) and the Windows oracle
+`WindowsGdiGlyphMaskRasterizerTests.GdiDrawsAFaceWithoutABoldStyleBoldAsSimulatedBoldDoes`, which compares GDI's bold
+masks with `SimulatedBold` of its regular ones for the three faces.
+
+#### What GDI derives from a font file (2026-11-14)
+
+The text server rasterizer cannot ask GDI, so it reads the face's font file and applies the rules GDI applies to it,
+and off Windows the installed-font list is read from the files too. These are the rules, as GDI applies them on
+Windows 10 (19045) under the Japanese locale AGE needs (ANSI code page 932), for a request with `lfHeight` = -h, so
+h is the em in pixels. Code: `Ome.Engine/Text/GdiFontRules.cs`, `OpenTypeFace.cs`, `InstalledFontIndex.cs`,
+`GdiGlyphRealization.cs`.
+
+**The font list** (`EnumFontFamiliesExA` over `SHIFTJIS_CHARSET`, "Font family list" above):
+
+- A static face is listed under its family name (name 1) in Japanese, else in US English. A variable face is listed
+  once per named instance, as its family plus the instance's style name unless that is a regular one ("Noto Sans JP
+  Thin").
+- A face is listed under Shift-JIS when its code page ranges (OS/2 version 1 and later) include 932. GDI also lists
+  the SystemLink faces, whose linked Japanese fonts answer Shift-JIS; AGE removes them. And it lists AquilineTwo, a
+  decorative Latin face that declares no code pages, for a reason its tables do not show; neither game's list keeps
+  it (Kamidori's checkers and Himegari's fixed-pitch rule remove it).
+- The pitch bit: fixed when the PANOSE proportion is monospaced (9), or, in a face with TrueType outlines, when
+  `post.isFixedPitch` is set. GDI ignores `post.isFixedPitch` in a CFF face. Noto Sans Mono CJK JP has neither mark
+  and is listed proportional.
+- The family bits follow two rules, read from GDI over probe faces that differ in one PANOSE byte and in their
+  outlines (loaded with `AddFontResourceEx` and `FR_PRIVATE`, which installs nothing). Both give FF_SCRIPT for the
+  script family type (3). With TrueType outlines: FF_ROMAN for a serif style of 2 to 10, FF_MODERN for 11 to 15, and
+  FF_DONTCARE for any other, whatever the family type and proportion. With CFF outlines: FF_DECORATIVE for the
+  decorative and pictorial types (4, 5), FF_MODERN for a monospaced proportion, then FF_ROMAN for 2 to 10, FF_SWISS
+  for 11 to 15 and FF_MODERN for any other. So the same sans-serif face is `0x32` with TrueType outlines and `0x22`
+  with CFF ones. AGE reads only the pitch bit.
+
+**The metrics:**
+
+- `tmAveCharWidth` is `xAvgCharWidth * h / unitsPerEm` rounded half up (half the height without an average). A
+  request's width replaces it, and simulated bold adds a pixel.
+- The ascent and descent are the `VDMX` record for the height when there is one. Otherwise they come from
+  `usWinAscent` and `usWinDescent` (the `hhea` values when both are 0), scaled. A TrueType face rounds the ascent and
+  the descent, each half up. A CFF face rounds the descent and the whole height, and the ascent is what remains:
+  Noto Sans CJK (1160 and 288 per 1000) at 8 pixels has 9.28 and 2.30, which GDI gives as 10 and 2.
+- A request's width scales the face horizontally by `|width|` over its unrounded average width
+  (`xAvgCharWidth * h / unitsPerEm`). ＭＳ ゴシック at 21 pixels averages 10.5, so -10 draws it at 10/10.5; メイリオ at 22
+  averages 20.6, so -11 draws it at about half its width. A glyph's advance is its natural advance times the scale,
+  rounded, except that GDI's hinting makes about one in a hundred a pixel wider: 6 of 624 on the test machine, exact
+  advances just under a half, as Meiryo UI's 20.499 at 22 pixels and -11, and 11.18 at 12 pixels and -6.
+- A monospaced face (PANOSE proportion 9) advances by whole multiples of its average width: a half-width glyph by
+  the width, a full-width one by twice it. A face fixed by `post` alone (BIZ UDゴシック) keeps its own advances.
+- `GetGlyphOutline` with `GGO_METRICS` measures an unscaled request from the embedded bitmap where the face has a
+  strike at the height (the inked box and advance): ＭＳ ゴシック up to 22 pixels.
+- A CP932 code CP932 does not decode is drawn as U+30FB (・), the replacement Windows uses: the checker code `0x87AB`
+  that 悪 becomes (above) probes ・.
+
+**Accepted differences.** The hinting pixel above, which only a TrueType hinter would reproduce; and a variable face's
+named instance, whose metrics the rules read from the default instance's tables (no shipped game's default face is
+variable).
+
+**Evidence.** `WindowsGdiFontRulesTests` hold the rules to GDI over the installed faces wherever the tests run on
+Windows. On the test machine: the portable Shift-JIS list equals GDI's but for the SystemLink faces and AquilineTwo,
+with equal pitch and checker answers and equal catalogs. The average width, height, ascent, monospaced advance and
+embedded-bitmap box are equal for every static Japanese face at weights 400 and 700, 19 heights from 8 to 48 pixels,
+and widths 0 and -h/2. Scaled advances were equal in 618 of 624 cases. The installed faces are all TrueType. The CFF
+rules were read from 234 probe faces made from a subset of Noto Sans CJK JP. They were then checked over the four
+Noto Sans and Serif CJK files of WSL Ubuntu, loaded privately: 1092 requests, all equal (13 heights, three widths,
+two weights). A self-contained linux-x64 build of the scanner on WSL lists those files' 14 families as GDI lists them,
+names, order and pitch byte. Read from Linux, the Windows font folders give the same 42 Shift-JIS families and
+catalogs as on Windows.
+
+**Port.** `GodotTextServerGlyphMaskRasterizer` resolves each request to a face file: a language's font, else the
+requested face, else a substitute (`godot/config/japanese-text-rendering.json`). It draws the glyph at its natural
+width with the text server and realizes it by these rules (`GdiGlyphRealization`). A substitute stands in for a face
+the machine lacks and is realized as that face would be, half the height per half cell, not by its own file's
+metrics: native never meets this case, and by its own rules Noto Sans Mono CJK JP would draw at half its width. Tests:
+`GdiFontRulesTests`, `OpenTypeFaceTests`, `InstalledFontIndexTests`, `GdiGlyphRealizationTests` (synthetic fonts,
+`TestFonts.cs`) and the Windows oracle above.
 
 #### SYS4433 glyph coverage alpha (2026-11-07)
 

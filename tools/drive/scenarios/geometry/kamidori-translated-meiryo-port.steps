@@ -1,0 +1,57 @@
+# Localization gate 12 in a proportional face (docs/localization-import-test.md), run B: the port on the clean install
+# with the package imported from the translated one, its language active, with メイリオ chosen as the game font in its
+# config screen as kamidori-translated-meiryo-native.steps chooses it on native AGE. It waits for the same pages at the
+# clean install's offsets and shoots the same names. Run it after run A, on a new sandbox seeded from run A's once
+# native has stopped (its SAVE.DAT then keeps the font native chose):
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start --sandbox <new name> --seed native:fresh
+#       --mod <imported package> --port-arg=--language --port-arg=en
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port run
+#       tools/drive/scenarios/geometry/kamidori-translated-meiryo-port.steps
+# then compare with run A: tools/text_geometry_compare.py A B geometry-meiryo-p26 geometry-meiryo-p37
+#   geometry-meiryo-p55 geometry-meiryo-p56 (docs/tools-reference.md).
+
+rand-seed 13
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+click newgame.begin
+wait-state script=SC0000 timeout=60
+wait-state top=SC0000@0xd5d click=adv.next every=1.5 timeout=200    # page 2
+settle
+rclick adv.next
+wait 3
+click menu.config
+wait-state script=CONFIG1 timeout=10
+wait 2
+click config.adv
+wait-state script=CONFIG2 timeout=10
+wait 2
+click 470 283                                                        # the game font's list
+wait-state script=SELFONT timeout=10
+wait 1
+move 470 400
+wheel up 20                                                          # the list opens at the chosen font: start from the top
+wheel down 3
+wait 1
+click 470 444                                                        # メイリオ
+wait-state script=CONFIG2 timeout=10
+wait 2
+shot geometry-meiryo-config
+rclick adv.next
+wait 3
+rclick adv.next
+wait-state top=SC0000@0xd5d timeout=15
+wait-state top=SC0000@0x1488 click=adv.next every=1.5 timeout=400   # page 26: Wil, one row
+settle
+shot geometry-meiryo-p26
+wait-state top=SC0000@0x1812 click=adv.next every=1.5 timeout=400   # page 37: Leguna, two rows
+settle
+shot geometry-meiryo-p37
+wait-state top=SC0000@0x27b0 click=adv.next every=1.5 timeout=400   # page 55: the longest name plate
+settle
+shot geometry-meiryo-p55
+wait-state top=SC0000@0x2816 click=adv.next every=1.5 timeout=60    # page 56
+settle
+shot geometry-meiryo-p56

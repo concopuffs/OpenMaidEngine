@@ -73,6 +73,10 @@ public sealed class DriveDispatcher
     public const int DefaultSettleTimeoutMs = 10_000;
     public const int DefaultSettleQuietMs = 700;
     public const int CloseDelayMs = 100;
+    /// <summary>The time between two wheel notches, and after the last: the native driver posts one WM_MOUSEWHEEL
+    /// each 80 ms, so a script that reads the wheel each frame (op 0x10d) sees every notch apart, as it does a
+    /// user's.</summary>
+    public const int WheelNotchIntervalMs = 80;
 
     private readonly IDriveBackend _backend;
     private Operation? _active;
@@ -161,7 +165,7 @@ public sealed class DriveDispatcher
                 // x/y default to the driven cursor, which the game may have moved since the client last saw it.
                 (int pointerX, int pointerY) = _backend.PointerPosition;
                 int notches = request.Int("notches"), x = request.Int("x", pointerX), y = request.Int("y", pointerY);
-                return Immediate(request, reply, () => { _backend.Wheel(notches, x, y); return null; });
+                return new WheelOperation(request, reply, _backend, nowMs, notches, x, y);
             }
             case "wait":
             {
@@ -362,6 +366,37 @@ public sealed class DriveDispatcher
             if (_backend.TakeCursorWarp() is (int warpX, int warpY))
                 result["cursor_moved_to"] = new JsonArray(warpX, warpY);
             return result;
+        }
+    }
+
+    /// <summary>Wheel notches one at a time, <see cref="WheelNotchIntervalMs"/> apart, ending that long after the last.
+    /// </summary>
+    private sealed class WheelOperation : Operation
+    {
+        private readonly IDriveBackend _backend;
+        private readonly int _notches, _sign, _x, _y;
+        private readonly long _startMs;
+        private int _sent;
+
+        public WheelOperation(DriveRequest request, Action<string> reply, IDriveBackend backend, long nowMs,
+                              int notches, int x, int y) : base(request, reply)
+        {
+            _backend = backend;
+            _notches = Math.Abs(notches);
+            _sign = Math.Sign(notches);
+            _x = x; _y = y;
+            _startMs = nowMs;
+        }
+
+        public override JsonNode? Poll(long nowMs)
+        {
+            while (_sent < _notches && nowMs >= _startMs + (long)_sent * WheelNotchIntervalMs)
+            {
+                _backend.Wheel(_sign, _x, _y);
+                _sent++;
+            }
+            Done = nowMs >= _startMs + (long)_notches * WheelNotchIntervalMs;
+            return null;
         }
     }
 

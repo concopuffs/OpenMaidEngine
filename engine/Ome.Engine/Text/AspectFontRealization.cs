@@ -11,6 +11,18 @@ public interface IFontMetricsProbe
     /// <summary>Measure <paramref name="code"/> in the LOGFONT {lfHeight -<paramref name="pixelHeight"/>, lfWidth
     /// <paramref name="width"/>, lfWeight <paramref name="weight"/>, DEFAULT_CHARSET, face} on a display IC.</summary>
     FontProbeMetrics Measure(string faceName, int pixelHeight, int width, int weight, ushort code);
+
+    /// <summary>Measure <paramref name="code"/> in the reference face, ＭＳ ゴシック itself: native measures the
+    /// reference (text_measure_reference_gothic_glyph@0x44ff60) by that name whatever face the text draws with, so a
+    /// language font that replaces ＭＳ ゴシック (<see cref="Replacement"/>) does not replace it here.</summary>
+    FontProbeMetrics MeasureReference(int pixelHeight, int width, int weight, ushort code)
+        => Measure(AspectFontRealization.ReferenceFace, pixelHeight, width, weight, code);
+
+    /// <summary>The face that draws <paramref name="faceName"/> in its place as a whole, as the player's choice in a
+    /// game's config would: a language's font (localization spec §7.4). Its name and <c>lfPitchAndFamily</c> are the
+    /// ones aspect mode reads instead of the installed-font list's. Null when the face draws as itself, which GDI's
+    /// substitution of a missing face does not change.</summary>
+    EnumeratedFontFamily? Replacement(string faceName) => null;
 }
 
 /// <summary>
@@ -20,7 +32,8 @@ public interface IFontMetricsProbe
 /// <list type="bullet">
 /// <item>With the mode off, or a face that is fixed-pitch in the installed-font list (<see cref="FontFamilyCatalog"/>)
 /// and not IPA Pゴシック or IPA P明朝, or a face missing from the list, the width is <c>-height / 2</c>, as for any
-/// AGE font.</item>
+/// AGE font. A face a language's font replaces (<see cref="IFontMetricsProbe.Replacement"/>) takes that font's pitch,
+/// as a face the player chose would.</item>
 /// <item>Otherwise mode 1 calibrates it from 激 (text_calibrate_mode1_glyph_font@0x451340): with <c>ref</c> the
 /// reference glyph (ＭＳ ゴシック at the size, half width and the weight) and <c>nat</c> the face's glyph at its natural
 /// width (lfWidth 0), the width is <c>ref.gmBlackBoxX / nat.gmCellIncX * -nat.tmAveCharWidth</c> when the reference
@@ -117,7 +130,7 @@ public sealed class AspectFontRealization
         {
             if (!_referenceBlackBox.TryGetValue((pixelHeight, weight), out int width))
             {
-                width = (int)_probe.Measure(ReferenceFace, pixelHeight, -(pixelHeight / 2), weight, ReferenceCode).BlackBoxX;
+                width = (int)_probe.MeasureReference(pixelHeight, -(pixelHeight / 2), weight, ReferenceCode).BlackBoxX;
                 _referenceBlackBox.Add((pixelHeight, weight), width);
             }
             return width;
@@ -130,16 +143,26 @@ public sealed class AspectFontRealization
     public bool PlacesGlyphsInCell(string faceName)
     {
         ArgumentNullException.ThrowIfNull(faceName);
-        return TryGetPitch(faceName, out byte pitch) && (pitch & 1) == 0;
+        return TryGetPitch(faceName, out _, out byte pitch) && (pitch & 1) == 0;
     }
 
     private bool Calibrates(string faceName)
-        => TryGetPitch(faceName, out byte pitch)
-           && ((pitch & 1) == 0 || FontFamilyCatalog.ProportionalIpaFaces.Contains(faceName, StringComparer.Ordinal));
+        => TryGetPitch(faceName, out string drawn, out byte pitch)
+           && ((pitch & 1) == 0 || FontFamilyCatalog.ProportionalIpaFaces.Contains(drawn, StringComparer.Ordinal));
 
-    // text_find_font_family_index@0x423a50 skips one leading '@'.
-    private bool TryGetPitch(string faceName, out byte pitch)
-        => _pitchByFace.TryGetValue(faceName.StartsWith('@') ? faceName[1..] : faceName, out pitch);
+    /// <summary>The pitch of the face that draws <paramref name="faceName"/>: a replacement the probe names
+    /// (<see cref="IFontMetricsProbe.Replacement"/>), else the face's entry in the installed-font list, which
+    /// text_find_font_family_index@0x423a50 looks up skipping one leading '@'. False for a face the list lacks.</summary>
+    private bool TryGetPitch(string faceName, out string drawn, out byte pitch)
+    {
+        if (_probe.Replacement(faceName) is { } replacement)
+        {
+            (drawn, pitch) = (replacement.FaceName, replacement.PitchAndFamily);
+            return true;
+        }
+        drawn = faceName.StartsWith('@') ? faceName[1..] : faceName;
+        return _pitchByFace.TryGetValue(drawn, out pitch);
+    }
 
     private int? CalibrateSingleByteMode1(string faceName, int pixelHeight, int weight, ushort code)
     {
@@ -149,7 +172,7 @@ public sealed class AspectFontRealization
         int smallHeight = (int)((double)pixelHeight / natural.Height * pixelHeight);
         if (smallHeight <= 0) return null;
         FontProbeMetrics small = _probe.Measure(faceName, smallHeight, 0, weight, code);
-        FontProbeMetrics reference = _probe.Measure(ReferenceFace, pixelHeight, -(pixelHeight / 2), weight, ReferenceCode);
+        FontProbeMetrics reference = _probe.MeasureReference(pixelHeight, -(pixelHeight / 2), weight, ReferenceCode);
         if (reference.BlackBoxX >> 1 >= small.BlackBoxX) return -small.AverageCharWidth;
         // The half black box is stored as a float before the division.
         double width = (float)(reference.BlackBoxX * 0.5) / (double)small.BlackBoxX * -small.AverageCharWidth;
@@ -158,7 +181,7 @@ public sealed class AspectFontRealization
 
     private int? CalibrateMode1(string faceName, int pixelHeight, int weight)
     {
-        FontProbeMetrics reference = _probe.Measure(ReferenceFace, pixelHeight, -(pixelHeight / 2), weight, ReferenceCode);
+        FontProbeMetrics reference = _probe.MeasureReference(pixelHeight, -(pixelHeight / 2), weight, ReferenceCode);
         FontProbeMetrics natural = _probe.Measure(faceName, pixelHeight, 0, weight, ReferenceCode);
         double width = reference.BlackBoxX <= natural.BlackBoxX
             ? (double)reference.BlackBoxX / natural.CellIncrementX * -natural.AverageCharWidth

@@ -7,10 +7,6 @@ namespace Ome.Engine.Text;
 /// History (text_history_render_records@0x4526c0) breaks only at retained line-break records this way.</param>
 /// <param name="FontRealization">The installed-font list behind aspect mode's glyph placement
 /// (<see cref="AspectGlyphPlacement"/>). Without it, aspect-mode glyphs draw at the pen.</param>
-/// <param name="OverflowAtFontHeight">Test the bottom bound against the font's height, the box rows advance by,
-/// instead of the glyph cell. Presented text sets it (localization spec §7): its Unicode font's cell holds the full
-/// ascent and descent, often taller than the source font's, and a layout sized for the source font (Kamidori's
-/// 25-pixel name plate) would otherwise stop at its first glyph.</param>
 /// <param name="RowShiftsX">Pixels each row starts right of where it would (<paramref name="CursorX"/> for the first,
 /// <paramref name="LineOriginX"/> for the rest), by row; a row past the list's end is not shifted. Presented text an
 /// entry aligns sets it (localization spec §7.2).</param>
@@ -24,8 +20,22 @@ public readonly record struct GlyphTextLayoutOptions(
     AdvTextStyle Style,
     IReadOnlyList<int>? LineBreaksBefore = null,
     AspectFontRealization? FontRealization = null,
-    bool OverflowAtFontHeight = false,
     IReadOnlyList<int>? RowShiftsX = null);
+
+/// <summary>The room a glyph takes in a layout: how far it moves the pen, and the width of the cell its record keeps
+/// (<see cref="RetainedGlyphLayoutEngine.Room"/>).</summary>
+public sealed class GlyphRoom
+{
+    private readonly IGlyphMaskRasterizer _rasterizer;
+    private readonly GlyphMask? _aspectReference;
+
+    internal GlyphRoom(IGlyphMaskRasterizer rasterizer, GlyphMask? aspectReference)
+        => (_rasterizer, _aspectReference) = (rasterizer, aspectReference);
+
+    public (int Advance, int Width) Of(GlyphRasterRequest request)
+        => RetainedGlyphLayoutEngine.Measure(request, _aspectReference == null ? _rasterizer.Rasterize(request) : null,
+                                             _aspectReference);
+}
 
 public sealed record GlyphTextLayoutResult(
     IReadOnlyList<AdvRetainedGlyphRecord> Records,
@@ -56,6 +66,34 @@ public sealed class RetainedGlyphLayoutEngine
         _coverageAlpha = coverageAlpha;
     }
 
+    /// <summary>
+    /// The room glyphs in <paramref name="style"/> take in <see cref="Render"/>, for planning a run's rows and extent
+    /// before drawing it (localization spec §7.1, §7.2): outside aspect mode a glyph's own advance and cell; in aspect
+    /// mode the reference cell, halved for a glyph of one half cell (<see cref="CharacterCells"/>). Either is narrowed
+    /// by the glyph's width percent.
+    /// </summary>
+    public GlyphRoom Room(AdvTextStyle style, GlyphRasterPolicy policy, bool antialias)
+        => new(_rasterizer, AspectReference(style, policy, antialias));
+
+    // SYS4433 0x2db: layout uses the reference MS Gothic glyph's advance, independently of the selected face's ink/text
+    // extent (native 0x45b710).
+    private GlyphMask? AspectReference(AdvTextStyle style, GlyphRasterPolicy policy, bool antialias)
+        => style.AspectMode != 0 ? _rasterizer.Rasterize(ReferenceRequest(style, policy, antialias)) : null;
+
+    private static GlyphRasterRequest ReferenceRequest(AdvTextStyle style, GlyphRasterPolicy policy, bool antialias)
+        => ImmediateSurfaceTextRenderer.CreateRequests(
+            "激", style with { FontFace = AspectFontRealization.ReferenceFace }, policy, antialias)[0];
+
+    /// <summary>A glyph's advance and the width of its record's cell (<see cref="Room"/>); <paramref name="mask"/> is
+    /// needed only outside aspect mode.</summary>
+    internal static (int Advance, int Width) Measure(GlyphRasterRequest request, GlyphMask? mask, GlyphMask? aspectReference)
+    {
+        if (aspectReference == null) return (mask!.CellAdvanceX, mask.CellWidth);
+        int cell = GlyphMaskNarrowing.Scale(
+            aspectReference.CellAdvanceX / (CharacterCells.HalfCells(request) == 2 ? 1 : 2), request.WidthPercent);
+        return (cell, cell);
+    }
+
     /// <summary>Lay out <paramref name="glyphs"/> and draw them into <paramref name="destination"/>; a null destination
     /// only measures, as the source layout pass of presented text does (localization spec §8).</summary>
     public GlyphTextLayoutResult Render(
@@ -76,12 +114,8 @@ public sealed class RetainedGlyphLayoutEngine
         var observed = AdvTextOverflowFlags.None;
         bool stopped = false;
 
-        // SYS4433 0x2db: layout uses the reference MS Gothic glyph's advance,
-        // independently of the selected face's ink/text extent (native 0x45b710).
         GlyphRasterRequest? referenceRequest = options.Style.AspectMode != 0 && glyphs.Count > 0
-            ? ImmediateSurfaceTextRenderer.CreateRequests(
-                "激", options.Style with { FontFace = AspectFontRealization.ReferenceFace }, glyphs[0].Policy,
-                glyphs[0].Antialias)[0]
+            ? ReferenceRequest(options.Style, glyphs[0].Policy, glyphs[0].Antialias)
             : null;
         GlyphMask? aspectReference = referenceRequest != null ? _rasterizer.Rasterize(referenceRequest) : null;
         // The realized font's 激, whose ink top the aspect-mode raise compares (+0x31430).
@@ -121,17 +155,13 @@ public sealed class RetainedGlyphLayoutEngine
             for (; nextBreak < breaks.Count && breaks[nextBreak] <= index; nextBreak++)
                 BreakLine(request.PixelHeight);
             GlyphMask mask = _rasterizer.Rasterize(request);
-            int advanceX = aspectReference == null ? mask.CellAdvanceX
-                : aspectReference.CellAdvanceX / (request.Cp932Code is <= 0xff ? 2 : 1);
-            int cellWidth = aspectReference == null ? mask.CellWidth : advanceX;
+            (int advanceX, int cellWidth) = Measure(request, mask, aspectReference);
             int cellHeight = aspectReference == null ? mask.CellHeight
                 : (options.Style.PrimaryFontSize > 0 ? options.Style.PrimaryFontSize : request.PixelHeight)
                   + (options.Style.RenderMode != 0 ? options.Style.EffectOffsetY : 0);
             int right = checked(cursorX + cellWidth);
             int bottom = checked(cursorY + cellHeight);
-            int overflowBottom = aspectReference != null ? checked(cursorY + aspectReference.CellAdvanceY)
-                : options.OverflowAtFontHeight ? checked(cursorY + request.PixelHeight)
-                : bottom;
+            int overflowBottom = aspectReference != null ? checked(cursorY + aspectReference.CellAdvanceY) : bottom;
             AdvTextOverflowFlags overflow = AdvRetainedTextContract.CheckOverflow(
                 options.RightBound, options.BottomBound, right, overflowBottom);
             observed |= overflow;
@@ -174,9 +204,12 @@ public sealed class RetainedGlyphLayoutEngine
             int raise = aspectReference != null
                 ? AspectGlyphRaise(mask, aspectReference, realizedReference!, request.PixelHeight)
                 : 0;
+            // A glyph an entry narrows (localization spec §7.2) is placed in its narrowed cell.
             int drawX = placesInCell
                 ? checked(cursorX + AspectGlyphPlacement.OffsetX(
-                    mask, referenceBlackBoxWidth, fontSize, request.Cp932Code, options.Style.AspectMode))
+                    mask, GlyphMaskNarrowing.Scale(referenceBlackBoxWidth, request.WidthPercent),
+                    GlyphMaskNarrowing.Scale(fontSize, request.WidthPercent), request.Cp932Code,
+                    options.Style.AspectMode, fullWidth: CharacterCells.HalfCells(request) == 2))
                 : cursorX;
             if (destination != null)
                 AgeGlyphMaskCompositor.DrawGlyph(

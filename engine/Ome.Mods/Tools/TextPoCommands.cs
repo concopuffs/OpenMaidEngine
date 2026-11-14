@@ -240,7 +240,7 @@ public static class TextPoCommands
     private static TextEntry Retext(TextEntry entry, TextEntry translated) => translated with
     {
         Script = entry.Script, At = entry.At, Align = entry.Align, Fit = entry.Fit, Measure = entry.Measure,
-        Cells = entry.Cells, RowGap = entry.RowGap, Note = entry.Note, Origin = entry.Origin,
+        RowGap = entry.RowGap, Note = entry.Note, Origin = entry.Origin,
     };
 
     /// <summary>The comment lines a file starts with, which a rewrite keeps.</summary>

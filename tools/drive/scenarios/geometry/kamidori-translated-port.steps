@@ -1,0 +1,33 @@
+# Localization gate 12 (localization spec §18.1, docs/localization-import-test.md), run B: the port on the clean
+# install with the package imported from the translated one (`omp text import-scripts`), its language active. It
+# waits for the pages kamidori-translated-native.steps waits for, at the clean install's offsets, and shoots the same
+# names. Run it after run A, once native has stopped, on a new sandbox seeded from run A's: the face is the game's
+# setting (SAVE.DAT's shared profile, which AGE writes when it quits), and the translated install's INITCONFIG and
+# CHECKCONFIG settle on ＭＳ ゴシック where the clean ones choose メイリオ, so the port starts with the settings native
+# played with and both draw the same face:
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start --sandbox <new name> --seed native:fresh
+#       --mod <imported package> --port-arg=--language --port-arg=en
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori port run
+#       tools/drive/scenarios/geometry/kamidori-translated-port.steps
+# then compare with run A: tools/text_geometry_compare.py (docs/tools-reference.md).
+
+rand-seed 13
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+click newgame.begin
+wait-state script=SC0000 timeout=60
+wait-state top=SC0000@0x1488 click=adv.next every=1.5 timeout=400   # page 26: Wil, one row
+settle
+shot geometry-p26
+wait-state top=SC0000@0x1812 click=adv.next every=1.5 timeout=400   # page 37: Leguna, two rows
+settle
+shot geometry-p37
+wait-state top=SC0000@0x27b0 click=adv.next every=1.5 timeout=400   # page 55: the longest name plate
+settle
+shot geometry-p55
+wait-state top=SC0000@0x2816 click=adv.next every=1.5 timeout=60    # page 56
+settle
+shot geometry-p56

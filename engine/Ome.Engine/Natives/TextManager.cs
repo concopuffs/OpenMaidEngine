@@ -64,15 +64,29 @@ public sealed partial class TextManager : ISurfaceListener
     private Func<bool> _inputWaiting = static () => false;
     private ITextListener[] _listeners = [];
 
-    /// <summary>One rasterizer with its glyph cache and the two renderers over it.</summary>
+    /// <summary>One rasterizer with its glyph cache, the two renderers over it, and aspect mode's font calibration
+    /// measured with that rasterizer: each pipeline draws the widths it measured.</summary>
     private sealed class TextPipeline(GlyphRasterizerBackendInfo info, CachedGlyphMaskRasterizer cache,
-                                      GlyphCoverageAlpha coverageAlpha)
+                                      GlyphCoverageAlpha coverageAlpha, Func<AspectFontRealization?> realization)
     {
+        private Lazy<AspectFontRealization?> _realization = new(realization);
+
         public GlyphRasterizerBackendInfo Info { get; } = info;
         public GlyphRasterPolicy Policy => Info.Policy;
         public CachedGlyphMaskRasterizer Cache { get; } = cache;
         public ImmediateSurfaceTextRenderer Pixels { get; } = new(cache, info.Policy, coverageAlpha);
         public RetainedGlyphLayoutEngine Layout { get; } = new(cache, coverageAlpha);
+
+        /// <summary>The aspect-mode font list (<see cref="AspectFontRealization"/>), or null when the rasterizer does
+        /// not measure (<see cref="IFontMetricsProbe"/>): its glyphs then draw at <c>-height / 2</c>.</summary>
+        public AspectFontRealization? Realization => _realization.Value;
+
+        /// <summary>Drop the glyph masks and the calibration: the fonts behind them changed.</summary>
+        public void FontsChanged()
+        {
+            Cache.Clear();
+            _realization = new Lazy<AspectFontRealization?>(realization);
+        }
     }
 
     // The gameplay rasterizer (--text-backend), and the Unicode one every run uses while a language is active
@@ -88,7 +102,6 @@ public sealed partial class TextManager : ISurfaceListener
     private bool _presentsText;
 
     private readonly Lazy<EnumeratedFontFamily[]> _fontFamilies;
-    private readonly Lazy<AspectFontRealization?> _fontRealization;
 
     private int _messageGlyphDelayMilliseconds = Sys4RegIniStore.DefaultMessageSpeed;
     private int _messageWindowAlphaSetting = Sys4RegIniStore.DefaultMesWinAlpha;
@@ -177,7 +190,8 @@ public sealed partial class TextManager : ISurfaceListener
             _surfaceTextBackendInfo = backend;
             _surfaceTextRasterizer = devices.Gameplay;
             _surfaceTextMaskCache = new CachedGlyphMaskRasterizer(devices.Gameplay, capacity: devices.GameplayCacheCapacity);
-            TextPipeline source = new(backend, _surfaceTextMaskCache, devices.CoverageAlpha);
+            IFontMetricsProbe? metrics = devices.FontMetrics;
+            TextPipeline source = new(backend, _surfaceTextMaskCache, devices.CoverageAlpha, () => Realization(metrics));
             _sourceText = source;
             _presentedText = new Lazy<TextPipeline>(() =>
             {
@@ -190,19 +204,21 @@ public sealed partial class TextManager : ISurfaceListener
                     throw new InvalidOperationException("The presented-text rasterizer must take Unicode requests.");
                 _presentedTextRasterizer = rasterizer;
                 (rasterizer as ILanguageFontRasterizer)?.UseLanguageFonts(_presentedFonts);
+                // A presented rasterizer that measures calibrates its own aspect-mode fonts (localization spec §7.4).
                 return new TextPipeline(info, new CachedGlyphMaskRasterizer(rasterizer, devices.PresentedCacheCapacity),
-                                        devices.CoverageAlpha);
+                                        devices.CoverageAlpha, () => Realization(rasterizer as IFontMetricsProbe));
             }, LazyThreadSafetyMode.ExecutionAndPublication);
         }
         Func<IReadOnlyList<EnumeratedFontFamily>>? familySource = devices?.FontFamilies;
-        IFontMetricsProbe? metrics = devices?.FontMetrics;
         _fontFamilies = new Lazy<EnumeratedFontFamily[]>(() => familySource != null
             ? familySource().Where(family => !string.IsNullOrWhiteSpace(family.FaceName)).ToArray()
             : []);
-        _fontRealization = new Lazy<AspectFontRealization?>(() => metrics != null
-            ? new AspectFontRealization(_fontFamilies.Value, metrics)
-            : null);
     }
+
+    /// <summary>Aspect mode's fonts measured with <paramref name="probe"/>, over the installed-font list the scripts
+    /// see; none without a probe.</summary>
+    private AspectFontRealization? Realization(IFontMetricsProbe? probe)
+        => probe != null ? new AspectFontRealization(_fontFamilies.Value, probe) : null;
 
     /// <summary>A text manager that draws nothing, for a VM given none and for headless runs: it keeps every layout,
     /// cursor, setting and indicator, and records the shown text, as a host without text pixels did.</summary>
@@ -265,24 +281,22 @@ public sealed partial class TextManager : ISurfaceListener
         if (_presentedText.IsValueCreated && _presentedTextRasterizer is ILanguageFontRasterizer presented)
         {
             presented.UseLanguageFonts(fonts);
-            _presentedText.Value.Cache.Clear();
+            _presentedText.Value.FontsChanged();
         }
         else if (_surfaceTextBackendInfo!.Policy == GlyphRasterPolicy.PortableUnicode
                  && _surfaceTextRasterizer is ILanguageFontRasterizer gameplay)
         {
             gameplay.UseLanguageFonts(fonts);
-            _surfaceTextMaskCache!.Clear();
+            _sourceText!.FontsChanged();
         }
     }
 
-    /// <summary>The aspect-mode font list for <paramref name="text"/>'s rasterizer: the gameplay rasterizer's, or none
-    /// for the Unicode one, as on a portable run.</summary>
-    private AspectFontRealization? RealizationFor(TextPipeline text)
-        => ReferenceEquals(text, _sourceText) ? _fontRealization.Value : null;
-
-    /// <summary>A presented run's style: aspect mode's fixed reference cell does not fit other scripts, so presented
-    /// glyphs advance by their own width (spec §7.4).</summary>
-    private static AdvTextStyle PresentedStyle(AdvTextStyle style) => style with { AspectMode = 0 };
+    /// <summary>The glyphs <paramref name="text"/> draws in <paramref name="style"/> with <paramref name="pipeline"/>'s
+    /// rasterizer, source or presented alike (localization spec §7): each carries its CP932 code when it has one, so
+    /// every layout rule applies to it as to the source text.</summary>
+    private IReadOnlyList<GlyphRasterRequest> Requests(string text, AdvTextStyle style, TextPipeline pipeline)
+        => ImmediateSurfaceTextRenderer.CreateRequests(text, style, pipeline.Policy, _textAntialias,
+                                                       pipeline.Realization);
 
     // ---- the installed fonts (SYS4433 ops 0x2dc-0x2de) ----
 

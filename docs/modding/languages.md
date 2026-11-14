@@ -128,7 +128,7 @@ a manifest.
 | `name` | the language's own name |
 | `fallback` | the chain tried after this language, before the source text. Without it, a tag's parents: `pt-br` then `pt` |
 | `line_break` | where presented text may wrap: `words` breaks after spaces and hyphens and between CJK characters; `anywhere` between any two characters |
-| `measure` | what the scripts' length opcodes measure: the `presented` text, so a name plate sized from a name fits the translated name, or the `source` text, so the game's state never depends on the language |
+| `measure` | what the scripts' length opcodes measure: the `presented` text, so a name plate sized from a name fits the translated name, or the `source` text, so the game's state never depends on the language. Presented text counts as the game counts its own: a character's CP932 bytes, and for a character CP932 lacks 2 if Unicode marks it wide, else 1 |
 | `digits` | `ascii` presents full-width digits (`１２`) in numbers the scripts build as ASCII |
 | `glyph_delay_scale` | scales the reveal's delay per glyph for translated text. English has about twice the glyphs of Japanese per sentence, so `0.5` keeps the pace |
 | `min_fit_scale` | the narrowest an entry's `fit = "shrink"`, or `overflow`, makes its glyphs, as a share of their width: above 0 and at most 1; default `0.75` |
@@ -169,7 +169,6 @@ note = "item name"
 | `script`, `at` | the scope, below |
 | `obsolete` | `true` skips the entry; `omp text extract` sets it when the source is gone |
 | `measure` | this string's measurement, over the language's |
-| `cells` | this string's length in half cells, for the length opcodes |
 | `row_gap` | pixels between the rows of a `draw-string` whose text holds `\n`, beyond the font's height; default 2 |
 | `note` | for translators; the port ignores it |
 | `align`, `fit` | where the translation sits and how narrow it may get, against the original text: below |
@@ -259,10 +258,11 @@ align = "end"                        # "start" (default), "center" or "end"
 ### Text too long for its window
 
 A message that needs more rows than its window has would be cut at the window's bottom, as the game cuts its own
-text. The port draws a translation at its letters' own widths, so one written to the line lengths of an in-place
-translation can need a row more than it had there. By default (`overflow = "shrink"`) the port narrows such a
-message's glyphs, all by one factor and only as far as it needs to fit, never below `min_fit_scale`. The window is
-whatever the game's script set up; nothing about it is per game.
+text. The port wraps a translation at word breaks, where an in-place translation broke its lines by hand, and a
+proportional face outside aspect mode does not keep to the half cells the scripts count (below, "Fonts"). A translation written
+to the line lengths of an in-place one can therefore need a row more than it had there. By default
+(`overflow = "shrink"`) the port narrows such a message's glyphs, all by one factor and only as far as it needs to
+fit, never below `min_fit_scale`. The window is whatever the game's script set up; nothing about it is per game.
 
 - A message that fits, or one whose entry's `fit` already made it fit, is drawn as before.
 - A message that does not fit even at `min_fit_scale`, or whose own `\n` breaks make more rows than the window has,
@@ -283,8 +283,45 @@ lack falls back to the next font, then to the system's.
 
 - `fonts/` holds `.ttf`, `.otf`, `.ttc`, `.woff` and `.woff2` files, at most 64 MiB each, without subfolders. Each
   bundled file a `use` names must be in the package.
-- A bundled font draws at its own weight; the port does not embolden it.
-- `omp text check` lists the characters of the translations that no bundled font of a table covers.
+- A bundled font has only its own weight. Where the game asks for bold and the font has no bold style, the port
+  draws it bold as Windows does for such a face (each letter one pixel wider).
+- `omp text check` lists the characters of the translations that no bundled font of a table covers, and warns
+  when a table's first font is bundled and proportional to the game (below).
+
+Without a table the port draws the face the game asks for (the player's choice in the game's config, or the
+script's) when the machine has it. On a machine without it, the port's stand-ins for ＭＳ ゴシック and ＭＳ 明朝 are
+other fixed-width Japanese faces (Noto Sans Mono CJK JP, BIZ UDGothic and BIZ UDMincho, IPAGothic and IPAMincho,
+Osaka-Mono) first, and proportional faces only as a last resort. A stand-in draws in the room of the face it stands
+in for, half the height per half cell, whatever its own metrics.
+
+A table's font is not a stand-in: it replaces the face as a whole, as a player's choice in the game's config does,
+and the game treats it as Windows treats that font. Its first font decides how.
+
+**Use a fixed-width font.** The scripts place and size text by counting characters: a name plate, a box or a
+right-aligned name gets room for so many half cells, the count the length opcodes give (`measure`, above). A font
+whose Latin letters are all half-width, as ＭＳ ゴシック's and ＭＳ 明朝's are, fills exactly that room. A
+proportional font does not, unless the game selects aspect mode (below): its wide letters run past the room, its
+narrow ones fall short, and right-aligned text ends ragged.
+
+- A `[[language.font]]` table should name a fixed-width face whose Latin letters are half-width.
+- Fixed-width means what Windows reads from the font file, not its name: a PANOSE proportion of monospaced, or, in a
+  font with TrueType outlines, `post.isFixedPitch`. BIZ UDGothic and IPAGothic are fixed-width. Noto Sans Mono CJK JP
+  is not: its file carries neither mark, and its average width is that of its Japanese glyphs, almost a whole em.
+- The game asks for its font with half the height as the average width, and Windows narrows a proportional font by
+  that over the font's own average. A Japanese proportional font is drawn at about half its width (Noto Sans Mono
+  CJK JP at 51 %), and a Latin one near its own width, which runs past the half cells. `omp text check` warns about
+  such a font and gives the width.
+- Outside aspect mode nothing makes a proportional font fit but `fit` and `overflow`, which narrow the letters.
+  `overflow = "shrink"` is still worth keeping for a quick or machine translation, whose messages can run a row
+  longer than the window.
+
+**Aspect mode.** A game whose scripts select aspect mode (op `0x2db`) lays its text out on cells whatever the font,
+and the port lays a translation out exactly as native AGE lays out the same characters. A character of one CP932
+byte takes half a cell and one of two bytes a whole cell (Ⅰ, ― and ♪ are two bytes); a character CP932 lacks takes a
+whole cell if Unicode marks it wide, else half. In a proportional face (the player's メイリオ, say) the game narrows
+each letter by a width it calibrates for the face, a half-width letter by one it calibrates for that letter, and
+centres it in its cell; an opening bracket sits at its cell's right edge, and a closing bracket, 、 or 。 at its
+left. A fixed-width face is drawn as it is. `fit` and `overflow` narrow the cells too. Which games select aspect mode is in their [game notes](games/README.md).
 
 ## Images and other assets
 

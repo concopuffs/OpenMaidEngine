@@ -79,7 +79,7 @@ public sealed partial class TextManager
                                                  out IReadOnlyList<AdvRetainedGlyphRecord> glyphs, out TextExtent? extent)
     {
         TextPipeline text = _sourceText!;
-        AspectFontRealization? realization = RealizationFor(text);
+        AspectFontRealization? realization = text.Realization;
         (int x, int y) = run.SourceCursor ?? (run.Layout.CursorX, run.Layout.CursorY);
         GlyphTextLayoutResult laid = text.Layout.Render(
             null,
@@ -170,13 +170,13 @@ public sealed partial class TextManager
 
         var updated = new RgbaImage(
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
-        // A presented run always draws with the Unicode rasterizer, even if the language changed meanwhile.
+        // A presented run always draws with the Unicode rasterizer, even if the language changed meanwhile. It is laid out
+        // as its source text would be (localization spec §7): the same style, aspect mode and rules.
         TextPipeline text = run.Presented != null ? _presentedText!.Value : ActiveText;
         string drawnText = run.Presented?.Text ?? run.Text;
-        AdvTextStyle style = run.Presented != null ? PresentedStyle(run.Style) : run.Style;
-        AspectFontRealization? realization = run.Presented != null ? null : RealizationFor(text);
-        IReadOnlyList<GlyphRasterRequest> requests =
-            ImmediateSurfaceTextRenderer.CreateRequests(drawnText, style, text.Policy, _textAntialias, realization);
+        AdvTextStyle style = run.Style;
+        AspectFontRealization? realization = text.Realization;
+        IReadOnlyList<GlyphRasterRequest> requests = Requests(drawnText, style, text);
         IReadOnlyList<int>? breaks = recordedLineBreaks;
         int rightBound = recordedLineBreaks == null ? run.Layout.Right : int.MaxValue;
         bool wrap = recordedLineBreaks == null;
@@ -196,7 +196,7 @@ public sealed partial class TextManager
                                              IReadOnlyList<int>? rowShifts)
             => new(run.Layout.CursorX, run.Layout.CursorY, binding.ResetCursorX, right,
                    history ? int.MaxValue : run.Layout.Bottom, WrapHorizontally: wrapRows, style, lineBreaks, realization,
-                   OverflowAtFontHeight: run.Presented != null, RowShiftsX: rowShifts);
+                   RowShiftsX: rowShifts);
 
         PresentedRunPlacement? placement = null;
         if (run.Presented is { } presented && recordedLineBreaks == null)
@@ -212,7 +212,8 @@ public sealed partial class TextManager
                     : null;
             placement = PresentedTextPlacement.Place(
                 drawnText, Ome.Engine.Localization.PresentedLineBreaks.Opportunities(drawnText, presented.LineBreak), requests,
-                text.Cache, run.Layout.CursorX, binding.ResetCursorX, run.Layout.Right,
+                text.Layout.Room(style, text.Policy, _textAntialias), run.Layout.CursorX, binding.ResetCursorX,
+                run.Layout.Right,
                 presented.Entry?.Align ?? Ome.Engine.Localization.TextAlign.Start,
                 presented.Entry?.Fit ?? Ome.Engine.Localization.TextFit.None, sourceExtent, source?.Rows.Count ?? 0,
                 presented.MinFitScale, fitsWindow);
@@ -390,40 +391,37 @@ public sealed partial class TextManager
             destination.Width, destination.Height, (byte[])destination.Pixels.Clone());
         string? placed = null;
         if (presented == null)
-            pipeline.Pixels.Render(updated, x, y, text, style, _textAntialias, RealizationFor(pipeline), _blankExtentMode);
+            pipeline.Pixels.Render(updated, x, y, text, style, _textAntialias, pipeline.Realization, _blankExtentMode);
         else
         {
-            // Each "\n" of the presented text starts a row at the same x, lower by the font's height and a gap.
-            AdvTextStyle presentedStyle = PresentedStyle(style);
+            // Each row draws as its source string would (localization spec §7): the same style, aspect mode and rules. A
+            // "\n" of the presented text starts a row at the same x, lower by the font's height and a gap (§7.1).
+            AspectFontRealization? realization = pipeline.Realization;
             int height = style.PrimaryFontSize > 0 ? style.PrimaryFontSize : 24;
             int step = height + (presented.Entry?.RowGap ?? PresentedRowGap);
-            IReadOnlyList<GlyphRasterRequest>[] rows = presented.Text.Split('\n')
-                .Select(row => ImmediateSurfaceTextRenderer.CreateRequests(
-                    new string(row.Where(c => c >= ' ').ToArray()), presentedStyle, pipeline.Policy, _textAntialias))
-                .ToArray();
+            string[] rows = presented.Text.Split('\n');
+            ImmediateSurfaceTextResult Draw(RgbaImage? into, int at, int top, string row, int percent)
+                => pipeline.Pixels.Render(into, at, top, row, style, _textAntialias, realization, _blankExtentMode, percent);
             // An entry's align and fit place its rows against what the source string would have covered (§7.2).
             Ome.Engine.Localization.TextAlign align = presented.Entry?.Align ?? Ome.Engine.Localization.TextAlign.Start;
             bool fit = presented.Entry?.Fit == Ome.Engine.Localization.TextFit.Shrink;
             TextExtent? source = align != Ome.Engine.Localization.TextAlign.Start || fit
-                ? _sourceText!.Pixels.Render(null, x, y, text, style, _textAntialias, RealizationFor(_sourceText),
+                ? _sourceText!.Pixels.Render(null, x, y, text, style, _textAntialias, _sourceText!.Realization,
                                              _blankExtentMode).Ink
                 : null;
             int percent = fit && source is { } fitted
-                ? PresentedTextPlacement.FitPercent(rows, pipeline.Cache, fitted.Width, presented.MinFitScale)
+                ? PresentedTextPlacement.FitPercent(
+                    at => rows.Max(row => Draw(null, 0, y, row, at).Ink?.Width ?? 0), fitted.Width, presented.MinFitScale)
                 : 100;
-            if (percent < 100)
-                rows = rows.Select(row => (IReadOnlyList<GlyphRasterRequest>)row
-                    .Select(glyph => glyph with { WidthPercent = percent }).ToArray()).ToArray();
             var shifts = new int[rows.Length];
             for (int row = 0; row < rows.Length; row++)
             {
-                if (rows[row].Count == 0) continue;
+                if (rows[row].Length == 0) continue;
                 shifts[row] = source is { } target && align != Ome.Engine.Localization.TextAlign.Start
-                              && PresentedTextPlacement.Extent(rows[row], pipeline.Cache, x) is { } extent
+                              && Draw(null, x, y, rows[row], percent).Ink is { } extent
                     ? PresentedTextPlacement.Shift(align, target, extent, 0, updated.Width)
                     : 0;
-                pipeline.Pixels.RenderGlyphs(updated, checked(x + shifts[row]), checked(y + row * step), rows[row],
-                                             presentedStyle);
+                Draw(updated, checked(x + shifts[row]), checked(y + row * step), rows[row], percent);
             }
             if (source is { } placedAgainst)
                 placed = $"source {placedAgainst.Left}..{placedAgainst.Right}, width {percent}%, shifts {string.Join(",", shifts)}";
@@ -574,7 +572,7 @@ public sealed partial class TextManager
         IReadOnlyList<(AdvRetainedGlyphRecord Cell, bool IsRuby)> cells = batch.Presented is { } presented
             ? RedrawPresented(updated, binding, batch, presented, text)
             : text.Layout.RenderRedraw(
-                updated, batch.Records, text.Policy, _textAntialias, _rubyRules, RealizationFor(text));
+                updated, batch.Records, text.Policy, _textAntialias, _rubyRules, text.Realization);
 
         bool bind = (batch.Flags & 4) == 0;
         RetainedAdvTextLayoutPresentation? presentation;
@@ -618,16 +616,16 @@ public sealed partial class TextManager
         Ome.Engine.Localization.PresentedText presented, TextPipeline text)
     {
         AdvTextRedrawRecord first = batch.Records.First(record => !record.IsRuby);
-        AdvTextStyle style = PresentedStyle(first.Style);
+        AdvTextStyle style = first.Style;
         PresentedTextPlan plan = PresentedTextLayout.Plan(
             presented.Text, Ome.Engine.Localization.PresentedLineBreaks.Opportunities(presented.Text, presented.LineBreak),
-            ImmediateSurfaceTextRenderer.CreateRequests(presented.Text, style, text.Policy, _textAntialias, null),
-            text.Cache, first.Rect.Left, binding.ResetCursorX, batch.Layout.Right);
+            Requests(presented.Text, style, text), text.Layout.Room(style, text.Policy, _textAntialias),
+            first.Rect.Left, binding.ResetCursorX, batch.Layout.Right);
         GlyphTextLayoutResult drawn = text.Layout.Render(
             destination,
             new GlyphTextLayoutOptions(
                 first.Rect.Left, first.Rect.Top, binding.ResetCursorX, int.MaxValue, batch.Layout.Bottom,
-                WrapHorizontally: false, style, plan.BreaksBefore, OverflowAtFontHeight: true),
+                WrapHorizontally: false, style, plan.BreaksBefore, text.Realization),
             plan.Glyphs);
         return drawn.Records.Select(record => (record, false)).ToArray();
     }

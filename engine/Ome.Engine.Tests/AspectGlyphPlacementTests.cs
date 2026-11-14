@@ -61,7 +61,7 @@ public class AspectGlyphPlacementTests
     [InlineData(0x8175, 2, 7)]
     public void TheOffsetFollowsTheGlyphsClass(int code, int aspectMode, int expected)
         => Assert.Equal(expected, AspectGlyphPlacement.OffsetX(
-            Glyph(width: 4, originX: 2, advance: 9), 19, 22, (ushort)code, aspectMode));
+            Glyph(width: 4, originX: 2, advance: 9), 19, 22, (ushort)code, aspectMode, fullWidth: code > 0xff));
 
     [Theory]
     [InlineData("メイリオ", true, new[] { 9, 38, 48 })]        // centred, right-aligned to the probe's 19, at the pen

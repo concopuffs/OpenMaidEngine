@@ -248,6 +248,41 @@ public sealed class TextToolTests : IDisposable
                         + "(en/_global.toml:5)", console.ToString());
     }
 
+    [Theory]
+    [InlineData(false, 0, 979, "51 %")]    // Noto Sans Mono CJK JP: no fixed-pitch mark, a CJK-wide average
+    [InlineData(false, 0, 500, null)]      // proportional at half an em: its own width, still warned
+    [InlineData(true, 0, 500, null)]       // post.isFixedPitch in a TrueType font: fixed
+    [InlineData(false, 9, 500, null)]      // a monospaced PANOSE proportion: fixed
+    public void CheckWarnsWhenATablesFirstFontIsProportionalToTheGame(bool postFixed, byte proportion, short average,
+                                                                     string? narrowed)
+    {
+        var font = new TestFont { PostFixedPitch = postFixed, AverageCharWidth = average,
+                                  Panose = [2, 11, 0, proportion, 0, 0, 0, 0, 0, 0] };
+        font.Map(('A', font.AddGlyph(TestGlyph.Box(0, 0, 400, 700))));
+        WriteBytes("fonts/Body.ttf", font.Build(0));
+        WriteFile("languages.toml", """
+            [[language]]
+            tag = "en"
+
+            [[language.font]]
+            requested = ["ＭＳ ゴシック"]
+            use = ["fonts/Body.ttf"]
+            """);
+        WriteFile("en/_global.toml", """
+            [[text]]
+            source = "はい"
+            text = "A"
+            """);
+        var console = new StringWriter();
+
+        Assert.Equal(0, TextCommands.Check(Root(), null, null, console));
+
+        bool proportional = !postFixed && proportion != 9;
+        Assert.Equal(proportional, console.ToString().Contains(
+            "warning: text en: Body.ttf, the font for ＭＳ ゴシック, is proportional to the game"));
+        if (narrowed != null) Assert.Contains($"elsewhere it draws the font at {narrowed} of its own width", console.ToString());
+    }
+
     [Fact]
     public void StatsCountsWhatEachLanguageTranslates()
     {

@@ -109,6 +109,27 @@ def test_step_files():
             print("   ", error)
             runs = False
         check(runs, f"port/{path.name} parses and needs only port capabilities")
+    # Geometry pairs (scenarios/geometry/, localization gate 12): each runs on its own install, so the two files differ
+    # in offsets but must shoot the same pages under the same names for text_geometry_compare.py.
+    geometry = HERE / "drive" / "scenarios" / "geometry"
+    natives = sorted(geometry.glob("*-native.steps"))
+    check(bool(natives), "geometry scenario pairs exist")
+    for native in natives:
+        port = native.with_name(native.name.replace("-native.steps", "-port.steps"))
+        check(port.is_file(), f"geometry/{native.name} has its port half")
+        if not port.is_file():
+            continue
+        shots = []
+        for path in (native, port):
+            try:
+                parsed = core.parse_steps(path.read_text(encoding="utf-8").splitlines())
+                core.check_capabilities(parsed, core.SHARED_CAPABILITIES, "shared subset")
+            except core.DriveError as error:
+                print("   ", error)
+                parsed = []
+            shots.append([step.args for step in parsed if step.name == "shot"])
+        check(bool(shots[0]) and shots[0] == shots[1],
+              f"geometry/{native.name} and its port half shoot the same names in the same order")
 
 
 def port_capability_names() -> list[str]:
@@ -388,6 +409,25 @@ def test_profiles():
           "the agent gets where op 0x60's rand() call returns")
     kamidori = core.parse_profile((HERE / "drive" / "kamidori.toml").read_text(encoding="utf-8"))
     check(kamidori.rand == {"op60_rand_return": 0x42768F}, "Kamidori names its own engine's op 0x60 site (4.33G)")
+    clean, name = kamidori.for_build("52151686545215F350D2453FEBAB91259450CF3FA79BFB218142765CE3F8842E")
+    check(name == "4.33G" and clean == kamidori, "the clean install's AGE.EXE takes the tables as written")
+    translated, name = kamidori.for_build("977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4")
+    check(name == "4.33F" and translated.rand == {"op60_rand_return": 0x42772F}
+          and translated.keep_polling == {**kamidori.keep_polling, "activate_return": 0x48E061}
+          and translated.engine == kamidori.engine,
+          "the translated install's 4.33F takes its own hook addresses and keeps the rest")
+    check(raises(kamidori.for_build, "0" * 64, contains="none of the profile's builds"),
+          "an AGE.EXE that is no known build is refused, not hooked at another build's addresses")
+    check(profile.for_build("0" * 64) == (profile, None), "a profile without builds serves any AGE.EXE")
+    engine = "[native.engine]\nctx_global = 1\nframe_stride = 2\nframe_count = 3\n"
+    check(raises(core.parse_profile, engine + '[native.build.x]\nsha256 = "12"\n', contains="needs sha256"),
+          "a build names its AGE.EXE by a whole SHA-256")
+    check(raises(core.parse_profile, engine + f'[native.build.x]\nsha256 = "{"a" * 64}"\nrand = {{ op60_rand_return = 1 }}\n',
+                 contains="no [native.rand]"), "a build changes only tables the profile has")
+    check(raises(core.parse_profile, engine + f'[native.build.x]\nsha256 = "{"a" * 64}"\nengine = {{ pc = 1 }}\n',
+                 contains="unknown key"), "a build's keys are checked")
+    check(raises(core.parse_profile, engine + "[native.hooks]\na = 1\n", contains="unknown [native] table"),
+          "an unknown [native] table is rejected, not ignored")
     check(raises(core.parse_profile, "[native.rand]\nop60_rand_return = 1\n", contains="needs [native.engine]"),
           "the rand hook needs the engine facts to name the call site")
     check(raises(native.agent_config, profile, {0x1C: Path("C:/箱")}, engine_ctx, contains="ASCII"),

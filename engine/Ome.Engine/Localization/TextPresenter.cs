@@ -58,7 +58,7 @@ public enum TextLengthKind
 {
     /// <summary><c>strlen</c>, op <c>0x2c5</c>: half cells.</summary>
     HalfCells,
-    /// <summary><c>halve-strlen</c>, op <c>0x1a6</c>: half cells halved, rounded up.</summary>
+    /// <summary><c>halve-strlen</c>, op <c>0x1a6</c>: half cells halved, truncated as native's is.</summary>
     Halved,
     /// <summary><c>cp932-character-length</c>, op <c>0x2c6</c>: characters.</summary>
     Characters,
@@ -209,7 +209,7 @@ public sealed class TextPresenter
         if (!result.Measurable || result.Presented is not { } presented) return null;
         if ((presented.Entry?.Measure ?? Language.Measure) == TextMeasure.Source) return null;
         if (kind == TextLengthKind.Characters) return TextMeasurement.Characters(presented.Text);
-        int cells = presented.Entry?.Cells ?? TextMeasurement.HalfCells(presented.Text);
+        int cells = TextMeasurement.HalfCells(presented.Text);
         return kind == TextLengthKind.Halved ? TextMeasurement.Halve(cells) : cells;
     }
 

@@ -50,6 +50,7 @@ CORE_TESTS = (
     "test_page_map_compare.py",
     "test_drive_core.py",
     "test_native_scratch.py",
+    "test_text_geometry_compare.py",
     "test_compiler_census.py",
     "test_opcodes.py",
     "test_operand_access.py",

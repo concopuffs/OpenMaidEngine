@@ -1,5 +1,5 @@
 {
-  "id": "sys4-japanese-godot-system-font-v1",
+  "id": "sys4-japanese-godot-system-font-v2",
   "fontCacheCapacity": 8,
   "glyphMaskCacheCapacity": 2048,
   "raster": {
@@ -24,22 +24,30 @@
     {
       "requested": [ "ＭＳ 明朝", "MS Mincho" ],
       "substitutes": [
+        "ＭＳ 明朝",
+        "MS Mincho",
+        "BIZ UDMincho",
+        "IPAMincho",
         "Noto Serif CJK JP",
         "Noto Serif JP",
         "Yu Mincho",
         "Hiragino Mincho ProN",
-        "IPAMincho",
         "serif"
       ]
     },
     {
       "requested": [ "ＭＳ ゴシック", "MS Gothic" ],
       "substitutes": [
+        "ＭＳ ゴシック",
+        "MS Gothic",
+        "Noto Sans Mono CJK JP",
+        "BIZ UDGothic",
+        "IPAGothic",
+        "Osaka-Mono",
         "Noto Sans CJK JP",
         "Noto Sans JP",
         "Yu Gothic",
         "Hiragino Kaku Gothic ProN",
-        "IPAGothic",
         "sans-serif"
       ]
     }

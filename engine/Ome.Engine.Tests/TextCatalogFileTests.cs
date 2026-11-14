@@ -27,7 +27,6 @@ public class TextCatalogFileTests
             align = "center"
             fit = "shrink"
             measure = "source"
-            cells = 12
             row_gap = 5
             note = "a choice"
 
@@ -43,8 +42,8 @@ public class TextCatalogFileTests
         TextEntry yes = file.Entries[0], no = file.Entries[1], site = file.Entries[2];
         Assert.Equal(("SC0100", (int?)null, "sc0100.toml:4"), (yes.Script, yes.At, yes.Origin));
         Assert.Null(no.Script);
-        Assert.Equal((TextAlign.Center, TextFit.Shrink, TextMeasure.Source, 12, 5, "a choice"),
-            (no.Align, no.Fit, no.Measure!.Value, no.Cells!.Value, no.RowGap!.Value, no.Note));
+        Assert.Equal((TextAlign.Center, TextFit.Shrink, TextMeasure.Source, 5, "a choice"),
+            (no.Align, no.Fit, no.Measure!.Value, no.RowGap!.Value, no.Note));
         Assert.Equal(("SC0100", 0x2a43), (site.Script, site.At!.Value));
         Assert.True(site.IsPattern);
     }
@@ -148,7 +147,7 @@ public class TextCatalogFileTests
             TextEntry.Literal("はい", "Yep") with
             {
                 Script = "SC0100", At = 0x2a43, Align = TextAlign.End, Fit = TextFit.Shrink,
-                Measure = TextMeasure.Presented, Cells = 7, RowGap = 3, Note = "two breaks",
+                Measure = TextMeasure.Presented, RowGap = 3, Note = "two breaks",
             },
         ];
         var file = new TextCatalogFile("SC0100", Fingerprint, entries, [new EngineTextEntry("a.b", "c")]);
@@ -239,6 +238,6 @@ public class TextCatalogFileTests
     }
 
     private static object Shape(TextEntry entry)
-        => (entry.Source, entry.Text, entry.Script, entry.At, entry.Align, entry.Fit, entry.Measure, entry.Cells,
+        => (entry.Source, entry.Text, entry.Script, entry.At, entry.Align, entry.Fit, entry.Measure,
             entry.RowGap, entry.Note);
 }

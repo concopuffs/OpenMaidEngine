@@ -77,5 +77,18 @@ class ScratchBuildTests(unittest.TestCase):
             self.assertEqual(0, quietly(native_scratch.check))
 
 
+class ScratchNameTests(unittest.TestCase):
+    def test_a_named_copy_and_its_manifest_sit_beside_the_profiles_own(self) -> None:
+        with mock.patch.object(native_scratch, "NAME", "translated"):
+            self.assertEqual("native-scratch-translated", native_scratch.scratch_root().name)
+            self.assertEqual("native-scratch-translated-manifest.json", native_scratch.manifest_path().name)
+        with mock.patch.object(native_scratch, "NAME", None):
+            self.assertEqual("native-scratch", native_scratch.scratch_root().name)
+
+    def test_a_name_is_letters_digits_and_hyphens(self) -> None:
+        with self.assertRaises(SystemExit):
+            quietly(native_scratch.main, ["--name", "../x"])
+
+
 if __name__ == "__main__":
     unittest.main()

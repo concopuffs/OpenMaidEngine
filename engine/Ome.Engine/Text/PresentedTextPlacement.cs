@@ -40,6 +40,8 @@ public sealed record PresentedRunPlacement(PresentedTextPlan Plan, int WidthPerc
 /// </summary>
 public static class PresentedTextPlacement
 {
+    /// <summary>The spaces of presented text: ASCII space, tab and the ideographic space. They count for no extent,
+    /// and word wrap drops them at a break (<see cref="PresentedTextLayout"/>).</summary>
     public static bool IsSpace(int scalar) => scalar is ' ' or '\t' or 0x3000;
 
     /// <summary>The extent of the glyphs <paramref name="records"/> laid out for <paramref name="text"/>, one record
@@ -60,45 +62,39 @@ public static class PresentedTextPlacement
         return left <= right ? new TextExtent(left, right) : null;
     }
 
-    /// <summary>The extent of <paramref name="glyphs"/> drawn in one row from <paramref name="x"/>, each advancing the
-    /// pen by its cell (presented text draws without aspect mode); null when every glyph is a space or a control
-    /// character.</summary>
-    public static TextExtent? Extent(IEnumerable<GlyphRasterRequest> glyphs, IGlyphMaskRasterizer rasterizer, int x)
+    /// <summary>The extent of <paramref name="glyphs"/> laid out in one row from <paramref name="x"/>, each taking the
+    /// room <paramref name="room"/> gives it; null when every glyph is a space or a control character.</summary>
+    public static TextExtent? Extent(IEnumerable<GlyphRasterRequest> glyphs, GlyphRoom room, int x)
     {
         ArgumentNullException.ThrowIfNull(glyphs);
-        ArgumentNullException.ThrowIfNull(rasterizer);
+        ArgumentNullException.ThrowIfNull(room);
         int? left = null;
         int right = x, pen = x;
         foreach (GlyphRasterRequest glyph in glyphs)
         {
-            // A control character draws nothing (PresentedTextLayout drops it).
-            if (glyph.UnicodeScalar < 0x20) continue;
-            GlyphMask mask = rasterizer.Rasterize(glyph);
-            if (!IsSpace(glyph.UnicodeScalar))
+            (int advance, int width) = room.Of(glyph);
+            if (!IsSpace(glyph.UnicodeScalar) && glyph.UnicodeScalar >= 0x20)
             {
                 left ??= pen;
-                right = checked(pen + mask.CellWidth);
+                right = checked(pen + width);
             }
-            pen = checked(pen + mask.CellAdvanceX);
+            pen = checked(pen + advance);
         }
         return left is { } start ? new TextExtent(start, right) : null;
     }
 
-    /// <summary>The narrowing <c>fit = "shrink"</c> gives <paramref name="lines"/> against a source extent
-    /// <paramref name="width"/> pixels wide, in percent: 100 when the widest line fits, else the widest narrowing that
-    /// makes it fit, but no narrower than <paramref name="minScale"/>.</summary>
-    public static int FitPercent(IReadOnlyList<IReadOnlyList<GlyphRasterRequest>> lines, IGlyphMaskRasterizer rasterizer,
-                                 int width, double minScale)
+    /// <summary>The narrowing <c>fit = "shrink"</c> gives text against a source extent <paramref name="width"/> pixels
+    /// wide, in percent: 100 when its widest line fits, else the widest narrowing that makes it fit, but no narrower
+    /// than <paramref name="minScale"/>. <paramref name="widestAt"/> gives the widest line's width at a percent, as
+    /// the layout that draws the text measures it.</summary>
+    public static int FitPercent(Func<int, int> widestAt, int width, double minScale)
     {
-        ArgumentNullException.ThrowIfNull(lines);
-        int Widest(int percent) => lines
-            .Select(line => Extent(line.Select(glyph => glyph with { WidthPercent = percent }), rasterizer, 0)?.Width ?? 0)
-            .DefaultIfEmpty(0).Max();
-        int natural = Widest(100);
+        ArgumentNullException.ThrowIfNull(widestAt);
+        int natural = widestAt(100);
         if (natural <= width || width <= 0) return 100;
         int floor = FloorPercent(minScale);
         int percent = System.Math.Clamp((int)System.Math.Floor(100.0 * width / natural), floor, 100);
-        while (percent > floor && Widest(percent) > width) percent--;
+        while (percent > floor && widestAt(percent) > width) percent--;
         return percent;
     }
 
@@ -129,14 +125,14 @@ public static class PresentedTextPlacement
     /// the layout that draws it decides (the host lays it out without drawing). Null leaves a run that does not fit to
     /// be cut.</param>
     public static PresentedRunPlacement Place(
-        string text, bool[] opportunities, IReadOnlyList<GlyphRasterRequest> requests, IGlyphMaskRasterizer rasterizer,
+        string text, bool[] opportunities, IReadOnlyList<GlyphRasterRequest> requests, GlyphRoom room,
         int cursorX, int lineOriginX, int rightBound, TextAlign align, TextFit fit, TextExtent? source, int sourceRows,
         double minFitScale, Func<PresentedRunPlacement, bool>? fitsWindow = null)
     {
         ArgumentNullException.ThrowIfNull(requests);
         PresentedTextPlan PlanAt(int width) => PresentedTextLayout.Plan(
             text, opportunities, width == 100 ? requests : requests.Select(glyph => glyph with { WidthPercent = width }).ToArray(),
-            rasterizer, cursorX, lineOriginX, rightBound);
+            room, cursorX, lineOriginX, rightBound);
         PresentedRunPlacement PlaceAt(int width)
         {
             PresentedTextPlan plan = PlanAt(width);
@@ -150,7 +146,7 @@ public static class PresentedTextPlacement
             {
                 (int first, int end) = Row(plan, row);
                 int start = row == 0 ? cursorX : lineOriginX;
-                if (Extent(plan.Glyphs.Skip(first).Take(end - first), rasterizer, start) is { } extent)
+                if (Extent(plan.Glyphs.Skip(first).Take(end - first), room, start) is { } extent)
                     shifts[row] = Shift(align, target, extent, System.Math.Min(start, lineOriginX), rightBound);
             }
             return shifts.Any(shift => shift != 0) ? shifts : null;
@@ -166,7 +162,11 @@ public static class PresentedTextPlacement
                 foreach (GlyphRasterRequest glyph in requests)
                     if (glyph.UnicodeScalar == '\n') lines.Add(new List<GlyphRasterRequest>());
                     else ((List<GlyphRasterRequest>)lines[^1]).Add(glyph);
-                percent = FitPercent(lines, rasterizer, fitted.Width, minFitScale);
+                percent = FitPercent(
+                    at => lines.Select(line => Extent(
+                            line.Select(glyph => glyph with { WidthPercent = at }), room, 0)?.Width ?? 0)
+                        .DefaultIfEmpty(0).Max(),
+                    fitted.Width, minFitScale);
             }
             else
                 while (percent > floor && RowCount(PlanAt(percent)) > sourceRows) percent--;

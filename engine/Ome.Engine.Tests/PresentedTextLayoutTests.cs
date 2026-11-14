@@ -5,7 +5,8 @@ using Ome.Engine.Model;
 using Ome.Engine.Text;
 using Xunit;
 
-/// <summary>Where presented text's rows break (localization spec §7.1), with every glyph 10 pixels wide.</summary>
+/// <summary>Where presented text's rows break (localization spec §7.1), with every glyph 10 pixels wide unless a test
+/// lays it out in aspect mode.</summary>
 public class PresentedTextLayoutTests
 {
     private sealed class FixedRasterizer : IGlyphMaskRasterizer
@@ -18,11 +19,15 @@ public class PresentedTextLayoutTests
     private static readonly AdvTextStyle Style = AdvTextStyle.Default with { PrimaryFontSize = 12 };
 
     /// <summary>The rows the plan draws, joined by <c>|</c>.</summary>
-    private static string Rows(string text, int rightBound, int cursorX = 0, LineBreakMode mode = LineBreakMode.Words)
+    private static string Rows(string text, int rightBound, int cursorX = 0, LineBreakMode mode = LineBreakMode.Words,
+                               int aspectMode = 0)
     {
-        var requests = ImmediateSurfaceTextRenderer.CreateRequests(text, Style, GlyphRasterPolicy.PortableUnicode);
+        AdvTextStyle style = Style with { AspectMode = aspectMode };
+        var requests = ImmediateSurfaceTextRenderer.CreateRequests(text, style, GlyphRasterPolicy.PortableUnicode);
+        GlyphRoom room = new RetainedGlyphLayoutEngine(new FixedRasterizer())
+            .Room(style, GlyphRasterPolicy.PortableUnicode, antialias: true);
         PresentedTextPlan plan = PresentedTextLayout.Plan(text, PresentedLineBreaks.Opportunities(text, mode), requests,
-            new FixedRasterizer(), cursorX, lineOriginX: 0, rightBound);
+            room, cursorX, lineOriginX: 0, rightBound);
         var rows = new StringBuilder();
         for (int glyph = 0, next = 0; glyph <= plan.Glyphs.Count; glyph++)
         {
@@ -44,8 +49,23 @@ public class PresentedTextLayoutTests
         => Assert.Equal("Superc|alifra|gilist|ic|word", Rows("Supercalifragilistic word", rightBound: 60));
 
     [Fact]
-    public void ARunThatBeganMidRowMovesDownWhole()
-        => Assert.Equal("|hello|world", Rows("hello world", rightBound: 60, cursorX: 40));
+    public void ARunThatBeganMidRowMayBreakBeforeItsFirstWord()
+    {
+        Assert.Equal("|hello|world", Rows("hello world", rightBound: 60, cursorX: 40));
+        Assert.Equal("hi|world", Rows("hi world", rightBound: 60, cursorX: 40));
+    }
+
+    [Fact]
+    public void InAspectModeEachGlyphTakesItsClasssCell()
+    {
+        // The reference cell is 10 pixels: a Latin letter takes half of it, Ⅰ (two bytes in CP932) all of it.
+        Assert.Equal("Cover I|and|more", Rows("Cover I and more", rightBound: 35, aspectMode: 1));
+        Assert.Equal("Cover|Ⅰ and|more", Rows("Cover Ⅰ and more", rightBound: 35, aspectMode: 1));
+    }
+
+    [Fact]
+    public void ControlCharactersOtherThanNewlinesStay()
+        => Assert.Equal("a\tb", Rows("a\tb", rightBound: 600));
 
     [Fact]
     public void NewlinesBreakAndTheirSpacesAreDropped()

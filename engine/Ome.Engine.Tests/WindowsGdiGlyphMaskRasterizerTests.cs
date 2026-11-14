@@ -233,6 +233,34 @@ public class WindowsGdiGlyphMaskRasterizerTests
         Assert.Equal(21, rasterizer.Rasterize(NativeRequest("ＭＳ ゴシック", 22, -11, 700, 0x6fc0)).Width);
     }
 
+    [Theory]
+    [InlineData("ＭＳ ゴシック", 22, -11)]
+    [InlineData("ＭＳ ゴシック", 16, -8)]
+    [InlineData("ＭＳ ゴシック", 22, -14)]
+    [InlineData("ＭＳ 明朝", 22, -11)]
+    [InlineData("ＭＳ Ｐゴシック", 22, -11)]
+    public void GdiDrawsAFaceWithoutABoldStyleBoldAsSimulatedBoldDoes(string face, int height, int width)
+    {
+        // A portable rasterizer that draws these faces regular applies SimulatedBold; this holds it to GDI's own.
+        if (!WindowsGdiGlyphMaskRasterizer.TryGetAvailability(out _)) return;
+        using var rasterizer = new WindowsGdiGlyphMaskRasterizer();
+        foreach (char c in "AHTaegt.,!?「」、。亜激薄暗工房あいうアイウ")
+        {
+            GlyphMask expected = SimulatedBold.Apply(rasterizer.Rasterize(NativeRequest(face, height, width, 400, c)));
+            GlyphMask bold = rasterizer.Rasterize(NativeRequest(face, height, width, 700, c));
+
+            Assert.Equal((expected.Width, expected.Height, expected.OriginX, expected.OriginY, expected.CellAdvanceX,
+                          expected.CellWidth, expected.Ascent),
+                         (bold.Width, bold.Height, bold.OriginX, bold.OriginY, bold.CellAdvanceX, bold.CellWidth,
+                          bold.Ascent));
+            Assert.Equal(Rows(expected), Rows(bold));
+        }
+
+        static byte[][] Rows(GlyphMask mask)
+            => Enumerable.Range(0, mask.Height)
+                         .Select(y => mask.Coverage.Slice(y * mask.Stride, mask.Width).ToArray()).ToArray();
+    }
+
     [Fact]
     public void FontHandlesUseTheSharedBoundedLruAndDisposeCleanly()
     {

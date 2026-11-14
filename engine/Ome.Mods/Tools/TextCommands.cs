@@ -1,3 +1,4 @@
+using Ome.Engine.Text;
 using System.Text;
 using Ome.Engine.Localization;
 using Ome.Mods.Linking;
@@ -327,6 +328,7 @@ public static class TextCommands
                     }
         foreach (LanguageFont table in settings.Fonts ?? [])
         {
+            CheckPitch(tag, table, set, warning);
             var bundled = table.Use.Where(LanguageFont.IsBundled).ToList();
             if (bundled.Count == 0) continue;
             var coverage = new List<FontCoverage>();
@@ -358,6 +360,34 @@ public static class TextCommands
                     + (missing.Count > Examples * 4 ? $"; {missing.Count - Examples * 4} more" : "")
                     + "; they fall back to the fonts listed after them and the system's");
         }
+    }
+
+    /// <summary>A table's first font replaces the requested faces as a whole, and the game treats it as Windows
+    /// marks it (localization spec §7.4). One Windows does not mark fixed-pitch (a monospaced PANOSE proportion, or
+    /// <c>post.isFixedPitch</c> in a TrueType font) is proportional, whatever its name: where the game does not select
+    /// aspect mode it asks for half the height as the average width, and Windows narrows the font by that over its
+    /// own average (<see cref="GdiFontRules.HorizontalScale"/>).</summary>
+    private static void CheckPitch(string tag, LanguageFont table, TextSet set, Action<string> warning)
+    {
+        if (table.Use.FirstOrDefault() is not { } first || !LanguageFont.IsBundled(first)
+            || !set.Fonts.TryGetValue(first, out byte[]? data))
+            return;
+        OpenTypeFace face;
+        try
+        {
+            face = OpenTypeFace.ReadData(data, first)[0];
+        }
+        catch (InvalidDataException)
+        {
+            return;
+        }
+        if (GdiFontRules.IsFixedPitch(face)) return;
+        double scale = GdiFontRules.HorizontalScale(face, 1000, -500);
+        warning($"text {tag}: {Path.GetFileName(first)}, the font for {string.Join(", ", table.Requested)}, is "
+                + "proportional to the game: neither a monospaced PANOSE proportion nor, in a TrueType font, "
+                + "post.isFixedPitch marks it fixed. Where the game selects aspect mode it narrows and centres each "
+                + $"letter in its cell; elsewhere it draws the font at {scale * 100:0} % of its own width, and its "
+                + "letters do not keep to the half cells the scripts count (docs/modding/languages.md, \"Fonts\")");
     }
 
     /// <summary>Translated and untranslated strings per script and language, against the installed scripts:

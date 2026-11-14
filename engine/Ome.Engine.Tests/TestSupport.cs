@@ -420,6 +420,11 @@ internal static class TestText
     /// <summary>Unicode glyphs, every one <paramref name="width"/> pixels wide: what presented text draws with.</summary>
     public static GridGlyphs Unicode(int width) => new(GlyphRasterPolicy.PortableUnicode, _ => width);
 
+    /// <summary>Unicode glyphs <paramref name="fullWidth"/> pixels wide, <paramref name="halfWidth"/> for a character
+    /// one byte in CP932 (or ASCII).</summary>
+    public static GridGlyphs Unicode(int fullWidth, int halfWidth)
+        => new(GlyphRasterPolicy.PortableUnicode, request => HalfWidth(request) ? halfWidth : fullWidth);
+
     /// <summary>Source text drawn with <paramref name="source"/>, and presented text with <paramref name="presented"/>
     /// while a language is active.</summary>
     public static TextDevices Glyphs(GridGlyphs source, GridGlyphs? presented = null)

@@ -1,0 +1,61 @@
+# Localization gate 12 in a proportional face (docs/localization-import-test.md), run A: native AGE on the install
+# translated in place, with メイリオ chosen as the game font in its config screen (ADV設定, CONFIG2), so aspect mode
+# calibrates the face and centres glyphs in their cells. kamidori-translated-meiryo-port.steps chooses the same font
+# on the port and shoots the same pages under the same names. The font list is the machine's installed-font list in
+# GDI's order, the same on both targets: on the machine this was written on, three wheel notches from the top put
+# メイリオ on the list's eighth row; elsewhere, look at the list and change the row. Run it first, on the fresh
+# sandbox, then stop native (AGE writes SAVE.DAT, which keeps the font, when it quits) and seed run B from it:
+#   py -3.11 -X utf8 tools/native_scratch.py --profile kamidori --game-root ../Kamidori_Translated --name translated
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori native start
+#       --exe build/games/kamidori/native-scratch-translated/AGE.EXE
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori native run
+#       tools/drive/scenarios/geometry/kamidori-translated-meiryo-native.steps
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori native stop
+# then compare with run B: tools/text_geometry_compare.py A B geometry-meiryo-p26 geometry-meiryo-p37
+#   geometry-meiryo-p55 geometry-meiryo-p56 (docs/tools-reference.md).
+
+rand-seed 13
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+click newgame.begin
+wait-state script=SC0000 timeout=60
+wait-state top=SC0000@0xd6d click=adv.next every=1.5 timeout=200    # page 2
+settle
+rclick adv.next
+wait 3
+click menu.config
+wait-state script=CONFIG1 timeout=10
+wait 2
+click config.adv
+wait-state script=CONFIG2 timeout=10
+wait 2
+click 470 283                                                        # the game font's list
+wait-state script=SELFONT timeout=10
+wait 1
+move 470 400
+wheel up 20                                                          # the list opens at the chosen font: start from the top
+wheel down 3
+wait 1
+click 470 444                                                        # メイリオ
+wait-state script=CONFIG2 timeout=10
+wait 2
+shot geometry-meiryo-config
+rclick adv.next
+wait 3
+rclick adv.next
+wait-state top=SC0000@0xd6d timeout=15
+wait-state top=SC0000@0x1530 click=adv.next every=1.5 timeout=400   # page 26: Wil, one row
+settle
+shot geometry-meiryo-p26
+wait-state top=SC0000@0x18ea click=adv.next every=1.5 timeout=400   # page 37: Leguna, two rows
+settle
+shot geometry-meiryo-p37
+wait-state top=SC0000@0x28d8 click=adv.next every=1.5 timeout=400   # page 55: the longest name plate
+settle
+shot geometry-meiryo-p55
+wait-state top=SC0000@0x293e click=adv.next every=1.5 timeout=60    # page 56
+settle
+shot geometry-meiryo-p56

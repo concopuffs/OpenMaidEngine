@@ -44,6 +44,7 @@ public sealed class ImmediateSurfaceTextRenderer
     /// in the reference font rather than by the reference cell.</param>
     /// <param name="destination">Null measures only: presented text aligns against the source string's extent
     /// (localization spec §7.2).</param>
+    /// <param name="widthPercent">Narrows every glyph and the room it takes (localization spec §7.2, <c>fit</c>).</param>
     public ImmediateSurfaceTextResult Render(
         RgbaImage? destination,
         int x,
@@ -52,22 +53,24 @@ public sealed class ImmediateSurfaceTextRenderer
         AdvTextStyle style,
         bool antialias = true,
         AspectFontRealization? realization = null,
-        bool blankExtentMode = false)
+        bool blankExtentMode = false,
+        int widthPercent = 100)
     {
         ArgumentNullException.ThrowIfNull(text);
         IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(text, style, _policy, antialias, realization);
+        if (widthPercent < 100)
+            requests = requests.Select(request => request with { WidthPercent = widthPercent }).ToArray();
         if (style.AspectMode != 0)
             return RenderAspect(destination, x, y, requests, style, antialias, blankExtentMode);
         return RenderGlyphs(destination, x, y, requests, style);
     }
 
     /// <summary>Draws <paramref name="requests"/> from the pen at (<paramref name="x"/>, <paramref name="y"/>), each
-    /// advancing it by its cell, as a string outside aspect mode draws: presented text, whose requests an entry may
-    /// narrow (localization spec §7.2). A null <paramref name="destination"/> measures only.</summary>
-    public ImmediateSurfaceTextResult RenderGlyphs(
+    /// advancing it by its cell, as a string outside aspect mode draws. A null <paramref name="destination"/> measures
+    /// only.</summary>
+    private ImmediateSurfaceTextResult RenderGlyphs(
         RgbaImage? destination, int x, int y, IReadOnlyList<GlyphRasterRequest> requests, AdvTextStyle style)
     {
-        ArgumentNullException.ThrowIfNull(requests);
         int cursorX = x;
         int cursorY = y;
         int? inkLeft = null;
@@ -135,7 +138,8 @@ public sealed class ImmediateSurfaceTextRenderer
         int inkRight = x;
         foreach (GlyphRasterRequest request in requests)
         {
-            bool singleByte = request.Cp932Code <= 0xff;
+            // One half cell (CharacterCells): a single-byte character, or one CP932 lacks that is not Wide.
+            bool singleByte = CharacterCells.HalfCells(request) == 1;
             if (IsBlank(request.Cp932Code))
             {
                 int advance = effect
@@ -145,7 +149,7 @@ public sealed class ImmediateSurfaceTextRenderer
                     advance = _rasterizer.Rasterize(
                         CreateRequests(char.ConvertFromUtf32(request.UnicodeScalar), referenceStyle, _policy, antialias)[0])
                         .CellWidth;
-                cursorX = checked(cursorX + advance);
+                cursorX = checked(cursorX + GlyphMaskNarrowing.Scale(advance, request.WidthPercent));
                 continue;
             }
             GlyphMask mask = _rasterizer.Rasterize(request);
@@ -153,7 +157,9 @@ public sealed class ImmediateSurfaceTextRenderer
                 AgeGlyphMaskCompositor.DrawGlyph(destination, mask, cursorX, y, baseline, style, _coverageAlpha);
             inkLeft ??= cursorX;
             inkRight = checked(cursorX + mask.CellWidth);
-            cursorX = checked(cursorX + (effect ? EffectAdvance(reference, singleByte) : mask.CellAdvanceX));
+            cursorX = checked(cursorX + (effect
+                ? GlyphMaskNarrowing.Scale(EffectAdvance(reference, singleByte), request.WidthPercent)
+                : mask.CellAdvanceX));
         }
         return new ImmediateSurfaceTextResult(requests.Count, cursorX, y)
         {

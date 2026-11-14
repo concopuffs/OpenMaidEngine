@@ -64,12 +64,21 @@ One command turns the translated install into a package that shows the untransla
 Ome.Cli omp text import-scripts --profile kamidori --game-root ../Kamidori --from ../Kamidori_Translated --overlay-root patch --allow-bmp-as-agf --output build/games/kamidori/import-en --package --verify
 ```
 
-- The package holds 48,588 entries in 217 catalog files and 232 images: 207 from `patch/`, and the 25 `$n$`
+- The package holds 48,586 entries in 217 catalog files and 232 images: 207 from `patch/`, and the 25 `$n$`
   append images from the translated root. All of them are BMPs under AGF names, written as PNG.
 - The manifest's `glyph_delay_scale` comes out at 0.48.
 - Play it with `.\run-godot.cmd -Kamidori -Mod build\games\kamidori\import-en`, and choose English in the options
   panel's OME section (or pass `--language en` to the port).
 - Keep it under `build/`. It is the translators' work, for playing on your own machine only.
+- Kamidori's text font is the player's choice in its config screen (`CONFIG2`: メイリオ, ＭＳ ゴシック or
+  ＭＳ 明朝), kept in `SAVE.DAT`. The clean install starts with メイリオ, a proportional face (ＭＳ 明朝 where it is
+  missing). The translated install's `INITCONFIG` and `CHECKCONFIG` settle on ＭＳ ゴシック instead. Those are face
+  names, not text, so the importer reports them and carries none: to play in the translated install's face, choose
+  ＭＳ ゴシック in the config screen.
+- `SYSTEM4` selects aspect mode at boot, so the port lays English out on the cells native AGE gives the same
+  characters ([languages.md](../languages.md), "Fonts"). On the pages localization gate 12 compares, every name plate
+  and every run of text starts within a pixel of native AGE on the translated install
+  (`../../localization-import-test.md`). Stat boxes and item tables are not compared yet (`../../backlog.md`).
 
 ## First mod values
 

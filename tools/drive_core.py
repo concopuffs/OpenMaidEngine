@@ -22,7 +22,7 @@ import socket
 import sys
 import time
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -284,6 +284,15 @@ class DialogPolicy:
 
 
 @dataclass(frozen=True)
+class NativeBuild:
+    """[native.build."NAME"]: one AGE.EXE build, known by the SHA-256 of the file, and the [native.*] keys whose
+    values differ for it (hook addresses move between builds)."""
+    name: str
+    sha256: str
+    overrides: dict[str, dict[str, int]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class Profile:
     """tools/drive/<profile>.toml. [points], [advance] and [sandbox.*] serve both targets; [native.*] only the
     native daemon."""
@@ -296,12 +305,34 @@ class Profile:
     engine: dict[str, int] | None = None        # ctx_global, frame_stride, frame_count [, frame field offsets]
     keep_polling: dict[str, int] | None = None  # setter, activate_return [, gate]
     rand: dict[str, int] | None = None          # op60_rand_return
+    builds: tuple[NativeBuild, ...] = ()        # the AGE.EXE builds the [native.*] values are given for
+
+    def for_build(self, sha256: str) -> tuple["Profile", str | None]:
+        """The profile for the AGE.EXE whose file hashes to `sha256`, with its build's values, and the build's name.
+        A profile that names no builds serves any AGE.EXE as written (None); one that names builds refuses an
+        AGE.EXE that is none of them, whose hook addresses it does not know."""
+        if not self.builds:
+            return self, None
+        build = next((b for b in self.builds if b.sha256 == sha256.lower()), None)
+        if build is None:
+            raise DriveError(f"AGE.EXE (SHA-256 {sha256.lower()}) is none of the profile's builds "
+                             f"({', '.join(b.name for b in self.builds)}): its hook addresses are unknown")
+        tables = {name: getattr(self, name) for name in NATIVE_HOOK_TABLES}
+        for name, values in build.overrides.items():
+            tables[name] = {**(tables[name] or {}), **values}
+        return replace(self, **tables), build.name
 
 
 # Engine field offsets a profile may give in [native.engine] / [native.keep_polling]. vm-map/engine-ctx.toml holds
 # Himegari's EngineCtx (the /v2 image); another engine revision lays the context out differently and names its own.
 ENGINE_FIELD_KEYS = ("cur_ctx_index", "frame_codebase", "frame_pc", "frame_script_resource_id")
 POLLING_GATE_KEY = "gate"
+# The [native.*] tables a build may give its own values for, with the keys each takes.
+NATIVE_HOOK_TABLES = {
+    "engine": ("ctx_global", "frame_stride", "frame_count") + ENGINE_FIELD_KEYS,
+    "keep_polling": ("setter", "activate_return", POLLING_GATE_KEY),
+    "rand": ("op60_rand_return",),
+}
 
 
 def parse_profile(text: str) -> Profile:
@@ -334,8 +365,44 @@ def parse_profile(text: str) -> Profile:
     rand = _native_table(native, "rand", ("op60_rand_return",))
     if rand is not None and engine is None:
         raise DriveError("[native.rand] needs [native.engine] (it names the call site from the running frame)")
+    unknown = set(native) - {"dialog", "build"} - set(NATIVE_HOOK_TABLES)
+    if unknown:
+        raise DriveError(f"unknown [native] table(s): {', '.join(sorted(unknown))}")
+    builds = tuple(_native_build(name, entry, native) for name, entry in native.get("build", {}).items())
+    hashes = [build.sha256 for build in builds]
+    if len(set(hashes)) != len(hashes):
+        raise DriveError("two [native.build] tables give the same sha256")
     return Profile(points, advance, sandbox.get("settings_file", ""), settings, quiet, tuple(dialogs), engine,
-                   keep_polling, rand)
+                   keep_polling, rand, builds)
+
+
+def _native_build(name: str, entry: dict[str, Any], native: dict[str, Any]) -> NativeBuild:
+    sha256 = str(entry.get("sha256", "")).lower()
+    if len(sha256) != 64 or any(c not in "0123456789abcdef" for c in sha256):
+        raise DriveError(f"[native.build.{name!r}] needs sha256, the AGE.EXE file's SHA-256 in hex")
+    overrides = {}
+    for table, values in entry.items():
+        if table == "sha256":
+            continue
+        if table not in NATIVE_HOOK_TABLES or not isinstance(values, dict):
+            raise DriveError(f"[native.build.{name!r}] cannot set {table!r}; it sets keys of "
+                             f"{', '.join(NATIVE_HOOK_TABLES)}")
+        if table not in native:
+            raise DriveError(f"[native.build.{name!r}] sets {table} keys, but the profile has no [native.{table}]")
+        unknown = set(values) - set(NATIVE_HOOK_TABLES[table])
+        if unknown:
+            raise DriveError(f"[native.build.{name!r}].{table} has unknown key(s): {', '.join(sorted(unknown))}")
+        overrides[table] = {key: int(value) for key, value in values.items()}
+    return NativeBuild(name, sha256, overrides)
+
+
+def file_sha256(path: Path) -> str:
+    import hashlib
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _native_table(native: dict[str, Any], name: str, keys: tuple[str, ...],
@@ -1130,6 +1197,9 @@ class Windows:
         kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
         kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
         kernel32.GetProcessTimes.restype = wintypes.BOOL
+        kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                                                        ctypes.POINTER(wintypes.DWORD)]
+        kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
 
     # windows ---------------------------------------------------------------------------------------
     def _pid(self, hwnd: int) -> int:
@@ -1163,6 +1233,20 @@ class Windows:
         rect = self.wintypes.RECT()
         self.user32.GetClientRect(hwnd, self.ctypes.byref(rect))
         return rect.right, rect.bottom
+
+    def process_image(self, pid: int) -> Path:
+        """The executable file a running process was started from."""
+        handle = self.kernel32.OpenProcess(0x1000, False, pid)     # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            raise DriveError(f"cannot open process {pid} (error {self.ctypes.get_last_error()})")
+        try:
+            size = self.wintypes.DWORD(32768)
+            buffer = self.ctypes.create_unicode_buffer(size.value)
+            if not self.kernel32.QueryFullProcessImageNameW(handle, 0, buffer, self.ctypes.byref(size)):
+                raise DriveError(f"cannot read process {pid}'s image (error {self.ctypes.get_last_error()})")
+            return Path(buffer.value)
+        finally:
+            self.kernel32.CloseHandle(handle)
 
     def main_window(self, pid: int) -> int | None:
         candidates = [hwnd for hwnd in self.top_windows(pid) if self._class(hwnd) != "#32770"]

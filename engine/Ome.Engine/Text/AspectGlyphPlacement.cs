@@ -47,13 +47,16 @@ public static class AspectGlyphPlacement
     /// multiplies the size and the reference width by a display scale (+0x40c->+0x4e0, 1.0 unless +0x488 is clear),
     /// which the port does not have.
     /// </summary>
-    public static int OffsetX(GlyphMask glyph, int referenceBlackBoxWidth, int fontSize, ushort? code, int aspectMode)
+    /// <param name="fullWidth">Whether the glyph takes a full cell (<see cref="CharacterCells"/>): a double-byte one,
+    /// or a character CP932 lacks that is Wide.</param>
+    public static int OffsetX(GlyphMask glyph, int referenceBlackBoxWidth, int fontSize, ushort? code, int aspectMode,
+                              bool fullWidth)
     {
         ArgumentNullException.ThrowIfNull(glyph);
         int classification = aspectMode == 1 && code is { } value ? Classify(value) : -1;
         if (classification == 0) return 0;
         if (classification == 1) return referenceBlackBoxWidth - glyph.OriginX - glyph.Width;
-        float centre = fontSize / (code is null or <= 0xff ? 4.0f : 2.0f);
+        float centre = fontSize / (fullWidth ? 2.0f : 4.0f);
         return (int)(centre + 0.5) - (int)(glyph.Width * 0.5 + 0.5) - glyph.OriginX;
     }
 }

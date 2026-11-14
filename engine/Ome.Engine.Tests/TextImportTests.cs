@@ -346,6 +346,43 @@ public class TextImportTests
     }
 
     [Fact]
+    public void AFaceNameAFontOpcodeReadsIsNotText()
+    {
+        // Kamidori's translation changed INITCONFIG's default face and CHECKCONFIG's fallback: the face is the game's
+        // setting, so neither becomes an entry, and the drawn name (CONFIG2 draws the cell) stays the face in use.
+        const int SetFont = 0x1a5, FindFontFamilyIndex = 0x2de;
+        Asm Init(string face, string sword)
+        {
+            var asm = new Asm();
+            asm.Op(SetString, GlobalString(0x279), asm.S(face));
+            asm.Op(SetString, GlobalString(4), asm.S(sword));
+            asm.Op(Exit);
+            return asm;
+        }
+        Asm Check(string fallback, string local)
+        {
+            var asm = new Asm();
+            asm.Op(FindFontFamilyIndex, new Operand(1, 0), GlobalString(0x279));
+            asm.Op(SetString, GlobalString(0x279), asm.S(fallback));
+            asm.Op(SetString, LocalString(0), asm.S(local));
+            asm.Op(SetFont, LocalString(0));
+            asm.Op(Exit);
+            return asm;
+        }
+
+        var (import, report) = Import(("INITCONFIG", Init("メイリオ", "剣"), Init("ＭＳゴシック", "Sword")),
+                                      ("CHECKCONFIG", Check("ＭＳ 明朝", "ＭＳ 明朝"), Check("ＭＳ ゴシック", "Arial")));
+
+        Assert.Equal(["ＭＳゴシック", "ＭＳ ゴシック", "Arial"],
+                     report.Literals.FontFaces.Samples.Select(face => face.Translated).ToArray());
+        TextCatalog catalog = Catalog(import);
+        Assert.Equal("メイリオ", Present(catalog, "メイリオ", "INITCONFIG", 0));
+        Assert.Equal("ＭＳ 明朝", Present(catalog, "ＭＳ 明朝", "CHECKCONFIG", 5));
+        Assert.Equal("Sword", Present(catalog, "剣", "INITCONFIG", 5));
+        Assert.Equal(0, ImportVerifier.Verify(catalog, import.Occurrences).Mismatches.Count);
+    }
+
+    [Fact]
     public void LiteralsThatAreNotTranslationsKeepTheirSource()
     {
         Asm Build(string damaged, string emptyAsSpace, string emptyFilled, string compared, string stored)

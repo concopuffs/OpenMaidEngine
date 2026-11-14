@@ -36,7 +36,7 @@ public static class PresentedLineBreaks
     }
 
     /// <summary>Spaces a break drops: ASCII space, tab and the ideographic space.</summary>
-    public static bool IsSpace(char c) => c is ' ' or '\t' or '\u3000';
+    public static bool IsSpace(char c) => Text.PresentedTextPlacement.IsSpace(c);
 
     private static bool IsHyphen(char c) => c is '-' or '\u2010' or '\u2013';
 

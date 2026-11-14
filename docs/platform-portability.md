@@ -190,6 +190,29 @@ final archive. Variable fonts remain a size-optimization alternative only after 
 validated. Game-corpus-only subsetting is not the default because it would constrain first-class modding and name
 entry. The system-font-only policy remains supported until the bundled-font option is deliberately selected.
 
+Since 2026-11-14 the text server rasterizer draws the face the game requests when the machine has it, and the
+substitutes for ＭＳ ゴシック and ＭＳ 明朝 put fixed-width faces first and proportional ones last
+(`godot/config/japanese-text-rendering.json`). The MS faces are fixed-width, and outside aspect mode the scripts
+size text by character count, so translated Latin text fits only in a face whose Latin letters are half-width
+(`docs/modding/languages.md`, "Fonts"). A bundled set should therefore be fixed-width too, for example Noto Sans
+Mono CJK JP for Gothic requests, rather than the proportional Noto Sans and Serif JP named above. A stand-in draws in
+the room of the face it stands in for (half the height per half cell), not by its own file's metrics: Windows'
+rules would squeeze Noto Sans Mono CJK JP to half its width, since its file marks it neither monospaced nor
+fixed-pitch and its average width is its Japanese glyphs'.
+
+The rasterizer also draws what GDI draws (localization spec §7.4): it reads the requested face's font file and
+applies the rules GDI derives from it (`GdiFontRules`; `docs/engine-re.md`, "What GDI derives from a font file"):
+the request's width (`lfWidth`), which aspect mode's calibration and `fit` set, scales by the face's own average;
+the metrics probe reports GDI's average width, height, ascent and embedded-bitmap box; a face with no bold style
+gets GDI's simulated bold. Off Windows the installed-font list comes from the same files
+(`InstalledFontIndex`, `OpenTypeFontFamilySource`): the platform's font directories (on Linux the XDG data
+directories' `fonts` and `~/.fonts`; on macOS the three Library/Fonts) and Godot's system fonts, read on a worker
+thread from startup (about 40 ms for 361 families on the Windows machine, 80 to 340 ms for WSL Ubuntu's 14). Each
+family carries the names, order and `lfPitchAndFamily` GDI enumerates. Checked on WSL Ubuntu 20.04 (2026-11-14) with
+a self-contained linux-x64 build of the scanner: its Noto Sans and Serif CJK files list 14 families whose names,
+order, pitch byte and checker answers equal GDI's for the same files (loaded privately on Windows), and the Windows
+font folders read from Linux list the same 42 Shift-JIS families as GDI, with the same catalogs.
+
 ## Dependency inventory
 
 | Area | Current dependency | Runtime impact | Portability status / future action |

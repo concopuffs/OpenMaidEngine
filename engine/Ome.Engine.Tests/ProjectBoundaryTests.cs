@@ -88,7 +88,7 @@ public class ProjectBoundaryTests
         [typeof(IMovieAssets)] = "movies",
         // The trace consumers (the CLI, the front end's logs, the tests).
         [typeof(Ome.Engine.Diagnostics.ITraceSink)] = "trace",
-        // A glyph rasterizer's metrics, which the GDI rasterizer gives.
+        // A glyph rasterizer's metrics, which the GDI and Godot rasterizers give.
         [typeof(IFontMetricsProbe)] = "glyphs",
     };
 

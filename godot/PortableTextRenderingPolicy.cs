@@ -38,10 +38,13 @@ public sealed class PortableTextRenderingPolicy
             family => family.Requested.Any(
                 alias => alias.Equals(requested, StringComparison.OrdinalIgnoreCase)));
         IEnumerable<string> candidates = mapped?.Substitutes ?? DefaultSubstitutes;
-        // The authored face remains the last candidate. This preserves a useful match on systems
-        // that happen to provide it without making that Windows font a portable dependency.
+        // The face the script or language asks for comes first, as GDI's CreateFontIndirect finds it when it is
+        // installed; the substitutes follow (a mapping names the face's other-language name too, since the font list
+        // may give either). The MS faces are fixed-width, so their substitutes are fixed-width faces first and
+        // proportional ones last: a fixed-width face keeps text in the room the scripts count for it. No face is a
+        // portable dependency.
         return candidates
-            .Append(requested)
+            .Prepend(requested)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();

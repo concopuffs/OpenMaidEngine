@@ -34,7 +34,6 @@ public static class TextCatalogFileWriter
             if (entry.Fit == TextFit.Shrink) text.Append("fit = \"shrink\"\n");
             if (entry.Measure is { } measure)
                 text.Append("measure = ").Append(Quote(measure == TextMeasure.Source ? "source" : "presented")).Append('\n');
-            if (entry.Cells is { } cells) text.Append("cells = ").Append(cells.ToString(CultureInfo.InvariantCulture)).Append('\n');
             if (entry.RowGap is { } gap) text.Append("row_gap = ").Append(gap.ToString(CultureInfo.InvariantCulture)).Append('\n');
             if (entry.Note != null) text.Append("note = ").Append(Quote(entry.Note)).Append('\n');
         }

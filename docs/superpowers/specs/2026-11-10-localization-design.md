@@ -3,8 +3,10 @@
 **Date:** 2026-11-10
 **Status:** accepted 2026-11-10, after one design review. Revised the same day after the review of milestone 0's
 numbers (`docs/localization-import-test.md`): line structure in entries (§7.1, §18.1), the record of stores and
-the lookup order it allows (§5.2, §6.1, §6.4, §15), and `at` in version 1 (§20). Milestone 0 is implemented;
-nothing in the engine is. §20 records the settled questions.
+the lookup order it allows (§5.2, §6.1, §6.4, §15), and `at` in version 1 (§20). §20 records the settled
+questions. Built and merged into develop on 2026-11-12. Revised 2026-11-14 after a layout review: presented text
+is laid out as the same characters in the source would be, by one model (§5.3, §7.1, §7.4), and gate 12 compares it
+with native AGE (§18).
 **Home in the canonical map:** this file is the design. The package format it extends stays in
 `docs/superpowers/specs/2026-11-03-mod-loader-design.md`. The shell's string tables stay in
 `docs/superpowers/specs/2026-11-09-engine-shell-design.md` (§6). Native text and history findings stay in
@@ -190,24 +192,23 @@ accumulator and the developer jump picker (developer-facing).
 
 - **Rule.** If the operand resolves to an entry, the opcode returns the size of the presented text. If it does
   not, the result is the native one. A player's typed name therefore measures as it always did.
-- **Unit: half cells, counted by character class.** A character whose Unicode East Asian Width is Wide or
-  Fullwidth counts 2. Every other character counts 1, including the Ambiguous class (Cyrillic, Greek), which a
-  presented font draws narrow.
+- **Unit: half cells, counted by character class.** A character CP932 encodes counts its CP932 bytes: 1 or 2. Any
+  other character (é, ß, Hangul, a simplified-only hanzi) counts 2 if its Unicode East Asian Width is Wide or
+  Fullwidth, else 1. For any text native AGE could show, the count is therefore native's: Ⅰ, ―, ♪ and … are two
+  bytes in CP932 and count 2, though Unicode marks them Ambiguous. The second rule is the one extension beyond native
+  (`CharacterCells`).
   - `strlen` returns the half cells.
-  - `halve-strlen` returns half of that, rounded up. Native truncates; rounding up keeps an odd-length Latin name
-    inside its plate.
+  - `halve-strlen` returns half of that, truncated, as native does.
   - `cp932-character-length` returns the number of characters in the presented text.
 - **No fonts are involved.** Measuring the advance width in the current font was considered and rejected. It
   would put a font-dependent value into VM state: the headless host and the Godot host, or two machines with
   different fallback fonts, would return different lengths and runs could diverge. Counting by class gives the
-  same value everywhere. For ASCII, kana and kanji it is also what native `strlen` returns for the CP932 bytes,
-  so English text measures as the fan translation's did on native AGE.
-- **Override per entry.** A proportional font can make a plate a few pixels wide or narrow: `Illumina` and `WWWW`
-  differ more in width than in count. An entry may set `cells = N` (half cells) to state its length outright. It
-  is data, so it is as deterministic as the count.
+  same value everywhere.
 - **Pixel-accurate fitting stays in the host,** through `fit` and `align` (§7.2).
-- **Why.** Scripts use these results to size plates, centre labels and place one string after another. The fan
-  translation ran the same scripts with English in every length call, which shows the scripts tolerate it.
+- **Why.** Scripts use these results to size plates, centre labels and place one string after another. The
+  layout uses the same classes (§7.4): a presented character takes the room the same character would take in the
+  source, so the room a script counts is the room the text takes. The fan translation ran the same scripts with
+  English in every length call, and native AGE drew it on the same cells; gate 12 compares the two.
 - **Cost.** A scratch integer in a save can differ between languages: Kamidori's `G[0x4f8]` and frame locals,
   and frame locals only in Himegari (§2).
 - **Opt out.** A language can set `measure = "source"` (§9.2) and an entry can override it. Gate 2 uses this to
@@ -364,6 +365,8 @@ For presented text:
   characters in CJK text, never before closing punctuation or after opening punctuation;
 - the layout engine breaks at the last allowed place before the bound and drops the space there;
 - a word longer than a line breaks at the bound, as source text does;
+- a run that starts in the middle of a row (after a name, or after an earlier run) starts at a word boundary, so
+  it may move to the next row whole;
 - `\n` in the presented text forces a break.
 
 A language declares `line_break = "words"` or `"anywhere"` (§9.2).
@@ -387,7 +390,8 @@ Measurement (§5.3) handles layout the script computes. Two entry attributes han
   would have been. The default is `"start"`.
 - `fit = "shrink"`: if the presented text is wider than the source text was, narrow the glyphs down to a floor
   the language sets. This is for labels in fixed boxes. Glyph requests already carry a requested width, so
-  narrowing needs no new raster path.
+  narrowing needs no new raster path. `fit`, `overflow` (§7.3) and a rasterizer honouring `lfWidth` (§7.4) narrow
+  with one function (`GlyphMaskNarrowing`).
 
 Both use the source text's extent, which the host computes for history anyway (§8).
 
@@ -415,8 +419,39 @@ Presented text can need more rows than the text window has.
   would otherwise be drawn by GDI beside translated strings drawn by the text server, with different faces and
   antialiasing. While a language other than the source is selected, every run uses the text server rasterizer.
   With no language active nothing changes (gate 1).
-- **Proportional fonts work.** The layout engine already advances by each glyph's own width outside Kamidori's
-  aspect mode. In aspect mode, presented runs use the glyph's own advance instead of the fixed MS Gothic cell.
+- **One layout.** Presented text is laid out as the same characters in the source would be. Each glyph request
+  carries its character's CP932 code when it has one, so every rule of the source layout applies to it unchanged:
+  in Kamidori's aspect mode the cells, the calibrated width, the bracket classes and the raise
+  (`AspectFontRealization`, `AspectGlyphPlacement`). A character CP932 lacks takes the cell its class gives (§5.3)
+  and no bracket class. The presented additions are explicit and data-driven: word wrap (§7.1), `\n` rows in a
+  `draw-string`, `align`, `fit` and `overflow`. Each rasterizer is calibrated with its own metrics
+  (`IFontMetricsProbe`).
+  - The first design drew presented runs in aspect mode at their glyphs' own advances. English then ran past the
+    name plates the scripts size from §5.3's count, and each mismatch got a special case (rounding `halve-strlen`
+    up, a per-entry `cells` override, fixed cells for presented glyphs). The review of 2026-11-14 replaced them with
+    this rule.
+- **The requested face first.** The rasterizer draws the face the game asks for (the player's choice in the
+  game's config, or the script's) when the machine has it, from its font file. The substitution list serves
+  machines without it; the MS faces' substitutes are fixed-width faces first and proportional ones last. A
+  substitute stands in for the missing face: it draws in that face's room, at `height / 2` per half cell, and not by
+  its own file's metrics (native never meets this case, since its faces are installed). A language's fonts go in
+  front of both and replace the face as a whole, as the player's choice in the config does natively: aspect mode
+  reads the pitch of the font that draws, not the requested name's entry in the installed-font list. The reference
+  glyph aspect mode measures (ＭＳ ゴシック's 激) is not replaced, since native measures it by name. Fixed-width fonts
+  are recommended. A proportional face is calibrated and centred where the game selects aspect mode, as native AGE
+  treats it; elsewhere it is drawn at the game's width, `-height / 2`, which GDI's rule below squeezes towards half
+  its own width.
+- **The text server rasterizer draws what GDI draws.** It reads the face's font file (`OpenTypeFace`) and applies
+  the rules GDI derives from it (`GdiFontRules`, `GdiGlyphRealization`; `docs/engine-re.md`, "What GDI derives from
+  a font file"). A request's width scales the glyph horizontally by `|width|` over the face's unrounded average
+  width (`xAvgCharWidth` at the height), with `GlyphMaskNarrowing`; a monospaced face (PANOSE proportion 9) advances
+  by whole average widths. The probe reports GDI's `tmAveCharWidth`, `tmHeight` and `tmAscent`, and the embedded
+  bitmap's black box where GDI measures one (ＭＳ ゴシック up to 22 pixels). A bold request that a face with no bold
+  style answers (ＭＳ ゴシック, ＭＳ 明朝) is drawn with `SimulatedBold`, which equals GDI's simulated bold glyph for
+  glyph from 12 to 50 pixels. Its masks are the inked box, as GDI's are, so aspect placement measures the same box.
+  The portable installed-font list (`OpenTypeFontFamilySource`) gives the names, order and `lfPitchAndFamily` GDI
+  enumerates. Two differences remain, both accepted: GDI's hinting makes about one scaled advance in a hundred a
+  pixel wider, and a variable font's named instance is measured by its default instance's tables.
 - **Glyph coverage is checked at build** for bundled fonts (§13).
 
 ### 7.5 Reveal speed
@@ -561,7 +596,6 @@ note   = "item name"                 # for translators; the engine ignores it
 | `align`, `fit` | layout (§7.2) |
 | `row_gap` | pixels between rows of a `draw-string` that holds `\n`, beyond the font's height; default 2 (§7.1) |
 | `measure` | override the language's measurement mode for this string |
-| `cells` | this string's length in half cells, in place of the count (§5.3) |
 | `note` | translator comment |
 
 Unknown keys are errors, as in the manifest.
@@ -746,14 +780,15 @@ Catalogs are data from untrusted packages (mod loader spec §11):
 | 3. Catalog | merge, override order, scope precedence and the language fallback chain behave as §6.4 says; malformed files stop the load with file and line |
 | 4. Messages | a sentence split by furigana presents as one wrapped sentence; a branch target inside a run splits it; a miss falls back per run |
 | 5. Patterns | the level-up line presents with its number moved; a captured item name is itself translated; a full-width number comes out in ASCII under `digits = "ascii"`; an ambiguous pair fails `omp text check` |
-| 6. Measurement | the speaker's name plate is sized to the presented name on Kamidori; an entry's `cells` value overrides the count |
+| 6. Measurement | the speaker's name plate is sized to the presented name on Kamidori, from `halve-strlen` truncated as native truncates |
 | 7. History | the backlog shows presented text before and after a save and load, and changes with the language; the click-wait indicator sits after the last presented glyph |
 | 8. Assets | a language asset overrides its package's plain one only while its language is selected; the fallback chain applies; a later package's plain asset wins over an earlier package's language asset, and the link report lists it |
 | 9. Pseudo-language | the committed drive scenarios run under `x-pseudo` with the same VM positions as the source run |
 | 10. Import, local only | `import-scripts` converts the translated Kamidori install; `--verify` reproduces its text for every message, literal and composed string; every item the catalog could not carry is on a reviewed list (§18.1) |
 | 11. Run comparison, local only | the port driven over the same scenarios on the translated install and on the clean install with the imported catalog shows the same text on every page (§18.1) |
+| 12. Native geometry, local only | native AGE on the translated install and the port on the clean install with the imported catalog, in the same face, end every name plate and start every run of text on the gate's pages within 1 pixel of each other (§18.1) |
 
-Gates 1–9 use synthetic catalogs written for the tests and run in CI. Gates 10 and 11 need an install the
+Gates 1–9 use synthetic catalogs written for the tests and run in CI. Gates 10–12 need an install the
 project cannot ship, so they run locally, as the native comparisons do.
 
 ### 18.1 The import test
@@ -822,6 +857,16 @@ Two more results come from the same runs:
 (`docs/engine-re.md`). Both runs here are the port, so native behaviour is not compared. Text the scenarios do
 not reach is covered by half 1 only.
 
+**Half 3: geometry (gate 12).** Native AGE runs the translated install: its own engine, 4.33F, whose hook addresses
+the driver picks by the executable's hash. The port runs the clean install with the imported catalog, starting from
+native's saves once native has quit (AGE writes them then), because the face is the game's setting: the translated
+install's config scripts settle on ＭＳ ゴシック where the clean ones choose メイリオ, and the importer carries no
+face (a face name is not text). Both shoot the same pages, and `text_geometry_compare.py` compares where each name
+plate ends and each run of text columns starts. GDI and the text server antialias the same outlines differently, so
+a column may differ by one pixel; pixels are not compared. A second pair chooses メイリオ in both games' config
+screens, so aspect mode calibrates a proportional face from each rasterizer's metrics, and is held to the same
+measure. The tool, the scenario pairs and the results are in `docs/localization-import-test.md`.
+
 **Other translations.** The test is not specific to Kamidori. Any install whose scripts were translated in place
 can go through both halves, and each one that does is another check on the design.
 
@@ -849,9 +894,9 @@ milestone 0's numbers (`docs/localization-import-test.md`, R1 to R3):
 | Question | Decision | Alternative that was set aside |
 |---|---|---|
 | What the length opcodes return | the presented text's length by default, counted by character class (§5.3) | source lengths by default with a per-string opt-in: saves stay strictly identical, but plates and centred labels are wrong until a translator marks them |
-| `halve-strlen` on an odd length | rounds up for presented text (§5.3) | truncating, as native does: an odd-length Latin name overhangs its plate |
+| `halve-strlen` on an odd length | truncates, as native does (§5.3); reversed on 2026-11-14 from rounding up, once presented text took native's cells (§7.4) | rounding up for presented text: it kept an odd-length name inside a plate when presented glyphs drew at their own widths, and made the plate 23 pixels wider than native's |
 | What history rows a save holds | source rows (§8) | presented rows: no second layout pass, but a save's backlog is tied to one language and to CP932 |
-| Shipped catalog format | TOML, with PO conversion (§9.3, §13) | PO in the package: it has no natural place for `align`, `fit`, `at`, `measure` or `cells` |
+| Shipped catalog format | TOML, with PO conversion (§9.3, §13) | PO in the package: it has no natural place for `align`, `fit`, `at` or `measure` |
 | Packages that target no profile | allowed, for engine language packs (§11.1) | one copy of a shell language per game |
 | Switching language while playing | fully switched after returning to the title, with a note in the options panel (§10) | requiring a restart |
 | Asset precedence between packages | load order decides; a language asset ranks only above its own package's plain asset (§12) | every language asset above every plain asset, with the conflict reported |

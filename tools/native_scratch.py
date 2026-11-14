@@ -11,6 +11,8 @@ is written beside the scratch copy; ``--check`` compares the install against it 
     py -3.11 -X utf8 tools/native_scratch.py --profile himegari --overlay build/.../SC0000.BIN --overlay ...
     py -3.11 -X utf8 tools/native_scratch.py --profile himegari --check
     py -3.11 -X utf8 tools/native_scratch.py --reference arterial      (a reference-only install, paths.py)
+    py -3.11 -X utf8 tools/native_scratch.py --profile kamidori --game-root ../Kamidori_Translated --name translated
+                                                                        (another install of the game, its own copy)
 
 Native AGE keeps saves under %LOCALAPPDATA% (docs/engine-re.md, "Save-root resolution"), shared with the real
 install. Drive the copy with `tools/drive.py native`, which redirects them into a sandbox, or back that folder up
@@ -32,6 +34,7 @@ HARD_LINKED = {".alf"}
 
 
 REFERENCE: str | None = None   # set by --reference: a reference-only install instead of the profile's
+NAME: str | None = None        # set by --name: a copy of its own, beside the profile's (another install of the game)
 
 
 def install_root() -> Path:
@@ -43,11 +46,11 @@ def _build_root() -> Path:
 
 
 def scratch_root() -> Path:
-    return _build_root() / "native-scratch"
+    return _build_root() / (f"native-scratch-{NAME}" if NAME else "native-scratch")
 
 
 def manifest_path() -> Path:
-    return _build_root() / "native-scratch-manifest.json"
+    return _build_root() / (f"native-scratch-{NAME}-manifest.json" if NAME else "native-scratch-manifest.json")
 
 
 def snapshot(root: Path) -> dict[str, list[int]]:
@@ -117,9 +120,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--reference", choices=sorted(paths.REFERENCE_INSTALLS),
                         help="a reference-only install (paths.REFERENCE_INSTALLS) instead of the profile's; "
                              "the copy goes to build/engines/<id>/native-scratch")
+    parser.add_argument("--name", help="a copy of its own, native-scratch-NAME, with its own manifest: for another "
+                                       "install of the profile's game (--game-root), such as a translated one")
     arguments = parser.parse_args(argv)
-    global REFERENCE
-    REFERENCE = arguments.reference
+    if arguments.name is not None and not arguments.name.replace("-", "").isalnum():
+        parser.error("--name takes letters, digits and hyphens")
+    global REFERENCE, NAME
+    REFERENCE, NAME = arguments.reference, arguments.name
     return check() if arguments.check else build(arguments.overlay, arguments.replace)
 
 

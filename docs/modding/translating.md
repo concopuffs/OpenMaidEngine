@@ -209,8 +209,9 @@ with an absolute path.
 ## 9. Fonts and the engine's menus
 
 **Fonts.** The port draws translated text with the system's fonts. To ship a font, put the file in `my.lang/fonts/`
-and map the game's faces to it with a `[[language.font]]` table in the manifest. `omp text check` lists the characters
-your translation uses that no bundled font has (languages.md, "Fonts").
+and map the game's faces to it with a `[[language.font]]` table in the manifest. Choose a fixed-width font: the
+scripts count half cells, and Windows' rules squeeze a proportional one. `omp text check` lists the characters your
+translation uses that no bundled font has, and warns about a proportional font (languages.md, "Fonts").
 
 **Menus and dialogs.** The engine's own text (the menu bar, the settings panel, the quit dialog, the name entry) has
 keys, not sources. The engine has it in Japanese and English. For any other language, `extract` also writes

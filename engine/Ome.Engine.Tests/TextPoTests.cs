@@ -115,7 +115,7 @@ public sealed class TextPoTests : IDisposable
 
             [[text]]
             source = "武器ＬＶが{"{level:num}"}に上がった"
-            cells = 30
+            row_gap = 4
 
             [[text]]
             source = "はい"
@@ -177,7 +177,7 @@ public sealed class TextPoTests : IDisposable
         Assert.True(global.Items[2].Obsolete);
         Assert.StartsWith("# Catalog template written by omp text extract.", ReadFile("_global.toml"));
         TextCatalogFile script = TextCatalogFileReader.Read(Path.Combine(Folder, "SC0100.toml"), "de/SC0100.toml");
-        Assert.Equal(("Waffenstufe {level}", 30), (script.Entries[0].Text, script.Entries[0].Cells));
+        Assert.Equal(("Waffenstufe {level}", 4), (script.Entries[0].Text, script.Entries[0].RowGap));
         Assert.Equal(("Jawohl", 0x2a43), (script.Entries[1].Text, script.Entries[1].At));   // the fuzzy one is left
         Assert.Equal(Fingerprint, script.Fingerprint);
         Assert.NotEqual(before, ReadFile("SC0100.toml"));

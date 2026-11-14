@@ -222,11 +222,11 @@ public sealed class PageLocatorState : System.IDisposable
         return before.LastInkRight + (wideJoin ? 0 : after.SpaceAdvance) + after.FirstWordWidth > after.Right;
     }
 
-    internal static bool IsSpace(int scalar) => scalar is ' ' or '\t' or 0x3000;
+    internal static bool IsSpace(int scalar) => Ome.Engine.Text.PresentedTextPlacement.IsSpace(scalar);
 
-    /// <summary>A double-byte character of CP932, as the importer counts widths: anything but ASCII and half-width
-    /// katakana.</summary>
-    internal static bool IsWide(int scalar) => scalar >= 0x80 && scalar is not (>= 0xff61 and <= 0xff9f);
+    /// <summary>A character that takes a full cell, as the importer counts widths (<see cref="Ome.Engine.Text.CharacterCells"/>).
+    /// </summary>
+    internal static bool IsWide(int scalar) => Ome.Engine.Text.CharacterCells.IsFullWidth(scalar);
 
     /// <summary>The page reached a text wait: record it and its locator. Records only; nothing blocks.</summary>
     public void WaitReached(int page)

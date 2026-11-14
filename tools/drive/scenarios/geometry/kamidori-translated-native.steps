@@ -1,0 +1,35 @@
+# Localization gate 12 (localization spec §18.1, docs/localization-import-test.md), run A: native AGE on the install
+# translated in place. Its AGE.EXE is 4.33F, whose hook addresses tools/drive/kamidori.toml gives in
+# [native.build."4.33F"]. The translated scripts carry extra instructions, so the pages are waited for at this
+# install's own offsets; kamidori-translated-port.steps waits for the same pages on the clean install and shoots the
+# same names. Run it first, on the fresh sandbox, then stop native: AGE writes SAVE.DAT, which keeps the face, only
+# when it quits, and run B seeds its sandbox from this one (do not start native again before run B starts, which
+# would empty it).
+#   py -3.11 -X utf8 tools/native_scratch.py --profile kamidori --game-root ../Kamidori_Translated --name translated
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori native start
+#       --exe build/games/kamidori/native-scratch-translated/AGE.EXE
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori native run
+#       tools/drive/scenarios/geometry/kamidori-translated-native.steps
+#   py -3.11 -X utf8 tools/drive.py --profile kamidori native stop
+# then compare with run B: tools/text_geometry_compare.py (docs/tools-reference.md).
+
+rand-seed 13
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+click newgame.begin
+wait-state script=SC0000 timeout=60
+wait-state top=SC0000@0x1530 click=adv.next every=1.5 timeout=400   # page 26: Wil, one row
+settle
+shot geometry-p26
+wait-state top=SC0000@0x18ea click=adv.next every=1.5 timeout=400   # page 37: Leguna, two rows
+settle
+shot geometry-p37
+wait-state top=SC0000@0x28d8 click=adv.next every=1.5 timeout=400   # page 55: the longest name plate
+settle
+shot geometry-p55
+wait-state top=SC0000@0x293e click=adv.next every=1.5 timeout=60    # page 56
+settle
+shot geometry-p56

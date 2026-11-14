@@ -236,7 +236,6 @@ public static partial class TextCatalogFileReader
         string? align = fields.String("align");
         string? fit = fields.String("fit");
         string? measure = fields.String("measure");
-        long? cells = fields.Integer("cells");
         long? rowGap = fields.Integer("row_gap");
         string? note = fields.String("note");
         fields.RejectUnknown();
@@ -261,8 +260,6 @@ public static partial class TextCatalogFileReader
                 "a pattern that starts or ends with a placeholder needs a script scope");
         if (note is { Length: > TextCatalogLimits.MaxStringLength })
             return fields.Problem<TextCatalogItem>($"note is limited to {TextCatalogLimits.MaxStringLength} characters");
-        if (cells is { } count && (count < 0 || count > TextCatalogLimits.MaxCells))
-            return fields.Problem<TextCatalogItem>($"cells must be 0 to {TextCatalogLimits.MaxCells}");
         if (rowGap is { } gap && (gap < 0 || gap > TextCatalogLimits.MaxRowGap))
             return fields.Problem<TextCatalogItem>($"row_gap must be 0 to {TextCatalogLimits.MaxRowGap}");
 
@@ -293,7 +290,6 @@ public static partial class TextCatalogFileReader
             Align = alignment,
             Fit = fitting,
             Measure = measuring,
-            Cells = cells is { } c ? (int)c : null,
             RowGap = rowGap is { } g ? (int)g : null,
             Note = note,
         }, text != null, obsolete);

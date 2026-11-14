@@ -288,7 +288,8 @@ internal static partial class OmpTextCommand
                           + $"conflicts (frame locals), {report.Literals.UntranslatedInInstall.Count} untranslated in "
                           + $"the install that the catalog translates; empty literals filled with text: "
                           + $"{report.Literals.EmptyFolded.Count} folded into the line before, "
-                          + $"{report.Literals.EmptyFilled.Count} not carried");
+                          + $"{report.Literals.EmptyFilled.Count} not carried; "
+                          + $"{report.Literals.FontFaces.Count} face names changed (kept: a face is not text)");
         ComposedCounts cc = report.Composed;
         Console.WriteLine($"  composed strings: {cc.Stores} stores and draws, {cc.Templates} templates "
                           + $"({cc.Untranslated} untranslated), {cc.Entries} pattern entries; {cc.Skipped.Count} walks "

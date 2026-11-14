@@ -21,8 +21,6 @@ public static class TextCatalogLimits
     public const int MaxStringLength = 16 * 1024;
     /// <summary>The most entries one language may hold after merging.</summary>
     public const int MaxEntriesPerLanguage = 1_000_000;
-    /// <summary>The largest <c>cells</c> value.</summary>
-    public const int MaxCells = 4096;
     /// <summary>The largest <c>row_gap</c> value, in pixels.</summary>
     public const int MaxRowGap = 256;
 }
@@ -60,9 +58,6 @@ public sealed record TextEntry
 
     /// <summary>Overrides the language's measurement mode for this string; null keeps the language's.</summary>
     public TextMeasure? Measure { get; init; }
-
-    /// <summary>This string's length in half cells, in place of the count (spec §5.3).</summary>
-    public int? Cells { get; init; }
 
     /// <summary>Pixels between the rows of a <c>draw-string</c> whose presented text holds a line break, beyond the
     /// font's height (spec §7.1); null keeps the default.</summary>

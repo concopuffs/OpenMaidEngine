@@ -178,6 +178,12 @@ public sealed class LiteralCounts
 
     /// <summary>Changed literals of every other opcode, which nothing presents.</summary>
     public Sampled<ReportedLiteral> Other { get; } = new();
+
+    /// <summary>Face names the translation changed, stored into a string cell a font opcode reads or writes
+    /// (<c>set-font</c>, <c>find-font-family-index</c>, <c>get-font-family-name</c>). Which face draws is the game's
+    /// setting, not text, so they get no entry and the base install's face stays; a translator who wants another face
+    /// names it in the language's fonts (spec §7.4).</summary>
+    public Sampled<ReportedLiteral> FontFaces { get; } = new();
 }
 
 /// <summary>Strings the scripts compose with <c>concat</c> and <c>toString</c> (review R4 of

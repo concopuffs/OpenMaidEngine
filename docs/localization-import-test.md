@@ -4,7 +4,7 @@ Results of the import test in the localization design (`superpowers/specs/2026-1
 §18.1): converting an install whose scripts were translated in place into a text catalog, and checking what the
 catalog carries. The design stays in the spec; this page holds the test's results and the importer's rules, so the
 spec can be revised against them. Gate 10 (half 1) ran on 2026-11-10 for milestone 0. Gate 11 (half 2) ran on
-2026-11-11 for milestone 6.
+2026-11-11 for milestone 6. Gate 12 (half 3), the geometry comparison with native AGE, ran on 2026-11-14.
 
 **Status: reviewed, and the review's changes are in (2026-11-10).** Milestone 0's numbers were reviewed before
 milestone 1, as spec §19 asks. The review found one loss (line structure), and the user accepted three design
@@ -33,7 +33,8 @@ dotnet run --project engine/Ome.Cli -- omp text import-scripts --profile kamidor
   - It writes the 232 replaced images to `assets/en/` as PNG: 207 from `patch/` and the 25 `$n$` append images in
     the translated root, all BMPs under AGF names.
   - It writes a manifest whose `glyph_delay_scale` comes out at 0.48. The hand-made package of gate 11 used 0.5.
-  - `omp check` links it: 48,588 entries from 217 files, no errors.
+  - `omp check` links it: 48,588 entries from 217 files, no errors. Since 2026-11-14 it holds 48,586: the two
+    entries for face names are gone (rule 9).
   - The port runs the clean install with this one package and `--language en`. The opening credits, the title, the
     new-game screen and SC0000's first page are in English, and six of its images (SO001, SO004–6, SO023,
     EV999YB) were served by then.
@@ -53,9 +54,10 @@ first run differed, the row says why.
 | Messages that could not be joined | 0. 5 the translators emptied, 0 damaged, 0 with an added variable | §6.2 needs no change |
 | Line breaks in translated messages | 14,767 wraps and 6,239 deliberate breaks (in 5,892 messages). 998 wraps are uncertain, and 428 breaks stay deliberate by the added-break count. 5,748 entries hold `\n` | Line structure is kept (R1). The first run joined every break |
 | Scope that serves each message | global 43,765; script 470; site 137; untranslated 1,283 | Decision 2 holds. Site scope is needed for 0.3% of messages (finding 1) |
-| Entries | 47,302 global, 569 script, 690 site, 27 patterns. Stored literals take 126 of the script entries and 553 of the site entries. 89 catalog files carry a fingerprint | Stored literals are scoped like messages (R2, finding 2) |
-| `--verify` | 0 mismatches over 45,655 messages, 86 drawn literals, 306 patterns, 34 composed strings and 12,171 stored literals. The comparison is exact. 635 stored literals that the install left untranslated are translated (finding 3) | Every message, literal and pattern reproduces exactly |
-| Changed literals outside messages | `set-string` 10,665, `draw-string` 15, `concat` 44; also 265 `coroutine-label-yield` and 26 `comment` operands, which nothing draws | All are carried (finding 2). `concat` had 42: two literals that only lost words to another run now count as translations (R5) |
+| Entries | 47,300 global, 569 script, 690 site, 27 patterns (47,302 global before rule 9). Stored literals take 126 of the script entries and 553 of the site entries. 89 catalog files carry a fingerprint | Stored literals are scoped like messages (R2, finding 2) |
+| `--verify` | 0 mismatches over 45,655 messages, 86 drawn literals, 306 patterns, 34 composed strings and 12,163 stored literals. The comparison is exact. 632 stored literals that the install left untranslated are translated (finding 3). Before rule 9 there were 12,171 and 635: the global entries メイリオ → ＭＳゴシック and ＭＳ 明朝 → ＭＳ ゴシック translated the three face names `CONFIG2` stores (`@0x9b3`, `@0x9e4`, `@0x9fc`), and its config screen draws those cells (`@0x1bed`, `@0x1bf9`), so it would have named a face the port did not draw | Every message, literal and pattern reproduces exactly |
+| Changed literals outside messages | `set-string` 10,662 (10,665 before rule 9), `draw-string` 15, `concat` 44; also 265 `coroutine-label-yield` and 26 `comment` operands, which nothing draws | All are carried (finding 2). `concat` had 42: two literals that only lost words to another run now count as translations (R5) |
+| Face names (rule 9, 2026-11-14) | 3 changed and kept: `INITCONFIG@0x0` and `@0x8` store the default face, メイリオ in the clean install and ＭＳゴシック (no space, a face no machine has) in the translated one; `CHECKCONFIG@0x13` stores the fallback for a missing face, ＭＳ 明朝 and ＭＳ ゴシック. So the translated install draws in ＭＳ ゴシック | Which face draws is the game's setting, not text; gate 12 carries it in the saves instead |
 | Literals that feed compares or the value switch | 3, all `""` written as `" "`, the translated install's empty-string damage (see "The translated install's own damage") | As the spec expected, they need no entry |
 | Emptied furigana | 2,960 of 3,072 runs emptied; 104 keep a reading | Dropping ruby from the presented text matches what the translators did. Spec §2's 2,595 counted only the 120 same-shape scripts |
 | Composed strings | 30 stores build 34 templates. 3 are untranslated; the other 31, in 11 scripts, become 27 pattern entries with the composing script's scope. 0 walks gave up. Of the first run's "Literals that feed `concat`" row, the claim "all in `SHOWCC` and `SC5510`" was wrong (R4) | Patterns get a real test (R4). The 313 variable messages are only variables, so they test nothing |
@@ -141,7 +143,7 @@ character, so run B leaves out the small glyph that run A draws for the tab.
 
 ## Rules the importer applies
 
-These are the rules as of the review's changes. The code is `ScriptTranslationImporter.cs` (rules 1 to 6 and 8)
+These are the rules as of the review's changes. The code is `ScriptTranslationImporter.cs` (rules 1 to 6, 8 and 9)
 and `ComposedStrings.cs` (rule 7).
 
 1. **Alignment.** Greedy, instruction by instruction. An added `show-text` or `end-text-line` is an insertion;
@@ -193,6 +195,9 @@ and `ComposedStrings.cs` (rule 7).
    entry of the line stored to the cell before it (index − 1), which the game draws one row higher. That line is
    the nearest earlier store into that cell in the same block, or the line it was folded into. With no such store
    the text is reported as not carried.
+9. **Face names (2026-11-14).** A string cell that any script passes to `set-font`, `find-font-family-index` or
+   `get-font-family-name` holds a face name, global cells across the install and frame locals within their script.
+   A literal stored into one gets no entry, and one the translation changed is reported (`literals.font_faces`).
 
 ## Gate 11 results (2026-11-11)
 
@@ -214,7 +219,7 @@ clicks.
 | Same text on every page (required) | **143 of 143.** Run A's text with its wraps joined equals run B's presented text once whitespace is collapsed |
 | Run B left in Japanese | none: every page presents English, speaker names included |
 | Line breaks (reviewed) | run A has 64 wraps and 93 deliberate breaks by the box's real right edge, most of the deliberate ones between a name plate and its line. 12 pages break where the catalog has a wrap: see below |
-| Wrapping (reviewed) | 1 page of run B ran past its layout's bottom: page 2 (`SC0000@0xd5a`), the narration. The translated install lays out every half-width character on an 11-pixel cell, and the translators broke this sentence into two lines of 61 characters. The port draws presented text at its glyphs' own widths (spec §7.4), and in メイリオ bold at 22 pixels the joined 123 characters wrap into three rows of a window that holds two (710 pixels each). Since the language's `overflow = "shrink"` (the default; `docs/modding/languages.md`), the port draws it at 96 % in two rows; `--text-log` lists it (`SC0000@0xd55`, `width_percent` 96). Rerun on 2026-11-11: 143 pages, same text on every page, none cut |
+| Wrapping (reviewed) | 1 page of run B ran past its layout's bottom: page 2 (`SC0000@0xd5a`), the narration. The translated install lays out every half-width character on an 11-pixel cell, and the translators broke this sentence into two lines of 61 characters. The port draws presented text at its glyphs' own widths (spec §7.4), and in メイリオ bold at 22 pixels the joined 123 characters wrap into three rows of a window that holds two (710 pixels each). Since the language's `overflow = "shrink"` (the default; `docs/modding/languages.md`), the port draws it at 96 % in two rows; `--text-log` lists it (`SC0000@0xd55`, `width_percent` 96). Rerun on 2026-11-11: 143 pages, same text on every page, none cut. Since 2026-11-14 presented text in aspect mode takes native's cells (spec §7.4): driven through SC0000's pages 1 to 56 in メイリオ with `--text-log`, the port narrowed and cut no message, page 2 included |
 | Damaged strings, untranslated stored strings, `SC2310@0x1232` | not reached by the opening |
 
 **The real edge does not find the translators' wraps.** The spec expected the real right edge to classify run A's
@@ -229,7 +234,10 @@ the comparison that ignores line breaks.
 against the 11-pixel half cells, and assuming every entry sits in a two-row window 710 pixels wide, 848 of the
 19,846 entries that take two rows on half cells take three or more at the glyphs' widths (4 %). Narrowing fits each
 of them back into two rows at 88 % or more, 97 % at the median; the run above narrowed page 2 a little less than
-this model predicts. This is why `overflow = "shrink"` is the default.
+this model predicts. This is why `overflow = "shrink"` is the default. The estimate measured the first design, in
+which presented glyphs drew at their own advances in aspect mode; since 2026-11-14 they take native's cells (spec
+§7.4), so it no longer describes Kamidori. `shrink` stays the default for text a proportional face draws outside
+aspect mode, and for translations not fitted by hand.
 
 **Saves** were not compared again: gate 2 already holds for run B's catalog (milestone 3).
 
@@ -239,12 +247,92 @@ Run A (the translated install) and run B (the clean install with this catalog) a
 pages that draw:
 
 - strings damaged in the translated install, which run B shows in full Japanese;
-- the 635 stored strings run B translates and run A does not;
+- the 632 stored strings run B translates and run A does not;
 - `SC2310@0x1232`'s leading tab, which run A draws as a small glyph and run B leaves out. The text is the same
   once whitespace is collapsed.
 
 Pages that draw them fail the required check and are reviewed against this list; the opening draws none. Table rows
 are not among them, since the engine records each store (R2).
+
+## Gate 12 results (2026-11-14)
+
+**What it compares.** Gate 11 compared text only, between two runs of the port. Gate 12 compares where text lands,
+between native AGE and the port: run A is native AGE 4.33F on the translated install (a scratch copy), run B the
+port on the clean install with this package and `--language en`. Each shoots SC0000's pages 26 (Wil, one row), 37
+(Leguna, two rows), 55 (the longest name plate) and 56, waited for at its own install's offsets.
+`tools/text_geometry_compare.py` measures in each shot where the name plate's bottom edge ends and where each run of
+text columns starts, and compares the two runs within a tolerance of 1 pixel. Pixels are not compared: GDI and the
+text server antialias the same outlines differently.
+
+**How it runs.** The commands are in the scenario files' headers (`tools/drive/scenarios/geometry/kamidori-translated-
+{native,port}.steps`; usage in `tools-reference.md`, "Geometry pairs").
+
+1. `native_scratch.py --profile kamidori --game-root ../Kamidori_Translated --name translated` copies the translated
+   install. The driver recognises its 4.33F AGE.EXE by its hash and takes that build's hook addresses
+   (`tools/drive/kamidori.toml`, `[native.build."4.33F"]`).
+2. Native runs its half on the fresh sandbox, then stops: AGE writes `SAVE.DAT`, which keeps the face, only when it
+   quits. Seeded before that, the port found no `SAVE.DAT`, took the clean install's メイリオ, and failed all four
+   shots.
+3. The port runs its half on a new sandbox seeded from native's (`--seed native:fresh`).
+4. `text_geometry_compare.py build/games/kamidori/drive/native/shots build/games/kamidori/drive/port/shots`.
+
+**The face comes from the saves.** The translated install's `INITCONFIG` and `CHECKCONFIG` settle on ＭＳ ゴシック
+(rule 9), and the clean install's choose メイリオ. The face is kept in `SAVE.DAT`'s shared profile, so the port,
+seeded from native's sandbox, draws ＭＳ ゴシック as native does. Run unseeded, in メイリオ, the plates still matched
+exactly and every run started within 2 pixels, since aspect mode's cells do not depend on the face; the opening
+bracket was 2 pixels off, because a bracket's place in its cell depends on its glyph's ink.
+
+| Shot | Plate edge (A / B) | Runs per row (A : B) | Run starts |
+|---|---|---|---|
+| p26 | 141 / 141 | 46 : 46, 1 : 1 | all within 1 px |
+| p37 | 187 / 187 | 53 : 53, 9 : 9 | all within 1 px |
+| p55 | 302 / 302 | 25 : 25, 3 : 3 | all within 1 px |
+| p56 | 141 / 141 | 33 : 33, 3 : 3 | all within 1 px |
+
+Of the 173 runs, 138 start in the same column, 16 one column left and 19 one column right, with no pattern: the
+antialiasing. Rendered with the engine's own GDI rasterizer and layout, the same line in ＭＳ ゴシック bold at 22
+pixels gives the first 20 of run A's runs on p26 their exact starts and widths; in メイリオ it does not.
+
+**What the comparison found** (each is now fixed):
+
+- **Two layout models.** Presented text had its own layout in aspect mode; the review that started the gate replaced
+  it with the source's (spec §5.3, §7.4). The fixed-cell build before it fails the gate: its "Wil" plate ends at 164,
+  native's at 141, since it rounded `halve-strlen` up.
+- **Glyph masks with a margin.** The text server's masks kept the atlas's blank margin; GDI's are the inked box,
+  which aspect mode measures to place an opening bracket. They are trimmed.
+- **Simulated bold.** ＭＳ ゴシック has no bold style; for `lfWeight` 700 GDI adds the regular glyph to itself one
+  column to the right, so each glyph's ink and advance grow by a pixel (`SimulatedBold`, which equals GDI's glyph for
+  glyph from 12 to 50 pixels; `WindowsGdiGlyphMaskRasterizerTests`). The text server drew it regular: strokes a pixel
+  thinner, and a full-width cell of 22 pixels where native's is 23, which moved the glyph after each bracket.
+- **Face names imported as text** (rule 9).
+
+**A proportional face.** In ＭＳ ゴシック aspect mode neither calibrates nor centres, so a second pair,
+`kamidori-translated-meiryo-{native,port}.steps`, chooses メイリオ in each game's config screen (ADV設定's game font
+list, SELFONT) before the same pages, shot as `geometry-meiryo-p26` to `-p56`. Aspect mode then calibrates the face
+from each rasterizer's own metrics (spec §7.4): GDI's on native, and on the port the rules GDI applies to the face's
+file (`docs/engine-re.md`, "What GDI derives from a font file"). Each glyph is drawn at a width calibrated for its
+character (`-13` for i, l and t in bold at 22 pixels, `-9` for m) and centred in its cell.
+
+| Shot (メイリオ) | Plate edge (A / B) | Runs per row (A : B) | Run starts |
+|---|---|---|---|
+| p26 | 141 / 141 | 46 : 46, 1 : 1 | all within 1 px |
+| p37 | 187 / 187 | 53 : 53, 9 : 9 | all within 1 px |
+| p55 | 302 / 302 | 25 : 26, 3 : 3 | all within 1 px (two glyphs touch in A and not in B) |
+| p56 | 141 / 141 | 33 : 33, 3 : 3 | all within 1 px |
+
+The font list is the machine's installed-font list in GDI's order, the same on both targets; the scenarios scroll it
+to the top and pick the eighth row after three wheel notches, which is メイリオ on the machine they were written on.
+Two things had to be right before this pair could pass:
+
+- **The text server's metrics.** Its probe reported `height / 2` as every face's average width and the raster's
+  black box as the reference's. GDI reports the face's `tmAveCharWidth` (21 for メイリオ bold at 22 pixels) and
+  ＭＳ ゴシック's embedded bitmap box (19, not 21), so メイリオ calibrated about 6 % wider. The rasterizer now reads the
+  face's font file and applies GDI's rules.
+- **The wheel.** The port's driver turned the wheel in one event of three notches, which SELFONT reads as one row
+  (it scrolls a row per read, whatever the delta); native's driver posts one notch each 80 ms. The port then chose
+  BIZ UDP明朝 Medium, two rows up, and drew the pages in it. The port's driver now spaces notches as native's does.
+
+**What it does not cover.** Stat boxes and item tables (`backlog.md`, "Localization").
 
 ## The review (2026-11-10)
 

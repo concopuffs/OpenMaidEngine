@@ -1,6 +1,7 @@
 using Ome.Engine.Localization;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
+using Ome.Engine.Text;
 using Ome.Engine.Vm;
 using Ome.Mods.Localization;
 using Ome.Script.Abi;
@@ -149,6 +150,93 @@ public class PresentedMessageTests
         Assert.Equal((0, 1, 0), (misses.Count, misses.NarrowedCount, misses.CutCount));
     }
 
+    // ---- one layout (spec §7.4) ------------------------------------------------------------------------------------
+
+    /// <summary>The left of each glyph object a SYS4433 page in aspect mode 1 draws: <paramref name="text"/>, presented
+    /// as <paramref name="presented"/> when it is given, with glyphs 13 pixels wide for a single-byte CP932 code and 30
+    /// for a double-byte one.</summary>
+    private static int[] AspectLefts(string text, string? presented)
+    {
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        Ome.Engine.Model.Script script = ScriptAssembler.Assemble(table, "SC0100",
+            [(0x70, [I(1), I(400), I(160), I(0), I(400)]), (0x213, [I(1), I(100), I(64)]), (0x2db, [I(1)]),
+             (0x6e, [I(0), S(0)]), (0x2, [])], [text]);
+        var vm = TestText.Vm(script, table, new RecordingWaits(),
+            TestText.Glyphs(TestText.Fixed(30, 13), TestText.Unicode(30, 13)), EngineBuilds.Age433G);
+        if (presented != null)
+        {
+            vm.Text.Presenter = new TextPresenter(
+                new TextLanguage("en", [TextCatalog.Build("en", [TextEntry.Literal(text, presented)])]),
+                messages: new ScriptMessageIndex(table, Contracts));
+            vm.Text.PresentsText = true;
+        }
+        vm.Run();
+        Assert.Equal("exit", vm.HaltReason);
+        return [.. vm.Gfx.SnapshotVisibleObjects().Where(glyph => glyph.Handle >= 100).Select(glyph => glyph.DstX)];
+    }
+
+    [Fact]
+    public void InAspectModePresentedTextIsLaidOutAsTheSameTextInTheSourceWouldBe()
+    {
+        // The reference 激 is 30 wide, so a single-byte character takes a 15-pixel cell and a double-byte one 30,
+        // whatever its glyph's own advance; Ⅰ is double-byte in CP932. The same text drawn as source and as a
+        // translation lands on the same cells.
+        int[] source = AspectLefts("Wil Ⅰ", presented: null);
+        Assert.Equal([0, 15, 30, 45, 60], source.Select(left => left - source[0]));
+        Assert.Equal(source, AspectLefts("ウィル", presented: "Wil Ⅰ"));
+    }
+
+    /// <summary>A presented rasterizer that measures: glyphs 13 pixels wide for a single-byte CP932 code and 30
+    /// otherwise, every request recorded, and metrics whose average width is the width asked for (or half the height)
+    /// over a font twice as tall as its size, so the single-byte calibration narrows.</summary>
+    private sealed class MeasuringGlyphs : IIdentifiedGlyphMaskRasterizer, Ome.Engine.Text.IFontMetricsProbe
+    {
+        private readonly TestText.GridGlyphs _glyphs = TestText.Unicode(30, 13);
+        public readonly List<GlyphRasterRequest> Requests = [];
+        public GlyphRasterizerBackendInfo BackendInfo => _glyphs.BackendInfo;
+
+        public GlyphMask Rasterize(GlyphRasterRequest request)
+        {
+            Requests.Add(request);
+            return _glyphs.Rasterize(request);
+        }
+
+        public Ome.Engine.Text.FontProbeMetrics Measure(string faceName, int pixelHeight, int width, int weight,
+                                                        ushort code)
+            => new(width != 0 ? System.Math.Abs(width) : pixelHeight / 2, BlackBoxX: 8, CellIncrementX: 16,
+                   Height: 2 * pixelHeight);
+    }
+
+    [Fact]
+    public void PresentedTextIsCalibratedWithItsOwnRasterizersMetrics()
+    {
+        // The installed list says the face is proportional, so aspect mode calibrates it (spec §7.4): the source
+        // rasterizer does not measure, the presented one does, and presented glyphs ask for the width its metrics give.
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+        Ome.Engine.Model.Script script = ScriptAssembler.Assemble(table, "SC0100",
+            [(0x70, [I(1), I(400), I(160), I(0), I(400)]), (0x213, [I(1), I(100), I(64)]), (0x2db, [I(1)]),
+             (0x6e, [I(0), S(0)]), (0x2, [])], ["ウィル"]);
+        var presented = new MeasuringGlyphs();
+        EnumeratedFontFamily[] families = [new(ImmediateSurfaceTextRenderer.DefaultFontFace, 0)];
+        var vm = TestText.Vm(script, table, new RecordingWaits(),
+            new Ome.Engine.Natives.TextDevices(TestText.Fixed(30, 13), GlyphCoverageAlpha.Sixteenths, Presented: () => presented,
+                            FontFamilies: () => families),
+            EngineBuilds.Age433G);
+        vm.Text.Presenter = new TextPresenter(
+            new TextLanguage("en", [TextCatalog.Build("en", [TextEntry.Literal("ウィル", "Wil")])]),
+            messages: new ScriptMessageIndex(table, Contracts));
+        vm.Text.PresentsText = true;
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        GlyphRasterRequest w = presented.Requests.First(request => request.UnicodeScalar == 'W');
+        int calibrated = new Ome.Engine.Text.AspectFontRealization(families, presented)
+            .SingleByteWidth(w.FontFace, w.PixelHeight, w.Weight, 'W', aspectMode: 1);
+        Assert.NotEqual(-(w.PixelHeight / 2), calibrated);
+        Assert.Equal(calibrated, w.RequestedWidth);
+    }
+
     // ---- the record of stores -------------------------------------------------------------------------------------
 
     private static readonly TextEntry[] StoneEntries =
@@ -218,13 +306,15 @@ public class PresentedMessageTests
     {
         Assert.Equal(new[] { 3, 6, 3 }, Lengths(null));
         Assert.Equal(new[] { 4, 8, 8 }, Lengths(Presenter(null, TextEntry.Literal("アリア", "Illumina"))));
+        // halve-strlen truncates, as native's does: Kamidori sizes the "Wil" plate for one cell.
+        Assert.Equal(new[] { 1, 3, 3 }, Lengths(Presenter(null, TextEntry.Literal("アリア", "Wil"))));
+        // CP932's double-byte symbols count two half cells, as native counts their bytes.
+        Assert.Equal(new[] { 4, 8, 7 }, Lengths(Presenter(null, TextEntry.Literal("アリア", "Cover Ⅰ"))));
     }
 
     [Fact]
-    public void AnEntrysCellsOverrideTheCountAndSourceMeasurementOptsOut()
+    public void SourceMeasurementOptsOut()
     {
-        Assert.Equal(new[] { 5, 10, 8 },
-                     Lengths(Presenter(null, TextEntry.Literal("アリア", "Illumina") with { Cells = 10 })));
         Assert.Equal(new[] { 3, 6, 3 },
                      Lengths(Presenter(null, TextEntry.Literal("アリア", "Illumina") with { Measure = TextMeasure.Source })));
         var sourceLanguage = new TextPresenter(new TextLanguage("en",

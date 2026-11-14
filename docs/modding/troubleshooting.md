@@ -160,6 +160,11 @@ limits how narrow it gets.
 do the system's. `omp text check` lists the characters each table's bundled fonts lack; add a font that has them to
 `use`.
 
+**Letters squeezed to half their width, or running past their boxes.** The table's first font is proportional to the
+game: Windows marks it neither monospaced nor fixed-pitch, whatever its name says. Outside aspect mode the game draws
+it at half the height over its average width, about half for a Japanese font and near its own width for a Latin one.
+`omp text check` warns about it and gives the width. Use a fixed-width font (languages.md, "Fonts").
+
 **A menu or dialog keeps the engine's wording.** The log has a `[text]` line for each `[[engine]]` entry the engine
 left out, ending "the engine's own text is shown": the key is not one the engine has, or the text names a value
 (`{1}`) its Japanese does not take. `omp text check` reports both. An entry without `text` is a template and is

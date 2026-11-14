@@ -173,17 +173,18 @@ public class TextMeasurementTests
     [InlineData("イルミナ", 8)]
     [InlineData("ｲﾙﾐﾅ", 4)]
     [InlineData("黒石", 4)]
-    [InlineData("αβ", 2)]       // Ambiguous counts 1
+    [InlineData("αβ", 4)]       // two bytes each in CP932
+    [InlineData("é", 1)]         // not in CP932, and not East Asian Wide
     [InlineData("１２", 4)]
-    [InlineData("a😀b", 4)]     // an emoji is Wide
+    [InlineData("a😀b", 4)]     // not in CP932; an emoji is East Asian Wide
     [InlineData("𠮷", 2)]        // a supplementary ideograph
     public void HalfCellsCountByCharacterClass(string text, int cells)
         => Assert.Equal(cells, TextMeasurement.HalfCells(text));
 
     [Fact]
-    public void HalvingRoundsUpAndCharactersCountScalars()
+    public void HalvingTruncatesAndCharactersCountScalars()
     {
-        Assert.Equal(4, TextMeasurement.Halve(7));
+        Assert.Equal(3, TextMeasurement.Halve(7));
         Assert.Equal(4, TextMeasurement.Halve(8));
         Assert.Equal(3, TextMeasurement.Characters("a😀b"));
     }

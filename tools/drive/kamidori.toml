@@ -26,9 +26,10 @@ settings_file = "SYS4REG.INI"
 [sandbox.quiet]
 "sound.Volume0" = 0
 
-# Native AGE only, for the clean install's AGE.EXE: AGE 4.33G (4.33.7.0), SYS4433; its unpacked image is
-# build/games/kamidori/engine-dump. The English fan translation ships AGE 4.33F (4.33.6.0), an older build whose
-# hook addresses differ (docs/engine-re.md, "Kamidori engine builds").
+# Native AGE only. The [native.*] tables below are for the clean install's AGE.EXE: AGE 4.33G (4.33.7.0), SYS4433;
+# its unpacked image is build/games/kamidori/engine-dump. The translated install ships AGE 4.33F (4.33.6.0), an older
+# build whose hook addresses differ (docs/engine-re.md, "Kamidori engine builds"): its [native.build] table gives
+# them. The driver hashes the AGE.EXE it spawns or attaches to and refuses one that is neither build.
 # - g_pEngineCtx is 0x5c9bc8 (every handler reads the ctx through it);
 # - the interpreter (0x41121e) reads curCtx at ctx+0x57fa0 and the current op through ctx+0x57fb8 + curCtx*0x78;
 #   the frame record keeps Himegari's internal layout (codebase +0x14, pc +0x18, resource id +0x50 from curCtx).
@@ -43,17 +44,25 @@ frame_script_resource_id = 0x57ff0
 
 # input_set_polling_enabled is 0x465a60 (input manager +0x1820, as in Himegari). age_main_window_proc's WM_ACTIVATE
 # case calls it with (windowed && wParam == WA_INACTIVE) on the input manager at ctx+0x408; the call returns to
-# 0x48e041 (4.33F: 0x48e061).
+# 0x48e041.
 [native.keep_polling]
 setter = 0x465a60
 activate_return = 0x48e041
 gate = 0x1c28
 
 # The drive step rand-seed replaces op 0x60's rand() draw at the instruction its call returns to
-# (op 0x60's handler at 0x427650 calls _rand@0x558368 before it fetches an operand; 4.33F: handler 0x4276f0,
-# return 0x42772f).
+# (op 0x60's handler at 0x427650 calls _rand@0x558368 before it fetches an operand; 4.33F's handler is
+# 0x4276f0).
 [native.rand]
 op60_rand_return = 0x42768f
+
+[native.build."4.33G"]
+sha256 = "52151686545215f350d2453febab91259450cf3fa79bfb218142765ce3f8842e"   # packed, as installed
+
+[native.build."4.33F"]
+sha256 = "977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4"   # unpacked, as the translation ships it
+keep_polling = { activate_return = 0x48e061 }
+rand = { op60_rand_return = 0x42772f }
 
 [[native.dialog]]
 match = "データが壊れています．"

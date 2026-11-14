@@ -500,6 +500,12 @@ public partial class Main : Godot.Control
             ? configuredPolicy
             : PortableTextRenderingPolicy.JapaneseFallbackResourcePath;
         string? exactUnavailable = null;
+        // The installed fonts read from their own files: the faces portable text draws, and the installed-font list
+        // where GDI does not give it. Read once, when first needed.
+        var installedFonts = new Lazy<InstalledFontIndex>(ScanInstalledFonts,
+                                                          System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+        // Read from startup on a worker thread, so the first glyph or font-list query does not wait for the files.
+        _ = Task.Run(() => installedFonts.Value);
         try
         {
 #if OME_WINDOWS_GDI
@@ -533,7 +539,7 @@ public partial class Main : Godot.Control
                         exactUnavailable ?? "Exact Windows GDI text is unavailable.");
                 portableTextPolicy = PortableTextRenderingPolicy.Load(portablePolicyResource);
                 var portable =
-                    new GodotTextServerGlyphMaskRasterizer(portableTextPolicy);
+                    new GodotTextServerGlyphMaskRasterizer(portableTextPolicy, () => installedFonts.Value);
                 surfaceTextRasterizer = portable;
                 _glyphRasterizerOwner = portable;
             }
@@ -582,13 +588,13 @@ public partial class Main : Godot.Control
                 Presented: () =>
                 {
                     PortableTextRenderingPolicy policy = PortableTextRenderingPolicy.Load(portablePolicyResource);
-                    var portable = new GodotTextServerGlyphMaskRasterizer(policy);
+                    var portable = new GodotTextServerGlyphMaskRasterizer(policy, () => installedFonts.Value);
                     _presentedRasterizerOwner = portable;
                     GD.Print($"[text] presented text uses {portable.BackendInfo.Id}: {portable.BackendInfo.Detail}");
                     return portable;
                 },
                 PresentedCacheCapacity: glyphCacheCapacity,
-                FontFamilies: InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings),
+                FontFamilies: InstalledFontFamilySource(surfaceTextRasterizer, _catalog.StartupSettings, installedFonts),
                 FontMetrics: surfaceTextRasterizer as IFontMetricsProbe),
             engineBuild.Rules.Text.Ruby.For(_catalog.StartupSettings, SettingsStore?.RubyShiftMode),
             blankExtentMode: _catalog.StartupSettings.BlankExtentMode == 1,
@@ -1032,10 +1038,11 @@ public partial class Main : Godot.Control
 #endif
     }
 
-    /// <summary>AGE's own installed-font list (<see cref="FontFamilyCatalog"/>) when text draws through Windows GDI, so
-    /// the names the scripts look up are the names GDI draws; otherwise Godot's system fonts.</summary>
+    /// <summary>AGE's own installed-font list (<see cref="FontFamilyCatalog"/>): from Windows GDI when text draws through
+    /// it, so the names the scripts look up are the names GDI draws; otherwise from the installed font files, with the
+    /// names and pitch GDI would give them (<see cref="OpenTypeFontFamilySource"/>).</summary>
     private static Func<IReadOnlyList<EnumeratedFontFamily>> InstalledFontFamilySource(
-        IGlyphMaskRasterizer rasterizer, Sys4StartupSettings settings)
+        IGlyphMaskRasterizer rasterizer, Sys4StartupSettings settings, Lazy<InstalledFontIndex> installedFonts)
     {
 #if OME_WINDOWS_GDI
         if (rasterizer is WindowsGdiGlyphMaskRasterizer && OperatingSystem.IsWindows())
@@ -1045,10 +1052,24 @@ public partial class Main : Godot.Control
                 return FontFamilyCatalog.Build(source, settings.UseProportionalFont, settings.ValidFontCheckers);
             };
 #endif
-        return () => OS.GetSystemFonts()
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(name => new EnumeratedFontFamily(name, 0))
-            .ToArray();
+        return () => FontFamilyCatalog.Build(new OpenTypeFontFamilySource(installedFonts.Value),
+                                             settings.UseProportionalFont, settings.ValidFontCheckers);
+    }
+
+    /// <summary>The installed fonts, read from the platform's font directories (<see cref="SystemFontFiles"/>); away
+    /// from Windows also from each file the system's font configuration gives for a family it lists, which may lie in
+    /// a directory of its own.</summary>
+    private static InstalledFontIndex ScanInstalledFonts()
+    {
+        var stopwatch = Stopwatch.StartNew();
+        IEnumerable<string> files = SystemFontFiles.Enumerate(SystemFontFiles.Directories());
+        if (!OperatingSystem.IsWindows())
+            files = files.Concat(OS.GetSystemFonts()
+                                   .Select(name => OS.GetSystemFontPath(name))
+                                   .Where(path => !string.IsNullOrEmpty(path)));
+        InstalledFontIndex index = InstalledFontIndex.Scan(files, message => GD.PushWarning($"[text] font {message}"));
+        GD.Print($"[text] installed fonts: {index.Families.Count} families from their files in " +
+                 $"{stopwatch.ElapsedMilliseconds} ms");
+        return index;
     }
 }

@@ -417,8 +417,12 @@ public class DriveControlTests
             $$"""{"id":3,"op":"shot","path":{{JsonSerializer.Serialize(absolute)}}}""");
         Assert.Equal(800, (int)shot["result"]!["width"]!);
         Assert.Contains($"0:shot {absolute}", backend.Events);
-        Run(dispatcher, backend, """{"id":4,"op":"wheel","notches":-2,"x":5,"y":6}""");
-        Assert.Contains("0:wheel -2 5,6", backend.Events);
+        // Notches go one at a time, 80 ms apart, as the native driver posts them: a script reading the wheel each
+        // frame sees each one.
+        var turned = Run(dispatcher, backend, """{"id":4,"op":"wheel","notches":-2,"x":5,"y":6}""");
+        Assert.True((bool)turned["ok"]!);
+        Assert.Equal(new[] { "0:wheel -1 5,6", "80:wheel -1 5,6" },
+                     backend.Events.Where(e => e.Contains("wheel")).ToArray());
         backend.PointerPosition = (355, 299);           // e.g. where the game glided the cursor
         Run(dispatcher, backend, """{"id":4,"op":"wheel","notches":1}""");
         Assert.Contains("0:wheel 1 355,299", backend.Events);

@@ -33,6 +33,18 @@ public class PresentedTextPlacementTests
 
     private static CachedGlyphMaskRasterizer Cache(FixedRasterizer? inner = null) => new(inner ?? new FixedRasterizer(), 256);
 
+    /// <summary>The room each glyph takes, as the layout engine lays it out.</summary>
+    private static GlyphRoom Room(AdvTextStyle? style = null)
+        => new RetainedGlyphLayoutEngine(Cache()).Room(style ?? Style, GlyphRasterPolicy.PortableUnicode, antialias: true);
+
+    /// <summary>The widest of <paramref name="lines"/> laid out at a percent, as fit measures it.</summary>
+    private static Func<int, int> WidestAt(IReadOnlyList<GlyphRasterRequest>[] lines)
+    {
+        GlyphRoom room = Room();
+        return percent => lines.Max(line => PresentedTextPlacement.Extent(
+            line.Select(glyph => glyph with { WidthPercent = percent }), room, 0)?.Width ?? 0);
+    }
+
     // ---- narrowing -------------------------------------------------------------------------------------------------
 
     [Fact]
@@ -49,6 +61,21 @@ public class PresentedTextPlacementTests
             half.CellAdvanceX, half.CellWidth, half.CellHeight, half.Ascent!.Value));
         Assert.All(half.Coverage.ToArray(), value => Assert.Equal(8, value));
         Assert.Same(mask, GlyphMaskNarrowing.Narrow(mask, 100));
+    }
+
+    [Fact]
+    public void AResizeAboveOneWidensAndNarrowingIsAResize()
+    {
+        var mask = new GlyphMask(4, 1, 4, originX: 1, originY: 1, cellAdvanceX: 6, cellAdvanceY: 0, cellWidth: 6,
+                                 cellHeight: 4, [16, 16, 0, 0]);
+
+        GlyphMask wide = GlyphMaskNarrowing.Resize(mask, 1.5);
+
+        Assert.Equal((6, 2, 9, 9), (wide.Width, wide.OriginX, wide.CellAdvanceX, wide.CellWidth));
+        Assert.Equal([16, 16, 16, 0, 0, 0], wide.Coverage.ToArray());
+        Assert.Equal(GlyphMaskNarrowing.Resize(mask, 0.5).Coverage.ToArray(),
+                     GlyphMaskNarrowing.Narrow(mask, 50).Coverage.ToArray());
+        Assert.Same(mask, GlyphMaskNarrowing.Resize(mask, 1));
     }
 
     [Fact]
@@ -89,21 +116,20 @@ public class PresentedTextPlacementTests
         Assert.Equal(new TextExtent(10, 30), PresentedTextPlacement.Extent("　ab　", [Cell(0), Cell(10), Cell(20), Cell(30)]));
         Assert.Null(PresentedTextPlacement.Extent("　 ", [Cell(0), Cell(10)]));
 
-        Assert.Equal(new TextExtent(105, 125), PresentedTextPlacement.Extent(Requests(" ab "), Cache(), 100));
+        Assert.Equal(new TextExtent(105, 125), PresentedTextPlacement.Extent(Requests(" ab "), Room(), 100));
     }
 
     [Fact]
     public void FitNarrowsTheWidestLineToTheSourceWidthDownToTheFloor()
     {
-        CachedGlyphMaskRasterizer cache = Cache();
-        IReadOnlyList<GlyphRasterRequest>[] lines = [Requests("abcdefghij"), Requests("abc")];   // 100 and 30 wide
+        Func<int, int> widestAt = WidestAt([Requests("abcdefghij"), Requests("abc")]);   // 100 and 30 wide
 
-        Assert.Equal(100, PresentedTextPlacement.FitPercent(lines, cache, 100, 0.5));
-        // 75 % rounds each glyph's advance to 8 (half to even), 80 wide; 74 % to 7, 71 wide.
-        Assert.Equal(74, PresentedTextPlacement.FitPercent(lines, cache, 75, 0.5));
-        Assert.Equal(60, PresentedTextPlacement.FitPercent(lines, cache, 40, 0.6));
-        // 72 % rounds each 10-pixel glyph to 7: 9 advances of 7 and a cell of 8 make 71.
-        Assert.Equal(72, PresentedTextPlacement.FitPercent(lines, cache, 72, 0.5));
+        Assert.Equal(100, PresentedTextPlacement.FitPercent(widestAt, 100, 0.5));
+        // 75 % rounds each glyph's advance to 8 (half to even), 80 wide; 74 % to 7, 70 wide.
+        Assert.Equal(74, PresentedTextPlacement.FitPercent(widestAt, 75, 0.5));
+        Assert.Equal(60, PresentedTextPlacement.FitPercent(widestAt, 40, 0.6));
+        // 72 % rounds each 10-pixel glyph's advance and cell to 7: 70 wide.
+        Assert.Equal(72, PresentedTextPlacement.FitPercent(widestAt, 72, 0.5));
     }
 
     [Theory]
@@ -129,7 +155,7 @@ public class PresentedTextPlacementTests
                                                int cursorX = 0, int right = 200, double minFit = 0.5, int sourceRows = 1,
                                                Func<PresentedRunPlacement, bool>? fitsWindow = null)
         => PresentedTextPlacement.Place(text, PresentedLineBreaks.Opportunities(text, LineBreakMode.Words), Requests(text),
-                                        Cache(), cursorX, lineOriginX: 0, right, align, fit, source, sourceRows, minFit,
+                                        Room(), cursorX, lineOriginX: 0, right, align, fit, source, sourceRows, minFit,
                                         fitsWindow);
 
     [Fact]
@@ -205,8 +231,7 @@ public class PresentedTextPlacementTests
             tried?.Add(placement.WidthPercent);
             return !engine.Render(null,
                 new GlyphTextLayoutOptions(0, 0, 0, int.MaxValue, bottom, WrapHorizontally: false, Style,
-                                           placement.Plan.BreaksBefore, OverflowAtFontHeight: true,
-                                           RowShiftsX: placement.RowShiftsX),
+                                           placement.Plan.BreaksBefore, RowShiftsX: placement.RowShiftsX),
                 placement.Plan.Glyphs).StoppedOnVerticalOverflow;
         };
     }
@@ -290,8 +315,7 @@ public class PresentedTextPlacementTests
 
         ImmediateSurfaceTextResult measured = renderer.Render(null, 10, 0, " ab", Style);
         var surface = new RgbaImage(64, 8, new byte[64 * 8 * 4]);
-        ImmediateSurfaceTextResult drawn = renderer.RenderGlyphs(
-            surface, 0, 0, Requests("ab").Select(glyph => glyph with { WidthPercent = 50 }).ToArray(), Style);
+        ImmediateSurfaceTextResult drawn = renderer.Render(surface, 0, 0, "ab", Style, widthPercent: 50);
 
         Assert.Equal((new TextExtent(15, 35), 35), (measured.Ink!.Value, measured.CursorX));
         Assert.Equal((new TextExtent(0, 10), 10), (drawn.Ink!.Value, drawn.CursorX));

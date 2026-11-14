@@ -162,6 +162,84 @@ public class AspectFontRealizationTests
         Assert.Equal(new[] { -9, primary, primary }, requests.Select(request => request.RequestedWidth));
     }
 
+    /// <summary>A probe whose language puts fonts in place of faces (<see cref="IFontMetricsProbe.Replacement"/>): the
+    /// face it is asked to measure is drawn by the replacement, and the reference is measured apart.</summary>
+    private sealed class ReplacingProbe : IFontMetricsProbe
+    {
+        public Dictionary<string, EnumeratedFontFamily> Replacements { get; } = new();
+        public List<string> Measured { get; } = new();
+        public int ReferenceMeasurements { get; private set; }
+
+        public FontProbeMetrics Measure(string faceName, int pixelHeight, int width, int weight, ushort code)
+        {
+            Measured.Add(faceName);
+            return new FontProbeMetrics(21, 21, 22);
+        }
+
+        public FontProbeMetrics MeasureReference(int pixelHeight, int width, int weight, ushort code)
+        {
+            ReferenceMeasurements++;
+            return new FontProbeMetrics(11, 19, 23);
+        }
+
+        public EnumeratedFontFamily? Replacement(string faceName)
+            => Replacements.TryGetValue(faceName, out EnumeratedFontFamily replacement) ? replacement : null;
+    }
+
+    [Fact]
+    public void AProportionalLanguageFontInPlaceOfAFixedFaceIsCalibrated()
+    {
+        // A language that draws ＭＳ ゴシック in a proportional font calibrates it as GDI would the player's choice of
+        // that font, against the reference ＭＳ ゴシック itself: 19 / 22 * -21 = -18.1.
+        var probe = new ReplacingProbe { Replacements = { ["ＭＳ ゴシック"] = new("Noto Sans", Proportional) } };
+        var realization = new AspectFontRealization(Installed, probe);
+
+        Assert.Equal(-18, realization.RequestedWidth("ＭＳ ゴシック", 22, 700, aspectMode: 1));
+        Assert.Equal(new[] { "ＭＳ ゴシック" }, probe.Measured);
+        Assert.Equal(1, probe.ReferenceMeasurements);
+        Assert.True(realization.PlacesGlyphsInCell("ＭＳ ゴシック"));
+        Assert.Equal(19, realization.ReferenceBlackBoxWidth(22, 700));
+    }
+
+    [Fact]
+    public void AFixedLanguageFontInPlaceOfAProportionalFaceIsNot()
+    {
+        var probe = new ReplacingProbe { Replacements = { ["メイリオ"] = new("Noto Sans Mono", Fixed) } };
+        var realization = new AspectFontRealization(Installed, probe);
+
+        Assert.Equal(-11, realization.RequestedWidth("メイリオ", 22, 700, aspectMode: 1));
+        Assert.Equal(-7, realization.SingleByteWidth("メイリオ", 14, 0, 0x36, aspectMode: 1));
+        Assert.False(realization.PlacesGlyphsInCell("メイリオ"));
+        Assert.Empty(probe.Measured);
+    }
+
+    [Fact]
+    public void ALanguageFontTakesThePitchOfAFaceTheListLacks()
+    {
+        var probe = new ReplacingProbe { Replacements = { ["Not Installed"] = new("Noto Sans", Proportional) } };
+
+        Assert.Equal(-18, new AspectFontRealization(Installed, probe).RequestedWidth("Not Installed", 22, 700, 1));
+    }
+
+    [Fact]
+    public void AFixedLanguageFontNamedAsAProportionalIpaFaceIsCalibrated()
+    {
+        var probe = new ReplacingProbe { Replacements = { ["メイリオ"] = new("IPA Pゴシック", Fixed) } };
+
+        Assert.Equal(-18, new AspectFontRealization(Installed, probe).RequestedWidth("メイリオ", 22, 700, 1));
+    }
+
+    [Fact]
+    public void WithoutAReplacementTheInstalledListDecides()
+    {
+        var probe = new ReplacingProbe { Replacements = { ["メイリオ"] = new("Noto Sans Mono", Fixed) } };
+        var realization = new AspectFontRealization(Installed, probe);
+
+        Assert.Equal(-11, realization.RequestedWidth("ＭＳ ゴシック", 22, 700, 1));
+        Assert.False(realization.PlacesGlyphsInCell("ＭＳ ゴシック"));
+        Assert.Equal(-11, realization.RequestedWidth("Not Installed", 22, 700, 1));
+    }
+
     [Fact]
     public void GlyphRequestsUseTheRealizedWidth()
     {

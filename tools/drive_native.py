@@ -520,7 +520,7 @@ class Daemon:
         self.context = paths.CONTEXT
         self.root = core.drive_root("native")
         self.events_path = self.root / "events.jsonl"
-        self.profile = core.load_profile()
+        self.profile = self.written_profile = core.load_profile()
         names_path = self.context.game_build / "callscript-names.json"
         self.names = json.loads(names_path.read_text(encoding="utf-8")) if names_path.is_file() else {}
         self.token = os.environ.get(core.TOKEN_ENVIRONMENT) or secrets.token_hex(16)
@@ -603,13 +603,14 @@ class Daemon:
         engine_ctx = ENGINE_CTX_TOML.read_text(encoding="utf-8") if ENGINE_CTX_TOML.is_file() else None
         # An attached AGE is the user's own; only a spawned one is kept in the background, unless --foreground.
         background = self.arguments.attach is None and not self.arguments.foreground
-        config = agent_config(self.profile, folders, engine_ctx, background)
         source = AGENT.read_text(encoding="utf-8")
         if self.arguments.attach is not None:
             self.age_pid = self.find_running_age(device) if self.arguments.attach == "auto" else int(self.arguments.attach)
+            build = self.select_build(win32().process_image(self.age_pid))
+            config = agent_config(self.profile, folders, engine_ctx, background)
             self.session = device.attach(self.age_pid)
             self.load_agent(source, config)
-            self.event("attached", pid=self.age_pid, hooked=self.api.hooked())
+            self.event("attached", pid=self.age_pid, build=build, hooked=self.api.hooked())
             return
         running = [process.pid for process in device.enumerate_processes() if process.name.upper() == "AGE.EXE"]
         if running:
@@ -617,6 +618,8 @@ class Daemon:
         exe = Path(self.arguments.exe) if self.arguments.exe else scratch_exe()
         if not exe.is_file():
             raise DriveError(f"no {exe}; build the scratch install with native_scratch.py or pass --exe")
+        build = self.select_build(exe)
+        config = agent_config(self.profile, folders, engine_ctx, background)
         self.names = {**self.names, **append_record_names(exe.parent)}
         self.age_pid = device.spawn([str(exe)], cwd=str(exe.parent))
         try:
@@ -627,7 +630,13 @@ class Daemon:
         except Exception:
             device.kill(self.age_pid)         # never leave a suspended or unhooked AGE behind
             raise
-        self.event("spawned", pid=self.age_pid, exe=str(exe), hooked=self.api.hooked(), background=background)
+        self.event("spawned", pid=self.age_pid, exe=str(exe), build=build, hooked=self.api.hooked(),
+                   background=background)
+
+    def select_build(self, exe: Path) -> str | None:
+        """Take the hook addresses of `exe`'s build ([native.build.*], by the file's SHA-256) for this session."""
+        self.profile, build = self.written_profile.for_build(core.file_sha256(exe))
+        return build
 
     def find_running_age(self, device: Any) -> int:
         running = [process.pid for process in device.enumerate_processes() if process.name.upper() == "AGE.EXE"]
