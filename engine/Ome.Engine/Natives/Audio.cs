@@ -98,9 +98,9 @@ public sealed partial class Audio : IFastForwardListener
     public bool IsVoicePlaying => Volatile.Read(ref _playing[VoiceChannel]);
 
     /// <summary>The engine tick's audio step (spec §5.3, part 1). In native's order (engine_main_tick@0x411840): take
-    /// the device's reports; the delayed sound effect and voice starts, which wait while a statement block is open; the
-    /// voice duck release (run-state 0x4000); then the BGM fade (run-state 0x200).</summary>
-    public void Service(bool statementBlockOpen)
+    /// the device's reports; the delayed sound effect and voice starts, unless the tick withholds them (an open statement
+    /// block, EngineTick); the voice duck release (run-state 0x4000); then the BGM fade (run-state 0x200).</summary>
+    public void Service(bool withholdDelayedStarts)
     {
         bool reported = _device.TryTakeEnded(out AudioChannelEnded ended);
         if (!reported && !_timedWork) return;
@@ -110,7 +110,7 @@ public sealed partial class Audio : IFastForwardListener
             reported = _device.TryTakeEnded(out ended);
         }
         long now = _clock.NowMs;
-        if (!statementBlockOpen)
+        if (!withholdDelayedStarts)
         {
             ServiceDelayedSoundEffects(now);
             ServiceDelayedVoice(now);

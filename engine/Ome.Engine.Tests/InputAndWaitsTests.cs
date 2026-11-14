@@ -91,6 +91,72 @@ public class InputAndWaitsTests
         Assert.Contains("unload 11", rig.Device.Commands);
     }
 
+    // ---- the tick under a statement block (docs/engine-re.md, "Statement blocks") ----
+
+    [Fact]
+    public void AnEffectWaitLetsTheDelayedStartsThroughAnOpenBlock()
+    {
+        // Native's tick holds the delayed sound effect and voice starts while a block is open, unless op 0x21c's effect
+        // wait parks the interpreter (run-state 0x400, which only that op sets).
+        using BlockRig rig = new();
+        rig.OnEngineThread(() => rig.Waits.Sleep(300));
+        Assert.Empty(rig.Audio.Device.CommandsStartingWith("play"));   // a sleep in the block holds them
+
+        GfxState gfx = rig.Natives.Graphics.State;
+        gfx.QueueSurfaceAlphaTransition(102, 6, 101, 1, 100, 1, 0, 300);
+        rig.OnEngineThread(() => rig.Waits.WaitForForegroundTransition(gfx));
+        Assert.Equal(["play 2 sfx:40 once 0.0dB"], rig.Audio.Device.CommandsStartingWith("play 2"));
+        Assert.Equal([(10L, false)], rig.Audio.Device.Voices);   // its delay counted from the park's first tick
+        Assert.True(rig.Audio.Tick.StatementBlockOpen);
+    }
+
+    [Fact]
+    public void AScreenTransitionHoldsTheDelayedStartsUnderAnOpenBlock()
+    {
+        // Ops 0x21, 0x22, 0x24 and 0x25 run under other run-state bits, which do not open the tick's check.
+        using BlockRig rig = new();
+        rig.OnEngineThread(() => rig.Waits.FadeSurfaceToWhite(rig.Natives.Graphics.State, 0, 20));   // 320 ms
+        Assert.Empty(rig.Audio.Device.CommandsStartingWith("play"));
+
+        rig.Audio.Tick.CloseStatementBlock();
+        rig.Audio.Advance(0);
+        Assert.Equal(["play 2 sfx:40 once 0.0dB"], rig.Audio.Device.CommandsStartingWith("play 2"));
+    }
+
+    // A sound effect and a voice due 100 ms after they are scheduled, inside an open statement block.
+    private sealed class BlockRig : IDisposable
+    {
+        public BlockRig()
+        {
+            Natives = HeadlessNativesTests.Natives(_locator, Audio.Clock, audio: Audio);
+            Audio.Audio.LoadSoundEffect(40, 2);
+            Audio.Audio.ScheduleSoundEffectStart(2, 0, 100);
+            Audio.Audio.ScheduleVoicePlayback(10, 0, 100);
+            Audio.Tick.OpenStatementBlock();
+        }
+
+        private readonly PageLocatorState _locator = new("SC0000", null);
+        public AudioRig Audio { get; } = new();
+        public HeadlessNativesTests.NativeSet Natives { get; }
+        public InputAndWaits Waits => Natives.Waits;
+
+        // Run a wait on an engine thread while this thread takes the front end's frame turns, 16 ms apart.
+        public void OnEngineThread(Action wait)
+        {
+            Task engine = Task.Run(() => Waits.RunEngine(wait));
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+            while (!engine.IsCompleted && DateTime.UtcNow < deadline)
+            {
+                Audio.Clock.Advance(0.016);
+                Waits.RunFrameTurn(null, null, null, 4, out _);
+                Thread.Sleep(1);
+            }
+            Assert.True(engine.Wait(TimeSpan.FromSeconds(10)), "the wait did not end");
+        }
+
+        public void Dispose() => _locator.Dispose();
+    }
+
     // ---- the input routing (InputAndWaits.Events.cs) ----
 
     [Fact]

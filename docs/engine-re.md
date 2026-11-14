@@ -7613,7 +7613,17 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
   fade that owns the BGM envelope as an explicit fade does, in 100 basis-point-level steps over one second.
 - **Statement blocks.** The engine tick (`engine/Ome.Engine/Natives/EngineTick.cs`, milestone 6) keeps the flag
   and depth; ops `0x1f4`/`0x1f5` open and close it. While the outermost block is open the tick withholds the delayed
-  voice (`0x2c0`) and delayed SFX starts (`0x2bf`), and the host withholds its presentation.
+  voice (`0x2c0`) and delayed SFX starts (`0x2bf`), and the waits withhold presentation.
+  - **Delayed starts during op `0x21c` (2026-11-13).** Only op `0x21c` sets run-state `0x400`, in /v2 and in 4.33G
+    (`gfx_op_0x21c_set_run_state_0x400`, the one `or [ctx+run_state], 0x400` in each). Native's tick checks the block
+    and `0x400` together before the delayed starts (`0x411a42`; 4.33G `0x411c5a`, block flag at `ctx+0x635d8`), so
+    they run under a block only during op `0x21c`'s park. The waits pass that park to the tick
+    (`InputAndWaits.Blocking.cs`, `ParkedOnEffectWait`), which starts them then (`EngineTick.Service`). A screen
+    transition (ops `0x21`, `0x22`, `0x24`, `0x25`) runs under other run-state bits and holds them.
+    `InputAndWaitsTests` covers both. A scan of both games' disassembly finds no `0x2bf`/`0x2c0` lexically inside a
+    block (79 schedules in Himegari, 136 in Kamidori), but op `0x21c` inside one 307 and 1,244 times, so a start
+    scheduled before a block can come due during its park. The 21 port scenarios of milestone 12 showed no
+    difference after the change.
   - **Render withholding.** `ConsumePresentationReasons` reports nothing while a block is open, unless an explicit
     present (`HostRequest`) is pending or a transition is active (`IsTransitionWaiting` / screen transition, the
     `0x400` equivalent). Retained changes stay pending for the next present.

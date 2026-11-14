@@ -707,6 +707,12 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   - the run ends when the scene returns;
   - `--scene TITLE` is refused (TITLE is the coordinator).
 
+  So a scene that only writes state and returns ends the run at once. DEBUGMAP is one: it fills the debug party and
+  items, sets the system-flow request `G[0]=3` and returns, and SYSTEM4 then enters `FIELD`
+  (`docs/phase-b-framework.md`, "DEBUGMAP field-entry result"). Enter such a scene with the F4 launcher, after which
+  SYSTEM4 carries on (`DebugSceneLaunchTests.RealDebugMapLaunchContinuesPastSc0270Page8Wait` follows that path through
+  `FIELD` into SC0270).
+
   A profile without a coordinator (Kamidori) runs the script as the root with no setup.
 - `--selftest` — headless; runs a **synthesized** scene through the thread/suspend/`CallDeferred` plumbing and
   asserts it matches a live headless run (full handling; no vm0/frozen golden). Profile-owned fixture checks

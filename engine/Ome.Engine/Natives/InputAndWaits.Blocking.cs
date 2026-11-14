@@ -21,7 +21,7 @@ public sealed partial class InputAndWaits
         if (ServeFrameTurn()) return handle.WaitOne(0);
         bool signalled = Block(handle, timeoutMs);
         PumpMessages();
-        _tick.Service();
+        _tick.Service(ParkedOnEffectWait);
         ServeFrameTurn();
         return signalled;
     }
@@ -33,7 +33,7 @@ public sealed partial class InputAndWaits
         if (ServeFrameTurn()) return WaitHandle.WaitTimeout;
         int index = WaitHandle.WaitAny(handles, timeoutMs);
         PumpMessages();
-        _tick.Service();
+        _tick.Service(ParkedOnEffectWait);
         ServeFrameTurn();
         return index;
     }
@@ -47,6 +47,10 @@ public sealed partial class InputAndWaits
         ServeFrameTurn();
         return signalled;
     }
+
+    // Native run-state 0x400: op 0x21c's effect wait parks the interpreter (WaitForForegroundTransition holds its
+    // graphics state for exactly that park). The tick runs the delayed starts under a statement block during it.
+    private bool ParkedOnEffectWait => _scene.ForegroundGfx != null;
 
     // The frame signal wakes every wait: the front end sets it for a frame turn, its input, a request or a movie frame.
     private bool Block(WaitHandle handle, int timeoutMs)

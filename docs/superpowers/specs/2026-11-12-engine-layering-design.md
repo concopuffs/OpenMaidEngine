@@ -1640,7 +1640,7 @@ From `docs/backlog.md`, `## Architecture`:
 
 - "Opcode dispatch is kept in three hand-written lists" — milestone 1.
 - "Revision behaviour is one boolean" — milestone 0.
-- "VM state has no owners" — the census in milestone 2, then milestones 5 to 11.
+- "VM state has no owners" — the census in milestone 2, then milestones 5 to 11; closed after milestone 12 (§15).
 - "Scene reset clears fields one by one" — as each native takes its state; milestone 12 closed it (§5.1, "As
   built (milestone 12): rule 5").
 - "The host's threads have no stated ownership" — typed calls in milestone 4, the locks in milestone 11, which
@@ -1648,6 +1648,9 @@ From `docs/backlog.md`, `## Architecture`:
 - "Two instruction loops" — the typed step result in milestone 1; one loop in milestone 11, which closed it (§5.4).
 - "The Godot front end has no unit tests" — milestone 4.
 - "The render traversal is written three times" — milestone 7, which closed it.
+
+Two items milestones 6 and 7 logged were also settled on the branch (§15, "2026-11-13, before the merge"):
+"Delayed starts wait for a statement block's close even during a transition" and "DEBUGMAP, run as a direct scene".
 
 Not covered:
 
@@ -1853,3 +1856,15 @@ Not covered:
   (op `0x1d9`, its native reader, is a stub). The glyph styles and the follow mode now clear at a reload as native's
   do. No port run was compared before and after that change. `himegari-exit-dialog`, whose return to title runs the
   reload, passes on the new build.
+- **2026-11-13, before the merge.** The branch's own backlog items were settled before the merge into develop:
+  - **"VM state has no owners" is closed.** Every group it named has one private owner, which `ProjectBoundaryTests`
+    holds to. Two leftovers moved: script memory's integer cells joined the existing integer-cell item, and the
+    handlers' own index checks became a Robustness item.
+  - **Delayed starts during a transition.** Only op `0x21c` sets native's run-state `0x400`, in both engines, and
+    native's tick starts delayed sounds under an open block only while that bit is set. The waits now tell the tick
+    when op `0x21c`'s effect wait parks the interpreter (`ParkedOnEffectWait`), and the tick starts the delayed sound
+    effects and voices then. A screen transition still holds them. `InputAndWaitsTests` covers both.
+  - **DEBUGMAP's early end as a direct scene is older than the branch.** Milestone 7 logged it, but a hosted `--scene`
+    ends at the hosted scene's return by develop's design (`f32b463f`). DEBUGMAP writes state, asks for `FIELD` and returns, so it ends at once. The F4
+    launcher reaches `FIELD` on the branch, as `DebugSceneLaunchTests` checks. `docs/tools-reference.md` now says so
+    and the item is gone.

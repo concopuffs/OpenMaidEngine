@@ -10,13 +10,6 @@ it; git history keeps the record.
 
 ## Engine fidelity
 
-- **DEBUGMAP, run as a direct scene, exits without showing the map.** `--scene DEBUGMAP` (entered as the F4 launcher
-  does) runs 128,557 steps and ends on `exit` within six seconds, with nothing drawn. On 2026-07-22 the same entry
-  reached the dungeon map and was the `FIELD` performance case (`docs/phase-a-slice-plan.md`, "P1 capture 2"). It was
-  seen on 2026-11-12 at `1d819e9`, before engine layering milestone 7, and is the same after it; when it began is not
-  known, and neither is what DEBUGMAP checks before it exits. The `FIELD` performance captures use Kamidori's field
-  from a save meanwhile. Done when a native run through the F4 launcher shows what DEBUGMAP does, and the port does
-  the same.
 - **Engine shell menu bar: undriven cases, and optional look differences.** The bar, the fullscreen strip and 終了
   come from the shell model, and 設定, ﾊﾞｰｼﾞｮﾝ情報 and 動作環境 are the options panel
   (`superpowers/specs/2026-11-09-engine-shell-design.md`). Every command either game can reach does what native's
@@ -61,12 +54,6 @@ it; git history keeps the record.
 
   No difference has been seen. Done when `display:AspectMode` and the display scale are modelled or shown
   unreachable.
-- **Delayed starts wait for a statement block's close even during a transition.** Native's tick runs the delayed SFX
-  and voice starts (ops `0x2bf`, `0x2c0`) inside an open block when run-state `0x400` is set, a park on an animation
-  or surface transition (`engine-re.md`, "Statement blocks"). The engine tick (`Natives/EngineTick.cs`) withholds
-  them in every open block, as the host did before milestone 6, because the tick does not yet know when a transition
-  parks the interpreter. No scene where it matters has been seen. Done when the tick runs them under a block during a
-  transition park (the waits, layering milestone 11: the transition waits are still the host's) and a test covers it.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
@@ -180,14 +167,24 @@ it; git history keeps the record.
 Gaps the 2026-11-10 codebase review found and the fixes that followed it left open. None affects retail scripts.
 
 - **Integer cells are not normalised to 32 bits when written.** Native cells are 32-bit. The port's are `long`:
-  immediates load zero-extended (`Sys4Loader`), C# writes and loaded saves sign-extended, and `Write` stores
-  whatever it is given (`VirtualMachine.cs`, `Read`/`Write`). Since 2026-11-10 arithmetic wraps and compares take
-  the signed low 32 bits (`VirtualMachine.Values.cs`, `I32`), so `bit-set g,31` then `lt g,0` gives native's 1.
-  Values that only move between cells (packed ids, colours) still keep whichever extension they arrived with, and
-  consumers that compare or index with the wide value could still differ. Neither disassembled corpus has a high-bit
-  immediate in an arithmetic or compare op, so this is latent for retail scripts and live for mod bytecode. Done
-  when every integer cell holds one canonical form, written in one place (see "VM state has no owners" under
-  Architecture), and a test round-trips a high-bit value through an immediate, a write, a save and a load.
+  immediates load zero-extended (`Sys4Loader`), C# writes and loaded saves sign-extended, and `Write` stores whatever
+  it is given (`VirtualMachine.cs`, `Read`/`Write`, into script memory's banks, `Natives/ScriptMemory.cs`). Since
+  2026-11-10 arithmetic wraps and compares take the signed low 32 bits (`VirtualMachine.Values.cs`, `I32`), so
+  `bit-set g,31` then `lt g,0` gives native's 1. Values that only move between cells (packed ids, colours) still keep
+  whichever extension they arrived with, and consumers that compare or index with the wide value could still differ.
+  Neither disassembled corpus has a high-bit immediate in an arithmetic or compare op, so this is latent for retail
+  scripts and live for mod bytecode. Done when every integer cell holds one canonical form, written in one place
+  (script memory owns the banks since engine layering milestone 9), and a test round-trips a high-bit value through an
+  immediate, a write, a save and a load.
+- **Each handler checks its own script-controlled indices.** A handler that indexes a table with an operand checks the
+  range itself, if at all, and no helper decides what happens past the end. Some halt with a reason that names the
+  index, five reasons in all (`bit-index-out-of-range`, `numeric-glyph-style-index-out-of-range`,
+  `preloaded-script-slot-out-of-range`, `keyboard-action-out-of-range`, `input-action-count-out-of-range`), as the
+  interpreter does for the pc (`pc-out-of-range`). Native checks some indices too (op `0x13a` admits styles 0 to 10).
+  Retail scripts pass valid indices; mod bytecode need not. The 2026-11-10 codebase review named this, in the
+  architecture item that engine layering milestone 12 closed. Done when the handlers that index with an operand are
+  listed, one helper takes the index and its table's length and halts with the handler's name and the index, and a
+  test drives each listed handler past its end.
 - **The port's image and texture caches never evict.** The graphics native's `_images`
   (`engine/Ome.Engine/Natives/Graphics.Surfaces.cs`), `ReferenceRenderer._pixelCache`
   (`engine/Ome.Engine/Hosting/ReferenceRenderer.cs`) and `GpuRetainedRenderer`'s `_textures` and `_lerpMaterials` keep
@@ -223,20 +220,6 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   were a fault that matched no filter: a halt inside a callback, `ModPackageException` at launch, and a drive command
   that threw. All three are fixed. Done when each layer has one documented fault type that its filters name, and the
   VM turns any fault raised during a step into a halt, with a reason and a trace event, in one place.
-- **VM state has no owners.** Any of the VM's files can write any field. The skip and auto-message flags were the
-  most shared (`_messageSkipServiceActive` in 7 files, `_messageSkipInjected` in 5); since milestone 5 (2026-11-12)
-  they are private to the skip-and-auto native, `engine/Ome.Engine/Natives/SkipAndAuto*.cs`. `_advTextWaitPolling`
-  is still used in 4. Integer-cell normalisation (under Robustness) and the bounds checks on script-controlled indices also have
-  no single home. Done when each group of state is private to one type that others change through named methods:
-  memory banks, frame stack, skip and auto, input, audio, text, menu, play clock, saves. Planned: layering spec. The
-  census of every field (milestone 2, `docs/superpowers/plans/2026-11-12-engine-layering.md`) names each one's owner;
-  skip and auto has its owner, and since milestone 6 (2026-11-12) so do audio (`Natives/Audio*.cs`) and the statement
-  block (`Natives/EngineTick.cs`), since milestone 7 graphics (`Natives/Graphics*.cs`: the surface table,
-  publication and the screen transition), since milestone 8 movies, and since milestone 9 (2026-11-13) the memory
-  banks (`Natives/ScriptMemory*.cs`), the saves and the play clock (`Natives/SavesAndSettings*.cs`) and the menu
-  (`Natives/ShellServices*.cs`), since milestone 10 text (`Natives/TextManager*.cs`), and since milestone 11 the waits
-  (`Natives/InputAndWaits*.cs`). The interpreter's input state (the callback frames, the latch, the pointer the ops
-  read) stays at the VM, as the census has it.
 - **Modal dialogs are separate fields.** `Main` keeps the 終了 dialog (`_exitConfirmation`), the script error box,
   the options panel, the screenshot folder dialog and the full-width editor in their own fields, plus a hold
   counter (`_frontendModalHolds`). Input routing, the drive `dialogs` and `answer` steps and screen-mode changes each
