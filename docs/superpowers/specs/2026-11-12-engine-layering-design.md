@@ -4,8 +4,8 @@
 **Status:** accepted 2026-11-12. Drafted on 2026-11-11 from the user's decisions of that day, revised after one
 design review, and accepted with the decisions of 2026-11-12 (§2). Milestones 0 (engine builds), 1 (handler table),
 2 (census), 3 (projects), 4 (the lift), 5 (skip and auto), 6 (audio), 7 (graphics), 8 (movies), 9 (saves,
-settings and shell services), 10 (text), 11 (input, waits and the engine loop) and 12 (close) are done on
-`feature/engine-layering`; §3.3, §4, §5.1, §5.2, §5.3, §5.4, §6.2, §6.3, §6.5, §6.6, §7.5, §7.6, §8,
+settings and shell services), 10 (text), 11 (input, waits and the engine loop) and 12 (close) are done, built on
+`feature/engine-layering` and merged into develop on 2026-11-14; §3.3, §4, §5.1, §5.2, §5.3, §5.4, §6.2, §6.3, §6.5, §6.6, §7.5, §7.6, §8,
 §11, §12 and §13 record what they settled. The census is in the implementation plan, `docs/superpowers/plans/2026-11-12-engine-layering.md`. §15
 records the history, including the branch review's thirteen findings, fixed on the branch on 2026-11-14.
 **Home in the canonical map:** this file is the design of the engine's layering (handlers, natives, devices), its

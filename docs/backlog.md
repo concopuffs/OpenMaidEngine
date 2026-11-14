@@ -367,6 +367,24 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   Done when the port or `Ome.Cli` names the pictures on the current screen, and `Ome.Cli` exports a named asset as
   PNG with the port's decoder, both documented in `modding/translating.md` step 8.
 
+- **English names and labels spill out of their boxes.** With `--language en`, names and text spill out of Kamidori's
+  RPG stat boxes, and a character's name spills out of its name plate in the opening ADV scene (the user's report,
+  2026-11-14). Message text is not the concern: `overflow` narrows a message to its window. The likely cause is the
+  width model. Native AGE on the translated install (`Kamidori_Translated/`) lays out every half-width character on an
+  11-pixel cell (`localization-import-test.md`, "Gate 11 results"), so its translators could fit a name or label to a
+  box by counting characters. The port draws presented text at its glyphs' own advances, also in Kamidori's aspect
+  mode (localization spec §7.4), in proportional faces: メイリオ bold for SC0000's text, and for MS Gothic a substitution
+  list with no monospaced face (`godot/config/japanese-text-rendering.json`). Capitals and wide letters there take
+  more than 11 pixels. The length opcodes count half cells by character class, not by the font (spec §5.3), so a plate
+  the game sizes from a name's length is sized for cells the glyphs overrun. A box the game does not size from the
+  text is helped only by an entry's `fit = "shrink"`, and the package imported from the translated install has no
+  `fit` entries. Not yet known: the face, weight and size the translated install draws in these boxes, and the sites
+  (F3 copies an ADV page's locator; a stat box needs its screen and script). Done when native AGE on the translated
+  install and the port with `--language en` are compared on those screens (shots side by side), the sites are listed,
+  and the choice is made and documented in `modding/languages.md`: fixed half cells for presented half-width text in
+  aspect mode, another font mapping (a monospaced or narrower face, or another size), `fit` written by the importer
+  for boxed text, or a mix. The listed sites then draw inside their boxes.
+
 ## Platform and project
 
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
