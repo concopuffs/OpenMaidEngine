@@ -639,3 +639,65 @@ Tests: `LuaNamesTests` (25) over a synthetic layout, and three link tests in `Mo
 - with a scratch mod that requires `himegari-base` and lists `stage_turn_limit`, the engine mounted the shipped base
   mod with its note. The mod's `ome.session.start` handler wrote the limit, and its write to `current_stage_turn` was
   refused with the list. Until the write scan (piece 4), the link still prints its old note for a written-out name.
+
+### 7.3 Events
+
+Built 2026-11-15 (spec §7.4, §8.2, §9.2):
+
+- **The declarations** (`engine/Ome.Mods/Manifest/ModEvents.cs`). `ManifestReader.ParseEvents` reads an `events/*.toml`
+  file: `[[event]]` tables with a dotted name, exactly one of `point` and `raised_by = "lua"`, a description, and
+  `[[event.field]]` entries (name, type, `access` with `r` the default, `at`). Unknown keys are errors.
+- **The rules** (`engine/Ome.Engine/Modding/GameEvents.cs`) are the engine's, so a runtime cannot loosen them:
+  - `FieldLocation.Parse` reads `at`: `L[n]`, `LF[n]`, `LS[n]`, `G[n]`, `GF[n]`, `GS[n]`, `arg[n]`, an exported
+    name, and `table[loc]`, `table[loc][loc]` or `table[loc].column`, with numbers or other locations as indices. A
+    fixed index is checked against the table's shape when it is read.
+  - `GameEvent.BuildField` checks a field: a Lua name other than `event`, its type against its cell's kind, a
+    location for an event at a point and none for one raised from Lua.
+  - `EventFieldRules` holds the value rules (a `bool` is an integer cell, 1 or 0). `EventValues` holds an emit's
+    values and refuses a missing or an undeclared field.
+- **The link** (`ModLuaLinker`) reads every declaration before the hooks:
+  - Names resolve through the declaring mod's layout, or the first base mod it requires.
+  - An event at a point is bound as a point hook is, and its declaring mod needs `vm`.
+  - An event declared twice is a hard conflict naming both mods. A broken declaration is an error naming its file,
+    and its subscribers report nothing more.
+  - An event hook names a declared event, and its mod requires the declaring mod or is it.
+  - A point event's subscribers join the instruction's list with the point hooks, each naming its event
+    (`PlannedHandler.GameEvent`). A Lua event's subscribers go to `HookPlan.LuaEvents`.
+  - The ordered interaction lists the merged order, a subscriber as "… on EVENT".
+  - The patch points are the profile's, else the copy a base mod ships (plan §7.1). `link.json` keeps the events, as
+    written, and `lua_events`. A due handler keeps its `event`, and the cache reads the fields again over the same
+    layout.
+- **The run** (`engine/Ome.Engine/Natives/Scripting.Events.cs`):
+  - A subscriber at a point gets a `HookContext` of kind `GameEvent` whose fields are live views (`PointFields`):
+    locals through the interpreter, globals and table elements through script memory, operands of the point's
+    instruction with the write rules of `ctx.args`.
+  - `maid.events.emit` runs the subscribers inside the call. The engine checks that the event is declared and raised
+    from Lua, that the caller is its owner, and that a session is running.
+  - Under `--lua-errors halt`, a subscriber's failure is kept and returned by the outermost call (`_nestedHalt`).
+- **A call inside a call** (`LuaModSession.Guarded`). A subscriber inside an emit is a call of its own: its own token
+  and budget, and its error converted for its own handler. The outer call's token and count resume after it.
+  Before, the inner call shared the raiser's budget, and a subscriber's Lua error became an error of the raiser's.
+  The nesting cap (32) bounds an event that raises itself.
+- **Lua** (`LuaViews.cs`, `ModEnvironment.cs`). `ctx.event` is the event's name and `ctx.<field>` its value: a
+  boolean for `bool`, a number or a string otherwise. A write takes only its type's Lua value, so a number for a
+  `bool` field is an error. `maid.events.emit(name, fields)` returns its table with the values the subscribers left.
+- **The first event.** `mods/himegari-base/events/experience.toml` declares `himegari.experience.award` at
+  `himegari.experience.after_calculation`: `amount` (`L[0x1]`, rw), `unit` (`current_unit_id`) and `level`
+  (`unit_current_levels[current_unit_id]`). The example `oms/examples/mods/example.double-exp-event` is spec §9.4's
+  worked example: it has no `vm` and names no address.
+
+Gate 5, as far as this piece reaches:
+- **Order** (`LuaEventsTests`, 53 tests). Two subscribers and a point hook between them on one instruction run in
+  priority order, and each sees the cells the one before left. An event raised from Lua runs its subscribers in their
+  own order inside the emit. A failing subscriber is logged against itself and the emit goes on; under halt the run
+  ends with its reason. A runaway subscriber is stopped by its own budget while its raiser completes.
+- **The link** (`ModLuaLinkTests`, 12 tests). It reports the merged order (gate 3's undeclared event among them), and
+  the cache keeps the events. On the install, `example.double-exp-event` on `ADDEXP.BIN` leaves the same session as
+  the guide's OMS patch.
+- **Still to come:** the trace that shows the value after each handler is `--lua-trace` (piece 5), and the site hook
+  in the gate's one order is milestone 4's.
+
+Driven in the port on 2026-11-15 (sandbox `luaevents`): with `--mod oms/examples/mods/example.double-exp-event` the
+engine mounted the shipped `himegari-base`, linked the subscriber into `ADDEXP.BIN`'s list at the point (`link.json`
+keeps `"event": "himegari.experience.award"`), and the console found `on_award` in the mod without `maid.vm`. An
+award in play needs a battle; the install test above runs the same native on `ADDEXP.BIN`.

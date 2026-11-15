@@ -9,6 +9,8 @@ internal sealed class LuaStackBuilder
     private readonly List<ModRuntimeHandler> _handlers = new();
     private readonly Dictionary<string, List<PlannedSite>> _sites = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<PlannedHandler>> _engine = new(StringComparer.Ordinal);
+    private readonly List<GameEvent> _events = new();
+    private readonly Dictionary<string, List<PlannedHandler>> _luaEvents = new(StringComparer.Ordinal);
 
     public LuaStackBuilder Mod(string id, string files, bool vm = true, bool library = false, params string[] requires)
         => Mod(id, Files(files), vm, library, requires);
@@ -69,13 +71,16 @@ internal sealed class LuaStackBuilder
 
     private int LoadOrder(string mod) => _mods.FindIndex(entry => entry.Id == mod);
 
-    public LuaStackBuilder Point(Script script, int index, string mod, string handler, int priority = 0, string point = "test.point")
+    /// <summary>A handler at an instruction: a point hook, or with <paramref name="gameEvent"/> a subscriber of that
+    /// event at the instruction's point.</summary>
+    public LuaStackBuilder Point(Script script, int index, string mod, string handler, int priority = 0, string point = "test.point",
+                                 string? gameEvent = null)
     {
         HandlerId id = Handler(mod, handler);
         int offset = script.Instructions[index].Offset;
         if (!_sites.TryGetValue(script.Name, out var sites)) _sites[script.Name] = sites = new();
         int at = sites.FindIndex(site => site.Offset == offset);
-        var planned = new PlannedHandler(id, priority, LoadOrder(mod));
+        var planned = new PlannedHandler(id, priority, LoadOrder(mod), GameEvent: gameEvent);
         if (at < 0) sites.Add(new PlannedSite(offset, offset, point, [planned]));
         else sites[at] = sites[at] with
         {
@@ -92,8 +97,26 @@ internal sealed class LuaStackBuilder
         return this;
     }
 
+    /// <summary>An event the stack declares, as the link builds it.</summary>
+    public LuaStackBuilder Event(GameEvent gameEvent)
+    {
+        _events.Add(gameEvent);
+        return this;
+    }
+
+    /// <summary>A subscriber of an event raised from Lua, in the merged order.</summary>
+    public LuaStackBuilder LuaEvent(string name, string mod, string handler, int priority = 0)
+    {
+        HandlerId id = Handler(mod, handler);
+        if (!_luaEvents.TryGetValue(name, out var list)) _luaEvents[name] = list = new();
+        list.Add(new PlannedHandler(id, priority, LoadOrder(mod)));
+        _luaEvents[name] = list.OrderBy(h => h.Priority).ThenBy(h => h.LoadOrder).ToList();
+        return this;
+    }
+
     public (ModRuntimeStack Stack, HookPlan Plan) Build()
-        => (new ModRuntimeStack(_mods, _handlers),
+        => (new ModRuntimeStack(_mods, _handlers, _events),
             new HookPlan(_sites.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedSite>)pair.Value),
-                         _engine.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value)));
+                         _engine.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value),
+                         _luaEvents.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value)));
 }

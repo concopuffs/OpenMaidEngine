@@ -10,12 +10,15 @@ This version supports:
 - **the engine events** `ome.session.start`, `ome.session.resumed` and `ome.save.writing`;
 - **game names:** the game's base mod names its cells, and a mod reads any of them and writes the ones it lists,
   without a capability;
+- **game events:** a mod subscribes to a named occurrence, such as an experience award, and reads and writes its
+  typed fields, without a capability;
 - **`maid.vm`:** raw access to the game's cells, the frame's locals and the call stack;
 - **`maid.state`:** a table that is saved beside each numbered save and comes back when that save is loaded;
 - **`maid.log`,** and **the console:** the driver's `lua` step runs a chunk in a running game.
 
-Not yet: game events, hooks on raw sites, on script entry and exit or on cell writes, `skip`, calling a script from Lua, and reloading Lua without a restart. A
-mod that uses one of them fails to link, and the report says that this engine does not build it yet. The design
+Not yet: hooks on raw sites, on script entry and exit or on cell writes, `skip`, calling a script from Lua, and
+reloading Lua without a restart. A mod that uses one of them fails to link, and the report says that this engine does
+not build it yet. The design
 behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
 Game-specific values (point names, which local holds what) are in your game guide, `games/<profile>.md`.
@@ -77,6 +80,7 @@ Each `[[hooks]]` table has one form and a `handler`:
 |---|---|---|
 | Point | `point = "NAME"`, a named patch point of the game | yes |
 | Engine event | `engine = "EVENT"`, one of the events in "Engine events" | no |
+| Game event | `event = "NAME"`, an event a mod of the stack declares ("Game events") | no |
 
 `handler = "FILE.lua:FUNCTION"` names a file under `lua/` (with folders: `util/hooks.lua:f`) and a function in
 it. `priority` (default 0) orders the handlers due at one point: lower runs first, then load order. The link report
@@ -182,6 +186,98 @@ row.<column>, row[0]                            -- its cells, by column name or 
   returns. The base mods have no helpers yet.
 - **Mounting.** The engine mounts a base mod only when an enabled mod requires it, and uses an installed package of
   the same id instead when there is one ([packages.md](packages.md), "Base mods").
+
+## Game events
+
+A game event is a named occurrence with typed fields: `<profile>.experience.award` is one award of experience, with
+the amount as a field you may change. Your game guide lists the events its base mod declares. A mod subscribes in
+its manifest and requires the mod that declares the event:
+
+```toml
+[lua]
+api = 1
+
+[[requires]]
+id = "<profile>-base"
+version = ">=1, <2"
+
+[[hooks]]
+event = "<profile>.experience.award"
+handler = "double_exp.lua:on_award"
+```
+
+```lua
+-- lua/double_exp.lua
+function on_award(event)
+  event.amount = event.amount * 2
+end
+```
+
+The mod names no address, script or fingerprint, and needs no capability.
+
+- **Fields.** `ctx.event` is the event's name; each field is `ctx.<field>`. A field is live: a read reads its cell
+  now, and a write to a field declared `rw` writes the cell, so the next handler sees the change. Writing a field
+  declared `r` is an error, and so is a name the event does not declare.
+- **Types.** `int` and `float` fields are numbers, with the cells' rules ("Game names", "Values"); `string` fields
+  are strings; `bool` fields are `true` or `false`. A value of another type is an error: a `bool` field takes no
+  number.
+- **Order.** An event raised at a point runs its subscribers in that instruction's list, with the point hooks there,
+  by `priority` and then load order. The link report gives the order wherever more than one handler is due.
+- **The link checks** that some mod of the stack declares the event and that your mod requires that mod. A misspelt
+  event is a link error that lists the events the stack declares.
+
+### Declaring an event
+
+A mod declares events in `events/*.toml`. The base mods declare their game's; a mod may declare its own:
+
+```toml
+# events/experience.toml
+[[event]]
+name = "<profile>.experience.award"
+point = "<a patch point of your game>"
+description = "One experience award, after the multipliers and before it is applied."
+
+[[event.field]]
+name = "amount"
+at = "L[0x1]"                         # the frame's integer local 1
+type = "int"
+access = "rw"
+
+[[event.field]]
+name = "level"
+at = "<a table global>[<a scalar global>]"
+type = "int"                           # access defaults to "r"
+```
+
+- **`point`** raises the event before the point's instruction, as a point hook runs. A mod that declares one needs
+  `vm`, since its fields read the frame. **`raised_by = "lua"`** instead declares an event the mod raises from its
+  own code with `maid.events.emit`, and its fields take no `at`.
+- **`at`** is a field's cell:
+
+  | Location | Cell |
+  |---|---|
+  | `L[n]`, `LF[n]`, `LS[n]` | the frame's integer, float or string local `n` |
+  | `G[n]`, `GF[n]`, `GS[n]` | the global at address `n` |
+  | `arg[n]` | operand `n` (from 1) of the point's instruction |
+  | `name` | a scalar global the base mod exports |
+  | `table[loc]`, `table[loc][loc]`, `table[loc].column` | an element of an exported table, by indices that are numbers or other locations |
+
+  Names resolve through the declaring mod's own layout (a base mod's) or the first base mod it requires. An index is
+  read when the field is, so `unit_levels[current_unit]` follows the current unit.
+- **The link checks** each declaration: the point exists in the script your stack loads, the names resolve, a
+  field's type matches its cell, and no two mods declare one event (that is a hard conflict naming both). `type` is
+  `int`, `float`, `string` or `bool`, and `bool` needs an integer cell.
+
+### `maid.events.emit`
+
+```lua
+local fields = maid.events.emit("<my>.event", { amount = 10, name = "x" })
+```
+
+Only the mod that declares an event with `raised_by = "lua"` may raise it, and it gives every declared field and no
+other. The subscribers run inside the call, in their own order, and the table comes back with the values they left.
+A subscriber's error is its own: it is logged against that subscriber, and the next one runs. Under
+`--lua-errors halt` the run ends at the instruction where the raising handler ran.
 
 ## State
 
@@ -293,6 +389,7 @@ have it.
 - `maid.state` is the mod's saved table ("State").
 - `maid.names` exists only in a base mod and in the console: `g` and `table` over that base mod's names, with no
   write list ("Game names").
+- `maid.events.emit(name, fields)` raises an event the mod declares with `raised_by = "lua"` ("Game events").
 
 ## The sandbox
 
@@ -322,10 +419,12 @@ or `string.dump`: nothing reaches files, processes, the clock or the network.
 |---|---|
 | A handler call | 1,000,000 Lua instructions |
 | A mod's start-up code (`init.lua` and its handler files, together) | 10,000,000 instructions |
-| Handlers nested inside handlers | 32 |
+| Handlers nested inside handlers (a subscriber inside an emit) | 32 |
 | Lua files in a package | 512, each at most 1 MiB |
 
-Unbounded recursion ends as a "stack overflow" error. When a handler fails or runs past its budget:
+Unbounded recursion ends as a "stack overflow" error. A subscriber that runs inside an emit is a call of its own,
+with its own budget, so a runaway subscriber is stopped without stopping the handler that raised the event. When a
+handler fails or runs past its budget:
 
 - `diagnostics/lua.log` gets the mod, the handler, the script and offset it ran at, the error and its traceback;
 - the port's status line shows a notice;

@@ -193,8 +193,24 @@ reference ([games/README.md](games/README.md)).
 Another mod replaced the script, or patched away the instruction your point names. Your hook cannot bind there;
 the two mods conflict as written.
 
-**"… this engine does not build it yet".** The hook form, `calls` or `events/` is part of a later version of Lua
-scripting ([lua.md](lua.md), the list at the top).
+**"… this engine does not build it yet".** The hook form or `calls` is part of a later version of Lua scripting
+([lua.md](lua.md), the list at the top).
+
+**"no mod of the stack declares the event 'NAME' (it declares …)".** The event is misspelt, or the mod that declares
+it is not enabled; the parenthesis lists the events the stack has. **"X declares NAME, and the mod does not
+require it"**: add `[[requires]] id = "X"` ([lua.md](lua.md), "Game events").
+
+**"field F of NAME is read-only", "NAME has no field F", "field F is bool, not number".** The handler wrote a field
+declared `r`, named a field the event does not declare, or gave a value of another type. Your game guide lists each
+event's fields.
+
+**"events/FILE.toml: NAME: …".** A declaration of your mod does not link: the message gives the field and the
+location's problem, or the point. **"X and Y both declare the event NAME"** is a hard conflict: an event has one
+declaring mod.
+
+**"NAME is raised by X, which declares it; M cannot raise it", "NAME is raised at its point", "NAME: field F is
+missing".** `maid.events.emit` raises only an event your mod declares with `raised_by = "lua"`, and with every
+field it declares ([lua.md](lua.md), "`maid.events.emit`").
 
 **"M writes NAME, which its [lua] writes list does not name (…)".** Add `NAME` to `[lua] writes` ([lua.md](lua.md),
 "Game names"). The message shows the list as the engine read it.

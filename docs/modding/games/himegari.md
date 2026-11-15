@@ -87,6 +87,17 @@ Game names ([../lua.md](../lua.md), "Game names") come from `himegari-base`. A m
 `require("himegari-base").g.stage_turn_limit` or `.table("unit_current_levels")[unit]` without `vm`, and writes
 them once its `[lua] writes` lists them. The names are those of `../../global-reference.md`.
 
+`himegari-base` declares one game event ([../lua.md](../lua.md), "Game events"), raised at the experience point:
+
+| Event | Field | Type | Access | Cell |
+|---|---|---|---|---|
+| `himegari.experience.award` | `amount` | int | rw | `L[0x1]`, the experience the unit receives |
+| | `unit` | int | r | `current_unit_id` |
+| | `level` | int | r | `unit_current_levels[current_unit_id]` |
+
+A subscriber needs no `vm`. `oms/examples/mods/example.double-exp-event` doubles every award with
+`event.amount = event.amount * 2`, and leaves the same state as the patch above.
+
 ## Catalogs, scenes and saves
 
 - **Selectors.** The install ships one append catalog (`APPEND01`), so a first mod's catalog normally gets selector
@@ -109,3 +120,4 @@ them once its `[lua] writes` lists them. The names are those of `../../global-re
 | `oms/examples/himegari-patch/SC0000.oms` | two inserted pages, with speakers |
 | `oms/examples/himegari-gate6/` | a boot-time script and a script called by packed id |
 | `oms/examples/mods/example.double-exp-lua` | a Lua point hook on the experience award |
+| `oms/examples/mods/example.double-exp-event` | a Lua subscriber of `himegari.experience.award`, without `vm` |

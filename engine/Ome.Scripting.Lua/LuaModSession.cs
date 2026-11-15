@@ -242,27 +242,34 @@ internal sealed partial class LuaModSession : IModSession
     private T Guarded<T>(long budget, bool startup, Func<CancellationToken, T> call)
         => Guarded(budget, startup, call, static (body, token) => body(token));
 
+    /// <summary>
+    /// One call from the engine into Lua, with its token and budget (plan §3.1). A call made while another runs, a
+    /// subscriber of an event raised from Lua (spec §7.4), is a call of its own: it has its own token and budget, its
+    /// error is its own handler's, and the outer call's token and count resume after it.
+    /// </summary>
     private T Guarded<TState, T>(long budget, bool startup, TState state, Func<TState, CancellationToken, T> call)
     {
-        bool outermost = _callDepth == 0;
-        if (outermost)
+        bool nested = _callDepth > 0;
+        CancellationTokenSource outerSource = _source;
+        long outerUsed = _used, outerBudget = _budget;
+        bool outerStop = _budgetStop;
+        ExceptionDispatchInfo? outerKept = _kept;
+        if (nested) _source = new CancellationTokenSource();
+        else if (!_source.TryReset())
         {
-            if (!_source.TryReset())
-            {
-                _source.Dispose();
-                _source = new CancellationTokenSource();
-            }
-            _used = 0;
-            _budget = budget;
-            _budgetStop = false;
-            _kept = null;
+            _source.Dispose();
+            _source = new CancellationTokenSource();
         }
+        _used = 0;
+        _budget = budget;
+        _budgetStop = false;
+        _kept = null;
         _callDepth++;
         try
         {
             return call(state, _source.Token);
         }
-        catch (OperationCanceledException) when (outermost)
+        catch (OperationCanceledException)
         {
             if (_kept is { } kept)
             {
@@ -274,21 +281,30 @@ internal sealed partial class LuaModSession : IModSession
                     $"{(startup ? "the mod's start-up code" : "the call")} ran past its budget of {budget:N0} instructions");
             throw;
         }
-        catch (LuaRuntimeException error) when (outermost)
+        catch (LuaRuntimeException error)
         {
             throw new ModScriptException(ModScriptErrorKind.Error, ErrorText(error), error.LuaTraceback?.ToString());
         }
-        catch (LuaParseException error) when (outermost)
+        catch (LuaParseException error)
         {
             throw new ModScriptException(ModScriptErrorKind.Error, WithoutLibraryName(error.Message));
         }
-        catch (Exception error) when (outermost && error.GetType().Name == "LuaCompileException")
+        catch (Exception error) when (error.GetType().Name == "LuaCompileException")
         {
             throw new ModScriptException(ModScriptErrorKind.Error, WithoutLibraryName(error.Message));
         }
         finally
         {
             _callDepth--;
+            if (nested)
+            {
+                _source.Dispose();
+                _source = outerSource;
+                _used = outerUsed;
+                _budget = outerBudget;
+                _budgetStop = outerStop;
+                _kept = outerKept;
+            }
         }
     }
 
@@ -362,6 +378,7 @@ internal sealed partial class LuaModSession : IModSession
     internal Metatables Metatables { get; }
     internal SessionReason Reason => _reason;
     internal IScriptAccess Access => _access;
+    internal ModRuntimeStack Stack => _stack;
 
     internal ModEnvironment? ModById(string id) => _mods.GetValueOrDefault(id);
 

@@ -106,10 +106,38 @@ internal sealed class ModEnvironment
         if (Mod != null) mod["version"] = Mod.Version;
         maid["mod"] = mod;
         maid["session"] = LuaValue.FromUserData(new SessionView(_session));
+        maid["events"] = new LuaTable { ["emit"] = Emit() };
         maid["state"] = new LuaTable();
         MaidTable = maid;
         return maid;
     }
+
+    /// <summary>
+    /// <c>maid.events.emit(name, fields)</c> (spec §8.2): the engine checks that this mod declares the event and raises
+    /// it from Lua, and that the fields are the declared ones; the subscribers run before it returns. The table comes
+    /// back with the values they left.
+    /// </summary>
+    private LuaFunction Emit() => _session.Fn("emit", context =>
+    {
+        if (!context.GetArgument(0).TryRead(out string name))
+            throw new LuaRuntimeException(context.State, "bad argument #1 to 'emit' (an event's name expected)", 1);
+        if (!context.GetArgument(1).TryRead(out LuaTable fields))
+            throw new LuaRuntimeException(context.State, "bad argument #2 to 'emit' (a table of the event's fields expected)", 1);
+        GameEvent? declared = _session.Stack.Event(name);
+        var given = new Dictionary<string, CellValue>(StringComparer.Ordinal);
+        foreach (var pair in fields)
+        {
+            if (!pair.Key.TryRead(out string key))
+                throw new LuaRuntimeException(context.State, $"emit: a field is named by a string, not {pair.Key.TypeToString()}", 1);
+            given[key] = declared?.Field(key) is { } field
+                ? EventFieldValues.FromLua(context, field, pair.Value)
+                : pair.Value.Type == LuaValueType.String ? CellValue.String(pair.Value.Read<string>()) : CellValue.Integer(0);
+        }
+        IReadOnlyDictionary<string, CellValue> values = Access.Emit(name, given);
+        foreach (GameEventField field in declared!.Fields)
+            fields[field.Name] = EventFieldValues.ToLua(field, values[field.Name]);
+        return context.Return(fields);
+    });
 
     /// <summary>Spec §5.7 step 2: the mod's saved state, and in <c>maid.mod.state_version</c> the version of the mod
     /// that wrote it (nil when the mod has none saved).</summary>

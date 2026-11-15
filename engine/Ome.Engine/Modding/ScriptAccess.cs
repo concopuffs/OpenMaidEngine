@@ -51,6 +51,10 @@ public interface IModAccess
     /// <summary>The base mod whose accessors <c>maid.names</c> holds (spec §8.4): a base mod's own, and for the console
     /// the profile's (spec §13); null for any other mod.</summary>
     string? OwnLayout { get; }
+
+    /// <summary><c>maid.events.emit</c> (spec §8.2): raise an event this mod declares with <c>raised_by = "lua"</c>, with
+    /// every declared field's value. Its subscribers run before it returns; the result is the values they left.</summary>
+    IReadOnlyDictionary<string, CellValue> Emit(string eventName, IReadOnlyDictionary<string, CellValue> fields);
 }
 
 /// <summary>

@@ -563,6 +563,8 @@ public sealed class LuaScriptingTests : IDisposable
         public void Log(ModLogLevel level, string message) { }
         public INamedAccess? Names(string baseModId) => null;
         public string? OwnLayout => null;
+        public IReadOnlyDictionary<string, CellValue> Emit(string eventName, IReadOnlyDictionary<string, CellValue> fields)
+            => fields;
         public double ReadInteger(double address) => throw new UnwindException();
         public void WriteInteger(double address, double value) { }
         public double ReadFloat(double address) => 0;

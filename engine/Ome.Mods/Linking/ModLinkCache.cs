@@ -114,12 +114,29 @@ public sealed record LinkedLuaHandlerEntry(
     [property: JsonPropertyName("file")] string File,
     [property: JsonPropertyName("function")] string Function);
 
-/// <summary>One handler due at a place, in the merged order.</summary>
+/// <summary>One handler due at a place, in the merged order; <c>event</c> names the game event at the instruction's
+/// point that it subscribes to.</summary>
 public sealed record LinkedLuaDueEntry(
     [property: JsonPropertyName("handler")] int Handler,
     [property: JsonPropertyName("priority")] int Priority,
     [property: JsonPropertyName("load_order")] int LoadOrder,
-    [property: JsonPropertyName("skip")] bool Skip = false);
+    [property: JsonPropertyName("skip")] bool Skip = false,
+    [property: JsonPropertyName("event")] string? Event = null);
+
+/// <summary>A field of a declared event, as written: its location is read again over the owner's layout.</summary>
+public sealed record LinkedLuaEventFieldEntry(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("access")] string Access,
+    [property: JsonPropertyName("at")] string? At);
+
+/// <summary>An event the stack declares (Lua scripting spec §9.2): its owner, and its point unless Lua raises it.</summary>
+public sealed record LinkedLuaEventEntry(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("owner")] string Owner,
+    [property: JsonPropertyName("point")] string? Point,
+    [property: JsonPropertyName("description")] string? Description,
+    [property: JsonPropertyName("fields")] IReadOnlyList<LinkedLuaEventFieldEntry> Fields);
 
 /// <summary>A hooked instruction of a linked script: its linked offset, its original offset, its point.</summary>
 public sealed record LinkedLuaSiteEntry(
@@ -145,6 +162,12 @@ public sealed record LinkedLuaEntry
     [JsonPropertyName("engine")]
     public IReadOnlyDictionary<string, IReadOnlyList<LinkedLuaDueEntry>> Engine { get; init; }
         = new Dictionary<string, IReadOnlyList<LinkedLuaDueEntry>>();
+    /// <summary>The declared events, by name.</summary>
+    [JsonPropertyName("events")] public IReadOnlyList<LinkedLuaEventEntry> Events { get; init; } = [];
+    /// <summary>By game event raised from Lua, its subscribers.</summary>
+    [JsonPropertyName("lua_events")]
+    public IReadOnlyDictionary<string, IReadOnlyList<LinkedLuaDueEntry>> LuaEvents { get; init; }
+        = new Dictionary<string, IReadOnlyList<LinkedLuaDueEntry>>();
 
     /// <summary>A source's path under the cache directory.</summary>
     public static string PathOf(string mod, string file) => $"{Folder}/{mod}/{file}";
@@ -153,10 +176,10 @@ public sealed record LinkedLuaEntry
     public static string LayoutPathOf(string mod) => $"layout/{mod}/globals.json";
 
     private static LinkedLuaDueEntry Due(PlannedHandler handler)
-        => new(handler.Handler.Index, handler.Priority, handler.LoadOrder, handler.Skip);
+        => new(handler.Handler.Index, handler.Priority, handler.LoadOrder, handler.Skip, handler.GameEvent);
 
     private static PlannedHandler Planned(LinkedLuaDueEntry entry)
-        => new(new HandlerId(entry.Handler), entry.Priority, entry.LoadOrder, entry.Skip);
+        => new(new HandlerId(entry.Handler), entry.Priority, entry.LoadOrder, entry.Skip, GameEvent: entry.Event);
 
     public static LinkedLuaEntry Of(LinkedLua lua, string runtime) => new()
     {
@@ -171,22 +194,42 @@ public sealed record LinkedLuaEntry
                 site.Point, site.Handlers.Select(Due).ToList())).ToList(), StringComparer.Ordinal),
         Engine = lua.Plan.EngineEvents.ToDictionary(pair => pair.Key,
             pair => (IReadOnlyList<LinkedLuaDueEntry>)pair.Value.Select(Due).ToList(), StringComparer.Ordinal),
+        Events = lua.Stack.EventList.Select(gameEvent => new LinkedLuaEventEntry(gameEvent.Name, gameEvent.Owner,
+            gameEvent.Point, gameEvent.Description, gameEvent.Fields.Select(field => new LinkedLuaEventFieldEntry(field.Name,
+                field.Type.Name(), field.Writable ? "rw" : "r", field.At)).ToList())).ToList(),
+        LuaEvents = lua.Plan.LuaEvents.ToDictionary(pair => pair.Key,
+            pair => (IReadOnlyList<LinkedLuaDueEntry>)pair.Value.Select(Due).ToList(), StringComparer.Ordinal),
     };
 
-    /// <summary>The stack, with each source read from under <paramref name="directory"/>.</summary>
+    /// <summary>The stack, with each source read from under <paramref name="directory"/>. An event's locations are
+    /// read again over its owner's layout, or the first required base mod's, as the link read them.</summary>
     public ModRuntimeStack ToStack(string directory)
-        => new(Mods.Select(mod => new ModRuntimeMod(mod.Id, mod.Version, mod.Library, mod.Vm, mod.Requires,
-                mod.Files.Select(file => new ModSource(mod.Id, file,
-                    File.ReadAllText(Path.Combine(directory, PathOf(mod.Id, file)), Encoding.UTF8))).ToList(),
-                mod.Layout ? GameLayout.Parse(File.ReadAllText(Path.Combine(directory, LayoutPathOf(mod.Id)), Encoding.UTF8)) : null,
-                mod.Writes)).ToList(),
-            Handlers.Select(handler => new ModRuntimeHandler(handler.Mod, handler.File, handler.Function)).ToList());
+    {
+        var mods = Mods.Select(mod => new ModRuntimeMod(mod.Id, mod.Version, mod.Library, mod.Vm, mod.Requires,
+            mod.Files.Select(file => new ModSource(mod.Id, file,
+                File.ReadAllText(Path.Combine(directory, PathOf(mod.Id, file)), Encoding.UTF8))).ToList(),
+            mod.Layout ? GameLayout.Parse(File.ReadAllText(Path.Combine(directory, LayoutPathOf(mod.Id)), Encoding.UTF8)) : null,
+            mod.Writes)).ToList();
+        GameLayout? LayoutFor(string owner)
+        {
+            ModRuntimeMod? declaring = mods.FirstOrDefault(mod => mod.Id == owner);
+            return declaring?.Layout ?? mods.FirstOrDefault(mod => mod.Layout != null
+                                                                   && declaring?.Requires.Contains(mod.Id) == true)?.Layout;
+        }
+        var events = Events.Select(entry => new GameEvent(entry.Name, entry.Owner, entry.Point, entry.Description,
+            entry.Fields.Select(field => GameEvent.BuildField(field.Name, field.Type, field.Access, field.At,
+                entry.Point != null, LayoutFor(entry.Owner))).ToList())).ToList();
+        return new ModRuntimeStack(mods,
+            Handlers.Select(handler => new ModRuntimeHandler(handler.Mod, handler.File, handler.Function)).ToList(), events);
+    }
 
     public HookPlan ToPlan()
         => new(Sites.ToDictionary(pair => pair.Key,
                 pair => (IReadOnlyList<PlannedSite>)pair.Value.Select(site => new PlannedSite(site.Offset, site.Site, site.Point,
                     site.Handlers.Select(Planned).ToList())).ToList(), StringComparer.Ordinal),
             Engine.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value.Select(Planned).ToList(),
+                StringComparer.Ordinal),
+            LuaEvents.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value.Select(Planned).ToList(),
                 StringComparer.Ordinal));
 }
 

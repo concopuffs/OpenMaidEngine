@@ -206,10 +206,13 @@ public sealed partial class Scripting : IDisposable
             if (!IsOn(session, handler.Handler)) continue;
             // An engine event's subscriber in the instruction's list (ome.save.writing) gets the event's context:
             // its fields, and no frame.
+            // An event's subscriber at its point (spec §9.2) gets the event's fields over the frame's cells.
             HookContext context = handler.EngineEvent is { } name
                 ? HookContext.ForEngineEvent(name,
                     new KeyValuePair<string, CellValue>("slot", _interpreter.ReadOperand(instruction.Args[1])))
-                : HookContext.ForPoint(site, instruction, _interpreter, _memory.Encoding.CodePage);
+                : handler.GameEvent is { } gameEvent
+                    ? GameEventContext(gameEvent, site, instruction, _interpreter)
+                    : HookContext.ForPoint(site, instruction, _interpreter, _memory.Encoding.CodePage);
             if (Call(session, handler.Handler, context, frameAccess: handler.EngineEvent == null) is { } halt)
                 return halt;
         }
@@ -235,8 +238,12 @@ public sealed partial class Scripting : IDisposable
 
     /// <summary>Where a handler ran, for its error: the instruction of a point, the name of an event. Formed only
     /// when a call fails, so a call that succeeds formats nothing.</summary>
-    private static string Where(HookContext context)
-        => context.Kind == HookKind.Point ? $"{context.Script}@0x{context.Offset:x}" : context.Name ?? "";
+    private static string Where(HookContext context) => context switch
+    {
+        { Kind: HookKind.Point } => $"{context.Script}@0x{context.Offset:x}",
+        { Kind: HookKind.GameEvent, Script: { } script } => $"{context.Name} at {script}@0x{context.Offset:x}",
+        _ => context.Name ?? "",
+    };
 
     private string? Call(IModSession session, HandlerId handler, HookContext context, bool frameAccess)
     {
@@ -246,15 +253,16 @@ public sealed partial class Scripting : IDisposable
         bool outerFrameAccess = _frameAccess;
         _depth++;
         _frameAccess = frameAccess;
+        string? halt;
         try
         {
             session.Invoke(handler, context);
             _scene.FailuresInARow.Remove(handler.Index);
-            return null;
+            halt = null;
         }
         catch (ModScriptException error)
         {
-            return Failed(handler, error, Where(context));
+            halt = Failed(handler, error, Where(context));
         }
         finally
         {
@@ -262,6 +270,13 @@ public sealed partial class Scripting : IDisposable
             _frameAccess = outerFrameAccess;
             _depth--;
         }
+        // A subscriber of an event this call raised halted (--lua-errors halt): the outermost call returns its reason.
+        if (_depth == 0 && _nestedHalt is { } nested)
+        {
+            _nestedHalt = null;
+            return nested;
+        }
+        return halt;
     }
 
     /// <summary>A handler's error (spec §5.5): the log gets the mod, the handler, where it ran and the traceback; the

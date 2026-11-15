@@ -24,21 +24,33 @@ public sealed record ModRuntimeMod(string Id, string Version, bool Library, bool
     public IReadOnlyList<string> WriteList => Writes ?? [];
 }
 
-/// <summary>The mods that ship Lua, in load order, and every handler their hooks name.</summary>
-public sealed record ModRuntimeStack(IReadOnlyList<ModRuntimeMod> Mods, IReadOnlyList<ModRuntimeHandler> Handlers)
+/// <summary>The mods that ship Lua, in load order, every handler their hooks name, and the events they declare.</summary>
+public sealed record ModRuntimeStack(IReadOnlyList<ModRuntimeMod> Mods, IReadOnlyList<ModRuntimeHandler> Handlers,
+                                     IReadOnlyList<GameEvent>? Events = null)
 {
     public static readonly ModRuntimeStack Empty = new([], []);
 
     public bool HasLua => Mods.Count > 0;
 
     public ModRuntimeHandler this[HandlerId handler] => Handlers[handler.Index];
+
+    /// <summary>The declared events, empty when none.</summary>
+    public IReadOnlyList<GameEvent> EventList => Events ?? [];
+
+    public GameEvent? Event(string name)
+    {
+        foreach (GameEvent gameEvent in EventList)
+            if (gameEvent.Name == name) return gameEvent;
+        return null;
+    }
 }
 
 /// <summary>One handler due at a place, in the merged order of spec §7.4. <paramref name="EngineEvent"/> names the
 /// engine event the handler subscribes to when the event's subscribers take their places in an instruction's list
-/// (<c>ome.save.writing</c> before each numbered save, spec §7.7); such a handler is given the event's context.</summary>
+/// (<c>ome.save.writing</c> before each numbered save, spec §7.7); <paramref name="GameEvent"/> names the game event at
+/// the instruction's point that it subscribes to (spec §9.2). Such a handler is given the event's context.</summary>
 public sealed record PlannedHandler(HandlerId Handler, int Priority, int LoadOrder, bool Skip = false,
-                                    string? EngineEvent = null);
+                                    string? EngineEvent = null, string? GameEvent = null);
 
 /// <summary>A hooked instruction (spec §7.1, §7.5): its linked offset, its original offset, the point it is if it is
 /// one, and its handlers in order.</summary>
@@ -54,13 +66,22 @@ public sealed class HookPlan
                                                 new Dictionary<string, IReadOnlyList<PlannedHandler>>());
 
     /// <param name="sites">By script name, either form (<c>ADDEXP</c> or <c>ADDEXP.BIN</c>).</param>
+    /// <param name="luaEvents">The subscribers of each game event raised from Lua (spec §8.2), by event name.</param>
     public HookPlan(IReadOnlyDictionary<string, IReadOnlyList<PlannedSite>> sites,
-                    IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> engineEvents)
+                    IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> engineEvents,
+                    IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>>? luaEvents = null)
     {
         Sites = sites.ToDictionary(pair => TextCatalog.NormalizeScriptName(pair.Key), pair => pair.Value,
                                    StringComparer.Ordinal);
         EngineEvents = engineEvents;
+        LuaEvents = luaEvents ?? new Dictionary<string, IReadOnlyList<PlannedHandler>>();
     }
+
+    /// <summary>By game event name, the subscribers of an event raised from Lua, each list in the merged order.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> LuaEvents { get; }
+
+    public IReadOnlyList<PlannedHandler> SubscribersOf(string luaEvent)
+        => LuaEvents.TryGetValue(luaEvent, out var handlers) ? handlers : [];
 
     /// <summary>By normalized script name (<c>ADDEXP</c>).</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<PlannedSite>> Sites { get; }
@@ -68,7 +89,7 @@ public sealed class HookPlan
     /// <summary>By event name (<c>ome.session.start</c>), each list in the merged order.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> EngineEvents { get; }
 
-    public bool IsEmpty => Sites.Count == 0 && EngineEvents.Count == 0;
+    public bool IsEmpty => Sites.Count == 0 && EngineEvents.Count == 0 && LuaEvents.Count == 0;
 
     public IReadOnlyList<PlannedHandler> HandlersOf(string engineEvent)
         => EngineEvents.TryGetValue(engineEvent, out var handlers) ? handlers : [];

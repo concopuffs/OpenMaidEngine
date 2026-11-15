@@ -194,7 +194,6 @@ public sealed class ModLuaLinkTests : IDisposable
     }
 
     [Theory]
-    [InlineData("[[hooks]]\nevent = \"himegari.experience.award\"\nhandler = \"hooks.lua:on_award\"", "event hooks come with base mods")]
     [InlineData("[[hooks]]\nscript = \"ADDEXP.BIN\"\nfingerprint = \"" + AddExpFingerprint + "\"\nsite = 0x9a\nwhen = \"after\"\nhandler = \"hooks.lua:on_award\"",
                 "site hooks come with the wider hooks")]
     [InlineData("[[hooks]]\nscript = \"ADDEXP.BIN\"\nwhen = \"enter\"\nhandler = \"hooks.lua:on_award\"", "script entry and exit hooks")]
@@ -210,11 +209,6 @@ public sealed class ModLuaLinkTests : IDisposable
     [InlineData("api = 1\ncalls = [\"ADDEXP.BIN\"]", "script calls come with")]
     public void AWriteListWithoutABaseModAndScriptCallsAreRefused(string lua, string message)
         => Stop(ModLinker.Link(SyntheticBase(), [Mod("m", files: Hooks(Doubles), lua: lua)], []), message);
-
-    [Fact]
-    public void EventDeclarationsWaitForBaseMods()
-        => Stop(ModLinker.Link(SyntheticBase(), [Mod("m", files: new() { ["lua/hooks.lua"] = Doubles, ["events/award.toml"] = "" })], []),
-                "events/: event declarations come with base mods");
 
     [Fact]
     public void AModuleNamedLikeARequiredModIsAnError()
@@ -372,6 +366,213 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.NotEqual(ModLinkCache.ComputeKey(withRuntime, [lua], none), ModLinkCache.ComputeKey(other, [lua], none));
         Assert.Equal(ModLinkCache.ComputeKey(withRuntime, [], none), ModLinkCache.ComputeKey(other, [], none));
         Assert.True(ModLuaLinker.ShipsLua(plain));
+    }
+
+    // ------------------------------------------------------------------------------------------- events (§9.2, gate 5)
+
+    private const string Events = """
+        [[event]]
+        name = "test.award"
+        point = "himegari.experience.after_calculation"
+
+        [[event.field]]
+        name = "amount"
+        at = "L[0x1]"
+        type = "int"
+        access = "rw"
+
+        [[event.field]]
+        name = "limit"
+        at = "turn_limit"
+        type = "int"
+
+        [[event]]
+        name = "test.computed"
+        raised_by = "lua"
+
+        [[event.field]]
+        name = "amount"
+        type = "int"
+        access = "rw"
+        """;
+
+    private ModPackage EventBase(string events = Events, string? points = null)
+    {
+        var files = new Dictionary<string, string> { ["layout/globals.json"] = BaseLayout, ["events/award.toml"] = events };
+        if (points != null) files["layout/points.json"] = points;
+        return Mod("test-base", files: files);
+    }
+
+    private const string RequiresBase = "[[requires]]\nid = \"test-base\"\nversion = \">=1, <2\"\n";
+
+    private static string EventHook(string name, int priority = 0, string handler = "hooks.lua:on_award")
+        => $"[[hooks]]\nevent = \"{name}\"\nhandler = \"{handler}\"\npriority = {priority}\n";
+
+    private const string Subscribes = "function on_award(ctx) ctx.amount = ctx.amount * 2 end";
+
+    /// <summary>A mod without vm that subscribes to the events it is given.</summary>
+    private ModPackage Subscriber(string id, string hooks, bool requires = true)
+        => Mod(id, (requires ? RequiresBase : "") + hooks, Hooks(Subscribes), lua: "api = 1");
+
+    [Fact]
+    public void AnEventAtAPointJoinsItsInstructionsListInTheMergedOrderAndTheCacheKeepsIt()
+    {
+        ModLinkResult result = ModLinker.Link(SyntheticBase(),
+            [EventBase(), Subscriber("first", EventHook("test.award")), Subscriber("last", EventHook("test.award", 10)),
+             Mod("hooker", PointHook(extra: "priority = 5"), Hooks(Doubles))], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+
+        Assert.Equal(["test.award", "test.computed"], result.Lua.Stack.EventList.Select(gameEvent => gameEvent.Name));
+        GameEvent award = result.Lua.Stack.Event("test.award")!;
+        Assert.Equal(("test-base", ExperiencePoint), (award.Owner, award.Point));
+        Assert.Equal([new GameEventField("amount", EventFieldType.Int, true, "L[0x1]", new FieldLocation.Local(CellKind.Integer, 1)),
+                      new GameEventField("limit", EventFieldType.Int, false, "turn_limit",
+                                         new FieldLocation.Global(CellKind.Integer, 0x11, "stage_turn_limit"))], award.Fields);
+
+        // One instruction, one list: the subscribers and the point hook by priority, each subscriber naming its event.
+        PlannedSite site = Assert.Single(result.Lua.Plan.Sites["ADDEXP"]);
+        Assert.Equal((0x9a, ExperiencePoint), (site.Offset, site.Point));
+        Assert.Equal([("first", "test.award"), ("hooker", null), ("last", "test.award")],
+                     site.Handlers.Select(handler => (result.Lua.Stack[handler.Handler].ModId, handler.GameEvent)));
+        ModReportLine order = Assert.Single(result.Report.Lines, line => line.Class == ModReportClass.OrderedInteraction);
+        Assert.EndsWith("handlers run in this order: first hooks.lua:on_award on test.award (priority 0), hooker hooks.lua:on_award "
+                        + "(priority 5), last hooks.lua:on_award on test.award (priority 10)", order.Message);
+
+        // The cache keeps the events and which handlers subscribe.
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", SyntheticBase(), result);
+        MountedModLayer reopened = ModLinkCache.TryOpen(cache, "key")!;
+        Assert.Equal(result.Lua.Stack.EventList.Select(gameEvent => (gameEvent.Name, gameEvent.Owner, gameEvent.Point)),
+                     reopened.LuaStack.EventList.Select(gameEvent => (gameEvent.Name, gameEvent.Owner, gameEvent.Point)));
+        Assert.Equal(result.Lua.Stack.EventList.SelectMany(gameEvent => gameEvent.Fields),
+                     reopened.LuaStack.EventList.SelectMany(gameEvent => gameEvent.Fields));
+        Assert.Equal(site.Handlers, Assert.Single(reopened.HookPlan.Sites["ADDEXP"]).Handlers);
+    }
+
+    [Fact]
+    public void AnEventRaisedFromLuaHasItsSubscribersInTheirOwnOrder()
+    {
+        ModLinkResult result = ModLinker.Link(SyntheticBase(),
+            [EventBase(), Subscriber("late", EventHook("test.computed", 3)), Subscriber("early", EventHook("test.computed", 1))], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.Empty(result.Lua.Plan.Sites);
+        Assert.Equal(["early", "late"], result.Lua.Plan.SubscribersOf("test.computed")
+                                           .Select(handler => result.Lua.Stack[handler.Handler].ModId));
+        Assert.Contains(result.Report.Lines, line => line.Class == ModReportClass.OrderedInteraction
+                                                     && line.Message.StartsWith("test.computed: subscribers run in this order: ",
+                                                                                StringComparison.Ordinal));
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", SyntheticBase(), result);
+        Assert.Equal(result.Lua.Plan.SubscribersOf("test.computed"),
+                     ModLinkCache.TryOpen(cache, "key")!.HookPlan.SubscribersOf("test.computed"));
+    }
+
+    [Fact]
+    public void AnUndeclaredEventAndASubscriberThatDoesNotRequireItsOwnerAreLinkErrors()
+    {
+        ModReportLine line = Stop(ModLinker.Link(SyntheticBase(), [EventBase(), Subscriber("m", EventHook("test.none"))], []),
+                                  "no mod of the stack declares the event 'test.none' (it declares test.award, test.computed)");
+        Assert.Equal(["m"], line.Mods);
+        Stop(ModLinker.Link(SyntheticBase(), [Subscriber("m", EventHook("test.none"), requires: false)], []),
+             "no mod of the stack declares the event 'test.none'");
+        line = Stop(ModLinker.Link(SyntheticBase(), [EventBase(), Subscriber("m", EventHook("test.award"), requires: false)], []),
+                    "test-base declares test.award, and the mod does not require it");
+        Assert.Equal(["m"], line.Mods);
+    }
+
+    [Fact]
+    public void TwoModsThatDeclareOneEventAreAHardConflictAndItsSubscribersReportNothingMore()
+    {
+        ModPackage other = Mod("other", RequiresBase, new() { ["events/mine.toml"] =
+            "[[event]]\nname = \"test.computed\"\nraised_by = \"lua\"\n", ["lua/init.lua"] = "return {}" }, lua: "api = 1");
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), [EventBase(), other, Subscriber("m", EventHook("test.computed"))], []);
+        ModReportLine line = Stop(result, "test-base and other both declare the event test.computed");
+        Assert.Equal(ModReportClass.HardConflict, line.Class);
+        Assert.Equal(["other", "test-base"], line.Mods.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("[[event]]\nname = \"test.award\"\npoint = \"" + ExperiencePoint + "\"\n[[event.field]]\nname = \"limit\"\nat = \"no_such\"\ntype = \"int\"",
+                "events/award.toml: test.award: field limit: 'no_such': the layout names no global 'no_such'")]
+    [InlineData("[[event]]\nname = \"test.award\"\npoint = \"himegari.nowhere\"",
+                "events/award.toml: test.award: 'himegari.nowhere' is not a named patch point of himegari")]
+    [InlineData("[[event]]\nname = \"test.award\"\nraised_by = \"lua\"\n[[event.field]]\nname = \"x\"\nat = \"L[1]\"\ntype = \"int\"",
+                "events/award.toml: test.award: field x: an event raised from Lua has no locations")]
+    [InlineData("[[event]\n", "events/award.toml: not valid TOML")]
+    public void ADeclarationThatDoesNotLinkStopsTheLinkNamingItsFile(string events, string message)
+        => Assert.Equal(["test-base"], Stop(ModLinker.Link(SyntheticBase(), [EventBase(events), Subscriber("m", EventHook("test.award"))], []),
+                                            message).Mods);
+
+    [Fact]
+    public void AnEventAtAPointNeedsTheVmCapabilityInItsDeclaringMod()
+    {
+        ModPackage declarer = Mod("declarer", files: new() { ["events/x.toml"] =
+            "[[event]]\nname = \"test.award\"\npoint = \"" + ExperiencePoint + "\"\n[[event.field]]\nname = \"amount\"\nat = \"L[1]\"\ntype = \"int\"\n" },
+            lua: "api = 1");
+        Assert.Equal(["declarer"], Stop(ModLinker.Link(SyntheticBase(), [declarer], []),
+                                        "an event at a point reads the frame's cells, which needs the vm capability").Mods);
+    }
+
+    [Fact]
+    public void APointLinksThroughTheBaseModsCopyWhenTheProfileHasNoPatchPoints()
+    {
+        string points = $$"""
+            {"profile": "himegari", "points": [{"name": "{{ExperiencePoint}}", "script": "ADDEXP.BIN",
+             "at": [{"fingerprint": "{{OmsPatchPlan.FingerprintOf(SyntheticAddExp)}}", "site": 154}]}]}
+            """;
+        ModLinkBase noPoints = SyntheticBase() with { PatchPoints = null };
+        ModLinkResult result = ModLinker.Link(noPoints,
+            [EventBase(points: points), Subscriber("m", EventHook("test.award")), Mod("hooker", PointHook(), Hooks(Doubles))], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.Equal(2, Assert.Single(result.Lua.Plan.Sites["ADDEXP"]).Handlers.Count);
+
+        Stop(ModLinker.Link(noPoints, [EventBase(), Subscriber("m", EventHook("test.award"))], []),
+             "'" + ExperiencePoint + "' is not a named patch point of himegari");
+    }
+
+    /// <summary>The shipped example that doubles each award without vm (spec §9.4), and the base mod it requires.</summary>
+    private IReadOnlyList<ModPackage> ShippedAward()
+    {
+        ModPackage user = ModPackage.Open(Path.Combine(Paths.Repo, "oms", "examples", "mods", "example.double-exp-event"));
+        _opened.Add(user);
+        IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([user], new ModLinkReport());
+        _opened.AddRange(shipped);
+        return [user, .. shipped];
+    }
+
+    [Fact]
+    public void TheShippedBaseModDeclaresTheExperienceAwardAtItsPoint()
+    {
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), ShippedAward(), []);
+        Assert.True(result.Succeeded, result.Report.Render());
+        GameEvent award = Assert.Single(result.Lua.Stack.EventList);
+        Assert.Equal(("himegari.experience.award", "himegari-base", ExperiencePoint), (award.Name, award.Owner, award.Point));
+        Assert.Equal(["amount", "unit", "level"], award.Fields.Select(field => field.Name));
+        Assert.Equal(new FieldLocation.Global(CellKind.Integer, 0x66715, "current_unit_id"), award.Field("unit")!.Location);
+        var level = Assert.IsType<FieldLocation.Element>(award.Field("level")!.Location);
+        Assert.Equal(("unit_current_levels", 0x6930), (level.Table.Name, level.Table.Address));
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void ASubscriberOfTheExperienceAwardDoesWhatTheGuidesPatchDoesWithoutVm()
+    {
+        ModLinkBase linkBase = InstalledBase();
+        ModLinkResult patched = ModLinker.Link(linkBase,
+            [OmsMod("double-exp-oms", $"before site {ExperiencePoint} {{\n    exp = exp * 2\n}}")], []);
+        Assert.True(patched.Succeeded, patched.Report.Render());
+        string withPatch = Award(Sys4Loader.Parse(patched.Scripts[AddExp].Bytes, HimegariTable, AddExp), 7).ToJson();
+
+        ModLinkResult linked = ModLinker.Link(linkBase, ShippedAward(), []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = linked.Lua.Stack, Plan = linked.Lua.Plan, Errors = LuaErrorPolicy.Halt,
+        });
+        string withEvent = Award(Sys4Loader.Parse(linkBase.ReadScript(AddExp)!, HimegariTable, AddExp), 7, scripting).ToJson();
+        Assert.DoesNotContain(scripting.RecentLog, line => line.Contains(" error ", StringComparison.Ordinal));
+        Assert.Equal(14, GameSession.FromJson(withEvent).Globals[0x6994 + 1]);
+        Assert.Equal(withPatch, withEvent);
     }
 
     // ------------------------------------------------------------------------------------------- gate 4

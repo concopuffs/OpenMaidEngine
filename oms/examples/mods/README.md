@@ -30,5 +30,8 @@ ran the same scenarios on native AGE.
   handler on `himegari.experience.after_calculation` doubles `L[0x1]`. `ModLuaLinkTests` links it and runs
   `ADDEXP.BIN` with it and with the guide's OMS patch, and both leave the same state. It targets `extended`, so it
   runs in the port only.
+- `example.double-exp-event` (Lua scripting §9.4, gate 5) is the same mod as a subscriber of `himegari-base`'s
+  `himegari.experience.award`: it names no address, script or fingerprint and has no `vm`. `ModLuaLinkTests` runs it
+  on `ADDEXP.BIN` and compares it with the guide's OMS patch too.
 
 Each folder is an unpacked Open Maid Pack; `Ome.Cli omp build DIR` packs one into a `.omp` with stored plans.

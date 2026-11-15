@@ -285,6 +285,13 @@ internal sealed class HookView(HookContext context, LuaModSession session) : ILu
             var self = Metatables.Self<HookView>(context);
             HookContext hook = self.Context;
             if (!context.GetArgument(1).TryRead(out string key)) return context.Return(LuaValue.Nil);
+            if (hook.Kind == HookKind.GameEvent)
+            {
+                if (key == "event") return context.Return(hook.Name ?? "");
+                return hook.Event!.Field(key) is { } field
+                    ? context.Return(EventFieldValues.ToLua(field, hook.ReadField(field)))
+                    : context.Return(LuaValue.Nil);
+            }
             if (hook.Kind == HookKind.EngineEvent)
             {
                 if (key == "event") return context.Return(hook.Name ?? "");
@@ -305,10 +312,41 @@ internal sealed class HookView(HookContext context, LuaModSession session) : ILu
             };
         });
         meta["__newindex"] = session.Fn("__newindex", context =>
-            throw new LuaRuntimeException(context.State, "the context is read-only; write an operand through ctx.args[i].value", 1));
+        {
+            HookContext hook = Metatables.Self<HookView>(context).Context;
+            if (hook.Kind != HookKind.GameEvent)
+                throw new LuaRuntimeException(context.State, "the context is read-only; write an operand through ctx.args[i].value", 1);
+            if (!context.GetArgument(1).TryRead(out string key) || hook.Event!.Field(key) is not { } field)
+                throw new LuaRuntimeException(context.State,
+                    $"{hook.Name} has no field {LuaModSession.Show(context.GetArgument(1))}", 1);
+            hook.WriteField(field, EventFieldValues.FromLua(context, field, context.GetArgument(2)));
+            return context.Return();
+        });
         meta["__metatable"] = Metatables.Locked;
         return meta;
     }
+}
+
+/// <summary>A field's value between Lua and the engine (spec §9.2): a bool as a boolean, the others as their cells
+/// give them.</summary>
+internal static class EventFieldValues
+{
+    public static LuaValue ToLua(GameEventField field, CellValue value)
+        => field.Type == EventFieldType.Bool ? value.Number != 0
+            : value.Kind == CellKind.String ? value.Text ?? "" : value.Number;
+
+    /// <summary>A Lua value for the field: a boolean for a bool, a number for an int or a float, a string for a
+    /// string. The field's rules (<see cref="EventFieldRules"/>) then check the number.</summary>
+    public static CellValue FromLua(LuaFunctionExecutionContext context, GameEventField field, LuaValue value)
+        => (field.Type, value.Type) switch
+        {
+            (EventFieldType.Bool, LuaValueType.Boolean) => CellValue.Integer(value.Read<bool>() ? 1 : 0),
+            (EventFieldType.Int, LuaValueType.Number) => CellValue.Integer(value.Read<double>()),
+            (EventFieldType.Float, LuaValueType.Number) => CellValue.Float(value.Read<double>()),
+            (EventFieldType.String, LuaValueType.String) => CellValue.String(value.Read<string>()),
+            _ => throw new LuaRuntimeException(context.State,
+                $"field {field.Name} is {field.Type.Name()}, not {value.TypeToString()}", 1),
+        };
 }
 
 /// <summary><c>ctx.args</c>: the instruction's operands, 1-based.</summary>

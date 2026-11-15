@@ -1,0 +1,25 @@
+# One experience award (Lua scripting spec §9.2). Hand-written: the event names its point and gives each field's cell,
+# by the names layout/globals.json exports.
+
+[[event]]
+name = "himegari.experience.award"
+point = "himegari.experience.after_calculation"
+description = "One experience award, after the multipliers and before it is applied."
+
+[[event.field]]
+name = "amount"
+at = "L[0x1]"                    # the frame's integer local 1: the experience the unit receives
+type = "int"
+access = "rw"
+
+[[event.field]]
+name = "unit"
+at = "current_unit_id"           # the unit the award goes to
+type = "int"
+access = "r"
+
+[[event.field]]
+name = "level"
+at = "unit_current_levels[current_unit_id]"
+type = "int"
+access = "r"

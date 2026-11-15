@@ -18,6 +18,7 @@ An Open Maid Pack (OMP) is one mod. It comes in two forms that load identically:
 ├── text/           translation catalogs, text/<language>/*.toml (format version 2; languages.md)
 ├── fonts/          font files a language uses (format version 2; languages.md)
 ├── lua/            Lua sources; init.lua is optional (format version 3; lua.md)
+├── events/         game event declarations (NAME.toml), for a mod that declares events (format version 3; lua.md)
 ├── layout/         a game's base mod only: the names of its cells (format version 3)
 ├── README.md       optional
 └── LICENSE         optional
@@ -194,14 +195,16 @@ else, or language assets besides, is presentation only, which its save stamps re
 ### Lua: `lua/`
 
 `lua/` holds the mod's Lua sources (`*.lua` only), which `[lua]` and `[[hooks]]` use. A package with `lua/` needs
-a `[lua]` table, and it is never presentation only: Lua can change what the game stores. See [lua.md](lua.md).
+a `[lua]` table, and it is never presentation only: Lua can change what the game stores. `events/` holds the game
+events the mod declares (`*.toml`, no subfolders), and takes a `[lua]` table and a `[game]` too. See
+[lua.md](lua.md), "Game events".
 
 ### Base mods: `layout/`
 
 The engine ships one base mod per game, `<profile>-base`, which names the game's cells for Lua mods. Its
 `layout/globals.json` gives each named global its bank, address and shape; `layout/points.json` copies the game's
-patch points; `layout/exports.txt` lists the names it exports, which stay exported until its major version is
-raised. A mod that names cells requires the base mod (`[[requires]] id = "<profile>-base"`). The engine mounts it
+patch points, which the link uses when the profile has none of its own; `layout/exports.txt` lists the names it
+exports, which stay exported until its major version is raised. Its `events/` declares the game's events. A mod that names cells requires the base mod (`[[requires]] id = "<profile>-base"`). The engine mounts it
 only then, and uses an installed package of the same id instead when there is one. The files are written by the
 project's `tools/base_mod_build.py`; a mod has no reason to carry `layout/`, and a package that does needs omp 3,
 its own game's `[game]` and `[lua] capabilities = ["vm"]`. How a Lua mod reads and writes names through a base mod

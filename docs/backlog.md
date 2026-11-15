@@ -346,7 +346,8 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   - **The first release:**
     3. events and the first base mods: the layout, the accessors with declared writes, the write scan and
        `--lua-dev`, the trace, editor stubs, and the guide for mod authors. Being built: the base mod package
-       (`mods/<profile>-base/`, plan §7.1) and the accessors with the write lists (plan §7.2) are done.
+       (`mods/<profile>-base/`, plan §7.1), the accessors with the write lists (plan §7.2) and the events with
+       `maid.events.emit` and Himegari's experience award (plan §7.3) are done.
   - **After it:** 4, raw sites, `skip`, script entry and exit, and watches; 5, synchronous script calls and the
     base mods' helpers; 6, reload and the seeded random streams.
 - **Lua-CSharp past 0.5.8.** 0.5.8 writes fractions in .NET's form (`3 * 1.1` reads `3.3000000000000003`, `1/0`

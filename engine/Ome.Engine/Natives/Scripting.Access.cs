@@ -60,6 +60,9 @@ public sealed partial class Scripting
 
         public string? OwnLayout => mod == null ? owner.ConsoleLayout()?.ModId : mod.Layout != null ? mod.Id : null;
 
+        public IReadOnlyDictionary<string, CellValue> Emit(string eventName, IReadOnlyDictionary<string, CellValue> fields)
+            => owner.Emit(ModId, eventName, fields);
+
         public INamedAccess? Names(string baseModId)
         {
             if (!_names.TryGetValue(baseModId, out INamedAccess? face)) _names[baseModId] = face = Build(baseModId);
@@ -97,16 +100,7 @@ public sealed partial class Scripting
         public int Named(LayoutGlobal global, string column) => LayoutCells.Named(global, column);
 
         public CellValue Read(LayoutGlobal global, int row = -1, int column = -1)
-        {
-            int address = LayoutCells.Address(global, row, column);
-            ScriptMemory memory = owner._memory;
-            return global.Kind switch
-            {
-                CellKind.Integer => CellValue.Integer(CellRules.ReadInteger(memory.Integer(address))),
-                CellKind.Float => CellValue.Float(CellRules.ReadFloat(memory.Float(address))),
-                _ => CellValue.String(memory.String(address)),
-            };
-        }
+            => owner.ReadCell(global.Kind, LayoutCells.Address(global, row, column));
 
         public void Write(LayoutGlobal global, int row, int column, CellValue value)
         {
@@ -114,18 +108,7 @@ public sealed partial class Scripting
                 throw new ScriptAccessException($"{modId} writes {global.Name}, which its [lua] writes list does not name ("
                     + (writes.Count == 0 ? "it lists none" : "writes = [" + string.Join(", ", writes.Order(StringComparer.Ordinal)) + "]")
                     + ")");
-            int address = LayoutCells.Address(global, row, column);
-            bool text = global.Kind == CellKind.String;
-            if (text != (value.Kind == CellKind.String))
-                throw new ScriptAccessException($"{global.Name} holds {(text ? "strings" : "numbers")}, not "
-                                                + (value.Kind == CellKind.String ? "a string" : "a number"));
-            ScriptMemory memory = owner._memory;
-            switch (global.Kind)
-            {
-                case CellKind.Integer: memory.SetInteger(address, CellRules.Integer(value.Number)); break;
-                case CellKind.Float: memory.SetFloat(address, CellRules.FloatBits(value.Number)); break;
-                default: memory.SetString(address, CellRules.Text(value.Text ?? "", memory.Encoding.CodePage)); break;
-            }
+            owner.WriteCell(global.Kind, LayoutCells.Address(global, row, column), value, global.Name);
         }
     }
 

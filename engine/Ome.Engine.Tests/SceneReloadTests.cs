@@ -124,8 +124,9 @@ public class SceneReloadTests
         [
             // The interpreter, attached once, and each script's hook table, which the link's plan decides.
             "_interpreter", "_tables",
-            // Lua on the stack and whether it may read locals: zero and false between calls, and op 0x9 runs no Lua.
-            "_depth", "_frameAccess",
+            // Lua on the stack, whether it may read locals, and a halt from a nested emit: zero, false and null between
+            // calls, and op 0x9 runs no Lua.
+            "_depth", "_frameAccess", "_nestedHalt",
             // The run's log and notices, and the front end's console chunks not yet run.
             "_recentLog", "_noticeCount", "_latestNotice", "_console",
         ],
