@@ -342,8 +342,12 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   authoring flags while showing its logs (`diagnostics/lua.log`, the trace). It would drive the same commands and
   files, as the launcher above drives the engine (mod loader spec §12), and may share that launcher's shell: the
   launcher serves players, the devkit authors. Outside the repository it needs the toolchain an export lacks (the
-  first item of this section). Done when a design spec settles its scope and UI toolkit, and a first version
-  covers check, build and a port run with the authoring flags.
+  first item of this section). An editor extension (VS Code, say) is the other form to weigh, instead of the
+  application or beside it: it could bundle OMS language support (highlighting, the modules' names, the compiler's
+  errors in place), run the commands from the editor, point lua-language-server at `omp lua-stubs`' definitions, and
+  open a game script (`.BIN`) as its `oms-decompile` text. Done when a design spec settles the form (an application,
+  an extension or both), its scope and its toolkit, and a first version covers check, build and a port run with the
+  authoring flags.
 - **More base mod helpers.** Each base mod has one helper, `give_item` over ADDITEM (`mods/<profile>-base/lua/`;
   plan §9.3). The check ahead found more wait-free scripts in both games (plan §9.2: 22 of 27 probed in Himegari, 30
   of 44 in Kamidori), most of them battle arithmetic (`CALC*`) or map and unit edits (`SET*`, `DEL*`) that read
