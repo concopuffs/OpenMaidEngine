@@ -26,4 +26,9 @@ ran the same scenarios on native AGE.
   the first page of the translated `patch/SC0000.bin` (site 0xd0a, fingerprinted on the translated bytes).
   `NaturalBootIntegrationTests.KamidoriTranslatedPrologueFragmentIsTheFirstAdvPage` boots a new game into it.
 
+- `example.double-exp-lua` (Lua scripting gate 4) is the Lua version of the Himegari guide's experience patch: a
+  handler on `himegari.experience.after_calculation` doubles `L[0x1]`. `ModLuaLinkTests` links it and runs
+  `ADDEXP.BIN` with it and with the guide's OMS patch, and both leave the same state. It targets `extended`, so it
+  runs in the port only.
+
 Each folder is an unpacked Open Maid Pack; `Ome.Cli omp build DIR` packs one into a `.omp` with stored plans.

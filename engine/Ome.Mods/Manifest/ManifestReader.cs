@@ -40,6 +40,19 @@ public static partial class ManifestReader
     [GeneratedRegex(@"^sha256:[0-9a-f]{64}$")]
     private static partial Regex FingerprintPattern();
 
+    /// <summary>A handler (Lua scripting spec §6.2): a <c>.lua</c> file under <c>lua/</c>, a colon, and a Lua
+    /// identifier.</summary>
+    [GeneratedRegex(@"^(?<file>[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*\.lua):(?<function>[A-Za-z_][A-Za-z0-9_]*)$")]
+    private static partial Regex HandlerPattern();
+
+    /// <summary>A dotted name: an event, an engine event or a patch point (<c>himegari.experience.award</c>).</summary>
+    [GeneratedRegex(@"^[a-z0-9_]+(?:-[a-z0-9_]+)*(?:\.[a-z0-9_]+(?:-[a-z0-9_]+)*)+$")]
+    private static partial Regex DottedNamePattern();
+
+    /// <summary>A registry name a mod writes (<c>stage_turn_limit</c>).</summary>
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*$")]
+    private static partial Regex GlobalNamePattern();
+
     public static bool IsValidId(string id) => id.Length <= 64 && IdPattern().IsMatch(id);
     public static bool IsValidScriptName(string name) => ScriptNamePattern().IsMatch(name);
     public static bool IsValidAssetName(string name) => AssetNamePattern().IsMatch(name);
@@ -82,8 +95,11 @@ public static partial class ManifestReader
         {
             profile = game.String("profile", required: true) ?? "";
             target = game.String("target", required: true) ?? "";
-            if (target is { Length: > 0 } && target != "native")
-                game.Problems.Add($"game.target: '{target}' is not supported; version 1 mods target \"native\"");
+            if (target == ModManifest.ExtendedTarget && omp < ModManifest.LuaOmpVersion)
+                game.Problems.Add($"game.target: \"{ModManifest.ExtendedTarget}\" needs omp = {ModManifest.LuaOmpVersion}");
+            else if (target is { Length: > 0 } && target != ModManifest.NativeTarget && target != ModManifest.ExtendedTarget)
+                game.Problems.Add($"game.target: '{target}' is not supported; a mod targets \"{ModManifest.NativeTarget}\" "
+                                  + $"or \"{ModManifest.ExtendedTarget}\"");
             revisions = game.Strings("revisions");
             foreach (string revision in revisions.Where(revision => !IsValidFingerprint(revision)))
                 game.Problems.Add($"game.revisions: '{revision}' is not a sha256:<64 lowercase hex> fingerprint");
@@ -189,15 +205,151 @@ public static partial class ManifestReader
                     languages.Add(language);
         }
 
+        // Lua scripting spec §6.2: format version 3 adds [lua] and [[hooks]].
+        ModLuaSettings? lua = null;
+        var hooks = new List<ModHook>();
+        if ((root.ContainsKey("lua") || root.ContainsKey("hooks")) && omp < ModManifest.LuaOmpVersion)
+        {
+            reader.Consume("lua");
+            reader.Consume("hooks");
+            reader.Problems.Add($"lua: [lua] and [[hooks]] need omp = {ModManifest.LuaOmpVersion}");
+        }
+        else
+        {
+            if (reader.Table("lua") is { } luaTable) lua = ReadLua(luaTable, profile == null);
+            int index = 0;
+            foreach (TableReader entry in reader.TableArray("hooks"))
+                if (ReadHook(entry, index++) is { } hook) hooks.Add(hook);
+            if (profile == null && root.ContainsKey("hooks"))
+                reader.Problems.Add("hooks: a package without [game] is a library: a hook names something of one game "
+                                    + "(Lua scripting spec §6.4)");
+            else if (hooks.Count > 0 && lua == null)
+                reader.Problems.Add("hooks: [[hooks]] needs a [lua] table");
+            if (lua != null && profile != null && target is { Length: > 0 } && target != ModManifest.ExtendedTarget)
+                reader.Problems.Add($"game.target: a mod with Lua targets \"{ModManifest.ExtendedTarget}\"; native AGE "
+                                    + "cannot run it");
+        }
+
         reader.RejectUnknown();
         if (reader.Problems.Count > 0) throw new ModManifestException(origin, reader.Problems);
         return new ModManifest
         {
-            OmpVersion = omp, Languages = languages,
+            OmpVersion = omp, Languages = languages, Lua = lua, Hooks = hooks,
             Id = id, Name = name, Version = version, Authors = authors, Description = description,
             Profile = profile, Target = target, Revisions = revisions, OmsVersion = oms,
             Requires = requires, Conflicts = conflicts, After = after, Before = before,
             ScriptNames = scriptNames, AssetNames = assetNames, ReplacementOrders = replacementOrders,
+        };
+    }
+
+    /// <summary>A <c>[lua]</c> table. A package without <c>[game]</c> is a library: it may give only <c>api</c>
+    /// (Lua scripting spec §6.4).</summary>
+    private static ModLuaSettings ReadLua(TableReader table, bool library)
+    {
+        int api = table.Integer("api", required: true) ?? ModLuaSettings.CurrentApi;
+        if (api != ModLuaSettings.CurrentApi)
+            table.Problems.Add($"lua.api: maid API version {api} is not supported (this engine provides {ModLuaSettings.CurrentApi})");
+        var capabilities = table.Strings("capabilities");
+        foreach (string capability in capabilities.Where(c => !ModLuaSettings.KnownCapabilities.Contains(c)))
+            table.Problems.Add($"lua.capabilities: '{capability}' is not a capability (version 1 has \"{ModLuaSettings.VmCapability}\")");
+        var writes = table.Strings("writes");
+        foreach (string name in writes.Where(name => !GlobalNamePattern().IsMatch(name)))
+            table.Problems.Add($"lua.writes: '{name}' is not a global's name");
+        var calls = table.Strings("calls");
+        foreach (string script in calls.Where(script => !IsValidScriptName(
+                     script.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase) ? script[..^4] : script)))
+            table.Problems.Add($"lua.calls: '{script}' is not a script name");
+        foreach (var (key, names) in new[] { ("capabilities", capabilities), ("writes", writes), ("calls", calls) })
+            foreach (var duplicate in names.GroupBy(n => n, StringComparer.Ordinal).Where(g => g.Count() > 1))
+                table.Problems.Add($"lua.{key}: '{duplicate.Key}' is listed more than once");
+        if (library)
+            foreach (string key in new[] { "capabilities", "writes", "calls" }.Where(table.Has))
+                table.Problems.Add($"lua.{key}: a package without [game] is a library: it has no capabilities, writes "
+                                   + "or calls; a mod passes it access (Lua scripting spec §6.4)");
+        table.RejectUnknown();
+        return new ModLuaSettings(api, capabilities, writes, calls);
+    }
+
+    /// <summary>One <c>[[hooks]]</c> entry (Lua scripting spec §6.3): exactly one form, and the keys that form takes.
+    /// Whether the form is built yet, and whether its target exists, the link decides.</summary>
+    private static ModHook? ReadHook(TableReader entry, int index)
+    {
+        string? eventName = entry.String("event"), engine = entry.String("engine"), point = entry.String("point");
+        string? script = entry.String("script"), watch = entry.String("watch");
+        string? fingerprint = entry.String("fingerprint"), when = entry.String("when");
+        int? site = entry.Integer("site");
+        int priority = entry.Integer("priority") ?? 0;
+        bool skip = entry.Boolean("skip") ?? false;
+        string handlerText = entry.String("handler", required: true) ?? "";
+
+        var forms = new List<(ModHookForm Form, string Target)>();
+        if (eventName != null) forms.Add((ModHookForm.Event, eventName));
+        if (engine != null) forms.Add((ModHookForm.Engine, engine));
+        if (point != null) forms.Add((ModHookForm.Point, point));
+        if (watch != null) forms.Add((ModHookForm.Watch, watch));
+        if (script != null) forms.Add((site != null || fingerprint != null ? ModHookForm.Site : ModHookForm.Script, script));
+        else if (site != null || fingerprint != null)
+            entry.Problems.Add($"{entry.Path}script: a site hook names its script, fingerprint and site");
+        string where = entry.Path.TrimEnd('.');
+        if (forms.Count != 1)
+        {
+            entry.Problems.Add(forms.Count == 0
+                ? $"{where}: a hook names one of event, engine, point, script or watch"
+                : $"{where}: a hook has one form; this one names "
+                  + string.Join(" and ", forms.Select(f => f.Form.ToString().ToLowerInvariant())));
+            entry.RejectUnknown();
+            return null;
+        }
+        var (form, target) = forms[0];
+        switch (form)
+        {
+            case ModHookForm.Event or ModHookForm.Point when !DottedNamePattern().IsMatch(target):
+                entry.Problems.Add($"{entry.Path}{form.ToString().ToLowerInvariant()}: '{target}' is not a dotted name");
+                break;
+            case ModHookForm.Engine when !target.StartsWith("ome.", StringComparison.Ordinal) || !DottedNamePattern().IsMatch(target):
+                entry.Problems.Add($"{entry.Path}engine: '{target}' is not an engine event (ome.…)");
+                break;
+            case ModHookForm.Site or ModHookForm.Script when !target.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)
+                                                             || !IsValidScriptName(target[..^4]):
+                entry.Problems.Add($"{entry.Path}script: '{target}' is not a script file name (NAME.BIN)");
+                break;
+        }
+        if (form == ModHookForm.Site)
+        {
+            if (fingerprint == null) entry.Problems.Add($"{entry.Path}fingerprint: required for a site hook");
+            else if (!IsValidFingerprint(fingerprint))
+                entry.Problems.Add($"{entry.Path}fingerprint: '{fingerprint}' is not a sha256:<64 lowercase hex> fingerprint");
+            if (site == null) entry.Problems.Add($"{entry.Path}site: required for a site hook");
+            else if (site < 0) entry.Problems.Add($"{entry.Path}site: an offset is not negative");
+        }
+        string[] whens = form switch
+        {
+            ModHookForm.Site => ["before", "after"],
+            ModHookForm.Script => ["enter", "exit"],
+            _ => [],
+        };
+        string choices = string.Join(" or ", whens.Select(w => $"\"{w}\""));
+        if (whens.Length > 0 && when == null)
+            entry.Problems.Add($"{entry.Path}when: required ({choices})");
+        else if (when != null && !whens.Contains(when))
+            entry.Problems.Add(whens.Length == 0
+                ? $"{entry.Path}when: a {form.ToString().ToLowerInvariant()} hook takes no 'when'"
+                : $"{entry.Path}when: '{when}' is not {choices}");
+        if (skip && !(form == ModHookForm.Point || form == ModHookForm.Site && when == "before"))
+            entry.Problems.Add($"{entry.Path}skip: only a point hook, or a site hook before its instruction, may skip");
+
+        ModHandlerRef handler = new("", "");
+        if (handlerText.Length > 0)
+        {
+            Match match = HandlerPattern().Match(handlerText);
+            if (match.Success) handler = new ModHandlerRef(match.Groups["file"].Value, match.Groups["function"].Value);
+            else entry.Problems.Add($"{entry.Path}handler: '{handlerText}' is not FILE.lua:FUNCTION (a file under lua/ and "
+                                    + "a top-level function of it)");
+        }
+        entry.RejectUnknown();
+        return new ModHook(index, form, target, handler)
+        {
+            Priority = priority, Fingerprint = fingerprint, Site = site, When = when, Skip = skip,
         };
     }
 
@@ -224,6 +376,7 @@ public static partial class ManifestReader
         }
 
         public IEnumerable<string> Keys() => _table.Keys.ToArray();
+        public bool Has(string key) => _table.ContainsKey(key);
         public void Consume(string key) => _read.Add(key);
 
         private object? Get(string key, bool required)
@@ -248,6 +401,14 @@ public static partial class ManifestReader
             if (value is null) return null;
             if (value is long number and >= int.MinValue and <= int.MaxValue) return (int)number;
             Problems.Add($"{Path}{key}: expected an integer");
+            return null;
+        }
+
+        public bool? Boolean(string key, bool required = false)
+        {
+            object? value = Get(key, required);
+            if (value is null or bool) return (bool?)value;
+            Problems.Add($"{Path}{key}: expected true or false");
             return null;
         }
 

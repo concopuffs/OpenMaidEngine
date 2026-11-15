@@ -68,6 +68,21 @@ before site himegari.experience.after_calculation {
 }
 ```
 
+The same in Lua ([../lua.md](../lua.md)), as `oms/examples/mods/example.double-exp-lua` ships it: a hook on the point
+and a handler that doubles the local. It leaves the same state as the patch.
+
+```toml
+[[hooks]]
+point = "himegari.experience.after_calculation"
+handler = "double_exp.lua:on_award"
+```
+
+```lua
+function on_award(ctx)
+  maid.vm.l[0x1] = maid.vm.l[0x1] * 2
+end
+```
+
 ## Catalogs, scenes and saves
 
 - **Selectors.** The install ships one append catalog (`APPEND01`), so a first mod's catalog normally gets selector
@@ -89,3 +104,4 @@ before site himegari.experience.after_calculation {
 | `oms/examples/mods/example.prologue` | a save-capable scene in an append catalog |
 | `oms/examples/himegari-patch/SC0000.oms` | two inserted pages, with speakers |
 | `oms/examples/himegari-gate6/` | a boot-time script and a script called by packed id |
+| `oms/examples/mods/example.double-exp-lua` | a Lua point hook on the experience award |

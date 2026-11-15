@@ -19,7 +19,7 @@ Your game guide lists the options its installs need ([games/README.md](games/REA
 |---|---|
 | `omp check [--mod PATH …] [--data-root DIR] [--skip-failed-mods]` | Links the mods and prints the link report, each mod catalog's records with their packed ids, and a summary. It writes nothing. It exits non-zero if the stack does not link. |
 | `omp build DIR [--output FILE.omp] [--mod DEP …]` | Validates and links the mod folder `DIR`, compiles every fragment, and writes a reproducible `.omp` with the plans stored inside (default `<id>-<version>.omp` beside the folder). The folder is not changed. Pass the mod's dependencies with `--mod`. |
-| `omp export --output-dir DIR [--mod PATH …] [--data-root DIR]` | Links the mods and writes what native AGE loads: patched and replaced scripts and asset overrides as loose files, and one `APPENDnn.AAI`/`.ALF` pair per mod catalog. It refuses a stack that does not link. It leaves out `text/`, `fonts/`, language assets (`assets/<language>/`) and `[[language]]` with a note, since native AGE cannot present them. |
+| `omp export --output-dir DIR [--mod PATH …] [--data-root DIR]` | Links the mods and writes what native AGE loads: patched and replaced scripts and asset overrides as loose files, and one `APPENDnn.AAI`/`.ALF` pair per mod catalog. It refuses a stack that does not link, and a mod whose target is not `native` (a Lua mod targets `extended`). It leaves out `text/`, `fonts/`, language assets (`assets/<language>/`) and `[[language]]`, and a Lua library's `lua/`, with a note, since native AGE cannot use them. |
 | `omp explain NAME [--mod PATH …] [--data-root DIR]` | Says which layer and mod supplies a script or asset, such as `SC0000.BIN`, `$2$SCENE.BIN` or `my.mod:NAME`, and lists every plan applied to a script. A base entry shows its loose file or its range in the ALF archive. An asset with language versions (`assets/<language>/`) also lists each one, the language it shows in, and whether a later package's plain asset hides it. |
 
 `--mod` takes a folder or an `.omp` file and repeats. `--data-root DIR` also links the mods installed in a port
@@ -65,10 +65,11 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 | `--data-root DIR` | Use `DIR` as the profile root instead of the default, for a separate set of mods and saves. |
 | `--language TAG` | Present the game's text in `TAG` for this run, whatever `OME.INI` says: the catalogs the mods (and `--text-root`) hold for it. `ja` draws the scripts' text as written; `x-pseudo` brackets and lengthens every string, with no catalog. The menus and dialogs take the mods' `[[engine]]` entries for `TAG`, then the engine's own table for it, along its fallback chain, then Japanese ([languages.md](languages.md), "Engine text"). |
 | `--text-root DIR` | Also load a loose folder of catalogs laid out as a package's `text/`, after the mods' (languages.md, "Testing without a package"). |
+| `--lua-errors continue\|halt` | What a Lua handler's error does: `continue` (the default) logs it to `diagnostics/lua.log`, shows a notice and switches the handler off after its third failure in a row; `halt` ends the run at that instruction ([lua.md](lua.md), "Errors and budgets"). |
 | `--text-log` | Write every string drawn without a catalog entry to `diagnostics/text-misses.jsonl`, every translated message narrowed to fit its window, with `width_percent`, the width it got, and every one cut at the bottom of its window, with `rows_cut`, the rows it lost. |
 
 `run-godot.ps1` (or `run-godot.cmd`) passes these through as `-Mod PATH` (repeatable), `-NoMods`, `-Language TAG`,
-`-TextRoot DIR` and `-TextLog`. Combine them with the game switches:
+`-TextRoot DIR` and `-TextLog`; pass `--lua-errors` after `--`. Combine them with the game switches:
 
 ```text
 .\run-godot.cmd <game switches> -Mod path\to\my.mod
@@ -76,8 +77,9 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 
 The game switches (such as `-Profile`, `-GameRoot`, `-OverlayRoot`, or a game's shortcut) are in your game guide.
 
-At startup the console prints `[mods]` lines with the load order and every file the mods supplied. The full report
-is `diagnostics/mod-link.txt` in the profile root.
+At startup the console prints `[mods]` lines with the load order and every file the mods supplied, and a `[lua]`
+line when a mod ships Lua. The full report is `diagnostics/mod-link.txt` in the profile root, and Lua's log
+`diagnostics/lua.log`.
 
 ## Installing mods in the port
 
@@ -132,6 +134,9 @@ py -3.11 -X utf8 tools/drive.py --profile <profile> port start --mod path\to\my.
 Extra port options go through `--port-arg=…`, one per argument; your game guide has the full command for its
 installs. Each start uses an empty save sandbox. See `../tools-reference.md`, "Game driver", for the steps and the
 native side. `tools/drive/scenarios/*-mod-*.steps` are working examples.
+
+`lua [mod=ID] [timeout=S] CODE` runs a Lua chunk in the running port and returns its result: the console of
+[lua.md](lua.md). It is a port step, like `language`.
 
 `language TAG` switches the port's language as the settings panel's OME section does, and fails for a language no
 installed package defines (other than `ja` and `en`). Native AGE has no language, so a scenario that uses it runs on

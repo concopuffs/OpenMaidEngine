@@ -9,6 +9,7 @@ using Godot;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Modding;
 using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 using Ome.Engine.Profiles;
@@ -18,6 +19,7 @@ using Ome.Engine.Text;
 using Ome.Engine.Text.Windows;
 #endif
 using Ome.Engine.Vm;
+using Ome.Scripting.Lua;
 using Script = Ome.Engine.Model.Script;   // disambiguate from Godot.Script
 
 public partial class Main : Godot.Control
@@ -78,8 +80,16 @@ public partial class Main : Godot.Control
     private bool _histDumped;
     private volatile bool _done;
     private bool _ended;
-    private Task? _vmTask;
+    private System.Threading.Thread? _engineThread;
     private Exception? _vmFailure;
+    /// <summary>The engine thread's stack (Lua scripting plan §3.3): set here, so the Lua nesting cap does not depend on
+    /// what the host gives a pool thread (8 MiB under Godot on Windows, which this keeps).</summary>
+    private const int EngineThreadStackBytes = 8 << 20;
+    // The Lua runtime, created only when a mod ships Lua or the driver's lua step runs a chunk (Lua scripting spec §5.1);
+    // the scripting native over it, and how a handler's error is taken (--lua-errors).
+    private readonly LazyModRuntime _luaRuntime = LuaModRuntime.Lazy();
+    private Scripting? _scripting;
+    private int _luaNoticesSeen;
     private bool _selftest;
     private string? _shotPath;                 // --shot <png>: capture a page then quit (dev tool)
     private int _shotPage = 1;                  // --shot-page <n>: which page to capture (default 1)
@@ -158,7 +168,7 @@ public partial class Main : Godot.Control
         try
         {
             if (!LinkMods(userArgs, workingDirectory, selectedProfile, profilePersistence, gameRoot.Sys4IniPath, catalog,
-                          _assetStore, out _modLayer))
+                          _assetStore, _luaRuntime, out _modLayer))
             {
                 GetTree().Quit(2);
                 return;
@@ -624,12 +634,33 @@ public partial class Main : Godot.Control
         Ome.Engine.Diagnostics.ITraceSink sink = _trace;
         if (histFile != null) { _hist = new Ome.Engine.Diagnostics.HistogramTraceSink();
                                  sink = new Ome.Engine.Diagnostics.CompositeTraceSink(_trace, _hist); }
-        _vm = new VirtualMachine(script, table, _waits,
-            GodotVmOptions.Create(_selftest, nativeDebugMenu, _catalog.StartupSettings) with
-            {
-                ProfileId = selectedProfile.Profile.Id,
-                ProbeMode = selectedProfile.ProbeMode,
-            },
+        VmOptions vmOptions = GodotVmOptions.Create(_selftest, nativeDebugMenu, _catalog.StartupSettings) with
+        {
+            ProfileId = selectedProfile.Profile.Id,
+            ProbeMode = selectedProfile.ProbeMode,
+        };
+        // The scripting native (Lua scripting spec §14.1) is in every run; it creates the Lua runtime only when a mod
+        // ships Lua or the driver's lua step is used. The console runs after the waits native has run the front end's
+        // requests, so a chunk runs while the game waits.
+        if (!TryParseLuaErrors(userArgs, out LuaErrorPolicy luaErrors))
+        {
+            GetTree().Quit(2);
+            return;
+        }
+        _scripting = new Scripting(new ScriptMemory(vmOptions.NativeStringCodePage), new ScriptingSetup
+        {
+            Runtime = _luaRuntime,
+            Stack = _modLayer?.LuaStack ?? ModRuntimeStack.Empty,
+            Plan = _modLayer?.HookPlan ?? HookPlan.Empty,
+            Sites = _modLayer?.ScriptSites ?? UnchangedScriptSites.Instance,
+            Errors = luaErrors,
+            DiagnosticsDirectory = profilePersistence.DiagnosticsDirectory,
+        });
+        _waits.ServiceAfterRequests(_scripting.ServiceRequests);
+        if (_modLayer?.LuaStack is { HasLua: true } luaStack)
+            GD.Print($"[lua] {luaStack.Mods.Count} mods ship Lua ({string.Join(", ", luaStack.Mods.Select(mod => mod.Id))}); "
+                     + $"{luaStack.Handlers.Count} handlers; errors {luaErrors.ToString().ToLowerInvariant()}");
+        _vm = new VirtualMachine(script, table, _waits, vmOptions,
             provider, sink,
             saves: _saves,
             shell: _shell,
@@ -639,7 +670,8 @@ public partial class Main : Godot.Control
             tick: tick,
             graphics: _graphics,
             movies: _movies,
-            text: _text);
+            text: _text,
+            scripting: _scripting);
         _reference = new ReferenceRenderer(logicalCanvas) { Perf = _perf };
         _gpuRenderer.Perf = _perf;
         _decisionLog = new GfxDecisionLog(_gfxLogPath, _timeline);
@@ -669,13 +701,19 @@ public partial class Main : Godot.Control
             GetTree().Quit(2);
             return;
         }
-        // The engine thread (InputAndWaits.Turns.cs): the interpreter, its waits and every native run on it.
-        _vmTask = Task.Run(() =>
+        // The engine thread (InputAndWaits.Turns.cs): the interpreter, its waits and every native run on it, on a stack
+        // of a known size (Lua scripting plan §3.3).
+        _engineThread = new System.Threading.Thread(() =>
         {
             try { _waits.RunEngine(() => _vm.Run()); }
             catch (Exception error) { _vmFailure = error; }
             finally { _done = true; }
-        });
+        }, EngineThreadStackBytes)
+        {
+            Name = "engine",
+            IsBackground = true,
+        };
+        _engineThread.Start();
         // --control [--control-file <json>]: the game-driving protocol (Main.Drive.cs).
         if (!_selftest && System.Array.IndexOf(userArgs, "--control") >= 0
             && !StartDriveServer(ArgumentValue(userArgs, "--control-file")))
@@ -719,6 +757,7 @@ public partial class Main : Godot.Control
         FlushTextMisses(delta);
         ProcessScreenMode();
         ServicePageNotices();
+        ServiceLuaNotices();
         if (_fpsHud != null && _fpsHud.Visible)
         {
             _fpsHudUpdateSeconds += delta;
@@ -929,17 +968,16 @@ public partial class Main : Godot.Control
         if (_vm != null) _vm.RequestStop();
         CallDeferred(MethodName.ClearAgeCursor);
         _waits?.Stop();
-        if (_vmTask != null)
+        if (_engineThread != null)
         {
-            try
-            {
-                vmStopped = _vmTask.Wait(System.TimeSpan.FromSeconds(5));
-            }
-            catch (System.AggregateException error)
-            {
-                vmStopped = true;
-                GD.PushError($"[vm] worker failed during shutdown: {error.Flatten().InnerException?.Message}");
-            }
+            vmStopped = _engineThread.Join(System.TimeSpan.FromSeconds(5));
+            if (vmStopped && _vmFailure != null)
+                GD.PushError($"[vm] worker failed during shutdown: {_vmFailure.Message}");
+        }
+        if (vmStopped)
+        {
+            _scripting?.Dispose();
+            _luaRuntime.Dispose();
         }
 
         if (!vmStopped)
@@ -995,6 +1033,38 @@ public partial class Main : Godot.Control
             GD.Print($"[trace-histogram] wrote {_hist.TotalSteps} steps -> {_histFile}");
         }
         catch (System.Exception e) { GD.Print($"[trace-histogram] write failed: {e.Message}"); }
+    }
+
+    /// <summary>--lua-errors continue|halt (Lua scripting spec §5.5): how a handler's error is taken.</summary>
+    private static bool TryParseLuaErrors(string[] userArgs, out LuaErrorPolicy policy)
+    {
+        policy = LuaErrorPolicy.Continue;
+        switch (ArgumentValue(userArgs, "--lua-errors"))
+        {
+            case null or "continue":
+                return true;
+            case "halt":
+                policy = LuaErrorPolicy.Halt;
+                return true;
+            case var other:
+                GD.PushError($"[startup] --lua-errors takes continue or halt, not '{other}'");
+                return false;
+        }
+    }
+
+    /// <summary>The scripting native's notices (spec §5.5): a handler's error, a mod switched off. The latest shows in the
+    /// status line until the next page clears it; diagnostics/lua.log has them all.</summary>
+    private void ServiceLuaNotices()
+    {
+        if (_scripting == null) return;
+        int notices = _scripting.NoticeCount;
+        if (notices == _luaNoticesSeen) return;
+        _luaNoticesSeen = notices;
+        if (_scripting.LatestNotice is { } notice)
+        {
+            _status.Text = $"Lua: {notice}";
+            GD.PushWarning($"[lua] {notice}");
+        }
     }
 
     /// <summary>The waits native's page notices (<see cref="InputAndWaits.PageNotices"/>): a text wait starting or

@@ -235,6 +235,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       pattern matcher and overlap check, half-cell measurement, line-break
     │                                       opportunities, history's text split (spec §8), the pseudo-language
     │                                       and the miss log
+    │   ├── Ome.Engine/Modding/              the Lua runtime seam (superpowers/specs/2026-11-10-lua-scripting-
+    │                                       design.md §14.2): IModRuntime and IModSession, the stack and its
+    │                                       sources, the hook plan and each script's table, the hook context,
+    │                                       and IScriptAccess, the checked face each mod's Lua reaches the engine
+    │                                       through
     │   ├── Ome.Engine/Persistence/          native S3SD/S4SD + S3RT codecs, shared payload/ReadTextDB,
     │                                       layout-3 numbered state/history/gfx, DAT/STH pair + BMP codec,
     │                                       screenshot BMP naming, profile-owned state, identity, and
@@ -252,9 +257,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       banks, the queues and stacks, op 0x60's seeded draws), SavesAndSettings
     │                                       (the shared profile, the numbered saves, the playtime, SYS4REG.INI),
     │                                       ShellServices (the system-menu fields, the menu and callback requests,
-    │                                       the diagnostic text, the dialogs, the screen mode) and TextManager (the
+    │                                       the diagnostic text, the dialogs, the screen mode), TextManager (the
     │                                       layouts and History, the style, the reveal, the wait indicator, the
-    │                                       message settings, the fonts, the presenter, the string stores)
+    │                                       message settings, the fonts, the presenter, the string stores) and
+    │                                       Scripting (the Lua session, the hook dispatch's handler calls, budgets
+    │                                       and the error policy, lua.log and the notices, the console)
     │   ├── Ome.Engine.Vm/                   the handler layer (superpowers/specs/2026-11-12-engine-layering-design.md
     │                                       §3.3): the interpreter, the handler table and handlers, and the engine
     │                                       builds; references Ome.Engine only and cannot see Ome.Engine.Devices
@@ -279,7 +286,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       on Tomlyn plus semantic versions and ranges (Manifest/), and the linker:
     │                                       stack resolution and load order, replacements, plan composition, the
     │                                       spec §7 report, selector allocation, per-mod append catalogs, asset
-    │                                       overrides, the stack's text, fonts, languages and language assets, offset
+    │                                       overrides, the stack's text, fonts, languages and language assets, the
+    │                                       Lua link (each mod's checked sources, handlers and the hook plan,
+    │                                       ModLuaLinker), offset
     │                                       tables for patched scripts and the link cache (Linking/), startup discovery, flags
     │                                       and save stamps (Launch/), and the omp and omp text commands (Tools/);
     │                                       the localization catalog file reader and writer, the text source loader
@@ -302,6 +311,12 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       port options with their OME.INI store)
     │   ├── Ome.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
+    │   ├── Ome.Scripting.Lua/               the Lua runtime (Lua scripting spec §14.1) over Lua-CSharp, the only
+    │                                       project that names the library: the check (parse only), the session
+    │                                       with one environment per mod, the sandbox, the module loader, the maid
+    │                                       bindings and read-only views, the calling rules and budgets
+    │                                       (superpowers/plans/2026-11-14-lua-scripting.md §3.1), and LuaSource, the
+    │                                       library's hexadecimal-numeral workaround; references Ome.Engine only
     │   └── Ome.Scripting.Lua.Spike/         milestone 0 of the Lua design (superpowers/plans/2026-11-14-lua-
     │                                       scripting.md §1): a console program that checks LuaCSharp and
     │                                       MoonSharp against spec §5.1's criteria, one child process per case;
@@ -559,6 +574,16 @@ requests (`Invoke`, `TryInvoke`). `Natives/StopAndReload.cs` holds the stop and 
 waits and the interpreter. The front end reads the text waits' pages by polling `PageNotices` and `Pages`. The VM
 calls the native through `Natives/IInputAndWaits.cs` (above), and the native shows the cursor through the device
 `engine/Ome.Engine.Devices/Window/ICursorDevice.cs`.
+The scripting native `engine/Ome.Engine/Natives/Scripting.cs` (Lua scripting spec §14.1) owns the Lua session, which
+its `Scene` holds, so op `0x9`'s reset ends it and the interpreter builds the next one (`StartSession`). It also owns
+each script's hook table (`HooksFor`, which a frame takes when it is entered), the handler calls of an instruction's
+`before` hooks (`RunBefore`) and of the engine events, the nesting cap, the error policy (`--lua-errors`), the
+failure count that switches a handler off, `diagnostics/lua.log` and the notices the front end polls. It creates the
+runtime only when a mod ships Lua or the console asks (`LazyModRuntime`). Its partials: `Access` builds each mod's
+`IScriptAccess` face over the script memory native and the interpreter (`IInterpreterAccess`, which `VirtualMachine.Scripting.cs`
+implements); `Console` queues the driver's `lua` chunks and runs them at an instruction boundary or inside a wait
+(`ServiceRequests`, which `InputAndWaits.ServiceAfterRequests` calls after each batch of requests). The runtime it
+calls is `engine/Ome.Scripting.Lua/`; the link builds its stack and plan in `engine/Ome.Mods/Linking/ModLuaLinker.cs`.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state

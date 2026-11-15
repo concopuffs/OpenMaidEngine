@@ -29,9 +29,17 @@ public sealed record ModFontFile(string Name, PackageEntry File);
 /// image <c>NAME.AGF</c> (<see cref="Png"/>).</summary>
 public sealed record ModLanguageAssetFile(string Language, string Name, PackageEntry File, bool Png);
 
+/// <summary>A Lua source under <c>lua/</c> (Lua scripting spec §6.1), by its path inside <c>lua/</c>
+/// (<c>util/names.lua</c>).</summary>
+public sealed record ModLuaFile(string Path, PackageEntry File);
+
+/// <summary>An event declaration under <c>events/</c> (Lua scripting spec §9.2).</summary>
+public sealed record ModEventFile(string Name, PackageEntry File);
+
 /// <summary>
 /// A package's files sorted into the content kinds of spec §3.2 and §4, and the localization spec's <c>text/</c> and
-/// <c>fonts/</c> (§9.1, format version 2). Directories are matched case-insensitively. Files outside the layout are
+/// <c>fonts/</c> (§9.1, format version 2), and the Lua scripting spec's <c>lua/</c> and <c>events/</c> (§6.1, format
+/// version 3). Directories are matched case-insensitively. Files outside the layout are
 /// kept as notes (spec §3.2); a wrongly typed or nested file inside a content directory is an error.
 /// </summary>
 public sealed record ModLayout(
@@ -42,7 +50,11 @@ public sealed record ModLayout(
     IReadOnlyList<string> Notes)
 {
     public const string PlanSuffix = ".omspatch.json";
-    public const string TextFolder = "text", FontsFolder = "fonts";
+    public const string TextFolder = "text", FontsFolder = "fonts", LuaFolder = "lua", EventsFolder = "events";
+    /// <summary>Largest Lua source a package may carry, and the most files under <c>lua/</c> (Lua scripting spec
+    /// §15: file count and size are bounded).</summary>
+    public const long MaxLuaBytes = 1L << 20;
+    public const int MaxLuaFiles = 512;
     /// <summary>Largest font file a package may bundle (localization spec §16).</summary>
     public const long MaxFontBytes = 64L << 20;
 
@@ -52,11 +64,17 @@ public sealed record ModLayout(
     public IReadOnlyList<ModFontFile> Fonts { get; init; } = [];
     /// <summary>The language assets under <c>assets/&lt;language&gt;/</c>, by language and then name.</summary>
     public IReadOnlyList<ModLanguageAssetFile> LanguageAssets { get; init; } = [];
+    /// <summary>The Lua sources under <c>lua/</c>, by path in ordinal order.</summary>
+    public IReadOnlyList<ModLuaFile> Lua { get; init; } = [];
+    /// <summary>The event declarations under <c>events/</c>, by name in ordinal order.</summary>
+    public IReadOnlyList<ModEventFile> Events { get; init; } = [];
 
     /// <summary>Whether the package changes no script or asset: it holds only <c>text/</c>, <c>fonts/</c>,
     /// language assets and <c>[[language]]</c> tables (localization spec §8, save stamps). A language asset changes
-    /// what is shown, not what the game stores.</summary>
-    public bool ChangesNoContent => Patches.Count == 0 && Scripts.Count == 0 && Replacements.Count == 0 && Assets.Count == 0;
+    /// what is shown, not what the game stores. Lua can change what the game stores, so a package with <c>lua/</c> or
+    /// <c>events/</c> is never one (Lua scripting spec §11).</summary>
+    public bool ChangesNoContent => Patches.Count == 0 && Scripts.Count == 0 && Replacements.Count == 0 && Assets.Count == 0
+                                    && Lua.Count == 0 && Events.Count == 0;
     private static readonly string[] Documents = ["README.md", "README.txt", "LICENSE", "LICENSE.md", "LICENSE.txt"];
 
     public static ModLayout Classify(ModManifest manifest, IReadOnlyList<PackageEntry> entries, List<string> problems)
@@ -70,6 +88,8 @@ public sealed record ModLayout(
         var text = new List<ModTextFile>();
         var fonts = new List<ModFontFile>();
         var languageAssets = new List<ModLanguageAssetFile>();
+        var lua = new List<ModLuaFile>();
+        var events = new List<ModEventFile>();
 
         foreach (PackageEntry entry in entries)
         {
@@ -129,6 +149,30 @@ public sealed record ModLayout(
                 case FontsFolder:
                     problems.Add($"'{entry.Path}': fonts/ holds only font files ({string.Join(", ", LanguageFont.Extensions)}), "
                                  + "without subdirectories");
+                    break;
+                case LuaFolder or EventsFolder when manifest.OmpVersion < ModManifest.LuaOmpVersion:
+                    problems.Add($"'{entry.Path}': {top.ToLowerInvariant()}/ needs omp = {ModManifest.LuaOmpVersion}");
+                    break;
+                case LuaFolder when manifest.Lua == null:
+                    problems.Add($"'{entry.Path}': lua/ needs a [lua] table in the manifest");
+                    break;
+                case LuaFolder when rest.EndsWith(".lua", StringComparison.Ordinal):
+                    if (entry.Length > MaxLuaBytes)
+                        problems.Add($"'{entry.Path}': a Lua file may be at most {MaxLuaBytes >> 20} MiB");
+                    else lua.Add(new ModLuaFile(rest, entry));
+                    break;
+                case LuaFolder:
+                    problems.Add($"'{entry.Path}': lua/ holds only *.lua sources");
+                    break;
+                case EventsFolder when manifest.TargetsAnyProfile:
+                    problems.Add($"'{entry.Path}': a package without [game] is a library and declares no events "
+                                 + "(Lua scripting spec §6.4)");
+                    break;
+                case EventsFolder when !nested && rest.EndsWith(".toml", StringComparison.OrdinalIgnoreCase):
+                    events.Add(new ModEventFile(rest, entry));
+                    break;
+                case EventsFolder:
+                    problems.Add($"'{entry.Path}': events/ holds only *.toml declarations, without subdirectories");
                     break;
                 case "patches":
                     problems.Add($"'{entry.Path}': patches/ holds only *.oms fragments and *{PlanSuffix} plans");
@@ -191,8 +235,18 @@ public sealed record ModLayout(
             problems.Add($"{string.Join(" and ", clash.Select(file => $"'{file.File.Path}'"))} both stand for "
                          + $"{clash.First().Name} in {clash.Key.Language}");
 
+        if (lua.Count > MaxLuaFiles)
+            problems.Add($"lua/: a package may carry at most {MaxLuaFiles} Lua files; this one has {lua.Count}");
+        // Each hook's handler names a file under lua/ (Lua scripting spec §6.2); whether the function is declared
+        // there, the link checks by parsing the file.
+        var luaPaths = lua.Select(file => file.Path).ToHashSet(StringComparer.Ordinal);
+        foreach (ModHook hook in manifest.Hooks.Where(hook => hook.Handler.File.Length > 0 && !luaPaths.Contains(hook.Handler.File)))
+            problems.Add($"hooks[{hook.Index}].handler: the package has no lua/{hook.Handler.File}");
+
         return new ModLayout(patches, scripts, replacements, assets, notes)
         {
+            Lua = lua.OrderBy(file => file.Path, StringComparer.Ordinal).ToList(),
+            Events = events.OrderBy(file => file.Name, StringComparer.Ordinal).ToList(),
             Text = text.OrderBy(file => file.Language, StringComparer.Ordinal)
                 .ThenBy(file => file.Name, StringComparer.Ordinal).ToList(),
             Fonts = fonts,

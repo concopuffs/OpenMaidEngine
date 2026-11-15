@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Ome.Engine.Localization;
+using Ome.Engine.Modding;
 using Ome.Engine.Sys4;
 using Ome.Mods.Localization;
 using Ome.Mods.Packages;
@@ -94,6 +95,92 @@ public sealed record ModLayerSource(
     [property: JsonPropertyName("mods")] IReadOnlyList<string> Mods,
     [property: JsonPropertyName("detail")] string Detail);
 
+/// <summary>A mod with Lua in <c>link.json</c> (Lua scripting spec §6): its sources are under the cache directory's
+/// <c>lua/&lt;mod&gt;/</c>, by their paths inside the package's <c>lua/</c>.</summary>
+public sealed record LinkedLuaModEntry(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("version")] string Version,
+    [property: JsonPropertyName("library")] bool Library,
+    [property: JsonPropertyName("vm")] bool Vm,
+    [property: JsonPropertyName("requires")] IReadOnlyList<string> Requires,
+    [property: JsonPropertyName("files")] IReadOnlyList<string> Files);
+
+/// <summary>A handler in <c>link.json</c>: its index in the list is its <see cref="HandlerId"/>.</summary>
+public sealed record LinkedLuaHandlerEntry(
+    [property: JsonPropertyName("mod")] string Mod,
+    [property: JsonPropertyName("file")] string File,
+    [property: JsonPropertyName("function")] string Function);
+
+/// <summary>One handler due at a place, in the merged order.</summary>
+public sealed record LinkedLuaDueEntry(
+    [property: JsonPropertyName("handler")] int Handler,
+    [property: JsonPropertyName("priority")] int Priority,
+    [property: JsonPropertyName("load_order")] int LoadOrder,
+    [property: JsonPropertyName("skip")] bool Skip = false);
+
+/// <summary>A hooked instruction of a linked script: its linked offset, its original offset, its point.</summary>
+public sealed record LinkedLuaSiteEntry(
+    [property: JsonPropertyName("offset")] int Offset,
+    [property: JsonPropertyName("site")] int Site,
+    [property: JsonPropertyName("point")] string? Point,
+    [property: JsonPropertyName("handlers")] IReadOnlyList<LinkedLuaDueEntry> Handlers);
+
+/// <summary>The <c>lua</c> of <c>link.json</c>: the runtime the files were checked with, the mods, the handlers and
+/// the hook plan (Lua scripting spec §7.5).</summary>
+public sealed record LinkedLuaEntry
+{
+    public const string Folder = "lua";
+
+    [JsonPropertyName("runtime")] public required string Runtime { get; init; }
+    [JsonPropertyName("mods")] public IReadOnlyList<LinkedLuaModEntry> Mods { get; init; } = [];
+    [JsonPropertyName("handlers")] public IReadOnlyList<LinkedLuaHandlerEntry> Handlers { get; init; } = [];
+    /// <summary>By script name (<c>ADDEXP.BIN</c>).</summary>
+    [JsonPropertyName("sites")]
+    public IReadOnlyDictionary<string, IReadOnlyList<LinkedLuaSiteEntry>> Sites { get; init; }
+        = new Dictionary<string, IReadOnlyList<LinkedLuaSiteEntry>>();
+    /// <summary>By engine event (<c>ome.session.start</c>).</summary>
+    [JsonPropertyName("engine")]
+    public IReadOnlyDictionary<string, IReadOnlyList<LinkedLuaDueEntry>> Engine { get; init; }
+        = new Dictionary<string, IReadOnlyList<LinkedLuaDueEntry>>();
+
+    /// <summary>A source's path under the cache directory.</summary>
+    public static string PathOf(string mod, string file) => $"{Folder}/{mod}/{file}";
+
+    private static LinkedLuaDueEntry Due(PlannedHandler handler)
+        => new(handler.Handler.Index, handler.Priority, handler.LoadOrder, handler.Skip);
+
+    private static PlannedHandler Planned(LinkedLuaDueEntry entry)
+        => new(new HandlerId(entry.Handler), entry.Priority, entry.LoadOrder, entry.Skip);
+
+    public static LinkedLuaEntry Of(LinkedLua lua, string runtime) => new()
+    {
+        Runtime = runtime,
+        Mods = lua.Stack.Mods.Select(mod => new LinkedLuaModEntry(mod.Id, mod.Version, mod.Library, mod.Vm, mod.Requires,
+            mod.Files.Select(file => file.Path).ToList())).ToList(),
+        Handlers = lua.Stack.Handlers.Select(handler => new LinkedLuaHandlerEntry(handler.ModId, handler.File, handler.Function))
+            .ToList(),
+        Sites = lua.Plan.Sites.ToDictionary(pair => pair.Key + ".BIN",
+            pair => (IReadOnlyList<LinkedLuaSiteEntry>)pair.Value.Select(site => new LinkedLuaSiteEntry(site.Offset, site.Site,
+                site.Point, site.Handlers.Select(Due).ToList())).ToList(), StringComparer.Ordinal),
+        Engine = lua.Plan.EngineEvents.ToDictionary(pair => pair.Key,
+            pair => (IReadOnlyList<LinkedLuaDueEntry>)pair.Value.Select(Due).ToList(), StringComparer.Ordinal),
+    };
+
+    /// <summary>The stack, with each source read from under <paramref name="directory"/>.</summary>
+    public ModRuntimeStack ToStack(string directory)
+        => new(Mods.Select(mod => new ModRuntimeMod(mod.Id, mod.Version, mod.Library, mod.Vm, mod.Requires,
+                mod.Files.Select(file => new ModSource(mod.Id, file,
+                    File.ReadAllText(Path.Combine(directory, PathOf(mod.Id, file)), Encoding.UTF8))).ToList())).ToList(),
+            Handlers.Select(handler => new ModRuntimeHandler(handler.Mod, handler.File, handler.Function)).ToList());
+
+    public HookPlan ToPlan()
+        => new(Sites.ToDictionary(pair => pair.Key,
+                pair => (IReadOnlyList<PlannedSite>)pair.Value.Select(site => new PlannedSite(site.Offset, site.Site, site.Point,
+                    site.Handlers.Select(Planned).ToList())).ToList(), StringComparer.Ordinal),
+            Engine.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value.Select(Planned).ToList(),
+                StringComparer.Ordinal));
+}
+
 /// <summary>The <c>link.json</c> of a cache directory.</summary>
 public sealed record ModLinkManifest
 {
@@ -120,6 +207,9 @@ public sealed record ModLinkManifest
     /// runs of dword offsets; localization spec §6.1).</summary>
     [JsonPropertyName("offsets")]
     public IReadOnlyDictionary<string, IReadOnlyList<int[]>> Offsets { get; init; } = new Dictionary<string, IReadOnlyList<int[]>>();
+    /// <summary>The stack's Lua (Lua scripting spec §6, §7.5); absent when no mod ships Lua.</summary>
+    [JsonPropertyName("lua"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LinkedLuaEntry? Lua { get; init; }
 }
 
 /// <summary>A linked stack as mounted (spec §6.4–§6.5): the cache directory, its <c>loose/</c> root (first in the
@@ -169,6 +259,31 @@ public sealed record MountedModLayer(string Directory, ModLinkManifest Manifest,
         return (true, _offsets.Value.GetValueOrDefault(TextCatalog.NormalizeScriptName(script)));
     }
 
+    private readonly Lazy<ModRuntimeStack> _luaStack = new(() => Manifest.Lua?.ToStack(Directory) ?? ModRuntimeStack.Empty);
+    private readonly Lazy<HookPlan> _hookPlan = new(() => Manifest.Lua?.ToPlan() ?? HookPlan.Empty);
+
+    /// <summary>The mods that ship Lua, with their sources, and every handler their hooks name (Lua scripting spec §6).</summary>
+    public ModRuntimeStack LuaStack => _luaStack.Value;
+
+    /// <summary>The hooks, bound to the linked scripts (Lua scripting spec §7.5).</summary>
+    public HookPlan HookPlan => _hookPlan.Value;
+
+    /// <summary>Where the layer's script instructions came from (Lua scripting spec §8.1, "Positions").</summary>
+    public IScriptSites ScriptSites => new LayerScriptSites(this);
+
+    private sealed class LayerScriptSites(MountedModLayer layer) : IScriptSites
+    {
+        public int? Site(string script, int offset)
+        {
+            var (changed, map) = layer.SiteBinding(script);
+            return !changed ? offset : map?.Unmap(offset);
+        }
+
+        public IReadOnlyList<string> ChangedBy(string script)
+            => layer.Manifest.Files.TryGetValue(TextCatalog.NormalizeScriptName(script) + ".BIN", out ModLayerSource? file)
+               && file.Kind == "script" ? file.Mods : [];
+    }
+
     /// <summary>The mod that supplied a script or asset of the layer, by catalog name, or null for the base; with the
     /// language assets that can stand in for it.</summary>
     public string? Explain(string name)
@@ -214,6 +329,8 @@ public static class ModLinkCache
         foreach (var (id, selector) in selectors.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             text.Append("selector ").Append(id).Append(' ').Append(selector).Append('\n');
         text.Append("toolchain\n").Append(linkBase.ToolchainStamp).Append('\n');
+        // The runtime that checks the Lua files, only for a stack with Lua: other keys stay as they were.
+        if (order.Any(ModLuaLinker.ShipsLua)) text.Append("lua ").Append(linkBase.Lua?.Identity ?? "none").Append('\n');
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()))).ToLowerInvariant();
     }
 
@@ -255,7 +372,9 @@ public static class ModLinkCache
             if (manifest.Text.Any(path => !File.Exists(Path.Combine(layer.TextRoot, path)))
                 || manifest.Fonts.Any(path => !File.Exists(Path.Combine(directory, path)))
                 || manifest.LanguageAssets.Values.SelectMany(entries => entries).SelectMany(entry => entry.Files.Values)
-                    .Any(path => !File.Exists(Path.Combine(directory, path))))
+                    .Any(path => !File.Exists(Path.Combine(directory, path)))
+                || (manifest.Lua?.Mods ?? []).Any(mod => mod.Files.Any(file =>
+                    !File.Exists(Path.Combine(directory, LinkedLuaEntry.PathOf(mod.Id, file))))))
                 return null;
             // A hit counts as recent use, so pruning keeps the entries that are actually launched.
             try
@@ -383,6 +502,13 @@ public static class ModLinkCache
                 files[catalog.ArchiveFile] = new ModLayerSource("catalog", [catalog.ModId], detail);
                 foreach (LinkedRecord record in catalog.Records) records[record.CatalogName] = catalog.ModId;
             }
+            foreach (ModRuntimeMod mod in result.Lua.Stack.Mods)
+                foreach (ModSource source in mod.Files)
+                {
+                    string path = Path.Combine(temporary, LinkedLuaEntry.PathOf(mod.Id, source.Path));
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.WriteAllText(path, source.Text, new UTF8Encoding(false));
+                }
             var manifest = new ModLinkManifest
             {
                 Key = key,
@@ -399,6 +525,8 @@ public static class ModLinkCache
                 Offsets = result.Scripts.Values.Where(script => script.Offsets != null)
                     .OrderBy(script => script.Name, StringComparer.Ordinal)
                     .ToDictionary(script => script.Name, script => script.Offsets!.ToArrays(), StringComparer.OrdinalIgnoreCase),
+                Lua = result.Lua.Stack.HasLua || !result.Lua.Plan.IsEmpty
+                    ? LinkedLuaEntry.Of(result.Lua, linkBase.Lua?.Identity ?? "none") : null,
             };
             string report = result.Report.Render();
             File.WriteAllText(Path.Combine(temporary, MountedModLayer.ManifestFile), JsonSerializer.Serialize(manifest, Json),

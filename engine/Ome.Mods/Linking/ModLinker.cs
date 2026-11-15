@@ -38,6 +38,8 @@ public sealed record ModLinkResult(
     public IReadOnlyDictionary<string, IReadOnlyList<LinkedLanguageAssetLayer>> LanguageAssets { get; init; }
         = new Dictionary<string, IReadOnlyList<LinkedLanguageAssetLayer>>();
     public LinkedText Text { get; init; } = LinkedText.None;
+    /// <summary>The Lua mods, their handlers and the hook plan (Lua scripting spec §6, §7).</summary>
+    public LinkedLua Lua { get; init; } = LinkedLua.None;
     public SelectorStore Selectors { get; init; } = new();
 }
 
@@ -205,9 +207,11 @@ public static class ModLinker
             }
         LinkedText text = ModTextLinker.Link(order, linkBase, scripts, report);
         var languageAssets = ModLanguageAssetLinker.Link(order, linkBase, allocated, report);
+        LinkedLua lua = ModLuaLinker.Link(order, linkBase, scripts, report);
         return new ModLinkResult(order, scripts, report)
         {
-            Catalogs = catalogs, Assets = assets, LanguageAssets = languageAssets, Text = text, Selectors = selectors,
+            Catalogs = catalogs, Assets = assets, LanguageAssets = languageAssets, Text = text, Lua = lua,
+            Selectors = selectors,
         };
     }
 

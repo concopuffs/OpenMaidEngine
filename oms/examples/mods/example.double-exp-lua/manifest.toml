@@ -1,0 +1,17 @@
+omp = 3
+id = "example.double-exp-lua"
+name = "Double EXP (Lua)"
+version = "1.0.0"
+description = "Doubles every experience award, from a Lua handler on the experience point."
+
+[game]
+profile = "himegari"
+target = "extended"
+
+[lua]
+api = 1
+capabilities = ["vm"]
+
+[[hooks]]
+point = "himegari.experience.after_calculation"
+handler = "double_exp.lua:on_award"

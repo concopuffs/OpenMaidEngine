@@ -17,6 +17,7 @@
     <ProjectReference Include="..\engine\Ome.Engine.Vm\Ome.Engine.Vm.csproj" />
     <ProjectReference Include="..\engine\Ome.Engine.Frontend\Ome.Engine.Frontend.csproj" />
     <ProjectReference Include="..\engine\Ome.Mods\Ome.Mods.csproj" />
+    <ProjectReference Include="..\engine\Ome.Scripting.Lua\Ome.Scripting.Lua.csproj" />
     <EmbeddedResource Include="..\build\opcodes.json"
                       LogicalName="OME.Runtime.opcodes.json" />
     <!-- The engine shell's own assets (godot/assets/, which Godot ignores): the options panel's font and the OME icon. -->

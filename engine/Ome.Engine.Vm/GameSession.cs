@@ -48,10 +48,13 @@ public sealed class GameSession
     public void SeedString(int addr, string value) => GlobalStrings[addr] = value;
 
     /// <summary>Run one scene: seed a fresh VM from session state, execute, merge final state back.</summary>
+    /// <param name="scripting">The scripting native of this run (Lua scripting spec §14.1), with its mods' hooks. It
+    /// attaches to this run's VM and its script memory is the run's, so each run takes its own.</param>
     public SceneResult RunScene(Script script, OpcodeTable table, IInputAndWaits waits,
                                 VmOptions? options = null, IScriptProvider? provider = null,
                                 ITraceSink? sink = null,
-                                EngineBuild? build = null, Func<SkipAndAuto, Audio>? audio = null)
+                                EngineBuild? build = null, Func<SkipAndAuto, Audio>? audio = null,
+                                Scripting? scripting = null)
     {
         // Each run has its own skip and auto native, and an audio native over it (audio builds one; without it the run
         // plays nothing). The mixer settings are the session's. Its save native reads and writes the session's profile
@@ -62,7 +65,7 @@ public sealed class GameSession
         var vm = new VirtualMachine(
             script, table, waits, options, provider, sink, TextHistory,
             saves: new SavesAndSettings(SharedProfile, NativeDatStore), shell: shell, build: build, skipAndAuto: skip,
-            audio: audio?.Invoke(skip) ?? Audio.Silent(skip, AudioMixerSettings));
+            audio: audio?.Invoke(skip) ?? Audio.Silent(skip, AudioMixerSettings), scripting: scripting);
         foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
         foreach (var kv in GlobalFloats) vm.GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;

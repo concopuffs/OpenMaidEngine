@@ -686,6 +686,11 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   failed link unless `--skip-failed-mods`. The linked layer outranks `--overlay-root` roots and the game root. Flag
   semantics, the profile root's mod files, save stamps and the outside-the-repository limits are documented for
   modders in `docs/modding/cli.md`.
+- `--lua-errors continue|halt` — what a Lua handler's error does (Lua scripting spec §5.5): `continue` (the default)
+  logs it to `diagnostics/lua.log`, shows a notice in the status line, and switches the handler off after its third
+  failure in a row; `halt` ends the run at the instruction. Another value fails startup (exit 2). When a mod ships
+  Lua the startup log prints a `[lua]` line with the mods, the handler count and the policy; with none, no Lua
+  runtime is created unless the driver's `lua` step asks for one. Modders' reference: `docs/modding/lua.md`.
 - `--allow-bmp-as-agf` — opt into decoding a `BM` payload found under an `.AGF` catalog record as an
   uncompressed Windows BMP. The supported compatibility surface is `BITMAPINFOHEADER`-compatible `BI_RGB` at
   1/4/8-bit paletted (opaque), 24-bit opaque, or 32-bit straight alpha, including top-down images and padded rows. Without this option,
@@ -1011,6 +1016,7 @@ profile's points. Points are named coordinates from `[points]` in the profile, o
 | `wait-state CONDITIONS [timeout=S] [click=POINT every=S]` | poll until `expect` would pass, clicking `POINT` every `S` seconds (default 2) meanwhile (boot: `wait-state script=TITLE click=adv.next every=3`) |
 | `point NAME X Y` | define a point for the session |
 | `speed FACTOR` | port: run the frame clock 0.05–8 times as fast |
+| `lua [mod=ID] [timeout=S] CODE` | port: run the Lua chunk `CODE` (the rest of the line, `#` included) on the engine thread and report what it returns as text, values separated by tabs (Lua scripting spec §13). It runs at the next instruction boundary or inside the wait the game sits in, so it also runs at a text wait; there `maid.vm.frame`, `maid.vm.frames()` and the waiting frame's locals read as the `state` step shows them. Without `mod=` it runs in the console's own environment, which has `maid.vm` and lasts for the session (a return to title or a load ends it), so a chunk can use what an earlier one defined. With `mod=ID` it runs in that mod's environment, with its globals. With no Lua mod enabled the step creates the runtime and a session for the console alone on its first use. A chunk cannot call a script. An error fails the step with the error and its traceback. `timeout` (default 30 s) bounds the wait for the chunk to run. The result reads `result` and `elapsed_ms`. Native AGE has no Lua |
 | `rand-seed SEED\|off` | draw op `0x60` from SEED's streams (0 to `0xffffffff`, decimal or hex), one per call site and the same on both targets, until the next `rand-seed`; `off` returns to the game's own draws. Every stream restarts at each `rand-seed`. The result reports what the period that just ended drew: `previous_seed`, `draws` and `sites`, the count per `SCRIPT@0xOFFSET`. Seed both targets at the same point, for example after loading one save, then compare the counts as well as the screens. The streams are defined in `docs/engine-re.md`, "Op 0x60 randomness". Native needs the profile's `[native.rand]` |
 | `dialogs` / `answer BUTTON` | list the open dialogs / press a button, radio buttons included (native: AGE's message boxes, AGERC's dialogs and the 画像の保存場所 folder picker; port: the 終了 and script-error dialogs, the folder picker and the options panel). AGERC's dialogs list every static text and button of the dialog and its pages, hidden pages included, the topmost dialog first; `answer` presses the first match from the topmost dialog down, and a check box toggles. The port's options panel lists itself in Japanese whatever its language: title 設定, as `text` the section shown, then the section's check boxes, 情報's ｸﾘｯﾌﾟﾎﾞｰﾄﾞにｺﾋﾟｰ, the six sections, 決定 and ｷｬﾝｾﾙ. `answer` takes a Japanese or shown label, mnemonics ignored (`効果音(&S)` matches 効果音): a check box toggles (a read-only section's refuses), a section shows, and 決定 (or `OK`) and ｷｬﾝｾﾙ (or `Cancel`) end the panel. Steps split like a shell, so quote a label with spaces (`answer 'Return to title(&T)'`). Natively the press is a posted `BM_CLICK`, which AGE's thread takes only when it next reads its queue, as it would a user's click, so `answer` returns once AGE has taken it (10 s at most). 設定's first open in a process holds AGE's thread for about 2 s with its VRAM query (`engine-re.md`, "Native menu bar", 設定). The folder picker is the shell's, so its title and buttons follow the Windows UI language. `SHARED_CAPABILITIES` in `drive_core.py` lists what committed scenarios may use |
 | `close-request` | ask to close as the close button and ESC do (an unforced `WM_CLOSE`): AGE opens its 終了 dialog. While the window is minimized, AGE quits at once without the dialog (run-state `0x1000000`), so the session ends |
@@ -1345,7 +1351,9 @@ these flags; you need them directly only to drive the port from another client.
 - `wheel` without `x`/`y` turns at the driven cursor. Both targets send one notch at a time, 80 ms apart, and the
   step ends 80 ms after the last: a script that reads the wheel each frame (op `0x10d`, which SELFONT's list scrolls
   a row by per read) sees every notch, as it sees a user's.
-- Port-only ops: `speed` (clock factor 0.05–8). `shot` needs an **absolute** path, because the port's working
+- Port-only ops: `speed` (clock factor 0.05–8) and `lua` (`code`, optional `mod` and `timeout_ms`; capability
+  `lua`). `lua` hands the chunk over through `InputAndWaits.Invoke` and polls for its result once a frame, as the
+  timed operations do (`DriveDispatcher`). `shot` needs an **absolute** path, because the port's working
   directory is `godot/`. It captures the 800×600 viewport, without the menu bar above it, so the window must not be
   minimized. Points and cursor positions are canvas pixels on both targets, below the bar.
 - Give `--data-root` and `--control-file` as absolute paths; relative ones resolve against `godot/`.

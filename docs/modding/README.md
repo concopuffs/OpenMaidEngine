@@ -27,8 +27,11 @@ Format version 2 adds **language packages**: translation catalogs and fonts that
 language without changing a script ([translating.md](translating.md) walks through one, [languages.md](languages.md)
 has every rule). They run in the port only.
 
-Version 1 does not support runtime scripting (Lua), engine extensions, or patching code another mod inserted.
-`../backlog.md` and the mod loader design's future work list what may come later.
+Format version 3 adds **Lua**: handlers the engine calls at a named instruction or when a session starts, with raw
+access to the game's cells ([lua.md](lua.md)). Lua mods run in the port only.
+
+Mods cannot yet extend the engine or patch code another mod inserted. `../backlog.md` and the mod loader design's
+future work list what may come later.
 
 ## Port and native
 
@@ -53,6 +56,7 @@ Test a mod in the port first: its link report names every conflict, while native
 | add a scene, a boot-time data edit, or new assets | [new-scenes.md](new-scenes.md) |
 | translate a game, step by step | [translating.md](translating.md) |
 | look up a language package's keys and rules | [languages.md](languages.md) |
+| run Lua beside the game's scripts | [lua.md](lua.md) |
 | look up a command or a port flag | [cli.md](cli.md) |
 | understand an error or a crash | [troubleshooting.md](troubleshooting.md) |
 | find your game's options, values and quirks | [games/README.md](games/README.md) |
@@ -77,6 +81,7 @@ These guides are the home for how to make mods. The design records behind them a
 - the language design: `../superpowers/specs/2026-10-06-open-maid-script-design.md`;
 - the loader design: `../superpowers/specs/2026-11-03-mod-loader-design.md`;
 - the localization design: `../superpowers/specs/2026-11-10-localization-design.md`;
+- the Lua design: `../superpowers/specs/2026-11-10-lua-scripting-design.md`;
 - engine facts: `../engine-re.md` and `../sys4-format-notes.md`;
 - the generated opcode reference, `../opcode-reference.md`. Each game's global and patch-point references are
   linked from its identity block in [games/README.md](games/README.md).

@@ -7,6 +7,7 @@
     <ProjectReference Include="..\Ome.Engine.Frontend\Ome.Engine.Frontend.csproj" />
     <ProjectReference Include="..\Ome.Script\Ome.Script.csproj" />
     <ProjectReference Include="..\Ome.Mods\Ome.Mods.csproj" />
+    <ProjectReference Include="..\Ome.Scripting.Lua\Ome.Scripting.Lua.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

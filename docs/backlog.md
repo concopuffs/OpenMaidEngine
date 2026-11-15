@@ -330,20 +330,19 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   and a two-mod test shows it.
 - **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12):
   - a launcher;
-  - runtime scripting (Lua): designed, see the next item;
+  - runtime scripting (Lua): being built, see the next item;
   - mod-owned sites (patching another mod's inserted code);
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
-- **Runtime scripting (Lua): designed, not built.** The port runs no mod code of its own: mods change behaviour
-  only through bytecode (patches and scripts). `superpowers/specs/2026-11-10-lua-scripting-design.md` (accepted
-  2026-11-14) specifies Lua beside the VM: a managed interpreter, hooks declared in the manifest (`omp = 3`), the
-  `maid` API, per-game base mods with declared writes, mod state beside the save, and gates 1 to 15. Its
-  milestones (§18), each done when its gates pass (milestone 0, the spike, chose Lua-CSharp on 2026-11-14; its
-  results are in `superpowers/plans/2026-11-14-lua-scripting.md`):
+- **Runtime scripting (Lua): milestones 0 and 1 built.** `superpowers/specs/2026-11-10-lua-scripting-design.md`
+  (accepted 2026-11-14) specifies Lua beside the VM: a managed interpreter, hooks declared in the manifest (`omp = 3`),
+  the `maid` API, per-game base mods with declared writes, mod state beside the save, and gates 1 to 15. Milestone 0
+  (the spike) chose Lua-CSharp, and milestone 1 (the core: point hooks, `ome.session.start`, `maid.vm` without
+  `call`, errors and budgets, the console) is built, both on 2026-11-14; their results are in
+  `superpowers/plans/2026-11-14-lua-scripting.md`, and the modders' guide is `modding/lua.md`. The remaining milestones
+  (§18), each done when its gates pass:
   - **The first release:**
-    1. the core: the scripting native and the runtime seam, session life, the sandbox, point hooks, `maid.vm`
-       without `call`, errors and budgets, the driver's `lua` step;
     2. state: `maid.state` and its sidecar, the rebuild on load, `maid.session.restoring`,
        `ome.session.resumed`, `ome.save.writing`;
     3. events and the first base mods: the layout, the accessors with declared writes, the write scan and

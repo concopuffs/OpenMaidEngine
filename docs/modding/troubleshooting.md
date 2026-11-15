@@ -174,6 +174,36 @@ skipped.
 game carries the engine's own text only. Game text, patches, scripts and assets need a `[game]` table naming the
 game ([languages.md](languages.md), "A shell language for every game").
 
+## Lua
+
+**"lua/NAME.lua: line N: …".** A syntax error, found by the compiler that runs the mod; the line is the file's. The
+check runs none of your code.
+
+**"… declares no top-level function F; a handler is a global function of its file".** The hook's handler must be
+declared as `function F(ctx)` at the top level of the named file, not as `local function`, `function M.F`, `F =
+function`, or inside a block ([lua.md](lua.md), "Handlers and the session").
+
+**"a point hook hands its handler the frame and operands, which needs the vm capability".** Add
+`capabilities = ["vm"]` to `[lua]`.
+
+**"'NAME' is not a named patch point of <profile>".** Point names are in your game guide and its patch-point
+reference ([games/README.md](games/README.md)).
+
+**"X replaces SCRIPT, and a hook names the original's instruction" or "a patch of X replaced the instruction".**
+Another mod replaced the script, or patched away the instruction your point names. Your hook cannot bind there;
+the two mods conflict as written.
+
+**"… this engine does not build it yet".** The hook form, `writes`, `calls` or `events/` is part of a later version
+of Lua scripting ([lua.md](lua.md), the list at the top).
+
+**A handler's error in `diagnostics/lua.log`.** The line names the mod, the handler, the script and offset it ran
+at, and the traceback. After three failures in a row the handler is off for the session; `--lua-errors halt` stops
+at the first one instead. "ran out of its instruction budget" means the call ran past 1,000,000 Lua instructions,
+usually an endless loop.
+
+**The game hangs with a Lua mod enabled.** A pattern that backtracks (`string.find` and the other pattern functions)
+is not bounded by the budget. Disable mods and enable them again one at a time to find the one.
+
 ## Game-specific problems
 
 Each game guide lists its quirks and current limits, such as installs with several bases, missing patch points, or

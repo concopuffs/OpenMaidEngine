@@ -68,6 +68,30 @@ public class ProjectBoundaryTests
         Assert.Equal("true", Property("Ome.Engine.Vm", "DisableTransitiveProjectReferences"));
     }
 
+    [Fact]
+    public void OnlyTheLuaProjectNamesTheLuaLibrary()
+    {
+        // Lua scripting spec §14.1 and gate 14: Ome.Engine and Ome.Engine.Vm reference no Lua library; the runtime seam
+        // is Ome.Engine's, and Ome.Scripting.Lua, which references Ome.Engine only, implements it. The milestone 0 spike
+        // is a measuring program that the engine never references.
+        var projects = Directory.EnumerateFiles(Path.Combine(Paths.Repo, "engine"), "*.csproj", SearchOption.AllDirectories)
+            .Append(Path.Combine(Paths.Repo, "godot", "OME.csproj"))
+            .Where(path => !path.Replace('\\', '/').Split('/').Any(part => part is "obj" or "bin"));
+        var naming = new List<string>();
+        foreach (string path in projects)
+            if (XDocument.Load(path).Descendants("PackageReference").Any(reference =>
+                    reference.Attribute("Include")?.Value is { } package
+                    && (package.StartsWith("LuaCSharp", StringComparison.OrdinalIgnoreCase)
+                        || package.StartsWith("MoonSharp", StringComparison.OrdinalIgnoreCase))))
+                naming.Add(Path.GetFileNameWithoutExtension(path));
+        Assert.Equal(["Ome.Scripting.Lua", "Ome.Scripting.Lua.Spike"], naming.Order(StringComparer.Ordinal));
+        Assert.Equal(["Ome.Engine"], ProjectReferences("Ome.Scripting.Lua"));
+        Assert.DoesNotContain(ProjectReferences("Ome.Engine.Vm"), name => name.Contains("Lua", StringComparison.Ordinal));
+        foreach (Assembly assembly in new[] { Handlers, Natives })
+            Assert.DoesNotContain(assembly.GetReferencedAssemblies(),
+                name => name.Name!.StartsWith("Lua", StringComparison.Ordinal) || name.Name == "MoonSharp.Interpreter");
+    }
+
     /// <summary>
     /// The natives' interfaces (spec §9, acceptance 1): every interface the Ome.Engine assembly exports, except the
     /// seams the natives call out through to what the front end and the platform supply, each with its reason.
@@ -90,6 +114,10 @@ public class ProjectBoundaryTests
         [typeof(Ome.Engine.Diagnostics.ITraceSink)] = "trace",
         // A glyph rasterizer's metrics, which the GDI and Godot rasterizers give.
         [typeof(IFontMetricsProbe)] = "glyphs",
+        // The Lua runtime (Lua scripting spec §14.1): every front end runs the same Lua, so it is no device; the
+        // scripting native and the link call it, and only Ome.Scripting.Lua implements it.
+        [typeof(Ome.Engine.Modding.IModRuntime)] = "lua",
+        [typeof(Ome.Engine.Modding.IModSession)] = "lua",
     };
 
     private static Type[] NativeInterfaces()

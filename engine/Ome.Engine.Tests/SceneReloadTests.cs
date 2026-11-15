@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Modding;
 using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
@@ -87,6 +88,8 @@ public class SceneReloadTests
             "_publishedLate", "_workQueued", "_requests", "_input", "_pointerPending", "_pendingPointerX",
             "_pendingPointerY", "_advanceQueued", "_frontendModalHolds",
             "_blockHandles", "_engineThreadId", "SleepScale",
+            // What runs after the requests (the scripting console), registered once at composition.
+            "_afterRequests",
             // The run's page counts (the reset posts a notice).
             "_pages", "_pageNotices",
             // The interpreter input goes to, and its script frames (none at a reload).
@@ -116,6 +119,15 @@ public class SceneReloadTests
             // The pace and the action-6 history are kept, as are the Auto delays (settings).
             "_fastForwardPacing", "_fastForwardStartMs", "_fastForwardOwedMs", "_fastForwardPagePassed",
             "_physicalSkipActionHeld", "_revealPhysicalSkipSuppressed", "_autoMessageTime0Ms", "_autoMessageTime1Ms",
+        ],
+        [typeof(Scripting)] =
+        [
+            // The interpreter, attached once, and each script's hook table, which the link's plan decides.
+            "_interpreter", "_tables",
+            // Lua on the stack and whether it may read locals: zero and false between calls, and op 0x9 runs no Lua.
+            "_depth", "_frameAccess",
+            // The run's log and notices, and the front end's console chunks not yet run.
+            "_recentLog", "_noticeCount", "_latestNotice", "_console",
         ],
         [typeof(TextManager)] =
         [
@@ -168,6 +180,7 @@ public class SceneReloadTests
         ("engine/Ome.Engine/Natives/Movies.cs", "public void ResetScene()"),
         ("engine/Ome.Engine/Natives/SavesAndSettings.cs", "public void ResetScene()"),
         ("engine/Ome.Engine/Natives/ScriptMemory.cs", "public void ResetScene()"),
+        ("engine/Ome.Engine/Natives/Scripting.cs", "public void ResetScene()"),
         ("engine/Ome.Engine/Natives/ShellServices.cs", "public void ResetScene()"),
         ("engine/Ome.Engine/Natives/SkipAndAuto.cs", "public void ResetScene()"),
         ("engine/Ome.Engine/Natives/TextManager.cs", "public void ResetScene()"),
@@ -250,7 +263,16 @@ public class SceneReloadTests
         using var locator = new PageLocatorState("ROOT", null);
         var saves = new SavesAndSettings(playClock: new StoppedClock());
         HeadlessNativesTests.NativeSet natives = HeadlessNativesTests.Natives(locator, clock, saves: saves);
-        VirtualMachine vm = natives.Vm(first, table, provider: new ScriptMap(new Dictionary<long, Script> { [0] = end }));
+        // A mod that ships Lua, so a session is built at boot and again after the reload.
+        using LazyModRuntime runtime = Ome.Scripting.Lua.LuaModRuntime.Lazy();
+        using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = runtime,
+            Stack = new ModRuntimeStack([new ModRuntimeMod("m", "1.0.0", false, false, [],
+                [new ModSource("m", "init.lua", "x = 1")])], []),
+        });
+        VirtualMachine vm = natives.Vm(first, table, provider: new ScriptMap(new Dictionary<long, Script> { [0] = end }),
+                                       scripting: scripting);
         ((IInputAndWaits)natives.Waits).CancelNextModalMovie();   // the waits' scene: the next modal movie cancelled
 
         natives.Waits.RunEngine(() => vm.Run());
@@ -269,6 +291,7 @@ public class SceneReloadTests
             [nameof(InputAndWaits)] = SceneOf(natives.Waits),
             [nameof(SavesAndSettings)] = SceneOf(natives.Saves),
             [nameof(ShellServices)] = SceneOf(natives.Shell),
+            [nameof(Scripting)] = SceneOf(scripting),
             [nameof(SkipAndAuto)] = SceneOf(natives.Skip),
             [nameof(TextManager)] = SceneOf(natives.Text),
         };
@@ -291,6 +314,7 @@ public class SceneReloadTests
         if (type.IsPrimitive || type.IsEnum || value is decimal) return Convert.ToString(value, CultureInfo.InvariantCulture)!;
         if (value is Delegate) return "delegate";
         if (value is Script script) return "script " + script.Name;
+        if (value is IModSession) return "session";   // a Lua state: the scene's reason says which session
         if (depth > 8) return "…";
         if (!type.IsValueType && !seen.Add(value)) return "(seen)";
         if (value is IDictionary dictionary)

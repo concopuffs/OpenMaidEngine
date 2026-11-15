@@ -13,13 +13,20 @@ public sealed record ModConflict(string Id, string? Reason);
 public sealed record ModReplacementOrder(string Script, string Over);
 
 /// <summary>A parsed and validated <c>manifest.toml</c> (spec §3.3; format version 2 adds the localization spec's
-/// <c>[[language]]</c> tables, §9.2).</summary>
+/// <c>[[language]]</c> tables, §9.2; version 3 adds the Lua scripting spec's <c>[lua]</c> and <c>[[hooks]]</c>,
+/// §6.2).</summary>
 public sealed record ModManifest
 {
-    /// <summary>The newest format version the reader takes; it also reads version 1.</summary>
-    public const int CurrentOmpVersion = 2;
+    /// <summary>The newest format version the reader takes; it also reads versions 1 and 2.</summary>
+    public const int CurrentOmpVersion = 3;
     /// <summary>The first format version with <c>[[language]]</c>, <c>text/</c> and <c>fonts/</c>.</summary>
     public const int LanguageOmpVersion = 2;
+    /// <summary>The first format version with <c>[lua]</c>, <c>[[hooks]]</c>, <c>lua/</c>, <c>events/</c> and the
+    /// <c>extended</c> target (Lua scripting spec §6.2).</summary>
+    public const int LuaOmpVersion = 3;
+    /// <summary>The targets of <c>[game].target</c>: native AGE runs a <c>native</c> mod; only the port runs an
+    /// <c>extended</c> one, which a mod with Lua must be.</summary>
+    public const string NativeTarget = "native", ExtendedTarget = "extended";
     public const int CurrentOmsVersion = 1;
 
     /// <summary>The manifest's <c>omp</c>.</summary>
@@ -34,7 +41,8 @@ public sealed record ModManifest
     /// <summary>The embedded profile id the mod targets (<c>[game].profile</c>); null for a version 2 package
     /// without <c>[game]</c>, which every profile accepts (localization spec §11.1).</summary>
     public string? Profile { get; init; }
-    /// <summary><c>[game].target</c>; <c>native</c> is the only version 1 target. Null without <c>[game]</c>.</summary>
+    /// <summary><c>[game].target</c>: <c>native</c>, or from version 3 <c>extended</c>. Null without
+    /// <c>[game]</c>.</summary>
     public string? Target { get; init; }
     /// <summary><c>[game].revisions</c>: <c>sha256:</c> fingerprints of <c>SYS4INI.BIN</c>; empty admits any.</summary>
     public IReadOnlyList<string> Revisions { get; init; } = [];
@@ -55,6 +63,11 @@ public sealed record ModManifest
     /// <summary>The languages the mod defines (localization spec §9.2), in manifest order, bundled fonts as written
     /// (<c>fonts/NAME</c>).</summary>
     public IReadOnlyList<LanguageSettings> Languages { get; init; } = [];
+
+    /// <summary>The <c>[lua]</c> table (Lua scripting spec §6.2); null when the manifest has none.</summary>
+    public ModLuaSettings? Lua { get; init; }
+    /// <summary>The <c>[[hooks]]</c> entries, in manifest order (§6.3).</summary>
+    public IReadOnlyList<ModHook> Hooks { get; init; } = [];
 
     /// <summary>Whether the package targets no profile (localization spec §11.1): it may hold only
     /// <c>[[language]]</c>, catalogs with <c>[[engine]]</c> entries alone, and <c>fonts/</c>.</summary>

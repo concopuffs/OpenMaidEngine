@@ -1,6 +1,7 @@
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Modding;
 using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 using Ome.Engine.Sys4;
@@ -186,7 +187,7 @@ public sealed partial class VirtualMachine
                           EngineBuild? build = null, SkipAndAuto? skipAndAuto = null,
                           Audio? audio = null, EngineTick? tick = null,
                           Graphics? graphics = null, Movies? movies = null, ScriptMemory? memory = null,
-                          TextManager? text = null)
+                          TextManager? text = null, Scripting? scripting = null)
     {
         ArgumentNullException.ThrowIfNull(waits);
         _s = s; _t = t; _handlers = BindHandlers(t); _waits = waits; _o = o ?? new VmOptions(); _provider = provider;
@@ -210,8 +211,14 @@ public sealed partial class VirtualMachine
         if (waits is ITextListener textListener) _text.Listen(textListener);
         _rules = EngineBuilds.ForVm(build, t).Rules;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        // Without composition the banks start empty in a script memory of the options' code page.
-        _memory = memory ?? new ScriptMemory(_o.NativeStringCodePage);
+        // Without composition the banks start empty in a script memory of the options' code page. The scripting native
+        // reaches the banks through the same script memory (Lua scripting spec §8.1).
+        if (memory != null && scripting != null && !ReferenceEquals(memory, scripting.Memory))
+            throw new ArgumentException("The scripting native works over the VM's script memory.", nameof(scripting));
+        _memory = memory ?? scripting?.Memory ?? new ScriptMemory(_o.NativeStringCodePage);
+        // Without a scripting native the VM has no hooks, as one without an audio native is silent (spec §14.1).
+        _scripting = scripting;
+        scripting?.AttachInterpreter(this);
         _sink = sink ?? NullTraceSink.Instance;
         // Without composition there is no save store: a numbered save fails, and the shared profile starts empty.
         _saves = saves ?? new SavesAndSettings();
@@ -909,10 +916,18 @@ public sealed partial class VirtualMachine
         int rootEntry = root.IndexByOffset.TryGetValue(entryOffset, out var idx) ? idx : 0;
         FrameCause cause = FrameCause.TopScene;
         NativeSavedScriptFrame? restoredRootFrame = null;
+        // Lua scripting spec §5.7: a session is built between frames, before the root script is entered at the start of
+        // the run and after a return to title, and before CALLBACK_LOAD after a full load.
+        SessionReason? session = SessionReason.Boot;
         while (true)
         {
             FrameOutcome outcome;
             bool restoreRequested = false;
+            if (session is { } reason)
+            {
+                session = null;
+                if (!StartScriptingSession(reason)) break;
+            }
             try
             {
                 ExecFrame rootFrame = restoredRootFrame == null
@@ -947,6 +962,7 @@ public sealed partial class VirtualMachine
                     // model. The port's restored scenes take op 0x7c's cold path, so a yield saved before the load must
                     // not survive it.
                     ResetCoroutineYield();
+                    if (!StartScriptingSession(SessionReason.Load)) break;
                     Script? callback = _provider?.GetByName("CALLBACK_LOAD.BIN");
                     if (callback != null)
                     {
@@ -963,6 +979,7 @@ public sealed partial class VirtualMachine
                             root = reloadedRoot;
                             rootEntry = root.IndexByOffset.TryGetValue(0, out int lri) ? lri : 0;
                             cause = FrameCause.RootReload;
+                            session = SessionReason.Title;
                             continue;
                         }
                     }
@@ -993,6 +1010,7 @@ public sealed partial class VirtualMachine
                 root = reloaded;
                 rootEntry = root.IndexByOffset.TryGetValue(0, out int ri) ? ri : 0;
                 cause = FrameCause.RootReload;
+                session = SessionReason.Title;
                 continue;
             }
             if (outcome == FrameOutcome.RanOff) HaltReason ??= "pc-out-of-range";
@@ -1033,6 +1051,7 @@ public sealed partial class VirtualMachine
         _skip.ResetScene();   // Skip, Auto and read skip start over; run-state 0x08000000 is zeroed
         _movies.ResetScene();   // every surface's movie object goes; the surfaces stay
         _waits.ResetSceneContext();
+        _scripting?.ResetScene();   // the Lua session ends with the scene; Run builds the next (Lua scripting spec §5.7)
         // The reset keeps every surface. op_0x9_reset_scene_and_reload_root then runs the release worker over all
         // 1,000 slots only when (CreateObject & 2) && (AutoFreeTex & 1): Kamidori, not Himegari (docs/engine-re.md,
         // "AutoFreeTex").
@@ -1060,6 +1079,7 @@ public sealed partial class VirtualMachine
         {
             _waits.EnterScriptContext(frame.Script.Name);
             hostContextEntered = true;
+            frame.Hooks = _scripting?.HooksFor(frame.Script);   // Lua scripting spec §7.5
             _sink.Emit(TraceEvent.FrameEnter(frame.Script.Name, _depth, cause, callId));
             var outcome = FrameOutcome.RanOff;
             int pc = frame.Pc;
@@ -1385,6 +1405,18 @@ public sealed partial class VirtualMachine
                 case FrameOutcome.RootReload: return LoopEnd.RootReload;
                 case FrameOutcome.ExitRequested: return LoopEnd.ExitRequested;
                 case FrameOutcome.Halted: return LoopEnd.Halted;
+            }
+            if (_scripting != null)
+            {
+                // Lua scripting spec §7.1, §13: the console's chunks, then the instruction's before hooks, after the
+                // boundary's services and before the opcode handler. A frame's table is null for a script with no hooks.
+                _scripting.ServiceRequests();
+                if (frame.Hooks?.ByIndex[pc] is { } site
+                    && _scripting.RunBefore(site, frame.Script.Instructions[pc]) is { } luaHalt)
+                {
+                    HaltReason ??= luaHalt;
+                    return LoopEnd.Halted;
+                }
             }
             if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
             StepResult step = ApplyIgnoredDwords(frame, pc, Step(frame.Script.Instructions[pc], pc));

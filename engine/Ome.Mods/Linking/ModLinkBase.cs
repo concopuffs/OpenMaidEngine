@@ -1,4 +1,5 @@
 using Ome.Engine.Model;
+using Ome.Engine.Modding;
 using Ome.Engine.Sys4;
 using Ome.Script.Abi;
 using Ome.Script.Modules;
@@ -42,6 +43,10 @@ public sealed record ModLinkBase
     /// <summary>The toolchain's identity for the link cache key (spec §6.4): the compiler and linker builds and the
     /// profile's opcode table, preludes and patch points.</summary>
     public string ToolchainStamp { get; init; } = "";
+    /// <summary>The Lua runtime the link checks each <c>lua/</c> file with (Lua scripting spec §14.2), created only
+    /// when a mod ships Lua; null in a build without one, where a mod that ships Lua fails the link. Its identity
+    /// joins the cache key of a stack with Lua.</summary>
+    public LazyModRuntime? Lua { get; init; }
 
     /// <summary>The opcode table's content (each opcode's label, operand count and semantic name), for the stamp.</summary>
     private static string TableFingerprint(OpcodeTable table)

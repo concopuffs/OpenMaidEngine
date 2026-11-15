@@ -17,6 +17,7 @@ An Open Maid Pack (OMP) is one mod. It comes in two forms that load identically:
 ├── assets/         asset overrides by original name, and new assets; assets/<language>/ (format version 2; languages.md)
 ├── text/           translation catalogs, text/<language>/*.toml (format version 2; languages.md)
 ├── fonts/          font files a language uses (format version 2; languages.md)
+├── lua/            Lua sources; init.lua is optional (format version 3; lua.md)
 ├── README.md       optional
 └── LICENSE         optional
 ```
@@ -27,7 +28,7 @@ changes behavior without a mention.
 ## Manifest
 
 ```toml
-omp = 1                              # package format version: 1, or 2 for languages (required)
+omp = 1                              # package format version: 1, 2 for languages, 3 for Lua (required)
 id = "example.double-exp"            # required
 name = "Double EXP"                  # required
 version = "1.2.0"                    # required, MAJOR.MINOR.PATCH
@@ -36,7 +37,7 @@ description = "Doubles experience awards."
 
 [game]                               # required (a version 2 package without it is for every game)
 profile = "<profile>"                # a profile id from games/README.md (required)
-target = "native"                    # "native" is the only version 1 target (required)
+target = "native"                    # "native", or "extended" for a mod with Lua (required)
 revisions = ["sha256:…"]             # SYS4INI.BIN fingerprints this mod supports
 
 [engine]
@@ -63,8 +64,16 @@ names = ["DBLEXP_ICON.AGF"]          # new assets, as records after the scripts
 [replace]
 "SC0010.BIN" = { over = "other.mod" } # this replacement deliberately supersedes other.mod's
 
-[[language]]                         # format version 2 only; repeatable (languages.md)
+[[language]]                         # format version 2 and later; repeatable (languages.md)
 tag = "en"
+
+[lua]                                # format version 3; lua.md
+api = 1
+capabilities = ["vm"]
+
+[[hooks]]                            # format version 3; repeatable (lua.md)
+point = "<a patch point>"
+handler = "double_exp.lua:on_award"
 ```
 
 Unknown keys are errors, so a misspelled setting cannot be silently ignored.
@@ -72,6 +81,9 @@ Unknown keys are errors, so a misspelled setting cannot be silently ignored.
 **Format versions.** `omp = 2` adds the `[[language]]` table, the `text/` and `fonts/` folders and language assets
 in `assets/<language>/`, and lets a package leave out `[game]` (below); everything else is as in version 1, which a
 version 2 loader still reads. A version 1 package with any of these, or without `[game]`, is an error.
+`omp = 3` adds the `[lua]` table, `[[hooks]]`, the `lua/` folder and the `extended` target ([lua.md](lua.md)); a
+version 3 loader still reads versions 1 and 2. A package with Lua and an earlier version, or with Lua and
+`target = "native"`, is an error.
 
 ### Identity
 
@@ -89,8 +101,8 @@ version 2 loader still reads. A version 1 package with any of these, or without 
 - **`profile`:** the game. A mod targets exactly one game. A version 2 package without `[game]` targets every game
   and holds only the engine's own text in other languages: `[[language]]` tables, catalogs with `[[engine]]` entries
   alone, and `fonts/` ([languages.md](languages.md), "A shell language for every game").
-- **`target`:** `native`. The mod uses only what the original engine supports, so it can be exported for
-  `AGE.EXE`.
+- **`target`:** `native`: the mod uses only what the original engine supports, so it can be exported for
+  `AGE.EXE`. `extended` (format version 3): the mod has Lua, which only the port runs, so `omp export` refuses it.
 - **`revisions`:** optional SHA-256 fingerprints of `SYS4INI.BIN`. When present, any other installed catalog stops
   the load and prints the installed fingerprint (`omp check` prints it too). Patches do not need it, because each
   fragment carries its own script fingerprint. Declare it when the mod has replacements, new scripts or data edits
@@ -178,6 +190,11 @@ landing on the wrong instructions.
 no script or asset: the port presents the game's text through them as it is drawn. A package that holds nothing
 else, or language assets besides, is presentation only, which its save stamps record. See [languages.md](languages.md).
 
+### Lua: `lua/`
+
+`lua/` holds the mod's Lua sources (`*.lua` only), which `[lua]` and `[[hooks]]` use. A package with `lua/` needs
+a `[lua]` table, and it is never presentation only: Lua can change what the game stores. See [lua.md](lua.md).
+
 ## Limits
 
 Packages are treated as untrusted input:
@@ -187,4 +204,6 @@ Packages are treated as untrusted input:
 - an entry that expands past 1 MiB at a ratio over 200:1 is rejected;
 - compiled plans are revalidated against the base on every load;
 - catalog files are at most 32 MiB each, and font files 64 MiB;
-- a package contains no native code. Version 1 runs only AGE bytecode, inside the VM.
+- a package carries at most 512 Lua files, each at most 1 MiB;
+- a package contains no native code. It runs AGE bytecode inside the VM, and Lua source inside the engine's sandbox
+  ([lua.md](lua.md)): no bytecode, no native modules, and no access to files, processes or the network.

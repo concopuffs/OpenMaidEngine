@@ -76,6 +76,21 @@ public class DriveControlTests
             ChosenLanguage = tag;
             return new JsonObject { ["language"] = tag, ["previous"] = "ja" };
         }
+        /// <summary>Each chunk handed over, and how many polls it takes before it has run (null: never).</summary>
+        public List<(string? Mod, string Code)> Chunks { get; } = [];
+        public int? LuaPolls = 2;
+        public bool LuaFails;
+        public Func<JsonObject?> Lua(string? mod, string code)
+        {
+            Chunks.Add((mod, code));
+            int polls = 0;
+            return () =>
+            {
+                if (LuaPolls is not { } due || ++polls < due) return null;
+                if (LuaFails) throw new DriveProtocolException("lua: boom");
+                return new JsonObject { ["result"] = "256" };
+            };
+        }
         public List<(string? Path, int Tolerance)> Diffs { get; } = [];
         public JsonObject ReferenceDiff(string? path, int tolerance)
         {
@@ -361,6 +376,28 @@ public class DriveControlTests
         var without = new FakeBackend { Capabilities = new[] { "options" } };
         Assert.Contains("'reference-diff' is not supported",
             (string?)Run(new DriveDispatcher(without), without, """{"id":5,"op":"reference-diff","arm":true}""")["error"]);
+    }
+
+    [Fact]
+    public void ALuaChunkIsHandedOverOnceAndPolledUntilItHasRun()
+    {
+        var backend = new FakeBackend { Capabilities = new[] { "lua" } };
+        var dispatcher = new DriveDispatcher(backend);
+        var ran = Run(dispatcher, backend, """{"id":1,"op":"lua","code":"return maid.vm.g[0x100]","mod":"m"}""");
+        Assert.True((bool)ran["ok"]!);
+        Assert.Equal("256", (string?)ran["result"]!["result"]);
+        Assert.Equal([("m", "return maid.vm.g[0x100]")], backend.Chunks);
+
+        backend.LuaFails = true;
+        Assert.Equal("lua: boom", (string?)Run(dispatcher, backend, """{"id":2,"op":"lua","code":"error('boom')"}""")["error"]);
+        backend.LuaPolls = null;
+        Assert.Contains("had not run after 100 ms",
+            (string?)Run(dispatcher, backend, """{"id":3,"op":"lua","code":"return 1","timeout_ms":100}""")["error"]);
+        Assert.Equal(3, backend.Chunks.Count);
+
+        var without = new FakeBackend { Capabilities = Array.Empty<string>() };
+        Assert.Contains("'lua' is not supported",
+            (string?)Run(new DriveDispatcher(without), without, """{"id":4,"op":"lua","code":"return 1"}""")["error"]);
     }
 
     [Fact]

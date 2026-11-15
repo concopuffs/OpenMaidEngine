@@ -325,8 +325,18 @@ public sealed partial class InputAndWaits
         if (Volatile.Read(ref _workQueued) == 0 || Interlocked.Exchange(ref _workQueued, 0) == 0) return;
         RouteQueuedInput();
         RunRequests();
+        _afterRequests?.Invoke();
         _movies.PublishServiced();
     }
+
+    private Action? _afterRequests;
+
+    /// <summary>
+    /// Work the engine thread runs each time it has run the front end's requests: the scripting native's console (Lua
+    /// scripting spec §13), whose requests only hand a chunk over, so the chunk runs here, inside a wait too. The
+    /// composition registers it before the engine thread starts.
+    /// </summary>
+    public void ServiceAfterRequests(Action service) => _afterRequests += service;
 
     private void RunRequests()
     {

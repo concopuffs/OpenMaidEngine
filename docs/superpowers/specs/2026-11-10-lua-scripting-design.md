@@ -1111,6 +1111,10 @@ INIT2 before its op `0xae`; Kamidori's also calls CHECKCONFIG. The rules that fo
 - Changing a manifest or an event file needs a restart, because it changes the link.
 - The guide for mod authors goes under `docs/modding/`, in the same change that ships the feature.
 
+**As built (milestone 1).** The driver step is `lua [mod=ID] [timeout=S] CODE`: a bare first word cannot be told
+from code (`lua x = 1`), so the mod is named by `mod=`. The guide for mod authors is `docs/modding/lua.md`. The
+plan's §4.5 has the rest.
+
 ## 14. Engine changes
 
 ### 14.1 Where Lua sits in the layers
@@ -1178,6 +1182,19 @@ touches engine state.
   runtime, and the link and `omp check` call `Check` for each file: the handlers of §6.2, the write scan of
   §9.3 and the syntax errors of §5.5 all come from it.
 - **`CaptureState` serializes each mod's state on its own** and reports the mods whose state failed (§11).
+
+**As built (milestone 1).** The seam is `engine/Ome.Engine/Modding/ModRuntime.cs`, in namespace
+`Ome.Engine.Modding`; the plan's §4.2 and §4.4 have the detail.
+
+- **`Check` compiles; it does not parse.** The library's syntax tree parser refuses valid Lua (any comment, among
+  others), so `Check` compiles the file with the compiler a session uses, which runs nothing, and reports its
+  errors with their line. The handlers and the written names come from a token scan of our own over the text the
+  compiler accepted (`LuaSourceScan`).
+- **Additions.** `IModRuntime.Identity` names the runtime for the link cache key, and `BuildSession` takes the
+  budgets and the nesting cap (`ModLimits`). `IModSession` adds `Failures` (the mods a build switched off),
+  `IsActive(handler)` and `RunChunk` (the console).
+- **`LazyModRuntime`** creates the runtime at its first use, so a run without Lua mods and without the console
+  creates none (gate 1).
 
 ### 14.3 The other changes
 

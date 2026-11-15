@@ -21,7 +21,8 @@ public partial class Main
     /// </summary>
     private static bool LinkMods(IReadOnlyList<string> userArgs, string workingDirectory, SelectedGameProfile selected,
                                  ResolvedGamePersistence persistence, string sys4IniPath, Sys4AssetCatalog catalog,
-                                 IAssetStore baseStore, out MountedModLayer? layer)
+                                 IAssetStore baseStore, Ome.Engine.Modding.LazyModRuntime luaRuntime,
+                                 out MountedModLayer? layer)
     {
         layer = null;
         ModLaunchOptions options = ModLaunchOptions.Resolve(userArgs, workingDirectory);
@@ -44,8 +45,9 @@ public partial class Main
         if (modules == null)
             GD.PushWarning("[mods] no repository toolchain: fragments compile without the profile's OMS modules, "
                            + "globals and patch points");
+        // The Lua runtime checks each lua/ file; it is created only when a mod ships Lua (Lua scripting spec §14.2).
         ModLinkBase linkBase = ModLinkBase.ForInstall(profile, sys4IniPath, catalog, baseStore, table,
-            OmeRuntimeMetadata.LoadOpcodeContracts(), globals, modules, points);
+            OmeRuntimeMetadata.LoadOpcodeContracts(), globals, modules, points) with { Lua = luaRuntime };
         ModLaunchResult result = ModLaunch.Run(linkBase, persistence.ProfileRoot, persistence.DiagnosticsDirectory, options);
         foreach (ModReportLine line in result.Report.Lines.Where(line => line.Class == ModReportClass.Note
                                                                           && line.Message.Contains("--forget-mod")))

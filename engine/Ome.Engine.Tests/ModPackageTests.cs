@@ -162,10 +162,12 @@ public sealed class ModPackageTests : IDisposable
                 "is not a lowercase, dot-separated id")]
     [InlineData("omp = 1\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"native\"",
                 "is not a semantic version")]
-    [InlineData("omp = 3\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"native\"",
-                "format version 3 is not supported")]
+    [InlineData("omp = 4\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"native\"",
+                "format version 4 is not supported")]
     [InlineData("omp = 1\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"extended\"",
-                "version 1 mods target \"native\"")]
+                "\"extended\" needs omp = 3")]
+    [InlineData("omp = 1\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"other\"",
+                "'other' is not supported")]
     [InlineData("omp = 1\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"", "game: required")]
     [InlineData("omp = 1\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"native\"\nrevisions = [\"S4IC422\"]",
                 "is not a sha256:<64 lowercase hex> fingerprint")]

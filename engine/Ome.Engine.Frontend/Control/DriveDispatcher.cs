@@ -51,6 +51,11 @@ public interface IDriveBackend
     /// port's).</summary>
     JsonObject ReferenceDiff(string? path, int tolerance)
         => throw new DriveProtocolException("'reference-diff' has no implementation here");
+    /// <summary>Hand a Lua chunk to the scripting native (Lua scripting spec §13): in <paramref name="mod"/>'s
+    /// environment, or the console's own when null. Returns a poll the dispatcher calls once a frame: null until the
+    /// chunk has run, then {result} (capability "lua", the port's). A chunk that fails throws from the poll with the
+    /// error's message.</summary>
+    Func<JsonObject?> Lua(string? mod, string code) => throw new DriveProtocolException("'lua' has no implementation here");
     /// <summary>Draw op 0x60 from <paramref name="seed"/>'s per-site streams, or from the game's own generator when
     /// null; returns what op 0x60 drew since the previous call (capability "rand").</summary>
     JsonObject RandSeed(uint? seed) => throw new DriveProtocolException("'rand-seed' has no implementation here");
@@ -276,6 +281,14 @@ public sealed class DriveDispatcher
                 if (tolerance is < 0 or > 255) throw new DriveProtocolException("tolerance is 0..255 per channel");
                 return Immediate(request, reply, () => _backend.ReferenceDiff(path, tolerance));
             }
+            case "lua":
+            {
+                RequireCapability("lua");
+                string code = request.Text("code");
+                string? mod = request.Has("mod") ? request.Text("mod") : null;
+                return new LuaOperation(request, reply, _backend, nowMs, mod, code,
+                    request.Int("timeout_ms", DefaultWaitTimeoutMs));
+            }
             default:
                 throw new DriveProtocolException(
                     $"unknown op '{request.Op}' (the {_backend.Target} supports state, pointer, click, key, wheel, " +
@@ -477,6 +490,29 @@ public sealed class DriveDispatcher
                 _pokes++;
                 _nextPokeAt = nowMs + everyMs;
             }
+            return null;
+        }
+    }
+
+    /// <summary>A Lua chunk (Lua scripting spec §13): handed over at once, then polled once a frame until it has run on
+    /// the engine thread, at its next instruction boundary or inside the wait it sits in.</summary>
+    private sealed class LuaOperation(DriveRequest request, Action<string> reply, IDriveBackend backend, long startMs,
+                                      string? mod, string code, int timeoutMs) : Operation(request, reply)
+    {
+        private Func<JsonObject?>? _poll;
+
+        public override JsonNode? Poll(long nowMs)
+        {
+            _poll ??= backend.Lua(mod, code);
+            if (_poll() is { } result)
+            {
+                Done = true;
+                result["elapsed_ms"] = nowMs - startMs;
+                return result;
+            }
+            if (nowMs - startMs >= timeoutMs)
+                throw new DriveProtocolException($"lua: the chunk had not run after {timeoutMs} ms (the engine thread "
+                                                 + "reached no instruction boundary or wait)");
             return null;
         }
     }

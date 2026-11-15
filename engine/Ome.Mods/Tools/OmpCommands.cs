@@ -233,6 +233,11 @@ public static class OmpCommands
             if (presenting.Count > 0)
                 console.WriteLine($"note: text/, fonts/, assets/<language>/ and [[language]] of {string.Join(", ", presenting)} "
                                   + "are not exported: native AGE cannot load them");
+            // Lua scripting spec §6.4: a Lua library has no [game], so the target check above passes it; its Lua stays.
+            var libraries = result.Order.Where(mod => mod.Layout.Lua.Count > 0 || mod.Manifest.Lua != null)
+                .Select(mod => mod.Id).ToList();
+            if (libraries.Count > 0)
+                console.WriteLine($"note: lua/ and [lua] of {string.Join(", ", libraries)} are not exported: native AGE runs no Lua");
             console.WriteLine($"omp export: {result.Order.Count} mods, {written.Count} files -> {Path.GetFullPath(outputDirectory)}");
             return 0;
         }

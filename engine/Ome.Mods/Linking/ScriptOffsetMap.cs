@@ -40,6 +40,22 @@ public sealed class ScriptOffsetMap
         return null;
     }
 
+    /// <summary>The base offset of the instruction at linked offset <paramref name="linkedOffset"/>, or null when a
+    /// patch inserted it. Layout keeps base order, so the runs are sorted by linked offset too.</summary>
+    public int? Unmap(int linkedOffset)
+    {
+        int low = 0, high = Runs.Count - 1;
+        while (low <= high)
+        {
+            int middle = (low + high) >>> 1;
+            OffsetRun run = Runs[middle];
+            if (linkedOffset < run.Start + run.Delta) high = middle - 1;
+            else if (linkedOffset >= run.End + run.Delta) low = middle + 1;
+            else return linkedOffset - run.Delta;
+        }
+        return null;
+    }
+
     /// <summary>The table of a patch result: each instruction the applier kept from the base carries its base offset
     /// (<c>OriginalOffset</c>), and its linked offset is the sum of the sizes before it.</summary>
     public static ScriptOffsetMap From(OmsPatchResult result)

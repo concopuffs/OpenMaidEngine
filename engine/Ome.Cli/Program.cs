@@ -94,9 +94,11 @@ if (command == "omp")
     List<string> Paths_(string flag) => args.Select((arg, k) => (arg, k))
         .Where(pair => pair.arg == flag && pair.k + 1 < args.Length).Select(pair => Path.GetFullPath(args[pair.k + 1])).ToList();
     string profileId = selectedProfile.Profile.Id;
+    // The Lua runtime checks each lua/ file (Lua scripting spec §13); it is created only when a mod ships Lua.
+    using Ome.Engine.Modding.LazyModRuntime luaRuntime = Ome.Scripting.Lua.LuaModRuntime.Lazy();
     var linkBase = Ome.Mods.Linking.ModLinkBase.ForInstall(profileId, sys4Ini, catalog, assetStore, table,
         Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), Paths.GlobalsJson(profileId), Paths.OmsModules(profileId),
-        Paths.PatchPointsJson(profileId));
+        Paths.PatchPointsJson(profileId)) with { Lua = luaRuntime };
     string? dataRoot = OptionValue("--data-root") is { } root ? Path.GetFullPath(root) : null;
     string verb = args.Length > 1 ? args[1] : "";
     return verb switch

@@ -52,9 +52,9 @@ public class HeadlessNativesTests
     {
         /// <summary>A VM over these natives, as composition builds the front end's.</summary>
         public VirtualMachine Vm(Script script, OpcodeTable table, VmOptions? options = null,
-                                 IScriptProvider? provider = null)
+                                 IScriptProvider? provider = null, Scripting? scripting = null)
             => new(script, table, Waits, options, provider, saves: Saves, shell: Shell, skipAndAuto: Skip,
-                   audio: Audio, tick: Tick, graphics: Graphics, movies: Movies, text: Text);
+                   audio: Audio, tick: Tick, graphics: Graphics, movies: Movies, text: Text, scripting: scripting);
     }
 
     /// <summary>The natives over devices that do nothing, any of which a test may give. Without an

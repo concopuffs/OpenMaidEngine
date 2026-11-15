@@ -29,5 +29,7 @@ internal sealed class ExecFrame
     // 無視 after an interpreter error: native adds the frame's last decoded instruction length to its pc. A
     // waiting frame's native pc is already past the wait, so the port applies the dwords to the wait's successor.
     public int IgnoredDwords;
+    // The script's hook table (Lua scripting spec §7.5), taken when the frame is entered; null for a script with none.
+    public Ome.Engine.Modding.ScriptHooks? Hooks;
     public ExecFrame(Script script, int pc) { Script = script; Pc = pc; }
 }

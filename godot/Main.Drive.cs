@@ -141,7 +141,7 @@ public partial class Main
     {
         private static readonly string[] PortCapabilities =
             { "speed", "waiting", "dialogs", "answer", "window", "menu", "rand", "options", "language",
-              "reference-diff" };
+              "reference-diff", "lua" };
 
         public string Target => "port";
         public string Profile { get; } = main._selectedProfile.Profile.Id;
@@ -214,6 +214,20 @@ public partial class Main
             => DriveRandomReport.ToJson(seed, main._waits.Invoke(() => main._vm.Memory.SeedDeterministicRandom(seed)));
 
         public void Close() => main.GetTree().Quit(0);
+
+        /// <summary>The console (Lua scripting spec §13): the request only hands the chunk to the scripting native,
+        /// which runs it on the engine thread at its next instruction boundary or inside the wait it sits in.</summary>
+        public Func<System.Text.Json.Nodes.JsonObject?> Lua(string? mod, string code)
+        {
+            if (main._scripting is not { } scripting) throw new DriveProtocolException("this run has no scripting native");
+            ConsoleRequest request = main._waits.Invoke(() => scripting.SubmitConsole(mod, code));
+            return () =>
+            {
+                if (request.Result is not { } result) return null;
+                if (!result.Succeeded) throw new DriveProtocolException($"lua: {result.Text}");
+                return new System.Text.Json.Nodes.JsonObject { ["result"] = result.Text };
+            };
+        }
 
         /// <summary>Deferred to the end of the frame, so the reply is on its way before a close that quits at once
         /// (a minimized window) ends the process.</summary>

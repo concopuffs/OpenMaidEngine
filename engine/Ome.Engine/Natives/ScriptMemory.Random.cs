@@ -57,6 +57,10 @@ public sealed partial class ScriptMemory
         return (int)((state >> 16) & 0x7FFF);
     }
 
+    /// <summary>A Lua mod's draw of 15 bits (Lua scripting spec §5.6): from the generator op 0x60 draws from without
+    /// a seed. A mod's draws ignore <c>rand-seed</c> until the seeded streams of the spec's milestone 6.</summary>
+    public int DrawForMod() => System.Random.Shared.Next(0x8000);
+
     /// <summary>The value op 0x60 draws before taking its bound, at the op whose dword offset is
     /// <paramref name="offset"/> in <paramref name="script"/> (packed id <paramref name="packedId"/>).</summary>
     public int DrawRandom(string script, uint packedId, int offset)

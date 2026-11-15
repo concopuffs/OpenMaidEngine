@@ -644,6 +644,10 @@ STEPS = {
                             "NAME: compare the screen with its drawing of the same frame (run settled), counting "
                             "pixels with a channel more than N (default 3) apart; writes shots/NAME-gpu.png, "
                             "-reference.png, -diff.png (port)", "reference-diff"),
+    "lua": _spec(1, 1, "mod timeout",
+                 "lua [mod=ID] CODE             run a Lua chunk on the engine thread and report what it returns (the "
+                 "rest of the line is the chunk, so no comment may follow it); mod=ID runs it in that mod's "
+                 "environment, else in the console's own, which has maid.vm (port)", "lua"),
     "close": _spec(0, 0, "timeout", "close [timeout=S]             quit the game and end the session"),
 }
 NUMERIC_OPTIONS = {"hold", "timeout", "quiet", "threshold", "every", "tolerance"}
@@ -670,7 +674,33 @@ def normalize_script(name: str) -> str:
     return name.strip().upper().removesuffix(".BIN")
 
 
+LUA_STEP = re.compile(r"\s*lua(?:\s+(?:mod=(?P<mod>\S+)\s+)?(?:timeout=(?P<timeout>\S+)\s+)?(?P<code>.*?))?\s*$",
+                      re.IGNORECASE | re.DOTALL)
+
+
+def _parse_lua_step(text: str, line: int) -> Step:
+    """A `lua` step: the rest of the line is Lua, so it is not split into words (a quote, `#` or `=` in it is code)."""
+    where = f"line {line}: " if line else ""
+    match = LUA_STEP.match(text)
+    if not match or not (match.group("code") or "").strip():
+        raise DriveError(f"{where}lua takes a chunk: {STEPS['lua'].usage}")
+    options = {key: match.group(key) for key in ("mod", "timeout") if match.group(key)}
+    if "timeout" in options:
+        try:
+            float(options["timeout"])
+        except ValueError:
+            raise DriveError(f"{where}lua: timeout={options['timeout']!r} is not a number") from None
+    return Step("lua", (match.group("code").strip(),), options, text.strip(), line)
+
+
+def is_lua_step(text: str) -> bool:
+    words = text.split(None, 1)
+    return bool(words) and words[0].lower() == "lua"
+
+
 def parse_step(text: str, line: int = 0) -> Step:
+    if is_lua_step(text):
+        return _parse_lua_step(text, line)
     try:
         words = shlex.split(text, posix=True)
     except ValueError as error:
@@ -790,7 +820,8 @@ def _coordinates(words: Iterable[str]) -> tuple[int, int]:
 def parse_steps(lines: Iterable[str]) -> list[Step]:
     steps = []
     for number, line in enumerate(lines, 1):
-        text = line.split("#", 1)[0].strip()
+        # A lua step's line is code to its end: `#` is Lua's length operator there, not a comment.
+        text = line.strip() if is_lua_step(line) else line.split("#", 1)[0].strip()
         if text:
             steps.append(parse_step(text, number))
     return steps
@@ -1108,6 +1139,12 @@ class Executor:
             result = self.client.call("reference-diff", path=str(path),
                                       tolerance=int(options.get("tolerance", 3)))
             return {**result, "location": self.location()}
+        elif step.name == "lua":
+            timeout = float(options.get("timeout", 30))
+            arguments: dict[str, Any] = {"code": step.args[0], "timeout_ms": int(timeout * 1000)}
+            if "mod" in options:
+                arguments["mod"] = options["mod"]
+            return self.client.call("lua", timeout=timeout + REPLY_MARGIN_S, **arguments)
         elif step.name == "close":
             timeout = float(options.get("timeout", 20))
             result = self.client.call("close", timeout=timeout + REPLY_MARGIN_S, timeout_ms=int(timeout * 1000))
@@ -1147,7 +1184,8 @@ def describe(result: dict[str, Any]) -> str:
     details = []
     for key in ("error", "path", "location", "settled", "pokes", "seconds", "answered", "exit_code",
                 "cursor_moved_to", "label", "checked", "seed", "previous_seed", "draws", "option", "value",
-                "section", "language", "previous", "armed", "renderer", "items", "transformed", "over", "max", "mean", "bbox"):
+                "section", "language", "previous", "armed", "renderer", "items", "transformed", "over", "max", "mean", "bbox",
+                "result"):
         if key in result and result[key] is not None:
             details.append(f"{key}={result[key]}")
     if "frames" in result:

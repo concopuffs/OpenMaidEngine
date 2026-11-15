@@ -692,6 +692,34 @@ def test_language_step():
           and "languages=ja,en" in core.describe(results[0]), "a language result names both languages and the list")
 
 
+def test_lua_step():
+    step = core.parse_step("lua return #maid.vm.frames(), 'a=b' # not a comment")
+    check(step.args == ("return #maid.vm.frames(), 'a=b' # not a comment",) and step.options == {},
+          "the rest of the line is the chunk, with its quotes, # and =")
+    check(core.parse_step("lua mod=double-exp return exports").options == {"mod": "double-exp"},
+          "mod= names the environment")
+    check(core.parse_step("lua mod=a timeout=5 return 1").options == {"mod": "a", "timeout": "5"},
+          "a timeout may follow mod=")
+    check(raises(core.parse_step, "lua", contains="takes a chunk"), "lua needs a chunk")
+    check(raises(core.parse_step, "lua timeout=soon return 1", contains="not a number"), "a timeout must parse")
+    check([s.args for s in core.parse_steps(["lua return #t # length", "state # a comment"])]
+          == [("return #t # length",), ()], "only a lua line keeps its #")
+    check(core.step_capabilities(core.parse_step("lua return 1")) == {"lua"}, "lua needs the lua capability")
+    check("lua" not in core.SHARED_CAPABILITIES and "lua" not in native.CAPABILITIES, "native AGE runs no Lua")
+
+    server = FakeServer(lambda request: {"ok": True, "result": {"result": "256", "elapsed_ms": 16}
+                                         if request.get("op") == "lua" else {}})
+    with tempfile.TemporaryDirectory() as directory:
+        with core.Client(server.port, "secret") as client:
+            executor = core.Executor(client, core.Profile(points={}), Path(directory))
+            results = []
+            ok = executor.run(core.parse_steps(["lua mod=m return maid.vm.g[0x100]"]), results.append)
+    sent = server.requests[1]
+    check(ok and sent["op"] == "lua" and sent["code"] == "return maid.vm.g[0x100]" and sent["mod"] == "m"
+          and sent["timeout_ms"] == 30000, "lua sends the chunk, the mod and the timeout")
+    check("result=256" in core.describe(results[0]), "describe shows what the chunk returned")
+
+
 def test_settings_trailer():
     pairs = [("USEAPPDATAFOLDER", "1"), ("SAVEPATH", "Eushully\\姫\\SAVE")]
     strings = b"".join(key.encode("ascii") + b"\0" + value.encode("cp932") + b"\0" for key, value in pairs)
@@ -758,6 +786,7 @@ def main():
     test_option_step()
     test_language_step()
     test_reference_diff_step()
+    test_lua_step()
     test_settings_trailer()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
