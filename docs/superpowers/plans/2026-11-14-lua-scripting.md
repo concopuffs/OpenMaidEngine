@@ -1108,7 +1108,7 @@ With it milestone 4 is done: gate 6, and the held cases of gates 3, 5, 8 and 12.
 
 ## 9. Milestone 5: script calls
 
-Being built on `feature/lua-scripting` (spec §10, §18), in four pieces; piece 1 is built (§9.1):
+Being built on `feature/lua-scripting` (spec §10, §18), in four pieces; pieces 1 to 3 are built (§9.1 to §9.3):
 
 1. **The call and its refusals at run time**: `maid.vm.call(script)` runs a script the mod's `[lua] calls` lists as
    a nested frame with the cause `mod`, under a step budget; a wait, a save, a load, an op `0xae` during a restore and
@@ -1184,3 +1184,64 @@ Built 2026-11-15:
   the nesting cap on an 8 MiB thread. `ModCallWaitsTests` (2): every member on one list and implemented by the guard,
   and inside a call each wait refused and every other member passed on. `LuaStateTests` (1): op `0xae` in a script
   called during a restore fails the call, and the restore completes. Full suite 2351.
+
+### 9.2 The check ahead
+
+Built 2026-11-15:
+
+- **Where.** The link (`ModLuaLinker.CheckCalls`), so `omp check`, `omp build` and a launch all report it before any
+  call runs. Each name under `[lua] calls` is normalized to its catalog name (`TextCatalog.NormalizeScriptName`: no
+  `.BIN`, upper case); a name the catalog lacks is an error, and so is a list in a mod without `vm`, since
+  `maid.vm.call` is raw access. The names the runtime enforces are the normalized ones; the link cache keeps them
+  (`calls`), and the report's `lua:` line ends with `calls NAME, …`.
+- **The walk.** Breadth first from each listed script, over the linked bytes (a patched script is checked as patched)
+  or the catalog's, each script once per listed root; a `call-script` with an immediate id is followed through the
+  game modules' id table, so a line names the chain (`lua.calls: ADDSKILL calls SBUNKI, SBUNKIMOVE: …`). Every
+  instruction is read, reached or not, with its opcode's facts (spec §7.1):
+  - **errors**: an opcode the port does not implement, one that always waits, one that saves (`leaves` has `saves`)
+    or loads (`loads`);
+  - **notes** (the report has no warning class; a note is the warning): one that may wait, op `0xae` (`restores`),
+    a `call-script` whose id comes from a cell, an id the catalog does not name, and any other call it cannot follow
+    (op `0x8`'s preloaded slot among them).
+  The findings of one script are grouped by what they are, six offsets listed and the rest counted.
+- **The facts were wrong about presents.** `opcode_flow.py` counted every wait member that reaches the blocking
+  helpers, so ops `0x20c` and `0x222` were `may`; spec §10 says a present and the front end's modal hold block and are
+  not waits, and the run-time guard passes them. The derivation now drops the members `ModCallWaits.cs` lists under
+  `NotWaits` (read from that file, so the two lists cannot part); ops `0x20c` and `0x222` became `never`, and nothing
+  else changed (op `0x21c` stays `may`: it waits for a foreground transition). The skip refusal and the `after` hook
+  warning read the same facts, so a present can now be skipped, which spec §7.1 allows.
+- **On the games.** A probe mod listing every `ADD*`, `CALC*`, `DEL*`, `SET*` and `RECOVER` script: in Himegari 22
+  of 27 are clean; ADDEXP, ADDRANDOMITEM and ADDSKILL may wait (through MES, SHOWGROW and SBUNKI's movement), ADDEN
+  calls op `0x8` slots, CALCCC calls from a cell. In Kamidori 30 of 44 are clean; 10 others reach CALCARM, whose call from a cell is
+  noted for each. ADDITEM is clean in both.
+- **Tests.** `ModLuaLinkTests` (2): the walk through calls with an error for a save two scripts down and a missing
+  script, notes for a sleep, op `0xae` and a call from a cell, each script walked once, the list normalized, shown and
+  cached; a list without `vm`. `test_opcode_flow.py` (1): a present is not a wait.
+
+### 9.3 The base mods' helpers
+
+Built 2026-11-15:
+
+- **`give_item(item, count)`** in each base mod's `lua/init.lua` (the base mods ship Lua now; `[lua] calls =
+  ["ADDITEM"]`): it sets `current_item_id` and `current_item_count_change`, calls ADDITEM, puts both back, and returns
+  `item_inventory_counts[item]`. Kamidori's also puts back `shared_loop_index` and `shared_scratch_value`, which
+  ADDITEM uses (the loop over an item's granted skills, the money paid past the cap) and which 365 and 362 scripts
+  share, ADDEXP among them. It checks its arguments against the game's bounds (items 1 to 999 or 1999, changes up to
+  the count cap, 99 or 999), so ADDITEM never indexes past its tables. A refused call puts the arguments back too, then
+  raises the refusal unchanged.
+- **The names.** Registry entries, with their evidence: Himegari's `item_inventory_counts` (`0x3306`, int[1000]) and
+  `current_item_count_change` (`0x8c878`); Kamidori's `current_item_count_change` (`0x2d2847`), `shared_loop_index`
+  (`0xfd42d`) and `shared_scratch_value` (`0xfec0c`). The base mods export them (5 names added; still 1.0.0, unreleased).
+- **The trace.** A call through another mod's face, a base mod's helper calling for its caller, has `"through"`
+  beside the script, as a write does: `{"script":"ADDITEM.BIN","through":"himegari-base","result":"ok"}` in the
+  calling mod's line.
+- **The stubs.** `omp lua-stubs` copies each helper into `<base mod id>.lua`: every top-level `function T.name(…)` of
+  the table the file's last `return T` names, with the `---` lines above it (`LuaStubs.Helpers`).
+- **Other helpers.** None yet: the other wait-free scripts (§9.2) compute battle values or edit the map and units, and
+  each needs its arguments read off the game first. The backlog keeps the item.
+- **Tests.** `ModLuaLinkTests` (3): a mod without `vm` gives items through the shipped Himegari base mod over a
+  stand-in ADDITEM, the arguments put back, four bad arguments refused, the trace's `through`; Himegari's real ADDITEM
+  under the award, clamping at 99 and marking the item (workspace); Kamidori's real ADDITEM under the award, learning
+  the granted skill, with all four cells as the handler found them (workspace; without the restore it fails).
+  `LuaStubsTests` (1): the helpers a file gives. The synthetic link base has a wait-free ADDITEM, since a stack that
+  mounts a shipped base mod now checks its calls. Full suite 2356.

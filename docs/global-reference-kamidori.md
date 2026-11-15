@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals-kamidori.toml by tools/globals_build.py --build -->
 # Global Variable Reference — kamidori (generated)
 
-8298 globals (624 curated, 7674 auto shape-inferred). Source of truth: `vm-map/globals-kamidori.toml`.
+8300 globals (627 curated, 7673 auto shape-inferred). Source of truth: `vm-map/globals-kamidori.toml`.
 
 ## Tables
 
@@ -176,6 +176,8 @@ The current stage's enemy placements, keyed by placement slot: STINIT2 writes th
 |---|---|---|---|---|
 | `0x2c81` | scjump_chain_pending | med | investigation | Callers set 1 before walking scjump_handler_chain (CHECKREWARD@0x29a/0x2b8) and stop when a SCJUMP branch clears it alongside writing scjump_decision_out. |
 | `GS 0x4227` | class_change_title_out | high | investigation | CALCCC@0x00319 copies it into character_class_titles[c]. |
+| `0xfd42d` | shared_loop_index | high | investigation | The loop index most scripts share: 365 scripts count with it (mov 0, add 1, lt N; 21,101 operands), so a script keeps it only while it calls no other script that loops. ADDITEM@0x00126 loops over an item's granted skill bundle with it. The base mod's give_item helper puts it back after ADDITEM. |
+| `0xfec0c` | shared_scratch_value | med | investigation | A temporary 362 scripts share, each writing it before reading it (3,859 operands, most mov and lookup-array; 0xfec0d is a second one). It also carries an argument: ADDEXP@0x0007a reads the award from it. ADDITEM@0x00088 holds there the money it pays for the items past the count cap. The base mod's give_item helper puts it back after ADDITEM. |
 | `0xfec10` | scjump_decision_out | high | investigation | Selected scene id. Written by SCJUMP branches (e.g. SCJUMP@0x118), TOWN@0xad7, STUDIO@0xa1e and GAMESTART@0x1ad5; SYSTEM4@0x2dc resolves it through scjump_scene_script_resource_ids and SYSTEM4@0x329 marks viewed_scene_flags; multi-scene SC scripts branch on it (e.g. SC0010@0x985). |
 | `0x13e872` | world_area_selected_list_index | high | investigation | ALLMAP@0xc58 sets it from the clicked marker; SELSTAGE@0x3a6/0x3b7 cycles it with the wheel; ALLMAP@0xc6b resolves it to the area id. |
 | `0x2d2014` | class_change_title_priority | high | investigation | Zeroed by CALCCC; CCINIT keeps the title of the highest-threshold rule; nonzero makes ADDEXP@0x00419 / scenes call SHOWCC. |
@@ -186,6 +188,7 @@ The current stage's enemy placements, keyed by placement slot: STINIT2 writes th
 | `0x2d202d` | class_change_stat_cap_deltas | high | investigation | CALCCC@0x00114 adds to character_stat_caps, clamped to the global cap 0x2a2da7[0]. |
 | `0x2d203b` | class_change_skill_slot_replacements | high | investigation | CALCCC@0x00223 overwrites character_skill_list[c][k] when >0. |
 | `0x2d2043` | class_change_skill_learn_flags | high | investigation | CALCCC@0x0026f sets character_learned_skill_flags[c][skill]=1 (and the persistent skill-seen bank 0xf6483 when 0x64201 bit1). |
+| `0x2d2847` | current_item_count_change | high | investigation | ADDITEM's second argument, beside current_item_id: ADDITEM@0x00016 adds it to item_inventory_counts[current_item_id], clamps the count at 0 (ADDITEM@0x00024) and pays a count past 999 out as money (ADDITEM@0x00041). About 70 scripts use it, setting it before call-script ADDITEM; ADDSTOCK reads it too. The base mod's give_item helper sets it and puts it back. |
 
 ## counter
 
@@ -8478,7 +8481,6 @@ The current stage's enemy placements, keyed by placement slot: STINIT2 writes th
 | `0xf3599` | — | low | auto-shape | index/counter? |
 | `0xfd3a8` | — | med | auto-shape | record-table[stride 25] |
 | `0xfd435` | — | low | auto-shape | index/counter? |
-| `0xfec0c` | — | low | auto-shape | index/counter? |
 | `0xfec0d` | — | low | auto-shape | index/counter? |
 | `0x104651` | — | med | auto-shape | record-table[stride 10000] |
 | `0x135391` | — | med | auto-shape | record-table[stride 100] |

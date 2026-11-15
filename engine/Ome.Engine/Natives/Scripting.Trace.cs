@@ -35,10 +35,12 @@ public sealed partial class Scripting
     }
 
     /// <summary>A script the traced call ran through <c>maid.vm.call</c> (spec §10): it returned, it was refused with an
-    /// error, or neither, when it ended the scene or the run.</summary>
-    private sealed class TracedScriptCall(string script)
+    /// error, or neither, when it ended the scene or the run. <see cref="Through"/> is the mod whose face called, when a
+    /// base mod's helper calls for its caller.</summary>
+    private sealed class TracedScriptCall(string script, string? through)
     {
         public string Script { get; } = script;
+        public string? Through { get; } = through;
         public bool Returned { get; set; }
         public string? Error { get; set; }
     }
@@ -233,6 +235,7 @@ public sealed partial class Scripting
                 {
                     json.WriteStartObject();
                     json.WriteString("script", called.Script);
+                    if (called.Through != null) json.WriteString("through", called.Through);
                     json.WriteString("result", called.Returned ? "ok" : called.Error != null ? "refused" : "abandoned");
                     if (called.Error != null) json.WriteString("error", called.Error);
                     json.WriteEndObject();

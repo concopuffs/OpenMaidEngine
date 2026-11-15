@@ -279,9 +279,9 @@ public static class OmpCommands
                 console.WriteLine($"omp lua-stubs: the stack does not link: {result.Report.Summary()}");
                 return 1;
             }
-            var (bases, events) = Tools.LuaStubs.Inputs(linkBase, result);
+            var (bases, events, helpers) = Tools.LuaStubs.Inputs(linkBase, result);
             Directory.CreateDirectory(outputDirectory);
-            var files = Tools.LuaStubs.Files(bases, events);
+            var files = Tools.LuaStubs.Files(bases, events, helpers);
             foreach (var (name, text) in files)
             {
                 File.WriteAllText(Path.Combine(outputDirectory, name), text.Replace("\r\n", "\n"), new System.Text.UTF8Encoding(false));

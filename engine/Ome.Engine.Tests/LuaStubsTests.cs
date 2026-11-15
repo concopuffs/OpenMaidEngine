@@ -44,8 +44,51 @@ public sealed class LuaStubsTests : IDisposable
         GameEvent.BuildField("label", "string", "r", null, false, Layout),
     ]);
 
+    /// <summary>A base mod's init.lua: three helpers on the table it returns, two without annotations (a plain comment is
+    /// none); a local function and a function on another table, which are not helpers.</summary>
+    private const string HelperInit = """
+        local base = {}
+        local other = {}
+
+        local function whole(value) return value end
+
+        ---Give an item.
+        ---@param item integer an item id
+        ---@return integer count
+        function base.give_item( item, count )
+            return whole(item)
+        end
+
+        function other.hidden() end
+
+        function base.bare() end
+        -- a plain comment is no annotation
+        function base.after_comment(x) end
+
+        return base
+        """;
+
     private static IReadOnlyDictionary<string, string> Stubs()
-        => LuaStubs.Files([new BaseModLayout("test-base", Layout)], [Computed(), Award()]);
+        => LuaStubs.Files([new BaseModLayout("test-base", Layout)], [Computed(), Award()],
+                          new Dictionary<string, string> { ["test-base"] = HelperInit });
+
+    [Fact]
+    public void ABaseModsHelpersAreTheFunctionsOnTheTableItsInitReturnsWithTheirAnnotations()
+    {
+        Assert.Equal(
+        [
+            "---Give an item.\n---@param item integer an item id\n---@return integer count\nfunction M.give_item(item, count) end\n",
+            "function M.bare() end\n",
+            "function M.after_comment(x) end\n",
+        ], LuaStubs.Helpers(HelperInit.Replace("\n", "\r\n")));
+        Assert.Empty(LuaStubs.Helpers("function M.f() end\n"));   // no return: nothing is known to be exported
+        string text = Stubs()["test-base.lua"];
+        Assert.EndsWith("-- The helpers test-base's lua/init.lua returns.\n\n---Give an item.\n---@param item integer an item id\n"
+                        + "---@return integer count\nfunction M.give_item(item, count) end\n\nfunction M.bare() end\n\n"
+                        + "function M.after_comment(x) end\n\nreturn M\n", text);
+        // Without an init.lua the file has the accessors only.
+        Assert.DoesNotContain("helpers", LuaStubs.Files([new BaseModLayout("test-base", Layout)], [])["test-base.lua"]);
+    }
 
     private static string[] Lines(string text) => text.Split('\n');
 
@@ -84,7 +127,7 @@ public sealed class LuaStubsTests : IDisposable
                      Regex.Matches(text, "---@overload fun\\(name: \"([a-z_]+)\"\\)").Select(match => match.Groups[1].Value));
         Assert.Contains("---@overload fun(name: \"conditions\"): test_base.unit_condition_levels\n", text);
         Assert.Equal(["g"], Fields(text, "test_base"));
-        Assert.EndsWith("function M.table(name) end\n\nreturn M\n", text);
+        Assert.Contains("function M.table(name) end\n\n-- The helpers", text);
     }
 
     [Fact]

@@ -72,6 +72,13 @@ class DerivedFactsTests(unittest.TestCase):
         self.assertEqual(self.facts("show-and-clear-diagnostic")[0], "always")
         self.assertEqual(self.facts("mov")[0], "never")
 
+    def test_a_present_blocks_and_is_not_a_wait(self):
+        # Spec §10: the port waits for the display at a present, and a script call passes it (ModCallWaits.NotWaits).
+        self.assertTrue({"PresentFrame", "PresentObjectRange", "FrameYield"} <= F.not_waits())
+        self.assertEqual(self.facts("present-frame")[0], "never")
+        self.assertEqual(self.facts("present-gfx-object-range")[0], "never")
+        self.assertEqual(self.facts("sleep")[0], "may")
+
     def test_the_save_native(self):
         self.assertIn("saves", self.facts("save-numbered-slot")[1])
         self.assertIn("loads", self.facts("load-numbered-slot-and-resume")[1])

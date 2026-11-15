@@ -94,8 +94,10 @@ public static class ModLuaLinker
             void Error(string? script, string message) => report.Add(ModReportClass.Error, mod.Id, script, message);
 
             if (settings == null) Error(null, "lua/ needs a [lua] table in the manifest");
-            if (settings is { Calls.Count: > 0 })
-                Error(null, "lua.calls: script calls come with Lua scripting milestone 5");
+            // Spec §10, "Checked ahead": the scripts the mod may call, each walked before any of them runs.
+            IReadOnlyList<string> calls = settings is { Calls.Count: > 0 } listed
+                ? CheckCalls(mod, listed.Calls, vm, linkBase, scripts, report)
+                : [];
 
             // The sources, each checked without running it.
             var requires = mod.Manifest.Requires.Select(requirement => requirement.Id).Where(loadOrders.ContainsKey).ToList();
@@ -237,7 +239,7 @@ public static class ModLuaLinker
             // layout (spec §9.1, §9.3).
             if (report.Lines.Count(line => line.Stops) == problemsBefore && (sources.Count > 0 || mod.BaseLayout != null))
                 mods.Add(new ModRuntimeMod(mod.Id, mod.Manifest.Version.ToString(), mod.Manifest.TargetsAnyProfile, vm,
-                                           requires, sources, mod.BaseLayout, writes, luaDev));
+                                           requires, sources, mod.BaseLayout, writes, luaDev, calls.Count > 0 ? calls : null));
             // Spec §15: the report shows what each mod may change, so a player can see it.
             if (vm)
                 report.Add(ModReportClass.Note, mod.Id, null,
@@ -391,6 +393,7 @@ public static class ModLuaLinker
                 if (mod.LuaDev) writes += ", and under --lua-dev (opaque) any exported name its list lacks";
                 parts.Add(writes);
             }
+            if (mod.CallList.Count > 0) parts.Add("calls " + string.Join(", ", mod.CallList));
             lines.Add($"mod {mod.Id} {mod.Version}: {string.Join("; ", parts)}");
         }
         foreach (var (script, planned) in sites)
@@ -744,6 +747,117 @@ public static class ModLuaLinker
         }
         why = null;
         return code.Instructions[index];
+    }
+
+    /// <summary>Instructions a call's check names in one line, before it counts the rest.</summary>
+    private const int CallFindingsListed = 6;
+
+    /// <summary>
+    /// Spec §10, "Checked ahead": each script a mod lists under <c>[lua] calls</c> must be in the catalog, and is walked
+    /// as the link leaves it, with every script its <c>call-script</c> instructions name. The walk reads every
+    /// instruction of each script, reached or not, with its opcode's facts (spec §7.1). It fails on an instruction that
+    /// always waits, saves, loads, or that the port does not implement, and notes one that may wait, an op 0xae (which
+    /// fails the call during a restore), a <c>call-script</c> whose id comes from a cell, and any other call it cannot
+    /// follow. A mod that lists calls needs <c>vm</c>, since <c>maid.vm.call</c> is raw access. Returns the names the
+    /// runtime enforces: catalog names without <c>.BIN</c>.
+    /// </summary>
+    private static List<string> CheckCalls(ModPackage mod, IReadOnlyList<string> listed, bool vm, ModLinkBase linkBase,
+                                           IReadOnlyDictionary<string, LinkedScript> scripts, ModLinkReport report)
+    {
+        var names = new List<string>();
+        if (!vm)
+            report.Add(ModReportClass.Error, mod.Id, null,
+                       "lua.calls: maid.vm.call is raw access, so a mod that lists calls needs the vm capability");
+        byte[]? Bytes(string script)
+            => scripts.TryGetValue(script + ".BIN", out LinkedScript? linked) ? linked.Bytes : linkBase.ReadScript(script + ".BIN");
+        string? NameOf(uint id)
+        {
+            foreach (Ome.Script.Modules.GameModule module in linkBase.Modules)
+                if (module.TryGetScript(id, out string name)) return name.ToUpperInvariant();
+            return null;
+        }
+        foreach (string entry in listed)
+        {
+            string name = TextCatalog.NormalizeScriptName(entry);
+            if (Bytes(name) == null)
+            {
+                report.Add(ModReportClass.Error, mod.Id, null, $"lua.calls: the catalog has no {name}.BIN");
+                continue;
+            }
+            names.Add(name);
+            // Breadth first, so each script is named through the shortest chain of calls that reaches it.
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var queue = new Queue<(string Script, string Through)>();
+            queue.Enqueue((name, name));
+            while (queue.TryDequeue(out var next))
+            {
+                if (!seen.Add(next.Script)) continue;
+                string where = $"lua.calls: {name}" + (next.Script == name ? "" : $" calls {next.Through}") + ": ";
+                string file = next.Script + ".BIN";
+                if (Bytes(next.Script) is not { } bytes)
+                {
+                    report.Add(ModReportClass.Error, mod.Id, file, $"{where}the catalog has no {file}");
+                    continue;
+                }
+                Ome.Engine.Model.Script code;   // Script alone is the Ome.Script namespace here
+                try
+                {
+                    code = Sys4Loader.Parse(bytes, linkBase.Table, file);
+                }
+                catch (Exception error) when (error is InvalidDataException or Sys4OpcodeDecodeException
+                                                  or IndexOutOfRangeException or ArgumentException)
+                {
+                    report.Add(ModReportClass.Error, mod.Id, file, $"{where}{file} does not decode as a script: {error.Message}");
+                    continue;
+                }
+                var findings = new Dictionary<(bool Stops, string What), List<string>>();
+                void Find(bool stops, string what, Instruction instruction, OpcodeDefinition? definition)
+                {
+                    if (!findings.TryGetValue((stops, what), out List<string>? list)) findings[(stops, what)] = list = new();
+                    list.Add($"0x{instruction.Offset:x} (op 0x{instruction.Opcode:x}"
+                             + (definition is { } known ? $" {known.CanonicalLabel})" : ")"));
+                }
+                foreach (Instruction instruction in code.Instructions)
+                {
+                    if (!linkBase.Table.TryGetDefinition(instruction.Opcode, out OpcodeDefinition definition)
+                        || definition.Waits is not { } waits)
+                    {
+                        Find(true, "is not implemented by this port, so the run halts there", instruction,
+                             linkBase.Table.TryGetDefinition(instruction.Opcode, out OpcodeDefinition named) ? named : null);
+                        continue;
+                    }
+                    OpcodeLeaves leaves = definition.Leaves;
+                    if (waits == OpcodeWaits.Always) Find(true, "waits, and a called script cannot wait", instruction, definition);
+                    else if (waits == OpcodeWaits.May)
+                        Find(false, "may wait, and the call fails if it does", instruction, definition);
+                    if ((leaves & OpcodeLeaves.Saves) != 0) Find(true, "saves, and a called script cannot save", instruction, definition);
+                    if ((leaves & OpcodeLeaves.Loads) != 0) Find(true, "loads a save, and a called script cannot load", instruction, definition);
+                    if ((leaves & OpcodeLeaves.Restores) != 0)
+                        Find(false, "continues a load's restore, so the call fails while a restore is pending", instruction, definition);
+                    else if ((leaves & OpcodeLeaves.Calls) != 0 && waits == OpcodeWaits.Never)
+                    {
+                        if (definition.CanonicalLabel != "call-script")
+                            Find(false, "calls a script the check cannot follow", instruction, definition);
+                        else if (instruction.Args.Count == 0 || instruction.Args[0].Type != OperandTypes.Immediate)
+                            Find(false, "calls a script whose id comes from a cell, which the check cannot follow", instruction,
+                                 definition);
+                        else if (NameOf(unchecked((uint)instruction.Args[0].Value)) is { } callee)
+                            queue.Enqueue((callee, next.Script == name ? callee : $"{next.Through}, {callee}"));
+                        else
+                            Find(false, "calls a script id the catalog does not name, which the check cannot follow",
+                                 instruction, definition);
+                    }
+                }
+                foreach (var ((stops, what), at) in findings.OrderBy(pair => pair.Key.Stops ? 0 : 1))
+                {
+                    string list = string.Join(", ", at.Take(CallFindingsListed))
+                                  + (at.Count > CallFindingsListed ? $" and {at.Count - CallFindingsListed} more" : "");
+                    report.Add(stops ? ModReportClass.Error : ModReportClass.Note, mod.Id, file,
+                               $"{where}{file} at {list} {what}");
+                }
+            }
+        }
+        return names;
     }
 
     /// <summary>What an instruction that may not be skipped does, from its facts (spec §7.1), in the order the

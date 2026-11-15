@@ -1512,6 +1512,36 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x2d2847"
+name = "current_item_count_change"
+category = "choice-output"
+type = "int"
+value_domain = "signed count; a negative one takes items away"
+usage = "ADDITEM's second argument, beside current_item_id: ADDITEM@0x00016 adds it to item_inventory_counts[current_item_id], clamps the count at 0 (ADDITEM@0x00024) and pays a count past 999 out as money (ADDITEM@0x00041). About 70 scripts use it, setting it before call-script ADDITEM; ADDSTOCK reads it too. The base mod's give_item helper sets it and puts it back."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xfd42d"
+name = "shared_loop_index"
+category = "choice-output"
+type = "int"
+value_domain = "a loop's counter"
+usage = "The loop index most scripts share: 365 scripts count with it (mov 0, add 1, lt N; 21,101 operands), so a script keeps it only while it calls no other script that loops. ADDITEM@0x00126 loops over an item's granted skill bundle with it. The base mod's give_item helper puts it back after ADDITEM."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xfec0c"
+name = "shared_scratch_value"
+category = "choice-output"
+type = "int"
+value_domain = "any; it means something only between a write and the reads that follow it"
+usage = "A temporary 362 scripts share, each writing it before reading it (3,859 operands, most mov and lookup-array; 0xfec0d is a second one). It also carries an argument: ADDEXP@0x0007a reads the award from it. ADDITEM@0x00088 holds there the money it pays for the items past the count cap. The base mod's give_item helper puts it back after ADDITEM."
+source = "investigation"
+confidence = "med"
+
+[[global]]
 address = "0x2d2848"
 name = "item_handler_script_id"
 category = "data-table"

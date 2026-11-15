@@ -9,5 +9,7 @@ enabled mod requires it. A Lua mod reads and writes the game's cells by name thr
   `py -3.11 -X utf8 tools/base_mod_build.py --build`. Do not edit it.
 - `events/` is hand-written: the game events the base mod declares (`events/experience.toml`, the experience award
   at `kamidori.experience.after_calculation`), with each field's cell by an exported name.
+- `lua/init.lua` is hand-written: the helpers the base mod returns to a mod that requires it, each changing the game
+  through one of its own scripts (`give_item` through ADDITEM). `[lua] calls` in the manifest lists those scripts.
 - `layout/exports.txt` is the list of exported names, checked in: a name in it stays exported, as a global's name
   or one of its `aliases`, until the major version is raised.

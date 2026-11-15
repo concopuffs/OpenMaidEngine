@@ -132,6 +132,26 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x8c878"
+name = "current_item_count_change"
+category = "choice-output"
+type = "int"
+value_domain = "signed count; a negative one takes items away"
+usage = "ADDITEM's second argument, beside current_item_id: ADDITEM@0x00016 adds it to item_inventory_counts[current_item_id], and a positive change also marks the item obtained (ADDITEM@0x00062). 42 other scripts set it before call-script ADDITEM: 1 for an item found, ALCHEMY@0x0140c the negated quantity of each ingredient. The base mod's give_item helper sets it and puts it back."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3306"
+name = "item_inventory_counts"
+category = "data-table"
+type = "int[1000]"
+value_domain = "owned count per item id, 0..99"
+usage = "ADDITEM@0x00016 adds current_item_count_change to the element of current_item_id and clamps it to 0 (ADDITEM@0x00024) and 99 (ADDITEM@0x00048). GAMESTART, CHMENU, ALCHEMY, SUMMON, TRAIN and STUDY read it. Its 1000 cells end where the next item-indexed array (0x36ee, which ADDITEM sets for an item gained) begins, as item_category is int[1000]."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x8c879"
 name = "item_sort_key"
 category = "data-table"

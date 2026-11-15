@@ -33,6 +33,8 @@ public sealed class ModLuaLinkTests : IDisposable
     private const string AddExpFingerprint = "sha256:b4f38c43f2c500012be48517ce773d3c9e81c12deeb4d712cab4b99749661e1c";
     private const string ExperiencePoint = "himegari.experience.after_calculation";
     private static readonly byte[] SyntheticAddExp = Encoding.ASCII.GetBytes("base ADDEXP.BIN");
+    // The shipped base mods call ADDITEM (their [lua] calls), so a stack that mounts one needs a wait-free ADDITEM.BIN.
+    private static readonly byte[] SyntheticAddItem = ScriptAssembler.AssembleBytes(new List<(int, Operand[])> { (0x5, []) }, [], "SYS4422");
 
     public void Dispose()
     {
@@ -41,12 +43,13 @@ public sealed class ModLuaLinkTests : IDisposable
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 
-    /// <summary>A base with ADDEXP.BIN and the experience point at 0x9a of its one revision.</summary>
+    /// <summary>A base with ADDEXP.BIN and the experience point at 0x9a of its one revision, and a wait-free ADDITEM.BIN.</summary>
     private ModLinkBase SyntheticBase(bool lua = true) => new()
     {
         Profile = "himegari",
         CatalogFingerprint = Installed,
-        ReadScript = name => name.Equals(AddExp, StringComparison.OrdinalIgnoreCase) ? SyntheticAddExp : null,
+        ReadScript = name => name.Equals(AddExp, StringComparison.OrdinalIgnoreCase) ? SyntheticAddExp
+                             : name.Equals("ADDITEM.BIN", StringComparison.OrdinalIgnoreCase) ? SyntheticAddItem : null,
         Table = Table,
         Contracts = Contracts,
         Intrinsics = new IntrinsicCatalog(Table, Contracts),
@@ -69,11 +72,11 @@ public sealed class ModLuaLinkTests : IDisposable
     /// <summary>A version 3 package: <paramref name="tables"/> after <c>[lua]</c> (hooks, requires), and its files.
     /// Without <paramref name="game"/> it is a library.</summary>
     private ModPackage Mod(string id, string tables = "", Dictionary<string, string>? files = null,
-                           string lua = "api = 1\ncapabilities = [\"vm\"]", bool game = true)
+                           string lua = "api = 1\ncapabilities = [\"vm\"]", bool game = true, string profile = "himegari")
     {
         string folder = Path.Combine(_root, id + "-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(folder);
-        string gameTable = game ? "[game]\nprofile = \"himegari\"\ntarget = \"extended\"\n\n" : "";
+        string gameTable = game ? $"[game]\nprofile = \"{profile}\"\ntarget = \"extended\"\n\n" : "";
         File.WriteAllText(Path.Combine(folder, "manifest.toml"),
             $"omp = 3\nid = \"{id}\"\nname = \"{id}\"\nversion = \"1.0.0\"\n\n{gameTable}[lua]\n{lua}\n\n{tables}\n");
         foreach (var (path, text) in files ?? new Dictionary<string, string>())
@@ -201,11 +204,10 @@ public sealed class ModLuaLinkTests : IDisposable
     public void TheLinkRefusesByNameWhatThisEngineDoesNotBuild(string hook, string message)
         => Assert.Equal(["m"], Stop(ModLinker.Link(SyntheticBase(), [Mod("m", hook, Hooks(Doubles))], []), message).Mods);
 
-    [Theory]
-    [InlineData("api = 1\nwrites = [\"stage_turn_limit\"]", "names cells of a base mod, and the mod requires none")]
-    [InlineData("api = 1\ncalls = [\"ADDEXP.BIN\"]", "script calls come with")]
-    public void AWriteListWithoutABaseModAndScriptCallsAreRefused(string lua, string message)
-        => Stop(ModLinker.Link(SyntheticBase(), [Mod("m", files: Hooks(Doubles), lua: lua)], []), message);
+    [Fact]
+    public void AWriteListWithoutABaseModIsRefused()
+        => Stop(ModLinker.Link(SyntheticBase(), [Mod("m", files: Hooks(Doubles), lua: "api = 1\nwrites = [\"stage_turn_limit\"]")], []),
+                "names cells of a base mod, and the mod requires none");
 
     [Fact]
     public void AModuleNamedLikeARequiredModIsAnError()
@@ -358,6 +360,87 @@ public sealed class ModLuaLinkTests : IDisposable
     public void ASiteHookOnAScriptTheCatalogLacksIsAnError()
         => Stop(ModLinker.Link(SiteBase(), [Mod("m", SiteHook(0x0, "before", script: "NONE.BIN"), Hooks(Doubles))], []),
                 "the base catalog has no NONE.BIN");
+
+    // ------------------------------------------------------------------------------------------- script calls (§10)
+
+    /// <summary>Scripts for the calls' check: CALLEE (id 5) calls SUB2 (id 6) and a script from a cell, sleeps and runs
+    /// op 0xae; SUB2 saves, calls CALLEE back and returns; SAFE (id 7) only writes a cell.</summary>
+    private static readonly Dictionary<string, byte[]> CallScripts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["CALLEE.BIN"] = ScriptAssembler.AssembleBytes(new List<(int, Operand[])>
+        {
+            (0x55, [new Operand(3, 0x100), new Operand(0, 5)]),
+            (0x3, [new Operand(0, 6)]),
+            (0x3, [new Operand(3, 0x50)]),
+            (0xc8, [new Operand(0, 10)]),
+            (0xae, []),
+            (0x5, []),
+        }, [], "SYS4422"),
+        ["SUB2.BIN"] = ScriptAssembler.AssembleBytes(new List<(int, Operand[])>
+        {
+            (0x19e, [new Operand(3, 0x20), new Operand(0, 1)]),
+            (0x3, [new Operand(0, 5)]),
+            (0x5, []),
+        }, [], "SYS4422"),
+        ["SAFE.BIN"] = ScriptAssembler.AssembleBytes(new List<(int, Operand[])>
+        {
+            (0x55, [new Operand(3, 0x100), new Operand(0, 5)]),
+            (0x5, []),
+        }, [], "SYS4422"),
+    };
+
+    private ModLinkBase CallBase() => SyntheticBase() with
+    {
+        ReadScript = name => CallScripts.GetValueOrDefault(name),
+        Modules = [Ome.Script.Modules.GameModule.Scripts("himegari", [("CALLEE.BIN", 5), ("SUB2.BIN", 6), ("SAFE.BIN", 7)])],
+    };
+
+    private const string CallingHook = "[[hooks]]\nengine = \"ome.session.resumed\"\nhandler = \"hooks.lua:on_award\"\n";
+
+    [Fact]
+    public void TheScriptsAModCallsAreWalkedThroughTheirCallsAndAWaitASaveOrAMissingScriptIsReportedFirst()
+    {
+        // Gate 9: omp check reports what would refuse a call before any of it runs.
+        ModPackage mod = Mod("m", CallingHook, Hooks(Doubles),
+                             lua: "api = 1\ncapabilities = [\"vm\"]\ncalls = [\"CALLEE\", \"safe.bin\", \"MISSING\"]");
+        ModLinkResult result = ModLinker.Link(CallBase(), [mod], []);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+        [
+            "lua.calls: CALLEE calls SUB2: SUB2.BIN at 0x0 (op 0x19e save-numbered-slot) saves, and a called script cannot save",
+            "lua.calls: the catalog has no MISSING.BIN",
+        ], Stopping(result).Select(line => line.Message).Order(StringComparer.Ordinal));
+        string[] notes = result.Report.Lines.Where(line => line.Class == ModReportClass.Note && line.Message.StartsWith("lua.calls", StringComparison.Ordinal))
+            .Select(line => line.Message).ToArray();
+        Assert.Equal(
+        [
+            "lua.calls: CALLEE: CALLEE.BIN at 0x8 (op 0x3 call-script) calls a script whose id comes from a cell, which the check "
+            + "cannot follow",
+            "lua.calls: CALLEE: CALLEE.BIN at 0xb (op 0xc8 sleep) may wait, and the call fails if it does",
+            "lua.calls: CALLEE: CALLEE.BIN at 0xe (op 0xae continue-save-load-stack-restore) continues a load's restore, so the "
+            + "call fails while a restore is pending",
+        ], notes.Order(StringComparer.Ordinal));
+        // SUB2 calls CALLEE back: each script is walked once.
+        Assert.Single(result.Report.Lines, line => line.Message.Contains("op 0xc8", StringComparison.Ordinal));
+
+        // SAFE alone links; the runtime enforces the list by catalog name, the report shows it, and the cache keeps it.
+        ModPackage safe = Mod("m", CallingHook, Hooks(Doubles), lua: "api = 1\ncapabilities = [\"vm\"]\ncalls = [\"safe.bin\"]");
+        ModLinkResult linked = ModLinker.Link(CallBase(), [safe], []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        Assert.Equal(["SAFE"], Assert.Single(linked.Lua.Stack.Mods).CallList);
+        Assert.Contains("mod m 1.0.0: capabilities vm (opaque); writes no name, and any cell by address; calls SAFE",
+                        linked.Report.Lua);
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", CallBase(), linked);
+        Assert.Equal(["SAFE"], Assert.Single(ModLinkCache.TryOpen(cache, "key")!.LuaStack.Mods).CallList);
+    }
+
+    [Fact]
+    public void AModThatListsCallsNeedsVm()
+        => Assert.Equal(["m"], Stop(ModLinker.Link(CallBase(), [Mod("m", CallingHook, Hooks("function on_award(e) end"),
+                                                                    lua: "api = 1\ncalls = [\"SAFE\"]")], []),
+                                    "lua.calls: maid.vm.call is raw access, so a mod that lists calls needs the vm capability").Mods);
 
     private static string ScriptHook(string when, string extra = "", string script = AddExp)
         => $"[[hooks]]\nscript = \"{script}\"\nwhen = \"{when}\"\nhandler = \"hooks.lua:on_award\"\n{extra}";
@@ -958,6 +1041,10 @@ public sealed class ModLuaLinkTests : IDisposable
         string names = File.ReadAllText(Path.Combine(output, "himegari-base.lua"));
         Assert.StartsWith("---@meta himegari-base\n", names);
         Assert.Contains("---@class himegari_base.g\n", names);
+        // Its helpers, from its lua/init.lua, with their annotations.
+        Assert.Contains("-- The helpers himegari-base's lua/init.lua returns.\n", names);
+        Assert.Contains("---@param item integer an item id, 1 to 999\n", names);
+        Assert.EndsWith("function M.give_item(item, count) end\n\nreturn M\n", names);
         Assert.DoesNotContain("\r", names);
         Assert.Contains("---@class himegari.experience.award\n", File.ReadAllText(Path.Combine(output, "events.lua")));
         Assert.Contains("omp lua-stubs: 3 files (himegari-base; 1 events)", console.ToString());
@@ -1094,7 +1181,8 @@ public sealed class ModLuaLinkTests : IDisposable
 
     /// <summary>ADDEXP awarding <paramref name="amount"/> to the first unit, with no multiplier, from a session whose
     /// banks the award reads.</summary>
-    private static GameSession Award(Script addExp, long amount, Scripting? scripting = null)
+    private static GameSession Award(Script addExp, long amount, Scripting? scripting = null, IScriptProvider? provider = null,
+                                     Action<GameSession>? seed = null)
     {
         var session = new GameSession();
         session.Seed(0x62ccb, amount);      // the award
@@ -1104,7 +1192,8 @@ public sealed class ModLuaLinkTests : IDisposable
         session.Seed(0x6930 + 1, 1);        // unit_current_levels[1]: level 1
         session.Seed(0x7a766 + 1, 99);      // unit_level_cap[1]: below the cap, so the award applies
         session.Seed(0x6994 + 1, 0);        // unit_experience_progress[1]: 100 is a level, which the award stays under
-        SceneResult result = session.RunScene(addExp, HimegariTable, new HeadlessWaits(), scripting: scripting);
+        seed?.Invoke(session);
+        SceneResult result = session.RunScene(addExp, HimegariTable, new HeadlessWaits(), provider: provider, scripting: scripting);
         Assert.True(result.Halt is null or "exit" or "end", result.Halt);
         return session;
     }
@@ -1142,6 +1231,144 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.Equal(withPatch, withLua);
     }
 
+    // ------------------------------------------------------------------------------- the base mods' helpers (§9.3, §10)
+
+    /// <summary>A mod without vm that requires <paramref name="profile"/>'s shipped base mod, subscribes to its award
+    /// and runs <paramref name="body"/> there with <c>game</c> the base mod; and the base mod.</summary>
+    private IReadOnlyList<ModPackage> Giver(string profile, string body)
+    {
+        ModPackage user = Mod("giver", $"[[requires]]\nid = \"{profile}-base\"\nversion = \">=1.0, <2\"\n\n"
+                                       + $"[[hooks]]\nevent = \"{profile}.experience.award\"\nhandler = \"hooks.lua:on_award\"\n",
+                              Hooks($"local game = require(\"{profile}-base\")\nfunction on_award(e)\n{body}\nend\n"),
+                              lua: "api = 1", profile: profile);
+        IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([user], new ModLinkReport());
+        _opened.AddRange(shipped);
+        return [user, .. shipped];
+    }
+
+    /// <summary>A stand-in for Himegari's ADDITEM at its cells: it notes current_item_id in G[0x400], adds
+    /// current_item_count_change to item_inventory_counts[5], and clears both arguments, as a script may.</summary>
+    private static readonly byte[] HimegariAddItem = ScriptAssembler.AssembleBytes(new List<(int, Operand[])>
+    {
+        (0x55, [new Operand(OperandTypes.GlobalInteger, 0x400), new Operand(OperandTypes.GlobalInteger, 0x8c877)]),
+        (0x50, [new Operand(OperandTypes.GlobalInteger, 0x3306 + 5), new Operand(OperandTypes.GlobalInteger, 0x3306 + 5),
+                new Operand(OperandTypes.GlobalInteger, 0x8c878)]),
+        (0x55, [new Operand(OperandTypes.GlobalInteger, 0x8c877), new Operand(OperandTypes.Immediate, 0)]),
+        (0x55, [new Operand(OperandTypes.GlobalInteger, 0x8c878), new Operand(OperandTypes.Immediate, 0)]),
+        (0x5, []),
+    }, [], "SYS4422");
+
+    [Fact]
+    public void TheBaseModsGiveItemCallsAddItemForTheModThatCalledItAndPutsItsArgumentsBack()
+    {
+        // Spec §9.3: where the game has a script for a change, the helper calls it. A mod without vm and without a
+        // write list changes an item's count through it; the trace names the mod and the base mod that called.
+        string fingerprint = OmsPatchPlan.FingerprintOf(RunAddExp);
+        ModLinkBase linkBase = SyntheticBase() with
+        {
+            ReadScript = name => name.Equals(AddExp, StringComparison.OrdinalIgnoreCase) ? RunAddExp
+                                 : name.Equals("ADDITEM.BIN", StringComparison.OrdinalIgnoreCase) ? HimegariAddItem : null,
+            PatchPoints = new OmsPatchPoints([new OmsPatchPoint(ExperiencePoint, AddExp, null,
+                [new OmsPatchPointSite(fingerprint, 0x5)])]),
+        };
+        ModLinkResult result = ModLinker.Link(linkBase, Giver("himegari", """
+            maid.log.info("count " .. game.give_item(5, 3))
+            for _, args in ipairs({ { 1000 }, { 5, 1.5 }, { 5, -100 }, { "5" } }) do
+                local ok, err = pcall(game.give_item, args[1], args[2])
+                maid.log.info(tostring(err))
+            end
+            """), []);
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.Contains(result.Report.Lua, line => line.StartsWith("mod himegari-base 1.0.0: ", StringComparison.Ordinal)
+                                                   && line.EndsWith("; calls ADDITEM", StringComparison.Ordinal));
+
+        using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = result.Lua.Stack, Plan = result.Lua.Plan, Errors = LuaErrorPolicy.Halt, Trace = true,
+        });
+        var provider = new MapProvider(new(), new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ADDITEM.BIN"] = Sys4Loader.Parse(HimegariAddItem, HimegariTable, "ADDITEM.BIN"),
+        });
+        var vm = new VirtualMachine(Sys4Loader.Parse(RunAddExp, HimegariTable, AddExp), HimegariTable, new HeadlessWaits(),
+                                    null, provider, scripting: scripting);
+        vm.Globals[0x8c877] = 7;          // current_item_id as the hooked script left it
+        vm.Globals[0x8c878] = -2;         // current_item_count_change
+        vm.Globals[0x3306 + 5] = 10;      // item_inventory_counts[5]
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal((5, 13), (vm.Globals[0x400], vm.Globals[0x3306 + 5]));
+        Assert.Equal((7, -2), (vm.Globals[0x8c877], vm.Globals[0x8c878]));
+        string[] lines = scripting.RecentLog.Where(line => line.Contains(" giver: ", StringComparison.Ordinal))
+            .Select(line => line[(line.IndexOf(" giver: ", StringComparison.Ordinal) + 8)..]).ToArray();
+        Assert.Equal(
+        [
+            "count 13",
+            "bad argument #1 to 'give_item' (an integer from 1 to 999 expected, got 1000)",
+            "bad argument #2 to 'give_item' (an integer from -99 to 99 expected, got 1.5)",
+            "bad argument #2 to 'give_item' (an integer from -99 to 99 expected, got -100)",
+            "bad argument #1 to 'give_item' (an integer from 1 to 999 expected, got 5)",
+        ], lines);
+        string traced = Assert.Single(scripting.RecentTrace, line => line.Contains("\"mod\":\"giver\"", StringComparison.Ordinal));
+        Assert.Contains("\"calls\":[{\"script\":\"ADDITEM.BIN\",\"through\":\"himegari-base\",\"result\":\"ok\"}]", traced);
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void HimegarisGiveItemRunsTheGamesAddItemWhichKeepsTheCountUnder100()
+    {
+        ModLinkBase linkBase = InstalledBase();
+        ModLinkResult linked = ModLinker.Link(linkBase, Giver("himegari", """
+            maid.log.info("count " .. game.give_item(5, 60) .. " " .. game.give_item(5, 60) .. " " .. game.give_item(5, -99))
+            """), []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = linked.Lua.Stack, Plan = linked.Lua.Plan, Errors = LuaErrorPolicy.Halt,
+        });
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var scripts = new Sys4ScriptProvider(HimegariTable, catalog, new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir));
+        GameSession session = Award(Sys4Loader.Parse(linkBase.ReadScript(AddExp)!, HimegariTable, AddExp), 7, scripting, scripts,
+                                    seed: s => s.Seed(0x8c877, 4));
+        Assert.DoesNotContain(scripting.RecentLog, line => line.Contains(" error ", StringComparison.Ordinal));
+        Assert.Contains(scripting.RecentLog, line => line.EndsWith(": count 60 99 0", StringComparison.Ordinal));
+        Assert.Equal((0, 4), (session.Globals[0x3306 + 5], session.Globals[0x8c877]));
+        Assert.Equal(1, session.Globals[0x36ee + 5]);   // a gained item is marked
+        Assert.Equal(7, session.Globals[0x6994 + 1]);   // the award goes on as before
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void KamidorisGiveItemPutsBackTheLoopIndexAndScratchValueTheGamesAddItemUses()
+    {
+        // Kamidori's ADDITEM loops over an item's granted skills with the loop index 365 scripts share, inside the
+        // award, whose ADDEXP has the index and the scratch value in use.
+        var (linkBase, scripts) = KamidoriBase(Path.Combine(Paths.Workspace, "Kamidori"));
+        ModLinkResult linked = ModLinker.Link(linkBase, Giver("kamidori", """
+            local names = { "current_item_id", "current_item_count_change", "shared_loop_index", "shared_scratch_value" }
+            local before = {}
+            for i, name in ipairs(names) do before[i] = game.g[name] end
+            maid.log.info("count " .. game.give_item(3, 2))
+            for i, name in ipairs(names) do
+                if game.g[name] ~= before[i] then error(name .. " changed") end
+            end
+            """), []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = linked.Lua.Stack, Plan = linked.Lua.Plan, Errors = LuaErrorPolicy.Halt,
+        });
+        GameSession session = KamidoriAward(Sys4Loader.Parse(linkBase.ReadScript(AddExp)!, KamidoriTable, AddExp), scripts, 7,
+                                            scripting, seed: s => s.Seed(0x304cf8 + 3, 9));   // item 3 grants skill 9
+        Assert.DoesNotContain(scripting.RecentLog, line => line.Contains(" error ", StringComparison.Ordinal));
+        Assert.Contains(scripting.RecentLog, line => line.EndsWith(": count 2", StringComparison.Ordinal));
+        Assert.Equal(2, session.Globals[0x7ea4f + 3]);
+        Assert.Equal(1, session.Globals[0xf6483 + 9]);  // ADDITEM learned the skill the item grants
+        Assert.Equal(8, session.Globals[0x64391 + 1]);  // the award goes on as before: 7 with the gem's 25%
+    }
+
     // ------------------------------------------------------------------------------------------ gate 13: a second game
 
     private const string KamidoriPoint = "kamidori.experience.after_calculation";
@@ -1167,7 +1394,8 @@ public sealed class ModLuaLinkTests : IDisposable
 
     /// <summary>Kamidori's ADDEXP awarding <paramref name="amount"/> to character 1, who wears a costume with one
     /// experience gem (0x118, +25%), from a session that seeds the cells the award reads and stays under a level.</summary>
-    private static GameSession KamidoriAward(Script addExp, IScriptProvider scripts, long amount, Scripting? scripting = null)
+    private static GameSession KamidoriAward(Script addExp, IScriptProvider scripts, long amount, Scripting? scripting = null,
+                                             Action<GameSession>? seed = null)
     {
         var session = new GameSession();
         session.Seed(0xfec0c, amount);          // the amount the caller passes
@@ -1180,6 +1408,7 @@ public sealed class ModLuaLinkTests : IDisposable
         session.Seed(0x6432d + 1, 1);           // character_levels[1]: level 1
         session.Seed(0x2bdfc4 + 1, 99);         // unit_level_cap[1]: below the cap, so the award applies
         session.Seed(0x64391 + 1, 0);           // character_experience[1]: 100 is a level, which the award stays under
+        seed?.Invoke(session);
         SceneResult result = session.RunScene(addExp, KamidoriTable, new HeadlessWaits(), provider: scripts,
                                               build: EngineBuilds.Age433G, scripting: scripting);
         Assert.True(result.Halt is null or "exit" or "end", result.Halt);

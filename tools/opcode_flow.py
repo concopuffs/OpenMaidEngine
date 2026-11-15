@@ -5,8 +5,10 @@ The two facts are whether an instruction waits and how it leaves:
 
 - ``waits``: ``never``, ``may`` or ``always``. An instruction waits when its handler can park the engine thread in the
   wait native (``InputAndWaits.Blocking.cs``, the one place the engine blocks) before it returns: a text or input
-  wait, a sleep, a transition, a modal dialog or movie. ``always`` is only given to the handlers listed in
-  ``ALWAYS_WAITS``, each read and found to block on every path; the derivation proves ``may``.
+  wait, a sleep, a transition, a modal dialog or movie. A present and the front end's modal hold block and are not
+  waits (spec §10): the members ``ModCallWaits.cs`` lists under ``NotWaits``, the list a script call refuses by, do not
+  count. ``always`` is only given to the handlers listed in ``ALWAYS_WAITS``, each read and found to block on every
+  path; the derivation proves ``may``.
 - ``leaves``: what the handler can do with control besides blocking, any of
   ``falls`` (it returns to the next instruction), ``jumps`` (it continues at another instruction of its frame),
   ``calls`` (it runs another frame or a callback before it returns: a script, a wait's callback, a menu's script),
@@ -53,6 +55,10 @@ LEAVES = M.LEAVES
 
 # The wait native's helpers that block the engine thread (InputAndWaits.Blocking.cs).
 BLOCKING_HELPERS = {"WaitAndTick", "WaitAnyAndTick", "WaitModal", "Block"}
+# The guard a script call runs the waits through: its NotWaits list names the members that are not waits.
+MOD_CALL_WAITS = VM_DIR / "ModCallWaits.cs"
+NOT_WAITS_LIST = re.compile(r"\bNotWaits\s*=\s*\[(?P<body>[^\]]*)\]")
+NAMEOF = re.compile(r"nameof\(\s*(?:\w+\.)?(?P<name>\w+)\s*\)")
 # Interpreter methods that run other code: a frame, or a wait's callback inside the waiting frame.
 RUNS_CODE = {"RunFrame", "RunInstructions"}
 # Tokens in a body, and the fact each gives.
@@ -238,6 +244,15 @@ def blocking_waits(methods: dict[str, list[Method]]) -> set[str]:
     return blocking
 
 
+def not_waits() -> set[str]:
+    """The wait members that block and are not waits: ModCallWaits.cs's NotWaits list (spec §10)."""
+    found = NOT_WAITS_LIST.search(MOD_CALL_WAITS.read_text(encoding="utf-8"))
+    names = {m.group("name") for m in NAMEOF.finditer(found.group("body"))} if found else set()
+    if not names:
+        raise SystemExit(f"no NotWaits list found in {MOD_CALL_WAITS}")
+    return names
+
+
 def handler_table() -> dict[str, str]:
     """Each implemented opcode's canonical name to its handler method."""
     table = {m.group("label"): m.group("method") for m in TABLE_ENTRY.finditer(HANDLERS.read_text(encoding="utf-8"))}
@@ -250,7 +265,7 @@ def derive() -> tuple[dict[str, dict], dict[str, list[Method]]]:
     """Each implemented opcode's canonical name to its facts and the methods that gave each."""
     vm = methods_of(sorted(VM_DIR.glob("VirtualMachine*.cs")))
     waits_native = methods_of(sorted(WAITS_DIR.glob(WAITS_GLOB)))
-    blocking = blocking_waits(waits_native)
+    blocking = blocking_waits(waits_native) - not_waits()
     results: dict[str, dict] = {}
     for label, method in sorted(handler_table().items()):
         if method not in vm:

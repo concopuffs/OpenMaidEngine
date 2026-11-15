@@ -191,6 +191,7 @@ current_floor_height_tiles
 current_floor_no
 current_floor_terrain_grid
 current_floor_width_tiles
+current_item_count_change
 current_item_id
 current_labyrinth_id
 current_objective_id
@@ -385,6 +386,8 @@ scjump_scene_script_resource_ids
 selected_battle_animation_id
 selected_costume_enhancement_id
 set_land_terrain_id
+shared_loop_index
+shared_scratch_value
 shop_catalogue_hooks
 shop_catalogue_item_ids
 shop_level_scaled_table

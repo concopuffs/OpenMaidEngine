@@ -1918,7 +1918,7 @@ The worker clips the paired source and destination rectangles against both surfa
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
 - **semantic status:** investigated
 - **summary:** Draw every visible retained object over the selected target without implicitly clearing it, then present the composited backbuffer; label_1235a uses this on the read/message-skip branch to expose the completed foreground endpoint immediately.
-- **control (port handler):** waits may; leaves falls
+- **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
 - **depends on:** 0x223, 0x1c7, 0x1cc
 - **depended on by:** 0x21, 0x22, 0x23, 0x24, 0x25, 0x20d, 0x223
@@ -2097,7 +2097,7 @@ Port status (2026-11-03): VirtualMachine stores tick_presentation_enabled for op
 - **semantic status:** investigated
 - **summary:** (first_handle)(count) - flush/present retained graphics objects in the selected handle range into the currently selected backbuffer or offscreen render target, then clear their pending update flags.
 - **operand access:** `1` read · `2` read
-- **control (port handler):** waits may; leaves falls
+- **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
 - **depended on by:** 0x24f, 0x250, 0x251
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x222`; scope=Himegari SYS4422. Ghidra /v2: op_0x222_handler@0x4235e0 calls gfx_present_object_range@0x482230. The worker enters the graphics service, walks the retained-object map, processes flagged objects whose handles fall in [first,first+count), clears pending flags, and finalizes the render batch in the D3D target previously selected by op 0x20d. HISTORY.BIN uses (0,60000) for the backbuffer. SAVE.BIN instead renders [0,0x130b0) into 800x600 slot 2, then handle 0x15f90 at 14% scale into 112x84 slot 192; op 0x1ae writes slot 192 as the numbered .STH thumbnail.

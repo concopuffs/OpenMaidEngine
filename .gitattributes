@@ -19,6 +19,7 @@
 *.js text eol=lf
 *.json text eol=lf
 *.jsonl text eol=lf
+*.lua text eol=lf
 *.md text eol=lf
 *.oms text eol=lf
 *.props text eol=lf

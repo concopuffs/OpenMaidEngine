@@ -299,7 +299,12 @@ public sealed partial class Scripting
         if (_running == null || _interpreter == null)
             throw new ScriptAccessException("maid.vm.call runs only in a handler the interpreter invoked");
         TracedScriptCall? traced = null;
-        if (Tracing) _traced[^1].Calls.Add(traced = new TracedScriptCall(name + ".BIN"));
+        if (Tracing)
+        {
+            TracedCall call = _traced[^1];
+            call.Calls.Add(traced = new TracedScriptCall(name + ".BIN",
+                                                         mod.Id == _setup.Stack[call.Handler].ModId ? null : mod.Id));
+        }
         try
         {
             _interpreter.Call(name, _setup.Limits.CallInstructions);

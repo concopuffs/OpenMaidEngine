@@ -120,6 +120,7 @@ current_enemy_encyclopedia_unit_id
 current_entity_index
 current_faction_id
 current_glossary_topic_id
+current_item_count_change
 current_item_id
 current_magic_action_id
 current_routine_set_id
@@ -182,6 +183,7 @@ item_essence_recovery_amount
 item_granted_skill_id
 item_handler_script_id
 item_icon_id
+item_inventory_counts
 item_max_range
 item_min_range
 item_random_tier

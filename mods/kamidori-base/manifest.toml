@@ -2,7 +2,7 @@ omp = 3
 id = "kamidori-base"
 name = "神採りアルケミーマイスター base"
 version = "1.0.0"
-description = "Names the game's cells for Lua mods: the layout the engine builds a mod's game.g and game.table from."
+description = "Names the game's cells for Lua mods (the layout the engine builds a mod's game.g and game.table from), and gives helpers that change the game through its own scripts."
 
 [game]
 profile = "kamidori"
@@ -11,3 +11,5 @@ target = "extended"
 [lua]
 api = 1
 capabilities = ["vm"]
+# The game scripts the helpers in lua/init.lua call (spec §10); omp check walks each.
+calls = ["ADDITEM"]

@@ -333,7 +333,7 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
-- **Runtime scripting (Lua): milestones 0 to 4 built; 0 to 3 are the first release.**
+- **Runtime scripting (Lua): milestones 0 to 5 built; 0 to 3 are the first release.**
   `superpowers/specs/2026-11-10-lua-scripting-design.md` (accepted 2026-11-14) specifies Lua beside the VM: a managed interpreter, hooks declared in the manifest (`omp = 3`),
   the `maid` API, per-game base mods with declared writes, mod state beside the save, and gates 1 to 15. Milestone 0
   (the spike) chose Lua-CSharp, milestone 1 (the core: point hooks, `ome.session.start`, `maid.vm` without
@@ -341,11 +341,16 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   load, `maid.session.restoring`, `ome.session.resumed`, `ome.save.writing`) were built on 2026-11-14, and milestone
   3 (events and the base mods: the layout, the accessors with declared writes, the write scan and `--lua-dev`, the
   trace, editor stubs, Kamidori's point and event, and the guide for mod authors) and milestone 4 (the opcode facts
-  `waits` and `leaves`, site hooks with `after`, `skip`, script entry and exit, and watches) on 2026-11-15. Their
-  results are in `superpowers/plans/2026-11-14-lua-scripting.md`, and the modders' guide is `modding/lua.md`. The
-  remaining milestones (§18), each done when its gates pass:
-  - 5, synchronous script calls and the base mods' helpers;
-  - 6, reload and the seeded random streams.
+  `waits` and `leaves`, site hooks with `after`, `skip`, script entry and exit, and watches) and milestone 5
+  (`maid.vm.call` with its refusals and the check ahead, and the base mods' first helper, `give_item`) on 2026-11-15.
+  Their results are in `superpowers/plans/2026-11-14-lua-scripting.md`, and the modders' guide is `modding/lua.md`.
+  The remaining milestone (§18), done when its gates pass: 6, reload and the seeded random streams.
+- **More base mod helpers.** Each base mod has one helper, `give_item` over ADDITEM (`mods/<profile>-base/lua/`;
+  plan §9.3). The check ahead found more wait-free scripts in both games (plan §9.2: 22 of 27 probed in Himegari, 30
+  of 44 in Kamidori), most of them battle arithmetic (`CALC*`) or map and unit edits (`SET*`, `DEL*`) that read
+  their arguments from cells nobody has named yet. Done for a script when its argument and scratch cells are in the
+  registry with evidence, its base mod's helper sets and puts them back, and a test runs it on the game's own
+  script.
 - **Lua-CSharp past 0.5.8.** 0.5.8 writes fractions in .NET's form (`3 * 1.1` reads `3.3000000000000003`, `1/0`
   reads `Infinity`), raises on `string.format("%d", 2.5)`, writes `%e` unformatted, and refuses to compile `t[0x10]`,
   which `LuaSource.Prepare` works around. Upstream's `main` fixes them all, the number text through the option
