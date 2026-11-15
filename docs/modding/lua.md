@@ -19,11 +19,12 @@ This version supports:
 - **game events:** a mod subscribes to a named occurrence, such as an experience award, and reads and writes its
   typed fields, without a capability;
 - **`maid.vm`:** raw access to the game's cells, the frame's locals and the call stack;
+- **script calls:** `maid.vm.call` runs one of the game's scripts from a handler, and the base mods' helpers change
+  the game through its own scripts;
 - **`maid.state`:** a table that is saved beside each numbered save and comes back when that save is loaded;
 - **`maid.log`,** and **the console:** the driver's `lua` step runs a chunk in a running game.
 
-Not yet: calling a script from Lua (the link refuses `[lua] calls`), and reloading Lua without a restart. The design
-behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
+Not yet: reloading Lua without a restart. The design behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
 Game-specific values (point names, which local holds what, the events and their fields) are in your game guide,
 `games/<profile>.md`.
@@ -109,7 +110,7 @@ version 3 loader still reads versions 1 and 2. All other keys are as in [package
 - **`[lua] capabilities`** lists what the mod may reach. Version 1 has `"vm"`, the raw access of `maid.vm`. A mod
   without it has no `maid.vm`, and its point, site and script hooks and its watches on an address are link errors.
 - **`[lua] writes`** lists the global names the mod writes through a base mod ("Game names").
-- **`[lua] calls`** is read but not built yet: the link refuses a mod that lists any.
+- **`[lua] calls`** lists the game's scripts the mod runs with `maid.vm.call` ("Calling a script"). It needs `vm`.
 
 Each `[[hooks]]` table has one form and a `handler`:
 
@@ -262,6 +263,7 @@ The handler gets `ctx.script` and `ctx.cause`, why the frame was entered:
 | `"root"` | the run's first root script |
 | `"title"` | the root script after a return to title |
 | `"restore"` | `CALLBACK_LOAD.BIN`, or a script a load entered again |
+| `"mod"` | a script a handler ran with `maid.vm.call`; `ctx.mod` is the mod whose handler called, which for a base mod's helper is the mod that called the helper |
 
 A load does not resume a saved frame where it stopped: it enters each saved script again at its entry, runs it to
 where the save resumes, and goes on from there ("Loads"). So a restored frame runs its `enter` hooks again, with the
@@ -319,7 +321,12 @@ row.<column>, row[0]                            -- its cells, by column name or 
     writes any exported name, and `diagnostics/lua.log` names each unlisted one once, so you can copy it into the
     list. A packed mod's list holds under `--lua-dev` too, and so does every other rule of the cell.
 - **What `require` gives** is read-only: `g` and `table`, and beside them what the base mod's own `lua/init.lua`
-  returns. The base mods have no helpers yet.
+  returns: its helpers.
+- **Helpers** change the game the way the game does, by calling one of its own scripts ("Calling a script"), such
+  as `game.give_item(item, count)`. A helper needs no capability and no list: its writes are the base mod's, so your
+  `[lua] writes` names none of them, and it puts back the argument cells it sets. Like the call it makes, it runs in
+  a handler at an instruction, not in `init.lua`, `ome.session.start` or the console. The trace names your mod
+  ("The link report and the trace"). Your game guide lists the helpers and their bounds.
 - **Mounting.** The engine mounts a base mod only when an enabled mod requires it, and uses an installed package of
   the same id instead when there is one ([packages.md](packages.md), "Base mods").
 
@@ -460,6 +467,58 @@ other. The subscribers run inside the call, in their own order, and the table co
 A subscriber's error is its own: it is logged against that subscriber, and the next one runs. Under
 `--lua-errors halt` the run ends at the instruction where the raising handler ran.
 
+## Calling a script
+
+`maid.vm.call("NAME")` runs one of the game's scripts from a handler, as a `call-script` instruction does: a nested
+frame on the game's stack, which returns when the script returns. The game's scripts take their inputs and give their
+results in globals, so a handler sets cells, calls, and reads cells:
+
+```toml
+[lua]
+api = 1
+capabilities = ["vm"]
+calls = ["<SCRIPT>"]            # catalog names; .BIN may be left off
+```
+
+```lua
+function on_award(ctx)
+    maid.vm.g[<argument cell>] = 5
+    maid.vm.call("<SCRIPT>")
+    maid.log.info(maid.vm.g[<result cell>])
+end
+```
+
+- **The list.** A call to a script that `calls` does not list is an error. A listed name that neither the game nor
+  your `[scripts]` has is a link error, and so is a list in a mod without `vm`.
+- **Your own scripts.** A name your `[scripts]` lists is your script, before a game script of the same name: list
+  `WAITER` and call `maid.vm.call("WAITER")`. The link report shows the record's catalog name beside it,
+  `calls WAITER ($2$WAITER)`, and the trace names the record (`$2$WAITER.BIN`). The first name of `[scripts]` runs at
+  boot ([new-scenes.md](new-scenes.md), "Record 0 runs at boot"), so do not put a script you call first.
+  `maid.vm.script_id` gives a record's packed id by its catalog name (`$2$WAITER`).
+- **A call cannot wait, save, load, or go on with a load's restore.** When the script reaches a wait (a text or input
+  wait, a sleep, a transition, a text reveal, a movie, a dialog), a save (op `0x19e`), a load (op `0x19f` or
+  `0x1a1`), or op `0xae` while a load restores, the call fails with an error that names the script, the offset and
+  the opcode: `calling <SCRIPT> failed: <SCRIPT>.BIN@0x5 (op 0xc8 sleep) waits (Sleep), and a called script cannot
+  wait`. A script error inside it fails the call with the error's message, instead of opening AGE's error box. A
+  present (ops `0x20c` and `0x222`) is not a wait. For anything interactive, ship a script and a patch that calls it
+  ([patching.md](patching.md)): a save inside it works.
+- **`omp check` walks each listed script first,** with every script its `call-script` instructions name, and reads
+  every instruction, reached or not:
+  - an instruction that always waits, saves or loads, or that the port does not implement, is an error;
+  - one that may wait, op `0xae`, and a call it cannot follow (a script id from a cell, op `0x8`'s preloaded slot)
+    are notes: the call fails if the script reaches that instruction while it would wait or restore.
+- **A failed call** leaves the cells as the script wrote them, and puts back the statement block the script opened.
+  The error is one `pcall` catches.
+- **Where.** In a handler the engine runs at an instruction: a point, site or script hook, a watch, a game event
+  raised at one, and the handlers they run. Not in the console, in `init.lua` or in an `ome.session.start` handler,
+  which run between instructions.
+- **While it runs,** hooks inside the called script fire, and its frame's script hooks get `ctx.cause = "mod"`. A
+  call has a budget of 1,000,000 script instructions, the scripts it calls included, and the nesting cap of "Errors
+  and budgets" applies. A callback script the game queues meanwhile runs after the call.
+- **When the script ends the scene or the run** (a return to title, the game's exit request, a stop, a halt), the
+  call does not return: the handler and every Lua frame above it are abandoned, `pcall` too, and the engine goes on
+  with that outcome as it would after the same `call-script`.
+
 ## State
 
 `maid.state` is the mod's own table that lasts across saves. The engine writes it beside each numbered save, in
@@ -544,7 +603,8 @@ vm.l[i], vm.lf[i], vm.ls[i] -- the frame's integer, float and string locals
 vm.g:range(addr, count)  -- count cells as a table (at most 65,536)
 vm.frame                 -- { script, offset, depth, site, changed_by } of the frame the hook runs in
 vm.frames()              -- every frame, outermost first, as vm.frame describes one
-vm.script_id("NAME")     -- a script's packed id, or nil
+vm.script_id("NAME")     -- a script's packed id by its catalog name ($n$NAME for a mod's record), or nil
+vm.call("NAME")          -- run a script [lua] calls lists ("Calling a script")
 ```
 
 - **Integers** must be whole and fit in 32 bits; anything else is an error, not a truncation. A read gives the
@@ -555,7 +615,6 @@ vm.script_id("NAME")     -- a script's packed id, or nil
   watch they are an error.
 - **`site`** is absent for an instruction a patch inserted. **`changed_by`** lists the mods that patched or
   replaced the frame's script.
-- `vm.call` is not available in this version.
 
 `maid.vm` is raw access: it can corrupt game state and the saves made after it. The link report lists the mods that
 have it.
@@ -601,7 +660,8 @@ or `string.dump`: nothing reaches files, processes, the clock or the network.
 |---|---|
 | A handler call | 1,000,000 Lua instructions |
 | A mod's start-up code (`init.lua` and its handler files, together) | 10,000,000 instructions |
-| Handlers nested inside handlers (a subscriber inside an emit), and rounds of watch handlers firing on each other's writes | 32 |
+| Handlers nested inside handlers (a subscriber inside an emit, a hook inside a called script), and rounds of watch handlers firing on each other's writes | 32 |
+| A script a handler calls (`maid.vm.call`), with the scripts it calls | 1,000,000 script instructions |
 | Lua files in a package | 512, each at most 1 MiB |
 
 Unbounded recursion ends as a "stack overflow" error. A subscriber that runs inside an emit is a call of its own,
@@ -623,8 +683,9 @@ them again one at a time to find the one.
 
 `diagnostics/mod-link.txt`, and what `omp check` prints, ends with a `lua:` section:
 
-- `mod <id> <version>: …` for each mod that ships Lua or lends its layout: its capabilities and the names it
-  writes. A mod with `vm` is *opaque*: the report cannot list what it changes. So is a mod under `--lua-dev`.
+- `mod <id> <version>: …` for each mod that ships Lua or lends its layout: its capabilities, the names it writes,
+  and the scripts it calls. A mod with `vm` is *opaque*: the report cannot list what it changes. So is a mod under
+  `--lua-dev`.
 - `hook …` for each instruction and engine event with handlers, in the order they run; an instruction's after
   hooks follow `after:`.
 - `watch <watch> (<cells>): …` for each watch, its handlers in the order they run.
@@ -643,12 +704,15 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 - `hook` is the point, the script, the engine event, the game event or the watch, and for a site hook not at a
   point the script and the site as the manifest gives it (`SC0000.BIN@0x83c`); `kind` is `point`, `site`,
   `script`, `engine-event`, `event` or `watch`; a site or script hook's line has `when` (`before`, `after`, `enter`
-  or `exit`), and a script hook's `cause`; `at` is the script and offset, for a point or a site and for an event
+  or `exit`), and a script hook's `cause`, with `caller` naming the mod for `mod`; `at` is the script and offset, for a point or a site and for an event
   raised at one, the script for a script hook, and the writing instruction for a watch.
 - A watch's line has `cell` (such as `G[0x11]`), `old` and `new`, and `writer` (`script`, `mod`, `console` or
   `engine`), with `by` naming the mod for `mod`.
-- `result` is `ok`, `error`, `budget` or `depth`, with `error` the message's first line; `skip` is true on the line
-  of the handler that skipped the instruction.
+- `result` is `ok`, `error`, `budget` or `depth`, with `error` the message's first line, or `abandoned` when a
+  script the handler called ended the scene or the run; `skip` is true on the line of the handler that skipped the
+  instruction.
+- `calls` lists the scripts the handler ran with `maid.vm.call`: `script`, `result` (`ok`, `refused` with `error`,
+  or `abandoned`), and `through` naming the base mod when its helper called.
 - `within` lists the handlers the call ran inside, innermost first: a subscriber inside an emit has one.
 - `fields` gives each declared field, and an engine event's, before and after the call. A write to a field shows
   here, not in `writes`.
@@ -669,7 +733,8 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 - `events.lua`: a class per declared event, named as the event, with each field's type and whether it is
   writable;
 - `<base mod id>.lua`: what `require("<base mod id>")` gives, with every scalar's name in `g` and every table's in
-  `table(name)`, aliases too. One is written for the profile's base mod even when no mod mounts it.
+  `table(name)`, aliases too, and its helpers with the annotations its `lua/init.lua` gives them. One is written for
+  the profile's base mod even when no mod mounts it.
 
 Point the editor at the folder in your mod's `.luarc.json`; the command prints the line to add:
 

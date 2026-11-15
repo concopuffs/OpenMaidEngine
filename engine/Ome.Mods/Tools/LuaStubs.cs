@@ -151,7 +151,8 @@ public static class LuaStubs
             ---@field ls maid.vm.strings the frame's string locals
             ---@field frame maid.vm.frame? the frame the hook fired in
             ---@field frames fun(): maid.vm.frame[] the call stack, outermost first
-            ---@field script_id fun(name: string): integer? a catalog name's packed id
+            ---@field script_id fun(name: string): integer? a catalog name's packed id, a mod record's by its $n$ name too
+            ---@field call fun(script: string) run a script [lua] calls lists, as call-script does (spec §10); a wait, a save, a load or a script error fails it
 
             ---A base mod's own accessors (spec §8.4): g and table over its layout, with no write list.
             ---@class maid.names
@@ -178,7 +179,8 @@ public static class LuaStubs
             ---What a script hook is given (spec §7.2).
             ---@class maid.script
             ---@field script string
-            ---@field cause "call"|"root"|"title"|"restore" why the frame was entered
+            ---@field cause "call"|"root"|"title"|"restore"|"mod" why the frame was entered
+            ---@field mod string|nil for "mod": the mod whose handler called the script
 
             ---What a watch handler is given (spec §7.3): one write to a watched cell.
             ---@class maid.watch

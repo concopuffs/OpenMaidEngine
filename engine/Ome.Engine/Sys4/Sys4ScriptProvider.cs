@@ -47,6 +47,13 @@ public sealed class Sys4ScriptProvider : IScriptProvider
         return script;
     }
 
+    /// <summary><see cref="GetByName"/>, then the mounted append catalogs' records by their <c>$n$</c> names, each the
+    /// script <see cref="GetById"/> gives for its packed id.</summary>
+    public Script? GetByMountedName(string name)
+        => GetByName(name) ?? (Catalog.ResolveMountedName(name) is { IsPlaceholder: false } entry
+                               && entry.Name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase)
+                                   ? GetById(entry.PackedId) : null);
+
     public Script RequireByName(string name)
         => GetByName(name) ?? throw new FileNotFoundException($"script is not in SYS4INI: {name}", name);
 

@@ -56,8 +56,10 @@ public static class ModLuaLinker
     private sealed record WatchedCells(string Watch, CellKind Kind, int Address, int Count, string? Global, int Dimensions,
                                        int RowWidth);
 
+    /// <param name="catalogs">The mods' append catalogs: a mod's own scripts are reached through them (spec §10).</param>
     public static LinkedLua Link(IReadOnlyList<ModPackage> order, ModLinkBase linkBase,
-                                 IReadOnlyDictionary<string, LinkedScript> scripts, ModLinkReport report)
+                                 IReadOnlyDictionary<string, LinkedScript> scripts, ModLinkReport report,
+                                 IReadOnlyList<LinkedCatalog>? catalogs = null)
     {
         var luaMods = order.Where(ShipsLua).ToList();
         if (luaMods.Count == 0) return LinkedLua.None;
@@ -95,9 +97,9 @@ public static class ModLuaLinker
 
             if (settings == null) Error(null, "lua/ needs a [lua] table in the manifest");
             // Spec §10, "Checked ahead": the scripts the mod may call, each walked before any of them runs.
-            IReadOnlyList<string> calls = settings is { Calls.Count: > 0 } listed
-                ? CheckCalls(mod, listed.Calls, vm, linkBase, scripts, report)
-                : [];
+            var (calls, ownScripts) = settings is { Calls.Count: > 0 } listed
+                ? CheckCalls(mod, listed.Calls, vm, linkBase, scripts, catalogs ?? [], report)
+                : ([], new Dictionary<string, string>());
 
             // The sources, each checked without running it.
             var requires = mod.Manifest.Requires.Select(requirement => requirement.Id).Where(loadOrders.ContainsKey).ToList();
@@ -239,7 +241,8 @@ public static class ModLuaLinker
             // layout (spec §9.1, §9.3).
             if (report.Lines.Count(line => line.Stops) == problemsBefore && (sources.Count > 0 || mod.BaseLayout != null))
                 mods.Add(new ModRuntimeMod(mod.Id, mod.Manifest.Version.ToString(), mod.Manifest.TargetsAnyProfile, vm,
-                                           requires, sources, mod.BaseLayout, writes, luaDev, calls.Count > 0 ? calls : null));
+                                           requires, sources, mod.BaseLayout, writes, luaDev, calls.Count > 0 ? calls : null,
+                                           ownScripts.Count > 0 ? ownScripts : null));
             // Spec §15: the report shows what each mod may change, so a player can see it.
             if (vm)
                 report.Add(ModReportClass.Note, mod.Id, null,
@@ -393,7 +396,12 @@ public static class ModLuaLinker
                 if (mod.LuaDev) writes += ", and under --lua-dev (opaque) any exported name its list lacks";
                 parts.Add(writes);
             }
-            if (mod.CallList.Count > 0) parts.Add("calls " + string.Join(", ", mod.CallList));
+            if (mod.CallList.Count > 0)
+            {
+                var named = (mod.OwnScripts ?? new Dictionary<string, string>()).ToDictionary(pair => pair.Value, pair => pair.Key);
+                parts.Add("calls " + string.Join(", ", mod.CallList.Select(
+                    script => named.TryGetValue(script, out string? own) ? $"{own} ({script})" : script)));
+            }
             lines.Add($"mod {mod.Id} {mod.Version}: {string.Join("; ", parts)}");
         }
         foreach (var (script, planned) in sites)
@@ -758,30 +766,54 @@ public static class ModLuaLinker
     /// instruction of each script, reached or not, with its opcode's facts (spec §7.1). It fails on an instruction that
     /// always waits, saves, loads, or that the port does not implement, and notes one that may wait, an op 0xae (which
     /// fails the call during a restore), a <c>call-script</c> whose id comes from a cell, and any other call it cannot
-    /// follow. A mod that lists calls needs <c>vm</c>, since <c>maid.vm.call</c> is raw access. Returns the names the
-    /// runtime enforces: catalog names without <c>.BIN</c>.
+    /// follow. A name the mod's own <c>[scripts]</c> lists is that script, by its catalog name (<c>$selector$NAME</c>),
+    /// before a game script of the name. A mod that lists calls needs <c>vm</c>, since <c>maid.vm.call</c> is raw access.
+    /// Returns the names the runtime enforces, catalog names without <c>.BIN</c>, and the mod's own names among them.
     /// </summary>
-    private static List<string> CheckCalls(ModPackage mod, IReadOnlyList<string> listed, bool vm, ModLinkBase linkBase,
-                                           IReadOnlyDictionary<string, LinkedScript> scripts, ModLinkReport report)
+    private static (List<string> Names, Dictionary<string, string> Own) CheckCalls(
+        ModPackage mod, IReadOnlyList<string> listed, bool vm, ModLinkBase linkBase,
+        IReadOnlyDictionary<string, LinkedScript> scripts, IReadOnlyList<LinkedCatalog> catalogs, ModLinkReport report)
     {
         var names = new List<string>();
+        var own = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!vm)
             report.Add(ModReportClass.Error, mod.Id, null,
                        "lua.calls: maid.vm.call is raw access, so a mod that lists calls needs the vm capability");
+        // The mods' new scripts, by catalog name and by packed id: (selector << 24) | record.
+        var modScripts = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        var modIds = new Dictionary<uint, string>();
+        var ownNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (LinkedCatalog catalog in catalogs)
+            for (int record = 0; record < catalog.Records.Count; record++)
+                if (catalog.Records[record] is { IsScript: true, Stub: false } script)
+                {
+                    string catalogName = TextCatalog.NormalizeScriptName(script.CatalogName);
+                    modScripts[catalogName] = script.Bytes;
+                    modIds[(uint)(catalog.Selector << 24) | (uint)record] = catalogName;
+                    if (catalog.ModId == mod.Id) ownNames[TextCatalog.NormalizeScriptName(script.Name)] = catalogName;
+                }
         byte[]? Bytes(string script)
-            => scripts.TryGetValue(script + ".BIN", out LinkedScript? linked) ? linked.Bytes : linkBase.ReadScript(script + ".BIN");
+            => modScripts.TryGetValue(script, out byte[]? added) ? added
+               : scripts.TryGetValue(script + ".BIN", out LinkedScript? linked) ? linked.Bytes : linkBase.ReadScript(script + ".BIN");
         string? NameOf(uint id)
         {
+            if (modIds.TryGetValue(id, out string? added)) return added;
             foreach (Ome.Script.Modules.GameModule module in linkBase.Modules)
                 if (module.TryGetScript(id, out string name)) return name.ToUpperInvariant();
             return null;
         }
         foreach (string entry in listed)
         {
-            string name = TextCatalog.NormalizeScriptName(entry);
-            if (Bytes(name) == null)
+            string name = TextCatalog.NormalizeScriptName(entry), root = name;
+            if (ownNames.TryGetValue(name, out string? catalogName))
             {
-                report.Add(ModReportClass.Error, mod.Id, null, $"lua.calls: the catalog has no {name}.BIN");
+                own[name] = catalogName;
+                name = catalogName;
+            }
+            else if (Bytes(name) == null)
+            {
+                report.Add(ModReportClass.Error, mod.Id, null,
+                           $"lua.calls: neither the catalog nor the mod's [scripts] has {name}");
                 continue;
             }
             names.Add(name);
@@ -792,7 +824,7 @@ public static class ModLuaLinker
             while (queue.TryDequeue(out var next))
             {
                 if (!seen.Add(next.Script)) continue;
-                string where = $"lua.calls: {name}" + (next.Script == name ? "" : $" calls {next.Through}") + ": ";
+                string where = $"lua.calls: {root}" + (next.Script == name ? "" : $" calls {next.Through}") + ": ";
                 string file = next.Script + ".BIN";
                 if (Bytes(next.Script) is not { } bytes)
                 {
@@ -857,7 +889,7 @@ public static class ModLuaLinker
                 }
             }
         }
-        return names;
+        return (names, own);
     }
 
     /// <summary>What an instruction that may not be skipped does, from its facts (spec §7.1), in the order the

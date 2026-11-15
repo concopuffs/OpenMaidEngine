@@ -290,9 +290,11 @@ public sealed partial class Scripting
         // The console's chunks, and the handlers of an event a chunk raises, run between instructions.
         if (mod == null || _consoleDepth > 0)
             throw new ScriptAccessException("maid.vm.call is not available in the console: it runs between instructions");
-        string name = Localization.TextCatalog.NormalizeScriptName(script);
+        string listed = Localization.TextCatalog.NormalizeScriptName(script);
+        // A name of the mod's own scripts is that script, by its catalog name ($selector$NAME).
+        string name = mod.OwnScripts?.GetValueOrDefault(listed) ?? listed;
         if (!mod.CallList.Contains(name, StringComparer.Ordinal))
-            throw new ScriptAccessException($"{name} is not in {mod.Id}'s [lua] calls");
+            throw new ScriptAccessException($"{listed} is not in {mod.Id}'s [lua] calls");
         if (_building > 0)
             throw new ScriptAccessException(
                 "maid.vm.call cannot run while the session is built (init.lua, ome.session.start): no instruction is under way");

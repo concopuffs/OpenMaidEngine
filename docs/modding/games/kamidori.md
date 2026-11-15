@@ -186,6 +186,12 @@ A subscriber needs no `vm`. `oms/examples/mods/example.kamidori-double-exp-event
 character at the level cap, gains no experience. Weapon experience is awarded after the point and does not read the
 amount.
 
+`kamidori-base`'s helpers ([../lua.md](../lua.md), "Game names"):
+
+| Helper | Calls | What it does |
+|---|---|---|
+| `give_item(item, count)` | `ADDITEM.BIN` | adds `count` (-999 to 999, 1 when nil) of item `item` (1 to 1999) as the game does: the count stays at 0 or more, a count past 999 is paid out as money at the item's price, the item is marked obtained, the skills it grants are learned, and a key item (`item_category` 1 or 2) sets its story flag. It puts back `current_item_id`, `current_item_count_change`, and the `shared_loop_index` and `shared_scratch_value` ADDITEM uses, and returns `item_inventory_counts[item]`. |
+
 ## Catalogs, scenes and saves
 
 - **Selectors.** The install ships three append catalogs (`APPEND01`–`03`), so a first mod's catalog normally gets

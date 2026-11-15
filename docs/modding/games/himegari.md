@@ -98,6 +98,12 @@ them once its `[lua] writes` lists them. The names are those of `../../global-re
 A subscriber needs no `vm`. `oms/examples/mods/example.double-exp-event` doubles every award with
 `event.amount = event.amount * 2`, and leaves the same state as the patch above.
 
+`himegari-base`'s helpers ([../lua.md](../lua.md), "Game names"):
+
+| Helper | Calls | What it does |
+|---|---|---|
+| `give_item(item, count)` | `ADDITEM.BIN` | adds `count` (-99 to 99, 1 when nil) of item `item` (1 to 999) as the game does: the count stays from 0 to 99, an item gained is marked obtained, and a key item (`item_category` 1) sets its story flag. It puts back `current_item_id` and `current_item_count_change`, and returns `item_inventory_counts[item]`. |
+
 ## Catalogs, scenes and saves
 
 - **Selectors.** The install ships one append catalog (`APPEND01`), so a first mod's catalog normally gets selector

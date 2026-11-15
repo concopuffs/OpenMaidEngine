@@ -164,6 +164,35 @@ public sealed class LuaCallsTests : IDisposable
         Assert.Contains("bad argument #1 to 'call' (a script name expected)", lines[2]);
     }
 
+    [Fact]
+    public void AModsOwnScriptIsCalledByItsNameAndRunsAsItsCatalogRecord()
+    {
+        Script root = Root();
+        Script own = Assemble("$2$WAITER.BIN", (Mov, [G(0x330), Imm(7)]), (0x5, []));
+        // Another mod's script of the same name is the game's, which the list does not name.
+        Script game = Assemble("WAITER.BIN", (Mov, [G(0x331), Imm(1)]), (0x5, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Mod("mod.a", """
+                -- file: hooks.lua
+                function caller(ctx)
+                    maid.vm.call("waiter.bin")
+                    local ok, err = pcall(maid.vm.call, "$2$WAITER")
+                    maid.log.info(tostring(ok) .. " " .. tostring(err))
+                end
+                """)
+            .OwnScript("mod.a", "WAITER", "$2$WAITER")
+            .Point(root, 0, "mod.a", "hooks.lua:caller"), trace: true);
+
+        VirtualMachine vm = Run(root, native, Provider(null, own, game));
+
+        NoErrors(native);
+        Assert.Equal(7, vm.Globals[0x330]);
+        Assert.False(vm.Globals.ContainsKey(0x331));   // the game's WAITER did not run
+        Assert.Equal(["true nil"], Lines(native));   // the catalog name is on the list too
+        string call = Assert.Single(native.RecentTrace, line => line.Contains("hooks.lua:caller\",\"hook\"", StringComparison.Ordinal));
+        Assert.Contains("\"calls\":[{\"script\":\"$2$WAITER.BIN\",\"result\":\"ok\"},{\"script\":\"$2$WAITER.BIN\",\"result\":\"ok\"}]", call);
+    }
+
     // ------------------------------------------------------------------------------------------- refusals
 
     /// <summary>Spec §10, gate 9: each case's instruction refuses the call before it reaches the waits or the store.</summary>

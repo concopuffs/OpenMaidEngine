@@ -76,6 +76,17 @@ internal sealed class LuaStackBuilder
         return this;
     }
 
+    /// <summary>A mod's own new script on its <c>[lua] calls</c>, as the link leaves it: <paramref name="name"/> to its
+    /// catalog name.</summary>
+    public LuaStackBuilder OwnScript(string id, string name, string catalogName)
+    {
+        int index = _mods.FindIndex(mod => mod.Id == id);
+        ModRuntimeMod mod = _mods[index];
+        var own = new Dictionary<string, string>(mod.OwnScripts ?? new Dictionary<string, string>()) { [name] = catalogName };
+        _mods[index] = mod with { Calls = [.. mod.CallList, catalogName], OwnScripts = own };
+        return this;
+    }
+
     private HandlerId Handler(string mod, string handler)
     {
         // One id per (mod, file, function), as the link gives it.

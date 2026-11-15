@@ -61,7 +61,7 @@ public sealed partial class VirtualMachine : IInterpreterAccess
     }
 
     uint? IInterpreterAccess.ScriptId(string name)
-        => _provider?.GetByName(name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase) ? name : name + ".BIN")?.PackedId;
+        => _provider?.GetByMountedName(name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase) ? name : name + ".BIN")?.PackedId;
 
     bool IInterpreterAccess.IsNumberedSave(int opcode)
         => _t.TryGetDefinition(opcode, out OpcodeDefinition definition) && definition.CanonicalLabel == "save-numbered-slot";
@@ -78,7 +78,7 @@ public sealed partial class VirtualMachine : IInterpreterAccess
 
     void IInterpreterAccess.Call(string name, long instructions)
     {
-        Script script = _provider?.GetByName(name + ".BIN")
+        Script script = _provider?.GetByMountedName(name + ".BIN")
                         ?? throw new ScriptAccessException($"calling {name} failed: no script {name}.BIN is installed");
         if (_depth >= _o.CallDepthCap)
             throw new ScriptAccessException($"calling {name} failed: frames nest {_depth} deep, the cap is {_o.CallDepthCap}");

@@ -34,6 +34,10 @@ public class Sys4ScriptProviderTests
         Assert.NotNull(script);
         Assert.True(script!.Instructions.Count > 0);
         Assert.Null(provider.GetByName("$1$SC1260.BIN"));
+        // A mod's script call names an append record by its $n$ name: the record its packed id gives.
+        Assert.Same(script, provider.GetByMountedName("$1$SC1260.BIN"));
+        Assert.Same(provider.GetByName("ADDITEM.BIN"), provider.GetByMountedName("additem.bin"));
+        Assert.Null(provider.GetByMountedName("$1$NONE.BIN"));
     }
 
     [Fact]

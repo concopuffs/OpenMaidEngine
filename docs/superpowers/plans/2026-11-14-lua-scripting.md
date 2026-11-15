@@ -1108,7 +1108,7 @@ With it milestone 4 is done: gate 6, and the held cases of gates 3, 5, 8 and 12.
 
 ## 9. Milestone 5: script calls
 
-Being built on `feature/lua-scripting` (spec §10, §18), in four pieces; pieces 1 to 3 are built (§9.1 to §9.3):
+Built on `feature/lua-scripting` (spec §10, §18), in four pieces (§9.1 to §9.4):
 
 1. **The call and its refusals at run time**: `maid.vm.call(script)` runs a script the mod's `[lua] calls` lists as
    a nested frame with the cause `mod`, under a step budget; a wait, a save, a load, an op `0xae` during a restore and
@@ -1245,3 +1245,45 @@ Built 2026-11-15:
   the granted skill, with all four cells as the handler found them (workspace; without the restore it fails).
   `LuaStubsTests` (1): the helpers a file gives. The synthetic link base has a wait-free ADDITEM, since a stack that
   mounts a shipped base mod now checks its calls. Full suite 2356.
+
+### 9.4 The whole
+
+Built 2026-11-15:
+
+- **A mod's own scripts.** The port check found that a mod could not call a script of its own `[scripts]`: its
+  records are named `$selector$NAME`, and the provider looks names up in the base catalog only. Now a name under
+  `[lua] calls` that the mod's `[scripts]` lists is that record, before a game script of the name
+  (`ModLuaLinker.CheckCalls`, over the linked catalogs); the list keeps the catalog name and the mod keeps the map
+  (`ModRuntimeMod.OwnScripts`, the link cache's `own_scripts`), so `maid.vm.call("WAITER")` runs `$2$WAITER.BIN`. The
+  walk reads the mods' records too, and follows a `call-script` to one by its packed id. The report reads
+  `calls WAITER ($2$WAITER)`, and a missing name reads `neither the catalog nor the mod's [scripts] has NAME`.
+- **Names of mounted records.** `IScriptProvider.GetByMountedName` resolves a name through the base catalog, then the
+  mounted append catalogs by their `$n$` names (`Sys4ScriptProvider`, the record its packed id gives). `maid.vm.call`
+  and `maid.vm.script_id` use it; the engine's own lookups (`CALLBACK_LOAD.BIN`, the skip callbacks) keep
+  `GetByName`, base names only, as AGE's.
+- **The guide and the stubs.** `docs/modding/lua.md` gained "Calling a script" (the list, own scripts, the refusals, the
+  check, where a call may run, the abandon), `vm.call` in the `maid.vm` block, the budget row, the report's `calls` and
+  the trace's `calls`, `caller` and `abandoned`; `troubleshooting.md` the refusal and check messages; the game guides
+  each base mod's `give_item`; `omp lua-stubs` declares `vm.call` and the cause `mod` with `ctx.mod`.
+- **Gate 9 in the port** (`tools/drive.py port`, sandbox `m5calls3`, a scratch mod with `--lua-trace`, a new game to
+  SC0000's first page). The mod requires `himegari-base`, ships BOOT (record 0, which runs at boot, so it only exits),
+  WAITER (writes `G[0x400]`, sleeps, writes `G[0x401]`), INDIRECT (`call-script G[0x402]`), SAVER and LOADER (a write,
+  op `0x19e` or op `0x1a1`, a write), lists `WAITER`, `ADDITEM` and `INDIRECT`, and hooks SC0000's and ADDITEM's
+  `enter`. `omp check` noted WAITER's sleep and INDIRECT's call from a cell, and nothing stopped it. At SC0000's enter:
+  - `give_item(5, 3)` took the count from 0 to 3 and put `current_item_id` back to 0; ADDITEM's `enter` hook saw the
+    cause `mod` with the mod `scratch.calls`; the trace's call reads `{"script":"ADDITEM.BIN","through":"himegari-base",
+    "result":"ok"}`;
+  - `WAITER` failed with `$2$WAITER.BIN@0x5 (op 0xc8 sleep) waits (Sleep), and a called script cannot wait`, with
+    `G[0x400]` 1 and `G[0x401]` 0;
+  - SAVER and LOADER, reached through INDIRECT with `maid.vm.script_id("$2$SAVER")`, each failed naming its opcode
+    (`calling $2$INDIRECT failed: $2$SAVER.BIN@0x5 (op 0x19e save-numbered-slot) saves, and a called script cannot
+    save`, and `… (op 0x1a1 load-numbered-slot-and-resume) loads a save …`), the first write kept and the second not, and no `SAVE50.DAT` was written;
+  - `SC0010` was refused as not in the list;
+  - the scene went on: page 1 drew, and three advances later SC0000 waited for input at `0x8de`.
+- **Tests.** `ModLuaLinkTests` (1): a mod's own WAITER on its list is its record, walked with its sleep noted, shown as
+  `calls WAITER ($2$WAITER)`, and kept by the cache. `LuaCallsTests` (1): the own name and the catalog name both run
+  the record, not the game's script of the name, and the trace names the record. `Sys4ScriptProviderTests` (workspace):
+  `GetByMountedName` gives an append record by its `$n$` name, the record its packed id gives, while `GetByName` still
+  does not. Full suite 2358.
+
+With it milestone 5 is done: gate 9.

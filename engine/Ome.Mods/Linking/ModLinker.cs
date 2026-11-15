@@ -207,7 +207,7 @@ public static class ModLinker
             }
         LinkedText text = ModTextLinker.Link(order, linkBase, scripts, report);
         var languageAssets = ModLanguageAssetLinker.Link(order, linkBase, allocated, report);
-        LinkedLua lua = ModLuaLinker.Link(order, linkBase, scripts, report);
+        LinkedLua lua = ModLuaLinker.Link(order, linkBase, scripts, report, catalogs);
         return new ModLinkResult(order, scripts, report)
         {
             Catalogs = catalogs, Assets = assets, LanguageAssets = languageAssets, Text = text, Lua = lua,

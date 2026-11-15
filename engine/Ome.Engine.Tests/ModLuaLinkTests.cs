@@ -409,7 +409,7 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.Equal(
         [
             "lua.calls: CALLEE calls SUB2: SUB2.BIN at 0x0 (op 0x19e save-numbered-slot) saves, and a called script cannot save",
-            "lua.calls: the catalog has no MISSING.BIN",
+            "lua.calls: neither the catalog nor the mod's [scripts] has MISSING",
         ], Stopping(result).Select(line => line.Message).Order(StringComparer.Ordinal));
         string[] notes = result.Report.Lines.Where(line => line.Class == ModReportClass.Note && line.Message.StartsWith("lua.calls", StringComparison.Ordinal))
             .Select(line => line.Message).ToArray();
@@ -434,6 +434,44 @@ public sealed class ModLuaLinkTests : IDisposable
         string cache = Path.Combine(_root, "cache");
         ModLinkCache.Write(cache, "key", CallBase(), linked);
         Assert.Equal(["SAFE"], Assert.Single(ModLinkCache.TryOpen(cache, "key")!.LuaStack.Mods).CallList);
+    }
+
+    private static string Oms(string name, string body)
+        => $"oms 1\nscript \"{name}\"\n\n{string.Join("\n", body.Split('\n').Select(line => "    " + line))}\n";
+
+    [Fact]
+    public void AModsOwnScriptOnItsCallsIsItsCatalogRecordAndIsWalkedLikeAGameScript()
+    {
+        // The mod's WAITER shadows the game's: the list names the mod's record, by its catalog name.
+        ModLinkBase linkBase = CallBase() with
+        {
+            // A compiled script's header carries the table's ABI, so the mod's WAITER needs Himegari's table.
+            Table = HimegariTable,
+            Intrinsics = new IntrinsicCatalog(HimegariTable, Contracts),
+            InstallSelectors = new HashSet<int> { 1 },
+            ReadScript = name => name.Equals("WAITER.BIN", StringComparison.OrdinalIgnoreCase) ? CallScripts["SAFE.BIN"]
+                                 : CallScripts.GetValueOrDefault(name),
+        };
+        var files = Hooks(Doubles);
+        files["scripts/WAITER.oms"] = Oms("WAITER", "G[0x400] = 1\nsleep(0xa)\nexit");
+        ModPackage mod = Mod("m", CallingHook + "\n[scripts]\nnames = [\"WAITER\"]\n", files,
+                             lua: "api = 1\ncapabilities = [\"vm\"]\ncalls = [\"waiter\", \"SAFE\"]");
+        ModLinkResult result = ModLinker.Link(linkBase, [mod], []);
+
+        Assert.True(result.Succeeded, result.Report.Render());
+        ModRuntimeMod linked = Assert.Single(result.Lua.Stack.Mods);
+        Assert.Equal(["$2$WAITER", "SAFE"], linked.CallList);
+        Assert.Equal([("WAITER", "$2$WAITER")], linked.OwnScripts!.Select(pair => (pair.Key, pair.Value)));
+        Assert.Contains(result.Report.Lines, line => line.Class == ModReportClass.Note
+            && line.Message.StartsWith("lua.calls: WAITER: $2$WAITER.BIN at 0x", StringComparison.Ordinal)
+            && line.Message.EndsWith("(op 0xc8 sleep) may wait, and the call fails if it does", StringComparison.Ordinal));
+        Assert.Contains("calls WAITER ($2$WAITER), SAFE", Assert.Single(result.Report.Lua, line => line.StartsWith("mod m ", StringComparison.Ordinal)));
+
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", linkBase, result);
+        ModRuntimeMod cached = Assert.Single(ModLinkCache.TryOpen(cache, "key")!.LuaStack.Mods);
+        Assert.Equal(linked.CallList, cached.CallList);
+        Assert.Equal([("WAITER", "$2$WAITER")], cached.OwnScripts!.Select(pair => (pair.Key, pair.Value)));
     }
 
     [Fact]

@@ -226,8 +226,27 @@ Skip a plain instruction near it, or change the flow with a patch ([lua.md](lua.
 **"ctx:skip(): this hook did not declare skip = true".** Add `skip = true` to the hook's `[[hooks]]` entry. An after
 hook cannot skip: its instruction has already run.
 
-**"lua.calls: script calls come with …" or "… this engine does not raise it yet".** Script calls and the reserved
-engine events are part of a later version of Lua scripting ([lua.md](lua.md), the list at the top).
+**"… this engine does not raise it yet".** The reserved engine events are part of a later version of Lua scripting
+([lua.md](lua.md), the list at the top).
+
+**"calling NAME failed: NAME.BIN@0x… (op 0x… …) waits (…), and a called script cannot wait"**, or **"… saves"**,
+**"… loads a save"**, **"… continues the load's restore"**, **"… raised a script error: …"**, **"the call ran past its
+budget"**. A script `maid.vm.call` ran reached something a call cannot do; the offset and the opcode say where, in
+that script or in one it called. The cells keep what the script wrote before it. Run `omp check`: its `lua.calls`
+notes list each instruction of the scripts you call that may wait or restore. Set the cells the script reads so it
+takes a path without them, call a smaller script, or ship a script and a patch that calls it ([lua.md](lua.md),
+"Calling a script").
+
+**"lua.calls: NAME: NAME.BIN at 0x… (op 0x… …) waits / saves / loads a save, …" in `omp check`.** A script your
+`[lua] calls` lists, or one it calls (the line names the chain: `A calls B, C:`), has an instruction the call
+always fails at. Take it off the list. **"… may wait, and the call fails if it does"**, **"… continues a load's
+restore …"**, **"… which the check cannot follow"** are notes: the call works on paths that avoid them.
+
+**"NAME is not in M's [lua] calls"**: add the script to `[lua] calls`. **"lua.calls: neither the catalog nor the
+mod's [scripts] has NAME"**: the name is misspelled, or neither the game nor your `[scripts]` has such a script. **"lua.calls: maid.vm.call is raw access, so a mod that lists
+calls needs the vm capability"**: add `capabilities = ["vm"]` to `[lua]`, or use a base mod's helper, which needs
+none. **"maid.vm.call is not available in the console"**, **"… cannot run while the session is built (init.lua,
+ome.session.start)"**: call it from a hook, a watch or a game event's handler ([lua.md](lua.md), "Calling a script").
 
 **"a watch on an address names a cell by number, which needs the vm capability".** Add `capabilities = ["vm"]` to
 `[lua]`, or watch the cell's name through the base mod, which needs none. **"a watch on a name resolves through a
