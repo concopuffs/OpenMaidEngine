@@ -1,0 +1,23 @@
+# Port only (scenarios/port/): the tech demo example.random-enemies on a new game. At stage 1's himegari.stage.loaded
+# the mod draws the playthrough's seed from its own stream (under rand-seed 7, 827724324 in every run) and replaces
+# stage 1's two 緑プテテット (slots 2 and 3) with a ハルピュア (unit 810) and a サーペント (unit 834); the オーク in
+# slot 1 is the stage's boss and stays. The lua step fails on any other draw. The prologue stops at the familiar's
+# name entry (INPUTNAME), whose 決定 keeps the default name. Run on a fresh sandbox:
+#   py -3.11 -X utf8 tools/drive.py port start --mod oms/examples/mods/example.random-enemies
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/port/himegari-random-enemies.steps
+
+rand-seed 7
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+speed 8
+wait-state script=INPUTNAME click=adv.next every=0.3 timeout=600   # the prologue, to the familiar's name entry
+wait 1
+click 458 465                                                      # 決定: keep the default name
+wait-state script=FIELD click=adv.next every=0.3 timeout=300       # stage 1: its loader and the mod have run
+speed 1
+lua mod=example.random-enemies local got = describe() assert(got == "seed=827724324 stage=1 drawn=2 1=205 2=810 3=834", got) return got
+rand-seed off

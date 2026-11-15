@@ -40,5 +40,12 @@ ran the same scenarios on native AGE.
   and with `math.random()`, and keeps the rolls in `maid.state`; `describe()` gives them to the driver's `lua` step.
   `tools/drive/scenarios/port/himegari-lua-random.steps` runs a new game under `rand-seed 7` and fails unless the
   rolls are the ones every seeded run gives. It also serves to try `--lua-reload` on a copy of the folder.
+- `example.random-enemies` (Lua scripting plan §11) is a tech demo of `himegari-base`'s stage events: at
+  `himegari.stage.loaded` it replaces each ordinary enemy of the stage with one drawn from every ordinary enemy of the
+  game, bosses and named characters kept. It draws a seed at a playthrough's first stage and keeps it in `maid.state`,
+  so the playthrough's saves keep its draws and a new game draws another. The pick is a function of the seed, the
+  stage and the slot, so the loaders' later runs in a stage get the same answer.
+  `tools/drive/scenarios/port/himegari-random-enemies.steps` plays a new game to stage 1 under `rand-seed 7` and fails
+  unless the draw is the one every seeded run gives.
 
 Each folder is an unpacked Open Maid Pack; `Ome.Cli omp build DIR` packs one into a `.omp` with stored plans.

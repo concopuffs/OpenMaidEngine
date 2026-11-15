@@ -1,0 +1,22 @@
+omp = 3
+id = "example.random-enemies"
+name = "Random enemies"
+version = "1.0.0"
+description = "A tech demo: each stage's ordinary enemies are drawn from the game's whole roster of ordinary enemies, the same each time a playthrough reaches the stage."
+
+[game]
+profile = "himegari"
+target = "extended"
+
+[lua]
+api = 1
+# The one table it changes: the stage's enemy slots, after the stage's loader wrote them and before FIELD places them.
+writes = ["stage_enemy_unit_id"]
+
+[[requires]]
+id = "himegari-base"
+version = ">=1, <2"
+
+[[hooks]]
+event = "himegari.stage.loaded"
+handler = "random_enemies.lua:on_stage_loaded"

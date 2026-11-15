@@ -7,8 +7,9 @@ design's home. This plan keeps what each milestone measured and what that settle
 the spike, chose **Lua-CSharp 0.5.8** (`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the
 library against the official Lua 5.2 test suite. Milestone 2 built mod state and the session's life across loads
 (§6), milestone 3 events and the base mods (§7), milestone 4 the wider hooks (§8), milestone 5 script calls (§9),
-and milestone 6 the authoring tools: the seeded random streams and `--lua-reload` (§10). The backlog keeps the
-follow-ups: more base mod helpers, and Lua-CSharp past 0.5.8.
+and milestone 6 the authoring tools: the seeded random streams and `--lua-reload` (§10). §11, before the merge, adds
+the boot and stage events to both base mods and the `example.random-enemies` demo. The backlog keeps the follow-ups:
+a hook point survey for each game, more base mod helpers, and Lua-CSharp past 0.5.8.
 
 Paths are relative to `age-reimpl/`.
 
@@ -1378,3 +1379,91 @@ reload, and gate 11 with the guide.
   messages; the Himegari guide and the examples' README the example; `omp lua-stubs` the reason `reload`.
 
 With it milestone 6 is done: gate 11. Every milestone of spec §18 is built.
+
+## 11. Boot and stage events, and a demo
+
+Built on `feature/lua-scripting` on 2026-11-15, before the merge. Until now each base mod raised one event, the
+experience award. The appends extend the games through callback chains: the boot runs each append's `$n$AUTORUN`, which
+registers its scripts in the chains, and FIELD walks the stage chains at a stage's start, at each round and at its end
+(`kamidori-data-tables.md`, "Hook chains"). The places just after those walks are where a mod sees the base game's
+and every append's work done, so the base mods now raise five more events there, in both games. A demo mod rewrites a
+stage's enemies on one of them. The wider survey of each game's hook points stays in the backlog.
+
+### 11.1 An event at several points
+
+- **The form.** An event's `point` is a string or a list of strings (`ModEventDeclaration.Points`,
+  `TableReader.StringOrStrings`; `GameEvent.Points`). Himegari's FIELD ends a stage at two places, won and lost, and
+  `himegari.stage.close` names both. The linker adds the subscribers at each place, the report lists each place, and the
+  link cache keeps the list (`LinkedLuaEventEntry.Points`; the cache key carries the `Ome.Mods` assembly id, so an old
+  entry is not read). Errors: an empty list, a point named twice, a name that is not dotted, and two points on one
+  instruction (the event would be raised twice there).
+- **Tests.** `LuaEventsTests.AnEventMayNameAListOfPoints` and four declaration cases;
+  `ModLuaLinkTests.AnEventAtTwoPointsIsRaisedAtEachAndTheCacheKeepsBoth` and
+  `TwoPointsOfOneEventOnOneInstructionAreALinkError`.
+
+### 11.2 An event the install cannot raise
+
+- **The rule.** When an event's point does not bind (its script is another revision, or the profile does not name the
+  point), the event is not raised: the report notes it ("not raised in this install, so a mod that subscribes to it
+  does not link: REASON") and a subscriber fails to link ("X declares NAME, which is not raised in this install:
+  REASON"). A mistake in the declaration itself still stops the declaring mod. Without it, the new FIELD and INIT2
+  events stopped the whole base mod on the synthetic bases the tests link against, and would on any revision the points
+  do not fingerprint, taking the experience event and the helpers with them.
+- **Test.** `ModLuaLinkTests.AnEventWhosePointDoesNotBindIsANoteAndOnlyItsSubscribersDoNotLink`.
+
+### 11.3 The points, the names and the events
+
+| Event | Himegari point | Kamidori point | Fields |
+|---|---|---|---|
+| `<profile>.data.ready` | `himegari.boot.data_ready` (INIT2 `0x183`) | `kamidori.boot.data_ready` (INIT2 `0x2cf`) | none |
+| `<profile>.stage.loaded` | `himegari.stage.after_loader` (FIELD `0x20a`) | `kamidori.stage.after_loader` (FIELD `0x527`) | `stage` |
+| `<profile>.stage.ready` | `himegari.stage.after_ready_handlers` (FIELD `0xa27`) | `kamidori.stage.after_ready_handlers` (FIELD `0xd58`) | `stage` |
+| `<profile>.stage.round` | `himegari.stage.after_round_handlers` (FIELD `0x764a`) | `kamidori.stage.after_round_handlers` (FIELD `0x933d`) | `stage`, `turn` |
+| `<profile>.stage.close` | `himegari.stage.after_close_handlers_won` and `_lost` (FIELD `0xbaa1`, `0xbabd`) | `kamidori.stage.after_close_handlers` (FIELD `0xc785`) | `stage`, `result`, `turn` |
+
+- **The points** are in `vm-map/patch-points-<profile>.toml`; Kamidori's list both installs' scripts, which put each at
+  the same site.
+- **The names.** Himegari: `current_stage_id` (`0x4dfbc`, formerly `scjump_progress_a`, which the base mod keeps as an
+  alias), `stage_event_handler_script_ids` (`0xccc33`, 32 rows of ready, close and round handlers),
+  `scjump_handler_script_ids` (`0x69e`), `stage_result` (`0xccbcc`) and `field_map_continue_mode` (`0x767d`).
+  Kamidori: `stage_ready_handler_script_ids`, `stage_close_handler_script_ids`, `stage_round_handler_script_ids`,
+  `current_stage_turn` and `stage_result`.
+- **The events** are `events/boot.toml` and `events/stage.toml` in each base mod; their fields are read-only.
+- **Tests.** `HimegarisBaseModRaisesItsBootAndStageEventsAtTheInstalledScripts` (each event's offsets in the installed
+  scripts, and a headless INIT2 run that raises `data.ready` once) and
+  `KamidorisBaseModRaisesItsBootAndStageEventsOnBothInstalls`.
+
+### 11.4 Driven in the port
+
+- **Himegari** (sandbox `hk1`; an observer mod on the five events and `example.random-enemies`; `rand-seed 7`): at boot
+  `data.ready`; at stage 1 `stage.loaded` and `stage.ready`, then `stage.round` for turns 2 to 50 and `stage.close`
+  with result 2 and turn 50 when the 50-turn limit lost the stage. Back from the deploy screen FIELD raised
+  `stage.loaded` again and no `stage.ready`. A save made in the field (its `SAVE01.modstate.json` holds the seed),
+  loaded in a new process without `rand-seed`, raised `data.ready` again while it restored, then `stage.loaded`, with
+  the same seed and draws.
+- **Kamidori** (sandbox `k6obs`, seeded from `k1clean`, the clean install): `data.ready` at boot and again at each
+  load; slot 021's load raised `stage.loaded` (floor 52) and no `stage.ready`, and an end of turn `stage.round` with turn
+  6; a fresh entry of 蒼月の南湖畔 (52) raised `stage.loaded` and `stage.ready`; on the free floor 開けた涼風西湖畔
+  (51), `stage.loaded`, `stage.ready`, and a withdrawal at turn 1 closed it with result 1, then STAGECLEAR.
+- **What the runs corrected.** The code reading had `data.ready` once per run and `stage.loaded` once per stage. A load
+  builds the data tables again (the scripts' prologues run again, as `docs/modding/lua.md`, "Loads", says), and FIELD
+  runs the stage's loaders whenever `field_map_continue_mode` is not 1: at a stage's start (0), back from the camp
+  screens (2 or 3) and at the load of a save made in the field (FIELD writes 2 before it calls SAVE). Only mode 0
+  places the units and walks the ready chain. The descriptions and both game guides say so, and the registries name
+  the flag and the withdrawal's results.
+
+### 11.5 The demo: `example.random-enemies`
+
+- **What it does.** At `himegari.stage.loaded` it replaces each enemy in `stage_enemy_unit_id` slots 1 to 29 whose
+  `unit_boss_class` is 0 with one drawn from the game's ordinary enemies: `unit_enemy_info_listed` nonzero,
+  `unit_boss_class` 0 and a battle sprite, 82 units of the 189 listed. Bosses and named characters stay, so a stage
+  can still be won. Its one write is `stage_enemy_unit_id`.
+- **Per playthrough.** The seed comes from `math.random` at the playthrough's first stage and lives in `maid.state`,
+  so the saves keep it and a new game, whose state starts empty, draws another. The pick is a few Park-Miller steps from
+  (seed, stage, slot), so every run of a stage's loaders gets the same answer, a load included.
+- **The scenario** `tools/drive/scenarios/port/himegari-random-enemies.steps`: `rand-seed 7`, a new game through the
+  prologue and the familiar's name entry to stage 1, then a `lua` step that fails unless `describe()` is
+  `seed=827724324 stage=1 drawn=2 1=205 2=810 3=834`. It passed in a fresh process on a fresh sandbox, with
+  `rand-seed off` reporting `mods=example.random-enemiesx3`.
+- **What it looks like.** Stage 1's two 緑プテテット are a ハルピュア and a サーペント, beside a level 1 リリィ; the
+  stage's boss, the オーク, stays.
