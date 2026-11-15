@@ -10,6 +10,7 @@ This version supports:
 - **site hooks:** a handler runs before or after any instruction of an original script, which the hook names by the
   script's fingerprint and the instruction's offset;
 - **`skip`:** a handler before an instruction passes over it;
+- **script hooks:** a handler runs when a script's frame is entered and when it returns;
 - **the engine events** `ome.session.start`, `ome.session.resumed` and `ome.save.writing`;
 - **game names:** the game's base mod names its cells, and a mod reads any of them and writes the ones it lists,
   without a capability;
@@ -19,8 +20,7 @@ This version supports:
 - **`maid.state`:** a table that is saved beside each numbered save and comes back when that save is loaded;
 - **`maid.log`,** and **the console:** the driver's `lua` step runs a chunk in a running game.
 
-Not yet: hooks on script entry and exit or on cell writes, calling a script from Lua, and reloading Lua without a
-restart. A mod that uses one of them fails to link, and the report says that this engine does
+Not yet: hooks on cell writes, calling a script from Lua, and reloading Lua without a restart. A mod that uses one of them fails to link, and the report says that this engine does
 not build it yet. The design
 behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
@@ -116,6 +116,7 @@ Each `[[hooks]]` table has one form and a `handler`:
 |---|---|---|
 | Point | `point = "NAME"`, a named patch point of the game; optionally `skip = true` ("Skipping an instruction") | yes |
 | Site | `script = "NAME.BIN"`, `fingerprint = "sha256:…"`, `site = 0x…`, `when = "before"` or `"after"` ("Site hooks"); with `before`, optionally `skip = true` | yes |
+| Script | `script = "NAME.BIN"`, `when = "enter"` or `"exit"` ("Script hooks") | yes |
 | Engine event | `engine = "EVENT"`, one of the events in "Engine events" | no |
 | Game event | `event = "NAME"`, an event a mod of the stack declares ("Game events") | no |
 
@@ -232,6 +233,39 @@ it is an error. Only a point hook and a site hook with `when = "before"` may ski
   skip cannot be undone. A game event at the point still reaches its subscribers, and what they write to its fields
   is written, though the instruction that would have used it does not run.
 - **The trace** marks the line of the handler that skipped with `"skip":true`.
+
+## Script hooks
+
+A script hook runs when a frame of the script starts and when it returns:
+
+```toml
+[[hooks]]
+script = "NAME.BIN"
+when = "enter"             # or "exit"
+handler = "hooks.lua:on_enter"
+```
+
+**`enter`** runs before the frame's first instruction, when the frame starts at the script's entry, which every
+frame does. In a new session it comes after `ome.session.start`. **`exit`** runs when the frame returns, while it is
+still the running frame, so `maid.vm.l` reads the locals it returns with. A frame that ends any other way (a
+return to title, a load, a stop, the game's exit request, a halt, a script error answered 中止) runs no `exit`
+hook: each of those also ends the session or the run.
+
+The handler gets `ctx.script` and `ctx.cause`, why the frame was entered:
+
+| `ctx.cause` | The frame is |
+|---|---|
+| `"call"` | a script another script called, or a callback script the engine queued |
+| `"root"` | the run's first root script |
+| `"title"` | the root script after a return to title |
+| `"restore"` | `CALLBACK_LOAD.BIN`, or a script a load entered again |
+
+A load does not resume a saved frame where it stopped: it enters each saved script again at its entry, runs it to
+where the save resumes, and goes on from there ("Loads"). So a restored frame runs its `enter` hooks again, with the
+cause `"restore"`; the scripts it calls on the way are ordinary calls. `maid.session.restoring` tells a handler that
+a load is under way.
+
+The link refuses a script hook on a script the game does not have, and on one another mod replaces.
 
 ## Game names
 
@@ -556,9 +590,10 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 {"mod":"mod.double","handler":"double.lua:on_award","hook":"<profile>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.012,"result":"ok","fields":[{"name":"amount","before":25,"after":50}]}
 ```
 
-- `hook` is the point, the engine event or the game event; `kind` is `point`, `site`, `engine-event` or `event`;
-  a site hook's line has `when` (`before` or `after`); `at` is the script and offset, for a point or a site and for
-  an event raised at one.
+- `hook` is the point, the script, the engine event or the game event; `kind` is `point`, `site`, `script`,
+  `engine-event` or `event`; a site or script hook's line has `when` (`before`, `after`, `enter` or `exit`), and a
+  script hook's `cause`; `at` is the script and offset, for a point or a site and for an event raised at one, and
+  the script for a script hook.
 - `result` is `ok`, `error`, `budget` or `depth`, with `error` the message's first line; `skip` is true on the line
   of the handler that skipped the instruction.
 - `within` lists the handlers the call ran inside, innermost first: a subscriber inside an emit has one.
@@ -575,8 +610,8 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 [lua-language-server](https://luals.github.io/), the language server most editors use for Lua. It links the stack as
 `omp check` does (pass your mod and its dependencies with `--mod`) and writes:
 
-- `maid.lua`: `maid` and its tables, and what a handler is given: `maid.point` for a point or site hook, and a
-  class per engine event (`ome.session.start` and the rest);
+- `maid.lua`: `maid` and its tables, and what a handler is given: `maid.point` for a point or site hook,
+  `maid.script` for a script hook, and a class per engine event (`ome.session.start` and the rest);
 - `events.lua`: a class per declared event, named as the event, with each field's type and whether it is
   writable;
 - `<base mod id>.lua`: what `require("<base mod id>")` gives, with every scalar's name in `g` and every table's in

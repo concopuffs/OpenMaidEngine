@@ -201,8 +201,11 @@ reference ([games/README.md](games/README.md)).
 Another mod replaced the script, or patched away the instruction your point names. Your hook cannot bind there;
 the two mods conflict as written.
 
-**"a site hook hands its handler the frame and operands, which needs the vm capability".** Add
-`capabilities = ["vm"]` to `[lua]`.
+**"a site hook hands its handler the frame and operands, which needs the vm capability"** (or a script hook's
+"the frame"). Add `capabilities = ["vm"]` to `[lua]`.
+
+**"X replaces SCRIPT, and the hook names the original's entry and exit".** Another mod replaces the script your
+script hook names; a replaced script is that mod's code, and the two mods conflict as written.
 
 **"the hook was written for SCRIPT sha256:A, but the base catalog's SCRIPT is sha256:B".** The installed script is
 another revision than the one your site hook names; the offset may not mean the same instruction in it. Take the

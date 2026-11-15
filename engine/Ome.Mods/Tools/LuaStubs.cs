@@ -144,6 +144,11 @@ public static class LuaStubs
             ---@field skipped boolean whether a handler before the instruction skipped it
             ---@field skip fun(self: maid.point) pass over the instruction; a hook before it with skip = true
 
+            ---What a script hook is given (spec §7.2).
+            ---@class maid.script
+            ---@field script string
+            ---@field cause "call"|"root"|"title"|"restore" why the frame was entered
+
             """);
         foreach (var (name, (field, type, doc)) in EngineEventFields.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             text.Append($"---What an {name} handler is given (spec §7.7).\n---@class {name}\n---@field event \"{name}\"\n")

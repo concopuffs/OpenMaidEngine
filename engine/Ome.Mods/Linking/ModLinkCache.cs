@@ -148,6 +148,11 @@ public sealed record LinkedLuaSiteEntry(
     [property: JsonPropertyName("handlers")] IReadOnlyList<LinkedLuaDueEntry> Handlers,
     [property: JsonPropertyName("after")] IReadOnlyList<LinkedLuaDueEntry>? After = null);
 
+/// <summary>A script's entry and exit hooks (Lua scripting spec §7.2).</summary>
+public sealed record LinkedLuaScriptEntry(
+    [property: JsonPropertyName("enter")] IReadOnlyList<LinkedLuaDueEntry> Enter,
+    [property: JsonPropertyName("exit")] IReadOnlyList<LinkedLuaDueEntry> Exit);
+
 /// <summary>The <c>lua</c> of <c>link.json</c>: the runtime the files were checked with, the mods, the handlers and
 /// the hook plan (Lua scripting spec §7.5).</summary>
 public sealed record LinkedLuaEntry
@@ -161,6 +166,10 @@ public sealed record LinkedLuaEntry
     [JsonPropertyName("sites")]
     public IReadOnlyDictionary<string, IReadOnlyList<LinkedLuaSiteEntry>> Sites { get; init; }
         = new Dictionary<string, IReadOnlyList<LinkedLuaSiteEntry>>();
+    /// <summary>By script name (<c>ADDEXP.BIN</c>), its entry and exit hooks.</summary>
+    [JsonPropertyName("scripts")]
+    public IReadOnlyDictionary<string, LinkedLuaScriptEntry> Scripts { get; init; }
+        = new Dictionary<string, LinkedLuaScriptEntry>();
     /// <summary>By engine event (<c>ome.session.start</c>).</summary>
     [JsonPropertyName("engine")]
     public IReadOnlyDictionary<string, IReadOnlyList<LinkedLuaDueEntry>> Engine { get; init; }
@@ -196,6 +205,9 @@ public sealed record LinkedLuaEntry
         Sites = lua.Plan.Sites.ToDictionary(pair => pair.Key + ".BIN",
             pair => (IReadOnlyList<LinkedLuaSiteEntry>)pair.Value.Select(site => new LinkedLuaSiteEntry(site.Offset, site.Site,
                 site.Point, site.Handlers.Select(Due).ToList(), site.After?.Select(Due).ToList())).ToList(),
+            StringComparer.Ordinal),
+        Scripts = lua.Plan.Scripts.ToDictionary(pair => pair.Key + ".BIN",
+            pair => new LinkedLuaScriptEntry(pair.Value.Enter.Select(Due).ToList(), pair.Value.Exit.Select(Due).ToList()),
             StringComparer.Ordinal),
         Engine = lua.Plan.EngineEvents.ToDictionary(pair => pair.Key,
             pair => (IReadOnlyList<LinkedLuaDueEntry>)pair.Value.Select(Due).ToList(), StringComparer.Ordinal),
@@ -236,7 +248,9 @@ public sealed record LinkedLuaEntry
             Engine.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value.Select(Planned).ToList(),
                 StringComparer.Ordinal),
             LuaEvents.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value.Select(Planned).ToList(),
-                StringComparer.Ordinal));
+                StringComparer.Ordinal),
+            Scripts.ToDictionary(pair => pair.Key, pair => new PlannedScript(pair.Value.Enter.Select(Planned).ToList(),
+                pair.Value.Exit.Select(Planned).ToList()), StringComparer.Ordinal));
 }
 
 /// <summary>The <c>link.json</c> of a cache directory.</summary>

@@ -48,7 +48,6 @@ public static class ModLuaLinker
     /// <summary>The hook forms this engine builds; the reader takes all six (spec §6.3).</summary>
     private static string? NotBuilt(ModHook hook) => hook.Form switch
     {
-        ModHookForm.Script => "script entry and exit hooks come with the wider hooks (Lua scripting milestone 4)",
         ModHookForm.Watch => "watches come with the wider hooks (Lua scripting milestone 4)",
         _ => null,
     };
@@ -81,6 +80,7 @@ public static class ModLuaLinker
         // Point and site hooks, and the events at points: by instruction. A site hook has no point.
         var pointHooks = new List<(Pending Pending, string Script, int Offset, int Site, string? Point)>();
         var engineHooks = new List<(Pending Pending, string Event)>();
+        var scriptHooks = new List<(Pending Pending, string Script)>();
         var luaEventHooks = new List<(Pending Pending, string Event)>();
         // Spec §9.1, plan §7.1: the profile's patch points, else the copy a base mod ships.
         OmsPatchPoints? points = linkBase.PatchPoints ?? order.Select(mod => mod.BasePoints).FirstOrDefault(found => found != null);
@@ -159,30 +159,34 @@ public static class ModLuaLinker
                           + string.Join(", ", BuiltEngineEvents.Order(StringComparer.Ordinal)) + ")");
                     continue;
                 }
-                // A point or an event first: neither depends on the handler's file, so a broken file does not hide a
-                // wrong target.
+                // The target first (a point, a site, a script or an event): none depends on the handler's file, so a
+                // broken file does not hide a wrong target.
                 (string Script, int Offset, int Site)? bound = null;
+                string? hookedScript = null;
                 bool pointFails = false;
                 DeclaredEvent? subscribed = null;
-                if (hook.Form == ModHookForm.Point)
+                if ((hook.Form is ModHookForm.Point or ModHookForm.Site or ModHookForm.Script) && !vm)
                 {
-                    if (!vm)
-                        Error(null, $"{where}: a point hook hands its handler the frame and operands, which needs the vm "
-                                    + "capability ([lua] capabilities = [\"vm\"])");
-                    else bound = BindPoint(mod, where, hook.Target, points, linkBase, scripts, report);
+                    Error(null, $"{where}: a {hook.Form.ToString().ToLowerInvariant()} hook hands its handler the frame"
+                                + (hook.Form == ModHookForm.Script ? "" : " and operands")
+                                + ", which needs the vm capability ([lua] capabilities = [\"vm\"])");
+                    pointFails = true;
+                }
+                else if (hook.Form == ModHookForm.Point)
+                {
+                    bound = BindPoint(mod, where, hook.Target, points, linkBase, scripts, report);
                     pointFails = bound == null;
                 }
                 else if (hook.Form == ModHookForm.Site)
                 {
-                    if (!vm)
-                        Error(null, $"{where}: a site hook hands its handler the frame and operands, which needs the "
-                                           + "vm capability ([lua] capabilities = [\"vm\"])");
-                    else bound = BindSite(mod, where, hook, linkBase, scripts, report);
+                    bound = BindSite(mod, where, hook, linkBase, scripts, report);
                     pointFails = bound == null;
                 }
-                // Spec §7.1: a hook that may skip names an instruction that goes on to the next one.
-                if (hook.Skip && bound is { } skipped && !CheckSkip(mod, where, skipped.Script, skipped.Site, linkBase, report))
-                    pointFails = true;
+                else if (hook.Form == ModHookForm.Script)
+                {
+                    hookedScript = BindScript(mod, where, hook.Target, linkBase, scripts, report);
+                    pointFails = hookedScript == null;
+                }
                 else if (hook.Form == ModHookForm.Event)
                 {
                     if (brokenEvents.Contains(hook.Target)) continue;   // its declaration's error is reported
@@ -201,6 +205,9 @@ public static class ModLuaLinker
                     }
                     bound = subscribed.Place;
                 }
+                // Spec §7.1: a hook that may skip names an instruction that goes on to the next one.
+                if (hook.Skip && bound is { } skipped && !CheckSkip(mod, where, skipped.Script, skipped.Site, linkBase, report))
+                    pointFails = true;
                 if (!checks.TryGetValue(hook.Handler.File, out ModSourceCheck? check)) continue;   // the layout reported it
                 if (!check.Parsed) continue;   // reported above
                 if (!check.TopLevelFunctions.Contains(hook.Handler.Function))
@@ -222,6 +229,7 @@ public static class ModLuaLinker
                     pointHooks.Add((new Pending(hook, id, loadOrder, hook.Target), place.Script, place.Offset, place.Site,
                                     subscribed.Event.Point!));
                 else if (hook.Form == ModHookForm.Engine) engineHooks.Add((new Pending(hook, id, loadOrder), hook.Target));
+                else if (hook.Form == ModHookForm.Script) scriptHooks.Add((new Pending(hook, id, loadOrder), hookedScript!));
                 else pointHooks.Add((new Pending(hook, id, loadOrder), bound!.Value.Script, bound.Value.Offset, bound.Value.Site,
                                      hook.Form == ModHookForm.Point ? hook.Target : null));
             }
@@ -273,6 +281,21 @@ public static class ModLuaLinker
             }
             sites[byScript.Key] = planned;
         }
+        // Spec §7.2: each script's entry and exit lists, by the same rule.
+        var scriptPlans = new Dictionary<string, PlannedScript>(StringComparer.Ordinal);
+        foreach (var byScript in scriptHooks.GroupBy(hook => TextCatalog.NormalizeScriptName(hook.Script), StringComparer.Ordinal)
+                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            List<Pending> When(string when)
+                => Merged(byScript.Where(hook => hook.Pending.Hook.When == when).Select(hook => hook.Pending)).ToList();
+            var enter = When("enter");
+            var exit = When("exit");
+            scriptPlans[byScript.Key] = new PlannedScript(enter.Select(Planned).ToList(), exit.Select(Planned).ToList());
+            foreach (var (when, due) in new[] { ("enter", enter), ("exit", exit) })
+                if (due.Count > 1)
+                    report.Add(ModReportClass.OrderedInteraction, due.Select(entry => handlers[entry.Handler.Index].ModId),
+                        byScript.First().Script, $"{when}: handlers run in this order: " + string.Join(", ", due.Select(Describe)));
+        }
         var engine = new Dictionary<string, IReadOnlyList<PlannedHandler>>(StringComparer.Ordinal);
         foreach (var byEvent in engineHooks.GroupBy(hook => hook.Event, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
@@ -303,16 +326,18 @@ public static class ModLuaLinker
         foreach (var (name, ids) in writers.Where(pair => pair.Value.Count > 1).OrderBy(pair => pair.Key, StringComparer.Ordinal))
             report.Add(ModReportClass.OrderedInteraction, ids, null,
                        $"{name} is written by {string.Join(", then ", ids)} (load order); the trace shows each write (--lua-trace)");
-        report.Lua = Summary(mods, handlers, sites, engine, luaEvents, declared);
+        report.Lua = Summary(mods, handlers, sites, scriptPlans, engine, luaEvents, declared);
 
         var events = declared.Values.Select(entry => entry.Event).OrderBy(gameEvent => gameEvent.Name, StringComparer.Ordinal).ToList();
-        return new LinkedLua(new ModRuntimeStack(mods, handlers, events), new HookPlan(sites, engine, luaEvents), undeclared);
+        return new LinkedLua(new ModRuntimeStack(mods, handlers, events), new HookPlan(sites, engine, luaEvents, scriptPlans),
+                             undeclared);
     }
 
     /// <summary>The report's Lua section (spec §12): each mod with its capabilities and the names it writes, each hook with
     /// its handlers in the order they run, and each event with its owner, its fields and its subscribers.</summary>
     private static List<string> Summary(IReadOnlyList<ModRuntimeMod> mods, IReadOnlyList<ModRuntimeHandler> handlers,
                                         IReadOnlyDictionary<string, IReadOnlyList<PlannedSite>> sites,
+                                        IReadOnlyDictionary<string, PlannedScript> scriptPlans,
                                         IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> engine,
                                         IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> luaEvents,
                                         IReadOnlyDictionary<string, DeclaredEvent> declared)
@@ -352,6 +377,10 @@ public static class ModLuaLinker
                 lines.Add($"hook {script} 0x{site.Site:x}" + (site.Point is { } point ? $" ({point})" : "") + ": "
                           + string.Join("; ", lists));
             }
+        foreach (var (script, planned) in scriptPlans)
+            foreach (var (when, list) in new[] { ("enter", planned.Enter), ("exit", planned.Exit) })
+                if (list.Count > 0)
+                    lines.Add($"hook {script} {when}: " + string.Join(", ", list.Select(handler => Describe(handler))));
         foreach (var (name, planned) in engine)
             lines.Add($"hook {name}: " + string.Join(", ", planned.Select(handler => Describe(handler))));
         foreach (DeclaredEvent entry in declared.Values.OrderBy(entry => entry.Event.Name, StringComparer.Ordinal))
@@ -692,6 +721,27 @@ public static class ModLuaLinker
             report.Add(ModReportClass.Note, mod.Id, script, $"{what} {string.Join(" and ", how)}, so the after hook fires "
                                                             + "only once it has finished; a save made before then rebuilds the "
                                                             + "session when it is loaded, and the hook does not fire for that load");
+    }
+
+    /// <summary>A script hook's script (spec §7.2): one of the base catalog's, which no mod replaces (a replaced script is
+    /// that mod's code, spec §1.3). A patched one keeps its entry and its returns.</summary>
+    private static string? BindScript(ModPackage mod, string where, string target, ModLinkBase linkBase,
+                                      IReadOnlyDictionary<string, LinkedScript> scripts, ModLinkReport report)
+    {
+        string script = target.ToUpperInvariant();
+        if (linkBase.ReadScript(script) == null)
+        {
+            report.Add(ModReportClass.Error, mod.Id, script, $"{where}: the base catalog has no {script}");
+            return null;
+        }
+        if (scripts.TryGetValue(script, out LinkedScript? linked) && linked.ReplacedBy is { } replacer)
+        {
+            report.Add(replacer == mod.Id ? ModReportClass.Error : ModReportClass.HardConflict, [mod.Id, replacer], script,
+                $"{where}: {replacer} replaces {script}, and the hook names the original's entry and exit; a replaced script "
+                + "is that mod's code, which a hook does not reach");
+            return null;
+        }
+        return script;
     }
 
     /// <summary>An original instruction's offset in the linked script (spec §7.6): its own when no mod changed the

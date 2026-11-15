@@ -855,7 +855,7 @@ An award in play needs a battle; the install tests run the same native on `ADDEX
 
 ## 8. Milestone 4: wider hooks
 
-Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; pieces 1 to 3 are built (§8.1–§8.3):
+Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; pieces 1 to 4 are built (§8.1–§8.4):
 
 1. **The two opcode facts** (spec §7.1): `waits` (`always`, `may` or `never`) and `leaves` (any of `falls`, `jumps`,
    `calls`, `ends`, `saves`, `loads`, `restores`) for every opcode the port implements, in `vm-map/opcodes.toml`.
@@ -971,3 +971,33 @@ Tests: `LuaHooksTests.ASkipPassesOverTheInstructionAndEveryHandlerBeforeItStillR
 `LuaEventsTests.ASkippedInstructionsEventStillReachesItsSubscribersAndTheirWritesAreMade`, and
 `ModLuaLinkTests.SkipIsRefusedOnAnInstructionThatDoesNotGoOnToTheNextOne` (5 cases: a mov at a site and at a point
 link; a call, the ADV wait and an exit are refused). Full suite 2304.
+
+### 8.4 Script entry and exit
+
+Built 2026-11-15 (spec §7.2):
+
+- **The link** (`BindScript`). A script hook needs `vm`; its script must be in the base catalog, and no mod may
+  replace it (a hard conflict naming the replacing mod, as for a point; a replaced script is that mod's code, spec
+  §1.3). A patched script keeps its entry and its returns. The plan has `Scripts`: per script an `enter` and an
+  `exit` list (`PlannedScript`), each in the merged order, in the report (`hook ADDEXP enter: …`), the ordered
+  interactions and the cache (`scripts`).
+- **Where they run.** A frame takes them with its table (`ScriptHooks.Enter`, `.Exit`). `RunFrame` runs `enter`
+  before the loop when the frame starts at its script's entry (the index of offset 0, where every frame but a debug
+  run's starts; a restored frame does too), and `exit` when the loop ends with `Returned`, while the frame is still
+  `_cur`, so `maid.vm.l` reads its locals. The other ends (a return to title, a load, a stop, an exit request, a halt,
+  an abort, a debug return, running off the end) run none.
+  - Op 0x2 (`exit`) is the script's return (`StepResult.FrameReturn`), op 0x5 (`ret`) only when no local call is
+    open. So the root frame's op 0x2 runs its `exit` hooks too, before the run ends; it is a return, which the spec's
+    list of other ends does not name.
+  - In a new session `enter` follows `ome.session.start`, as the session is built before the frame is entered.
+- **The context** (`HookKind.Script`): `ctx.script` and `ctx.cause` (`call`, `root`, `title`, `restore` from
+  `FrameCause`), with the frame's locals; `cause = "mod"` waits for `maid.vm.call` (milestone 5). The trace's kind is
+  `script`, with `when`, `cause` and `at` the script; an error reads `failed at SCRIPT enter`.
+- **Tidied.** The link's per-form branches are one chain now: the capability check for the three frame forms, then
+  each form's binding, then the skip check for any bound instruction.
+
+Tests: `LuaHooksTests.EnterAndExitFireForACalledFrameWithItsCauseAndItsLocals`,
+`LuaStateTests.EnterFollowsTheSessionStartAndARestoredFrameEntersWithTheCauseRestore` (a full load: LOADER root,
+the load's session, CALLBACK_LOAD restore, ROOT restore, then `ome.session.resumed`; an abandoned load: the title
+session, then TITLE title), and in `ModLuaLinkTests` the lists, the report and the cache, and the three refusals.
+Full suite 2307.

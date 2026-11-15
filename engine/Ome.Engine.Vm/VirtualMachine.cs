@@ -1100,15 +1100,32 @@ public sealed partial class VirtualMachine
             }
             try
             {
-                outcome = RunInstructions(frame, pc, waitCallback: false) switch
+                // Lua scripting spec §7.2: enter before the first instruction of a frame that starts at its script's
+                // entry (a restored frame does), and exit for a return only, while the frame is still the running one.
+                if (frame.Hooks is { Enter.Count: > 0 } entered && pc == EntryIndex(frame.Script)
+                    && _scripting!.RunFrameHooks(entered, frame.Script.Name, enter: true, cause) is { } enterHalt)
                 {
-                    LoopEnd.Returned => FrameOutcome.Returned,
-                    LoopEnd.DebugReturned => FrameOutcome.DebugReturned,
-                    LoopEnd.RootReload => FrameOutcome.RootReload,
-                    LoopEnd.Stopped or LoopEnd.ExitRequested => FrameOutcome.ExitRequested,
-                    LoopEnd.Halted => FrameOutcome.Halted,
-                    _ => FrameOutcome.RanOff,   // a hotspot's ret with no wait to return to runs the frame off too
-                };
+                    HaltReason ??= enterHalt;
+                    outcome = FrameOutcome.Halted;
+                }
+                else
+                {
+                    outcome = RunInstructions(frame, pc, waitCallback: false) switch
+                    {
+                        LoopEnd.Returned => FrameOutcome.Returned,
+                        LoopEnd.DebugReturned => FrameOutcome.DebugReturned,
+                        LoopEnd.RootReload => FrameOutcome.RootReload,
+                        LoopEnd.Stopped or LoopEnd.ExitRequested => FrameOutcome.ExitRequested,
+                        LoopEnd.Halted => FrameOutcome.Halted,
+                        _ => FrameOutcome.RanOff,   // a hotspot's ret with no wait to return to runs the frame off too
+                    };
+                    if (outcome == FrameOutcome.Returned && frame.Hooks is { Exit.Count: > 0 } exited
+                        && _scripting!.RunFrameHooks(exited, frame.Script.Name, enter: false, cause) is { } exitHalt)
+                    {
+                        HaltReason ??= exitHalt;
+                        outcome = FrameOutcome.Halted;
+                    }
+                }
             }
             catch (RootReloadRequestedException) { outcome = FrameOutcome.RootReload; }
             catch (ProcessExitRequestedException) { outcome = FrameOutcome.ExitRequested; }
@@ -1146,6 +1163,9 @@ public sealed partial class VirtualMachine
             }
         }
     }
+
+    /// <summary>The instruction index of a script's entry, offset 0, where every frame but a debug run's starts.</summary>
+    private static int EntryIndex(Script script) => script.IndexByOffset.TryGetValue(0, out int index) ? index : 0;
 
     /// <summary>The coordinator of a <see cref="HostScene"/> run returns before its first instruction, as TITLE's
     /// developer menu returns its choice, and arms the end of the run at the scene's return.</summary>

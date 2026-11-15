@@ -297,6 +297,13 @@ internal sealed class HookView(HookContext context, LuaModSession session) : ILu
                     ? context.Return(EventFieldValues.ToLua(field, hook.ReadField(field)))
                     : context.Return(LuaValue.Nil);
             }
+            if (hook.Kind == HookKind.Script)
+                return key switch
+                {
+                    "script" => context.Return(hook.Script ?? ""),
+                    "cause" => context.Return(hook.Cause ?? ""),
+                    _ => context.Return(LuaValue.Nil),
+                };
             if (hook.Kind == HookKind.EngineEvent)
             {
                 if (key == "event") return context.Return(hook.Name ?? "");

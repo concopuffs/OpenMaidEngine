@@ -451,6 +451,37 @@ public sealed class LuaStateTests : IDisposable
     }
 
     [Fact]
+    public void EnterFollowsTheSessionStartAndARestoredFrameEntersWithTheCauseRestore()
+    {
+        // Spec §7.2: the load's session is built before CALLBACK_LOAD, which enters with the cause restore; the saved ROOT
+        // is entered again at its entry with the cause restore; a return to title enters the root with the cause title.
+        string saves = Saves();
+        Run(Root(), Native(Counting()), Store(saves));
+        LuaStackBuilder Entering() => Counting()
+            .Mod("mod.e", "-- file: e.lua\nfunction on_enter(ctx) maid.log.info(\"enter \" .. ctx.script .. \" \" .. ctx.cause) end")
+            .ScriptHook("LOADER.BIN", "enter", "mod.e", "e.lua:on_enter")
+            .ScriptHook("CALLBACK_LOAD.BIN", "enter", "mod.e", "e.lua:on_enter")
+            .ScriptHook("ROOT.BIN", "enter", "mod.e", "e.lua:on_enter")
+            .ScriptHook("TITLE.BIN", "enter", "mod.e", "e.lua:on_enter");
+        string[] Order(Scripting native)
+            => native.RecentLog.Where(line => line.Contains(" mod.e: ", StringComparison.Ordinal)
+                                              || line.Contains(" mod.a: start ", StringComparison.Ordinal)
+                                              || line.Contains(" mod.a: resumed ", StringComparison.Ordinal))
+                .Select(line => line[(line.IndexOf(": ", 20, StringComparison.Ordinal) + 2)..].Split(" restoring")[0]).ToArray();
+
+        Scripting loaded = Native(Entering());
+        Run(Loader(), loaded, Store(saves), Provider(CallbackLoad()));
+        Assert.Equal(["start boot", "enter LOADER.BIN root", "start load", "enter CALLBACK_LOAD.BIN restore",
+                      "enter ROOT.BIN restore", "resumed slot=1"], Order(loaded));
+
+        Script title = ScriptAssembler.Assemble(Table, "TITLE.BIN", new List<(int, Operand[])> { (0x2, []) }, []);
+        Scripting abandoned = Native(Entering());
+        Run(Loader(), abandoned, Store(saves), Provider(CallbackLoad(returnToTitle: true), title));
+        Assert.Equal(["start boot", "enter LOADER.BIN root", "start load", "enter CALLBACK_LOAD.BIN restore", "start title",
+                      "enter TITLE.BIN title"], Order(abandoned));
+    }
+
+    [Fact]
     public void AnAbandonedLoadEndsWithTheFlagSetAndTheTitleSessionStartsClear()
     {
         string saves = Saves();

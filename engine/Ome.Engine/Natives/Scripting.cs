@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Ome.Engine.Diagnostics;
 using Ome.Engine.Model;
 using Ome.Engine.Modding;
 
@@ -129,17 +130,18 @@ public sealed partial class Scripting : IDisposable
     public ScriptHooks? HooksFor(Script script)
     {
         IReadOnlyList<PlannedHandler> saveWriting = _setup.Plan.HandlersOf(SaveWritingEvent);
-        if (_setup.Plan.Sites.Count == 0 && saveWriting.Count == 0) return null;
+        if (_setup.Plan.Sites.Count == 0 && _setup.Plan.Scripts.Count == 0 && saveWriting.Count == 0) return null;
         if (_tables.TryGetValue(script, out TableEntry? entry)) return entry.Table;
-        if (!_setup.Plan.Sites.TryGetValue(Localization.TextCatalog.NormalizeScriptName(script.Name), out var sites))
-            sites = [];
+        string name = Localization.TextCatalog.NormalizeScriptName(script.Name);
+        if (!_setup.Plan.Sites.TryGetValue(name, out var sites)) sites = [];
+        _setup.Plan.Scripts.TryGetValue(name, out PlannedScript? entryAndExit);
         IInterpreterAccess? interpreter = _interpreter;
         ScriptHooks? table = ScriptHooks.For(script, sites,
             site => WriteLog(ModLogLevel.Warn, null,
                 $"{script.Name}@0x{site.Offset:x} is no instruction of the loaded script; its hooks do not fire"),
             interpreter == null ? null : instruction => interpreter.IsNumberedSave(instruction.Opcode),
             saveWriting.Select(handler => handler with { EngineEvent = SaveWritingEvent }).ToList(),
-            offset => _setup.Sites.Site(script.Name, offset));
+            offset => _setup.Sites.Site(script.Name, offset), entryAndExit);
         _tables.AddOrUpdate(script, new TableEntry(table));
         return table;
     }
@@ -234,6 +236,33 @@ public sealed partial class Scripting : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// A frame's <c>enter</c> or <c>exit</c> hooks (spec §7.2), in order, with the frame's locals: the interpreter calls
+    /// it before the first instruction of a frame that starts at its script's entry, and when a frame has returned and is
+    /// still the running one; no other end of a frame runs them. Returns a halt reason under <c>--lua-errors halt</c>.
+    /// </summary>
+    public string? RunFrameHooks(ScriptHooks hooks, string script, bool enter, FrameCause cause)
+    {
+        IModSession? session = _scene.Session;
+        if (session == null || _interpreter == null) return null;
+        IReadOnlyList<PlannedHandler> handlers = enter ? hooks.Enter : hooks.Exit;
+        string why = cause switch
+        {
+            FrameCause.TopScene => "root",
+            FrameCause.RootReload => "title",
+            FrameCause.SaveRestore => "restore",
+            _ => "call",
+        };
+        for (int i = 0; i < handlers.Count; i++)
+        {
+            PlannedHandler handler = handlers[i];
+            if (!IsOn(session, handler.Handler)) continue;
+            HookContext context = HookContext.ForScript(script, enter ? "enter" : "exit", why);
+            if (Call(session, handler.Handler, context, frameAccess: true) is { } halt) return halt;
+        }
+        return null;
+    }
+
     /// <summary>The session an instruction starts in, for its <c>after</c> hooks: <see cref="RunAfter"/> runs them only
     /// in the same one.</summary>
     public long SessionMark => _sessionsEnded;
@@ -282,6 +311,7 @@ public sealed partial class Scripting : IDisposable
     private static string Where(HookContext context) => context switch
     {
         { Kind: HookKind.Point, When: "after" } => $"{context.Script}@0x{context.Offset:x} (after)",
+        { Kind: HookKind.Script } => $"{context.Script} {context.When}",
         { Kind: HookKind.Point } => $"{context.Script}@0x{context.Offset:x}",
         { Kind: HookKind.GameEvent, Script: { } script } => $"{context.Name} at {script}@0x{context.Offset:x}",
         _ => context.Name ?? "",

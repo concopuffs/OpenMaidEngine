@@ -64,9 +64,13 @@ public sealed record PlannedSite(int Offset, int Site, string? Point, IReadOnlyL
     public IReadOnlyList<PlannedHandler> AfterList => After ?? [];
 }
 
+/// <summary>A script's entry and exit hooks (spec §7.2), each list in the merged order.</summary>
+public sealed record PlannedScript(IReadOnlyList<PlannedHandler> Enter, IReadOnlyList<PlannedHandler> Exit);
+
 /// <summary>
-/// The hook plan the link builds (spec §7.5): per script, the hooked instructions with their handlers, and per engine
-/// event, its handlers. A frame takes its script's table (<see cref="ScriptHooks"/>) when it is entered.
+/// The hook plan the link builds (spec §7.5): per script, the hooked instructions with their handlers and its entry
+/// and exit hooks, and per engine event, its handlers. A frame takes its script's table (<see cref="ScriptHooks"/>)
+/// when it is entered.
 /// </summary>
 public sealed class HookPlan
 {
@@ -75,15 +79,22 @@ public sealed class HookPlan
 
     /// <param name="sites">By script name, either form (<c>ADDEXP</c> or <c>ADDEXP.BIN</c>).</param>
     /// <param name="luaEvents">The subscribers of each game event raised from Lua (spec §8.2), by event name.</param>
+    /// <param name="scripts">Each script's entry and exit hooks, by script name in either form.</param>
     public HookPlan(IReadOnlyDictionary<string, IReadOnlyList<PlannedSite>> sites,
                     IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> engineEvents,
-                    IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>>? luaEvents = null)
+                    IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>>? luaEvents = null,
+                    IReadOnlyDictionary<string, PlannedScript>? scripts = null)
     {
         Sites = sites.ToDictionary(pair => TextCatalog.NormalizeScriptName(pair.Key), pair => pair.Value,
                                    StringComparer.Ordinal);
         EngineEvents = engineEvents;
         LuaEvents = luaEvents ?? new Dictionary<string, IReadOnlyList<PlannedHandler>>();
+        Scripts = (scripts ?? new Dictionary<string, PlannedScript>())
+            .ToDictionary(pair => TextCatalog.NormalizeScriptName(pair.Key), pair => pair.Value, StringComparer.Ordinal);
     }
+
+    /// <summary>By normalized script name (<c>ADDEXP</c>), its entry and exit hooks.</summary>
+    public IReadOnlyDictionary<string, PlannedScript> Scripts { get; }
 
     /// <summary>By game event name, the subscribers of an event raised from Lua, each list in the merged order.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> LuaEvents { get; }
@@ -97,7 +108,7 @@ public sealed class HookPlan
     /// <summary>By event name (<c>ome.session.start</c>), each list in the merged order.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> EngineEvents { get; }
 
-    public bool IsEmpty => Sites.Count == 0 && EngineEvents.Count == 0 && LuaEvents.Count == 0;
+    public bool IsEmpty => Sites.Count == 0 && EngineEvents.Count == 0 && LuaEvents.Count == 0 && Scripts.Count == 0;
 
     public IReadOnlyList<PlannedHandler> HandlersOf(string engineEvent)
         => EngineEvents.TryGetValue(engineEvent, out var handlers) ? handlers : [];
@@ -116,22 +127,31 @@ public sealed class HookSite(PlannedSite planned, string script)
     public bool MaySkip { get; } = planned.Handlers.Any(handler => handler.Skip);
 }
 
-/// <summary>A script's table (spec §7.5): instruction index to its hooked site, or null for none. A script with no
-/// hooks has no table, so the loop tests one reference per instruction.</summary>
-public sealed class ScriptHooks(HookSite?[] byIndex)
+/// <summary>A script's table (spec §7.5): instruction index to its hooked site, or null for none, and its entry and
+/// exit hooks (spec §7.2). A script with no hooks has no table, so the loop tests one reference per instruction.</summary>
+public sealed class ScriptHooks(HookSite?[] byIndex, PlannedScript? script = null)
 {
     public HookSite?[] ByIndex { get; } = byIndex;
+
+    /// <summary>The handlers before the first instruction of a frame that starts at the script's entry.</summary>
+    public IReadOnlyList<PlannedHandler> Enter { get; } = script?.Enter ?? [];
+
+    /// <summary>The handlers when a frame of the script returns.</summary>
+    public IReadOnlyList<PlannedHandler> Exit { get; } = script?.Exit ?? [];
 
     /// <summary>The table of <paramref name="script"/> under <paramref name="sites"/>, or null when none of them
     /// names one of its instructions. A site whose offset is no instruction start is reported through
     /// <paramref name="unbound"/>. An instruction that <paramref name="takesEvent"/> accepts also gets
     /// <paramref name="eventHandlers"/>, merged into its list by priority and then load order (spec §7.4); its
-    /// original offset comes from <paramref name="site"/>.</summary>
+    /// original offset comes from <paramref name="site"/>. <paramref name="entryAndExit"/> are the script's entry and
+    /// exit hooks.</summary>
     public static ScriptHooks? For(Script script, IReadOnlyList<PlannedSite> sites, Action<PlannedSite>? unbound = null,
                                    Func<Instruction, bool>? takesEvent = null,
-                                   IReadOnlyList<PlannedHandler>? eventHandlers = null, Func<int, int?>? site = null)
+                                   IReadOnlyList<PlannedHandler>? eventHandlers = null, Func<int, int?>? site = null,
+                                   PlannedScript? entryAndExit = null)
     {
         HookSite?[]? table = null;
+        if (entryAndExit is { Enter.Count: > 0 } or { Exit.Count: > 0 }) table = new HookSite?[script.Instructions.Count];
         foreach (PlannedSite planned in sites)
         {
             if (!script.IndexByOffset.TryGetValue(planned.Offset, out int index))
@@ -157,7 +177,7 @@ public sealed class ScriptHooks(HookSite?[] byIndex)
                 };
                 table[index] = new HookSite(merged, script.Name);
             }
-        return table == null ? null : new ScriptHooks(table);
+        return table == null ? null : new ScriptHooks(table, entryAndExit);
     }
 }
 

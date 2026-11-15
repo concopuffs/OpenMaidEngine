@@ -145,11 +145,15 @@ public sealed partial class Scripting
             {
                 HookKind.Point => context.When == null ? "point" : "site",
                 HookKind.EngineEvent => "engine-event",
+                HookKind.Script => "script",
                 _ => "event",
             });
             if (context.When != null) json.WriteString("when", context.When);
+            if (context.Cause != null) json.WriteString("cause", context.Cause);
             if (context.Script != null)
-                json.WriteString("at", string.Create(CultureInfo.InvariantCulture, $"{context.Script}@0x{context.Offset:x}"));
+                json.WriteString("at", context.Offset < 0
+                    ? context.Script
+                    : string.Create(CultureInfo.InvariantCulture, $"{context.Script}@0x{context.Offset:x}"));
             json.WriteNumber("ms", Math.Round(milliseconds, 3));
             json.WriteString("result", error?.Kind switch
             {

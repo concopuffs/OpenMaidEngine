@@ -10,6 +10,8 @@ public enum HookKind
     EngineEvent,
     /// <summary>A game event (spec §9.2): its declared fields, at its point or raised from Lua.</summary>
     GameEvent,
+    /// <summary>A script's entry or exit (spec §7.2): the frame, and the cause it was entered for.</summary>
+    Script,
 }
 
 /// <summary>Whether a pass over a hooked instruction is skipped (spec §7.1): one per pass, shared by the contexts of its
@@ -62,6 +64,11 @@ public sealed class HookContext
             MaySkip = maySkip,
         };
 
+    /// <summary>A script hook's context (spec §7.2): <paramref name="when"/> is <c>enter</c> or <c>exit</c>,
+    /// <paramref name="cause"/> why the frame was entered (<c>call</c>, <c>root</c>, <c>title</c>, <c>restore</c>).</summary>
+    public static HookContext ForScript(string script, string when, string cause)
+        => new(HookKind.Script, script, [], null, [], 0) { Script = script, When = when, Cause = cause };
+
     /// <summary>An engine event's context, with its fields.</summary>
     public static HookContext ForEngineEvent(string name, params KeyValuePair<string, CellValue>[] fields)
         => new(HookKind.EngineEvent, name, fields, null, [], 0);
@@ -86,8 +93,11 @@ public sealed class HookContext
     public string? Name { get; }
 
     public string? Script { get; private init; }
-    /// <summary>A site hook's <c>before</c> or <c>after</c>; null for a point hook and an event.</summary>
+    /// <summary>A site hook's <c>before</c> or <c>after</c>, a script hook's <c>enter</c> or <c>exit</c>; null for a
+    /// point hook and an event.</summary>
     public string? When { get; private init; }
+    /// <summary>A script hook's cause: why its frame was entered.</summary>
+    public string? Cause { get; private init; }
     public int Offset { get; private init; } = -1;
     public int Site { get; private init; } = -1;
     public int Opcode { get; private init; } = -1;

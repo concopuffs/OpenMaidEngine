@@ -8,8 +8,8 @@ using Ome.Scripting.Lua;
 
 /// <summary>
 /// Milestone 4 of docs/superpowers/specs/2026-11-10-lua-scripting-design.md, the wider hooks, over synthetic scripts
-/// and hand-built stacks (the link's output): site hooks and <c>after</c> (§7.1), <c>skip</c> (§7.1) and their order
-/// (§7.4). The link's
+/// and hand-built stacks (the link's output): site hooks and <c>after</c> (§7.1), <c>skip</c> (§7.1), script entry and
+/// exit (§7.2) and their order (§7.4). A load's and a return to title's causes are in <see cref="LuaStateTests"/>. The link's
 /// side is in <see cref="ModLuaLinkTests"/>, a load across an <c>after</c> hook in <see cref="LuaStateTests"/>.
 /// </summary>
 public sealed class LuaHooksTests : IDisposable
@@ -166,6 +166,49 @@ public sealed class LuaHooksTests : IDisposable
         Assert.Equal((3, 3), (vm.Globals[0x121], vm.Globals[0x402]));
         Assert.Equal(1, vm.Globals[0x403]);                       // the error was INNER's instruction's, not the call's
         NoErrors(native);
+    }
+
+    // ------------------------------------------------------------------------------------------- script entry and exit (§7.2)
+
+    [Fact]
+    public void EnterAndExitFireForACalledFrameWithItsCauseAndItsLocals()
+    {
+        // ROOT calls SUB (id 5) twice, then exits; SUB sets its local and returns.
+        Script root = Assemble("ROOT.BIN", (0x3, [Imm(5)]), (0x3, [Imm(5)]), (0x2, []));
+        Script sub = Assemble("SUB.BIN", (Mov, [new Operand(9, 1), Imm(7)]), (0x5, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Mod("mod.a", """
+                -- file: hooks.lua
+                function root_enter(ctx)
+                    assert(ctx.script == "ROOT.BIN" and ctx.cause == "root" and ctx.args == nil and ctx.offset == nil)
+                    maid.vm.g[0x300] = 1
+                end
+                function sub_enter(ctx)
+                    assert(ctx.script == "SUB.BIN" and ctx.cause == "call")
+                    assert(maid.vm.l[1] == 0 and maid.vm.frame.script == "SUB.BIN" and maid.vm.frame.offset == 0)
+                    maid.vm.g[0x301] = maid.vm.g[0x301] + 1
+                end
+                function sub_exit(ctx)
+                    assert(ctx.cause == "call" and maid.vm.l[1] == 7, "the returning frame is the running one")
+                    maid.vm.g[0x302] = maid.vm.g[0x302] * 10 + 1
+                end
+                function sub_exit_later(ctx) maid.vm.g[0x302] = maid.vm.g[0x302] * 10 + 2 end
+                function root_exit(ctx) maid.vm.g[0x303] = 1 end
+                """)
+            .ScriptHook("ROOT.BIN", "enter", "mod.a", "hooks.lua:root_enter")
+            .ScriptHook("SUB.BIN", "enter", "mod.a", "hooks.lua:sub_enter")
+            .ScriptHook("SUB.BIN", "exit", "mod.a", "hooks.lua:sub_exit_later", priority: 1)
+            .ScriptHook("SUB.BIN", "exit", "mod.a", "hooks.lua:sub_exit")
+            .ScriptHook("ROOT.BIN", "exit", "mod.a", "hooks.lua:root_exit"), trace: true);
+
+        VirtualMachine vm = Run(root, native, provider: new MapProvider(new() { [5] = sub }));
+
+        NoErrors(native);
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal((1, 2, 1212), (vm.Globals[0x300], vm.Globals[0x301], vm.Globals[0x302]));
+        Assert.Equal(1, vm.Globals[0x303]);   // op 0x2 returns ROOT's frame too, and then the run ends
+        Assert.Contains("\"kind\":\"script\",\"when\":\"enter\",\"cause\":\"call\",\"at\":\"SUB.BIN\"",
+                        native.RecentTrace[1]);
     }
 
     // ------------------------------------------------------------------------------------------- skip (§7.1)

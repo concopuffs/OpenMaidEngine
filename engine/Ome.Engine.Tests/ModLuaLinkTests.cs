@@ -195,7 +195,6 @@ public sealed class ModLuaLinkTests : IDisposable
     }
 
     [Theory]
-    [InlineData("[[hooks]]\nscript = \"ADDEXP.BIN\"\nwhen = \"enter\"\nhandler = \"hooks.lua:on_award\"", "script entry and exit hooks")]
     [InlineData("[[hooks]]\nwatch = \"current_unit_id\"\nhandler = \"hooks.lua:on_award\"", "watches come with the wider hooks")]
     [InlineData("[[hooks]]\nengine = \"ome.text.present\"\nhandler = \"hooks.lua:on_award\"", "is reserved for the localization filter")]
     [InlineData("[[hooks]]\nengine = \"ome.nothing.here\"\nhandler = \"hooks.lua:on_award\"", "is not an engine event")]
@@ -306,6 +305,47 @@ public sealed class ModLuaLinkTests : IDisposable
     public void ASiteHookOnAScriptTheCatalogLacksIsAnError()
         => Stop(ModLinker.Link(SiteBase(), [Mod("m", SiteHook(0x0, "before", script: "NONE.BIN"), Hooks(Doubles))], []),
                 "the base catalog has no NONE.BIN");
+
+    private static string ScriptHook(string when, string extra = "", string script = AddExp)
+        => $"[[hooks]]\nscript = \"{script}\"\nwhen = \"{when}\"\nhandler = \"hooks.lua:on_award\"\n{extra}";
+
+    [Fact]
+    public void AScriptHookBindsItsScriptWithEnterAndExitListsAndTheCacheKeepsThem()
+    {
+        ModPackage first = Mod("first", ScriptHook("enter") + "\n" + ScriptHook("exit"), Hooks(Doubles));
+        ModPackage second = Mod("second", ScriptHook("enter", "priority = -1"), Hooks(Doubles));
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), [first, second], []);
+
+        Assert.True(result.Succeeded, result.Report.Render());
+        PlannedScript planned = result.Lua.Plan.Scripts["ADDEXP"];
+        Assert.Equal([(1, -1), (0, 0)], planned.Enter.Select(h => (h.LoadOrder, h.Priority)));
+        Assert.Equal([0], planned.Exit.Select(h => h.LoadOrder));
+        Assert.Empty(result.Lua.Plan.Sites);
+        Assert.Contains(result.Report.Lines, line => line.Class == ModReportClass.OrderedInteraction
+            && line.Message == "enter: handlers run in this order: second hooks.lua:on_award (priority -1), first hooks.lua:on_award (priority 0)");
+        Assert.Contains("hook ADDEXP enter: second hooks.lua:on_award (priority -1), first hooks.lua:on_award (priority 0)",
+                        result.Report.Lua);
+        Assert.Contains("hook ADDEXP exit: first hooks.lua:on_award (priority 0)", result.Report.Lua);
+
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", SyntheticBase(), result);
+        PlannedScript cached = ModLinkCache.TryOpen(cache, "key")!.HookPlan.Scripts["ADDEXP"];
+        Assert.Equal(planned.Enter, cached.Enter);
+        Assert.Equal(planned.Exit, cached.Exit);
+    }
+
+    [Fact]
+    public void AScriptHookNeedsVmAScriptOfTheCatalogAndOneNoModReplaces()
+    {
+        Stop(ModLinker.Link(SyntheticBase(), [Mod("m", ScriptHook("enter"), Hooks(Doubles), lua: "api = 1")], []),
+             "a script hook hands its handler the frame, which needs the vm capability");
+        Stop(ModLinker.Link(SyntheticBase(), [Mod("m", ScriptHook("exit", script: "NONE.BIN"), Hooks(Doubles))], []),
+             "the base catalog has no NONE.BIN");
+        ModPackage replacer = Mod("replacer", files: new() { ["replace/ADDEXP.BIN"] = "replacement" }, lua: "api = 1");
+        ModReportLine line = Stop(ModLinker.Link(SyntheticBase(), [replacer, Mod("hooker", ScriptHook("enter"), Hooks(Doubles))], []),
+                                  "replacer replaces ADDEXP.BIN, and the hook names the original's entry and exit");
+        Assert.Equal(ModReportClass.HardConflict, line.Class);
+    }
 
     [Theory]
     [InlineData("site", 0x0, null)]

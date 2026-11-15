@@ -11,6 +11,7 @@ internal sealed class LuaStackBuilder
     private readonly Dictionary<string, List<PlannedHandler>> _engine = new(StringComparer.Ordinal);
     private readonly List<GameEvent> _events = new();
     private readonly Dictionary<string, List<PlannedHandler>> _luaEvents = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (List<PlannedHandler> Enter, List<PlannedHandler> Exit)> _scripts = new(StringComparer.Ordinal);
 
     public LuaStackBuilder Mod(string id, string files, bool vm = true, bool library = false, params string[] requires)
         => Mod(id, Files(files), vm, library, requires);
@@ -116,6 +117,17 @@ internal sealed class LuaStackBuilder
         return this;
     }
 
+    /// <summary>A script hook (spec §7.2): <paramref name="when"/> <c>enter</c> or <c>exit</c>, in the merged order.</summary>
+    public LuaStackBuilder ScriptHook(string script, string when, string mod, string handler, int priority = 0)
+    {
+        HandlerId id = Handler(mod, handler);
+        if (!_scripts.TryGetValue(script, out var lists)) _scripts[script] = lists = (new(), new());
+        List<PlannedHandler> list = when == "enter" ? lists.Enter : lists.Exit;
+        list.Add(new PlannedHandler(id, priority, LoadOrder(mod)));
+        list.Sort((a, b) => a.Priority != b.Priority ? a.Priority.CompareTo(b.Priority) : a.LoadOrder.CompareTo(b.LoadOrder));
+        return this;
+    }
+
     public LuaStackBuilder Engine(string name, string mod, string handler, int priority = 0)
     {
         HandlerId id = Handler(mod, handler);
@@ -145,5 +157,6 @@ internal sealed class LuaStackBuilder
         => (new ModRuntimeStack(_mods, _handlers, _events),
             new HookPlan(_sites.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedSite>)pair.Value),
                          _engine.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value),
-                         _luaEvents.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value)));
+                         _luaEvents.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value),
+                         _scripts.ToDictionary(pair => pair.Key, pair => new PlannedScript(pair.Value.Enter, pair.Value.Exit))));
 }
