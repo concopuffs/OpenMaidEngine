@@ -8,12 +8,13 @@ This version supports:
 - **point hooks:** a handler runs before a named instruction of an original script, with the frame's locals and
   the instruction's operands;
 - **the engine events** `ome.session.start`, `ome.session.resumed` and `ome.save.writing`;
+- **game names:** the game's base mod names its cells, and a mod reads any of them and writes the ones it lists,
+  without a capability;
 - **`maid.vm`:** raw access to the game's cells, the frame's locals and the call stack;
 - **`maid.state`:** a table that is saved beside each numbered save and comes back when that save is loaded;
 - **`maid.log`,** and **the console:** the driver's `lua` step runs a chunk in a running game.
 
-Not yet: game events and base mods, writing globals by name, hooks on raw sites, on
-script entry and exit or on cell writes, `skip`, calling a script from Lua, and reloading Lua without a restart. A
+Not yet: game events, hooks on raw sites, on script entry and exit or on cell writes, `skip`, calling a script from Lua, and reloading Lua without a restart. A
 mod that uses one of them fails to link, and the report says that this engine does not build it yet. The design
 behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
@@ -67,7 +68,8 @@ version 3 loader still reads versions 1 and 2. All other keys are as in [package
 - **`[lua] api`** is the `maid` API version the mod was written for. This engine provides `1`.
 - **`[lua] capabilities`** lists what the mod may reach. Version 1 has `"vm"`, the raw access of `maid.vm`. A mod
   without it has no `maid.vm`, and its point hooks are link errors.
-- **`[lua] writes`** and **`calls`** are read but not built yet: the link refuses a mod that lists any.
+- **`[lua] writes`** lists the global names the mod writes through a base mod ("Game names").
+- **`[lua] calls`** is read but not built yet: the link refuses a mod that lists any.
 
 Each `[[hooks]]` table has one form and a `handler`:
 
@@ -135,6 +137,51 @@ A point names an instruction of the original script, and the link finds it in th
 - when a patch replaces the instruction, or a mod replaces the whole script, the link stops and names both mods;
 - when the installed script is not the revision the point was written for, the link stops: the game's catalog
   differs (an update or a translation that replaces the script).
+
+## Game names
+
+The engine ships one base mod per game, `<profile>-base`. It exports every global the project has named, with its
+shape. A mod that requires it reads any of those names, and writes the ones its manifest lists, with no capability:
+
+```toml
+[lua]
+api = 1
+writes = ["<a scalar global>", "<a table global>"]
+
+[[requires]]
+id = "<profile>-base"
+version = ">=1, <2"
+```
+
+```lua
+local game = require("<profile>-base")
+
+local unit = game.g.<scalar global>             -- read a named global
+game.g.<scalar global> = 30                     -- write one the list names
+local levels = game.table("<table global>")
+levels[unit] = levels[unit] + 1                 -- an element of a table
+local row = game.table("<table of rows>")[unit] -- a row of a 2-D table
+row.<column>, row[0]                            -- its cells, by column name or number
+```
+
+- **Names.** The names, their shapes and their columns are in your game's global reference
+  ([games/README.md](games/README.md)). A name that a later version renames stays exported until the base mod's
+  major version changes, so `version = ">=1, <2"` keeps a mod working.
+- **Indices are the game's,** from 0, as its scripts index: `levels[0]` is the first element. An index outside the
+  table is an error. A table whose row count the registry does not know ends where the next named global starts.
+  `#t` is a table's rows and `#t[row]` a row's columns.
+- **Columns.** A named column is a field: `t[row].charm` is `t[row][6]` when the registry names column 6 `charm`. A
+  1-D table's column names name its elements.
+- **Values** keep their cell's rules, as `maid.vm` does: integers whole and in 32 bits, floats rounded to single
+  precision, strings in CP932. `g` takes a scalar's name and `table` a table's.
+- **Writes.** `[lua] writes` lists the names the mod writes; a table's name covers all its elements.
+  - A write to a name the list lacks is an error that names the list (`pcall` catches it).
+  - A listed name the base mod does not export is a link error, and so is a list in a mod that requires no base mod.
+  - A mod with `vm` lists what it writes by name too. It can still write any cell by address.
+- **What `require` gives** is read-only: `g` and `table`, and beside them what the base mod's own `lua/init.lua`
+  returns. The base mods have no helpers yet.
+- **Mounting.** The engine mounts a base mod only when an enabled mod requires it, and uses an installed package of
+  the same id instead when there is one ([packages.md](packages.md), "Base mods").
 
 ## State
 
@@ -244,6 +291,8 @@ have it.
 - `maid.session.reason` is why the session was built: `"boot"`, `"title"` or `"load"`.
   `maid.session.restoring` is true while a load restores the saved game ("Loads").
 - `maid.state` is the mod's saved table ("State").
+- `maid.names` exists only in a base mod and in the console: `g` and `table` over that base mod's names, with no
+  write list ("Game names").
 
 ## The sandbox
 
@@ -301,7 +350,8 @@ lua mod=my.double-exp return some_global
 ```
 
 It runs at the next instruction boundary, or inside the wait the game sits in, so it also runs at a text wait.
-Without `mod=` it runs in the console's own environment, which has `maid.vm` and lasts for the session, so a later
-chunk sees what an earlier one defined. With `mod=ID` it runs in that mod's environment, with its globals: that is
+Without `mod=` it runs in the console's own environment, which has `maid.vm`, and `maid.names` over the game's base
+mod with no write list (`require("<profile>-base")` gives the same, and works even when no mod mounts the base mod).
+The environment lasts for the session, so a later chunk sees what an earlier one defined. With `mod=ID` it runs in that mod's environment, with its globals: that is
 how to inspect a mod. A chunk cannot call a script. The console works with no Lua mod enabled too: its first use
 starts the Lua runtime.

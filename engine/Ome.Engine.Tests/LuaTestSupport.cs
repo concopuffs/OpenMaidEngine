@@ -40,6 +40,22 @@ internal sealed class LuaStackBuilder
         return this;
     }
 
+    /// <summary>A base mod: its layout, and Lua files if it has any.</summary>
+    public LuaStackBuilder Base(string id, GameLayout layout, string files = "")
+    {
+        _mods.Add(new ModRuntimeMod(id, "1.0.0", false, true, [],
+            Files(files).Select(file => new ModSource(id, file.Item1, file.Item2)).ToList(), layout));
+        return this;
+    }
+
+    /// <summary>A mod's <c>[lua] writes</c>, as the link leaves it: global names.</summary>
+    public LuaStackBuilder Writes(string id, params string[] names)
+    {
+        int index = _mods.FindIndex(mod => mod.Id == id);
+        _mods[index] = _mods[index] with { Writes = names };
+        return this;
+    }
+
     private HandlerId Handler(string mod, string handler)
     {
         // One id per (mod, file, function), as the link gives it.

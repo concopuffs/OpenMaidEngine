@@ -77,8 +77,6 @@ public static class ModLuaLinker
             void Error(string? script, string message) => report.Add(ModReportClass.Error, mod.Id, script, message);
 
             if (settings == null) Error(null, "lua/ needs a [lua] table in the manifest");
-            if (settings is { Writes.Count: > 0 })
-                Error(null, "lua.writes: declared writes come with base mods (Lua scripting milestone 3)");
             if (settings is { Calls.Count: > 0 })
                 Error(null, "lua.calls: script calls come with Lua scripting milestone 5");
             if (mod.Layout.Events.Count > 0)
@@ -86,6 +84,7 @@ public static class ModLuaLinker
 
             // The sources, each checked without running it.
             var requires = mod.Manifest.Requires.Select(requirement => requirement.Id).Where(loadOrders.ContainsKey).ToList();
+            IReadOnlyList<string> writes = Writes(mod, order, requires, report);
             var sources = new List<ModSource>();
             var checks = new Dictionary<string, ModSourceCheck>(StringComparer.Ordinal);
             foreach (ModLuaFile file in mod.Layout.Lua)
@@ -161,9 +160,11 @@ public static class ModLuaLinker
                 if (hook.Form == ModHookForm.Engine) engineHooks.Add((pending, hook.Target));
                 else pointHooks.Add((pending, bound!.Value.Script, bound.Value.Offset, bound.Value.Site));
             }
-            if (report.Lines.Count(line => line.Stops) == problemsBefore && sources.Count > 0)
+            // A base mod is in the session with no Lua of its own: the accessors of the mods that require it read its
+            // layout (spec §9.1, §9.3).
+            if (report.Lines.Count(line => line.Stops) == problemsBefore && (sources.Count > 0 || mod.BaseLayout != null))
                 mods.Add(new ModRuntimeMod(mod.Id, mod.Manifest.Version.ToString(), mod.Manifest.TargetsAnyProfile, vm,
-                                           requires, sources));
+                                           requires, sources, mod.BaseLayout, writes));
             // Spec §15: the report shows what each mod may change, so a player can see it.
             if (vm)
                 report.Add(ModReportClass.Note, mod.Id, null,
@@ -204,6 +205,42 @@ public static class ModLuaLinker
                     $"{byEvent.Key}: handlers run in this order: " + string.Join(", ", due.Select(Describe)));
         }
         return new LinkedLua(new ModRuntimeStack(mods, handlers), new HookPlan(sites, engine));
+    }
+
+    /// <summary>
+    /// A mod's <c>[lua] writes</c> (spec §9.3), each entry as the global it names: an exported name or alias of a base mod
+    /// the mod requires. A name no such base mod exports is a link error, and so is a list in a mod that requires no base
+    /// mod.
+    /// </summary>
+    private static IReadOnlyList<string> Writes(ModPackage mod, IReadOnlyList<ModPackage> order, IReadOnlyList<string> requires,
+                                                ModLinkReport report)
+    {
+        IReadOnlyList<string> listed = mod.Manifest.Lua?.Writes ?? [];
+        if (listed.Count == 0) return [];
+        var bases = order.Where(package => package.BaseLayout != null && requires.Contains(package.Id, StringComparer.Ordinal))
+            .ToList();
+        if (bases.Count == 0)
+        {
+            report.Add(ModReportClass.Error, mod.Id, null,
+                "lua.writes names cells of a base mod, and the mod requires none ([[requires]] id = \"<profile>-base\")");
+            return [];
+        }
+        var writes = new List<string>();
+        foreach (string name in listed)
+        {
+            LayoutGlobal? global = null;
+            foreach (ModPackage package in bases)
+                if (package.BaseLayout!.TryGet(name, out LayoutGlobal found))
+                {
+                    global = found;
+                    break;
+                }
+            if (global == null)
+                report.Add(ModReportClass.Error, mod.Id, null,
+                    $"lua.writes: '{name}' is not a name {string.Join(" or ", bases.Select(package => package.Id))} exports");
+            else if (!writes.Contains(global.Name, StringComparer.Ordinal)) writes.Add(global.Name);
+        }
+        return writes;
     }
 
     /// <summary>Whether a package takes part in the Lua link: it has Lua files, a <c>[lua]</c> table or hooks.</summary>

@@ -13,7 +13,21 @@ public sealed record LayoutGlobal(string Name, CellKind Kind, int Address, IRead
                                   IReadOnlyDictionary<string, int> Columns, IReadOnlyList<string> Aliases)
 {
     public bool IsScalar => Dimensions.Count == 0;
+
+    /// <summary>
+    /// How many rows an index may reach (the elements of a 1-D array): the first dimension, or for an open one the rows
+    /// that fit before the next named global of the same bank, so an accessor never reaches past its table into
+    /// another global's cells. Null for a scalar, and for an open array that no named global follows.
+    /// </summary>
+    public int? Rows { get; init; }
+
+    /// <summary>The cells of one row: the last dimension of a 2-D array, 1 otherwise.</summary>
+    public int RowWidth => Dimensions.Count == 2 ? Dimensions[1]!.Value : 1;
 }
+
+/// <summary>A base mod's layout and the id of the base mod it belongs to: what a mod's accessors and the console's read
+/// (spec §9.3, §13).</summary>
+public sealed record BaseModLayout(string ModId, GameLayout Layout);
 
 /// <summary>
 /// A base mod's layout (Lua scripting spec §9.1): every registry global's name, bank, address and shape, as
@@ -29,12 +43,16 @@ public sealed partial class GameLayout
     public string Profile { get; }
     /// <summary>The globals, by name in ordinal order.</summary>
     public IReadOnlyList<LayoutGlobal> Globals { get; }
+    /// <summary>The document it was read from, which the link cache keeps.</summary>
+    public string Json { get; }
 
-    private GameLayout(string profile, IReadOnlyList<LayoutGlobal> globals, Dictionary<string, LayoutGlobal> byName)
+    private GameLayout(string profile, IReadOnlyList<LayoutGlobal> globals, Dictionary<string, LayoutGlobal> byName,
+                       string json)
     {
         Profile = profile;
         Globals = globals;
         _byName = byName;
+        Json = json;
     }
 
     /// <summary>The global a name or an alias names.</summary>
@@ -75,19 +93,43 @@ public sealed partial class GameLayout
                 throw new FormatException("it has no \"profile\"");
             if (!root.TryGetProperty("globals", out JsonElement list) || list.ValueKind != JsonValueKind.Array)
                 throw new FormatException("it has no \"globals\" list");
-            var globals = new List<LayoutGlobal>();
+            var parsed = new List<LayoutGlobal>();
+            foreach (JsonElement entry in list.EnumerateArray()) parsed.Add(Global(entry));
+            var globals = WithRows(parsed);
+            globals.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
             var byName = new Dictionary<string, LayoutGlobal>(StringComparer.Ordinal);
-            foreach (JsonElement entry in list.EnumerateArray())
-            {
-                LayoutGlobal global = Global(entry);
+            foreach (LayoutGlobal global in globals)
                 foreach (string name in global.Aliases.Prepend(global.Name))
                     if (!byName.TryAdd(name, global))
                         throw new FormatException($"'{name}' names both {byName[name].Name} and {global.Name}");
-                globals.Add(global);
-            }
-            globals.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
-            return new GameLayout(profileId, globals, byName);
+            return new GameLayout(profileId, globals, byName, json);
         }
+    }
+
+    /// <summary>Each array's <see cref="LayoutGlobal.Rows"/>: its first dimension, or for an open one the rows before the
+    /// next global of its bank by address.</summary>
+    private static List<LayoutGlobal> WithRows(List<LayoutGlobal> globals)
+    {
+        var result = new List<LayoutGlobal>(globals.Count);
+        foreach (LayoutGlobal global in globals)
+        {
+            if (global.IsScalar)
+            {
+                result.Add(global);
+                continue;
+            }
+            int? rows = global.Dimensions[0];
+            if (rows == null)
+            {
+                int? next = null;
+                foreach (LayoutGlobal other in globals)
+                    if (other.Kind == global.Kind && other.Address > global.Address && (next == null || other.Address < next))
+                        next = other.Address;
+                if (next is int end) rows = (end - global.Address) / global.RowWidth;
+            }
+            result.Add(global with { Rows = rows });
+        }
+        return result;
     }
 
     private static LayoutGlobal Global(JsonElement entry)

@@ -561,6 +561,8 @@ public sealed class LuaScriptingTests : IDisposable
         public IVmAccess? Vm => this;
         public int DrawRandom() => 0;
         public void Log(ModLogLevel level, string message) { }
+        public INamedAccess? Names(string baseModId) => null;
+        public string? OwnLayout => null;
         public double ReadInteger(double address) => throw new UnwindException();
         public void WriteInteger(double address, double value) { }
         public double ReadFloat(double address) => 0;

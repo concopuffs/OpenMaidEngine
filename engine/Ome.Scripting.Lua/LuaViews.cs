@@ -18,6 +18,10 @@ internal sealed class Metatables
         Args = ArgsView.BuildMetatable(session);
         Arg = ArgView.BuildMetatable(session);
         Session = SessionView.BuildMetatable(session);
+        Names = NamesView.BuildMetatable(session);
+        Globals = GlobalsView.BuildMetatable(session);
+        Table = TableView.BuildMetatable(session);
+        Row = RowView.BuildMetatable(session);
     }
 
     public LuaTable View { get; }
@@ -27,6 +31,10 @@ internal sealed class Metatables
     public LuaTable Args { get; }
     public LuaTable Arg { get; }
     public LuaTable Session { get; }
+    public LuaTable Names { get; }
+    public LuaTable Globals { get; }
+    public LuaTable Table { get; }
+    public LuaTable Row { get; }
 
     public const string Locked = "locked";
 

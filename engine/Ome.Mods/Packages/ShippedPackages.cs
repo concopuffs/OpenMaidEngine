@@ -1,4 +1,5 @@
 using System.Reflection;
+using Ome.Engine.Modding;
 using Ome.Mods.Linking;
 
 namespace Ome.Mods.Packages;
@@ -57,6 +58,14 @@ public static class ShippedPackages
     public static ModPackage? Open(string id)
         => Contents.Value.TryGetValue(id, out var files)
             ? ModPackage.Load(new MemoryPackageContainer(LocationOf(id), files)) : null;
+
+    /// <summary>The layout of a profile's shipped base mod, <c>&lt;profile&gt;-base</c>, which the console's accessors read
+    /// when no mod mounts it (Lua scripting spec §13); null when the engine ships none.</summary>
+    public static BaseModLayout? BaseLayoutOf(string profile)
+    {
+        string id = $"{profile}-base";
+        return Open(id)?.BaseLayout is { } layout ? new BaseModLayout(id, layout) : null;
+    }
 
     /// <summary>
     /// The shipped packages that <paramref name="packages"/> require and do not hold, and those they in turn require,

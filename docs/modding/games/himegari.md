@@ -83,6 +83,10 @@ function on_award(ctx)
 end
 ```
 
+Game names ([../lua.md](../lua.md), "Game names") come from `himegari-base`. A mod that requires it reads
+`require("himegari-base").g.stage_turn_limit` or `.table("unit_current_levels")[unit]` without `vm`, and writes
+them once its `[lua] writes` lists them. The names are those of `../../global-reference.md`.
+
 ## Catalogs, scenes and saves
 
 - **Selectors.** The install ships one append catalog (`APPEND01`), so a first mod's catalog normally gets selector

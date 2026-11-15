@@ -206,9 +206,9 @@ public sealed class ModLuaLinkTests : IDisposable
         => Assert.Equal(["m"], Stop(ModLinker.Link(SyntheticBase(), [Mod("m", hook, Hooks(Doubles))], []), message).Mods);
 
     [Theory]
-    [InlineData("api = 1\nwrites = [\"stage_turn_limit\"]", "declared writes come with base mods")]
+    [InlineData("api = 1\nwrites = [\"stage_turn_limit\"]", "names cells of a base mod, and the mod requires none")]
     [InlineData("api = 1\ncalls = [\"ADDEXP.BIN\"]", "script calls come with")]
-    public void WritesAndCallsWaitForTheirMilestones(string lua, string message)
+    public void AWriteListWithoutABaseModAndScriptCallsAreRefused(string lua, string message)
         => Stop(ModLinker.Link(SyntheticBase(), [Mod("m", files: Hooks(Doubles), lua: lua)], []), message);
 
     [Fact]
@@ -300,6 +300,66 @@ public sealed class ModLuaLinkTests : IDisposable
         // A missing source makes the entry incomplete.
         File.Delete(Path.Combine(reopened.Directory, LinkedLuaEntry.PathOf("hooker", "hooks.lua")));
         Assert.Null(ModLinkCache.TryOpen(cache, "key"));
+    }
+
+    // ------------------------------------------------------------------------------- base mods and write lists (§9.3)
+
+    private const string BaseLayout = """
+        {"layout": 1, "profile": "himegari", "globals": [
+        {"name": "stage_turn_limit", "bank": "G", "address": "0x11", "dims": [], "aliases": ["turn_limit"]},
+        {"name": "unit_current_levels", "bank": "G", "address": "0x100", "dims": [4]}
+        ]}
+        """;
+
+    private ModPackage BaseMod() => Mod("test-base", files: new() { ["layout/globals.json"] = BaseLayout });
+
+    private ModPackage Writer(string writes)
+        => Mod("writer", "[[requires]]\nid = \"test-base\"\nversion = \">=1, <2\"",
+               new() { ["lua/init.lua"] = "return {}" }, lua: $"api = 1\nwrites = [{writes}]");
+
+    [Fact]
+    public void ABaseModJoinsTheStackWithItsLayoutAndAWriteListBecomesGlobalNames()
+    {
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), [Writer("\"turn_limit\", \"unit_current_levels\", \"stage_turn_limit\""),
+                                                                BaseMod()], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.Equal(["test-base", "writer"], result.Lua.Stack.Mods.Select(mod => mod.Id));
+        ModRuntimeMod baseMod = result.Lua.Stack.Mods[0], writer = result.Lua.Stack.Mods[1];
+        Assert.Empty(baseMod.Files);
+        Assert.Equal(["stage_turn_limit", "unit_current_levels"], baseMod.Layout!.Globals.Select(global => global.Name));
+        Assert.Null(writer.Layout);
+        Assert.Equal(["stage_turn_limit", "unit_current_levels"], writer.WriteList);
+
+        // The cache keeps the layout and the list.
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", SyntheticBase(), result);
+        MountedModLayer reopened = ModLinkCache.TryOpen(cache, "key")!;
+        Assert.Equal(BaseLayout, reopened.LuaStack.Mods[0].Layout!.Json);
+        Assert.Equal(writer.WriteList, reopened.LuaStack.Mods[1].WriteList);
+        File.Delete(Path.Combine(reopened.Directory, LinkedLuaEntry.LayoutPathOf("test-base")));
+        Assert.Null(ModLinkCache.TryOpen(cache, "key"));
+    }
+
+    [Fact]
+    public void AListedNameTheBaseModDoesNotExportIsALinkError()
+    {
+        ModReportLine line = Stop(ModLinker.Link(SyntheticBase(), [BaseMod(), Writer("\"stage_turn_limit\", \"no_such_name\"")], []),
+                                  "lua.writes: 'no_such_name' is not a name test-base exports");
+        Assert.Equal(["writer"], line.Mods);
+    }
+
+    [Fact]
+    public void TheShippedBaseModIsMountedForAModThatRequiresItAndItsListIsCheckedAgainstIt()
+    {
+        ModPackage user = Mod("user", "[[requires]]\nid = \"himegari-base\"\nversion = \">=1, <2\"",
+                              new() { ["lua/init.lua"] = "return {}" }, lua: "api = 1\nwrites = [\"stage_turn_limit\"]");
+        var report = new ModLinkReport();
+        IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([user], report);
+        _opened.AddRange(shipped);
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), [user, .. shipped], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.Equal(["himegari-base", "user"], result.Lua.Stack.Mods.Select(mod => mod.Id));
+        Assert.True(result.Lua.Stack.Mods[0].Layout!.TryGet("unit_current_levels", out _));
     }
 
     [Fact]

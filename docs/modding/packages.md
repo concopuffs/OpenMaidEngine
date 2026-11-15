@@ -204,8 +204,8 @@ patch points; `layout/exports.txt` lists the names it exports, which stay export
 raised. A mod that names cells requires the base mod (`[[requires]] id = "<profile>-base"`). The engine mounts it
 only then, and uses an installed package of the same id instead when there is one. The files are written by the
 project's `tools/base_mod_build.py`; a mod has no reason to carry `layout/`, and a package that does needs omp 3,
-its own game's `[game]` and `[lua] capabilities = ["vm"]`. This engine ships the base mods and mounts one a mod
-requires, but Lua cannot name cells through them yet ([lua.md](lua.md)).
+its own game's `[game]` and `[lua] capabilities = ["vm"]`. How a Lua mod reads and writes names through a base mod
+is in [lua.md](lua.md), "Game names".
 
 ## Limits
 

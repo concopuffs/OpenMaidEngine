@@ -597,3 +597,45 @@ Built 2026-11-14 (spec §9.1):
 
 Tests: `BaseModTests` (17; the shipped bytes must equal the repository's folders, so a stale build fails) and the core
 `tools/test_base_mod_build.py`. A base mod has no `lua/` yet, so it does not join the runtime's stack; piece 2 adds it.
+
+### 7.2 The accessors and the write lists
+
+Built 2026-11-15 (spec §5.4, §8.4, §9.3, §13):
+
+- **The face** (`engine/Ome.Engine/Modding/ScriptAccess.cs`). `IModAccess.Names(baseModId)` gives an
+  `INamedAccess`, the base mod's accessors for that mod, and every rule is the engine's:
+  - names and aliases resolve through the layout; a name the base mod does not export is refused;
+  - indices pass `LayoutCells`: whole numbers from 0, within the rows, and within the columns of a 2-D array; the
+    face checks them again when it reads or writes;
+  - values pass `CellRules`, as `maid.vm`'s do, and a string goes only to a string global;
+  - a write to a global the mod's list lacks is refused, with the mod, the name and the list.
+
+  A mod that requires the base mod gets its own list. The base mod's own face and the console's have none, and any
+  other mod gets null.
+- **An open first dimension ends at the next global.** `int[][C]` and `int[unit][C]` have no row count in the
+  registry. `GameLayout` bounds each one by the next named global of the same bank, so a mod without `vm` reaches only
+  the table's cells. In both games every open table ends exactly at such a global (Himegari's nine at 900 to 52,000
+  rows, Kamidori's four at 50 to 226). An open table that nothing follows would be bounded by the last address alone;
+  none does.
+- **The Lua side** (`engine/Ome.Scripting.Lua/NameViews.cs`) has userdata views only:
+  - `require("<profile>-base")` gives `g` and `table(name)` beside a read-only view of what the base mod's
+    `init.lua` returned. A base mod whose export uses either name is off for the session, and so are the mods that
+    require it.
+  - `table(name)` gives elements of a 1-D array, or rows of a 2-D array, by index or column name; `#` gives rows or
+    columns.
+  - `maid.names` exists in a base mod and in the console.
+- **The console** reads the base mod the stack mounts, else the profile's shipped one
+  (`ScriptingSetup.ConsoleLayout`, `ShippedPackages.BaseLayoutOf`). It reads it at the console's first use, so a run
+  that never uses the console reads no layout. `require("<profile>-base")` works there too.
+- **The link** (`ModLuaLinker`) puts a base mod in the stack with its layout and no sources. `[lua] writes` becomes
+  the globals its entries name, an alias as its global. A name no required base mod exports is a link error, and so
+  is a list in a mod that requires none. The link cache keeps each layout (`layout/<mod>/globals.json`) and each list;
+  a missing layout file makes the entry incomplete.
+
+Tests: `LuaNamesTests` (25) over a synthetic layout, and three link tests in `ModLuaLinkTests` (the shipped
+`himegari-base` among them). Driven in the port on 2026-11-15 (sandbox `luanames`):
+- without mods, the console read `maid.names.g.current_stage_turn` and `#maid.names.table("unit_current_levels")`
+  (100), wrote `stage_turn_limit` through `require("himegari-base")`, and refused index 100;
+- with a scratch mod that requires `himegari-base` and lists `stage_turn_limit`, the engine mounted the shipped base
+  mod with its note. The mod's `ome.session.start` handler wrote the limit, and its write to `current_stage_turn` was
+  refused with the list. Until the write scan (piece 4), the link still prints its old note for a written-out name.

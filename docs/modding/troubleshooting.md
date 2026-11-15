@@ -193,8 +193,19 @@ reference ([games/README.md](games/README.md)).
 Another mod replaced the script, or patched away the instruction your point names. Your hook cannot bind there;
 the two mods conflict as written.
 
-**"… this engine does not build it yet".** The hook form, `writes`, `calls` or `events/` is part of a later version
-of Lua scripting ([lua.md](lua.md), the list at the top).
+**"… this engine does not build it yet".** The hook form, `calls` or `events/` is part of a later version of Lua
+scripting ([lua.md](lua.md), the list at the top).
+
+**"M writes NAME, which its [lua] writes list does not name (…)".** Add `NAME` to `[lua] writes` ([lua.md](lua.md),
+"Game names"). The message shows the list as the engine read it.
+
+**"lua.writes: 'NAME' is not a name <profile>-base exports".** Check the name against your game's global reference
+([games/README.md](games/README.md)). **"lua.writes names cells of a base mod, and the mod requires none"**: add
+`[[requires]] id = "<profile>-base"`.
+
+**"<profile>-base exports no global named 'NAME'", "NAME is a table: use .table(…)", "NAME[i]: an index is a whole
+number from 0 to N".** The name is not exported, or it was used with the wrong accessor or index. Indices start at 0,
+and a table ends at its last row ([lua.md](lua.md), "Game names").
 
 **A handler's error in `diagnostics/lua.log`.** The line names the mod, the handler, the script and offset it ran
 at, and the traceback. After three failures in a row the handler is off for the session; `--lua-errors halt` stops

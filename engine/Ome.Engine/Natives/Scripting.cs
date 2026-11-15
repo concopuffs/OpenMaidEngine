@@ -25,6 +25,10 @@ public sealed record ScriptingSetup
     /// while the stamp names a mod that ships Lua is reported (spec §11). The composition reads the stamp; without it
     /// that report is not made.</summary>
     public Func<IReadOnlyDictionary<string, string>, IReadOnlyCollection<string>?>? StampedMods { get; init; }
+
+    /// <summary>The layout of the profile's base mod, which the console's accessors read when the stack does not
+    /// mount that base mod (spec §13). Asked at the console's first use; null gives the console no accessors.</summary>
+    public Func<BaseModLayout?>? ConsoleLayout { get; init; }
 }
 
 /// <summary>
@@ -45,6 +49,7 @@ public sealed partial class Scripting : IDisposable
     private readonly ScriptMemory _memory;
     private readonly ScriptingSetup _setup;
     private readonly ScriptAccess _access;
+    private readonly Lazy<BaseModLayout?> _consoleLayout;
     private IInterpreterAccess? _interpreter;
     private readonly ConditionalWeakTable<Script, TableEntry> _tables = new();
 
@@ -87,6 +92,7 @@ public sealed partial class Scripting : IDisposable
         _memory = memory ?? throw new ArgumentNullException(nameof(memory));
         _setup = setup ?? new ScriptingSetup();
         _access = new ScriptAccess(this);
+        _consoleLayout = new Lazy<BaseModLayout?>(() => _setup.ConsoleLayout?.Invoke());
     }
 
     /// <summary>A scripting native with no mods and no runtime: a VM given it has no hooks.</summary>

@@ -17,6 +17,8 @@ internal sealed class ModEnvironment
     private readonly Dictionary<string, LuaValue> _modules = new(StringComparer.Ordinal);
     private readonly HashSet<string> _loading = new(StringComparer.Ordinal);
     private readonly ReadOnlyViews _views;
+    // What require gives for a base mod: its accessors for this mod beside its exports, one view per session.
+    private readonly Dictionary<string, LuaValue> _baseViews = new(StringComparer.Ordinal);
 
     public ModEnvironment(string id, ModRuntimeMod? mod, IModAccess access, LuaModSession session)
     {
@@ -85,11 +87,13 @@ internal sealed class ModEnvironment
     }
 
     /// <summary>The mod's <c>maid</c> (spec §8.1, §8.4): <c>vm</c> only with the capability, <c>log</c>, <c>mod</c> and
-    /// <c>session</c>.</summary>
+    /// <c>session</c>; <c>names</c> only in a base mod and the console.</summary>
     private LuaTable Maid()
     {
         var maid = new LuaTable();
         if (Access.Vm is { } vm) maid["vm"] = LuaValue.FromUserData(new VmView(vm, _session));
+        if (Access.OwnLayout is { } own && Access.Names(own) is { } names)
+            maid["names"] = LuaValue.FromUserData(new NamesView(names, LuaValue.Nil, _views, _session));
         var log = new LuaTable();
         foreach (var (name, level) in new[] { ("info", ModLogLevel.Info), ("warn", ModLogLevel.Warn), ("error", ModLogLevel.Error) })
             log[name] = _session.Fn(name, context =>
@@ -152,7 +156,8 @@ internal sealed class ModEnvironment
 
     /// <summary>
     /// <c>require</c> (spec §5.4): an id under the mod's <c>[[requires]]</c> gives a read-only view of what that mod's
-    /// <c>init.lua</c> returned; a module name gives the mod's own file, run once. Nothing else resolves.
+    /// <c>init.lua</c> returned, and for a base mod its accessors beside it; a module name gives the mod's own file, run
+    /// once. The console's environment resolves the base mod its accessors read. Nothing else resolves.
     /// </summary>
     private LuaValue Require(string name, CancellationToken token)
     {
@@ -163,8 +168,12 @@ internal sealed class ModEnvironment
                                           $"{name} ships no Lua, so require(\"{name}\") has nothing to give", 1);
             if (required.Off)
                 throw new LuaRuntimeException(_session.State, $"{name} is off for this session", 1);
-            return _views.Wrap(required.Exports);
+            return required.Mod?.Layout != null && Access.Names(name) is { } names
+                ? BaseView(name, names, required.Exports)
+                : _views.Wrap(required.Exports);
         }
+        if (Mod == null && Access.Names(name) is { } console)
+            return BaseView(name, console, _session.ModById(name) is { Off: false } mounted ? mounted.Exports : LuaValue.Nil);
         if (Mod != null && Mod.Files.Any(file => file.Path == FileOf(name)))
         {
             LuaValue result = LoadModule(name, token);
@@ -172,6 +181,13 @@ internal sealed class ModEnvironment
         }
         throw new LuaRuntimeException(_session.State,
             $"module '{name}' not found: require gives the mod's own lua/ files and the ids it lists under [[requires]]", 1);
+    }
+
+    private LuaValue BaseView(string id, INamedAccess names, LuaValue exports)
+    {
+        if (!_baseViews.TryGetValue(id, out LuaValue view))
+            _baseViews[id] = view = LuaValue.FromUserData(new NamesView(names, exports, _views, _session));
+        return view;
     }
 
     /// <summary>Run a file of the mod once per session and keep its first result.</summary>

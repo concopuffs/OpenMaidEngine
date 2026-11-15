@@ -324,7 +324,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── Ome.Scripting.Lua/               the Lua runtime (Lua scripting spec §14.1) over Lua-CSharp, the only
     │                                       project that names the library: the check (parse only), the session
     │                                       with one environment per mod, the sandbox, the module loader, the maid
-    │                                       bindings and read-only views, the calling rules and budgets
+    │                                       bindings and read-only views, the accessors over a base mod's
+    │                                       layout (NameViews: g, table, rows), the calling rules and budgets
     │                                       (superpowers/plans/2026-11-14-lua-scripting.md §3.1), LuaStateCodec
     │                                       (maid.state to the state file's JSON and back), and LuaSource, the
     │                                       library's hexadecimal-numeral workaround; references Ome.Engine only

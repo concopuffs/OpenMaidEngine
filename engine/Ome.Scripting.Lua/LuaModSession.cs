@@ -125,6 +125,14 @@ internal sealed partial class LuaModSession : IModSession
             SwitchOff(environment, error.Message, error.LuaTraceback);
             return;
         }
+        // Spec §5.4: what require gives for a base mod holds the accessors g and table beside its exports.
+        if (mod.Layout != null && environment.Exports.TryRead(out LuaTable exports)
+            && NamesView.AccessorNames.FirstOrDefault(name => exports[name].Type != LuaValueType.Nil) is { } taken)
+        {
+            SwitchOff(environment, $"its init.lua returns a table with '{taken}', a name the engine's accessors take "
+                                   + "(require gives g and table beside what init.lua returns)", null);
+            return;
+        }
         var found = new List<(int Index, LuaValue Function)>();
         for (int i = 0; i < _stack.Handlers.Count; i++)
         {

@@ -19,17 +19,37 @@ public sealed partial class Scripting
             if (_faces.TryGetValue(modId, out ModFace? face)) return face;
             ModRuntimeMod mod = owner._setup.Stack.Mods.FirstOrDefault(entry => entry.Id == modId)
                                 ?? throw new ArgumentException($"{modId} is not a mod of the stack", nameof(modId));
-            _faces[modId] = face = new ModFace(owner, modId, mod.Vm);
+            _faces[modId] = face = new ModFace(owner, modId, mod, mod.Vm);
             return face;
         }
 
-        public IModAccess Console => _console ??= new ModFace(owner, ConsoleId, vm: true);
+        public IModAccess Console => _console ??= new ModFace(owner, ConsoleId, null, vm: true);
 
         public bool Restoring => owner._scene.Restoring;
     }
 
-    private sealed class ModFace(Scripting owner, string modId, bool vm) : IModAccess
+    /// <summary>A base mod's layout as a face reads it: one the stack mounts, else for the console the profile's.</summary>
+    private BaseModLayout? LayoutOf(string baseModId, bool console)
     {
+        foreach (ModRuntimeMod mod in _setup.Stack.Mods)
+            if (mod.Id == baseModId && mod.Layout != null) return new BaseModLayout(mod.Id, mod.Layout);
+        return console && _consoleLayout.Value is { } layout && layout.ModId == baseModId ? layout : null;
+    }
+
+    /// <summary>The console's layout (spec §13): the base mod the stack mounts, else the profile's, read at first use.</summary>
+    private BaseModLayout? ConsoleLayout()
+    {
+        foreach (ModRuntimeMod mod in _setup.Stack.Mods)
+            if (mod.Layout != null) return new BaseModLayout(mod.Id, mod.Layout);
+        return _consoleLayout.Value;
+    }
+
+    /// <summary>A mod's face, or the console's (no mod): its capability, its write list and the base mods it may
+    /// name.</summary>
+    private sealed class ModFace(Scripting owner, string modId, ModRuntimeMod? mod, bool vm) : IModAccess
+    {
+        private readonly Dictionary<string, INamedAccess?> _names = new(StringComparer.Ordinal);
+
         public string ModId { get; } = modId;
         public IVmAccess? Vm { get; } = vm ? new VmFace(owner) : null;
 
@@ -37,6 +57,76 @@ public sealed partial class Scripting
         public int DrawRandom() => owner._memory.DrawForMod();
 
         public void Log(ModLogLevel level, string message) => owner.WriteLog(level, ModId, message);
+
+        public string? OwnLayout => mod == null ? owner.ConsoleLayout()?.ModId : mod.Layout != null ? mod.Id : null;
+
+        public INamedAccess? Names(string baseModId)
+        {
+            if (!_names.TryGetValue(baseModId, out INamedAccess? face)) _names[baseModId] = face = Build(baseModId);
+            return face;
+        }
+
+        // Spec §9.3: a mod that requires the base mod writes what its list names; the base mod's own accessors and the
+        // console's have no list (spec §8.4, §13).
+        private INamedAccess? Build(string baseModId)
+        {
+            if (owner.LayoutOf(baseModId, console: mod == null) is not { } layout) return null;
+            if (mod == null || mod.Id == baseModId) return new NamedFace(owner, ModId, layout, null);
+            return mod.Requires.Contains(baseModId, StringComparer.Ordinal)
+                ? new NamedFace(owner, ModId, layout, mod.WriteList.ToHashSet(StringComparer.Ordinal))
+                : null;
+        }
+    }
+
+    /// <summary>A base mod's accessors for one mod (spec §9.3): the index rules of <see cref="LayoutCells"/>, the value
+    /// rules of <see cref="CellRules"/>, and the mod's write list.</summary>
+    private sealed class NamedFace(Scripting owner, string modId, BaseModLayout layout, IReadOnlySet<string>? writes)
+        : INamedAccess
+    {
+        public string BaseModId => layout.ModId;
+        public GameLayout Layout => layout.Layout;
+        public IReadOnlySet<string>? Writes => writes;
+
+        public LayoutGlobal Global(string name)
+            => layout.Layout.TryGet(name, out LayoutGlobal global)
+                ? global
+                : throw new ScriptAccessException($"{layout.ModId} exports no global named '{name}'");
+
+        public int Row(LayoutGlobal global, double index) => LayoutCells.Row(global, index);
+        public int Column(LayoutGlobal global, double index) => LayoutCells.Column(global, index);
+        public int Named(LayoutGlobal global, string column) => LayoutCells.Named(global, column);
+
+        public CellValue Read(LayoutGlobal global, int row = -1, int column = -1)
+        {
+            int address = LayoutCells.Address(global, row, column);
+            ScriptMemory memory = owner._memory;
+            return global.Kind switch
+            {
+                CellKind.Integer => CellValue.Integer(CellRules.ReadInteger(memory.Integer(address))),
+                CellKind.Float => CellValue.Float(CellRules.ReadFloat(memory.Float(address))),
+                _ => CellValue.String(memory.String(address)),
+            };
+        }
+
+        public void Write(LayoutGlobal global, int row, int column, CellValue value)
+        {
+            if (writes != null && !writes.Contains(global.Name))
+                throw new ScriptAccessException($"{modId} writes {global.Name}, which its [lua] writes list does not name ("
+                    + (writes.Count == 0 ? "it lists none" : "writes = [" + string.Join(", ", writes.Order(StringComparer.Ordinal)) + "]")
+                    + ")");
+            int address = LayoutCells.Address(global, row, column);
+            bool text = global.Kind == CellKind.String;
+            if (text != (value.Kind == CellKind.String))
+                throw new ScriptAccessException($"{global.Name} holds {(text ? "strings" : "numbers")}, not "
+                                                + (value.Kind == CellKind.String ? "a string" : "a number"));
+            ScriptMemory memory = owner._memory;
+            switch (global.Kind)
+            {
+                case CellKind.Integer: memory.SetInteger(address, CellRules.Integer(value.Number)); break;
+                case CellKind.Float: memory.SetFloat(address, CellRules.FloatBits(value.Number)); break;
+                default: memory.SetString(address, CellRules.Text(value.Text ?? "", memory.Encoding.CodePage)); break;
+            }
+        }
     }
 
     private sealed class VmFace(Scripting owner) : IVmAccess

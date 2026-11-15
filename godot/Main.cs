@@ -656,6 +656,7 @@ public partial class Main : Godot.Control
             Errors = luaErrors,
             DiagnosticsDirectory = profilePersistence.DiagnosticsDirectory,
             StampedMods = StampedMods,
+            ConsoleLayout = () => Ome.Mods.Packages.ShippedPackages.BaseLayoutOf(selectedProfile.Profile.Id),
         });
         _waits.ServiceAfterRequests(_scripting.ServiceRequests);
         if (_modLayer?.LuaStack is { HasLua: true } luaStack)

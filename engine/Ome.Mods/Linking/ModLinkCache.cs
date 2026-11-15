@@ -96,14 +96,17 @@ public sealed record ModLayerSource(
     [property: JsonPropertyName("detail")] string Detail);
 
 /// <summary>A mod with Lua in <c>link.json</c> (Lua scripting spec §6): its sources are under the cache directory's
-/// <c>lua/&lt;mod&gt;/</c>, by their paths inside the package's <c>lua/</c>.</summary>
+/// <c>lua/&lt;mod&gt;/</c>, by their paths inside the package's <c>lua/</c>; a base mod's layout is
+/// <c>layout/&lt;mod&gt;/globals.json</c>; <c>writes</c> is its write list as global names (spec §9.3).</summary>
 public sealed record LinkedLuaModEntry(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("version")] string Version,
     [property: JsonPropertyName("library")] bool Library,
     [property: JsonPropertyName("vm")] bool Vm,
     [property: JsonPropertyName("requires")] IReadOnlyList<string> Requires,
-    [property: JsonPropertyName("files")] IReadOnlyList<string> Files);
+    [property: JsonPropertyName("files")] IReadOnlyList<string> Files,
+    [property: JsonPropertyName("layout")] bool Layout = false,
+    [property: JsonPropertyName("writes")] IReadOnlyList<string>? Writes = null);
 
 /// <summary>A handler in <c>link.json</c>: its index in the list is its <see cref="HandlerId"/>.</summary>
 public sealed record LinkedLuaHandlerEntry(
@@ -146,6 +149,9 @@ public sealed record LinkedLuaEntry
     /// <summary>A source's path under the cache directory.</summary>
     public static string PathOf(string mod, string file) => $"{Folder}/{mod}/{file}";
 
+    /// <summary>A base mod's layout under the cache directory.</summary>
+    public static string LayoutPathOf(string mod) => $"layout/{mod}/globals.json";
+
     private static LinkedLuaDueEntry Due(PlannedHandler handler)
         => new(handler.Handler.Index, handler.Priority, handler.LoadOrder, handler.Skip);
 
@@ -156,7 +162,8 @@ public sealed record LinkedLuaEntry
     {
         Runtime = runtime,
         Mods = lua.Stack.Mods.Select(mod => new LinkedLuaModEntry(mod.Id, mod.Version, mod.Library, mod.Vm, mod.Requires,
-            mod.Files.Select(file => file.Path).ToList())).ToList(),
+            mod.Files.Select(file => file.Path).ToList(), mod.Layout != null,
+            mod.WriteList.Count > 0 ? mod.WriteList : null)).ToList(),
         Handlers = lua.Stack.Handlers.Select(handler => new LinkedLuaHandlerEntry(handler.ModId, handler.File, handler.Function))
             .ToList(),
         Sites = lua.Plan.Sites.ToDictionary(pair => pair.Key + ".BIN",
@@ -170,7 +177,9 @@ public sealed record LinkedLuaEntry
     public ModRuntimeStack ToStack(string directory)
         => new(Mods.Select(mod => new ModRuntimeMod(mod.Id, mod.Version, mod.Library, mod.Vm, mod.Requires,
                 mod.Files.Select(file => new ModSource(mod.Id, file,
-                    File.ReadAllText(Path.Combine(directory, PathOf(mod.Id, file)), Encoding.UTF8))).ToList())).ToList(),
+                    File.ReadAllText(Path.Combine(directory, PathOf(mod.Id, file)), Encoding.UTF8))).ToList(),
+                mod.Layout ? GameLayout.Parse(File.ReadAllText(Path.Combine(directory, LayoutPathOf(mod.Id)), Encoding.UTF8)) : null,
+                mod.Writes)).ToList(),
             Handlers.Select(handler => new ModRuntimeHandler(handler.Mod, handler.File, handler.Function)).ToList());
 
     public HookPlan ToPlan()
@@ -374,7 +383,8 @@ public static class ModLinkCache
                 || manifest.LanguageAssets.Values.SelectMany(entries => entries).SelectMany(entry => entry.Files.Values)
                     .Any(path => !File.Exists(Path.Combine(directory, path)))
                 || (manifest.Lua?.Mods ?? []).Any(mod => mod.Files.Any(file =>
-                    !File.Exists(Path.Combine(directory, LinkedLuaEntry.PathOf(mod.Id, file))))))
+                    !File.Exists(Path.Combine(directory, LinkedLuaEntry.PathOf(mod.Id, file))))
+                    || mod.Layout && !File.Exists(Path.Combine(directory, LinkedLuaEntry.LayoutPathOf(mod.Id)))))
                 return null;
             // A hit counts as recent use, so pruning keeps the entries that are actually launched.
             try
@@ -503,12 +513,20 @@ public static class ModLinkCache
                 foreach (LinkedRecord record in catalog.Records) records[record.CatalogName] = catalog.ModId;
             }
             foreach (ModRuntimeMod mod in result.Lua.Stack.Mods)
+            {
                 foreach (ModSource source in mod.Files)
                 {
                     string path = Path.Combine(temporary, LinkedLuaEntry.PathOf(mod.Id, source.Path));
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                     File.WriteAllText(path, source.Text, new UTF8Encoding(false));
                 }
+                if (mod.Layout is { } layout)
+                {
+                    string path = Path.Combine(temporary, LinkedLuaEntry.LayoutPathOf(mod.Id));
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.WriteAllText(path, layout.Json, new UTF8Encoding(false));
+                }
+            }
             var manifest = new ModLinkManifest
             {
                 Key = key,

@@ -138,6 +138,11 @@ The unit tables sit above the saved range, so boot rebuilds them with the edit o
 after loading a save. Saves made before the edit pick it up too. `../../kamidori-data-tables.md` explains how the
 init scripts fill each table.
 
+In Lua ([../lua.md](../lua.md), "Game names"), `kamidori-base` gives the same tables by name.
+`require("kamidori-base").table("unit_condition_levels")[unit].charm` reads a battle unit's charm level. The table
+has 50 rows, which end where `unit_condition_remaining_turns` starts. The names are those of
+`../../global-reference-kamidori.md`.
+
 ## Catalogs, scenes and saves
 
 - **Selectors.** The install ships three append catalogs (`APPEND01`–`03`), so a first mod's catalog normally gets

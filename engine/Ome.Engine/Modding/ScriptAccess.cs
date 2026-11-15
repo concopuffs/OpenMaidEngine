@@ -42,6 +42,118 @@ public interface IModAccess
 
     /// <summary><c>maid.log</c> and <c>print</c>: a line of <c>diagnostics/lua.log</c> with the mod's id.</summary>
     void Log(ModLogLevel level, string message);
+
+    /// <summary>The accessors over the layout of the base mod <paramref name="baseModId"/> (spec §9.3): with this mod's
+    /// write list when it requires that base mod, with none when it is that base mod or the console; null when this
+    /// mod may not name that base mod's cells.</summary>
+    INamedAccess? Names(string baseModId);
+
+    /// <summary>The base mod whose accessors <c>maid.names</c> holds (spec §8.4): a base mod's own, and for the console
+    /// the profile's (spec §13); null for any other mod.</summary>
+    string? OwnLayout { get; }
+}
+
+/// <summary>
+/// A base mod's accessors for one mod (spec §9.3): reads by an exported name, writes checked against the mod's write
+/// list, and indices checked against the global's shape, so an accessor reaches only the named global's own cells.
+/// Indices are the game's: the first row and the first column are 0. Every rule is here, in the engine.
+/// </summary>
+public interface INamedAccess
+{
+    string BaseModId { get; }
+
+    /// <summary>The globals, by name or alias.</summary>
+    GameLayout Layout { get; }
+
+    /// <summary>The global names this face may write; null when it may write any (a base mod's own accessors, the
+    /// console's).</summary>
+    IReadOnlySet<string>? Writes { get; }
+
+    /// <summary>The global a name or an alias names; a refused access for a name the base mod does not export.</summary>
+    LayoutGlobal Global(string name);
+
+    /// <summary>A row of <paramref name="global"/> (an element of a 1-D array), checked against its rows.</summary>
+    int Row(LayoutGlobal global, double index);
+
+    /// <summary>A column of a 2-D array, checked against its width.</summary>
+    int Column(LayoutGlobal global, double index);
+
+    /// <summary>The index a column's name stands for in the last dimension: a 2-D array's column, a 1-D array's
+    /// element.</summary>
+    int Named(LayoutGlobal global, string column);
+
+    /// <summary>A cell: a scalar with no indices, a 1-D element with its row, a 2-D cell with both (-1 for none).</summary>
+    CellValue Read(LayoutGlobal global, int row = -1, int column = -1);
+
+    /// <summary>Write a cell, if the write list names the global; the value passes <see cref="CellRules"/>.</summary>
+    void Write(LayoutGlobal global, int row, int column, CellValue value);
+}
+
+/// <summary>The index rules of the accessors (spec §9.3), in one place for every face.</summary>
+public static class LayoutCells
+{
+    /// <summary>A row of <paramref name="global"/>: whole, from 0 to its rows; for an open array that nothing follows,
+    /// any row whose cells stay below the last address.</summary>
+    public static int Row(LayoutGlobal global, double index)
+    {
+        if (global.IsScalar) throw new ScriptAccessException($"{global.Name} is no table, so it has no rows");
+        if (global.Rows is int rows)
+        {
+            if (!Whole(index) || index < 0 || index >= rows)
+                throw new ScriptAccessException(rows == 0
+                    ? $"{global.Name} has no rows"
+                    : $"{global.Name}[{Show(index)}]: an index is a whole number from 0 to {rows - 1}");
+            return (int)index;
+        }
+        long last = ((long)CellRules.MaxAddress - global.Address - (global.RowWidth - 1)) / global.RowWidth;
+        if (!Whole(index) || index < 0 || index > last)
+            throw new ScriptAccessException($"{global.Name}[{Show(index)}]: an index is a whole number from 0 to {last}");
+        return (int)index;
+    }
+
+    /// <summary>A column of a 2-D array: whole, from 0 to its width.</summary>
+    public static int Column(LayoutGlobal global, double index)
+    {
+        if (global.Dimensions.Count != 2) throw new ScriptAccessException($"{global.Name} has no columns");
+        int width = global.RowWidth;
+        if (!Whole(index) || index < 0 || index >= width)
+            throw new ScriptAccessException($"{global.Name}: a column is a whole number from 0 to {width - 1}, not {Show(index)}");
+        return (int)index;
+    }
+
+    public static int Named(LayoutGlobal global, string column)
+        => global.Columns.TryGetValue(column, out int index)
+            ? index
+            : throw new ScriptAccessException(global.Columns.Count == 0
+                ? $"{global.Name} names no columns, so '{column}' is not one of its fields"
+                : $"{global.Name} has no column '{column}' (its columns: "
+                  + string.Join(", ", global.Columns.OrderBy(pair => pair.Value).Select(pair => pair.Key)) + ")");
+
+    /// <summary>The address of a cell, with its indices checked again: a scalar takes none, a 1-D array a row, a 2-D
+    /// array a row and a column.</summary>
+    public static int Address(LayoutGlobal global, int row, int column)
+    {
+        switch (global.Dimensions.Count)
+        {
+            case 0 when row < 0 && column < 0:
+                return global.Address;
+            case 1 when row >= 0 && column < 0:
+                return global.Address + Row(global, row);
+            case 2 when row >= 0 && column >= 0:
+                return global.Address + Row(global, row) * global.RowWidth + Column(global, column);
+            default:
+                throw new ScriptAccessException(global.Dimensions.Count switch
+                {
+                    0 => $"{global.Name} is no table: it takes no index",
+                    1 => $"{global.Name} is a table: it takes one index",
+                    _ => $"{global.Name} is a table of rows: it takes a row and a column",
+                });
+        }
+    }
+
+    private static bool Whole(double value) => double.IsFinite(value) && value == Math.Floor(value);
+
+    private static string Show(double value) => value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
 }
 
 /// <summary><c>maid.vm</c> (spec §8.1). Numbers come and go as Lua's: an address or an index must be a whole number
