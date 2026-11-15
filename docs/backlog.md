@@ -330,27 +330,28 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   and a two-mod test shows it.
 - **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12):
   - a launcher;
-  - runtime scripting (Lua): design drafted, see the next item;
+  - runtime scripting (Lua): designed, see the next item;
   - mod-owned sites (patching another mod's inserted code);
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
-- **Runtime scripting (Lua): design draft under review.** The port runs no mod code of its own: mods change
-  behaviour only through bytecode (patches and scripts). The roadmap plans Lua beside the VM
-  (`remake-architecture-and-roadmap.md` §3.8, and §3.10 step 7 for the runtime boundary and the spike).
-  - **Draft (2026-11-10, not accepted):** `lua-scripting-design-2026-11-10.md` at the workspace root, outside this
-    repository. It covers the runtime choice, hooks declared in the manifest, the engine API (`maid.vm` and the
-    rest), per-game base mods that hold every game-specific name, mod state beside the save, and the validation
-    gates. Its §19 lists the questions still open.
-  - It raises the package manifest to `omp = 2`, as the localization design does
-    (`superpowers/specs/2026-11-10-localization-design.md` §9.2). Localization milestone 4 introduced version 2
-    (2026-11-11), so the draft's manifest tables join it, unless a released version 2 calls for a version 3.
-  - Packages that target no profile are decided (2026-11-10, localization design §11.1). The draft still has to
-    say what such a package may hold for Lua.
+- **Runtime scripting (Lua): designed, not built.** The port runs no mod code of its own: mods change behaviour
+  only through bytecode (patches and scripts). `superpowers/specs/2026-11-10-lua-scripting-design.md` (accepted
+  2026-11-14) specifies Lua beside the VM: a managed interpreter, hooks declared in the manifest (`omp = 3`), the
+  `maid` API, per-game base mods with declared writes, mod state beside the save, and gates 1 to 15. Its
+  milestones (§18), each done when its gates pass:
+  - **The first release:**
+    0. the spike: choose the library against §5.1's eleven criteria, and measure dispatch cost;
+    1. the core: the scripting native and the runtime seam, session life, the sandbox, point hooks, `maid.vm`
+       without `call`, errors and budgets, the driver's `lua` step;
+    2. state: `maid.state` and its sidecar, the rebuild on load, `maid.session.restoring`,
+       `ome.session.resumed`, `ome.save.writing`;
+    3. events and the first base mods: the layout, the accessors with declared writes, the write scan and
+       `--lua-dev`, the trace, editor stubs, and the guide for mod authors.
+  - **After it:** 4, raw sites, `skip`, script entry and exit, and watches; 5, synchronous script calls and the
+    base mods' helpers; 6, reload and the seeded random streams.
 
-  Done when the draft is accepted (moved to `superpowers/specs/2026-11-10-lua-scripting-design.md` with its row in
-  the canonical documents map) and this item is replaced by its milestones. The first of those is the runtime
-  spike (draft §5).
+  Delete each milestone here as it lands, and the item with the last.
 
 ## Localization
 
