@@ -224,6 +224,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       --spawn), operand-access.json (operand_access.py --engine)
     │   ├── revision-diff/<a>-<b>.{json,md}    revision_diff.py's opcode-by-opcode comparison of two engine builds
     │   ├── opcodes.json                        GENERATED from opcodes.toml (machine view for the C# VM)
+    │   ├── opcode-flow.json                    opcode_flow.py's derived control facts, with the methods behind each
     │   └── opcode-coverage.md                  GENERATED from opcodes.toml
     │
     ├── engine/                              DELIVERABLE — the .NET VM/runtime projects and tests (OmeEngine.sln)

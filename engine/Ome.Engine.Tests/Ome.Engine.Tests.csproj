@@ -21,6 +21,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Lua scripting spec §7.1: every instruction the tests run is checked against its opcode's control facts
+         (vm-map/opcodes.toml waits and leaves; engine/Ome.Engine.Vm/VirtualMachine.OpcodeFlow.cs). -->
+    <RuntimeHostConfigurationOption Include="Ome.Engine.CheckOpcodeFlow" Value="true" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Ome.Engine\Ome.Engine.csproj" />
     <ProjectReference Include="..\Ome.Engine.Devices\Ome.Engine.Devices.csproj" />
     <ProjectReference Include="..\Ome.Engine.Vm\Ome.Engine.Vm.csproj" />

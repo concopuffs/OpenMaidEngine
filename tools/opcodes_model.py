@@ -26,6 +26,11 @@ CODE_TARGET_KINDS = ("transfer", "call", "callback", "coroutine")
 # position relocates instead of surviving as a number.
 VALUE_KINDS = ("code-address",)
 
+# The two control facts of an implemented opcode (Lua scripting spec §7.1), derived from the port's handlers by
+# tools/opcode_flow.py: whether it waits, and the ways it can leave. An opcode the port does not implement has neither.
+WAITS = ("never", "may", "always")
+LEAVES = ("falls", "jumps", "calls", "ends", "saves", "loads", "restores")
+
 ACCESS_KINDS = (
     "read",            # value read (immediates, variables and reference targets)
     "read-float",      # value read as a float (integer forms are converted)
@@ -102,6 +107,8 @@ class Semantics:
     details: str = ""
     confirm_by: str = ""
     args: list[dict] = field(default_factory=list)
+    waits: str = ""
+    leaves: list[str] = field(default_factory=list)
 
 @dataclass
 class Opcode:
@@ -224,6 +231,8 @@ def load(path) -> Model:
                 details=s.get("details", ""),
                 confirm_by=s.get("confirm_by", ""),
                 args=list(s.get("args", [])),
+                waits=s.get("waits", ""),
+                leaves=list(s.get("leaves", [])),
             )
         ops[op] = Opcode(
             op=op, label=e.get("label", ""), argc=int(e["argc"]),
@@ -363,6 +372,12 @@ def lint(model: Model) -> tuple[list[str], list[str]]:
             errors.append(f"{tag}: bad source {s.source!r}")
         if s.confidence not in CONFIDENCE:
             errors.append(f"{tag}: bad confidence {s.confidence!r}")
+        if s.waits and s.waits not in WAITS:
+            errors.append(f"{tag}: waits must be one of {list(WAITS)}")
+        if [kind for kind in s.leaves if kind not in LEAVES] or len(set(s.leaves)) != len(s.leaves):
+            errors.append(f"{tag}: leaves must list each of {list(LEAVES)} at most once")
+        if bool(s.waits) != bool(s.leaves):
+            errors.append(f"{tag}: waits and leaves come together (tools/opcode_flow.py --apply)")
         for index, evidence in enumerate(s.evidence, 1):
             evidence_tag = f"{tag}: evidence {index}"
             if evidence.method not in EVIDENCE_METHODS:

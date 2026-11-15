@@ -54,8 +54,13 @@ public static class OpcodeTableJson
                         foreach (JsonElement revision in revisions.EnumerateArray())
                             if (revision.GetString() is { } value) evidenceRevisions.Add(value);
             }
+            var (waits, leaves) = semantics.ValueKind == JsonValueKind.Object ? Flow(semantics, op) : (null, OpcodeLeaves.None);
             catalog[op] = new OpcodeDefinition(
-                op, label, argc, observedBy, semanticName, evidenceRevisions);
+                op, label, argc, observedBy, semanticName, evidenceRevisions)
+            {
+                Waits = waits,
+                Leaves = leaves,
+            };
         }
 
         if (!doc.RootElement.TryGetProperty("abi_layers", out JsonElement layerArray))
@@ -74,6 +79,35 @@ public static class OpcodeTableJson
         Dictionary<int, OpcodeDefinition> resolved = ResolveLayer(
             abiId, layers, catalog, active, applied);
         return new OpcodeTable(resolved, abiId, observations, applied);
+    }
+
+    /// <summary>An implemented opcode's control facts (Lua scripting spec §7.1): its semantics' <c>waits</c> and
+    /// <c>leaves</c>, or none.</summary>
+    private static (OpcodeWaits?, OpcodeLeaves) Flow(JsonElement semantics, int op)
+    {
+        if (!semantics.TryGetProperty("waits", out JsonElement waitsElement)) return (null, OpcodeLeaves.None);
+        OpcodeWaits waits = waitsElement.GetString() switch
+        {
+            "never" => OpcodeWaits.Never,
+            "may" => OpcodeWaits.May,
+            "always" => OpcodeWaits.Always,
+            var other => throw new InvalidDataException($"opcode 0x{op:x}: waits '{other}' is not never, may or always"),
+        };
+        var leaves = OpcodeLeaves.None;
+        if (semantics.TryGetProperty("leaves", out JsonElement leavesElement))
+            foreach (JsonElement kind in leavesElement.EnumerateArray())
+                leaves |= kind.GetString() switch
+                {
+                    "falls" => OpcodeLeaves.Falls,
+                    "jumps" => OpcodeLeaves.Jumps,
+                    "calls" => OpcodeLeaves.Calls,
+                    "ends" => OpcodeLeaves.Ends,
+                    "saves" => OpcodeLeaves.Saves,
+                    "loads" => OpcodeLeaves.Loads,
+                    "restores" => OpcodeLeaves.Restores,
+                    var other => throw new InvalidDataException($"opcode 0x{op:x}: leaves '{other}' is not a way to leave"),
+                };
+        return (waits, leaves);
     }
 
     private static Dictionary<int, OpcodeDefinition> ResolveLayer(
@@ -140,7 +174,7 @@ public static class OpcodeTableJson
                 {
                     int op = Convert.ToInt32(contract.GetProperty("op").GetString(), 16);
                     catalog.TryGetValue(op, out OpcodeDefinition? inherited);
-                    contracts[op] = new OpcodeDefinition(
+                    var replacement = new OpcodeDefinition(
                         op,
                         contract.GetProperty("label").GetString() ?? "",
                         contract.GetProperty("argc").GetInt32(),
@@ -148,6 +182,11 @@ public static class OpcodeTableJson
                         contract.TryGetProperty("semantic_name", out JsonElement semanticName)
                             ? semanticName.GetString() : inherited?.SemanticName,
                         inherited?.EvidenceRevisions);
+                    // The control facts are the handler's, which the canonical name selects: a replacement that keeps
+                    // the name keeps them.
+                    contracts[op] = inherited != null && replacement.CanonicalLabel == inherited.CanonicalLabel
+                        ? replacement with { Waits = inherited.Waits, Leaves = inherited.Leaves }
+                        : replacement;
                 }
             }
             return new AbiLayerDocument(id, composes, members, contracts, removes, provenance);

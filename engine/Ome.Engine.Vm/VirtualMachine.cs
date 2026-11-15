@@ -1389,6 +1389,7 @@ public sealed partial class VirtualMachine
     /// </summary>
     private LoopEnd RunInstructions(ExecFrame frame, int pc, bool waitCallback)
     {
+        _loopsEntered++;   // an instruction that runs this loop calls (VirtualMachine.OpcodeFlow.cs)
         while (pc >= 0 && pc < frame.Script.Instructions.Count)
         {
             if (_stopAndReload.StopRequested) return LoopEnd.Stopped;
@@ -1426,7 +1427,9 @@ public sealed partial class VirtualMachine
                 }
             }
             if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
-            StepResult step = ApplyIgnoredDwords(frame, pc, Step(frame.Script.Instructions[pc], pc));
+            Instruction instruction = frame.Script.Instructions[pc];
+            StepResult step = ApplyIgnoredDwords(frame, pc,
+                _checkOpcodeFlow ? CheckedStep(instruction, pc) : Step(instruction, pc));
             _waits.FrameYield();
             _skip.PaceOp();
             switch (step.Kind)

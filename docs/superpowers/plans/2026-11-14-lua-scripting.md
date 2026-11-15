@@ -3,10 +3,10 @@
 **Date:** 2026-11-14
 **Spec:** `docs/superpowers/specs/2026-11-10-lua-scripting-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps what each milestone measured and what that settles for the later ones.
-**Status:** milestones 0 to 2 are done (2026-11-14). Milestone 0, the spike, chose **Lua-CSharp 0.5.8**
-(`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the library against the official Lua 5.2
-test suite. Milestone 2 built mod state and the session's life across loads (§6). Milestone 3 is being built (§7);
-milestones 4 to 6 are not.
+**Status:** milestones 0 to 3, the first release, are done (2026-11-14 and 2026-11-15). Milestone 0, the spike,
+chose **Lua-CSharp 0.5.8** (`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the library against
+the official Lua 5.2 test suite. Milestone 2 built mod state and the session's life across loads (§6), and
+milestone 3 events and the base mods (§7). Milestone 4 is being built (§8); milestones 5 and 6 are not.
 The backlog's "Runtime scripting (Lua)" item lists them.
 
 Paths are relative to `age-reimpl/`.
@@ -852,3 +852,64 @@ Driven in the port on 2026-11-15 (profile `kamidori`, sandbox `k7lua`) with
 handlers`, `mod-link.txt`'s `lua:` section listed the hook at `ADDEXP 0x88` and the event with its four fields and
 the subscriber, and the console found `on_award` in the mod with no `maid.vm`. The opening played with the mod on.
 An award in play needs a battle; the install tests run the same native on `ADDEXP.BIN`.
+
+## 8. Milestone 4: wider hooks
+
+Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; piece 1 is built (§8.1):
+
+1. **The two opcode facts** (spec §7.1): `waits` (`always`, `may` or `never`) and `leaves` (any of `falls`, `jumps`,
+   `calls`, `ends`, `saves`, `loads`, `restores`) for every opcode the port implements, in `vm-map/opcodes.toml`.
+   A tool derives them from the port's handlers, as `operand_access.py` derives the operand contracts from native's;
+   `opcodes_build.py` carries them into `build/opcodes.json` and `docs/opcode-reference.md`; the engine reads them
+   from its opcode table. A check in the tests' runs fails an instruction that does what its facts deny.
+2. **Site hooks and `after`**: `script`, `fingerprint`, `site`, `when`, bound through the linked offsets as a point
+   is, with a frame's context; `after` lists in the plan, run when the opcode handler returns and the frame goes on;
+   the loader's warning for an `after` hook on an instruction that waits or calls.
+3. **`skip`**: `skip = true` on a point or a site `before`, refused by the link on an instruction whose facts jump,
+   call, end, wait, save, load or restore; `ctx:skip()` and `ctx.skipped`; a skipped instruction runs no handler and
+   no `after`; the trace names the handler that skipped.
+4. **Script entry and exit**: `script` with `when = "enter"` or `"exit"`, the cause (`call`, `root`, `title`,
+   `restore`), `enter` after `ome.session.start` for the first frame of a session, `exit` for a return only.
+5. **Watches**: the records in script memory's setters, delivered when the instruction that made them returns (an
+   inner instruction its own), Lua's writes recorded too, none for a load's banks or a return to title; a watch on a
+   name (`name`, `name[*]`) through the base mod's layout without `vm`, on `G[0x…]` with it; the cost of a broad
+   watch on Kamidori's largest table.
+6. **The merged order, the report, the trace, the stubs and the guide**, gate 6 and the held cases of gates 3, 5, 8
+   and 12, and a port check.
+
+### 8.1 The two opcode facts
+
+Built 2026-11-15 (spec §7.1):
+
+- **Derived, not written.** `tools/opcode_flow.py` reads the port's handler table and every method of the
+  interpreter's partial classes, with comments and literals removed, and follows each handler through the methods it
+  calls and the methods it passes as arguments (a wait's callback is a method group). `--apply` writes `waits` and
+  `leaves` into each implemented opcode's `[opcode.semantics]` in `vm-map/opcodes.toml`; `--check` is a core
+  `validate.py` gate (`opcode-flow-check`); `--why NAME` prints the method and line behind each fact. Hand-written
+  facts would drift from the handlers the next time one changes.
+- **The rules it follows.**
+  - `RunFrame` and `RunInstructions` give `calls`: anything that runs bytecode inside the instruction.
+  - A `StepResult` counts only in a method that returns one, reached through methods that return one: `Next` gives
+    `falls`, `Jump(` `jumps`, a frame return, root reload or hotspot return `ends`. The engine's unwinds (the
+    reload and exit requests) give `ends` wherever they are thrown, since they leave the frame from any depth.
+  - `_waits.X` waits when the wait native's `X` reaches one of its blocking helpers (`InputAndWaits.Blocking.cs`,
+    the one place the engine blocks).
+  - The save native's entry points give `saves`, `loads` and `restores`.
+  - A fact reachable on some path is given. `always` is given only to the two modal boxes (`ALWAYS_WAITS`), since
+    Skip, Auto and fast-forward pass every other wait.
+- **What it found.** 283 implemented opcodes: `never` 263, `may` 18, `always` 2; `falls` 277, `jumps` 11, `calls` 6,
+  `ends` 11, `saves` 1, `loads` 2, `restores` 1. The ADV wait (`wait-for-input`) falls, calls and ends: the menu's
+  callbacks run inside it, and one of them returns to title.
+- **Carried through.** `opcodes_model.py` lints the two fields (known values, no repeats, both or neither);
+  `opcodes_build.py` writes them into `build/opcodes.json` and a "control (port handler)" line of
+  `docs/opcode-reference.md`; the engine reads them into `OpcodeDefinition.Waits` and `.Leaves`
+  (`OpcodeWaits`, `[Flags] OpcodeLeaves`), and a layer's replacement inherits them when it keeps the label.
+- **Checked in every test run.** With the AppContext switch `Ome.Engine.CheckOpcodeFlow` on (the test project sets
+  it), every instruction's step goes through `CheckedStep` (`VirtualMachine.OpcodeFlow.cs`): how it left (its step
+  result, an unwind it threw, a loop it entered) must be among its `leaves`, or the run stops with an
+  `OpcodeFlowException` naming the instruction and the fix. `waits` is not checked at run time: the headless tests do
+  not run the real wait native. Off, the loop pays one field test.
+
+Tests: `OpcodeFlowTests` (4: every implemented opcode has facts and no other does, run for both ABIs; the facts of known
+handlers; the switch is on; a wrong fact stops the run), `test_opcode_flow.py` (7), and the full engine suite (2287)
+with the check on.

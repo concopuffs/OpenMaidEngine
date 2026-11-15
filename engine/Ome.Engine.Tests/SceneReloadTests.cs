@@ -34,6 +34,8 @@ public class SceneReloadTests
         [
             // The run's outcome and counters.
             "HaltReason", "ScriptError", "CompatibilityFailure", "Steps", "CallScriptDispatches",
+            // How many instruction loops the run entered, which the opcode flow check compares (VirtualMachine.OpcodeFlow.cs).
+            "_loopsEntered",
             // The frame stack, empty at a reload: op 0x9 has unwound every frame.
             "_cur", "_depth", "_activeFrameNames", "_activeExecutionFrames", "_debugNextFrameId", "_restoreFrameIndex",
             // The handler table.

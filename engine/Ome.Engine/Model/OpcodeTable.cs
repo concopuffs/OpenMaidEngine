@@ -22,6 +22,32 @@ public sealed record OpcodeResolutionProvenance(
     string EvidenceArtifact,
     string EvidenceScope);
 
+/// <summary>Whether an implemented opcode's handler waits (Lua scripting spec §7.1): parks the engine thread in the
+/// wait native before it returns. <see cref="May"/> covers a wait that Skip, Auto or fast-forward pass.</summary>
+public enum OpcodeWaits { Never, May, Always }
+
+/// <summary>How an implemented opcode's handler can leave (Lua scripting spec §7.1), from the registry's
+/// <c>leaves</c> (vm-map/opcodes.toml, derived by tools/opcode_flow.py).</summary>
+[Flags]
+public enum OpcodeLeaves
+{
+    None = 0,
+    /// <summary>It goes on at the next instruction.</summary>
+    Falls = 1 << 0,
+    /// <summary>It goes on at another instruction of its frame.</summary>
+    Jumps = 1 << 1,
+    /// <summary>It runs another frame or a callback before it returns.</summary>
+    Calls = 1 << 2,
+    /// <summary>It ends its frame, the scene or the run, itself or because a frame it ran did.</summary>
+    Ends = 1 << 3,
+    /// <summary>It writes a numbered save of the game state.</summary>
+    Saves = 1 << 4,
+    /// <summary>It replaces the game state from a save.</summary>
+    Loads = 1 << 5,
+    /// <summary>It continues a load's restore of the saved frames (op 0xae).</summary>
+    Restores = 1 << 6,
+}
+
 public sealed record OpcodeDefinition(
     int Opcode,
     string Label,
@@ -31,6 +57,12 @@ public sealed record OpcodeDefinition(
     IReadOnlySet<string>? SemanticEvidenceRevisions = null,
     OpcodeResolutionProvenance? Resolution = null)
 {
+    /// <summary>Whether the port's handler waits; null for an opcode the port does not implement.</summary>
+    public OpcodeWaits? Waits { get; init; }
+
+    /// <summary>How the port's handler can leave; <see cref="OpcodeLeaves.None"/> with <see cref="Waits"/> null.</summary>
+    public OpcodeLeaves Leaves { get; init; }
+
     public string CanonicalLabel => string.IsNullOrWhiteSpace(SemanticName) ? Label : SemanticName;
     public bool IsObservedBy(string profileId) => ObservedBy.Contains(profileId);
     public IReadOnlySet<string> EvidenceRevisions { get; } = SemanticEvidenceRevisions

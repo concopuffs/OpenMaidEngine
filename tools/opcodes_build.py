@@ -347,6 +347,9 @@ def emit_json(model: M.Model) -> str:
                               "confidence": s.confidence, "depends_on": ["0x%x" % d for d in s.depends_on],
                               "evidence": [_evidence_json(item) for item in s.evidence],
                               "details": s.details, "confirm_by": s.confirm_by, "args": s.args}
+            if s.waits:
+                e["semantics"]["waits"] = s.waits
+                e["semantics"]["leaves"] = s.leaves
         out["opcodes"].append(e)
     return json.dumps(out, ensure_ascii=False, indent=2) + "\n"
 
@@ -377,7 +380,11 @@ def emit_reference_md(model: M.Model) -> str:
          "definition, revision ancestry, or absence from any unscanned game.", "",
          "Which opcodes the port runs is the engine's handler table "
          "(`engine/Ome.Engine.Vm/VirtualMachine.Handlers.cs`), which binds each opcode by its name; "
-         "`OpcodeHandlerTableTests` checks that every opcode of a game's ABI table has a handler.", ""]
+         "`OpcodeHandlerTableTests` checks that every opcode of a game's ABI table has a handler.", "",
+         "An implemented opcode's **control** facts (Lua scripting spec §7.1) say whether its handler waits "
+         "(`never`, `may`, `always`) and how it can leave: `falls` to the next instruction, `jumps` within its frame, "
+         "`calls` another frame or a callback, `ends` its frame, the scene or the run, `saves`, `loads`, or "
+         "`restores` a load's frames. `tools/opcode_flow.py` derives them from the port's handlers.", ""]
     for observation in model.observations.values():
         L.append(
             f"- **{observation.profile_id}:** {len(observation.opcodes)} opcodes in "
@@ -425,6 +432,8 @@ def emit_reference_md(model: M.Model) -> str:
                 operands = _operand_access_md(oc)
                 if operands:
                     L.append(f"- **operand access:** {operands}")
+                if s.waits:
+                    L.append(f"- **control (port handler):** waits {s.waits}; leaves " + ", ".join(s.leaves))
                 L.append(f"- **grounding:** source={s.source}, confidence={s.confidence}"
                          + (f", noop_headless={s.noop_headless}" if s.noop_headless else ""))
                 if s.depends_on:

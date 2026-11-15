@@ -54,6 +54,7 @@ CORE_TESTS = (
     "test_compiler_census.py",
     "test_opcodes.py",
     "test_operand_access.py",
+    "test_opcode_flow.py",
     "test_patch_points.py",
     "test_base_mod_build.py",
     "test_paths.py",
@@ -181,6 +182,11 @@ def build_gate_plan(
         # The check runs before the build so stale tracked files are reported, not silently rewritten.
         Gate("opcodes-check", "Generated opcode references", _python_tool("opcodes_build.py", "--check")),
         Gate("opcodes-build", "Opcode metadata build", _python_tool("opcodes_build.py", "--build")),
+        Gate(
+            "opcode-flow-check",
+            "Opcode control facts against the port's handlers",
+            _python_tool("opcode_flow.py", "--check"),
+        ),
         *registry_gates(),
         Gate(
             "engine-ctx-check",
