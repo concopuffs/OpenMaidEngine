@@ -119,13 +119,19 @@ public sealed partial class Scripting
     public string? ServiceBoundary()
     {
         if (_scene.BuildPending && StartSession(SessionReason.Load) is { } halt) return halt;
-        if (_scene.ResumedPending)
+        if (!_scene.ResumedPending) return null;
+        _scene.ResumedPending = false;
+        // Spec §7.3: the boundary comes before the instruction, so its handlers' writes go with that instruction's records.
+        _looseDepth++;
+        try
         {
-            _scene.ResumedPending = false;
             return RaiseEngineEvent(SessionResumedEvent,
                 new KeyValuePair<string, CellValue>("slot", CellValue.Integer(_scene.Slot)));
         }
-        return null;
+        finally
+        {
+            _looseDepth--;
+        }
     }
 
     /// <summary>The state a new session is built from (spec §5.7 step 2): its load's, or none. Every block of it is

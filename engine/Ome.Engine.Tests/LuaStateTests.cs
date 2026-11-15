@@ -481,6 +481,83 @@ public sealed class LuaStateTests : IDisposable
                       "enter TITLE.BIN title"], Order(abandoned));
     }
 
+    /// <summary>A mod watching ROOT's prologue cell, its repeated cell and CALLBACK_LOAD's cell (spec §7.3): it logs each
+    /// record and keeps two totals in its state, one that honours the restore flag and one that does not.</summary>
+    private static LuaStackBuilder Watching()
+        => new LuaStackBuilder()
+            .Mod("mod.w", """
+                -- file: watch.lua
+                function on_write(ctx)
+                    maid.log.info(string.format("0x%x %d->%d restoring=%s", ctx.address, ctx.old, ctx.new,
+                                                tostring(maid.session.restoring)))
+                    if ctx.address == 0x100 and not maid.session.restoring then maid.state.prologue = (maid.state.prologue or 0) + 1 end
+                    if ctx.address == 0x101 then maid.state.repeats = (maid.state.repeats or 0) + 1 end
+                end
+                """)
+            .Watch("G[0x100..]", 0x100, "mod.w", "watch.lua:on_write", count: 3);
+
+    [Fact]
+    public void AWatchSeesARestoresWritesAndNoneForTheLoadsBanksOrATitlesZeroing()
+    {
+        // Spec §7.3, gate 6 and gate 8: the load's banks and op 0x9's zeroing are no writes; the restored prologue's write
+        // is, with the flag set; the write in the repeated range is delivered again after ome.session.resumed.
+        string saves = Saves();
+        Scripting first = Native(Watching());
+        Run(Root(), first, Store(saves));
+        Assert.Equal(["0x100 0->5 restoring=false", "0x101 0->1 restoring=false"], Lines(first, "mod.w"));
+        Assert.Equal("""{"s:prologue":1,"s:repeats":1}""", Block(saves, "mod.w"));
+
+        Scripting loaded = Native(Watching());
+        Run(Loader(), loaded, Store(saves), Provider(CallbackLoad()));
+        Assert.Equal(["0x102 0->1 restoring=true", "0x100 5->5 restoring=true", "0x101 1->1 restoring=false"],
+                     Lines(loaded, "mod.w"));
+        // The total that honours the flag is the same after save, load and resume; the other counted its write twice.
+        Assert.Equal("""{"s:prologue":1,"s:repeats":2}""", Block(saves, "mod.w"));
+
+        // A return to title zeroes the banks, which no watch sees: TITLE's write finds the cell at 0. (The second run's save
+        // holds CALLBACK_LOAD's 1, which this load's banks bring back unseen.)
+        Script title = ScriptAssembler.Assemble(Table, "TITLE.BIN", new List<(int, Operand[])>
+        {
+            (Mov, [G(0x100), Imm(2)]),
+            (0x2, []),
+        }, []);
+        Scripting abandoned = Native(Watching());
+        Run(Loader(), abandoned, Store(saves), Provider(CallbackLoad(returnToTitle: true), title));
+        Assert.Equal(["0x102 1->1 restoring=true", "0x100 0->2 restoring=false"], Lines(abandoned, "mod.w"));
+    }
+
+    [Fact]
+    public void ADataOnlyLoadDropsTheRecordsItsInstructionMadeAndTheNextSessionGetsItsOwn()
+    {
+        // Spec §7.3, §5.7: the before hook's write to G[0x110] and op 0x19f's status write to G[0x20] go with the session
+        // the load ends; the next instruction's write is delivered in the load's session.
+        string saves = Saves();
+        Run(Root(), Native(Counting()), Store(saves));
+        Script dataOnly = ScriptAssembler.Assemble(Table, "DATAONLY.BIN", new List<(int, Operand[])>
+        {
+            (0x19f, [G(0x20), Imm(1)]),
+            (Mov, [G(0x102), Imm(3)]),
+            (0x2, []),
+        }, []);
+        LuaStackBuilder builder = new LuaStackBuilder().Mod("mod.a", """
+            -- file: hooks.lua
+            function before_load(ctx) maid.vm.g[0x110] = 1 end
+            function on_write(ctx)
+                maid.log.info(string.format("0x%x %d->%d %s", ctx.address, ctx.old, ctx.new, maid.session.reason))
+            end
+            """)
+            .Point(dataOnly, 0, "mod.a", "hooks.lua:before_load")
+            .Watch("G[0x20]", 0x20, "mod.a", "hooks.lua:on_write")
+            .Watch("G[0x102]", 0x102, "mod.a", "hooks.lua:on_write")
+            .Watch("G[0x110]", 0x110, "mod.a", "hooks.lua:on_write");
+        Scripting native = Native(builder);
+
+        VirtualMachine vm = Run(dataOnly, native, Store(saves));
+
+        Assert.Equal((0, 3, 0), (vm.Globals[0x20], vm.Globals[0x102], vm.Globals.GetValueOrDefault(0x110)));   // the banks are the save's
+        Assert.Equal(["0x102 0->3 load"], Lines(native));
+    }
+
     [Fact]
     public void AnAbandonedLoadEndsWithTheFlagSetAndTheTitleSessionStartsClear()
     {

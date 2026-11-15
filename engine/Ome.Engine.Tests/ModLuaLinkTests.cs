@@ -6,6 +6,7 @@ using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Ome.Mods.Linking;
+using Ome.Mods.Manifest;
 using Ome.Mods.Packages;
 using Ome.Mods.Tools;
 using Ome.Script.Abi;
@@ -195,7 +196,6 @@ public sealed class ModLuaLinkTests : IDisposable
     }
 
     [Theory]
-    [InlineData("[[hooks]]\nwatch = \"current_unit_id\"\nhandler = \"hooks.lua:on_award\"", "watches come with the wider hooks")]
     [InlineData("[[hooks]]\nengine = \"ome.text.present\"\nhandler = \"hooks.lua:on_award\"", "is reserved for the localization filter")]
     [InlineData("[[hooks]]\nengine = \"ome.nothing.here\"\nhandler = \"hooks.lua:on_award\"", "is not an engine event")]
     public void TheLinkRefusesByNameWhatThisEngineDoesNotBuild(string hook, string message)
@@ -521,6 +521,103 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.True(result.Succeeded, result.Report.Render());
         Assert.Equal(["himegari-base", "user"], result.Lua.Stack.Mods.Select(mod => mod.Id));
         Assert.True(result.Lua.Stack.Mods[0].Layout!.TryGet("unit_current_levels", out _));
+    }
+
+    // ------------------------------------------------------------------------------------------- watches (§7.3)
+
+    private const string WatchLayout = """
+        {"layout": 1, "profile": "himegari", "globals": [
+        {"name": "speed", "bank": "GF", "address": "0x10", "dims": []},
+        {"name": "stage_turn_limit", "bank": "G", "address": "0x11", "dims": [], "aliases": ["turn_limit"]},
+        {"name": "hero_name", "bank": "GS", "address": "0x20", "dims": []},
+        {"name": "unit_current_levels", "bank": "G", "address": "0x100", "dims": [4]},
+        {"name": "unit_grid", "bank": "G", "address": "0x200", "dims": [2, 3]},
+        {"name": "open_table", "bank": "G", "address": "0x300", "dims": [null]}
+        ]}
+        """;
+
+    private ModPackage WatchBase() => Mod("test-base", files: new() { ["layout/globals.json"] = WatchLayout });
+
+    private static string Watch(string target, string extra = "")
+        => $"[[hooks]]\nwatch = \"{target}\"\nhandler = \"hooks.lua:on_write\"\n{extra}\n";
+
+    private const string Requires = "[[requires]]\nid = \"test-base\"\nversion = \">=1, <2\"\n\n";
+    private const string OnWrite = "function on_write(ctx) end";
+
+    /// <summary>A mod without vm that requires the base mod and has <paramref name="hooks"/>.</summary>
+    private ModPackage Watcher(string hooks, string id = "watcher")
+        => Mod(id, Requires + hooks, Hooks(OnWrite), lua: "api = 1");
+
+    [Fact]
+    public void AWatchOnANameBindsThroughTheBaseModWithoutVmAndOneCellIsOneWatchInTheMergedOrder()
+    {
+        ModPackage watcher = Watcher(Watch("turn_limit") + Watch("unit_grid[*]") + Watch("hero_name"));
+        ModPackage raw = Mod("raw", Watch("G[0x11]", "priority = -1"), Hooks(OnWrite));
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), [WatchBase(), watcher, raw], []);
+
+        Assert.True(result.Succeeded, result.Report.Render());
+        IReadOnlyList<PlannedWatch> watches = result.Lua.Plan.Watches;
+        Assert.Equal([("stage_turn_limit", CellKind.Integer, 0x11, 1), ("unit_grid[*]", CellKind.Integer, 0x200, 6),
+                      ("hero_name", CellKind.String, 0x20, 1)],
+                     watches.Select(watch => (watch.Watch, watch.Kind, watch.Address, watch.Count)));
+        Assert.Equal([("raw", -1), ("watcher", 0)],
+                     watches[0].Handlers.Select(handler => (result.Lua.Stack[handler.Handler].ModId, handler.Priority)));
+        Assert.Equal(("unit_grid", 2, 3), (watches[1].Global, watches[1].Dimensions, watches[1].RowWidth));
+        Assert.Contains(result.Report.Lines, line => line.Class == ModReportClass.OrderedInteraction
+            && line.Message == "watch stage_turn_limit: handlers run in this order: raw hooks.lua:on_write (priority -1), "
+                               + "watcher hooks.lua:on_write (priority 0)");
+        Assert.Contains("watch unit_grid[*] (G[0x200..0x205]): watcher hooks.lua:on_write (priority 0)", result.Report.Lua);
+        Assert.Contains("watch hero_name (GS[0x20]): watcher hooks.lua:on_write (priority 0)", result.Report.Lua);
+
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", SyntheticBase(), result);
+        IReadOnlyList<PlannedWatch> cached = ModLinkCache.TryOpen(cache, "key")!.HookPlan.Watches;
+        static object Cells(PlannedWatch watch)
+            => (watch.Watch, watch.Kind, watch.Address, watch.Count, watch.Global, watch.Dimensions, watch.RowWidth);
+        Assert.Equal(watches.Select(Cells), cached.Select(Cells));
+        Assert.Equal(watches.SelectMany(watch => watch.Handlers), cached.SelectMany(watch => watch.Handlers));
+    }
+
+    [Fact]
+    public void TwoWatchesThatShareCellsAreAnOrderedInteraction()
+    {
+        ModLinkResult result = ModLinker.Link(SyntheticBase(),
+            [WatchBase(), Watcher(Watch("unit_current_levels[*]")), Mod("raw", Watch("G[0x102]", "priority = -1"), Hooks(OnWrite))], []);
+
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.Equal(2, result.Lua.Plan.Watches.Count);
+        Assert.Contains(result.Report.Lines, line => line.Class == ModReportClass.OrderedInteraction
+            && line.Message == "watches unit_current_levels[*] and G[0x102] share cells; on one of them the handlers run in "
+                               + "this order: raw hooks.lua:on_write (priority -1), watcher hooks.lua:on_write (priority 0)");
+    }
+
+    [Theory]
+    [InlineData("G[0x11]", "a watch on an address names a cell by number, which needs the vm capability")]
+    [InlineData("no_such_name", "'no_such_name' is not a name test-base exports")]
+    [InlineData("speed", "speed is a float global; version 1 watches integer and string globals")]
+    [InlineData("turn_limit[*]", "stage_turn_limit is no table; watch \"stage_turn_limit\"")]
+    [InlineData("unit_grid", "unit_grid is a table; watch \"unit_grid[*]\" for its cells")]
+    [InlineData("open_table[*]", "open_table's row count is not known, so a watch on the table has no end")]
+    public void AWatchTheBaseModCannotGiveIsALinkError(string target, string message)
+        => Assert.Equal(["watcher"], Stop(ModLinker.Link(SyntheticBase(), [WatchBase(), Watcher(Watch(target))], []),
+                                         $"hooks[0] watch {target}: {message}").Mods);
+
+    [Fact]
+    public void AWatchOnANameNeedsABaseMod()
+        => Stop(ModLinker.Link(SyntheticBase(), [Mod("m", Watch("stage_turn_limit"), Hooks(OnWrite))], []),
+                "a watch on a name resolves through a base mod, and the mod requires none");
+
+    [Theory]
+    [InlineData("GF[0x10]", "version 1 watches integer and string cells (G[0x…], GS[0x…]); 'GF[0x10]' is a float cell")]
+    [InlineData("G[16]", "'G[16]' is not a global's name, name[*] for a whole table, or G[0x…] or GS[0x…] for a cell")]
+    [InlineData("G[0x100000000]", "is not a global's name")]
+    [InlineData("levels[0]", "is not a global's name")]
+    public void TheReaderRefusesAWatchThatNamesNoCell(string target, string message)
+    {
+        string text = "omp = 3\nid = \"m\"\nname = \"m\"\nversion = \"1.0.0\"\n\n[game]\nprofile = \"himegari\"\n"
+                      + "target = \"extended\"\n\n[lua]\napi = 1\n\n" + Watch(target);
+        var error = Assert.Throws<ModManifestException>(() => ManifestReader.Parse(text));
+        Assert.Contains(error.Problems, problem => problem.Contains(message, StringComparison.Ordinal));
     }
 
     [Fact]

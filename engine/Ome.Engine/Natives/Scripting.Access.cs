@@ -120,6 +120,7 @@ public sealed partial class Scripting
                                                             + $"({list}); --lua-dev lets it through: add it to the list");
             }
             int address = LayoutCells.Address(global, row, column);
+            owner._faceMod = modId;   // a watch's writer when no handler runs (spec §7.3)
             if (!owner.Tracing)
             {
                 owner.WriteCell(global.Kind, address, value, global.Name);
@@ -145,6 +146,7 @@ public sealed partial class Scripting
             int cell = CellRules.Address(address);
             var integer = CellRules.Integer(value);
             CellValue? before = GlobalBefore(CellKind.Integer, cell);
+            owner._faceMod = modId;
             Memory.SetInteger(cell, integer);
             GlobalAfter(CellKind.Integer, cell, before);
         }
@@ -167,6 +169,7 @@ public sealed partial class Scripting
             int cell = CellRules.Address(address);
             var text = CellRules.Text(value, CodePage);
             CellValue? before = GlobalBefore(CellKind.String, cell);
+            owner._faceMod = modId;
             Memory.SetString(cell, text);
             GlobalAfter(CellKind.String, cell, before);
         }

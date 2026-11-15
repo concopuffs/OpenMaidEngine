@@ -67,16 +67,27 @@ public sealed partial class GameLayout
     /// wins over a table whose rows reach it.
     /// </summary>
     public string? NameAt(CellKind kind, int address)
+        => GlobalAt(kind, address, out int row, out int column) is not { } global
+            ? null
+            : column >= 0 ? $"{global.Name}[{row}][{column}]" : row >= 0 ? $"{global.Name}[{row}]" : global.Name;
+
+    /// <summary>The global that covers a cell, with the cell's row in a table and its column in a 2-D one (-1 for
+    /// none); null when no global of the bank covers it. A scalar at the address wins over a table whose rows reach
+    /// it.</summary>
+    public LayoutGlobal? GlobalAt(CellKind kind, int address, out int row, out int column)
     {
+        row = column = -1;
         foreach (LayoutGlobal global in Globals)
-            if (global.Kind == kind && global.IsScalar && global.Address == address) return global.Name;
+            if (global.Kind == kind && global.IsScalar && global.Address == address) return global;
         foreach (LayoutGlobal global in Globals)
         {
             if (global.Kind != kind || global.IsScalar || address < global.Address) continue;
-            int offset = address - global.Address, width = global.RowWidth, row = offset / width;
+            int offset = address - global.Address, width = global.RowWidth;
             // An open table that no global follows reaches every row.
-            if (global.Rows is int rows && row >= rows) continue;
-            return global.Dimensions.Count == 2 ? $"{global.Name}[{row}][{offset % width}]" : $"{global.Name}[{row}]";
+            if (global.Rows is int rows && offset / width >= rows) continue;
+            row = offset / width;
+            if (global.Dimensions.Count == 2) column = offset % width;
+            return global;
         }
         return null;
     }

@@ -54,6 +54,8 @@ public class SceneReloadTests
         [
             // A queue lives for the run; the driver's deterministic random draws are the run's.
             "_queues", "_deterministicRandomSeed", "_deterministicRandomSites", "_deterministicRandomDraws",
+            // The scripting native's watched cells, which the link's plan decides (Lua scripting spec §7.3).
+            "_watched",
         ],
         [typeof(Audio)] =
         [
@@ -133,6 +135,9 @@ public class SceneReloadTests
             "_depth", "_frameAccess", "_nestedHalt",
             // How many sessions the run has ended, which an after hook compares across its instruction.
             "_sessionsEnded",
+            // The plan's watches; and the handler running, the console chunks and the builds running, the latest face's
+            // mod and the delivery's depth, all set and cleared within a call (the records are the Scene's).
+            "_watches", "_running", "_consoleDepth", "_looseDepth", "_faceMod", "_delivering",
             // The undeclared writes --lua-dev has logged, once each for the run.
             "_devWrites",
             // The trace (--lua-trace): the traced calls running (empty between calls), the run's recent lines, and its

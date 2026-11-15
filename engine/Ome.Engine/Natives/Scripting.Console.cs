@@ -106,6 +106,7 @@ public sealed partial class Scripting
         }
         bool outerFrameAccess = _frameAccess;
         _depth++;
+        _consoleDepth++;   // spec §7.3: the chunk's writes go with the next instruction's records
         _frameAccess = true;
         try
         {
@@ -118,6 +119,7 @@ public sealed partial class Scripting
         finally
         {
             _frameAccess = outerFrameAccess;
+            _consoleDepth--;
             _depth--;
         }
     }

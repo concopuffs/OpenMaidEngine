@@ -1175,8 +1175,9 @@ public sealed partial class VirtualMachine
             || !frame.Script.Name.Equals(entry.CoordinatorScript, StringComparison.OrdinalIgnoreCase))
             return false;
         _scene.HostedSceneEntry = null;
+        // A tool's seeding, which no watch sees (Lua scripting spec §7.3).
         foreach (var (address, value) in entry.CoordinatorWrites)
-            _memory.SetInteger(address, value);
+            _memory.Integers[address] = value;
         _scene.HostedScenePackedId = entry.ScenePackedId;
         return true;
     }
@@ -1186,8 +1187,9 @@ public sealed partial class VirtualMachine
         if (_scene.DebugFrameReturnRequest is not { } pending
             || !ReferenceEquals(pending.Frame, frame)) return false;
         if (!ReferenceEquals(_scene.DebugFrameReturnRequest?.Frame, frame)) return false;
+        // The debugger's writes, which no watch sees (Lua scripting spec §7.3).
         foreach (var (address, value) in _scene.DebugFrameReturnRequest.GlobalWrites)
-            _memory.SetInteger(address, value);
+            _memory.Integers[address] = value;
         _scene.DebugFrameReturnRequest = null;
         return true;
     }
@@ -1456,11 +1458,14 @@ public sealed partial class VirtualMachine
             HookSite? hooked = null;
             long sessionMark = -1;
             bool skipped = false;
+            int watchSlot = -1;
             if (_scripting != null)
             {
                 // Lua scripting spec §7.1, §13: the console's chunks, then the instruction's before hooks, after the
                 // boundary's services and before the opcode handler. A frame's table is null for a script with no hooks.
                 _scripting.ServiceRequests();
+                // Spec §7.3: with watches, the instruction's records start here, so its before hooks' writes are its own.
+                if (_scripting.Watching) watchSlot = _scripting.BeginInstruction(frame.Script, pc);
                 if ((hooked = frame.Hooks?.ByIndex[pc]) != null)
                 {
                     if (_scripting.RunBefore(hooked, frame.Script.Instructions[pc], out skipped) is { } luaHalt)
@@ -1489,6 +1494,12 @@ public sealed partial class VirtualMachine
                     HaltReason ??= afterHalt;
                     return LoopEnd.Halted;
                 }
+            }
+            // Spec §7.3, §7.4: the watch records the instruction made, after its after hooks, unless it halted the run.
+            if (watchSlot >= 0 && _scripting!.EndInstruction(watchSlot, step.Kind != StepKind.Halt) is { } watchHalt)
+            {
+                HaltReason ??= watchHalt;
+                return LoopEnd.Halted;
             }
             _waits.FrameYield();
             _skip.PaceOp();

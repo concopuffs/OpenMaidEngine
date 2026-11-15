@@ -855,7 +855,7 @@ An award in play needs a battle; the install tests run the same native on `ADDEX
 
 ## 8. Milestone 4: wider hooks
 
-Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; pieces 1 to 4 are built (§8.1–§8.4):
+Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; pieces 1 to 5 are built (§8.1–§8.5):
 
 1. **The two opcode facts** (spec §7.1): `waits` (`always`, `may` or `never`) and `leaves` (any of `falls`, `jumps`,
    `calls`, `ends`, `saves`, `loads`, `restores`) for every opcode the port implements, in `vm-map/opcodes.toml`.
@@ -1001,3 +1001,62 @@ Tests: `LuaHooksTests.EnterAndExitFireForACalledFrameWithItsCauseAndItsLocals`,
 the load's session, CALLBACK_LOAD restore, ROOT restore, then `ome.session.resumed`; an abandoned load: the title
 session, then TITLE title), and in `ModLuaLinkTests` the lists, the report and the cache, and the three refusals.
 Full suite 2307.
+
+### 8.5 Watches
+
+Built 2026-11-15 (spec §7.3–§7.5):
+
+- **The manifest and the link** (`ModWatchTarget`, `ModLuaLinker.BindWatch`). The reader takes `name`, `name[*]`,
+  `G[0x…]` and `GS[0x…]`, and refuses `GF[0x…]` and anything else (an element by index is not a form: watch the
+  table and test `ctx.index`). A name resolves through the layouts of the base mods the mod requires, as `[lua]
+  writes` does, and needs no capability; a cell by address needs `vm`. The link refuses a float global, a table's
+  name without `[*]`, `[*]` on a scalar, and a table whose row count the registry does not know (it has no end).
+  Watches on the same cells (bank, address, count) are one `PlannedWatch` with their handlers in the merged order,
+  the named form's text kept; watches that share cells get an ordered-interaction line, and the report a
+  `watch NAME (G[0x…..0x…]): …` line. The cache stores them (`watches`).
+- **The records.** The plan's cells are a paged bitmap per bank (`WatchedCells`: 65,536 cells a page, 8 KB, a page
+  no watch reaches null), installed in `ScriptMemory` only when the plan has a watch. `SetInteger` and `SetString`
+  test it and, for a covered cell, record the old and new value. Without watches the setters pay one null test.
+- **Whose records they are.** With watches the loop brackets each instruction: `BeginInstruction` after the boundary's
+  services and before the before hooks, `EndInstruction` after the after hooks. `Scene.Open` is the stack of running
+  instructions; a record joins the innermost one's (`Scene.Pending`), and each instruction delivers only its own, so a
+  called script's write is delivered when its instruction returns, inside the call. A halted step drops its records.
+  - The writer is the running handler's mod, else the console, else (a session build, which runs no handler) the mod
+    whose face wrote, else the innermost instruction, else `engine`.
+  - Records made outside any instruction (a session build and its `ome.session.start` handlers, a console chunk, the
+    boundary's `ome.session.resumed`, writes before the first instruction) are loose (`Scene.Loose`) and join the next
+    instruction's.
+  - A watch handler's write is appended to the records being delivered, one generation deeper; a record at
+    generation 32 is refused as nesting too deep (`ModScriptErrorKind.Depth`), which ends a handler that rewrites its
+    own cell.
+- **What is not a write.** A load replacing the banks and a return to title zeroing them assign the banks wholesale,
+  past the setters. The hosted coordinator's and the debugger's global writes now assign `Integers[…]` directly for
+  the same reason (tool seeding). A session's records go with it: `EndSession` replaces the scene, so a load or a
+  title return inside an instruction drops what it had recorded, and op 0x19f's status write, made after its session
+  ended, is dropped at the setter. A restore's re-run writes are ordinary writes, delivered with `restoring` set.
+- **The context** (`HookKind.Watch`): `ctx.watch`, `address`, `name`, `index`, `column`, `old`, `new`, `writer`, `mod`,
+  and for a script write `script`, `offset`, `site`. A cell by address finds its name, row and column through the
+  console's layout (`GameLayout.GlobalAt`). No frame access. The trace's kind is `watch`, with `cell`, `old`, `new`,
+  `writer` and `by`; an error reads `at watch NAME on G[0x…]`.
+- **Measured** (spec §7.5), on Kamidori 4.33G's data-table boot: the 112 INIT scripts of `init-image.json`, in its
+  order through one session, 84,466 instructions; Release, the best of 15 interleaved runs, a Lua runtime per script.
+
+  | Run | Time | Records delivered |
+  |---|---|---|
+  | No scripting native | 175 ms | — |
+  | A Lua mod with an exit hook on each script, no watch | 173 ms | — |
+  | The same mod watching `unit_base_stats[*]` (14,000 cells, the table the boot writes most) | 180 ms | 4,183 |
+  | The same mod watching `item_costume_enhancement_grid[*]` (450,000 cells, the largest table, unwritten at boot) | 175 ms | 0 |
+
+  The four differ by less than one run differs from the next (an earlier best of 5 gave 172, 182, 177 and 182 ms). A watch
+  costs its bitmap (the largest table's 7 pages, 56 KB) and, for each covered write, a record and its handler calls;
+  an uncovered write costs one lookup. With a watch present every instruction also pushes and pops its bracket.
+
+Tests: `LuaHooksTests` (6: one delivery per write after the instruction and its after hooks, its hooks' writes first;
+an inner instruction's records delivered at its own return, the outer's at the outer's; writes outside any
+instruction delivered with the next instruction's; a handler's write delivered after the handlers due, and the cap
+ending a loop; a name's row and column, and two watches on one cell in one order; a string watch and its trace
+line), `LuaStateTests` (2: a restore's writes seen and the load's banks and a title's zeroing not; a data-only load
+dropping its instruction's records, the next session getting its own), and in `ModLuaLinkTests` the binding, the
+merge and the cache, the overlap line, six refusals, the missing base mod, and four reader refusals. Full suite
+2327.

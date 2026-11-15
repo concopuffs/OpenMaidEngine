@@ -45,19 +45,16 @@ public static class ModLuaLinker
         ["ome.text.present"] = "is reserved for the localization filter (Lua scripting spec §7.7)",
     };
 
-    /// <summary>The hook forms this engine builds; the reader takes all six (spec §6.3).</summary>
-    private static string? NotBuilt(ModHook hook) => hook.Form switch
-    {
-        ModHookForm.Watch => "watches come with the wider hooks (Lua scripting milestone 4)",
-        _ => null,
-    };
-
     /// <summary>A hook on its way into the plan; <paramref name="GameEvent"/> names the event at a point that it
     /// subscribes to.</summary>
     private sealed record Pending(ModHook Hook, HandlerId Handler, int LoadOrder, string? GameEvent = null);
 
     /// <summary>An event the link read, with its place when it is raised at a point.</summary>
     private sealed record DeclaredEvent(GameEvent Event, (string Script, int Offset, int Site)? Place);
+
+    /// <summary>The cells a watch covers (spec §7.3), and the global it names with its shape.</summary>
+    private sealed record WatchedCells(string Watch, CellKind Kind, int Address, int Count, string? Global, int Dimensions,
+                                       int RowWidth);
 
     public static LinkedLua Link(IReadOnlyList<ModPackage> order, ModLinkBase linkBase,
                                  IReadOnlyDictionary<string, LinkedScript> scripts, ModLinkReport report)
@@ -82,6 +79,7 @@ public static class ModLuaLinker
         var engineHooks = new List<(Pending Pending, string Event)>();
         var scriptHooks = new List<(Pending Pending, string Script)>();
         var luaEventHooks = new List<(Pending Pending, string Event)>();
+        var watchHooks = new List<(Pending Pending, WatchedCells Cells)>();
         // Spec §9.1, plan §7.1: the profile's patch points, else the copy a base mod ships.
         OmsPatchPoints? points = linkBase.PatchPoints ?? order.Select(mod => mod.BasePoints).FirstOrDefault(found => found != null);
         var (declared, brokenEvents) = Events(luaMods, order, linkBase, points, scripts, report);
@@ -146,11 +144,6 @@ public static class ModLuaLinker
             foreach (ModHook hook in mod.Manifest.Hooks)
             {
                 string where = hook.Describe();
-                if (NotBuilt(hook) is { } later)
-                {
-                    Error(null, $"{where}: {later}; this engine does not build it yet");
-                    continue;
-                }
                 if (hook.Form == ModHookForm.Engine && !BuiltEngineEvents.Contains(hook.Target))
                 {
                     Error(null, LaterEngineEvents.TryGetValue(hook.Target, out string? why)
@@ -163,6 +156,7 @@ public static class ModLuaLinker
                 // broken file does not hide a wrong target.
                 (string Script, int Offset, int Site)? bound = null;
                 string? hookedScript = null;
+                WatchedCells? watched = null;
                 bool pointFails = false;
                 DeclaredEvent? subscribed = null;
                 if ((hook.Form is ModHookForm.Point or ModHookForm.Site or ModHookForm.Script) && !vm)
@@ -186,6 +180,11 @@ public static class ModLuaLinker
                 {
                     hookedScript = BindScript(mod, where, hook.Target, linkBase, scripts, report);
                     pointFails = hookedScript == null;
+                }
+                else if (hook.Form == ModHookForm.Watch)
+                {
+                    watched = BindWatch(mod, where, hook.Target, vm, bases, report);
+                    pointFails = watched == null;
                 }
                 else if (hook.Form == ModHookForm.Event)
                 {
@@ -230,6 +229,7 @@ public static class ModLuaLinker
                                     subscribed.Event.Point!));
                 else if (hook.Form == ModHookForm.Engine) engineHooks.Add((new Pending(hook, id, loadOrder), hook.Target));
                 else if (hook.Form == ModHookForm.Script) scriptHooks.Add((new Pending(hook, id, loadOrder), hookedScript!));
+                else if (hook.Form == ModHookForm.Watch) watchHooks.Add((new Pending(hook, id, loadOrder), watched!));
                 else pointHooks.Add((new Pending(hook, id, loadOrder), bound!.Value.Script, bound.Value.Offset, bound.Value.Site,
                                      hook.Form == ModHookForm.Point ? hook.Target : null));
             }
@@ -315,6 +315,31 @@ public static class ModLuaLinker
                 report.Add(ModReportClass.OrderedInteraction, due.Select(entry => handlers[entry.Handler.Index].ModId), null,
                     $"{byEvent.Key}: subscribers run in this order: " + string.Join(", ", due.Select(Describe)));
         }
+        // Spec §7.3, §7.4: each watch once for its cells, with every handler of a hook on them in the merged order. A cell
+        // that two watches cover runs both lists merged, which the report shows.
+        var watches = new List<PlannedWatch>();
+        foreach (var byCells in watchHooks.GroupBy(hook => (hook.Cells.Kind, hook.Cells.Address, hook.Cells.Count))
+                     .OrderBy(group => group.Key.Kind).ThenBy(group => group.Key.Address).ThenBy(group => group.Key.Count))
+        {
+            WatchedCells cells = byCells.Select(hook => hook.Cells).OrderBy(found => found.Global == null).First();
+            var due = Merged(byCells.Select(hook => hook.Pending)).ToList();
+            watches.Add(new PlannedWatch(cells.Watch, cells.Kind, cells.Address, cells.Count, due.Select(Planned).ToList(),
+                                         cells.Global, cells.Dimensions, cells.RowWidth));
+            if (due.Count > 1)
+                report.Add(ModReportClass.OrderedInteraction, due.Select(entry => handlers[entry.Handler.Index].ModId), null,
+                    $"watch {cells.Watch}: handlers run in this order: " + string.Join(", ", due.Select(Describe)));
+        }
+        for (int i = 0; i < watches.Count; i++)
+            for (int j = i + 1; j < watches.Count; j++)
+            {
+                PlannedWatch a = watches[i], b = watches[j];
+                if (a.Kind != b.Kind || a.Address + (long)a.Count <= b.Address || b.Address + (long)b.Count <= a.Address) continue;
+                var both = a.Handlers.Concat(b.Handlers).OrderBy(handler => handler.Priority).ThenBy(handler => handler.LoadOrder)
+                    .ToList();
+                report.Add(ModReportClass.OrderedInteraction, both.Select(handler => handlers[handler.Handler.Index].ModId).Distinct(),
+                    null, $"watches {a.Watch} and {b.Watch} share cells; on one of them the handlers run in this order: "
+                          + string.Join(", ", both.Select(handler => $"{handlers[handler.Handler.Index]} (priority {handler.Priority})")));
+            }
         // Spec §12: two mods that write one name are an ordered interaction, in load order.
         var writers = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (ModRuntimeMod mod in mods.Where(mod => mod.Layout == null))
@@ -326,11 +351,11 @@ public static class ModLuaLinker
         foreach (var (name, ids) in writers.Where(pair => pair.Value.Count > 1).OrderBy(pair => pair.Key, StringComparer.Ordinal))
             report.Add(ModReportClass.OrderedInteraction, ids, null,
                        $"{name} is written by {string.Join(", then ", ids)} (load order); the trace shows each write (--lua-trace)");
-        report.Lua = Summary(mods, handlers, sites, scriptPlans, engine, luaEvents, declared);
+        report.Lua = Summary(mods, handlers, sites, scriptPlans, engine, luaEvents, declared, watches);
 
         var events = declared.Values.Select(entry => entry.Event).OrderBy(gameEvent => gameEvent.Name, StringComparer.Ordinal).ToList();
-        return new LinkedLua(new ModRuntimeStack(mods, handlers, events), new HookPlan(sites, engine, luaEvents, scriptPlans),
-                             undeclared);
+        return new LinkedLua(new ModRuntimeStack(mods, handlers, events),
+                             new HookPlan(sites, engine, luaEvents, scriptPlans, watches), undeclared);
     }
 
     /// <summary>The report's Lua section (spec §12): each mod with its capabilities and the names it writes, each hook with
@@ -340,7 +365,8 @@ public static class ModLuaLinker
                                         IReadOnlyDictionary<string, PlannedScript> scriptPlans,
                                         IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> engine,
                                         IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> luaEvents,
-                                        IReadOnlyDictionary<string, DeclaredEvent> declared)
+                                        IReadOnlyDictionary<string, DeclaredEvent> declared,
+                                        IReadOnlyList<PlannedWatch> watches)
     {
         var lines = new List<string>();
         var baseIds = mods.Where(mod => mod.Layout != null).Select(mod => mod.Id).ToHashSet(StringComparer.Ordinal);
@@ -383,6 +409,8 @@ public static class ModLuaLinker
                     lines.Add($"hook {script} {when}: " + string.Join(", ", list.Select(handler => Describe(handler))));
         foreach (var (name, planned) in engine)
             lines.Add($"hook {name}: " + string.Join(", ", planned.Select(handler => Describe(handler))));
+        foreach (PlannedWatch watch in watches)
+            lines.Add($"watch {watch.Watch} ({watch.Cells}): " + string.Join(", ", watch.Handlers.Select(handler => Describe(handler))));
         foreach (DeclaredEvent entry in declared.Values.OrderBy(entry => entry.Event.Name, StringComparer.Ordinal))
         {
             GameEvent gameEvent = entry.Event;
@@ -557,6 +585,73 @@ public static class ModLuaLinker
             else if (!writes.Contains(global.Name, StringComparer.Ordinal)) writes.Add(global.Name);
         }
         return writes;
+    }
+
+    /// <summary>
+    /// A watch's cells (spec §6.3, §7.3). A name resolves through the mod's own layout or the base mods it requires, as
+    /// its write list does, and needs no vm: a scalar is one cell, <c>name[*]</c> every cell of a table whose rows are
+    /// known. An address names one cell, which needs vm. Version 1 watches the integer and string banks.
+    /// </summary>
+    private static WatchedCells? BindWatch(ModPackage mod, string where, string target, bool vm, IReadOnlyList<ModPackage> bases,
+                                           ModLinkReport report)
+    {
+        void Error(string message) => report.Add(ModReportClass.Error, mod.Id, null, $"{where}: {message}");
+        ModWatchTarget watch = ModWatchTarget.Parse(target)
+                               ?? throw new InvalidOperationException($"the reader let '{target}' through as a watch");
+        if (watch.Name is not { } name)
+        {
+            if (!vm)
+            {
+                Error("a watch on an address names a cell by number, which needs the vm capability ([lua] capabilities = "
+                      + "[\"vm\"]); a watch on a name of the base mod does not");
+                return null;
+            }
+            CellKind bank = watch.Bank == "GS" ? CellKind.String : CellKind.Integer;
+            return new WatchedCells($"{watch.Bank}[0x{watch.Address:x}]", bank, watch.Address, 1, null, 0, 1);
+        }
+        var layouts = (mod.BaseLayout != null ? [mod] : Array.Empty<ModPackage>()).Concat(bases).ToList();
+        if (layouts.Count == 0)
+        {
+            Error("a watch on a name resolves through a base mod, and the mod requires none ([[requires]] id = "
+                  + "\"<profile>-base\")");
+            return null;
+        }
+        LayoutGlobal? found = null;
+        foreach (ModPackage package in layouts)
+            if (package.BaseLayout!.TryGet(name, out LayoutGlobal global))
+            {
+                found = global;
+                break;
+            }
+        if (found is not { } named)
+        {
+            Error($"'{name}' is not a name {string.Join(" or ", layouts.Select(package => package.Id))} exports");
+            return null;
+        }
+        if (named.Kind == CellKind.Float)
+        {
+            Error($"{named.Name} is a float global; version 1 watches integer and string globals");
+            return null;
+        }
+        if (named.IsScalar)
+        {
+            if (!watch.Table) return new WatchedCells(named.Name, named.Kind, named.Address, 1, named.Name, 0, 1);
+            Error($"{named.Name} is no table; watch \"{named.Name}\"");
+            return null;
+        }
+        if (!watch.Table)
+        {
+            Error($"{named.Name} is a table; watch \"{named.Name}[*]\" for its cells");
+            return null;
+        }
+        if (named.Rows is not (int rows and > 0))
+        {
+            Error($"{named.Name}'s row count is not known, so a watch on the table has no end; watch its cells by address "
+                  + "(G[0x…], with the vm capability)");
+            return null;
+        }
+        return new WatchedCells($"{named.Name}[*]", named.Kind, named.Address, rows * named.RowWidth, named.Name,
+                                named.Dimensions.Count, named.RowWidth);
     }
 
     /// <summary>Whether a package takes part in the Lua link: it has Lua files, a <c>[lua]</c> table or hooks.</summary>

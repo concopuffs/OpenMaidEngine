@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+
 namespace Ome.Mods.Manifest;
 
 /// <summary>The forms a <c>[[hooks]]</c> entry takes (Lua scripting spec §6.3).</summary>
@@ -15,6 +18,27 @@ public enum ModHookForm
     Script,
     /// <summary><c>watch = "…"</c>: writes to a global (§7.3).</summary>
     Watch,
+}
+
+/// <summary>
+/// What a <c>watch</c> names (Lua scripting spec §6.3, §7.3): a global by name, its whole table (<c>name[*]</c>), or a
+/// cell by address in bank <see cref="Bank"/> (<c>G[0x…]</c> an integer cell, <c>GS[0x…]</c> a string cell; the reader
+/// refuses <c>GF</c>, a float cell, which version 1 does not watch).
+/// </summary>
+public sealed partial record ModWatchTarget(string? Name, bool Table, string? Bank, int Address)
+{
+    [GeneratedRegex(@"^(?:(?<name>[A-Za-z_][A-Za-z0-9_]*)(?<table>\[\*\])?|(?<bank>G|GS|GF)\[0x(?<address>[0-9A-Fa-f]{1,8})\])$")]
+    private static partial Regex Pattern();
+
+    /// <summary>The target <paramref name="text"/> names, or null when it is none of the three forms.</summary>
+    public static ModWatchTarget? Parse(string text)
+    {
+        Match match = Pattern().Match(text);
+        if (!match.Success) return null;
+        if (match.Groups["name"].Success) return new ModWatchTarget(match.Groups["name"].Value, match.Groups["table"].Success, null, -1);
+        uint address = uint.Parse(match.Groups["address"].Value, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture);
+        return address > int.MaxValue ? null : new ModWatchTarget(null, false, match.Groups["bank"].Value, (int)address);
+    }
 }
 
 /// <summary>A <c>[lua]</c> table (Lua scripting spec §6.2).</summary>

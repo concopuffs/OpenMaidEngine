@@ -9,7 +9,8 @@ using Ome.Scripting.Lua;
 /// <summary>
 /// Milestone 4 of docs/superpowers/specs/2026-11-10-lua-scripting-design.md, the wider hooks, over synthetic scripts
 /// and hand-built stacks (the link's output): site hooks and <c>after</c> (§7.1), <c>skip</c> (§7.1), script entry and
-/// exit (§7.2) and their order (§7.4). A load's and a return to title's causes are in <see cref="LuaStateTests"/>. The link's
+/// exit (§7.2), watches (§7.3) and their order (§7.4). A load's and a return to title's causes and records are in
+/// <see cref="LuaStateTests"/>. The link's
 /// side is in <see cref="ModLuaLinkTests"/>, a load across an <c>after</c> hook in <see cref="LuaStateTests"/>.
 /// </summary>
 public sealed class LuaHooksTests : IDisposable
@@ -41,6 +42,20 @@ public sealed class LuaHooksTests : IDisposable
     }
 
     private static Operand G(int address) => new(T_GINT, address);
+    /// <summary>The mod's log lines, without the time, the level and the mod.</summary>
+    private static string[] Lines(Scripting native, string mod = "mod.a")
+        => native.RecentLog.Where(line => line.Contains($" {mod}: ", StringComparison.Ordinal))
+            .Select(line => line[(line.IndexOf($" {mod}: ", StringComparison.Ordinal) + mod.Length + 3)..]).ToArray();
+
+    /// <summary>A watch handler that logs each record: the cell, the values, the writer, and where.</summary>
+    private const string Logging = """
+        -- file: watch.lua
+        function on_write(ctx)
+            local by = ctx.writer == "script" and (ctx.script .. "@" .. ctx.offset) or (ctx.mod or ctx.writer)
+            maid.log.info(string.format("%s 0x%x %s->%s %s", ctx.watch, ctx.address, tostring(ctx.old), tostring(ctx.new), by))
+        end
+        """;
+
     private static Operand Imm(long value) => new(T_IMM, value);
 
     private static Script Assemble(string name, params (int, Operand[])[] code)
@@ -209,6 +224,185 @@ public sealed class LuaHooksTests : IDisposable
         Assert.Equal(1, vm.Globals[0x303]);   // op 0x2 returns ROOT's frame too, and then the run ends
         Assert.Contains("\"kind\":\"script\",\"when\":\"enter\",\"cause\":\"call\",\"at\":\"SUB.BIN\"",
                         native.RecentTrace[1]);
+    }
+
+    // ------------------------------------------------------------------------------------------- watches (§7.3)
+
+    [Fact]
+    public void AWatchFiresOncePerWriteAfterTheInstructionAndItsAfterHooksWithItsHooksWritesFirst()
+    {
+        // ROOT writes G[0x100] = 5 twice (one value, two writes) and exits; instruction 0 has a before hook that writes
+        // the cell first and an after hook that logs.
+        Script root = Assemble("ROOT.BIN", (Mov, [G(0x100), Imm(5)]), (Mov, [G(0x100), Imm(5)]), (0x2, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Mod("mod.a", Logging + "\n" + """
+                -- file: hooks.lua
+                function before(ctx) maid.vm.g[0x100] = 1 end
+                function after(ctx) maid.log.info("after") end
+                function check(ctx)
+                    assert(ctx.name == nil and ctx.index == nil and ctx.column == nil and ctx.watch == "G[0x100]")
+                    if ctx.writer == "script" then
+                        assert(ctx.script == "ROOT.BIN" and ctx.site == ctx.offset and ctx.mod == nil)
+                    else
+                        assert(ctx.writer == "mod" and ctx.mod == "mod.a" and ctx.script == nil and ctx.offset == nil)
+                    end
+                end
+                """)
+            .Site(root, 0, "mod.a", "hooks.lua:before")
+            .Site(root, 0, "mod.a", "hooks.lua:after", "after")
+            .Watch("G[0x100]", 0x100, "mod.a", "watch.lua:on_write")
+            .Watch("G[0x100]", 0x100, "mod.a", "hooks.lua:check"));
+
+        VirtualMachine vm = Run(root, native);
+
+        NoErrors(native);
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(["after", "G[0x100] 0x100 0->1 mod.a", "G[0x100] 0x100 1->5 ROOT.BIN@0",
+                      "G[0x100] 0x100 5->5 ROOT.BIN@5"], Lines(native));
+    }
+
+    [Fact]
+    public void AnInnerInstructionDeliversItsOwnRecordsAndLeavesTheOuterOnesForTheOutersReturn()
+    {
+        // ROOT's call has a before hook that writes G[0x200]; SUB writes G[0x201] and returns, and its exit hook writes
+        // G[0x202]. SUB's own instruction delivers its record when it returns; the call's two wait for the call.
+        Script root = Assemble("ROOT.BIN", (0x3, [Imm(5)]), (0x2, []));
+        Script sub = Assemble("SUB.BIN", (Mov, [G(0x201), Imm(7)]), (0x5, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Mod("mod.a", Logging + "\n" + """
+                -- file: hooks.lua
+                function before_call(ctx) maid.vm.g[0x200] = 1 end
+                function sub_exit(ctx) maid.vm.g[0x202] = 2 end
+                function outer_record(ctx) assert(maid.vm.g[0x201] == 7, "SUB has run") end
+                """)
+            .Site(root, 0, "mod.a", "hooks.lua:before_call")
+            .ScriptHook("SUB.BIN", "exit", "mod.a", "hooks.lua:sub_exit")
+            .Watch("G[0x200]", 0x200, "mod.a", "watch.lua:on_write")
+            .Watch("G[0x200]", 0x200, "mod.a", "hooks.lua:outer_record")
+            .Watch("G[0x201]", 0x201, "mod.a", "watch.lua:on_write")
+            .Watch("G[0x202]", 0x202, "mod.a", "watch.lua:on_write"));
+
+        Run(root, native, provider: new MapProvider(new() { [5] = sub }));
+
+        NoErrors(native);
+        Assert.Equal(["G[0x201] 0x201 0->7 SUB.BIN@0", "G[0x200] 0x200 0->1 mod.a", "G[0x202] 0x202 0->2 mod.a"],
+                     Lines(native));
+    }
+
+    [Fact]
+    public void LuaWritesOutsideAnyInstructionGoWithTheNextInstructionsRecords()
+    {
+        // init.lua, a session start handler and a console chunk write before the first instruction; each record is
+        // delivered once that instruction has returned, after its own.
+        Script root = Assemble("ROOT.BIN", (Mov, [G(0x103), Imm(3)]), (0x2, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Mod("mod.a", Logging + "\n" + """
+                -- file: init.lua
+                maid.vm.g[0x100] = 1
+                -- file: hooks.lua
+                function on_start(e) maid.vm.g[0x101] = 2 end
+                function check(ctx) assert(maid.vm.g[0x103] == 3, "the first instruction has run") end
+                """)
+            .Engine(Scripting.SessionStartEvent, "mod.a", "hooks.lua:on_start")
+            .Watch("G[0x100..]", 0x100, "mod.a", "watch.lua:on_write", count: 4)
+            .Watch("G[0x100..]", 0x100, "mod.a", "hooks.lua:check", count: 4));
+        native.SubmitConsole(null, "maid.vm.g[0x102] = 4");
+
+        Run(root, native);
+
+        NoErrors(native);
+        Assert.Equal(["G[0x100..] 0x100 0->1 mod.a", "G[0x100..] 0x101 0->2 mod.a", "G[0x100..] 0x102 0->4 console",
+                      "G[0x100..] 0x103 0->3 ROOT.BIN@0"], Lines(native));
+    }
+
+    [Fact]
+    public void AWatchHandlersWriteIsDeliveredAfterTheHandlersDueAndTheNestingCapEndsALoop()
+    {
+        // The before hook writes G[0x101], the instruction G[0x100]; the handler on G[0x101] writes G[0x102], delivered
+        // after G[0x100]'s. The handler on G[0x110] writes its own cell again, which comes back to it a delivery deeper
+        // until the cap (32) refuses it.
+        Script root = Assemble("ROOT.BIN", (Mov, [G(0x100), Imm(1)]), (Mov, [G(0x110), Imm(1)]), (0x2, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Mod("mod.a", Logging + "\n" + """
+                -- file: hooks.lua
+                function before(ctx) maid.vm.g[0x101] = 1 end
+                function chain(ctx) if ctx.address == 0x101 then maid.vm.g[0x102] = 1 end end
+                function again(ctx) maid.vm.g[0x110] = ctx.new + 1 end
+                """)
+            .Site(root, 0, "mod.a", "hooks.lua:before")
+            .Watch("G[0x100..]", 0x100, "mod.a", "watch.lua:on_write", count: 3)
+            .Watch("G[0x100..]", 0x100, "mod.a", "hooks.lua:chain", count: 3)
+            .Watch("G[0x110]", 0x110, "mod.a", "hooks.lua:again"));
+
+        VirtualMachine vm = Run(root, native);
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(["G[0x100..] 0x101 0->1 mod.a", "G[0x100..] 0x100 0->1 ROOT.BIN@0", "G[0x100..] 0x102 0->1 mod.a"],
+                     Lines(native).Where(line => line.StartsWith("G[", StringComparison.Ordinal)));
+        Assert.Equal(33, vm.Globals[0x110]);   // the instruction's 1, then 32 handler calls
+        Assert.Contains(native.RecentLog, line => line.Contains("hooks.lua:again nested too deep at watch G[0x110]: watch "
+                                                                + "handlers' writes nest 32 deep, the cap is 32", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AWatchOnANameGivesTheRowAndColumnAndTwoWatchesOnACellRunInOneOrder()
+    {
+        // A 2-D table of 2 rows of 3 at G[0x500], and an address watch on one of its cells from a second mod. The mod
+        // with the name watch has no vm.
+        var layout = GameLayout.Parse("""
+            {"layout": 1, "profile": "test", "globals": [
+              {"name": "grid", "bank": "G", "address": "0x500", "dims": [2, 3]}]}
+            """);
+        Script root = Assemble("ROOT.BIN", (Mov, [G(0x505), Imm(9)]), (Mov, [G(0x501), Imm(4)]), (0x2, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Base("test-base", layout)
+            .Mod("mod.a", """
+                -- file: watch.lua
+                function on_grid(ctx)
+                    maid.log.info(string.format("a %s %s[%d][%d] %d", ctx.watch, ctx.name, ctx.index, ctx.column, ctx.new))
+                end
+                """, vm: false, requires: ["test-base"])
+            .Mod("mod.b", """
+                -- file: watch.lua
+                function on_cell(ctx)
+                    maid.log.info(string.format("b %s %s[%d][%d] %d", ctx.watch, ctx.name, ctx.index, ctx.column, ctx.new))
+                end
+                """)
+            .Watch("grid[*]", 0x500, "mod.a", "watch.lua:on_grid", count: 6, global: "grid", dimensions: 2, rowWidth: 3)
+            .Watch("G[0x505]", 0x505, "mod.b", "watch.lua:on_cell", priority: -1));
+
+        Run(root, native);
+
+        NoErrors(native);
+        Assert.Equal(["b G[0x505] grid[1][2] 9", "a grid[*] grid[1][2] 9", "a grid[*] grid[0][1] 4"],
+                     native.RecentLog.Where(entry => entry.Contains(" mod.a: ", StringComparison.Ordinal)
+                                                     || entry.Contains(" mod.b: ", StringComparison.Ordinal))
+                         .Select(entry => entry[(entry.IndexOf(": ", 20, StringComparison.Ordinal) + 2)..]));
+    }
+
+    [Fact]
+    public void AStringWatchGivesTheTextsAndTheTraceNamesTheCellAndTheWriter()
+    {
+        Script root = Assemble("ROOT.BIN", (Mov, [G(0x100), Imm(1)]), (0x2, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Mod("mod.a", """
+                -- file: hooks.lua
+                function before(ctx) maid.vm.gs[0x40] = "after" end
+                function on_text(ctx)
+                    assert(ctx.old == "" and ctx.new == "after" and ctx.writer == "mod", "the texts")
+                    error("on purpose")
+                end
+                """)
+            .Site(root, 0, "mod.a", "hooks.lua:before")
+            .Watch("GS[0x40]", 0x40, "mod.a", "hooks.lua:on_text", kind: CellKind.String), trace: true);
+
+        Run(root, native);
+
+        string line = native.RecentTrace[1];
+        Assert.Contains("\"hook\":\"GS[0x40]\",\"kind\":\"watch\",\"cell\":\"GS[0x40]\",\"old\":\"\",\"new\":\"after\","
+                        + "\"writer\":\"mod\",\"by\":\"mod.a\"", line);
+        Assert.Contains("\"result\":\"error\"", line);
+        Assert.Contains(native.RecentLog, entry => entry.Contains("hooks.lua:on_text failed at watch GS[0x40]: ", StringComparison.Ordinal));
     }
 
     // ------------------------------------------------------------------------------------------- skip (§7.1)

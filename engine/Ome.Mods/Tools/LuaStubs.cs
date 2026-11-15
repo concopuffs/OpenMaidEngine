@@ -149,6 +149,21 @@ public static class LuaStubs
             ---@field script string
             ---@field cause "call"|"root"|"title"|"restore" why the frame was entered
 
+            ---What a watch handler is given (spec §7.3): one write to a watched cell.
+            ---@class maid.watch
+            ---@field watch string the watch as the manifest names it
+            ---@field address integer the cell's address
+            ---@field name string|nil the global the cell belongs to; nil for a cell no base mod names
+            ---@field index integer|nil the cell's row in a table
+            ---@field column integer|nil the cell's column in a 2-D table
+            ---@field old integer|string the value before the write
+            ---@field new integer|string the value it wrote
+            ---@field writer "script"|"mod"|"console"|"engine" what wrote it
+            ---@field mod string|nil the writing mod, when a mod's Lua wrote
+            ---@field script string|nil the writing instruction's script, when an instruction wrote
+            ---@field offset integer|nil its offset in the linked script
+            ---@field site integer|nil its original offset; nil for an instruction a patch inserted
+
             """);
         foreach (var (name, (field, type, doc)) in EngineEventFields.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             text.Append($"---What an {name} handler is given (spec §7.7).\n---@class {name}\n---@field event \"{name}\"\n")

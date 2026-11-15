@@ -12,6 +12,7 @@ internal sealed class LuaStackBuilder
     private readonly List<GameEvent> _events = new();
     private readonly Dictionary<string, List<PlannedHandler>> _luaEvents = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (List<PlannedHandler> Enter, List<PlannedHandler> Exit)> _scripts = new(StringComparer.Ordinal);
+    private readonly List<PlannedWatch> _watches = new();
 
     public LuaStackBuilder Mod(string id, string files, bool vm = true, bool library = false, params string[] requires)
         => Mod(id, Files(files), vm, library, requires);
@@ -128,6 +129,22 @@ internal sealed class LuaStackBuilder
         return this;
     }
 
+    /// <summary>A handler of a watch (spec §7.3): <paramref name="watch"/> as the manifest names it, over
+    /// <paramref name="count"/> cells from <paramref name="address"/>; a watch on a name gives its global and shape. One
+    /// watch per (bank, address, count), its handlers in the merged order, as the link builds it.</summary>
+    public LuaStackBuilder Watch(string watch, int address, string mod, string handler, int count = 1, int priority = 0,
+                                 CellKind kind = CellKind.Integer, string? global = null, int dimensions = 0, int rowWidth = 1)
+    {
+        var planned = new PlannedHandler(Handler(mod, handler), priority, LoadOrder(mod));
+        int at = _watches.FindIndex(entry => entry.Kind == kind && entry.Address == address && entry.Count == count);
+        if (at < 0) _watches.Add(new PlannedWatch(watch, kind, address, count, [planned], global, dimensions, rowWidth));
+        else _watches[at] = _watches[at] with
+        {
+            Handlers = _watches[at].Handlers.Append(planned).OrderBy(h => h.Priority).ThenBy(h => h.LoadOrder).ToList(),
+        };
+        return this;
+    }
+
     public LuaStackBuilder Engine(string name, string mod, string handler, int priority = 0)
     {
         HandlerId id = Handler(mod, handler);
@@ -158,5 +175,6 @@ internal sealed class LuaStackBuilder
             new HookPlan(_sites.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedSite>)pair.Value),
                          _engine.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value),
                          _luaEvents.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value),
-                         _scripts.ToDictionary(pair => pair.Key, pair => new PlannedScript(pair.Value.Enter, pair.Value.Exit))));
+                         _scripts.ToDictionary(pair => pair.Key, pair => new PlannedScript(pair.Value.Enter, pair.Value.Exit)),
+                         _watches));
 }

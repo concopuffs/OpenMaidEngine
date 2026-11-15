@@ -275,6 +275,36 @@ internal sealed class HookView(HookContext context, LuaModSession session) : ILu
         ? _args = LuaValue.FromUserData(new ArgsView(Context, session))
         : _args;
 
+    /// <summary>A watch's keys (spec §7.3): the cell, its global with the row and column, the values, and the writer;
+    /// a key that does not apply reads nil.</summary>
+    private static LuaValue WatchField(HookContext hook, string key)
+    {
+        static LuaValue Value(CellValue value) => value.Kind == CellKind.String ? value.Text ?? "" : value.Number;
+        static LuaValue Count(int value) => value >= 0 ? value : LuaValue.Nil;
+        return key switch
+        {
+            "watch" => hook.Name ?? "",
+            "address" => hook.Address,
+            "name" => hook.Global is { } global ? global : LuaValue.Nil,
+            "index" => Count(hook.Index),
+            "column" => Count(hook.Column),
+            "old" => Value(hook.Old),
+            "new" => Value(hook.New),
+            "writer" => hook.Writer switch
+            {
+                CellWriter.Script => "script",
+                CellWriter.Mod => "mod",
+                CellWriter.Console => "console",
+                _ => "engine",
+            },
+            "mod" => hook.WriterMod is { } mod ? mod : LuaValue.Nil,
+            "script" => hook.Script is { } script ? script : LuaValue.Nil,
+            "offset" => hook.Script != null ? hook.Offset : LuaValue.Nil,
+            "site" => hook.Script != null ? Count(hook.Site) : LuaValue.Nil,
+            _ => LuaValue.Nil,
+        };
+    }
+
     public static LuaTable BuildMetatable(LuaModSession session)
     {
         var meta = new LuaTable();
@@ -304,6 +334,7 @@ internal sealed class HookView(HookContext context, LuaModSession session) : ILu
                     "cause" => context.Return(hook.Cause ?? ""),
                     _ => context.Return(LuaValue.Nil),
                 };
+            if (hook.Kind == HookKind.Watch) return context.Return(WatchField(hook, key));
             if (hook.Kind == HookKind.EngineEvent)
             {
                 if (key == "event") return context.Return(hook.Name ?? "");

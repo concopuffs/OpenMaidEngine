@@ -68,6 +68,22 @@ public sealed record PlannedSite(int Offset, int Site, string? Point, IReadOnlyL
 public sealed record PlannedScript(IReadOnlyList<PlannedHandler> Enter, IReadOnlyList<PlannedHandler> Exit);
 
 /// <summary>
+/// A watch (spec §7.3): <paramref name="Count"/> cells from <paramref name="Address"/> in the bank of
+/// <paramref name="Kind"/> (an integer or a string bank), how the manifest names it (<c>exp</c>, <c>exp[*]</c>,
+/// <c>G[0x5000]</c>), and its handlers in the merged order. A watch on a name keeps the global's name and shape
+/// (<paramref name="Dimensions"/>, <paramref name="RowWidth"/>), so a handler is given a cell's row and column.
+/// </summary>
+public sealed record PlannedWatch(string Watch, CellKind Kind, int Address, int Count, IReadOnlyList<PlannedHandler> Handlers,
+                                  string? Global = null, int Dimensions = 0, int RowWidth = 1)
+{
+    public bool Covers(CellKind kind, int address) => kind == Kind && address >= Address && address - Address < Count;
+
+    /// <summary>The cells, as the report and the trace write them: <c>G[0x5000]</c> or <c>G[0x5000..0x5063]</c>.</summary>
+    public string Cells => (Kind == CellKind.String ? "GS" : "G")
+                           + (Count == 1 ? $"[0x{Address:x}]" : $"[0x{Address:x}..0x{Address + Count - 1:x}]");
+}
+
+/// <summary>
 /// The hook plan the link builds (spec §7.5): per script, the hooked instructions with their handlers and its entry
 /// and exit hooks, and per engine event, its handlers. A frame takes its script's table (<see cref="ScriptHooks"/>)
 /// when it is entered.
@@ -83,7 +99,7 @@ public sealed class HookPlan
     public HookPlan(IReadOnlyDictionary<string, IReadOnlyList<PlannedSite>> sites,
                     IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> engineEvents,
                     IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>>? luaEvents = null,
-                    IReadOnlyDictionary<string, PlannedScript>? scripts = null)
+                    IReadOnlyDictionary<string, PlannedScript>? scripts = null, IReadOnlyList<PlannedWatch>? watches = null)
     {
         Sites = sites.ToDictionary(pair => TextCatalog.NormalizeScriptName(pair.Key), pair => pair.Value,
                                    StringComparer.Ordinal);
@@ -91,7 +107,11 @@ public sealed class HookPlan
         LuaEvents = luaEvents ?? new Dictionary<string, IReadOnlyList<PlannedHandler>>();
         Scripts = (scripts ?? new Dictionary<string, PlannedScript>())
             .ToDictionary(pair => TextCatalog.NormalizeScriptName(pair.Key), pair => pair.Value, StringComparer.Ordinal);
+        Watches = watches ?? [];
     }
+
+    /// <summary>The watches (spec §7.3), each once for the cells it covers.</summary>
+    public IReadOnlyList<PlannedWatch> Watches { get; }
 
     /// <summary>By normalized script name (<c>ADDEXP</c>), its entry and exit hooks.</summary>
     public IReadOnlyDictionary<string, PlannedScript> Scripts { get; }
@@ -108,7 +128,8 @@ public sealed class HookPlan
     /// <summary>By event name (<c>ome.session.start</c>), each list in the merged order.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> EngineEvents { get; }
 
-    public bool IsEmpty => Sites.Count == 0 && EngineEvents.Count == 0 && LuaEvents.Count == 0 && Scripts.Count == 0;
+    public bool IsEmpty => Sites.Count == 0 && EngineEvents.Count == 0 && LuaEvents.Count == 0 && Scripts.Count == 0
+                           && Watches.Count == 0;
 
     public IReadOnlyList<PlannedHandler> HandlersOf(string engineEvent)
         => EngineEvents.TryGetValue(engineEvent, out var handlers) ? handlers : [];

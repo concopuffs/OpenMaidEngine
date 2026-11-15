@@ -226,8 +226,24 @@ Skip a plain instruction near it, or change the flow with a patch ([lua.md](lua.
 **"ctx:skip(): this hook did not declare skip = true".** Add `skip = true` to the hook's `[[hooks]]` entry. An after
 hook cannot skip: its instruction has already run.
 
-**"… this engine does not build it yet".** The hook form or `calls` is part of a later version of Lua scripting
-([lua.md](lua.md), the list at the top).
+**"lua.calls: script calls come with …" or "… this engine does not raise it yet".** Script calls and the reserved
+engine events are part of a later version of Lua scripting ([lua.md](lua.md), the list at the top).
+
+**"a watch on an address names a cell by number, which needs the vm capability".** Add `capabilities = ["vm"]` to
+`[lua]`, or watch the cell's name through the base mod, which needs none. **"a watch on a name resolves through a
+base mod, and the mod requires none"**: add `[[requires]] id = "<profile>-base"` ([lua.md](lua.md), "Watches").
+
+**"X is a table; watch "X[*]" for its cells", "X is no table", "X is a float global", "X's row count is not
+known".** A table's name takes `[*]` and a scalar's does not; version 1 watches integer and string cells only; and a
+table whose size the registry does not know has no end to watch, so watch its cells by address instead.
+
+**"watch: '…' is not a global's name, name[*] for a whole table, or G[0x…] or GS[0x…] for a cell".** A watch names a
+global, all of a table, or one cell; it cannot name one element by index (`levels[3]`): watch the table and test
+`ctx.index`.
+
+**"watch handlers' writes nest 32 deep".** A watch handler writes a cell that it, or another watch handler, watches,
+and so runs again on its own write. Skip the write when `ctx.writer == "mod"` and `ctx.mod` is your mod, or keep the
+value somewhere no watch covers.
 
 **"no mod of the stack declares the event 'NAME' (it declares …)".** The event is misspelt, or the mod that declares
 it is not enabled; the parenthesis lists the events the stack has. **"X declares NAME, and the mod does not

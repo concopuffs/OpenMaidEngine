@@ -11,6 +11,8 @@ This version supports:
   script's fingerprint and the instruction's offset;
 - **`skip`:** a handler before an instruction passes over it;
 - **script hooks:** a handler runs when a script's frame is entered and when it returns;
+- **watches:** a handler runs after each write to a named global or a whole table, without a capability, or to a
+  cell by address with `vm`;
 - **the engine events** `ome.session.start`, `ome.session.resumed` and `ome.save.writing`;
 - **game names:** the game's base mod names its cells, and a mod reads any of them and writes the ones it lists,
   without a capability;
@@ -20,8 +22,7 @@ This version supports:
 - **`maid.state`:** a table that is saved beside each numbered save and comes back when that save is loaded;
 - **`maid.log`,** and **the console:** the driver's `lua` step runs a chunk in a running game.
 
-Not yet: hooks on cell writes, calling a script from Lua, and reloading Lua without a restart. A mod that uses one of them fails to link, and the report says that this engine does
-not build it yet. The design
+Not yet: calling a script from Lua (the link refuses `[lua] calls`), and reloading Lua without a restart. The design
 behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
 Game-specific values (point names, which local holds what, the events and their fields) are in your game guide,
@@ -106,7 +107,7 @@ version 3 loader still reads versions 1 and 2. All other keys are as in [package
 - **`[game] target = "extended"`** is required for a mod with Lua. The port runs it, and `omp export` refuses it.
 - **`[lua] api`** is the `maid` API version the mod was written for. This engine provides `1`.
 - **`[lua] capabilities`** lists what the mod may reach. Version 1 has `"vm"`, the raw access of `maid.vm`. A mod
-  without it has no `maid.vm`, and its point and site hooks are link errors.
+  without it has no `maid.vm`, and its point, site and script hooks and its watches on an address are link errors.
 - **`[lua] writes`** lists the global names the mod writes through a base mod ("Game names").
 - **`[lua] calls`** is read but not built yet: the link refuses a mod that lists any.
 
@@ -117,6 +118,7 @@ Each `[[hooks]]` table has one form and a `handler`:
 | Point | `point = "NAME"`, a named patch point of the game; optionally `skip = true` ("Skipping an instruction") | yes |
 | Site | `script = "NAME.BIN"`, `fingerprint = "sha256:…"`, `site = 0x…`, `when = "before"` or `"after"` ("Site hooks"); with `before`, optionally `skip = true` | yes |
 | Script | `script = "NAME.BIN"`, `when = "enter"` or `"exit"` ("Script hooks") | yes |
+| Watch | `watch = "NAME"`, `"NAME[*]"` for a whole table, or `"G[0x…]"` / `"GS[0x…]"` for one cell ("Watches") | only for a cell by address |
 | Engine event | `engine = "EVENT"`, one of the events in "Engine events" | no |
 | Game event | `event = "NAME"`, an event a mod of the stack declares ("Game events") | no |
 
@@ -319,6 +321,51 @@ row.<column>, row[0]                            -- its cells, by column name or 
   returns. The base mods have no helpers yet.
 - **Mounting.** The engine mounts a base mod only when an enabled mod requires it, and uses an installed package of
   the same id instead when there is one ([packages.md](packages.md), "Base mods").
+
+## Watches
+
+A watch runs a handler after each write to the cells it names:
+
+```toml
+[[hooks]]
+watch = "<a scalar global>"     # one global; "<a table global>[*]" for every cell of a table
+handler = "hooks.lua:on_write"
+```
+
+- **What a watch names.** A name or `name[*]` resolves through the base mod the mod requires, as `[lua] writes`
+  does, and needs no capability: a scalar is one cell, and `name[*]` is every cell of a table. A name of a table
+  without `[*]`, `[*]` on a scalar, a float global, and a table whose row count the registry does not know are link
+  errors. `G[0x…]` (an integer cell) and `GS[0x…]` (a string cell) name one cell by address, which needs `vm`.
+  Version 1 watches integer and string cells.
+- **Every write fires,** a write of the value the cell already holds too. A watch does not see a load putting the
+  save's cells back, a return to title clearing them, or a tool's seeding (`--seed`): none of them is a write.
+- **When it fires.** A write is recorded while its instruction runs, and the handlers run once the instruction has
+  returned, after its `after` hooks. Instructions nest: the scripts a call runs and a wait's callbacks run inside the
+  calling instruction. Each instruction's own writes fire when it returns, so a script's write fires before the call
+  that ran it has finished, and a write made by the call's own hooks fires when the call returns.
+- **Lua's writes fire too.** A hook's write fires with its instruction's. A watch handler's write fires after the
+  handlers already due, so a handler that writes a cell it watches runs again; that ends after 32 rounds, as a call
+  nested too deep. A write made outside any instruction (`init.lua`, an `ome.session.start` handler, the console)
+  fires once the next instruction has returned.
+- **A load writes.** A load runs the saved scripts again from their entries ("Loads"), and their writes fire as at
+  boot, with `maid.session.restoring` set. A handler that keeps a total from them should skip a write made while it
+  is set, or it counts that write twice.
+
+The handler gets:
+
+| Key | Value |
+|---|---|
+| `ctx.watch` | the watch as the manifest names it |
+| `ctx.address` | the cell's address |
+| `ctx.name` | the global the cell belongs to; for a cell by address, the base mod's name for it if it has one, else nil |
+| `ctx.index`, `ctx.column` | the cell's row in a table and its column in a 2-D one; nil otherwise |
+| `ctx.old`, `ctx.new` | the value before the write and the value written: a number for an integer cell, a string for a string cell |
+| `ctx.writer` | what wrote: `"script"` (an instruction), `"mod"` (a mod's Lua), `"console"`, or `"engine"` (outside any instruction) |
+| `ctx.script`, `ctx.offset`, `ctx.site` | for `"script"`: the instruction's script, its offset in the linked script and its original offset (nil for one a patch inserted) |
+| `ctx.mod` | for `"mod"`: the mod whose handler wrote, or whose start-up code did; a base mod's helper's write is the calling mod's |
+
+A watch handler has no frame: `maid.vm.l` is refused in it. Two watches on one cell, of one mod or of several, run
+their handlers in one list by `priority` and then load order; the link report names watches that share cells.
 
 ## Game events
 
@@ -552,7 +599,7 @@ or `string.dump`: nothing reaches files, processes, the clock or the network.
 |---|---|
 | A handler call | 1,000,000 Lua instructions |
 | A mod's start-up code (`init.lua` and its handler files, together) | 10,000,000 instructions |
-| Handlers nested inside handlers (a subscriber inside an emit) | 32 |
+| Handlers nested inside handlers (a subscriber inside an emit), and rounds of watch handlers firing on each other's writes | 32 |
 | Lua files in a package | 512, each at most 1 MiB |
 
 Unbounded recursion ends as a "stack overflow" error. A subscriber that runs inside an emit is a call of its own,
@@ -578,6 +625,8 @@ them again one at a time to find the one.
   writes. A mod with `vm` is *opaque*: the report cannot list what it changes. So is a mod under `--lua-dev`.
 - `hook …` for each instruction and engine event with handlers, in the order they run; an instruction's after
   hooks follow `after:`.
+- `watch <watch> (<cells>): …` for each watch, its handlers in the order they run.
+
 - `event <name> (<owner>, <where>): fields …; subscribers …` for each declared event.
 
 Two mods whose `[lua] writes` lists name one global give an `interaction` line, in load order.
@@ -590,10 +639,12 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 {"mod":"mod.double","handler":"double.lua:on_award","hook":"<profile>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.012,"result":"ok","fields":[{"name":"amount","before":25,"after":50}]}
 ```
 
-- `hook` is the point, the script, the engine event or the game event; `kind` is `point`, `site`, `script`,
-  `engine-event` or `event`; a site or script hook's line has `when` (`before`, `after`, `enter` or `exit`), and a
-  script hook's `cause`; `at` is the script and offset, for a point or a site and for an event raised at one, and
-  the script for a script hook.
+- `hook` is the point, the script, the engine event, the game event or the watch; `kind` is `point`, `site`,
+  `script`, `engine-event`, `event` or `watch`; a site or script hook's line has `when` (`before`, `after`, `enter`
+  or `exit`), and a script hook's `cause`; `at` is the script and offset, for a point or a site and for an event
+  raised at one, the script for a script hook, and the writing instruction for a watch.
+- A watch's line has `cell` (such as `G[0x11]`), `old` and `new`, and `writer` (`script`, `mod`, `console` or
+  `engine`), with `by` naming the mod for `mod`.
 - `result` is `ok`, `error`, `budget` or `depth`, with `error` the message's first line; `skip` is true on the line
   of the handler that skipped the instruction.
 - `within` lists the handlers the call ran inside, innermost first: a subscriber inside an emit has one.
@@ -611,7 +662,8 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 `omp check` does (pass your mod and its dependencies with `--mod`) and writes:
 
 - `maid.lua`: `maid` and its tables, and what a handler is given: `maid.point` for a point or site hook,
-  `maid.script` for a script hook, and a class per engine event (`ome.session.start` and the rest);
+  `maid.script` for a script hook, `maid.watch` for a watch, and a class per engine event (`ome.session.start` and
+  the rest);
 - `events.lua`: a class per declared event, named as the event, with each field's type and whether it is
   writable;
 - `<base mod id>.lua`: what `require("<base mod id>")` gives, with every scalar's name in `g` and every table's in

@@ -12,7 +12,13 @@ public enum HookKind
     GameEvent,
     /// <summary>A script's entry or exit (spec §7.2): the frame, and the cause it was entered for.</summary>
     Script,
+    /// <summary>A write to a watched cell (spec §7.3): the cell, its old and new value, and what wrote it; no frame.</summary>
+    Watch,
 }
+
+/// <summary>What wrote a watched cell (spec §7.3): an instruction, a mod's Lua (the innermost running handler's mod,
+/// spec §12), the console, or the engine outside any instruction.</summary>
+public enum CellWriter { Script, Mod, Console, Engine }
 
 /// <summary>Whether a pass over a hooked instruction is skipped (spec §7.1): one per pass, shared by the contexts of its
 /// before list, set by the first <c>ctx:skip()</c> and never cleared.</summary>
@@ -69,6 +75,29 @@ public sealed class HookContext
     public static HookContext ForScript(string script, string when, string cause)
         => new(HookKind.Script, script, [], null, [], 0) { Script = script, When = when, Cause = cause };
 
+    /// <summary>A watch's context (spec §7.3): the cell <paramref name="cell"/> names at <paramref name="address"/>,
+    /// the global it belongs to with its row and column (-1 for none), the values before and after the write, and the
+    /// writer: for an instruction its script, linked offset and original offset (-1 when a patch inserted it), for Lua
+    /// the mod.</summary>
+    public static HookContext ForWatch(string watch, string cell, int address, string? global, int index, int column,
+                                       CellValue old, CellValue @new, CellWriter writer, string? writerMod = null,
+                                       string? script = null, int offset = -1, int site = -1)
+        => new(HookKind.Watch, watch, [], null, [], 0)
+        {
+            Cell = cell,
+            Address = address,
+            Global = global,
+            Index = index,
+            Column = column,
+            Old = old,
+            New = @new,
+            Writer = writer,
+            WriterMod = writerMod,
+            Script = script,
+            Offset = offset,
+            Site = site,
+        };
+
     /// <summary>An engine event's context, with its fields.</summary>
     public static HookContext ForEngineEvent(string name, params KeyValuePair<string, CellValue>[] fields)
         => new(HookKind.EngineEvent, name, fields, null, [], 0);
@@ -89,7 +118,7 @@ public sealed class HookContext
 
     public HookKind Kind { get; }
 
-    /// <summary>The point's name, or the engine event's or the game event's.</summary>
+    /// <summary>The point's name, or the engine event's or the game event's, or the watch as its manifest names it.</summary>
     public string? Name { get; }
 
     public string? Script { get; private init; }
@@ -101,6 +130,21 @@ public sealed class HookContext
     public int Offset { get; private init; } = -1;
     public int Site { get; private init; } = -1;
     public int Opcode { get; private init; } = -1;
+
+    /// <summary>A watch's cell, as the trace writes it (<c>G[0x5003]</c>), and its address.</summary>
+    public string? Cell { get; private init; }
+    public int Address { get; private init; } = -1;
+    /// <summary>A watch's global, with the cell's row in a table and its column in a 2-D one (-1 for none).</summary>
+    public string? Global { get; private init; }
+    public int Index { get; private init; } = -1;
+    public int Column { get; private init; } = -1;
+    /// <summary>A watched cell's value before the write and after it.</summary>
+    public CellValue Old { get; private init; }
+    public CellValue New { get; private init; }
+    /// <summary>What wrote a watched cell; for a mod, <see cref="WriterMod"/>, and for an instruction
+    /// <see cref="Script"/>, <see cref="Offset"/> and <see cref="Site"/>.</summary>
+    public CellWriter Writer { get; private init; }
+    public string? WriterMod { get; private init; }
 
     /// <summary>An engine event's fields (<c>reason</c>).</summary>
     public IReadOnlyList<KeyValuePair<string, CellValue>> Fields { get; }

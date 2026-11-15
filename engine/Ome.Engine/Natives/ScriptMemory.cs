@@ -1,4 +1,5 @@
 using System.Text;
+using Ome.Engine.Modding;
 using Ome.Engine.Persistence;
 
 namespace Ome.Engine.Natives;
@@ -50,6 +51,8 @@ public sealed partial class ScriptMemory
     }
 
     private Scene _scene = new();
+    // Lua scripting spec §7.3, §7.5: the cells the plan's watches cover, or null; a global write tests this reference.
+    private WatchedCells? _watched;
 
     private readonly Encoding _encoding;
     // Op 0x132 creates a queue; ATSEEK/MVSEEK use queue 0. A queue lives for the run (a scene reset keeps it).
@@ -87,11 +90,27 @@ public sealed partial class ScriptMemory
 
     public string String(int address) => _scene.Strings.TryGetValue(address, out string? value) ? value : "";
 
-    public void SetInteger(int address, long value) => _scene.Integers[address] = value;
+    /// <summary>The integer and string setters are every write a script, a native or Lua makes to a global, so they
+    /// record a write to a watched cell (Lua scripting spec §7.3). A load's banks, a scene reset's and a tool's seeding
+    /// write the banks directly, which is no write.</summary>
+    public void SetInteger(int address, long value)
+    {
+        if (_watched != null && _watched.Integer(address))
+            _watched.Record(new CellWrite(CellKind.Integer, address, Integer(address), value, null, null));
+        _scene.Integers[address] = value;
+    }
 
     public void SetFloat(int address, long value) => _scene.Floats[address] = value;
 
-    public void SetString(int address, string value) => _scene.Strings[address] = value;
+    public void SetString(int address, string value)
+    {
+        if (_watched != null && _watched.String(address))
+            _watched.Record(new CellWrite(CellKind.String, address, 0, 0, String(address), value));
+        _scene.Strings[address] = value;
+    }
+
+    /// <summary>The scripting native's watches (Lua scripting spec §7.3), or null for none.</summary>
+    public void Watch(WatchedCells? watched) => _watched = watched;
 
     public void SetPointer(int index, int address) => _scene.Pointers[index] = address;
 

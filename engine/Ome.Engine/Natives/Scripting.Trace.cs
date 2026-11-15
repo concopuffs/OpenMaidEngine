@@ -146,8 +146,18 @@ public sealed partial class Scripting
                 HookKind.Point => context.When == null ? "point" : "site",
                 HookKind.EngineEvent => "engine-event",
                 HookKind.Script => "script",
+                HookKind.Watch => "watch",
                 _ => "event",
             });
+            if (context.Kind == HookKind.Watch)
+            {
+                // Spec §7.3: the cell, its values and its writer; at is the writing instruction, by the writing mod.
+                json.WriteString("cell", context.Cell);
+                Value(json, "old", new TracedValue(context.Old, null));
+                Value(json, "new", new TracedValue(context.New, null));
+                json.WriteString("writer", context.Writer.ToString().ToLowerInvariant());
+                if (context.WriterMod != null) json.WriteString("by", context.WriterMod);
+            }
             if (context.When != null) json.WriteString("when", context.When);
             if (context.Cause != null) json.WriteString("cause", context.Cause);
             if (context.Script != null)

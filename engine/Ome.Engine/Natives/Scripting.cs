@@ -83,6 +83,12 @@ public sealed partial class Scripting : IDisposable
         public bool BuildPending;
         // A mod's state failed to serialize under --lua-errors halt; the save's own instruction ends the run.
         public string? HaltPending;
+        // Spec §7.3: the records of the running instructions, innermost last; those made outside any instruction, until
+        // the next instruction takes them; and the running instructions, each with where its records start. A record goes
+        // with its session.
+        public readonly List<PendingWrite> Pending = new();
+        public readonly List<PendingWrite> Loose = new();
+        public readonly List<RunningInstruction> Open = new();
     }
 
     private Scene _scene = new();
@@ -99,6 +105,8 @@ public sealed partial class Scripting : IDisposable
         _setup = setup ?? new ScriptingSetup();
         _access = new ScriptAccess(this);
         _consoleLayout = new Lazy<BaseModLayout?>(() => _setup.ConsoleLayout?.Invoke());
+        _watches = _setup.Plan.Watches.ToArray();
+        _memory.Watch(WatchedCells());
     }
 
     /// <summary>A scripting native with no mods and no runtime: a VM given it has no hooks.</summary>
@@ -159,6 +167,20 @@ public sealed partial class Scripting : IDisposable
         // save (spec §11).
         ModState state = TakeState(loaded);
         if (!_setup.Stack.HasLua) return null;   // gate 1: no mod ships Lua, so no runtime
+        // Spec §7.3: the build's writes and its start handlers' go with the next instruction's records.
+        _looseDepth++;
+        try
+        {
+            return BuildSession(reason, state);
+        }
+        finally
+        {
+            _looseDepth--;
+        }
+    }
+
+    private string? BuildSession(SessionReason reason, ModState state)
+    {
         IModRuntime runtime = Runtime();
         IModSession session;
         _depth++;
@@ -192,6 +214,7 @@ public sealed partial class Scripting : IDisposable
     {
         EndSession();
         CloseTrace();
+        if (_watches.Length > 0) _memory.Watch(null);
     }
 
     private void EndSession()
@@ -312,6 +335,7 @@ public sealed partial class Scripting : IDisposable
     {
         { Kind: HookKind.Point, When: "after" } => $"{context.Script}@0x{context.Offset:x} (after)",
         { Kind: HookKind.Script } => $"{context.Script} {context.When}",
+        { Kind: HookKind.Watch } => context.Name == context.Cell ? $"watch {context.Name}" : $"watch {context.Name} on {context.Cell}",
         { Kind: HookKind.Point } => $"{context.Script}@0x{context.Offset:x}",
         { Kind: HookKind.GameEvent, Script: { } script } => $"{context.Name} at {script}@0x{context.Offset:x}",
         _ => context.Name ?? "",
@@ -323,8 +347,10 @@ public sealed partial class Scripting : IDisposable
             return Failed(handler, new ModScriptException(ModScriptErrorKind.Depth,
                 $"handlers nest {_depth} deep, the cap is {_setup.Limits.NestingCap}"), Where(context));
         bool outerFrameAccess = _frameAccess;
+        HandlerId? outerRunning = _running;
         _depth++;
         _frameAccess = frameAccess;
+        _running = handler;
         TracedCall? traced = TraceBegin(handler, context);
         ModScriptException? failure = null;
         string? halt;
@@ -344,6 +370,7 @@ public sealed partial class Scripting : IDisposable
             if (traced != null) TraceEnd(traced, failure);
             context.Live = false;
             _frameAccess = outerFrameAccess;
+            _running = outerRunning;
             _depth--;
         }
         // A subscriber of an event this call raised halted (--lua-errors halt): the outermost call returns its reason.

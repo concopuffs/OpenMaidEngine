@@ -153,6 +153,17 @@ public sealed record LinkedLuaScriptEntry(
     [property: JsonPropertyName("enter")] IReadOnlyList<LinkedLuaDueEntry> Enter,
     [property: JsonPropertyName("exit")] IReadOnlyList<LinkedLuaDueEntry> Exit);
 
+/// <summary>A watch (Lua scripting spec §7.3): its cells in bank <c>G</c> or <c>GS</c>, and its global's shape.</summary>
+public sealed record LinkedLuaWatchEntry(
+    [property: JsonPropertyName("watch")] string Watch,
+    [property: JsonPropertyName("bank")] string Bank,
+    [property: JsonPropertyName("address")] int Address,
+    [property: JsonPropertyName("count")] int Count,
+    [property: JsonPropertyName("handlers")] IReadOnlyList<LinkedLuaDueEntry> Handlers,
+    [property: JsonPropertyName("global")] string? Global = null,
+    [property: JsonPropertyName("dims")] int Dimensions = 0,
+    [property: JsonPropertyName("row_width")] int RowWidth = 1);
+
 /// <summary>The <c>lua</c> of <c>link.json</c>: the runtime the files were checked with, the mods, the handlers and
 /// the hook plan (Lua scripting spec §7.5).</summary>
 public sealed record LinkedLuaEntry
@@ -180,6 +191,8 @@ public sealed record LinkedLuaEntry
     [JsonPropertyName("lua_events")]
     public IReadOnlyDictionary<string, IReadOnlyList<LinkedLuaDueEntry>> LuaEvents { get; init; }
         = new Dictionary<string, IReadOnlyList<LinkedLuaDueEntry>>();
+    /// <summary>The watches.</summary>
+    [JsonPropertyName("watches")] public IReadOnlyList<LinkedLuaWatchEntry> Watches { get; init; } = [];
 
     /// <summary>A source's path under the cache directory.</summary>
     public static string PathOf(string mod, string file) => $"{Folder}/{mod}/{file}";
@@ -216,6 +229,9 @@ public sealed record LinkedLuaEntry
                 field.Type.Name(), field.Writable ? "rw" : "r", field.At)).ToList())).ToList(),
         LuaEvents = lua.Plan.LuaEvents.ToDictionary(pair => pair.Key,
             pair => (IReadOnlyList<LinkedLuaDueEntry>)pair.Value.Select(Due).ToList(), StringComparer.Ordinal),
+        Watches = lua.Plan.Watches.Select(watch => new LinkedLuaWatchEntry(watch.Watch,
+            watch.Kind == CellKind.String ? "GS" : "G", watch.Address, watch.Count, watch.Handlers.Select(Due).ToList(),
+            watch.Global, watch.Dimensions, watch.RowWidth)).ToList(),
     };
 
     /// <summary>The stack, with each source read from under <paramref name="directory"/>. An event's locations are
@@ -250,7 +266,10 @@ public sealed record LinkedLuaEntry
             LuaEvents.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value.Select(Planned).ToList(),
                 StringComparer.Ordinal),
             Scripts.ToDictionary(pair => pair.Key, pair => new PlannedScript(pair.Value.Enter.Select(Planned).ToList(),
-                pair.Value.Exit.Select(Planned).ToList()), StringComparer.Ordinal));
+                pair.Value.Exit.Select(Planned).ToList()), StringComparer.Ordinal),
+            Watches.Select(watch => new PlannedWatch(watch.Watch, watch.Bank == "GS" ? CellKind.String : CellKind.Integer,
+                watch.Address, watch.Count, watch.Handlers.Select(Planned).ToList(), watch.Global, watch.Dimensions,
+                watch.RowWidth)).ToList());
 }
 
 /// <summary>The <c>link.json</c> of a cache directory.</summary>

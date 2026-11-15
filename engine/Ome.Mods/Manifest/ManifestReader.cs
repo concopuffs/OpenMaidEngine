@@ -313,6 +313,14 @@ public static partial class ManifestReader
                                                              || !IsValidScriptName(target[..^4]):
                 entry.Problems.Add($"{entry.Path}script: '{target}' is not a script file name (NAME.BIN)");
                 break;
+            case ModHookForm.Watch when ModWatchTarget.Parse(target) is not { } watched:
+                entry.Problems.Add($"{entry.Path}watch: '{target}' is not a global's name, name[*] for a whole table, or "
+                                   + "G[0x…] or GS[0x…] for a cell");
+                break;
+            case ModHookForm.Watch when ModWatchTarget.Parse(target) is { Bank: "GF" }:
+                entry.Problems.Add($"{entry.Path}watch: version 1 watches integer and string cells (G[0x…], GS[0x…]); "
+                                   + $"'{target}' is a float cell");
+                break;
         }
         if (form == ModHookForm.Site)
         {
