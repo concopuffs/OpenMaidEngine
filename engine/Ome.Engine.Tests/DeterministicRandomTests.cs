@@ -80,5 +80,18 @@ public class DeterministicRandomTests
         Assert.Equal(17, (int)json["draws"]!);
         Assert.Equal(12, (int)json["sites"]!["FIELD@0x940a"]!);
         Assert.Equal(5, (int)json["sites"]!["MVRTN@0x24e"]!);
+        Assert.False(json.ContainsKey("mods"));   // no Lua mod drew
+    }
+
+    [Fact]
+    public void ADriveReportListsEachLuaModsDraws()
+    {
+        var summary = new DeterministicRandomSummary(7, 0, [],
+            [new DeterministicRandomMod("example.lua-random", 9), new DeterministicRandomMod("mod.b", 1)]);
+
+        var json = DriveRandomReport.ToJson(7, summary);
+
+        Assert.Equal(9, (int)json["mods"]!["example.lua-random"]!);
+        Assert.Equal(1, (int)json["mods"]!["mod.b"]!);
     }
 }

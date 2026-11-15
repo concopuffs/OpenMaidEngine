@@ -1194,6 +1194,8 @@ def describe(result: dict[str, Any]) -> str:
         details.append(f"dialogs={json.dumps(result['dialogs'], ensure_ascii=False)}")
     if result.get("sites"):
         details.append("sites=" + " ".join(f"{site}x{count}" for site, count in result["sites"].items()))
+    if result.get("mods"):
+        details.append("mods=" + " ".join(f"{mod}x{count}" for mod, count in result["mods"].items()))
     if "options" in result:
         details.append("options=" + " ".join(f"{entry['name']}={entry['value']}" for entry in result["options"]))
     if "languages" in result:

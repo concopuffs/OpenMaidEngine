@@ -76,6 +76,10 @@ def test_step_parsing():
               {"ok": True, "step": "rand-seed off", "previous_seed": 2, "draws": 4,
                "sites": {"FIELD@0x940a": 3, "MVRTN@0x24e": 1}}),
           "a rand-seed result lists its draws per site")
+    check("mods=example.lua-randomx5" in core.describe(
+              {"ok": True, "step": "rand-seed 7", "previous_seed": 7, "draws": 0, "sites": {},
+               "mods": {"example.lua-random": 5}}),
+          "a rand-seed result lists each Lua mod's draws")
     check(core.parse_step("wait-state script=TITLE click=adv.next every=3").options["every"] == "3",
           "wait-state can click while it waits")
 

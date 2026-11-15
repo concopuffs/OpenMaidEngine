@@ -91,7 +91,8 @@ public sealed record DriveState(IReadOnlyList<DriveFrame> Frames, string? Waitin
 }
 
 /// <summary>The reply to <c>rand-seed</c>: the seed now in force, and what op 0x60 drew since the previous
-/// <c>rand-seed</c>, in total and per call site (<c>SCRIPT@0xOFFSET</c>, as frames are named).</summary>
+/// <c>rand-seed</c>, in total and per call site (<c>SCRIPT@0xOFFSET</c>, as frames are named); and what each Lua mod's
+/// <c>math.random</c> drew, when one did.</summary>
 public static class DriveRandomReport
 {
     public static JsonObject ToJson(uint? seed, Ome.Engine.Natives.DeterministicRandomSummary drawn)
@@ -99,13 +100,20 @@ public static class DriveRandomReport
         var sites = new JsonObject();
         foreach (Ome.Engine.Natives.DeterministicRandomSite site in drawn.Sites)
             sites[new DriveFrame(DriveFrame.NormalizeScript(site.Script), site.Offset).Location] = site.Draws;
-        return new JsonObject
+        var json = new JsonObject
         {
             ["seed"] = seed,
             ["previous_seed"] = drawn.Seed,
             ["draws"] = drawn.Draws,
             ["sites"] = sites,
         };
+        if (drawn.ModList.Count > 0)
+        {
+            var mods = new JsonObject();
+            foreach (Ome.Engine.Natives.DeterministicRandomMod mod in drawn.ModList) mods[mod.ModId] = mod.Draws;
+            json["mods"] = mods;
+        }
+        return json;
     }
 }
 

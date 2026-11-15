@@ -56,8 +56,8 @@ public sealed partial class Scripting
         public string ModId { get; } = modId;
         public IVmAccess? Vm { get; } = vm ? new VmFace(owner, modId, mod) : null;
 
-        // Spec §5.6: script memory's generator, the one op 0x60 draws from.
-        public int DrawRandom() => owner._memory.DrawForMod();
+        // Spec §5.6: script memory's generator, the one op 0x60 draws from; under a seed, the mod's own stream.
+        public int DrawRandom() => owner._memory.DrawForMod(ModId);
 
         public void Log(ModLogLevel level, string message) => owner.WriteLog(level, ModId, message);
 

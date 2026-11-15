@@ -3,9 +3,17 @@ namespace Ome.Engine.Natives;
 /// <summary>One op-0x60 call site's draws under a seed: the script and the op's dword offset.</summary>
 public sealed record DeterministicRandomSite(string Script, uint PackedId, int Offset, int Draws);
 
+/// <summary>One Lua mod's draws under a seed (Lua scripting spec §5.6).</summary>
+public sealed record DeterministicRandomMod(string ModId, int Draws);
+
 /// <summary>What op 0x60 drew under one seed: the seed (null when the game drew its own values), the total and each
-/// call site's count.</summary>
-public sealed record DeterministicRandomSummary(uint? Seed, int Draws, IReadOnlyList<DeterministicRandomSite> Sites);
+/// call site's count; and each Lua mod's draws, which the total does not count.</summary>
+public sealed record DeterministicRandomSummary(uint? Seed, int Draws, IReadOnlyList<DeterministicRandomSite> Sites,
+                                                IReadOnlyList<DeterministicRandomMod>? Mods = null)
+{
+    /// <summary>The mods' draws, empty when none drew.</summary>
+    public IReadOnlyList<DeterministicRandomMod> ModList => Mods ?? [];
+}
 
 /// <summary>Op 0x60's deterministic mode, for comparing the port with native AGE (drive step <c>rand-seed</c>;
 /// docs/engine-re.md, "Op 0x60 randomness"). Native draws from the CRT's shared generator, seeded from the tick count
@@ -14,12 +22,15 @@ public sealed record DeterministicRandomSummary(uint? Seed, int Draws, IReadOnly
 /// offset O, its own MSVC <c>rand()</c> stream starting from <c>seed ^ (P * 0x9E3779B1 + O * 0x85EBCA77)</c>, mod 2^32.
 /// The k-th draw at a site is then the same on both targets whatever else ran, and a site drawn a different number
 /// of times on the two (a timed loop) cannot shift any other. tools/drive/native-agent.js computes the same streams
-/// inside native AGE.</summary>
+/// inside native AGE. A Lua mod's <c>math.random</c> draws from the same generator: under a seed, from a stream of its own
+/// that starts from <c>seed ^ FNV-1a(mod id)</c> (Lua scripting spec §5.6), so its draws neither shift nor are shifted by
+/// the sites' or another mod's.</summary>
 public sealed partial class ScriptMemory
 {
     private uint? _deterministicRandomSeed;
     private int _deterministicRandomDraws;
     private readonly Dictionary<(uint PackedId, int Offset), DeterministicRandomStream> _deterministicRandomSites = new();
+    private readonly Dictionary<string, DeterministicRandomStream> _deterministicRandomMods = new(StringComparer.Ordinal);
 
     private sealed class DeterministicRandomStream(string script, uint state)
     {
@@ -28,9 +39,9 @@ public sealed partial class ScriptMemory
         public int Draws { get; set; }
     }
 
-    /// <summary>Start drawing op 0x60 from <paramref name="seed"/>'s streams, or from the game's own generator when
-    /// null. Every stream restarts. Returns what was drawn since the previous call. The driver asks for it through the
-    /// input and waits native's requests.</summary>
+    /// <summary>Start drawing op 0x60 and the Lua mods' <c>math.random</c> from <paramref name="seed"/>'s streams, or
+    /// from the game's own generator when null. Every stream restarts. Returns what was drawn since the previous call.
+    /// The driver asks for it through the input and waits native's requests.</summary>
     public DeterministicRandomSummary SeedDeterministicRandom(uint? seed)
     {
         var sites = _deterministicRandomSites
@@ -38,11 +49,25 @@ public sealed partial class ScriptMemory
                                                          entry.Value.Draws))
             .OrderBy(site => site.Script, StringComparer.Ordinal).ThenBy(site => site.Offset)
             .ToArray();
-        var summary = new DeterministicRandomSummary(_deterministicRandomSeed, _deterministicRandomDraws, sites);
+        var mods = _deterministicRandomMods
+            .Select(entry => new DeterministicRandomMod(entry.Key, entry.Value.Draws))
+            .OrderBy(mod => mod.ModId, StringComparer.Ordinal)
+            .ToArray();
+        var summary = new DeterministicRandomSummary(_deterministicRandomSeed, _deterministicRandomDraws, sites, mods);
         _deterministicRandomSeed = seed;
         _deterministicRandomDraws = 0;
         _deterministicRandomSites.Clear();
+        _deterministicRandomMods.Clear();
         return summary;
+    }
+
+    /// <summary>A mod's stream's first state (Lua scripting spec §5.6): the seed, xor the 32-bit FNV-1a hash of the mod
+    /// id's UTF-8 bytes.</summary>
+    public static uint DeterministicModInitialState(uint seed, string modId)
+    {
+        uint hash = 0x811C9DC5u;
+        foreach (byte b in System.Text.Encoding.UTF8.GetBytes(modId)) hash = unchecked((hash ^ b) * 0x01000193u);
+        return seed ^ hash;
     }
 
     /// <summary>A stream's first state for the site at <paramref name="offset"/> in script <paramref name="packedId"/>.
@@ -57,9 +82,23 @@ public sealed partial class ScriptMemory
         return (int)((state >> 16) & 0x7FFF);
     }
 
-    /// <summary>A Lua mod's draw of 15 bits (Lua scripting spec §5.6): from the generator op 0x60 draws from without
-    /// a seed. A mod's draws ignore <c>rand-seed</c> until the seeded streams of the spec's milestone 6.</summary>
-    public int DrawForMod() => System.Random.Shared.Next(0x8000);
+    /// <summary>A Lua mod's draw of 15 bits (Lua scripting spec §5.6): from the generator op 0x60 draws from without a
+    /// seed, and under one from the mod's own stream. The stream is script memory's, so a session's rebuild (a load, a
+    /// return to title, a reload) does not restart it; the next <c>rand-seed</c> does.</summary>
+    public int DrawForMod(string modId)
+    {
+        if (_deterministicRandomSeed is not uint seed) return System.Random.Shared.Next(0x8000);
+        if (!_deterministicRandomMods.TryGetValue(modId, out DeterministicRandomStream? stream))
+        {
+            stream = new DeterministicRandomStream(modId, DeterministicModInitialState(seed, modId));
+            _deterministicRandomMods.Add(modId, stream);
+        }
+        uint state = stream.State;
+        int value = DeterministicRandomNext(ref state);
+        stream.State = state;
+        stream.Draws++;
+        return value;
+    }
 
     /// <summary>The value op 0x60 draws before taking its bound, at the op whose dword offset is
     /// <paramref name="offset"/> in <paramref name="script"/> (packed id <paramref name="packedId"/>).</summary>
