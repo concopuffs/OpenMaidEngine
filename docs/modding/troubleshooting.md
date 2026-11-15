@@ -23,12 +23,15 @@ omp check: does not link: 2 mods; 0 errors, 1 conflicts, 0 interactions, 0 overr
 |---|---|---|
 | `error` | Something in one mod is wrong: syntax, a missing file, a bad manifest, a fingerprint mismatch. | yes |
 | `conflict` | Two mods cannot load together: overlapping edits, two replacements of one script, a declared `[[conflicts]]`, a missing dependency. | yes |
-| `interaction` | Several mods insert at the same site. They all apply, in the order shown. | no |
+| `interaction` | Several mods insert at the same site, several Lua handlers are due at one hook, or two Lua mods list one global in `[lua] writes`. They all apply, in the order shown. | no |
 | `override` | Several mods supply the same asset or script. The winner is named. | no |
 | `note` | Information. Examples: a fragment compiled at load time, a stray file in a package, a table entry that now points at replacement code, or a record 0 that would hang native AGE at boot (`warning: record 0 runs at boot …`). | no |
 
 In the port, a report with errors or conflicts stops startup with exit code 2. `--skip-failed-mods` drops the mods
 involved and starts with the rest, naming what it dropped.
+
+A stack with Lua ends with a `lua:` section: each mod's capabilities and writes, each hook's handlers in order, and
+each event's subscribers ([lua.md](lua.md), "The link report and the trace").
 
 ## Compile errors
 
@@ -175,6 +178,11 @@ game carries the engine's own text only. Game text, patches, scripts and assets 
 game ([languages.md](languages.md), "A shell language for every game").
 
 ## Lua
+
+**A value is not what you expect, and several mods touch it.** Run with `--lua-trace` and read
+`diagnostics/lua-trace.jsonl`: each handler call's line shows the event's fields before and after it and every cell
+it wrote, so the first line whose `after` differs from what you expect names the mod ([lua.md](lua.md), "The link
+report and the trace").
 
 **"lua/NAME.lua: line N: …".** A syntax error, found by the compiler that runs the mod; the line is the file's. The
 check runs none of your code.

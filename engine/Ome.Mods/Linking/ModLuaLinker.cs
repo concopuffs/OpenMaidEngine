@@ -108,8 +108,8 @@ public static class ModLuaLinker
             {
                 luaDev = mod.Unpacked;
                 report.Add(ModReportClass.Note, mod.Id, null, luaDev
-                    ? "runs under --lua-dev: a write to a name its [lua] writes list lacks goes through, and diagnostics/lua.log "
-                      + "names it once"
+                    ? "runs under --lua-dev, so it is opaque: a write to a name its [lua] writes list lacks goes through, and "
+                      + "diagnostics/lua.log names it once"
                     : "is packed, so --lua-dev does not apply: its [lua] writes list is enforced");
             }
             var sources = new List<ModSource>();
@@ -220,8 +220,9 @@ public static class ModLuaLinker
             // Spec §15: the report shows what each mod may change, so a player can see it.
             if (vm)
                 report.Add(ModReportClass.Note, mod.Id, null,
-                           "has the vm capability: its Lua reads and writes any cell, the frames' locals and the operands, "
-                           + "so it can change any game state and the saves made after it");
+                           "has the vm capability, so it is opaque: its Lua reads and writes any cell, the frames' locals and the "
+                           + "operands, so it can change any game state and the saves made after it, and this report cannot list "
+                           + "what it changes");
         }
 
         // The merged order (spec §7.4): ascending priority, then load order; one mod's hooks keep manifest order.
@@ -269,8 +270,80 @@ public static class ModLuaLinker
                 report.Add(ModReportClass.OrderedInteraction, due.Select(entry => handlers[entry.Handler.Index].ModId), null,
                     $"{byEvent.Key}: subscribers run in this order: " + string.Join(", ", due.Select(Describe)));
         }
+        // Spec §12: two mods that write one name are an ordered interaction, in load order.
+        var writers = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (ModRuntimeMod mod in mods.Where(mod => mod.Layout == null))
+            foreach (string name in mod.WriteList)
+            {
+                if (!writers.TryGetValue(name, out List<string>? ids)) writers[name] = ids = new List<string>();
+                ids.Add(mod.Id);
+            }
+        foreach (var (name, ids) in writers.Where(pair => pair.Value.Count > 1).OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            report.Add(ModReportClass.OrderedInteraction, ids, null,
+                       $"{name} is written by {string.Join(", then ", ids)} (load order); the trace shows each write (--lua-trace)");
+        report.Lua = Summary(mods, handlers, sites, engine, luaEvents, declared);
+
         var events = declared.Values.Select(entry => entry.Event).OrderBy(gameEvent => gameEvent.Name, StringComparer.Ordinal).ToList();
         return new LinkedLua(new ModRuntimeStack(mods, handlers, events), new HookPlan(sites, engine, luaEvents), undeclared);
+    }
+
+    /// <summary>The report's Lua section (spec §12): each mod with its capabilities and the names it writes, each hook with
+    /// its handlers in the order they run, and each event with its owner, its fields and its subscribers.</summary>
+    private static List<string> Summary(IReadOnlyList<ModRuntimeMod> mods, IReadOnlyList<ModRuntimeHandler> handlers,
+                                        IReadOnlyDictionary<string, IReadOnlyList<PlannedSite>> sites,
+                                        IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> engine,
+                                        IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> luaEvents,
+                                        IReadOnlyDictionary<string, DeclaredEvent> declared)
+    {
+        var lines = new List<string>();
+        var baseIds = mods.Where(mod => mod.Layout != null).Select(mod => mod.Id).ToHashSet(StringComparer.Ordinal);
+        string Describe(PlannedHandler planned, bool withEvent = true)
+            => $"{handlers[planned.Handler.Index]}"
+               + (withEvent && planned.GameEvent is { } name ? $" on {name}" : "")
+               + $" (priority {planned.Priority})";
+
+        foreach (ModRuntimeMod mod in mods)
+        {
+            var parts = new List<string>();
+            if (mod.Layout != null) parts.Add($"base mod of {mod.Layout.Globals.Count} globals");
+            if (mod.Library) parts.Add("library");
+            parts.Add(mod.Vm ? "capabilities vm (opaque)" : "capabilities none");
+            var through = mod.Requires.Where(baseIds.Contains).ToList();
+            if (mod.Layout != null) parts.Add("writes its own names, with no list");
+            else
+            {
+                string writes = mod.WriteList.Count == 0 ? "writes no name" : "writes " + string.Join(", ", mod.WriteList);
+                if (through.Count > 0) writes += $" through {string.Join(", ", through)}";
+                if (mod.Vm) writes += ", and any cell by address";
+                if (mod.LuaDev) writes += ", and under --lua-dev (opaque) any exported name its list lacks";
+                parts.Add(writes);
+            }
+            lines.Add($"mod {mod.Id} {mod.Version}: {string.Join("; ", parts)}");
+        }
+        foreach (var (script, planned) in sites)
+            foreach (PlannedSite site in planned)
+                lines.Add($"hook {script} 0x{site.Site:x}" + (site.Point is { } point ? $" ({point})" : "") + ": "
+                          + string.Join(", ", site.Handlers.Select(handler => Describe(handler))));
+        foreach (var (name, planned) in engine)
+            lines.Add($"hook {name}: " + string.Join(", ", planned.Select(handler => Describe(handler))));
+        foreach (DeclaredEvent entry in declared.Values.OrderBy(entry => entry.Event.Name, StringComparer.Ordinal))
+        {
+            GameEvent gameEvent = entry.Event;
+            string where = gameEvent.RaisedByLua
+                ? "raised from Lua"
+                : $"at {gameEvent.Point}"
+                  + (entry.Place is { } place ? $", {TextCatalog.NormalizeScriptName(place.Script)} 0x{place.Site:x}" : "");
+            IEnumerable<PlannedHandler> subscribers = gameEvent.RaisedByLua
+                ? luaEvents.GetValueOrDefault(gameEvent.Name) ?? []
+                : sites.Values.SelectMany(planned => planned).SelectMany(site => site.Handlers)
+                    .Where(handler => handler.GameEvent == gameEvent.Name);
+            string fields = string.Join(", ", gameEvent.Fields.Select(field => $"{field.Name} {field.Type.Name()} "
+                                                                               + (field.Writable ? "rw" : "r")));
+            var listed = subscribers.Select(handler => Describe(handler, withEvent: false)).ToList();
+            lines.Add($"event {gameEvent.Name} ({gameEvent.Owner}, {where}): fields {(fields.Length == 0 ? "none" : fields)}; "
+                      + $"subscribers {(listed.Count == 0 ? "none" : string.Join(", ", listed))}");
+        }
+        return lines;
     }
 
     /// <summary>

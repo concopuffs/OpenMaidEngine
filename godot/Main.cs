@@ -647,6 +647,8 @@ public partial class Main : Godot.Control
             GetTree().Quit(2);
             return;
         }
+        // --lua-trace (Lua scripting spec §12): a line per handler call in diagnostics/lua-trace.jsonl.
+        bool luaTrace = userArgs.Contains("--lua-trace");
         _scripting = new Scripting(new ScriptMemory(vmOptions.NativeStringCodePage), new ScriptingSetup
         {
             Runtime = _luaRuntime,
@@ -654,17 +656,25 @@ public partial class Main : Godot.Control
             Plan = _modLayer?.HookPlan ?? HookPlan.Empty,
             Sites = _modLayer?.ScriptSites ?? UnchangedScriptSites.Instance,
             Errors = luaErrors,
+            Trace = luaTrace,
             DiagnosticsDirectory = profilePersistence.DiagnosticsDirectory,
             StampedMods = StampedMods,
             ConsoleLayout = () => Ome.Mods.Packages.ShippedPackages.BaseLayoutOf(selectedProfile.Profile.Id),
         });
         _waits.ServiceAfterRequests(_scripting.ServiceRequests);
         if (_modLayer?.LuaStack is { HasLua: true } luaStack)
-            GD.Print($"[lua] {luaStack.Mods.Count} mods ship Lua ({string.Join(", ", luaStack.Mods.Select(mod => mod.Id))}); "
-                     + $"{luaStack.Handlers.Count} handlers; errors {luaErrors.ToString().ToLowerInvariant()}"
+        {
+            // A base mod with no lua/ of its own is in the stack for its layout; it ships no Lua.
+            var shipping = luaStack.Mods.Where(mod => mod.Files.Count > 0).Select(mod => mod.Id).ToList();
+            var layouts = luaStack.Mods.Where(mod => mod.Files.Count == 0).Select(mod => mod.Id).ToList();
+            GD.Print($"[lua] {shipping.Count} mods ship Lua ({string.Join(", ", shipping)})"
+                     + (layouts.Count > 0 ? $", with the layout of {string.Join(", ", layouts)}" : "")
+                     + $"; {luaStack.Handlers.Count} handlers; errors {luaErrors.ToString().ToLowerInvariant()}"
                      + (luaStack.Mods.Any(mod => mod.LuaDev)
                          ? "; --lua-dev for " + string.Join(", ", luaStack.Mods.Where(mod => mod.LuaDev).Select(mod => mod.Id))
-                         : ""));
+                         : "")
+                     + (luaTrace ? $"; tracing to diagnostics/{Scripting.TraceFile}" : ""));
+        }
         _vm = new VirtualMachine(script, table, _waits, vmOptions,
             provider, sink,
             saves: _saves,

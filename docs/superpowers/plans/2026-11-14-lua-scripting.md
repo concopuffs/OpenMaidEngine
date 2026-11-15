@@ -732,3 +732,45 @@ source writes `adv_hover_history`: `omp check` gave the note with `writes = ["ad
 "adv_hover_history"]`. In the port (sandbox `luadev`, `--port-arg=--lua-dev`) the `[lua]` line ended `; --lua-dev for
 scratch.devwrite`, two writes through the console in the mod's environment went through with one `lua.log` warning,
 and a write of `1.5` to the integer cell still failed.
+
+### 7.5 The link report's Lua section and `--lua-trace`
+
+Built 2026-11-15 (spec §12, §13; gate 5's trace, gate 15's remaining cases):
+
+- **The report** (`ModLuaLinker.Summary`, `ModLinkReport.Lua`, rendered after the findings as `lua:`):
+  - `mod`: each mod in the runtime stack in load order, with a base mod's global count, `library`, its capabilities
+    (`vm (opaque)`), and its writes: the list's global names and the base mods they go through, `and any cell by
+    address` with `vm`, and the `--lua-dev` addition (opaque);
+  - `hook`: each planned instruction and engine event, its handlers in the merged order;
+  - `event`: each declared event with its owner, where it is raised, its fields and its subscribers.
+  - Two mods whose lists name one global are an ordered interaction in load order. The `vm` note and the
+    `--lua-dev` note say "opaque". The cache keeps the section, as it keeps the rendered report.
+- **The trace** (`Natives/Scripting.Trace.cs`, `ScriptingSetup.Trace`, the port's `--lua-trace`):
+  - `Call` opens a record before the handler (the fields read through the context, the time) and writes the line
+    after it, before the context goes dead, with `result` from the error kind. Nested calls keep a stack; a line
+    names the calls it ran inside (`within`, innermost first) and is written before theirs.
+  - Writes are recorded where they are made: `NamedFace.Write` (the accessor, with `name[row][column]`),
+    `VmFace` (globals with the layout's name, `GameLayout.NameAt`, and locals), and `HookContext.WriteOperand`
+    through `OperandWritten`, which only a traced point call sets. Each write is the innermost call's, with `through`
+    when the face's mod is not the call's: a base mod's helper writing for its caller.
+  - Without the flag nothing is read or allocated per write: the faces test `Tracing` (a traced call is running).
+  - The file is opened at the run's first line with `FileMode.Create` and closed by `Dispose`; the last 256 lines
+    are kept in memory (`RecentTrace`). A write error logs one warning and stops the file.
+- **The port's `[lua]` line** now counts the mods that ship Lua apart from the base mods in the stack for their
+  layout (piece 2 counted those as shipping Lua), and says when the trace is on.
+- **Tests.** `LuaTraceTests` (5): two subscribers' amounts in order (gate 5's trace), each write named for its handler
+  with a base mod's helper's write `through` the base mod and needing no list entry (gate 15), a nested call's
+  `within` and a failure's `result`, the file only under the flag and started anew, and `NameAt`.
+  `ModLuaLinkTests` (2): the section's lines, the write interaction, opaque under `vm` and `--lua-dev`, no section
+  without Lua; the startup report keeps the section (below).
+- **Gates.** Gate 15 has every case now. Gate 5 has all but the site hook in the merged order, held for
+  milestone 4.
+
+Driven in the port on 2026-11-15 (sandbox `luatrace`, `--port-arg=--lua-trace`) with a scratch mod whose
+`ome.session.start` handler writes `adv_hover_history` through `himegari-base`: the `[lua]` line read `1 mods ship Lua
+(scratch.trace), with the layout of himegari-base; 1 handlers; errors continue; tracing to
+diagnostics/lua-trace.jsonl`, and the trace held one line, the handler with `reason` before and after and the write
+as `G[0x6c9]` named `adv_hover_history`. The first run showed that the launcher's merged report dropped the section
+(`ModLaunch.Run` copies the order and the dropped mods into a new report); it now copies the section too, and
+`ModLuaLinkTests.TheStartupReportKeepsTheLuaSectionWhenItLinksAndWhenItReusesTheCache` covers it. The rerun's
+`mod-link.txt` ends with the base mod, the scratch mod, its hook and the experience award with no subscribers.

@@ -161,7 +161,7 @@ public static class ModLaunch
             ModLinkReport final = stack.Report;
             if (!ReferenceEquals(final, report))
             {
-                var merged = new ModLinkReport { Order = final.Order, Dropped = final.Dropped };
+                var merged = new ModLinkReport { Order = final.Order, Dropped = final.Dropped, Lua = final.Lua };
                 merged.AddRange(report.Lines);
                 merged.AddRange(final.Lines);
                 final = merged;

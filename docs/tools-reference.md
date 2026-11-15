@@ -696,6 +696,10 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--lua-dev` — while writing a mod (spec §9.3, §13): a mod loaded from a folder that requires a base mod may write
   an exported name its `[lua] writes` list lacks; `diagnostics/lua.log` names each such write once per mod and name,
   and the `[lua]` line lists the mods it applies to. A packed `.omp` keeps its list. The link cache keys on the flag.
+- `--lua-trace` — the attribution trace (spec §12): one JSON line per handler call in `diagnostics/lua-trace.jsonl`
+  (started anew by the run's first line), with the mod, handler, hook, kind, `at`, `ms`, `result`, `within`, the
+  declared fields before and after, and each write through `maid.vm`, an accessor or `ctx.args` (`Scripting.Trace.cs`).
+  The `[lua]` line says when it is on. Format: `docs/modding/lua.md`, "The link report and the trace".
 - `--allow-bmp-as-agf` — opt into decoding a `BM` payload found under an `.AGF` catalog record as an
   uncompressed Windows BMP. The supported compatibility surface is `BITMAPINFOHEADER`-compatible `BI_RGB` at
   1/4/8-bit paletted (opaque), 24-bit opaque, or 32-bit straight alpha, including top-down images and padded rows. Without this option,

@@ -54,7 +54,7 @@ public sealed partial class Scripting
         private readonly Dictionary<string, INamedAccess?> _names = new(StringComparer.Ordinal);
 
         public string ModId { get; } = modId;
-        public IVmAccess? Vm { get; } = vm ? new VmFace(owner) : null;
+        public IVmAccess? Vm { get; } = vm ? new VmFace(owner, modId) : null;
 
         // Spec §5.6: script memory's generator, the one op 0x60 draws from.
         public int DrawRandom() => owner._memory.DrawForMod();
@@ -119,11 +119,21 @@ public sealed partial class Scripting
                     owner.WriteLog(ModLogLevel.Warn, modId, $"writes {global.Name}, which its [lua] writes list does not name "
                                                             + $"({list}); --lua-dev lets it through: add it to the list");
             }
-            owner.WriteCell(global.Kind, LayoutCells.Address(global, row, column), value, global.Name);
+            int address = LayoutCells.Address(global, row, column);
+            if (!owner.Tracing)
+            {
+                owner.WriteCell(global.Kind, address, value, global.Name);
+                return;
+            }
+            CellValue before = owner.ReadCell(global.Kind, address);
+            owner.WriteCell(global.Kind, address, value, global.Name);
+            string name = global.Name + (row >= 0 ? $"[{row}]" : "") + (column >= 0 ? $"[{column}]" : "");
+            owner.TraceWrite(CellText(global.Kind, address, local: false), name, modId, before, owner.ReadCell(global.Kind, address));
         }
     }
 
-    private sealed class VmFace(Scripting owner) : IVmAccess
+    /// <summary><c>maid.vm</c> for one mod (<paramref name="modId"/> names it in the trace).</summary>
+    private sealed class VmFace(Scripting owner, string modId) : IVmAccess
     {
         private ScriptMemory Memory => owner._memory;
         private int CodePage => owner._memory.Encoding.CodePage;
@@ -131,17 +141,60 @@ public sealed partial class Scripting
         public double ReadInteger(double address) => CellRules.ReadInteger(Memory.Integer(CellRules.Address(address)));
 
         public void WriteInteger(double address, double value)
-            => Memory.SetInteger(CellRules.Address(address), CellRules.Integer(value));
+        {
+            int cell = CellRules.Address(address);
+            var integer = CellRules.Integer(value);
+            CellValue? before = GlobalBefore(CellKind.Integer, cell);
+            Memory.SetInteger(cell, integer);
+            GlobalAfter(CellKind.Integer, cell, before);
+        }
 
         public double ReadFloat(double address) => CellRules.ReadFloat(Memory.Float(CellRules.Address(address)));
 
         public void WriteFloat(double address, double value)
-            => Memory.SetFloat(CellRules.Address(address), CellRules.FloatBits(value));
+        {
+            int cell = CellRules.Address(address);
+            var bits = CellRules.FloatBits(value);
+            CellValue? before = GlobalBefore(CellKind.Float, cell);
+            Memory.SetFloat(cell, bits);
+            GlobalAfter(CellKind.Float, cell, before);
+        }
 
         public string ReadString(double address) => Memory.String(CellRules.Address(address));
 
         public void WriteString(double address, string value)
-            => Memory.SetString(CellRules.Address(address), CellRules.Text(value, CodePage));
+        {
+            int cell = CellRules.Address(address);
+            var text = CellRules.Text(value, CodePage);
+            CellValue? before = GlobalBefore(CellKind.String, cell);
+            Memory.SetString(cell, text);
+            GlobalAfter(CellKind.String, cell, before);
+        }
+
+        // Under --lua-trace (spec §12) a write is read before and after it; otherwise the before is null and nothing is
+        // read or allocated.
+        private CellValue? GlobalBefore(CellKind kind, int cell) => owner.Tracing ? owner.ReadCell(kind, cell) : null;
+
+        private void GlobalAfter(CellKind kind, int cell, CellValue? before)
+        {
+            if (before is { } value) owner.TraceGlobal(kind, cell, modId, value);
+        }
+
+        private CellValue? LocalBefore(IInterpreterAccess frame, CellKind kind, int index)
+            => owner.Tracing ? ReadLocal(frame, kind, index) : null;
+
+        private void LocalAfter(IInterpreterAccess frame, CellKind kind, int index, CellValue? before)
+        {
+            if (before is { } value)
+                owner.TraceWrite(CellText(kind, index, local: true), null, modId, value, ReadLocal(frame, kind, index));
+        }
+
+        private static CellValue ReadLocal(IInterpreterAccess frame, CellKind kind, int index) => kind switch
+        {
+            CellKind.Integer => CellValue.Integer(CellRules.ReadInteger(frame.LocalInteger(index))),
+            CellKind.Float => CellValue.Float(CellRules.ReadFloat(frame.LocalFloat(index))),
+            _ => CellValue.String(frame.LocalString(index)),
+        };
 
         public double ReadPointer(double index) => Memory.Pointers.GetValueOrDefault(CellRules.Address(index, "an index"));
 
@@ -160,18 +213,39 @@ public sealed partial class Scripting
             => CellRules.ReadInteger(Frame_().LocalInteger(CellRules.Address(index, "an index")));
 
         public void WriteLocalInteger(double index, double value)
-            => Frame_().SetLocalInteger(CellRules.Address(index, "an index"), CellRules.Integer(value));
+        {
+            int local = CellRules.Address(index, "an index");
+            var integer = CellRules.Integer(value);
+            IInterpreterAccess frame = Frame_();
+            CellValue? before = LocalBefore(frame, CellKind.Integer, local);
+            frame.SetLocalInteger(local, integer);
+            LocalAfter(frame, CellKind.Integer, local, before);
+        }
 
         public double ReadLocalFloat(double index)
             => CellRules.ReadFloat(Frame_().LocalFloat(CellRules.Address(index, "an index")));
 
         public void WriteLocalFloat(double index, double value)
-            => Frame_().SetLocalFloat(CellRules.Address(index, "an index"), CellRules.FloatBits(value));
+        {
+            int local = CellRules.Address(index, "an index");
+            var bits = CellRules.FloatBits(value);
+            IInterpreterAccess frame = Frame_();
+            CellValue? before = LocalBefore(frame, CellKind.Float, local);
+            frame.SetLocalFloat(local, bits);
+            LocalAfter(frame, CellKind.Float, local, before);
+        }
 
         public string ReadLocalString(double index) => Frame_().LocalString(CellRules.Address(index, "an index"));
 
         public void WriteLocalString(double index, string value)
-            => Frame_().SetLocalString(CellRules.Address(index, "an index"), CellRules.Text(value, CodePage));
+        {
+            int local = CellRules.Address(index, "an index");
+            var text = CellRules.Text(value, CodePage);
+            IInterpreterAccess frame = Frame_();
+            CellValue? before = LocalBefore(frame, CellKind.String, local);
+            frame.SetLocalString(local, text);
+            LocalAfter(frame, CellKind.String, local, before);
+        }
 
         public ScriptFrameInfo? Frame
         {

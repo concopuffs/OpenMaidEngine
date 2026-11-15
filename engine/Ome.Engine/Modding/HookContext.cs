@@ -108,6 +108,10 @@ public sealed class HookContext
     /// <summary>False once the call it was built for has returned.</summary>
     public bool Live { get; internal set; } = true;
 
+    /// <summary>Told of each write through <c>ctx.args</c> under <c>--lua-trace</c> (spec §12): the operand's index, the
+    /// operand, and its value before and after. Null otherwise, so a write reads nothing more.</summary>
+    internal Action<int, Operand, CellValue, CellValue>? OperandWritten { get; set; }
+
     public int OperandCount => _operands.Count;
 
     public OperandKind OperandKindOf(int index) => KindOf(OperandAt(index).Type);
@@ -147,7 +151,9 @@ public sealed class HookContext
             _ => throw new ScriptAccessException(
                 $"ctx.args[{index + 1}] is {Describe(operand.Type)}; it takes {(kind == OperandKind.String ? "a string" : "a number")}"),
         };
+        CellValue? before = OperandWritten != null ? _interpreter!.ReadOperand(operand) : null;
         _interpreter!.WriteOperand(operand, checkedValue);
+        if (before is { } previous) OperandWritten!(index, operand, previous, _interpreter.ReadOperand(operand));
     }
 
     private Operand OperandAt(int index)

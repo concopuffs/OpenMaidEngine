@@ -445,6 +445,36 @@ Two things no budget bounds: a pattern that backtracks (`string.find`, `match`, 
 `a*a*a*…b`) can stall the game, and a mod can use up memory. If the game hangs with mods on, disable mods and enable
 them again one at a time to find the one.
 
+## The link report and the trace
+
+`diagnostics/mod-link.txt`, and what `omp check` prints, ends with a `lua:` section:
+
+- `mod <id> <version>: …` for each mod that ships Lua or lends its layout: its capabilities and the names it
+  writes. A mod with `vm` is *opaque*: the report cannot list what it changes. So is a mod under `--lua-dev`.
+- `hook …` for each instruction and engine event with handlers, in the order they run.
+- `event <name> (<owner>, <where>): fields …; subscribers …` for each declared event.
+
+Two mods whose `[lua] writes` lists name one global give an `interaction` line, in load order.
+
+`--lua-trace` ([cli.md](cli.md)) writes one JSON line per handler call to `diagnostics/lua-trace.jsonl`; each run
+starts the file anew. Two mods on one award, one dividing the amount and one doubling it, read:
+
+```json
+{"mod":"mod.gap","handler":"gap.lua:on_award","hook":"<profile>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.041,"result":"ok","fields":[{"name":"amount","before":50,"after":25}]}
+{"mod":"mod.double","handler":"double.lua:on_award","hook":"<profile>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.012,"result":"ok","fields":[{"name":"amount","before":25,"after":50}]}
+```
+
+- `hook` is the point, the engine event or the game event; `kind` is `point`, `engine-event` or `event`; `at` is
+  the script and offset, for a point and for an event raised at one.
+- `result` is `ok`, `error`, `budget` or `depth`, with `error` the message's first line.
+- `within` lists the handlers the call ran inside, innermost first: a subscriber inside an emit has one.
+- `fields` gives each declared field, and an engine event's, before and after the call. A write to a field shows
+  here, not in `writes`.
+- `writes` gives each write through `maid.vm`, the game names or `ctx.args`: `cell` (such as `G[0x11]`, `GS[0x0]`,
+  `L[0x1]` or `arg[1] G[0x100]`), `name` when the base mod's layout names the cell, `before` and `after`. A write
+  belongs to the handler running, so a base mod's helper's write is named for the mod that called it, with
+  `through` naming the base mod. A call's first 1000 writes are listed, and `writes_not_listed` counts the rest.
+
 ## The console
 
 The driver's `lua` step runs a chunk in a running game and returns what it returns ([cli.md](cli.md), "Automated

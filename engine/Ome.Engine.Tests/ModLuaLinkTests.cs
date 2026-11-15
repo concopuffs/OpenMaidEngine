@@ -560,6 +560,74 @@ public sealed class ModLuaLinkTests : IDisposable
     }
 
     [Fact]
+    public void TheReportListsEachModsWritesEachHookInOrderAndEachEventWithItsSubscribers()
+    {
+        // Spec §12, gate 15: each mod's capabilities and writes, the hooks and the events; two mods on one name.
+        ModPackage first = Mod("first", RequiresBase + EventHook("test.award"), Hooks(Subscribes),
+                               lua: "api = 1\nwrites = [\"turn_limit\", \"unit_current_levels\"]");
+        ModPackage second = Mod("second", RequiresBase + EventHook("test.computed", 2), Hooks(Subscribes),
+                                lua: "api = 1\nwrites = [\"stage_turn_limit\"]");
+        ModPackage hooker = Mod("hooker", PointHook(extra: "priority = 5")
+                                          + "\n[[hooks]]\nengine = \"ome.session.start\"\nhandler = \"hooks.lua:on_start\"\n",
+                                Hooks(Doubles + "\nfunction on_start(e) end"));
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), [EventBase(), first, second, hooker], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+
+        ModReportLine shared = Assert.Single(result.Report.Lines, line => line.Message.StartsWith("stage_turn_limit ", StringComparison.Ordinal));
+        Assert.Equal(ModReportClass.OrderedInteraction, shared.Class);
+        Assert.Equal(["first", "second"], shared.Mods);
+        Assert.Equal("stage_turn_limit is written by first, then second (load order); the trace shows each write (--lua-trace)",
+                     shared.Message);
+        Assert.Contains(result.Report.Lines, line => line.Mods.SequenceEqual(["hooker"])
+                                                     && line.Message.StartsWith("has the vm capability, so it is opaque",
+                                                                                StringComparison.Ordinal));
+        // The mods in load order: hooker requires nothing, so it may load first. Compared as text, so a difference shows
+        // where it is.
+        Assert.Equal(string.Join("\n", (string[])[
+            "mod hooker 1.0.0: capabilities vm (opaque); writes no name, and any cell by address",
+            "mod test-base 1.0.0: base mod of 2 globals; capabilities vm (opaque); writes its own names, with no list",
+            "mod first 1.0.0: capabilities none; writes stage_turn_limit, unit_current_levels through test-base",
+            "mod second 1.0.0: capabilities none; writes stage_turn_limit through test-base",
+            $"hook ADDEXP 0x9a ({ExperiencePoint}): first hooks.lua:on_award on test.award (priority 0), "
+            + "hooker hooks.lua:on_award (priority 5)",
+            "hook ome.session.start: hooker hooks.lua:on_start (priority 0)",
+            $"event test.award (test-base, at {ExperiencePoint}, ADDEXP 0x9a): fields amount int rw, limit int r; "
+            + "subscribers first hooks.lua:on_award (priority 0)",
+            "event test.computed (test-base, raised from Lua): fields amount int rw; subscribers second hooks.lua:on_award (priority 2)",
+        ]), string.Join("\n", result.Report.Lua));
+        // The section follows the findings, one line each, indented.
+        string[] rendered = result.Report.Render().Split(Environment.NewLine);
+        int section = Array.IndexOf(rendered, "lua:");
+        Assert.True(section > 0 && rendered[1..section].All(line => !line.StartsWith("  ", StringComparison.Ordinal)));
+        Assert.Equal(result.Report.Lua.Select(line => "  " + line), rendered[(section + 1)..^1]);
+        Assert.Equal("", rendered[^1]);
+        // Under --lua-dev a folder mod is opaque too.
+        ModLinkResult dev = ModLinker.Link(SyntheticBase() with { LuaDev = true }, [EventBase(), first], []);
+        Assert.Contains("mod first 1.0.0: capabilities none; writes stage_turn_limit, unit_current_levels through test-base, and "
+                        + "under --lua-dev (opaque) any exported name its list lacks", dev.Report.Lua);
+        Assert.Contains(dev.Report.Lines, line => line.Message.StartsWith("runs under --lua-dev, so it is opaque", StringComparison.Ordinal));
+        // A stack without Lua has no section.
+        Assert.Empty(ModLinker.Link(SyntheticBase(), [], []).Report.Lua);
+    }
+
+    [Fact]
+    public void TheStartupReportKeepsTheLuaSectionWhenItLinksAndWhenItReusesTheCache()
+    {
+        string profile = Path.Combine(_root, "profile");
+        string diagnostics = Path.Combine(profile, "diagnostics");
+        ModPackage hooker = Mod("hooker", PointHook(), Hooks(Doubles));
+        var options = Ome.Mods.Launch.ModLaunchOptions.Resolve(["--mod", hooker.Location], _root);
+        foreach (bool cached in new[] { false, true })
+        {
+            Ome.Mods.Launch.ModLaunchResult launched = Ome.Mods.Launch.ModLaunch.Run(SyntheticBase(), profile, diagnostics, options);
+            Assert.False(launched.Failed, launched.Report.Render());
+            Assert.Equal(cached, launched.FromCache);
+            string text = File.ReadAllText(Path.Combine(diagnostics, Ome.Mods.Launch.ModLaunch.ReportFile));
+            Assert.Contains("  mod hooker 1.0.0: capabilities vm (opaque); writes no name, and any cell by address", text);
+        }
+    }
+
+    [Fact]
     public void AnUndeclaredEventAndASubscriberThatDoesNotRequireItsOwnerAreLinkErrors()
     {
         ModReportLine line = Stop(ModLinker.Link(SyntheticBase(), [EventBase(), Subscriber("m", EventHook("test.none"))], []),

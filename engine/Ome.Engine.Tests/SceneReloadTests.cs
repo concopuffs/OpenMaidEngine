@@ -129,6 +129,9 @@ public class SceneReloadTests
             "_depth", "_frameAccess", "_nestedHalt",
             // The undeclared writes --lua-dev has logged, once each for the run.
             "_devWrites",
+            // The trace (--lua-trace): the traced calls running (empty between calls), the run's recent lines, and its
+            // file, which the run's first line starts anew.
+            "_traced", "_recentTrace", "_traceWriter", "_traceUnwritable",
             // The run's log and notices, and the front end's console chunks not yet run.
             "_recentLog", "_noticeCount", "_latestNotice", "_console",
         ],

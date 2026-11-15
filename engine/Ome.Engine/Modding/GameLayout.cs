@@ -61,6 +61,26 @@ public sealed partial class GameLayout
     /// <summary>Every exported name: each global's name and its aliases.</summary>
     public IEnumerable<string> Names => _byName.Keys;
 
+    /// <summary>
+    /// The name a cell has (spec §12, the trace): a scalar's, or a table's with the cell's row, and column in a 2-D
+    /// table, such as <c>unit_current_levels[2]</c>; null when no global of the bank covers it. A scalar at the address
+    /// wins over a table whose rows reach it.
+    /// </summary>
+    public string? NameAt(CellKind kind, int address)
+    {
+        foreach (LayoutGlobal global in Globals)
+            if (global.Kind == kind && global.IsScalar && global.Address == address) return global.Name;
+        foreach (LayoutGlobal global in Globals)
+        {
+            if (global.Kind != kind || global.IsScalar || address < global.Address) continue;
+            int offset = address - global.Address, width = global.RowWidth, row = offset / width;
+            // An open table that no global follows reaches every row.
+            if (global.Rows is int rows && row >= rows) continue;
+            return global.Dimensions.Count == 2 ? $"{global.Name}[{row}][{offset % width}]" : $"{global.Name}[{row}]";
+        }
+        return null;
+    }
+
     [GeneratedRegex("^[a-z_][a-z0-9_]*$", RegexOptions.CultureInvariant)]
     private static partial Regex Identifier();
 

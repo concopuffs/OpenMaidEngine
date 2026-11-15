@@ -604,7 +604,8 @@ implements); `Console` queues the driver's `lua` chunks and runs them at an inst
 mods' state and the session's life across loads: the save record the save native asks for at op `0x19e`
 (`SAVEnn.modstate.json`, which the port's `SidecarNativeDatStore` writes beside the save), the load's report, each
 mod's last good block, `maid.session.restoring`, and the build and `ome.session.resumed` the interpreter asks for at
-a boundary (`BoundaryPending`, `ServiceBoundary`). The runtime it calls is `engine/Ome.Scripting.Lua/`; the link builds its stack and plan in `engine/Ome.Mods/Linking/ModLuaLinker.cs`.
+a boundary (`BoundaryPending`, `ServiceBoundary`); `Events` runs the game events' subscribers; `Trace` writes
+`--lua-trace`'s `diagnostics/lua-trace.jsonl`. The runtime it calls is `engine/Ome.Scripting.Lua/`; the link builds its stack and plan in `engine/Ome.Mods/Linking/ModLuaLinker.cs`.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state

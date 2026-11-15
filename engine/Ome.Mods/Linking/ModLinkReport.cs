@@ -46,6 +46,10 @@ public sealed class ModLinkReport
     public IReadOnlyList<ModReportLine> Lines => _lines;
     public IReadOnlyList<string> Order { get; internal set; } = [];
     public IReadOnlyList<string> Dropped { get; internal set; } = [];
+
+    /// <summary>The Lua section (Lua scripting spec §12): each mod that ships Lua or lends its layout, with its
+    /// capabilities and writes; each hook with its handlers in order; each event with its owner and subscribers.</summary>
+    public IReadOnlyList<string> Lua { get; internal set; } = [];
     public bool Stops => _lines.Any(line => line.Stops);
 
     /// <summary>The mods named by lines that stop the link.</summary>
@@ -68,6 +72,11 @@ public sealed class ModLinkReport
         foreach (ModReportClass kind in Enum.GetValues<ModReportClass>())
             foreach (ModReportLine line in _lines.Where(line => line.Class == kind))
                 text.AppendLine(line.ToString());
+        if (Lua.Count > 0)
+        {
+            text.AppendLine("lua:");
+            foreach (string line in Lua) text.Append("  ").AppendLine(line);
+        }
         return text.ToString();
     }
 

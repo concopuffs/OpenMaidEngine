@@ -20,6 +20,9 @@ public sealed record ScriptingSetup
     public LuaErrorPolicy Errors { get; init; } = LuaErrorPolicy.Continue;
     public string? DiagnosticsDirectory { get; init; }
 
+    /// <summary><c>--lua-trace</c> (spec §12): a line per handler call in <c>diagnostics/lua-trace.jsonl</c>.</summary>
+    public bool Trace { get; init; }
+
     /// <summary>The mod ids the stack stamp beside a loaded save names (mod loader spec §8, <c>SAVEnn.mods.toml</c>),
     /// from the texts the store read beside it; null when it has none. With it, a load whose state file is missing
     /// while the stamp names a mod that ships Lua is reported (spec §11). The composition reads the stamp; without it
@@ -181,7 +184,11 @@ public sealed partial class Scripting : IDisposable
 
     /// <summary>End the session at shutdown, on the engine thread or once it has stopped. The composition disposes the
     /// runtime it created.</summary>
-    public void Dispose() => EndSession();
+    public void Dispose()
+    {
+        EndSession();
+        CloseTrace();
+    }
 
     private void EndSession()
     {
@@ -253,6 +260,8 @@ public sealed partial class Scripting : IDisposable
         bool outerFrameAccess = _frameAccess;
         _depth++;
         _frameAccess = frameAccess;
+        TracedCall? traced = TraceBegin(handler, context);
+        ModScriptException? failure = null;
         string? halt;
         try
         {
@@ -262,10 +271,12 @@ public sealed partial class Scripting : IDisposable
         }
         catch (ModScriptException error)
         {
+            failure = error;
             halt = Failed(handler, error, Where(context));
         }
         finally
         {
+            if (traced != null) TraceEnd(traced, failure);
             context.Live = false;
             _frameAccess = outerFrameAccess;
             _depth--;
