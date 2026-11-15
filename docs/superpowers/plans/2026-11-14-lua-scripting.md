@@ -826,7 +826,11 @@ Built 2026-11-15 (spec §9.2, §18; gate 13):
 - **The guide.** `modding/lua.md`'s first mod is now the event subscriber (no `vm`, no address), checked, run with
   `--lua-trace`, given editor definitions and packed, with the point hook as the second form.
   `modding/games/kamidori.md` has the point, both fingerprints, the OMS patch and the event table.
-- **Found on the way:** `omp build --output` into a folder that does not exist threw; it now makes the folder.
+- **Found on the way:**
+  - `omp build --output` into a folder that does not exist threw; it now makes the folder.
+  - `run-godot.ps1` had no way to pass the Lua switches: `modding/cli.md` said to put them after `--`, which
+    PowerShell refuses as an ambiguous parameter. It now takes `-LuaErrors continue|halt`, `-LuaDev` and
+    `-LuaTrace`, as it takes `-TextLog`.
 - **Tests.** `ModLuaLinkTests` (2, Kamidori installs):
   - on the clean install the shipped base mod's event links at `0x88`, and the award of 7 with one gem is 8 unmodded
     and 16 with the subscriber (17 would mean the doubling came before the bonus), equal to the guide's OMS patch;

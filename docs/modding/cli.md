@@ -72,7 +72,8 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 | `--text-log` | Write every string drawn without a catalog entry to `diagnostics/text-misses.jsonl`, every translated message narrowed to fit its window, with `width_percent`, the width it got, and every one cut at the bottom of its window, with `rows_cut`, the rows it lost. |
 
 `run-godot.ps1` (or `run-godot.cmd`) passes these through as `-Mod PATH` (repeatable), `-NoMods`, `-Language TAG`,
-`-TextRoot DIR` and `-TextLog`; pass `--lua-errors`, `--lua-dev` and `--lua-trace` after `--`. Combine them with the game switches:
+`-TextRoot DIR`, `-TextLog`, `-LuaErrors continue|halt`, `-LuaDev` and `-LuaTrace`. Combine them with the game
+switches:
 
 ```text
 .\run-godot.cmd <game switches> -Mod path\to\my.mod
