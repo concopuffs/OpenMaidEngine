@@ -5,23 +5,24 @@ using Ome.Mods.Packages;
 namespace Ome.Mods.Launch;
 
 /// <summary>The engine's mod flags (spec §9): <c>--mod PATH</c> (repeatable), <c>--no-mods</c>,
-/// <c>--skip-failed-mods</c> and <c>--forget-mod ID</c> (repeatable).</summary>
+/// <c>--skip-failed-mods</c>, <c>--forget-mod ID</c> (repeatable), and the Lua scripting spec's <c>--lua-dev</c>.</summary>
 public sealed record ModLaunchOptions(IReadOnlyList<string> ExtraPackages, bool NoMods, bool SkipFailedMods,
-                                      IReadOnlyList<string> ForgetMods)
+                                      IReadOnlyList<string> ForgetMods, bool LuaDev = false)
 {
     public const string ModOption = "--mod", NoModsOption = "--no-mods", SkipFailedOption = "--skip-failed-mods",
-                        ForgetOption = "--forget-mod";
+                        ForgetOption = "--forget-mod", LuaDevOption = "--lua-dev";
 
     public static ModLaunchOptions Resolve(IReadOnlyList<string> arguments, string workingDirectory)
     {
         var extra = new List<string>();
         var forget = new List<string>();
-        bool noMods = false, skip = false;
+        bool noMods = false, skip = false, luaDev = false;
         for (int k = 0; k < arguments.Count; k++)
         {
             string argument = arguments[k];
             if (argument == NoModsOption) noMods = true;
             else if (argument == SkipFailedOption) skip = true;
+            else if (argument == LuaDevOption) luaDev = true;
             else if (argument is ModOption or ForgetOption)
             {
                 if (k + 1 >= arguments.Count || arguments[k + 1].StartsWith("--", StringComparison.Ordinal))
@@ -31,7 +32,7 @@ public sealed record ModLaunchOptions(IReadOnlyList<string> ExtraPackages, bool 
                 else forget.Add(value);
             }
         }
-        return new ModLaunchOptions(extra, noMods, skip, forget);
+        return new ModLaunchOptions(extra, noMods, skip, forget, luaDev);
     }
 }
 
@@ -145,6 +146,7 @@ public static class ModLaunch
             store.Save(selectorsPath);
         }
         if (options.NoMods) return ModLaunchResult.None(report);
+        linkBase = linkBase with { LuaDev = options.LuaDev };
 
         ModDiscovery discovery = Discover(modsDirectory, options.ExtraPackages, report);
         var packages = discovery.Packages;

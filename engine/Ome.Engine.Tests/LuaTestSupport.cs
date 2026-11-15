@@ -50,6 +50,14 @@ internal sealed class LuaStackBuilder
         return this;
     }
 
+    /// <summary>An unpacked mod run under <c>--lua-dev</c>, as the link marks it.</summary>
+    public LuaStackBuilder LuaDev(string id)
+    {
+        int index = _mods.FindIndex(mod => mod.Id == id);
+        _mods[index] = _mods[index] with { LuaDev = true };
+        return this;
+    }
+
     /// <summary>A mod's <c>[lua] writes</c>, as the link leaves it: global names.</summary>
     public LuaStackBuilder Writes(string id, params string[] names)
     {

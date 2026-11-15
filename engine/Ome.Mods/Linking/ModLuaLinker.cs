@@ -8,11 +8,18 @@ using Ome.Script.Patch;
 namespace Ome.Mods.Linking;
 
 /// <summary>The Lua part of a link (Lua scripting spec §6, §7): the mods that ship Lua with their sources, every
-/// handler their hooks name, and the hook plan bound to the linked scripts.</summary>
-public sealed record LinkedLua(ModRuntimeStack Stack, HookPlan Plan)
+/// handler their hooks name, the hook plan bound to the linked scripts, and the writes the source names that a mod's
+/// list lacks (spec §9.3), which <c>omp build</c> refuses.</summary>
+public sealed record LinkedLua(ModRuntimeStack Stack, HookPlan Plan, IReadOnlyList<ModUndeclaredWrite>? UndeclaredWrites = null)
 {
     public static readonly LinkedLua None = new(ModRuntimeStack.Empty, HookPlan.Empty);
+
+    public IReadOnlyList<ModUndeclaredWrite> Undeclared => UndeclaredWrites ?? [];
 }
+
+/// <summary>A write the source spells out (<c>game.g.NAME = …</c>, <c>game.table("NAME")[…] = …</c>) to a name a base
+/// mod the mod requires exports, which the mod's <c>[lua] writes</c> lacks: <paramref name="Name"/> is the global's.</summary>
+public sealed record ModUndeclaredWrite(string Mod, string File, string Name);
 
 /// <summary>
 /// Links the stack's Lua (Lua scripting spec §6.2–§6.4, §7.1, §7.6, §9.2), after the scripts and the text. Every file
@@ -76,6 +83,7 @@ public static class ModLuaLinker
         // Spec §9.1, plan §7.1: the profile's patch points, else the copy a base mod ships.
         OmsPatchPoints? points = linkBase.PatchPoints ?? order.Select(mod => mod.BasePoints).FirstOrDefault(found => found != null);
         var (declared, brokenEvents) = Events(luaMods, order, linkBase, points, scripts, report);
+        var undeclared = new List<ModUndeclaredWrite>();
 
         foreach (ModPackage mod in luaMods)
         {
@@ -91,7 +99,19 @@ public static class ModLuaLinker
 
             // The sources, each checked without running it.
             var requires = mod.Manifest.Requires.Select(requirement => requirement.Id).Where(loadOrders.ContainsKey).ToList();
-            IReadOnlyList<string> writes = Writes(mod, order, requires, report);
+            var bases = order.Where(package => package.BaseLayout != null && requires.Contains(package.Id, StringComparer.Ordinal))
+                .ToList();
+            IReadOnlyList<string> writes = Writes(mod, bases, report);
+            // Spec §9.3, §13: --lua-dev applies to an unpacked mod that names cells through a base mod.
+            bool luaDev = false;
+            if (linkBase.LuaDev && bases.Count > 0 && mod.BaseLayout == null)
+            {
+                luaDev = mod.Unpacked;
+                report.Add(ModReportClass.Note, mod.Id, null, luaDev
+                    ? "runs under --lua-dev: a write to a name its [lua] writes list lacks goes through, and diagnostics/lua.log "
+                      + "names it once"
+                    : "is packed, so --lua-dev does not apply: its [lua] writes list is enforced");
+            }
             var sources = new List<ModSource>();
             var checks = new Dictionary<string, ModSourceCheck>(StringComparer.Ordinal);
             foreach (ModLuaFile file in mod.Layout.Lua)
@@ -109,9 +129,6 @@ public static class ModLuaLinker
                 var source = new ModSource(mod.Id, file.Path, text);
                 ModSourceCheck check = runtime.Check(source);
                 foreach (ModSourceError error in check.Errors) Error(null, $"lua/{file.Path}: {error}");
-                foreach (string written in check.WrittenNames.Distinct(StringComparer.Ordinal))
-                    report.Add(ModReportClass.Note, mod.Id, null,
-                        $"lua/{file.Path} writes {written}; declared writes come with base mods (Lua scripting milestone 3)");
                 string module = ModuleName(file.Path);
                 if (requires.Contains(module, StringComparer.Ordinal))
                     Error(null, $"lua/{file.Path} is module '{module}', which is also the id of a mod it requires, so "
@@ -119,6 +136,9 @@ public static class ModLuaLinker
                 sources.Add(source);
                 checks[file.Path] = check;
             }
+
+            // Spec §9.3: the writes the source spells out, against the list. A base mod's own names have no list.
+            if (bases.Count > 0 && mod.BaseLayout == null) ScanWrites(mod, bases, writes, checks, luaDev, undeclared, report);
 
             // The hooks.
             foreach (ModHook hook in mod.Manifest.Hooks)
@@ -196,7 +216,7 @@ public static class ModLuaLinker
             // layout (spec §9.1, §9.3).
             if (report.Lines.Count(line => line.Stops) == problemsBefore && (sources.Count > 0 || mod.BaseLayout != null))
                 mods.Add(new ModRuntimeMod(mod.Id, mod.Manifest.Version.ToString(), mod.Manifest.TargetsAnyProfile, vm,
-                                           requires, sources, mod.BaseLayout, writes));
+                                           requires, sources, mod.BaseLayout, writes, luaDev));
             // Spec §15: the report shows what each mod may change, so a player can see it.
             if (vm)
                 report.Add(ModReportClass.Note, mod.Id, null,
@@ -250,7 +270,49 @@ public static class ModLuaLinker
                     $"{byEvent.Key}: subscribers run in this order: " + string.Join(", ", due.Select(Describe)));
         }
         var events = declared.Values.Select(entry => entry.Event).OrderBy(gameEvent => gameEvent.Name, StringComparer.Ordinal).ToList();
-        return new LinkedLua(new ModRuntimeStack(mods, handlers, events), new HookPlan(sites, engine, luaEvents));
+        return new LinkedLua(new ModRuntimeStack(mods, handlers, events), new HookPlan(sites, engine, luaEvents), undeclared);
+    }
+
+    /// <summary>
+    /// The write scan (spec §9.3): each name a file writes out through <c>.g</c> or <c>.table("…")</c> is resolved
+    /// through the base mods the mod requires. One the list lacks is reported with the list as it should read, and
+    /// recorded for <c>omp build</c>; one no base mod exports is reported. A write through a computed name, or through
+    /// a local that stands for <c>game.g</c>, is checked when it runs.
+    /// </summary>
+    private static void ScanWrites(ModPackage mod, IReadOnlyList<ModPackage> bases, IReadOnlyList<string> writes,
+                                   IReadOnlyDictionary<string, ModSourceCheck> checks, bool luaDev,
+                                   List<ModUndeclaredWrite> undeclared, ModLinkReport report)
+    {
+        var missing = new List<ModUndeclaredWrite>();
+        foreach (var (file, check) in checks.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            foreach (string written in check.WrittenNames.Distinct(StringComparer.Ordinal))
+            {
+                LayoutGlobal? global = null;
+                foreach (ModPackage package in bases)
+                    if (package.BaseLayout!.TryGet(written, out LayoutGlobal found))
+                    {
+                        global = found;
+                        break;
+                    }
+                if (global == null)
+                {
+                    report.Add(ModReportClass.Note, mod.Id, null,
+                        $"lua/{file} writes {written} by name, which {string.Join(" or ", bases.Select(package => package.Id))} "
+                        + "does not export; that write fails when it runs");
+                    continue;
+                }
+                if (!writes.Contains(global.Name, StringComparer.Ordinal) && missing.All(entry => entry.Name != global.Name))
+                    missing.Add(new ModUndeclaredWrite(mod.Id, file, global.Name));
+            }
+        if (missing.Count == 0) return;
+        undeclared.AddRange(missing);
+        string what = string.Join(", ", missing.Select(entry => $"{entry.Name} (lua/{entry.File})"));
+        string should = "writes = [" + string.Join(", ", writes.Concat(missing.Select(entry => entry.Name)).Select(name => $"\"{name}\""))
+                        + "]";
+        report.Add(ModReportClass.Note, mod.Id, null, luaDev
+            ? $"the source writes names its [lua] writes list lacks: {what}; --lua-dev lets them through. The list should read {should}"
+            : $"the source writes names its [lua] writes list lacks: {what}; each write fails when it runs, and omp build "
+              + $"refuses the mod. The list should read {should}");
     }
 
     /// <summary>
@@ -336,16 +398,13 @@ public static class ModLuaLinker
 
     /// <summary>
     /// A mod's <c>[lua] writes</c> (spec §9.3), each entry as the global it names: an exported name or alias of a base mod
-    /// the mod requires. A name no such base mod exports is a link error, and so is a list in a mod that requires no base
-    /// mod.
+    /// the mod requires (<paramref name="bases"/>). A name no such base mod exports is a link error, and so is a list in a
+    /// mod that requires no base mod.
     /// </summary>
-    private static IReadOnlyList<string> Writes(ModPackage mod, IReadOnlyList<ModPackage> order, IReadOnlyList<string> requires,
-                                                ModLinkReport report)
+    private static IReadOnlyList<string> Writes(ModPackage mod, IReadOnlyList<ModPackage> bases, ModLinkReport report)
     {
         IReadOnlyList<string> listed = mod.Manifest.Lua?.Writes ?? [];
         if (listed.Count == 0) return [];
-        var bases = order.Where(package => package.BaseLayout != null && requires.Contains(package.Id, StringComparer.Ordinal))
-            .ToList();
         if (bases.Count == 0)
         {
             report.Add(ModReportClass.Error, mod.Id, null,

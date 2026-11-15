@@ -44,6 +44,9 @@ public sealed partial class Scripting
         return _consoleLayout.Value;
     }
 
+    // The (mod, name) pairs --lua-dev has let through and logged, once each for the run (spec §9.3).
+    private readonly HashSet<string> _devWrites = new(StringComparer.Ordinal);
+
     /// <summary>A mod's face, or the console's (no mod): its capability, its write list and the base mods it may
     /// name.</summary>
     private sealed class ModFace(Scripting owner, string modId, ModRuntimeMod? mod, bool vm) : IModAccess
@@ -76,15 +79,16 @@ public sealed partial class Scripting
             if (owner.LayoutOf(baseModId, console: mod == null) is not { } layout) return null;
             if (mod == null || mod.Id == baseModId) return new NamedFace(owner, ModId, layout, null);
             return mod.Requires.Contains(baseModId, StringComparer.Ordinal)
-                ? new NamedFace(owner, ModId, layout, mod.WriteList.ToHashSet(StringComparer.Ordinal))
+                ? new NamedFace(owner, ModId, layout, mod.WriteList.ToHashSet(StringComparer.Ordinal), mod.LuaDev)
                 : null;
         }
     }
 
     /// <summary>A base mod's accessors for one mod (spec §9.3): the index rules of <see cref="LayoutCells"/>, the value
-    /// rules of <see cref="CellRules"/>, and the mod's write list.</summary>
-    private sealed class NamedFace(Scripting owner, string modId, BaseModLayout layout, IReadOnlySet<string>? writes)
-        : INamedAccess
+    /// rules of <see cref="CellRules"/>, and the mod's write list, which <paramref name="luaDev"/> turns from a refusal
+    /// into a report.</summary>
+    private sealed class NamedFace(Scripting owner, string modId, BaseModLayout layout, IReadOnlySet<string>? writes,
+                                   bool luaDev = false) : INamedAccess
     {
         public string BaseModId => layout.ModId;
         public GameLayout Layout => layout.Layout;
@@ -105,9 +109,16 @@ public sealed partial class Scripting
         public void Write(LayoutGlobal global, int row, int column, CellValue value)
         {
             if (writes != null && !writes.Contains(global.Name))
-                throw new ScriptAccessException($"{modId} writes {global.Name}, which its [lua] writes list does not name ("
-                    + (writes.Count == 0 ? "it lists none" : "writes = [" + string.Join(", ", writes.Order(StringComparer.Ordinal)) + "]")
-                    + ")");
+            {
+                string list = writes.Count == 0 ? "it lists none"
+                    : "writes = [" + string.Join(", ", writes.Order(StringComparer.Ordinal)) + "]";
+                if (!luaDev)
+                    throw new ScriptAccessException($"{modId} writes {global.Name}, which its [lua] writes list does not name ({list})");
+                // Spec §9.3: under --lua-dev the write goes through, and the log names it once.
+                if (owner._devWrites.Add($"{modId}\n{global.Name}"))
+                    owner.WriteLog(ModLogLevel.Warn, modId, $"writes {global.Name}, which its [lua] writes list does not name "
+                                                            + $"({list}); --lua-dev lets it through: add it to the list");
+            }
             owner.WriteCell(global.Kind, LayoutCells.Address(global, row, column), value, global.Name);
         }
     }

@@ -30,6 +30,9 @@ public sealed record ModLinkBase
     public IReadOnlyList<GameModule> Modules { get; init; } = [];
     public OmsIdioms? Idioms { get; init; }
     public OmsPatchPoints? PatchPoints { get; init; }
+    /// <summary><c>--lua-dev</c> (Lua scripting spec §9.3, §13): an unpacked mod's write to a name its <c>[lua] writes</c>
+    /// lacks goes through and is reported. A packed mod's list is enforced.</summary>
+    public bool LuaDev { get; init; }
     /// <summary>The base catalog's title, which every append catalog repeats (AGE mounts only its own game's).</summary>
     public string CatalogTitle { get; init; } = "";
     /// <summary>The append magic of the base catalog family, such as <c>"S4AC422 "</c>.</summary>

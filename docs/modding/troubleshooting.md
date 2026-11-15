@@ -215,6 +215,14 @@ field it declares ([lua.md](lua.md), "`maid.events.emit`").
 **"M writes NAME, which its [lua] writes list does not name (…)".** Add `NAME` to `[lua] writes` ([lua.md](lua.md),
 "Game names"). The message shows the list as the engine read it.
 
+**"the source writes names its [lua] writes list lacks: NAME (lua/FILE)…", "omp build: M writes names its [lua]
+writes list lacks".** The link found `game.g.NAME = …` or `game.table("NAME")[…] = …` in your source, and the list
+does not name `NAME`. Replace the list with the one the note gives. Under `--lua-dev` the write goes through, and
+`diagnostics/lua.log` names it once. **"lua/FILE writes NAME by name, which B does not export"**: the name is
+misspelled or not in your game's global reference; the write fails when it runs. **"is packed, so --lua-dev does not
+apply"**: `--lua-dev` loosens the list only for a mod loaded from a folder; run the folder, or list the name and
+rebuild.
+
 **"lua.writes: 'NAME' is not a name <profile>-base exports".** Check the name against your game's global reference
 ([games/README.md](games/README.md)). **"lua.writes names cells of a base mod, and the mod requires none"**: add
 `[[requires]] id = "<profile>-base"`.

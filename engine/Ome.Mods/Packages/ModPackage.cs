@@ -22,6 +22,9 @@ public sealed class ModPackage : IDisposable
     public string Hash { get; }
 
     public string Location => Container.Location;
+
+    /// <summary>A folder, not a packed <c>.omp</c>: what <c>--lua-dev</c> applies to (Lua scripting spec §9.3).</summary>
+    public bool Unpacked => Container is FolderPackageContainer;
     public string Id => Manifest.Id;
 
     /// <summary>A base mod's layout (Lua scripting spec §9.1), read and checked when the package opens; null for any

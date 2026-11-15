@@ -7,6 +7,7 @@ using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Ome.Mods.Linking;
 using Ome.Mods.Packages;
+using Ome.Mods.Tools;
 using Ome.Script.Abi;
 using Ome.Script.Patch;
 using Ome.Scripting.Lua;
@@ -366,6 +367,97 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.NotEqual(ModLinkCache.ComputeKey(withRuntime, [lua], none), ModLinkCache.ComputeKey(other, [lua], none));
         Assert.Equal(ModLinkCache.ComputeKey(withRuntime, [], none), ModLinkCache.ComputeKey(other, [], none));
         Assert.True(ModLuaLinker.ShipsLua(plain));
+    }
+
+    // ------------------------------------------------------------------------------- the write scan and --lua-dev (§9.3)
+
+    private const string Writes = """
+        local game = require("test-base")
+        game.g.turn_limit = 1
+        game.g.stage_turn_limit = 2
+        game.table("unit_current_levels")[1] = 3
+        game.g.no_such = 4
+        """;
+
+    private ModPackage ScannedWriter(string writes = "\"turn_limit\"", string id = "writer")
+        => Mod(id, RequiresBase, new() { ["lua/init.lua"] = Writes }, lua: $"api = 1\nwrites = [{writes}]");
+
+    [Fact]
+    public void TheWriteScanReportsANameTheListLacksWithTheListAsItShouldRead()
+    {
+        ModLinkResult result = ModLinker.Link(SyntheticBase(), [BaseMod(), ScannedWriter()], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+        // An alias in the source is its global; the list already names it.
+        ModUndeclaredWrite write = Assert.Single(result.Lua.Undeclared);
+        Assert.Equal(new ModUndeclaredWrite("writer", "init.lua", "unit_current_levels"), write);
+        ModReportLine note = Assert.Single(result.Report.Lines, line => line.Message.StartsWith("the source writes names", StringComparison.Ordinal));
+        Assert.Equal((ModReportClass.Note, "writer"), (note.Class, note.Mods.Single()));
+        Assert.Equal("the source writes names its [lua] writes list lacks: unit_current_levels (lua/init.lua); each write fails "
+                     + "when it runs, and omp build refuses the mod. The list should read writes = [\"stage_turn_limit\", "
+                     + "\"unit_current_levels\"]", note.Message);
+        Assert.Contains(result.Report.Lines, line => line.Message == "lua/init.lua writes no_such by name, which test-base does not "
+                                                                     + "export; that write fails when it runs");
+        Assert.DoesNotContain(result.Report.Lines, line => line.Message.Contains("milestone 3", StringComparison.Ordinal));
+
+        // A base mod's own names have no list, and a mod that requires no base mod names no game cells.
+        ModPackage baseWithLua = Mod("test-base", files: new() { ["layout/globals.json"] = BaseLayout,
+                                                                ["lua/init.lua"] = "maid.names.g.stage_turn_limit = 1 return {}" });
+        ModPackage plain = Mod("plain", files: new() { ["lua/init.lua"] = "local t = { g = {} } t.g.anything = 1" }, lua: "api = 1");
+        ModLinkResult quiet = ModLinker.Link(SyntheticBase(), [baseWithLua, plain], []);
+        Assert.True(quiet.Succeeded, quiet.Report.Render());
+        Assert.Empty(quiet.Lua.Undeclared);
+        Assert.DoesNotContain(quiet.Report.Lines, line => line.Message.Contains("by name", StringComparison.Ordinal)
+                                                          || line.Message.Contains("the source writes", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OmpBuildRefusesAModWhoseSourceWritesANameItsListLacks()
+    {
+        string baseFolder = BaseMod().Location;
+        var console = new StringWriter();
+        Assert.Equal(1, OmpCommands.Build(SyntheticBase(), ScannedWriter().Location, Path.Combine(_root, "refused.omp"),
+                                          [baseFolder], console));
+        Assert.Contains("omp build: writer writes names its [lua] writes list lacks: unit_current_levels (lua/init.lua)",
+                        console.ToString());
+        Assert.False(File.Exists(Path.Combine(_root, "refused.omp")));
+
+        console = new StringWriter();
+        int built = OmpCommands.Build(SyntheticBase(), ScannedWriter("\"turn_limit\", \"unit_current_levels\"").Location,
+                                      Path.Combine(_root, "built.omp"), [baseFolder], console);
+        Assert.True(built == 0, console.ToString());
+    }
+
+    [Fact]
+    public void LuaDevLetsAnUnpackedModsUndeclaredWriteThroughAndKeepsAPackedModsList()
+    {
+        Assert.True(Ome.Mods.Launch.ModLaunchOptions.Resolve(["--lua-dev"], _root).LuaDev);
+        Assert.False(Ome.Mods.Launch.ModLaunchOptions.Resolve([], _root).LuaDev);
+        ModLinkBase dev = SyntheticBase() with { LuaDev = true };
+
+        ModLinkResult result = ModLinker.Link(dev, [BaseMod(), ScannedWriter()], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.True(result.Lua.Stack.Mods.Single(mod => mod.Id == "writer").LuaDev);
+        Assert.False(result.Lua.Stack.Mods.Single(mod => mod.Id == "test-base").LuaDev);
+        Assert.Contains(result.Report.Lines, line => line.Message.StartsWith("runs under --lua-dev", StringComparison.Ordinal));
+        Assert.Contains(result.Report.Lines, line => line.Message.Contains("--lua-dev lets them through", StringComparison.Ordinal));
+        // The cache keeps the mark, and the flag is part of the key.
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", dev, result);
+        Assert.True(ModLinkCache.TryOpen(cache, "key")!.LuaStack.Mods.Single(mod => mod.Id == "writer").LuaDev);
+        IReadOnlyList<ModPackage> stack = [BaseMod(), ScannedWriter()];
+        Assert.NotEqual(ModLinkCache.ComputeKey(dev, stack, new Dictionary<string, int>()),
+                        ModLinkCache.ComputeKey(SyntheticBase(), stack, new Dictionary<string, int>()));
+
+        // A packed mod's list is enforced.
+        string packed = Path.Combine(_root, "writer-packed.omp");
+        Assert.Equal(0, OmpCommands.Build(SyntheticBase(), ScannedWriter("\"turn_limit\", \"unit_current_levels\"", "writer").Location,
+                                          packed, [BaseMod().Location], new StringWriter()));
+        ModPackage omp = ModPackage.Open(packed);
+        _opened.Add(omp);
+        ModLinkResult packedResult = ModLinker.Link(dev, [BaseMod(), omp], []);
+        Assert.True(packedResult.Succeeded, packedResult.Report.Render());
+        Assert.False(packedResult.Lua.Stack.Mods.Single(mod => mod.Id == "writer").LuaDev);
+        Assert.Contains(packedResult.Report.Lines, line => line.Message == "is packed, so --lua-dev does not apply: its [lua] writes list is enforced");
     }
 
     // ------------------------------------------------------------------------------------------- events (§9.2, gate 5)

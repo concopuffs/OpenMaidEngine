@@ -131,6 +131,28 @@ public sealed class LuaNamesTests : IDisposable
         Assert.Equal("false", Chunk(native, "user", "return (pcall(function() require('test-base').g.current_unit_id = 1 end))"));
     }
 
+    [Fact]
+    public void UnderLuaDevAnUndeclaredWriteGoesThroughAndTheLogNamesItOnce()
+    {
+        Scripting native = Native(new LuaStackBuilder()
+            .Base(Requires, Layout)
+            .Mod("user", "-- file: init.lua\nreturn {}", false, false, Requires)
+            .Writes("user", "unit_names")
+            .LuaDev("user"));
+        Assert.Null(native.StartSession(SessionReason.Boot));
+
+        Chunk(native, "user", "local game = require('test-base') game.g.turn_limit = 7 game.g.stage_turn_limit = 8 "
+                              + "game.table('unit_current_levels')[1] = 2");
+        Assert.Equal(8, native.Memory.Integer(0x11));
+        Assert.Equal(2, native.Memory.Integer(0x101));
+        string line = Assert.Single(native.RecentLog, entry => entry.Contains("stage_turn_limit", StringComparison.Ordinal));
+        Assert.Contains("user: writes stage_turn_limit, which its [lua] writes list does not name (writes = [unit_names]); "
+                        + "--lua-dev lets it through", line);
+        Assert.Single(native.RecentLog, entry => entry.Contains("unit_current_levels", StringComparison.Ordinal));
+        // The rules other than the list still hold.
+        Assert.Contains("an integer cell holds a whole number", Fails(native, "user", "require('test-base').g.stage_turn_limit = 1.5"));
+    }
+
     [Theory]
     [InlineData("return game.table('unit_current_levels')[4]", "unit_current_levels[4]: an index is a whole number from 0 to 3")]
     [InlineData("return game.table('unit_current_levels')[-1]", "from 0 to 3")]

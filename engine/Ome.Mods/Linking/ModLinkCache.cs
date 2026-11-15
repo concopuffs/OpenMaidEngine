@@ -106,7 +106,8 @@ public sealed record LinkedLuaModEntry(
     [property: JsonPropertyName("requires")] IReadOnlyList<string> Requires,
     [property: JsonPropertyName("files")] IReadOnlyList<string> Files,
     [property: JsonPropertyName("layout")] bool Layout = false,
-    [property: JsonPropertyName("writes")] IReadOnlyList<string>? Writes = null);
+    [property: JsonPropertyName("writes")] IReadOnlyList<string>? Writes = null,
+    [property: JsonPropertyName("lua_dev")] bool LuaDev = false);
 
 /// <summary>A handler in <c>link.json</c>: its index in the list is its <see cref="HandlerId"/>.</summary>
 public sealed record LinkedLuaHandlerEntry(
@@ -186,7 +187,7 @@ public sealed record LinkedLuaEntry
         Runtime = runtime,
         Mods = lua.Stack.Mods.Select(mod => new LinkedLuaModEntry(mod.Id, mod.Version, mod.Library, mod.Vm, mod.Requires,
             mod.Files.Select(file => file.Path).ToList(), mod.Layout != null,
-            mod.WriteList.Count > 0 ? mod.WriteList : null)).ToList(),
+            mod.WriteList.Count > 0 ? mod.WriteList : null, mod.LuaDev)).ToList(),
         Handlers = lua.Stack.Handlers.Select(handler => new LinkedLuaHandlerEntry(handler.ModId, handler.File, handler.Function))
             .ToList(),
         Sites = lua.Plan.Sites.ToDictionary(pair => pair.Key + ".BIN",
@@ -209,7 +210,7 @@ public sealed record LinkedLuaEntry
             mod.Files.Select(file => new ModSource(mod.Id, file,
                 File.ReadAllText(Path.Combine(directory, PathOf(mod.Id, file)), Encoding.UTF8))).ToList(),
             mod.Layout ? GameLayout.Parse(File.ReadAllText(Path.Combine(directory, LayoutPathOf(mod.Id)), Encoding.UTF8)) : null,
-            mod.Writes)).ToList();
+            mod.Writes, mod.LuaDev)).ToList();
         GameLayout? LayoutFor(string owner)
         {
             ModRuntimeMod? declaring = mods.FirstOrDefault(mod => mod.Id == owner);
@@ -382,7 +383,11 @@ public static class ModLinkCache
             text.Append("selector ").Append(id).Append(' ').Append(selector).Append('\n');
         text.Append("toolchain\n").Append(linkBase.ToolchainStamp).Append('\n');
         // The runtime that checks the Lua files, only for a stack with Lua: other keys stay as they were.
-        if (order.Any(ModLuaLinker.ShipsLua)) text.Append("lua ").Append(linkBase.Lua?.Identity ?? "none").Append('\n');
+        if (order.Any(ModLuaLinker.ShipsLua))
+        {
+            text.Append("lua ").Append(linkBase.Lua?.Identity ?? "none").Append('\n');
+            if (linkBase.LuaDev) text.Append("lua-dev\n");
+        }
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString()))).ToLowerInvariant();
     }
 

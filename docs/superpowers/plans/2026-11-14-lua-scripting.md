@@ -701,3 +701,34 @@ Driven in the port on 2026-11-15 (sandbox `luaevents`): with `--mod oms/examples
 engine mounted the shipped `himegari-base`, linked the subscriber into `ADDEXP.BIN`'s list at the point (`link.json`
 keeps `"event": "himegari.experience.award"`), and the console found `on_award` in the mod without `maid.vm`. An
 award in play needs a battle; the install test above runs the same native on `ADDEXP.BIN`.
+
+### 7.4 The write scan and `--lua-dev`
+
+Built 2026-11-15 (spec §9.3, §13):
+
+- **The scan** (`ModLuaLinker.ScanWrites`). The source check already collects the names a mod writes where it
+  assigns: `x.g.NAME = …` and `x.table("NAME")[…] = …` (`ModSourceCheck.WrittenNames`, milestone 1's own token scan).
+  The link resolves each through the base mods the mod requires, aliases included:
+  - a name the list lacks gives one note for the mod with every such name and its file, and the list as it should
+    read; the link records it (`LinkedLua.Undeclared`, a `ModUndeclaredWrite` per name);
+  - a name no required base mod exports gives a note: that write fails when it runs.
+  - Base mods and mods that require none are not scanned. A write through a local alias, or a name built at run
+    time, is left to the runtime check.
+- **`omp build`** refuses a mod with an undeclared write, naming each and pointing at the note's list. `omp check`
+  and the startup report only note it, as a run fails the write itself.
+- **`--lua-dev`** (`ModLaunchOptions.LuaDev`, copied to `ModLinkBase.LuaDev`). The link marks each mod that is a
+  folder and requires a base mod (`ModRuntimeMod.LuaDev`) and notes it; a packed mod gets a note that its list is
+  enforced. At run time `Scripting.NamedFace` lets a marked mod's unlisted write through and writes one warning per
+  mod and name to `diagnostics/lua.log` (`_devWrites`, kept across a scene reload). The other cell rules hold. The
+  link cache keeps the mark, and the flag is part of its key when the stack ships Lua. The port's `[lua]` line names
+  the mods it applies to.
+- **Tests.** `ModLuaLinkTests` (3): the note and its list with an alias already listed, the unexported note, the quiet
+  base and plain mods; `omp build` refusing and then building once the list is complete; `--lua-dev` marking the
+  folder and not the packed `.omp`, the cache mark and key. `LuaNamesTests` (1): an unlisted write goes through under
+  `--lua-dev`, the log names it once, and a fractional write to an integer cell still fails.
+
+Checked on the install on 2026-11-15 with a scratch folder mod whose list names `adv_hide_window_enabled` and whose
+source writes `adv_hover_history`: `omp check` gave the note with `writes = ["adv_hide_window_enabled",
+"adv_hover_history"]`. In the port (sandbox `luadev`, `--port-arg=--lua-dev`) the `[lua]` line ended `; --lua-dev for
+scratch.devwrite`, two writes through the console in the mod's environment went through with one `lua.log` warning,
+and a write of `1.5` to the integer cell still failed.

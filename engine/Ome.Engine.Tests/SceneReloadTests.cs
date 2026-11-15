@@ -127,6 +127,8 @@ public class SceneReloadTests
             // Lua on the stack, whether it may read locals, and a halt from a nested emit: zero, false and null between
             // calls, and op 0x9 runs no Lua.
             "_depth", "_frameAccess", "_nestedHalt",
+            // The undeclared writes --lua-dev has logged, once each for the run.
+            "_devWrites",
             // The run's log and notices, and the front end's console chunks not yet run.
             "_recentLog", "_noticeCount", "_latestNotice", "_console",
         ],

@@ -693,6 +693,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   failure in a row; `halt` ends the run at the instruction. Another value fails startup (exit 2). When a mod ships
   Lua the startup log prints a `[lua]` line with the mods, the handler count and the policy; with none, no Lua
   runtime is created unless the driver's `lua` step asks for one. Modders' reference: `docs/modding/lua.md`.
+- `--lua-dev` — while writing a mod (spec §9.3, §13): a mod loaded from a folder that requires a base mod may write
+  an exported name its `[lua] writes` list lacks; `diagnostics/lua.log` names each such write once per mod and name,
+  and the `[lua]` line lists the mods it applies to. A packed `.omp` keeps its list. The link cache keys on the flag.
 - `--allow-bmp-as-agf` — opt into decoding a `BM` payload found under an `.AGF` catalog record as an
   uncompressed Windows BMP. The supported compatibility surface is `BITMAPINFOHEADER`-compatible `BI_RGB` at
   1/4/8-bit paletted (opaque), 24-bit opaque, or 32-bit straight alpha, including top-down images and padded rows. Without this option,

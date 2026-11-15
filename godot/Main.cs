@@ -661,7 +661,10 @@ public partial class Main : Godot.Control
         _waits.ServiceAfterRequests(_scripting.ServiceRequests);
         if (_modLayer?.LuaStack is { HasLua: true } luaStack)
             GD.Print($"[lua] {luaStack.Mods.Count} mods ship Lua ({string.Join(", ", luaStack.Mods.Select(mod => mod.Id))}); "
-                     + $"{luaStack.Handlers.Count} handlers; errors {luaErrors.ToString().ToLowerInvariant()}");
+                     + $"{luaStack.Handlers.Count} handlers; errors {luaErrors.ToString().ToLowerInvariant()}"
+                     + (luaStack.Mods.Any(mod => mod.LuaDev)
+                         ? "; --lua-dev for " + string.Join(", ", luaStack.Mods.Where(mod => mod.LuaDev).Select(mod => mod.Id))
+                         : ""));
         _vm = new VirtualMachine(script, table, _waits, vmOptions,
             provider, sink,
             saves: _saves,

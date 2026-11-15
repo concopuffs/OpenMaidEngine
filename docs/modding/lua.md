@@ -182,6 +182,14 @@ row.<column>, row[0]                            -- its cells, by column name or 
   - A write to a name the list lacks is an error that names the list (`pcall` catches it).
   - A listed name the base mod does not export is a link error, and so is a list in a mod that requires no base mod.
   - A mod with `vm` lists what it writes by name too. It can still write any cell by address.
+  - **The link reads your source** for writes that name their cell where they assign: `game.g.<name> = …` and
+    `game.table("<name>")[…] = …`. A name the list lacks gets a note in `omp check` and the startup report, with
+    the list as it should read, and `omp build` refuses the mod until the list names it. A name the base mod does
+    not export gets a note too: that write fails when it runs. A write through a local (`levels[unit] = …` after
+    `local levels = game.table(…)`) or a name built at run time is checked only when it runs.
+  - **`--lua-dev`** lets an unlisted write through while you work: each mod run from a folder, not a packed `.omp`,
+    writes any exported name, and `diagnostics/lua.log` names each unlisted one once, so you can copy it into the
+    list. A packed mod's list holds under `--lua-dev` too, and so does every other rule of the cell.
 - **What `require` gives** is read-only: `g` and `table`, and beside them what the base mod's own `lua/init.lua`
   returns. The base mods have no helpers yet.
 - **Mounting.** The engine mounts a base mod only when an enabled mod requires it, and uses an installed package of

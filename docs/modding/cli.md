@@ -18,7 +18,7 @@ Your game guide lists the options its installs need ([games/README.md](games/REA
 | Command | What it does |
 |---|---|
 | `omp check [--mod PATH …] [--data-root DIR] [--skip-failed-mods]` | Links the mods and prints the link report, each mod catalog's records with their packed ids, and a summary. It writes nothing. It exits non-zero if the stack does not link. |
-| `omp build DIR [--output FILE.omp] [--mod DEP …]` | Validates and links the mod folder `DIR`, compiles every fragment, and writes a reproducible `.omp` with the plans stored inside (default `<id>-<version>.omp` beside the folder). The folder is not changed. Pass the mod's dependencies with `--mod`. |
+| `omp build DIR [--output FILE.omp] [--mod DEP …]` | Validates and links the mod folder `DIR`, compiles every fragment, and writes a reproducible `.omp` with the plans stored inside (default `<id>-<version>.omp` beside the folder). The folder is not changed. Pass the mod's dependencies with `--mod`. It refuses a Lua mod whose source writes a base mod's name its `[lua] writes` list lacks ([lua.md](lua.md), "Game names"). |
 | `omp export --output-dir DIR [--mod PATH …] [--data-root DIR]` | Links the mods and writes what native AGE loads: patched and replaced scripts and asset overrides as loose files, and one `APPENDnn.AAI`/`.ALF` pair per mod catalog. It refuses a stack that does not link, and a mod whose target is not `native` (a Lua mod targets `extended`). It leaves out `text/`, `fonts/`, language assets (`assets/<language>/`) and `[[language]]`, and a Lua library's `lua/`, with a note, since native AGE cannot use them. |
 | `omp explain NAME [--mod PATH …] [--data-root DIR]` | Says which layer and mod supplies a script or asset, such as `SC0000.BIN`, `$2$SCENE.BIN` or `my.mod:NAME`, and lists every plan applied to a script. A base entry shows its loose file or its range in the ALF archive. An asset with language versions (`assets/<language>/`) also lists each one, the language it shows in, and whether a later package's plain asset hides it. |
 
@@ -66,10 +66,11 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 | `--language TAG` | Present the game's text in `TAG` for this run, whatever `OME.INI` says: the catalogs the mods (and `--text-root`) hold for it. `ja` draws the scripts' text as written; `x-pseudo` brackets and lengthens every string, with no catalog. The menus and dialogs take the mods' `[[engine]]` entries for `TAG`, then the engine's own table for it, along its fallback chain, then Japanese ([languages.md](languages.md), "Engine text"). |
 | `--text-root DIR` | Also load a loose folder of catalogs laid out as a package's `text/`, after the mods' (languages.md, "Testing without a package"). |
 | `--lua-errors continue\|halt` | What a Lua handler's error does: `continue` (the default) logs it to `diagnostics/lua.log`, shows a notice and switches the handler off after its third failure in a row; `halt` ends the run at that instruction ([lua.md](lua.md), "Errors and budgets"). |
+| `--lua-dev` | While you write a mod: a mod loaded from a folder may write a base mod's name its `[lua] writes` list lacks, and `diagnostics/lua.log` names each such name once. A packed `.omp` keeps its list ([lua.md](lua.md), "Game names"). |
 | `--text-log` | Write every string drawn without a catalog entry to `diagnostics/text-misses.jsonl`, every translated message narrowed to fit its window, with `width_percent`, the width it got, and every one cut at the bottom of its window, with `rows_cut`, the rows it lost. |
 
 `run-godot.ps1` (or `run-godot.cmd`) passes these through as `-Mod PATH` (repeatable), `-NoMods`, `-Language TAG`,
-`-TextRoot DIR` and `-TextLog`; pass `--lua-errors` after `--`. Combine them with the game switches:
+`-TextRoot DIR` and `-TextLog`; pass `--lua-errors` and `--lua-dev` after `--`. Combine them with the game switches:
 
 ```text
 .\run-godot.cmd <game switches> -Mod path\to\my.mod

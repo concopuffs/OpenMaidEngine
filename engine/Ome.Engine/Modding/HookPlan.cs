@@ -18,8 +18,10 @@ public sealed record ModRuntimeHandler(string ModId, string File, string Functio
 /// each an exported name's global (spec §9.3).</summary>
 public sealed record ModRuntimeMod(string Id, string Version, bool Library, bool Vm, IReadOnlyList<string> Requires,
                                    IReadOnlyList<ModSource> Files, GameLayout? Layout = null,
-                                   IReadOnlyList<string>? Writes = null)
+                                   IReadOnlyList<string>? Writes = null, bool LuaDev = false)
 {
+    // LuaDev: an unpacked mod run under --lua-dev (spec §9.3, §13): a write to a name its list lacks goes through and
+    // is logged once, where it would be an error.
     /// <summary>The write list, empty when the mod lists none.</summary>
     public IReadOnlyList<string> WriteList => Writes ?? [];
 }

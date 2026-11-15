@@ -53,6 +53,15 @@ public static class OmpCommands
                 console.WriteLine($"omp build: {mod.Id} does not link: {link.Report.Summary()}");
                 return 1;
             }
+            // Lua scripting spec §9.3: a write the source spells out that the list lacks would fail when it ran.
+            var undeclared = link.Lua.Undeclared.Where(write => write.Mod == mod.Id).ToList();
+            if (undeclared.Count > 0)
+            {
+                console.WriteLine($"omp build: {mod.Id} writes names its [lua] writes list lacks: "
+                                  + string.Join(", ", undeclared.Select(write => $"{write.Name} (lua/{write.File})"))
+                                  + "; list them, as the report's note gives the list");
+                return 1;
+            }
 
             var plans = new SortedDictionary<string, string>(StringComparer.Ordinal);
             OmsResourceScope scope = ModLinker.ScopeOf(mod, opened.ToDictionary(package => package.Id, StringComparer.Ordinal));
