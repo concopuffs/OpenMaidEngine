@@ -362,6 +362,31 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   their arguments from cells nobody has named yet. Done for a script when its argument and scratch cells are in the
   registry with evidence, its base mod's helper sets and puts them back, and a test runs it on the game's own
   script.
+- **A UI for Lua mods.** A mod cannot show the player anything but a log line, and the status line's notice belongs
+  to errors; it cannot open a window or ask a question. The Lua spec leaves `maid.ui` as future work
+  (`superpowers/specs/2026-11-10-lua-scripting-design.md` §16, "Engine services"). The way is not the game's own UI:
+  a SYS screen is hot spots and graphics objects its scripts place one by one, so a mod would rebuild each game's look
+  from cells. The front end already draws windows of its own over the game, the options panel (設定) and the 終了
+  dialog, and holds the engine while one is open (the front end's modal hold). A mod would ask the front end, through
+  the native that owns it, for a window built from a small set of controls (text, buttons, a list, number and switch
+  fields) and get the player's answer back. To settle: whether a window holds the game, as the panel does, or stays
+  open beside it; how the answer reaches the mod, since a handler cannot wait (§16, "Lua that waits"); what a save
+  made while one is open records; and how a window looks in each game and language. Done when a design spec settles
+  the API and the front end's part, and an example mod opens a window, reads the player's choice and acts on it, in
+  the port and under the driver.
+- **Settings for mods.** A mod has no setting a player can change: a value that should be tunable is written into
+  its Lua. The Lua spec lists mod settings as future work (§16, "Profile state and mod settings"). The options panel
+  already has a section of the port's own, OME, whose values live in `user://OME.INI` and are committed by 決定
+  (`PortOptions`, `OmeIniStore`; `superpowers/specs/2026-11-09-engine-shell-design.md` §5.6). A mod would declare its
+  settings in its manifest (a key, a label in the mod's languages, a type such as a switch, a number with a range or a
+  choice, and a default); the panel would show each enabled mod's settings in a section of their own and keep the
+  player's values outside the saves; and the mod would read them through `maid`, with a way to learn of a change made
+  while it runs. To settle: one value per profile or one across games; what becomes of a kept value a mod's new
+  version no longer accepts; whether a setting may also be per save; how `omp check` checks the declarations; and
+  how the driver sets the values and sandboxes them, as it does `OME.INI`. Done when a design spec settles these, the
+  panel shows a mod's settings and keeps the player's values, a handler reads them, and an example mod uses one
+  (`example.random-enemies` choosing between every ordinary enemy and only those near the level of the stage's own, say), with a test
+  and a driven run.
 - **Lua-CSharp past 0.5.8.** 0.5.8 writes fractions in .NET's form (`3 * 1.1` reads `3.3000000000000003`, `1/0`
   reads `Infinity`), raises on `string.format("%d", 2.5)`, writes `%e` unformatted, and refuses to compile `t[0x10]`,
   which `LuaSource.Prepare` works around. Upstream's `main` fixes them all, the number text through the option
