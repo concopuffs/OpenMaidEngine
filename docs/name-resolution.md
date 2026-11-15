@@ -324,7 +324,7 @@ has 82 genuine linked columns and specific semantic names for all 108 populated 
 ### STINIT mixed stage records (2026-07-23)
 
 STINIT is not a name table. Its preamble allocates 29 fixed global work buffers, then 74 sparse branches
-compare `scjump_progress_a` with stage ids 1 through 170. Each selected branch populates the same current-
+compare `current_stage_id` with stage ids 1 through 170. Each selected branch populates the same current-
 stage buffer with four strings, six scalar globals, sparse cells inside the fixed buffers, and
 length-prefixed arrays copied from the script footer. `extract_init.py` now detects this shape as `mixed`,
 evaluates preamble length arithmetic, attaches writes to their containing buffer, and preserves the branch

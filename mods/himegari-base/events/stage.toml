@@ -1,0 +1,62 @@
+# A stage's life (Lua scripting spec §9.2). Hand-written: each event names its point and gives each field's cell, by the
+# names layout/globals.json exports.
+
+[[event]]
+name = "himegari.stage.loaded"
+point = "himegari.stage.after_loader"
+description = """
+The stage's loaders have run (the base's and each append's). At the stage's start nothing is placed yet, and a \
+handler that rewrites the stage's enemy or object slots changes what the stage places. FIELD runs the loaders, and \
+raises this, again each time it is entered again during the stage (back from the camp screens, or a load of a save \
+made in the field): the loaders write their tables afresh and nothing new is placed, so a handler makes the same \
+change each time."""
+
+[[event.field]]
+name = "stage"
+at = "current_stage_id"
+type = "int"
+
+[[event]]
+name = "himegari.stage.ready"
+point = "himegari.stage.after_ready_handlers"
+description = "Once per stage, at its start: the enemies are placed and every layer's ready handler has run."
+
+[[event.field]]
+name = "stage"
+at = "current_stage_id"
+type = "int"
+
+[[event]]
+name = "himegari.stage.round"
+point = "himegari.stage.after_round_handlers"
+description = "The start of each player turn after the first, after every layer's round handler."
+
+[[event.field]]
+name = "stage"
+at = "current_stage_id"
+type = "int"
+
+[[event.field]]
+name = "turn"
+at = "current_stage_turn"
+type = "int"
+
+[[event]]
+name = "himegari.stage.close"
+point = ["himegari.stage.after_close_handlers_won", "himegari.stage.after_close_handlers_lost"]
+description = "The stage ends, after every layer's close handler."
+
+[[event.field]]
+name = "stage"
+at = "current_stage_id"
+type = "int"
+
+[[event.field]]
+name = "result"
+at = "stage_result"               # 1 won, 2 lost
+type = "int"
+
+[[event.field]]
+name = "turn"
+at = "current_stage_turn"
+type = "int"

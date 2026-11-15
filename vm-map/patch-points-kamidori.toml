@@ -28,3 +28,80 @@ site = 0x88
 [[point.at]]                    # the translated install's patch/ADDEXP.BIN: the same code, two strings translated
 fingerprint = "sha256:23bb6ac1e1aa83ef248bbacba4cadd71801fa07188aed3938c4768034f52b40b"
 site = 0x88
+
+[[point]]
+name = "kamidori.boot.data_ready"
+script = "INIT2.BIN"
+description = """
+INIT2's exit, once per run at boot. Every data table is built: the 28 base *INIT scripts, each mounted append's \
+$n$AUTORUN and its $n$*INIT layers (op 0x143), and INIT2's own work after them. The tables lie above the saved \
+prefix, so no load replaces them: an edit made here lasts the whole run."""
+
+[[point.at]]                    # the untranslated install
+fingerprint = "sha256:5e4932184f30e6d35d9ee9b259f2987bd62e443479fa2d207fde2edfbac5a65d"
+site = 0x2cf
+
+[[point.at]]                    # the translated install's patch/INIT2.bin: the same code, its strings translated
+fingerprint = "sha256:a60b27687b52d51c06ecfb1371e3aea7393b45a21612bb3715992ef2970925f8"
+site = 0x2cf
+
+[[point]]
+name = "kamidori.stage.after_loader"
+script = "FIELD.BIN"
+description = """
+Every layer's map and stage loader has run (mpinit_layer_script_ids and stage_loader_script_ids: MPINIT and STINIT, \
+then each append's) and FIELD has placed nothing yet: the floor's enemy slots, objects and rules hold the stage as \
+authored. current_stage_id is the stage."""
+
+[[point.at]]
+fingerprint = "sha256:e350246cc923622b92342a9377a75f597623c09c2b78b423d90fe067cde35f21"
+site = 0x527
+
+[[point.at]]
+fingerprint = "sha256:0c93c6815a7b6903564000ff470d4c5854b5baac4c994cddcda81899e25cbfd4"
+site = 0x527
+
+[[point]]
+name = "kamidori.stage.after_ready_handlers"
+script = "FIELD.BIN"
+description = """
+The floor's enemies are placed and every layer's ready handler has run (stage_ready_handler_script_ids: STAGEREADY, \
+then each append's)."""
+
+[[point.at]]
+fingerprint = "sha256:e350246cc923622b92342a9377a75f597623c09c2b78b423d90fe067cde35f21"
+site = 0xd58
+
+[[point.at]]
+fingerprint = "sha256:0c93c6815a7b6903564000ff470d4c5854b5baac4c994cddcda81899e25cbfd4"
+site = 0xd58
+
+[[point]]
+name = "kamidori.stage.after_round_handlers"
+script = "FIELD.BIN"
+description = """
+The start of a player turn after the first (current_stage_turn > 1): every layer's round handler has run \
+(stage_round_handler_script_ids)."""
+
+[[point.at]]
+fingerprint = "sha256:e350246cc923622b92342a9377a75f597623c09c2b78b423d90fe067cde35f21"
+site = 0x933d
+
+[[point.at]]
+fingerprint = "sha256:0c93c6815a7b6903564000ff470d4c5854b5baac4c994cddcda81899e25cbfd4"
+site = 0x933d
+
+[[point]]
+name = "kamidori.stage.after_close_handlers"
+script = "FIELD.BIN"
+description = """
+The floor ends and every layer's close handler has run (stage_close_handler_script_ids), after a won floor's \
+rewards. stage_result says how it ended."""
+
+[[point.at]]
+fingerprint = "sha256:e350246cc923622b92342a9377a75f597623c09c2b78b423d90fe067cde35f21"
+site = 0xc785
+
+[[point.at]]
+fingerprint = "sha256:0c93c6815a7b6903564000ff470d4c5854b5baac4c994cddcda81899e25cbfd4"
+site = 0xc785

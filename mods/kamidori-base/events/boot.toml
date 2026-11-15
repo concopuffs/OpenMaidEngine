@@ -1,0 +1,11 @@
+# The boot's data (Lua scripting spec §9.2). Hand-written: each event names its point and gives each field's cell, by the
+# names layout/globals.json exports.
+
+[[event]]
+name = "kamidori.data.ready"
+point = "kamidori.boot.data_ready"
+description = """
+At boot, once every data table is built: the base layer's, each append's, and the boot's own work on them. A handler \
+that edits a table (a unit's stats, an item, a skill) changes it for the run. The tables are not saved: a load builds \
+them again and raises this again while it restores (maid.session.restoring is true), so the handler makes its edit \
+again."""

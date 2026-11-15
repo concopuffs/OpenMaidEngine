@@ -1203,14 +1203,35 @@ public sealed class ModLuaLinkTests : IDisposable
     [Theory]
     [InlineData("[[event]]\nname = \"test.award\"\npoint = \"" + ExperiencePoint + "\"\n[[event.field]]\nname = \"limit\"\nat = \"no_such\"\ntype = \"int\"",
                 "events/award.toml: test.award: field limit: 'no_such': the layout names no global 'no_such'")]
-    [InlineData("[[event]]\nname = \"test.award\"\npoint = \"himegari.nowhere\"",
-                "events/award.toml: test.award: 'himegari.nowhere' is not a named patch point of himegari")]
     [InlineData("[[event]]\nname = \"test.award\"\nraised_by = \"lua\"\n[[event.field]]\nname = \"x\"\nat = \"L[1]\"\ntype = \"int\"",
                 "events/award.toml: test.award: field x: an event raised from Lua has no locations")]
     [InlineData("[[event]\n", "events/award.toml: not valid TOML")]
     public void ADeclarationThatDoesNotLinkStopsTheLinkNamingItsFile(string events, string message)
         => Assert.Equal(["test-base"], Stop(ModLinker.Link(SyntheticBase(), [EventBase(events), Subscriber("m", EventHook("test.award"))], []),
                                             message).Mods);
+
+    [Fact]
+    public void AnEventWhosePointDoesNotBindIsANoteAndOnlyItsSubscribersDoNotLink()
+    {
+        const string nowhere = "[[event]]\nname = \"test.award\"\npoint = \"himegari.nowhere\"";
+        // Declared and not subscribed: the stack links, and the report says why the event is not raised.
+        ModLinkResult quiet = ModLinker.Link(SyntheticBase(), [EventBase(nowhere)], []);
+        Assert.True(quiet.Succeeded, quiet.Report.Render());
+        Assert.Contains(quiet.Report.Lines, line => line.Class == ModReportClass.Note && line.Message
+            == "events/award.toml: test.award: not raised in this install, so a mod that subscribes to it does not link: "
+               + "'himegari.nowhere' is not a named patch point of himegari");
+        Assert.Empty(quiet.Lua.Stack.EventList);
+
+        // A subscriber does not link, naming the declaring mod and the reason.
+        ModLinkResult subscribed = ModLinker.Link(SyntheticBase(), [EventBase(nowhere), Subscriber("m", EventHook("test.award"))], []);
+        Assert.Equal(["m"], Stop(subscribed, "test-base declares test.award, which is not raised in this install: "
+                                             + "'himegari.nowhere' is not a named patch point of himegari").Mods);
+
+        // Two mods that declare it are still a conflict.
+        ModPackage again = Mod("again", RequiresBase, new() { ["events/again.toml"] = nowhere, ["lua/init.lua"] = "return {}" });
+        Assert.Equal(ModReportClass.HardConflict,
+                     Stop(ModLinker.Link(SyntheticBase(), [EventBase(nowhere), again], []), "both declare the event test.award").Class);
+    }
 
     [Fact]
     public void AnEventAtAPointNeedsTheVmCapabilityInItsDeclaringMod()
@@ -1571,7 +1592,7 @@ public sealed class ModLuaLinkTests : IDisposable
         var (linkBase, scripts) = KamidoriBase(Path.Combine(Paths.Workspace, "Kamidori"));
         var (withEvent, withPatch, unmodded, linked) = KamidoriAwards(linkBase, scripts, KamidoriAddExp, 7);
 
-        GameEvent award = Assert.Single(linked.Lua.Stack.EventList);
+        GameEvent award = linked.Lua.Stack.Event("kamidori.experience.award")!;
         Assert.Equal(("kamidori.experience.award", "kamidori-base", KamidoriPoint), (award.Name, award.Owner, string.Join(",", award.Points)));
         Assert.Equal(["amount", "unit", "character", "level"], award.Fields.Select(field => field.Name));
         Assert.Equal(new FieldLocation.Global(CellKind.Integer, 0x2d2845, "current_character_id"), award.Field("character")!.Location);
@@ -1584,6 +1605,78 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.Equal(8, unmodded.Globals[0x64391 + 1]);
         Assert.Equal(16, GameSession.FromJson(withEvent).Globals[0x64391 + 1]);
         Assert.Equal(withPatch, withEvent);
+    }
+
+    // ------------------------------------------------------------------------------- the boot and stage events
+
+    private static readonly string[] StageEvents = ["stage.loaded", "stage.ready", "stage.round", "stage.close"];
+
+    /// <summary>A mod of <paramref name="profile"/> that subscribes to its base mod's boot and stage events, with the
+    /// base mods it requires: on_ready logs the class-change chain's second slot, which only the append writes.</summary>
+    private IReadOnlyList<ModPackage> StageSubscriber(string profile)
+    {
+        string hooks = $"[[requires]]\nid = \"{profile}-base\"\nversion = \">=1, <2\"\n"
+                       + $"[[hooks]]\nevent = \"{profile}.data.ready\"\nhandler = \"hooks.lua:on_ready\"\n"
+                       + string.Concat(StageEvents.Select(name
+                           => $"[[hooks]]\nevent = \"{profile}.{name}\"\nhandler = \"hooks.lua:on_stage\"\n"));
+        ModPackage user = Mod("stage-user", hooks, Hooks($$"""
+            function on_ready(e)
+              local game = require("{{profile}}-base")
+              maid.log.info("ready " .. tostring(game.table("class_change_rule_script_ids")[1]))
+            end
+            function on_stage(e) maid.log.info(e.event .. " " .. e.stage) end
+            """), lua: "api = 1", profile: profile);
+        IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([user], new ModLinkReport());
+        _opened.AddRange(shipped);
+        return [user, .. shipped];
+    }
+
+    private static IEnumerable<int> Offsets(ModLinkResult result, string script)
+        => result.Lua.Plan.Sites[script].Select(site => site.Offset);
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    public void HimegarisBaseModRaisesItsBootAndStageEventsAtTheInstalledScripts()
+    {
+        ModLinkResult linked = ModLinker.Link(InstalledBase(), StageSubscriber("himegari"), []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        Assert.DoesNotContain(linked.Report.Lines, line => line.Message.Contains("not raised in this install", StringComparison.Ordinal));
+        Assert.Equal([0x183], Offsets(linked, "INIT2"));
+        Assert.Equal([0x20a, 0xa27, 0x764a, 0xbaa1, 0xbabd], Offsets(linked, "FIELD"));
+        Assert.Equal(["himegari.stage.after_close_handlers_won", "himegari.stage.after_close_handlers_lost"],
+                     linked.Lua.Stack.Event("himegari.stage.close")!.Points);
+        Assert.Equal(["stage", "result", "turn"], linked.Lua.Stack.Event("himegari.stage.close")!.Fields.Select(field => field.Name));
+
+        // At boot the event comes once, after the append's AUTORUN: the class-change chain's slot 1 is $1$CCINIT.
+        var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
+        var scripts = new Sys4ScriptProvider(HimegariTable, catalog, new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir));
+        using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = linked.Lua.Stack, Plan = linked.Lua.Plan, Errors = LuaErrorPolicy.Halt,
+        });
+        SceneResult result = new GameSession().RunScene(scripts.RequireByName("INIT2.BIN"), HimegariTable, new HeadlessWaits(),
+                                                        provider: scripts, scripting: scripting);
+        Assert.True(result.Halt is null or "exit" or "end", result.Halt);
+        Assert.Equal([$"ready {0x1000017}"], scripting.RecentLog
+            .Select(line => line[(line.LastIndexOf(": ", StringComparison.Ordinal) + 2)..])
+            .Where(text => text.StartsWith("ready ", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void KamidorisBaseModRaisesItsBootAndStageEventsOnBothInstalls(bool translated)
+    {
+        var (linkBase, _) = translated
+            ? KamidoriBase(Paths.KamidoriTranslatedDir, Path.Combine(Paths.KamidoriTranslatedDir, "patch"), Paths.KamidoriTranslatedDir)
+            : KamidoriBase(Path.Combine(Paths.Workspace, "Kamidori"));
+        ModLinkResult linked = ModLinker.Link(linkBase, StageSubscriber("kamidori"), []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        Assert.DoesNotContain(linked.Report.Lines, line => line.Message.Contains("not raised in this install", StringComparison.Ordinal));
+        Assert.Equal([0x2cf], Offsets(linked, "INIT2"));
+        Assert.Equal([0x527, 0xd58, 0x933d, 0xc785], Offsets(linked, "FIELD"));
     }
 
     [Fact]

@@ -348,6 +348,14 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   open a game script (`.BIN`) as its `oms-decompile` text. Done when a design spec settles the form (an application,
   an extension or both), its scope and its toolkit, and a first version covers check, build and a port run with the
   authoring flags.
+- **A hook point survey for each game.** Each base mod raises six events: the experience award, `<profile>.data.ready`
+  at boot, and the four stage events around FIELD's walks of the stage chains
+  (`superpowers/plans/2026-11-14-lua-scripting.md` §11). The appends register handlers in many more chains, each a
+  place Eushully's own extensions hook: Himegari's class change, SCJUMP and information messages; Kamidori's 18 32-slot
+  chains (`kamidori-data-tables.md`, "Hook chains"), among them the shop, costume sprites, CG substitution and the
+  stage flags. Done for a game when a session has surveyed its chains and other natural extension points, and the
+  base mod raises an event at each that has a use, with its fields named in the registry and a test that it binds on
+  every install the game guide lists. Repeat for each game the engine adds.
 - **More base mod helpers.** Each base mod has one helper, `give_item` over ADDITEM (`mods/<profile>-base/lua/`;
   plan §9.3). The check ahead found more wait-free scripts in both games (plan §9.2: 22 of 27 probed in Himegari, 30
   of 44 in Kamidori), most of them battle arithmetic (`CALC*`) or map and unit edits (`SET*`, `DEL*`) that read

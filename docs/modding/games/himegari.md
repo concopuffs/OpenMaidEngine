@@ -87,7 +87,8 @@ Game names ([../lua.md](../lua.md), "Game names") come from `himegari-base`. A m
 `require("himegari-base").g.stage_turn_limit` or `.table("unit_current_levels")[unit]` without `vm`, and writes
 them once its `[lua] writes` lists them. The names are those of `../../global-reference.md`.
 
-`himegari-base` declares one game event ([../lua.md](../lua.md), "Game events"), raised at the experience point:
+`himegari-base` declares six game events ([../lua.md](../lua.md), "Game events"). The experience award is raised at
+the experience point:
 
 | Event | Field | Type | Access | Cell |
 |---|---|---|---|---|
@@ -97,6 +98,33 @@ them once its `[lua] writes` lists them. The names are those of `../../global-re
 
 A subscriber needs no `vm`. `oms/examples/mods/example.double-exp-event` doubles every award with
 `event.amount = event.amount * 2`, and leaves the same state as the patch above.
+
+The other five follow the boot and each stage. Each is raised where INIT2 or FIELD has walked the chain the appends
+register their handlers in, so a handler runs after the base game's and every append's. Their fields are read-only:
+
+| Event | Raised | Fields |
+|---|---|---|
+| `himegari.data.ready` | `himegari.boot.data_ready` (INIT2): every data table is built, the appends' included | none |
+| `himegari.stage.loaded` | `himegari.stage.after_loader` (FIELD): the stage's loaders have run | `stage` (`current_stage_id`) |
+| `himegari.stage.ready` | `himegari.stage.after_ready_handlers`: once per stage, at its start, with the units placed | `stage` |
+| `himegari.stage.round` | `himegari.stage.after_round_handlers`: each player turn after the first | `stage`, `turn` (`current_stage_turn`) |
+| `himegari.stage.close` | `himegari.stage.after_close_handlers_won` and `_lost`: the stage ends | `stage`, `result` (`stage_result`: 1 won, 2 lost), `turn` |
+
+- **The data tables are not saved** (they lie above the saved range, below). An edit at `data.ready` lasts the run. A
+  load builds the tables again and raises `data.ready` again while it restores (`maid.session.restoring` is true), so
+  the handler makes its edit again.
+- **FIELD runs the loaders more than once a stage.** `field_map_continue_mode` is 0 at a stage's start: FIELD runs the
+  loaders, places the units and walks the ready chain. Back from the camp screens (the deploy screen, for one), or at
+  the load of a save made in the field, it is 2 or 3: FIELD runs the loaders again and raises `stage.loaded` again,
+  but places nothing and raises no `stage.ready`. The loaders write their tables afresh each time, so a handler that
+  rewrites them makes the same change each time.
+- **The stage's enemies** are `stage_enemy_unit_id` (30 slots, zero for an empty one), each with its spawn
+  (`stage_enemy_spawn_tile_x` and `_y`, or `stage_enemy_spawn_object_slot`), faction, difficulty mask and replay gate.
+  `unit_boss_class` is nonzero for a boss. A rewrite at the stage's start changes what the stage places:
+  `oms/examples/mods/example.random-enemies` replaces each ordinary enemy with one drawn from every ordinary enemy of
+  the game, from a seed it keeps in `maid.state`.
+- **`stage.close`** comes after the close chain, which FIELD walks for a result of 1 or 2 before it takes the stage's
+  SCJUMP decision. Stage 1 lost at its 50-turn limit raises it with result 2 and turn 50.
 
 `himegari-base`'s helpers ([../lua.md](../lua.md), "Game names"):
 
@@ -128,3 +156,4 @@ A subscriber needs no `vm`. `oms/examples/mods/example.double-exp-event` doubles
 | `oms/examples/mods/example.double-exp-lua` | a Lua point hook on the experience award |
 | `oms/examples/mods/example.double-exp-event` | a Lua subscriber of `himegari.experience.award`, without `vm` |
 | `oms/examples/mods/example.lua-random` | `math.random` in a script hook on `SC0000.BIN`, inside a `pairs` loop too; `tools/drive/scenarios/port/himegari-lua-random.steps` checks that `rand-seed 7` gives the same rolls in every run |
+| `oms/examples/mods/example.random-enemies` | a subscriber of `himegari.stage.loaded` that rewrites the stage's enemies and keeps a seed per playthrough in `maid.state`; `tools/drive/scenarios/port/himegari-random-enemies.steps` checks stage 1's draw under `rand-seed 7` |

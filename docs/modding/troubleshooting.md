@@ -273,6 +273,12 @@ require it"**: add `[[requires]] id = "X"` ([lua.md](lua.md), "Game events").
 declared `r`, named a field the event does not declare, or gave a value of another type. Your game guide lists each
 event's fields.
 
+**"X declares NAME, which is not raised in this install: …".** The event's point does not bind in the install you
+play: its script is another revision than the one the point was written for (a translation or an update that replaces
+it), or the profile has no such point. The message gives the reason, as the note `… not raised in this install, so a
+mod that subscribes to it does not link` in the report does. Mods that do not subscribe to the event still link. Play
+on the install your game guide lists for the event, or ask for the point to be added for yours.
+
 **"events/FILE.toml: NAME: …".** A declaration of your mod does not link: the message gives the field and the
 location's problem, or the point. **"X and Y both declare the event NAME"** is a hard conflict: an event has one
 declaring mod.

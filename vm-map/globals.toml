@@ -2741,13 +2741,13 @@ depends_on = []
 
 [[global]]
 address = "0x767d"
-name = ""
-category = "story-flag"
+name = "field_map_continue_mode"
+category = "index-pointer"
 type = "int"
-value_domain = "one of {0, 1, 2, 3}"
-usage = "TODO: confirm. Branch-read in 0 scenes / 9 scripts; compared against [0, 1, 2, 3]; writers=['CAMP.BIN', 'DEBUGADV2.BIN', 'DEBUGMAP.BIN', 'DEBUGMAP2.BIN']."
-source = "auto-shape"
-confidence = "med"
+value_domain = "0 = a new stage; 1 = resume the field as it stands; 2 = back from CAMP, or a save made in the field; 3 = CAMP's other return"
+usage = "Logged as ' MapContinue=' (FIELD@0x6). FIELD@0x182 resets the runtime unit and object tables and current_stage_turn only when it is 0; FIELD@0x1f2 calls stage_loader_script_ids[current_stage_id] unless it is 1; FIELD@0x3d8 builds the map, places the stage's units and walks the ready handlers only when it is 0. FIELD@0xfbe writes 1 once the field is up, FIELD@0x2349 writes 2 before it calls SAVE (so a save made in the field loads with 2) and 1 after it, and CAMP@0x73 and CAMP@0x300 write 2 and 3 when they return to the field; DEBUGMAP and DEBUGADV2 write it too. Kamidori's field_map_continue_mode is the same flag. In the port on 2026-11-15 a return from the deploy screen and a load of a save made in the field each ran the loader again and placed nothing."
+source = "investigation"
+confidence = "high"
 depends_on = []
 
 [[global]]
@@ -3234,14 +3234,49 @@ confidence = "high"
 depends_on = ["0x15a095", "0x15a096"]
 
 [[global]]
+address = "0xccc33"
+name = "stage_event_handler_script_ids"
+category = "data-table"
+type = "int[32][3]"
+columns = { "0" = "ready_handler", "1" = "close_handler", "2" = "round_handler" }
+value_domain = "packed script id; zero means no handler"
+usage = "FIELD's stage lifecycle chains, one row per layer: INIT2@0x4f stores READY.BIN, CLOSE.BIN and ROUND.BIN (0x3347..0x3349) in row zero and $1$AUTORUN stores $1$READY, $1$CLOSE and $1$ROUND in row one. FIELD@0x877b calls the nonzero cells of one column, rows 0..31 in order, with the column in its local 0x13e07: column 0 once the stage's enemies are placed (FIELD@0xa1f), column 2 at the start of each player turn after the first (FIELD@0x7642), and column 1 when the stage ends, won (FIELD@0xba99, before STAGECLEAR) or lost (FIELD@0xbab5). The base mod raises himegari.stage.ready, .round and .close after these walks."
+source = "investigation"
+confidence = "high"
+depends_on = []
+
+[[global]]
+address = "0x69e"
+name = "scjump_handler_script_ids"
+category = "data-table"
+type = "int[32]"
+value_domain = "packed script id; zero means no handler"
+usage = "The SCJUMP chain: INIT2@0x4a stores SCJUMP.BIN (0x3346) in slot zero and $1$AUTORUN stores $1$SCJUMP.BIN in slot one. FIELD@0x87bc sets chapter_mode to the phase (2..9), calls the nonzero slots in order, and stops after a handler sets system_flow_request to 1."
+source = "investigation"
+confidence = "high"
+depends_on = []
+
+[[global]]
 address = "0x4dfbc"
-name = "scjump_progress_a"
-category = "counter"
+name = "current_stage_id"
+aliases = ["scjump_progress_a"]
+category = "index-pointer"
 type = "int"
-value_domain = "progress index"
-usage = "Dominant SCJUMP switch input (1609 comparison reads) — a per-chapter story-progress counter/position the progression machine branches on. INFERENCE from SCJUMP usage; confirm exact meaning via a listing/playthrough."
-source = "inference"
-confidence = "med"
+value_domain = "STINIT2 stage id; the shipped stages are 1..170, DEBUGMAP's is 0xa5"
+usage = "The stage being played or last played. FIELD@0x200 calls stage_loader_script_ids[current_stage_id] (STINIT, or an append's $1$STINIT), then reads stage_display_names, stage_clear_state and stage_scjump_decision_ids by it; STINIT is a selector table keyed by it (74 sparse stage records, ids 1..170). DEBUGMAP writes 0xa5 before it enters FIELD. SCJUMP reads it 1,609 times to branch on the stage just played. Named scjump_progress_a until 2026-11-15 from those reads, which the base mod still exports as an alias."
+source = "investigation"
+confidence = "high"
+depends_on = []
+
+[[global]]
+address = "0xccbcc"
+name = "stage_result"
+category = "index-pointer"
+type = "int"
+value_domain = "0 while the stage runs; 1 won; 2 lost"
+usage = "How the current stage ends. FIELD@0x16c clears it at entry. It sets 1 when the victory condition is met (勝利条件達成, FIELD@0x903c), when the turn limit's outcome is a clear (FIELD@0x7686), and on a replay whose enemies have all withdrawn (全軍撤退, FIELD@0x8d79); 2 when the home base falls (本拠地陥落, FIELD@0x8c93) or the turn limit's outcome is a defeat (FIELD@0x76cf); scenes that end a stage set 1 (SC0030, SC0050, SC0070, SC0250, SC0280, SC0290). FIELD@0xb7cf walks the close chain for 1 and 2 and then takes the column-1 (1) or column-2 (2) decision of stage_scjump_decision_ids."
+source = "investigation"
+confidence = "high"
 depends_on = []
 
 [[global]]

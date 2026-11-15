@@ -13,6 +13,72 @@
           "site": 154
         }
       ]
+    },
+    {
+      "name": "himegari.boot.data_ready",
+      "script": "INIT2.BIN",
+      "description": "INIT2's exit, once per run at boot. Every data table is built: the base *INIT scripts, each mounted append's $n$AUTORUN and its $n$*INIT layers (op 0x143), and TUNE's derived item data after them. The tables lie above the saved prefix (0x6241b), so no load replaces them: an edit made here lasts the whole run.",
+      "at": [
+        {
+          "fingerprint": "sha256:00ec969c7f369f28943b0c7272c7a0b58bf145e5993e5d39e62a3d80498407fa",
+          "site": 387
+        }
+      ]
+    },
+    {
+      "name": "himegari.stage.after_loader",
+      "script": "FIELD.BIN",
+      "description": "The stage's loader has run (stage_loader_script_ids[current_stage_id]: STINIT, or an append's $1$STINIT) and FIELD has placed nothing yet: the 30 stage_enemy_* slots, the objects and the rules hold the stage as authored, and FIELD reads them next to place the enemies (slots 1..29, through SETEN). FIELD skips the loader, and this point, when G[0x767d] is 1.",
+      "at": [
+        {
+          "fingerprint": "sha256:8e29795883e1abcf723425324f2f1db58c22607a691977fa6dc037dbbba4c103",
+          "site": 522
+        }
+      ]
+    },
+    {
+      "name": "himegari.stage.after_ready_handlers",
+      "script": "FIELD.BIN",
+      "description": "The enemies are placed and every layer's ready handler has run (column 0 of stage_event_handler_script_ids: READY, then $1$READY). current_stage_id is the stage.",
+      "at": [
+        {
+          "fingerprint": "sha256:8e29795883e1abcf723425324f2f1db58c22607a691977fa6dc037dbbba4c103",
+          "site": 2599
+        }
+      ]
+    },
+    {
+      "name": "himegari.stage.after_round_handlers",
+      "script": "FIELD.BIN",
+      "description": "The start of a player turn after the first (current_stage_turn > 1, current_faction_id 1): every layer's round handler has run (column 2: ROUND, then $1$ROUND).",
+      "at": [
+        {
+          "fingerprint": "sha256:8e29795883e1abcf723425324f2f1db58c22607a691977fa6dc037dbbba4c103",
+          "site": 30282
+        }
+      ]
+    },
+    {
+      "name": "himegari.stage.after_close_handlers_won",
+      "script": "FIELD.BIN",
+      "description": "The stage is won (stage_result 1) and every layer's close handler has run (column 1: CLOSE, then $1$CLOSE); STAGECLEAR runs next.",
+      "at": [
+        {
+          "fingerprint": "sha256:8e29795883e1abcf723425324f2f1db58c22607a691977fa6dc037dbbba4c103",
+          "site": 47777
+        }
+      ]
+    },
+    {
+      "name": "himegari.stage.after_close_handlers_lost",
+      "script": "FIELD.BIN",
+      "description": "The stage is lost (stage_result 2) and every layer's close handler has run (column 1: CLOSE, then $1$CLOSE).",
+      "at": [
+        {
+          "fingerprint": "sha256:8e29795883e1abcf723425324f2f1db58c22607a691977fa6dc037dbbba4c103",
+          "site": 47805
+        }
+      ]
     }
   ]
 }

@@ -55,6 +55,9 @@ public static class ModLuaLinker
 
     private sealed record EventPlace(string Script, int Offset, int Site, string Point);
 
+    /// <summary>An event a point of which does not bind in this install, and why.</summary>
+    private sealed record UnavailableEvent(string Owner, string Reason);
+
     /// <summary>The cells a watch covers (spec §7.3), and the global it names with its shape.</summary>
     private sealed record WatchedCells(string Watch, CellKind Kind, int Address, int Count, string? Global, int Dimensions,
                                        int RowWidth);
@@ -87,7 +90,7 @@ public static class ModLuaLinker
         var watchHooks = new List<(Pending Pending, WatchedCells Cells)>();
         // Spec §9.1, plan §7.1: the profile's patch points, else the copy a base mod ships.
         OmsPatchPoints? points = linkBase.PatchPoints ?? order.Select(mod => mod.BasePoints).FirstOrDefault(found => found != null);
-        var (declared, brokenEvents) = Events(luaMods, order, linkBase, points, scripts, report);
+        var (declared, brokenEvents, unavailableEvents) = Events(luaMods, order, linkBase, points, scripts, report);
         var undeclared = new List<ModUndeclaredWrite>();
 
         foreach (ModPackage mod in luaMods)
@@ -196,6 +199,12 @@ public static class ModLuaLinker
                 else if (hook.Form == ModHookForm.Event)
                 {
                     if (brokenEvents.Contains(hook.Target)) continue;   // its declaration's error is reported
+                    if (unavailableEvents.TryGetValue(hook.Target, out UnavailableEvent? missing))
+                    {
+                        Error(null, $"{where}: {missing.Owner} declares {hook.Target}, which is not raised in this install: "
+                                    + missing.Reason);
+                        continue;
+                    }
                     if (!declared.TryGetValue(hook.Target, out subscribed))
                     {
                         Error(null, $"{where}: no mod of the stack declares the event '{hook.Target}'"
@@ -491,13 +500,18 @@ public static class ModLuaLinker
     /// The events the stack declares (spec §9.2), each once: its fields over the layout of its mod, or of the first base
     /// mod its mod requires, and an event at a point bound as a point hook is. An event declared twice is a hard
     /// conflict. The second set names the events whose declaration failed, so their subscribers report nothing more.
+    /// The third holds each event a point of which does not bind in this install (another revision of its script, a
+    /// point the profile does not name), with the reason: a note, not an error, since a base mod declares events over
+    /// many scripts and one script that differs must not stop the mods that use the others. A subscriber to it does not
+    /// link.
     /// </summary>
-    private static (Dictionary<string, DeclaredEvent>, HashSet<string>) Events(
+    private static (Dictionary<string, DeclaredEvent>, HashSet<string>, Dictionary<string, UnavailableEvent>) Events(
         IReadOnlyList<ModPackage> luaMods, IReadOnlyList<ModPackage> order, ModLinkBase linkBase, OmsPatchPoints? points,
         IReadOnlyDictionary<string, LinkedScript> scripts, ModLinkReport report)
     {
         var declared = new Dictionary<string, DeclaredEvent>(StringComparer.Ordinal);
         var broken = new HashSet<string>(StringComparer.Ordinal);
+        var unavailable = new Dictionary<string, UnavailableEvent>(StringComparer.Ordinal);
         foreach (ModPackage mod in luaMods)
         {
             if (mod.Layout.Events.Count == 0) continue;
@@ -521,10 +535,12 @@ public static class ModLuaLinker
                 foreach (ModEventDeclaration declaration in declarations)
                 {
                     string where = $"events/{file.Name}: {declaration.Name}";
-                    if (declared.TryGetValue(declaration.Name, out DeclaredEvent? first))
+                    string? firstOwner = declared.TryGetValue(declaration.Name, out DeclaredEvent? first) ? first.Event.Owner
+                        : unavailable.TryGetValue(declaration.Name, out UnavailableEvent? gone) ? gone.Owner : null;
+                    if (firstOwner != null)
                     {
-                        report.Add(ModReportClass.HardConflict, [first.Event.Owner, mod.Id], null,
-                            $"{first.Event.Owner} and {mod.Id} both declare the event {declaration.Name}; an event has one "
+                        report.Add(ModReportClass.HardConflict, [firstOwner, mod.Id], null,
+                            $"{firstOwner} and {mod.Id} both declare the event {declaration.Name}; an event has one "
                             + "declaring mod");
                         broken.Add(declaration.Name);
                         continue;
@@ -554,10 +570,23 @@ public static class ModLuaLinker
                         else
                         {
                             places = [];
+                            var unbound = new ModLinkReport();
                             foreach (string point in declaration.Points)
-                                if (BindPoint(mod, where, point, points, linkBase, scripts, report) is { } bound)
+                                if (BindPoint(mod, where, point, points, linkBase, scripts, unbound) is { } bound)
                                     places.Add(new EventPlace(bound.Script, bound.Offset, bound.Site, point));
-                                else failed = true;
+                            if (unbound.Lines.Count > 0)
+                            {
+                                string reason = string.Join("; ", unbound.Lines.Select(line => line.Message.StartsWith(
+                                    where + ": ", StringComparison.Ordinal) ? line.Message[(where.Length + 2)..] : line.Message));
+                                report.Add(ModReportClass.Note, mod.Id, unbound.Lines[0].Script,
+                                           $"{where}: not raised in this install, so a mod that subscribes to it does not "
+                                           + $"link: {reason}");
+                                if (!failed)
+                                {
+                                    unavailable[declaration.Name] = new UnavailableEvent(mod.Id, reason);
+                                    continue;
+                                }
+                            }
                             // Two points at one instruction would raise the event twice there.
                             foreach (var shared in places.GroupBy(place => (TextCatalog.NormalizeScriptName(place.Script),
                                                                             place.Offset)).Where(group => group.Count() > 1))
@@ -579,8 +608,12 @@ public static class ModLuaLinker
                 }
             }
         }
-        foreach (string name in broken) declared.Remove(name);
-        return (declared, broken);
+        foreach (string name in broken)
+        {
+            declared.Remove(name);
+            unavailable.Remove(name);
+        }
+        return (declared, broken, unavailable);
     }
 
     /// <summary>

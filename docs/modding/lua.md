@@ -460,6 +460,11 @@ type = "int"                           # access defaults to "r"
 - **The link checks** each declaration: the point exists in the script your stack loads, the names resolve, a
   field's type matches its cell, and no two mods declare one event (that is a hard conflict naming both). `type` is
   `int`, `float`, `string` or `bool`, and `bool` needs an integer cell.
+- **An event the install cannot raise.** When a point of an event does not bind in this install (its script is
+  another revision, as a translation's can be, or the profile does not name the point), the event is not raised. The
+  report notes it with the reason, and only a mod that subscribes to it fails to link, so a base mod's other events
+  and helpers still work. A mistake in the declaration itself, such as a field that does not resolve, stops the
+  declaring mod as before.
 
 ### `maid.events.emit`
 

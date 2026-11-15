@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals-kamidori.toml by tools/globals_build.py --build -->
 # Global Variable Reference — kamidori (generated)
 
-8300 globals (627 curated, 7673 auto shape-inferred). Source of truth: `vm-map/globals-kamidori.toml`.
+8303 globals (632 curated, 7671 auto shape-inferred). Source of truth: `vm-map/globals-kamidori.toml`.
 
 ## Tables
 
@@ -198,6 +198,7 @@ The current stage's enemy placements, keyed by placement slot: STINIT2 writes th
 | `0x3610` | world_map_scroll_y | high | investigation | Pair of world_map_scroll_x (ALLMAP@0x6f, 0xe5f, 0x955). |
 | `0x3613` | world_area_state_flags | high | investigation | AMINIT@0x1d masks every cell to bit0 then writes 3 per area when its flag test passes. ALLMAP@0xd36 lists areas with bit0 (and x!=0); ALLMAP@0x11e7 greys markers without bit1; SELSTAGE@0xa68 refuses entry (error SE) without bit1; SELSTAGE@0x611 bit1 gates the per-area event scan; INFO3@0x1af3 / INFO5@0x1053 grey undiscovered names. FIELD@0x299 sets bit0 for marker-less areas on entry; ALLMAP@0x49 (render-only path used by SHOWALLMAP) clears the shown area so it can be drawn as a 'new' highlight. |
 | `0x3697` | expedition_elapsed_days | high | investigation | Incremented by world_area_travel_days (SELSTAGE@0xc00, TOWN@0x7b, FIELD@0x271); ALLMAP@0x3b4 >= 30 shows '経過日数が30日を超えました／工房で清算を行ってください' and returns home; ALLMAP@0x13d1 draws it; CALCSETTLE/DRAWSETTLE/CHECKREWARD consume it. Also observed: [progression decode, named expedition_elapsed_days] Days elapsed since leaving the studio. CHECKREWARD@0xb0 adds it to every active quest's quest_elapsed_days, settles, then clears it (CHECKREWARD@0x2ed); CHECKCONTRACT@0x1ab seeds a newly posted quest's elapsed days with its negation so the pending days are not charged; INFO2@0x10bf adds it to show live elapsed days; ALLMAP@0x3b4 tests >= 30. |
+| `0x429b` | current_stage_turn | high | investigation | FIELD@0x31e clears it, FIELD@0x125a sets 1 at the first turn and FIELD@0x5371 adds one after each; FIELD@0x9377 ends the map when it equals stage_turn_limit, the round chain runs while it is above 1, and DRAWCHP displays it. |
 | `0x523d` | stage_occupation_percent | high | investigation | FIELD@0xc7ac/0xc807 store floor_occupation_percent_by_faction[1]; SELSTAGE@0x104a prints it with '%'. FIELD@0x756: value 100 reveals and claims every non-void tile on entry; FIELD@0xc813: reaching 100 sets stage_objective_reward_state bit 0 of objective 0. |
 | `0x37305` | stage_object_use_counts | high | investigation | CHECKOBJ@0x1f and SETOBJ@0x184 compare it with object_type_use_limit; FIELD@0x2eaf increments it on use; FIELD@0x5b0 resets it on map entry for object_type_use_count_resets_on_entry types. |
 | `0x4fde0` | floor_occupation_percent_by_faction | high | investigation | CALCOCC@0x39e resets it to [100,0,0,0,0], counts tile_owner_faction_mask bits over all tiles with nonzero visibility class into 0x2a2d5e[5], then sets [k] = 100*count/total and subtracts from [0]; rounding remainder is redistributed. FIELD@0xc7ac/0xc807 stores [1] (player) into stage_occupation_percent. |
@@ -859,6 +860,7 @@ The current stage's enemy placements, keyed by placement slot: STINIT2 writes th
 | `0x13ec63` | studio_room_level_index | med | investigation | ARRANGE@0x42a, CALCSETTLE@0x4b, SETSTUDIOCH, STUDIO compute it before indexing studio_room_layout_grids / costs. |
 | `0x14d09c` | routine_id | high | investigation | BTRTN@0x00029 loads it from the unit's battle routine 0x61f6e[unit][phase 0x320b]. MVRTN@0x0008d loads it from the map routine 0x61ed8[unit][phase]. Every RTINIT bank is indexed [routine_id][step]. |
 | `0x14d09d` | routine_step_index | high | investigation | BTRTN@0x00145 and MVRTN@0x000cb loop over the 50 steps, and RTN_* scripts read their parameters at [routine_id][step]. |
+| `0x2a2ddf` | stage_result | high | investigation | How the current floor ends. FIELD@0x1de clears it. It sets 1 when the victory condition is met (勝利条件達成, FIELD@0xad14) or the turn limit's outcome is a clear (FIELD@0x939a); 2 when the party is wiped out (全滅, FIELD@0xa87d), the base falls (拠点陥落, FIELD@0xa9a3) or the turn limit's outcome is a defeat (FIELD@0x93a2); story scenes set 1 ($1$SC2600). The withdraw button sets 1 at FIELD@0x2be4 when the player ends the exploration (探索を終了しますか？), and 2 at FIELD@0x2b73 when the player forfeits an arena match (試合を放棄しますか？, arena_battle_active). FIELD@0xc62a runs a won floor's rewards before the close chain. In the port on 2026-11-15 a withdrawal from the free floor 開けた涼風西湖畔 closed it with 1 at turn 1, then STAGECLEAR. |
 | `0x2a3510` | set_land_terrain_id | med | investigation | Argument of SETLAND: SETLAND@0x62 writes it into every cell of the doubled rectangle (2*G[0xfec0c]..2*G[0xfec0e], 2*G[0xfec0d]..2*G[0xfec0f]) and reveals tiles whose visibility class is 1 (or >0 once the stage is fully complete). Set by STAGEREADY/STAGEROUND/STAGECLOSE and story scripts (SC2200, SC3030, ...) to dig or open map areas; SETOCC@0x15 also reads it as a faction bit. |
 | `0x2a64bb` | current_card_id | high | investigation | Selected field card. FIELD@0x831d iterates candidates; FIELD@0x83fd stores the weighted pick; every card array is indexed through it. |
 | `0x2a79d4` | current_card_generation_list_id | high | investigation | FIELD@0x82a4 sets it before walking the CDINIT hook chain 0x3d42a0; CDINIT branches on it to fill the candidate arrays. |
@@ -875,6 +877,9 @@ The current stage's enemy placements, keyed by placement slot: STINIT2 writes th
 | `0x3cac74` | current_objective_id | high | investigation | Selected objective. INFO1@0x6b9 sets it; FAMES dispatches on it; INFO1 reads strings/script through it. |
 | `0x3d19d5` | character_profile_selected_id | high | investigation | Set by INFO7, read by CIMES/$1$CIMES dispatch guards. |
 | `0x3d20de` | current_vocabulary_id | high | investigation | INFO8@0x6b9 sets it; VIMES dispatches on it. |
+| `0x3d4100` | stage_ready_handler_script_ids | high | investigation | INIT2@0x9a stores STAGEREADY; each $n$AUTORUN stores its own. FIELD@0x3353 calls the nonzero cells in order (row 0 of the 0x3d4100 chains, its local 0x2f74 = 0) once the floor's enemies are placed (FIELD@0xd50). The base mod raises kamidori.stage.ready after the walk. |
+| `0x3d4120` | stage_close_handler_script_ids | high | investigation | INIT2@0x9f stores STAGECLOSE; each $n$AUTORUN stores its own. FIELD@0x3353 calls the nonzero cells in order (row 1, local 0x2f74 = 1) when the floor ends (FIELD@0xc77d), after a won stage's rewards. The base mod raises kamidori.stage.close after the walk. |
+| `0x3d4140` | stage_round_handler_script_ids | high | investigation | INIT2@0xa4 stores STAGEROUND; each $n$AUTORUN stores its own. FIELD@0x3353 calls the nonzero cells in order (row 2, local 0x2f74 = 2) at the start of each player turn after the first (FIELD@0x9335: current_stage_turn > 1 and faction 0x4fdcb = 1). The base mod raises kamidori.stage.round after the walk. |
 | `0x3d41e0` | town_site_hooks | high | investigation | TOWN@0x194 and SELSTAGE@0x539 call-script each nonzero entry to (re)build the current town's site table. |
 | `0x3d4200` | shop_catalogue_hooks | high | investigation | SHOP@0x169c call-scripts each nonzero entry. |
 | `0x3d4220` | costume_sprite_hooks | high | investigation | Every scene script (e.g. $1$SC2600@0xa60, 113 scripts) calls each entry after choosing a standing sprite so CSINIT can substitute the costume variant; followed by the 0x3d4240 hook list. |
@@ -3613,7 +3618,6 @@ The current stage's enemy placements, keyed by placement slot: STINIT2 writes th
 | `0x428d` | — | med | auto-shape | string-table (written by ITINIT) |
 | `0x4299` | — | med | auto-shape | string-table (written by ITINIT) |
 | `GS 0x429a` | — | med | auto-shape | string-table (written by ITINIT) |
-| `0x429b` | — | med | auto-shape | string-table (written by ITINIT) |
 | `0x429c` | — | med | auto-shape | string-table (written by ITINIT) |
 | `GS 0x42ab` | — | med | auto-shape | string-table (written by ITINIT) |
 | `GS 0x42ac` | — | med | auto-shape | string-table (written by ITINIT) |
@@ -8508,4 +8512,3 @@ The current stage's enemy placements, keyed by placement slot: STINIT2 writes th
 | `0x3c5bb0` | — | med | auto-shape | record-table[stride 100] |
 | `0x3c5d4c` | — | med | auto-shape | record-table[stride 2000] |
 | `0x3d40c0` | — | med | auto-shape | record-table[stride 32] |
-| `0x3d4100` | — | med | auto-shape | record-table[stride 32] |

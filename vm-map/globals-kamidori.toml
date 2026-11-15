@@ -3783,6 +3783,26 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x429b"
+name = "current_stage_turn"
+category = "counter"
+type = "int"
+value_domain = "one-based turn number while a floor is active"
+usage = "FIELD@0x31e clears it, FIELD@0x125a sets 1 at the first turn and FIELD@0x5371 adds one after each; FIELD@0x9377 ends the map when it equals stage_turn_limit, the round chain runs while it is above 1, and DRAWCHP displays it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2a2ddf"
+name = "stage_result"
+category = "index-pointer"
+type = "int"
+value_domain = "0 while the floor runs; 1 won; 2 lost"
+usage = "How the current floor ends. FIELD@0x1de clears it. It sets 1 when the victory condition is met (勝利条件達成, FIELD@0xad14) or the turn limit's outcome is a clear (FIELD@0x939a); 2 when the party is wiped out (全滅, FIELD@0xa87d), the base falls (拠点陥落, FIELD@0xa9a3) or the turn limit's outcome is a defeat (FIELD@0x93a2); story scenes set 1 ($1$SC2600). The withdraw button sets 1 at FIELD@0x2be4 when the player ends the exploration (探索を終了しますか？), and 2 at FIELD@0x2b73 when the player forfeits an arena match (試合を放棄しますか？, arena_battle_active). FIELD@0xc62a runs a won floor's rewards before the close chain. In the port on 2026-11-15 a withdrawal from the free floor 開けた涼風西湖畔 closed it with 1 at turn 1, then STAGECLEAR."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x378b"
 name = "current_stage_id"
 category = "index-pointer"
@@ -5463,6 +5483,36 @@ category = "index-pointer"
 type = "int[32]"
 value_domain = "packed script ids: [0] STINIT (0x4527), later cells $n$STINIT"
 usage = "INIT2@0x8b stores STINIT; FIELD@0x50c, SELSTAGE@0x13ed, ORGANIZE, INFO3, ARENA call every nonzero cell in order, so append overlays run after the base loader."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3d4100"
+name = "stage_ready_handler_script_ids"
+category = "index-pointer"
+type = "int[32]"
+value_domain = "packed script ids: [0] STAGEREADY (0x452a), later cells $n$STAGEREADY"
+usage = "INIT2@0x9a stores STAGEREADY; each $n$AUTORUN stores its own. FIELD@0x3353 calls the nonzero cells in order (row 0 of the 0x3d4100 chains, its local 0x2f74 = 0) once the floor's enemies are placed (FIELD@0xd50). The base mod raises kamidori.stage.ready after the walk."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3d4120"
+name = "stage_close_handler_script_ids"
+category = "index-pointer"
+type = "int[32]"
+value_domain = "packed script ids: [0] STAGECLOSE (0x452b), later cells $n$STAGECLOSE"
+usage = "INIT2@0x9f stores STAGECLOSE; each $n$AUTORUN stores its own. FIELD@0x3353 calls the nonzero cells in order (row 1, local 0x2f74 = 1) when the floor ends (FIELD@0xc77d), after a won stage's rewards. The base mod raises kamidori.stage.close after the walk."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3d4140"
+name = "stage_round_handler_script_ids"
+category = "index-pointer"
+type = "int[32]"
+value_domain = "packed script ids: [0] STAGEROUND (0x452c), later cells $n$STAGEROUND"
+usage = "INIT2@0xa4 stores STAGEROUND; each $n$AUTORUN stores its own. FIELD@0x3353 calls the nonzero cells in order (row 2, local 0x2f74 = 2) at the start of each player turn after the first (FIELD@0x9335: current_stage_turn > 1 and faction 0x4fdcb = 1). The base mod raises kamidori.stage.round after the walk."
 source = "investigation"
 confidence = "high"
 

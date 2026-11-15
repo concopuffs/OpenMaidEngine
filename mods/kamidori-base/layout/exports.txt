@@ -198,6 +198,7 @@ current_objective_id
 current_quest_id
 current_skill_id
 current_stage_id
+current_stage_turn
 current_town_location_id
 current_unit_id
 current_vocabulary_id
@@ -432,6 +433,7 @@ stage_background_texture_asset_ids
 stage_bgm_id
 stage_boss_flags
 stage_cleared_flags
+stage_close_handler_script_ids
 stage_defeat_base_loss_mode
 stage_defeat_story_flag
 stage_description_lines
@@ -486,12 +488,15 @@ stage_occupation_percent
 stage_player_occupied_tile_bitmask
 stage_prerequisite_floor_numbers
 stage_prerequisite_labyrinth_ids
+stage_ready_handler_script_ids
 stage_recommended_levels
 stage_required_party_unit_ids
 stage_required_story_flag_ids
+stage_result
 stage_revealed_tile_bitmask
 stage_reward_condition_texts
 stage_reward_row_required_story_flags
+stage_round_handler_script_ids
 stage_select_background_asset_ids
 stage_select_sort_keys
 stage_turn_limit

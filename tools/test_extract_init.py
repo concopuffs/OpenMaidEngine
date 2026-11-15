@@ -263,7 +263,7 @@ def test_real_mixed_table() -> None:
     check(records[0]["id"] == 1 and records[-1]["id"] == 170,
           "STINIT preserves sparse runtime stage ids")
     check(meta["selector_global"] == "0x4dfbc",
-          "STINIT records are keyed by scjump_progress_a")
+          "STINIT records are keyed by current_stage_id")
     check(meta["array_layouts"]["0xe74b5"] == {
         "length": 350, "stride": 7, "rows": 50,
     }, "STINIT preamble recovers a consumer-confirmed row buffer")

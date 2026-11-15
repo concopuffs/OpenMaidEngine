@@ -991,6 +991,10 @@ when a handler clears `0x2c81`.
 | `0x3d41a0` | BTANINIT | `0x3d42c0` | MPINIT |
 | `0x3d41c0` | AMINIT | `0x3d42e0` | STINIT |
 
+The registry names the three stage chains (`stage_ready_handler_script_ids`, `stage_close_handler_script_ids`,
+`stage_round_handler_script_ids`), and `kamidori-base` raises `kamidori.stage.ready`, `.close` and `.round` after FIELD
+walks them, and `kamidori.stage.loaded` after the MPINIT and STINIT layers (`modding/games/kamidori.md`).
+
 ### Quests (QUINIT)
 
 QUINIT has **187 quests**, not the 744 records the generic output shows: that output turned each quest's nine

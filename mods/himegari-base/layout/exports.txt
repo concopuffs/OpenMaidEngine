@@ -127,6 +127,7 @@ current_routine_set_id
 current_skill_id
 current_spirit
 current_stage_enemy_spawn_slot
+current_stage_id
 current_stage_terrain_grid
 current_stage_turn
 current_unit_id
@@ -159,6 +160,7 @@ familiar_alignment
 familiar_alignment_fraction
 familiar_training_progress
 familiar_training_progress_fraction
+field_map_continue_mode
 gallery_image_assets
 gallery_thumbnail_sheet_asset_ids
 gallery_thumbnail_sheet_ids
@@ -256,7 +258,8 @@ scene_decision_seen_flags
 scjump_authored_chapters
 scjump_decision_out
 scjump_decision_out2
-scjump_progress_a
+scjump_handler_script_ids
+scjump_progress_a = current_stage_id
 scjump_progress_d
 scjump_scene_script_resource_ids
 selected_battle_animation_id
@@ -307,6 +310,7 @@ stage_enemy_spawn_object_slot
 stage_enemy_spawn_tile_x
 stage_enemy_spawn_tile_y
 stage_enemy_unit_id
+stage_event_handler_script_ids
 stage_extra_dungeon_flags
 stage_forbidden_story_flag_ids
 stage_loader_script_ids
@@ -331,6 +335,7 @@ stage_object_tile_y
 stage_object_type_id
 stage_replay_rules_disabled
 stage_required_story_flag_ids
+stage_result
 stage_scjump_decision_ids
 stage_target_clear_turns
 stage_terrain_atlas
