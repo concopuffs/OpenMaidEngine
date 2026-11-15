@@ -305,8 +305,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       overrides, the stack's text, fonts, languages and language assets, the
     │                                       Lua link (each mod's checked sources, handlers, events and the hook
     │                                       plan, ModLuaLinker), offset
-    │                                       tables for patched scripts and the link cache (Linking/), startup discovery, flags
-    │                                       and save stamps (Launch/), and the omp and omp text commands (Tools/);
+    │                                       tables for patched scripts and the link cache, and --lua-reload's
+    │                                       check of a mod's changed lua/ (ModLuaReload) (Linking/), startup
+    │                                       discovery, flags, save stamps and --lua-reload's folder watcher
+    │                                       (LuaReloadWatcher) (Launch/), and the omp and omp text commands (Tools/);
     │                                       the localization catalog file reader and writer, the text source loader
     │                                       and site binder, the script message index, the installed-script text
     │                                       scanner, the template extractor, the font cmap reader and the gettext
@@ -399,6 +401,8 @@ It also runs the driver's `reference-diff`, which draws every frame with the ref
 Godot input routing, locator/debug hotkeys, debug-scene dispatch, cursor control, native alerts, and
 full-width text entry. `godot/Main.Drive.cs` owns the `--control` driving backend: the control server's lifetime,
 injected input events, exclusive input, and the port side of the protocol (state, screenshots, speed, close).
+`godot/Main.LuaReload.cs` owns `--lua-reload`: the watcher over the unpacked Lua mods' `lua/` folders and the hand-over
+of their checked files to the scripting native through the waits native's requests.
 `godot/Main.MenuBar.cs` attaches the shell's menu bar (`ShellMenu`, the tree of AGERC's menu 110) above the game
 canvas and runs its commands (`ShellCommands`), reaching the frontend's services through `godot/Main.ShellHost.cs`,
 Main's `IShellHost`; `godot/ExitConfirmationDialog.cs` is the shell's 終了 dialog;
@@ -569,7 +573,8 @@ presentation times (`MovieAudioTimeline.cs`) and paces the decoder by what has b
 The script memory native `engine/Ome.Engine/Natives/ScriptMemory.cs` owns the five global banks (the VM's `Globals` and
 its siblings return them), the engine's string encoding, the queues and stacks of ops `0x132`-`0x139`, op `0x9`'s bank
 reset and the banks' sections of a numbered save; its partial `ScriptMemory.Random.cs` owns op `0x60`'s seeded
-per-call-site streams, which the drive step `rand-seed` turns on.
+per-call-site streams, which the drive step `rand-seed` turns on, and each Lua mod's stream under the same seed
+(`DrawForMod`, Lua scripting spec §5.6).
 The save and settings native `engine/Ome.Engine/Natives/SavesAndSettings.cs` owns the shared profile, the save store,
 `SYS4REG.INI` (the front end's shell reads and writes the keys AGERC owned through it), the playtime clock, the
 shutdown flush (`set:NoSaveDat`) and the shutdown write of the message settings (`FlushMessageSettingsOnShutdown`);
@@ -608,7 +613,9 @@ VM calls the waits through `engine/Ome.Engine.Vm/ModCallWaits.cs`, which refuses
 mods' state and the session's life across loads: the save record the save native asks for at op `0x19e`
 (`SAVEnn.modstate.json`, which the port's `SidecarNativeDatStore` writes beside the save), the load's report, each
 mod's last good block, `maid.session.restoring`, and the build and `ome.session.resumed` the interpreter asks for at
-a boundary (`BoundaryPending`, `ServiceBoundary`); `Events` runs the game events' subscribers; `Watches` keeps the
+a boundary (`BoundaryPending`, `ServiceBoundary`); `Reload` is `--lua-reload`'s rebuild (spec §13): the files the front
+end hands over (`RequestReload`, `RefuseReload`) and the session rebuilt at a boundary outside any wait
+(`IInterpreterAccess.InsideWait`), keeping each mod's state; `Events` runs the game events' subscribers; `Watches` keeps the
 watch records (spec §7.3): which running instruction owns each write to a watched cell, and their delivery when it
 returns, over the bitmap of watched cells that the script memory native's setters test (`WatchedCells.cs`); `Trace`
 writes `--lua-trace`'s `diagnostics/lua-trace.jsonl`. The runtime it calls is `engine/Ome.Scripting.Lua/`; the link builds its stack and plan in `engine/Ome.Mods/Linking/ModLuaLinker.cs`.

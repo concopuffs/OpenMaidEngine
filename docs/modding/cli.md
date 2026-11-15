@@ -69,10 +69,11 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 | `--lua-errors continue\|halt` | What a Lua handler's error does: `continue` (the default) logs it to `diagnostics/lua.log`, shows a notice and switches the handler off after its third failure in a row; `halt` ends the run at that instruction ([lua.md](lua.md), "Errors and budgets"). |
 | `--lua-dev` | While you write a mod: a mod loaded from a folder may write a base mod's name its `[lua] writes` list lacks, and `diagnostics/lua.log` names each such name once. A packed `.omp` keeps its list ([lua.md](lua.md), "Game names"). |
 | `--lua-trace` | Write one JSON line per Lua handler call to `diagnostics/lua-trace.jsonl`: where it ran, how long it took, the event's fields before and after, the write a watch saw, every cell it wrote, and the scripts it called ([lua.md](lua.md), "The link report and the trace"). |
+| `--lua-reload` | While you write a mod: when a `.lua` file under the `lua/` of a mod loaded from a folder changes, check the mod's files and rebuild the Lua session at the next instruction, keeping `maid.state`. The startup log's `[lua] --lua-reload watches` line names the folders. A packed `.omp` is not watched, and a change to the manifest or `events/` needs a restart ([lua.md](lua.md), "Reloading"). |
 | `--text-log` | Write every string drawn without a catalog entry to `diagnostics/text-misses.jsonl`, every translated message narrowed to fit its window, with `width_percent`, the width it got, and every one cut at the bottom of its window, with `rows_cut`, the rows it lost. |
 
 `run-godot.ps1` (or `run-godot.cmd`) passes these through as `-Mod PATH` (repeatable), `-NoMods`, `-Language TAG`,
-`-TextRoot DIR`, `-TextLog`, `-LuaErrors continue|halt`, `-LuaDev` and `-LuaTrace`. Combine them with the game
+`-TextRoot DIR`, `-TextLog`, `-LuaErrors continue|halt`, `-LuaDev`, `-LuaTrace` and `-LuaReload`. Combine them with the game
 switches:
 
 ```text
@@ -140,7 +141,12 @@ installs. Each start uses an empty save sandbox. See `../tools-reference.md`, "G
 native side. `tools/drive/scenarios/*-mod-*.steps` are working examples.
 
 `lua [mod=ID] [timeout=S] CODE` runs a Lua chunk in the running port and returns its result: the console of
-[lua.md](lua.md). It is a port step, like `language`.
+[lua.md](lua.md). It is a port step, like `language`. A chunk that fails fails the step, so `lua mod=ID
+assert(CONDITION, MESSAGE)` checks a mod's state in a scenario.
+
+`rand-seed SEED` makes a run's random draws repeat: the game's own, on both targets, and in the port each Lua mod's
+`math.random`, from a stream of its own ([lua.md](lua.md), "Random numbers"). Its result counts the draws since the
+last `rand-seed`, per call site and per mod; `rand-seed off` ends it.
 
 `language TAG` switches the port's language as the settings panel's OME section does, and fails for a language no
 installed package defines (other than `ja` and `en`). Native AGE has no language, so a scenario that uses it runs on

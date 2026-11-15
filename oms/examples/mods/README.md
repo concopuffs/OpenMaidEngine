@@ -36,5 +36,9 @@ ran the same scenarios on native AGE.
 - `example.kamidori-double-exp-event` (Lua scripting gate 13) is the same subscriber on Kamidori, of `kamidori-base`'s
   `kamidori.experience.award`. `ModLuaLinkTests` runs it on both Kamidori installs' `ADDEXP.BIN` and compares it
   with the Kamidori guide's OMS patch.
+- `example.lua-random` (Lua scripting gate 11) rolls `math.random` when `SC0000.BIN` is entered, in a `pairs` loop
+  and with `math.random()`, and keeps the rolls in `maid.state`; `describe()` gives them to the driver's `lua` step.
+  `tools/drive/scenarios/port/himegari-lua-random.steps` runs a new game under `rand-seed 7` and fails unless the
+  rolls are the ones every seeded run gives. It also serves to try `--lua-reload` on a copy of the folder.
 
 Each folder is an unpacked Open Maid Pack; `Ome.Cli omp build DIR` packs one into a `.omp` with stored plans.

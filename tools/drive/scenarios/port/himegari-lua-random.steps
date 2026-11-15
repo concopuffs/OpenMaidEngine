@@ -1,0 +1,17 @@
+# Port only (scenarios/port/): Lua scripting gate 11 (spec §5.6). example.lua-random rolls math.random when SC0000
+# is entered, inside a pairs loop too; under rand-seed 7 it draws from its own stream (seed ^ FNV-1a of its id), so
+# every run ends in the same state, and the lua step fails on any other. rand-seed off reports the mod's 13 draws
+# (mods=example.lua-randomx13). Run on a fresh sandbox:
+#   py -3.11 -X utf8 tools/drive.py port start --mod oms/examples/mods/example.lua-random
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/port/himegari-lua-random.steps
+
+rand-seed 7
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+wait-state top=SC0000@0x83f timeout=90                       # page 1: the enter hook has rolled
+lua mod=example.lua-random local got = describe() assert(got == "entered=1 sword=25 shield=9 ring=50 cape=7 boots=8 helm=23 lance=18 orb=54 luck=0.195779 d6=3", got) return got
+rand-seed off

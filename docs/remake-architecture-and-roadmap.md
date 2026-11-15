@@ -460,10 +460,10 @@ code, and show a merged-script view where practical.
 
 ### 3.8 Runtime scripting API
 
-> **Design (2026-11-14):** Lua mods are specified in `docs/superpowers/specs/2026-11-10-lua-scripting-design.md`
-> (accepted; milestone 0 done). This section remains the direction it implements. The spec decides on a managed
-> interpreter, and its first milestone, the spike, chose Lua-CSharp on 2026-11-14
-> (`docs/superpowers/plans/2026-11-14-lua-scripting.md`).
+> **Built (2026-11-15):** Lua mods are specified in `docs/superpowers/specs/2026-11-10-lua-scripting-design.md`
+> and built through its last milestone (`docs/superpowers/plans/2026-11-14-lua-scripting.md`); the modders' guide is
+> `docs/modding/lua.md`. This section remains the direction it implements. The spec decides on a managed
+> interpreter, and its first milestone, the spike, chose Lua-CSharp on 2026-11-14.
 
 Lua is attractive for runtime mods because it is familiar, embeddable, dynamically loadable and already
 has mature editor support. It avoids requiring users to compile C# assemblies and keeps drop-in mods

@@ -1,0 +1,18 @@
+omp = 3
+id = "example.lua-random"
+name = "Seeded rolls (Lua)"
+version = "1.0.0"
+description = "Rolls math.random when the prologue starts, inside a pairs loop too: the same rolls under the driver's rand-seed."
+
+[game]
+profile = "himegari"
+target = "extended"
+
+[lua]
+api = 1
+capabilities = ["vm"]   # a script hook hands its handler the frame
+
+[[hooks]]
+script = "SC0000.BIN"
+when = "enter"
+handler = "rolls.lua:on_prologue"

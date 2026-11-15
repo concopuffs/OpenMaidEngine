@@ -305,6 +305,21 @@ at, and the traceback. After three failures in a row the handler is off for the 
 at the first one instead. "ran out of its instruction budget" means the call ran past 1,000,000 Lua instructions,
 usually an endless loop.
 
+**"Lua: ID was not reloaded: …"** (with `--lua-reload`). The check of your changed files found a problem, and the
+message gives it as the link would: `lua/FILE: line N: …`, "declares no top-level function F, which a hook names",
+"lua/FILE is gone, and a hook names its F", or "its maid.state cannot be carried into the new session" with the value
+a save cannot hold. The game goes on with the code it had. Fix the file and save it again. A hook on a new handler,
+and any change to the manifest or `events/`, needs a restart ([lua.md](lua.md), "Reloading").
+
+**"Lua: reload failed, the running session is kept: ID: …".** The new files parsed, but `init.lua` or a handler
+file's top level raised an error as the session was rebuilt (`diagnostics/lua.log` has the traceback), or a mod your
+mod requires did. The game goes on with the old code. The new files stay as they are on disk, so a load or a return
+to title before you fix them runs them, and your mod is off for that session.
+
+**Nothing happens when you save a file under `--lua-reload`.** Only a mod loaded from a folder is watched, and only
+the `.lua` files under its `lua/`: the startup log's `[lua] --lua-reload watches` line lists the folders. At a text
+wait the rebuild waits for the click; `Lua: reloaded ID` then shows.
+
 **"maid.state was not saved in slot N, its last good state is kept: …"** (or "it has none saved"). Your mod's
 `maid.state` holds something a save cannot hold; the message names it and where it is, as in `maid.state.items[3].f
 is a function`. The game's save was written, and beside it the state your mod loaded or saved last. A state holds

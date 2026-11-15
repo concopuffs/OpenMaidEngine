@@ -127,3 +127,4 @@ A subscriber needs no `vm`. `oms/examples/mods/example.double-exp-event` doubles
 | `oms/examples/himegari-gate6/` | a boot-time script and a script called by packed id |
 | `oms/examples/mods/example.double-exp-lua` | a Lua point hook on the experience award |
 | `oms/examples/mods/example.double-exp-event` | a Lua subscriber of `himegari.experience.award`, without `vm` |
+| `oms/examples/mods/example.lua-random` | `math.random` in a script hook on `SC0000.BIN`, inside a `pairs` loop too; `tools/drive/scenarios/port/himegari-lua-random.steps` checks that `rand-seed 7` gives the same rolls in every run |

@@ -3,11 +3,12 @@
 **Date:** 2026-11-14
 **Spec:** `docs/superpowers/specs/2026-11-10-lua-scripting-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps what each milestone measured and what that settles for the later ones.
-**Status:** milestones 0 to 4 are done (2026-11-14 and 2026-11-15); 0 to 3 are the first release. Milestone 0,
+**Status:** milestones 0 to 6 are done (2026-11-14 and 2026-11-15); 0 to 3 are the first release. Milestone 0,
 the spike, chose **Lua-CSharp 0.5.8** (`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the
 library against the official Lua 5.2 test suite. Milestone 2 built mod state and the session's life across loads
-(§6), milestone 3 events and the base mods (§7), and milestone 4 the wider hooks (§8). Milestone 5, script calls,
-is being built (§9); milestone 6 is not. The backlog's "Runtime scripting (Lua)" item lists them.
+(§6), milestone 3 events and the base mods (§7), milestone 4 the wider hooks (§8), milestone 5 script calls (§9),
+and milestone 6 the authoring tools: the seeded random streams and `--lua-reload` (§10). The backlog keeps the
+follow-ups: more base mod helpers, and Lua-CSharp past 0.5.8.
 
 Paths are relative to `age-reimpl/`.
 
@@ -1287,3 +1288,93 @@ Built 2026-11-15:
   does not. Full suite 2358.
 
 With it milestone 5 is done: gate 9.
+
+## 10. Milestone 6: authoring
+
+Built on `feature/lua-scripting` (spec §5.6, §13, §18) on 2026-11-15, in three pieces: the seeded streams, the
+reload, and gate 11 with the guide.
+
+### 10.1 Each mod's seeded stream
+
+- **The stream.** Under the driver's `rand-seed`, `math.random` draws from a stream of the mod's own
+  (`ScriptMemory.DrawForMod(modId)`, which the mod's face calls): its first state is the seed xor the 32-bit FNV-1a
+  hash of the mod id's UTF-8 bytes (`DeterministicModInitialState`), and it advances by MSVC `rand` as op `0x60`'s
+  site streams do. A hash of the id, not .NET's string hash, which each process randomizes. The console draws as the
+  mod `console`.
+- **Its life.** The streams are script memory's, beside the sites', so a session's rebuild (a load, a return to
+  title, a reload) does not restart one; `SeedDeterministicRandom` restarts them with the sites' and reports each
+  mod's draws (`DeterministicRandomSummary.Mods`). Without a seed a mod draws from the system's generator, as before.
+- **The report.** The `rand-seed` reply has `mods`, each mod's draws, when one drew; `draws` still counts op `0x60`
+  only. `drive.py` prints `mods=IDxN`.
+- **Tests.** `LuaRandomTests` (6): the stream's vectors (checked against an independent Python computation); two
+  mods' streams and the draws each call size takes; the same rolls in a `pairs` loop from two sessions under one seed;
+  a point's draws beside op `0x60`'s site, neither moving the other; a data-only load's rebuild not restarting the
+  stream and the next seed restarting it; unseeded draws differing. `DeterministicRandomTests` (1): the report's
+  `mods`, absent when none drew. `test_drive_core.py`: the printed `mods=`.
+
+### 10.2 The reload
+
+- **The native** (`Natives/Scripting.Reload.cs`). `RequestReload(modId, files)` swaps the mod's sources into the
+  stack (`_setup` is no longer read-only; nothing else changes it) and marks a reload due when a session runs; with
+  none, the next build takes the files. `BoundaryPending` covers the reload when no Lua is on the stack and the
+  interpreter is not inside a wait's callback. `ServiceBoundary` takes, in order, a data-only load's build, the reload,
+  then `ome.session.resumed`. The reload captures every mod's state (blocks merged over the scene's), builds the new
+  session with it (`SessionReason.Reload`; `_building` and the loose records as at any build, no session visible to
+  the build's code), and then:
+  - a mod that was on and is off in the new session (its `init.lua` or a handler file raised, or a mod it requires
+    did) disposes the new session and keeps the running one, logged and notified, and never halts the run: a reload
+    is an authoring aid, and spec §13 keeps the running session;
+  - a mod that was already off may stay off ("still off for this session");
+  - otherwise the old session is disposed, the new one installed with the reason `reload`, the failure counts and the
+    switched-off handlers cleared, and `ome.session.start` raised with `reload`.
+  The scene is not replaced: its records, blocks, load and restore flags stay, and `_sessionsEnded` does not move, so
+  an instruction's `after` hooks still run in the new session. A state that does not serialize refuses the reload
+  before any build. The stack keeps the new files even when the build fails, so they are what a later session builds
+  from, as the disk has them.
+- **Inside a wait.** `IInterpreterAccess.InsideWait` (a default member, false), which the VM answers from a count of
+  the wait callbacks running: `RunWaitCallback` (a text wait's HISTORY, a coroutine handler) and
+  `ServiceWaitSettingCallback` (`CALLBACK_SETTING.BIN` and `CALLBACK_WINDOW.BIN` from a text wait). A
+  `CALLBACK_SETTING.BIN` that the instruction boundary runs is not inside a wait, and neither is a script called by a
+  `call-script` op, whose boundaries already take a data-only load's build.
+- **The front end's check** (`Ome.Mods/Linking/ModLuaReload.cs`). It opens the folder again (`ModPackage.Open`), refuses
+  another id, reads each `lua/` file and checks it with the runtime's `Check` (thread-safe, runs nothing): the syntax,
+  a module named as a required mod, and each handler of the stack's for the mod still a top-level function of its file
+  (or its file gone). It does not run the write scan, whose findings are notes the runtime enforces anyway.
+- **The watcher** (`Ome.Mods/Launch/LuaReloadWatcher.cs`). One `FileSystemWatcher` per unpacked mod of the stack with a
+  `lua/` folder (`ModLaunchResult.UnpackedLua`, from the packages the launch opened), its `.lua` files and folders only;
+  a timer per mod restarts at each change and fires 300 ms after the last; one delivery runs at a time. The port
+  (`godot/Main.LuaReload.cs`, started once the engine thread runs, disposed first at shutdown) hands each result to the
+  native with `TryInvoke` (10 s, then it is dropped with a warning): `RequestReload`, or `RefuseReload` with the
+  check's problems. `run-godot.ps1 -LuaReload`.
+- **Tests.** `LuaReloadTests` (11): a reload handed over during a sleep and taken at the next boundary, the old body
+  before it and the new one after, the state kept across (hits, builds), the reasons `boot reload`; a failed build and
+  an unserializable state keeping the running session; a mod off at boot back on, and a handler switched off after
+  three failures on again with its state; a mod still off not stopping the reload; no session (the boot build takes the
+  files); a refusal's notice and an unknown mod; a stand-in interpreter inside a wait holding the reload; the check
+  passing, refusing a syntax error, a module name, a missing handler, a gone file and another id; the watcher
+  delivering a changed file. `SceneReloadTests`: the new fields, each kept across a return to title. Full suite 2376.
+
+### 10.3 Gate 11 and the guide
+
+- **The example** `oms/examples/mods/example.lua-random`: a script hook on `SC0000.BIN`'s `enter` rolls
+  `math.random(weight * 10)` for eight items in a `pairs` loop, then `math.random()` and a d6, 13 draws, into
+  `maid.state`; `describe()` gives them to the driver.
+- **The scenario** `tools/drive/scenarios/port/himegari-lua-random.steps`: `rand-seed 7`, a new game to SC0000's first
+  page, then a `lua` step that fails unless `describe()` is the state every seeded run gives, and `rand-seed off`.
+- **Driven in the port** (2026-11-15, Himegari). Under seed 7, three fresh processes (sandboxes `m6rand1` to `m6rand3`)
+  ended in `entered=1 sword=25 shield=9 ring=50 cape=7 boots=8 helm=23 lance=18 orb=54 luck=0.195779 d6=3`, and
+  `rand-seed off` reported `mods=example.lua-randomx13` and `draws=0`. The first three rolls match the stream computed
+  offline (25554, 16368, 12149). The loop visits the items in the order the table was written, in every process.
+  Without a seed two runs rolled `sword=1 shield=2 ring=30 …` and `sword=15 shield=15 ring=34 …`.
+- **The reload, driven** (sandbox `m6reload`, a copy of the example, `--port-arg=--lua-reload`). The startup log named
+  the watched folder. At page 1's text wait, `describe` was edited: the log read `lua/ changed (1 file)`, and a `lua`
+  step at the wait still got the old text with the reason `boot`; after one advance it got `v2 …` with the reason
+  `reload` and the same rolls. A syntax error was refused (`not reloaded, the running session is kept: lua/rolls.lua:
+  line 20: <name> or '...' expected near 'return'`); an `error()` at the file's top kept the session (`reload failed,
+  the running session is kept: … boom at the top`, with the traceback), and the game went on with `v2`; the fixed file
+  reloaded as `v3` at the next advance, the rolls unchanged.
+- **The guide.** `docs/modding/lua.md` gained "Random numbers" and "Reloading", the reason `reload`, and lost "Not yet";
+  `cli.md` the flag, the switch, `rand-seed` and asserting with a `lua` step; `troubleshooting.md` the reload's
+  messages; the Himegari guide and the examples' README the example; `omp lua-stubs` the reason `reload`.
+
+With it milestone 6 is done: gate 11. Every milestone of spec §18 is built.

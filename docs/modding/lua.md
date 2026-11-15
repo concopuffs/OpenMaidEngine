@@ -22,9 +22,11 @@ This version supports:
 - **script calls:** `maid.vm.call` runs one of the game's scripts from a handler, and the base mods' helpers change
   the game through its own scripts;
 - **`maid.state`:** a table that is saved beside each numbered save and comes back when that save is loaded;
-- **`maid.log`,** and **the console:** the driver's `lua` step runs a chunk in a running game.
+- **`maid.log`,** and **the console:** the driver's `lua` step runs a chunk in a running game;
+- **`math.random`,** which the driver's `rand-seed` makes repeatable for each mod;
+- **reloading:** `--lua-reload` runs a mod folder's changed `lua/` files without a restart, keeping `maid.state`.
 
-Not yet: reloading Lua without a restart. The design behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
+The design behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
 Game-specific values (point names, which local holds what, the events and their fields) are in your game guide,
 `games/<profile>.md`.
@@ -142,7 +144,8 @@ A handler is a global function declared at the top level of its file: `function 
 it without running the file, so these are not handlers: a `local function`, `function M.f()` or `function M:f()`
 on a table, `on_award = function() end`, or a function declared inside a block.
 
-The engine builds a **session** at the start of a run, after a return to title and after a load. A session gives
+The engine builds a **session** at the start of a run, after a return to title, after a load, and at a reload
+("Reloading"). A session gives
 each mod its own environment, fills its `maid.state` (from the save after a load, empty otherwise), runs the mod's
 `lua/init.lua` (when it has one), then each file that holds a handler, and then raises `ome.session.start`. So a
 mod's globals start fresh in every session: a value kept in a Lua global is gone after a load or a return to
@@ -152,7 +155,7 @@ title. Keep what must last in `maid.state` ("State").
 
 | Event | When | `ctx` fields |
 |---|---|---|
-| `ome.session.start` | a session has been built, before the game goes on | `reason`: `"boot"`, `"title"` or `"load"` |
+| `ome.session.start` | a session has been built, before the game goes on | `reason`: `"boot"`, `"title"`, `"load"` or `"reload"` |
 | `ome.session.resumed` | a load has restored the saved game, before its first instruction ("Loads") | `slot`: the slot loaded |
 | `ome.save.writing` | before each numbered save, ahead of the save's capture: what a handler writes, to `maid.state` or to the game's cells, is in the save | `slot`: the slot written |
 
@@ -625,7 +628,7 @@ have it.
   mod's id. `print` writes at `info`.
 - `maid.mod.id` and `maid.mod.version` are the mod's own; `maid.mod.state_version` is the version that wrote the
   loaded state ("State").
-- `maid.session.reason` is why the session was built: `"boot"`, `"title"` or `"load"`.
+- `maid.session.reason` is why the session was built: `"boot"`, `"title"`, `"load"` or `"reload"`.
   `maid.session.restoring` is true while a load restores the saved game ("Loads").
 - `maid.state` is the mod's saved table ("State").
 - `maid.names` exists only in a base mod and in the console: `g` and `table` over that base mod's names, with no
@@ -644,8 +647,8 @@ or `string.dump`: nothing reaches files, processes, the clock or the network.
   required mod's export, once per session.
 - **Each mod has its own library tables.** Changing `string.format` changes it for your mod only, and the string
   metatable is locked.
-- **`math.random`** draws from the engine's generator, so the driver's `rand-seed` makes it repeatable.
-  `math.randomseed` is absent.
+- **`math.random`** draws from the engine's generator, so the driver's `rand-seed` makes it repeatable ("Random
+  numbers"). `math.randomseed` is absent.
 - **Strings count UTF-16 code units,** not bytes: `#"日本語"` is 3, and `("日本"):sub(1, 1)` is `"日"`.
 - **Whole numbers print as Lua prints them; fractions may not.** A number that is not a whole number, such as
   `3 * 1.1`, prints with every digit it holds (`3.3000000000000003`; Lua 5.2 prints `3.3`), and `1/0` prints
@@ -653,6 +656,24 @@ or `string.dump`: nothing reaches files, processes, the clock or the network.
   `%d` needs a whole number (`math.floor(x)`).
 - **Weak tables are never cleared, and `__gc` never runs.** The .NET collector owns memory, so a table with
   `__mode` keeps its entries.
+
+## Random numbers
+
+`math.random` draws from the engine's generator, the one the game's own random instruction draws from:
+
+- `math.random(m, n)` gives a whole number from `m` to `n`, and `math.random(n)` one from 1 to `n`. The range may
+  hold at most 2^45 values.
+- `math.random()` gives a number from 0 up to, not including, 1.
+- `math.randomseed` is absent: the seed is the engine's.
+
+**Without a seed** the draws come from the system's generator. Your mod's rolls differ from run to run, and between
+two loads of one save, as the game's own do.
+
+**Under the driver's `rand-seed`** ([cli.md](cli.md), "Automated testing") each mod draws from a stream of its own,
+made from the seed and the mod's id. So a scenario that runs your mod rolls the same every time, inside a `pairs`
+loop too: a table is iterated in the same order in every run. What the game and the other mods draw does not move
+your stream. A load or a return to title does not restart it; the next `rand-seed` does. The step's result lists
+each mod's draws since the last `rand-seed`, as `mods=<id>x<count>`.
 
 ## Errors and budgets
 
@@ -756,6 +777,38 @@ end
 
 Run the command again after the stack, a base mod or an event changes. The files only name types: the engine never
 reads them.
+
+## Reloading
+
+Run with `--lua-reload` (`-LuaReload`; [cli.md](cli.md)) while you write a mod loaded from a folder. When a `.lua`
+file under its `lua/` changes, the port reads the mod's files again and checks them as the link does: their syntax,
+and that each handler your hooks name is still a top-level function of its file. Then, at the next instruction, it
+rebuilds the session:
+
+1. each mod's `maid.state` is kept as it is;
+2. every mod's `init.lua` and handler files run again, in load order, so each mod's globals start again from what
+   its files set;
+3. `ome.session.start` fires with the reason `"reload"`, and `maid.session.reason` is `"reload"`;
+4. the game goes on where it was, with the new functions. A handler switched off for failing gets another chance.
+
+No Lua runs while it waits, and it waits outside the game's waits' callbacks (the history a text wait opens, for
+example). At a text wait the rebuild comes after the click, before the next instruction. The status line and
+`diagnostics/lua.log` say what happened:
+
+- **`Lua: reloaded <id>`**: the session was rebuilt with your files.
+- **`Lua: <id> was not reloaded: …`**: the check found a problem, such as a syntax error or a handler your files no
+  longer declare, or `maid.state` holds something a save cannot hold (a function, for example). The game goes on
+  with the code it had. Fix the file and save it again.
+- **`Lua: reload failed, the running session is kept: <id>: …`**: the new code failed as it ran, in `init.lua` or a
+  handler file's top level (or a mod it requires did). The game goes on with the code it had. The files on disk
+  are still the new ones, so the next session the game builds (a load, a return to title) runs them, and your mod
+  is off in it until you fix them.
+
+A mod that was off for the session after an error is on again once a reload's build succeeds for it.
+
+A reload changes code, not the link. The hooks, the events and the `[lua]` lists stay as the run linked them, so a
+change to `manifest.toml` or to `events/`, or a hook on a new handler, needs a restart. A packed `.omp` is not
+watched. The console's environment starts again with the new session ("The console").
 
 ## The console
 
