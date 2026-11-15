@@ -151,7 +151,7 @@ No single language should serve every layer:
 | Layer | Preferred representation |
 |---|---|
 | Mod identity, dependencies, load order, assets, data patches and hook selectors | declarative manifest/patch files |
-| Runtime behavior, event callbacks and UI glue | embedded scripting language: **Lua** (designed in `docs/superpowers/specs/2026-11-10-lua-scripting-design.md`; a spike chooses the interpreter) |
+| Runtime behavior, event callbacks and UI glue | embedded scripting language: **Lua** (designed in `docs/superpowers/specs/2026-11-10-lua-scripting-design.md`; the interpreter is Lua-CSharp, chosen by its spike) |
 | Direct modification of original scripts | annotated AGE assembly + assembler |
 | Substantial new narrative/content authoring | optional future **Open Maid Script** scenario DSL |
 
@@ -461,8 +461,9 @@ code, and show a merged-script view where practical.
 ### 3.8 Runtime scripting API
 
 > **Design (2026-11-14):** Lua mods are specified in `docs/superpowers/specs/2026-11-10-lua-scripting-design.md`
-> (accepted; not built). This section remains the direction it implements. The spec decides on a managed
-> interpreter, and its first milestone is the spike that chooses which one.
+> (accepted; milestone 0 done). This section remains the direction it implements. The spec decides on a managed
+> interpreter, and its first milestone, the spike, chose Lua-CSharp on 2026-11-14
+> (`docs/superpowers/plans/2026-11-14-lua-scripting.md`).
 
 Lua is attractive for runtime mods because it is familiar, embeddable, dynamically loadable and already
 has mature editor support. It avoids requiring users to compile C# assemblies and keeps drop-in mods

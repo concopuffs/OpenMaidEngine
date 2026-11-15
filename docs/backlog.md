@@ -339,9 +339,9 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   only through bytecode (patches and scripts). `superpowers/specs/2026-11-10-lua-scripting-design.md` (accepted
   2026-11-14) specifies Lua beside the VM: a managed interpreter, hooks declared in the manifest (`omp = 3`), the
   `maid` API, per-game base mods with declared writes, mod state beside the save, and gates 1 to 15. Its
-  milestones (§18), each done when its gates pass:
+  milestones (§18), each done when its gates pass (milestone 0, the spike, chose Lua-CSharp on 2026-11-14; its
+  results are in `superpowers/plans/2026-11-14-lua-scripting.md`):
   - **The first release:**
-    0. the spike: choose the library against §5.1's eleven criteria, and measure dispatch cost;
     1. the core: the scripting native and the runtime seam, session life, the sandbox, point hooks, `maid.vm`
        without `call`, errors and budgets, the driver's `lua` step;
     2. state: `maid.state` and its sidecar, the rebuild on load, `maid.session.restoring`,

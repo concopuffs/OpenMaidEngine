@@ -1,8 +1,8 @@
 # Lua scripting design
 
 **Date:** 2026-11-10; accepted 2026-11-14
-**Status:** accepted. Not built: §18 has the milestones, and the first is a spike that chooses the library
-(§5.1).
+**Status:** accepted. Milestone 0, the spike, chose Lua-CSharp on 2026-11-14 (§5.1); milestones 1 to 6 are not
+built (§18). The plan, `docs/superpowers/plans/2026-11-14-lua-scripting.md`, keeps what each milestone measured.
 **Checked against:** `ac843b3b` on `develop`, after the engine layering work was merged. Code references name files
 and members, not lines. Paths are relative to `age-reimpl/`; a short path is under `engine/` (`Natives/` and
 `Persistence/` are `Ome.Engine`'s, and `VirtualMachine*.cs` is `Ome.Engine.Vm`'s).
@@ -23,16 +23,13 @@ turns that direction into a design against the code as it is today.
 - the mod loader design said the base mod would own the patch points (its §5). The registry stays their source,
   and the base mod carries a generated copy (§9.1).
 
-**Not verified** (each is marked where it matters):
+**Not verified:** which opcodes reach a wait. The waits themselves are listed; the registry does not yet record the
+fact per opcode (§10).
 
-- whether an engine unwind passes through the Lua library's frames, `pcall` included, and whether a budget stop
-  does (§5.1);
-- which opcodes reach a wait. The waits themselves are listed; the registry does not yet record the fact per
-  opcode (§10);
-- the Lua libraries' features. What this spec says about them comes from package listings, not from use, and
-  the spike in §5.1 settles it. That includes whether Lua-CSharp can be called synchronously at no extra cost,
-  whether a library can keep one mod from changing what another sees (§5.2), and whether deep recursion ends as
-  an error.
+**Settled by the spike** (2026-11-14; plan §2–§3): an engine unwind and a budget stop pass through every Lua frame,
+`pcall` included, when they cancel the call's token, and not when they throw; Lua-CSharp can be called
+synchronously at no extra cost; it keeps one mod from changing what another sees (§5.2); and it ends deep
+recursion as an error.
 
 ## 1. Purpose and scope
 
@@ -219,6 +216,13 @@ The spike also reports what bounds a library function that loops inside one call
 backtracks. An instruction budget does not count those (§5.5, §15).
 
 If neither managed candidate passes, the choice between managed and native is open again.
+
+**Chosen 2026-11-14: Lua-CSharp 0.5.8.** It passes all eleven criteria. It passes 2 and 3 only when an unwind or a
+budget stop cancels the call's token: a thrown exception is caught by `pcall`. MoonSharp 2.0.0 fails criterion 10
+(unbounded recursion ends the process or hangs it) and parts of 2 and 3. No library function that loops inside one
+call can be stopped, and Lua-CSharp's strings count UTF-16 code units, not bytes. The plan
+(`docs/superpowers/plans/2026-11-14-lua-scripting.md`) has the results, how the runtime must call Lua, and the
+measured budgets.
 
 The language level modders rely on is then **Lua 5.2**, and the manifest records the API version, not the
 library.
@@ -1288,6 +1292,7 @@ No question is open. Each decision names the alternative it rejected. These five
 
 1. **The library is a managed one,** and the spike picks which (§5.1). The alternative was native Lua, for Lua
    5.4, with its extra packaging work. If no managed candidate passes the spike, this decision is open again.
+   The spike chose Lua-CSharp (2026-11-14, §5.1).
 2. **The session is rebuilt on a load** (decision 6). The alternative kept one Lua state for the whole process
    and trusted mods to reset themselves. The engine rebuilds every owner's scene state on a return to title,
    which is the same rule.

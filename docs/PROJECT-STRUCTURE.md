@@ -300,8 +300,12 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       frontend services its commands reach), the options panel's
     │                                       layout, draft and 情報 rows, the engine identity, and the
     │                                       port options with their OME.INI store)
-    │   └── Ome.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
+    │   ├── Ome.Engine.Text.Windows/         optional exact Windows GDI gray-4 reference backend; kept
     │                                       outside the platform-neutral VM/runtime core
+    │   └── Ome.Scripting.Lua.Spike/         milestone 0 of the Lua design (superpowers/plans/2026-11-14-lua-
+    │                                       scripting.md §1): a console program that checks LuaCSharp and
+    │                                       MoonSharp against spec §5.1's criteria, one child process per case;
+    │                                       results to disposable build/lua-spike/; not in OmeEngine.sln
     ├── native/                              authored native runtime boundaries
     │   └── ome_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows/Linux dependency manifests,
     │                                       and native/MSVC plus Linux-hosted MinGW target bootstrap/build scripts;
