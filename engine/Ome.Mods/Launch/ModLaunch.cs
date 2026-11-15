@@ -87,9 +87,10 @@ public static class ModLaunch
 
     /// <summary>
     /// Opens the folder's candidates and the extra packages. Mods that <c>load-order.txt</c> disables are skipped (an
-    /// extra package is always enabled); a package that does not open is an error named by its file. The user order is
-    /// the listed ids, then the folder's other mods by id, then the extra packages in argument order. The caller
-    /// disposes the packages.
+    /// extra package is always enabled); a package that does not open is an error named by its file. The engine's own
+    /// base mods join when an enabled package requires one that is not installed (<see cref="ShippedPackages"/>). The
+    /// user order is the listed ids, then the folder's other mods by id, then the extra packages in argument order. The
+    /// caller disposes the packages.
     /// </summary>
     public static ModDiscovery Discover(string modsDirectory, IReadOnlyList<string> extraPackages, ModLinkReport report)
     {
@@ -121,6 +122,7 @@ public static class ModLaunch
                 failedToOpen = true;
             }
         }
+        packages.AddRange(ShippedPackages.Required(packages, report));
         var userOrder = listed
             .Concat(folderIds.Where(id => !listed.Contains(id)).Order(StringComparer.Ordinal))
             .Concat(extraIds.Where(id => !listed.Contains(id)))

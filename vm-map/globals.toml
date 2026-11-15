@@ -4,6 +4,9 @@
 # tools/story_flags.py --bootstrap; enrich each entry as we investigate.
 # The type implies the bank: `string...` entries are string-bank cells (GS), everything else integer cells (G).
 # The two banks have separate address spaces, so G 0x0 and GS 0x0 are different globals.
+# A renamed global keeps its old names in `aliases = ["old_name"]`: tools/base_mod_build.py exports
+# them from mods/himegari-base/ beside the new name, and refuses a rename that drops an exported name
+# unless the base mod's major version is raised.
 # See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md.
 [meta]
 note = "Curated global addresses override the auto shape-inference map (build/games/himegari/global-var-map.json)."

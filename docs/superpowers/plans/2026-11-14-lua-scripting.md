@@ -5,7 +5,8 @@
 design's home. This plan keeps what each milestone measured and what that settles for the later ones.
 **Status:** milestones 0 to 2 are done (2026-11-14). Milestone 0, the spike, chose **Lua-CSharp 0.5.8**
 (`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the library against the official Lua 5.2
-test suite. Milestone 2 built mod state and the session's life across loads (§6). Milestones 3 to 6 are not built.
+test suite. Milestone 2 built mod state and the session's life across loads (§6). Milestone 3 is being built (§7);
+milestones 4 to 6 are not.
 The backlog's "Runtime scripting (Lua)" item lists them.
 
 Paths are relative to `age-reimpl/`.
@@ -541,3 +542,58 @@ cause was not isolated (the dispatch now tests each handler for an engine event)
 compare only with each other.
 
 The engine suite (2156 tests) and core validation pass.
+
+## 7. Milestone 3: events and base mods
+
+Being built on `feature/lua-scripting`, in seven pieces:
+
+1. the base mod package (§7.1);
+2. the accessors `game.g` and `game.table`, `[lua] writes`, `maid.names`, and the base mod in the runtime stack;
+3. `events/` with typed fields, `maid.events.emit`, event hooks, and a point linked through the base mod's copy;
+4. the write scan and `--lua-dev`;
+5. the link report's additions and `--lua-trace`;
+6. `omp lua-stubs` (lua-language-server `---@class` annotations);
+7. the reverse-engineered Kamidori point `kamidori.experience.after_calculation`, each base mod's experience award
+   event (its only event at first), gate 13 and the guide.
+
+### 7.1 The base mod package
+
+Built 2026-11-14 (spec §9.1):
+
+- **The folders.** `mods/himegari-base/` and `mods/kamidori-base/` each hold a hand-written `manifest.toml` (omp 3,
+  the game's `[game]`, `[lua] capabilities = ["vm"]`, version 1.0.0) and `README.md`. `layout/` is written by
+  `tools/base_mod_build.py --build` from the repository's sources alone, so a base mod builds without an install.
+- **`layout/globals.json`** (format 1) has one entry per named global, one per line, ordered by name: its bank (`G`,
+  `GF`, `GS`), address, dimensions, columns and aliases. Himegari has 428 globals (93 with columns, 9 with an open
+  first dimension), Kamidori 624 (69 and 4).
+  - Only the first dimension may be open (`int[][C]`, `int[unit][C]`): the registry does not know its row count.
+  - Columns name indices of the last dimension: a 1-D array's elements or a 2-D array's columns. They are Lua names
+    and may hold capitals, as Kamidori's asset-named columns do.
+- **`layout/points.json`** copies the patch points in `patch-points.json`'s form, validated without the install
+  (Himegari has one point, Kamidori none yet). Piece 3 links a point through it when
+  `build/games/<profile>/patch-points.json` is absent.
+- **`layout/exports.txt`** holds the major version and every exported name; an alias reads `old = new`. The
+  checked-in file is the released list:
+  - `--check`, a core `validate.py` gate (`base-mods-check`), refuses a name that leaves the list while the
+    manifest's major version stays the same, and a major version lower than the file's;
+  - a raised major version starts a new list.
+- **Aliases** (`globals_build.py`) are `aliases = [...]` on a registry global, as lowercase identifiers.
+  - The linter refuses an alias that is another global's name or alias.
+  - The reference doc writes them as "formerly".
+  - A name and an alias are one name in the layout (`GameLayout.TryGet`).
+- **Read at open** (`ModPackage`). A package with `layout/` needs:
+  - omp 3, a `[game]` of its own and the capability `vm`;
+  - a `layout/globals.json` that parses as that game's layout (`GameLayout.Parse`,
+    `engine/Ome.Engine/Modding/GameLayout.cs`), and a `points.json` that parses as patch points.
+
+  Any other file in `layout/` is refused.
+- **Shipped** (`ShippedPackages`, `engine/Ome.Mods/Packages/`). `mods/**` is embedded in `Ome.Mods`, so an exported
+  build carries the base mods.
+  - Discovery (`ModLaunch.Discover`) and `omp build` add each shipped package an enabled mod requires, and those it
+    requires in turn, with a note in the link report.
+  - A disabled mod's requirement mounts nothing.
+  - An installed package of the same id is used instead, with a note.
+  - A shipped package's location reads `<engine>/mods/<id>`.
+
+Tests: `BaseModTests` (17; the shipped bytes must equal the repository's folders, so a stale build fails) and the core
+`tools/test_base_mod_build.py`. A base mod has no `lua/` yet, so it does not join the runtime's stack; piece 2 adds it.

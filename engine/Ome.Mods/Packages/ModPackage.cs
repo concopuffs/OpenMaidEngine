@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using Ome.Engine.Modding;
 using Ome.Mods.Manifest;
+using Ome.Script.Patch;
 
 namespace Ome.Mods.Packages;
 
@@ -21,6 +23,13 @@ public sealed class ModPackage : IDisposable
 
     public string Location => Container.Location;
     public string Id => Manifest.Id;
+
+    /// <summary>A base mod's layout (Lua scripting spec §9.1), read and checked when the package opens; null for any
+    /// other package.</summary>
+    public GameLayout? BaseLayout { get; private init; }
+    /// <summary>A base mod's copy of the game's patch points (<c>layout/points.json</c>, spec §9.1), so an exported
+    /// build resolves them; null without one.</summary>
+    public OmsPatchPoints? BasePoints { get; private init; }
 
     /// <summary>Whether the package only presents (localization spec §8, save stamps): it changes no script or plain
     /// asset, and carries text, fonts, language assets or a language. Adding or removing it is reported as presentation
@@ -78,7 +87,47 @@ public sealed class ModPackage : IDisposable
         var problems = new List<string>();
         ModLayout layout = ModLayout.Classify(manifest, container.Entries, problems);
         if (problems.Count > 0) throw new ModPackageException(container.Location, problems);
-        return new ModPackage(container, manifest, layout, ComputeHash(container));
+        var (baseLayout, basePoints) = layout.BaseLayout is { } files ? ReadBaseLayout(container, manifest, files) : (null, null);
+        return new ModPackage(container, manifest, layout, ComputeHash(container))
+        {
+            BaseLayout = baseLayout,
+            BasePoints = basePoints,
+        };
+    }
+
+    /// <summary>A base mod's layout and points (Lua scripting spec §9.1). The layout names the cells its dependents
+    /// reach by name, which is raw access, so a base mod declares <c>vm</c>; and it names one game's, its own.</summary>
+    private static (GameLayout, OmsPatchPoints?) ReadBaseLayout(IPackageContainer container, ModManifest manifest,
+                                                               ModLayoutFiles files)
+    {
+        var problems = new List<string>();
+        if (manifest.Lua?.HasVm != true)
+            problems.Add("layout/: a base mod names cells for the mods that require it, which is raw access: it needs "
+                         + "[lua] capabilities = [\"vm\"]");
+        GameLayout? layout = null;
+        try
+        {
+            layout = GameLayout.Parse(ReadText(container, files.Globals));
+            if (layout.Profile != manifest.Profile)
+                problems.Add($"{files.Globals.Path}: the layout is {layout.Profile}'s, and the package targets {manifest.Profile}");
+        }
+        catch (FormatException error)
+        {
+            problems.Add($"{files.Globals.Path}: {error.Message}");
+        }
+        OmsPatchPoints? points = null;
+        if (files.Points is { } pointsFile)
+            try
+            {
+                points = OmsPatchPoints.FromJson(ReadText(container, pointsFile));
+            }
+            catch (Exception error) when (error is System.Text.Json.JsonException or FormatException or InvalidDataException
+                                              or InvalidOperationException or KeyNotFoundException)
+            {
+                problems.Add($"{pointsFile.Path}: {error.Message}");
+            }
+        if (problems.Count > 0) throw new ModPackageException(container.Location, problems);
+        return (layout!, points);
     }
 
     public byte[] ReadAll(PackageEntry entry)

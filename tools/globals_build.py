@@ -8,7 +8,8 @@ vm-map/globals-<profile>.toml -> docs/global-reference-<profile>.md.
   --lint    run the linter, print errors/warnings, exit nonzero on errors
   --check   lint, then exit nonzero if the reference doc differs from what --build would write (needs the auto map)
 A registry may also declare `[[table]]` entries: Open Maid Script tables (record views over parallel
-arrays, design spec §5.3), emitted to the JSON's `tables` list and the reference doc.
+arrays, design spec §5.3), emitted to the JSON's `tables` list and the reference doc. A global's `aliases` keep the
+names it had before a rename, which a base mod still exports (tools/base_mod_build.py; Lua scripting spec §9.1).
 See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md."""
 from __future__ import annotations
 import os, re, sys, json, math, argparse, collections, tomllib
@@ -192,6 +193,36 @@ def lint_tables(tables: list[dict], entries: dict) -> list[str]:
     return errors
 
 
+def lint_aliases(entries: dict) -> list[str]:
+    """Errors: an `aliases` value that is not a list of lowercase identifiers, and an alias that is also a global's
+    name or another global's alias. A base mod exports a global's aliases beside its name (Lua scripting spec §9.1),
+    so each must name one cell."""
+    errors: list[str] = []
+    names = {e["name"]: e for e in entries.values() if e.get("name")}
+    owners: dict[str, str] = {}
+    for e in entries.values():
+        aliases = e.get("aliases")
+        if aliases is None:
+            continue
+        tag = e.get("name") or f"0x{e['_addr']:x}"
+        if not e.get("name"):
+            errors.append(f"{tag}: aliases need the global's own name")
+            continue
+        if not isinstance(aliases, list) or not all(isinstance(alias, str) for alias in aliases):
+            errors.append(f"{tag}: aliases must be a list of names")
+            continue
+        for alias in aliases:
+            if not IDENTIFIER.fullmatch(alias):
+                errors.append(f"{tag}: alias {alias!r} must be a lowercase identifier")
+            elif alias in names:
+                errors.append(f"{tag}: alias {alias} is also the name of a global")
+            elif alias in owners:
+                errors.append(f"{tag}: alias {alias} is also an alias of {owners[alias]}")
+            else:
+                owners[alias] = tag
+    return errors
+
+
 def overlap_warnings(entries: dict) -> list[str]:
     """Fully sized arrays of one bank whose cells overlap. The OMS decompiler names a cell by the smallest
     array containing it (spec §11.3), so a size error here misnames cells, though it never changes bytes."""
@@ -256,6 +287,8 @@ def merge(curated: dict, auto: dict) -> Registry:
                      "source": e.get("source", "inference"), "confidence": e.get("confidence", "low"),
                      "depends_on": [f"0x{_parse_addr(d):x}" for d in e.get("depends_on", [])],
                      "provenance": "curated"}
+        if e.get("aliases"):
+            out[(bank, addr)]["aliases"] = list(e["aliases"])
         if e.get("columns"):
             out[(bank, addr)]["columns"] = {
                 str(column): name for column, name in e["columns"].items()
@@ -309,6 +342,8 @@ def emit_reference_md(merged: Registry, tables: list[dict] = ()) -> str:
         for key in sorted(by_cat[cat], key=lambda k: (merged[k]["provenance"] != "curated", k[1], k[0])):
             e = merged[key]
             name = e["name"] or "—"
+            if aliases := e.get("aliases"):
+                name += " (formerly " + ", ".join(aliases) + ")"
             usage = (e["usage"] or "").replace("|", "\\|").replace("\n", " ")
             if columns := e.get("columns"):
                 mapping = ", ".join(
@@ -332,6 +367,7 @@ def _linted_merge(tp: Path, auto_map: Path) -> tuple[Registry, dict, list[dict]]
     errors, warnings = lint(curated, all_addrs)
     tables = load_tables(tp)
     errors += lint_tables(tables, curated)
+    errors += lint_aliases(curated)
     for m in warnings: print("warn:", m)
     if errors:
         for m in errors: print("error:", m)
@@ -392,6 +428,7 @@ def main(argv=None):
         entries, _ = load_toml(tp)
         errors, warnings = lint(entries, entries.addresses())
         errors += lint_tables(load_tables(tp), entries)
+        errors += lint_aliases(entries)
         for m in warnings: print("warn:", m)
         for m in errors: print("error:", m)
         print(f"lint: {len(errors)} errors, {len(warnings)} warnings")

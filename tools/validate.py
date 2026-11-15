@@ -55,6 +55,7 @@ CORE_TESTS = (
     "test_opcodes.py",
     "test_operand_access.py",
     "test_patch_points.py",
+    "test_base_mod_build.py",
     "test_paths.py",
     "test_revision_diff.py",
     "test_sys4load.py",
@@ -190,6 +191,11 @@ def build_gate_plan(
             "modding-games-check",
             "Generated modding games page",
             _python_tool("modding_games_build.py", "--check"),
+        ),
+        Gate(
+            "base-mods-check",
+            "Base mod layouts and their exported names",
+            _python_tool("base_mod_build.py", "--check"),
         ),
     ]
     gates.extend(

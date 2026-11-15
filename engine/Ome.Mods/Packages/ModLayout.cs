@@ -36,10 +36,14 @@ public sealed record ModLuaFile(string Path, PackageEntry File);
 /// <summary>An event declaration under <c>events/</c> (Lua scripting spec §9.2).</summary>
 public sealed record ModEventFile(string Name, PackageEntry File);
 
+/// <summary>A base mod's generated layout (Lua scripting spec §9.1): <c>layout/globals.json</c>, the patch points'
+/// copy <c>layout/points.json</c>, and the exported names <c>layout/exports.txt</c>, which the engine does not read.</summary>
+public sealed record ModLayoutFiles(PackageEntry Globals, PackageEntry? Points, PackageEntry? Exports);
+
 /// <summary>
 /// A package's files sorted into the content kinds of spec §3.2 and §4, and the localization spec's <c>text/</c> and
-/// <c>fonts/</c> (§9.1, format version 2), and the Lua scripting spec's <c>lua/</c> and <c>events/</c> (§6.1, format
-/// version 3). Directories are matched case-insensitively. Files outside the layout are
+/// <c>fonts/</c> (§9.1, format version 2), and the Lua scripting spec's <c>lua/</c>, <c>events/</c> and a base mod's
+/// <c>layout/</c> (§6.1, §9.1, format version 3). Directories are matched case-insensitively. Files outside the layout are
 /// kept as notes (spec §3.2); a wrongly typed or nested file inside a content directory is an error.
 /// </summary>
 public sealed record ModLayout(
@@ -50,7 +54,10 @@ public sealed record ModLayout(
     IReadOnlyList<string> Notes)
 {
     public const string PlanSuffix = ".omspatch.json";
-    public const string TextFolder = "text", FontsFolder = "fonts", LuaFolder = "lua", EventsFolder = "events";
+    public const string TextFolder = "text", FontsFolder = "fonts", LuaFolder = "lua", EventsFolder = "events",
+                        LayoutFolder = "layout";
+    /// <summary>The files a base mod's <c>layout/</c> holds; <c>tools/base_mod_build.py</c> writes them.</summary>
+    public const string LayoutGlobalsFile = "globals.json", LayoutPointsFile = "points.json", LayoutExportsFile = "exports.txt";
     /// <summary>Largest Lua source a package may carry, and the most files under <c>lua/</c> (Lua scripting spec
     /// §15: file count and size are bounded).</summary>
     public const long MaxLuaBytes = 1L << 20;
@@ -68,6 +75,9 @@ public sealed record ModLayout(
     public IReadOnlyList<ModLuaFile> Lua { get; init; } = [];
     /// <summary>The event declarations under <c>events/</c>, by name in ordinal order.</summary>
     public IReadOnlyList<ModEventFile> Events { get; init; } = [];
+    /// <summary>A base mod's <c>layout/</c>, or null: a package that carries one is a base mod (Lua scripting spec
+    /// §8.4, §9.1).</summary>
+    public ModLayoutFiles? BaseLayout { get; init; }
 
     /// <summary>Whether the package changes no script or asset: it holds only <c>text/</c>, <c>fonts/</c>,
     /// language assets and <c>[[language]]</c> tables (localization spec §8, save stamps). A language asset changes
@@ -90,6 +100,7 @@ public sealed record ModLayout(
         var languageAssets = new List<ModLanguageAssetFile>();
         var lua = new List<ModLuaFile>();
         var events = new List<ModEventFile>();
+        var layoutFiles = new Dictionary<string, PackageEntry>(StringComparer.Ordinal);
 
         foreach (PackageEntry entry in entries)
         {
@@ -174,6 +185,20 @@ public sealed record ModLayout(
                 case EventsFolder:
                     problems.Add($"'{entry.Path}': events/ holds only *.toml declarations, without subdirectories");
                     break;
+                case LayoutFolder when manifest.OmpVersion < ModManifest.LuaOmpVersion:
+                    problems.Add($"'{entry.Path}': layout/ needs omp = {ModManifest.LuaOmpVersion}");
+                    break;
+                case LayoutFolder when manifest.TargetsAnyProfile:
+                    problems.Add($"'{entry.Path}': a package without [game] carries no layout: a layout names one game's "
+                                 + "cells (Lua scripting spec §9.1)");
+                    break;
+                case LayoutFolder when rest is LayoutGlobalsFile or LayoutPointsFile or LayoutExportsFile:
+                    layoutFiles[rest] = entry;
+                    break;
+                case LayoutFolder:
+                    problems.Add($"'{entry.Path}': layout/ holds {LayoutGlobalsFile}, {LayoutPointsFile} and "
+                                 + $"{LayoutExportsFile}, which tools/base_mod_build.py writes");
+                    break;
                 case "patches":
                     problems.Add($"'{entry.Path}': patches/ holds only *.oms fragments and *{PlanSuffix} plans");
                     break;
@@ -243,8 +268,16 @@ public sealed record ModLayout(
         foreach (ModHook hook in manifest.Hooks.Where(hook => hook.Handler.File.Length > 0 && !luaPaths.Contains(hook.Handler.File)))
             problems.Add($"hooks[{hook.Index}].handler: the package has no lua/{hook.Handler.File}");
 
+        ModLayoutFiles? baseLayout = null;
+        if (layoutFiles.TryGetValue(LayoutGlobalsFile, out PackageEntry? layoutGlobals))
+            baseLayout = new ModLayoutFiles(layoutGlobals, layoutFiles.GetValueOrDefault(LayoutPointsFile),
+                                            layoutFiles.GetValueOrDefault(LayoutExportsFile));
+        else if (layoutFiles.Count > 0)
+            problems.Add($"layout/: a base mod's layout needs layout/{LayoutGlobalsFile}");
+
         return new ModLayout(patches, scripts, replacements, assets, notes)
         {
+            BaseLayout = baseLayout,
             Lua = lua.OrderBy(file => file.Path, StringComparer.Ordinal).ToList(),
             Events = events.OrderBy(file => file.Name, StringComparer.Ordinal).ToList(),
             Text = text.OrderBy(file => file.Language, StringComparer.Ordinal)

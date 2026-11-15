@@ -9,6 +9,12 @@
     <PackageReference Include="Tomlyn" Version="2.10.1" />
   </ItemGroup>
 
+  <!-- The base mods the engine ships (Lua scripting spec §9.1): mods/<profile>-base/, read by ShippedPackages. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\mods\**\*"
+                      LogicalName="Ome.Mods.Shipped/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

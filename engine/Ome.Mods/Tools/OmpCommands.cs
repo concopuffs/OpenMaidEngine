@@ -37,6 +37,9 @@ public static class OmpCommands
                 mod = ModPackage.Open(directory);
                 opened.Add(mod);
                 opened.AddRange(dependencies.Select(path => ModPackage.Open(path)));
+                var shipped = new ModLinkReport();
+                opened.AddRange(ShippedPackages.Required(opened, shipped));
+                foreach (ModReportLine line in shipped.Lines) console.WriteLine(line);
             }
             catch (Exception error) when (error is ModPackageException or Manifest.ModManifestException or IOException)
             {
