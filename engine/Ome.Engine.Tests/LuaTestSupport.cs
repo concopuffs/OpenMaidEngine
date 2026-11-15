@@ -17,6 +17,10 @@ internal sealed class LuaStackBuilder
     public LuaStackBuilder Mod(string id, string files, bool vm = true, bool library = false, params string[] requires)
         => Mod(id, Files(files), vm, library, requires);
 
+    /// <summary>A mod's sources from <c>-- file: name.lua</c> sections of one text, as a reload hands them over.</summary>
+    public static IReadOnlyList<ModSource> Sources(string id, string files)
+        => Files(files).Select(file => new ModSource(id, file.Item1, file.Item2)).ToList();
+
     /// <summary>Files as <c>-- file: name.lua</c> sections of one text.</summary>
     private static IReadOnlyList<(string, string)> Files(string text)
     {

@@ -66,6 +66,11 @@ public sealed partial class VirtualMachine : IInterpreterAccess
     bool IInterpreterAccess.IsNumberedSave(int opcode)
         => _t.TryGetDefinition(opcode, out OpcodeDefinition definition) && definition.CanonicalLabel == "save-numbered-slot";
 
+    // The wait callbacks running (RunWaitCallback, ServiceWaitSettingCallback): a reload waits until none does.
+    private int _waitCallbacks;
+
+    bool IInterpreterAccess.InsideWait => _waitCallbacks > 0;
+
     // ---- maid.vm.call (Lua scripting spec §10) ----
 
     /// <summary>A refusal inside a Lua script call: the innermost call catches it and fails with its message, so it

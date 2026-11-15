@@ -618,8 +618,8 @@ STEPS = {
     "point": _spec(3, 3, "", "point NAME X Y                define a named point for this session"),
     "speed": _spec(1, 1, "", "speed FACTOR                  run the frame clock FACTOR times as fast (port)", "speed"),
     "rand-seed": _spec(1, 1, "", "rand-seed SEED|off            draw op 0x60 from SEED's per-call-site streams, alike on "
-                       "both targets (off: the game's own draws); reports the draws per site since the last "
-                       "rand-seed", "rand"),
+                       "both targets, and each Lua mod's math.random from its own (port) (off: the game's own draws); "
+                       "reports the draws per site and per mod since the last rand-seed", "rand"),
     "dialogs": _spec(0, 0, "", "dialogs                       list the game's open dialogs (native message boxes; "
                      "both: the 終了 dialog)", "dialogs"),
     "answer": _spec(1, 1, "", "answer BUTTON                 press a button of an open dialog (radio buttons too)",

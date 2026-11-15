@@ -317,4 +317,8 @@ public interface IInterpreterAccess
     /// <c>ome.save.writing</c> fires (spec §7.7). The interpreter answers from its opcode table, so the native names
     /// no opcode number.</summary>
     bool IsNumberedSave(int opcode);
+
+    /// <summary>Whether the running instructions are a wait's callback, nested in the instruction that waits (a text
+    /// wait's HISTORY or CALLBACK_SETTING.BIN): a Lua reload is not taken there (spec §13).</summary>
+    bool InsideWait => false;
 }

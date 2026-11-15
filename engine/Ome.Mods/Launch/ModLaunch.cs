@@ -40,11 +40,16 @@ public sealed record ModLaunchOptions(IReadOnlyList<string> ExtraPackages, bool 
 public sealed record ModDiscovery(IReadOnlyList<ModPackage> Packages, IReadOnlyList<string> UserOrder, bool FailedToOpen);
 
 /// <summary>The outcome of startup linking: the layer to mount (null without mods or on failure), the report, and
-/// where it was written.</summary>
+/// where it was written. <paramref name="UnpackedLua"/> gives each unpacked mod that ships Lua by id, with its folder:
+/// the folders <c>--lua-reload</c> watches (Lua scripting spec §13).</summary>
 public sealed record ModLaunchResult(MountedModLayer? Layer, ModLinkReport Report, string? ReportPath, bool Failed,
-                                     bool FromCache, IReadOnlyList<ModStackEntry> Stack)
+                                     bool FromCache, IReadOnlyList<ModStackEntry> Stack,
+                                     IReadOnlyDictionary<string, string>? UnpackedLua = null)
 {
     public static ModLaunchResult None(ModLinkReport report) => new(null, report, null, false, false, []);
+
+    /// <summary>The unpacked mods that ship Lua, empty when none.</summary>
+    public IReadOnlyDictionary<string, string> UnpackedLuaFolders => UnpackedLua ?? new Dictionary<string, string>();
 }
 
 /// <summary>
@@ -170,8 +175,11 @@ public static class ModLaunch
             Directory.CreateDirectory(diagnosticsDirectory);
             File.WriteAllText(reportPath, final.Render() + (stack.Layer is { } layer && stack.FromCache
                 ? $"(linked earlier; cached report follows)\n{layer.ReportText}" : ""));
+            var unpackedLua = packages.Where(package => package.Unpacked && ModLuaLinker.ShipsLua(package))
+                .GroupBy(package => package.Id, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First().Location, StringComparer.Ordinal);
             return new ModLaunchResult(stack.Layer, final, reportPath, stack.Layer == null, stack.FromCache,
-                stack.Layer?.Manifest.Order ?? []);
+                stack.Layer?.Manifest.Order ?? [], unpackedLua);
         }
         finally
         {

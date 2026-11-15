@@ -168,7 +168,7 @@ public partial class Main : Godot.Control
         try
         {
             if (!LinkMods(userArgs, workingDirectory, selectedProfile, profilePersistence, gameRoot.Sys4IniPath, catalog,
-                          _assetStore, _luaRuntime, out _modLayer))
+                          _assetStore, _luaRuntime, out _modLayer, out _unpackedLua))
             {
                 GetTree().Quit(2);
                 return;
@@ -729,6 +729,7 @@ public partial class Main : Godot.Control
             IsBackground = true,
         };
         _engineThread.Start();
+        StartLuaReload(userArgs);   // --lua-reload (Main.LuaReload.cs)
         // --control [--control-file <json>]: the game-driving protocol (Main.Drive.cs).
         if (!_selftest && System.Array.IndexOf(userArgs, "--control") >= 0
             && !StartDriveServer(ArgumentValue(userArgs, "--control-file")))
@@ -979,6 +980,7 @@ public partial class Main : Godot.Control
     public override void _ExitTree()
     {
         StopDriveServer();
+        _luaReload?.Dispose();
         bool vmStopped = true;
         if (_vm != null) _vm.RequestStop();
         CallDeferred(MethodName.ClearAgeCursor);

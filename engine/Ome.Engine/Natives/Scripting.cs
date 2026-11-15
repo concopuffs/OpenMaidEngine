@@ -51,7 +51,8 @@ public sealed partial class Scripting : IDisposable
     public const string SessionStartEvent = "ome.session.start";
 
     private readonly ScriptMemory _memory;
-    private readonly ScriptingSetup _setup;
+    // Not readonly: a reload swaps a mod's files into the stack (Scripting.Reload.cs); nothing else changes it.
+    private ScriptingSetup _setup;
     private readonly ScriptAccess _access;
     private readonly Lazy<BaseModLayout?> _consoleLayout;
     private IInterpreterAccess? _interpreter;
@@ -166,6 +167,9 @@ public sealed partial class Scripting : IDisposable
     {
         LoadedState? loaded = reason == SessionReason.Load ? _scene.Loaded : null;
         EndSession();
+        // A build takes the stack's files as they are, a reload's too (spec §13).
+        _reloadPending = false;
+        _reloadedMods.Clear();
         // Spec §5.7 step 2: a load's state, kept even when no mod ships Lua, so a removed mod's block reaches the next
         // save (spec §11).
         ModState state = TakeState(loaded);

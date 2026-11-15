@@ -21,6 +21,7 @@
 #   .\run-godot.ps1 -LuaErrors continue|halt  what a Lua handler's error does (docs/modding/lua.md)
 #   .\run-godot.ps1 -LuaDev    let a mod folder write base-mod names its [lua] writes list lacks
 #   .\run-godot.ps1 -LuaTrace  log every Lua handler call to the profile's diagnostics/lua-trace.jsonl
+#   .\run-godot.ps1 -LuaReload rebuild the Lua session when a mod folder's lua/ files change, keeping maid.state
 #   .\run-godot.ps1 -Profile kamidori -GameRoot <install>  explicitly select a game profile
 #   .\run-godot.ps1 -Profile himegari -Probe -GameRoot <install>  force a read-only diagnostic run
 #   .\run-godot.ps1 -Doctor     resolve and print prerequisites without building or launching
@@ -41,6 +42,7 @@ param(
     [string]$LuaErrors,
     [switch]$LuaDev,
     [switch]$LuaTrace,
+    [switch]$LuaReload,
     [switch]$TranslationPatch,
     [switch]$Probe,
     [switch]$SelfTest,
@@ -255,6 +257,7 @@ if ($SelfTest) {
     if ($LuaErrors) { $userArgs += @('--lua-errors', $LuaErrors) }
     if ($LuaDev) { $userArgs += '--lua-dev' }
     if ($LuaTrace) { $userArgs += '--lua-trace' }
+    if ($LuaReload) { $userArgs += '--lua-reload' }
     if ($perfLogFile) {
         Write-Host "==> performance log: $perfLogFile" -ForegroundColor Cyan
         $userArgs += @('--perf-log', $perfLogFile)

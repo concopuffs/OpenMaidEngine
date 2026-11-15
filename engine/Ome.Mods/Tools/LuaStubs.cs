@@ -21,7 +21,7 @@ public static class LuaStubs
     public static readonly IReadOnlyDictionary<string, (string Field, string Type, string Doc)> EngineEventFields =
         new Dictionary<string, (string, string, string)>(StringComparer.Ordinal)
         {
-            [Scripting.SessionStartEvent] = ("reason", "\"boot\"|\"title\"|\"load\"", "why the session was built"),
+            [Scripting.SessionStartEvent] = ("reason", "\"boot\"|\"title\"|\"load\"|\"reload\"", "why the session was built"),
             [Scripting.SessionResumedEvent] = ("slot", "integer", "the slot the load read"),
             [Scripting.SaveWritingEvent] = ("slot", "integer", "the slot the save writes"),
         };
@@ -101,7 +101,7 @@ public static class LuaStubs
             ---@field state_version string? the version that wrote the loaded state
 
             ---@class maid.session
-            ---@field reason "boot"|"title"|"load" why the session was built
+            ---@field reason "boot"|"title"|"load"|"reload" why the session was built
             ---@field restoring boolean true while a load restores its frames
 
             ---@class maid.events

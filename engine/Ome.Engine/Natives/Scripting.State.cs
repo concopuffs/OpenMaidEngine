@@ -21,10 +21,13 @@ public sealed partial class Scripting
     private sealed record LoadedState(int Slot, ModState State, bool FullLoad);
 
     /// <summary>Whether a boundary has work for the native before its services: a session to build after a data-only
-    /// load, or <c>ome.session.resumed</c> to fire. The interpreter tests it at every instruction boundary.</summary>
+    /// load, a reload outside any wait (spec §13), or <c>ome.session.resumed</c> to fire. The interpreter tests it at
+    /// every instruction boundary.</summary>
     // Not inside a handler's script call (spec §10): the call refuses the load and the restore that set them, and a
     // session cannot end under its Lua.
-    public bool BoundaryPending => _depth == 0 && (_scene.BuildPending || _scene.ResumedPending);
+    public bool BoundaryPending
+        => _depth == 0 && (_scene.BuildPending || _scene.ResumedPending
+                           || (_reloadPending && _interpreter?.InsideWait != true));
 
     /// <summary><c>maid.session.restoring</c> (spec §11).</summary>
     public bool Restoring => _scene.Restoring;
@@ -115,12 +118,13 @@ public sealed partial class Scripting
 
     /// <summary>
     /// The work of <see cref="BoundaryPending"/>, at the start of an instruction boundary, before its services: the
-    /// session after a data-only load, then <c>ome.session.resumed</c>. Returns a halt reason under
+    /// session after a data-only load, a reload, then <c>ome.session.resumed</c>. Returns a halt reason under
     /// <c>--lua-errors halt</c>, or null.
     /// </summary>
     public string? ServiceBoundary()
     {
         if (_scene.BuildPending && StartSession(SessionReason.Load) is { } halt) return halt;
+        if (_reloadPending && _interpreter?.InsideWait != true && Reload() is { } reloadHalt) return reloadHalt;
         if (!_scene.ResumedPending) return null;
         _scene.ResumedPending = false;
         // Spec §7.3: the boundary comes before the instruction, so its handlers' writes go with that instruction's records.

@@ -1387,6 +1387,7 @@ public sealed partial class VirtualMachine
         // runs; the callback's ret re-runs the wait, which sets it again.
         bool waitPolling = _advTextWaitPolling;
         _advTextWaitPolling = false;
+        _waitCallbacks++;
         try
         {
             // The callback's ops run through the frame's loop (native runs them from its main tick). A halt anywhere
@@ -1400,6 +1401,7 @@ public sealed partial class VirtualMachine
         }
         finally
         {
+            _waitCallbacks--;
             _advTextWaitPolling = waitPolling;
         }
         _cur.Pc = waitingPc;
@@ -1447,8 +1449,8 @@ public sealed partial class VirtualMachine
             }
             Steps++;
             frame.Pc = pc;
-            // Lua scripting spec §5.7, §11: a data-only load's session, and ome.session.resumed after a full load's last
-            // frame, at the first boundary, before its services run anything.
+            // Lua scripting spec §5.7, §11, §13: a data-only load's session, a reload outside any wait, and
+            // ome.session.resumed after a full load's last frame, at the first boundary, before its services run anything.
             if (_scripting is { BoundaryPending: true } && _scripting.ServiceBoundary() is { } pendingHalt)
             {
                 HaltReason ??= pendingHalt;

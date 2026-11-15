@@ -18,14 +18,16 @@ public partial class Main
 
     /// <summary>
     /// Links the profile's mods and the <c>--mod</c> packages. Returns false when the link fails (startup stops with the
-    /// report); on success <paramref name="layer"/> is the layer to mount, or null when no mods are enabled.
+    /// report); on success <paramref name="layer"/> is the layer to mount, or null when no mods are enabled, and
+    /// <paramref name="unpackedLua"/> the unpacked mods that ship Lua, by id with their folders (for --lua-reload).
     /// </summary>
     private static bool LinkMods(IReadOnlyList<string> userArgs, string workingDirectory, SelectedGameProfile selected,
                                  ResolvedGamePersistence persistence, string sys4IniPath, Sys4AssetCatalog catalog,
                                  IAssetStore baseStore, Ome.Engine.Modding.LazyModRuntime luaRuntime,
-                                 out MountedModLayer? layer)
+                                 out MountedModLayer? layer, out IReadOnlyDictionary<string, string> unpackedLua)
     {
         layer = null;
+        unpackedLua = new Dictionary<string, string>();
         ModLaunchOptions options = ModLaunchOptions.Resolve(userArgs, workingDirectory);
         string modsDirectory = Path.Combine(persistence.ProfileRoot, ModLaunch.ModsFolder);
         if (options.NoMods && options.ForgetMods.Count == 0)
@@ -62,6 +64,7 @@ public partial class Main
             return false;
         }
         layer = result.Layer;
+        unpackedLua = result.UnpackedLuaFolders;
         if (layer == null)
         {
             GD.Print("[mods] none enabled");

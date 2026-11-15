@@ -43,6 +43,8 @@ public class SceneReloadTests
             // The Lua script calls running and the innermost one's budget: a call puts them back as it returns or unwinds,
             // so none is running at a reload (Lua scripting spec §10).
             "_modCalls", "_modCallStepsEnd", "_modCallBudget",
+            // The wait callbacks running, where a Lua reload waits: a callback puts it back as it returns or unwinds.
+            "_waitCallbacks",
             // The handler table.
             "_handlers",
             // A wait's flags, set and cleared within the wait; no wait runs at a reload.
@@ -55,8 +57,10 @@ public class SceneReloadTests
         ],
         [typeof(ScriptMemory)] =
         [
-            // A queue lives for the run; the driver's deterministic random draws are the run's.
+            // A queue lives for the run; the driver's deterministic random draws are the run's, the Lua mods' too
+            // (Lua scripting spec §5.6: a session's rebuild does not restart a mod's stream).
             "_queues", "_deterministicRandomSeed", "_deterministicRandomSites", "_deterministicRandomDraws",
+            "_deterministicRandomMods",
             // The scripting native's watched cells, which the link's plan decides (Lua scripting spec §7.3).
             "_watched",
         ],
@@ -145,6 +149,9 @@ public class SceneReloadTests
             "_building",
             // The undeclared writes --lua-dev has logged, once each for the run.
             "_devWrites",
+            // The composition's setup, whose stack a reload gives a mod's new files for the run; and a reload due and the
+            // mods it names, which the next build (the title's after a reset) takes and clears (spec §13).
+            "_setup", "_reloadPending", "_reloadedMods",
             // The trace (--lua-trace): the traced calls running (empty between calls), the run's recent lines, and its
             // file, which the run's first line starts anew.
             "_traced", "_recentTrace", "_traceWriter", "_traceUnwritable",

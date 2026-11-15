@@ -105,6 +105,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
         if (_tick.StatementBlockOpen || _shell.TakeCallbackScript() is not { } callback) return false;
         bool waitPolling = _advTextWaitPolling;
         _advTextWaitPolling = false;
+        _waitCallbacks++;   // Lua scripting spec §13: no reload inside the wait
         try
         {
             switch (RunCallbackScript(callback))
@@ -116,6 +117,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
         }
         finally
         {
+            _waitCallbacks--;
             _advTextWaitPolling = waitPolling;
         }
         RearmAfterWaitCallback();
