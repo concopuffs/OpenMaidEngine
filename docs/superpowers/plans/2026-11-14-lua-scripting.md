@@ -8,7 +8,8 @@ the spike, chose **Lua-CSharp 0.5.8** (`LuaCSharp` on NuGet); milestone 1 built 
 library against the official Lua 5.2 test suite. Milestone 2 built mod state and the session's life across loads
 (§6), milestone 3 events and the base mods (§7), milestone 4 the wider hooks (§8), milestone 5 script calls (§9),
 and milestone 6 the authoring tools: the seeded random streams and `--lua-reload` (§10). §11, before the merge, adds
-the boot and stage events to both base mods and the `example.random-enemies` demo. The backlog keeps the follow-ups:
+the boot and stage events to both base mods and the `example.random-enemies` demo. The branch was merged into
+develop on 2026-11-15. The backlog keeps the follow-ups:
 a hook point survey for each game, more base mod helpers, and Lua-CSharp past 0.5.8.
 
 Paths are relative to `age-reimpl/`.

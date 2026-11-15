@@ -1,13 +1,14 @@
 # Lua scripting design
 
 **Date:** 2026-11-10; accepted 2026-11-14
-**Status:** accepted. Milestone 0, the spike, chose Lua-CSharp on 2026-11-14 (§5.1); milestones 1 to 6 are not
-built (§18). The plan, `docs/superpowers/plans/2026-11-14-lua-scripting.md`, keeps what each milestone measured.
+**Status:** accepted. Milestone 0, the spike, chose Lua-CSharp on 2026-11-14 (§5.1); milestones 1 to 6 (§18) were
+built on `feature/lua-scripting` and merged into develop on 2026-11-15. The plan,
+`docs/superpowers/plans/2026-11-14-lua-scripting.md`, keeps what each milestone measured.
 **Checked against:** `ac843b3b` on `develop`, after the engine layering work was merged. Code references name files
 and members, not lines. Paths are relative to `age-reimpl/`; a short path is under `engine/` (`Natives/` and
 `Persistence/` are `Ome.Engine`'s, and `VirtualMachine*.cs` is `Ome.Engine.Vm`'s).
 **Direction:** `docs/remake-architecture-and-roadmap.md` §3.2–§3.10, which this spec implements in part. The
-backlog's "Runtime scripting (Lua)" item tracks the milestones.
+backlog keeps the follow-ups; §16's future work stays here.
 
 **What already exists.** The roadmap fixes most of the direction: Lua runs beside the AGE VM, selectors stay
 declarative, callbacks run on the VM thread and cannot yield, each mod owns a serializable namespace, and
