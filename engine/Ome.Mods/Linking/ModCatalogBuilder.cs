@@ -98,7 +98,7 @@ public static class ModCatalogBuilder
                         $"warning: record 0 runs at boot (INIT2), but scripts/{script.Name}.oms uses "
                         + $"{string.Join(", ", sceneOps)}; native AGE hangs at boot on a record 0 that shows text or "
                         + "waits for the player. Put a short boot script that ends with exit first in [scripts].names "
-                        + "(docs/modding/new-scenes.md, \"Record 0 runs at boot\")");
+                        + "(docs/modding/packages.md, \"Record 0 runs at boot\")");
                 records.Add(new LinkedRecord(catalogName, script.Name, true, false, IrEncoder.Encode(compiled)));
             }
             catch (Exception error) when (error is OmsSyntaxException or OmsCompileException or InvalidDataException

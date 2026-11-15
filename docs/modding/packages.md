@@ -135,7 +135,7 @@ one site appear (`patching.md`).
 These lists fix the order of the mod's **append catalog** records:
 
 - the records are the scripts in `[scripts].names` order, then the new assets in `[assets].names` order;
-- record 0 runs at boot (`new-scenes.md`), so list your boot script first;
+- record 0, the first script, runs at boot ("Record 0 runs at boot" below), so list a short boot script first;
 - a file in `scripts/` that the list does not name is an error, and so is a new asset that `[assets].names` does
   not name;
 - script names are ASCII letters, digits and `_`, at most 48 characters. Asset names are ASCII basenames with an
@@ -167,6 +167,26 @@ Ship the source as well as the plan, so players can read and rebuild the mod.
 
 One OMS script unit per file, named like its `[scripts].names` entry (`scripts/DBLEXP.oms` holds
 `script "DBLEXP"`). New scripts are compiled into the mod's append catalog. See `new-scenes.md`.
+
+### Record 0 runs at boot
+
+The first name in `[scripts].names` is record 0 of the mod's append catalog. When the engine starts (INIT2, after the
+game's data tables are built), it runs record 0 of every mounted catalog once, in selector order, before the title
+screen. Record 0 is the mod's entry point, for a data edit at boot for example (`new-scenes.md`, "Data edits at
+boot"), and whatever script is listed first runs then:
+
+- **Make record 0 a short script that ends with `exit`.** A record 0 that shows text or waits for the player hangs
+  native AGE at boot. `omp build`, `omp check` and the port's link report warn when record 0 itself does either (a
+  `note` that starts `warning: record 0 runs at boot`). They do not follow a `run` from record 0 into another script.
+- **Do not list a script meant to be called first.** A scene, a script a patch runs, or one that Lua calls
+  ([lua.md](lua.md), "Calling a script") would also run once at boot. Put a small boot script before it:
+
+  ```toml
+  [scripts]
+  names = ["AUTO", "SCENE"]                # AUTO is record 0
+  ```
+
+- A mod that ships new assets but no scripts gets an empty record 0 generated for it.
 
 ### Replacements: `replace/`
 

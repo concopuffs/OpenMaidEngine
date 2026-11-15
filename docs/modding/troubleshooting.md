@@ -81,7 +81,8 @@ most emoji and many accented letters are not in CP932, while straight quotes and
 ## In-game problems
 
 **Native AGE hangs at boot, before the title.** Your record 0, the first `[scripts].names` entry, shows text or waits
-for input. Record 0 runs during boot. Put a short boot script that ends with `exit` first ([new-scenes.md](new-scenes.md)).
+for input. Record 0 runs during boot. Put a short boot script that ends with `exit` first ([packages.md](packages.md),
+"Record 0 runs at boot").
 `omp check` warns about this when record 0 itself shows text or waits; a `run` from record 0 into a scene hangs the
 same way without the warning.
 

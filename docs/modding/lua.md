@@ -493,7 +493,7 @@ end
 - **Your own scripts.** A name your `[scripts]` lists is your script, before a game script of the same name: list
   `WAITER` and call `maid.vm.call("WAITER")`. The link report shows the record's catalog name beside it,
   `calls WAITER ($2$WAITER)`, and the trace names the record (`$2$WAITER.BIN`). The first name of `[scripts]` runs at
-  boot ([new-scenes.md](new-scenes.md), "Record 0 runs at boot"), so do not put a script you call first.
+  boot ([packages.md](packages.md), "Record 0 runs at boot"), so do not put a script you call first.
   `maid.vm.script_id` gives a record's packed id by its catalog name (`$2$WAITER`).
 - **A call cannot wait, save, load, or go on with a load's restore.** When the script reaches a wait (a text or input
   wait, a sleep, a transition, a text reveal, a movie, a dialog), a save (op `0x19e`), a load (op `0x19f` or
