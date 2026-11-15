@@ -430,6 +430,19 @@ public static partial class ManifestReader
             return [];
         }
 
+        /// <summary>A key that takes one string or an array of strings: null when it is absent or of another type (which
+        /// is reported).</summary>
+        public List<string>? StringOrStrings(string key)
+        {
+            object? value = Get(key, false);
+            if (value is null) return null;
+            if (value is string one) return [one];
+            if (value is TomlArray array && array.All(item => item is string))
+                return array.Cast<string>().ToList();
+            Problems.Add($"{Path}{key}: expected a string or an array of strings");
+            return null;
+        }
+
         public TableReader? Table(string key, bool required = false, bool quoted = false)
         {
             object? value = Get(key, required);

@@ -135,11 +135,12 @@ public sealed record LinkedLuaEventFieldEntry(
     [property: JsonPropertyName("access")] string Access,
     [property: JsonPropertyName("at")] string? At);
 
-/// <summary>An event the stack declares (Lua scripting spec §9.2): its owner, and its point unless Lua raises it.</summary>
+/// <summary>An event the stack declares (Lua scripting spec §9.2): its owner, and its points (none when Lua raises
+/// it).</summary>
 public sealed record LinkedLuaEventEntry(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("owner")] string Owner,
-    [property: JsonPropertyName("point")] string? Point,
+    [property: JsonPropertyName("points")] IReadOnlyList<string> Points,
     [property: JsonPropertyName("description")] string? Description,
     [property: JsonPropertyName("fields")] IReadOnlyList<LinkedLuaEventFieldEntry> Fields);
 
@@ -230,7 +231,7 @@ public sealed record LinkedLuaEntry
         Engine = lua.Plan.EngineEvents.ToDictionary(pair => pair.Key,
             pair => (IReadOnlyList<LinkedLuaDueEntry>)pair.Value.Select(Due).ToList(), StringComparer.Ordinal),
         Events = lua.Stack.EventList.Select(gameEvent => new LinkedLuaEventEntry(gameEvent.Name, gameEvent.Owner,
-            gameEvent.Point, gameEvent.Description, gameEvent.Fields.Select(field => new LinkedLuaEventFieldEntry(field.Name,
+            gameEvent.Points, gameEvent.Description, gameEvent.Fields.Select(field => new LinkedLuaEventFieldEntry(field.Name,
                 field.Type.Name(), field.Writable ? "rw" : "r", field.At)).ToList())).ToList(),
         LuaEvents = lua.Plan.LuaEvents.ToDictionary(pair => pair.Key,
             pair => (IReadOnlyList<LinkedLuaDueEntry>)pair.Value.Select(Due).ToList(), StringComparer.Ordinal),
@@ -254,9 +255,9 @@ public sealed record LinkedLuaEntry
             return declaring?.Layout ?? mods.FirstOrDefault(mod => mod.Layout != null
                                                                    && declaring?.Requires.Contains(mod.Id) == true)?.Layout;
         }
-        var events = Events.Select(entry => new GameEvent(entry.Name, entry.Owner, entry.Point, entry.Description,
+        var events = Events.Select(entry => new GameEvent(entry.Name, entry.Owner, entry.Points, entry.Description,
             entry.Fields.Select(field => GameEvent.BuildField(field.Name, field.Type, field.Access, field.At,
-                entry.Point != null, LayoutFor(entry.Owner))).ToList())).ToList();
+                entry.Points.Count > 0, LayoutFor(entry.Owner))).ToList())).ToList();
         return new ModRuntimeStack(mods,
             Handlers.Select(handler => new ModRuntimeHandler(handler.Mod, handler.File, handler.Function)).ToList(), events);
     }

@@ -206,13 +206,14 @@ public abstract partial record FieldLocation
 public sealed record GameEventField(string Name, EventFieldType Type, bool Writable, string? At, FieldLocation? Location);
 
 /// <summary>
-/// An event (spec §9.2): its name, the mod that declares it, the patch point it is raised at, or none when the owner
-/// raises it from Lua (<c>raised_by = "lua"</c>), and its fields.
+/// An event (spec §9.2): its name, the mod that declares it, the patch points it is raised at (one, or more for an
+/// occurrence the game reaches at several instructions), or none when the owner raises it from Lua
+/// (<c>raised_by = "lua"</c>), and its fields.
 /// </summary>
-public sealed record GameEvent(string Name, string Owner, string? Point, string? Description,
+public sealed record GameEvent(string Name, string Owner, IReadOnlyList<string> Points, string? Description,
                                IReadOnlyList<GameEventField> Fields)
 {
-    public bool RaisedByLua => Point == null;
+    public bool RaisedByLua => Points.Count == 0;
 
     public GameEventField? Field(string name)
     {

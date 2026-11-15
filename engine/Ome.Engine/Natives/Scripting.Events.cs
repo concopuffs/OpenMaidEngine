@@ -27,7 +27,8 @@ public sealed partial class Scripting
         GameEvent gameEvent = _setup.Stack.Event(name)
                               ?? throw new ScriptAccessException($"no mod of the stack declares the event '{name}'");
         if (!gameEvent.RaisedByLua)
-            throw new ScriptAccessException($"{name} is raised at its point ({gameEvent.Point}), not from Lua");
+            throw new ScriptAccessException($"{name} is raised at its point{(gameEvent.Points.Count > 1 ? "s" : "")} "
+                                            + $"({string.Join(", ", gameEvent.Points)}), not from Lua");
         if (gameEvent.Owner != modId)
             throw new ScriptAccessException($"{name} is raised by {gameEvent.Owner}, which declares it; {modId} cannot raise it");
         IModSession session = _scene.Session

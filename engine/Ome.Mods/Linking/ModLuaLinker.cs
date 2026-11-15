@@ -50,7 +50,10 @@ public static class ModLuaLinker
     private sealed record Pending(ModHook Hook, HandlerId Handler, int LoadOrder, string? GameEvent = null);
 
     /// <summary>An event the link read, with its place when it is raised at a point.</summary>
-    private sealed record DeclaredEvent(GameEvent Event, (string Script, int Offset, int Site)? Place);
+    /// <summary>A declared event and, unless Lua raises it, the instruction each of its points names.</summary>
+    private sealed record DeclaredEvent(GameEvent Event, IReadOnlyList<EventPlace>? Places);
+
+    private sealed record EventPlace(string Script, int Offset, int Site, string Point);
 
     /// <summary>The cells a watch covers (spec §7.3), and the global it names with its shape.</summary>
     private sealed record WatchedCells(string Watch, CellKind Kind, int Address, int Count, string? Global, int Dimensions,
@@ -206,7 +209,6 @@ public static class ModLuaLinker
                                     + $"([[requires]] id = \"{owner}\")");
                         continue;
                     }
-                    bound = subscribed.Place;
                 }
                 // Spec §7.1: a hook that may skip names an instruction that goes on to the next one.
                 if (hook.Skip && bound is { } skipped && !CheckSkip(mod, where, skipped.Script, skipped.Site, linkBase, report))
@@ -226,11 +228,12 @@ public static class ModLuaLinker
                     handlerIds[runtimeHandler] = id = new HandlerId(handlers.Count);
                     handlers.Add(runtimeHandler);
                 }
-                if (subscribed is { Place: null })
+                if (subscribed is { Places: null })
                     luaEventHooks.Add((new Pending(hook, id, loadOrder), hook.Target));
-                else if (subscribed is { Place: { } place })
-                    pointHooks.Add((new Pending(hook, id, loadOrder, hook.Target), place.Script, place.Offset, place.Site,
-                                    subscribed.Event.Point!));
+                else if (subscribed is { Places: { } places })
+                    foreach (EventPlace place in places)
+                        pointHooks.Add((new Pending(hook, id, loadOrder, hook.Target), place.Script, place.Offset, place.Site,
+                                        place.Point));
                 else if (hook.Form == ModHookForm.Engine) engineHooks.Add((new Pending(hook, id, loadOrder), hook.Target));
                 else if (hook.Form == ModHookForm.Script) scriptHooks.Add((new Pending(hook, id, loadOrder), hookedScript!));
                 else if (hook.Form == ModHookForm.Watch) watchHooks.Add((new Pending(hook, id, loadOrder), watched!));
@@ -427,12 +430,12 @@ public static class ModLuaLinker
             GameEvent gameEvent = entry.Event;
             string where = gameEvent.RaisedByLua
                 ? "raised from Lua"
-                : $"at {gameEvent.Point}"
-                  + (entry.Place is { } place ? $", {TextCatalog.NormalizeScriptName(place.Script)} 0x{place.Site:x}" : "");
+                : "at " + string.Join(" and ", (entry.Places ?? []).Select(place
+                      => $"{place.Point}, {TextCatalog.NormalizeScriptName(place.Script)} 0x{place.Site:x}"));
             IEnumerable<PlannedHandler> subscribers = gameEvent.RaisedByLua
                 ? luaEvents.GetValueOrDefault(gameEvent.Name) ?? []
                 : sites.Values.SelectMany(planned => planned).SelectMany(site => site.Handlers)
-                    .Where(handler => handler.GameEvent == gameEvent.Name);
+                    .Where(handler => handler.GameEvent == gameEvent.Name).Distinct();   // once, however many points
             string fields = string.Join(", ", gameEvent.Fields.Select(field => $"{field.Name} {field.Type.Name()} "
                                                                                + (field.Writable ? "rw" : "r")));
             var listed = subscribers.Select(handler => Describe(handler, withEvent: false)).ToList();
@@ -539,8 +542,8 @@ public static class ModLuaLinker
                             Error($"{where}: {error.Message}");
                             failed = true;
                         }
-                    (string Script, int Offset, int Site)? place = null;
-                    if (declaration.Point is { } point)
+                    List<EventPlace>? places = null;
+                    if (!declaration.RaisedByLua)
                     {
                         if (mod.Manifest.Lua?.HasVm != true)
                         {
@@ -548,8 +551,23 @@ public static class ModLuaLinker
                                   + "([lua] capabilities = [\"vm\"])");
                             failed = true;
                         }
-                        else if (BindPoint(mod, where, point, points, linkBase, scripts, report) is { } bound) place = bound;
-                        else failed = true;
+                        else
+                        {
+                            places = [];
+                            foreach (string point in declaration.Points)
+                                if (BindPoint(mod, where, point, points, linkBase, scripts, report) is { } bound)
+                                    places.Add(new EventPlace(bound.Script, bound.Offset, bound.Site, point));
+                                else failed = true;
+                            // Two points at one instruction would raise the event twice there.
+                            foreach (var shared in places.GroupBy(place => (TextCatalog.NormalizeScriptName(place.Script),
+                                                                            place.Offset)).Where(group => group.Count() > 1))
+                            {
+                                Error($"{where}: {string.Join(" and ", shared.Select(place => place.Point))} name one "
+                                      + $"instruction ({shared.Key.Item1} 0x{shared.First().Site:x}), so the event would be "
+                                      + "raised twice there");
+                                failed = true;
+                            }
+                        }
                     }
                     if (failed)
                     {
@@ -557,7 +575,7 @@ public static class ModLuaLinker
                         continue;
                     }
                     declared[declaration.Name] = new DeclaredEvent(
-                        new GameEvent(declaration.Name, mod.Id, declaration.Point, declaration.Description, fields), place);
+                        new GameEvent(declaration.Name, mod.Id, declaration.Points, declaration.Description, fields), places);
                 }
             }
         }

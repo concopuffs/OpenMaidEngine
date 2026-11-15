@@ -7,12 +7,12 @@ namespace Ome.Mods.Manifest;
 /// checked at link, where the declaring mod's layout resolves the names.</summary>
 public sealed record ModEventFieldDeclaration(string Name, string Type, string Access, string? At);
 
-/// <summary>One <c>[[event]]</c> of a file under <c>events/</c> (Lua scripting spec §9.2): raised at a point, or by
-/// its declaring mod's Lua (<c>raised_by = "lua"</c>).</summary>
-public sealed record ModEventDeclaration(string Name, string? Point, string? Description,
+/// <summary>One <c>[[event]]</c> of a file under <c>events/</c> (Lua scripting spec §9.2): raised at one or more
+/// points, or by its declaring mod's Lua (<c>raised_by = "lua"</c>, no point).</summary>
+public sealed record ModEventDeclaration(string Name, IReadOnlyList<string> Points, string? Description,
                                          IReadOnlyList<ModEventFieldDeclaration> Fields)
 {
-    public bool RaisedByLua => Point == null;
+    public bool RaisedByLua => Points.Count == 0;
 }
 
 public static partial class ManifestReader
@@ -22,8 +22,9 @@ public static partial class ManifestReader
 
     /// <summary>
     /// Reads one <c>events/*.toml</c> file (Lua scripting spec §9.2): one or more <c>[[event]]</c> tables, each with a
-    /// dotted name, exactly one of <c>point</c> and <c>raised_by = "lua"</c>, an optional description, and its
-    /// <c>[[event.field]]</c> entries. Unknown keys are errors, as in the manifest.
+    /// dotted name, exactly one of <c>point</c> (a point's name, or a list of them when the occurrence is reached at more
+    /// than one instruction) and <c>raised_by = "lua"</c>, an optional description, and its <c>[[event.field]]</c>
+    /// entries. Unknown keys are errors, as in the manifest.
     /// </summary>
     public static IReadOnlyList<ModEventDeclaration> ParseEvents(string text, string origin)
     {
@@ -47,16 +48,24 @@ public static partial class ManifestReader
                 entry.Problems.Add($"{entry.Path}name: '{name}' is not a dotted name");
             else if (name.Length > 0 && !names.Add(name))
                 entry.Problems.Add($"{entry.Path}name: the file declares {name} twice");
-            string? point = entry.String("point"), raisedBy = entry.String("raised_by");
+            bool hasPoint = entry.Has("point");
+            List<string>? points = entry.StringOrStrings("point");
+            string? raisedBy = entry.String("raised_by");
             string? description = entry.String("description");
-            if (point != null && raisedBy != null)
+            if (hasPoint && raisedBy != null)
                 entry.Problems.Add($"{where}: an event is raised at its point or by Lua (raised_by = \"lua\"), not both");
-            else if (point == null && raisedBy == null)
+            else if (!hasPoint && raisedBy == null)
                 entry.Problems.Add($"{where}: an event names its point, or raised_by = \"lua\" for one its mod raises");
             if (raisedBy != null && raisedBy != "lua")
                 entry.Problems.Add($"{entry.Path}raised_by: '{raisedBy}' is not \"lua\"");
-            if (point != null && !DottedNamePattern().IsMatch(point))
-                entry.Problems.Add($"{entry.Path}point: '{point}' is not a dotted name");
+            if (points is { Count: 0 })
+                entry.Problems.Add($"{entry.Path}point: the list names no point");
+            var pointNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string point in points ?? [])
+                if (!DottedNamePattern().IsMatch(point))
+                    entry.Problems.Add($"{entry.Path}point: '{point}' is not a dotted name");
+                else if (!pointNames.Add(point))
+                    entry.Problems.Add($"{entry.Path}point: the list names {point} twice");
 
             var fields = new List<ModEventFieldDeclaration>();
             var fieldNames = new HashSet<string>(StringComparer.Ordinal);
@@ -72,7 +81,7 @@ public static partial class ManifestReader
                 fields.Add(new ModEventFieldDeclaration(fieldName, type, access, at));
             }
             entry.RejectUnknown();
-            events.Add(new ModEventDeclaration(name, point, description, fields));
+            events.Add(new ModEventDeclaration(name, points ?? [], description, fields));
         }
         reader.RejectUnknown();
         if (reader.Problems.Count == 0 && events.Count == 0)

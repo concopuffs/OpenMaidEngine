@@ -37,7 +37,7 @@ public sealed class LuaTraceTests : IDisposable
 
     private const string Base = "test-base";
 
-    private static GameEvent Award() => new("test.award", Base, "test.point", null,
+    private static GameEvent Award() => new("test.award", Base, ["test.point"], null,
     [
         GameEvent.BuildField("amount", "int", "rw", "L[0x1]", true, Layout),
         GameEvent.BuildField("unit", "int", "r", "current_unit_id", true, Layout),
@@ -186,7 +186,7 @@ public sealed class LuaTraceTests : IDisposable
     public void ACallInsideACallIsTracedWithTheHandlersItRanInsideAndAFailureWithItsResult()
     {
         Script root = Root();
-        var computed = new GameEvent("test.computed", Base, null, null,
+        var computed = new GameEvent("test.computed", Base, [], null,
             [GameEvent.BuildField("amount", "int", "rw", null, false, Layout)]);
         Scripting native = Native(new LuaStackBuilder()
             .Base(Base, Layout, """

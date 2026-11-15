@@ -31,13 +31,13 @@ public sealed class LuaStubsTests : IDisposable
         ]}
         """);
 
-    private static GameEvent Award() => new("test.award", "test-base", "test.point", "One award.\nAfter the multipliers.",
+    private static GameEvent Award() => new("test.award", "test-base", ["test.point"], "One award.\nAfter the multipliers.",
     [
         GameEvent.BuildField("amount", "int", "rw", "L[0x1]", true, Layout),
         GameEvent.BuildField("unit", "int", "r", "stage_turn_limit", true, Layout),
     ]);
 
-    private static GameEvent Computed() => new("test.computed", "test-base", null, null,
+    private static GameEvent Computed() => new("test.computed", "test-base", [], null,
     [
         GameEvent.BuildField("ratio", "float", "rw", null, false, Layout),
         GameEvent.BuildField("crit", "bool", "r", null, false, Layout),

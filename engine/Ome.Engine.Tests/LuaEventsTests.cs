@@ -41,7 +41,7 @@ public sealed class LuaEventsTests : IDisposable
         => GameEvent.BuildField(name, type, access, at, atPoint, Layout);
 
     /// <summary>An event at <c>test.point</c>: the award in L[1], the unit, its level, and a flag in G[0x201].</summary>
-    private static GameEvent Award() => new("test.award", Base, "test.point", null,
+    private static GameEvent Award() => new("test.award", Base, ["test.point"], null,
     [
         Field("amount", "int", "rw", "L[0x1]"),
         Field("unit", "int", "r", "current_unit_id"),
@@ -50,7 +50,7 @@ public sealed class LuaEventsTests : IDisposable
     ]);
 
     /// <summary>An event its owner raises from Lua.</summary>
-    private static GameEvent Computed() => new("test.computed", Base, null, null,
+    private static GameEvent Computed() => new("test.computed", Base, [], null,
     [
         Field("amount", "int", "rw", null, atPoint: false),
         Field("name", "string", "r", null, atPoint: false),
@@ -195,7 +195,7 @@ public sealed class LuaEventsTests : IDisposable
     {
         Script root = Root();
         // The operand form: arg[2] of the point's instruction is L[1], an integer cell a write changes.
-        var award = new GameEvent("test.award", Base, "test.point", null,
+        var award = new GameEvent("test.award", Base, ["test.point"], null,
         [
             Field("value", "int", "rw", "arg[2]"),
             Field("target", "int", "r", "arg[1]"),
@@ -483,10 +483,19 @@ public sealed class LuaEventsTests : IDisposable
     {
         IReadOnlyList<ModEventDeclaration> events = ManifestReader.ParseEvents(Declaration, "events/test.toml");
         Assert.Equal(["test.award", "test.computed"], events.Select(e => e.Name));
-        Assert.Equal(("test.point", "One award.", false), (events[0].Point, events[0].Description, events[0].RaisedByLua));
+        Assert.Equal(("test.point", "One award.", false), (string.Join(",", events[0].Points), events[0].Description, events[0].RaisedByLua));
         Assert.Equal([new ModEventFieldDeclaration("amount", "int", "rw", "L[0x1]"),
                       new ModEventFieldDeclaration("unit", "int", "r", "current_unit_id")], events[0].Fields);
         Assert.True(events[1].RaisedByLua);
+    }
+
+    [Fact]
+    public void AnEventMayNameAListOfPoints()
+    {
+        ModEventDeclaration declared = Assert.Single(ManifestReader.ParseEvents(
+            "[[event]]\nname = \"a.b\"\npoint = [\"p.first\", \"p.second\"]", "events/x.toml"));
+        Assert.Equal(["p.first", "p.second"], declared.Points);
+        Assert.False(declared.RaisedByLua);
     }
 
     [Theory]
@@ -495,6 +504,10 @@ public sealed class LuaEventsTests : IDisposable
     [InlineData("[[event]]\nname = \"a.b\"\nraised_by = \"game\"", "raised_by: 'game' is not \"lua\"")]
     [InlineData("[[event]]\nname = \"nodots\"\nraised_by = \"lua\"", "name: 'nodots' is not a dotted name")]
     [InlineData("[[event]]\nname = \"a.b\"\npoint = \"p\"", "point: 'p' is not a dotted name")]
+    [InlineData("[[event]]\nname = \"a.b\"\npoint = []", "point: the list names no point")]
+    [InlineData("[[event]]\nname = \"a.b\"\npoint = [\"p.q\", \"p.q\"]", "point: the list names p.q twice")]
+    [InlineData("[[event]]\nname = \"a.b\"\npoint = 3", "point: expected a string or an array of strings")]
+    [InlineData("[[event]]\nname = \"a.b\"\npoint = [\"p.q\"]\nraised_by = \"lua\"", "not both")]
     [InlineData("[[event]]\nname = \"a.b\"\nraised_by = \"lua\"\nwhen = 1", "event[0].when: unknown key")]
     [InlineData("[[event]]\nname = \"a.b\"\nraised_by = \"lua\"\n[[event.field]]\nname = \"x\"\ntype = \"int\"\nwhere = \"L[1]\"",
                 "event[0].field[0].where: unknown key")]

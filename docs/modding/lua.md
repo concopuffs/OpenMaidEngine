@@ -441,7 +441,9 @@ type = "int"                           # access defaults to "r"
 ```
 
 - **`point`** raises the event before the point's instruction, as a point hook runs. A mod that declares one needs
-  `vm`, since its fields read the frame. **`raised_by = "lua"`** instead declares an event the mod raises from its
+  `vm`, since its fields read the frame. When the game reaches the occurrence at more than one instruction, `point`
+  takes a list, `point = ["<a point>", "<another>"]`, and the event is raised before each; its fields must mean the
+  same at every one. Two points of the list may not name one instruction. **`raised_by = "lua"`** instead declares an event the mod raises from its
   own code with `maid.events.emit`, and its fields take no `at`.
 - **`at`** is a field's cell:
 

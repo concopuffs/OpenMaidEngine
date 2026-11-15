@@ -956,7 +956,7 @@ public sealed class ModLuaLinkTests : IDisposable
 
         Assert.Equal(["test.award", "test.computed"], result.Lua.Stack.EventList.Select(gameEvent => gameEvent.Name));
         GameEvent award = result.Lua.Stack.Event("test.award")!;
-        Assert.Equal(("test-base", ExperiencePoint), (award.Owner, award.Point));
+        Assert.Equal(("test-base", ExperiencePoint), (award.Owner, string.Join(",", award.Points)));
         Assert.Equal([new GameEventField("amount", EventFieldType.Int, true, "L[0x1]", new FieldLocation.Local(CellKind.Integer, 1)),
                       new GameEventField("limit", EventFieldType.Int, false, "turn_limit",
                                          new FieldLocation.Global(CellKind.Integer, 0x11, "stage_turn_limit"))], award.Fields);
@@ -974,12 +974,81 @@ public sealed class ModLuaLinkTests : IDisposable
         string cache = Path.Combine(_root, "cache");
         ModLinkCache.Write(cache, "key", SyntheticBase(), result);
         MountedModLayer reopened = ModLinkCache.TryOpen(cache, "key")!;
-        Assert.Equal(result.Lua.Stack.EventList.Select(gameEvent => (gameEvent.Name, gameEvent.Owner, gameEvent.Point)),
-                     reopened.LuaStack.EventList.Select(gameEvent => (gameEvent.Name, gameEvent.Owner, gameEvent.Point)));
+        Assert.Equal(result.Lua.Stack.EventList.Select(gameEvent => (gameEvent.Name, gameEvent.Owner, string.Join(",", gameEvent.Points))),
+                     reopened.LuaStack.EventList.Select(gameEvent => (gameEvent.Name, gameEvent.Owner, string.Join(",", gameEvent.Points))));
         Assert.Equal(result.Lua.Stack.EventList.SelectMany(gameEvent => gameEvent.Fields),
                      reopened.LuaStack.EventList.SelectMany(gameEvent => gameEvent.Fields));
         Assert.Equal(site.Handlers, Assert.Single(reopened.HookPlan.Sites["ADDEXP"]).Handlers);
     }
+
+    /// <summary>A base whose ADDEXP.BIN is <see cref="RunAddExp"/>, with <c>test.first</c> at its 0x0 and
+    /// <c>test.second</c> at its 0x5 (and <paramref name="second"/> moves the second point).</summary>
+    private ModLinkBase TwoPointBase(int second = 0x5)
+    {
+        string fingerprint = OmsPatchPlan.FingerprintOf(RunAddExp);
+        return SyntheticBase() with
+        {
+            ReadScript = name => name.Equals(AddExp, StringComparison.OrdinalIgnoreCase) ? RunAddExp : null,
+            PatchPoints = new OmsPatchPoints([
+                new OmsPatchPoint("test.first", AddExp, null, [new OmsPatchPointSite(fingerprint, 0x0)]),
+                new OmsPatchPoint("test.second", AddExp, null, [new OmsPatchPointSite(fingerprint, second)])]),
+        };
+    }
+
+    private const string TwoPointEvent = """
+        [[event]]
+        name = "test.award"
+        point = ["test.first", "test.second"]
+
+        [[event.field]]
+        name = "amount"
+        at = "L[0x1]"
+        type = "int"
+        """;
+
+    [Fact]
+    public void AnEventAtTwoPointsIsRaisedAtEachAndTheCacheKeepsBoth()
+    {
+        ModPackage subscriber = Mod("subscriber", RequiresBase + EventHook("test.award"),
+            Hooks("function on_award(ctx) maid.log.info(\"amount \" .. ctx.amount) end"), lua: "api = 1");
+        ModLinkResult result = ModLinker.Link(TwoPointBase(), [EventBase(TwoPointEvent), subscriber], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+
+        Assert.Equal(["test.first", "test.second"], result.Lua.Stack.Event("test.award")!.Points);
+        Assert.Equal([(0x0, "test.first", "test.award"), (0x5, "test.second", "test.award")],
+                     result.Lua.Plan.Sites["ADDEXP"].Select(site => (site.Offset, site.Point,
+                                                                     Assert.Single(site.Handlers).GameEvent)));
+        Assert.Contains("event test.award (test-base, at test.first, ADDEXP 0x0 and test.second, ADDEXP 0x5): fields amount "
+                        + "int r; subscribers subscriber hooks.lua:on_award (priority 0)", result.Report.Lua);
+
+        // The handler runs before each instruction: L[1] is 0 before 0x0 sets it, and 3 at 0x5.
+        using (var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+               {
+                   Runtime = _runtime, Stack = result.Lua.Stack, Plan = result.Lua.Plan, Errors = LuaErrorPolicy.Halt,
+               }))
+        {
+            var vm = new VirtualMachine(Sys4Loader.Parse(RunAddExp, HimegariTable, AddExp), HimegariTable, new HeadlessWaits(),
+                                        scripting: scripting);
+            vm.Run();
+            Assert.Equal("exit", vm.HaltReason);
+            Assert.Equal(["amount 0", "amount 3"], scripting.RecentLog
+                .Select(line => line[(line.LastIndexOf(": ", StringComparison.Ordinal) + 2)..])
+                .Where(text => text.StartsWith("amount ", StringComparison.Ordinal)));
+        }
+
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", TwoPointBase(), result);
+        MountedModLayer reopened = ModLinkCache.TryOpen(cache, "key")!;
+        Assert.Equal(["test.first", "test.second"], reopened.LuaStack.Event("test.award")!.Points);
+        Assert.Equal(result.Lua.Plan.Sites["ADDEXP"].Select(site => site.Handlers),
+                     reopened.HookPlan.Sites["ADDEXP"].Select(site => site.Handlers));
+    }
+
+    [Fact]
+    public void TwoPointsOfOneEventOnOneInstructionAreALinkError()
+        => Assert.Equal(["test-base"], Stop(ModLinker.Link(TwoPointBase(second: 0x0),
+                [EventBase(TwoPointEvent), Subscriber("m", EventHook("test.award"))], []),
+            "test.award: test.first and test.second name one instruction (ADDEXP 0x0), so the event would be raised twice there").Mods);
 
     [Fact]
     public void AnEventRaisedFromLuaHasItsSubscribersInTheirOwnOrder()
@@ -1186,7 +1255,7 @@ public sealed class ModLuaLinkTests : IDisposable
         ModLinkResult result = ModLinker.Link(SyntheticBase(), ShippedAward(), []);
         Assert.True(result.Succeeded, result.Report.Render());
         GameEvent award = Assert.Single(result.Lua.Stack.EventList);
-        Assert.Equal(("himegari.experience.award", "himegari-base", ExperiencePoint), (award.Name, award.Owner, award.Point));
+        Assert.Equal(("himegari.experience.award", "himegari-base", ExperiencePoint), (award.Name, award.Owner, string.Join(",", award.Points)));
         Assert.Equal(["amount", "unit", "level"], award.Fields.Select(field => field.Name));
         Assert.Equal(new FieldLocation.Global(CellKind.Integer, 0x66715, "current_unit_id"), award.Field("unit")!.Location);
         var level = Assert.IsType<FieldLocation.Element>(award.Field("level")!.Location);
@@ -1503,7 +1572,7 @@ public sealed class ModLuaLinkTests : IDisposable
         var (withEvent, withPatch, unmodded, linked) = KamidoriAwards(linkBase, scripts, KamidoriAddExp, 7);
 
         GameEvent award = Assert.Single(linked.Lua.Stack.EventList);
-        Assert.Equal(("kamidori.experience.award", "kamidori-base", KamidoriPoint), (award.Name, award.Owner, award.Point));
+        Assert.Equal(("kamidori.experience.award", "kamidori-base", KamidoriPoint), (award.Name, award.Owner, string.Join(",", award.Points)));
         Assert.Equal(["amount", "unit", "character", "level"], award.Fields.Select(field => field.Name));
         Assert.Equal(new FieldLocation.Global(CellKind.Integer, 0x2d2845, "current_character_id"), award.Field("character")!.Location);
         var level = Assert.IsType<FieldLocation.Element>(award.Field("level")!.Location);

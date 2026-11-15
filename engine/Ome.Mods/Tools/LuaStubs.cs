@@ -214,7 +214,7 @@ public static class LuaStubs
             text.Append('\n');
             if (gameEvent.Description is { Length: > 0 } description)
                 foreach (string line in description.Split('\n')) text.Append($"---{line.TrimEnd()}\n");
-            string where = gameEvent.RaisedByLua ? "raised from Lua" : $"raised at {gameEvent.Point}";
+            string where = gameEvent.RaisedByLua ? "raised from Lua" : $"raised at {string.Join(" and ", gameEvent.Points)}";
             text.Append($"---Declared by {gameEvent.Owner}, {where}. Subscribe in the manifest: [[hooks]] event = \"{gameEvent.Name}\".\n");
             text.Append($"---@class {gameEvent.Name}\n---@field event \"{gameEvent.Name}\"\n");
             foreach (GameEventField field in gameEvent.Fields)
