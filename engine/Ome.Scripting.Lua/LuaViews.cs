@@ -279,7 +279,12 @@ internal sealed class HookView(HookContext context, LuaModSession session) : ILu
     {
         var meta = new LuaTable();
         LuaFunction skip = session.Fn("skip", context =>
-            throw new LuaRuntimeException(context.State, "ctx:skip(): this hook did not declare skip = true", 1));
+        {
+            if (context.ArgumentCount == 0 || !context.GetArgument(0).TryRead(out ILuaUserData data) || data is not HookView self)
+                throw new LuaRuntimeException(context.State, "ctx:skip() takes the context: call it with a colon", 1);
+            self.Context.Skip();
+            return context.Return();
+        });
         meta["__index"] = session.Fn("__index", context =>
         {
             var self = Metatables.Self<HookView>(context);
@@ -308,6 +313,7 @@ internal sealed class HookView(HookContext context, LuaModSession session) : ILu
                 "opcode" => context.Return(hook.Opcode),
                 "args" => context.Return(self.Args),
                 "skip" => context.Return(skip),
+                "skipped" => context.Return(hook.Skipped),
                 _ => context.Return(LuaValue.Nil),
             };
         });

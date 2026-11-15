@@ -162,6 +162,35 @@ public sealed class LuaEventsTests : IDisposable
     }
 
     [Fact]
+    public void ASkippedInstructionsEventStillReachesItsSubscribersAndTheirWritesAreMade()
+    {
+        // Spec §7.1: a point hook skips the point's G[0x100] = L[1]; the award's subscriber still runs, its write to the
+        // flag is made, and the copy that would have used the amount does not run.
+        Script root = Root();
+        Scripting native = Native(new LuaStackBuilder()
+            .Base(Base, Layout)
+            .Mod("mod.a", "-- file: a.lua\nfunction skips(ctx) ctx:skip() end")
+            .Mod("mod.b", """
+                -- file: b.lua
+                function on_award(ctx)
+                    assert(ctx.amount == 3 and ctx.flag == true)
+                    ctx.flag = false
+                    ctx.amount = 40
+                end
+                """, false, false, Base)
+            .Event(Award())
+            .Point(root, PointIndex, "mod.a", "a.lua:skips", priority: -1, skip: true)
+            .Point(root, PointIndex, "mod.b", "b.lua:on_award", gameEvent: "test.award"));
+
+        VirtualMachine vm = Run(root, native);
+
+        NoErrors(native);
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(0, vm.Globals[0x201]);
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x100));
+    }
+
+    [Fact]
     public void AFieldWhoseCellHoldsAnotherKindIsAnErrorThatNamesItsLocation()
     {
         Script root = Root();

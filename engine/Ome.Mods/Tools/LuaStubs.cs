@@ -141,6 +141,8 @@ public static class LuaStubs
             ---@field site integer
             ---@field opcode integer
             ---@field args maid.arg[]
+            ---@field skipped boolean whether a handler before the instruction skipped it
+            ---@field skip fun(self: maid.point) pass over the instruction; a hook before it with skip = true
 
             """);
         foreach (var (name, (field, type, doc)) in EngineEventFields.OrderBy(pair => pair.Key, StringComparer.Ordinal))

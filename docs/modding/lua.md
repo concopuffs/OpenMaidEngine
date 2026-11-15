@@ -9,6 +9,7 @@ This version supports:
   the instruction's operands;
 - **site hooks:** a handler runs before or after any instruction of an original script, which the hook names by the
   script's fingerprint and the instruction's offset;
+- **`skip`:** a handler before an instruction passes over it;
 - **the engine events** `ome.session.start`, `ome.session.resumed` and `ome.save.writing`;
 - **game names:** the game's base mod names its cells, and a mod reads any of them and writes the ones it lists,
   without a capability;
@@ -18,8 +19,8 @@ This version supports:
 - **`maid.state`:** a table that is saved beside each numbered save and comes back when that save is loaded;
 - **`maid.log`,** and **the console:** the driver's `lua` step runs a chunk in a running game.
 
-Not yet: hooks on script entry and exit or on cell writes, `skip`, calling a script from Lua, and reloading Lua
-without a restart. A mod that uses one of them fails to link, and the report says that this engine does
+Not yet: hooks on script entry and exit or on cell writes, calling a script from Lua, and reloading Lua without a
+restart. A mod that uses one of them fails to link, and the report says that this engine does
 not build it yet. The design
 behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
@@ -113,8 +114,8 @@ Each `[[hooks]]` table has one form and a `handler`:
 
 | Form | Keys | Needs `vm` |
 |---|---|---|
-| Point | `point = "NAME"`, a named patch point of the game | yes |
-| Site | `script = "NAME.BIN"`, `fingerprint = "sha256:…"`, `site = 0x…`, `when = "before"` or `"after"` ("Site hooks") | yes |
+| Point | `point = "NAME"`, a named patch point of the game; optionally `skip = true` ("Skipping an instruction") | yes |
+| Site | `script = "NAME.BIN"`, `fingerprint = "sha256:…"`, `site = 0x…`, `when = "before"` or `"after"` ("Site hooks"); with `before`, optionally `skip = true` | yes |
 | Engine event | `engine = "EVENT"`, one of the events in "Engine events" | no |
 | Game event | `event = "NAME"`, an event a mod of the stack declares ("Game events") | no |
 
@@ -167,6 +168,8 @@ boundary, every time the game reaches it. The handler gets `ctx`:
 | `ctx.point` | the point's name |
 | `ctx.opcode` | the instruction's opcode |
 | `ctx.args[i]` | operand `i` (from 1): `.value` to read or write it, `.kind` (`"integer"`, `"float"` or `"string"`), `.writable` |
+| `ctx.skipped` | whether a handler before the instruction skipped it, this one included |
+| `ctx:skip()` | pass over the instruction ("Skipping an instruction") |
 
 A write to `ctx.args[i].value` writes the cell the operand names. An immediate or a literal is not writable. The
 context is live only during its call: a `ctx` kept in a global and used later is an error.
@@ -213,6 +216,22 @@ on the instruction:
 A save made while the instruction waits, or while the script it called runs, is loaded later in a new session, so
 the after hook does not run for that load. The link report notes each after hook on such an instruction, and on
 one that never finishes.
+
+### Skipping an instruction
+
+A handler before an instruction can make the game pass over it with `ctx:skip()`. The hook says so in its
+`[[hooks]]` entry with `skip = true`, so the link report lists it ("may skip"); `ctx:skip()` from a hook without
+it is an error. Only a point hook and a site hook with `when = "before"` may skip.
+
+- **The link refuses it** on an instruction that jumps, calls a script, ends its script, waits, saves, loads or
+  restores frames: a skipped conditional jump would be a jump, and skipping the others would break the frames, a
+  save or a load. What each instruction does comes from the port's handlers (the `waits` and `leaves` facts in the
+  opcode reference).
+- **A skipped instruction** runs nothing and writes nothing, and its after hooks do not run.
+- **The other handlers before it still run,** whichever one skipped; from then on `ctx.skipped` reads true, and a
+  skip cannot be undone. A game event at the point still reaches its subscribers, and what they write to its fields
+  is written, though the instruction that would have used it does not run.
+- **The trace** marks the line of the handler that skipped with `"skip":true`.
 
 ## Game names
 
@@ -540,7 +559,8 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 - `hook` is the point, the engine event or the game event; `kind` is `point`, `site`, `engine-event` or `event`;
   a site hook's line has `when` (`before` or `after`); `at` is the script and offset, for a point or a site and for
   an event raised at one.
-- `result` is `ok`, `error`, `budget` or `depth`, with `error` the message's first line.
+- `result` is `ok`, `error`, `budget` or `depth`, with `error` the message's first line; `skip` is true on the line
+  of the handler that skipped the instruction.
 - `within` lists the handlers the call ran inside, innermost first: a subscriber inside an emit has one.
 - `fields` gives each declared field, and an engine event's, before and after the call. A write to a field shows
   here, not in `writes`.

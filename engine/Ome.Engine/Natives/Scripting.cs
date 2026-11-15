@@ -202,12 +202,15 @@ public sealed partial class Scripting : IDisposable
 
     /// <summary>
     /// The <c>before</c> hooks of a hooked instruction (spec §7.1): every handler due there, in order, after the
-    /// boundary's services and before the opcode handler. Returns a halt reason under <c>--lua-errors halt</c>.
+    /// boundary's services and before the opcode handler. <paramref name="skipped"/> says whether one of them skipped
+    /// the instruction; every one runs either way. Returns a halt reason under <c>--lua-errors halt</c>.
     /// </summary>
-    public string? RunBefore(HookSite site, Instruction instruction)
+    public string? RunBefore(HookSite site, Instruction instruction, out bool skipped)
     {
+        skipped = false;
         IModSession? session = _scene.Session;
         if (session == null || _interpreter == null) return null;
+        InstructionSkip? skip = site.MaySkip ? new InstructionSkip() : null;
         // Indexed, not foreach: an enumerator over the interface would be allocated at every hooked instruction.
         IReadOnlyList<PlannedHandler> handlers = site.Planned.Handlers;
         for (int i = 0; i < handlers.Count; i++)
@@ -223,10 +226,11 @@ public sealed partial class Scripting : IDisposable
                 : handler.GameEvent is { } gameEvent
                     ? GameEventContext(gameEvent, site, instruction, _interpreter)
                     : HookContext.ForPoint(site, instruction, _interpreter, _memory.Encoding.CodePage,
-                                           handler.Site ? "before" : null);
+                                           handler.Site ? "before" : null, skip, handler.Skip);
             if (Call(session, handler.Handler, context, frameAccess: handler.EngineEvent == null) is { } halt)
                 return halt;
         }
+        skipped = skip?.Skipped == true;
         return null;
     }
 

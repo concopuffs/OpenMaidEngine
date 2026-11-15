@@ -82,13 +82,13 @@ internal sealed class LuaStackBuilder
     /// <summary>A handler at an instruction: a point hook, or with <paramref name="gameEvent"/> a subscriber of that
     /// event at the instruction's point.</summary>
     public LuaStackBuilder Point(Script script, int index, string mod, string handler, int priority = 0, string point = "test.point",
-                                 string? gameEvent = null)
+                                 string? gameEvent = null, bool skip = false)
     {
         HandlerId id = Handler(mod, handler);
         int offset = script.Instructions[index].Offset;
         if (!_sites.TryGetValue(script.Name, out var sites)) _sites[script.Name] = sites = new();
         int at = sites.FindIndex(site => site.Offset == offset);
-        var planned = new PlannedHandler(id, priority, LoadOrder(mod), GameEvent: gameEvent);
+        var planned = new PlannedHandler(id, priority, LoadOrder(mod), skip, GameEvent: gameEvent);
         if (at < 0) sites.Add(new PlannedSite(offset, offset, point, [planned]));
         else sites[at] = sites[at] with
         {
@@ -99,14 +99,15 @@ internal sealed class LuaStackBuilder
 
     /// <summary>A site hook at an instruction (spec §6.3): in its before list with the points, or with
     /// <paramref name="when"/> <c>after</c> in its after list; each list in the merged order.</summary>
-    public LuaStackBuilder Site(Script script, int index, string mod, string handler, string when = "before", int priority = 0)
+    public LuaStackBuilder Site(Script script, int index, string mod, string handler, string when = "before", int priority = 0,
+                                bool skip = false)
     {
         HandlerId id = Handler(mod, handler);
         int offset = script.Instructions[index].Offset;
         if (!_sites.TryGetValue(script.Name, out var sites)) _sites[script.Name] = sites = new();
         int at = sites.FindIndex(site => site.Offset == offset);
         PlannedSite site = at < 0 ? new PlannedSite(offset, offset, null, []) : sites[at];
-        var planned = new PlannedHandler(id, priority, LoadOrder(mod), Site: true);
+        var planned = new PlannedHandler(id, priority, LoadOrder(mod), skip, Site: true);
         static List<PlannedHandler> With(IReadOnlyList<PlannedHandler> list, PlannedHandler handler)
             => list.Append(handler).OrderBy(h => h.Priority).ThenBy(h => h.LoadOrder).ToList();
         site = when == "after" ? site with { After = With(site.AfterList, planned) } : site with { Handlers = With(site.Handlers, planned) };

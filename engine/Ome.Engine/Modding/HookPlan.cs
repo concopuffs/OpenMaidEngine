@@ -111,6 +111,9 @@ public sealed class HookSite(PlannedSite planned, string script)
 
     /// <summary>Whether it has <c>after</c> hooks, which the loop runs when the opcode handler returns.</summary>
     public bool HasAfter { get; } = planned.AfterList.Count > 0;
+
+    /// <summary>Whether a handler before it declared <c>skip = true</c> (spec §7.1).</summary>
+    public bool MaySkip { get; } = planned.Handlers.Any(handler => handler.Skip);
 }
 
 /// <summary>A script's table (spec §7.5): instruction index to its hooked site, or null for none. A script with no

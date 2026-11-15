@@ -216,6 +216,13 @@ the disassembly lists it; an offset inside an instruction's operands names none.
 the instruction waits or calls a script (a save in between and a later load of it skip the hook), or it ends its
 frame ([lua.md](lua.md), "Site hooks").
 
+**"skip = true on the instruction at 0x… (op …), which …".** The instruction jumps, calls a script, ends its
+script, waits, saves, loads or restores frames, and skipping it would break the game's flow; the message says which.
+Skip a plain instruction near it, or change the flow with a patch ([lua.md](lua.md), "Skipping an instruction").
+
+**"ctx:skip(): this hook did not declare skip = true".** Add `skip = true` to the hook's `[[hooks]]` entry. An after
+hook cannot skip: its instruction has already run.
+
 **"… this engine does not build it yet".** The hook form or `calls` is part of a later version of Lua scripting
 ([lua.md](lua.md), the list at the top).
 

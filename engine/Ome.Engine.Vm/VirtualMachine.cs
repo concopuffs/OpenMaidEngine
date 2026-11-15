@@ -1435,6 +1435,7 @@ public sealed partial class VirtualMachine
             }
             HookSite? hooked = null;
             long sessionMark = -1;
+            bool skipped = false;
             if (_scripting != null)
             {
                 // Lua scripting spec §7.1, §13: the console's chunks, then the instruction's before hooks, after the
@@ -1442,26 +1443,32 @@ public sealed partial class VirtualMachine
                 _scripting.ServiceRequests();
                 if ((hooked = frame.Hooks?.ByIndex[pc]) != null)
                 {
-                    if (_scripting.RunBefore(hooked, frame.Script.Instructions[pc]) is { } luaHalt)
+                    if (_scripting.RunBefore(hooked, frame.Script.Instructions[pc], out skipped) is { } luaHalt)
                     {
                         HaltReason ??= luaHalt;
                         return LoopEnd.Halted;
                     }
-                    if (hooked.HasAfter) sessionMark = _scripting.SessionMark;
+                    if (hooked.HasAfter && !skipped) sessionMark = _scripting.SessionMark;
                 }
             }
-            if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
             Instruction instruction = frame.Script.Instructions[pc];
-            _instructionRaisedScriptError = false;
-            StepResult step = ApplyIgnoredDwords(frame, pc,
-                _checkOpcodeFlow ? CheckedStep(instruction, pc) : Step(instruction, pc));
-            // Spec §7.1: the after hooks, once the handler has returned and the frame goes on, unless the instruction
-            // raised a script error; before the front end's frame turn.
-            if (sessionMark >= 0 && step.Continues && !_instructionRaisedScriptError
-                && _scripting!.RunAfter(hooked!, instruction, sessionMark) is { } afterHalt)
+            StepResult step;
+            // Spec §7.1: a before handler skipped it, so it runs nothing and writes nothing, and fires no after hook. The
+            // link allows a skip only on an instruction that goes on to the next one.
+            if (skipped) step = StepResult.Next;
+            else
             {
-                HaltReason ??= afterHalt;
-                return LoopEnd.Halted;
+                if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, instruction, _depth));
+                _instructionRaisedScriptError = false;
+                step = ApplyIgnoredDwords(frame, pc, _checkOpcodeFlow ? CheckedStep(instruction, pc) : Step(instruction, pc));
+                // Spec §7.1: the after hooks, once the handler has returned and the frame goes on, unless the instruction
+                // raised a script error; before the front end's frame turn.
+                if (sessionMark >= 0 && step.Continues && !_instructionRaisedScriptError
+                    && _scripting!.RunAfter(hooked!, instruction, sessionMark) is { } afterHalt)
+                {
+                    HaltReason ??= afterHalt;
+                    return LoopEnd.Halted;
+                }
             }
             _waits.FrameYield();
             _skip.PaceOp();

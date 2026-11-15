@@ -197,7 +197,6 @@ public sealed class ModLuaLinkTests : IDisposable
     [Theory]
     [InlineData("[[hooks]]\nscript = \"ADDEXP.BIN\"\nwhen = \"enter\"\nhandler = \"hooks.lua:on_award\"", "script entry and exit hooks")]
     [InlineData("[[hooks]]\nwatch = \"current_unit_id\"\nhandler = \"hooks.lua:on_award\"", "watches come with the wider hooks")]
-    [InlineData("[[hooks]]\npoint = \"" + ExperiencePoint + "\"\nskip = true\nhandler = \"hooks.lua:on_award\"", "skip = true comes with")]
     [InlineData("[[hooks]]\nengine = \"ome.text.present\"\nhandler = \"hooks.lua:on_award\"", "is reserved for the localization filter")]
     [InlineData("[[hooks]]\nengine = \"ome.nothing.here\"\nhandler = \"hooks.lua:on_award\"", "is not an engine event")]
     public void TheLinkRefusesByNameWhatThisEngineDoesNotBuild(string hook, string message)
@@ -307,6 +306,27 @@ public sealed class ModLuaLinkTests : IDisposable
     public void ASiteHookOnAScriptTheCatalogLacksIsAnError()
         => Stop(ModLinker.Link(SiteBase(), [Mod("m", SiteHook(0x0, "before", script: "NONE.BIN"), Hooks(Doubles))], []),
                 "the base catalog has no NONE.BIN");
+
+    [Theory]
+    [InlineData("site", 0x0, null)]
+    [InlineData("point", 0xb, null)]
+    [InlineData("site", 0x5, "(op 0x3 call-script), which calls a script and ends its frame, the scene or the run; only")]
+    [InlineData("site", 0x8, "(op 0x72 wait-for-input), which may wait, calls a script and ends its frame, the scene or the run")]
+    [InlineData("site", 0x10, "(op 0x2 exit), which ends its frame, the scene or the run")]
+    public void SkipIsRefusedOnAnInstructionThatDoesNotGoOnToTheNextOne(string form, int site, string? refusal)
+    {
+        // Spec §7.1, from the instruction's facts in the base script.
+        string hook = form == "point" ? PointHook(extra: "skip = true") : SiteHook(site, "before", extra: "skip = true");
+        ModLinkResult result = ModLinker.Link(SiteBase(), [Mod("m", hook, Hooks(Doubles))], []);
+        if (refusal == null)
+        {
+            Assert.True(result.Succeeded, result.Report.Render());
+            Assert.True(Assert.Single(Assert.Single(result.Lua.Plan.Sites["ADDEXP"]).Handlers).Skip);
+            Assert.Contains(result.Report.Lua, line => line.EndsWith("m hooks.lua:on_award (priority 0, may skip)", StringComparison.Ordinal));
+        }
+        else
+            Assert.Contains($"skip = true on the instruction at 0x{site:x} {refusal}", Stop(result, "skip = true").Message);
+    }
 
     [Fact]
     public void AnAfterHookAcrossACallOrAWaitAndOneOnAnExitGetNotes()

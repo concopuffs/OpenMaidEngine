@@ -12,6 +12,15 @@ public enum HookKind
     GameEvent,
 }
 
+/// <summary>Whether a pass over a hooked instruction is skipped (spec §7.1): one per pass, shared by the contexts of its
+/// before list, set by the first <c>ctx:skip()</c> and never cleared.</summary>
+public sealed class InstructionSkip
+{
+    public bool Skipped { get; private set; }
+
+    internal void Set() => Skipped = true;
+}
+
 /// <summary>An operand as <c>ctx.args[i]</c> gives it (spec §7.1): what it holds, and whether a write may change it.
 /// An immediate, a float literal and a string literal are read-only; every cell operand is writable.</summary>
 public enum OperandKind { Integer, Float, String }
@@ -38,9 +47,10 @@ public sealed class HookContext
     }
 
     /// <summary>An instruction's context: a point's, or with <paramref name="when"/> a site hook's (<c>before</c> or
-    /// <c>after</c>).</summary>
+    /// <c>after</c>). Before it, <paramref name="skip"/> is the pass's skip state when a handler there may skip, and
+    /// <paramref name="maySkip"/> says whether this one declared it.</summary>
     public static HookContext ForPoint(HookSite site, Instruction instruction, IInterpreterAccess interpreter, int codePage,
-                                       string? when = null)
+                                       string? when = null, InstructionSkip? skip = null, bool maySkip = false)
         => new(HookKind.Point, site.Planned.Point, [], interpreter, instruction.Args, codePage)
         {
             Script = site.Script,
@@ -48,6 +58,8 @@ public sealed class HookContext
             Site = site.Planned.Site,
             Opcode = instruction.Opcode,
             When = when,
+            SkipState = skip,
+            MaySkip = maySkip,
         };
 
     /// <summary>An engine event's context, with its fields.</summary>
@@ -82,6 +94,39 @@ public sealed class HookContext
 
     /// <summary>An engine event's fields (<c>reason</c>).</summary>
     public IReadOnlyList<KeyValuePair<string, CellValue>> Fields { get; }
+
+    /// <summary>Whether this handler declared <c>skip = true</c> (spec §7.1).</summary>
+    public bool MaySkip { get; private init; }
+    private InstructionSkip? SkipState { get; init; }
+
+    /// <summary><c>ctx.skipped</c>: whether this handler or one before it skipped the instruction.</summary>
+    public bool Skipped
+    {
+        get
+        {
+            if (!Live) throw new ScriptAccessException("this context's call has returned; a context is live only during it");
+            return SkipState?.Skipped == true;
+        }
+    }
+
+    /// <summary>Whether this call skipped the instruction, which the trace names.</summary>
+    public bool SkippedHere { get; private set; }
+
+    /// <summary><c>ctx:skip()</c>: the VM passes over the instruction once its before list has run (spec §7.1). Only a
+    /// handler before it that declared <c>skip = true</c> may; a second skip changes nothing.</summary>
+    public void Skip()
+    {
+        if (!Live) throw new ScriptAccessException("this context's call has returned; a context is live only during it");
+        if (Kind != HookKind.Point) throw new ScriptAccessException($"{Name} has no instruction to skip");
+        if (When == "after")
+            throw new ScriptAccessException("ctx:skip(): an after hook runs once its instruction has run; only a hook before "
+                                            + "it may skip it");
+        if (!MaySkip || SkipState == null)
+            throw new ScriptAccessException("ctx:skip(): this hook did not declare skip = true");
+        if (SkipState.Skipped) return;
+        SkipState.Set();
+        SkippedHere = true;
+    }
 
     /// <summary>A game event's declaration.</summary>
     public GameEvent? Event { get; private init; }

@@ -50,7 +50,6 @@ public static class ModLuaLinker
     {
         ModHookForm.Script => "script entry and exit hooks come with the wider hooks (Lua scripting milestone 4)",
         ModHookForm.Watch => "watches come with the wider hooks (Lua scripting milestone 4)",
-        _ when hook.Skip => "skip = true comes with the wider hooks (Lua scripting milestone 4)",
         _ => null,
     };
 
@@ -181,6 +180,9 @@ public static class ModLuaLinker
                     else bound = BindSite(mod, where, hook, linkBase, scripts, report);
                     pointFails = bound == null;
                 }
+                // Spec §7.1: a hook that may skip names an instruction that goes on to the next one.
+                if (hook.Skip && bound is { } skipped && !CheckSkip(mod, where, skipped.Script, skipped.Site, linkBase, report))
+                    pointFails = true;
                 else if (hook.Form == ModHookForm.Event)
                 {
                     if (brokenEvents.Contains(hook.Target)) continue;   // its declaration's error is reported
@@ -246,7 +248,7 @@ public static class ModLuaLinker
         static bool IsAfter(Pending entry) => entry.Hook is { Form: ModHookForm.Site, When: "after" };
         string Describe(Pending entry) => $"{handlers[entry.Handler.Index]}"
                                           + (entry.GameEvent is { } name ? $" on {name}" : "")
-                                          + $" (priority {entry.Hook.Priority})";
+                                          + $" (priority {entry.Hook.Priority}{(entry.Hook.Skip ? ", may skip" : "")})";
 
         var sites = new Dictionary<string, IReadOnlyList<PlannedSite>>(StringComparer.Ordinal);
         foreach (var byScript in pointHooks.GroupBy(hook => TextCatalog.NormalizeScriptName(hook.Script), StringComparer.Ordinal)
@@ -320,7 +322,7 @@ public static class ModLuaLinker
         string Describe(PlannedHandler planned, bool withEvent = true)
             => $"{handlers[planned.Handler.Index]}"
                + (withEvent && planned.GameEvent is { } name ? $" on {name}" : "")
-               + $" (priority {planned.Priority})";
+               + $" (priority {planned.Priority}{(planned.Skip ? ", may skip" : "")})";
 
         foreach (ModRuntimeMod mod in mods)
         {
@@ -586,25 +588,86 @@ public static class ModLuaLinker
             Error($"the hook was written for {script} {hook.Fingerprint}, but the base catalog's {script} is {fingerprint}");
             return null;
         }
+        if (DecodeAt(bytes, script, site, linkBase.Table, out string? why) is not { } instruction)
+        {
+            Error(why!);
+            return null;
+        }
+        if (BindOriginal(mod, where, script, site, scripts, report) is not { } bound) return null;
+        if (hook.When == "after") NoteAfter(mod, where, script, instruction, linkBase.Table, report);
+        return bound;
+    }
+
+    /// <summary>The instruction at <paramref name="site"/> of a base script, decoded with the profile's table; null
+    /// with <paramref name="why"/> when the script does not decode or no instruction starts there.</summary>
+    private static Instruction? DecodeAt(byte[] bytes, string script, int site, OpcodeTable table, out string? why)
+    {
         Ome.Engine.Model.Script code;   // Script alone is the Ome.Script namespace here
         try
         {
-            code = Sys4Loader.Parse(bytes, linkBase.Table, script);
+            code = Sys4Loader.Parse(bytes, table, script);
         }
         catch (Exception error) when (error is InvalidDataException or Sys4OpcodeDecodeException
                                           or IndexOutOfRangeException or ArgumentException)
         {
-            Error($"{script} does not decode as a script: {error.Message}");
+            why = $"{script} does not decode as a script: {error.Message}";
             return null;
         }
         if (!code.IndexByOffset.TryGetValue(site, out int index))
         {
-            Error($"0x{site:x} is not the start of an instruction of {script}");
+            why = $"0x{site:x} is not the start of an instruction of {script}";
             return null;
         }
-        if (BindOriginal(mod, where, script, site, scripts, report) is not { } bound) return null;
-        if (hook.When == "after") NoteAfter(mod, where, script, code.Instructions[index], linkBase.Table, report);
-        return bound;
+        why = null;
+        return code.Instructions[index];
+    }
+
+    /// <summary>What an instruction that may not be skipped does, from its facts (spec §7.1), in the order the
+    /// refusal lists them.</summary>
+    private static readonly (OpcodeLeaves Leaves, string Text)[] Unskippable =
+    [
+        (OpcodeLeaves.Jumps, "jumps"),
+        (OpcodeLeaves.Calls, "calls a script"),
+        (OpcodeLeaves.Ends, "ends its frame, the scene or the run"),
+        (OpcodeLeaves.Saves, "saves"),
+        (OpcodeLeaves.Loads, "loads"),
+        (OpcodeLeaves.Restores, "restores frames"),
+    ];
+
+    /// <summary>Spec §7.1: <c>skip = true</c> only on an instruction that goes on to the next one and never waits. A
+    /// skipped jump would be a jump, and skipping a call, an end, a wait, a save, a load or a restore would break the
+    /// frame stack, a save or a restore. The facts are those of the instruction in the base script.</summary>
+    private static bool CheckSkip(ModPackage mod, string where, string script, int site, ModLinkBase linkBase,
+                                  ModLinkReport report)
+    {
+        void Error(string message) => report.Add(ModReportClass.Error, mod.Id, script, $"{where}: {message}");
+        if (linkBase.ReadScript(script) is not { } bytes)
+        {
+            Error($"the base catalog has no {script}");
+            return false;
+        }
+        if (DecodeAt(bytes, script, site, linkBase.Table, out string? why) is not { } instruction)
+        {
+            Error(why!);
+            return false;
+        }
+        string at = $"skip = true on the instruction at 0x{site:x} (op 0x{instruction.Opcode:x}";
+        if (!linkBase.Table.TryGetDefinition(instruction.Opcode, out OpcodeDefinition definition)
+            || definition.Waits is not { } waits)
+        {
+            Error($"{at}), which this port does not implement");
+            return false;
+        }
+        var how = new List<string>();
+        if (waits != OpcodeWaits.Never) how.Add(waits == OpcodeWaits.Always ? "waits" : "may wait");
+        foreach (var (leaves, text) in Unskippable)
+            if (definition.Leaves.HasFlag(leaves)) how.Add(text);
+        if (how.Count == 0) return true;
+        string listed = how.Count == 1 ? how[0] : string.Join(", ", how.Take(how.Count - 1)) + " and " + how[^1];
+        Error($"{at} {definition.CanonicalLabel}), which {listed}; only an instruction that goes on to the next one may be "
+              + "skipped: a skipped jump would be a jump, and skipping the others would break the frame stack, a save or a "
+              + "restore");
+        return false;
     }
 
     /// <summary>Spec §7.1: an <c>after</c> hook fires once its instruction has finished. One that waits, or calls a

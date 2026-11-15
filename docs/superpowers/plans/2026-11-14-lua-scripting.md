@@ -855,7 +855,7 @@ An award in play needs a battle; the install tests run the same native on `ADDEX
 
 ## 8. Milestone 4: wider hooks
 
-Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; pieces 1 and 2 are built (§8.1, §8.2):
+Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; pieces 1 to 3 are built (§8.1–§8.3):
 
 1. **The two opcode facts** (spec §7.1): `waits` (`always`, `may` or `never`) and `leaves` (any of `falls`, `jumps`,
    `calls`, `ends`, `saves`, `loads`, `restores`) for every opcode the port implements, in `vm-map/opcodes.toml`.
@@ -946,3 +946,28 @@ Built 2026-11-15 (spec §6.3, §7.1, §7.4, §7.6):
   text), `LuaStateTests.AnAfterHookDoesNotFireWhenALoadRebuiltTheSessionDuringItsInstruction`, and in
   `ModLuaLinkTests` the binding, the lists and the cache, the three refusals and the missing script, the notes, and
   on the install a site hook through the guide's patch. Full suite 2298.
+
+### 8.3 `skip`
+
+Built 2026-11-15 (spec §7.1):
+
+- **The link** (`CheckSkip`). `skip = true` on a point or a site `before` links when the instruction at the bound
+  original offset, decoded in the base script, never waits and leaves only by falling through. Otherwise the link
+  stops, naming what the instruction does from its facts (§8.1): "skip = true on the instruction at 0x5 (op 0x3
+  call-script), which calls a script and ends its frame, the scene or the run; only an instruction that goes on to the
+  next one may be skipped…". An opcode the port does not implement is refused too. The report's handler lists add
+  "may skip" (spec §7.1: the loader sees it and the report lists it).
+- **One skip state per pass.** `RunBefore` gives every context of the before list one `InstructionSkip` when a
+  handler there declared skip (`HookSite.MaySkip`), and reports it through `out bool skipped`. `ctx:skip()` sets it
+  (an error from a hook without `skip = true`, from an after hook, or called without the colon); `ctx.skipped`
+  reads it. Every handler of the list runs either way, a game event's subscribers included.
+- **The loop** passes over a skipped instruction as `StepResult.Next`: no opcode handler, no step trace, no flow
+  check, no after list. The link's refusal is what keeps that a plain fall-through.
+- **The trace** writes `"skip": true` on the line of the handler that skipped (`HookContext.SkippedHere`).
+- **Stubs and guide.** `maid.point` gets `skipped` and `skip`; `lua.md` has "Skipping an instruction", and
+  `troubleshooting.md` the two errors.
+
+Tests: `LuaHooksTests.ASkipPassesOverTheInstructionAndEveryHandlerBeforeItStillRuns`,
+`LuaEventsTests.ASkippedInstructionsEventStillReachesItsSubscribersAndTheirWritesAreMade`, and
+`ModLuaLinkTests.SkipIsRefusedOnAnInstructionThatDoesNotGoOnToTheNextOne` (5 cases: a mov at a site and at a point
+link; a call, the ADV wait and an exit are refused). Full suite 2304.

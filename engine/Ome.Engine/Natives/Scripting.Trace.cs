@@ -159,6 +159,7 @@ public sealed partial class Scripting
                 _ => "error",
             });
             if (error != null) json.WriteString("error", FirstLine(error.Message));
+            if (context.SkippedHere) json.WriteBoolean("skip", true);   // spec §7.1: the handler that skipped
             // Spec §12: the handlers it ran inside, innermost first.
             if (_traced.Count > 0)
             {

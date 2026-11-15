@@ -8,7 +8,8 @@ using Ome.Scripting.Lua;
 
 /// <summary>
 /// Milestone 4 of docs/superpowers/specs/2026-11-10-lua-scripting-design.md, the wider hooks, over synthetic scripts
-/// and hand-built stacks (the link's output): site hooks and <c>after</c> (§7.1) and their order (§7.4). The link's
+/// and hand-built stacks (the link's output): site hooks and <c>after</c> (§7.1), <c>skip</c> (§7.1) and their order
+/// (§7.4). The link's
 /// side is in <see cref="ModLuaLinkTests"/>, a load across an <c>after</c> hook in <see cref="LuaStateTests"/>.
 /// </summary>
 public sealed class LuaHooksTests : IDisposable
@@ -46,7 +47,8 @@ public sealed class LuaHooksTests : IDisposable
         => ScriptAssembler.Assemble(Table, name, code.ToList(), []);
 
     private static void NoErrors(Scripting native)
-        => Assert.DoesNotContain(native.RecentLog, line => line.Contains(" error ", StringComparison.Ordinal));
+        => Assert.True(!native.RecentLog.Any(line => line.Contains(" error ", StringComparison.Ordinal)),
+                       string.Join("\n", native.RecentLog));
 
     // ------------------------------------------------------------------------------------------- sites and after (§7.1)
 
@@ -164,6 +166,58 @@ public sealed class LuaHooksTests : IDisposable
         Assert.Equal((3, 3), (vm.Globals[0x121], vm.Globals[0x402]));
         Assert.Equal(1, vm.Globals[0x403]);                       // the error was INNER's instruction's, not the call's
         NoErrors(native);
+    }
+
+    // ------------------------------------------------------------------------------------------- skip (§7.1)
+
+    [Fact]
+    public void ASkipPassesOverTheInstructionAndEveryHandlerBeforeItStillRuns()
+    {
+        // ROOT: G[0x100] = 5 (skipped); G[0x101] = G[0x100]; exit.
+        Script root = Assemble("ROOT.BIN", (Mov, [G(0x100), Imm(5)]), (Mov, [G(0x101), G(0x100)]), (0x2, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Mod("mod.a", """
+                -- file: a.lua
+                function skips(ctx)
+                    assert(not ctx.skipped)
+                    ctx:skip()
+                    ctx:skip()   -- a second skip changes nothing
+                    assert(ctx.skipped)
+                end
+                """)
+            .Mod("mod.b", """
+                -- file: b.lua
+                function later(ctx)
+                    assert(ctx.skipped, "a handler before this one skipped")
+                    local ok, e = pcall(ctx.skip, ctx)
+                    assert(not ok and tostring(e):find("did not declare skip = true"), tostring(e))
+                    ok, e = pcall(ctx.skip)
+                    assert(not ok and tostring(e):find("call it with a colon"), tostring(e))
+                    maid.vm.g[0x200] = 1
+                end
+                function after(ctx) maid.vm.g[0x201] = 1 end
+                function after_next(ctx)
+                    local ok, e = pcall(ctx.skip, ctx)
+                    assert(not ok and tostring(e):find("only a hook before it may skip it"), tostring(e))
+                    assert(ctx.skipped == false)
+                    maid.vm.g[0x202] = 1
+                end
+                """)
+            .Point(root, 0, "mod.a", "a.lua:skips", skip: true)
+            .Site(root, 0, "mod.b", "b.lua:later", priority: 1)
+            .Site(root, 0, "mod.b", "b.lua:after", "after")
+            .Site(root, 1, "mod.b", "b.lua:after_next", "after"), trace: true);
+
+        VirtualMachine vm = Run(root, native);
+
+        Assert.Equal("exit", vm.HaltReason);
+        NoErrors(native);
+        Assert.Equal((0, 0), (vm.Globals.GetValueOrDefault(0x100), vm.Globals.GetValueOrDefault(0x101)));   // wrote nothing
+        Assert.Equal((1, 0, 1), (vm.Globals[0x200], vm.Globals.GetValueOrDefault(0x201), vm.Globals[0x202]));   // no after
+        NoErrors(native);
+        // The trace names the handler that skipped, and only it.
+        Assert.Contains("\"skip\":true", Assert.Single(native.RecentTrace, line => line.Contains("a.lua:skips")));
+        Assert.Single(native.RecentTrace, line => line.Contains("\"skip\":true"));
     }
 
     [Fact]
