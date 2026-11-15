@@ -96,6 +96,9 @@ public sealed partial class Scripting : IDisposable
     private long _sessionsEnded;
     // How many handler calls, builds and chunks are running: Lua on the stack (spec §13).
     private int _depth;
+    // Whether a session is being built: init.lua and the ome.session.start handlers, where maid.vm.call is refused
+    // (spec §10).
+    private int _building;
     // Whether the running call may read the frame's locals: a point hook or a console chunk, not an engine event.
     private bool _frameAccess;
 
@@ -169,12 +172,14 @@ public sealed partial class Scripting : IDisposable
         if (!_setup.Stack.HasLua) return null;   // gate 1: no mod ships Lua, so no runtime
         // Spec §7.3: the build's writes and its start handlers' go with the next instruction's records.
         _looseDepth++;
+        _building++;
         try
         {
             return BuildSession(reason, state);
         }
         finally
         {
+            _building--;
             _looseDepth--;
         }
     }
@@ -274,13 +279,17 @@ public sealed partial class Scripting : IDisposable
             FrameCause.TopScene => "root",
             FrameCause.RootReload => "title",
             FrameCause.SaveRestore => "restore",
+            FrameCause.ModCall => "mod",
             _ => "call",
         };
+        // Spec §7.2, §10: a frame a handler called names the handler's mod, which is running while the frame starts and
+        // returns; a base mod's helper calls for the mod that called it.
+        string? caller = cause == FrameCause.ModCall && _running is { } running ? _setup.Stack[running].ModId : null;
         for (int i = 0; i < handlers.Count; i++)
         {
             PlannedHandler handler = handlers[i];
             if (!IsOn(session, handler.Handler)) continue;
-            HookContext context = HookContext.ForScript(script, enter ? "enter" : "exit", why);
+            HookContext context = HookContext.ForScript(script, enter ? "enter" : "exit", why, caller);
             if (Call(session, handler.Handler, context, frameAccess: true) is { } halt) return halt;
         }
         return null;
@@ -354,20 +363,24 @@ public sealed partial class Scripting : IDisposable
         TracedCall? traced = TraceBegin(handler, context);
         ModScriptException? failure = null;
         string? halt;
+        // Spec §10: a script the handler called that ended the scene or the run unwinds past it; the call is abandoned.
+        bool ended = false;
         try
         {
             session.Invoke(handler, context);
             _scene.FailuresInARow.Remove(handler.Index);
             halt = null;
+            ended = true;
         }
         catch (ModScriptException error)
         {
             failure = error;
+            ended = true;
             halt = Failed(handler, error, Where(context));
         }
         finally
         {
-            if (traced != null) TraceEnd(traced, failure);
+            if (traced != null) TraceEnd(traced, failure, abandoned: !ended);
             context.Live = false;
             _frameAccess = outerFrameAccess;
             _running = outerRunning;

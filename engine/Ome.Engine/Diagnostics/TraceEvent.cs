@@ -2,7 +2,9 @@ using Ome.Engine.Model;
 namespace Ome.Engine.Diagnostics;
 
 public enum TraceEventKind { Step, FrameEnter, FrameExit, CallScript, Stub, UnsupportedOpcode, Halt }
-public enum FrameCause { TopScene, CallScript, RootReload, SaveRestore }
+/// <summary>Why a frame was entered. <see cref="ModCall"/>: a Lua handler called its script through <c>maid.vm.call</c>
+/// (Lua scripting spec §10).</summary>
+public enum FrameCause { TopScene, CallScript, RootReload, SaveRestore, ModCall }
 
 /// <summary>An engine diagnostic fact. A <c>readonly struct</c> with a Kind discriminator and a shared
 /// field set — no per-event heap allocation. Only the fields relevant to a Kind are populated; the

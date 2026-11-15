@@ -6,8 +6,8 @@ design's home. This plan keeps what each milestone measured and what that settle
 **Status:** milestones 0 to 4 are done (2026-11-14 and 2026-11-15); 0 to 3 are the first release. Milestone 0,
 the spike, chose **Lua-CSharp 0.5.8** (`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the
 library against the official Lua 5.2 test suite. Milestone 2 built mod state and the session's life across loads
-(§6), milestone 3 events and the base mods (§7), and milestone 4 the wider hooks (§8). Milestones 5 and 6 are not
-built; the backlog's "Runtime scripting (Lua)" item lists them.
+(§6), milestone 3 events and the base mods (§7), and milestone 4 the wider hooks (§8). Milestone 5, script calls,
+is being built (§9); milestone 6 is not. The backlog's "Runtime scripting (Lua)" item lists them.
 
 Paths are relative to `age-reimpl/`.
 
@@ -1105,3 +1105,82 @@ Built 2026-11-15 (spec §17, §18):
 Tests: full suite 2331.
 
 With it milestone 4 is done: gate 6, and the held cases of gates 3, 5, 8 and 12.
+
+## 9. Milestone 5: script calls
+
+Being built on `feature/lua-scripting` (spec §10, §18), in four pieces; piece 1 is built (§9.1):
+
+1. **The call and its refusals at run time**: `maid.vm.call(script)` runs a script the mod's `[lua] calls` lists as
+   a nested frame with the cause `mod`, under a step budget; a wait, a save, a load, an op `0xae` during a restore and
+   a script error refuse it, naming the instruction; a failed call puts the statement block back; a script that ends
+   the scene or the run unwinds past every Lua frame; the call is refused in the console, `init.lua` and an
+   `ome.session.start` handler; the nesting cap measured again.
+2. **The check ahead** (spec §10, "Checked ahead"): the link walks each listed script's static call graph with the
+   opcode facts. It fails on an opcode that always waits, saves or loads, and warns on one that may wait, on a
+   `call-script` whose id comes from a cell, and on an op `0xae`.
+3. **The base mods' helpers** (spec §9.3): where a game has a wait-free script for a change, its base mod's helper
+   calls it.
+4. **The whole**: the guide, the stubs, gate 9 with a port check.
+
+### 9.1 The call and its refusals
+
+Built 2026-11-15:
+
+- **The seam.** `IVmAccess.Call(script)` on a mod's face; `IInterpreterAccess.Call(name, instructions)` on the
+  interpreter (`VirtualMachine.Scripting.cs`). The face (`Scripting.CallScript`, in `Scripting.Access.cs`) checks, in
+  order: the console (its face, or any Lua under a console chunk, `_consoleDepth`), the mod's list
+  (`ModRuntimeMod.Calls`, catalog names without `.BIN`, carried in the link cache's `calls`), a session build
+  (`_building`: `init.lua`, `ome.session.start` and the subscribers of events they raise), and a handler running. Each
+  refusal is a `ScriptAccessException`, so `pcall` catches it.
+- **The run.** The interpreter resolves the script by name, refuses past `VmOptions.CallDepthCap` frames, and runs
+  `RunFrame` with `FrameCause.ModCall`. That cause gives a script hook's `ctx.cause = "mod"` with `ctx.mod`, the mod
+  of the running handler: a base mod's helper calls for the mod that called it. Frames the called script calls have
+  the cause `call`. A `ModCall` frame puts the hooked frame's hotspot owner (`InteractiveFrame`) back as it found it.
+- **The unwind.** The outcomes become the interpreter's own exceptions: a return to title
+  `RootReloadRequestedException`, a stop or an exit request `ProcessExitRequestedException`, a halt `VmHaltException`.
+  The session's callback keeps them (`LuaModSession.Fn`), so they pass `pcall` and every Lua frame;
+  `Scripting.Call` lets them through, its trace line saying `"result":"abandoned"`; the hooked frame's `RunFrame`
+  turns the first two back into its outcome, and `Run` takes the halt.
+- **The refusals** are a VM-private `ModCallRefusedException`, which the innermost call catches and turns into a
+  `ScriptAccessException` reading `calling SUB failed: SUB.BIN@0x5 (op 0xc8 sleep) waits (Sleep), and a called
+  script cannot wait`:
+  - **Waits.** With Lua in the stack the VM calls the waits through `ModCallWaits` (`engine/Ome.Engine.Vm/`), which
+    implements every member of `IInputAndWaits` itself and refuses each member on its `Waits` list while a call runs:
+    the dialogs (`ShowDiagnosticMessage`, `ShowScriptError`, `EditFullwidthString`), the sleeps, the timed-callback
+    wait, the modal movie, the transitions (`WaitForForegroundTransition` and the four surface transitions), the text
+    reveal, the three text waits, the hidden-window wait. `NotWaits` has the rest: routing, warnings, the frame
+    context, `FrameYield`, the scene reset and the interrupt, the presents, the input services, the clock, the
+    cursor. Without Lua the VM calls the waits directly.
+  - **A script error** is refused in the VM's `ShowScriptError` before the box, with the error's text.
+  - **Saves, loads and the restore** are refused before the instruction's hooks, from the opcode facts: `leaves`
+    with `saves` or `loads`, or `restores` while `SavesAndSettings.RestoringFrames` is set.
+  - **The budget**: `ModLimits.CallInstructions`, 1,000,000 script instructions by default, the frames the script
+    calls included; a call inside a call keeps the outer's end.
+- **What a refused call leaves.** The cells keep what the script wrote. The statement block goes back as the call
+  found it (`EngineTick.StatementBlock`, `RestoreStatementBlock`). The rest of what a waiting handler sets before it
+  reaches the wait stays as it is; the check ahead (piece 2) exists so a released mod never gets there:
+  - op `0x72` and op `0xfa`: the skip native's text-wait entry (`EnterTextWait`: read skip applied, held triggers
+    dropped unless fast-forward), the page's wait begun on its layout (`TextManager.BeginPageWait`; the indicator is
+    stopped again), the hotspots armed;
+  - op `0x6e` and op `0x196`: the run laid out and its reveal begun, which the next wait finishes;
+  - op `0x20f`: a held click handed to the next modal movie (`OfferHeldTriggersToModalMovie`);
+  - op `0x1b4`: the diagnostic text kept, not cleared;
+  - ops `0xcd` and `0xd5`: the timed callbacks' state as the dispatch left it.
+- **While it runs**, a queued callback script (`CALLBACK_SETTING.BIN`, `CALLBACK_WINDOW.BIN`) stays queued
+  (`ServiceInstructionBoundary`), the console's chunks wait (`ServiceRequests`, `_depth`), and so does a session's
+  build at a boundary (`BoundaryPending` is false while Lua runs).
+- **The trace**: a handler's line lists the scripts it called (`"calls":[{"script":"SUB.BIN","result":"ok"}]`, or
+  `refused` with the error, or `abandoned`); a script hook's line for a called frame has `"cause":"mod"` and
+  `"caller"`.
+- **The nesting cap**, measured again (spec §5.5): one level through a call (a handler, the call, the frame, its
+  instruction loop and its `enter` hook) takes 6,992 B of C# stack in a Release build and 8,128 B in Debug; a frame of
+  `call-script` takes 2,400 B and 3,888 B. The cap of 32 handlers is about 220 KiB, with the VM's 64 frames about
+  150 KiB more, of the engine thread's 8 MiB (`godot/Main.cs`). The cap stays 32.
+- **Tests.** `LuaCallsTests` (17): a wait-free call with its result, the cause `mod` and a hook inside it, and the
+  trace; a script the list lacks, one not installed, no name; the refusals of a sleep, a text wait, a diagnostic box, a
+  modal movie, a save and both loads, the cells keeping the script's writes; a script error, with no box; the statement
+  block put back, and a callback script queued inside the call run after it; `init.lua`, `ome.session.start` and the
+  console; a return to title, an exit request, a stop and a halt each abandoning the handler past `pcall`; the budget;
+  the nesting cap on an 8 MiB thread. `ModCallWaitsTests` (2): every member on one list and implemented by the guard,
+  and inside a call each wait refused and every other member passed on. `LuaStateTests` (1): op `0xae` in a script
+  called during a restore fails the call, and the restore completes. Full suite 2351.

@@ -189,6 +189,15 @@ public interface IVmAccess
 
     /// <summary>A catalog name (<c>ADDEXP</c> or <c>ADDEXP.BIN</c>) to its packed id, or null.</summary>
     double? ScriptId(string name);
+
+    /// <summary>
+    /// <c>maid.vm.call</c> (spec §10): run a script the mod's <c>[lua] calls</c> lists (<c>ADDEXP</c> or <c>ADDEXP.BIN</c>)
+    /// as a nested frame, and return when it exits. A handler that the interpreter invoked at an instruction may call:
+    /// a hook, a watch or an event; the console, <c>init.lua</c> and an <c>ome.session.start</c> handler may not. A refusal,
+    /// and a call the script refused (a wait, a save, a load, a restore, a script error, the budget), is a
+    /// <see cref="ScriptAccessException"/>; a script that ends the scene or the run does not return.
+    /// </summary>
+    void Call(string script);
 }
 
 /// <summary>What a cell or an operand holds, as Lua sees it: an integer or a float as a number, or a string.</summary>
@@ -293,6 +302,16 @@ public interface IInterpreterAccess
 
     /// <summary>The packed id of a catalog script, or null.</summary>
     uint? ScriptId(string name);
+
+    /// <summary>
+    /// <c>maid.vm.call</c> (spec §10): run the catalog script <paramref name="name"/> (no <c>.BIN</c>) as a nested frame
+    /// of the running one, as <c>call-script</c> runs it, for at most <paramref name="instructions"/> instructions. A
+    /// wait, a save, a load, an op 0xae while a restore is pending, a script error, the budget, the frame cap or a script
+    /// that is not installed refuses the call: a <see cref="ScriptAccessException"/> naming the instruction, with the
+    /// statement block put back as the call found it. A frame that returns to title, stops or halts does not return:
+    /// the interpreter's own unwind passes the caller and every Lua frame above it.
+    /// </summary>
+    void Call(string name, long instructions);
 
     /// <summary>Whether <paramref name="opcode"/> is the numbered save (op 0x19e in both games), before which
     /// <c>ome.save.writing</c> fires (spec §7.7). The interpreter answers from its opcode table, so the native names

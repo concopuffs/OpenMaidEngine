@@ -600,7 +600,8 @@ each script's hook table (`HooksFor`, which a frame takes when it is entered), t
 failure count that switches a handler off, `diagnostics/lua.log` and the notices the front end polls. It creates the
 runtime only when a mod ships Lua or the console asks (`LazyModRuntime`). Its partials: `Access` builds each mod's
 `IScriptAccess` face over the script memory native and the interpreter (`IInterpreterAccess`, which `VirtualMachine.Scripting.cs`
-implements); `Console` queues the driver's `lua` chunks and runs them at an instruction boundary or inside a wait
+implements, `maid.vm.call` included: spec §10), and checks a call's list and where it is made; while a call runs, the
+VM calls the waits through `engine/Ome.Engine.Vm/ModCallWaits.cs`, which refuses each member that waits; `Console` queues the driver's `lua` chunks and runs them at an instruction boundary or inside a wait
 (`ServiceRequests`, which `InputAndWaits.ServiceAfterRequests` calls after each batch of requests); `State` is the
 mods' state and the session's life across loads: the save record the save native asks for at op `0x19e`
 (`SAVEnn.modstate.json`, which the port's `SidecarNativeDatStore` writes beside the save), the load's report, each

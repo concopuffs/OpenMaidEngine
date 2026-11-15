@@ -50,6 +50,8 @@ public sealed record ModLimits
     public long HandlerInstructions { get; init; } = 1_000_000;
     public long StartupInstructions { get; init; } = 10_000_000;
     public int NestingCap { get; init; } = 32;
+    /// <summary>The script instructions one <c>maid.vm.call</c> may run, its called frames' included (spec §10).</summary>
+    public long CallInstructions { get; init; } = 1_000_000;
     /// <summary>The characters of one mod's serialized state.</summary>
     public int StateCharacters { get; init; } = 1 << 20;
     /// <summary>Tables nested in one mod's state, its own table counting as the first.</summary>

@@ -69,6 +69,19 @@ public sealed class EngineTick
         _timeline?.Event("statement-block", new() { ["active"] = false });
     }
 
+    /// <summary>The block's state: whether the outermost block is open, and how many are open inside it.</summary>
+    public (bool Open, int Depth) StatementBlock => (_scene.StatementBlockOpen, _scene.StatementBlockDepth);
+
+    /// <summary>Put the block back as <see cref="StatementBlock"/> read it: a Lua script call that fails leaves the block
+    /// as it was when the call started (Lua scripting spec §10), since the frames that opened it are gone.</summary>
+    public void RestoreStatementBlock((bool Open, int Depth) block)
+    {
+        bool changed = block.Open != _scene.StatementBlockOpen;
+        _scene.StatementBlockOpen = block.Open;
+        _scene.StatementBlockDepth = block.Depth;
+        if (changed) _timeline?.Event("statement-block", new() { ["active"] = block.Open });
+    }
+
     /// <summary>A root reload abandons every open block with its frames.</summary>
     public void ResetScene() => _scene = new();
 }

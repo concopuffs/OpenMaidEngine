@@ -121,8 +121,9 @@ public sealed class LuaScriptingTests : IDisposable
                     local frames = maid.vm.frames()
                     assert(#frames == 1 and frames[1].script == "ROOT.BIN" and #maid.vm:frames() == 1)
                     assert(maid.vm.script_id("ROOT") == maid.vm:script_id("ROOT"))
+                    -- milestone 5: a call needs the script in [lua] calls (LuaCallsTests has the rest)
                     local ok, e = pcall(maid.vm.call, "ROOT")
-                    assert(not ok and tostring(e):find("not available"), tostring(e))
+                    assert(not ok and tostring(e):find("ROOT is not in mod.a's [lua] calls", 1, true), tostring(e))
                 end
                 function write_immediate(ctx)
                     local ok, e = pcall(function() ctx.args[2].value = 1 end)
@@ -589,6 +590,7 @@ public sealed class LuaScriptingTests : IDisposable
         public ScriptFrameInfo? Frame => null;
         public IReadOnlyList<ScriptFrameInfo> Frames() => [];
         public double? ScriptId(string name) => null;
+        public void Call(string script) { }
     }
 
     // ------------------------------------------------------------------------------------------- the check (§14.2)

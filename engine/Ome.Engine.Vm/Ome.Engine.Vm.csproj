@@ -16,4 +16,9 @@
     <ProjectReference Include="..\Ome.Engine\Ome.Engine.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The waits a Lua script call refuses (ModCallWaits) are internal; their test reaches them. -->
+    <InternalsVisibleTo Include="Ome.Engine.Tests" />
+  </ItemGroup>
+
 </Project>

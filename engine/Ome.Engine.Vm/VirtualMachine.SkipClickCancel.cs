@@ -30,13 +30,14 @@ public sealed partial class VirtualMachine
     /// <summary>The services native's tick runs before dispatching an op: the engine tick (EngineTick: the natives'
     /// timed work), the click-cancel machine (with CANCELMESSKIPONCLICK set), the shell native's queued menu commands,
     /// then any queued CALLBACK_SETTING.BIN or CALLBACK_WINDOW.BIN launch. Non-null only when the callback ends the enclosing
-    /// frame.</summary>
+    /// frame. A queued launch waits while a statement block is open, and while a Lua script call runs (Lua scripting spec
+    /// §10).</summary>
     private FrameOutcome? ServiceInstructionBoundary()
     {
         _tick.Service();
         if (_skip.ServiceClickCancel(InputBindings)) CancelMessageSkipFromClick();
         ApplyMenuToggles();
-        if (_tick.StatementBlockOpen || _shell.TakeCallbackScript() is not { } callback) return null;
+        if (_tick.StatementBlockOpen || _modCalls > 0 || _shell.TakeCallbackScript() is not { } callback) return null;
         return RunCallbackScript(callback);
     }
 

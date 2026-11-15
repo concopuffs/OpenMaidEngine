@@ -15,15 +15,20 @@ public sealed record ModRuntimeHandler(string ModId, string File, string Functio
 /// <summary>A mod of the session, as the link left it (spec §6): its id and version, whether it is a library (no
 /// <c>[game]</c>), whether it declared <c>vm</c>, the mods it requires, and its Lua sources. A base mod also has its
 /// <paramref name="Layout"/> (spec §9.1); <paramref name="Writes"/> are the global names its <c>[lua] writes</c> lists,
-/// each an exported name's global (spec §9.3).</summary>
+/// each an exported name's global (spec §9.3); <paramref name="Calls"/> the scripts its <c>[lua] calls</c> lists, as
+/// catalog names without <c>.BIN</c> (spec §10).</summary>
 public sealed record ModRuntimeMod(string Id, string Version, bool Library, bool Vm, IReadOnlyList<string> Requires,
                                    IReadOnlyList<ModSource> Files, GameLayout? Layout = null,
-                                   IReadOnlyList<string>? Writes = null, bool LuaDev = false)
+                                   IReadOnlyList<string>? Writes = null, bool LuaDev = false,
+                                   IReadOnlyList<string>? Calls = null)
 {
     // LuaDev: an unpacked mod run under --lua-dev (spec §9.3, §13): a write to a name its list lacks goes through and
     // is logged once, where it would be an error.
     /// <summary>The write list, empty when the mod lists none.</summary>
     public IReadOnlyList<string> WriteList => Writes ?? [];
+
+    /// <summary>The scripts the mod may call, empty when it lists none.</summary>
+    public IReadOnlyList<string> CallList => Calls ?? [];
 }
 
 /// <summary>The mods that ship Lua, in load order, every handler their hooks name, and the events they declare.</summary>

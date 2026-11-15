@@ -190,7 +190,9 @@ public sealed partial class VirtualMachine
                           TextManager? text = null, Scripting? scripting = null)
     {
         ArgumentNullException.ThrowIfNull(waits);
-        _s = s; _t = t; _handlers = BindHandlers(t); _waits = waits; _o = o ?? new VmOptions(); _provider = provider;
+        _s = s; _t = t; _handlers = BindHandlers(t); _o = o ?? new VmOptions(); _provider = provider;
+        // Lua scripting spec §10: with Lua in the stack, the waits refuse while a handler's script call runs.
+        _waits = scripting is { Setup.Stack.HasLua: true } ? new ModCallWaits(waits, this) : waits;
         // Composition hands over the native its time device belongs to; tests and tools that give none get one over
         // the system clock. Waits that keep the effects of fast-forward hear it: the input and waits native already
         // listens to its own skip and auto native, and Listen adds a listener once.
@@ -865,6 +867,7 @@ public sealed partial class VirtualMachine
         DiagnosticMessage message = AgeBox(new AgeBoxParts(error,
             DiagnosticLocation(_cur.Script.Instructions[coordinateIndex]), Prompt: true));
         _instructionRaisedScriptError = true;   // its after hooks do not fire (Lua scripting spec §7.1)
+        RefuseScriptErrorInModCall(text);
         ScriptErrorChoice choice = _waits.ShowScriptError(message);
         if (choice is ScriptErrorChoice.Retry or ScriptErrorChoice.Ignore) return choice;
         ScriptError = message;
@@ -1150,6 +1153,8 @@ public sealed partial class VirtualMachine
             if (cause == FrameCause.CallScript)
                 _scene.InteractiveFrame = previousInteractiveFrame?.Hotspots.Armed == true
                     ? previousInteractiveFrame : null;
+            // A Lua script call leaves the hooked frame's hotspots as it found them (Lua scripting spec §10).
+            else if (cause == FrameCause.ModCall) _scene.InteractiveFrame = previousInteractiveFrame;
             else if (ReferenceEquals(_scene.InteractiveFrame, frame))
                 _scene.InteractiveFrame = null;
             if (ReferenceEquals(_scene.RawInputFrame, frame)) _scene.RawInputFrame = previousRawInputFrame;
@@ -1455,6 +1460,7 @@ public sealed partial class VirtualMachine
                 case FrameOutcome.ExitRequested: return LoopEnd.ExitRequested;
                 case FrameOutcome.Halted: return LoopEnd.Halted;
             }
+            if (_modCalls > 0) RefuseInstructionInModCall(frame.Script.Instructions[pc]);   // Lua scripting spec §10
             HookSite? hooked = null;
             long sessionMark = -1;
             bool skipped = false;

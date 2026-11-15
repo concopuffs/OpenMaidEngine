@@ -218,6 +218,49 @@ public sealed class LuaStateTests : IDisposable
         Assert.Equal("""{"i:1":"integer key","s:1":"string key","s:count":1,"s:repeats":2}""", Block(saves, "mod.a"));
     }
 
+    [Fact]
+    public void AnOp0xaeInAScriptCalledDuringARestoreFailsTheCallAndTheRestoreCompletes()
+    {
+        // Spec §10, gate 9: RESTORER runs op 0xae. Outside a restore the op does nothing and the call returns; in a
+        // load's prologue the call fails before it runs, and ROOT's own op 0xae then completes the restore.
+        Script restorer = ScriptAssembler.Assemble(Table, "RESTORER.BIN", new List<(int, Operand[])> { (0xae, []), (0x5, []) }, []);
+        static LuaStackBuilder Calling() => new LuaStackBuilder()
+            .Mod("mod.a", """
+                -- file: hooks.lua
+                function on_prologue(ctx)
+                    local ok, err = pcall(maid.vm.call, "RESTORER")
+                    maid.log.info("prologue restoring=" .. tostring(maid.session.restoring) .. " " .. tostring(ok) .. " "
+                                  .. tostring(err))
+                end
+                function on_resumed(e) maid.log.info("resumed restoring=" .. tostring(maid.session.restoring)) end
+                """)
+            .Calls("mod.a", "RESTORER")
+            .Point(Root(), 0, "mod.a", "hooks.lua:on_prologue")
+            .Engine(Scripting.SessionResumedEvent, "mod.a", "hooks.lua:on_resumed");
+        MapProvider Scripts() => new(new() { [RootId] = Root() }, new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["RESTORER.BIN"] = restorer,
+            ["CALLBACK_LOAD.BIN"] = CallbackLoad(),
+        });
+        string saves = Saves();
+        Scripting first = Native(Calling());
+        VirtualMachine played = Run(Root(), first, Store(saves), Scripts());
+        Assert.Equal("exit", played.HaltReason);
+        Assert.Equal(["prologue restoring=false true nil"], Lines(first));
+
+        Scripting second = Native(Calling());
+        VirtualMachine loaded = Run(Loader(), second, Store(saves), Scripts());
+
+        Assert.Equal("exit", loaded.HaltReason);
+        string[] lines = Lines(second);
+        Assert.Equal(2, lines.Length);
+        Assert.StartsWith("prologue restoring=true false ", lines[0]);
+        Assert.Contains("calling RESTORER failed: RESTORER.BIN@0x0 (op 0xae continue-save-load-stack-restore) continues the "
+                        + "load's restore, and a called script cannot while a restore is pending", lines[0]);
+        Assert.Equal("resumed restoring=false", lines[1]);
+        Assert.Equal((1, 0), (loaded.Globals[0x101], loaded.Globals[0x20]));   // the resumed range ran, and saved again
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

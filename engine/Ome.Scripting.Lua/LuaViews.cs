@@ -146,8 +146,16 @@ internal sealed class VmView(IVmAccess vm, LuaModSession session) : ILuaUserData
         return Vm.ScriptId(name) is double id ? context.Return(id) : context.Return(LuaValue.Nil);
     });
 
+    // Spec §10: a refusal is a Lua error; a script that ends the scene or the run unwinds past every Lua frame (Fn keeps
+    // the interpreter's exception, so pcall does not catch it).
     public LuaFunction Call => _call ??= session.Fn("call", context =>
-        throw new LuaRuntimeException(context.State, "maid.vm.call is not available in this version", 1));
+    {
+        int first = First(context);
+        if (context.ArgumentCount <= first || !context.GetArgument(first).TryRead(out string name))
+            throw new LuaRuntimeException(context.State, "bad argument #1 to 'call' (a script name expected)", 1);
+        Vm.Call(name);
+        return context.Return();
+    });
 
     public static LuaTable FrameTable(ScriptFrameInfo frame)
     {
@@ -332,6 +340,7 @@ internal sealed class HookView(HookContext context, LuaModSession session) : ILu
                 {
                     "script" => context.Return(hook.Script ?? ""),
                     "cause" => context.Return(hook.Cause ?? ""),
+                    "mod" => hook.CallingMod is { } mod ? context.Return(mod) : context.Return(LuaValue.Nil),
                     _ => context.Return(LuaValue.Nil),
                 };
             if (hook.Kind == HookKind.Watch) return context.Return(WatchField(hook, key));

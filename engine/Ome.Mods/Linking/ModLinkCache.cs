@@ -97,7 +97,8 @@ public sealed record ModLayerSource(
 
 /// <summary>A mod with Lua in <c>link.json</c> (Lua scripting spec §6): its sources are under the cache directory's
 /// <c>lua/&lt;mod&gt;/</c>, by their paths inside the package's <c>lua/</c>; a base mod's layout is
-/// <c>layout/&lt;mod&gt;/globals.json</c>; <c>writes</c> is its write list as global names (spec §9.3).</summary>
+/// <c>layout/&lt;mod&gt;/globals.json</c>; <c>writes</c> is its write list as global names (spec §9.3), <c>calls</c> the
+/// scripts it may call (spec §10).</summary>
 public sealed record LinkedLuaModEntry(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("version")] string Version,
@@ -107,7 +108,8 @@ public sealed record LinkedLuaModEntry(
     [property: JsonPropertyName("files")] IReadOnlyList<string> Files,
     [property: JsonPropertyName("layout")] bool Layout = false,
     [property: JsonPropertyName("writes")] IReadOnlyList<string>? Writes = null,
-    [property: JsonPropertyName("lua_dev")] bool LuaDev = false);
+    [property: JsonPropertyName("lua_dev")] bool LuaDev = false,
+    [property: JsonPropertyName("calls")] IReadOnlyList<string>? Calls = null);
 
 /// <summary>A handler in <c>link.json</c>: its index in the list is its <see cref="HandlerId"/>.</summary>
 public sealed record LinkedLuaHandlerEntry(
@@ -212,7 +214,8 @@ public sealed record LinkedLuaEntry
         Runtime = runtime,
         Mods = lua.Stack.Mods.Select(mod => new LinkedLuaModEntry(mod.Id, mod.Version, mod.Library, mod.Vm, mod.Requires,
             mod.Files.Select(file => file.Path).ToList(), mod.Layout != null,
-            mod.WriteList.Count > 0 ? mod.WriteList : null, mod.LuaDev)).ToList(),
+            mod.WriteList.Count > 0 ? mod.WriteList : null, mod.LuaDev, mod.CallList.Count > 0 ? mod.CallList : null))
+            .ToList(),
         Handlers = lua.Stack.Handlers.Select(handler => new LinkedLuaHandlerEntry(handler.ModId, handler.File, handler.Function))
             .ToList(),
         Sites = lua.Plan.Sites.ToDictionary(pair => pair.Key + ".BIN",
@@ -242,7 +245,7 @@ public sealed record LinkedLuaEntry
             mod.Files.Select(file => new ModSource(mod.Id, file,
                 File.ReadAllText(Path.Combine(directory, PathOf(mod.Id, file)), Encoding.UTF8))).ToList(),
             mod.Layout ? GameLayout.Parse(File.ReadAllText(Path.Combine(directory, LayoutPathOf(mod.Id)), Encoding.UTF8)) : null,
-            mod.Writes, mod.LuaDev)).ToList();
+            mod.Writes, mod.LuaDev, mod.Calls)).ToList();
         GameLayout? LayoutFor(string owner)
         {
             ModRuntimeMod? declaring = mods.FirstOrDefault(mod => mod.Id == owner);

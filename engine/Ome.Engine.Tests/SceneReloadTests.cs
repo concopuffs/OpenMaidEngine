@@ -40,6 +40,9 @@ public class SceneReloadTests
             "_instructionRaisedScriptError",
             // The frame stack, empty at a reload: op 0x9 has unwound every frame.
             "_cur", "_depth", "_activeFrameNames", "_activeExecutionFrames", "_debugNextFrameId", "_restoreFrameIndex",
+            // The Lua script calls running and the innermost one's budget: a call puts them back as it returns or unwinds,
+            // so none is running at a reload (Lua scripting spec §10).
+            "_modCalls", "_modCallStepsEnd", "_modCallBudget",
             // The handler table.
             "_handlers",
             // A wait's flags, set and cleared within the wait; no wait runs at a reload.
@@ -138,6 +141,8 @@ public class SceneReloadTests
             // The plan's watches; and the handler running, the console chunks and the builds running, the latest face's
             // mod and the delivery's depth, all set and cleared within a call (the records are the Scene's).
             "_watches", "_running", "_consoleDepth", "_looseDepth", "_faceMod", "_delivering",
+            // Whether a session is being built, where maid.vm.call is refused: set and cleared within the build.
+            "_building",
             // The undeclared writes --lua-dev has logged, once each for the run.
             "_devWrites",
             // The trace (--lua-trace): the traced calls running (empty between calls), the run's recent lines, and its

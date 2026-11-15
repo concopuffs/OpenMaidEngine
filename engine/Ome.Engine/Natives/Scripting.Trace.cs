@@ -31,6 +31,16 @@ public sealed partial class Scripting
         public long Started { get; } = Stopwatch.GetTimestamp();
         public List<TracedWrite> Writes { get; } = new();
         public int Dropped { get; set; }
+        public List<TracedScriptCall> Calls { get; } = new();
+    }
+
+    /// <summary>A script the traced call ran through <c>maid.vm.call</c> (spec §10): it returned, it was refused with an
+    /// error, or neither, when it ended the scene or the run.</summary>
+    private sealed class TracedScriptCall(string script)
+    {
+        public string Script { get; } = script;
+        public bool Returned { get; set; }
+        public string? Error { get; set; }
     }
 
     // The traced calls running, innermost last; empty between calls (and always without --lua-trace).
@@ -126,7 +136,9 @@ public sealed partial class Scripting
         }
     }
 
-    private void TraceEnd(TracedCall call, ModScriptException? error)
+    /// <summary>A traced call's line. <paramref name="abandoned"/>: the call did not return, because a script it called
+    /// ended the scene or the run (spec §10).</summary>
+    private void TraceEnd(TracedCall call, ModScriptException? error, bool abandoned = false)
     {
         IReadOnlyList<(string Name, TracedValue Value)> after = FieldValues(call.Context);
         double milliseconds = (Stopwatch.GetTimestamp() - call.Started) * 1000.0 / Stopwatch.Frequency;
@@ -163,12 +175,13 @@ public sealed partial class Scripting
             }
             if (context.When != null) json.WriteString("when", context.When);
             if (context.Cause != null) json.WriteString("cause", context.Cause);
+            if (context.CallingMod != null) json.WriteString("caller", context.CallingMod);
             if (context.Script != null)
                 json.WriteString("at", context.Offset < 0
                     ? context.Script
                     : string.Create(CultureInfo.InvariantCulture, $"{context.Script}@0x{context.Offset:x}"));
             json.WriteNumber("ms", Math.Round(milliseconds, 3));
-            json.WriteString("result", error?.Kind switch
+            json.WriteString("result", abandoned ? "abandoned" : error?.Kind switch
             {
                 null => "ok",
                 ModScriptErrorKind.Budget => "budget",
@@ -213,6 +226,19 @@ public sealed partial class Scripting
                 json.WriteEndArray();
             }
             if (call.Dropped > 0) json.WriteNumber("writes_not_listed", call.Dropped);
+            if (call.Calls.Count > 0)
+            {
+                json.WriteStartArray("calls");
+                foreach (TracedScriptCall called in call.Calls)
+                {
+                    json.WriteStartObject();
+                    json.WriteString("script", called.Script);
+                    json.WriteString("result", called.Returned ? "ok" : called.Error != null ? "refused" : "abandoned");
+                    if (called.Error != null) json.WriteString("error", called.Error);
+                    json.WriteEndObject();
+                }
+                json.WriteEndArray();
+            }
             json.WriteEndObject();
         }
         AppendTrace(Encoding.UTF8.GetString(buffer.WrittenSpan));

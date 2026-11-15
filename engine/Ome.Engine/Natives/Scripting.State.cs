@@ -22,7 +22,9 @@ public sealed partial class Scripting
 
     /// <summary>Whether a boundary has work for the native before its services: a session to build after a data-only
     /// load, or <c>ome.session.resumed</c> to fire. The interpreter tests it at every instruction boundary.</summary>
-    public bool BoundaryPending => _scene.BuildPending || _scene.ResumedPending;
+    // Not inside a handler's script call (spec §10): the call refuses the load and the restore that set them, and a
+    // session cannot end under its Lua.
+    public bool BoundaryPending => _depth == 0 && (_scene.BuildPending || _scene.ResumedPending);
 
     /// <summary><c>maid.session.restoring</c> (spec §11).</summary>
     public bool Restoring => _scene.Restoring;

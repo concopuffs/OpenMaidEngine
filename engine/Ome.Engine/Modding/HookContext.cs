@@ -71,9 +71,13 @@ public sealed class HookContext
         };
 
     /// <summary>A script hook's context (spec §7.2): <paramref name="when"/> is <c>enter</c> or <c>exit</c>,
-    /// <paramref name="cause"/> why the frame was entered (<c>call</c>, <c>root</c>, <c>title</c>, <c>restore</c>).</summary>
-    public static HookContext ForScript(string script, string when, string cause)
-        => new(HookKind.Script, script, [], null, [], 0) { Script = script, When = when, Cause = cause };
+    /// <paramref name="cause"/> why the frame was entered (<c>call</c>, <c>root</c>, <c>title</c>, <c>restore</c>, or
+    /// <c>mod</c> with <paramref name="callingMod"/> the mod whose handler called the script, spec §10).</summary>
+    public static HookContext ForScript(string script, string when, string cause, string? callingMod = null)
+        => new(HookKind.Script, script, [], null, [], 0)
+        {
+            Script = script, When = when, Cause = cause, CallingMod = callingMod,
+        };
 
     /// <summary>A watch's context (spec §7.3): the cell <paramref name="cell"/> names at <paramref name="address"/>,
     /// the global it belongs to with its row and column (-1 for none), the values before and after the write, and the
@@ -127,6 +131,8 @@ public sealed class HookContext
     public string? When { get; private init; }
     /// <summary>A script hook's cause: why its frame was entered.</summary>
     public string? Cause { get; private init; }
+    /// <summary>For the cause <c>mod</c>: the mod whose handler called the script through <c>maid.vm.call</c>.</summary>
+    public string? CallingMod { get; private init; }
     public int Offset { get; private init; } = -1;
     public int Site { get; private init; } = -1;
     public int Opcode { get; private init; } = -1;

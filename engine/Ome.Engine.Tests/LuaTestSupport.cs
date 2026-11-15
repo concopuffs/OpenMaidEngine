@@ -68,6 +68,14 @@ internal sealed class LuaStackBuilder
         return this;
     }
 
+    /// <summary>A mod's <c>[lua] calls</c>, as the link leaves it: catalog names without <c>.BIN</c>.</summary>
+    public LuaStackBuilder Calls(string id, params string[] scripts)
+    {
+        int index = _mods.FindIndex(mod => mod.Id == id);
+        _mods[index] = _mods[index] with { Calls = scripts };
+        return this;
+    }
+
     private HandlerId Handler(string mod, string handler)
     {
         // One id per (mod, file, function), as the link gives it.

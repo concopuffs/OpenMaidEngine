@@ -54,7 +54,7 @@ public sealed partial class Scripting
         private readonly Dictionary<string, INamedAccess?> _names = new(StringComparer.Ordinal);
 
         public string ModId { get; } = modId;
-        public IVmAccess? Vm { get; } = vm ? new VmFace(owner, modId) : null;
+        public IVmAccess? Vm { get; } = vm ? new VmFace(owner, modId, mod) : null;
 
         // Spec §5.6: script memory's generator, the one op 0x60 draws from.
         public int DrawRandom() => owner._memory.DrawForMod();
@@ -134,7 +134,7 @@ public sealed partial class Scripting
     }
 
     /// <summary><c>maid.vm</c> for one mod (<paramref name="modId"/> names it in the trace).</summary>
-    private sealed class VmFace(Scripting owner, string modId) : IVmAccess
+    private sealed class VmFace(Scripting owner, string modId, ModRuntimeMod? mod) : IVmAccess
     {
         private ScriptMemory Memory => owner._memory;
         private int CodePage => owner._memory.Encoding.CodePage;
@@ -276,5 +276,39 @@ public sealed partial class Scripting
         }
 
         public double? ScriptId(string name) => owner._interpreter?.ScriptId(name) is uint id ? id : null;
+
+        public void Call(string script) => owner.CallScript(mod, script);
+    }
+
+    /// <summary>
+    /// <c>maid.vm.call</c> for a mod's face (spec §10), or the console's (<paramref name="mod"/> null): the script must be
+    /// on the mod's list, and the call made in a handler the interpreter invoked at an instruction, not while a session
+    /// is built. The interpreter runs it with the call budget; the running handler's trace line names it.
+    /// </summary>
+    private void CallScript(ModRuntimeMod? mod, string script)
+    {
+        // The console's chunks, and the handlers of an event a chunk raises, run between instructions.
+        if (mod == null || _consoleDepth > 0)
+            throw new ScriptAccessException("maid.vm.call is not available in the console: it runs between instructions");
+        string name = Localization.TextCatalog.NormalizeScriptName(script);
+        if (!mod.CallList.Contains(name, StringComparer.Ordinal))
+            throw new ScriptAccessException($"{name} is not in {mod.Id}'s [lua] calls");
+        if (_building > 0)
+            throw new ScriptAccessException(
+                "maid.vm.call cannot run while the session is built (init.lua, ome.session.start): no instruction is under way");
+        if (_running == null || _interpreter == null)
+            throw new ScriptAccessException("maid.vm.call runs only in a handler the interpreter invoked");
+        TracedScriptCall? traced = null;
+        if (Tracing) _traced[^1].Calls.Add(traced = new TracedScriptCall(name + ".BIN"));
+        try
+        {
+            _interpreter.Call(name, _setup.Limits.CallInstructions);
+        }
+        catch (ScriptAccessException error)
+        {
+            if (traced != null) traced.Error = error.Message;
+            throw;
+        }
+        if (traced != null) traced.Returned = true;
     }
 }
