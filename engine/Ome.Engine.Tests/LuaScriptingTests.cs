@@ -22,86 +22,6 @@ public sealed class LuaScriptingTests : IDisposable
         foreach (IDisposable item in _owned) item.Dispose();
     }
 
-    /// <summary>A stack and its hook plan, as the link would leave them.</summary>
-    private sealed class StackBuilder
-    {
-        private readonly List<ModRuntimeMod> _mods = new();
-        private readonly List<ModRuntimeHandler> _handlers = new();
-        private readonly Dictionary<string, List<PlannedSite>> _sites = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, List<PlannedHandler>> _engine = new(StringComparer.Ordinal);
-
-        public StackBuilder Mod(string id, string files, bool vm = true, bool library = false, params string[] requires)
-            => Mod(id, Files(files), vm, library, requires);
-
-        /// <summary>Files as <c>-- file: name.lua</c> sections of one text.</summary>
-        private static IReadOnlyList<(string, string)> Files(string text)
-        {
-            var files = new List<(string, string)>();
-            string? name = null;
-            var body = new System.Text.StringBuilder();
-            foreach (string line in text.Split('\n'))
-            {
-                if (line.TrimStart().StartsWith("-- file: ", StringComparison.Ordinal))
-                {
-                    if (name != null) files.Add((name, body.ToString()));
-                    name = line.Trim()["-- file: ".Length..];
-                    body.Clear();
-                }
-                else body.Append(line).Append('\n');
-            }
-            if (name != null) files.Add((name, body.ToString()));
-            return files;
-        }
-
-        private StackBuilder Mod(string id, IReadOnlyList<(string Path, string Text)> files, bool vm, bool library, string[] requires)
-        {
-            _mods.Add(new ModRuntimeMod(id, "1.0.0", library, vm, requires,
-                files.Select(file => new ModSource(id, file.Path, file.Text)).ToList()));
-            return this;
-        }
-
-        private HandlerId Handler(string mod, string handler)
-        {
-            // One id per (mod, file, function), as the link gives it.
-            int colon = handler.IndexOf(':');
-            var entry = new ModRuntimeHandler(mod, handler[..colon], handler[(colon + 1)..]);
-            int found = _handlers.IndexOf(entry);
-            if (found >= 0) return new HandlerId(found);
-            _handlers.Add(entry);
-            return new HandlerId(_handlers.Count - 1);
-        }
-
-        private int LoadOrder(string mod) => _mods.FindIndex(entry => entry.Id == mod);
-
-        public StackBuilder Point(Script script, int index, string mod, string handler, int priority = 0, string point = "test.point")
-        {
-            HandlerId id = Handler(mod, handler);
-            int offset = script.Instructions[index].Offset;
-            if (!_sites.TryGetValue(script.Name, out var sites)) _sites[script.Name] = sites = new();
-            int at = sites.FindIndex(site => site.Offset == offset);
-            var planned = new PlannedHandler(id, priority, LoadOrder(mod));
-            if (at < 0) sites.Add(new PlannedSite(offset, offset, point, [planned]));
-            else sites[at] = sites[at] with
-            {
-                Handlers = sites[at].Handlers.Append(planned).OrderBy(h => h.Priority).ThenBy(h => h.LoadOrder).ToList(),
-            };
-            return this;
-        }
-
-        public StackBuilder Engine(string name, string mod, string handler, int priority = 0)
-        {
-            HandlerId id = Handler(mod, handler);
-            if (!_engine.TryGetValue(name, out var list)) _engine[name] = list = new();
-            list.Add(new PlannedHandler(id, priority, LoadOrder(mod)));
-            return this;
-        }
-
-        public (ModRuntimeStack Stack, HookPlan Plan) Build()
-            => (new ModRuntimeStack(_mods, _handlers),
-                new HookPlan(_sites.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedSite>)pair.Value),
-                             _engine.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value)));
-    }
-
     private LazyModRuntime Runtime()
     {
         LazyModRuntime runtime = LuaModRuntime.Lazy();
@@ -109,7 +29,7 @@ public sealed class LuaScriptingTests : IDisposable
         return runtime;
     }
 
-    private Scripting Native(StackBuilder builder, LazyModRuntime? runtime = null, LuaErrorPolicy errors = LuaErrorPolicy.Continue,
+    private Scripting Native(LuaStackBuilder builder, LazyModRuntime? runtime = null, LuaErrorPolicy errors = LuaErrorPolicy.Continue,
                              ModLimits? limits = null, string? diagnostics = null)
     {
         var (stack, plan) = builder.Build();
@@ -161,7 +81,7 @@ public sealed class LuaScriptingTests : IDisposable
     public void APointHandlerRunsBeforeItsInstructionAndCanWriteItsCells()
     {
         Script root = Copy();
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.a", """
                 -- file: hooks.lua
                 function on_point(ctx)
@@ -190,7 +110,7 @@ public sealed class LuaScriptingTests : IDisposable
             (0x55, [G(0x101), Imm(0x10)]),
             (0x2, []),
         }, []);
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.a", """
                 -- file: hooks.lua
                 function double_local(ctx)
@@ -225,7 +145,7 @@ public sealed class LuaScriptingTests : IDisposable
     public void HandlersAtOneInstructionRunByPriorityThenLoadOrder()
     {
         Script root = Copy();
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.a", "-- file: a.lua\nfunction a(ctx) maid.vm.g[0x100] = maid.vm.g[0x100] * 10 + 1 end")
             .Mod("mod.b", "-- file: b.lua\nfunction b(ctx) maid.vm.g[0x100] = maid.vm.g[0x100] * 10 + 2 end")
             .Point(root, 1, "mod.b", "b.lua:b", priority: 0)
@@ -254,7 +174,7 @@ public sealed class LuaScriptingTests : IDisposable
             (0x55, [G(0x100), Imm(2)]),
             (0x2, []),
         }, []);
-        var builder = new StackBuilder()
+        var builder = new LuaStackBuilder()
             .Mod("mod.a", """
                 -- file: init.lua
                 order = {}
@@ -305,7 +225,7 @@ public sealed class LuaScriptingTests : IDisposable
     public void ARunawayHandlerIsStoppedByItsBudgetAndTheGameGoesOn()
     {
         Script root = Copy();
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
                 .Mod("mod.a", "-- file: hooks.lua\nfunction spin(ctx) while true do pcall(function() while true do end end) end end")
                 .Point(root, 1, "mod.a", "hooks.lua:spin"),
             limits: new ModLimits { HandlerInstructions = 200_000 });
@@ -323,7 +243,7 @@ public sealed class LuaScriptingTests : IDisposable
     public void UnboundedRecursionEndsAsAnErrorThatNamesModHandlerScriptAndOffset()
     {
         Script root = Copy();
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.a", "-- file: hooks.lua\nlocal function f() return f() + 1 end\nfunction deep(ctx) f() end")
             .Point(root, 1, "mod.a", "hooks.lua:deep"));
 
@@ -341,7 +261,7 @@ public sealed class LuaScriptingTests : IDisposable
     public void LuaErrorsHaltEndsTheRunBeforeTheInstruction()
     {
         Script root = Copy();
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
                 .Mod("mod.a", "-- file: hooks.lua\nfunction fail(ctx) error('boom') end")
                 .Point(root, 1, "mod.a", "hooks.lua:fail"),
             errors: LuaErrorPolicy.Halt);
@@ -362,7 +282,7 @@ public sealed class LuaScriptingTests : IDisposable
             (0x55, [G(0x100), Imm(1)]), (0x55, [G(0x101), Imm(1)]), (0x55, [G(0x102), Imm(1)]), (0x55, [G(0x103), Imm(1)]),
             (0x2, []),
         }, []);
-        var builder = new StackBuilder().Mod("mod.a", "-- file: hooks.lua\nfunction fail(ctx) calls = (calls or 0) + 1 error('no') end");
+        var builder = new LuaStackBuilder().Mod("mod.a", "-- file: hooks.lua\nfunction fail(ctx) calls = (calls or 0) + 1 error('no') end");
         for (int i = 0; i < 4; i++) builder.Point(root, i, "mod.a", "hooks.lua:fail");
         Scripting native = Native(builder);
 
@@ -378,7 +298,7 @@ public sealed class LuaScriptingTests : IDisposable
     public void AModWhoseInitFailsIsOffForTheSessionAndSoIsAModThatRequiresIt()
     {
         Script root = Copy();
-        var builder = new StackBuilder()
+        var builder = new LuaStackBuilder()
             .Mod("mod.base", "-- file: init.lua\nerror('broken base')", library: true)
             .Mod("mod.dependent", "-- file: hooks.lua\nfunction on_point(ctx) maid.vm.g[0x100] = 9 end", requires: ["mod.base"])
             .Mod("mod.other", "-- file: hooks.lua\nfunction on_point(ctx) maid.vm.g[0x100] = maid.vm.g[0x100] + 1 end")
@@ -403,7 +323,7 @@ public sealed class LuaScriptingTests : IDisposable
     public void AHandlerThatIsNotAFunctionOnceItsFileRanSwitchesTheModOff()
     {
         Script root = Copy();
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.a", "-- file: hooks.lua\nfunction on_point(ctx) end\non_point = 3")
             .Point(root, 1, "mod.a", "hooks.lua:on_point"));
 
@@ -415,7 +335,7 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void ABudgetBoundsAModsStartUpCode()
     {
-        Scripting native = Native(new StackBuilder().Mod("mod.a", "-- file: init.lua\nwhile true do end"),
+        Scripting native = Native(new LuaStackBuilder().Mod("mod.a", "-- file: init.lua\nwhile true do end"),
             limits: new ModLimits { StartupInstructions = 100_000 });
 
         Run(Copy(), native);
@@ -426,7 +346,7 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void LocalsAreAnErrorInAnEngineEvent()
     {
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.a", """
                 -- file: hooks.lua
                 function on_start(e)
@@ -445,7 +365,7 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void WritesKeepTheCellRules()
     {
-        Scripting native = Native(new StackBuilder().Mod("mod.a", "-- file: init.lua\n"));
+        Scripting native = Native(new LuaStackBuilder().Mod("mod.a", "-- file: init.lua\n"));
         Run(Copy(), native);
 
         string Try(string code) => Chunk(native, null, $"local ok, e = pcall(function() {code} end) return tostring(ok) .. ' ' .. tostring(e)");
@@ -467,7 +387,7 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void MaidVmIsAbsentInAModThatDidNotDeclareIt()
     {
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.plain", "-- file: init.lua\n", vm: false)
             .Mod("mod.raw", "-- file: init.lua\n"));
         Run(Copy(), native);
@@ -480,7 +400,7 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void AModCannotChangeALibraryFunctionTheStringMethodsOrAnExportForAnother()
     {
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.lib", "-- file: init.lua\nreturn { list = {1, 2}, f = function() return 3 end }", vm: false, library: true)
             .Mod("mod.a", """
                 -- file: init.lua
@@ -510,7 +430,7 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void TheSandboxHasNoFilesProcessesClockOrLoader()
     {
-        Scripting native = Native(new StackBuilder().Mod("mod.a", "-- file: init.lua\n"));
+        Scripting native = Native(new LuaStackBuilder().Mod("mod.a", "-- file: init.lua\n"));
         Run(Copy(), native);
 
         Assert.Equal(string.Join("\t", Enumerable.Repeat("true", 11)), Chunk(native, "mod.a", """
@@ -522,7 +442,7 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void RequireResolvesTheModsOwnFilesOnceAndNothingElse()
     {
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.other", "-- file: init.lua\nreturn {}", vm: false)
             .Mod("mod.a", """
                 -- file: util/names.lua
@@ -543,7 +463,7 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void TheConsoleKeepsItsOwnEnvironmentAndRunsInAModsWhenNamed()
     {
-        Scripting native = Native(new StackBuilder().Mod("mod.a", "-- file: init.lua\nsecret = 7", vm: false));
+        Scripting native = Native(new LuaStackBuilder().Mod("mod.a", "-- file: init.lua\nsecret = 7", vm: false));
         Run(Copy(), native);
 
         Assert.Equal("", Chunk(native, null, "x = 41"));
@@ -579,7 +499,7 @@ public sealed class LuaScriptingTests : IDisposable
     public void AContextIsLiveOnlyDuringItsCall()
     {
         Script root = Copy();
-        Scripting native = Native(new StackBuilder()
+        Scripting native = Native(new LuaStackBuilder()
             .Mod("mod.a", "-- file: hooks.lua\nfunction keep(ctx) kept = ctx end")
             .Point(root, 1, "mod.a", "hooks.lua:keep"));
         Run(root, native);
@@ -593,7 +513,7 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void MathRandomDrawsFromTheEngineInRange()
     {
-        Scripting native = Native(new StackBuilder().Mod("mod.a", "-- file: init.lua\n", vm: false));
+        Scripting native = Native(new LuaStackBuilder().Mod("mod.a", "-- file: init.lua\n", vm: false));
         Run(Copy(), native);
 
         Assert.Equal("true", Chunk(native, "mod.a", """
@@ -733,7 +653,7 @@ public sealed class LuaScriptingTests : IDisposable
     public void HexNumeralsReadAsLuaReadsThemAndErrorLinesAreTheModsOwn()
     {
         using var runtime = new LuaModRuntime();
-        Scripting native = Native(new StackBuilder());
+        Scripting native = Native(new LuaStackBuilder());
         Assert.Equal("256\t17\ttrue", Chunk(native, null, "local t = {[0x10]=256} return t[0x10], 0x10+1, 0xff==255"));
 
         // The space after 0x10 moves no line; the compiler's errors carry a line and no column, as Lua's do.

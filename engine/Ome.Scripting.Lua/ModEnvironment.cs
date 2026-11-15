@@ -32,6 +32,10 @@ internal sealed class ModEnvironment
     public ModRuntimeMod? Mod { get; }
     public IModAccess Access { get; }
     public LuaTable Globals { get; }
+    /// <summary>The mod's own <c>maid</c>, whatever its globals now hold: a save reads <c>maid.state</c> from it.</summary>
+    public LuaTable MaidTable { get; private set; } = null!;
+    /// <summary><c>maid.state</c> as the mod left it, read raw.</summary>
+    public LuaValue State => MaidTable["state"];
     /// <summary>What the mod's <c>init.lua</c> returned: what <c>require</c> gives a mod that requires it.</summary>
     public LuaValue Exports { get; set; } = LuaValue.Nil;
     public bool Off { get; set; }
@@ -98,7 +102,17 @@ internal sealed class ModEnvironment
         if (Mod != null) mod["version"] = Mod.Version;
         maid["mod"] = mod;
         maid["session"] = LuaValue.FromUserData(new SessionView(_session));
+        maid["state"] = new LuaTable();
+        MaidTable = maid;
         return maid;
+    }
+
+    /// <summary>Spec §5.7 step 2: the mod's saved state, and in <c>maid.mod.state_version</c> the version of the mod
+    /// that wrote it (nil when the mod has none saved).</summary>
+    public void SetState(LuaTable state, string? version)
+    {
+        MaidTable["state"] = state;
+        if (MaidTable["mod"].TryRead(out LuaTable mod)) mod["state_version"] = version is null ? LuaValue.Nil : version;
     }
 
     /// <summary><c>math.random</c> over the engine's draws (spec §5.6): as many 15-bit draws as cover the range's size,

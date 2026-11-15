@@ -20,6 +20,13 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         Write(a[0], _saves.SaveNumbered(unchecked((int)Read(a[1])), _saveRecords));
+        // Lua scripting spec §11: a mod's state that did not serialize under --lua-errors halt ends the run once the
+        // save is written.
+        if (_scripting?.TakeHalt() is { } halt)
+        {
+            HaltReason ??= halt;
+            return StepResult.Halt;
+        }
         return StepResult.Next;
     }
 
@@ -30,7 +37,12 @@ public sealed partial class VirtualMachine
         if (!TryLoadNumberedState(unchecked((int)Read(a[1])), restoreHistory: false))
             Write(a[0], 1);
         else
+        {
+            // Lua scripting spec §5.7: the banks are the save's, so the session ends now; the next boundary builds the
+            // next one. The status write below is part of the old instruction, which no hook of the old session sees.
+            _scripting?.LoadedDataOnly();
             Write(a[0], 0);
+        }
         return StepResult.Next;
     }
 
@@ -69,6 +81,7 @@ public sealed partial class VirtualMachine
             _cur.RestoredSaveFrame = null;
             _saves.EndRestore();
             _restoreFrameIndex = -1;
+            _scripting?.RestoreEnded();   // Lua scripting spec §11 step 5: restoring clears; ome.session.resumed is next
             return StepResult.Jump(ResolveTableOffset(_cur.Script, _cur.Script.ReadMessageOffsets, saved.ResumeIndex, pc + 1));
         }
 

@@ -7,21 +7,24 @@ namespace Ome.Engine.Natives;
 /// <summary>
 /// What a numbered save holds besides the save native's own records: the natives that write and read theirs (script
 /// memory's banks, audio's track and sound-effect channels, graphics' surfaces and objects, text's history tail and the
-/// source glyph objects of presented text), and the interpreter's saved frames, which are not a native. The interpreter
-/// builds it once and hands it to each save and load, so the save native needs none of them to be built first.
+/// source glyph objects of presented text, the scripting native's mod state beside the save), and the interpreter's
+/// saved frames, which are not a native. The interpreter builds it once and hands it to each save and load, so the save
+/// native needs none of them to be built first.
 /// </summary>
 /// <param name="captureFrames">The interpreter's saved frames, up to op 0x1ad's boundary; throws
 /// <see cref="InvalidDataException"/> when no frame can be saved.</param>
 /// <param name="releaseSurfacesOnLoad">(CreateObject &amp; 2) &amp;&amp; (AutoFreeTex &amp; 2): a load releases every
 /// surface before it restores the saved ones (docs/engine-re.md, "AutoFreeTex").</param>
+/// <param name="scripting">The scripting native, or null for a VM given none: its saves carry no mod state.</param>
 public sealed class NumberedSaveRecords(
     ScriptMemory memory, Audio audio, Graphics graphics, TextManager text,
-    Func<NativeSavedScriptFrame[]> captureFrames, bool releaseSurfacesOnLoad)
+    Func<NativeSavedScriptFrame[]> captureFrames, bool releaseSurfacesOnLoad, Scripting? scripting = null)
 {
     public ScriptMemory Memory { get; } = memory;
     public Audio Audio { get; } = audio;
     public Graphics Graphics { get; } = graphics;
     public TextManager Text { get; } = text;
+    public Scripting? Scripting { get; } = scripting;
     public bool ReleaseSurfacesOnLoad { get; } = releaseSurfacesOnLoad;
     public NativeSavedScriptFrame[] CaptureFrames() => captureFrames();
 }
@@ -54,18 +57,27 @@ public sealed partial class SavesAndSettings
     public void EndRestore() => _loaded = null;
 
     /// <summary>Op 0x19e: write save <paramref name="slot"/> and then the shared profile. 0 when both were written,
-    /// 1 when there is no save store or a write failed.</summary>
+    /// 1 when there is no save store or a write failed. The mods' state is serialized with the other records, before
+    /// the store is called, and a mod's bad state never fails the save (Lua scripting spec §11).</summary>
     public int SaveNumbered(int slot, NumberedSaveRecords records)
     {
         if (_store == null) return 1;
         try
         {
+            // The time and play time first: the mod state records them, so a load can tell a state file that does not
+            // belong to its save.
+            NativeSystemTime timestamp = NativeSystemTime.FromLocalDateTime(DateTime.Now);
+            uint playSeconds = AccumulatedPlaySeconds;
             NativeNumberedSaveState state = CaptureNumbered(_store, records);
             byte[] payload = NativeNumberedSaveCodec.Encode(state);
             byte[] history = records.Text.WriteHistoryTail();
-            NativeSystemTime timestamp = NativeSystemTime.FromLocalDateTime(DateTime.Now);
-            uint playSeconds = AccumulatedPlaySeconds;
-            _store.SaveNumberedFile(slot, payload, history, timestamp, playSeconds);
+            if (records.Scripting is { } scripting)
+                _store.SaveNumberedFile(slot, payload, history, timestamp, playSeconds,
+                    new Dictionary<string, string?>
+                    {
+                        [Scripting.StateFileSuffix] = scripting.WriteSaveRecord(slot, timestamp, playSeconds),
+                    });
+            else _store.SaveNumberedFile(slot, payload, history, timestamp, playSeconds);
             _profile.Save(_store, timestamp, playSeconds);
             return 0;
         }
@@ -108,6 +120,8 @@ public sealed partial class SavesAndSettings
                 _loaded = state;
             }
             else _loaded = null;
+            // The state text was read with the save; the scripting native takes it only now that the load succeeded.
+            records.Scripting?.ReadSaveRecord(slot, file.Sidecars, file.Document.Metadata, fullLoad: restoreHistory);
             return NumberedLoad.Loaded;
         }
         catch (Exception error) when (

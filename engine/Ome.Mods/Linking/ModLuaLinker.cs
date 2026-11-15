@@ -1,5 +1,6 @@
 using Ome.Engine.Localization;
 using Ome.Engine.Modding;
+using Ome.Engine.Natives;
 using Ome.Mods.Manifest;
 using Ome.Mods.Packages;
 using Ome.Script.Patch;
@@ -25,13 +26,11 @@ public static class ModLuaLinker
     /// <summary>The engine events this engine raises; the others are built later or reserved (spec §7.7).</summary>
     public static readonly IReadOnlySet<string> BuiltEngineEvents = new HashSet<string>(StringComparer.Ordinal)
     {
-        "ome.session.start",
+        Scripting.SessionStartEvent, Scripting.SessionResumedEvent, Scripting.SaveWritingEvent,
     };
 
     private static readonly IReadOnlyDictionary<string, string> LaterEngineEvents = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["ome.session.resumed"] = "comes with mod state (Lua scripting milestone 2)",
-        ["ome.save.writing"] = "comes with mod state (Lua scripting milestone 2)",
         ["ome.text.present"] = "is reserved for the localization filter (Lua scripting spec §7.7)",
     };
 

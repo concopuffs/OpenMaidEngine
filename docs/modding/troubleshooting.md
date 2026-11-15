@@ -201,6 +201,26 @@ at, and the traceback. After three failures in a row the handler is off for the 
 at the first one instead. "ran out of its instruction budget" means the call ran past 1,000,000 Lua instructions,
 usually an endless loop.
 
+**"maid.state was not saved in slot N, its last good state is kept: …"** (or "it has none saved"). Your mod's
+`maid.state` holds something a save cannot hold; the message names it and where it is, as in `maid.state.items[3].f
+is a function`. The game's save was written, and beside it the state your mod loaded or saved last. A state holds
+booleans, finite numbers, strings and tables of them, with string or integer keys ([lua.md](lua.md), "State").
+
+**"save slot N was made with X, which ships Lua, but SAVEnn.modstate.json is missing".** The stack stamp beside the
+save names a Lua mod, so the save had a state file, and it is gone: copied without it, or deleted. The mod's state
+starts empty. Copy a save with every `SAVEnn.*` file beside it.
+
+**"SAVEnn.modstate.json does not belong to its save" or "… cannot be read".** The state file was written for another
+save (the game stopped between writing the save and its state file, or the files of two slots were mixed), or it
+is not a state file the engine can read. Every mod's state starts empty for that load. The next save writes a new
+one.
+
+**"off for this session: its saved state cannot be read: …".** The mod's block in the state file is damaged or was
+edited by hand. The mod is off for the session; its block is kept unchanged in the next save.
+
+**A total in `maid.state` grows at every load.** Handlers fire while a load restores the game, and on the page the
+save was made in a second time. Skip the restore with `maid.session.restoring` ([lua.md](lua.md), "Loads").
+
 **A number prints with up to 17 digits** (`0.1 + 0.2` reads `0.30000000000000004`, `1/3` reads
 `0.3333333333333333`). This build's Lua library writes fractions as .NET does, not with Lua 5.2's 14 digits; whole
 numbers print the same. Format a number before you show it, for example `string.format("%.2f", x)`, which gives the

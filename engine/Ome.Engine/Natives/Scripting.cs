@@ -8,8 +8,8 @@ namespace Ome.Engine.Natives;
 public enum LuaErrorPolicy { Continue, Halt }
 
 /// <summary>What the composition gives the scripting native: the run's runtime, the link's stack and hook plan, where
-/// the linked instructions came from, the bounds, the error policy, and the directory <c>lua.log</c> goes in (none
-/// keeps the log in memory only).</summary>
+/// the linked instructions came from, the bounds, the error policy, the directory <c>lua.log</c> goes in (none keeps the
+/// log in memory only), and how to read the mod ids a save's stamp names.</summary>
 public sealed record ScriptingSetup
 {
     public LazyModRuntime? Runtime { get; init; }
@@ -19,6 +19,12 @@ public sealed record ScriptingSetup
     public ModLimits Limits { get; init; } = ModLimits.Default;
     public LuaErrorPolicy Errors { get; init; } = LuaErrorPolicy.Continue;
     public string? DiagnosticsDirectory { get; init; }
+
+    /// <summary>The mod ids the stack stamp beside a loaded save names (mod loader spec §8, <c>SAVEnn.mods.toml</c>),
+    /// from the texts the store read beside it; null when it has none. With it, a load whose state file is missing
+    /// while the stamp names a mod that ships Lua is reported (spec §11). The composition reads the stamp; without it
+    /// that report is not made.</summary>
+    public Func<IReadOnlyDictionary<string, string>, IReadOnlyCollection<string>?>? StampedMods { get; init; }
 }
 
 /// <summary>
@@ -47,7 +53,8 @@ public sealed partial class Scripting : IDisposable
         public ScriptHooks? Table { get; } = table;
     }
 
-    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
+    // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5), and so does each session's
+    // build, which first takes the load's state (Scripting.State.cs).
     private sealed class Scene
     {
         public IModSession? Session;
@@ -55,6 +62,18 @@ public sealed partial class Scripting : IDisposable
         public SessionReason Reason;
         public readonly Dictionary<int, int> FailuresInARow = new();
         public readonly HashSet<int> SwitchedOff = new();
+        // Each mod's last good state block (spec §11): the loaded one until a save captures the mod's own. A block for
+        // a mod not in the session, or off in it, is carried into every save unchanged.
+        public readonly Dictionary<string, ModStateBlock> Blocks = new(StringComparer.Ordinal);
+        public bool Restoring;        // maid.session.restoring: a full load's build until its last frame is restored
+        public bool ResumedPending;   // ome.session.resumed is due at the next instruction boundary
+        public int Slot = -1;         // the slot the session's load read
+        // A load's state, from the save native's read until the session the load rebuilds takes it (spec §11).
+        public LoadedState? Loaded;
+        // A data-only load ended the session; the next instruction boundary builds the next one (spec §5.7).
+        public bool BuildPending;
+        // A mod's state failed to serialize under --lua-errors halt; the save's own instruction ends the run.
+        public string? HaltPending;
     }
 
     private Scene _scene = new();
@@ -93,15 +112,23 @@ public sealed partial class Scripting : IDisposable
         _interpreter = interpreter;
     }
 
-    /// <summary>The table a frame of <paramref name="script"/> takes when it is entered (spec §7.5), or null.</summary>
+    /// <summary>The table a frame of <paramref name="script"/> takes when it is entered (spec §7.5), or null.
+    /// <c>ome.save.writing</c>'s subscribers take their places in the list of every numbered save instruction, as a
+    /// <c>before</c> hook on it would (spec §7.4, §7.7).</summary>
     public ScriptHooks? HooksFor(Script script)
     {
-        if (_setup.Plan.Sites.Count == 0) return null;
+        IReadOnlyList<PlannedHandler> saveWriting = _setup.Plan.HandlersOf(SaveWritingEvent);
+        if (_setup.Plan.Sites.Count == 0 && saveWriting.Count == 0) return null;
         if (_tables.TryGetValue(script, out TableEntry? entry)) return entry.Table;
-        ScriptHooks? table = null;
-        if (_setup.Plan.Sites.TryGetValue(Localization.TextCatalog.NormalizeScriptName(script.Name), out var sites))
-            table = ScriptHooks.For(script, sites, site => WriteLog(ModLogLevel.Warn, null,
-                $"{script.Name}@0x{site.Offset:x} is no instruction of the loaded script; its hooks do not fire"));
+        if (!_setup.Plan.Sites.TryGetValue(Localization.TextCatalog.NormalizeScriptName(script.Name), out var sites))
+            sites = [];
+        IInterpreterAccess? interpreter = _interpreter;
+        ScriptHooks? table = ScriptHooks.For(script, sites,
+            site => WriteLog(ModLogLevel.Warn, null,
+                $"{script.Name}@0x{site.Offset:x} is no instruction of the loaded script; its hooks do not fire"),
+            interpreter == null ? null : instruction => interpreter.IsNumberedSave(instruction.Opcode),
+            saveWriting.Select(handler => handler with { EngineEvent = SaveWritingEvent }).ToList(),
+            offset => _setup.Sites.Site(script.Name, offset));
         _tables.AddOrUpdate(script, new TableEntry(table));
         return table;
     }
@@ -113,14 +140,18 @@ public sealed partial class Scripting : IDisposable
     /// </summary>
     public string? StartSession(SessionReason reason)
     {
+        LoadedState? loaded = reason == SessionReason.Load ? _scene.Loaded : null;
         EndSession();
+        // Spec §5.7 step 2: a load's state, kept even when no mod ships Lua, so a removed mod's block reaches the next
+        // save (spec §11).
+        ModState state = TakeState(loaded);
         if (!_setup.Stack.HasLua) return null;   // gate 1: no mod ships Lua, so no runtime
         IModRuntime runtime = Runtime();
         IModSession session;
         _depth++;
         try
         {
-            session = runtime.BuildSession(_setup.Stack, _access, ModState.Empty, reason, _setup.Limits);
+            session = runtime.BuildSession(_setup.Stack, _access, state, reason, _setup.Limits);
         }
         finally
         {
@@ -138,8 +169,8 @@ public sealed partial class Scripting : IDisposable
         return RaiseEngineEvent(SessionStartEvent, new KeyValuePair<string, CellValue>("reason", CellValue.String(reason.Name())));
     }
 
-    /// <summary>Op 0x9's reset: the session ends with the scene (spec §5.7). The interpreter builds the next one before
-    /// the root script is entered again.</summary>
+    /// <summary>Op 0x9's reset: the session ends with the scene, and with it the mods' state and a load still to be
+    /// taken (spec §5.7). The interpreter builds the next one before the root script is entered again.</summary>
     public void ResetScene() => EndSession();
 
     /// <summary>End the session at shutdown, on the engine thread or once it has stopped. The composition disposes the
@@ -167,8 +198,13 @@ public sealed partial class Scripting : IDisposable
         {
             PlannedHandler handler = handlers[i];
             if (!IsOn(session, handler.Handler)) continue;
-            var context = HookContext.ForPoint(site, instruction, _interpreter, _memory.Encoding.CodePage);
-            if (Call(session, handler.Handler, context, frameAccess: true) is { } halt)
+            // An engine event's subscriber in the instruction's list (ome.save.writing) gets the event's context:
+            // its fields, and no frame.
+            HookContext context = handler.EngineEvent is { } name
+                ? HookContext.ForEngineEvent(name,
+                    new KeyValuePair<string, CellValue>("slot", _interpreter.ReadOperand(instruction.Args[1])))
+                : HookContext.ForPoint(site, instruction, _interpreter, _memory.Encoding.CodePage);
+            if (Call(session, handler.Handler, context, frameAccess: handler.EngineEvent == null) is { } halt)
                 return halt;
         }
         return null;

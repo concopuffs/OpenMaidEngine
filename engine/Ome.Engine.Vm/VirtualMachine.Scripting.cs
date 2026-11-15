@@ -61,4 +61,7 @@ public sealed partial class VirtualMachine : IInterpreterAccess
 
     uint? IInterpreterAccess.ScriptId(string name)
         => _provider?.GetByName(name.EndsWith(".BIN", StringComparison.OrdinalIgnoreCase) ? name : name + ".BIN")?.PackedId;
+
+    bool IInterpreterAccess.IsNumberedSave(int opcode)
+        => _t.TryGetDefinition(opcode, out OpcodeDefinition definition) && definition.CanonicalLabel == "save-numbered-slot";
 }

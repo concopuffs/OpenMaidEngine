@@ -231,7 +231,7 @@ public sealed partial class VirtualMachine
         _shell = shell;
         _saveRecords = new NumberedSaveRecords(
             _memory, _audio, _graphics, _text, CaptureSavedFrames,
-            releaseSurfacesOnLoad: (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0);
+            releaseSurfacesOnLoad: (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0, scripting: _scripting);
         // The input and waits native routes the front end's input to this interpreter's hotspots and callbacks.
         waits.RouteInputTo(this);
         _stopAndReload = waits.StopAndReload ?? new StopAndReload();
@@ -1400,6 +1400,13 @@ public sealed partial class VirtualMachine
             }
             Steps++;
             frame.Pc = pc;
+            // Lua scripting spec §5.7, §11: a data-only load's session, and ome.session.resumed after a full load's last
+            // frame, at the first boundary, before its services run anything.
+            if (_scripting is { BoundaryPending: true } && _scripting.ServiceBoundary() is { } pendingHalt)
+            {
+                HaltReason ??= pendingHalt;
+                return LoopEnd.Halted;
+            }
             switch (ServiceInstructionBoundary())
             {
                 case FrameOutcome.RootReload: return LoopEnd.RootReload;

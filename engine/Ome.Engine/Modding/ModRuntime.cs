@@ -42,14 +42,18 @@ public static class SessionReasons
     };
 }
 
-/// <summary>The bounds of a session (spec §5.5; plan §3.2–§3.3): the instructions a handler call or a console chunk
-/// may run, the instructions each mod's start-up code (its <c>init.lua</c> and the files its hooks name) may run, and
-/// how deep handlers may nest.</summary>
+/// <summary>The bounds of a session (spec §5.5, §8.3; plan §3.2–§3.3): the instructions a handler call or a console
+/// chunk may run, the instructions each mod's start-up code (its <c>init.lua</c> and the files its hooks name) may run,
+/// how deep handlers may nest, and how large and how deeply nested one mod's <c>maid.state</c> may be.</summary>
 public sealed record ModLimits
 {
     public long HandlerInstructions { get; init; } = 1_000_000;
     public long StartupInstructions { get; init; } = 10_000_000;
     public int NestingCap { get; init; } = 32;
+    /// <summary>The characters of one mod's serialized state.</summary>
+    public int StateCharacters { get; init; } = 1 << 20;
+    /// <summary>Tables nested in one mod's state, its own table counting as the first.</summary>
+    public int StateDepth { get; init; } = 64;
     public static readonly ModLimits Default = new();
 }
 
@@ -60,12 +64,33 @@ public sealed record ModBuildFailure(string ModId, string Message, string? Trace
 /// <summary>What a console chunk gave (spec §13): its results as text, or its error.</summary>
 public sealed record ConsoleResult(bool Succeeded, string Text);
 
-/// <summary>Each mod's <c>maid.state</c>, as a session is built from it and captures it. Milestone 2 gives it content
-/// (spec §11); until then every session starts from <see cref="Empty"/>.</summary>
+/// <summary>One mod's saved <c>maid.state</c> (spec §11): the mod's version when it was captured, and the state as
+/// the runtime serialized it, a JSON value the runtime alone reads (<c>{"s:count":3}</c>).</summary>
+public sealed record ModStateBlock(string Version, string Json);
+
+/// <summary>Each mod's <c>maid.state</c>, as a session is built from it (spec §11): one block per mod id. A block for a
+/// mod that is not in the session is carried into the next save unchanged.</summary>
 public sealed class ModState
 {
-    public static readonly ModState Empty = new();
+    public static readonly ModState Empty = new(new Dictionary<string, ModStateBlock>());
+
+    public ModState(IReadOnlyDictionary<string, ModStateBlock> blocks)
+        => Blocks = new Dictionary<string, ModStateBlock>(blocks, StringComparer.Ordinal);
+
+    /// <summary>By mod id.</summary>
+    public IReadOnlyDictionary<string, ModStateBlock> Blocks { get; }
+
+    public ModStateBlock? Of(string modId) => Blocks.GetValueOrDefault(modId);
 }
+
+/// <summary>A mod whose state a capture could not serialize (spec §8.3): a function, a cycle, a number that is not
+/// finite, a key that is neither a string nor an integer, or a state past the size limit.</summary>
+public sealed record ModStateFailure(string ModId, string Message);
+
+/// <summary>What <see cref="IModSession.CaptureState"/> gives (spec §11, §14.2): a block for each mod of the session
+/// that is on and whose state serialized, and the mods whose state did not. A mod that is off has neither.</summary>
+public sealed record ModStateCapture(IReadOnlyDictionary<string, ModStateBlock> Blocks,
+                                     IReadOnlyList<ModStateFailure> Failures);
 
 /// <summary>How a handler call or a chunk failed, so the native can apply the error policy (spec §5.5).</summary>
 public enum ModScriptErrorKind
@@ -121,8 +146,9 @@ public interface IModSession : IDisposable
     /// <paramref name="modId"/>. Its error is the result's text; an engine exception comes out unchanged.</summary>
     ConsoleResult RunChunk(string? modId, string code);
 
-    /// <summary>Each mod's state for a save (milestone 2).</summary>
-    ModState CaptureState();
+    /// <summary>Each mod's state for a save, serialized mod by mod (spec §11): one mod's bad state fails only that mod.
+    /// Runs no Lua: tables are read raw, so no metamethod and no budget is involved.</summary>
+    ModStateCapture CaptureState();
 }
 
 /// <summary>

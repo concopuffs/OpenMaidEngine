@@ -24,7 +24,8 @@ public interface IScriptAccess
     /// <summary>The console's face (spec §13): <c>vm</c>, and no write list.</summary>
     IModAccess Console { get; }
 
-    /// <summary><c>maid.session.restoring</c> (spec §11); milestone 2 sets it.</summary>
+    /// <summary><c>maid.session.restoring</c> (spec §11): true from a full load's session build until its last frame
+    /// is restored.</summary>
     bool Restoring { get; }
 }
 
@@ -176,4 +177,9 @@ public interface IInterpreterAccess
 
     /// <summary>The packed id of a catalog script, or null.</summary>
     uint? ScriptId(string name);
+
+    /// <summary>Whether <paramref name="opcode"/> is the numbered save (op 0x19e in both games), before which
+    /// <c>ome.save.writing</c> fires (spec §7.7). The interpreter answers from its opcode table, so the native names
+    /// no opcode number.</summary>
+    bool IsNumberedSave(int opcode);
 }

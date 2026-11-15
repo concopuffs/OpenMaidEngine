@@ -31,6 +31,7 @@ internal sealed partial class LuaModSession : IModSession
     private readonly IScriptAccess _access;
     private readonly ModLimits _limits;
     private readonly SessionReason _reason;
+    private readonly ModState _saved;
     private readonly Dictionary<string, ModEnvironment> _mods = new(StringComparer.Ordinal);
     private readonly LuaValue[] _handlers;
     private readonly List<ModBuildFailure> _failures = new();
@@ -43,10 +44,12 @@ internal sealed partial class LuaModSession : IModSession
     private bool _budgetStop;
     private ExceptionDispatchInfo? _kept;
 
-    private LuaModSession(ModRuntimeStack stack, IScriptAccess access, SessionReason reason, ModLimits limits)
+    private LuaModSession(ModRuntimeStack stack, IScriptAccess access, ModState saved, SessionReason reason,
+                          ModLimits limits)
     {
         _stack = stack;
         _access = access;
+        _saved = saved;
         _reason = reason;
         _limits = limits;
         _handlers = new LuaValue[stack.Handlers.Count];
@@ -74,7 +77,7 @@ internal sealed partial class LuaModSession : IModSession
     public static LuaModSession Build(ModRuntimeStack stack, IScriptAccess access, ModState state, SessionReason reason,
                                       ModLimits limits)
     {
-        var session = new LuaModSession(stack, access, reason, limits);
+        var session = new LuaModSession(stack, access, state, reason, limits);
         foreach (ModRuntimeMod mod in stack.Mods) session.BuildMod(mod);
         return session;
     }
@@ -83,8 +86,9 @@ internal sealed partial class LuaModSession : IModSession
 
     public bool IsActive(HandlerId handler) => _handlers[handler.Index].Type == LuaValueType.Function;
 
-    /// <summary>Spec §5.7 step 3 for one mod: its environment, its <c>init.lua</c>, the files its hooks name, and
-    /// each handler's function. An error switches the mod off for the session.</summary>
+    /// <summary>Spec §5.7 steps 2 and 3 for one mod: its environment with its saved state, its <c>init.lua</c>, the
+    /// files its hooks name, and each handler's function. An error switches the mod off for the session; the scripting
+    /// native then carries its saved state into the next save unchanged.</summary>
     private void BuildMod(ModRuntimeMod mod)
     {
         var environment = new ModEnvironment(mod.Id, mod, _access.Mod(mod.Id), this);
@@ -93,6 +97,16 @@ internal sealed partial class LuaModSession : IModSession
         if (offRequirement != null)
         {
             SwitchOff(environment, $"it requires {offRequirement}, which is off for this session", null);
+            return;
+        }
+        ModStateBlock? saved = _saved.Of(mod.Id);
+        try
+        {
+            environment.SetState(saved == null ? new LuaTable() : LuaStateCodec.Decode(saved.Json, _limits), saved?.Version);
+        }
+        catch (LuaStateException error)
+        {
+            SwitchOff(environment, $"its saved state cannot be read: {error.Message}", null);
             return;
         }
         try
@@ -182,7 +196,26 @@ internal sealed partial class LuaModSession : IModSession
 
     public const string ConsoleId = "console";
 
-    public ModState CaptureState() => ModState.Empty;   // milestone 2
+    /// <summary>Spec §11: each mod that is on, in load order, serialized on its own. A mod whose state does not
+    /// serialize is a failure, and the others are still captured.</summary>
+    public ModStateCapture CaptureState()
+    {
+        var blocks = new Dictionary<string, ModStateBlock>(StringComparer.Ordinal);
+        var failures = new List<ModStateFailure>();
+        foreach (ModRuntimeMod mod in _stack.Mods)
+        {
+            if (!_mods.TryGetValue(mod.Id, out ModEnvironment? environment) || environment.Off) continue;
+            try
+            {
+                blocks[mod.Id] = new ModStateBlock(mod.Version, LuaStateCodec.Encode(environment.State, _limits));
+            }
+            catch (LuaStateException error)
+            {
+                failures.Add(new ModStateFailure(mod.Id, error.Message));
+            }
+        }
+        return new ModStateCapture(blocks, failures);
+    }
 
     public void Dispose()
     {

@@ -3,9 +3,10 @@
 **Date:** 2026-11-14
 **Spec:** `docs/superpowers/specs/2026-11-10-lua-scripting-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps what each milestone measured and what that settles for the later ones.
-**Status:** milestones 0 and 1 are done (2026-11-14). Milestone 0, the spike, chose **Lua-CSharp 0.5.8**
+**Status:** milestones 0 to 2 are done (2026-11-14). Milestone 0, the spike, chose **Lua-CSharp 0.5.8**
 (`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the library against the official Lua 5.2
-test suite. Milestones 2 to 6 are not built. The backlog's "Runtime scripting (Lua)" item lists them.
+test suite. Milestone 2 built mod state and the session's life across loads (§6). Milestones 3 to 6 are not built.
+The backlog's "Runtime scripting (Lua)" item lists them.
 
 Paths are relative to `age-reimpl/`.
 
@@ -402,3 +403,141 @@ What it touches:
 - **The move changes noise, not values.** After it, `3 * 1.1` reads `3.3` instead of `3.3000000000000003`. A mod
   that formats explicitly sees no change; one that compares number text with a string literal would, and a number a
   mod keeps as text no longer reads back exactly, as in Lua 5.2.
+
+## 6. Milestone 2: state
+
+Built 2026-11-14 on `feature/lua-scripting`: `maid.state` beside each numbered save, the session a load rebuilds,
+`maid.session.restoring`, `ome.session.resumed` and `ome.save.writing` (spec §5.7, §7.7, §8.3, §11). What it holds,
+by layer:
+
+- **The seam** (`engine/Ome.Engine/Modding/`): `ModState` holds a `ModStateBlock` per mod (its version and its state
+  as JSON text); `IModSession.CaptureState()` returns the blocks and a failure per mod whose state did not serialize.
+  `ModLimits` gains the state's bounds: 1,048,576 characters per mod and 64 levels of nesting. The plan's handlers
+  carry the engine event they answer (`PlannedHandler.EngineEvent`), so one can sit in an instruction's list.
+- **The scripting native** (`engine/Ome.Engine/Natives/Scripting.State.cs`): the save record, the load's report, the
+  restore flag, the two events and the last good blocks. Every field is in its `Scene`, so `SceneReloadTests` holds:
+  a return to title drops a load not yet taken, the flag and the pending event with the session.
+- **The save native** (`SavesAndSettings.Numbered.cs`): `SaveNumbered` takes the time and play time, then the
+  scripting native's record, then calls the store; `LoadNumbered` hands the texts read beside the save to the
+  scripting native once the load has succeeded.
+- **The interpreter** (`engine/Ome.Engine.Vm/`): op `0x19e` ends the run after its save when a state failed under
+  `--lua-errors halt`; op `0x19f` ends the session on success; the terminal op `0xae` of a restore ends the restore.
+  The loop asks the native for a pending build or event at each boundary (below).
+- **The runtime** (`engine/Ome.Scripting.Lua/`): `LuaStateCodec` turns a mod's `maid.state` into the file's form and
+  back; the session decodes each mod's block before its `init.lua` and sets `maid.mod.state_version`.
+- **The link** (`ModLuaLinker`): `ome.session.resumed` and `ome.save.writing` bind like `ome.session.start`. Only
+  `ome.text.present` is still refused by name.
+- **The front end** (`godot/Main.Mods.cs`): the port's save store is the stamp store wrapped in a second sidecar
+  store for `SAVEnn.modstate.json`, in every run, with or without mods, so a removed last Lua mod's block reaches the
+  next save.
+
+Modders' guide: `docs/modding/lua.md`, "State" and "Loads"; the messages are in `docs/modding/troubleshooting.md`.
+
+### 6.1 The store's change
+
+`SidecarNativeDatStore` took one fixed text when it was built, which suits the stamp. It now also takes a text per
+save: `INativeDatStore.SaveNumberedFile` has an overload with the sidecars by suffix, where a null text deletes the
+file and a missing one leaves the store's fixed text. A load returns each sidecar's text in
+`NativeNumberedSaveFile.Sidecars`, read before the save is decoded. A store the port did not wrap ignores the
+sidecars, so a headless run without the wrapper writes no state file.
+
+The state's text is made before the store is called (spec §11, "Writing"), so the store's I/O catch never sees a
+mod's error. Delete and copy move the file with the save, as they did the stamp.
+
+### 6.2 The file
+
+```json
+{
+  "modstate": 1,
+  "save": { "timestamp": "2026-11-14T21:03:55.120", "play_seconds": 312 },
+  "mods": {
+    "lua-state-check": { "version": "1.0.0", "state": {"s:last_slot":0,"s:saves":1} }
+  }
+}
+```
+
+- Mods are in ordinal id order, and the state is written as the runtime gave it.
+- The state's form (`LuaStateCodec`): an object's keys are marked `s:` or `i:`; a table is an array only when its keys
+  are exactly 1 to n, n at least 1, and the empty table is `{}`; integer keys come first in ascending order, then
+  string keys in ordinal order; a whole number below 2^53 is written as an integer, any other number, and -0, in
+  .NET's round-trip form, so every number reads back exactly.
+- Refused, with the path of the value: functions, userdata, threads, cycles, numbers that are not finite, keys that
+  are neither strings nor integers, strings with a lone surrogate, nesting past 64 and text past 1,048,576 characters.
+  Metatables are not consulted or saved, and a table reached twice is written twice.
+- **Matching the save.** The file repeats the save's header time, to the millisecond, and its play time. A load
+  compares both with the save. A file that differs, or that cannot be read, is reported and gives every mod empty
+  state. With no file, a load reports only when the stamp beside the save names a mod that ships Lua in this stack.
+
+### 6.3 The last good block
+
+The native keeps a block per mod: the ones the session's load gave, replaced by each successful capture. A mod
+whose state does not serialize keeps its last good block in the file, the error goes to `lua.log` and a notice, and
+under `halt` op `0x19e` ends the run after the save is written. A mod that is off is not captured, and a mod not in
+the stack has no session at all, so both blocks are carried unchanged. The native exists in every port run, so this
+holds when no mod ships Lua and no runtime is created.
+
+### 6.4 Where the session and the events run
+
+- **A full load** (op `0x1a1`, then `VirtualMachine.Run`): the session is built between frames, before
+  `CALLBACK_LOAD.BIN`, with the save's state and `restoring` set. The terminal op `0xae` clears the flag before its
+  jump and queues `ome.session.resumed`.
+- **A data-only load** (op `0x19f`): the op ends the session when it succeeds, so nothing of the old session runs
+  after the banks are replaced, and the next boundary builds the new one with `restoring` clear and no resumed event,
+  since no frame is restored.
+- **The boundary.** The loop tests one property, `BoundaryPending`, before `ServiceInstructionBoundary()`. When it is
+  set, the native builds the pending session and then fires the pending `ome.session.resumed`, so both come before
+  the boundary's services and before the hooks of the instruction the game resumes at (decision 3: Lua runs at a
+  boundary). The order after a load is then `ome.session.start`, the restore's hooks, `ome.session.resumed`, the
+  first resumed instruction's hooks.
+- **`ome.save.writing`** is not a separate call. The link's handlers for it are merged into the `before` list of
+  each numbered-save instruction (opcode label `save-numbered-slot`, asked through `IInterpreterAccess.IsNumberedSave`)
+  by priority and then load order, with the point hooks there. It gets an engine event's context with `slot` read
+  from the instruction's slot operand, and no frame access.
+- **An abandoned load** (`CALLBACK_LOAD.BIN` returns to title): the reset ends the session with the flag set and
+  drops what was pending; the title's session starts clear and empty.
+
+### 6.5 Gates
+
+| Gate | How it passes |
+|---|---|
+| 7. State | `LuaStateTests`, over real saves in a temporary directory through the store the port composes. State survives save and load (`AFullLoadRebuildsTheSessionWithTheSavedStateAndMarksTheRestore`). A removed and re-added mod gets its state back, as the last Lua mod and beside another (`ARemovedModGetsItsStateBackAfterASaveMadeWithoutIt`). `SAVEnn.DAT`'s payload and history tail are equal with and without a mod that only uses `maid.state`; the header's time differs between any two saves (`TheSaveIsTheSameWithAndWithoutAModThatOnlyUsesState`). A mismatched file is reported (`AStateFileThatDoesNotMatchItsSaveIsReportedAndGivesEmptyState`). A missing file is reported when the stamp names a Lua mod, and not when it names a mod without Lua (`AMissingStateFileIsReportedWhenTheStampNamesAModThatShipsLua`). A function in the state does not fail the save: it is written, the file keeps the last good block, the error names the mod, and `halt` ends the run (`AStateThatCannotBeSavedKeepsTheLastGoodBlockAndTheSaveIsStillWritten`). The keys `1` and `"1"` come back as two keys (the first test and `TheStateFormKeepsKeysTypesAndOrderAndReadsBackWhatItWrote`) |
+| 8. Session | A Lua global is gone after a load (the first test) and after a return to title (milestone 1, and `AnAbandonedLoadEndsWithTheFlagSetAndTheTitleSessionStartsClear`). The order is the build, `ome.session.start`, the first instruction's hooks. `maid.session.restoring` is set through `CALLBACK_LOAD` and the prologue and clear at `ome.session.resumed`; a hook in the repeated range fires again after it, and a total that honours the flag is the same after save, load and resume while one in the repeated range counts it twice (the first test, with point hooks where the gate names watches). Op `0x19f`'s rebuild on a synthetic script (`ADataOnlyLoadRebuildsTheSessionAtTheNextBoundary`). `ome.save.writing` in the save instruction's list by priority (`SaveWritingTakesItsPlaceInTheSaveInstructionsListByPriority`) |
+| 10. Errors, the load case | `AModWhoseInitFailsAtALoadIsOffAndItsStateBlockIsCarriedUnchanged` |
+| 14. Layers | `SceneReloadTests` with the new fields; the codec is in `Ome.Scripting.Lua` |
+
+Held for milestone 4, as spec §18 says: `enter` for a restored frame, `exit`, the watch cases and hooks around a wait.
+One case more waits there: that op `0x19f`'s own `after` hook does not fire. There are no `after` hooks yet; the
+session ends inside the op, so none could.
+
+### 6.6 Driven in the port
+
+On 2026-11-14, sandbox `luastate`, with a scratch mod (`ome.session.start`, `ome.session.resumed` and
+`ome.save.writing` handlers counting saves in `maid.state`) and `--lua-errors halt`:
+
+- a save in slot 0 and its load logged `start boot`, `writing slot 0 saves=1`, `start load restoring=true saves=1
+  from=1.0.0`, `resumed slot 0 restoring=false`; `SAVE00.modstate.json` held `{"s:last_slot":0,"s:saves":1}`
+  beside the stamp;
+- restarted without the mod, slot 0 loaded and slot 1 saved: `SAVE01.modstate.json` carried the block, and slot 1 has
+  no stamp;
+- restarted with the mod, slot 1 loaded: `saves=1 from=1.0.0` came back;
+- with `SAVE00.modstate.json` deleted, slot 0's load reported the missing file in the engine log and a notice, and the
+  state started empty.
+
+### 6.7 Measured
+
+Dispatch, as §4.7, against the commit before the milestone (`92c6a70d`) in a second worktree: Release, 200,000
+instructions, each one hooked in the hooked case; each case the best of 30 runs, less a one-instruction run of the
+same set-up; three passes per process, the first dropped as warm-up; each build run twice, alternating.
+
+| Case | Before | Milestone 2 |
+|---|---|---|
+| no scripting native | 21.5 ns, 0 B | 21.6–21.7 ns, 0 B |
+| a scripting native, no Lua mod (the port's run without Lua mods) | 21.6–21.8 ns, 0 B | 21.8–22.0 ns, 0 B |
+| a Lua mod, the instruction not hooked | 21.6–21.8 ns, 0 B | 21.9 ns, 0 B |
+| a trivial handler | 101.9–103.3 ns, 175 B | 105.1–109.2 ns, 175 B |
+
+The boundary test adds a fraction of a nanosecond where nothing is hooked. A hooked call costs 2 to 7 ns more; the
+cause was not isolated (the dispatch now tests each handler for an engine event). This harness counts allocation differently from §4.7's, so its 175 B
+compare only with each other.
+
+The engine suite (2156 tests) and core validation pass.

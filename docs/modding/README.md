@@ -27,8 +27,8 @@ Format version 2 adds **language packages**: translation catalogs and fonts that
 language without changing a script ([translating.md](translating.md) walks through one, [languages.md](languages.md)
 has every rule). They run in the port only.
 
-Format version 3 adds **Lua**: handlers the engine calls at a named instruction or when a session starts, with raw
-access to the game's cells ([lua.md](lua.md)). Lua mods run in the port only.
+Format version 3 adds **Lua**: handlers the engine calls at a named instruction or at an engine event, with raw
+access to the game's cells and state saved beside each save ([lua.md](lua.md)). Lua mods run in the port only.
 
 Mods cannot yet extend the engine or patch code another mod inserted. `../backlog.md` and the mod loader design's
 future work list what may come later.

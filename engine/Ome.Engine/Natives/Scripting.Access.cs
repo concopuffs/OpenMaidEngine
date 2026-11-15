@@ -25,7 +25,7 @@ public sealed partial class Scripting
 
         public IModAccess Console => _console ??= new ModFace(owner, ConsoleId, vm: true);
 
-        public bool Restoring => false;   // milestone 2 (spec §11)
+        public bool Restoring => owner._scene.Restoring;
     }
 
     private sealed class ModFace(Scripting owner, string modId, bool vm) : IModAccess

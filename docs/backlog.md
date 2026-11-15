@@ -335,16 +335,15 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
-- **Runtime scripting (Lua): milestones 0 and 1 built.** `superpowers/specs/2026-11-10-lua-scripting-design.md`
+- **Runtime scripting (Lua): milestones 0 to 2 built.** `superpowers/specs/2026-11-10-lua-scripting-design.md`
   (accepted 2026-11-14) specifies Lua beside the VM: a managed interpreter, hooks declared in the manifest (`omp = 3`),
   the `maid` API, per-game base mods with declared writes, mod state beside the save, and gates 1 to 15. Milestone 0
-  (the spike) chose Lua-CSharp, and milestone 1 (the core: point hooks, `ome.session.start`, `maid.vm` without
-  `call`, errors and budgets, the console) is built, both on 2026-11-14; their results are in
-  `superpowers/plans/2026-11-14-lua-scripting.md`, and the modders' guide is `modding/lua.md`. The remaining milestones
-  (§18), each done when its gates pass:
+  (the spike) chose Lua-CSharp, milestone 1 (the core: point hooks, `ome.session.start`, `maid.vm` without
+  `call`, errors and budgets, the console) and milestone 2 (state: `maid.state` beside each save, the rebuild on
+  load, `maid.session.restoring`, `ome.session.resumed`, `ome.save.writing`) are built, all on 2026-11-14; their
+  results are in `superpowers/plans/2026-11-14-lua-scripting.md`, and the modders' guide is `modding/lua.md`. The
+  remaining milestones (§18), each done when its gates pass:
   - **The first release:**
-    2. state: `maid.state` and its sidecar, the rebuild on load, `maid.session.restoring`,
-       `ome.session.resumed`, `ome.save.writing`;
     3. events and the first base mods: the layout, the accessors with declared writes, the write scan and
        `--lua-dev`, the trace, editor stubs, and the guide for mod authors.
   - **After it:** 4, raw sites, `skip`, script entry and exit, and watches; 5, synchronous script calls and the

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
@@ -89,13 +90,22 @@ public partial class Main
         }
     }
 
-    /// <summary>Wraps the numbered-save store so each save carries the stack stamp and each load compares it.</summary>
+    /// <summary>Wraps the numbered-save store so each save carries the stack stamp, which each load compares, and the
+    /// mods' state, whose text the scripting native gives at each save (Lua scripting spec §11).</summary>
     private INativeDatStore StampSaves(INativeDatStore inner, ResolvedGamePersistence persistence)
     {
         ModSaveStamp? current = _modLayer == null ? null : ModSaveStamp.Of(_modLayer);
-        return new SidecarNativeDatStore(inner, persistence.NativePaths.SaveDirectory, ModSaveStamp.Suffix,
+        string saves = persistence.NativePaths.SaveDirectory;
+        var stamped = new SidecarNativeDatStore(inner, saves, ModSaveStamp.Suffix,
             current?.ToToml(), (slot, text) => CheckSaveStamp(slot, text, current, persistence.DiagnosticsDirectory));
+        return new SidecarNativeDatStore(stamped, saves, Scripting.StateFileSuffix, currentSidecar: null);
     }
+
+    /// <summary>The mod ids the stamp beside a loaded save names, for the scripting native's missing-state report.</summary>
+    private static IReadOnlyCollection<string>? StampedMods(IReadOnlyDictionary<string, string> sidecars)
+        => sidecars.TryGetValue(ModSaveStamp.Suffix, out string? text)
+            ? ModSaveStamp.TryParse(text)?.Mods.Select(mod => mod.Id).ToArray()
+            : null;
 
     private static void CheckSaveStamp(int slot, string? text, ModSaveStamp? current, string diagnosticsDirectory)
     {

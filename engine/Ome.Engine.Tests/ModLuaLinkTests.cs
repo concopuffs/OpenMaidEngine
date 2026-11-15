@@ -107,7 +107,9 @@ public sealed class ModLuaLinkTests : IDisposable
     {
         // The file raises an error at its top level: the link only parses it.
         ModPackage mod = Mod("double-exp", PointHook() + "\n" + PointHook(extra: "priority = 5") + "\n"
-                                           + "[[hooks]]\nengine = \"ome.session.start\"\nhandler = \"hooks.lua:on_start\"\n",
+                                           + "[[hooks]]\nengine = \"ome.session.start\"\nhandler = \"hooks.lua:on_start\"\n"
+                                           + "[[hooks]]\nengine = \"ome.session.resumed\"\nhandler = \"hooks.lua:on_start\"\n"
+                                           + "[[hooks]]\nengine = \"ome.save.writing\"\nhandler = \"hooks.lua:on_start\"\n",
             Hooks("error('never at link')\n" + Doubles + "\nfunction on_start(e) end"));
         ModLinkResult result = ModLinker.Link(SyntheticBase(), [mod], []);
 
@@ -121,7 +123,9 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.Equal((0x9a, 0x9a, ExperiencePoint), (site.Offset, site.Site, site.Point));
         // One handler at two priorities: ascending priority, one id.
         Assert.Equal([(0, 0), (0, 5)], site.Handlers.Select(handler => (handler.Handler.Index, handler.Priority)));
-        Assert.Equal(1, Assert.Single(result.Lua.Plan.HandlersOf("ome.session.start")).Handler.Index);
+        // The three engine events this engine raises (spec §7.7), each bound to its one handler id.
+        foreach (string engineEvent in new[] { "ome.session.start", "ome.session.resumed", "ome.save.writing" })
+            Assert.Equal(1, Assert.Single(result.Lua.Plan.HandlersOf(engineEvent)).Handler.Index);
         Assert.Contains(result.Report.Lines, line => line.Class == ModReportClass.OrderedInteraction
                                                      && line.Message.Contains("handlers run in this order", StringComparison.Ordinal));
         // Spec §15: the report says which mods may change any game state.
@@ -196,8 +200,6 @@ public sealed class ModLuaLinkTests : IDisposable
     [InlineData("[[hooks]]\nscript = \"ADDEXP.BIN\"\nwhen = \"enter\"\nhandler = \"hooks.lua:on_award\"", "script entry and exit hooks")]
     [InlineData("[[hooks]]\nwatch = \"current_unit_id\"\nhandler = \"hooks.lua:on_award\"", "watches come with the wider hooks")]
     [InlineData("[[hooks]]\npoint = \"" + ExperiencePoint + "\"\nskip = true\nhandler = \"hooks.lua:on_award\"", "skip = true comes with")]
-    [InlineData("[[hooks]]\nengine = \"ome.session.resumed\"\nhandler = \"hooks.lua:on_award\"", "ome.session.resumed comes with mod state")]
-    [InlineData("[[hooks]]\nengine = \"ome.save.writing\"\nhandler = \"hooks.lua:on_award\"", "ome.save.writing comes with mod state")]
     [InlineData("[[hooks]]\nengine = \"ome.text.present\"\nhandler = \"hooks.lua:on_award\"", "is reserved for the localization filter")]
     [InlineData("[[hooks]]\nengine = \"ome.nothing.here\"\nhandler = \"hooks.lua:on_award\"", "is not an engine event")]
     public void TheLinkRefusesByNameWhatThisEngineDoesNotBuild(string hook, string message)

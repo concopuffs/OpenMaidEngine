@@ -655,6 +655,7 @@ public partial class Main : Godot.Control
             Sites = _modLayer?.ScriptSites ?? UnchangedScriptSites.Instance,
             Errors = luaErrors,
             DiagnosticsDirectory = profilePersistence.DiagnosticsDirectory,
+            StampedMods = StampedMods,
         });
         _waits.ServiceAfterRequests(_scripting.ServiceRequests);
         if (_modLayer?.LuaStack is { HasLua: true } luaStack)

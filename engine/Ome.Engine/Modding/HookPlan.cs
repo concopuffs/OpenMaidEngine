@@ -27,8 +27,11 @@ public sealed record ModRuntimeStack(IReadOnlyList<ModRuntimeMod> Mods, IReadOnl
     public ModRuntimeHandler this[HandlerId handler] => Handlers[handler.Index];
 }
 
-/// <summary>One handler due at a place, in the merged order of spec §7.4.</summary>
-public sealed record PlannedHandler(HandlerId Handler, int Priority, int LoadOrder, bool Skip = false);
+/// <summary>One handler due at a place, in the merged order of spec §7.4. <paramref name="EngineEvent"/> names the
+/// engine event the handler subscribes to when the event's subscribers take their places in an instruction's list
+/// (<c>ome.save.writing</c> before each numbered save, spec §7.7); such a handler is given the event's context.</summary>
+public sealed record PlannedHandler(HandlerId Handler, int Priority, int LoadOrder, bool Skip = false,
+                                    string? EngineEvent = null);
 
 /// <summary>A hooked instruction (spec §7.1, §7.5): its linked offset, its original offset, the point it is if it is
 /// one, and its handlers in order.</summary>
@@ -79,20 +82,39 @@ public sealed class ScriptHooks(HookSite?[] byIndex)
 
     /// <summary>The table of <paramref name="script"/> under <paramref name="sites"/>, or null when none of them
     /// names one of its instructions. A site whose offset is no instruction start is reported through
-    /// <paramref name="unbound"/>.</summary>
-    public static ScriptHooks? For(Script script, IReadOnlyList<PlannedSite> sites, Action<PlannedSite>? unbound = null)
+    /// <paramref name="unbound"/>. An instruction that <paramref name="takesEvent"/> accepts also gets
+    /// <paramref name="eventHandlers"/>, merged into its list by priority and then load order (spec §7.4); its
+    /// original offset comes from <paramref name="site"/>.</summary>
+    public static ScriptHooks? For(Script script, IReadOnlyList<PlannedSite> sites, Action<PlannedSite>? unbound = null,
+                                   Func<Instruction, bool>? takesEvent = null,
+                                   IReadOnlyList<PlannedHandler>? eventHandlers = null, Func<int, int?>? site = null)
     {
         HookSite?[]? table = null;
-        foreach (PlannedSite site in sites)
+        foreach (PlannedSite planned in sites)
         {
-            if (!script.IndexByOffset.TryGetValue(site.Offset, out int index))
+            if (!script.IndexByOffset.TryGetValue(planned.Offset, out int index))
             {
-                unbound?.Invoke(site);
+                unbound?.Invoke(planned);
                 continue;
             }
             table ??= new HookSite?[script.Instructions.Count];
-            table[index] = new HookSite(site, script.Name);
+            table[index] = new HookSite(planned, script.Name);
         }
+        if (takesEvent != null && eventHandlers is { Count: > 0 })
+            for (int index = 0; index < script.Instructions.Count; index++)
+            {
+                Instruction instruction = script.Instructions[index];
+                if (!takesEvent(instruction)) continue;
+                table ??= new HookSite?[script.Instructions.Count];
+                PlannedSite merged = table[index]?.Planned
+                                     ?? new PlannedSite(instruction.Offset, site?.Invoke(instruction.Offset) ?? -1, null, []);
+                merged = merged with
+                {
+                    Handlers = merged.Handlers.Concat(eventHandlers)
+                        .OrderBy(handler => handler.Priority).ThenBy(handler => handler.LoadOrder).ToList(),
+                };
+                table[index] = new HookSite(merged, script.Name);
+            }
         return table == null ? null : new ScriptHooks(table);
     }
 }

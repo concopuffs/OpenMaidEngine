@@ -48,7 +48,14 @@ public sealed record NativeSaveIdentity(
     }
 }
 
-public sealed record NativeNumberedSaveFile(NativeSaveDocument Document, byte[] HistoryTail);
+/// <summary>A numbered save as a load reads it: the save, its history tail, and the texts kept beside it, by file suffix
+/// (<c>.mods.toml</c>, <c>.modstate.json</c>). A store that keeps none gives none.</summary>
+public sealed record NativeNumberedSaveFile(NativeSaveDocument Document, byte[] HistoryTail)
+{
+    public IReadOnlyDictionary<string, string> Sidecars { get; init; } = NoSidecars;
+
+    public static readonly IReadOnlyDictionary<string, string> NoSidecars = new Dictionary<string, string>();
+}
 
 public interface INativeDatStore
 {
@@ -69,6 +76,16 @@ public interface INativeDatStore
         int slot, ReadOnlySpan<byte> payload, ReadOnlySpan<byte> historyTail,
         NativeSystemTime timestamp, uint accumulatedPlaySeconds)
         => SaveNumbered(slot, payload, timestamp, accumulatedPlaySeconds);
+
+    /// <summary>
+    /// A numbered save with the texts kept beside it (Lua scripting spec §11), by file suffix: a text is written beside
+    /// the save, and null deletes the file. A store that keeps no sidecars writes the save alone; a sidecar store
+    /// (<see cref="SidecarNativeDatStore"/>) takes its own suffix's text and hands the rest on.
+    /// </summary>
+    void SaveNumberedFile(
+        int slot, ReadOnlySpan<byte> payload, ReadOnlySpan<byte> historyTail,
+        NativeSystemTime timestamp, uint accumulatedPlaySeconds, IReadOnlyDictionary<string, string?> sidecars)
+        => SaveNumberedFile(slot, payload, historyTail, timestamp, accumulatedPlaySeconds);
     int DeleteNumberedPair(int slot);
     int CopyNumberedPair(int sourceSlot, int destinationSlot);
     byte[]? LoadNumberedThumbnail(int slot);

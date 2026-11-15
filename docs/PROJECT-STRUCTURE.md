@@ -261,7 +261,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       layouts and History, the style, the reveal, the wait indicator, the
     │                                       message settings, the fonts, the presenter, the string stores) and
     │                                       Scripting (the Lua session, the hook dispatch's handler calls, budgets
-    │                                       and the error policy, lua.log and the notices, the console)
+    │                                       and the error policy, lua.log and the notices, the console, the mods'
+    │                                       state beside each save)
     │   ├── Ome.Engine.Vm/                   the handler layer (superpowers/specs/2026-11-12-engine-layering-design.md
     │                                       §3.3): the interpreter, the handler table and handlers, and the engine
     │                                       builds; references Ome.Engine only and cannot see Ome.Engine.Devices
@@ -315,7 +316,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       project that names the library: the check (parse only), the session
     │                                       with one environment per mod, the sandbox, the module loader, the maid
     │                                       bindings and read-only views, the calling rules and budgets
-    │                                       (superpowers/plans/2026-11-14-lua-scripting.md §3.1), and LuaSource, the
+    │                                       (superpowers/plans/2026-11-14-lua-scripting.md §3.1), LuaStateCodec
+    │                                       (maid.state to the state file's JSON and back), and LuaSource, the
     │                                       library's hexadecimal-numeral workaround; references Ome.Engine only
     │   └── Ome.Scripting.Lua.Spike/         milestone 0 of the Lua design (superpowers/plans/2026-11-14-lua-
     │                                       scripting.md §1): a console program that checks LuaCSharp and
@@ -584,8 +586,11 @@ failure count that switches a handler off, `diagnostics/lua.log` and the notices
 runtime only when a mod ships Lua or the console asks (`LazyModRuntime`). Its partials: `Access` builds each mod's
 `IScriptAccess` face over the script memory native and the interpreter (`IInterpreterAccess`, which `VirtualMachine.Scripting.cs`
 implements); `Console` queues the driver's `lua` chunks and runs them at an instruction boundary or inside a wait
-(`ServiceRequests`, which `InputAndWaits.ServiceAfterRequests` calls after each batch of requests). The runtime it
-calls is `engine/Ome.Scripting.Lua/`; the link builds its stack and plan in `engine/Ome.Mods/Linking/ModLuaLinker.cs`.
+(`ServiceRequests`, which `InputAndWaits.ServiceAfterRequests` calls after each batch of requests); `State` is the
+mods' state and the session's life across loads: the save record the save native asks for at op `0x19e`
+(`SAVEnn.modstate.json`, which the port's `SidecarNativeDatStore` writes beside the save), the load's report, each
+mod's last good block, `maid.session.restoring`, and the build and `ome.session.resumed` the interpreter asks for at
+a boundary (`BoundaryPending`, `ServiceBoundary`). The runtime it calls is `engine/Ome.Scripting.Lua/`; the link builds its stack and plan in `engine/Ome.Mods/Linking/ModLuaLinker.cs`.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state
