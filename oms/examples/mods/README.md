@@ -33,5 +33,8 @@ ran the same scenarios on native AGE.
 - `example.double-exp-event` (Lua scripting §9.4, gate 5) is the same mod as a subscriber of `himegari-base`'s
   `himegari.experience.award`: it names no address, script or fingerprint and has no `vm`. `ModLuaLinkTests` runs it
   on `ADDEXP.BIN` and compares it with the guide's OMS patch too.
+- `example.kamidori-double-exp-event` (Lua scripting gate 13) is the same subscriber on Kamidori, of `kamidori-base`'s
+  `kamidori.experience.award`. `ModLuaLinkTests` runs it on both Kamidori installs' `ADDEXP.BIN` and compares it
+  with the Kamidori guide's OMS patch.
 
 Each folder is an unpacked Open Maid Pack; `Ome.Cli omp build DIR` packs one into a `.omp` with stored plans.

@@ -1,0 +1,17 @@
+<!-- DO NOT EDIT -- generated from vm-map/patch-points-kamidori.toml by tools/patch_points_build.py --build -->
+# Named patch points — kamidori (generated)
+
+Stable site names for OMS fragments (`before site <name> { … }`; mod loader spec §5,
+`docs/superpowers/specs/2026-11-03-mod-loader-design.md`). Each point lists its site per script revision;
+a fragment compiles only against a revision its point lists.
+
+## `kamidori.experience.after_calculation`
+
+Script: `ADDEXP.BIN`
+
+The award is final and not yet applied. L[0x1] holds the experience the character receives: G[0xfec0c], the amount the caller passes (COMMITBTL after a battle, FIELD), times the costume bonus (100, plus 25 for each of the four item_costume_gem_sockets of character_costume_item_id[current_character_id] that holds 0x118), over 100. current_unit_id is the unit and current_character_id its canonical character, whose character_levels, character_experience and unit_level_cap the award reads. Every path reaches this instruction, so `before site` sees every award and may rewrite L[0x1]; an amount of 0 or less, or a character at its level cap, gains no experience. Weapon experience (G[0xfec0d] and the equipped item) is decided after this point and does not read L[0x1].
+
+| Revision | Site |
+|---|---|
+| `sha256:606b83e952a3ce45ee406a2383710734f1ea707288f5751b5614be50e3edd7b6` | `0x88` |
+| `sha256:23bb6ac1e1aa83ef248bbacba4cadd71801fa07188aed3938c4768034f52b40b` | `0x88` |

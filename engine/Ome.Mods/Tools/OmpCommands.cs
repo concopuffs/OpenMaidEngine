@@ -79,6 +79,7 @@ public static class OmpCommands
 
             string packagePath = Path.GetFullPath(output ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(directory))!,
                 $"{mod.Id}-{mod.Manifest.Version}{ModPackage.PackageExtension}"));
+            Directory.CreateDirectory(Path.GetDirectoryName(packagePath)!);
             string temporary = packagePath + ".tmp";
             using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write))
             using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))

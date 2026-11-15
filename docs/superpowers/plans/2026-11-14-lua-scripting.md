@@ -800,3 +800,51 @@ Built 2026-11-15 (spec §13):
 - **Not checked here:** lua-language-server itself is not installed on this machine, so the annotations were read
   against its documented syntax (classes, `---@field [integer] T`, `---@overload`, `---@meta name`), not loaded in it.
   On the install the command writes `himegari-base.lua` with 332 table overloads and the award in `events.lua`.
+
+### 7.7 Kamidori's point and event, and the guide
+
+Built 2026-11-15 (spec §9.2, §18; gate 13):
+
+- **The point** `kamidori.experience.after_calculation` (`vm-map/patch-points-kamidori.toml`, Kamidori's first
+  patch-point registry) is `ADDEXP.BIN` site `0x88`, the `jcc` on `G[0xfec0d]` right after `div L[0x1]`:
+  - `ADDEXP` starts the award at `L[0x5] = 100`, adds 25 for each of the costume's four sockets that holds the
+    experience gem `0x118` (`item_costume_gem_sockets[character_costume_item_id[current_character_id]]`), and sets
+    `L[0x1] = G[0xfec0c] * L[0x5] / 100` at `0x7a`/`0x81`. `G[0xfec0c]` is the amount the caller passes (COMMITBTL
+    after a battle, FIELD) and `G[0xfec0d]` whether weapon experience is due.
+  - Every path reaches `0x88`; after it the award is gated on `character_levels < unit_level_cap` and
+    `L[0x1] > 0`, and the timed-callback loop moves it a point at a time into `character_experience`. Weapon
+    experience (from `0x464`) does not read `L[0x1]`.
+  - The registry lists two revisions at the same site: the clean install's (`sha256:606b83e9…`) and the translated
+    install's `patch/ADDEXP.BIN` (`sha256:23bb6ac1…`), whose code is the same with two string operands translated.
+- **The event** `kamidori.experience.award` (`mods/kamidori-base/events/experience.toml`): `amount` (`L[0x1]`, rw),
+  `unit` (`current_unit_id`), `character` (`current_character_id`) and `level`
+  (`character_levels[current_character_id]`). Kamidori keeps levels and experience per character, so the event has
+  the character beside the unit, which Himegari's does not need.
+- **No engine change.** The point, the event and the example are data; `base_mod_build.py` copied the point into
+  `mods/kamidori-base/layout/points.json`, and the engine linked and ran them as it does Himegari's.
+- **The example** `oms/examples/mods/example.kamidori-double-exp-event` subscribes and doubles the amount.
+- **The guide.** `modding/lua.md`'s first mod is now the event subscriber (no `vm`, no address), checked, run with
+  `--lua-trace`, given editor definitions and packed, with the point hook as the second form.
+  `modding/games/kamidori.md` has the point, both fingerprints, the OMS patch and the event table.
+- **Found on the way:** `omp build --output` into a folder that does not exist threw; it now makes the folder.
+- **Tests.** `ModLuaLinkTests` (2, Kamidori installs):
+  - on the clean install the shipped base mod's event links at `0x88`, and the award of 7 with one gem is 8 unmodded
+    and 16 with the subscriber (17 would mean the doubling came before the bonus), equal to the guide's OMS patch;
+  - on the translated install the same mods link and leave the same state.
+
+  The `omp build` test now builds into a missing folder.
+
+Gate 13 passes:
+
+| Gate | How it passes |
+|---|---|
+| 13. Second game | `kamidori-base` builds from `vm-map/globals-kamidori.toml` and `patch-points-kamidori.toml` (`base_mod_build.py`, `BaseModTests`); its event works with no engine change (`ModLuaLinkTests.KamidorisBaseModRaisesItsExperienceAwardAndASubscriberDoesWhatThePatchDoes`); a rename with no alias and no new major version fails the core `base-mods-check` gate (`tools/test_base_mod_build.py` `test_rename_rule`) |
+
+With it milestone 3's gates are done: 5 (but the site hook in the merged order, held for milestone 4), 13 and 15.
+
+Driven in the port on 2026-11-15 (profile `kamidori`, sandbox `k7lua`) with
+`--mod oms/examples/mods/example.kamidori-double-exp-event`: the engine mounted the shipped `kamidori-base`, the
+`[lua]` line read `1 mods ship Lua (example.kamidori-double-exp-event), with the layout of kamidori-base; 1
+handlers`, `mod-link.txt`'s `lua:` section listed the hook at `ADDEXP 0x88` and the event with its four fields and
+the subscriber, and the console found `on_award` in the mod with no `maid.vm`. The opening played with the mod on.
+An award in play needs a battle; the install tests run the same native on `ADDEXP.BIN`.

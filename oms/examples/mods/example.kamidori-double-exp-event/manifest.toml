@@ -1,0 +1,20 @@
+omp = 3
+id = "example.kamidori-double-exp-event"
+name = "Double EXP (Kamidori event)"
+version = "1.0.0"
+description = "Doubles every experience award, from a Lua subscriber of the base mod's experience award event."
+
+[game]
+profile = "kamidori"
+target = "extended"
+
+[lua]
+api = 1
+
+[[requires]]
+id = "kamidori-base"
+version = ">=1.0, <2"
+
+[[hooks]]
+event = "kamidori.experience.award"
+handler = "double_exp.lua:on_award"

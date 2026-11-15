@@ -1,0 +1,31 @@
+# One experience award (Lua scripting spec §9.2). Hand-written: the event names its point and gives each field's cell,
+# by the names layout/globals.json exports.
+
+[[event]]
+name = "kamidori.experience.award"
+point = "kamidori.experience.after_calculation"
+description = "One experience award, after the costume bonus and before it is applied."
+
+[[event.field]]
+name = "amount"
+at = "L[0x1]"                    # the frame's integer local 1: the experience the character receives
+type = "int"
+access = "rw"
+
+[[event.field]]
+name = "unit"
+at = "current_unit_id"           # the unit the award goes to
+type = "int"
+access = "r"
+
+[[event.field]]
+name = "character"
+at = "current_character_id"      # the unit's canonical character, whose level and experience the award changes
+type = "int"
+access = "r"
+
+[[event.field]]
+name = "level"
+at = "character_levels[current_character_id]"
+type = "int"
+access = "r"

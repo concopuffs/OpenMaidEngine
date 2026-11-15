@@ -138,10 +138,53 @@ The unit tables sit above the saved range, so boot rebuilds them with the edit o
 after loading a save. Saves made before the edit pick it up too. `../../kamidori-data-tables.md` explains how the
 init scripts fill each table.
 
-In Lua ([../lua.md](../lua.md), "Game names"), `kamidori-base` gives the same tables by name.
+## Patch points
+
+`kamidori.experience.after_calculation` (`ADDEXP.BIN`) is reached once per experience award, after the costume
+bonus. `L[0x1]` holds the amount the character receives: the amount the caller passes, times 100 plus 25 for each
+experience gem (`0x118`) in the character's costume sockets, over 100. The point lists both installs' ADDEXP, which
+differ only in two strings:
+
+| `ADDEXP.BIN` | Fingerprint |
+|---|---|
+| untranslated | `sha256:606b83e952a3ce45ee406a2383710734f1ea707288f5751b5614be50e3edd7b6` |
+| translated | `sha256:23bb6ac1e1aa83ef248bbacba4cadd71801fa07188aed3938c4768034f52b40b` |
+
+```text
+oms 1
+patch "ADDEXP.BIN" fingerprint "sha256:606b83e952a3ce45ee406a2383710734f1ea707288f5751b5614be50e3edd7b6"
+use kamidori.globals
+
+local int exp @ 0x1
+
+before site kamidori.experience.after_calculation {
+    exp = exp * 2
+}
+```
+
+A fragment names one fingerprint, so this one patches the untranslated install; put the translated fingerprint in a
+second fragment for the other. A Lua hook or event subscriber names no fingerprint and links on both.
+
+In Lua ([../lua.md](../lua.md), "Game names"), `kamidori-base` gives the game's tables by name.
 `require("kamidori-base").table("unit_condition_levels")[unit].charm` reads a battle unit's charm level. The table
 has 50 rows, which end where `unit_condition_remaining_turns` starts. The names are those of
-`../../global-reference-kamidori.md`.
+`../../global-reference-kamidori.md`. Levels and experience belong to the character, not the unit:
+`character_levels` and `character_experience` are indexed by `current_character_id`, the unit's canonical
+character.
+
+`kamidori-base` declares one game event ([../lua.md](../lua.md), "Game events"), raised at the experience point:
+
+| Event | Field | Type | Access | Cell |
+|---|---|---|---|---|
+| `kamidori.experience.award` | `amount` | int | rw | `L[0x1]`, the experience the character receives |
+| | `unit` | int | r | `current_unit_id` |
+| | `character` | int | r | `current_character_id` |
+| | `level` | int | r | `character_levels[current_character_id]` |
+
+A subscriber needs no `vm`. `oms/examples/mods/example.kamidori-double-exp-event` doubles every award with
+`event.amount = event.amount * 2`, and leaves the same state as the patch above. An amount of 0 or less, or a
+character at the level cap, gains no experience. Weapon experience is awarded after the point and does not read the
+amount.
 
 ## Catalogs, scenes and saves
 
@@ -160,3 +203,4 @@ has 50 rows, which end where `unit_condition_remaining_turns` starts. The names 
 |---|---|
 | `oms/examples/mods/example.kamidori-prologue-line` | a patch against the translated opening |
 | `oms/examples/kamidori-gate6/` | a boot-time data edit and a script called by packed id |
+| `oms/examples/mods/example.kamidori-double-exp-event` | a Lua subscriber of `kamidori.experience.award`, without `vm` |

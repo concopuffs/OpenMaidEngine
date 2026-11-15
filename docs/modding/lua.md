@@ -21,9 +21,13 @@ reloading Lua without a restart. A mod that uses one of them fails to link, and 
 not build it yet. The design
 behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
-Game-specific values (point names, which local holds what) are in your game guide, `games/<profile>.md`.
+Game-specific values (point names, which local holds what, the events and their fields) are in your game guide,
+`games/<profile>.md`.
 
 ## A first Lua mod
+
+This mod doubles every experience award. It subscribes to the award event that your game's base mod declares
+("Game events"), so it names no address, script or fingerprint and needs no capability.
 
 ```text
 my.double-exp/
@@ -44,23 +48,52 @@ target = "extended"
 
 [lua]
 api = 1
-capabilities = ["vm"]
+
+[[requires]]
+id = "<profile>-base"
+version = ">=1, <2"
 
 [[hooks]]
-point = "<a patch point of your game>"
+event = "<profile>.experience.award"
 handler = "double_exp.lua:on_award"
 ```
 
 ```lua
 -- lua/double_exp.lua
+function on_award(event)
+  event.amount = event.amount * 2
+end
+```
+
+1. **Check it** with `omp check --mod my.double-exp` ([cli.md](cli.md)). The check compiles every Lua file and checks
+   every hook without running any of your code. The report's `lua:` section lists the event with your handler among
+   its subscribers ("The link report and the trace").
+2. **Run it** with `--mod my.double-exp`. The startup log prints a `[lua]` line with the mods that ship Lua and the
+   number of handlers. Add `--lua-trace` and win a battle: `diagnostics/lua-trace.jsonl` gets a line per award, with
+   the amount before and after your handler.
+3. **Get completion** in your editor with `omp lua-stubs --mod my.double-exp --output DIR` ("Editor definitions").
+4. **Pack it** with `omp build my.double-exp`, which writes `my.double-exp-1.0.0.omp` beside the folder.
+
+Your game guide (`games/<profile>.md`) lists its events and their fields, and ships this mod finished.
+
+When no event covers what you need, hook the instruction itself. The same mod as a point hook reads the frame's
+local by number, so it needs `vm` and depends on what your game guide says the local holds ("Point hooks"):
+
+```toml
+[lua]
+api = 1
+capabilities = ["vm"]
+
+[[hooks]]
+point = "<profile>.experience.after_calculation"
+handler = "double_exp.lua:on_award"
+```
+
+```lua
 function on_award(ctx)
   maid.vm.l[0x1] = maid.vm.l[0x1] * 2
 end
 ```
-
-Check it with `omp check --mod my.double-exp`, then run it with `--mod my.double-exp` ([cli.md](cli.md)). The check
-compiles every Lua file and checks every hook without running any of your code. The startup log prints a `[lua]`
-line with the mods that ship Lua and the number of handlers.
 
 ## The manifest
 

@@ -319,8 +319,6 @@ still handled on their own. Each change should be behaviour-neutral and pass the
 - **Kamidori new-scene example.** The save-capable scene recipe (`docs/modding/new-scenes.md`) is proven on
   Himegari only (`example.prologue`, gates 4 and 5). Done when a Kamidori scene mod, built on one of its append
   scenes' skeletons, plays and saves on native AGE.
-- **Kamidori named patch points.** `vm-map/patch-points-himegari.toml` has one point. Kamidori has no registry yet,
-  so Kamidori fragments name sites by offset only.
 - **Two mods' unpinned fragment locals share slots.** A fragment's unpinned `local` takes the first slot above the
   base's highest (`OmsCompiler` patch mode, `UsePatchBase`), and the applier keeps each plan's slots as compiled
   (`OmsPatchApplier`), so two mods patching one script get the same slots. If one mod's code runs while the other's
@@ -335,23 +333,19 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
-- **Runtime scripting (Lua): milestones 0 to 2 built.** `superpowers/specs/2026-11-10-lua-scripting-design.md`
-  (accepted 2026-11-14) specifies Lua beside the VM: a managed interpreter, hooks declared in the manifest (`omp = 3`),
+- **Runtime scripting (Lua): milestones 0 to 3 built, the first release.**
+  `superpowers/specs/2026-11-10-lua-scripting-design.md` (accepted 2026-11-14) specifies Lua beside the VM: a managed interpreter, hooks declared in the manifest (`omp = 3`),
   the `maid` API, per-game base mods with declared writes, mod state beside the save, and gates 1 to 15. Milestone 0
   (the spike) chose Lua-CSharp, milestone 1 (the core: point hooks, `ome.session.start`, `maid.vm` without
   `call`, errors and budgets, the console) and milestone 2 (state: `maid.state` beside each save, the rebuild on
-  load, `maid.session.restoring`, `ome.session.resumed`, `ome.save.writing`) are built, all on 2026-11-14; their
-  results are in `superpowers/plans/2026-11-14-lua-scripting.md`, and the modders' guide is `modding/lua.md`. The
-  remaining milestones (§18), each done when its gates pass:
-  - **The first release:**
-    3. events and the first base mods: the layout, the accessors with declared writes, the write scan and
-       `--lua-dev`, the trace, editor stubs, and the guide for mod authors. Being built: the base mod package
-       (`mods/<profile>-base/`, plan §7.1), the accessors with the write lists (plan §7.2), the events with
-       `maid.events.emit` and Himegari's experience award (plan §7.3), the write scan with `--lua-dev`
-       (plan §7.4), the link report's Lua section with `--lua-trace` (plan §7.5) and `omp lua-stubs` (plan §7.6)
-       are done; the Kamidori event and the guide remain.
-  - **After it:** 4, raw sites, `skip`, script entry and exit, and watches; 5, synchronous script calls and the
-    base mods' helpers; 6, reload and the seeded random streams.
+  load, `maid.session.restoring`, `ome.session.resumed`, `ome.save.writing`) were built on 2026-11-14, and milestone
+  3 (events and the base mods: the layout, the accessors with declared writes, the write scan and `--lua-dev`, the
+  trace, editor stubs, Kamidori's point and event, and the guide for mod authors) on 2026-11-15. Their results are in
+  `superpowers/plans/2026-11-14-lua-scripting.md`, and the modders' guide is `modding/lua.md`. The remaining
+  milestones (§18), each done when its gates pass:
+  - 4, raw sites, `skip`, script entry and exit, and watches;
+  - 5, synchronous script calls and the base mods' helpers;
+  - 6, reload and the seeded random streams.
 - **Lua-CSharp past 0.5.8.** 0.5.8 writes fractions in .NET's form (`3 * 1.1` reads `3.3000000000000003`, `1/0`
   reads `Infinity`), raises on `string.format("%d", 2.5)`, writes `%e` unformatted, and refuses to compile `t[0x10]`,
   which `LuaSource.Prepare` works around. Upstream's `main` fixes them all, the number text through the option

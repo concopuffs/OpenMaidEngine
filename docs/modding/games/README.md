@@ -44,7 +44,7 @@ Use the profile id wherever a guide writes `<profile>`.
 | OMS modules | `kamidori.globals`, `kamidori.scripts` (generated); `kamidori.adv` (`oms/kamidori/adv.oms`) |
 | Speakers | 114 in `kamidori.adv`'s `enum speaker` |
 | Tables | `unit[1000]` (44 fields), `item[2000]` (53 fields), `skill[1000]` (27 fields), `stage_enemy[30]` (11 fields) ([reference](../../global-reference-kamidori.md)) |
-| Named patch points | none yet (fragments use offsets) |
+| Named patch points | `kamidori.experience.after_calculation` ([reference](../../patch-point-reference-kamidori.md)) |
 | Guide | [kamidori.md](kamidori.md) |
 
 ## Adding a game

@@ -236,7 +236,10 @@ public sealed class ModLuaLinkTests : IDisposable
     private static string Patch(string body)
         => $"oms 1\npatch \"{AddExp}\" fingerprint \"{AddExpFingerprint}\"\nuse himegari.globals\n\nlocal int exp @ 0x1\n\n{body}\n";
 
-    private ModPackage OmsMod(string id, string body)
+    private ModPackage OmsMod(string id, string body) => OmsMod(id, "himegari", Patch(body));
+
+    /// <summary>A version 1 package of <paramref name="profile"/> with one fragment, <paramref name="patch"/>.</summary>
+    private ModPackage OmsMod(string id, string profile, string patch)
     {
         string folder = Path.Combine(_root, id + "-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(Path.Combine(folder, "patches"));
@@ -247,10 +250,10 @@ public sealed class ModLuaLinkTests : IDisposable
             version = "1.0.0"
 
             [game]
-            profile = "himegari"
+            profile = "{profile}"
             target = "native"
             """);
-        File.WriteAllText(Path.Combine(folder, "patches", "addexp.oms"), Patch(body));
+        File.WriteAllText(Path.Combine(folder, "patches", "addexp.oms"), patch);
         ModPackage mod = ModPackage.Open(folder);
         _opened.Add(mod);
         return mod;
@@ -423,8 +426,9 @@ public sealed class ModLuaLinkTests : IDisposable
 
         console = new StringWriter();
         int built = OmpCommands.Build(SyntheticBase(), ScannedWriter("\"turn_limit\", \"unit_current_levels\"").Location,
-                                      Path.Combine(_root, "built.omp"), [baseFolder], console);
+                                      Path.Combine(_root, "out", "built.omp"), [baseFolder], console);
         Assert.True(built == 0, console.ToString());
+        Assert.True(File.Exists(Path.Combine(_root, "out", "built.omp")));   // the output's folder is made
     }
 
     [Fact]
@@ -821,5 +825,128 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.Equal(7, unmodded.Globals[0x6994 + 1]);
         Assert.Equal(14, GameSession.FromJson(withPatch).Globals[0x6994 + 1]);
         Assert.Equal(withPatch, withLua);
+    }
+
+    // ------------------------------------------------------------------------------------------ gate 13: a second game
+
+    private const string KamidoriPoint = "kamidori.experience.after_calculation";
+    private const string KamidoriAddExp = "sha256:606b83e952a3ce45ee406a2383710734f1ea707288f5751b5614be50e3edd7b6";
+    private const string KamidoriTranslatedAddExp = "sha256:23bb6ac1e1aa83ef248bbacba4cadd71801fa07188aed3938c4768034f52b40b";
+    private static readonly OpcodeTable KamidoriTable = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
+
+    /// <summary>Kamidori's install at <paramref name="gameRoot"/> (its loose files first in
+    /// <paramref name="looseRoots"/>), with the script provider ADDEXP's calls resolve through.</summary>
+    private (ModLinkBase Base, Sys4ScriptProvider Scripts) KamidoriBase(string gameRoot, params string[] looseRoots)
+    {
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+        var catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var store = new Sys4AssetStore(catalog, gameRoot, looseRoots.Length > 0 ? looseRoots : [gameRoot]);
+        ModLinkBase linkBase = ModLinkBase.ForInstall("kamidori", sys4Ini, catalog, store, KamidoriTable, Contracts,
+            Paths.GlobalsJson("kamidori"), Paths.OmsModules("kamidori"), Paths.PatchPointsJson("kamidori")) with
+        {
+            Lua = _runtime,
+        };
+        return (linkBase, new Sys4ScriptProvider(KamidoriTable, catalog, store));
+    }
+
+    /// <summary>Kamidori's ADDEXP awarding <paramref name="amount"/> to character 1, who wears a costume with one
+    /// experience gem (0x118, +25%), from a session that seeds the cells the award reads and stays under a level.</summary>
+    private static GameSession KamidoriAward(Script addExp, IScriptProvider scripts, long amount, Scripting? scripting = null)
+    {
+        var session = new GameSession();
+        session.Seed(0xfec0c, amount);          // the amount the caller passes
+        session.Seed(0xfec0d, 0);               // no weapon experience
+        session.Seed(0x2a9b89, 0);              // current_battle_slot 0
+        session.Seed(0x53bb2 + 0, 1);           // battle_unit_unit_ids[0]: unit 1
+        session.Seed(0x2b6a94 + 1, 1);          // unit_canonical_character_id[1]: character 1
+        session.Seed(0x642c9 + 1, 3);           // character_costume_item_id[1]: costume item 3
+        session.Seed(0xefed0 + 3 * 4, 0x118);   // item_costume_gem_sockets[3][0]: the experience gem
+        session.Seed(0x6432d + 1, 1);           // character_levels[1]: level 1
+        session.Seed(0x2bdfc4 + 1, 99);         // unit_level_cap[1]: below the cap, so the award applies
+        session.Seed(0x64391 + 1, 0);           // character_experience[1]: 100 is a level, which the award stays under
+        SceneResult result = session.RunScene(addExp, KamidoriTable, new HeadlessWaits(), provider: scripts,
+                                              build: EngineBuilds.Age433G, scripting: scripting);
+        Assert.True(result.Halt is null or "exit" or "end", result.Halt);
+        return session;
+    }
+
+    /// <summary>The shipped Kamidori example that doubles each award without vm, and the base mod it requires.</summary>
+    private IReadOnlyList<ModPackage> ShippedKamidoriAward()
+    {
+        ModPackage user = ModPackage.Open(Path.Combine(Paths.Repo, "oms", "examples", "mods", "example.kamidori-double-exp-event"));
+        _opened.Add(user);
+        IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([user], new ModLinkReport());
+        _opened.AddRange(shipped);
+        return [user, .. shipped];
+    }
+
+    /// <summary>The OMS patch that doubles L[0x1] at the Kamidori point of the script <paramref name="fingerprint"/>
+    /// names (docs/modding/games/kamidori.md, "Patch points").</summary>
+    private ModPackage KamidoriPatch(string fingerprint) => OmsMod("kamidori-double-exp-oms", "kamidori",
+        $"oms 1\npatch \"{AddExp}\" fingerprint \"{fingerprint}\"\nuse kamidori.globals\n\nlocal int exp @ 0x1\n\n"
+        + $"before site {KamidoriPoint} {{\n    exp = exp * 2\n}}\n");
+
+    /// <summary>Links the shipped example on <paramref name="linkBase"/> and runs the award with it, then with the OMS
+    /// patch for <paramref name="fingerprint"/>, and returns both sessions' state and the unmodded award's.</summary>
+    private (string WithEvent, string WithPatch, GameSession Unmodded, ModLinkResult Linked) KamidoriAwards(
+        ModLinkBase linkBase, Sys4ScriptProvider scripts, string fingerprint, long amount)
+    {
+        byte[] baseBytes = linkBase.ReadScript(AddExp)!;
+        Assert.Equal(fingerprint, OmsPatchPlan.FingerprintOf(baseBytes));
+        Script baseScript = Sys4Loader.Parse(baseBytes, KamidoriTable, AddExp);
+
+        ModLinkResult patched = ModLinker.Link(linkBase, [KamidoriPatch(fingerprint)], []);
+        Assert.True(patched.Succeeded, patched.Report.Render());
+        string withPatch = KamidoriAward(Sys4Loader.Parse(patched.Scripts[AddExp].Bytes, KamidoriTable, AddExp), scripts, amount).ToJson();
+
+        ModLinkResult linked = ModLinker.Link(linkBase, ShippedKamidoriAward(), []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = linked.Lua.Stack, Plan = linked.Lua.Plan, Errors = LuaErrorPolicy.Halt,
+        });
+        string withEvent = KamidoriAward(baseScript, scripts, amount, scripting).ToJson();
+        Assert.DoesNotContain(scripting.RecentLog, line => line.Contains(" error ", StringComparison.Ordinal));
+        return (withEvent, withPatch, KamidoriAward(baseScript, scripts, amount), linked);
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void KamidorisBaseModRaisesItsExperienceAwardAndASubscriberDoesWhatThePatchDoes()
+    {
+        // Spec gate 13: the Kamidori base mod's event at the Kamidori point, with no engine change.
+        var (linkBase, scripts) = KamidoriBase(Path.Combine(Paths.Workspace, "Kamidori"));
+        var (withEvent, withPatch, unmodded, linked) = KamidoriAwards(linkBase, scripts, KamidoriAddExp, 7);
+
+        GameEvent award = Assert.Single(linked.Lua.Stack.EventList);
+        Assert.Equal(("kamidori.experience.award", "kamidori-base", KamidoriPoint), (award.Name, award.Owner, award.Point));
+        Assert.Equal(["amount", "unit", "character", "level"], award.Fields.Select(field => field.Name));
+        Assert.Equal(new FieldLocation.Global(CellKind.Integer, 0x2d2845, "current_character_id"), award.Field("character")!.Location);
+        var level = Assert.IsType<FieldLocation.Element>(award.Field("level")!.Location);
+        Assert.Equal(("character_levels", 0x6432d), (level.Table.Name, level.Table.Address));
+        Assert.Equal((0x88, KamidoriPoint), (Assert.Single(linked.Lua.Plan.Sites["ADDEXP"]).Offset, Assert.Single(linked.Lua.Plan.Sites["ADDEXP"]).Point));
+
+        // 7 with the gem's 25% is 8 (875 / 100), which the subscriber doubles: 16, not the 17 a doubling before
+        // the bonus would give.
+        Assert.Equal(8, unmodded.Globals[0x64391 + 1]);
+        Assert.Equal(16, GameSession.FromJson(withEvent).Globals[0x64391 + 1]);
+        Assert.Equal(withPatch, withEvent);
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void TheKamidoriPointHasTheTranslatedInstallsAddExpToo()
+    {
+        // The translation's patch/ADDEXP.BIN differs from the base in two strings: the point lists its revision, so
+        // the same mods link on the translated install.
+        string gameRoot = Paths.KamidoriTranslatedDir;
+        var (linkBase, scripts) = KamidoriBase(gameRoot, Path.Combine(gameRoot, "patch"), gameRoot);
+        var (withEvent, withPatch, _, linked) = KamidoriAwards(linkBase, scripts, KamidoriTranslatedAddExp, 7);
+        Assert.Equal(0x88, Assert.Single(linked.Lua.Plan.Sites["ADDEXP"]).Offset);
+        Assert.Equal(16, GameSession.FromJson(withEvent).Globals[0x64391 + 1]);
+        Assert.Equal(withPatch, withEvent);
     }
 }
