@@ -85,6 +85,8 @@ public sealed partial class Scripting : IDisposable
     }
 
     private Scene _scene = new();
+    // How many sessions the run has ended: an after hook's instruction compares it across its handler (spec §7.1).
+    private long _sessionsEnded;
     // How many handler calls, builds and chunks are running: Lua on the stack (spec §13).
     private int _depth;
     // Whether the running call may read the frame's locals: a point hook or a console chunk, not an engine event.
@@ -195,6 +197,7 @@ public sealed partial class Scripting : IDisposable
         if (_depth > 0) throw new InvalidOperationException("A session cannot end while its Lua runs.");
         _scene.Session?.Dispose();
         _scene = new Scene();
+        _sessionsEnded++;
     }
 
     /// <summary>
@@ -219,9 +222,36 @@ public sealed partial class Scripting : IDisposable
                     new KeyValuePair<string, CellValue>("slot", _interpreter.ReadOperand(instruction.Args[1])))
                 : handler.GameEvent is { } gameEvent
                     ? GameEventContext(gameEvent, site, instruction, _interpreter)
-                    : HookContext.ForPoint(site, instruction, _interpreter, _memory.Encoding.CodePage);
+                    : HookContext.ForPoint(site, instruction, _interpreter, _memory.Encoding.CodePage,
+                                           handler.Site ? "before" : null);
             if (Call(session, handler.Handler, context, frameAccess: handler.EngineEvent == null) is { } halt)
                 return halt;
+        }
+        return null;
+    }
+
+    /// <summary>The session an instruction starts in, for its <c>after</c> hooks: <see cref="RunAfter"/> runs them only
+    /// in the same one.</summary>
+    public long SessionMark => _sessionsEnded;
+
+    /// <summary>
+    /// The <c>after</c> hooks of a hooked instruction (spec §7.1): every one due there, in order, once the opcode handler
+    /// has returned and the frame goes on, before the loop answers the front end's frame turn. The interpreter does not
+    /// call it for an instruction that ended its frame or raised a script error. <paramref name="mark"/> is
+    /// <see cref="SessionMark"/> as it read before the instruction: a session that ended meanwhile (a load or a return
+    /// to title inside a wait) runs none of them. Returns a halt reason under <c>--lua-errors halt</c>.
+    /// </summary>
+    public string? RunAfter(HookSite site, Instruction instruction, long mark)
+    {
+        IModSession? session = _scene.Session;
+        if (session == null || _interpreter == null || mark != _sessionsEnded) return null;
+        IReadOnlyList<PlannedHandler> handlers = site.Planned.AfterList;
+        for (int i = 0; i < handlers.Count; i++)
+        {
+            PlannedHandler handler = handlers[i];
+            if (!IsOn(session, handler.Handler)) continue;
+            HookContext context = HookContext.ForPoint(site, instruction, _interpreter, _memory.Encoding.CodePage, "after");
+            if (Call(session, handler.Handler, context, frameAccess: true) is { } halt) return halt;
         }
         return null;
     }
@@ -247,6 +277,7 @@ public sealed partial class Scripting : IDisposable
     /// when a call fails, so a call that succeeds formats nothing.</summary>
     private static string Where(HookContext context) => context switch
     {
+        { Kind: HookKind.Point, When: "after" } => $"{context.Script}@0x{context.Offset:x} (after)",
         { Kind: HookKind.Point } => $"{context.Script}@0x{context.Offset:x}",
         { Kind: HookKind.GameEvent, Script: { } script } => $"{context.Name} at {script}@0x{context.Offset:x}",
         _ => context.Name ?? "",

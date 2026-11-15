@@ -127,15 +127,15 @@ public static class LuaStubs
             ---@field g table<string, integer|number|string>
             ---@field table fun(name: string): table
 
-            ---An operand of the instruction at a point (ctx.args[i]).
+            ---An operand of the hooked instruction (ctx.args[i]).
             ---@class maid.arg
             ---@field value integer|number|string a write changes the cell the operand names
             ---@field kind "integer"|"float"|"string"
             ---@field writable boolean false for an immediate or a literal
 
-            ---What a point hook is given (spec §7.1).
+            ---What a point hook and a site hook are given (spec §7.1).
             ---@class maid.point
-            ---@field point string the point's name
+            ---@field point string|nil the point's name; nil at a site that is no point
             ---@field script string
             ---@field offset integer
             ---@field site integer

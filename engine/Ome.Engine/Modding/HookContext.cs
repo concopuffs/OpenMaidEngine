@@ -37,14 +37,17 @@ public sealed class HookContext
         _codePage = codePage;
     }
 
-    /// <summary>A point's context.</summary>
-    public static HookContext ForPoint(HookSite site, Instruction instruction, IInterpreterAccess interpreter, int codePage)
+    /// <summary>An instruction's context: a point's, or with <paramref name="when"/> a site hook's (<c>before</c> or
+    /// <c>after</c>).</summary>
+    public static HookContext ForPoint(HookSite site, Instruction instruction, IInterpreterAccess interpreter, int codePage,
+                                       string? when = null)
         => new(HookKind.Point, site.Planned.Point, [], interpreter, instruction.Args, codePage)
         {
             Script = site.Script,
             Offset = site.Planned.Offset,
             Site = site.Planned.Site,
             Opcode = instruction.Opcode,
+            When = when,
         };
 
     /// <summary>An engine event's context, with its fields.</summary>
@@ -71,6 +74,8 @@ public sealed class HookContext
     public string? Name { get; }
 
     public string? Script { get; private init; }
+    /// <summary>A site hook's <c>before</c> or <c>after</c>; null for a point hook and an event.</summary>
+    public string? When { get; private init; }
     public int Offset { get; private init; } = -1;
     public int Site { get; private init; } = -1;
     public int Opcode { get; private init; } = -1;

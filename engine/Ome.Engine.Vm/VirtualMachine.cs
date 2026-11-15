@@ -864,6 +864,7 @@ public sealed partial class VirtualMachine
         string text = error.Text(AgeBoxText.JapaneseText);
         DiagnosticMessage message = AgeBox(new AgeBoxParts(error,
             DiagnosticLocation(_cur.Script.Instructions[coordinateIndex]), Prompt: true));
+        _instructionRaisedScriptError = true;   // its after hooks do not fire (Lua scripting spec §7.1)
         ScriptErrorChoice choice = _waits.ShowScriptError(message);
         if (choice is ScriptErrorChoice.Retry or ScriptErrorChoice.Ignore) return choice;
         ScriptError = message;
@@ -1390,6 +1391,24 @@ public sealed partial class VirtualMachine
     private LoopEnd RunInstructions(ExecFrame frame, int pc, bool waitCallback)
     {
         _loopsEntered++;   // an instruction that runs this loop calls (VirtualMachine.OpcodeFlow.cs)
+        // The flag belongs to the instruction this loop runs inside, if any: its own script error stays its own.
+        bool outerRaisedScriptError = _instructionRaisedScriptError;
+        try
+        {
+            return RunInstructionLoop(frame, pc, waitCallback);
+        }
+        finally
+        {
+            _instructionRaisedScriptError = outerRaisedScriptError;
+        }
+    }
+
+    // Whether the running instruction raised a script error (ShowScriptError): an instruction that did has not
+    // finished, so its after hooks do not fire (Lua scripting spec §7.1). Each loop keeps its outer instruction's.
+    private bool _instructionRaisedScriptError;
+
+    private LoopEnd RunInstructionLoop(ExecFrame frame, int pc, bool waitCallback)
+    {
         while (pc >= 0 && pc < frame.Script.Instructions.Count)
         {
             if (_stopAndReload.StopRequested) return LoopEnd.Stopped;
@@ -1414,22 +1433,36 @@ public sealed partial class VirtualMachine
                 case FrameOutcome.ExitRequested: return LoopEnd.ExitRequested;
                 case FrameOutcome.Halted: return LoopEnd.Halted;
             }
+            HookSite? hooked = null;
+            long sessionMark = -1;
             if (_scripting != null)
             {
                 // Lua scripting spec §7.1, §13: the console's chunks, then the instruction's before hooks, after the
                 // boundary's services and before the opcode handler. A frame's table is null for a script with no hooks.
                 _scripting.ServiceRequests();
-                if (frame.Hooks?.ByIndex[pc] is { } site
-                    && _scripting.RunBefore(site, frame.Script.Instructions[pc]) is { } luaHalt)
+                if ((hooked = frame.Hooks?.ByIndex[pc]) != null)
                 {
-                    HaltReason ??= luaHalt;
-                    return LoopEnd.Halted;
+                    if (_scripting.RunBefore(hooked, frame.Script.Instructions[pc]) is { } luaHalt)
+                    {
+                        HaltReason ??= luaHalt;
+                        return LoopEnd.Halted;
+                    }
+                    if (hooked.HasAfter) sessionMark = _scripting.SessionMark;
                 }
             }
             if (_sink.TracingSteps) _sink.Emit(TraceEvent.Step(pc, frame.Script.Instructions[pc], _depth));
             Instruction instruction = frame.Script.Instructions[pc];
+            _instructionRaisedScriptError = false;
             StepResult step = ApplyIgnoredDwords(frame, pc,
                 _checkOpcodeFlow ? CheckedStep(instruction, pc) : Step(instruction, pc));
+            // Spec §7.1: the after hooks, once the handler has returned and the frame goes on, unless the instruction
+            // raised a script error; before the front end's frame turn.
+            if (sessionMark >= 0 && step.Continues && !_instructionRaisedScriptError
+                && _scripting!.RunAfter(hooked!, instruction, sessionMark) is { } afterHalt)
+            {
+                HaltReason ??= afterHalt;
+                return LoopEnd.Halted;
+            }
             _waits.FrameYield();
             _skip.PaceOp();
             switch (step.Kind)

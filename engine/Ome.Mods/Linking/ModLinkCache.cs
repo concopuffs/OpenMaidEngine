@@ -122,7 +122,8 @@ public sealed record LinkedLuaDueEntry(
     [property: JsonPropertyName("priority")] int Priority,
     [property: JsonPropertyName("load_order")] int LoadOrder,
     [property: JsonPropertyName("skip")] bool Skip = false,
-    [property: JsonPropertyName("event")] string? Event = null);
+    [property: JsonPropertyName("event")] string? Event = null,
+    [property: JsonPropertyName("site")] bool Site = false);
 
 /// <summary>A field of a declared event, as written: its location is read again over the owner's layout.</summary>
 public sealed record LinkedLuaEventFieldEntry(
@@ -144,7 +145,8 @@ public sealed record LinkedLuaSiteEntry(
     [property: JsonPropertyName("offset")] int Offset,
     [property: JsonPropertyName("site")] int Site,
     [property: JsonPropertyName("point")] string? Point,
-    [property: JsonPropertyName("handlers")] IReadOnlyList<LinkedLuaDueEntry> Handlers);
+    [property: JsonPropertyName("handlers")] IReadOnlyList<LinkedLuaDueEntry> Handlers,
+    [property: JsonPropertyName("after")] IReadOnlyList<LinkedLuaDueEntry>? After = null);
 
 /// <summary>The <c>lua</c> of <c>link.json</c>: the runtime the files were checked with, the mods, the handlers and
 /// the hook plan (Lua scripting spec §7.5).</summary>
@@ -177,10 +179,11 @@ public sealed record LinkedLuaEntry
     public static string LayoutPathOf(string mod) => $"layout/{mod}/globals.json";
 
     private static LinkedLuaDueEntry Due(PlannedHandler handler)
-        => new(handler.Handler.Index, handler.Priority, handler.LoadOrder, handler.Skip, handler.GameEvent);
+        => new(handler.Handler.Index, handler.Priority, handler.LoadOrder, handler.Skip, handler.GameEvent, handler.Site);
 
     private static PlannedHandler Planned(LinkedLuaDueEntry entry)
-        => new(new HandlerId(entry.Handler), entry.Priority, entry.LoadOrder, entry.Skip, GameEvent: entry.Event);
+        => new(new HandlerId(entry.Handler), entry.Priority, entry.LoadOrder, entry.Skip, GameEvent: entry.Event,
+               Site: entry.Site);
 
     public static LinkedLuaEntry Of(LinkedLua lua, string runtime) => new()
     {
@@ -192,7 +195,8 @@ public sealed record LinkedLuaEntry
             .ToList(),
         Sites = lua.Plan.Sites.ToDictionary(pair => pair.Key + ".BIN",
             pair => (IReadOnlyList<LinkedLuaSiteEntry>)pair.Value.Select(site => new LinkedLuaSiteEntry(site.Offset, site.Site,
-                site.Point, site.Handlers.Select(Due).ToList())).ToList(), StringComparer.Ordinal),
+                site.Point, site.Handlers.Select(Due).ToList(), site.After?.Select(Due).ToList())).ToList(),
+            StringComparer.Ordinal),
         Engine = lua.Plan.EngineEvents.ToDictionary(pair => pair.Key,
             pair => (IReadOnlyList<LinkedLuaDueEntry>)pair.Value.Select(Due).ToList(), StringComparer.Ordinal),
         Events = lua.Stack.EventList.Select(gameEvent => new LinkedLuaEventEntry(gameEvent.Name, gameEvent.Owner,
@@ -227,7 +231,8 @@ public sealed record LinkedLuaEntry
     public HookPlan ToPlan()
         => new(Sites.ToDictionary(pair => pair.Key,
                 pair => (IReadOnlyList<PlannedSite>)pair.Value.Select(site => new PlannedSite(site.Offset, site.Site, site.Point,
-                    site.Handlers.Select(Planned).ToList())).ToList(), StringComparer.Ordinal),
+                    site.Handlers.Select(Planned).ToList(), site.After?.Select(Planned).ToList())).ToList(),
+                StringComparer.Ordinal),
             Engine.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value.Select(Planned).ToList(),
                 StringComparer.Ordinal),
             LuaEvents.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<PlannedHandler>)pair.Value.Select(Planned).ToList(),

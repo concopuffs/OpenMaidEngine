@@ -195,8 +195,6 @@ public sealed class ModLuaLinkTests : IDisposable
     }
 
     [Theory]
-    [InlineData("[[hooks]]\nscript = \"ADDEXP.BIN\"\nfingerprint = \"" + AddExpFingerprint + "\"\nsite = 0x9a\nwhen = \"after\"\nhandler = \"hooks.lua:on_award\"",
-                "site hooks come with the wider hooks")]
     [InlineData("[[hooks]]\nscript = \"ADDEXP.BIN\"\nwhen = \"enter\"\nhandler = \"hooks.lua:on_award\"", "script entry and exit hooks")]
     [InlineData("[[hooks]]\nwatch = \"current_unit_id\"\nhandler = \"hooks.lua:on_award\"", "watches come with the wider hooks")]
     [InlineData("[[hooks]]\npoint = \"" + ExperiencePoint + "\"\nskip = true\nhandler = \"hooks.lua:on_award\"", "skip = true comes with")]
@@ -229,6 +227,106 @@ public sealed class ModLuaLinkTests : IDisposable
         ModReportLine line = Stop(ModLinker.Link(SyntheticBase(), [replacer, hooker], []), "replacer replaces ADDEXP.BIN");
         Assert.Equal(ModReportClass.HardConflict, line.Class);
         Assert.Equal(["hooker", "replacer"], line.Mods.Order(StringComparer.Ordinal));
+    }
+
+    // ------------------------------------------------------------------------------------------- site hooks (§6.3, §7.1)
+
+    /// <summary>A real ADDEXP.BIN for the site hooks: a mov at 0x0, a call at 0x5, the ADV wait at 0x8, the copy at 0xb
+    /// (the experience point of <see cref="SiteBase"/>) and the exit at 0x10.</summary>
+    private static readonly byte[] SiteAddExp = ScriptAssembler.AssembleBytes(new List<(int, Operand[])>
+    {
+        (0x55, [new Operand(3, 0x100), new Operand(0, 5)]),
+        (0x3, [new Operand(0, 1)]),
+        (0x72, [new Operand(0, 0)]),
+        (0x55, [new Operand(3, 0x101), new Operand(3, 0x100)]),
+        (0x2, []),
+    }, [], "SYS4422");
+
+    private static readonly string SiteFingerprint = OmsPatchPlan.FingerprintOf(SiteAddExp);
+
+    /// <summary>A base whose ADDEXP.BIN is <see cref="SiteAddExp"/>, with the experience point at its copy.</summary>
+    private ModLinkBase SiteBase() => SyntheticBase() with
+    {
+        ReadScript = name => name.Equals(AddExp, StringComparison.OrdinalIgnoreCase) ? SiteAddExp : null,
+        PatchPoints = new OmsPatchPoints([new OmsPatchPoint(ExperiencePoint, AddExp, null,
+            [new OmsPatchPointSite(SiteFingerprint, 0xb)])]),
+    };
+
+    private static string SiteHook(int site, string when, string handler = "hooks.lua:on_award", string extra = "",
+                                   string script = AddExp, string? fingerprint = null)
+        => $"[[hooks]]\nscript = \"{script}\"\nfingerprint = \"{fingerprint ?? SiteFingerprint}\"\nsite = 0x{site:x}\n"
+           + $"when = \"{when}\"\nhandler = \"{handler}\"\n{extra}";
+
+    [Fact]
+    public void ASiteHookBindsItsOriginalOffsetAndItsAfterHooksTakeTheirOwnList()
+    {
+        // At the point's instruction: the point hook and a site hook before it, two after it in the merged order.
+        ModPackage first = Mod("first", PointHook() + "\n" + SiteHook(0xb, "before", extra: "priority = 1") + "\n"
+                                        + SiteHook(0xb, "after", extra: "priority = 1"), Hooks(Doubles));
+        ModPackage second = Mod("second", SiteHook(0xb, "after") + "\n" + SiteHook(0x0, "after"), Hooks(Doubles));
+        ModLinkResult result = ModLinker.Link(SiteBase(), [first, second], []);
+
+        Assert.True(result.Succeeded, result.Report.Render());
+        IReadOnlyList<PlannedSite> sites = result.Lua.Plan.Sites["ADDEXP"];
+        Assert.Equal([0x0, 0xb], sites.Select(site => site.Offset));
+        Assert.Equal((0x0, null, 0), (sites[0].Site, sites[0].Point, sites[0].Handlers.Count));
+        PlannedSite point = sites[1];
+        Assert.Equal((0xb, ExperiencePoint), (point.Site, point.Point));
+        Assert.Equal([(0, 0, false), (0, 1, true)], point.Handlers.Select(h => (h.LoadOrder, h.Priority, h.Site)));
+        Assert.Equal([(1, 0, true), (0, 1, true)], point.AfterList.Select(h => (h.LoadOrder, h.Priority, h.Site)));
+        Assert.Contains(result.Report.Lines, line => line.Class == ModReportClass.OrderedInteraction
+            && line.Message == $"0xb ({ExperiencePoint}): after it, handlers run in this order: second hooks.lua:on_award "
+                               + "(priority 0), first hooks.lua:on_award (priority 1)");
+        Assert.Contains("hook ADDEXP 0x0: after: second hooks.lua:on_award (priority 0)", result.Report.Lua);
+        Assert.Contains($"hook ADDEXP 0xb ({ExperiencePoint}): first hooks.lua:on_award (priority 0), first hooks.lua:on_award "
+                        + "(priority 1); after: second hooks.lua:on_award (priority 0), first hooks.lua:on_award (priority 1)",
+                        result.Report.Lua);
+
+        // The cache keeps both lists and which handlers are a site's.
+        string cache = Path.Combine(_root, "cache");
+        ModLinkCache.Write(cache, "key", SiteBase(), result);
+        PlannedSite cached = ModLinkCache.TryOpen(cache, "key")!.HookPlan.Sites["ADDEXP"][1];
+        Assert.Equal(point.Handlers, cached.Handlers);
+        Assert.Equal(point.AfterList, cached.AfterList);
+    }
+
+    [Theory]
+    [InlineData(0xb, "api = 1", null, "a site hook hands its handler the frame and operands, which needs the vm capability")]
+    [InlineData(0xb, null, "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+                "the hook was written for ADDEXP.BIN sha256:2222")]
+    [InlineData(0x6, null, null, "0x6 is not the start of an instruction of ADDEXP.BIN")]
+    public void ASiteHookNeedsVmItsRevisionAndAnInstructionsStart(int site, string? lua, string? fingerprint, string message)
+    {
+        ModPackage mod = lua == null
+            ? Mod("m", SiteHook(site, "before", fingerprint: fingerprint), Hooks(Doubles))
+            : Mod("m", SiteHook(site, "before", fingerprint: fingerprint), Hooks(Doubles), lua: lua);
+        Assert.Equal(["m"], Stop(ModLinker.Link(SiteBase(), [mod], []), message).Mods);
+    }
+
+    [Fact]
+    public void ASiteHookOnAScriptTheCatalogLacksIsAnError()
+        => Stop(ModLinker.Link(SiteBase(), [Mod("m", SiteHook(0x0, "before", script: "NONE.BIN"), Hooks(Doubles))], []),
+                "the base catalog has no NONE.BIN");
+
+    [Fact]
+    public void AnAfterHookAcrossACallOrAWaitAndOneOnAnExitGetNotes()
+    {
+        // Spec §7.1: across a call or a wait a save can come between, and an exit never finishes. A mov, and a before
+        // hook on the wait, get none.
+        ModPackage mod = Mod("m", SiteHook(0x5, "after") + "\n" + SiteHook(0x8, "after") + "\n" + SiteHook(0x10, "after")
+                                  + "\n" + SiteHook(0x0, "after") + "\n" + SiteHook(0x8, "before"), Hooks(Doubles));
+        ModLinkResult result = ModLinker.Link(SiteBase(), [mod], []);
+
+        Assert.True(result.Succeeded, result.Report.Render());
+        string[] notes = result.Report.Lines.Where(line => line.Class == ModReportClass.Note && line.Script == AddExp)
+            .Select(line => line.Message).ToArray();
+        Assert.Equal(3, notes.Length);
+        Assert.StartsWith("hooks[0] site ADDEXP.BIN: the instruction at 0x5 (op 0x3 call-script) calls a script, so the after "
+                          + "hook fires only once it has finished; a save made before then", notes[0]);
+        Assert.StartsWith("hooks[1] site ADDEXP.BIN: the instruction at 0x8 (op 0x72 wait-for-input) may wait and calls a script",
+                          notes[1]);
+        Assert.Equal("hooks[2] site ADDEXP.BIN: the instruction at 0x10 (op 0x2 exit) ends its frame, the scene or the run, so the "
+                     + "after hook never fires; a script exit hook sees a frame's return", notes[2]);
     }
 
     // ------------------------------------------------------------------------------------------- gate 3 on the install
@@ -279,6 +377,11 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.Equal(0x9a, site.Site);
         Assert.True(site.Offset > 0x9a);
         Assert.Equal(site.Offset, result.Scripts[AddExp].Offsets!.Map(0x9a));
+        ModPackage siteHooker = Mod("site-hooker", SiteHook(0x9a, "after", fingerprint: AddExpFingerprint), Hooks(Doubles));
+        ModLinkResult bySite = ModLinker.Link(linkBase, [inserting, siteHooker], []);
+        Assert.True(bySite.Succeeded, bySite.Report.Render());
+        Assert.Equal((site.Offset, 0x9a, 1), (bySite.Lua.Plan.Sites["ADDEXP"][0].Offset, bySite.Lua.Plan.Sites["ADDEXP"][0].Site,
+                                              bySite.Lua.Plan.Sites["ADDEXP"][0].AfterList.Count));
 
         // The cache keeps the sources and the plan, and the layer maps the linked offset back.
         string cache = Path.Combine(_root, "cache");

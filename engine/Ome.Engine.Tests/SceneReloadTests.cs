@@ -36,6 +36,8 @@ public class SceneReloadTests
             "HaltReason", "ScriptError", "CompatibilityFailure", "Steps", "CallScriptDispatches",
             // How many instruction loops the run entered, which the opcode flow check compares (VirtualMachine.OpcodeFlow.cs).
             "_loopsEntered",
+            // Whether the running instruction raised a script error, set and read within the instruction.
+            "_instructionRaisedScriptError",
             // The frame stack, empty at a reload: op 0x9 has unwound every frame.
             "_cur", "_depth", "_activeFrameNames", "_activeExecutionFrames", "_debugNextFrameId", "_restoreFrameIndex",
             // The handler table.
@@ -129,6 +131,8 @@ public class SceneReloadTests
             // Lua on the stack, whether it may read locals, and a halt from a nested emit: zero, false and null between
             // calls, and op 0x9 runs no Lua.
             "_depth", "_frameAccess", "_nestedHalt",
+            // How many sessions the run has ended, which an after hook compares across its instruction.
+            "_sessionsEnded",
             // The undeclared writes --lua-dev has logged, once each for the run.
             "_devWrites",
             // The trace (--lua-trace): the traced calls running (empty between calls), the run's recent lines, and its

@@ -201,6 +201,21 @@ reference ([games/README.md](games/README.md)).
 Another mod replaced the script, or patched away the instruction your point names. Your hook cannot bind there;
 the two mods conflict as written.
 
+**"a site hook hands its handler the frame and operands, which needs the vm capability".** Add
+`capabilities = ["vm"]` to `[lua]`.
+
+**"the hook was written for SCRIPT sha256:A, but the base catalog's SCRIPT is sha256:B".** The installed script is
+another revision than the one your site hook names; the offset may not mean the same instruction in it. Take the
+fingerprint and the offset from the script as installed (`Ome.Cli oms-patch --fingerprint SCRIPT.BIN`, and the
+disassembly or the page locator).
+
+**"0x… is not the start of an instruction of SCRIPT".** A site is a dword offset where an instruction starts, as
+the disassembly lists it; an offset inside an instruction's operands names none.
+
+**"… so the after hook fires only once it has finished" or "… so the after hook never fires".** Notes, not errors:
+the instruction waits or calls a script (a save in between and a later load of it skip the hook), or it ends its
+frame ([lua.md](lua.md), "Site hooks").
+
 **"… this engine does not build it yet".** The hook form or `calls` is part of a later version of Lua scripting
 ([lua.md](lua.md), the list at the top).
 

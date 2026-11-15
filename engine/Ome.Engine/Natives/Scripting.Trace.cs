@@ -143,10 +143,11 @@ public sealed partial class Scripting
             json.WriteString("hook", context.Name ?? "");
             json.WriteString("kind", context.Kind switch
             {
-                HookKind.Point => "point",
+                HookKind.Point => context.When == null ? "point" : "site",
                 HookKind.EngineEvent => "engine-event",
                 _ => "event",
             });
+            if (context.When != null) json.WriteString("when", context.When);
             if (context.Script != null)
                 json.WriteString("at", string.Create(CultureInfo.InvariantCulture, $"{context.Script}@0x{context.Offset:x}"));
             json.WriteNumber("ms", Math.Round(milliseconds, 3));

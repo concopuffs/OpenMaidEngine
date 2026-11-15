@@ -7,6 +7,8 @@ This version supports:
 
 - **point hooks:** a handler runs before a named instruction of an original script, with the frame's locals and
   the instruction's operands;
+- **site hooks:** a handler runs before or after any instruction of an original script, which the hook names by the
+  script's fingerprint and the instruction's offset;
 - **the engine events** `ome.session.start`, `ome.session.resumed` and `ome.save.writing`;
 - **game names:** the game's base mod names its cells, and a mod reads any of them and writes the ones it lists,
   without a capability;
@@ -16,8 +18,8 @@ This version supports:
 - **`maid.state`:** a table that is saved beside each numbered save and comes back when that save is loaded;
 - **`maid.log`,** and **the console:** the driver's `lua` step runs a chunk in a running game.
 
-Not yet: hooks on raw sites, on script entry and exit or on cell writes, `skip`, calling a script from Lua, and
-reloading Lua without a restart. A mod that uses one of them fails to link, and the report says that this engine does
+Not yet: hooks on script entry and exit or on cell writes, `skip`, calling a script from Lua, and reloading Lua
+without a restart. A mod that uses one of them fails to link, and the report says that this engine does
 not build it yet. The design
 behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
@@ -103,7 +105,7 @@ version 3 loader still reads versions 1 and 2. All other keys are as in [package
 - **`[game] target = "extended"`** is required for a mod with Lua. The port runs it, and `omp export` refuses it.
 - **`[lua] api`** is the `maid` API version the mod was written for. This engine provides `1`.
 - **`[lua] capabilities`** lists what the mod may reach. Version 1 has `"vm"`, the raw access of `maid.vm`. A mod
-  without it has no `maid.vm`, and its point hooks are link errors.
+  without it has no `maid.vm`, and its point and site hooks are link errors.
 - **`[lua] writes`** lists the global names the mod writes through a base mod ("Game names").
 - **`[lua] calls`** is read but not built yet: the link refuses a mod that lists any.
 
@@ -112,12 +114,13 @@ Each `[[hooks]]` table has one form and a `handler`:
 | Form | Keys | Needs `vm` |
 |---|---|---|
 | Point | `point = "NAME"`, a named patch point of the game | yes |
+| Site | `script = "NAME.BIN"`, `fingerprint = "sha256:…"`, `site = 0x…`, `when = "before"` or `"after"` ("Site hooks") | yes |
 | Engine event | `engine = "EVENT"`, one of the events in "Engine events" | no |
 | Game event | `event = "NAME"`, an event a mod of the stack declares ("Game events") | no |
 
 `handler = "FILE.lua:FUNCTION"` names a file under `lua/` (with folders: `util/hooks.lua:f`) and a function in
-it. `priority` (default 0) orders the handlers due at one point: lower runs first, then load order. The link report
-counts an interaction where more than one handler is due at one instruction.
+it. `priority` (default 0) orders the handlers due at one instruction: lower runs first, then load order. The link
+report counts an interaction where more than one handler is due at one instruction.
 
 ### Libraries
 
@@ -174,6 +177,42 @@ A point names an instruction of the original script, and the link finds it in th
 - when a patch replaces the instruction, or a mod replaces the whole script, the link stops and names both mods;
 - when the installed script is not the revision the point was written for, the link stops: the game's catalog
   differs (an update or a translation that replaces the script).
+
+## Site hooks
+
+A site hook names an instruction itself, where no point does: the script, its fingerprint, and the instruction's
+offset in it.
+
+```toml
+[[hooks]]
+script = "SC0000.BIN"
+fingerprint = "sha256:…"   # Ome.Cli oms-patch --fingerprint SC0000.BIN <game options>
+site = 0x…                 # a dword offset, as the disassembly and the page locator give it
+when = "after"             # or "before"
+handler = "hooks.lua:after_copy"
+```
+
+The offset is in the original script, the revision the fingerprint names; the link refuses the hook when the
+installed script is another revision, or when the offset is not the start of an instruction. It then follows the
+instruction through other mods' patches as a point hook does, and stops in the same cases.
+
+**`when = "before"`** runs the handler where a point hook would: before the instruction, in one list with the point
+hooks and event subscribers due there, by `priority` and then load order. **`when = "after"`** runs it once the
+instruction has finished and nothing else has run, in a second list by the same rule. The handler gets the same
+`ctx` as a point hook, with `ctx.point` nil unless the instruction is also a point. What "finished" means depends
+on the instruction:
+
+| The instruction | The after hook runs |
+|---|---|
+| goes on to the next instruction, or jumps within its script | at once; `ctx` does not say which way a branch went |
+| calls a script | when that script has returned, which may be long after |
+| waits (a text page, a choice) | when the wait has ended |
+| ends its script, the scene or the run | never |
+| raises a script error | never; if the player answers 再試行, the before hooks run again |
+
+A save made while the instruction waits, or while the script it called runs, is loaded later in a new session, so
+the after hook does not run for that load. The link report notes each after hook on such an instruction, and on
+one that never finishes.
 
 ## Game names
 
@@ -484,7 +523,8 @@ them again one at a time to find the one.
 
 - `mod <id> <version>: …` for each mod that ships Lua or lends its layout: its capabilities and the names it
   writes. A mod with `vm` is *opaque*: the report cannot list what it changes. So is a mod under `--lua-dev`.
-- `hook …` for each instruction and engine event with handlers, in the order they run.
+- `hook …` for each instruction and engine event with handlers, in the order they run; an instruction's after
+  hooks follow `after:`.
 - `event <name> (<owner>, <where>): fields …; subscribers …` for each declared event.
 
 Two mods whose `[lua] writes` lists name one global give an `interaction` line, in load order.
@@ -497,8 +537,9 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 {"mod":"mod.double","handler":"double.lua:on_award","hook":"<profile>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.012,"result":"ok","fields":[{"name":"amount","before":25,"after":50}]}
 ```
 
-- `hook` is the point, the engine event or the game event; `kind` is `point`, `engine-event` or `event`; `at` is
-  the script and offset, for a point and for an event raised at one.
+- `hook` is the point, the engine event or the game event; `kind` is `point`, `site`, `engine-event` or `event`;
+  a site hook's line has `when` (`before` or `after`); `at` is the script and offset, for a point or a site and for
+  an event raised at one.
 - `result` is `ok`, `error`, `budget` or `depth`, with `error` the message's first line.
 - `within` lists the handlers the call ran inside, innermost first: a subscriber inside an emit has one.
 - `fields` gives each declared field, and an engine event's, before and after the call. A write to a field shows
@@ -514,8 +555,8 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 [lua-language-server](https://luals.github.io/), the language server most editors use for Lua. It links the stack as
 `omp check` does (pass your mod and its dependencies with `--mod`) and writes:
 
-- `maid.lua`: `maid` and its tables, and what a handler is given: `maid.point` for a point hook, and a class per
-  engine event (`ome.session.start` and the rest);
+- `maid.lua`: `maid` and its tables, and what a handler is given: `maid.point` for a point or site hook, and a
+  class per engine event (`ome.session.start` and the rest);
 - `events.lua`: a class per declared event, named as the event, with each field's type and whether it is
   writable;
 - `<base mod id>.lua`: what `require("<base mod id>")` gives, with every scalar's name in `g` and every table's in

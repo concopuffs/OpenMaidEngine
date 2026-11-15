@@ -50,13 +50,19 @@ public sealed record ModRuntimeStack(IReadOnlyList<ModRuntimeMod> Mods, IReadOnl
 /// <summary>One handler due at a place, in the merged order of spec §7.4. <paramref name="EngineEvent"/> names the
 /// engine event the handler subscribes to when the event's subscribers take their places in an instruction's list
 /// (<c>ome.save.writing</c> before each numbered save, spec §7.7); <paramref name="GameEvent"/> names the game event at
-/// the instruction's point that it subscribes to (spec §9.2). Such a handler is given the event's context.</summary>
+/// the instruction's point that it subscribes to (spec §9.2). Such a handler is given the event's context.
+/// <paramref name="Site"/> marks a site hook's handler (spec §6.3), which its context and the trace name as one.</summary>
 public sealed record PlannedHandler(HandlerId Handler, int Priority, int LoadOrder, bool Skip = false,
-                                    string? EngineEvent = null, string? GameEvent = null);
+                                    string? EngineEvent = null, string? GameEvent = null, bool Site = false);
 
 /// <summary>A hooked instruction (spec §7.1, §7.5): its linked offset, its original offset, the point it is if it is
-/// one, and its handlers in order.</summary>
-public sealed record PlannedSite(int Offset, int Site, string? Point, IReadOnlyList<PlannedHandler> Handlers);
+/// one, its handlers before it in order, and its <c>after</c> hooks in order.</summary>
+public sealed record PlannedSite(int Offset, int Site, string? Point, IReadOnlyList<PlannedHandler> Handlers,
+                                 IReadOnlyList<PlannedHandler>? After = null)
+{
+    /// <summary>The <c>after</c> hooks, empty when it has none.</summary>
+    public IReadOnlyList<PlannedHandler> AfterList => After ?? [];
+}
 
 /// <summary>
 /// The hook plan the link builds (spec §7.5): per script, the hooked instructions with their handlers, and per engine
@@ -102,6 +108,9 @@ public sealed class HookSite(PlannedSite planned, string script)
 {
     public PlannedSite Planned { get; } = planned;
     public string Script { get; } = script;
+
+    /// <summary>Whether it has <c>after</c> hooks, which the loop runs when the opcode handler returns.</summary>
+    public bool HasAfter { get; } = planned.AfterList.Count > 0;
 }
 
 /// <summary>A script's table (spec §7.5): instruction index to its hooked site, or null for none. A script with no

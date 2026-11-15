@@ -411,6 +411,46 @@ public sealed class LuaStateTests : IDisposable
     }
 
     [Fact]
+    public void AnAfterHookDoesNotFireWhenALoadRebuiltTheSessionDuringItsInstruction()
+    {
+        // Spec §7.1: OUTER calls DATAONLY, whose op 0x19f ends the session; the next boundary builds the load's. The
+        // call's after hook belonged to the old session, so it does not fire; one inside the new session does.
+        string saves = Saves();
+        Run(Root(), Native(Counting()), Store(saves));
+        Script dataOnly = ScriptAssembler.Assemble(Table, "DATAONLY.BIN", new List<(int, Operand[])>
+        {
+            (0x19f, [G(0x20), Imm(1)]),
+            (Mov, [G(0x102), Imm(3)]),
+            (0x5, []),
+        }, []);
+        Script outer = ScriptAssembler.Assemble(Table, "OUTER.BIN", new List<(int, Operand[])>
+        {
+            (0x3, [Imm(9)]),
+            (Mov, [G(0x105), Imm(1)]),
+            (0x2, []),
+        }, []);
+        LuaStackBuilder builder = new LuaStackBuilder().Mod("mod.a", CountingMod + "\n" + """
+            function after_call(ctx) maid.log.info("after call") end
+            function after_mov(ctx) maid.log.info("after mov reason=" .. maid.session.reason) end
+            """)
+            .Engine(Scripting.SessionStartEvent, "mod.a", "hooks.lua:on_start")
+            .Site(outer, 0, "mod.a", "hooks.lua:after_call", "after")
+            .Site(dataOnly, 1, "mod.a", "hooks.lua:after_mov", "after");
+        Scripting native = Native(builder);
+
+        VirtualMachine vm = Run(outer, native, Store(saves), new MapProvider(new() { [9] = dataOnly }));
+
+        Assert.Equal((3, 1), (vm.Globals[0x102], vm.Globals[0x105]));
+        Assert.Equal(
+        [
+            "start boot restoring=false count=nil local=nil version=nil",
+            "start load restoring=false count=1 local=nil version=1.0.0",
+            "keys integer key | string key",
+            "after mov reason=load",
+        ], Lines(native));
+    }
+
+    [Fact]
     public void AnAbandonedLoadEndsWithTheFlagSetAndTheTitleSessionStartsClear()
     {
         string saves = Saves();

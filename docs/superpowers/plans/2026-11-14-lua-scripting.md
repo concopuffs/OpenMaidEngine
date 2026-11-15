@@ -855,7 +855,7 @@ An award in play needs a battle; the install tests run the same native on `ADDEX
 
 ## 8. Milestone 4: wider hooks
 
-Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; piece 1 is built (§8.1):
+Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; pieces 1 and 2 are built (§8.1, §8.2):
 
 1. **The two opcode facts** (spec §7.1): `waits` (`always`, `may` or `never`) and `leaves` (any of `falls`, `jumps`,
    `calls`, `ends`, `saves`, `loads`, `restores`) for every opcode the port implements, in `vm-map/opcodes.toml`.
@@ -913,3 +913,36 @@ Built 2026-11-15 (spec §7.1):
 Tests: `OpcodeFlowTests` (4: every implemented opcode has facts and no other does, run for both ABIs; the facts of known
 handlers; the switch is on; a wrong fact stops the run), `test_opcode_flow.py` (7), and the full engine suite (2287)
 with the check on.
+
+### 8.2 Site hooks and `after`
+
+Built 2026-11-15 (spec §6.3, §7.1, §7.4, §7.6):
+
+- **The link** (`ModLuaLinker.BindSite`). A site hook needs `vm`. The base catalog's script must be the revision the
+  hook's fingerprint names (otherwise: "the hook was written for SCRIPT A, but the base catalog's SCRIPT is B"), and
+  the site the start of one of its instructions; the link decodes the base script with the profile's table to tell.
+  The instruction is then followed through the patches by the same code as a point (`BindOriginal`, BindPoint's old
+  tail), so a replaced script or a patched-away instruction stops the link the same way.
+- **The plan.** `PlannedSite` has a second list, `After`, in the merged order; a site hook's handler is marked
+  (`PlannedHandler.Site`). A point, a site hook and an event's subscribers at one instruction share its before list.
+  The ordered-interaction line and the report's `hook` line give the after list separately (`after it, handlers run
+  in this order`, `…; after: …`). The cache stores both (`after`, `site`).
+- **The notes** (spec §7.1, "the loader warns"): an after hook on an instruction that may wait or calls (from its
+  facts, §8.1) gets a note that a save in between skips it on load; one on an instruction that only ends gets a note
+  that it never fires. They are notes, not errors: the spec refuses only `skip`.
+- **The loop.** After the opcode handler and the 無視 adjustment, before the frame turn, the loop runs the after list
+  when the step continues (`Next` or `Jump`), the instruction raised no script error, and the session is the one the
+  instruction started in.
+  - A script error is the instruction's own: `ShowScriptError` sets a flag the loop clears before each step, and
+    each loop restores its outer instruction's flag when it ends (`RunInstructions` now wraps
+    `RunInstructionLoop`). So a nested instruction's error does not cancel the call around it.
+  - The session check is `Scripting.SessionMark`, a count of the sessions ended: a data-only load inside a called
+    script ends the session, and the next boundary builds the load's, so the call's after hook does not fire.
+- **The context.** A site hook's `ctx` is a point's (`ctx.point` nil unless the instruction is one). The trace's kind
+  is `site` with `when`; an error reads `failed at SCRIPT@0x… (after)`.
+- **Tests.** `LuaHooksTests` (5: before and after with the instruction's write between; both lists in the merged
+  order; a call's after hook once the callee returned, none on a ret or an exit; 再試行 and 無視 on op 0xcd's Depth
+  error, where the instruction's after hook does not fire and the call around it does; the trace and the error
+  text), `LuaStateTests.AnAfterHookDoesNotFireWhenALoadRebuiltTheSessionDuringItsInstruction`, and in
+  `ModLuaLinkTests` the binding, the lists and the cache, the three refusals and the missing script, the notes, and
+  on the install a site hook through the guide's patch. Full suite 2298.
