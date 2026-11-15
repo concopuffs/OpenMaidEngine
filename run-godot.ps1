@@ -12,7 +12,7 @@
 #   .\run-godot.ps1 -Kamidori  launch the conventional ../Kamidori install with its profile
 #   .\run-godot.ps1 -Kamidori -TranslationPatch  launch the translated ../Kamidori_Translated install with its
 #                                               patch/ English overlay and BMP assets
-#   .\run-godot.ps1 -OverlayRoot <dir> -AllowBmpAsAgf  select generic asset compatibility options
+#   .\run-godot.ps1 -OverlayRoot <dir> [-OverlayRoot ...] -AllowBmpAsAgf  select generic asset compatibility options
 #   .\run-godot.ps1 -Mod <mod folder or .omp> [-Mod ...]  also load these mods (docs/modding/cli.md)
 #   .\run-godot.ps1 -NoMods    start without any mod, even those in the profile's mods/ folder
 #   .\run-godot.ps1 -Language <tag>  show the game in this language (docs/modding/languages.md)
@@ -32,9 +32,7 @@ param(
     [string]$GameRoot,
     [string]$Profile,
     [switch]$Kamidori,
-    [string[]]$OverlayRoot,
     [switch]$AllowBmpAsAgf,
-    [string[]]$Mod,
     [switch]$NoMods,
     [string]$Language,
     [string]$TextRoot,
@@ -57,6 +55,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# -Mod and -OverlayRoot repeat, which a script parameter cannot: PowerShell refuses a parameter given twice. So they
+# are not declared, and are collected here from the arguments no parameter took. -Mod a,b works too.
+$Mod = @()
+$OverlayRoot = @()
+for ($index = 0; $index -lt $args.Count; $index++) {
+    $name = [string]$args[$index]
+    if ($name -notin @('-Mod', '-OverlayRoot')) { throw "unknown argument: $name" }
+    if ($index + 1 -ge $args.Count) { throw "$name needs a value" }
+    $values = @($args[++$index])
+    if ($name -eq '-Mod') { $Mod += $values } else { $OverlayRoot += $values }
+}
 $repo    = $PSScriptRoot                          # age-reimpl/
 $project = Join-Path $repo 'godot'
 $csproj  = Join-Path $project 'OME.csproj'
