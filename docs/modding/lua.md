@@ -68,9 +68,9 @@ end
 1. **Check it** with `omp check --mod my.double-exp` ([cli.md](cli.md)). The check compiles every Lua file and checks
    every hook without running any of your code. The report's `lua:` section lists the event with your handler among
    its subscribers ("The link report and the trace").
-2. **Run it** with `--mod my.double-exp`. The startup log prints a `[lua]` line with the mods that ship Lua and the
-   number of handlers. Add `--lua-trace` and win a battle: `diagnostics/lua-trace.jsonl` gets a line per award, with
-   the amount before and after your handler.
+2. **Run it** with `--mod my.double-exp` (`run-godot`'s `-Mod my.double-exp`). The startup log prints a `[lua]`
+   line with the mods that ship Lua and the number of handlers. Add `--lua-trace` (`-LuaTrace`) and win a battle:
+   `diagnostics/lua-trace.jsonl` gets a line per award, with the amount before and after your handler.
 3. **Get completion** in your editor with `omp lua-stubs --mod my.double-exp --output DIR` ("Editor definitions").
 4. **Pack it** with `omp build my.double-exp`, which writes `my.double-exp-1.0.0.omp` beside the folder.
 
