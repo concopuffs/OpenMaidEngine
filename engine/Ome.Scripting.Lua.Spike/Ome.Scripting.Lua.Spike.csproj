@@ -16,4 +16,8 @@
     <PackageReference Include="LuaCSharp" Version="0.5.8" />
     <PackageReference Include="MoonSharp" Version="2.0.0" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The conformance run reads the official tests' text as a mod's is read (LuaSource.Prepare). -->
+    <Compile Include="..\Ome.Scripting.Lua\LuaSource.cs" Link="Linked\LuaSource.cs" />
+  </ItemGroup>
 </Project>

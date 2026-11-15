@@ -174,6 +174,12 @@ or `string.dump`: nothing reaches files, processes, the clock or the network.
 - **`math.random`** draws from the engine's generator, so the driver's `rand-seed` makes it repeatable.
   `math.randomseed` is absent.
 - **Strings count UTF-16 code units,** not bytes: `#"日本語"` is 3, and `("日本"):sub(1, 1)` is `"日"`.
+- **Whole numbers print as Lua prints them; fractions may not.** A number that is not a whole number, such as
+  `3 * 1.1`, prints with every digit it holds (`3.3000000000000003`; Lua 5.2 prints `3.3`), and `1/0` prints
+  `Infinity`. Format a number you show: `string.format("%.1f", x)` gives the same text on every build, and
+  `%d` needs a whole number (`math.floor(x)`).
+- **Weak tables are never cleared, and `__gc` never runs.** The .NET collector owns memory, so a table with
+  `__mode` keeps its entries.
 
 ## Errors and budgets
 

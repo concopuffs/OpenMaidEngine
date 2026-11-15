@@ -4,8 +4,8 @@
 **Spec:** `docs/superpowers/specs/2026-11-10-lua-scripting-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps what each milestone measured and what that settles for the later ones.
 **Status:** milestones 0 and 1 are done (2026-11-14). Milestone 0, the spike, chose **Lua-CSharp 0.5.8**
-(`LuaCSharp` on NuGet); milestone 1 built the core (§4). Milestones 2 to 6 are not built. The backlog's "Runtime
-scripting (Lua)" item lists them.
+(`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the library against the official Lua 5.2
+test suite. Milestones 2 to 6 are not built. The backlog's "Runtime scripting (Lua)" item lists them.
 
 Paths are relative to `age-reimpl/`.
 
@@ -263,3 +263,142 @@ Dispatch on the development machine (Release; 200,000 instructions, each one hoo
 - The cell handler makes six metamethod calls (`maid.vm.g` twice, the read, the write). A handler that keeps
   `local g = maid.vm.g` makes two.
 - A script's table holds one entry per hooked instruction and is built when a frame first enters the script.
+
+## 5. Library conformance
+
+Milestone 1 found two library bugs by accident (§4.1, §4.2). The spike's criteria test what the engine needs from a
+library, not the Lua language, so this measures the language. Run 2026-11-14, after milestone 1.
+
+### 5.1 How it was run
+
+- **The suite.** The official Lua 5.2 test suite, `lua-5.2.2-tests.tar.gz` from https://www.lua.org/tests/ (SHA-256
+  `07c1071c66d9cb4dc80200ed430fc21ebbbccf1f55148b87eb0b9522932e4eb6`), the newest one for 5.2. It is unpacked into
+  the disposable `build/lua-conformance/official/` and not committed.
+- **The runner.** The spike's `conformance` command runs each file unmodified, read as Latin-1 (one character per
+  byte, as reference Lua reads it). Each file gets the full standard library, not a mod's sandbox, with `_port` and
+  `_soft` set as `all.lua` allows. Each run is a child process on an 8 MiB thread with a 30 s limit. A file that
+  hangs runs again with a count hook that reports the line it is on. Three modes:
+  - **strict:** the file as written; the first failed assert ends it;
+  - **soft:** `assert` records a failure and returns, so a run lists every failed assert up to the first other
+    error;
+  - **past:** soft, plus shims and line patches that step over a stop once it is recorded, so the rest of the file
+    runs (`Conformance.PastShims` and `PastPatches`, each with its reason). None hides a failed assert.
+
+  A file that `LuaSource.Prepare` changes runs raw and prepared.
+- **The probe.** The `conformance-probe` command runs what the suite leaves out:
+  - 146 chunks with the result Lua 5.2 gives: numerals, escapes, comments, precedence, number text, `tonumber`,
+    `string.format`, tables, assignment order, control flow, `bit32`, and what 5.2 does not have;
+  - 234 numerals followed directly by an operator or a bracket, each compared with the same expression spaced out.
+
+  Each chunk runs on its own, so one failure hides nothing.
+- **The libraries.**
+  - Lua-CSharp 0.5.8 and MoonSharp 2.0.0, as the spike tested them.
+  - Lua-CSharp's `main` at `0fb05ff` (2026-11-12), built from source for net8.0 with SDK 8 (its `global.json` asks
+    for SDK 10). It ran with `LuaPlatform.NumberFormat = Lua`, an option added after 0.5.8.
+- **Upstream's own run.** Upstream runs the same suite in its tests, on a copy with ten files edited. `math.lua` is
+  reformatted with spaces around its operators, which hides §4.1's bug (`math.lua:129` is `0xE+1`). Failing asserts
+  are commented out. So upstream's passing run did not show conformance.
+
+From `age-reimpl/`, after unpacking the suite:
+
+```
+dotnet build -c Release engine/Ome.Scripting.Lua.Spike
+dotnet engine/Ome.Scripting.Lua.Spike/bin/Release/net8.0/Ome.Scripting.Lua.Spike.dll conformance [--lib luacsharp|moonsharp] [--file NAME] [--timeout S] [--out PATH]
+dotnet engine/Ome.Scripting.Lua.Spike/bin/Release/net8.0/Ome.Scripting.Lua.Spike.dll conformance-probe [--lib L]
+dotnet engine/Ome.Scripting.Lua.Spike/bin/Release/net8.0/Ome.Scripting.Lua.Spike.dll conformance-eval CODE
+```
+
+- `--tests DIR` defaults to `build/lua-conformance/official/lua-5.2.2-tests`, and `--out` to
+  `build/lua-conformance/results.json`.
+- `CONFORMANCE_NUMBERS=lua` sets `NumberFormat` by reflection, on a library that has it.
+- To test another build of the library, copy the output folder and replace `Lua.dll` and `Lua.Annotations.dll`.
+
+### 5.2 Results
+
+Nineteen of the suite's files test what a mod's sandbox has. The other three (`gc.lua`, `db.lua`, `files.lua`) test
+`collectgarbage`, `debug` and `io`, which a mod does not get.
+
+| Files | Lua-CSharp 0.5.8 | `main` | MoonSharp 2.0.0 |
+|---|---|---|---|
+| `constructs`, `literals`, `locals`, `goto`, `vararg`, `events`, `sort`, `pm`, `bitwise`, `big`, `verybig` | pass | pass | 3 of 11 pass (`locals`, `big`, `verybig`) |
+| `calls` | stops at 217: `load` with a reader function is not built | pass | stops at 217 |
+| `nextvar` | stops at 233: `package.loaded` lacks `package`; past mode passes | pass | an assert at 34 |
+| `strings` | asserts at 122 (`%q` of `"\0"`), 151 and 152 (`%x` of a fraction raises); stops at 187 (`%a`) | pass | an assert at 6 |
+| `math` | does not compile (§4.1); prepared, asserts at 60, 85, 99, 100, 137 (`tonumber`) | pass | stops at 45 |
+| `attrib` | stops at 385 and 395: `i, a[i], a = …` indexes the new `a` | pass | stops at 385 |
+| `closure` | hangs at 27, waiting for a weak entry to clear; past, asserts at 45 and 53 (closure identity) and 219-242 (`debug.upvalueid`) | the same, without the `debug` ones | does not compile: a valid `goto` refused |
+| `coroutine` | an assert at 209: a weak entry not cleared | the same | stops at 134 |
+| `errors` | asserts at 153 (`io.stdin`'s `__gc`) and 180 ("stack overflow" for "C stack overflow") | the same | an assert at 36 |
+
+The probe:
+
+| Library | Chunks (146) | Numerals (234) |
+|---|---|---|
+| Lua-CSharp 0.5.8, raw | 128 | 186 |
+| Lua-CSharp 0.5.8, through `LuaSource.Prepare` (what a mod runs) | 130 | 234 |
+| Lua-CSharp `main`, `NumberFormat = Lua` | 146 | 234 |
+| Lua-CSharp `main`, default number format | 134 | 234 |
+| MoonSharp 2.0.0 | 121 | 213 |
+
+MoonSharp's probe failures include `7 % -3` giving 1 (Lua gives -2), `math.modf(-3.5)` giving -4, `"Z" < "a"`
+false, `tonumber("0x10")` nil, and `1e1+2` refused.
+
+### 5.3 What differs for a mod
+
+| Difference | 0.5.8 | `main` | Reaches a mod |
+|---|---|---|---|
+| A hex integer numeral followed by an operator, `]` or `;` does not compile | yes; `LuaSource.Prepare` works around it (§4.1) | fixed | no |
+| **Number text.** `tostring`, `..`, `print`, `%s` and `table.concat` write .NET's shortest round-trip form, not `%.14g`: `1/3` reads `0.3333333333333333`, `0.1 + 0.2` reads `0.30000000000000004`, `1e15` reads `1000000000000000`, `1/0` reads `Infinity`. `%g` writes `1E+20`, and `%e` writes the number unformatted | yes | Lua's form with `NumberFormat = Lua`; .NET's stays the default | text only (§5.5) |
+| **`string.format("%d", 2.5)` raises** "number has no integer representation" (Lua 5.3's rule; 5.2 truncates); `%x` the same | yes | fixed | **yes** |
+| `%q` writes a NUL character as it is; `%a` is not built | yes | fixed | rarely |
+| A multiple assignment that assigns a table variable and indexes it in one statement indexes the new value | yes | fixed | rarely |
+| `tonumber` takes an embedded NUL, `0x5p+-2` and `"Infinity"`, and misreads a 150-digit hex numeral | yes | fixed | rarely |
+| Weak tables (`__mode`) are never cleared, and `__gc` never runs | yes | yes; upstream documents it: the .NET collector owns lifetimes | rarely: a weak cache keeps its entries, and a mod has no `collectgarbage` |
+| Two closures that nothing tells apart are not equal (5.2 reuses one; the manual leaves it open) | yes | yes | no |
+| Error wording, such as "stack overflow" for "C stack overflow" | yes | yes | no |
+| Outside the sandbox: `load` with a reader, `string.dump`, `package.loaded`, `collectgarbage`'s options, `debug`, `io` | gaps | most fixed | no |
+
+### 5.4 What follows
+
+- **The choice stands (§3).** Lua-CSharp's core passes the suite's language files. Upstream's `main` fixes every
+  0.5.8 failure a mod can reach except weak tables. MoonSharp fails more, besides criterion 10.
+- **Number text does not hold Lua back** (decided 2026-11-14 by the user, after §5.5). Lua ships on 0.5.8. The
+  runtime moves to the release after it when one comes, sets `NumberFormat = Lua`, drops `LuaSource.Prepare` once its
+  test passes raw, and repeats this run. The backlog keeps the item.
+- **Until then** the guide gives the number rule and weak tables, and the troubleshooting page gives the number text
+  and `%d`.
+
+### 5.5 Number text, measured
+
+The question was whether 0.5.8's number text is more than a display difference. Each value below went through
+0.5.8's `tostring` and was compared with C's `"%.14g"`, the format Lua 5.2 uses.
+
+| Values | Differ |
+|---|---|
+| Integers up to 14 digits, so every VM cell (32-bit) | none |
+| Integer-valued results of float arithmetic (`10 / 2`, `2^10`, `math.floor(x * 1.1)`) | none |
+| Decimals as a mod writes them (`0.1`, `1.5`, `12.34`, `0.001`) | none |
+| `x * 1.5`, `x * 0.5`, `x * 1.25` for x in 1..1000 | none: exact in binary |
+| `x * 1.1`, `x * 0.9`, `x * 0.3`, `x * 0.01` for x in 1..1000 | 53 %, 20 %, 24 %, 13 %: `3 * 1.1` reads `3.3000000000000003`, where Lua reads `3.3` |
+| `a / b` for a, b in 1..100; `x * 100 / y` | 78 %; 85 %: `1/3` reads `0.3333333333333333`, where Lua reads `0.33333333333333` |
+| Integers from 10^14; magnitudes below 10^-4 or above 10^15 | all: no exponent below 10^16, an upper-case `E` |
+| `inf`, `-inf`, `nan` | all: `Infinity`, `-Infinity`, `NaN` |
+
+What it touches:
+
+- **Only text.** A cell write takes the number, not its text. A table key that is a number stays a number, and a
+  key built from an integer (`"slot" .. id`) is the same string. Read back with `tonumber`, .NET's form gives the
+  same number for all of 90,000 fractions tested, where Lua's 14 digits give a different one for 92 % of them.
+- **Not the machine's locale.** The probe gives the same results under de-DE, fr-FR, ru-RU and ar-SA. MoonSharp does
+  not: under de-DE, `"" .. 2.5` reads `2,5`.
+- **Not what the engine writes.** `print` and `maid.log` format numbers in our code (`LuaModSession.Show`, .NET's
+  round-trip form with the invariant culture), so they agree with `tostring`; the move past 0.5.8 changes it with
+  them. The mod state of milestone 2 will be written by our own serializer, which must keep each number exactly.
+- **Explicit formatting is the same everywhere.** `string.format("%.Nf", x)` gives C's text on 0.5.8, ties rounded
+  to even as C does (`%.0f` of 2.5 reads `2`, `%.2f` of 0.125 reads `0.12`). Only `%e` and `%g` differ in 0.5.8.
+- **No workaround inside the engine.** A replaced `tostring` or `print` would not reach `..`, `table.concat` or the
+  string functions' coercions, which the library does inside its interpreter, and `tostring(x)` and `"" .. x` would
+  then disagree.
+- **The move changes noise, not values.** After it, `3 * 1.1` reads `3.3` instead of `3.3000000000000003`. A mod
+  that formats explicitly sees no change; one that compares number text with a string literal would, and a number a
+  mod keeps as text no longer reads back exactly, as in Lua 5.2.

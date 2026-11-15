@@ -201,6 +201,14 @@ at, and the traceback. After three failures in a row the handler is off for the 
 at the first one instead. "ran out of its instruction budget" means the call ran past 1,000,000 Lua instructions,
 usually an endless loop.
 
+**A number prints with up to 17 digits** (`0.1 + 0.2` reads `0.30000000000000004`, `1/3` reads
+`0.3333333333333333`). This build's Lua library writes fractions as .NET does, not with Lua 5.2's 14 digits; whole
+numbers print the same. Format a number before you show it, for example `string.format("%.2f", x)`, which gives the
+same text on every build ([lua.md](lua.md), "The sandbox"). Avoid `%e` and `%g` in this build.
+
+**"bad argument #N to 'format' (number has no integer representation)".** In this build `%d` and `%x` need a
+whole number, where Lua 5.2 truncates. Pass `math.floor(x)`.
+
 **The game hangs with a Lua mod enabled.** A pattern that backtracks (`string.find` and the other pattern functions)
 is not bounded by the budget. Disable mods and enable them again one at a time to find the one.
 

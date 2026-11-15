@@ -320,7 +320,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   └── Ome.Scripting.Lua.Spike/         milestone 0 of the Lua design (superpowers/plans/2026-11-14-lua-
     │                                       scripting.md §1): a console program that checks LuaCSharp and
     │                                       MoonSharp against spec §5.1's criteria, one child process per case;
-    │                                       results to disposable build/lua-spike/; not in OmeEngine.sln
+    │                                       results to disposable build/lua-spike/; and the conformance run (§5):
+    │                                       the official Lua 5.2 test suite and a probe, results to disposable
+    │                                       build/lua-conformance/; not in OmeEngine.sln
     ├── native/                              authored native runtime boundaries
     │   └── ome_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows/Linux dependency manifests,
     │                                       and native/MSVC plus Linux-hosted MinGW target bootstrap/build scripts;

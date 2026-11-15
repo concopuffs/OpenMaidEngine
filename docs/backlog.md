@@ -349,6 +349,14 @@ still handled on their own. Each change should be behaviour-neutral and pass the
        `--lua-dev`, the trace, editor stubs, and the guide for mod authors.
   - **After it:** 4, raw sites, `skip`, script entry and exit, and watches; 5, synchronous script calls and the
     base mods' helpers; 6, reload and the seeded random streams.
+- **Lua-CSharp past 0.5.8.** 0.5.8 writes fractions in .NET's form (`3 * 1.1` reads `3.3000000000000003`, `1/0`
+  reads `Infinity`), raises on `string.format("%d", 2.5)`, writes `%e` unformatted, and refuses to compile `t[0x10]`,
+  which `LuaSource.Prepare` works around. Upstream's `main` fixes them all, the number text through the option
+  `LuaPlatform.NumberFormat = Lua` (`superpowers/plans/2026-11-14-lua-scripting.md` §5). It is text only and does not
+  hold Lua back (§5.5, decided 2026-11-14). Done when the runtime uses a Lua-CSharp release with the fixes, sets
+  `NumberFormat = Lua` and formats `print`'s numbers the same way (`LuaModSession.Show`), drops `LuaSource.Prepare`
+  once its test passes raw, passes the conformance run of plan §5 again, and `modding/lua.md` and
+  `modding/troubleshooting.md` describe numbers as the new build writes them.
 
   Delete each milestone here as it lands, and the item with the last.
 
