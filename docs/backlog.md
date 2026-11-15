@@ -332,6 +332,18 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
+- **A devkit for mod authors.** Writing a mod takes the command line and the port's flags: `omp check`, `build`,
+  `export`, `explain` and `lua-stubs`, the `omp text` commands, `oms-patch --fingerprint` and `oms-decompile`, and in
+  the port `--mod`, `--lua-dev` (the writes a mod does not declare), `--lua-trace`, `--lua-reload`, `--text-log`, the
+  Lua console and the page locator (F2, F3). `modding/cli.md` and `modding/lua.md` document each, but an author has
+  to know them all and read their output as text. A GUI devkit would put the common work in one window: start a mod
+  folder, fingerprint a script and start a fragment at the page the locator names, check and build with each mod's
+  report shown, list a Lua mod's writes beside its `[lua] writes`, export for native AGE, and run the port with the
+  authoring flags while showing its logs (`diagnostics/lua.log`, the trace). It would drive the same commands and
+  files, as the launcher above drives the engine (mod loader spec §12), and may share that launcher's shell: the
+  launcher serves players, the devkit authors. Outside the repository it needs the toolchain an export lacks (the
+  first item of this section). Done when a design spec settles its scope and UI toolkit, and a first version
+  covers check, build and a port run with the authoring flags.
 - **More base mod helpers.** Each base mod has one helper, `give_item` over ADDITEM (`mods/<profile>-base/lua/`;
   plan §9.3). The check ahead found more wait-free scripts in both games (plan §9.2: 22 of 27 probed in Himegari, 30
   of 44 in Kamidori), most of them battle arithmetic (`CALC*`) or map and unit edits (`SET*`, `DEL*`) that read
