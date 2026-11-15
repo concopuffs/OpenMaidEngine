@@ -702,7 +702,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   and the `[lua]` line lists the mods it applies to. A packed `.omp` keeps its list. The link cache keys on the flag.
 - `--lua-trace` — the attribution trace (spec §12): one JSON line per handler call in `diagnostics/lua-trace.jsonl`
   (started anew by the run's first line), with the mod, handler, hook, kind, `at`, `ms`, `result`, `within`, the
-  declared fields before and after, and each write through `maid.vm`, an accessor or `ctx.args` (`Scripting.Trace.cs`).
+  declared fields before and after, and each write through `maid.vm`, an accessor or `ctx.args` (`Scripting.Trace.cs`);
+  a site or script hook's `when` and `cause`, `skip` on the handler that skipped, and a watch's cell, old and new
+  values and writer.
   The `[lua]` line says when it is on. Format: `docs/modding/lua.md`, "The link report and the trace".
 - `--allow-bmp-as-agf` — opt into decoding a `BM` payload found under an `.AGF` catalog record as an
   uncompressed Windows BMP. The supported compatibility surface is `BITMAPINFOHEADER`-compatible `BI_RGB` at

@@ -455,6 +455,8 @@ public sealed class LuaStateTests : IDisposable
     {
         // Spec §7.2: the load's session is built before CALLBACK_LOAD, which enters with the cause restore; the saved ROOT
         // is entered again at its entry with the cause restore; a return to title enters the root with the cause title.
+        // Gate 8: each frame's enter comes before its first instruction's before hooks (CALLBACK_LOAD's callback, ROOT's
+        // prologue).
         string saves = Saves();
         Run(Root(), Native(Counting()), Store(saves));
         LuaStackBuilder Entering() => Counting()
@@ -466,19 +468,21 @@ public sealed class LuaStateTests : IDisposable
         string[] Order(Scripting native)
             => native.RecentLog.Where(line => line.Contains(" mod.e: ", StringComparison.Ordinal)
                                               || line.Contains(" mod.a: start ", StringComparison.Ordinal)
+                                              || line.Contains(" mod.a: callback ", StringComparison.Ordinal)
+                                              || line.Contains(" mod.a: prologue ", StringComparison.Ordinal)
                                               || line.Contains(" mod.a: resumed ", StringComparison.Ordinal))
                 .Select(line => line[(line.IndexOf(": ", 20, StringComparison.Ordinal) + 2)..].Split(" restoring")[0]).ToArray();
 
         Scripting loaded = Native(Entering());
         Run(Loader(), loaded, Store(saves), Provider(CallbackLoad()));
-        Assert.Equal(["start boot", "enter LOADER.BIN root", "start load", "enter CALLBACK_LOAD.BIN restore",
-                      "enter ROOT.BIN restore", "resumed slot=1"], Order(loaded));
+        Assert.Equal(["start boot", "enter LOADER.BIN root", "start load", "enter CALLBACK_LOAD.BIN restore", "callback",
+                      "enter ROOT.BIN restore", "prologue", "resumed slot=1"], Order(loaded));
 
         Script title = ScriptAssembler.Assemble(Table, "TITLE.BIN", new List<(int, Operand[])> { (0x2, []) }, []);
         Scripting abandoned = Native(Entering());
         Run(Loader(), abandoned, Store(saves), Provider(CallbackLoad(returnToTitle: true), title));
-        Assert.Equal(["start boot", "enter LOADER.BIN root", "start load", "enter CALLBACK_LOAD.BIN restore", "start title",
-                      "enter TITLE.BIN title"], Order(abandoned));
+        Assert.Equal(["start boot", "enter LOADER.BIN root", "start load", "enter CALLBACK_LOAD.BIN restore", "callback",
+                      "start title", "enter TITLE.BIN title"], Order(abandoned));
     }
 
     /// <summary>A mod watching ROOT's prologue cell, its repeated cell and CALLBACK_LOAD's cell (spec §7.3): it logs each

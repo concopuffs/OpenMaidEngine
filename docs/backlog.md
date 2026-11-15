@@ -333,17 +333,17 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
-- **Runtime scripting (Lua): milestones 0 to 3 built, the first release.**
+- **Runtime scripting (Lua): milestones 0 to 4 built; 0 to 3 are the first release.**
   `superpowers/specs/2026-11-10-lua-scripting-design.md` (accepted 2026-11-14) specifies Lua beside the VM: a managed interpreter, hooks declared in the manifest (`omp = 3`),
   the `maid` API, per-game base mods with declared writes, mod state beside the save, and gates 1 to 15. Milestone 0
   (the spike) chose Lua-CSharp, milestone 1 (the core: point hooks, `ome.session.start`, `maid.vm` without
   `call`, errors and budgets, the console) and milestone 2 (state: `maid.state` beside each save, the rebuild on
   load, `maid.session.restoring`, `ome.session.resumed`, `ome.save.writing`) were built on 2026-11-14, and milestone
   3 (events and the base mods: the layout, the accessors with declared writes, the write scan and `--lua-dev`, the
-  trace, editor stubs, Kamidori's point and event, and the guide for mod authors) on 2026-11-15. Their results are in
-  `superpowers/plans/2026-11-14-lua-scripting.md`, and the modders' guide is `modding/lua.md`. The remaining
-  milestones (§18), each done when its gates pass:
-  - 4, raw sites, `skip`, script entry and exit, and watches;
+  trace, editor stubs, Kamidori's point and event, and the guide for mod authors) and milestone 4 (the opcode facts
+  `waits` and `leaves`, site hooks with `after`, `skip`, script entry and exit, and watches) on 2026-11-15. Their
+  results are in `superpowers/plans/2026-11-14-lua-scripting.md`, and the modders' guide is `modding/lua.md`. The
+  remaining milestones (§18), each done when its gates pass:
   - 5, synchronous script calls and the base mods' helpers;
   - 6, reload and the seeded random streams.
 - **Lua-CSharp past 0.5.8.** 0.5.8 writes fractions in .NET's form (`3 * 1.1` reads `3.3000000000000003`, `1/0`

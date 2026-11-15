@@ -146,6 +146,45 @@ public sealed class LuaHooksTests : IDisposable
         NoErrors(native);
     }
 
+    /// <summary>A recording host that notes, at each op 0xc8 sleep, how many lines the scripting native had logged.</summary>
+    private sealed class MarkedSleep(Func<int> mark) : RecordingWaits
+    {
+        public readonly List<int> Marks = new();
+
+        public override void Sleep(long duration)
+        {
+            Marks.Add(mark());
+            base.Sleep(duration);
+        }
+    }
+
+    [Fact]
+    public void AWaitsBeforeHooksFireBeforeTheWaitAndItsAfterHooksOnceTheWaitHasEnded()
+    {
+        // Spec §7.1, gate 8: ROOT sleeps (op 0xc8, which may wait), then exits.
+        Script root = Assemble("ROOT.BIN", (0xc8, [Imm(10)]), (0x2, []));
+        Scripting native = Native(new LuaStackBuilder()
+            .Mod("mod.a", """
+                -- file: hooks.lua
+                function before(ctx) maid.log.info("before") end
+                function after(ctx) maid.log.info("after") end
+                """)
+            .Site(root, 0, "mod.a", "hooks.lua:before")
+            .Site(root, 0, "mod.a", "hooks.lua:after", "after"));
+        var waits = new MarkedSleep(() => native.RecentLog.Count);
+
+        VirtualMachine vm = Run(root, native, waits);
+
+        NoErrors(native);
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal([10L], waits.SleptDurations);
+        Assert.Equal(["before", "after"], Lines(native));
+        int before = native.RecentLog.ToList().FindIndex(line => line.EndsWith(" mod.a: before", StringComparison.Ordinal));
+        int after = native.RecentLog.ToList().FindIndex(line => line.EndsWith(" mod.a: after", StringComparison.Ordinal));
+        int slept = Assert.Single(waits.Marks);
+        Assert.True(before < slept && slept <= after, $"before at {before}, the sleep after {slept} lines, after at {after}");
+    }
+
     [Fact]
     public void AnInstructionThatRaisesAScriptErrorFiresNoAfterHookAndTheCallAroundItStillDoes()
     {
@@ -473,7 +512,7 @@ public sealed class LuaHooksTests : IDisposable
         Run(root, native);
 
         Assert.Equal(2, native.RecentTrace.Count);
-        Assert.Contains("\"kind\":\"site\",\"when\":\"before\",\"at\":\"ROOT.BIN@0x0\"", native.RecentTrace[0]);
+        Assert.Contains("\"hook\":\"ROOT.BIN@0x0\",\"kind\":\"site\",\"when\":\"before\",\"at\":\"ROOT.BIN@0x0\"", native.RecentTrace[0]);
         Assert.Contains("\"kind\":\"site\",\"when\":\"after\",\"at\":\"ROOT.BIN@0x0\"", native.RecentTrace[1]);
         Assert.Contains("\"result\":\"error\"", native.RecentTrace[1]);
         Assert.Contains(native.RecentLog, line => line.Contains("hooks.lua:after failed at ROOT.BIN@0x0 (after)", StringComparison.Ordinal));

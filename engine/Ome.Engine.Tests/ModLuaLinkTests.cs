@@ -230,7 +230,8 @@ public sealed class ModLuaLinkTests : IDisposable
     // ------------------------------------------------------------------------------------------- site hooks (§6.3, §7.1)
 
     /// <summary>A real ADDEXP.BIN for the site hooks: a mov at 0x0, a call at 0x5, the ADV wait at 0x8, the copy at 0xb
-    /// (the experience point of <see cref="SiteBase"/>) and the exit at 0x10.</summary>
+    /// (the experience point of <see cref="SiteBase"/>) and the exit at 0x10; past it, unreached, a jump at 0x11 and a
+    /// save at 0x14.</summary>
     private static readonly byte[] SiteAddExp = ScriptAssembler.AssembleBytes(new List<(int, Operand[])>
     {
         (0x55, [new Operand(3, 0x100), new Operand(0, 5)]),
@@ -238,6 +239,8 @@ public sealed class ModLuaLinkTests : IDisposable
         (0x72, [new Operand(0, 0)]),
         (0x55, [new Operand(3, 0x101), new Operand(3, 0x100)]),
         (0x2, []),
+        (0x8c, [new Operand(0, 0)]),
+        (0x19e, [new Operand(3, 0x20), new Operand(0, 1)]),
     }, [], "SYS4422");
 
     private static readonly string SiteFingerprint = OmsPatchPlan.FingerprintOf(SiteAddExp);
@@ -286,6 +289,56 @@ public sealed class ModLuaLinkTests : IDisposable
         PlannedSite cached = ModLinkCache.TryOpen(cache, "key")!.HookPlan.Sites["ADDEXP"][1];
         Assert.Equal(point.Handlers, cached.Handlers);
         Assert.Equal(point.AfterList, cached.AfterList);
+    }
+
+    /// <summary>A runnable ADDEXP.BIN: L[1] = 3 at 0x0, G[0x100] = L[1] at 0x5 (the experience point of the test
+    /// below), the exit at 0xa.</summary>
+    private static readonly byte[] RunAddExp = ScriptAssembler.AssembleBytes(new List<(int, Operand[])>
+    {
+        (0x55, [new Operand(9, 1), new Operand(0, 3)]),
+        (0x55, [new Operand(3, 0x100), new Operand(9, 1)]),
+        (0x2, []),
+    }, [], "SYS4422");
+
+    [Fact]
+    public void AnEventAPointHookAndASiteHookOnOneInstructionRunInTheOrderTheReportGives()
+    {
+        // Spec §7.4, gate 5: one list at the instruction, by priority. Each handler changes L[1] (the event's amount)
+        // so that only the reported order leaves 20 in G[0x100].
+        string fingerprint = OmsPatchPlan.FingerprintOf(RunAddExp);
+        ModLinkBase linkBase = SyntheticBase() with
+        {
+            ReadScript = name => name.Equals(AddExp, StringComparison.OrdinalIgnoreCase) ? RunAddExp : null,
+            PatchPoints = new OmsPatchPoints([new OmsPatchPoint(ExperiencePoint, AddExp, null,
+                [new OmsPatchPointSite(fingerprint, 0x5)])]),
+        };
+        ModPackage pointer = Mod("pointer", PointHook(extra: "priority = 2"),
+            Hooks("function on_award(ctx) maid.log.info(\"point\"); maid.vm.l[1] = maid.vm.l[1] * 2 end"));
+        ModPackage sited = Mod("sited", SiteHook(0x5, "before", fingerprint: fingerprint),
+            Hooks("function on_award(ctx) maid.log.info(\"site\"); maid.vm.l[1] = maid.vm.l[1] * 3 end"));
+        ModPackage subscriber = Mod("subscriber", RequiresBase + EventHook("test.award", 1),
+            Hooks("function on_award(ctx) maid.log.info(\"event\"); ctx.amount = ctx.amount + 1 end"), lua: "api = 1");
+        ModLinkResult result = ModLinker.Link(linkBase, [pointer, EventBase(), subscriber, sited], []);
+        Assert.True(result.Succeeded, result.Report.Render());
+
+        ModReportLine order = Assert.Single(result.Report.Lines, line => line.Class == ModReportClass.OrderedInteraction);
+        Assert.EndsWith("handlers run in this order: sited hooks.lua:on_award (priority 0), subscriber hooks.lua:on_award on "
+                        + "test.award (priority 1), pointer hooks.lua:on_award (priority 2)", order.Message);
+        Assert.Contains($"hook ADDEXP 0x5 ({ExperiencePoint}): sited hooks.lua:on_award (priority 0), subscriber "
+                        + "hooks.lua:on_award on test.award (priority 1), pointer hooks.lua:on_award (priority 2)", result.Report.Lua);
+
+        using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = result.Lua.Stack, Plan = result.Lua.Plan, Errors = LuaErrorPolicy.Halt,
+        });
+        var vm = new VirtualMachine(Sys4Loader.Parse(RunAddExp, HimegariTable, AddExp), HimegariTable, new HeadlessWaits(),
+                                    scripting: scripting);
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(20, vm.Globals[0x100]);   // (3 × 3 + 1) × 2
+        Assert.Equal(["site", "event", "point"], scripting.RecentLog.Select(line => line[(line.LastIndexOf(": ", StringComparison.Ordinal) + 2)..])
+                                                          .Where(text => text is "site" or "event" or "point"));
     }
 
     [Theory]
@@ -353,6 +406,8 @@ public sealed class ModLuaLinkTests : IDisposable
     [InlineData("site", 0x5, "(op 0x3 call-script), which calls a script and ends its frame, the scene or the run; only")]
     [InlineData("site", 0x8, "(op 0x72 wait-for-input), which may wait, calls a script and ends its frame, the scene or the run")]
     [InlineData("site", 0x10, "(op 0x2 exit), which ends its frame, the scene or the run")]
+    [InlineData("site", 0x11, "(op 0x8c jmp), which jumps; only")]
+    [InlineData("site", 0x14, "(op 0x19e save-numbered-slot), which saves; only")]
     public void SkipIsRefusedOnAnInstructionThatDoesNotGoOnToTheNextOne(string form, int site, string? refusal)
     {
         // Spec §7.1, from the instruction's facts in the base script.

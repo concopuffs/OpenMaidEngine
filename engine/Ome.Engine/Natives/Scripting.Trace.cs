@@ -140,7 +140,10 @@ public sealed partial class Scripting
             json.WriteStartObject();
             json.WriteString("mod", handler.ModId);
             json.WriteString("handler", $"{handler.File}:{handler.Function}");
-            json.WriteString("hook", context.Name ?? "");
+            // A site hook not at a point is named as its manifest names it: the script and the original offset.
+            json.WriteString("hook", context.Name ?? (context.Kind == HookKind.Point && context.Site >= 0
+                ? string.Create(CultureInfo.InvariantCulture, $"{context.Script}@0x{context.Site:x}")
+                : ""));
             json.WriteString("kind", context.Kind switch
             {
                 HookKind.Point => context.When == null ? "point" : "site",

@@ -3,11 +3,11 @@
 **Date:** 2026-11-14
 **Spec:** `docs/superpowers/specs/2026-11-10-lua-scripting-design.md` (cited as "spec §n"). The spec stays the
 design's home. This plan keeps what each milestone measured and what that settles for the later ones.
-**Status:** milestones 0 to 3, the first release, are done (2026-11-14 and 2026-11-15). Milestone 0, the spike,
-chose **Lua-CSharp 0.5.8** (`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the library against
-the official Lua 5.2 test suite. Milestone 2 built mod state and the session's life across loads (§6), and
-milestone 3 events and the base mods (§7). Milestone 4 is being built (§8); milestones 5 and 6 are not.
-The backlog's "Runtime scripting (Lua)" item lists them.
+**Status:** milestones 0 to 4 are done (2026-11-14 and 2026-11-15); 0 to 3 are the first release. Milestone 0,
+the spike, chose **Lua-CSharp 0.5.8** (`LuaCSharp` on NuGet); milestone 1 built the core (§4). §5 measures the
+library against the official Lua 5.2 test suite. Milestone 2 built mod state and the session's life across loads
+(§6), milestone 3 events and the base mods (§7), and milestone 4 the wider hooks (§8). Milestones 5 and 6 are not
+built; the backlog's "Runtime scripting (Lua)" item lists them.
 
 Paths are relative to `age-reimpl/`.
 
@@ -855,7 +855,7 @@ An award in play needs a battle; the install tests run the same native on `ADDEX
 
 ## 8. Milestone 4: wider hooks
 
-Being built on `feature/lua-scripting` (spec §6.3, §7.1–§7.4, §18), in six pieces; pieces 1 to 5 are built (§8.1–§8.5):
+Built on `feature/lua-scripting` on 2026-11-15 (spec §6.3, §7.1–§7.5, §18), in six pieces (§8.1–§8.6):
 
 1. **The two opcode facts** (spec §7.1): `waits` (`always`, `may` or `never`) and `leaves` (any of `falls`, `jumps`,
    `calls`, `ends`, `saves`, `loads`, `restores`) for every opcode the port implements, in `vm-map/opcodes.toml`.
@@ -1060,3 +1060,48 @@ line), `LuaStateTests` (2: a restore's writes seen and the load's banks and a ti
 dropping its instruction's records, the next session getting its own), and in `ModLuaLinkTests` the binding, the
 merge and the cache, the overlap line, six refusals, the missing base mod, and four reader refusals. Full suite
 2327.
+
+### 8.6 The whole, and the gates
+
+Built 2026-11-15 (spec §17, §18):
+
+- **The merged order** is one rule for every list: a point's hooks, a site's `before` hooks and an event's
+  subscribers at one instruction share a list, and `after`, `enter`, `exit`, engine events and each watched cell
+  have their own, each by priority, then load order. The watch records go after the `after` hooks (piece 5).
+- **The trace.** A site hook not at a point had `"hook": ""`; it is now named as its manifest names it, the script
+  and the original offset (`SC0000.BIN@0x83c`), with `at` the linked offset.
+- **The guide** (`docs/modding/lua.md`), read whole: `priority` orders every list due together, not only an
+  instruction's; `enter` comes before the first instruction's `before` hooks; `maid.vm`'s locals are there in point,
+  site and script hooks and refused in engine events and watches; and a stray blank line no longer splits the
+  report's list.
+- **The gates.** Gate 6 is §8.5's tests. The held cases:
+  - **Gate 3**: `skip = true` on a jump (op 0x8c) and on a save (op 0x19e) are refused, beside the call, the wait and
+    the exit (`SkipIsRefusedOnAnInstructionThatDoesNotGoOnToTheNextOne`, 7 cases).
+  - **Gate 5**: `ModLuaLinkTests.AnEventAPointHookAndASiteHookOnOneInstructionRunInTheOrderTheReportGives` links a
+    subscriber, a point hook and a site hook on one instruction, checks the report's order, and runs the linked plan:
+    only that order leaves 20 in the cell.
+  - **Gate 8**: `enter` for a restored frame and the two watch cases were built with pieces 4 and 5. Now
+    `TheSessionIsBuiltBeforeTheFirstFrameAndRebuiltAfterAReturnToTitle` gives the build, `ome.session.start`, `enter`,
+    then the first instruction's `before` hook at the start of the run and after a return to title, and `exit` for
+    a return but none for the frame the return to title ends. `EnterFollowsTheSessionStart…` gives the same order
+    after a load, and `AWaitsBeforeHooksFireBeforeTheWaitAndItsAfterHooksOnceTheWaitHasEnded` covers the hooks around
+    a wait (op 0xc8).
+  - **Gate 12**: a site hook from a mod without `vm` is a link error (§8.2).
+- **Driven in the port** (2026-11-15, Himegari, sandbox `m4hooks`, `--lua-trace --lua-errors halt`), with two scratch
+  mods. One had `vm`: before and after hooks on SC0000's page 1 and page 3 waits (0x83c, 0x8a6), `skip` on page 3's
+  `mov G[0x2e47], 0` (0x8c4) with an after hook on the next instruction, `enter` on SC0000, and `enter` and `exit` on
+  SAVE.BIN. The other had no `vm` and watched `game_mode` and `adv_gfx_object_handles[*]` through `himegari-base`.
+  - `omp check` listed every form, `may skip`, and the two notes for after hooks on a wait; `omp lua-stubs` wrote
+    `maid.point` (with `skip`), `maid.script` and `maid.watch`.
+  - Run 1, a new game to page 3, a save in slot 0, on to page 4: INIT2's writes reached the table's watch at boot
+    (`adv_gfx_object_handles[0] 0->52000 by script INIT2.BIN@0xb3`); SC0000 entered with `call`; both waits' hooks
+    fired around them; SAVE.BIN entered and exited inside page 3's wait, the save between; and after page 3 the
+    instruction after the skip read `G[0x2e47] = 7`, which the skipped `mov` would have reset to 0.
+  - Run 2, slot 0 loaded from the title: the title's SAVE.BIN entered and got no `exit` (the load ended it); the
+    load's session started with `restoring=true` and the state's `handles=9`; CALLBACK_LOAD's and INIT2's writes
+    were delivered with the flag set; SC0000 entered with `restore`; after `ome.session.resumed`, page 3's wait ran
+    again with the flag clear, with its hooks, the skip and the after hook as in run 1. No handler failed.
+
+Tests: full suite 2331.
+
+With it milestone 4 is done: gate 6, and the held cases of gates 3, 5, 8 and 12.

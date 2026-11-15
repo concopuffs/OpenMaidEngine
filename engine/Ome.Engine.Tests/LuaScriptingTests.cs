@@ -163,7 +163,9 @@ public sealed class LuaScriptingTests : IDisposable
     [Fact]
     public void TheSessionIsBuiltBeforeTheFirstFrameAndRebuiltAfterAReturnToTitle()
     {
-        // ROOT1 returns to title (op 0x9); the reloaded root, ROOT2, exits.
+        // ROOT1 returns to title (op 0x9); the reloaded root, ROOT2, exits. Gate 8: the build, ome.session.start, the
+        // frame's enter, then the first instruction's before hooks; exit for ROOT2's return, none for the frame the return
+        // to title ends.
         Script first = ScriptAssembler.Assemble(Table, "ROOT.BIN", new List<(int, Operand[])>
         {
             (0x55, [G(0x100), Imm(1)]),
@@ -184,12 +186,16 @@ public sealed class LuaScriptingTests : IDisposable
                     seen = true
                     order[#order + 1] = "start"
                 end
+                function on_enter(ctx) order[#order + 1] = "enter " .. ctx.cause end
                 function on_point(ctx)
                     order[#order + 1] = "point"
                     maid.log.info("order " .. table.concat(order, ","))
                 end
+                function on_exit(ctx) maid.log.info("exit " .. ctx.cause) end
                 """)
             .Engine(Scripting.SessionStartEvent, "mod.a", "hooks.lua:on_start")
+            .ScriptHook("ROOT.BIN", "enter", "mod.a", "hooks.lua:on_enter")
+            .ScriptHook("ROOT.BIN", "exit", "mod.a", "hooks.lua:on_exit")
             // One point: sites are keyed by script name, so ROOT.BIN@0 is hooked in both roots.
             .Point(first, 0, "mod.a", "hooks.lua:on_point");
         Scripting native = Native(builder);
@@ -199,7 +205,8 @@ public sealed class LuaScriptingTests : IDisposable
         Assert.Equal("exit", vm.HaltReason);
         string[] lines = native.RecentLog.Select(line => line[(line.IndexOf("mod.a: ", StringComparison.Ordinal) + 7)..]).ToArray();
         // A Lua global set in the boot session is gone in the title session: the session was rebuilt.
-        Assert.Equal(["start boot nil boot", "order start,point", "start title nil title", "order start,point"], lines);
+        Assert.Equal(["start boot nil boot", "order start,enter root,point", "start title nil title",
+                      "order start,enter title,point", "exit title"], lines);
     }
 
     [Fact]

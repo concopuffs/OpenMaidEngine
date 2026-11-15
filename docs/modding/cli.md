@@ -68,7 +68,7 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 | `--text-root DIR` | Also load a loose folder of catalogs laid out as a package's `text/`, after the mods' (languages.md, "Testing without a package"). |
 | `--lua-errors continue\|halt` | What a Lua handler's error does: `continue` (the default) logs it to `diagnostics/lua.log`, shows a notice and switches the handler off after its third failure in a row; `halt` ends the run at that instruction ([lua.md](lua.md), "Errors and budgets"). |
 | `--lua-dev` | While you write a mod: a mod loaded from a folder may write a base mod's name its `[lua] writes` list lacks, and `diagnostics/lua.log` names each such name once. A packed `.omp` keeps its list ([lua.md](lua.md), "Game names"). |
-| `--lua-trace` | Write one JSON line per Lua handler call to `diagnostics/lua-trace.jsonl`: where it ran, how long it took, the event's fields before and after, and every cell it wrote ([lua.md](lua.md), "The link report and the trace"). |
+| `--lua-trace` | Write one JSON line per Lua handler call to `diagnostics/lua-trace.jsonl`: where it ran, how long it took, the event's fields before and after, the write a watch saw, and every cell it wrote ([lua.md](lua.md), "The link report and the trace"). |
 | `--text-log` | Write every string drawn without a catalog entry to `diagnostics/text-misses.jsonl`, every translated message narrowed to fit its window, with `width_percent`, the width it got, and every one cut at the bottom of its window, with `rows_cut`, the rows it lost. |
 
 `run-godot.ps1` (or `run-godot.cmd`) passes these through as `-Mod PATH` (repeatable), `-NoMods`, `-Language TAG`,

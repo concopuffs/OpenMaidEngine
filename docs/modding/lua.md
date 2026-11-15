@@ -123,8 +123,9 @@ Each `[[hooks]]` table has one form and a `handler`:
 | Game event | `event = "NAME"`, an event a mod of the stack declares ("Game events") | no |
 
 `handler = "FILE.lua:FUNCTION"` names a file under `lua/` (with folders: `util/hooks.lua:f`) and a function in
-it. `priority` (default 0) orders the handlers due at one instruction: lower runs first, then load order. The link
-report counts an interaction where more than one handler is due at one instruction.
+it. `priority` (default 0) orders the handlers due together: at one instruction, at an engine event or an event
+raised from Lua, at a script's entry or exit, or at a write to one watched cell. Lower runs first, then load order.
+The link report counts an interaction where more than one handler is due together.
 
 ### Libraries
 
@@ -247,8 +248,8 @@ when = "enter"             # or "exit"
 handler = "hooks.lua:on_enter"
 ```
 
-**`enter`** runs before the frame's first instruction, when the frame starts at the script's entry, which every
-frame does. In a new session it comes after `ome.session.start`. **`exit`** runs when the frame returns, while it is
+**`enter`** runs before the frame's first instruction and that instruction's before hooks, when the frame starts
+at the script's entry, which every frame does. In a new session it comes after `ome.session.start`. **`exit`** runs when the frame returns, while it is
 still the running frame, so `maid.vm.l` reads the locals it returns with. A frame that ends any other way (a
 return to title, a load, a stop, the game's exit request, a halt, a script error answered 中止) runs no `exit`
 hook: each of those also ends the session or the run.
@@ -550,7 +551,8 @@ vm.script_id("NAME")     -- a script's packed id, or nil
   signed 32-bit value.
 - **Floats** are 32-bit: a write rounds to single precision.
 - **Strings** must be encodable in CP932, the games' text encoding.
-- **Locals** exist while a point hook runs, and in the console at a wait. In an engine event they are an error.
+- **Locals** exist while a point, site or script hook runs, and in the console at a wait. In an engine event and a
+  watch they are an error.
 - **`site`** is absent for an instruction a patch inserted. **`changed_by`** lists the mods that patched or
   replaced the frame's script.
 - `vm.call` is not available in this version.
@@ -626,7 +628,6 @@ them again one at a time to find the one.
 - `hook …` for each instruction and engine event with handlers, in the order they run; an instruction's after
   hooks follow `after:`.
 - `watch <watch> (<cells>): …` for each watch, its handlers in the order they run.
-
 - `event <name> (<owner>, <where>): fields …; subscribers …` for each declared event.
 
 Two mods whose `[lua] writes` lists name one global give an `interaction` line, in load order.
@@ -639,7 +640,8 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
 {"mod":"mod.double","handler":"double.lua:on_award","hook":"<profile>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.012,"result":"ok","fields":[{"name":"amount","before":25,"after":50}]}
 ```
 
-- `hook` is the point, the script, the engine event, the game event or the watch; `kind` is `point`, `site`,
+- `hook` is the point, the script, the engine event, the game event or the watch, and for a site hook not at a
+  point the script and the site as the manifest gives it (`SC0000.BIN@0x83c`); `kind` is `point`, `site`,
   `script`, `engine-event`, `event` or `watch`; a site or script hook's line has `when` (`before`, `after`, `enter`
   or `exit`), and a script hook's `cause`; `at` is the script and offset, for a point or a site and for an event
   raised at one, the script for a script hook, and the writing instruction for a watch.
