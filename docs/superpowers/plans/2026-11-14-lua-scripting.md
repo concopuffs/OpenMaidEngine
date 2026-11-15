@@ -774,3 +774,29 @@ as `G[0x6c9]` named `adv_hover_history`. The first run showed that the launcher'
 (`ModLaunch.Run` copies the order and the dropped mods into a new report); it now copies the section too, and
 `ModLuaLinkTests.TheStartupReportKeepsTheLuaSectionWhenItLinksAndWhenItReusesTheCache` covers it. The rerun's
 `mod-link.txt` ends with the base mod, the scratch mod, its hook and the experience award with no subscribers.
+
+### 7.6 `omp lua-stubs`
+
+Built 2026-11-15 (spec §13):
+
+- **The command** (`OmpCommands.LuaStubs`, `Ome.Cli omp lua-stubs --output DIR [--data-root DIR] [--mod PATH …]`)
+  links the stack as `omp check` does and writes nothing when it does not link. It prints each file and the
+  `.luarc.json` settings: `runtime.version` `Lua 5.2` and the folder in `workspace.library`.
+- **The files** (`Ome.Mods/Tools/LuaStubs.cs`), each a `---@meta` file of LuaCATS annotations:
+  - `maid.lua`: `maid`, `maid.log`, `.mod`, `.session`, `.events`, `maid.vm` with its banks (`range` included),
+    `maid.vm.frame`, `maid.names`, `maid.arg`, `maid.point` (a point hook's context) and a class per engine event
+    with its one field (`LuaStubs.EngineEventFields`).
+  - `events.lua`: a class per declared event, named as the event, with `event` as its literal name and each field's
+    type (`integer`, `number`, `boolean`, `string`), access and location.
+  - `<base mod id>.lua` (`---@meta <id>`, so `require("<id>")` resolves): `<id>.g` with every scalar and alias and
+    its cell, a class per table (elements, or rows of named columns), and `table(name)` with an `---@overload` per
+    table name and alias. Class names use the id with `_` for `-`.
+  - The profile's shipped base mod is added when the stack does not mount it, linked alone, with its events.
+- **Kept honest by the runtime** (`LuaStubsTests`, 4): the `maid` fields are the keys a mod with `vm` and a base mod
+  see, together; every `maid.vm`, `maid.log`, `maid.mod`, `maid.events` and `maid.names` field is present in a
+  session; the engine event classes are `ModLuaLinker.BuiltEngineEvents`; every file compiles as Lua; the layout and
+  events render as expected. `ModLuaLinkTests` (1): the command on the install, with no mods (the shipped
+  `himegari-base` and its award), with a stack's own base mod beside it, and refusing a stack that does not link.
+- **Not checked here:** lua-language-server itself is not installed on this machine, so the annotations were read
+  against its documented syntax (classes, `---@field [integer] T`, `---@overload`, `---@meta name`), not loaded in it.
+  On the install the command writes `himegari-base.lua` with 332 table overloads and the award in `events.lua`.

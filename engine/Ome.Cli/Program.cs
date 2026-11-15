@@ -111,13 +111,16 @@ if (command == "omp")
             dataRoot, Paths_("--mod"), exportDirectory, Console.Out),
         "explain" when args.Length > 2 => Ome.Mods.Tools.OmpCommands.Explain(linkBase, catalog, assetStore, dataRoot,
             Paths_("--mod"), args[2], Console.Out),
+        "lua-stubs" when OptionValue("--output") is { } stubsDirectory => Ome.Mods.Tools.OmpCommands.LuaStubs(linkBase,
+            dataRoot, Paths_("--mod"), stubsDirectory, Console.Out),
         _ => Usage(),
     };
     static int Usage()
     {
         Console.Error.WriteLine("usage: omp build DIR [--output FILE.omp] [--mod DEP] | omp check [--data-root DIR] "
                                 + "[--mod PATH] [--skip-failed-mods] | omp export --output-dir DIR [--data-root DIR] [--mod PATH] | "
-                                + "omp explain NAME [--data-root DIR] [--mod PATH]");
+                                + "omp explain NAME [--data-root DIR] [--mod PATH] | "
+                                + "omp lua-stubs --output DIR [--data-root DIR] [--mod PATH]");
         return 2;
     }
 }

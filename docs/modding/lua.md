@@ -475,6 +475,40 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
   belongs to the handler running, so a base mod's helper's write is named for the mod that called it, with
   `through` naming the base mod. A call's first 1000 writes are listed, and `writes_not_listed` counts the rest.
 
+## Editor definitions
+
+`omp lua-stubs --output DIR` ([cli.md](cli.md)) writes definitions for
+[lua-language-server](https://luals.github.io/), the language server most editors use for Lua. It links the stack as
+`omp check` does (pass your mod and its dependencies with `--mod`) and writes:
+
+- `maid.lua`: `maid` and its tables, and what a handler is given: `maid.point` for a point hook, and a class per
+  engine event (`ome.session.start` and the rest);
+- `events.lua`: a class per declared event, named as the event, with each field's type and whether it is
+  writable;
+- `<base mod id>.lua`: what `require("<base mod id>")` gives, with every scalar's name in `g` and every table's in
+  `table(name)`, aliases too. One is written for the profile's base mod even when no mod mounts it.
+
+Point the editor at the folder in your mod's `.luarc.json`; the command prints the line to add:
+
+```json
+{
+  "runtime.version": "Lua 5.2",
+  "workspace.library": ["C:/path/to/DIR"]
+}
+```
+
+Then annotate a handler with its context's class, and the editor completes the fields and checks their types:
+
+```lua
+---@param e <profile>.experience.award
+function on_award(e)
+  e.amount = e.amount * 2
+end
+```
+
+Run the command again after the stack, a base mod or an event changes. The files only name types: the engine never
+reads them.
+
 ## The console
 
 The driver's `lua` step runs a chunk in a running game and returns what it returns ([cli.md](cli.md), "Automated

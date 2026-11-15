@@ -628,6 +628,42 @@ public sealed class ModLuaLinkTests : IDisposable
     }
 
     [Fact]
+    public void OmpLuaStubsDescribesTheStackAndTheProfilesBaseModWhenNoModMountsIt()
+    {
+        // Spec §13: with no mods, the shipped himegari-base and its experience award, for a mod not yet written.
+        string output = Path.Combine(_root, "stubs");
+        var console = new StringWriter();
+        Assert.True(OmpCommands.LuaStubs(SyntheticBase(), null, [], output, console) == 0, console.ToString());
+        Assert.Equal(["events.lua", "himegari-base.lua", "maid.lua"],
+                     Directory.GetFiles(output).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        string names = File.ReadAllText(Path.Combine(output, "himegari-base.lua"));
+        Assert.StartsWith("---@meta himegari-base\n", names);
+        Assert.Contains("---@class himegari_base.g\n", names);
+        Assert.DoesNotContain("\r", names);
+        Assert.Contains("---@class himegari.experience.award\n", File.ReadAllText(Path.Combine(output, "events.lua")));
+        Assert.Contains("omp lua-stubs: 3 files (himegari-base; 1 events)", console.ToString());
+        Assert.Contains("\"workspace.library\"", console.ToString());
+
+        // A stack's own base mod and events come first; the profile's is added beside them.
+        string withStack = Path.Combine(_root, "stubs-stack");
+        console = new StringWriter();
+        Assert.True(OmpCommands.LuaStubs(SyntheticBase(), null, [EventBase().Location], withStack, console) == 0, console.ToString());
+        Assert.Equal(["events.lua", "himegari-base.lua", "maid.lua", "test-base.lua"],
+                     Directory.GetFiles(withStack).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+        string events = File.ReadAllText(Path.Combine(withStack, "events.lua"));
+        Assert.Contains("---@class test.award\n", events);
+        Assert.Contains("---@class himegari.experience.award\n", events);
+
+        // A stack that does not link writes nothing.
+        string broken = Path.Combine(_root, "stubs-broken");
+        console = new StringWriter();
+        Assert.Equal(1, OmpCommands.LuaStubs(SyntheticBase(), null, [Mod("broken", PointHook("hooks.lua:missing"), Hooks(Doubles)).Location],
+                                             broken, console));
+        Assert.Contains("omp lua-stubs: the stack does not link", console.ToString());
+        Assert.False(Directory.Exists(broken));
+    }
+
+    [Fact]
     public void AnUndeclaredEventAndASubscriberThatDoesNotRequireItsOwnerAreLinkErrors()
     {
         ModReportLine line = Stop(ModLinker.Link(SyntheticBase(), [EventBase(), Subscriber("m", EventHook("test.none"))], []),

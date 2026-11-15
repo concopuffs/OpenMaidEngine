@@ -259,6 +259,46 @@ public static class OmpCommands
         }
     }
 
+    /// <summary>
+    /// <c>omp lua-stubs --output DIR</c> (Lua scripting spec §13): links the stack as <c>omp check</c> does and writes
+    /// lua-language-server definitions for <c>maid</c>, the declared events and each base mod's names into
+    /// <paramref name="outputDirectory"/> (<see cref="LuaStubs"/>). The profile's base mod is described too when no mod
+    /// mounts it. A stack that does not link writes nothing.
+    /// </summary>
+    public static int LuaStubs(ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages,
+                               string outputDirectory, TextWriter console)
+    {
+        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console);
+        try
+        {
+            if (result == null) return 1;
+            if (!result.Succeeded)
+            {
+                console.Write(result.Report.Render());
+                console.WriteLine($"omp lua-stubs: the stack does not link: {result.Report.Summary()}");
+                return 1;
+            }
+            var (bases, events) = Tools.LuaStubs.Inputs(linkBase, result);
+            Directory.CreateDirectory(outputDirectory);
+            var files = Tools.LuaStubs.Files(bases, events);
+            foreach (var (name, text) in files)
+            {
+                File.WriteAllText(Path.Combine(outputDirectory, name), text.Replace("\r\n", "\n"), new System.Text.UTF8Encoding(false));
+                console.WriteLine($"  {name}");
+            }
+            string full = Path.GetFullPath(outputDirectory);
+            console.WriteLine($"omp lua-stubs: {files.Count} files ({string.Join(", ", bases.Select(layout => layout.ModId))}"
+                              + $"{(bases.Count > 0 ? "; " : "")}{events.Count} events) -> {full}");
+            console.WriteLine($"omp lua-stubs: in your mod's .luarc.json, set \"runtime.version\": \"Lua 5.2\" and add "
+                              + $"\"{full.Replace('\\', '/')}\" to \"workspace.library\"");
+            return 0;
+        }
+        finally
+        {
+            foreach (ModPackage package in opened) package.Dispose();
+        }
+    }
+
     internal static (ModLinkResult? Result, IReadOnlyList<ModPackage> Opened) LinkForInspection(
         ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages, bool skipFailed, TextWriter console)
     {
