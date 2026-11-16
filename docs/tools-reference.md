@@ -1093,7 +1093,13 @@ of the profile, its checks and the log's end copied for a report, with the accou
 profile" opens the wizard: the install (browsed, dropped on the window, or one a profile already uses) with its
 overlays, then the name, the mode, and what the profile starts from (nothing, a copy of another profile of the game
 with or without its saves, the data the bare engine has for the game, or the original game's saves), and under
-Advanced its location and library folders; with no profile yet the wizard opens at once. An overlay folder the profile names that is gone fails the install's
+Advanced its location and library folders; with no profile yet the wizard opens at once. The header's Shortcut gives
+the command that starts the profile through the launcher (`--launch`, the default) or the engine directly, as its
+target, arguments, working folder and whole command line, each with Copy, and writes a `.lnk` (Windows) or `.desktop`
+file (Linux) on the desktop or in a picked folder; Duplicate copies the profile with or without its saves; Rename and
+Delete are under More. "Add an existing profile" adds a folder holding a `profile.toml` under an id made from the
+folder's name and opens its review (spec §12): the paths its file names, each network location marked, its enabled
+mods, and a link, which stops it; Accept, Decline (the root is forgotten, its folder kept) or Later. An overlay folder the profile names that is gone fails the install's
 check by name, as the engine would refuse it. Play
 starts the engine of that run of the launcher (`--engine` names another) as `--launch` does. While an engine it started runs, the
 launcher's process stays, the window stays, minimizes or hides by `launcher.toml`'s `while_running`, and closing it

@@ -33,7 +33,14 @@
           <TextBlock Classes="muted small" Text="·" />
           <Button Classes="link" Content="{Binding S[header.shortcut]}" Command="{Binding Shortcut}" />
           <TextBlock Classes="muted small" Text="·" />
-          <Button Classes="link" Content="{Binding S[header.more]}" Command="{Binding More}" />
+          <Button Name="More" Classes="link" Content="{Binding S[header.more]}">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="{Binding S[header.rename]}" Command="{Binding Rename}" />
+                <MenuItem Header="{Binding S[header.delete]}" Command="{Binding Delete}" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
         </StackPanel>
       </StackPanel>
     </Grid>

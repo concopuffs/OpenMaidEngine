@@ -200,6 +200,10 @@ public sealed class OverviewViewModel : ViewModel
     public IReadOnlyList<CheckLine> CheckLines => Checks?.Checks.Select(Line).ToList() ?? [];
     public bool HasChecks => Checks != null;
 
+    /// <summary>What the checks card says before it has checks: a profile under review is not checked until it is
+    /// accepted (spec §12), any other is being checked.</summary>
+    public string ChecksPending => S[_page.Entry.NeedsReview ? "checks.after-review" : "status.checking"];
+
     private CheckLine Line(ProfileCheck check)
     {
         string game = Game?.DisplayTitle ?? Document?.Game ?? "";

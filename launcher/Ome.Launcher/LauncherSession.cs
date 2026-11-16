@@ -14,7 +14,8 @@ public sealed class LauncherSession
     private LauncherSettingsFile _settings;
 
     public LauncherSession(WindowStart start, WindowReason reason, string launcherProgram, LauncherEnvironment environment,
-                           CheckOptions? checkOptions = null, CultureInfo? osCulture = null)
+                           CheckOptions? checkOptions = null, CultureInfo? osCulture = null,
+                           string? desktopFolder = null)
     {
         Home = start.Home;
         Engine = start.Engine;
@@ -25,6 +26,8 @@ public sealed class LauncherSession
         Environment = environment;
         CheckOptions = checkOptions ?? new CheckOptions();
         MachineFolder = CheckOptions.MachineFolder ?? MachineState.DefaultFolder();
+        DesktopFolder = desktopFolder
+                        ?? System.Environment.GetFolderPath(System.Environment.SpecialFolder.DesktopDirectory);
         _settings = LauncherSettingsStore.Load(Home);
         OsCulture = osCulture ?? CultureInfo.CurrentUICulture;
         Strings = LauncherStrings.Load(LauncherStrings.Choose(Settings.Language, OsCulture));
@@ -39,6 +42,9 @@ public sealed class LauncherSession
     public LauncherEnvironment Environment { get; }
     public CheckOptions CheckOptions { get; }
     public string MachineFolder { get; }
+
+    /// <summary>Where "Create a shortcut" puts one by default: the player's desktop (spec §8.4).</summary>
+    public string DesktopFolder { get; }
     public CultureInfo OsCulture { get; }
     public LauncherStrings Strings { get; private set; }
 

@@ -100,7 +100,7 @@
       <Border Grid.Row="1" Grid.Column="1" Classes="card">
         <StackPanel>
           <TextBlock Classes="heading card-title" Text="{Binding S[overview.checks], Converter={x:Static v:Text.Upper}}" />
-          <TextBlock Classes="muted" Text="{Binding S[status.checking]}" IsVisible="{Binding !HasChecks}" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ChecksPending}" IsVisible="{Binding !HasChecks}" />
           <ItemsControl ItemsSource="{Binding CheckLines}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:CheckLine">

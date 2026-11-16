@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             x:Class="Ome.Launcher.Views.ReviewView"
+             x:DataType="vm:ReviewViewModel"
+             Width="620">
+  <!-- The review of a root the launcher did not create (spec §12): what its file names, shown as text. -->
+  <StackPanel Spacing="10">
+    <TextBlock Classes="dialog-title" Text="{Binding Title}" />
+    <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding Intro}" />
+    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4"
+          IsVisible="{Binding Read}">
+      <TextBlock Classes="muted" Text="{Binding S[review.name]}" />
+      <TextBlock Grid.Column="1" Classes="strong" TextWrapping="Wrap" Text="{Binding NameText}" />
+      <TextBlock Grid.Row="1" Classes="muted" Text="{Binding S[review.game]}" />
+      <TextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap" Text="{Binding GameText}" />
+      <TextBlock Grid.Row="2" Classes="muted" Text="{Binding S[review.mode]}" />
+      <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ModeText}" />
+    </Grid>
+    <StackPanel Spacing="4">
+      <TextBlock Classes="heading" Text="{Binding S[review.paths]}" />
+      <ItemsControl ItemsSource="{Binding Paths}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:ReviewPathRow">
+            <Grid ColumnDefinitions="110,*" ColumnSpacing="12" Margin="0,2">
+              <TextBlock Classes="muted" Text="{Binding Label}" />
+              <StackPanel Grid.Column="1">
+                <SelectableTextBlock Classes="mono" TextWrapping="Wrap" Text="{Binding Path}" />
+                <TextBlock Classes="help" Classes.warn="{Binding NeedsApproval}" Text="{Binding Note}"
+                           IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+    <Grid ColumnDefinitions="110,*" ColumnSpacing="12" IsVisible="{Binding Read}">
+      <TextBlock Classes="muted" Text="{Binding S[review.mods]}" />
+      <TextBlock Grid.Column="1" TextWrapping="Wrap" Text="{Binding ModsText}" />
+    </Grid>
+    <Border Classes="notice bad" IsVisible="{Binding HasStop}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Stop}" />
+    </Border>
+    <Border Classes="notice bad" IsVisible="{Binding HasError}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Error}" />
+    </Border>
+    <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[review.decline-text]}" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+      <Button Content="{Binding S[review.later]}" Command="{Binding Later}" />
+      <Button Content="{Binding S[review.decline]}" Command="{Binding Decline}" />
+      <Button Classes="primary" Content="{Binding S[review.accept]}" Command="{Binding Accept}" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

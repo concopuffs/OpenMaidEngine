@@ -295,7 +295,9 @@ public static class ProfileStore
         return new ProfileChange(Load(id, root, elsewhere), changed);
     }
 
-    private static LauncherSettings Forget(LauncherSettings settings, ProfileEntry profile)
+    /// <summary>The settings without <paramref name="profile"/>: its root elsewhere, its review and the last
+    /// selection. Its folder is left as it is.</summary>
+    internal static LauncherSettings Forget(LauncherSettings settings, ProfileEntry profile)
         => settings with
         {
             Roots = profile.Elsewhere ? settings.Roots.Where(root => root.Id != profile.Id).ToList() : settings.Roots,

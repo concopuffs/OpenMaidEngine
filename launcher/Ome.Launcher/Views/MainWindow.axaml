@@ -88,6 +88,22 @@
       <v:WizardView DataContext="{Binding Wizard}" />
     </Panel>
 
+    <!-- A dialog (spec §8.4: Shortcut, Duplicate, Rename; §12: the review), over a scrim. -->
+    <Border Background="{DynamicResource OmeScrimBrush}" IsVisible="{Binding HasDialog}">
+      <Border Classes="dialog" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,24">
+        <ScrollViewer>
+          <ContentControl Content="{Binding Dialog}">
+            <ContentControl.DataTemplates>
+              <DataTemplate DataType="vm:ShortcutViewModel"><v:ShortcutView /></DataTemplate>
+              <DataTemplate DataType="vm:DuplicateViewModel"><v:DuplicateView /></DataTemplate>
+              <DataTemplate DataType="vm:RenameViewModel"><v:RenameView /></DataTemplate>
+              <DataTemplate DataType="vm:ReviewViewModel"><v:ReviewView /></DataTemplate>
+            </ContentControl.DataTemplates>
+          </ContentControl>
+        </ScrollViewer>
+      </Border>
+    </Border>
+
     <!-- A question before a change (plan §6.4, §6.10), over a scrim. -->
     <Border Background="{DynamicResource OmeScrimBrush}" IsVisible="{Binding HasConfirm}">
       <Border Classes="dialog" Width="520" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -106,7 +122,7 @@
             </ItemsControl>
           </StackPanel>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
-            <Button Content="{Binding CancelText}" Command="{Binding No}" />
+            <Button Content="{Binding CancelText}" Command="{Binding No}" IsVisible="{Binding HasCancel}" />
             <Button Classes="primary" Classes.danger="{Binding Danger}" Content="{Binding ConfirmText}"
                     Command="{Binding Yes}" />
           </StackPanel>

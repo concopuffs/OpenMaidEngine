@@ -90,6 +90,20 @@ public sealed class ProfileTrustTests : IDisposable
     }
 
     [Fact]
+    public void ADeclinedReviewForgetsTheRootAndLeavesItsFolder()
+    {
+        string root = Foreign("declined", Path.Combine(_root, "i"), Path.Combine(_root, "m"));
+        LauncherSettings settings = ProfileTrust.AddExisting(_home, LauncherSettings.Defaults, root, "theirs", Machine,
+                                                             picked: true) with { LastProfile = "theirs" };
+        settings = ProfileTrust.Decline(settings, ProfileStore.Find(List(settings), "theirs")!);
+        Assert.Null(ProfileStore.Find(List(settings), "theirs"));
+        Assert.Empty(settings.Roots);
+        Assert.Empty(settings.Reviewed);
+        Assert.Null(settings.LastProfile);
+        Assert.True(File.Exists(Path.Combine(root, ProfileFile.FileName)));
+    }
+
+    [Fact]
     public void ANetworkPathIsOpenedOnlyOnceThisMachineApprovedIt()
     {
         if (!OperatingSystem.IsWindows()) return;   // network paths are a Windows notion (spec §12)

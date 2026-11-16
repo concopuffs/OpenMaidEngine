@@ -368,9 +368,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       nothing), DiagnosticsSummary (the text the Advanced page copies:
     │                                       the profile, its checks, the log's end, paths written from known
     │                                       roots), ProfileTrust (the review of a root from elsewhere,
-    │                                       network approvals, the link check before a start), EngineLaunch
-    │                                       (the one engine-command builder, the Shortcut dialog's forms, the
-    │                                       launch with diagnostics/engine.log), LauncherCommandLine (spec
+    │                                       accepted or declined, network approvals, the link check before a
+    │                                       start), EngineLaunch (the one engine-command builder, the Shortcut
+    │                                       dialog's forms, the launch with diagnostics/engine.log),
+    │                                       ShortcutFile (a command quoted for Windows or a POSIX shell, and
+    │                                       the .lnk or .desktop file it writes), LauncherCommandLine (spec
     │                                       §8.6: --launch, --check, --print-command and their outcomes) and
     │                                       ArtStore (spec §8.7: each image's order, the generated card, the
     │                                       download on consent into cache/art/<game>/, ArtProbe's PNG and JPEG

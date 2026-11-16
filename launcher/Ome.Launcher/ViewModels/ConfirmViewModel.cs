@@ -25,6 +25,8 @@ public sealed class ConfirmViewModel : ViewModel
     public string Text { get; }
     public string ConfirmText { get; }
     public string CancelText { get; }
+    /// <summary>A message has one answer: <see cref="CancelText"/> is empty, and only the confirm button shows.</summary>
+    public bool HasCancel => CancelText.Length > 0;
     public IReadOnlyList<string> Items { get; }
     public string ItemsHeading { get; }
     public bool HasItems => Items.Count > 0;

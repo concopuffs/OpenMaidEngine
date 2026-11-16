@@ -36,10 +36,14 @@ public sealed class ProfilePageViewModel : ViewModel
         Cover = main.ArtFor(row.Game, Core.ArtKind.Cover, row.Entry);
         ReloadPort();
         Play = new Command(() => _ = _main.PlayAsync(Row), () => CanPlay);
-        Duplicate = new Command(() => { }, () => false);
-        Shortcut = new Command(() => { }, () => false);
-        More = new Command(() => { }, () => false);
-        NoticeCommand = new Command(RunNoticeAction, () => NoticeTarget != null);
+        Duplicate = new Command(() => _main.ShowDialog(new DuplicateViewModel(_main, this)),
+                                () => Entry.Usable && !Entry.NeedsReview && IsUnlocked);
+        Shortcut = new Command(() => _main.ShowDialog(new ShortcutViewModel(_main, Entry)),
+                               () => Entry.Loaded != null && !Entry.NeedsReview);
+        Rename = new Command(() => _main.ShowDialog(new RenameViewModel(_main, this)),
+                             () => Entry.Loaded != null && !Entry.NeedsReview && IsUnlocked);
+        Delete = new Command(() => _ = DeleteAsync(), () => !Entry.NeedsReview && IsUnlocked);
+        NoticeCommand = new Command(RunNoticeAction, () => Entry.NeedsReview || NoticeTarget != null);
         ShowTab = new Command(tab => Tab = (ProfileTab)tab!);
         Overview = new OverviewViewModel(this);
         Mods = new ModsViewModel(this);
@@ -151,7 +155,48 @@ public sealed class ProfilePageViewModel : ViewModel
     public Command Play { get; }
     public Command Duplicate { get; }
     public Command Shortcut { get; }
-    public Command More { get; }
+
+    /// <summary>Under More (spec §8.4): the name, never the id.</summary>
+    public Command Rename { get; }
+
+    /// <summary>Under More: the profile's folder goes, with everything in it, once the player says so.</summary>
+    public Command Delete { get; }
+
+    /// <summary>Asks, then deletes the profile's folder (spec §4.2: a profile is the unit of removal) and forgets it.
+    /// Core refuses while the game runs; the refusal is told.</summary>
+    public async Task DeleteAsync()
+    {
+        ProfileEntry entry = Entry;
+        int? saves = null;
+        if (Catalog is { } catalog)
+            try
+            {
+                saves = ProfileSaves.Count(ProfileStore.SaveDirectory(catalog.StartupSettings, entry.Root)).Saves;
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+            }
+        string text = S["confirm.delete.text"] + (saves is { } count
+            ? " " + S.Format(count == 1 ? "confirm.delete.save" : "confirm.delete.saves", count)
+            : "");
+        if (!await _main.ConfirmAsync(new ConfirmViewModel(
+                S.Format("confirm.delete.title", entry.DisplayName), text, S["confirm.delete.yes"], S["confirm.cancel"],
+                [entry.Root], S["confirm.delete.items"], danger: true)))
+            return;
+        try
+        {
+            OmeHome home = _main.Session.Home;
+            LauncherSettings settings = _main.Session.Settings;
+            settings = await _main.OneAtATime(() => Task.Run(() => ProfileStore.Delete(home, settings, entry)));
+            _main.Session.Save(settings);
+        }
+        catch (Exception error) when (error is ProfileBusyException or IOException or UnauthorizedAccessException)
+        {
+            await _main.TellAsync(S["delete.failed"], error.Message);
+            return;
+        }
+        _main.Dropped(entry.Root);
+    }
     public bool IsRunning => State == ProfileState.Running;
     public bool IsNotRunning => !IsRunning;
 
@@ -177,6 +222,11 @@ public sealed class ProfilePageViewModel : ViewModel
         Advanced.Refresh();
         Play.Refresh();
         OpenLog.Refresh();
+        Duplicate.Refresh();
+        Shortcut.Refresh();
+        Rename.Refresh();
+        Delete.Refresh();
+        NoticeCommand.Refresh();
     }
 
     /// <summary>Writes a change to the profile's files off the UI thread (<paramref name="write"/> holds the profile's
@@ -284,13 +334,17 @@ public sealed class ProfilePageViewModel : ViewModel
     public bool NoticeWarn => Notice?.Class == "warn";
     public bool NoticeRun => Notice?.Class == "run";
     private ProfileTab? NoticeTarget => Notice?.Target;
-    public bool HasNoticeAction => NoticeTarget != null && NoticeTarget != Tab;
-    public string NoticeAction => NoticeTarget == ProfileTab.Mods ? S["action.mods"] : S["action.overview"];
+    public bool HasNoticeAction => Entry.NeedsReview || NoticeTarget != null && NoticeTarget != Tab;
+    public string NoticeAction => Entry.NeedsReview ? S["action.review"]
+        : NoticeTarget == ProfileTab.Mods ? S["action.mods"]
+        : NoticeTarget == ProfileTab.Advanced ? S["action.advanced"]
+        : S["action.overview"];
     public Command NoticeCommand { get; }
 
     private void RunNoticeAction()
     {
-        if (NoticeTarget is { } target) Tab = target;
+        if (Entry.NeedsReview) _ = _main.OpenReviewAsync(Entry);
+        else if (NoticeTarget is { } target) Tab = target;
     }
 
     // ---- the tabs ----

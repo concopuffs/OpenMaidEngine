@@ -51,15 +51,20 @@ public sealed class MainViewModel : ViewModel, IDisposable
     private ConfirmViewModel? _confirm;
     private WizardViewModel? _wizard;
     private Task? _started;
+    private ViewModel? _dialog;
+    private readonly HashSet<string> _dropped;
     private readonly SemaphoreSlim _lockGate = new(1, 1);
 
     public MainViewModel(LauncherSession session, ArtOptions? artOptions = null)
     {
         Session = session;
+        _dropped = new HashSet<string>(session.Environment.Platform == OmePlatform.Windows
+                                           ? StringComparer.OrdinalIgnoreCase
+                                           : StringComparer.Ordinal);
         artOptions ??= new ArtOptions();
         _art = new ArtStore(session.Home, artOptions with { Decoder = artOptions.Decoder ?? ArtViewModel.Probe });
         NewProfile = new Command(OpenWizard, () => _wizard == null);
-        AddExisting = new Command(() => { }, () => false);
+        AddExisting = new Command(() => _ = AddExistingAsync());
         Games = new Command(() => { }, () => false);
         LauncherSettings = new Command(() => { }, () => false);
         About = new Command(() => { }, () => false);
@@ -123,6 +128,73 @@ public sealed class MainViewModel : ViewModel, IDisposable
     }
     public bool HasWizard => _wizard != null;
 
+    /// <summary>The dialog open over the window (spec §8.4: Shortcut, Duplicate, Rename, the review), or null.</summary>
+    public ViewModel? Dialog
+    {
+        get => _dialog;
+        private set
+        {
+            Set(ref _dialog, value);
+            Changed(nameof(HasDialog));
+        }
+    }
+    public bool HasDialog => _dialog != null;
+
+    public void ShowDialog(ViewModel dialog) => Dialog = dialog;
+
+    /// <summary>Closes <paramref name="dialog"/> when it is the one shown.</summary>
+    public void CloseDialog(ViewModel dialog)
+    {
+        if (_dialog == dialog) Dialog = null;
+    }
+
+    /// <summary>Opens the review of <paramref name="profile"/> (spec §12) and reads it.</summary>
+    public async Task OpenReviewAsync(ProfileEntry profile)
+    {
+        var review = new ReviewViewModel(this, profile);
+        ShowDialog(review);
+        await review.LoadAsync();
+    }
+
+    /// <summary>A root deleted or declined in this run: the list forgets it, the profile that opened the window
+    /// included, and shows another.</summary>
+    public void Dropped(string root)
+    {
+        _dropped.Add(Full(root));
+        Reload();
+    }
+
+    private static string Full(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+
+    /// <summary>"Add an existing profile" (spec §8.4, §12): a folder that holds a <c>profile.toml</c> becomes a root
+    /// elsewhere, under an id made from the folder's name, and its review opens. Picking a network folder approves it.
+    /// A folder with no profile, or one in or around another profile, is refused and says why.</summary>
+    public async Task AddExistingAsync()
+    {
+        if (Host is not { } host || await host.PickFolderAsync(S["add.title"]) is not { } picked) return;
+        string folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(picked));
+        if (!File.Exists(Path.Combine(folder, ProfileFile.FileName)))
+        {
+            await TellAsync(S["add.failed"], S.Format("add.no-profile", folder));
+            return;
+        }
+        string id = ProfileStore.SuggestId(Path.GetFileName(folder), "profile", Session.Home, Session.Settings);
+        try
+        {
+            LauncherSettings settings = ProfileTrust.AddExisting(Session.Home, Session.Settings, folder, id,
+                                                                 Session.Machine, picked: true);
+            Session.Save(settings with { LastProfile = id });
+        }
+        catch (Exception error) when (error is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            await TellAsync(S["add.failed"], error.Message);
+            return;
+        }
+        _dropped.Remove(folder);
+        Reload(select: id);
+        if (Selected is { Entry.NeedsReview: true } row && row.Id == id) await OpenReviewAsync(row.Entry);
+    }
+
     /// <summary>Opens the wizard at its first step.</summary>
     public void OpenWizard()
     {
@@ -144,7 +216,9 @@ public sealed class MainViewModel : ViewModel, IDisposable
     public void Reload(string? select = null)
     {
         List<ProfileEntry> entries = [.. ProfileStore.List(Session.Home, Session.Settings, Session.Machine)];
-        if (Session.Profile is { } opened
+        // The profile that opened the window is listed even when OME home does not know it, until it is deleted or
+        // declined in this run.
+        if (Session.Profile is { } opened && !_dropped.Contains(Full(opened.Root))
             && !entries.Any(entry => OmeHome.PathsEqual(entry.Root, opened.Root, Session.Environment.Platform)))
             entries.Add(opened);
 
@@ -247,6 +321,10 @@ public sealed class MainViewModel : ViewModel, IDisposable
             if (Confirm == question) Confirm = null;
         }
     }
+
+    /// <summary>Tells the player why something was refused, with one button.</summary>
+    public Task TellAsync(string title, string text)
+        => ConfirmAsync(new ConfirmViewModel(title, text, S["dialog.ok"], ""));
 
     /// <summary>The publisher's page of <paramref name="game"/> (spec §8.4 Overview), from the game's manifest.</summary>
     public Uri? Site(string game) => _art.Site(game);

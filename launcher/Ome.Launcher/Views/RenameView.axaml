@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             x:Class="Ome.Launcher.Views.RenameView"
+             x:DataType="vm:RenameViewModel"
+             Width="480">
+  <!-- Rename (spec §8.4, under More): the name, never the id. -->
+  <StackPanel Spacing="10">
+    <TextBlock Classes="dialog-title" Text="{Binding Title}" />
+    <TextBox Text="{Binding Name}" AutomationProperties.Name="{Binding S[wizard.name]}" />
+    <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding IdText}" />
+    <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[rename.empty]}" />
+    <Border Classes="notice bad" IsVisible="{Binding HasError}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Error}" />
+    </Border>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+      <Button Content="{Binding S[confirm.cancel]}" Command="{Binding Cancel}" />
+      <Button Classes="primary" Content="{Binding S[rename.save]}" Command="{Binding Save}" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

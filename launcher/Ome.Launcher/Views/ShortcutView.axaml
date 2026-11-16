@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             x:Class="Ome.Launcher.Views.ShortcutView"
+             x:DataType="vm:ShortcutViewModel"
+             Width="640">
+  <!-- The Shortcut dialog (spec §8.4): the two forms, the chosen one's fields with Copy, and "Create a shortcut". -->
+  <StackPanel Spacing="10">
+    <TextBlock Classes="dialog-title" Text="{Binding Title}" />
+    <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding S[shortcut.intro]}" />
+    <StackPanel Spacing="2">
+      <Button Classes="radio" Classes.on="{Binding ThroughLauncher}" Command="{Binding ChooseLauncher}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Ellipse Classes="radio-dot" VerticalAlignment="Top" Margin="0,3,0,0" />
+          <StackPanel>
+            <TextBlock Classes="strong" Text="{Binding S[shortcut.launcher]}" />
+            <TextBlock Classes="help" TextWrapping="Wrap" MaxWidth="560" Text="{Binding S[shortcut.launcher-text]}" />
+          </StackPanel>
+        </StackPanel>
+      </Button>
+      <Button Classes="radio" Classes.on="{Binding Direct}" Command="{Binding ChooseDirect}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Ellipse Classes="radio-dot" VerticalAlignment="Top" Margin="0,3,0,0" />
+          <StackPanel>
+            <TextBlock Classes="strong" Text="{Binding S[shortcut.direct]}" />
+            <TextBlock Classes="help" TextWrapping="Wrap" MaxWidth="560" Text="{Binding S[shortcut.direct-text]}" />
+          </StackPanel>
+        </StackPanel>
+      </Button>
+    </StackPanel>
+
+    <Grid ColumnDefinitions="110,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
+      <TextBlock VerticalAlignment="Center" Text="{Binding S[shortcut.target]}" />
+      <Border Grid.Column="1" Classes="field">
+        <SelectableTextBlock Classes="mono" TextWrapping="Wrap" Text="{Binding Target}" />
+      </Border>
+      <Button Grid.Column="2" Content="{Binding S[dialog.copy]}" Command="{Binding CopyTarget}" />
+
+      <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{Binding S[shortcut.arguments]}" />
+      <Border Grid.Row="1" Grid.Column="1" Classes="field">
+        <SelectableTextBlock Classes="mono" TextWrapping="Wrap" Text="{Binding Arguments}" />
+      </Border>
+      <Button Grid.Row="1" Grid.Column="2" Content="{Binding S[dialog.copy]}" Command="{Binding CopyArguments}" />
+
+      <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{Binding S[shortcut.working]}" />
+      <Border Grid.Row="2" Grid.Column="1" Classes="field">
+        <SelectableTextBlock Classes="mono" TextWrapping="Wrap" Text="{Binding WorkingFolder}" />
+      </Border>
+      <Button Grid.Row="2" Grid.Column="2" Content="{Binding S[dialog.copy]}" Command="{Binding CopyWorking}" />
+
+      <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="{Binding S[shortcut.line]}" />
+      <Border Grid.Row="3" Grid.Column="1" Classes="field">
+        <SelectableTextBlock Classes="mono" TextWrapping="Wrap" Text="{Binding CommandLine}" />
+      </Border>
+      <Button Grid.Row="3" Grid.Column="2" Content="{Binding S[dialog.copy]}" Command="{Binding CopyLine}" />
+    </Grid>
+    <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[shortcut.paths]}" />
+    <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[shortcut.no-file]}" IsVisible="{Binding CannotCreate}" />
+    <TextBlock Classes="help" Classes.bad="{Binding StatusBad}" TextWrapping="Wrap" Text="{Binding Status}"
+               IsVisible="{Binding HasStatus}" />
+
+    <DockPanel Margin="0,6,0,0">
+      <Button DockPanel.Dock="Right" Content="{Binding S[dialog.close]}" Command="{Binding Close}" />
+      <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !CannotCreate}">
+        <Button Classes="primary" Content="{Binding S[shortcut.create-desktop]}" Command="{Binding CreateOnDesktop}" />
+        <Button Content="{Binding S[shortcut.create-in]}" Command="{Binding CreateIn}" />
+      </StackPanel>
+    </DockPanel>
+  </StackPanel>
+</UserControl>

@@ -84,6 +84,7 @@ public sealed class AdvancedTests : IDisposable
             Directory.Delete(Extras, recursive: true);
             await model.Page.CheckAsync();
             Assert.Equal("An overlay folder this profile uses is gone.", model.Page.NoticeText);
+            Assert.Equal("Show on the Advanced page", model.Page.NoticeAction);
             Assert.False(model.Page.Overview.ShowLocate);
             Assert.Equal([("extras", true, "The folder is gone"), ("patch", false, "2 files the game names · BMP files under AGF names")],
                          advanced.Overlays.Select(row => (row.Name, row.On, row.Note)));

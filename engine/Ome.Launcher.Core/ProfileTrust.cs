@@ -113,6 +113,11 @@ public static class ProfileTrust
             : settings;
     }
 
+    /// <summary>Declines a review (spec §12: the player accepts or declines): the launcher forgets the root, and its
+    /// folder is left as it is. Returns the settings to save.</summary>
+    public static LauncherSettings Decline(LauncherSettings settings, ProfileEntry profile)
+        => ProfileStore.Forget(settings, profile);
+
     /// <summary>The check before each start (spec §8.5, §12): a root that holds a link stops the start, with the
     /// reason; null lets it go.</summary>
     public static string? BeforeStart(string root)

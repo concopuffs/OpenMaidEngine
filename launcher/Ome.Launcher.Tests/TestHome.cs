@@ -102,12 +102,15 @@ internal sealed class TestHome : IDisposable
 
     /// <summary>The window's session on this home. Its engine is <paramref name="engine"/>, else a program that is not
     /// there.</summary>
+    /// <summary>The desktop the window's shortcuts go to, inside the temporary home.</summary>
+    public string Desktop => Path.Combine(Root, "desktop");
+
     public LauncherSession Session(WindowReason reason = WindowReason.Requested, string language = "en",
                                    ProfileEntry? profile = null, LaunchResult? launch = null, EngineProgram? engine = null)
     {
         var start = new WindowStart(Home, engine ?? new EngineProgram(Path.Combine(Root, "engine", "OME"), []), profile,
                                     launch);
         return new LauncherSession(start, reason, Path.Combine(Root, "launcher", "OME-Launcher"), Environment,
-                                   CheckOptions, CultureInfo.GetCultureInfo(language));
+                                   CheckOptions, CultureInfo.GetCultureInfo(language), Desktop);
     }
 }

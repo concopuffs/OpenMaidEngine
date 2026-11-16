@@ -292,6 +292,82 @@ public sealed class WindowTests : IDisposable
     }
 
     [Fact]
+    public void TheDialogsDraw()
+    {
+        Three([("SAVEPATH", "SAVE"), ("REGFILEPATH", "")]);
+        Select("kamidori-english");
+        Draw("shortcut", task: "6.10", before: model =>
+        {
+            model.Page!.Shortcut.Execute(null);
+            return Task.CompletedTask;
+        }, check: model => Assert.IsType<ShortcutViewModel>(model.Dialog));
+        Draw("shortcut-ja", "ja", task: "6.10", themes: ThemeVariant.Dark, before: model =>
+        {
+            model.Page!.Shortcut.Execute(null);
+            ((ShortcutViewModel)model.Dialog!).ChooseDirect.Execute(null);
+            return Task.CompletedTask;
+        });
+        Draw("duplicate", task: "6.10", themes: ThemeVariant.Light, before: async model =>
+        {
+            await model.Page!.CheckAsync();
+            model.Page.Duplicate.Execute(null);
+        }, check: model => Assert.True(((DuplicateViewModel)model.Dialog!).CanLeaveSaves));
+        Draw("rename", task: "6.10", themes: ThemeVariant.Dark, before: model =>
+        {
+            model.Page!.Rename.Execute(null);
+            return Task.CompletedTask;
+        });
+        Task? deleting = null;
+        Draw("delete", task: "6.10", themes: ThemeVariant.Light,
+             before: async model =>
+             {
+                 deleting = model.Page!.DeleteAsync();
+                 await Headless.Until(() => model.HasConfirm, "the question");
+             },
+             after: async model =>
+             {
+                 model.Confirm!.No.Execute(null);
+                 await deleting!;
+             });
+
+        // The More menu holds Rename and Delete, bound to the page.
+        Headless.Run(async () =>
+        {
+            var model = new MainViewModel(_home.Session(), new ArtOptions(Handler: new Refuse()));
+            await model.StartAsync();
+            var window = new MainWindow { DataContext = model };
+            Headless.Render(window, ThemeVariant.Light, "6.10-more-closed-light");
+            Button more = window.GetLogicalDescendants().OfType<Button>().Single(button => button.Name == "More");
+            more.Flyout!.ShowAt(more);
+            Headless.Render(window, ThemeVariant.Light, "6.10-more-light");
+            var items = ((MenuFlyout)more.Flyout).Items.OfType<MenuItem>().ToList();
+            Assert.Equal([model.Page!.Rename, model.Page.Delete], items.Select(item => item.Command));
+            more.Flyout.Hide();
+            window.Close();
+        });
+
+        // The review of a profile from elsewhere, naming a mod folder on another computer on Windows.
+        string theirs = Path.Combine(_home.Root, "received", "theirs");
+        Directory.CreateDirectory(theirs);
+        string install = Path.Combine(_home.Root, "installs", "kamidori");
+        string mods = OperatingSystem.IsWindows() ? @"\\nas\games\ome-mods" : Path.Combine(_home.Root, "their-mods");
+        File.WriteAllText(Path.Combine(theirs, ProfileFile.FileName),
+                          "ome_profile = 1\nname = \"Their Kamidori\"\ngame = \"kamidori\"\nmode = \"extended\"\n\n"
+                          + $"[install]\nroot = '{install}'\n\n[mods]\nfolders = ['{mods}']\n"
+                          + "order = [\"community.font-fix\", \"community.random-enemies\"]\n");
+        var session = _home.Session();
+        session.Save(ProfileTrust.AddExisting(_home.Home, session.Settings, theirs, "theirs", session.Machine, picked: true)
+                     with { LastProfile = "theirs" });
+        Draw("review", task: "6.10", before: async model =>
+        {
+            Assert.Equal("Review…", model.Page!.NoticeAction);
+            await model.OpenReviewAsync(model.Page.Entry);
+        }, check: model => Assert.True(((ReviewViewModel)model.Dialog!).Read));
+        Draw("review-ja", "ja", task: "6.10", themes: ThemeVariant.Dark,
+             before: model => model.OpenReviewAsync(model.Page!.Entry));
+    }
+
+    [Fact]
     public void TheWizardDraws()
     {
         Dictionary<string, ProfileEntry> profiles = Three([("SAVEPATH", "SAVE"), ("REGFILEPATH", "")]);
