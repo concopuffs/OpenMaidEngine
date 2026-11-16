@@ -49,6 +49,8 @@ public sealed class MainViewModel : ViewModel, IDisposable
     private int _running;
     private bool _quitWhenIdle;
     private ConfirmViewModel? _confirm;
+    private WizardViewModel? _wizard;
+    private Task? _started;
     private readonly SemaphoreSlim _lockGate = new(1, 1);
 
     public MainViewModel(LauncherSession session, ArtOptions? artOptions = null)
@@ -56,7 +58,7 @@ public sealed class MainViewModel : ViewModel, IDisposable
         Session = session;
         artOptions ??= new ArtOptions();
         _art = new ArtStore(session.Home, artOptions with { Decoder = artOptions.Decoder ?? ArtViewModel.Probe });
-        NewProfile = new Command(() => { }, () => false);
+        NewProfile = new Command(OpenWizard, () => _wizard == null);
         AddExisting = new Command(() => { }, () => false);
         Games = new Command(() => { }, () => false);
         LauncherSettings = new Command(() => { }, () => false);
@@ -107,6 +109,31 @@ public sealed class MainViewModel : ViewModel, IDisposable
     public Task Checking { get; private set; } = Task.CompletedTask;
 
     public Command NewProfile { get; }
+
+    /// <summary>The new-profile wizard while it is open (spec §8.3).</summary>
+    public WizardViewModel? Wizard
+    {
+        get => _wizard;
+        private set
+        {
+            Set(ref _wizard, value);
+            Changed(nameof(HasWizard));
+            NewProfile.Refresh();
+        }
+    }
+    public bool HasWizard => _wizard != null;
+
+    /// <summary>Opens the wizard at its first step.</summary>
+    public void OpenWizard()
+    {
+        if (_wizard == null) Wizard = new WizardViewModel(this);
+    }
+
+    /// <summary>Closes <paramref name="wizard"/>, by Cancel or once it made the profile.</summary>
+    public void CloseWizard(WizardViewModel wizard)
+    {
+        if (_wizard == wizard) Wizard = null;
+    }
     public Command AddExisting { get; }
     public Command Games { get; }
     public Command LauncherSettings { get; }
@@ -166,8 +193,12 @@ public sealed class MainViewModel : ViewModel, IDisposable
     }
 
     /// <summary>The window's first work: the selected profile's checks, then every other profile's, one at a time, so
-    /// each dot shows its state; then the automatic downloads of <c>always</c>.</summary>
-    public async Task StartAsync()
+    /// each dot shows its state; then the automatic downloads of <c>always</c>. It runs once: a second call (the window
+    /// opening after a caller started the model) gets the first call's task, so no check pass runs twice or outlives
+    /// the one awaited.</summary>
+    public Task StartAsync() => _started ??= StartOnceAsync();
+
+    private async Task StartOnceAsync()
     {
         await Checking;
         foreach (ProfileRowViewModel row in Rows.ToList())
@@ -185,6 +216,8 @@ public sealed class MainViewModel : ViewModel, IDisposable
             }
         }
         await DownloadArtAsync(Session.Settings.Art);
+        // With no profile yet, the wizard's first step is the window (spec §8.7); Cancel leaves the first-run card.
+        if (!HasProfiles) OpenWizard();
     }
 
     // ---- questions ----

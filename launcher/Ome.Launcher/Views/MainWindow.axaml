@@ -83,6 +83,11 @@
       </Panel>
     </Grid>
 
+    <!-- The new-profile wizard (spec §8.3), over a scrim that takes a dropped folder. -->
+    <Panel IsVisible="{Binding HasWizard}">
+      <v:WizardView DataContext="{Binding Wizard}" />
+    </Panel>
+
     <!-- A question before a change (plan §6.4, §6.10), over a scrim. -->
     <Border Background="{DynamicResource OmeScrimBrush}" IsVisible="{Binding HasConfirm}">
       <Border Classes="dialog" Width="520" HorizontalAlignment="Center" VerticalAlignment="Center"

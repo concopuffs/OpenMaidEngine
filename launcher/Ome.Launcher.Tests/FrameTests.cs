@@ -152,13 +152,21 @@ public sealed class FrameTests : IDisposable
     });
 
     [Fact]
-    public void WithNoProfileTheWindowShowsTheFirstRunCard() => Headless.Run(async () =>
+    public void WithNoProfileTheWizardOpensOverTheFirstRunCard() => Headless.Run(async () =>
     {
         using MainViewModel model = Model();
         Assert.True(model.HasNoProfiles);
         Assert.False(model.HasPage);
         Assert.Empty(model.Groups);
         Assert.False(model.AskArt, "no game is listed, so no art is missing");
+        // The start runs once, however often it is asked for: the window asks again when it opens.
+        Task started = model.StartAsync();
+        Assert.Same(started, model.StartAsync());
+        await started;
+        Assert.True(model.HasWizard && model.Wizard!.OnGame);
+        model.Wizard.Cancel.Execute(null);
+        Assert.False(model.HasWizard);
+        Assert.True(model.HasNoProfiles && model.NewProfile.CanExecute(null));
     });
 
     /// <summary>A handler that answers every request with <paramref name="status"/> and counts them; with none given,

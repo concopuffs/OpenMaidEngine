@@ -1,0 +1,261 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             xmlns:v="using:Ome.Launcher.Views"
+             x:Class="Ome.Launcher.Views.WizardView"
+             x:DataType="vm:WizardViewModel">
+  <!-- The mock's wizard: a scrim over the window, which takes a dropped folder, and the two steps in a dialog. -->
+  <Border Name="Scrim" Background="{DynamicResource OmeScrimBrush}" DragDrop.AllowDrop="True">
+    <Border Classes="dialog" Width="640" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,24">
+      <ScrollViewer>
+        <StackPanel Spacing="10">
+          <TextBlock Classes="dialog-title" Text="{Binding S[wizard.title]}" />
+          <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,0,0,4">
+            <TextBlock Classes="step" Classes.on="{Binding OnGame}" Text="{Binding S[wizard.step-game]}" />
+            <TextBlock Classes="step" Classes.on="{Binding OnProfile}" Text="{Binding S[wizard.step-profile]}" />
+          </StackPanel>
+
+          <!-- Step 1: the game. -->
+          <StackPanel Spacing="10" IsVisible="{Binding OnGame}">
+            <Panel MinHeight="58">
+              <Rectangle Name="DropLine" Classes="dashed" />
+              <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Classes="muted" VerticalAlignment="Center" Text="{Binding S[wizard.drop]}" />
+                <Button Content="{Binding S[wizard.browse]}" Command="{Binding Browse}" />
+              </StackPanel>
+            </Panel>
+
+            <StackPanel Spacing="4" IsVisible="{Binding HasKnown}">
+              <TextBlock Classes="heading" Text="{Binding S[wizard.known], Converter={x:Static v:Text.Upper}}" />
+              <ItemsControl ItemsSource="{Binding Known}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:KnownInstallChoice">
+                    <Button Classes="rline" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                            Command="{Binding Pick}">
+                      <StackPanel>
+                        <TextBlock Text="{Binding Label}" />
+                        <TextBlock Classes="mono small muted" TextTrimming="LeadingCharacterEllipsis" Text="{Binding Root}" />
+                        <TextBlock Classes="help" Text="{Binding Profiles}" />
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+
+            <Grid ColumnDefinitions="250,*" ColumnSpacing="14" IsVisible="{Binding CanContinue}">
+              <Panel Height="56" VerticalAlignment="Top" IsVisible="{Binding HasBanner}">
+                <v:ArtView DataContext="{Binding Banner}" />
+              </Panel>
+              <StackPanel Grid.Column="1" Spacing="2">
+                <TextBlock Classes="strong" TextWrapping="Wrap" Text="{Binding FoundTitle}" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding FoundSub}" />
+                <TextBlock Classes="mono small muted" TextWrapping="Wrap" Text="{Binding FoundPath}" />
+              </StackPanel>
+            </Grid>
+            <Border Classes="notice bad" IsVisible="{Binding Refused}">
+              <StackPanel Spacing="2">
+                <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding RefusalText}" />
+                <TextBlock Classes="mono small" TextWrapping="Wrap" Text="{Binding FoundPath}" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" Padding="14,10" IsVisible="{Binding CanContinue}">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="heading" Text="{Binding S[wizard.found], Converter={x:Static v:Text.Upper}}" />
+                <ItemsControl ItemsSource="{Binding Overlays}" IsVisible="{Binding HasOverlays}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:WizardOverlayViewModel">
+                      <DockPanel Margin="0,3">
+                        <Button DockPanel.Dock="Left" Classes="switch" Classes.on="{Binding On}" Command="{Binding Toggle}"
+                                VerticalAlignment="Top" Margin="0,2,10,0" AutomationProperties.Name="{Binding Name}">
+                          <Ellipse Classes="knob" />
+                        </Button>
+                        <StackPanel>
+                          <TextBlock TextWrapping="Wrap" Text="{Binding Label}" />
+                          <TextBlock Classes="help" Text="{Binding Note}" />
+                        </StackPanel>
+                      </DockPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding S[wizard.no-overlays]}"
+                           IsVisible="{Binding !HasOverlays}" />
+                <DockPanel Margin="0,3" IsVisible="{Binding HasBmpCandidates}">
+                  <Button DockPanel.Dock="Left" Classes="switch" Classes.on="{Binding AllowBmp}" Command="{Binding ToggleBmp}"
+                          VerticalAlignment="Center" Margin="0,0,10,0" AutomationProperties.Name="{Binding S[wizard.bmp]}">
+                    <Ellipse Classes="knob" />
+                  </Button>
+                  <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding S[wizard.bmp]}" />
+                </DockPanel>
+              </StackPanel>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,6,0,0">
+              <Button Content="{Binding S[wizard.cancel]}" Command="{Binding Cancel}" />
+              <Button Classes="primary" Content="{Binding S[wizard.next]}" Command="{Binding Next}" />
+            </StackPanel>
+          </StackPanel>
+
+          <!-- Step 2: the profile. -->
+          <StackPanel IsVisible="{Binding OnProfile}">
+            <Border Classes="frow" BorderThickness="0">
+              <Grid ColumnDefinitions="120,*" ColumnSpacing="12">
+                <TextBlock VerticalAlignment="Center" Text="{Binding S[wizard.name]}" />
+                <TextBox Grid.Column="1" Text="{Binding Name}" AutomationProperties.Name="{Binding S[wizard.name]}" />
+              </Grid>
+            </Border>
+            <Border Classes="frow">
+              <Grid ColumnDefinitions="120,*" ColumnSpacing="12">
+                <TextBlock VerticalAlignment="Top" Margin="0,3,0,0" Text="{Binding S[wizard.mode]}" />
+                <StackPanel Grid.Column="1" Spacing="2">
+                  <Button Classes="radio" Classes.on="{Binding Compatibility}" Command="{Binding ChooseCompatibility}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Ellipse Classes="radio-dot" VerticalAlignment="Top" Margin="0,3,0,0" />
+                      <StackPanel>
+                        <TextBlock Classes="strong" Text="{Binding S[mode.native]}" />
+                        <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[wizard.compatibility-text]}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="radio" Classes.on="{Binding Extended}" Command="{Binding ChooseExtended}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Ellipse Classes="radio-dot" VerticalAlignment="Top" Margin="0,3,0,0" />
+                      <StackPanel>
+                        <TextBlock Classes="strong" Text="{Binding S[mode.extended]}" />
+                        <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[wizard.extended-text]}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Button>
+                  <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding ExtendedNote}"
+                             IsVisible="{Binding StartForcesExtended}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Border Classes="frow">
+              <Grid ColumnDefinitions="120,*" ColumnSpacing="12">
+                <TextBlock VerticalAlignment="Top" Margin="0,3,0,0" Text="{Binding S[wizard.start]}" />
+                <StackPanel Grid.Column="1" Spacing="2">
+                  <Button Classes="radio" Classes.on="{Binding FromNothing}" Command="{Binding StartNothing}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Ellipse Classes="radio-dot" />
+                      <TextBlock Text="{Binding S[wizard.start-nothing]}" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="radio" Classes.on="{Binding FromCopy}" Command="{Binding StartCopy}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Ellipse Classes="radio-dot" VerticalAlignment="Top" Margin="0,3,0,0" />
+                      <TextBlock TextWrapping="Wrap" MaxWidth="440">
+                        <Run Text="{Binding S[wizard.start-copy]}" />
+                        <Run Text="  " />
+                        <Run Foreground="{DynamicResource OmeMutedBrush}" Text="{Binding CopyNote}" />
+                      </TextBlock>
+                    </StackPanel>
+                  </Button>
+                  <StackPanel Orientation="Horizontal" Spacing="10" Margin="21,2,0,4" IsVisible="{Binding FromCopy}">
+                    <ComboBox Classes="field" ItemsSource="{Binding CopySources}" SelectedItem="{Binding CopySource}"
+                              AutomationProperties.Name="{Binding S[wizard.start-copy]}">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SaveProfileChoice">
+                          <TextBlock Text="{Binding Label}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Classes="switch" Classes.on="{Binding CopySaves}" Command="{Binding ToggleCopySaves}"
+                            VerticalAlignment="Center" AutomationProperties.Name="{Binding S[wizard.copy-saves]}">
+                      <Ellipse Classes="knob" />
+                    </Button>
+                    <TextBlock VerticalAlignment="Center" Text="{Binding S[wizard.copy-saves]}" />
+                  </StackPanel>
+                  <Button Classes="radio" Classes.on="{Binding FromBare}" Command="{Binding StartBare}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Ellipse Classes="radio-dot" VerticalAlignment="Top" Margin="0,3,0,0" />
+                      <TextBlock TextWrapping="Wrap" MaxWidth="440">
+                        <Run Text="{Binding S[wizard.start-bare]}" />
+                        <Run Text="  " />
+                        <Run Foreground="{DynamicResource OmeMutedBrush}" Text="{Binding BareNote}" />
+                      </TextBlock>
+                    </StackPanel>
+                  </Button>
+                  <ItemsControl ItemsSource="{Binding PlanNotes}" Margin="21,0,0,0" IsVisible="{Binding HasPlanNotes}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Button Classes="radio" Classes.on="{Binding FromNative}" Command="{Binding StartNative}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Ellipse Classes="radio-dot" VerticalAlignment="Top" Margin="0,3,0,0" />
+                      <TextBlock TextWrapping="Wrap" MaxWidth="440">
+                        <Run Text="{Binding S[wizard.start-native]}" />
+                        <Run Text="  " />
+                        <Run Foreground="{DynamicResource OmeMutedBrush}" Text="{Binding NativeNote}" />
+                      </TextBlock>
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Border Classes="frow">
+              <Grid ColumnDefinitions="120,*" ColumnSpacing="12">
+                <Button Classes="link" HorizontalAlignment="Left" Command="{Binding ToggleAdvanced}"
+                        Content="{Binding AdvancedLabel}" />
+                <TextBlock Grid.Column="1" Classes="muted" VerticalAlignment="Center" Text="{Binding S[wizard.advanced-text]}"
+                           IsVisible="{Binding !AdvancedOpen}" />
+              </Grid>
+            </Border>
+            <StackPanel IsVisible="{Binding AdvancedOpen}">
+              <Border Classes="frow">
+                <Grid ColumnDefinitions="120,*" ColumnSpacing="12">
+                  <TextBlock VerticalAlignment="Center" Text="{Binding S[wizard.location]}" />
+                  <DockPanel Grid.Column="1">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+                      <Button Content="{Binding S[wizard.choose]}" Command="{Binding ChooseLocation}" />
+                      <Button Content="{Binding S[wizard.default]}" Command="{Binding DefaultLocation}" />
+                    </StackPanel>
+                    <Border Classes="field">
+                      <TextBlock Classes="mono small" TextTrimming="LeadingCharacterEllipsis" Text="{Binding LocationText}"
+                                 ToolTip.Tip="{Binding LocationText}" />
+                    </Border>
+                  </DockPanel>
+                </Grid>
+              </Border>
+              <Border Classes="frow">
+                <Grid ColumnDefinitions="120,*" ColumnSpacing="12">
+                  <StackPanel>
+                    <TextBlock Text="{Binding S[wizard.folders]}" />
+                    <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[wizard.folders-help]}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="4">
+                    <ItemsControl ItemsSource="{Binding Folders}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:WizardFolder">
+                          <DockPanel Margin="0,2">
+                            <Button DockPanel.Dock="Right" Margin="8,0,0,0" Command="{Binding Remove}"
+                                    Content="{Binding $parent[UserControl].((vm:WizardViewModel)DataContext).S[wizard.remove]}" />
+                            <TextBlock Classes="mono small" VerticalAlignment="Center" TextTrimming="LeadingCharacterEllipsis"
+                                       Text="{Binding Path}" ToolTip.Tip="{Binding Path}" />
+                          </DockPanel>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button HorizontalAlignment="Left" Content="{Binding S[wizard.add-folder]}" Command="{Binding AddFolder}" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </StackPanel>
+
+            <Border Classes="notice bad" Margin="0,10,0,0" IsVisible="{Binding HasError}">
+              <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Error}" />
+            </Border>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,14,0,0">
+              <Button Content="{Binding S[wizard.back]}" Command="{Binding Back}" />
+              <Button Classes="primary" Content="{Binding S[wizard.create]}" Command="{Binding Create}" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Border>
+</UserControl>

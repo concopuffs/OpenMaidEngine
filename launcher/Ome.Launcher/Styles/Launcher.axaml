@@ -418,6 +418,24 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Margin" Value="0,2,0,0" />
   </Style>
+  <Style Selector="Rectangle.dashed">
+    <Setter Property="Stroke" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeDashArray" Value="4,3" />
+    <Setter Property="RadiusX" Value="8" />
+    <Setter Property="RadiusY" Value="8" />
+  </Style>
+  <Style Selector="Rectangle.dashed.over">
+    <Setter Property="Stroke" Value="{DynamicResource OmeInkBrush}" />
+  </Style>
+  <Style Selector="TextBlock.step">
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="TextBlock.step.on">
+    <Setter Property="Foreground" Value="{DynamicResource OmeInkBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
   <Style Selector="TextBlock.help.bad"><Setter Property="Foreground" Value="{DynamicResource OmeBadBrush}" /></Style>
   <Style Selector="ComboBox.field">
     <Setter Property="Background" Value="{DynamicResource OmeFieldBrush}" />

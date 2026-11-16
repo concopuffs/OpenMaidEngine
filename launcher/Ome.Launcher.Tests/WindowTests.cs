@@ -20,7 +20,7 @@ public sealed class WindowTests : IDisposable
     [Fact]
     public void TheWindowDrawsInBothThemesWithTheMocksPaletteAndTheLaunchersFont()
     {
-        Headless.Run(() =>
+        Headless.Run(async () =>
         {
             foreach ((ThemeVariant theme, string name, uint side, uint win) in new[]
                      {
@@ -28,7 +28,11 @@ public sealed class WindowTests : IDisposable
                          (ThemeVariant.Dark, "dark", 0x1f2023u, 0x18191bu),
                      })
             {
-                var window = new MainWindow { DataContext = new MainViewModel(_home.Session(language: "ja")) };
+                // With no profile the wizard opens over the window; the frame's own colours are measured without it.
+                var model = new MainViewModel(_home.Session(language: "ja"));
+                await model.StartAsync();
+                model.Wizard!.Cancel.Execute(null);
+                var window = new MainWindow { DataContext = model };
                 var frame = Headless.Render(window, theme, $"6.1-frame-{name}");
                 Assert.Equal(side, Headless.Pixel(frame, 150, 600));
                 Assert.Equal(win, Headless.Pixel(frame, 1150, 730));
@@ -288,6 +292,36 @@ public sealed class WindowTests : IDisposable
     }
 
     [Fact]
+    public void TheWizardDraws()
+    {
+        Dictionary<string, ProfileEntry> profiles = Three([("SAVEPATH", "SAVE"), ("REGFILEPATH", "")]);
+        string install = Path.Combine(_home.Root, "installs", "kamidori");
+        Directory.CreateDirectory(Path.Combine(install, "patch"));
+        File.WriteAllText(Path.Combine(install, "patch", "MENU.BIN"), "");
+        Directory.CreateDirectory(Path.Combine(install, "SAVE"));
+        File.WriteAllText(Path.Combine(install, "SAVE", "SAVE01.DAT"), "native");
+        Select("kamidori-english");
+        async Task Game(MainViewModel model)
+        {
+            model.NewProfile.Execute(null);
+            WizardViewModel wizard = model.Wizard!;
+            wizard.Known.Single(known => known.Root == install).Pick.Execute(null);
+            await Headless.Until(() => wizard.CanContinue, "the install recognized");
+        }
+        async Task Profile(MainViewModel model)
+        {
+            await Game(model);
+            model.Wizard!.Next.Execute(null);
+            model.Wizard.ToggleAdvanced.Execute(null);
+        }
+        Draw("wizard-game", task: "6.9", before: Game,
+             check: model => Assert.Equal(["patch"], model.Wizard!.Overlays.Select(row => row.Name)));
+        Draw("wizard-profile", task: "6.9", before: Profile,
+             check: model => Assert.True(model.Wizard!.HasNativeSaves && model.Wizard.HasCopySources));
+        Draw("wizard-profile-ja", "ja", task: "6.9", before: Profile, themes: ThemeVariant.Dark);
+    }
+
+    [Fact]
     public void TheOverviewDraws()
     {
         Dictionary<string, ProfileEntry> profiles = Three();
@@ -333,7 +367,12 @@ public sealed class WindowTests : IDisposable
     [Fact]
     public void TheFirstRunCardAndTheArtQuestionDraw()
     {
-        Draw("empty", themes: ThemeVariant.Light);
+        Draw("empty", themes: ThemeVariant.Light, check: model => Assert.True(model.HasWizard));
+        Draw("empty-card", themes: ThemeVariant.Light, before: model =>
+        {
+            model.Wizard!.Cancel.Execute(null);
+            return Task.CompletedTask;
+        });
 
         Three();
         Headless.Run(() =>
