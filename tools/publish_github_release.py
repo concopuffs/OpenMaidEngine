@@ -17,6 +17,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+import publish_launcher
 import verify_windows_native
 
 
@@ -373,6 +374,16 @@ def _validate_windows_verification(data: bytes) -> None:
     forbidden_imports = imports & verify_windows_native.FORBIDDEN_RUNTIME_IMPORTS
     if forbidden_imports:
         mismatches["forbidden_imports"] = (sorted(forbidden_imports), [])
+    # The launcher beside the engine (launcher plan §9.3): an AMD64 windowed program and AMD64 natives.
+    launcher = publish_launcher.LAYOUTS["win-x64"]
+    expected_launcher = {
+        "program": launcher.program,
+        "machine": "AMD64",
+        "subsystem": "windows-gui",
+        "natives": {name: "AMD64" for name in launcher.natives},
+    }
+    if report.get("launcher") != expected_launcher:
+        mismatches["launcher"] = (report.get("launcher"), expected_launcher)
     if mismatches:
         raise ValueError(f"WINDOWS-VERIFICATION.json is not accepted: {mismatches}")
 
@@ -435,6 +446,12 @@ def prepare_release_assets(
         raise ValueError("Linux SHA256SUMS does not contain the packaged executable")
     if b"  OME.exe\n" not in windows_ledger:
         raise ValueError("Windows SHA256SUMS does not contain the packaged executable")
+    for ledger, layout, label in (
+        (linux_ledger, publish_launcher.LAYOUTS["linux-x64"], "Linux"),
+        (windows_ledger, publish_launcher.LAYOUTS["win-x64"], "Windows"),
+    ):
+        if f"  {layout.program}\n".encode() not in ledger:
+            raise ValueError(f"{label} SHA256SUMS does not contain the packaged launcher")
 
     output_directory = output_directory.resolve()
     output_directory.mkdir(parents=True, exist_ok=True)

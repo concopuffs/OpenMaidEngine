@@ -17,11 +17,14 @@ import time
 from pathlib import Path
 
 import package_notices
+import publish_launcher
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 MANAGED_DIRECTORY = "data_OME_linuxbsd_x86_64"
 PACKAGE_NAME = "OME-linux-x64"
+# The launcher beside the engine (launcher spec §10, plan §9.3): its program, natives and notices.
+LAUNCHER = publish_launcher.LAYOUTS["linux-x64"]
 REQUIRED_FILES = (
     "OME",
     "OME.pck",
@@ -41,11 +44,14 @@ REQUIRED_FILES = (
     f"{MANAGED_DIRECTORY}/libswresample.so.6",
     f"{MANAGED_DIRECTORY}/FFmpeg-LICENSE.txt",
     f"{MANAGED_DIRECTORY}/FFmpeg-SOURCE.txt",
+    *LAUNCHER.files(),
 )
 FORBIDDEN_FILES = (
     f"{MANAGED_DIRECTORY}/Ome.Engine.Text.Windows.dll",
     f"{MANAGED_DIRECTORY}/ome_movie_ffmpeg.dll",
     f"{MANAGED_DIRECTORY}/avformat-62.dll",
+    publish_launcher.LAYOUTS["win-x64"].program,
+    *publish_launcher.LAYOUTS["win-x64"].natives,
 )
 LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
@@ -62,7 +68,9 @@ def _resolved_directory(path: Path, label: str) -> Path:
     return resolved
 
 
-def verify_export(export_directory: Path) -> Path:
+def verify_export(export_directory: Path, launcher_deps: Path | None = None) -> Path:
+    """Check the export's files, and that THIRD_PARTY_NOTICES.md names every package the engine and the launcher ship
+    (`launcher_deps`: the dependency list the launcher's publish kept, by default publish_launcher's)."""
     export_directory = _resolved_directory(export_directory, "Linux export")
     missing = [name for name in REQUIRED_FILES if not (export_directory / name).is_file()]
     if missing:
@@ -70,15 +78,21 @@ def verify_export(export_directory: Path) -> Path:
     forbidden = [name for name in FORBIDDEN_FILES if (export_directory / name).exists()]
     if forbidden:
         raise ValueError("Linux export contains Windows-only files: " + ", ".join(forbidden))
+    symbols = sorted(path.relative_to(export_directory).as_posix() for path in export_directory.rglob("*.pdb"))
+    if symbols:
+        raise ValueError("Linux export contains debug symbols: " + ", ".join(symbols))
     legacy = [name for name in LEGACY_FILES if (export_directory / name).exists()]
     if legacy:
         raise ValueError("Linux export contains legacy-branded files: " + ", ".join(legacy))
     package_notices.verify_dependency_notices(
         export_directory / MANAGED_DIRECTORY, REPO / "THIRD_PARTY_NOTICES.md"
     )
-    executable = export_directory / "OME"
-    if os.name != "nt" and not os.access(executable, os.X_OK):
-        raise ValueError(f"Linux export executable bit is not set: {executable}")
+    package_notices.verify_launcher_notices(
+        launcher_deps or publish_launcher.dependency_list(LAUNCHER.runtime), REPO / "THIRD_PARTY_NOTICES.md"
+    )
+    for executable in (export_directory / "OME", export_directory / LAUNCHER.program):
+        if os.name != "nt" and not os.access(executable, os.X_OK):
+            raise ValueError(f"Linux export executable bit is not set: {executable}")
     return export_directory
 
 
@@ -166,8 +180,9 @@ def create_package(
     output_directory: Path,
     metadata: dict[str, object],
     epoch: int,
+    launcher_deps: Path | None = None,
 ) -> tuple[Path, Path]:
-    export_directory = verify_export(export_directory)
+    export_directory = verify_export(export_directory, launcher_deps)
     output_directory = output_directory.resolve()
     expected_parent = (REPO / "build/package").resolve()
     if output_directory != expected_parent:
@@ -280,8 +295,10 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     verify = subparsers.add_parser("verify")
     verify.add_argument("export_directory", type=Path)
+    verify.add_argument("--launcher-deps", type=Path, help="the launcher's kept dependency list")
     package = subparsers.add_parser("package")
     package.add_argument("export_directory", type=Path)
+    package.add_argument("--launcher-deps", type=Path, help="the launcher's kept dependency list")
     package.add_argument("--output-directory", type=Path, default=REPO / "build/package")
     smoke = subparsers.add_parser("smoke")
     smoke.add_argument("package_root", type=Path)
@@ -289,7 +306,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "verify":
-        print(verify_export(args.export_directory))
+        print(verify_export(args.export_directory, args.launcher_deps))
         return 0
     if args.command == "smoke":
         try:
@@ -300,7 +317,7 @@ def main() -> int:
         return 0
     epoch = source_date_epoch()
     package_root, archive_path = create_package(
-        args.export_directory, args.output_directory, build_metadata(epoch), epoch
+        args.export_directory, args.output_directory, build_metadata(epoch), epoch, args.launcher_deps
     )
     print(package_root)
     print(archive_path)

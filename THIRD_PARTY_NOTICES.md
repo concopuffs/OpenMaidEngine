@@ -8,6 +8,8 @@ remains subject to its own terms or is acknowledged as prior research rather tha
 Release packages also carry each shipped component's own license texts, named in its section below. Every NuGet
 package a release ships is named below in backticks; the packagers refuse a package that leaves one out
 (`docs/tools-reference.md`, "Third-party notices"). A package's managed directory is `data_OME_<platform>_x86_64`.
+The launcher (`OME-Launcher`, beside the engine) is one self-contained file. Its packages' own notice files are in
+`OME-Launcher-notices/` beside it.
 
 ## Godot Engine
 
@@ -32,6 +34,57 @@ shipped NuGet package's own license and notice files into the managed directory 
 `Microsoft.NETCore.App.Runtime.<rid>-LICENSE.TXT` and `Microsoft.NETCore.App.Runtime.<rid>-THIRD-PARTY-NOTICES.TXT`
 for the runtime, and `System.Text.Encoding.CodePages-THIRD-PARTY-NOTICES.TXT`. That package carries no license file
 of its own; its MIT license is the runtime's.
+
+The launcher carries the .NET 10 runtime inside its single file, under the same terms. Its own copies of the
+runtime pack's two files are in `OME-Launcher-notices/`. The single file also holds the `Tomlyn`, `LuaCSharp` and
+`LuaCSharp.Annotations` packages, which `engine/Ome.Launcher.Core` brings (their sections below).
+
+## Avalonia
+
+The launcher's window is drawn with [Avalonia](https://avaloniaui.net/) 12.1.6, Copyright 2013-2026 © The AvaloniaUI
+Project, under the MIT License. Its single file holds the unmodified assemblies of the NuGet packages `Avalonia`,
+`Avalonia.Desktop`, `Avalonia.FreeDesktop`, `Avalonia.FreeDesktop.AtSpi`, `Avalonia.HarfBuzz`, `Avalonia.Native`,
+`Avalonia.Remote.Protocol`, `Avalonia.Skia`, `Avalonia.Themes.Fluent`, `Avalonia.Win32` and `Avalonia.X11`. It also
+holds those of two packages Avalonia brings, under the MIT License too:
+- `MicroCom.Runtime` 0.11.6, Copyright 2021 © Nikita Tsukanov;
+- `Tmds.DBus.Protocol` 0.94.1, by Tom Deseyn.
+None of these packages ships a license file of its own:
+
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+> documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+> the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+> permit persons to whom the Software is furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+> the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+> THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+> TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.
+
+## SkiaSharp and HarfBuzzSharp
+
+Avalonia draws through [SkiaSharp](https://github.com/mono/SkiaSharp) 3.119.4 and shapes text with HarfBuzzSharp
+8.3.1.3, Copyright (c) 2015-2016 Xamarin, Inc. and Copyright (c) 2017-2018 Microsoft Corporation, under the MIT
+License.
+- **The managed packages** `SkiaSharp` and `HarfBuzzSharp` are in the launcher's single file.
+- **The native packages** sit beside it:
+  - `SkiaSharp.NativeAssets.Win32` and `HarfBuzzSharp.NativeAssets.Win32` as `libSkiaSharp.dll` and
+    `libHarfBuzzSharp.dll` on Windows;
+  - `SkiaSharp.NativeAssets.Linux` and `HarfBuzzSharp.NativeAssets.Linux` as `libSkiaSharp.so` and
+    `libHarfBuzzSharp.so` on Linux.
+- **The native libraries** are Skia and HarfBuzz with the libraries they build in, each under its own license.
+- **Their notice files:** each package's `LICENSE.txt`, and each native package's `THIRD-PARTY-NOTICES.txt`, which
+  lists those libraries with their licenses, are in `OME-Launcher-notices/` as `<package id>-<file name>`.
+
+## ANGLE
+
+On Windows the launcher draws through [ANGLE](https://chromium.googlesource.com/angle/angle), Copyright 2018 The
+ANGLE Project Authors, under the BSD 3-Clause License. It comes as `av_libglesv2.dll` beside the launcher, from
+Avalonia's `Avalonia.Angle.Windows.Natives` package. That package's license file, which is ANGLE's license, is
+`OME-Launcher-notices/Avalonia.Angle.Windows.Natives-LICENSE`. Linux packages carry no ANGLE code.
 
 ## FFmpeg
 

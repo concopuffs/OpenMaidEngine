@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import package_notices
+import publish_launcher
 import verify_windows_native
 
 
@@ -21,6 +22,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 MANAGED_DIRECTORY = "data_OME_windows_x86_64"
 PACKAGE_NAME = "OME-windows-x64"
+# The launcher beside the engine (launcher spec §10, plan §9.3): its program, natives and notices.
+LAUNCHER = publish_launcher.LAYOUTS["win-x64"]
 REQUIRED_FILES = (
     "OME.exe",
     "OME.pck",
@@ -38,9 +41,11 @@ REQUIRED_FILES = (
     f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.win-x64-LICENSE.TXT",
     f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.win-x64-THIRD-PARTY-NOTICES.TXT",
     *(f"{MANAGED_DIRECTORY}/{name}" for name in verify_windows_native.REQUIRED_FILES),
+    *LAUNCHER.files(),
 )
 FORBIDDEN_FILES = (
     "OME",
+    publish_launcher.LAYOUTS["linux-x64"].program,
     f"{MANAGED_DIRECTORY}/libome_movie_ffmpeg.so",
     f"{MANAGED_DIRECTORY}/libavformat.so.62",
 )
@@ -62,7 +67,11 @@ def _resolved_directory(path: Path, label: str) -> Path:
     return resolved
 
 
-def verify_export(export_directory: Path, objdump: str) -> tuple[Path, dict[str, Any]]:
+def verify_export(
+    export_directory: Path, objdump: str, launcher_deps: Path | None = None
+) -> tuple[Path, dict[str, Any]]:
+    """Check the export's files and PE files, and that THIRD_PARTY_NOTICES.md names every package the engine and the
+    launcher ship (`launcher_deps`: the dependency list the launcher's publish kept, by default publish_launcher's)."""
     export_directory = _resolved_directory(export_directory, "Windows export")
     missing = [name for name in REQUIRED_FILES if not (export_directory / name).is_file()]
     if missing:
@@ -78,8 +87,14 @@ def verify_export(export_directory: Path, objdump: str) -> tuple[Path, dict[str,
     legacy = [name for name in LEGACY_FILES if (export_directory / name).exists()]
     if legacy:
         raise ValueError("Windows export contains legacy-branded files: " + ", ".join(legacy))
+    symbols = sorted(path.relative_to(export_directory).as_posix() for path in export_directory.rglob("*.pdb"))
+    if symbols:
+        raise ValueError("Windows export contains debug symbols: " + ", ".join(symbols))
     package_notices.verify_dependency_notices(
         export_directory / MANAGED_DIRECTORY, REPO / "THIRD_PARTY_NOTICES.md"
+    )
+    package_notices.verify_launcher_notices(
+        launcher_deps or publish_launcher.dependency_list(LAUNCHER.runtime), REPO / "THIRD_PARTY_NOTICES.md"
     )
     executable_machine = verify_windows_native.pe_machine(export_directory / "OME.exe")
     if executable_machine != verify_windows_native.PE_MACHINE_AMD64:
@@ -97,6 +112,7 @@ def verify_export(export_directory: Path, objdump: str) -> tuple[Path, dict[str,
         "target": "win-x64",
         "executable_machine": "AMD64",
         "native": native_report,
+        "launcher": verify_windows_native.verify_launcher(export_directory, LAUNCHER.program, LAUNCHER.natives),
     }
 
 
@@ -240,15 +256,17 @@ def main() -> int:
     verify = subparsers.add_parser("verify")
     verify.add_argument("export_directory", type=Path)
     verify.add_argument("--objdump", default="x86_64-w64-mingw32-objdump")
+    verify.add_argument("--launcher-deps", type=Path, help="the launcher's kept dependency list")
     package = subparsers.add_parser("package")
     package.add_argument("export_directory", type=Path)
     package.add_argument("--objdump", default="x86_64-w64-mingw32-objdump")
+    package.add_argument("--launcher-deps", type=Path, help="the launcher's kept dependency list")
     package.add_argument(
         "--output-directory", type=Path, default=REPO / "build/package/windows-x64"
     )
     args = parser.parse_args()
 
-    export_directory, verification = verify_export(args.export_directory, args.objdump)
+    export_directory, verification = verify_export(args.export_directory, args.objdump, args.launcher_deps)
     if args.command == "verify":
         print(export_directory)
         return 0

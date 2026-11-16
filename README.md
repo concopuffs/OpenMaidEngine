@@ -37,6 +37,17 @@ Linux and Windows release exports are asset-free build products. From a Linux ho
 `./tools/build-windows-x64.sh` cross-builds and structurally verifies the Windows runtime without Wine.
 Both write archives under `build/package/`; see the tools reference for exact inputs and output contents.
 
+Each archive carries the launcher (`OME-Launcher`, or `OME-Launcher.exe` on Windows) beside the engine; starting
+`OME` with no game opens it. On Linux it needs glibc 2.27 or later (the engine needs 2.28). Its window also needs
+these system libraries, which every desktop distribution has:
+- the X11 client libraries (`libX11`, `libX11-xcb`, `libxcb`, `libXext`, `libXi`, `libXrandr`, `libXrender`,
+  `libXcursor` and the libraries they use), with `libICE` and `libSM`;
+- `libfontconfig` and `libfreetype`;
+- OpenGL;
+- ICU.
+
+Its command line (`OME-Launcher --check <profile>`) needs no display.
+
 `workspace` and `full` validation additionally require the extracted script corpus and disposable derived
 inputs described by the tools reference. `runtime` and `full` require Godot plus a valid game root. A
 selected requirement that is unavailable is an error, not a silent skip.

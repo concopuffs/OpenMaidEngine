@@ -44,6 +44,41 @@ def write_deps(directory: Path, rid: str = "linux-x64") -> Path:
     return path
 
 
+# The packages write_launcher_deps ships, as THIRD_PARTY_NOTICES.md must name them.
+LAUNCHER_FIXTURE_PACKAGES = ("Avalonia", "Microsoft.NETCore.App", "SkiaSharp.NativeAssets.Linux",
+                             "SkiaSharp.NativeAssets.Win32")
+
+
+def write_launcher_deps(path: Path, rid: str = "linux-x64") -> Path:
+    """A dependency list as the launcher's publish keeps it (net10.0, bundled into its single file): projects, the
+    runtime pack, Avalonia, and SkiaSharp's native package for the target."""
+    target = f".NETCoreApp,Version=v10.0/{rid}"
+    runtime_pack = f"runtimepack.Microsoft.NETCore.App.Runtime.{rid}/10.0.15"
+    natives = f"SkiaSharp.NativeAssets.{'Linux' if rid == 'linux-x64' else 'Win32'}/3.119.4"
+    deps = {
+        "runtimeTarget": {"name": target, "signature": ""},
+        "targets": {
+            target: {
+                "OME-Launcher/1.0.0": {"runtime": {"OME-Launcher.dll": {}}},
+                runtime_pack: {"runtime": {"System.Private.CoreLib.dll": {}}},
+                "Avalonia/12.1.6": {"runtime": {"lib/net10.0/Avalonia.Base.dll": {}}},
+                natives: {"native": {"libSkiaSharp": {}}},
+                "Ome.Launcher.Core/1.0.0": {"runtime": {"Ome.Launcher.Core.dll": {}}},
+            }
+        },
+        "libraries": {
+            "OME-Launcher/1.0.0": {"type": "project", "serviceable": False, "sha512": ""},
+            runtime_pack: {"type": "runtimepack", "serviceable": False, "sha512": ""},
+            "Avalonia/12.1.6": {"type": "package", "serviceable": True, "sha512": "x"},
+            natives: {"type": "package", "serviceable": True, "sha512": "x"},
+            "Ome.Launcher.Core/1.0.0": {"type": "project", "serviceable": False, "sha512": ""},
+        },
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(deps), encoding="utf-8")
+    return path
+
+
 class PackageNoticesTests(unittest.TestCase):
     def test_committed_godot_notices_match_their_pins_and_the_pinned_godot_release(self) -> None:
         notices = package_notices.pinned_notices()
@@ -140,6 +175,34 @@ class PackageNoticesTests(unittest.TestCase):
         # The NuGet packages a self-contained publish of godot/OME.csproj ships (2026-11-06, both RIDs).
         text = (package_notices.REPO / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
         for name in ("GodotSharp", "Microsoft.NETCore.App", "System.Text.Encoding.CodePages", "Tomlyn"):
+            self.assertIn(f"`{name}`", text)
+
+    def test_the_launchers_list_is_checked_from_the_copy_its_publish_kept(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            deps = write_launcher_deps(root / "launcher-publish/linux-x64.deps.json")
+            notices = root / "THIRD_PARTY_NOTICES.md"
+            notices.write_text(" ".join(f"`{name}`" for name in LAUNCHER_FIXTURE_PACKAGES) + "\n", encoding="utf-8")
+            self.assertEqual(["Avalonia", "Microsoft.NETCore.App", "SkiaSharp.NativeAssets.Linux"],
+                             package_notices.verify_launcher_notices(deps, notices))
+            notices.write_text("`Microsoft.NETCore.App` `SkiaSharp.NativeAssets.Linux`\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "does not name the launcher's shipped NuGet packages: Avalonia"):
+                package_notices.verify_launcher_notices(deps, notices)
+            with self.assertRaisesRegex(ValueError, "launcher's dependency list was not found.*publish_launcher"):
+                package_notices.verify_launcher_notices(root / "missing.deps.json", notices)
+
+    def test_project_notices_name_the_packages_the_launcher_ships(self) -> None:
+        # The NuGet packages the launcher's release publish ships (launcher plan §9, 2026-11-16, both RIDs; the release
+        # build checks its kept list, this keeps the file honest between releases).
+        text = (package_notices.REPO / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+        for name in (
+            "Avalonia", "Avalonia.Desktop", "Avalonia.FreeDesktop", "Avalonia.FreeDesktop.AtSpi", "Avalonia.HarfBuzz",
+            "Avalonia.Native", "Avalonia.Remote.Protocol", "Avalonia.Skia", "Avalonia.Themes.Fluent", "Avalonia.Win32",
+            "Avalonia.X11", "Avalonia.Angle.Windows.Natives", "HarfBuzzSharp", "HarfBuzzSharp.NativeAssets.Linux",
+            "HarfBuzzSharp.NativeAssets.Win32", "SkiaSharp", "SkiaSharp.NativeAssets.Linux",
+            "SkiaSharp.NativeAssets.Win32", "MicroCom.Runtime", "Tmds.DBus.Protocol", "LuaCSharp",
+            "LuaCSharp.Annotations", "Tomlyn", "Microsoft.NETCore.App",
+        ):
             self.assertIn(f"`{name}`", text)
 
 

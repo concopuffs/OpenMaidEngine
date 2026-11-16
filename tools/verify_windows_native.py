@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the project-owned Windows x64 FFmpeg bundle without executing it."""
+"""Verify the project-owned Windows x64 FFmpeg bundle, and the launcher's PE files, without executing them."""
 from __future__ import annotations
 
 import argparse
@@ -32,6 +32,7 @@ REQUIRED_EXPORTS = frozenset({
 })
 FORBIDDEN_RUNTIME_IMPORTS = frozenset({"cygwin1.dll", "msys-2.0.dll"})
 PE_MACHINE_AMD64 = 0x8664
+PE_SUBSYSTEM_WINDOWS_GUI = 2
 
 
 def pe_machine(path: Path) -> int:
@@ -45,6 +46,41 @@ def pe_machine(path: Path) -> int:
     if len(pe_header) != 6 or pe_header[:4] != b"PE\0\0":
         raise ValueError(f"file has no PE signature: {path}")
     return struct.unpack_from("<H", pe_header, 4)[0]
+
+
+def pe_subsystem(path: Path) -> int:
+    """The PE optional header's Subsystem: 2 a windowed program, 3 a console one. It sits 68 bytes into the optional
+    header, which follows the 4-byte signature and the 20-byte COFF header, for PE32 and PE32+ alike."""
+    with path.open("rb") as stream:
+        header = stream.read(64)
+        if len(header) != 64 or header[:2] != b"MZ":
+            raise ValueError(f"file has no DOS/PE header: {path}")
+        pe_offset = struct.unpack_from("<I", header, 0x3C)[0]
+        stream.seek(pe_offset)
+        pe_header = stream.read(24 + 70)
+    if len(pe_header) != 94 or pe_header[:4] != b"PE\0\0":
+        raise ValueError(f"file has no PE signature: {path}")
+    if struct.unpack_from("<H", pe_header, 24)[0] not in (0x10B, 0x20B):
+        raise ValueError(f"file has no PE32 or PE32+ optional header: {path}")
+    return struct.unpack_from("<H", pe_header, 24 + 68)[0]
+
+
+def verify_launcher(directory: Path, program: str, natives: tuple[str, ...]) -> dict[str, Any]:
+    """The launcher beside the engine (launcher plan §9.3): an AMD64 windowed program, and its native libraries
+    AMD64. It is checked, never run."""
+    machine = pe_machine(directory / program)
+    if machine != PE_MACHINE_AMD64:
+        raise ValueError(f"Windows launcher is not AMD64 PE (0x{machine:04x}): {program}")
+    subsystem = pe_subsystem(directory / program)
+    if subsystem != PE_SUBSYSTEM_WINDOWS_GUI:
+        raise ValueError(f"Windows launcher is not a windowed program (subsystem {subsystem}): {program}")
+    machines: dict[str, str] = {}
+    for name in natives:
+        machine = pe_machine(directory / name)
+        if machine != PE_MACHINE_AMD64:
+            raise ValueError(f"Windows launcher native is not AMD64 PE (0x{machine:04x}): {name}")
+        machines[name] = "AMD64"
+    return {"program": program, "machine": "AMD64", "subsystem": "windows-gui", "natives": machines}
 
 
 def parse_objdump(output: str) -> tuple[set[str], set[str]]:

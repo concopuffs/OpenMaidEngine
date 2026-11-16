@@ -140,6 +140,12 @@ def windows_verification() -> bytes:
             "shim_exports": sorted(verify_windows_native.REQUIRED_EXPORTS),
             "shim_imports": [*verify_windows_native.RUNTIME_DLLS, "KERNEL32.dll"],
         },
+        "launcher": {
+            "program": "OME-Launcher.exe",
+            "machine": "AMD64",
+            "subsystem": "windows-gui",
+            "natives": {name: "AMD64" for name in ("av_libglesv2.dll", "libHarfBuzzSharp.dll", "libSkiaSharp.dll")},
+        },
     })
 
 
@@ -156,7 +162,14 @@ def write_checksum(directory: Path, archive: Path) -> None:
     )
 
 
-def create_artifacts(root: Path) -> tuple[Path, Path, Path]:
+def create_artifacts(
+    root: Path,
+    linux_ledger: bytes | None = None,
+    windows_ledger: bytes | None = None,
+    verification: bytes | None = None,
+) -> tuple[Path, Path, Path]:
+    """Both platforms' verified artifacts; a ledger or the Windows report given replaces the accepted one, inside the
+    archive and beside it alike."""
     linux = root / "linux"
     windows = root / "windows"
     prepared = root / "prepared"
@@ -164,7 +177,7 @@ def create_artifacts(root: Path) -> tuple[Path, Path, Path]:
     windows.mkdir()
 
     linux_info = build_info("linux-x64")
-    linux_ledger = f"{'0' * 64}  OME\n".encode()
+    linux_ledger = linux_ledger or f"{'0' * 64}  OME\n{'2' * 64}  OME-Launcher\n".encode()
     linux_archive = linux / publish_github_release.LINUX_ARCHIVE
     with tarfile.open(linux_archive, "w:gz") as archive:
         add_tar_bytes(
@@ -185,8 +198,8 @@ def create_artifacts(root: Path) -> tuple[Path, Path, Path]:
     write_checksum(linux, linux_archive)
 
     windows_info = build_info("win-x64")
-    windows_ledger = f"{'1' * 64}  OME.exe\n".encode()
-    verification = windows_verification()
+    windows_ledger = windows_ledger or f"{'1' * 64}  OME.exe\n{'3' * 64}  OME-Launcher.exe\n".encode()
+    verification = verification or windows_verification()
     windows_archive = windows / publish_github_release.WINDOWS_ARCHIVE
     with zipfile.ZipFile(windows_archive, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         root_name = publish_github_release.WINDOWS_PACKAGE_ROOT
@@ -405,6 +418,25 @@ class PublishGithubReleaseTests(unittest.TestCase):
                 publish_github_release.prepare_release_assets(
                     TAG, TARGET, linux, windows, prepared
                 )
+
+    def test_refuses_archives_without_the_launcher(self) -> None:
+        # Launcher plan §9.3: both ledgers list the launcher, and the Windows report checked it as a windowed AMD64
+        # program with AMD64 natives. Each refusal is consistent inside the archive and beside it.
+        accepted = json.loads(windows_verification())
+        console = dict(accepted, launcher=dict(accepted["launcher"], subsystem="windows-cui"))
+        cases = (
+            ({"linux_ledger": f"{'0' * 64}  OME\n".encode()}, "Linux SHA256SUMS does not contain the packaged launcher"),
+            ({"windows_ledger": f"{'1' * 64}  OME.exe\n{'3' * 64}  OME-Launcher-notices/x\n".encode()},
+             "Windows SHA256SUMS does not contain the packaged launcher"),
+            ({"verification": json_bytes({key: value for key, value in accepted.items() if key != "launcher"})},
+             "not accepted.*launcher"),
+            ({"verification": json_bytes(console)}, "not accepted.*launcher"),
+        )
+        for overrides, message in cases:
+            with self.subTest(message), tempfile.TemporaryDirectory() as temporary:
+                directories = create_artifacts(Path(temporary), **overrides)
+                with self.assertRaisesRegex(ValueError, message):
+                    publish_github_release.prepare_release_assets(TAG, TARGET, *directories)
 
 
 class FfmpegReleaseNoticeTests(unittest.TestCase):
