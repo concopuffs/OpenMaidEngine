@@ -5,6 +5,8 @@ vm-map/globals.toml -> docs/global-reference.md; any other profile uses
 vm-map/globals-<game>.toml -> docs/global-reference-<game>.md.
   --build   merge curated over build/games/<game>/global-var-map.json -> build/games/<game>/globals.json
             + the profile's generated reference doc
+  --build-json  lint and merge, then write only build/games/<game>/globals.json (the core level's step; a checkout
+            has no auto map, so its JSON holds the curated globals, which the OMS modules name)
   --lint    run the linter, print errors/warnings, exit nonzero on errors
   --check   lint, then exit nonzero if the reference doc differs from what --build would write (needs the auto map)
 A registry may also declare `[[table]]` entries: Open Maid Script tables (record views over parallel
@@ -400,6 +402,23 @@ def check(tp: Path, auto_map: Path = AUTO_MAP, reference_doc: Path = REFERENCE_D
     return 0
 
 
+def build_json(tp: Path, auto_map: Path = AUTO_MAP, output: Path | None = None) -> int:
+    """Lint and merge, then write only the profile's globals.json, which Open Maid Script loads as `<game>.globals`.
+    The tracked reference doc is left alone. The core level runs this for every profile. A checkout has no auto map
+    (a workspace input), so its JSON holds the curated globals, the only ones the OMS modules name; --build, which also
+    writes the doc, would shorten the doc there."""
+    prepared = _linted_merge(tp, auto_map)
+    if prepared is None:
+        return 1
+    merged, meta, tables = prepared
+    output = output or paths.BUILD / "globals.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(emit_json(merged, meta, tables), encoding="utf-8", newline="\n")
+    without_map = "" if Path(auto_map).is_file() else f" (no auto map at {_shown(Path(auto_map))}: curated globals only)"
+    print(f"build-json: {len(merged)} globals, {len(tables)} tables -> {_shown(output)}{without_map}")
+    return 0
+
+
 def build(tp: Path, auto_map: Path = AUTO_MAP) -> int:
     prepared = _linted_merge(tp, auto_map)
     if prepared is None:
@@ -416,6 +435,9 @@ def build(tp: Path, auto_map: Path = AUTO_MAP) -> int:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--build", action="store_true")
+    ap.add_argument("--build-json", action="store_true",
+                    help="lint, then write only build/games/<game>/globals.json (no reference doc; works without the "
+                         "auto map)")
     ap.add_argument("--lint", action="store_true")
     ap.add_argument("--check", action="store_true",
                     help="lint, then fail if the profile's reference doc differs from what --build would write")
@@ -437,7 +459,9 @@ def main(argv=None):
         return check(tp, Path(args.auto_map))
     if args.build:
         return build(tp, Path(args.auto_map))
-    ap.error("no action (expected --build/--check/--lint)")
+    if args.build_json:
+        return build_json(tp, Path(args.auto_map))
+    ap.error("no action (expected --build/--build-json/--check/--lint)")
 
 
 if __name__ == "__main__":

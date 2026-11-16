@@ -149,8 +149,11 @@ def selected_phases(level: str) -> set[str]:
 
 def registry_gates() -> list[Gate]:
     """Content-free gates over every profile's registries, whichever profile is selected: each global registry is
-    linted, and each patch-point registry is checked and its generated reference compared with what --build writes.
-    (A global reference merges the workspace auto map, so its staleness gate is in the workspace phase.)"""
+    linted and its build/games/<game>/globals.json written, and each patch-point registry is checked and its generated
+    reference compared with what --build writes. The engine and launcher tests link with the repository's OMS
+    modules, which load that JSON, and a checkout has none until it is built (launcher plan §9.7). (A global
+    reference merges the workspace auto map, so its staleness gate is in the workspace phase, and --build-json leaves
+    it alone.)"""
     gates = []
     for profile_id in paths.available_profiles():
         if paths.ToolContext.resolve(profile_id, environ={}).globals_toml.is_file():
@@ -158,6 +161,11 @@ def registry_gates() -> list[Gate]:
                 f"globals-lint-{profile_id}",
                 f"Global registry lint ({profile_id})",
                 _python_tool("globals_build.py", "--game", profile_id, "--lint"),
+            ))
+            gates.append(Gate(
+                f"globals-json-{profile_id}",
+                f"Global registry JSON for the OMS modules ({profile_id})",
+                _python_tool("globals_build.py", "--game", profile_id, "--build-json"),
             ))
         if (paths.VM_MAP / f"patch-points-{profile_id}.toml").is_file():
             gates.append(Gate(

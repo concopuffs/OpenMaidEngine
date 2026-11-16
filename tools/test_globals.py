@@ -691,6 +691,35 @@ def test_check_reports_a_stale_reference():
     check(missing_doc == 1 and current == 0 and stale == 1,
           "--check passes a current reference and fails a missing or stale one")
 
+def test_build_json_writes_the_json_alone_with_or_without_the_auto_map():
+    import contextlib, io, json, tempfile
+    registry = ('[[global]]\naddress = "0x10"\nname = "flag"\ncategory = "story-flag"\n'
+                'source = "investigation"\nconfidence = "high"\n')
+    auto = {"globals": {"0x20": {"label": "array-1d", "kind": "array-1d", "type": "int[4]"}}}
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        toml, auto_map, output = root / "globals.toml", root / "global-var-map.json", root / "out" / "globals.json"
+        toml.write_text(registry, encoding="utf-8")
+        doc = root / "global-reference.md"
+        saved_doc, G.REFERENCE_DOC = G.REFERENCE_DOC, doc
+        try:
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                without_map = G.build_json(toml, auto_map, output)
+            curated_only = json.loads(output.read_text(encoding="utf-8"))
+            auto_map.write_text(json.dumps(auto), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                with_map = G.build_json(toml, auto_map, output)
+            merged = json.loads(output.read_text(encoding="utf-8"))
+        finally:
+            G.REFERENCE_DOC = saved_doc
+        doc_written = doc.exists()
+    check(without_map == 0 and "curated globals only" in printed.getvalue(),
+          "--build-json builds without the auto map and says so")
+    check(set(curated_only["globals"]) == {"0x10"} and set(merged["globals"]) == {"0x10", "0x20"},
+          "--build-json merges the auto map when there is one")
+    check(with_map == 0 and not doc_written, "--build-json never writes the reference doc")
+
 def test_sys4load_labels_from_registry():
     import importlib, sys4load
     importlib.reload(sys4load)   # re-run _load_global_labels against current build/games/<game>/globals.json
@@ -748,6 +777,7 @@ if __name__ == "__main__":
     test_battle_experience_evidence()
     test_merge_precedence()
     test_check_reports_a_stale_reference()
+    test_build_json_writes_the_json_alone_with_or_without_the_auto_map()
     test_sys4load_labels_from_registry()
     test_miner_finds_known_flags()
     test_bootstrap_is_additive_and_idempotent()

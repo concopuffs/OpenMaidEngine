@@ -551,8 +551,11 @@ below.
   SDK. Its tests start the net8.0 stub engine too, which runs on the .NET 8 runtime.
   - **Printing:** on Windows it attaches to its parent's console; elsewhere it prints on the handles it inherits.
   - **On Linux:** the packaged program has run there (launcher plan §9.5: `--check` with no display, and its window
-    under WSLg). Its tests use no Windows-only path, but have run only on Windows; CI's core job runs them on Linux
-    at the first push.
+    under WSLg).
+  - **Its tests on Linux:** in a fresh WSL clone (Ubuntu 20.04), core passed with all 82 launcher and 2433 engine
+    tests (launcher plan §9.7).
+  - CI's first core run on Linux had failed 32 of them. Each one links with the repository's OMS modules, whose
+    generated `globals.json` a checkout lacked until core wrote it (`globals_build.py --build-json`).
 
 ### The launcher in the release archives (launcher M4, 2026-11-16)
 
@@ -568,7 +571,9 @@ Each archive carries the launcher beside the engine (launcher spec §10; plan §
 - **Its memory.** The publish is a step of its own, after Godot's export has exited, with the release build's
   low-memory flags, so the two peaks never overlap (the runner kills at about 1 GiB).
   - Locally, in WSL, its largest process peaked at 528-573 MiB over three builds.
-  - The GitHub runner's figure is not measured yet: it needs a push (plan §8, question 3).
+  - On the GitHub runner (release workflow run 43944395279, 2026-11-16), its largest process peaked at 522 MiB in the
+    Linux job and 536 MiB in the Windows job. The runner's cgroup reported no peak, so the publish printed no cgroup
+    line.
 - **The hand-over.** With no user argument, and no `SYS4INI.BIN` beside the program or in the folder it was started
   from, the engine starts `OME-Launcher` from beside itself and exits (`LauncherHandOver`).
 - **Linux's smoke** (`package_linux_x64.py smoke`, required by `build-linux-x64.sh` and by the publisher) has three
