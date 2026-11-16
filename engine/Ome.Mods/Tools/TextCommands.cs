@@ -135,8 +135,8 @@ public static class TextCommands
         {
             if (dataRoot != null || packages.Count > 0)
             {
-                (ModLinkResult? result, opened) = OmpCommands.LinkForInspection(linkBase, dataRoot, packages, false, console,
-                                                                                table);
+                (ModLinkResult? result, opened) = Launch.ModInspection.Inspect(linkBase, dataRoot, packages, false, table)
+                    .Printed(console);
                 if (result == null) return 1;
                 if (!stats) console.Write(result.Report.Render());
                 linked = result.Succeeded;

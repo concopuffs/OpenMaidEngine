@@ -3,6 +3,36 @@ using Ome.Mods.Packages;
 
 namespace Ome.Mods.Linking;
 
+/// <summary>Why one package loads before another (spec §6.3).</summary>
+public enum OrderEdgeKind
+{
+    /// <summary>A hard dependency: the required package loads first.</summary>
+    Requires,
+    /// <summary>A <c>[replace]</c> <c>over</c> entry: the package whose replacement is superseded loads first.</summary>
+    ReplacesOver,
+    /// <summary>An <c>[order] after</c> hint.</summary>
+    After,
+    /// <summary>An <c>[order] before</c> hint.</summary>
+    Before,
+}
+
+/// <summary>An edge of the load order: <see cref="First"/> loads before <see cref="Then"/>, because
+/// <see cref="DeclaredBy"/>'s manifest says so.</summary>
+public sealed record OrderEdge(string First, string Then, OrderEdgeKind Kind, string DeclaredBy)
+{
+    public override string ToString() => Kind switch
+    {
+        OrderEdgeKind.Requires => $"{Then} requires {First}",
+        OrderEdgeKind.ReplacesOver => $"{Then}'s [replace] goes over {First}",
+        OrderEdgeKind.After => $"{Then} asks to load after {First}",
+        _ => $"{First} asks to load before {Then}",
+    };
+}
+
+/// <summary>A package the resolver placed after packages the player ranked after it (<see cref="Overtaken"/>), with the
+/// edges that held it back (launcher spec §5.9, §8.4).</summary>
+public sealed record OrderMove(string Id, IReadOnlyList<string> Overtaken, IReadOnlyList<OrderEdge> Edges);
+
 /// <summary>
 /// Resolves a stack (spec §6.1 step 3, §6.3): profile and revision checks, dependencies and their version ranges,
 /// declared conflicts, then the load order. Dependencies and <c>[replace]</c> <c>over</c> entries come before the mods
@@ -50,19 +80,27 @@ public static class StackResolver
                     $"declares a conflict with {conflict.Id}" + (conflict.Reason is { } reason ? $": {reason}" : ""));
         }
 
-        // Edges run from the mod that loads first to the mod that loads after it.
+        // Edges run from the mod that loads first to the mod that loads after it; each is kept with its kind, so an
+        // order that differs from the user's can say why.
         var edges = byId.Keys.ToDictionary(id => id, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
-        void Edge(string first, string then)
+        var kinds = new List<OrderEdge>();
+        void Edge(string first, string then, OrderEdgeKind kind, string declaredBy)
         {
-            if (byId.ContainsKey(first) && byId.ContainsKey(then) && first != then) edges[first].Add(then);
+            if (!byId.ContainsKey(first) || !byId.ContainsKey(then) || first == then) return;
+            edges[first].Add(then);
+            var edge = new OrderEdge(first, then, kind, declaredBy);
+            if (!kinds.Contains(edge)) kinds.Add(edge);
         }
         foreach (ModPackage mod in byId.Values)
         {
-            foreach (ModRequirement requirement in mod.Manifest.Requires) Edge(requirement.Id, mod.Id);
-            foreach (ModReplacementOrder replacement in mod.Manifest.ReplacementOrders) Edge(replacement.Over, mod.Id);
-            foreach (string after in mod.Manifest.After) Edge(after, mod.Id);
-            foreach (string before in mod.Manifest.Before) Edge(mod.Id, before);
+            foreach (ModRequirement requirement in mod.Manifest.Requires)
+                Edge(requirement.Id, mod.Id, OrderEdgeKind.Requires, mod.Id);
+            foreach (ModReplacementOrder replacement in mod.Manifest.ReplacementOrders)
+                Edge(replacement.Over, mod.Id, OrderEdgeKind.ReplacesOver, mod.Id);
+            foreach (string after in mod.Manifest.After) Edge(after, mod.Id, OrderEdgeKind.After, mod.Id);
+            foreach (string before in mod.Manifest.Before) Edge(mod.Id, before, OrderEdgeKind.Before, mod.Id);
         }
+        report.OrderEdges = kinds;
 
         var rank = new Dictionary<string, int>(StringComparer.Ordinal);
         for (int k = 0; k < userOrder.Count; k++) rank.TryAdd(userOrder[k], k);
@@ -94,6 +132,45 @@ public static class StackResolver
         }
         report.Order = order.Select(mod => mod.Id).ToList();
         return order;
+    }
+
+    /// <summary>
+    /// The packages <paramref name="order"/> moved from <paramref name="userOrder"/>: a package moved when one the
+    /// player ranked after it loads before it. Packages outside the user order, such as a mounted base mod, never
+    /// count on either side. A move's edges are those on the paths into the package from its predecessors that the
+    /// player ranked after it or did not rank: what it waited for.
+    /// </summary>
+    public static IReadOnlyList<OrderMove> Moves(IReadOnlyList<string> order, IReadOnlyList<string> userOrder,
+                                                 IReadOnlyList<OrderEdge> edges)
+    {
+        var rank = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int k = 0; k < userOrder.Count; k++) rank.TryAdd(userOrder[k], k);
+        var into = edges.GroupBy(edge => edge.Then, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
+        var moves = new List<OrderMove>();
+        for (int at = 0; at < order.Count; at++)
+        {
+            string id = order[at];
+            if (!rank.TryGetValue(id, out int own)) continue;
+            var overtaken = order.Take(at).Where(other => rank.TryGetValue(other, out int r) && r > own).ToList();
+            if (overtaken.Count == 0) continue;
+
+            var ancestors = new HashSet<string>(StringComparer.Ordinal);
+            var pending = new Stack<string>([id]);
+            while (pending.TryPop(out string? node))
+                foreach (OrderEdge edge in into.GetValueOrDefault(node) ?? [])
+                    if (ancestors.Add(edge.First)) pending.Push(edge.First);
+            // The causes, and what lies between them and the package.
+            var onPath = ancestors.Where(node => !rank.TryGetValue(node, out int r) || r > own).ToHashSet(StringComparer.Ordinal);
+            var forward = new Stack<string>(onPath);
+            while (forward.TryPop(out string? node))
+                foreach (OrderEdge edge in edges.Where(edge => edge.First == node && ancestors.Contains(edge.Then)))
+                    if (onPath.Add(edge.Then)) forward.Push(edge.Then);
+            var held = edges.Where(edge => onPath.Contains(edge.First) && (onPath.Contains(edge.Then) || edge.Then == id))
+                .ToList();
+            moves.Add(new OrderMove(id, overtaken, held));
+        }
+        return moves;
     }
 
     private static List<string> FindCycle(HashSet<string> remaining, Dictionary<string, HashSet<string>> edges)

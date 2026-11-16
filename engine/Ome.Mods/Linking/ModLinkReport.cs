@@ -45,6 +45,8 @@ public sealed class ModLinkReport
 
     public IReadOnlyList<ModReportLine> Lines => _lines;
     public IReadOnlyList<string> Order { get; internal set; } = [];
+    /// <summary>The edges the resolver ordered the stack by, each with its kind (<see cref="StackResolver"/>).</summary>
+    public IReadOnlyList<OrderEdge> OrderEdges { get; internal set; } = [];
     public IReadOnlyList<string> Dropped { get; internal set; } = [];
 
     /// <summary>The Lua section (Lua scripting spec §12): each mod that ships Lua or lends its layout, with its

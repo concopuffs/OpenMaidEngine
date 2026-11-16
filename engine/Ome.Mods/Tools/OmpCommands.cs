@@ -112,7 +112,7 @@ public static class OmpCommands
     public static int Check(ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages, bool skipFailed,
                             TextWriter console, ProfileMods? table = null)
     {
-        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, skipFailed, console, table);
+        var (result, opened) = ModInspection.Inspect(linkBase, profileRoot, extraPackages, skipFailed, table).Printed(console);
         try
         {
             if (result == null) return 1;
@@ -135,7 +135,7 @@ public static class OmpCommands
                               IReadOnlyList<string> extraPackages, string name, TextWriter console,
                               ProfileMods? table = null)
     {
-        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console, table);
+        var (result, opened) = ModInspection.Inspect(linkBase, profileRoot, extraPackages, false, table).Printed(console);
         try
         {
             if (result == null) return 1;
@@ -203,7 +203,7 @@ public static class OmpCommands
     public static int Export(ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages,
                              string outputDirectory, TextWriter console, ProfileMods? table = null)
     {
-        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console, table);
+        var (result, opened) = ModInspection.Inspect(linkBase, profileRoot, extraPackages, false, table).Printed(console);
         try
         {
             if (result == null) return 1;
@@ -270,7 +270,7 @@ public static class OmpCommands
     public static int LuaStubs(ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages,
                                string outputDirectory, TextWriter console, ProfileMods? table = null)
     {
-        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console, table);
+        var (result, opened) = ModInspection.Inspect(linkBase, profileRoot, extraPackages, false, table).Printed(console);
         try
         {
             if (result == null) return 1;
@@ -299,23 +299,5 @@ public static class OmpCommands
         {
             foreach (ModPackage package in opened) package.Dispose();
         }
-    }
-
-    /// <param name="table">The profile file's <c>[mods]</c> table when the profile root has one (launcher spec §5.3):
-    /// it names the packages in place of the root's <c>mods/</c> folder.</param>
-    internal static (ModLinkResult? Result, IReadOnlyList<ModPackage> Opened) LinkForInspection(
-        ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages, bool skipFailed, TextWriter console,
-        ProfileMods? table = null)
-    {
-        var report = new ModLinkReport();
-        string modsDirectory = profileRoot == null ? "" : Path.Combine(profileRoot, ModLaunch.ModsFolder);
-        ModDiscovery discovery = ModLaunch.Discover(profileRoot == null ? Path.Combine(Path.GetTempPath(), "omp-none-" + Guid.NewGuid().ToString("N")) : modsDirectory,
-                                                    extraPackages, report, profileRoot == null ? null : table, linkBase.Profile,
-                                                    linkBase.ProfileMode);
-        foreach (ModReportLine line in report.Lines) console.WriteLine(line);
-        if (discovery.FailedToOpen && !skipFailed) return (null, discovery.Packages);
-        SelectorStore selectors = profileRoot == null ? new SelectorStore()
-            : SelectorStore.Load(Path.Combine(modsDirectory, SelectorStore.FileName));
-        return (ModLinker.Link(linkBase, discovery.Packages, discovery.UserOrder, selectors, skipFailed), discovery.Packages);
     }
 }

@@ -310,8 +310,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       plan, ModLuaLinker), offset
     │                                       tables for patched scripts and the link cache, and --lua-reload's
     │                                       check of a mod's changed lua/ (ModLuaReload) (Linking/), startup
-    │                                       discovery, flags, save stamps and --lua-reload's folder watcher
-    │                                       (LuaReloadWatcher) (Launch/), and the omp and omp text commands (Tools/);
+    │                                       discovery, flags, save stamps, the link for inspection that writes
+    │                                       nothing and says why a package moved (ModInspection) and
+    │                                       --lua-reload's folder watcher (LuaReloadWatcher) (Launch/), and the
+    │                                       omp and omp text commands (Tools/);
     │                                       the localization catalog file reader and writer, the text source loader
     │                                       and site binder, the script message index, the installed-script text
     │                                       scanner, the template extractor, the font cmap reader and the gettext
