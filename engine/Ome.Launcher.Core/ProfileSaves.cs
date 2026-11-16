@@ -19,7 +19,7 @@ public sealed record SaveSource(string SaveDirectory, string? Selectors, string?
     {
         Sys4PersistencePaths paths = Sys4PersistencePaths.ResolveProfileOverride(startup, profileRoot);
         return new SaveSource(paths.SaveDirectory,
-                              Path.Combine(profileRoot, ModLaunch.ModsFolder, SelectorStore.FileName),
+                              SelectorRelease.PathFor(profileRoot),
                               paths.Sys4RegIniPath, Path.GetFullPath(profileRoot));
     }
 
@@ -94,7 +94,7 @@ public static partial class ProfileSaves
             throw new ArgumentException($"{source.SaveDirectory} is the profile's own save folder");
 
         // Everything that can refuse the copy is checked before the first write.
-        string selectorsPath = Path.Combine(root, ModLaunch.ModsFolder, SelectorStore.FileName);
+        string selectorsPath = SelectorRelease.PathFor(root);
         SelectorStore? merged = null;
         if (source.Selectors is { } sourceSelectors && File.Exists(sourceSelectors))
         {

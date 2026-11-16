@@ -147,8 +147,7 @@ public static class Library
                 enabling.Add(profile.Id);
             try
             {
-                if (SelectorStore.Load(Path.Combine(profile.Root, ModLaunch.ModsFolder, SelectorStore.FileName))
-                    .TryGet(package.Id, out _))
+                if (SelectorRelease.Held(profile.Root).TryGet(package.Id, out _))
                     holding.Add(profile.Id);
             }
             catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)

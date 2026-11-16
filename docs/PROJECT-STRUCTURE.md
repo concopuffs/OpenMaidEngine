@@ -311,8 +311,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       tables for patched scripts and the link cache, and --lua-reload's
     │                                       check of a mod's changed lua/ (ModLuaReload) (Linking/), startup
     │                                       discovery, flags, save stamps, the link for inspection that writes
-    │                                       nothing and says why a package moved (ModInspection) and
-    │                                       --lua-reload's folder watcher (LuaReloadWatcher) (Launch/), and the
+    │                                       nothing and says why a package moved (ModInspection), releasing a
+    │                                       selector (SelectorRelease) and --lua-reload's folder watcher
+    │                                       (LuaReloadWatcher) (Launch/), and the
     │                                       omp and omp text commands (Tools/);
     │                                       the localization catalog file reader and writer, the text source loader
     │                                       and site binder, the script message index, the installed-script text
@@ -353,8 +354,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       ProfileSaves (save counts, copying saves in with their selectors),
     │                                       BareEngineData/Adoption (a profile from the bare engine's data) and
     │                                       Library (package states, add, remove, enable with dependencies,
-    │                                       the switch to Compatibility); no Avalonia type; net8.0 like the
-    │                                       libraries it references, tested in Ome.Engine.Tests
+    │                                       the switch to Compatibility) and ProfileSelectors (the selectors a
+    │                                       profile holds, released under its lock); no Avalonia type; net8.0
+    │                                       like the libraries it references, tested in Ome.Engine.Tests
     │   └── Ome.Scripting.Lua.Spike/         milestone 0 of the Lua design (superpowers/plans/2026-11-14-lua-
     │                                       scripting.md §1): a console program that checks LuaCSharp and
     │                                       MoonSharp against spec §5.1's criteria, one child process per case;

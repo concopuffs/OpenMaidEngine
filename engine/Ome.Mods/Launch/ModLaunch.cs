@@ -271,15 +271,9 @@ public static class ModLaunch
     {
         string modsDirectory = Path.Combine(profileRoot, ModsFolder);
         var report = new ModLinkReport();
-        if (options.ForgetMods.Count > 0)
-        {
-            string selectorsPath = Path.Combine(modsDirectory, SelectorStore.FileName);
-            SelectorStore store = SelectorStore.Load(selectorsPath);
-            foreach (string id in options.ForgetMods)
-                report.Add(ModReportClass.Note, id, null,
-                    store.Forget(id) ? "--forget-mod released its selector" : "--forget-mod: it had no selector");
-            store.Save(selectorsPath);
-        }
+        foreach (ReleasedSelector released in SelectorRelease.Release(profileRoot, options.ForgetMods))
+            report.Add(ModReportClass.Note, released.Id, null,
+                released.Held ? "--forget-mod released its selector" : "--forget-mod: it had no selector");
         if (options.NoMods) return ModLaunchResult.None(report);
         linkBase = linkBase with { LuaDev = options.LuaDev };
 
