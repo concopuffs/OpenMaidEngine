@@ -282,8 +282,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertEqual({"ubuntu-24.04"}, set(runners), workflow.name)
             self.assertNotIn("pull_request_target", text)
 
-    def test_dotnet_setup_installs_net8_beside_the_pinned_sdk(self) -> None:
-        # global.json pins SDK 10 (launcher plan §5.1); the net8.0 projects' tests need the .NET 8 runtime beside it.
+    def test_dotnet_setup_installs_only_the_pinned_sdk(self) -> None:
+        # global.json pins SDK 10 (launcher plan §5.1); every project targets net10.0, so its runtime runs the tests.
         sdk = json.loads((REPO / "global.json").read_text(encoding="utf-8"))["sdk"]
         self.assertRegex(sdk["version"], r"^10\.0\.4\d\d$")
         self.assertEqual("latestPatch", sdk["rollForward"])
@@ -294,8 +294,18 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 steps += 1
                 inputs = match.group(1)
                 self.assertIn("global-json-file: global.json", inputs, workflow.name)
-                self.assertRegex(inputs, r'dotnet-version: "8\.0\.x"', workflow.name)
+                self.assertNotIn("dotnet-version:", inputs, workflow.name)
         self.assertEqual(3, steps)
+
+    def test_every_project_targets_net10(self) -> None:
+        # .NET 8 left support on 2026-11-10; the exports bundle the runtime the projects target.
+        projects = [path for root in ("engine", "godot", "launcher", "tools") for path in (REPO / root).rglob("*.csproj")
+                    if not {"bin", "obj"} & set(path.relative_to(REPO).parts)]
+        self.assertGreater(len(projects), 15)
+        for project in projects:
+            frameworks = re.findall(r"<TargetFrameworks?[^>]*>([^<$]+)<", project.read_text(encoding="utf-8-sig"))
+            self.assertTrue(frameworks, project.name)
+            self.assertEqual({"net10.0"}, set(frameworks), project.name)
 
 
 if __name__ == "__main__":

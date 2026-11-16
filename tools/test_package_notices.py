@@ -15,8 +15,8 @@ HERE = Path(__file__).resolve().parent
 def write_deps(directory: Path, rid: str = "linux-x64") -> Path:
     """An OME.deps.json as a self-contained publish writes it: projects, the runtime pack, an analyzer-only package and
     two packages with runtime assets."""
-    target = f".NETCoreApp,Version=v8.0/{rid}"
-    runtime_pack = f"runtimepack.Microsoft.NETCore.App.Runtime.{rid}/8.0.15"
+    target = f".NETCoreApp,Version=v10.0/{rid}"
+    runtime_pack = f"runtimepack.Microsoft.NETCore.App.Runtime.{rid}/10.0.15"
     deps = {
         "runtimeTarget": {"name": target, "signature": ""},
         "targets": {
@@ -172,9 +172,10 @@ class PackageNoticesTests(unittest.TestCase):
                 package_notices.verify_dependency_notices(root / "elsewhere", notices)
 
     def test_project_notices_name_the_packages_the_port_ships(self) -> None:
-        # The NuGet packages a self-contained publish of godot/OME.csproj ships (2026-11-06, both RIDs).
+        # The NuGet packages a self-contained publish of godot/OME.csproj ships (2026-11-16, win-x64 on net10.0;
+        # .NET 10 holds the code pages itself, so System.Text.Encoding.CodePages is no longer one of them).
         text = (package_notices.REPO / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
-        for name in ("GodotSharp", "Microsoft.NETCore.App", "System.Text.Encoding.CodePages", "Tomlyn"):
+        for name in ("GodotSharp", "LuaCSharp", "LuaCSharp.Annotations", "Microsoft.NETCore.App", "Tomlyn"):
             self.assertIn(f"`{name}`", text)
 
     def test_the_launchers_list_is_checked_from_the_copy_its_publish_kept(self) -> None:

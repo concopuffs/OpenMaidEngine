@@ -33,8 +33,8 @@
     </ItemGroup>
   </Target>
 
-  <!-- A self-contained publish ships NuGet packages' files: the .NET runtime pack, System.Text.Encoding.CodePages,
-       Avalonia's and others. Each of those packages' own license and notice files (LICENSE*, THIRD-PARTY-NOTICES*,
+  <!-- A self-contained publish ships NuGet packages' files: the .NET runtime pack, Tomlyn, Avalonia's and
+       others. Each of those packages' own license and notice files (LICENSE*, THIRD-PARTY-NOTICES*,
        NOTICE* at the package root) is published as <PackageId>-<file name>, in OmePackageNoticeFolder when the program
        names one, else beside the program's files (THIRD_PARTY_NOTICES.md, ".NET"; the packagers require the runtime
        pack's). A single file leaves them out of its bundle. -->

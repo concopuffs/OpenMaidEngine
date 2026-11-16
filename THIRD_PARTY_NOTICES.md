@@ -27,13 +27,11 @@ Portions of this software are copyright © 1996-2025 The FreeType Project (www.f
 
 ## .NET
 
-Release packages are self-contained. They include the .NET 8 runtime (the `Microsoft.NETCore.App` runtime pack)
-and the `System.Text.Encoding.CodePages` NuGet package, both Copyright (c) .NET Foundation and Contributors, under
-the MIT License. The runtime includes third-party components listed in its notices file. The publish copies each
-shipped NuGet package's own license and notice files into the managed directory as `<package id>-<file name>`:
-`Microsoft.NETCore.App.Runtime.<rid>-LICENSE.TXT` and `Microsoft.NETCore.App.Runtime.<rid>-THIRD-PARTY-NOTICES.TXT`
-for the runtime, and `System.Text.Encoding.CodePages-THIRD-PARTY-NOTICES.TXT`. That package carries no license file
-of its own; its MIT license is the runtime's.
+Release packages are self-contained. They include the .NET 10 runtime (the `Microsoft.NETCore.App` runtime pack),
+Copyright (c) .NET Foundation and Contributors, under the MIT License. The runtime includes third-party components
+listed in its notices file. The publish copies each shipped NuGet package's own license and notice files into the
+managed directory as `<package id>-<file name>`: `Microsoft.NETCore.App.Runtime.<rid>-LICENSE.TXT` and
+`Microsoft.NETCore.App.Runtime.<rid>-THIRD-PARTY-NOTICES.TXT` for the runtime.
 
 The launcher carries the .NET 10 runtime inside its single file, under the same terms. Its own copies of the
 runtime pack's two files are in `OME-Launcher-notices/`. The single file also holds the `Tomlyn`, `LuaCSharp` and

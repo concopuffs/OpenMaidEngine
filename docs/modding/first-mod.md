@@ -16,7 +16,8 @@ lists (empty for the default game).
 
 ## 0. Prerequisites
 
-- .NET 8 SDK, Python 3.11 and Godot 4.7 .NET, as for the port itself (`../../README.md`).
+- The .NET 10 SDK that `global.json` names, Python 3.11 and Godot 4.7 .NET, as for the port itself
+  (`../../README.md`).
 - The game install in its expected place (your game guide says where), or `--game-root DIR`.
 - One build: `dotnet build engine/OmeEngine.sln`.
 - The generated registries, which fragments that `use <game>.globals` need. Run

@@ -14,7 +14,8 @@ Commands run from `age-reimpl/`. As in [first-mod.md](first-mod.md), `Ome.Cli <c
 
 ## 0. Prerequisites
 
-- .NET 8 SDK, Python 3.11 and Godot 4.7 .NET, as for the port itself (`../../README.md`).
+- The .NET 10 SDK that `global.json` names, Python 3.11 and Godot 4.7 .NET, as for the port itself
+  (`../../README.md`).
 - The game install in its expected place (your game guide says where), or `--game-root DIR`.
 - One build: `dotnet build engine/OmeEngine.sln`.
 

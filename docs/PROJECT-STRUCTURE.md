@@ -60,8 +60,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                         notices.json pins it (Windows packages ship MinGW-w64-runtime-COPYING.txt)
     ├── notices/noto-sans-jp/                 noto-cjk's OFL LICENSE (Sans2.004) as LICENSE.txt, unmodified; notices.json
     │                                         pins it (packages ship NotoSansJP-LICENSE.txt for the embedded panel font)
-    ├── global.json                           pins the .NET SDK 10.0.4xx feature band (launcher plan §5.1); the engine
-    │                                         projects target net8.0, whose tests run on the .NET 8 runtime
+    ├── global.json                           pins the .NET SDK 10.0.4xx feature band (launcher plan §5.1); every
+    │                                         project targets net10.0, whose tests run on that SDK's runtime
     ├── Directory.Build.targets               makes a Debug build recompile when Optimize changes
     │                                         (drive.py port start --optimize); the version stamp and the
     │                                         package notices of the two release programs (OmeProgram)
@@ -380,7 +380,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       ArtStore (spec §8.7: each image's order, the generated card, the
     │                                       download on consent into cache/art/<game>/, ArtProbe's PNG and JPEG
     │                                       header read); no
-    │                                       Avalonia type; net8.0 like the libraries it references, tested in
+    │                                       Avalonia type; net10.0 like every project, tested in
     │                                       Ome.Engine.Tests
     │   ├── Ome.Launcher.StubEngine/         the engine's stand-in in the launch tests: prints what it was given
     │                                       on both streams, waits for a file or deletes one when told, and

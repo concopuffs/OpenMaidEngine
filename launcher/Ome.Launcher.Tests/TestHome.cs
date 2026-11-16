@@ -30,22 +30,21 @@ internal sealed class TestHome : IDisposable
         if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true);
     }
 
-    /// <summary>A program built beside this assembly in the same configuration: <c>launcher/Ome.Launcher</c>'s, or the
-    /// stub engine's (net8.0).</summary>
-    public static string Built(string project, string program, string? framework = null)
+    /// <summary>A program built beside this assembly in the same configuration and framework:
+    /// <c>launcher/Ome.Launcher</c>'s, or the stub engine's.</summary>
+    public static string Built(string project, string program)
     {
         string output = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
         string configuration = Path.GetFileName(Path.GetDirectoryName(output))!;
-        string folder = project == "Ome.Launcher"
-            ? Path.Combine(Paths.Repo, "launcher", project, "bin", configuration, Path.GetFileName(output))
-            : Path.Combine(Paths.Repo, "engine", project, "bin", configuration, framework!);
+        string folder = Path.Combine(Paths.Repo, project == "Ome.Launcher" ? "launcher" : "engine", project, "bin",
+                                     configuration, Path.GetFileName(output));
         string path = Path.Combine(folder, program + (OperatingSystem.IsWindows() ? ".exe" : ""));
         Assert.True(File.Exists(path), $"{program} is not built at {path}");
         return path;
     }
 
     public static string Launcher => Built("Ome.Launcher", "OME-Launcher");
-    public static string Stub => Built("Ome.Launcher.StubEngine", "Ome.Launcher.StubEngine", "net8.0");
+    public static string Stub => Built("Ome.Launcher.StubEngine", "Ome.Launcher.StubEngine");
 
     /// <summary>The stub engine with <paramref name="arguments"/> before the <c>--</c>.</summary>
     public static EngineProgram StubEngine(params string[] arguments) => new(Stub, arguments);

@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The launcher's model (launcher spec §8.1): OME home, profiles, installs, the library, the checks and the engine
-       command. No Avalonia type: the OME-Launcher program (launcher/) is the presentation over it. net8.0 like every
-       library it references (launcher plan §5); only the program targets net10.0. -->
+       command. No Avalonia type: the OME-Launcher program (launcher/) is the presentation over it. net10.0, like
+       every project. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Ome.Engine\Ome.Engine.csproj" />
@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

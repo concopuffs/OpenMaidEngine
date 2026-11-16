@@ -17,7 +17,7 @@ release packages as unmodified, dynamically linked shared libraries; see
 ## Start here
 
 Prerequisites for the current Windows development workflow are Python 3.11, the .NET 10 SDK that `global.json`
-names (10.0.404 or a later 10.0.4xx patch) with the .NET 8 runtime beside it for the net8.0 projects, Godot 4.7
+names (10.0.404 or a later 10.0.4xx patch; every project targets net10.0, so it brings the runtime too), Godot 4.7
 .NET, and a Himegari install containing `SYS4INI.BIN`. Pass paths explicitly or configure
 `OME_GODOT_CONSOLE` and `OME_GAME_ROOT`.
 

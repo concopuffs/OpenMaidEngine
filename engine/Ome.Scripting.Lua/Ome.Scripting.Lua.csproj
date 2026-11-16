@@ -2,7 +2,7 @@
   <!-- The Lua runtime of docs/superpowers/specs/2026-11-10-lua-scripting-design.md §14.1: the only project that names the
        Lua library. It implements Ome.Engine's runtime seam (Ome.Engine.Modding) and references Ome.Engine only. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

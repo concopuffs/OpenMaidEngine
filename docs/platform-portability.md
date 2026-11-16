@@ -541,14 +541,17 @@ below.
 - **An Avalonia 12 program on Linux** needs glibc 2.27 (SkiaSharp and CoreCLR; the engine's floor is 2.28) and
   maps at run time the X11 client libraries with `libICE`/`libSM`, fontconfig and FreeType, GL, and ICU unless it
   runs with invariant globalization. Its command line runs with no display.
-- **The repository under SDK 10:** `engine/OmeEngine.sln` and `godot/OME.csproj` build under SDK 10.0.404 with
-  their net8.0 targets unchanged and the same warnings as under SDK 8.0.408. Since launcher plan §5.1
-  (2026-11-16), `global.json` pins 10.0.404, and the core level, the Godot build and the host self-test of both
-  games pass under it. The net8.0 tests run on the .NET 8 runtime beside SDK 10, which CI's `setup-dotnet` steps
-  install with SDK 8.0.
-- **The launcher's program** (`launcher/Ome.Launcher`, launcher plan §5.12) is the one net10.0 project. SDK 10 brings
-  the .NET 10 runtime it and its tests run on, so the core level's launcher gates need nothing beyond `global.json`'s
-  SDK. Its tests start the net8.0 stub engine too, which runs on the .NET 8 runtime.
+- **The repository on .NET 10:** since launcher plan §5.1 (2026-11-16), `global.json` pins SDK 10.0.404. .NET 8 left
+  support on 2026-11-10, and the same day as the pin every net8.0 project moved to net10.0, which the launcher's
+  program already targeted: the engine's (the launcher's core and stub engine among them), `godot/OME.csproj` and the
+  movie corpus gate. They build with the warnings they had on net8.0, and .NET 10 holds the code pages itself, so
+  `Ome.Engine` no longer references `System.Text.Encoding.CodePages`. The SDK brings the runtime the tests run on, so
+  CI's `setup-dotnet` steps install `global.json`'s SDK alone. Godot 4.7 hosts a net10.0 game: the editor build ran
+  the driver's effect, save and Lua scenarios on the installed 10.0.15 runtime, and a local Windows release export
+  (`--export-release "Windows x86_64"`) bundled the 10.0.15 runtime pack self-contained, started Himegari on it, and
+  played its logo and opening movies.
+- **The launcher's program** (`launcher/Ome.Launcher`, launcher plan §5.12) bundles the .NET 10 runtime in its single
+  file, as the engine's export bundles it beside `OME.exe`.
   - **Printing:** on Windows it attaches to its parent's console; elsewhere it prints on the handles it inherits.
   - **On Linux:** the packaged program has run there (launcher plan §9.5: `--check` with no display, and its window
     under WSLg).
