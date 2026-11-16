@@ -2,11 +2,15 @@ using System.Net;
 using System.Security.Cryptography;
 using Avalonia;
 using Avalonia.Media.Imaging;
+using Avalonia.Controls;
 using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Profiles;
 using Ome.Launcher.Core;
 using Ome.Launcher.ViewModels;
+using Ome.Launcher.Views;
 using Ome.Mods.Launch;
 
 /// <summary>
@@ -183,6 +187,65 @@ public sealed class LinksTests : IDisposable
                      PortOptions.Parse(File.ReadAllText(Path.Combine(made.Root, PortOptions.FileName))));
         model.Dispose();
     });
+
+    [Fact]
+    public void EachListShowsWhatIsPickedInIt() => Headless.Run(async () =>
+    {
+        // Picked through the lists themselves, as a click does (plan §10, item 5: the new profile's language stayed on
+        // its old option). The view models' own tests set their properties directly, which never showed it.
+        TwoKamidori();
+        Settings(settings => settings with { Art = ArtConsent.Never });
+        (MainViewModel model, _) = await Open();
+        var window = new MainWindow { DataContext = model };
+        Headless.Render(window, ThemeVariant.Light, "10-lists");
+
+        model.LauncherSettings.Execute(null);
+        await PickEachOther<LauncherSettingsView>(window, model);
+        // What is shown is what was written: a list that lost its pick wrote another option back.
+        Assert.Equal(("en", LauncherTheme.Light, WhileRunning.Minimize, ArtConsent.Ask),
+                     (Saved.Language, Saved.Theme, Saved.WhileRunning, Saved.Art));
+        // A language that changes the labels: the lists come back in it, still showing the pick.
+        ComboBox language = window.GetVisualDescendants().OfType<LauncherSettingsView>().Single()
+            .GetVisualDescendants().OfType<ComboBox>().First();
+        language.SelectedItem = language.Items.Cast<OptionChoice>().Single(choice => choice.Value == "ja");
+        await model.Checking;
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        await model.Checking;   // the language's reload checks the page again
+        Assert.Equal("ja", Saved.Language);
+        Assert.Equal(new OptionChoice("ja", "日本語"), language.SelectedItem);
+        Assert.Equal("システムの言語（English）", ((OptionChoice)language.Items[0]!).Label);
+        Assert.NotEqual(PortOptions.Defaults.Language, Saved.NewProfile.Language);
+        ((LauncherSettingsViewModel)model.Dialog!).Close.Execute(null);
+
+        model.Page!.ShowTab.Execute(ProfileTab.Advanced);
+        await PickEachOther<AdvancedView>(window, model);
+        model.Page!.ShowTab.Execute(ProfileTab.Settings);
+        await PickEachOther<SettingsView>(window, model);
+        window.Close();
+    });
+
+    /// <summary>In each list of the <typeparamref name="TView"/> the window shows, picks another option, waits for its
+    /// write and the checks after it, and asserts the list shows the pick.</summary>
+    private static async Task PickEachOther<TView>(Window window, MainViewModel model) where TView : Control
+    {
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        TView view = window.GetVisualDescendants().OfType<TView>().Single();
+        List<ComboBox> lists = view.GetVisualDescendants().OfType<ComboBox>().Where(list => list.IsEffectivelyVisible).ToList();
+        Assert.NotEmpty(lists);
+        foreach (ComboBox list in lists)
+        {
+            string name = Avalonia.Automation.AutomationProperties.GetName(list) ?? list.Name ?? "?";
+            object? shown = list.SelectedItem;
+            object? other = list.Items.Cast<object?>().FirstOrDefault(item => !Equals(item, shown));
+            if (other == null) continue;   // a list of one option
+            list.SelectedItem = other;
+            await model.OneAtATime(() => Task.FromResult(true));   // the write, and the checks in its turn
+            await model.Checking;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(Equals(other, list.SelectedItem),
+                        $"{typeof(TView).Name} '{name}' shows {list.SelectedItem} after {other} was picked");
+        }
+    }
 
     [Fact]
     public void ASettingThatCannotBeWrittenIsShownAndChangesNothing() => Headless.Run(async () =>
