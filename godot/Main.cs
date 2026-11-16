@@ -112,12 +112,44 @@ public partial class Main : Godot.Control
     private string? _perfLogPath;                // --perf-log <csv>: low-overhead frame/compositor timings + work
     private PerformanceFrameLog? _perf;
 
+    /// <summary>The directory the engine was started from, which relative paths resolve against.</summary>
+    private static string LaunchDirectory()
+    {
+        string workingDirectory = System.IO.Directory.GetCurrentDirectory();
+        if (!System.OperatingSystem.IsWindows())
+        {
+            // Godot can chdir to the project before managed startup. Unix shells preserve the launch
+            // directory in PWD, which keeps terminal-launched exports faithful to their caller.
+            string? inheritedWorkingDirectory = System.Environment.GetEnvironmentVariable("PWD");
+            if (!string.IsNullOrWhiteSpace(inheritedWorkingDirectory)
+                && System.IO.Directory.Exists(inheritedWorkingDirectory))
+                workingDirectory = inheritedWorkingDirectory;
+        }
+        return workingDirectory;
+    }
+
     public override void _Ready()
     {
         string[] commandLine = OS.GetCmdlineUserArgs();
         if (Array.IndexOf(commandLine, "--package-smoke") >= 0)
         {
             RunPackageSmoke();
+            return;
+        }
+        string workingDirectory = LaunchDirectory();
+        // Launcher spec §5.6: no argument, no game here, and the launcher beside us: start it instead.
+        if (LauncherHandOver.Decide(commandLine, OS.GetExecutablePath(), workingDirectory, System.OperatingSystem.IsWindows())
+            is { } launcher)
+        {
+            int process = OS.CreateProcess(launcher, []);
+            if (process < 0)
+            {
+                GD.PushError($"[startup] no game was given or found here, and {launcher} did not start");
+                GetTree().Quit(2);
+                return;
+            }
+            GD.Print($"[startup] no game was given or found here: started {launcher}");
+            GetTree().Quit(0);
             return;
         }
         InitializeExitPolicy();
@@ -131,19 +163,8 @@ public partial class Main : Godot.Control
         ResolvedGamePersistence profilePersistence;
         Sys4AssetCatalog catalog;
         AssetLaunchOptions assetOptions;
-        string workingDirectory = System.IO.Directory.GetCurrentDirectory();
         try
         {
-            if (!System.OperatingSystem.IsWindows())
-            {
-                // Godot can chdir to the project before managed startup. Unix shells preserve the launch
-                // directory in PWD, which keeps terminal-launched exports faithful to their caller.
-                string? inheritedWorkingDirectory =
-                    System.Environment.GetEnvironmentVariable("PWD");
-                if (!string.IsNullOrWhiteSpace(inheritedWorkingDirectory)
-                    && System.IO.Directory.Exists(inheritedWorkingDirectory))
-                    workingDirectory = inheritedWorkingDirectory;
-            }
             // This machine's own state (approved network locations) lives in Godot's user folder.
             run = RunResolver.Resolve(commandLine, workingDirectory,
                                       machineFolder: ProjectSettings.GlobalizePath("user://"));

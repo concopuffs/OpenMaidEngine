@@ -496,6 +496,13 @@ resolved against the current working directory, and repeated overrides use the l
 Godot preserves the shell launch directory through inherited `PWD` because editor/project startup may
 change the process directory before managed code runs.
 
+Started with no game (launcher spec §5.6; `LauncherHandOver`): with no engine argument at all, no `SYS4INI.BIN`
+in either of those folders, and `OME-Launcher` (`OME-Launcher.exe` on Windows) beside the executable, the engine
+starts the launcher, prints `[startup] no game was given or found here: started …` and quits with 0, so
+double-clicking either program works. With any argument, or without the launcher, the game root error above is
+unchanged: a mistyped command shows its own error. A launcher that does not start is a startup error (exit 2).
+Running from the editor binary never hands over, since no launcher sits beside it.
+
 **Linux x64 export** uses the committed `godot/export_presets.cfg` preset and `godot/OME.sln`:
 
 For the complete Linux-native release path, run from `age-reimpl/`:
