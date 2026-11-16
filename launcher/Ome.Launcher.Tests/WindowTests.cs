@@ -41,6 +41,11 @@ public sealed class WindowTests : IDisposable
                 Assert.Equal("プロファイル", heading.Text);
                 Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(heading.FontFamily), out var face));
                 Assert.Equal("Noto Sans JP", face!.FamilyName);
+
+                // The OME icon, not the system's blank one (plan §10, item 1): the window's icon loads from the
+                // launcher's .ico, which tools/launcher_icon_build.py draws from the port's SVG. A missing resource
+                // fails the window's load; the headless platform's icon is a stub, so its pixels are not compared.
+                Assert.NotNull(window.Icon);
                 window.Close();
             }
         });

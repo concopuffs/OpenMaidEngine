@@ -1,0 +1,15 @@
+{
+  "generated_by": "tools/launcher_icon_build.py --build (do not edit)",
+  "source": "godot/assets/ome-icon.svg",
+  "source_sha256": "9bac3a0901604d2a88d92fcc0ca9513753e8d8a66fc7d08bb2b66e6236d4f5e7",
+  "sizes": [
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64,
+    256
+  ]
+}

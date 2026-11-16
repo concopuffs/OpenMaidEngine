@@ -58,6 +58,7 @@ CORE_TESTS = (
     "test_opcode_flow.py",
     "test_patch_points.py",
     "test_base_mod_build.py",
+    "test_launcher_icon_build.py",
     "test_paths.py",
     "test_revision_diff.py",
     "test_sys4load.py",
@@ -211,6 +212,11 @@ def build_gate_plan(
             "base-mods-check",
             "Base mod layouts and their exported names",
             _python_tool("base_mod_build.py", "--check"),
+        ),
+        Gate(
+            "launcher-icon-check",
+            "The launcher's icon against the OME icon",
+            _python_tool("launcher_icon_build.py", "--check"),
         ),
     ]
     gates.extend(

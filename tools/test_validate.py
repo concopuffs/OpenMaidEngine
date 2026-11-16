@@ -161,6 +161,7 @@ class GatePlanTests(unittest.TestCase):
         self.assertIn("globals-lint-kamidori", by_key)          # vm-map/globals-kamidori.toml
         self.assertIn("patch-points-reference-himegari", by_key)
         self.assertEqual("--check", by_key["engine-ctx-check"].command[-1])
+        self.assertEqual("--check", by_key["launcher-icon-check"].command[-1])   # no Pillow needed
         self.assertNotIn("globals-check", by_key)                # merges the workspace auto map
 
     def test_workspace_checks_the_selected_global_reference_before_rebuilding_it(self) -> None:

@@ -5,6 +5,7 @@
         x:Class="Ome.Launcher.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="{Binding S[app.title]}"
+        Icon="/Assets/ome-icon.ico"
         Width="1180" Height="760" MinWidth="900" MinHeight="580">
   <Panel>
     <!-- The mock's .window: the profile list (.side, 300 px) beside the main pane (.main). -->

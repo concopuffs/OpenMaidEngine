@@ -401,7 +401,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                     LauncherSession (one window run), LauncherStrings + Strings/en.json,
     │   │                                     ja.json (the launcher's text), Styles/ (Palette.axaml: the mock's
     │   │                                     colours, light and dark; Launcher.axaml: its classes), ViewModels/
-    │   │                                     (the pages' decisions, over Core), Views/ (AXAML, compiled bindings);
+    │   │                                     (the pages' decisions, over Core), Views/ (AXAML, compiled bindings),
+    │   │                                     Assets/ome-icon.ico (generated from godot/assets/ome-icon.svg by
+    │   │                                     tools/launcher_icon_build.py, with its ome-icon.source.json stamp);
     │   │                                     the build output carries LICENSE and THIRD_PARTY_NOTICES.md, which
     │   │                                     About opens
     │   ├── Ome.Launcher.Tests/               gate 9: the program run as a child process with the stub engine on a

@@ -12,6 +12,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- The OME icon, drawn from godot/assets/ome-icon.svg by tools/launcher_icon_build.py (launcher plan §10): the
+         program's own icon on Windows, and the window's (Views/MainWindow.axaml). -->
+    <ApplicationIcon>Assets\ome-icon.ico</ApplicationIcon>
     <!-- A binding names a property of its x:DataType, so a missing one fails the build, not the page (plan §6). -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- The version stamp and the package notices of a release program (Directory.Build.targets); the launcher's
@@ -51,6 +54,7 @@
   <ItemGroup>
     <!-- The port's bundled font (shell §11), so Japanese titles read the same on every OS (spec §9). -->
     <AvaloniaResource Include="..\..\godot\assets\NotoSansJP-Regular.otf" Link="Assets\Fonts\NotoSansJP-Regular.otf" />
+    <AvaloniaResource Include="Assets\ome-icon.ico" />
     <!-- The launcher's string tables (spec §8.8), one per language. -->
     <EmbeddedResource Include="Strings\*.json" LogicalName="Ome.Launcher.Strings.%(Filename).json" />
     <!-- The licences About opens (plan §6.11), beside the built program. A publish leaves them out: the release
