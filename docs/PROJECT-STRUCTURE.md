@@ -83,6 +83,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── build-linux-x64.sh                 one-command pinned Linux export/package/smoke pipeline
     │   ├── build-windows-x64.sh               Linux-hosted Windows cross-export/package pipeline
     │   ├── dotnet_publish_proxy.py            guarded low-memory Godot export-time publish staging
+    │   ├── publish_launcher.py                the launcher's release publish for a target, its files checked
+    │   │                                      and placed beside the engine in an export (build/launcher-publish/)
     │   ├── publish_github_release.py          guarded/retry-safe draft-first GitHub release promotion
     │   ├── verify_windows_native.py           static AMD64 PE/native-bundle contract verifier
     │   ├── bootstrap-godot-linux-x64.sh       repo-local Godot 4.7 Linux editor/template bootstrap
@@ -94,7 +96,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── mingw_runtime_notices.py           MinGW link-map check: linked runtime objects covered by the shipped notices
     │   ├── test_install_godot_templates.py, test_package_notices.py, test_package_linux_x64.py,
     │   │   test_package_windows_x64.py, test_mingw_runtime_notices.py,
-    │   │   test_dotnet_publish_proxy.py,
+    │   │   test_dotnet_publish_proxy.py, test_publish_launcher.py,
     │   │   test_publish_github_release.py, test_write_ffmpeg_source_notice.py,
     │   │   test_release_workflow.py,
     │   │   test_verify_windows_native.py       source-only bootstrap/package/publish/native regressions
@@ -452,7 +454,9 @@ script id): add, move or delete it with its source, since `tools/test_release_wo
 match. A headless editor scan (`<Godot console> --headless --editor --quit --path godot`) writes a missing one.
 `tools/build-linux-x64.sh` and
 `tools/build-windows-x64.sh` produce their complete disposable artifacts under `build/export/`; the older
-Windows-hosted `tools/export-linux-x64.ps1` remains a Linux-export development path.
+Windows-hosted `tools/export-linux-x64.ps1` remains a Linux-export development path. All three put the launcher
+beside the engine through `tools/publish_launcher.py`, whose publish and kept dependency list are disposable
+`build/launcher-publish/<rid>/` and `build/launcher-publish/<rid>.deps.json`.
 
 `godot/Main.cs` retains the front-end's startup and runtime coordination. Behavior-neutral partial-class
 companions keep cohesive surfaces independently navigable without changing the Godot node type or invocation

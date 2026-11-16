@@ -537,6 +537,16 @@ reserved by the build driver. Because managed outputs are external to the PCK, t
 payload replaces that temporary staging directory only after Godot exits. The final payload verifier and
 packaged smoke test therefore validate the same complete runtime that is archived.
 
+Then `publish_launcher.py` puts the launcher beside the engine (launcher plan §9.2). It is a step of its own after
+Godot has exited, so its memory peak never joins the export's (plan §3.7). It runs `dotnet publish` of
+`launcher/Ome.Launcher` for the target, whose project gives the release form (Launcher, "Publishing"), with one
+MSBuild node, no build servers and the conserving GC, into `build/launcher-publish/<rid>/`. It keeps the bundled
+dependency list as `build/launcher-publish/<rid>.deps.json` for the notices check. It refuses an output that is not
+exactly the launcher's files (the program, the target's natives, notice files in `OME-Launcher-notices/`, among
+them the ones `LAYOUTS` requires): a `.pdb`, a loose `.deps.json` or another target's native fails it. Then it
+copies them beside `OME`/`OME.exe`, refusing an export that has no engine. On Linux it prints the publish's peak
+memory: its largest process (`getrusage`), and the job's memory cgroup peak where the cgroup has `memory.peak`.
+
 The packager adds `LICENSE`, `README.md`, `THIRD_PARTY_NOTICES.md`, Godot's notices, a source/dependency
 `BUILD-INFO.json`, and per-file `SHA256SUMS` to a stable top-level directory. It normalizes archive ownership,
 modes, ordering, and timestamps using `SOURCE_DATE_EPOCH` or the source commit time. Outputs are the loose
@@ -594,6 +604,7 @@ The focused component commands are:
 
 ```bash
 ./tools/bootstrap-godot-linux-x64.sh
+python3 -X utf8 tools/publish_launcher.py --runtime linux-x64 --into build/export/linux-x64
 python3 -X utf8 tools/package_linux_x64.py verify build/export/linux-x64
 python3 -X utf8 tools/package_linux_x64.py package build/export/linux-x64
 python3 -X utf8 tools/package_linux_x64.py smoke build/package/staging/OME-linux-x64 --log build/package/package-smoke.log
@@ -612,8 +623,9 @@ the selectively installed Windows template:
 
 The command requires Python 3.11, the `global.json` .NET SDK, MinGW-w64 GCC/binutils, `curl`, and `sha256sum`.
 It regenerates runtime metadata, builds and statically verifies the pinned Windows FFmpeg bundle, publishes the
-exact self-contained `ExportRelease/win-x64` managed runtime, and performs the real Godot `Windows x86_64`
-release export. No produced Windows program is executed. `package_windows_x64.py` requires the Godot AMD64 EXE,
+exact self-contained `ExportRelease/win-x64` managed runtime, performs the real Godot `Windows x86_64`
+release export, and then cross-publishes the launcher beside it with the SDK alone (`publish_launcher.py --runtime
+win-x64`, as on Linux; plan §3.2). No produced Windows program is executed. `package_windows_x64.py` requires the Godot AMD64 EXE,
 PCK, self-contained runtime, project assemblies including `Ome.Engine.Text.Windows.dll`, and FFmpeg DLL/license
 set; it rejects Linux shared objects and the legacy `Himegari.dll` name, and embeds `BUILD-INFO.json`,
 `WINDOWS-VERIFICATION.json`, the notices (Third-party notices, above), and a complete `SHA256SUMS`. The normalized output is
@@ -623,6 +635,7 @@ Focused commands are:
 
 ```bash
 ./tools/bootstrap-godot-linux-x64.sh windows-x64
+python3 -X utf8 tools/publish_launcher.py --runtime win-x64 --into build/export/windows-x64
 python3 -X utf8 tools/package_windows_x64.py verify build/export/windows-x64
 python3 -X utf8 tools/package_windows_x64.py package build/export/windows-x64
 ```
@@ -646,8 +659,9 @@ The older Windows-hosted cross-export remains available for local development:
 
 Install the Godot 4.7 .NET export templates first and build the pinned native bundle under
 `build/native/linux-x64` with the commands in “Native FFmpeg movie shim” above. The script safely replaces
-only `build/export/linux-x64`, invokes the release preset with a bounded headless shutdown, then calls the
-same Python payload verifier used by the Linux pipeline. The verifier checks the executable/PCK/self-contained
+only `build/export/linux-x64`, invokes the release preset with a bounded headless shutdown, publishes the launcher
+beside it (`publish_launcher.py --runtime linux-x64`), then calls the same Python payload verifier used by the
+Linux pipeline. The verifier checks the executable/PCK/self-contained
 managed payload plus all six project-owned FFmpeg files and rejects the Windows GDI adapter and Windows FFmpeg
 DLLs as well as the legacy `Himegari.dll` name. Output is `build/export/linux-x64/OME` with `OME.pck` and the
 `data_OME_linuxbsd_x86_64/` runtime directory. Do not relocate only the executable; the three
@@ -1145,7 +1159,8 @@ not trimmed, with Avalonia's native libraries beside it (`libSkiaSharp` and `lib
 `av_libglesv2.dll`), so nothing is unpacked outside its folder. The shipped packages' own notice files go in
 `OME-Launcher-notices/` and no symbols are published. `-p:OmeDependencyList=FILE` keeps the dependency list the
 single file bundles. The program carries the version the engine does (`OmeVersion`, `git describe`), which About
-shows.
+shows. The release builds publish it through `tools/publish_launcher.py` ("Engine (C#)", the Linux x64 export and the
+Windows x64 cross-export).
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|

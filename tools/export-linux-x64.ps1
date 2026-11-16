@@ -37,6 +37,12 @@ if ($LASTEXITCODE -ne 0) {
     throw "Godot Linux x64 export failed with exit code $LASTEXITCODE. Install the Godot 4.7 .NET export templates and retry."
 }
 
+# The launcher beside the engine, as the release build puts it there (launcher plan §9.2).
+py -3.11 -X utf8 (Join-Path $repoRoot 'tools\publish_launcher.py') --runtime linux-x64 --into $outputDirectory
+if ($LASTEXITCODE -ne 0) {
+    throw "Launcher publish failed with exit code $LASTEXITCODE."
+}
+
 py -3.11 -X utf8 (Join-Path $repoRoot 'tools\package_linux_x64.py') verify $outputDirectory
 if ($LASTEXITCODE -ne 0) {
     throw "Linux export payload verification failed with exit code $LASTEXITCODE."

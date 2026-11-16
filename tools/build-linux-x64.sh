@@ -118,6 +118,10 @@ rm -rf -- "$managed_export_directory"
 mkdir -p -- "$managed_export_directory"
 cp -a -- "$managed_publish_directory/." "$managed_export_directory/"
 
+# The launcher beside the engine (launcher plan §9.2): its own publish, a step of its own after Godot's export has
+# exited, so their memory peaks never overlap on the runner (§3.7).
+python3 -X utf8 "$script_dir/publish_launcher.py" --runtime linux-x64 --into "$export_directory"
+
 python3 -X utf8 "$script_dir/package_linux_x64.py" verify "$export_directory"
 mapfile -t package_outputs < <(
     python3 -X utf8 "$script_dir/package_linux_x64.py" package "$export_directory" \

@@ -126,6 +126,25 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("run/flush_stdout_on_print=true", application.splitlines())
         self.assertIn('package_linux_x64.py" smoke "$package_root"', self.linux_build)
 
+    def test_the_launcher_is_published_after_the_export_never_inside_it(self) -> None:
+        # Launcher plan §3.7, §9.2: the launcher's publish fits the runner on its own, not beside Godot's export, so
+        # each build runs it once the export has exited and its payload is staged, and before the payload is verified.
+        for script, runtime, verify in (
+            (self.linux_build, "linux-x64", 'package_linux_x64.py" verify'),
+            (self.windows_build, "win-x64", 'package_windows_x64.py" verify'),
+        ):
+            with self.subTest(runtime):
+                self.assertEqual(1, script.count("publish_launcher.py"))
+                publish = script.index(f'publish_launcher.py" --runtime {runtime} --into "$export_directory"')
+                self.assertLess(script.index("export_status=$?"), publish)
+                self.assertLess(script.index('cp -a -- "$managed_publish_directory/." "$managed_export_directory/"'),
+                                publish)
+                self.assertLess(publish, script.index(verify))
+        hosted = self.windows_hosted_export
+        publish = hosted.index("publish_launcher.py') --runtime linux-x64 --into $outputDirectory")
+        self.assertLess(hosted.index("--export-release"), publish)
+        self.assertLess(publish, hosted.index("package_linux_x64.py') verify"))
+
     def test_public_build_outputs_use_ome_branding(self) -> None:
         self.assertIn('export_path="../build/export/linux-x64/OME"', self.export_presets)
         self.assertIn('export_path="../build/export/windows-x64/OME.exe"', self.export_presets)

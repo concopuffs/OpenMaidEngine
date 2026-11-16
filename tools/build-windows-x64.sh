@@ -115,6 +115,10 @@ rm -rf -- "$managed_export_directory"
 mkdir -p -- "$managed_export_directory"
 cp -a -- "$managed_publish_directory/." "$managed_export_directory/"
 
+# The launcher beside the engine, cross-built here with the SDK alone (launcher plan §3.2, §9.2): its own publish,
+# a step of its own after Godot's export has exited, so their memory peaks never overlap on the runner (§3.7).
+python3 -X utf8 "$script_dir/publish_launcher.py" --runtime win-x64 --into "$export_directory"
+
 python3 -X utf8 "$script_dir/package_windows_x64.py" verify "$export_directory" --objdump "$objdump"
 mapfile -t package_outputs < <(
     python3 -X utf8 "$script_dir/package_windows_x64.py" package "$export_directory" \
