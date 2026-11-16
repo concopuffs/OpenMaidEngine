@@ -275,9 +275,25 @@ public sealed class RootSafetyTests : IDisposable
     {
         string folder = MachineState.DefaultFolder();
         if (OperatingSystem.IsWindows())
-            Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Assert.Equal(Path.Combine(Environment.GetEnvironmentVariable("APPDATA") is { Length: > 0 } appData
+                                          && Path.IsPathRooted(appData)
+                                          ? appData
+                                          : Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                                       "Godot", "app_userdata", "Open Maid Engine"), folder);
         else
             Assert.EndsWith(Path.Combine("godot", "app_userdata", "Open Maid Engine"), folder);
+    }
+
+    [Fact]
+    public void OnWindowsTheDefaultFolderFollowsTheAppDataVariableAsGodotDoes()
+    {
+        // validate.py's runtime level sets APPDATA for the Godot process; Godot's user folder moves with it.
+        string isolated = Path.Combine(Path.GetTempPath(), "isolated-appdata");
+        Assert.Equal(Path.Combine(isolated, "Godot", "app_userdata", "Open Maid Engine"),
+                     MachineState.DefaultFolder(name => name == "APPDATA" ? isolated : null, windows: true));
+        foreach (string? unusable in new[] { null, "", "relative" })
+            Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                                      "Godot", "app_userdata", "Open Maid Engine"),
+                         MachineState.DefaultFolder(name => name == "APPDATA" ? unusable : null, windows: true));
     }
 }

@@ -39,18 +39,25 @@ public sealed class MachineState
     /// the programs that run without Godot (<c>Ome.Cli</c>, the launcher). The host passes the folder Godot reports
     /// instead, and its self-test checks that the two agree.
     /// </summary>
-    public static string DefaultFolder()
+    public static string DefaultFolder() => DefaultFolder(Environment.GetEnvironmentVariable, OperatingSystem.IsWindows());
+
+    /// <summary>Godot's rule with the environment given: on Windows Godot reads the <c>APPDATA</c> variable, not the
+    /// known folder, so a harness that sets it (<c>validate.py</c>'s runtime level) moves Godot's user folder; the
+    /// known folder is used only when the variable is unset or relative.</summary>
+    public static string DefaultFolder(Func<string, string?> variable, bool windows)
     {
         string data;
         string godot = "Godot";
-        if (OperatingSystem.IsWindows())
-            data = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        if (windows)
+            data = variable("APPDATA") is { Length: > 0 } appData && System.IO.Path.IsPathRooted(appData)
+                ? appData
+                : Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         else if (OperatingSystem.IsMacOS())
             data = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                                           "Library", "Application Support");
         else
         {
-            string? xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+            string? xdg = variable("XDG_DATA_HOME");
             data = !string.IsNullOrEmpty(xdg) && System.IO.Path.IsPathRooted(xdg)
                 ? xdg
                 : System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
