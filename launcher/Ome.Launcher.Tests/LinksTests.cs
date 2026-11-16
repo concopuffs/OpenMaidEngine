@@ -50,7 +50,7 @@ public sealed class LinksTests : IDisposable
         using var bitmap = new WriteableBitmap(new PixelSize(width, height), new Vector(96, 96), PixelFormat.Bgra8888,
                                                AlphaFormat.Premul);
         using var stream = new MemoryStream();
-        bitmap.Save(stream);
+        bitmap.Save(stream, new PngBitmapEncoderOptions());
         return stream.ToArray();
     }
 
@@ -169,7 +169,7 @@ public sealed class LinksTests : IDisposable
         // `always` downloads what is missing at once, as the window's question does.
         settings.SelectedArt = settings.ArtChoices.Single(choice => choice.Value == "Always");
         Assert.Equal(ArtConsent.Always, Saved.Art);
-        Headless.Until(() => served.Requests == 2, "the missing Kamidori images are requested");
+        await Headless.Until(() => served.Requests == 2, "the missing Kamidori images are requested");
 
         // A new profile's OME.INI starts from these.
         settings.SelectedNewLanguage = settings.NewLanguages.Single(choice => choice.Value == "ja");
@@ -236,6 +236,21 @@ public sealed class LinksTests : IDisposable
         Assert.False(((AboutViewModel)model.Dialog!).LicencesMissing);
         model.Dispose();
     });
+
+    [Fact]
+    public void TheVersionIsTheOneTheBuildStampedAsTheEngineShowsIts()
+    {
+        // Directory.Build.targets stamps OmeVersion (git describe) into both programs (plan §9.1); a checkout always
+        // has a commit to describe, so the stamp is there, and the launcher reads it by the engine's rule.
+        string? stamped = typeof(Ome.Launcher.App).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .Cast<System.Reflection.AssemblyMetadataAttribute>()
+            .SingleOrDefault(attribute => attribute.Key == EngineIdentity.VersionMetadataKey)?.Value;
+        Assert.False(string.IsNullOrWhiteSpace(stamped));
+        Assert.Equal(EngineIdentity.DisplayVersion(stamped), Ome.Launcher.App.Version);
+        Assert.NotEqual("unknown", Ome.Launcher.App.Version);
+        Assert.DoesNotContain("1.0.0", Ome.Launcher.App.Version);
+    }
 
     [Fact]
     public void TheLicencesAreBesideTheBuiltLauncher()

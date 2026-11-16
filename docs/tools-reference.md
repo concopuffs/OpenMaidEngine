@@ -545,10 +545,11 @@ export under `build/export/linux-x64/`, the staged installation and `package-smo
 
 **Third-party notices.** Both packagers copy `notices/godot/LICENSE.txt` and `COPYRIGHT.txt` to the package root
 as `Godot-LICENSE.txt` and `Godot-COPYRIGHT.txt`. They refuse either file if it differs from its SHA-256 in
-`notices/godot/notices.json` (`tools/package_notices.py`). The self-contained publish (`godot/OME.csproj`, target
-`PublishPackageNotices`) copies the root `LICENSE*`, `THIRD-PARTY-NOTICES*` and `NOTICE*` files of every NuGet
-package it ships into the managed directory as `<package id>-<file name>`, and the verifiers require the .NET
-runtime pack's two. The verifiers also read the managed directory's `OME.deps.json`. They refuse an export that
+`notices/godot/notices.json` (`tools/package_notices.py`). The self-contained publish of each program (the root
+`Directory.Build.targets`, target `PublishPackageNotices`, which `godot/OME.csproj` and the launcher opt into with
+`OmeProgram`) copies the root `LICENSE*`, `THIRD-PARTY-NOTICES*` and `NOTICE*` files of every NuGet package it ships
+as `<package id>-<file name>`: the engine's into the managed directory, the launcher's into `OME-Launcher-notices/`
+(`OmePackageNoticeFolder`). The verifiers require the .NET runtime pack's two. The verifiers also read the managed directory's `OME.deps.json`. They refuse an export that
 ships a NuGet package `THIRD_PARTY_NOTICES.md` does not name in backticks. A shipped package is a package or
 runtime-pack library with runtime, native or resource assets; a runtime pack counts as its framework
 (`Microsoft.NETCore.App`). A Godot upgrade changes `release_tag` in `tools/godot-linux-x64.json`, and
@@ -1078,7 +1079,7 @@ branching/state can shift page ordinals between runs. Resolve a reported page wi
 `launcher/Ome.Launcher` builds `OME-Launcher` (`OME-Launcher.exe` on Windows), a windowed net10.0 program over
 `engine/Ome.Launcher.Core` (launcher spec §8). Its command line (spec §8.6) runs before any window and needs no
 display. Where the command line's outcome names the window, the program opens it (Avalonia 12, launcher plan §6).
-The window is being built in launcher plan M3. So far it has the profile list, the header, Play, the Overview tab
+The window (launcher plan M3) has the profile list, the header, Play, the Overview tab
 (the game, the profile with its mode switch, the mods in load order, the checks, and locating or accepting the
 install) and the Mods tab (the library's packages for the game in the order the stack loads, each with a switch and
 its state; dragging to set the order; the detail with the README; the link report; adding a package from a folder or
@@ -1137,6 +1138,14 @@ started from, but a shell does not always wait for a windowed program:
 During development, run it with `dotnet run --project launcher/Ome.Launcher -- --check ID --home DIR`, or with no
 command for the window. Pass `--engine <godot console> --engine-arg --path --engine-arg godot` to start the port from
 the repository, from the command line or from the window's Play.
+
+**Publishing** (launcher plan §9.1). `dotnet publish launcher/Ome.Launcher -c Release -r linux-x64` (or `win-x64`)
+gives the release form with no other flag: one self-contained `OME-Launcher` file, not compressed, not ReadyToRun,
+not trimmed, with Avalonia's native libraries beside it (`libSkiaSharp` and `libHarfBuzzSharp`, and on Windows
+`av_libglesv2.dll`), so nothing is unpacked outside its folder. The shipped packages' own notice files go in
+`OME-Launcher-notices/` and no symbols are published. `-p:OmeDependencyList=FILE` keeps the dependency list the
+single file bundles. The program carries the version the engine does (`OmeVersion`, `git describe`), which About
+shows.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|

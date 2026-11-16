@@ -295,7 +295,7 @@ public partial class Main
     }
 
     /// <summary>This engine's version, where ﾊﾞｰｼﾞｮﾝ情報 showed agerc_exe_file_version_string (AGE.EXE's
-    /// FileVersion): what godot/OME.csproj's OmeVersion target stored in the assembly.</summary>
+    /// FileVersion): what Directory.Build.targets' OmeVersion target stored in the assembly.</summary>
     private static string EngineVersion()
     {
         foreach (var attribute in typeof(Main).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>())

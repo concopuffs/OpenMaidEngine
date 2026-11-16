@@ -63,7 +63,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     ├── global.json                           pins the .NET SDK 10.0.4xx feature band (launcher plan §5.1); the engine
     │                                         projects target net8.0, whose tests run on the .NET 8 runtime
     ├── Directory.Build.targets               makes a Debug build recompile when Optimize changes
-    │                                         (drive.py port start --optimize)
+    │                                         (drive.py port start --optimize); the version stamp and the
+    │                                         package notices of the two release programs (OmeProgram)
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;
     │                                         tracked source and generated references use canonical LF
     ├── .github/workflows/core-validation.yml read-only, SHA-pinned Ubuntu 24.04 source-only core gate (GitHub Actions)

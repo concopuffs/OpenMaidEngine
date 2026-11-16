@@ -3,8 +3,8 @@ namespace Ome.Engine.Frontend.Shell;
 /// <summary>
 /// Open Maid Engine's own identity, which the options panel's 情報 section shows where AGE's ﾊﾞｰｼﾞｮﾝ情報 names AGE
 /// (docs/superpowers/specs/2026-11-09-engine-shell-design.md, §5.5). The version is what <c>git describe</c> gave the
-/// build (godot/OME.csproj, target OmeVersion); the build stores it in an AssemblyMetadata attribute named
-/// <see cref="VersionMetadataKey"/>.
+/// build (the root Directory.Build.targets, target OmeVersion, which the engine and the launcher both run); the build
+/// stores it in an AssemblyMetadata attribute named <see cref="VersionMetadataKey"/>.
 /// </summary>
 public static class EngineIdentity
 {

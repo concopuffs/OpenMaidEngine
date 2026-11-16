@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using Ome.Engine.Frontend.Shell;
 using Ome.Launcher.Core;
 using Ome.Launcher.ViewModels;
 using Ome.Launcher.Views;
@@ -19,11 +20,11 @@ public sealed partial class App : Application
 
     public App() { }
 
-    /// <summary>The launcher's version as its build stamps it: the assembly's informational version, which a build
-    /// from a git checkout ends with the commit.</summary>
-    public static string Version { get; } =
-        typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        ?? typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
+    /// <summary>The launcher's version as the engine shows its own: the <c>OmeVersion</c> its build stamped (git
+    /// describe, Directory.Build.targets), read by <see cref="EngineIdentity.DisplayVersion"/> (plan §9.1).</summary>
+    public static string Version { get; } = EngineIdentity.DisplayVersion(
+        typeof(App).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == EngineIdentity.VersionMetadataKey)?.Value);
 
     public App(LauncherSession session) => _session = session;
 

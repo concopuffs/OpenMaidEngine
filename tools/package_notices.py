@@ -8,8 +8,8 @@ Both packagers use this module:
   tools/mingw_runtime_notices.py checks the links against it);
 - the check that THIRD_PARTY_NOTICES.md names every NuGet package a publish ships, read from the publish's
   OME.deps.json. A runtime pack is named by its framework (Microsoft.NETCore.App).
-The NuGet packages' own license files reach the managed directory through the publish itself (godot/OME.csproj,
-target PublishPackageNotices).
+The NuGet packages' own license files reach the package through the publish itself (Directory.Build.targets,
+target PublishPackageNotices): the engine's into its managed directory, the launcher's into OME-Launcher-notices/.
 """
 from __future__ import annotations
 
