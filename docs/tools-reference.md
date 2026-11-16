@@ -656,7 +656,8 @@ The command requires Python 3.11, the `global.json` .NET SDK, MinGW-w64 GCC/binu
 It regenerates runtime metadata, builds and statically verifies the pinned Windows FFmpeg bundle, publishes the
 exact self-contained `ExportRelease/win-x64` managed runtime, performs the real Godot `Windows x86_64`
 release export (the preset's `application/icon` names `res://assets/ome-icon.svg`, which Godot draws into
-`OME.exe` at 16 to 256 pixels), and then cross-publishes the launcher beside it with the SDK alone (`publish_launcher.py --runtime
+`OME.exe` at 16 to 256 pixels; the project's `application/config/icon` names it too, which every export
+stores in its `.pck` and shows on the window from the start), and then cross-publishes the launcher beside it with the SDK alone (`publish_launcher.py --runtime
 win-x64`, as on Linux; plan §3.2). No produced Windows program is executed. `package_windows_x64.py` requires the Godot AMD64 EXE,
 PCK, self-contained runtime, project assemblies including `Ome.Engine.Text.Windows.dll`, and FFmpeg DLL/license
 set. It also requires the launcher: `OME-Launcher.exe`, an AMD64 PE with the Windows GUI subsystem, its three AMD64

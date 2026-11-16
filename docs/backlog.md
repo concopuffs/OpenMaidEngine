@@ -57,10 +57,6 @@ it; git history keeps the record.
 - **Op `0x82` flag 8 (voice replay) is not modelled.** Native replays a group's retained voice records under flag 8
   (`engine-re.md`, "Op 0x82 redraw"); the port ignores the flag. No shipped site sets it: Kamidori's six CONFIG sites
   pass flag 2. Done when a game that sets it is profiled and the replay matches native.
-- **Packaged executables carry Godot's icon.** The window, the fullscreen strip and 情報 show the OME icon
-  (`godot/assets/ome-icon.svg`, set at runtime), but the project sets no `application/config/icon` and the Windows
-  export no `.ico`, so `OME.exe` in a package and the taskbar before startup show Godot's. Done when both exports
-  carry the OME icon, built from the same SVG.
 - **The `0x90`-byte SYS4INI block.** Its meaning is unknown and no consumer is known (OMS spec §13). Revisit only if
   one appears.
 - **LZSS encoder parity (optional).** Port saves match native byte for byte except the LZSS-compressed bytes,
