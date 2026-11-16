@@ -2,8 +2,10 @@
 
 **Date:** 2026-11-15
 **Status:** accepted by the user on 2026-11-15, after two reviews the same day (§15.3 lists what they changed).
-Not built yet: §14 has the milestones. The points of §15.1 are the user's own decisions; the rest is this spec's
-design, accepted with it.
+Built on `feature/launcher` and merged into develop on 2026-11-16 (`v0.7.0`); the plan,
+`docs/superpowers/plans/2026-11-15-launcher.md`, keeps what each milestone measured and what changed after this
+spec: §12's rule against links inside a profile root was dropped (plan §9.7). §14 has the milestones. The points of
+§15.1 are the user's own decisions; the rest is this spec's design, accepted with it.
 **Home in the canonical map:** this file is the launcher design. Packages, linking, selectors and save stamps stay
 in `2026-11-03-mod-loader-design.md` ("mod loader §n"). `OME.INI`, the options panel and the shell's option model stay
 in `2026-11-09-engine-shell-design.md` ("shell §n"). Languages stay in `2026-11-10-localization-design.md`
