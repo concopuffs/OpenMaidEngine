@@ -435,5 +435,10 @@ round: a program inside a repository checkout links with the checkout's OMS modu
 covers the port, `omp`, and the launcher's Link check, even when the program was copied into the checkout. A fresh
 clone has the modules but not the files built from them under `build/`. Run
 `py -3.11 -X utf8 tools/globals_build.py --game <game> --build` as the message says, or run the program from
-outside the checkout. The port stops at startup with this message, `omp` reports it, and the launcher shows it as a
-failed Link check.
+outside the checkout. The port stops at startup with this message, `omp` prints it and exits 2, and the launcher
+shows it as a failed Link check.
+
+Without the game's shape map (`build/games/<game>/global-var-map.json`, which `tools/global_map.py` writes from the
+extracted game data), that build also rewrites the checked-in global reference with only the named globals. The
+`globals.json` the modules need is complete, so put the reference back (`git checkout docs/global-reference*.md`)
+instead of committing it.
