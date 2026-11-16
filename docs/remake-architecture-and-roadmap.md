@@ -107,7 +107,8 @@ state, host hooks and new services without changing the interpretation of unmodi
 The modes share one VM. Extended mode is an additive dispatcher and content layer, not a forked
 interpreter or a second implementation of the game rules.
 
-A player profile names its mode in `profile.toml` (launcher spec §6): `native` is Compatibility mode and
+A player profile names its mode in `profile.toml` ([launcher spec](superpowers/specs/2026-11-15-launcher-design.md)
+§6): `native` is Compatibility mode and
 `extended` is Extended mode, the words a package's `target` already uses. Both modes use package manifests and
 a load order. A Compatibility profile admits only the packages that stay within what AGE loads: those that target
 `native`, and packages with no game that ship no Lua. Its stack is one `omp export` accepts, and its saves carry
@@ -701,6 +702,9 @@ requirements.
 ### Phase E — Enhance, polish, productize
 - Enhancements the VM unlocks: higher/wide resolution, faster text, QoL, save-anywhere, new-content
   mods. Modding docs + tools. Save/UX polish.
+- The launcher ([spec](superpowers/specs/2026-11-15-launcher-design.md), `launcher/`; v1 built 2026-11-16): player
+  profiles, a mod library shared between them, checks before a run, and the start of the engine on a profile. It
+  ships beside the engine in both release archives, and the engine started with no game hands over to it.
 
 #### Planned maintenance slice — codebase consolidation
 
@@ -1559,7 +1563,9 @@ The first runtime install-selection boundary is now in place. Godot receives one
 defaulting to the executable directory with a current-working-directory fallback and accepting an
 explicit `--game-root` override; the selected root is injected into the generic SYS4 catalog/store
 instead of inferred from the Himegari repository layout. A future multi-profile launcher can therefore
-own install discovery and pass the chosen profile's absolute root through the same stable argument.
+own install discovery and pass the chosen profile's absolute root through the same stable argument. (The launcher
+built since, [launcher spec](superpowers/specs/2026-11-15-launcher-design.md) §5.1-5.2, passes the profile's folder
+as `--data-root` instead; its `profile.toml` names the install.)
 Generated engine/profile metadata still needs an export-owned bundle before this constitutes complete
 drop-in packaging; invocation details live in `tools-reference.md`.
 

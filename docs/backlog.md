@@ -336,8 +336,8 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   `example.kamidori-title-hover`). Done when a committed native-target mod removes that exit on each base it
   supports, so it runs in the port (`--mod`) and through `omp export` on native AGE. It is for development, so it
   goes outside `mods/`, which `Ome.Mods` embeds whole.
-- **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12):
-  - a launcher (designed, not built: `superpowers/specs/2026-11-15-launcher-design.md`);
+- **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12; its
+  launcher is built: `superpowers/specs/2026-11-15-launcher-design.md`, `launcher/`):
   - mod-owned sites (patching another mod's inserted code);
   - declarative data patches;
   - mod merging;
@@ -350,9 +350,9 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   folder, fingerprint a script and start a fragment at the page the locator names, check and build with each mod's
   report shown, list a Lua mod's writes beside its `[lua] writes`, export for native AGE, and run the port with the
   authoring flags while showing its logs (`diagnostics/lua.log`, the trace). It would drive the same commands and
-  files, as the launcher above drives the engine (mod loader spec §12), and may share that launcher's shell: the
-  launcher serves players, the devkit authors. Outside the repository it needs the toolchain an export lacks (the
-  first item of this section). An editor extension (VS Code, say) is the other form to weigh, instead of the
+  files, as the launcher drives the engine (`launcher/`, launcher spec §5.1), and may share the launcher's Avalonia
+  shell (`launcher/Ome.Launcher`): the launcher serves players, the devkit authors. Outside the repository it needs
+  the toolchain an export lacks (the first item of this section). An editor extension (VS Code, say) is the other form to weigh, instead of the
   application or beside it: it could bundle OMS language support (highlighting, the modules' names, the compiler's
   errors in place), run the commands from the editor, point lua-language-server at `omp lua-stubs`' definitions, and
   open a game script (`.BIN`) as its `oms-decompile` text. Done when a design spec settles the form (an application,
@@ -459,10 +459,11 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   layout: a "fat" executable, with only chosen data kept as files beside it. They named the game manifests as data
   to separate out eventually. What an investigation starts from:
   - Godot's executable hosts the .NET runtime from that folder: both packagers require `hostfxr.dll`, `coreclr.dll`
-    and `hostpolicy.dll` in it. Whether .NET's single-file publish, which the launcher will use (launcher plan
-    §3.1), can apply to the engine is not known. Neither is what the two export switches do when the engine starts.
-    If embedded assemblies are unpacked to a folder outside the package before they load, that is a second copy of
-    the program on the player's disk, outside what a portable install covers (launcher spec §4.1).
+    and `hostpolicy.dll` in it. Whether .NET's single-file publish, which the launcher uses (launcher plan §9.1;
+    `platform-portability.md`, "The launcher in the release archives"), can apply to the engine is not known.
+    Neither is what the two export switches do when the engine starts. If embedded assemblies are unpacked to a
+    folder outside the package before they load, that is a second copy of the program on the player's disk, outside
+    what a portable install covers (launcher spec §4.1).
   - FFmpeg's libraries stay separate files. The license walk-through depends on dynamic linking
     (`platform-portability.md`, "FFmpeg license checklist walk-through", item 2).
   - The packagers and their checks name loose files: `REQUIRED_FILES` in `tools/package_windows_x64.py` and

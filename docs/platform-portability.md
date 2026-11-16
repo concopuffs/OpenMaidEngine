@@ -516,7 +516,8 @@ whole-frame hashing overhead rather than a decoder incompatibility. The disposab
 ## Launcher platform facts (measured 2026-11-15)
 
 Milestone 0 of the launcher (`docs/superpowers/plans/2026-11-15-launcher.md` §3, which keeps the numbers and the
-method) measured these facts about the platforms. The launcher's packaging decisions land here with milestone 4.
+method) measured these facts about the platforms. Milestone 4's packaging is "The launcher in the release archives"
+below.
 
 - **An exclusive open** (`FileShare.None`, the run lock of the launcher spec §5.5). Windows refuses a second open
   with a sharing violation; while it is held the file cannot be read or copied, but its time can be read. On Linux,
@@ -549,8 +550,42 @@ method) measured these facts about the platforms. The launcher's packaging decis
   the .NET 10 runtime it and its tests run on, so the core level's launcher gates need nothing beyond `global.json`'s
   SDK. Its tests start the net8.0 stub engine too, which runs on the .NET 8 runtime.
   - **Printing:** on Windows it attaches to its parent's console; elsewhere it prints on the handles it inherits.
-  - **Not yet run on Linux:** the tests use no Windows-only path, but have run only on Windows. CI's core job runs
-    them on Linux at the first push.
+  - **On Linux:** the packaged program has run there (launcher plan §9.5: `--check` with no display, and its window
+    under WSLg). Its tests use no Windows-only path, but have run only on Windows; CI's core job runs them on Linux
+    at the first push.
+
+### The launcher in the release archives (launcher M4, 2026-11-16)
+
+Each archive carries the launcher beside the engine (launcher spec §10; plan §9 keeps the tasks and the runs).
+- **Its files.** `tools/publish_launcher.py` publishes the project's release form: a self-contained single file,
+  `OME-Launcher` or `OME-Launcher.exe`.
+  - Beside it are Avalonia's natives: `libSkiaSharp` and `libHarfBuzzSharp`, plus ANGLE's `av_libglesv2.dll` on
+    Windows.
+  - The shipped packages' licence files are in `OME-Launcher-notices/`, and `THIRD_PARTY_NOTICES.md` names every
+    package the single file bundles. Both packagers check that against the publish's kept dependency list
+    (`package_notices.verify_launcher_notices`).
+  - Both packagers refuse a `.pdb` and the other target's launcher.
+- **Its memory.** The publish is a step of its own, after Godot's export has exited, with the release build's
+  low-memory flags, so the two peaks never overlap (the runner kills at about 1 GiB).
+  - Locally, in WSL, its largest process peaked at 528-573 MiB over three builds.
+  - The GitHub runner's figure is not measured yet: it needs a push (plan §8, question 3).
+- **The hand-over.** With no user argument, and no `SYS4INI.BIN` beside the program or in the folder it was started
+  from, the engine starts `OME-Launcher` from beside itself and exits (`LauncherHandOver`).
+- **Linux's smoke** (`package_linux_x64.py smoke`, required by `build-linux-x64.sh` and by the publisher) has three
+  steps:
+  - the engine's `--package-smoke`;
+  - the launcher's `--check` on a synthetic home, with no display;
+  - the hand-over.
+
+  The launcher's two steps run on a copy outside the repository, since a program inside a checkout links with the
+  repository's toolchain (plan §9.5).
+- **Windows's checks stay structural:**
+  - the launcher's program is AMD64 PE with the GUI subsystem;
+  - its natives are AMD64;
+  - the publisher requires the launcher in both archives' checksum ledgers.
+
+  On a Windows host (plan §9.5), the zip's `OME.exe` handed over to its own launcher, whose window drew, and the
+  launcher's `--check` passed. CI does not run either program.
 
 ## Cross-platform validation gates
 

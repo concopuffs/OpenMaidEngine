@@ -120,8 +120,18 @@ internal static partial class OmpTextCommand
         }
         var store = new Sys4AssetStore(baseCatalog, baseRoot, baseRoot);
         // Launcher spec §5.9: the engine's link base (the embedded opcode metadata).
-        var linkBase = Ome.Mods.Linking.ModLinkBase.ForGame(profileId, table.AbiId, Path.Combine(baseRoot, "SYS4INI.BIN"),
-            baseCatalog, store, out _) with { ProfileMode = run.ProfileFile?.ModeName };
+        Ome.Mods.Linking.ModLinkBase linkBase;
+        try
+        {
+            linkBase = Ome.Mods.Linking.ModLinkBase.ForGame(profileId, table.AbiId, Path.Combine(baseRoot, "SYS4INI.BIN"),
+                baseCatalog, store, out _) with { ProfileMode = run.ProfileFile?.ModeName };
+        }
+        catch (InvalidDataException error)
+        {
+            // A base that does not build: a checkout's OMS modules without their generated globals.
+            Console.Error.WriteLine($"error: {error.Message}");
+            return 2;
+        }
         ScriptTextCorpus? corpus = stats || !args.Contains("--no-scripts") ? Corpus(baseRoot, baseCatalog, table) : null;
         return Ome.Mods.Tools.TextCommands.Run(stats, linkBase, dataRoot, packages, textRoot, corpus,
             Option(args, "--language"), args.Contains("--scripts"), Console.Out, EngineKeys, table: run.Mods);

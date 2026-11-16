@@ -429,3 +429,11 @@ recipes not yet tested on that game ([games/README.md](games/README.md)).
 An exported port build cannot compile new scripts, or fragments without a stored plan, because the OMS modules and
 registries live in the repository ([cli.md](cli.md), "Outside the repository"). Build packages with `omp build` and
 ship the `.omp`.
+
+**"the OMS modules in … do not build: …; they use the generated …globals.json, which is missing".** The other way
+round: a program inside a repository checkout links with the checkout's OMS modules and generated registries. That
+covers the port, `omp`, and the launcher's Link check, even when the program was copied into the checkout. A fresh
+clone has the modules but not the files built from them under `build/`. Run
+`py -3.11 -X utf8 tools/globals_build.py --game <game> --build` as the message says, or run the program from
+outside the checkout. The port stops at startup with this message, `omp` reports it, and the launcher shows it as a
+failed Link check.

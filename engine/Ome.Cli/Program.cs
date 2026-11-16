@@ -118,8 +118,18 @@ if (command == "omp")
     using Ome.Engine.Modding.LazyModRuntime luaRuntime = Ome.Scripting.Lua.LuaModRuntime.Lazy();
     // Launcher spec §5.9: the engine's link base, from the opcode metadata embedded in Ome.Engine (rebuild after
     // opcodes_build.py --build); the other commands read build/opcodes.json live.
-    var linkBase = Ome.Mods.Linking.ModLinkBase.ForGame(profileId, engineBuild.AbiId, sys4Ini, catalog, assetStore, out _)
-        with { Lua = luaRuntime, ProfileMode = run.ProfileFile?.ModeName };
+    Ome.Mods.Linking.ModLinkBase linkBase;
+    try
+    {
+        linkBase = Ome.Mods.Linking.ModLinkBase.ForGame(profileId, engineBuild.AbiId, sys4Ini, catalog, assetStore, out _)
+            with { Lua = luaRuntime, ProfileMode = run.ProfileFile?.ModeName };
+    }
+    catch (InvalidDataException error)
+    {
+        // A base that does not build: a checkout's OMS modules without their generated globals (ModLinkBase.ForInstall).
+        Console.Error.WriteLine($"error: {error.Message}");
+        return 2;
+    }
     string? dataRoot = run.DataRoot;
     Ome.Mods.Launch.ProfileMods? modsTable = run.Mods;
     string verb = args.Length > 1 ? args[1] : "";
