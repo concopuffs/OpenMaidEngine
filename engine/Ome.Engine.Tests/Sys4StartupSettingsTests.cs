@@ -186,6 +186,12 @@ public class Sys4StartupSettingsTests
     internal static byte[] BuildCatalog(IReadOnlyList<string> fileNames, string magic = "S4IC422 ", string title = "Synthetic")
         => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer: true, fileNames), magic, title);
 
+    /// <summary>A catalog with <paramref name="fileNames"/> and the startup settings <paramref name="pairs"/>, under a
+    /// game's identity: an install's SYS4INI.BIN as the launcher recognizes it.</summary>
+    internal static byte[] BuildCatalog(IReadOnlyList<string> fileNames, (string Key, string Value)[] pairs, string magic,
+                                        string title)
+        => WrapCatalog(BuildExpanded(pairs, includeTrailer: true, fileNames), magic, title);
+
     private static byte[] BuildExpanded(
         (string Key, string Value)[] pairs, bool includeTrailer = true, IReadOnlyList<string>? fileNames = null)
     {

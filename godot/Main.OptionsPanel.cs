@@ -303,30 +303,8 @@ public partial class Main
         return EngineIdentity.DisplayVersion(null);
     }
 
-    /// <summary>set:GameVersion. With VERREGPOS, registration_read_install_display_version@0x46ae80 reads the
-    /// installer's DisplayVersion from HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallShield_{GUID}
-    /// (a 32-bit process, so the WOW6432Node view), "1.00.0000" when it has none; without, SYS4INI GAMEVERSION.</summary>
-    private string GameVersion()
-    {
-        var settings = _catalog.StartupSettings;
-        string guid = settings.GetValueOrDefault("VERREGPOS") ?? "";
-        if (guid.Length == 0) return settings.GetValueOrDefault("GAMEVERSION") ?? "";
-        const string Default = "1.00.0000";
-        if (!OperatingSystem.IsWindows()) return Default;
-        try
-        {
-            using var machine = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine,
-                                                                         Microsoft.Win32.RegistryView.Registry32);
-            using var key = machine.OpenSubKey(
-                $@"Software\Microsoft\Windows\CurrentVersion\Uninstall\InstallShield_{{{guid}}}");
-            return key?.GetValue("DisplayVersion") as string ?? Default;
-        }
-        catch (Exception error) when (error is System.Security.SecurityException or UnauthorizedAccessException
-                                          or IOException)
-        {
-            return Default;
-        }
-    }
+    /// <summary>set:GameVersion, by the rule the launcher shares (GameVersionRule).</summary>
+    private string GameVersion() => GameVersionRule.Of(_catalog.StartupSettings);
 
     /// <summary>The engine side of the panel's draft: AGE:IAGEService on the audio mixer, the VM and SYS4REG.INI. What
     /// it reads and changes of the natives runs on the engine thread (InputAndWaits.Invoke); SYS4REG.INI's store is

@@ -1951,7 +1951,9 @@ last frame stays on screen. Unlike the 終了 dialog, nothing dims it.
   nothing of theirs commits. The driver's `dialogs` lists the panel by its Japanese texts (title 設定, the section
   shown, its check boxes, the sections, 決定 and ｷｬﾝｾﾙ), and `answer` presses them; a read-only check box refuses.
 - **情報 names the port.** The about rows fill the game half as AGE fills ﾊﾞｰｼﾞｮﾝ情報's (`set:GameName`,
-  `set:GameVersion` by the `VERREGPOS` rule, read from the registry on Windows, and `set:Copyright`). The engine half
+  `set:GameVersion` by the `VERREGPOS` rule, read from the registry on Windows, and `set:Copyright`). The rule is
+  `GameVersionRule` (`engine/Ome.Engine.Frontend/Shell`), with the registry read passed in, so the launcher shows the
+  same version (launcher spec §5.9). The engine half
   is `EngineIdentity` (`engine/Ome.Engine.Frontend/Shell`) with the OME icon: Open Maid Engine for ARCGameEngine,
   "Released under the MIT License" for ARC Software Laboratory's copyright, the FFmpeg notice FFmpeg's license
   checklist asks for (FFmpeg, its LGPLv2.1, and `FFmpeg-SOURCE.txt` for its source; `platform-portability.md`, item 10)
