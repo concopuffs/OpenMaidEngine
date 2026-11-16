@@ -358,16 +358,17 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   open a game script (`.BIN`) as its `oms-decompile` text. Done when a design spec settles the form (an application,
   an extension or both), its scope and its toolkit, and a first version covers check, build and a port run with the
   authoring flags.
-- **A Native mode for profiles: Play runs the game's own AGE instead of OME.** The user proposed it on 2026-11-16, to
+- **An Original mode for profiles: Play runs the game's own AGE instead of OME.** The user proposed it on 2026-11-16, to
   sanity-check the port against the original from the launcher. They left it out of the launcher's first version,
   so as not to turn the polish round into UI work (launcher plan §10).
-  - **The modes:** Extended and Compatibility stay as they are (launcher spec §6), and Native is a third. It needs
+  - **The modes:** Extended and Compatibility stay as they are (launcher spec §6), and Original is a third. It needs
     the install's AGE executable, and most settings are off in it.
   - **What a native run uses:** AGE reads and writes its own `SYS4REG.INI` and saves, by its `USEAPPDATAFOLDER` (the
     install folder or `%APPDATA%\Eushully\…`), not the profile's. No mods apply, nothing reaches the engine log, and
     it is Windows only.
-  - **The name:** Compatibility's stored name moves away from `native` in the first version (launcher plan §10,
-    item 6), so the new mode can take it.
+  - **The name:** Original, stored as `mode = "original"` (the user's choice, 2026-11-16). Compatibility keeps
+    `native`, which matches the package manifest's `[game] target = "native"`, the stack native AGE can run.
+    The launcher already says "the original game" for AGE's own saves.
   - It changes the modes the user decided (spec §15.1).
   - Done when a short design note settles what the mode turns off, where its saves are shown, and how the launcher
     starts and waits for AGE, and the launcher builds it.
