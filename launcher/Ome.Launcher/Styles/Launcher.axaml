@@ -286,6 +286,112 @@
     <Setter Property="FontFamily" Value="{DynamicResource OmeMonoFontFamily}" />
     <Setter Property="FontSize" Value="12" />
   </Style>
+  <!-- The Mods tab: the mock's .mlist, .mrow (grip, .switch, name and id, chip), .mrow.engine and .report. -->
+  <Style Selector="Border.mlist">
+    <Setter Property="Background" Value="{DynamicResource OmeCardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Button.mrow">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.mrow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.mrow.sel"><Setter Property="Background" Value="{DynamicResource OmeHoverBrush}" /></Style>
+  <Style Selector="Button.mrow.sel:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeHoverBrush}" />
+  </Style>
+  <Style Selector="Button.mrow.drop">
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeInkBrush}" />
+    <Setter Property="BorderThickness" Value="0,2,0,0" />
+  </Style>
+  <Style Selector="Button.mrow.drop:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeInkBrush}" />
+  </Style>
+  <Style Selector="Button.mrow.off TextBlock.mname"><Setter Property="Opacity" Value="0.55" /></Style>
+  <Style Selector="Button.mrow.off TextBlock.mid"><Setter Property="Opacity" Value="0.55" /></Style>
+  <Style Selector="Border.mrow">
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Padding" Value="12,8" />
+  </Style>
+  <Style Selector="TextBlock.mname"><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="TextBlock.mid">
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Border.grip">
+    <Setter Property="Cursor" Value="SizeNorthSouth" />
+    <Setter Property="Height" Value="24" />
+  </Style>
+  <Style Selector="Border.grip > Path"><Setter Property="Fill" Value="{DynamicResource OmeMutedBrush}" /></Style>
+  <Style Selector="Path.diamond"><Setter Property="Fill" Value="{DynamicResource OmeMutedBrush}" /></Style>
+  <Style Selector="Rectangle.dropline">
+    <Setter Property="Height" Value="2" />
+    <Setter Property="Fill" Value="{DynamicResource OmeInkBrush}" />
+  </Style>
+  <Style Selector="Button.switch">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="17" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="2" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.switch:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.switch:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.switch:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeLineBrush}" />
+  </Style>
+  <Style Selector="Button.switch.on"><Setter Property="Background" Value="{DynamicResource OmeOkBrush}" /></Style>
+  <Style Selector="Button.switch.on:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.switch.on:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.switch.on:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeOkBrush}" />
+  </Style>
+  <Style Selector="Ellipse.knob">
+    <Setter Property="Width" Value="13" />
+    <Setter Property="Height" Value="13" />
+    <Setter Property="Fill" Value="White" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Button.switch.on Ellipse.knob"><Setter Property="HorizontalAlignment" Value="Right" /></Style>
+  <Style Selector="TextBlock.tag">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="LetterSpacing" Value="0.5" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+    <Setter Property="Margin" Value="0,2,0,0" />
+  </Style>
+  <Style Selector="TextBlock.tag.bad">
+    <Setter Property="Foreground" Value="{DynamicResource OmeBadBrush}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.rline">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Button.rline:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.rline:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.rline:pointerover TextBlock"><Setter Property="TextDecorations" Value="Underline" /></Style>
+  <Style Selector="Button.rline:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
   <Style Selector="Border.rule-top">
     <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
     <Setter Property="BorderThickness" Value="0,1,0,0" />

@@ -72,18 +72,20 @@ internal sealed class TestHome : IDisposable
     }
 
     /// <summary>A package of <paramref name="game"/> in the shared library, whose one new script runs one the game's
-    /// catalog holds; <paramref name="target"/> <c>extended</c> needs Extended mode.</summary>
-    public void Package(string game, string id, string target = "native")
+    /// catalog holds; <paramref name="target"/> <c>extended</c> needs Extended mode. <paramref name="tables"/> ends the
+    /// manifest (<c>[[requires]]</c>, <c>[order]</c>…); <paramref name="parent"/> puts it in another folder.</summary>
+    public string Package(string game, string id, string target = "native", string tables = "", string? parent = null)
     {
-        string folder = Path.Combine(Home.ModsDirectory(game), id);
+        string folder = Path.Combine(parent ?? Home.ModsDirectory(game), id);
         string script = "S" + new string(id.Where(char.IsAsciiLetterOrDigit).ToArray()).ToUpperInvariant();
         string runs = Path.GetFileNameWithoutExtension(SyntheticCatalog.ScriptsTheModulesRun(game)[0]);
         Directory.CreateDirectory(Path.Combine(folder, "scripts"));
         File.WriteAllText(Path.Combine(folder, "manifest.toml"),
             $"omp = {(target == "native" ? 1 : 3)}\nid = \"{id}\"\nname = \"{id}\"\nversion = \"1.2.0\"\n"
-            + $"[scripts]\nnames = [\"{script}\"]\n[game]\nprofile = \"{game}\"\ntarget = \"{target}\"\n");
+            + $"[scripts]\nnames = [\"{script}\"]\n[game]\nprofile = \"{game}\"\ntarget = \"{target}\"\n" + tables);
         File.WriteAllText(Path.Combine(folder, "scripts", script + ".oms"),
             $"oms 1\nscript \"{script}\"\nuse {game}.scripts\n\n    run {runs}\n    exit\n");
+        return folder;
     }
 
     /// <summary>A profile on <paramref name="install"/>, made as the wizard makes one, in this home or in

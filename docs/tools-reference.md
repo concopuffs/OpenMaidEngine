@@ -1078,9 +1078,11 @@ branching/state can shift page ordinals between runs. Resolve a reported page wi
 `launcher/Ome.Launcher` builds `OME-Launcher` (`OME-Launcher.exe` on Windows), a windowed net10.0 program over
 `engine/Ome.Launcher.Core` (launcher spec §8). Its command line (spec §8.6) runs before any window and needs no
 display. Where the command line's outcome names the window, the program opens it (Avalonia 12, launcher plan §6).
-The window is being built in launcher plan M3. So far it has the profile list, the header, Play and the Overview tab
+The window is being built in launcher plan M3. So far it has the profile list, the header, Play, the Overview tab
 (the game, the profile with its mode switch, the mods in load order, the checks, and locating or accepting the
-install). Play starts the engine of that run of the launcher (`--engine` names another) as `--launch` does. While an engine it started runs, the
+install) and the Mods tab (the library's packages for the game in the order the stack loads, each with a switch and
+its state; dragging to set the order; the detail with the README; the link report; adding a package from a folder or
+an `.omp`, removing one, and releasing a gone package's selector). Play starts the engine of that run of the launcher (`--engine` names another) as `--launch` does. While an engine it started runs, the
 launcher's process stays, the window stays, minimizes or hides by `launcher.toml`'s `while_running`, and closing it
 only hides it; the launcher ends once that engine exits. A failed start brings the window forward with the end of the
 log.

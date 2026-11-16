@@ -359,7 +359,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       start mode, read as the engine reads them),
     │                                       BareEngineData/Adoption (a profile from the bare engine's data) and
     │                                       Library (package states, add, remove, enable with dependencies,
-    │                                       the switch to Compatibility), ProfileSelectors (the selectors a
+    │                                       the order a drag sets, a package's README, the switch to
+    │                                       Compatibility), ProfileSelectors (the selectors a
     │                                       profile holds, released under its lock), ProfileChecks (the
     │                                       checks before Play, the link check among them, which write
     │                                       nothing), ProfileTrust (the review of a root from elsewhere,

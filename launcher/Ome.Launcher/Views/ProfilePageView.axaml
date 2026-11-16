@@ -102,6 +102,9 @@
         <Panel IsVisible="{Binding OnOverview}">
           <v:OverviewView DataContext="{Binding Overview}" />
         </Panel>
+        <Panel IsVisible="{Binding OnMods}">
+          <v:ModsView DataContext="{Binding Mods}" />
+        </Panel>
       </Panel>
     </ScrollViewer>
   </DockPanel>

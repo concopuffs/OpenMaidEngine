@@ -23,4 +23,7 @@ public interface IWindowHost
 
     /// <summary>Asks the player for a folder; null when they cancel.</summary>
     Task<string?> PickFolderAsync(string title);
+
+    /// <summary>Asks the player for a file with <paramref name="extension"/> (".omp"); null when they cancel.</summary>
+    Task<string?> PickFileAsync(string title, string extension);
 }

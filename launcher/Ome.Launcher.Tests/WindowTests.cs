@@ -153,6 +153,54 @@ public sealed class WindowTests : IDisposable
     }
 
     [Fact]
+    public void TheModsTabDraws()
+    {
+        Dictionary<string, ProfileEntry> profiles = Three();
+        Select("kamidori-english");
+        _home.Package("kamidori", "community.font-fix");
+        _home.Package("kamidori", "community.random-enemies", target: "extended");
+        _home.Package("kamidori", "community.big-font", tables: "[[conflicts]]\nid = \"community.font-fix\"\nreason = \"both set the font\"\n");
+        string readme = _home.Package("kamidori", "community.uses-base",
+                                      tables: "[[requires]]\nid = \"kamidori-base\"\nversion = \">=1.0\"\n");
+        File.WriteAllText(Path.Combine(readme, "README.md"), "# Uses base\n\nNames cells through the base mod's layout.\n");
+        ProfileStore.Update(profiles["kamidori-english"], document =>
+        {
+            var folders = Library.Index(document);
+            document = document with { Mode = Ome.Mods.Launch.ProfileMode.Extended };
+            foreach (string id in new[] { "community.font-fix", "community.uses-base", "community.big-font" })
+                document = Library.Enable(document, id, folders).Document;
+            return document;
+        }, _home.Home);
+        Task Mods(MainViewModel model)
+        {
+            model.Page!.ShowTab.Execute(ProfileTab.Mods);
+            return Task.CompletedTask;
+        }
+        Draw("mods", task: "6.5", before: Mods,
+             check: model =>
+             {
+                 ModsViewModel mods = model.Page!.Mods;
+                 // The base mod sits where the stack loads it: after the ranked packages that are ready, before the one
+                 // that requires it. The disabled package keeps its place at the end.
+                 Assert.Equal(["community.font-fix", "community.big-font", "kamidori-base", "community.uses-base",
+                               "community.random-enemies"], mods.Rows.Select(row => row.Id));
+                 Assert.True(mods.Rows[2].IsEngine);
+                 Assert.Equal(["Conflict", "Conflict"], mods.Rows.Take(2).Select(row => row.Chip));
+                 Assert.Contains(mods.Report, line => line.Text
+                     == "[community.big-font, community.font-fix] declares a conflict with community.font-fix: both set the font");
+             });
+        Draw("mods-ja", "ja", task: "6.5", before: Mods, themes: ThemeVariant.Dark);
+        Draw("mods-readme", task: "6.5", themes: ThemeVariant.Light,
+             before: async model =>
+             {
+                 await Mods(model);
+                 model.Page!.Mods.Select("community.uses-base");
+                 await model.Page.Mods.ReadmeAsync();
+             },
+             check: model => Assert.True(model.Page!.Mods.HasReadme));
+    }
+
+    [Fact]
     public void TheOverviewDraws()
     {
         Dictionary<string, ProfileEntry> profiles = Three();

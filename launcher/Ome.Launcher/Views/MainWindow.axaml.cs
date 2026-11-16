@@ -100,6 +100,17 @@ public sealed partial class MainWindow : Window, IWindowHost
         return folders.Count == 0 ? null : folders[0].TryGetLocalPath();
     }
 
+    public async Task<string?> PickFileAsync(string title, string extension)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType(extension) { Patterns = ["*" + extension] }],
+        });
+        return files.Count == 0 ? null : files[0].TryGetLocalPath();
+    }
+
     public void Open(string path)
     {
         try

@@ -43,6 +43,7 @@ public sealed class ProfilePageViewModel : ViewModel
         NoticeCommand = new Command(RunNoticeAction, () => NoticeTarget != null);
         ShowTab = new Command(tab => Tab = (ProfileTab)tab!);
         Overview = new OverviewViewModel(this);
+        Mods = new ModsViewModel(this);
         OpenLog = new Command(() => { if (Row.Failure?.LogPath is { } log) _main.Host?.Open(log); },
                               () => Row.Failure?.LogPath != null);
         DismissFailure = new Command(() => Row.Failure = null);
@@ -53,6 +54,7 @@ public sealed class ProfilePageViewModel : ViewModel
     public MainViewModel Main => _main;
     public ProfileRowViewModel Row { get; }
     public OverviewViewModel Overview { get; }
+    public ModsViewModel Mods { get; }
     public ProfileEntry Entry => Row.Entry;
     private ProfileDocument? Document => Entry.Loaded?.Document;
     public ArtViewModel? Cover { get; private set; }
@@ -66,6 +68,7 @@ public sealed class ProfilePageViewModel : ViewModel
             _checks = value;
             ChangedAll();
             Overview.Refresh();
+            Mods.Refresh();
         }
     }
 
@@ -142,24 +145,25 @@ public sealed class ProfilePageViewModel : ViewModel
     {
         ChangedAll();
         Overview.Refresh();
+        Mods.Refresh();
         Play.Refresh();
         OpenLog.Refresh();
     }
 
     /// <summary>Writes a change to the profile's files off the UI thread (<paramref name="write"/> holds the profile's
-    /// lock), keeps the profile as written, and checks it again. A refused write (the game holds the lock, a file
-    /// cannot be written) is reported on the Overview and changes nothing.</summary>
-    public async Task<bool> WriteAsync(Func<ProfileEntry, LoadedProfile> write)
+    /// lock), keeps the profile as written (a write that returns null left <c>profile.toml</c> as it was), and checks it
+    /// again. A refused write (the game holds the lock, a file cannot be written) changes nothing and is reported to
+    /// <paramref name="failed"/>, by default on the Overview.</summary>
+    public async Task<bool> WriteAsync(Func<ProfileEntry, LoadedProfile?> write, Action<string>? failed = null)
     {
         ProfileEntry entry = Entry;
         try
         {
-            LoadedProfile loaded = await Task.Run(() => write(entry));
-            Row.Entry = entry with { Loaded = loaded };
+            if (await Task.Run(() => write(entry)) is { } loaded) Row.Entry = entry with { Loaded = loaded };
         }
         catch (Exception error) when (error is ProfileBusyException or ProfileFileException || IsCheckFailure(error))
         {
-            Overview.WriteFailed(error.Message);
+            (failed ?? Overview.WriteFailed)(error.Message);
             return false;
         }
         await CheckAsync();

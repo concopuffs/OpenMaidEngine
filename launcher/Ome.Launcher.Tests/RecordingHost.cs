@@ -20,4 +20,13 @@ internal sealed class RecordingHost : IWindowHost
         Calls.Add($"Pick {title}");
         return Task.FromResult(Folder);
     }
+
+    /// <summary>The file the next file pick returns; null is a cancelled pick.</summary>
+    public string? File { get; set; }
+
+    public Task<string?> PickFileAsync(string title, string extension)
+    {
+        Calls.Add($"Pick {title} ({extension})");
+        return Task.FromResult(File);
+    }
 }

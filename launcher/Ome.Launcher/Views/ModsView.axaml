@@ -1,0 +1,184 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             xmlns:v="using:Ome.Launcher.Views"
+             x:Class="Ome.Launcher.Views.ModsView"
+             x:DataType="vm:ModsViewModel">
+  <!-- The mock's mods(): the bar (.modbar), the list beside the detail (.mods: 1fr 270px), then the link report. -->
+  <StackPanel Spacing="10">
+    <Border Classes="notice run" IsVisible="{Binding IsLocked}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding S[mods.locked]}" />
+    </Border>
+    <Border Classes="notice" Classes.bad="{Binding ResultBad}" Classes.run="{Binding !ResultBad}"
+            IsVisible="{Binding HasResult}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Result}" />
+    </Border>
+
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8">
+        <Button Name="AddButton" Content="{Binding S[mods.add], StringFormat='{}{0}…'}">
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+              <MenuItem Header="{Binding S[mods.add-folder]}" Command="{Binding AddFolder}" />
+              <MenuItem Header="{Binding S[mods.add-file]}" Command="{Binding AddFile}" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+        <Button Content="{Binding S[mods.open-library]}" Command="{Binding OpenLibrary}" />
+      </StackPanel>
+      <TextBlock Classes="muted small" VerticalAlignment="Center" HorizontalAlignment="Right" TextWrapping="Wrap"
+                 Margin="12,0,0,0" TextAlignment="Right" Text="{Binding S[mods.hint]}" />
+    </DockPanel>
+
+    <Grid ColumnDefinitions="*,270" ColumnSpacing="14" Margin="0,4,0,0">
+      <Border Name="List" Classes="mlist" VerticalAlignment="Top" DragDrop.AllowDrop="True">
+        <StackPanel>
+          <!-- Raised by a pixel so the first row's top line sits under the list's own border. -->
+          <ItemsControl Name="RowList" ItemsSource="{Binding Rows}" Margin="0,-1,0,0">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ModRowViewModel">
+                <Panel>
+                  <!-- A library package: grip, switch, name and id, chip. -->
+                  <Button Classes="mrow" Classes.sel="{Binding IsSelected}" Classes.off="{Binding IsOff}"
+                          Classes.drop="{Binding DropBefore}" IsVisible="{Binding IsPackage}"
+                          Command="{Binding Choose}" AutomationProperties.Name="{Binding Name}">
+                    <Grid ColumnDefinitions="16,30,*,Auto" ColumnSpacing="10">
+                      <Border Classes="grip" Background="Transparent">
+                        <Path VerticalAlignment="Center" HorizontalAlignment="Center"
+                              Data="M0,0h2.4v2.4h-2.4z M4.6,0h2.4v2.4h-2.4z M0,4.6h2.4v2.4h-2.4z M4.6,4.6h2.4v2.4h-2.4z M0,9.2h2.4v2.4h-2.4z M4.6,9.2h2.4v2.4h-2.4z" />
+                      </Border>
+                      <Button Grid.Column="1" Classes="switch" Classes.on="{Binding Enabled}" Command="{Binding Toggle}"
+                              VerticalAlignment="Center" AutomationProperties.Name="{Binding Name}">
+                        <Ellipse Classes="knob" />
+                      </Button>
+                      <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Classes="mname" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Classes="muted" Text="{Binding Version}" />
+                        </StackPanel>
+                        <TextBlock Classes="mid mono" Text="{Binding Id}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="muted small" TextWrapping="Wrap" Text="{Binding Note}"
+                                   IsVisible="{Binding HasNote}" />
+                      </StackPanel>
+                      <Border Grid.Column="3" Classes="chip" Classes.ok="{Binding ChipOk}" Classes.warn="{Binding ChipWarn}"
+                              Classes.bad="{Binding ChipBad}" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Chip}" />
+                      </Border>
+                    </Grid>
+                  </Button>
+                  <!-- A base mod the engine mounted: no switch, no place in the order. -->
+                  <Border Classes="mrow engine" IsVisible="{Binding IsEngine}">
+                    <Grid ColumnDefinitions="16,30,*,Auto" ColumnSpacing="10">
+                      <Path Grid.Column="1" Classes="diamond" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Data="M4.5,0 L9,4.5 L4.5,9 L0,4.5 Z" />
+                      <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Classes="mname" Text="{Binding Name}" />
+                          <TextBlock Classes="muted" Text="{Binding Version}" />
+                        </StackPanel>
+                        <TextBlock Classes="mid" TextWrapping="Wrap" Text="{Binding Note}" />
+                      </StackPanel>
+                      <Border Grid.Column="3" Classes="chip" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Chip}" />
+                      </Border>
+                    </Grid>
+                  </Border>
+                </Panel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Rectangle Classes="dropline" IsVisible="{Binding DropAtEnd}" />
+          <TextBlock Classes="muted" Margin="12,10" TextWrapping="Wrap" Text="{Binding S[mods.empty]}"
+                     IsVisible="{Binding HasNoRows}" />
+        </StackPanel>
+      </Border>
+
+      <!-- The selected package. -->
+      <Panel Grid.Column="1" VerticalAlignment="Top">
+        <Border Classes="card" IsVisible="{Binding HasNoSelected}">
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding S[mods.no-selection]}" />
+        </Border>
+        <Border Classes="card" IsVisible="{Binding HasSelected}">
+          <StackPanel Spacing="9">
+            <TextBlock Classes="strong" TextWrapping="Wrap" Text="{Binding DetailName}" />
+            <TextBlock TextWrapping="Wrap" Text="{Binding DetailDescription}" IsVisible="{Binding HasDetailDescription}" />
+            <Grid ColumnDefinitions="70,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="5">
+              <TextBlock Classes="muted" Text="{Binding S[mods.id]}" />
+              <TextBlock Grid.Column="1" Classes="mono small" TextWrapping="Wrap" Text="{Binding DetailId}" />
+              <TextBlock Grid.Row="1" Classes="muted" Text="{Binding S[mods.version]}" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DetailVersion}" />
+              <TextBlock Grid.Row="2" Classes="muted" Text="{Binding S[mods.authors]}" IsVisible="{Binding HasDetailAuthors}" />
+              <TextBlock Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" Text="{Binding DetailAuthors}"
+                         IsVisible="{Binding HasDetailAuthors}" />
+              <TextBlock Grid.Row="3" Classes="muted" Text="{Binding S[mods.needs]}" />
+              <TextBlock Grid.Row="3" Grid.Column="1" TextWrapping="Wrap" Text="{Binding DetailNeeds}" />
+              <TextBlock Grid.Row="4" Classes="muted" Text="{Binding S[mods.does]}" IsVisible="{Binding HasDetailDoes}" />
+              <ItemsControl Grid.Row="4" Grid.Column="1" ItemsSource="{Binding DetailDoes}" IsVisible="{Binding HasDetailDoes}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <TextBlock Classes="small" TextWrapping="Wrap" Text="{Binding}" Margin="0,0,0,2" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Grid>
+            <WrapPanel>
+              <Button Classes="link" Content="{Binding S[mods.read-me]}" Command="{Binding ShowReadme}"
+                      IsVisible="{Binding ShowReadmeLink}" />
+              <Button Classes="link" Content="{Binding S[mods.hide-readme]}" Command="{Binding HideReadme}"
+                      IsVisible="{Binding HasReadme}" />
+              <TextBlock Classes="muted" Text=" · " VerticalAlignment="Center" />
+              <Button Classes="link" Content="{Binding S[mods.show-file]}" Command="{Binding ShowFile}" />
+              <TextBlock Classes="muted" Text=" · " VerticalAlignment="Center" />
+              <Button Classes="link" Content="{Binding S[mods.remove]}" Command="{Binding Remove}" />
+            </WrapPanel>
+            <Border Classes="log" IsVisible="{Binding HasReadme}" MaxHeight="300">
+              <ScrollViewer>
+                <SelectableTextBlock Classes="mono" TextWrapping="Wrap" Text="{Binding Readme}" />
+              </ScrollViewer>
+            </Border>
+          </StackPanel>
+        </Border>
+      </Panel>
+    </Grid>
+
+    <!-- The link report (the mock's .report: an 82px tag column). -->
+    <Border Classes="card" Margin="0,4,0,0">
+      <StackPanel>
+        <TextBlock Classes="heading card-title" Text="{Binding ReportTitle, Converter={x:Static v:Text.Upper}}" />
+        <ItemsControl ItemsSource="{Binding Report}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ReportLine">
+              <Grid ColumnDefinitions="82,*" ColumnSpacing="10" Margin="0,3">
+                <TextBlock Classes="tag" Classes.bad="{Binding Bad}" Text="{Binding Tag, Converter={x:Static v:Text.Upper}}" />
+                <Button Grid.Column="1" Classes="rline" Command="{Binding Show}">
+                  <TextBlock TextWrapping="Wrap" Text="{Binding Text}" />
+                </Button>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+
+    <!-- Advanced: the selectors the profile holds. -->
+    <Button Classes="link" HorizontalAlignment="Left" Command="{Binding ToggleAdvanced}"
+            Content="{Binding S[mods.advanced], StringFormat='{}{0} ▾'}" />
+    <Border Classes="card" IsVisible="{Binding ShowAdvanced}">
+      <StackPanel Spacing="6">
+        <TextBlock Classes="heading card-title" Text="{Binding S[mods.selectors], Converter={x:Static v:Text.Upper}}" />
+        <TextBlock Classes="muted" Text="{Binding S[mods.no-selectors]}" IsVisible="{Binding HasNoSelectors}" />
+        <ItemsControl ItemsSource="{Binding Selectors}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SelectorLine">
+              <DockPanel Margin="0,2">
+                <Button DockPanel.Dock="Right" Classes="link" Content="{Binding $parent[UserControl].((vm:ModsViewModel)DataContext).S[mods.release]}"
+                        Command="{Binding Release}" IsVisible="{Binding Gone}" />
+                <TextBlock Classes="mono small" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Text}" />
+              </DockPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

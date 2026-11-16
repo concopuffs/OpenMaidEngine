@@ -216,6 +216,45 @@ public static class Library
         return new LibraryChange(document with { Mods = mods with { Order = order } }, [], needing);
     }
 
+    /// <summary>Moves <paramref name="id"/> in the profile's preferred order (spec §8.4: dragging sets it) to just before
+    /// <paramref name="before"/>, or to the end when that is null or a package the profile never listed. A package
+    /// never listed joins the order where it lands, disabled; a listed one keeps whether it is enabled.</summary>
+    public static ProfileDocument Move(ProfileDocument document, string id, string? before)
+    {
+        ProfileMods mods = document.Mods ?? throw new InvalidOperationException("the profile has no [mods] table");
+        var order = mods.Order.ToList();
+        int from = order.FindIndex(entry => entry.Id == id);
+        ProfileModEntry moving = from >= 0 ? order[from] : new ProfileModEntry(id, false);
+        if (from >= 0) order.RemoveAt(from);
+        int to = before == null || before == id ? -1 : order.FindIndex(entry => entry.Id == before);
+        if (before == id && from >= 0) to = from;
+        if (to < 0) order.Add(moving);
+        else order.Insert(to, moving);
+        return document with { Mods = mods with { Order = order } };
+    }
+
+    public const int ReadmeLimit = 64 * 1024;
+    private static readonly string[] ReadmeNames = ["README.md", "README.txt", "README"];
+
+    /// <summary>A package's README as plain text (spec §8.4's detail pane): the first of <c>README.md</c>,
+    /// <c>README.txt</c> and <c>README</c> at its top, read as UTF-8 up to <paramref name="limit"/> bytes; null when it
+    /// has none. <c>Truncated</c> says the file is longer.</summary>
+    public static (string Text, bool Truncated)? Readme(PackageIndexEntry package, int limit = ReadmeLimit)
+    {
+        using ModPackage opened = ModPackage.Open(package.Path);
+        PackageEntry? found = ReadmeNames.Select(name => opened.Container.Find(name)).FirstOrDefault(entry => entry != null);
+        if (found == null) return null;
+        using Stream stream = opened.Container.Open(found);
+        var buffer = new byte[limit + 1];
+        int read = 0;
+        while (read < buffer.Length && stream.Read(buffer, read, buffer.Length - read) is var count and > 0) read += count;
+        bool truncated = read > limit;
+        int length = Math.Min(read, limit);
+        // A cut inside a multi-byte character drops that character rather than showing a replacement mark.
+        while (truncated && length > 0 && (buffer[length] & 0xC0) == 0x80) length--;
+        return (new System.Text.UTF8Encoding(false).GetString(buffer, 0, length).TrimStart('\uFEFF'), truncated);
+    }
+
     /// <summary>Switches the profile to Compatibility mode and disables the enabled packages that mode refuses
     /// (spec §6), keeping their places. <see cref="LibraryChange.Changed"/> are the packages it disabled.</summary>
     public static LibraryChange ToCompatibility(ProfileDocument document, IReadOnlyList<PackageFolderIndex> folders)

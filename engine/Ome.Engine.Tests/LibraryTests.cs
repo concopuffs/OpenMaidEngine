@@ -179,6 +179,34 @@ public sealed class LibraryTests : IDisposable
     }
 
     [Fact]
+    public void MovingSetsThePreferredOrderAndAPackageNeverListedJoinsItDisabled()
+    {
+        ProfileDocument document = Document(On("a"), Off("b"), On("c"));
+        string Order(ProfileDocument changed)
+            => string.Join(" ", changed.Mods!.Order.Select(entry => (entry.Enabled ? "+" : "-") + entry.Id));
+
+        Assert.Equal("+c -b +a", Order(Library.Move(Library.Move(document, "c", "a"), "a", null)));
+        Assert.Equal("+a +c -b", Order(Library.Move(document, "b", null)));
+        Assert.Equal("+a -b +c", Order(Library.Move(document, "b", "b")));
+        Assert.Equal("+a -new -b +c", Order(Library.Move(document, "new", "b")));
+        Assert.Equal("+a -b +c -new", Order(Library.Move(document, "new", "unlisted")));
+    }
+
+    [Fact]
+    public void AReadmeIsReadAsPlainTextUpToItsLimit()
+    {
+        string plain = Package(Shared, "example.plain");
+        Assert.Null(Library.Readme(PackageIndex.Read(plain)));
+
+        string documented = Package(Shared, "example.documented");
+        File.WriteAllText(Path.Combine(documented, "README.md"), "\uFEFF# 説明\n" + new string('x', 100));
+        PackageIndexEntry entry = PackageIndex.Read(documented);
+        Assert.Equal(("# 説明\n" + new string('x', 100), false), Library.Readme(entry));
+        // "# 説" is 5 bytes after the mark: a cut at 6 falls inside 説's three, which is dropped whole.
+        Assert.Equal(("# ", true), Library.Readme(entry, limit: 6));
+    }
+
+    [Fact]
     public void SwitchingToCompatibilityDisablesWhatTheModeRefuses()
     {
         Package(Shared, "example.plain");
