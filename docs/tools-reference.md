@@ -1086,7 +1086,12 @@ an `.omp`, removing one, and releasing a gone package's selector) and the Settin
 windowed start, the window size, the FPS counter and the page locator, each written to the profile's `OME.INI` or
 `SYS4REG.INI` at once, as the engine writes them; the start mode waits until the install is found) and the Saves tab
 (the save folder and its count; copying saves in from another profile of the game, with its selectors, or from where
-the original game keeps them, the saves it would replace asked first). Play starts the engine of that run of the launcher (`--engine` names another) as `--launch` does. While an engine it started runs, the
+the original game keeps them, the saves it would replace asked first) and the Advanced tab (the overlays, chosen from
+the install's folders of files the catalog names, and the BMP switch; the renderer, text drawing, the Lua error policy,
+what a failed link does and Direct3D 12, each written to `profile.toml` at once; the diagnostics folder, and a summary
+of the profile, its checks and the log's end copied for a report, with the account's folder written as `~`). An
+overlay folder the profile names that is gone fails the install's check by name, as the engine would refuse it. Play
+starts the engine of that run of the launcher (`--engine` names another) as `--launch` does. While an engine it started runs, the
 launcher's process stays, the window stays, minimizes or hides by `launcher.toml`'s `while_running`, and closing it
 only hides it; the launcher ends once that engine exits. A failed start brings the window forward with the end of the
 log.

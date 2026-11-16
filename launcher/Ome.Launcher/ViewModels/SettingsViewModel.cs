@@ -48,7 +48,7 @@ public sealed class SettingsViewModel : ViewModel
     public LauncherStrings S => _page.S;
     private ProfileCheckResult? Checks => _page.Checks;
     private Sys4StartupSettings? Startup
-        => Checks?[ProfileCheckKind.Install].Status == CheckStatus.Passed ? Checks.Install?.Catalog?.StartupSettings : null;
+        => _page.Catalog?.StartupSettings;
 
     /// <summary>The profile's files can be read: it is not under review and its document reads.</summary>
     public bool HasSettings => _settings != null;
@@ -144,7 +144,7 @@ public sealed class SettingsViewModel : ViewModel
     {
         if (_settings == null) return [];
         PortOptions port = _settings.Port;
-        if (Startup == null || Checks?.Install?.Catalog?.LogicalCanvas is not { } canvas)
+        if (Startup == null || _page.Catalog?.LogicalCanvas is not { } canvas)
             return [port.CanvasWindowSize
                         ? new SizeChoice(0, 0, true, S["settings.size-game"])
                         : new SizeChoice(port.WindowWidth, port.WindowHeight, false,

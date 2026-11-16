@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using Ome.Launcher.Core;
@@ -108,6 +109,11 @@ public sealed partial class MainWindow : Window, IWindowHost
         int frameWidth = FrameSize is { } frame ? (int)Math.Ceiling((frame.Width - ClientSize.Width) * scaling) : 0;
         int frameHeight = FrameSize is { } framed ? (int)Math.Ceiling((framed.Height - ClientSize.Height) * scaling) : 0;
         return (screen.WorkingArea.Width - frameWidth, screen.WorkingArea.Height - frameHeight);
+    }
+
+    public async Task CopyTextAsync(string text)
+    {
+        if (Clipboard is { } clipboard) await clipboard.SetTextAsync(text);
     }
 
     public async Task<string?> PickFileAsync(string title, string extension)

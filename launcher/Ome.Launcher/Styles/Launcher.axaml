@@ -418,6 +418,7 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Margin" Value="0,2,0,0" />
   </Style>
+  <Style Selector="TextBlock.help.bad"><Setter Property="Foreground" Value="{DynamicResource OmeBadBrush}" /></Style>
   <Style Selector="ComboBox.field">
     <Setter Property="Background" Value="{DynamicResource OmeFieldBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />

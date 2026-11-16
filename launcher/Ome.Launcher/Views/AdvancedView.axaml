@@ -1,0 +1,147 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             xmlns:v="using:Ome.Launcher.Views"
+             x:Class="Ome.Launcher.Views.AdvancedView"
+             x:DataType="vm:AdvancedViewModel">
+  <!-- The mock's advanced(): the install's overlays and the BMP switch, the engine's startup options, diagnostics. -->
+  <StackPanel Classes="form">
+    <Border Classes="notice run" Margin="0,0,0,12" IsVisible="{Binding IsLocked}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding S[advanced.locked]}" />
+    </Border>
+    <Border Classes="notice" Classes.bad="{Binding ResultBad}" Classes.run="{Binding !ResultBad}" Margin="0,0,0,12"
+            IsVisible="{Binding HasResult}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Result}" />
+    </Border>
+
+    <TextBlock Classes="heading form-heading first" Text="{Binding S[advanced.install], Converter={x:Static v:Text.Upper}}" />
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <StackPanel VerticalAlignment="Top">
+          <TextBlock Text="{Binding S[advanced.overlays]}" />
+          <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[advanced.overlays-help]}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <ItemsControl ItemsSource="{Binding Overlays}" IsVisible="{Binding HasOverlays}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:OverlayRowViewModel">
+                <DockPanel Margin="0,3">
+                  <Button DockPanel.Dock="Left" Classes="switch" Classes.on="{Binding On}" Command="{Binding Toggle}"
+                          VerticalAlignment="Center" Margin="0,0,10,0" AutomationProperties.Name="{Binding Name}">
+                    <Ellipse Classes="knob" />
+                  </Button>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Classes="mono small" TextTrimming="LeadingCharacterEllipsis" Text="{Binding Name}"
+                               ToolTip.Tip="{Binding Path}" />
+                    <TextBlock Classes="help" Text="{Binding Note}" />
+                  </StackPanel>
+                </DockPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding S[advanced.no-overlays]}"
+                     IsVisible="{Binding HasNoOverlays}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="{Binding S[advanced.bmp]}" />
+          <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[advanced.bmp-help]}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+          <Button Classes="switch" Classes.on="{Binding AllowBmpAsAgf}" Command="{Binding ToggleBmp}"
+                  AutomationProperties.Name="{Binding S[advanced.bmp]}">
+            <Ellipse Classes="knob" />
+          </Button>
+          <TextBlock Classes="help bad" TextWrapping="Wrap" Text="{Binding S[advanced.bmp-needed]}"
+                     IsVisible="{Binding BmpNeeded}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <TextBlock Classes="heading form-heading" Text="{Binding S[advanced.engine], Converter={x:Static v:Text.Upper}}" />
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <TextBlock VerticalAlignment="Center" Text="{Binding S[advanced.renderer]}" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <ComboBox Classes="field" ItemsSource="{Binding Renderers}" SelectedItem="{Binding Renderer}"
+                    IsEnabled="{Binding CanWrite}" AutomationProperties.Name="{Binding S[advanced.renderer]}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:OptionChoice">
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding S[advanced.renderer-help]}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <TextBlock VerticalAlignment="Center" Text="{Binding S[advanced.text]}" />
+        <ComboBox Grid.Column="1" Classes="field" ItemsSource="{Binding TextBackends}" SelectedItem="{Binding TextBackend}"
+                  IsEnabled="{Binding CanWrite}" AutomationProperties.Name="{Binding S[advanced.text]}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:OptionChoice">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+    </Border>
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <TextBlock VerticalAlignment="Center" Text="{Binding S[advanced.lua]}" />
+        <ComboBox Grid.Column="1" Classes="field" ItemsSource="{Binding LuaErrorModes}" SelectedItem="{Binding LuaErrors}"
+                  IsEnabled="{Binding CanWrite}" AutomationProperties.Name="{Binding S[advanced.lua]}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:OptionChoice">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+    </Border>
+    <Border Classes="frow" IsVisible="{Binding HasMods}">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <TextBlock VerticalAlignment="Center" Text="{Binding S[advanced.failure]}" />
+        <ComboBox Grid.Column="1" Classes="field" ItemsSource="{Binding FailureModes}" SelectedItem="{Binding OnFailure}"
+                  IsEnabled="{Binding CanWrite}" AutomationProperties.Name="{Binding S[advanced.failure]}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:OptionChoice">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+    </Border>
+    <Border Classes="frow" IsVisible="{x:Static vm:AdvancedViewModel.OnWindows}">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="{Binding S[advanced.d3d12]}" />
+          <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[advanced.d3d12-help]}" />
+        </StackPanel>
+        <Button Grid.Column="1" Classes="switch" Classes.on="{Binding Direct3D12}" Command="{Binding ToggleDirect3D12}"
+                VerticalAlignment="Center" AutomationProperties.Name="{Binding S[advanced.d3d12]}">
+          <Ellipse Classes="knob" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <TextBlock Classes="heading form-heading" Text="{Binding S[advanced.diagnostics], Converter={x:Static v:Text.Upper}}" />
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <TextBlock VerticalAlignment="Center" Text="{Binding S[advanced.logs]}" />
+        <StackPanel Grid.Column="1" Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="{Binding S[advanced.open-diagnostics]}" Command="{Binding OpenDiagnostics}" />
+            <Button Content="{Binding S[advanced.copy-summary]}" Command="{Binding CopySummary}" />
+          </StackPanel>
+          <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[advanced.summary-help]}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+  </StackPanel>
+</UserControl>

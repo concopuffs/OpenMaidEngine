@@ -365,7 +365,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       ProfileSelectors (the selectors a
     │                                       profile holds, released under its lock), ProfileChecks (the
     │                                       checks before Play, the link check among them, which write
-    │                                       nothing), ProfileTrust (the review of a root from elsewhere,
+    │                                       nothing), DiagnosticsSummary (the text the Advanced page copies:
+    │                                       the profile, its checks, the log's end, paths written from known
+    │                                       roots), ProfileTrust (the review of a root from elsewhere,
     │                                       network approvals, the link check before a start), EngineLaunch
     │                                       (the one engine-command builder, the Shortcut dialog's forms, the
     │                                       launch with diagnostics/engine.log), LauncherCommandLine (spec

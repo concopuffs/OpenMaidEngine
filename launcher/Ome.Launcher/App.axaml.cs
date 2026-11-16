@@ -1,3 +1,4 @@
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -17,6 +18,12 @@ public sealed partial class App : Application
     private readonly LauncherSession? _session;
 
     public App() { }
+
+    /// <summary>The launcher's version as its build stamps it: the assembly's informational version, which a build
+    /// from a git checkout ends with the commit.</summary>
+    public static string Version { get; } =
+        typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? typeof(App).Assembly.GetName().Version?.ToString() ?? "unknown";
 
     public App(LauncherSession session) => _session = session;
 

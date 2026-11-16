@@ -47,9 +47,8 @@ public sealed class SavesViewModel : ViewModel
     }
 
     public LauncherStrings S => _page.S;
-    private ProfileCheckResult? Checks => _page.Checks;
     private Sys4StartupSettings? Startup
-        => Checks?[ProfileCheckKind.Install].Status == CheckStatus.Passed ? Checks.Install?.Catalog?.StartupSettings : null;
+        => _page.Catalog?.StartupSettings;
 
     /// <summary>The save folder follows the game's <c>SAVEPATH</c>, so it is known once the install is found.</summary>
     public bool Known => Startup != null && _page.Entry.Loaded?.Document != null && !_page.Entry.NeedsReview;

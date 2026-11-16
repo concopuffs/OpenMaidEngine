@@ -26,6 +26,15 @@ internal sealed class RecordingHost : IWindowHost
 
     public (int Width, int Height)? UsableArea() => Usable;
 
+    /// <summary>What was last put on the clipboard.</summary>
+    public string? Clipboard { get; private set; }
+
+    public Task CopyTextAsync(string text)
+    {
+        Clipboard = text;
+        return Task.CompletedTask;
+    }
+
     /// <summary>The file the next file pick returns; null is a cancelled pick.</summary>
     public string? File { get; set; }
 

@@ -255,6 +255,39 @@ public sealed class WindowTests : IDisposable
     }
 
     [Fact]
+    public void TheAdvancedTabDraws()
+    {
+        string install = Path.Combine(_home.Root, "installs", "kamidori");
+        Directory.CreateDirectory(Path.Combine(install, "patch"));
+        TestHome.Catalog(install, "kamidori", extra: "TITLE.AGF");
+        File.WriteAllBytes(Path.Combine(install, "patch", "TITLE.AGF"), "BM  "u8.ToArray());
+        File.WriteAllText(Path.Combine(install, "patch", "MENU.BIN"), "");
+        Directory.CreateDirectory(Path.Combine(install, "extras"));
+        File.WriteAllText(Path.Combine(install, "extras", "HISTORY.BIN"), "");
+        ProfileEntry profile = _home.Profile("kamidori-english", "kamidori", install, "Kamidori (English)");
+        ProfileStore.Update(profile, document => document with
+        {
+            Install = document.Install with { Overlays = [Path.Combine(install, "patch")], AllowBmpAsAgf = true },
+            Launch = document.Launch with { LuaErrors = "halt" },
+        }, _home.Home);
+        _home.Profile("himegari", "himegari", _home.Install("himegari"), "Himegari");
+        Select("kamidori-english");
+        Task Advanced(MainViewModel model)
+        {
+            model.Page!.ShowTab.Execute(ProfileTab.Advanced);
+            return Task.CompletedTask;
+        }
+        Draw("advanced", task: "6.8", before: Advanced,
+             check: model =>
+             {
+                 AdvancedViewModel page = model.Page!.Advanced;
+                 Assert.Equal([("patch", true), ("extras", false)], page.Overlays.Select(row => (row.Name, row.On)));
+                 Assert.Equal("halt", page.LuaErrors!.Value);
+             });
+        Draw("advanced-ja", "ja", task: "6.8", before: Advanced, themes: ThemeVariant.Dark);
+    }
+
+    [Fact]
     public void TheOverviewDraws()
     {
         Dictionary<string, ProfileEntry> profiles = Three();

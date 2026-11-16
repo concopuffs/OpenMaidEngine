@@ -139,4 +139,32 @@ public sealed class ProfileChecksTests : IDisposable
         Assert.Equal(CheckStatus.Passed, result[ProfileCheckKind.Root].Status);
         Assert.Equal(CheckStatus.Passed, result[ProfileCheckKind.Lock].Status);
     }
+
+    [Fact]
+    public void AnOverlayThatIsGoneFailsTheInstallByNameAndTheLinkWaits()
+    {
+        string patch = Path.Combine(_install, "patch");
+        Directory.CreateDirectory(patch);
+        ProfileEntry profile = Profile("overlay", document => document with
+        {
+            Install = document.Install with { Overlays = [patch] },
+        });
+        ProfileCheckResult result = ProfileChecks.Run(profile, Options);
+        Assert.Equal(CheckStatus.Passed, result[ProfileCheckKind.Install].Status);
+        Assert.Empty(result.MissingOverlays);
+        Assert.NotEqual(CheckStatus.NotRun, result[ProfileCheckKind.Link].Status);
+
+        // The engine refuses a start without it (--overlay-root): the check says so instead of the run failing.
+        Directory.Delete(patch);
+        result = ProfileChecks.Run(profile, Options);
+        Assert.False(result.CanPlay);
+        Assert.Equal(CheckStatus.Failed, result[ProfileCheckKind.Install].Status);
+        Assert.Equal($"the overlay folder {patch} is not there, and the engine does not start without its overlays; "
+                     + "put the folder back or turn it off", result[ProfileCheckKind.Install].Message);
+        Assert.Equal([patch], result.MissingOverlays);
+        Assert.Equal(CheckStatus.Passed, result[ProfileCheckKind.Fingerprint].Status);
+        Assert.Equal((CheckStatus.NotRun, "needs the overlay folders"),
+                     (result[ProfileCheckKind.Link].Status, result[ProfileCheckKind.Link].Message));
+        Assert.NotNull(result.Install.Catalog);
+    }
 }

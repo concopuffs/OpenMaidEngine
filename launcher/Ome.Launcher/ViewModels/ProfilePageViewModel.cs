@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Profiles;
+using Ome.Engine.Sys4;
 using Ome.Launcher.Core;
 using Ome.Mods.Launch;
 
@@ -44,6 +45,7 @@ public sealed class ProfilePageViewModel : ViewModel
         Mods = new ModsViewModel(this);
         Settings = new SettingsViewModel(this);
         Saves = new SavesViewModel(this);
+        Advanced = new AdvancedViewModel(this);
         OpenLog = new Command(() => { if (Row.Failure?.LogPath is { } log) _main.Host?.Open(log); },
                               () => Row.Failure?.LogPath != null);
         DismissFailure = new Command(() => Row.Failure = null);
@@ -57,6 +59,7 @@ public sealed class ProfilePageViewModel : ViewModel
     public ModsViewModel Mods { get; }
     public SettingsViewModel Settings { get; }
     public SavesViewModel Saves { get; }
+    public AdvancedViewModel Advanced { get; }
     public ProfileEntry Entry => Row.Entry;
     private ProfileDocument? Document => Entry.Loaded?.Document;
     public ArtViewModel? Cover { get; private set; }
@@ -72,6 +75,14 @@ public sealed class ProfilePageViewModel : ViewModel
         Changed(nameof(LanguageText));
     }
 
+    /// <summary>The install's catalog once the checks found the profile's game there. A missing overlay fails the
+    /// install's check but not this: the catalog, its startup settings and the overlay candidates stay known.</summary>
+    public Sys4AssetCatalog? Catalog
+        => _checks?.Install is { Kind: InstallKind.Supported, Problem: null, Catalog: { } catalog, Game: { } game }
+           && game.Id == Entry.Loaded?.Document.Game
+            ? catalog
+            : null;
+
     public ProfileCheckResult? Checks
     {
         get => _checks;
@@ -83,6 +94,7 @@ public sealed class ProfilePageViewModel : ViewModel
             Mods.Refresh();
             Settings.Refresh();
             Saves.Refresh();
+            Advanced.Refresh();
         }
     }
 
@@ -162,6 +174,7 @@ public sealed class ProfilePageViewModel : ViewModel
         Mods.Refresh();
         Settings.Refresh();
         Saves.Refresh();
+        Advanced.Refresh();
         Play.Refresh();
         OpenLog.Refresh();
     }
@@ -249,6 +262,8 @@ public sealed class ProfilePageViewModel : ViewModel
             string cls = check.Status == CheckStatus.Failed ? "bad" : "warn";
             return check.Kind switch
             {
+                ProfileCheckKind.Install when checks.MissingOverlays.Count > 0
+                    => (S["notice.overlay"], check.Message, cls, ProfileTab.Advanced),
                 ProfileCheckKind.Install => (S["notice.install"], check.Message, cls, ProfileTab.Overview),
                 ProfileCheckKind.Fingerprint => (S["notice.fingerprint"], check.Message, cls, ProfileTab.Overview),
                 ProfileCheckKind.Root => (S["notice.root"], check.Message, cls, null),

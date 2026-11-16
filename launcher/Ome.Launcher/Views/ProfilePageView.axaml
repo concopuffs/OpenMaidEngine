@@ -111,6 +111,9 @@
         <Panel IsVisible="{Binding OnSaves}">
           <v:SavesView DataContext="{Binding Saves}" />
         </Panel>
+        <Panel IsVisible="{Binding OnAdvanced}">
+          <v:AdvancedView DataContext="{Binding Advanced}" />
+        </Panel>
       </Panel>
     </ScrollViewer>
   </DockPanel>

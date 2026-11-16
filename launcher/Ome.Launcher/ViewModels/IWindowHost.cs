@@ -27,6 +27,9 @@ public interface IWindowHost
     /// <summary>Asks the player for a file with <paramref name="extension"/> (".omp"); null when they cancel.</summary>
     Task<string?> PickFileAsync(string title, string extension);
 
+    /// <summary>Puts <paramref name="text"/> on the clipboard.</summary>
+    Task CopyTextAsync(string text);
+
     /// <summary>The screen area a game window can take, in pixels: the usable area of the screen the launcher is on,
     /// less a window's frame. Null when the screen cannot be measured.</summary>
     (int Width, int Height)? UsableArea();

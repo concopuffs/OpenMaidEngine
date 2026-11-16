@@ -39,6 +39,9 @@ public sealed record ProfileCheckResult(IReadOnlyList<ProfileCheck> Checks, Inst
     public ProfileCheck this[ProfileCheckKind kind] => Checks.Single(check => check.Kind == kind);
     public bool CanPlay => Checks.All(check => check.Status != CheckStatus.Failed);
     public bool Running => this[ProfileCheckKind.Lock].Status == CheckStatus.Failed;
+
+    /// <summary>The overlays the profile names that are not there, which fail the install's check.</summary>
+    public IReadOnlyList<string> MissingOverlays { get; init; } = [];
 }
 
 /// <param name="Registry">The games the engine runs; the built-in ones when null.</param>
@@ -92,8 +95,18 @@ public static class ProfileChecks
             : Installs.Recognize(document.Install.Root, registry, options.MachineRegistry);
         bool installed = install is { Kind: InstallKind.Supported, Problem: null }
                          && install.Game!.Id == document.Game;
-        Add(ProfileCheckKind.Install, installed ? CheckStatus.Passed : CheckStatus.Failed, installed
-            ? $"{install.Root} holds {install.Game!.DisplayTitle}"
+        // The engine refuses to start without an overlay the profile names (--overlay-root), so a folder that is gone
+        // fails the install's check, by name, and the link waits for it.
+        List<string> missingOverlays = installed
+            ? document.Install.Overlays.Where(overlay => !Directory.Exists(Path.GetFullPath(overlay, document.Install.Root)))
+                .ToList()
+            : [];
+        Add(ProfileCheckKind.Install, installed && missingOverlays.Count == 0 ? CheckStatus.Passed : CheckStatus.Failed, installed
+            ? missingOverlays.Count == 0
+                ? $"{install.Root} holds {install.Game!.DisplayTitle}"
+                : $"the overlay folder{(missingOverlays.Count == 1 ? "" : "s")} {string.Join(", ", missingOverlays)} "
+                  + $"{(missingOverlays.Count == 1 ? "is" : "are")} not there, and the engine does not start without "
+                  + "its overlays; put the folder back or turn it off"
             : installUnapproved.Count > 0
                 ? install.Problem!
                 : (install.Kind == InstallKind.Supported && install.Problem == null
@@ -140,6 +153,8 @@ public static class ProfileChecks
             Add(ProfileCheckKind.Link, CheckStatus.NotRun, "needs the install");
         else if (unapproved.Count > 0)
             Add(ProfileCheckKind.Link, CheckStatus.NotRun, "needs the network locations approved");
+        else if (missingOverlays.Count > 0)
+            Add(ProfileCheckKind.Link, CheckStatus.NotRun, "needs the overlay folders");
         else
         {
             try
@@ -164,7 +179,7 @@ public static class ProfileChecks
 
         Add(ProfileCheckKind.Lock, held ? CheckStatus.Failed : CheckStatus.Passed,
             held ? "running: an engine holds the profile's lock" : "no engine holds the profile's lock");
-        return new ProfileCheckResult(checks, install, view, link);
+        return new ProfileCheckResult(checks, install, view, link) { MissingOverlays = missingOverlays };
     }
 
     /// <summary>"Accept the install as it is now": records the install's fingerprint in <c>profile.toml</c>, under the

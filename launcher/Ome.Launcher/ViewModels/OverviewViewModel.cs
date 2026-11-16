@@ -59,7 +59,7 @@ public sealed class OverviewViewModel : ViewModel
     private ProfileDocument? Document => _page.Entry.Loaded?.Document;
     private GameProfileManifest? Game => Document == null ? null : GameProfileRegistry.BuiltIn.Find(Document.Game);
     private InstallRecognition? Install => Checks?.Install;
-    private bool InstallFound => Checks?[ProfileCheckKind.Install].Status == CheckStatus.Passed;
+    private bool InstallFound => _page.Catalog != null;
     private Sys4StartupSettings? Startup => InstallFound ? Install?.Catalog?.StartupSettings : null;
 
     /// <summary>A change can be written: the profile is readable, under no review, and not running or starting.</summary>
@@ -218,7 +218,8 @@ public sealed class OverviewViewModel : ViewModel
     // ---- what fixes a check ----
 
     /// <summary>"Locate the install…": the install check failed.</summary>
-    public bool ShowLocate => Checks?[ProfileCheckKind.Install].Status == CheckStatus.Failed && !_page.IsLocked;
+    public bool ShowLocate => Checks?[ProfileCheckKind.Install].Status == CheckStatus.Failed && _page.Catalog == null
+                              && !_page.IsLocked;
     public Command Locate { get; }
 
     /// <summary>"Accept the install as it is now": the fingerprint check warns.</summary>
