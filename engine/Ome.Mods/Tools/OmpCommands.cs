@@ -112,21 +112,24 @@ public static class OmpCommands
     public static int Check(ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages, bool skipFailed,
                             TextWriter console, ProfileMods? table = null)
     {
-        var (result, opened) = ModInspection.Inspect(linkBase, profileRoot, extraPackages, skipFailed, table).Printed(console);
-        try
-        {
-            if (result == null) return 1;
-            console.Write(result.Report.Render());
-            foreach (LinkedCatalog catalog in result.Catalogs)
-                console.WriteLine($"catalog: {catalog.ModId} selector {catalog.Selector}: "
-                                  + string.Join(", ", catalog.Records.Select((record, k) => $"0x{catalog.PackedId(k):x8} {record.CatalogName}")));
-            console.WriteLine($"omp check: {(result.Succeeded ? "links" : "does not link")}: {result.Report.Summary()}");
-            return result.Succeeded ? 0 : 1;
-        }
-        finally
-        {
-            foreach (ModPackage package in opened) package.Dispose();
-        }
+        using ModInspection inspection = ModInspection.Inspect(linkBase, profileRoot, extraPackages, skipFailed, table);
+        console.Write(CheckReport(inspection));
+        return inspection.Link is { Succeeded: true } ? 0 : 1;
+    }
+
+    /// <summary>What <c>omp check</c> prints for an inspection: the discovery's lines, the link report, each append
+    /// catalog and the verdict. The launcher's link check shows the same text (launcher spec §8.5, gate 8).</summary>
+    public static string CheckReport(ModInspection inspection)
+    {
+        var text = new StringWriter();
+        foreach (ModReportLine line in inspection.Discovery.Lines) text.WriteLine(line);
+        if (inspection.Link is not { } result) return text.ToString();
+        text.Write(result.Report.Render());
+        foreach (LinkedCatalog catalog in result.Catalogs)
+            text.WriteLine($"catalog: {catalog.ModId} selector {catalog.Selector}: "
+                           + string.Join(", ", catalog.Records.Select((record, k) => $"0x{catalog.PackedId(k):x8} {record.CatalogName}")));
+        text.WriteLine($"omp check: {(result.Succeeded ? "links" : "does not link")}: {result.Report.Summary()}");
+        return text.ToString();
     }
 
     /// <summary><c>omp explain NAME</c>: which layer and mod supplies a script or asset, and every plan applied to a

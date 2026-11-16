@@ -81,12 +81,15 @@ public sealed class LibraryTests : IDisposable
         Package(Shared, "example.himegari", game: "himegari");
         string other = Path.Combine(_root, "other-folder");
         Package(other, "example.ready");
-        ProfileDocument document = Document(Off("example.ext"), On("example.ready"), On("example.gone"));
+        Directory.CreateDirectory(Path.Combine(Shared, "example.unread"));
+        File.WriteAllText(Path.Combine(Shared, "example.unread", "manifest.toml"), "omp = 1\n");
+        ProfileDocument document = Document(Off("example.ext"), On("example.ready"), On("example.gone"),
+                                            On("example.unread"));
         document = document with { Mods = document.Mods! with { Folders = [.. document.Mods.Folders, other] } };
 
         LibraryView view = Library.View(document, Library.Index(document), Fingerprint);
-        Assert.Equal(["example.ext", "example.ready", "example.gone", "example.lib", "example.old-dep", "example.orphan",
-                      "example.pinned"], view.Packages.Select(row => row.Id));
+        Assert.Equal(["example.ext", "example.ready", "example.gone", "example.unread", "example.lib", "example.old-dep",
+                      "example.orphan", "example.pinned"], view.Packages.Select(row => row.Id));
         LibraryPackage Row(string id) => view.Packages.Single(row => row.Id == id);
         Assert.Equal(PackageState.NeedsExtended, Row("example.ext").State);
         Assert.False(Row("example.ext").Enabled);
@@ -95,6 +98,9 @@ public sealed class LibraryTests : IDisposable
         Assert.Equal(PackageState.Enabled, Row("example.ready").State);
         Assert.Contains("another copy of example.ready", Assert.Single(Row("example.ready").Problems));
         Assert.Equal(PackageState.Missing, Row("example.gone").State);
+        Assert.Equal(["the profile lists it, and none of its folders holds it"], Row("example.gone").Reasons);
+        Assert.Equal(PackageState.Missing, Row("example.unread").State);
+        Assert.Contains("example.unread is left out", Assert.Single(Row("example.unread").Reasons));
         Assert.Equal(PackageState.NeedsDependency, Row("example.orphan").State);
         Assert.Equal(PackageState.NeedsDependency, Row("example.old-dep").State);
         Assert.Equal(PackageState.UnsupportedRevision, Row("example.pinned").State);

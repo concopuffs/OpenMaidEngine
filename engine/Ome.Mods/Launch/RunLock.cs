@@ -86,6 +86,37 @@ public sealed class RunLock : IDisposable
         return true;
     }
 
+    /// <summary>Whether another process holds <paramref name="dataRoot"/>'s lock, found without taking it and without
+    /// creating the file: the launcher's checks (spec §8.5), which write nothing. The open asks for write access and
+    /// shares it, so it neither changes the file nor keeps a holder out for longer than the open. A missing file is a
+    /// free lock. <paramref name="problem"/> is why the file did not open when no holder is the reason: the root
+    /// cannot be written.</summary>
+    public static bool IsHeld(string dataRoot, out string? problem)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataRoot);
+        string path = System.IO.Path.Combine(System.IO.Path.GetFullPath(dataRoot), FileName);
+        problem = null;
+        try
+        {
+            using var probe = new FileStream(path, FileMode.Open, FileAccess.ReadWrite,
+                                             FileShare.ReadWrite | FileShare.Delete);
+            return false;
+        }
+        catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return false;
+        }
+        catch (IOException error) when (IsHeldElsewhere(error))
+        {
+            return true;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            problem = $"{path}: {error.Message}";
+            return false;
+        }
+    }
+
     /// <summary>A sharing or lock violation on Windows; <c>EWOULDBLOCK</c> from the <c>flock</c> elsewhere (11 on Linux,
     /// 35 on macOS). Any other failure is a root that cannot hold the file, not a holder.</summary>
     private static bool IsHeldElsewhere(IOException error)

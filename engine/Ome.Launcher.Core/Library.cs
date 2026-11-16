@@ -65,18 +65,26 @@ public static class Library
             ? ModeCheck.NativeRefusals(copies.Values.Select(list => list[0]))
             : new Dictionary<string, string>();
         var order = document.Mods?.Order ?? [];
+        var notes = folders.SelectMany(folder => folder.Notes).ToList();
         var rows = new List<LibraryPackage>();
         foreach (ProfileModEntry listed in order)
             rows.Add(Row(listed.Id, listed.Enabled, true));
         foreach (string id in copies.Keys.Where(id => order.All(entry => entry.Id != id)).Order(StringComparer.Ordinal))
             rows.Add(Row(id, false, false));
-        return new LibraryView(rows, folders.SelectMany(folder => folder.Notes).ToList());
+        return new LibraryView(rows, notes);
 
         LibraryPackage Row(string id, bool enabled, bool listed)
         {
             if (!copies.TryGetValue(id, out var found))
+            {
+                // The library files a package under its id, so a candidate of that name that does not read is likely it.
+                PackageIndexNote? unread = notes.FirstOrDefault(note => note.Name == id
+                                                                        || note.Name == id + ModPackage.PackageExtension);
                 return new LibraryPackage(id, null, enabled, listed, PackageState.Missing,
-                                          ["the profile lists it, and none of its folders holds it"], []);
+                                          [unread == null
+                                              ? "the profile lists it, and none of its folders holds it"
+                                              : $"the profile lists it, and {unread.Message}"], []);
+            }
             PackageIndexEntry entry = found[0];
             var reasons = new List<(PackageState State, string Text)>();
             if (refusals.TryGetValue(id, out string? refusal))
