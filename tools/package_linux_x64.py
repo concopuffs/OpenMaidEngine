@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import gzip
 import hashlib
 import json
@@ -18,6 +19,7 @@ import tarfile
 import tempfile
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -464,26 +466,41 @@ def _launcher_runs(record: Path, deadline: float) -> list[str]:
     return record.read_text(encoding="utf-8").splitlines() if record.is_file() else []
 
 
-def run_hand_over(package_root: Path, log: Path, timeout: float = SMOKE_TIMEOUT_S) -> None:
-    """The smoke's third step (launcher spec §5.6): the package, copied under a folder whose name has a space, with
-    write_launcher_stub's stub for its launcher, run from a folder with no game.
+@contextlib.contextmanager
+def released_copy(package_root: Path) -> Iterator[Path]:
+    """The package as a player has it: copied to `OME package`, a folder whose name has a space, in a temporary
+    folder outside the repository. A program inside a checkout links with the repository's toolchain
+    (`ModLinkBase.ForGame`), so the launcher's steps run on this copy, not where the package was staged. Its files are
+    hard links where the filesystem allows; the copy is removed afterwards."""
+    package_root = _resolved_directory(package_root, "package")
+    with tempfile.TemporaryDirectory(prefix="ome smoke ") as temporary:
+        scratch = Path(temporary).resolve()
+        if scratch == REPO or REPO in scratch.parents:
+            raise SmokeError(f"the temporary folder {scratch} is inside the repository: set TMPDIR to a folder "
+                             "outside it")
+        copy = scratch / "OME package"
+        shutil.copytree(package_root, copy, symlinks=True, copy_function=_link_or_copy)
+        yield copy
+
+
+def run_hand_over(folder: Path, log: Path, timeout: float = SMOKE_TIMEOUT_S) -> None:
+    """The smoke's third step (launcher spec §5.6), on a released_copy, whose launcher it replaces with
+    write_launcher_stub's stub; both runs start from a folder with no game.
     - `OME --headless -- --game-root <that folder>` must keep the engine: it reports its error and exits 2.
     - `OME --headless` must start the launcher once, with no arguments, and exit 0.
-    Appends both runs and the stub's records to `log`, then HAND_OVER_MARKER. The copy hard-links the package's
-    files where it can and is removed afterwards; the package itself is not changed."""
-    package_root = _resolved_directory(package_root, "package")
-    with tempfile.TemporaryDirectory(prefix="ome hand-over ", dir=package_root.parent) as temporary:
+    Appends both runs and the stub's records to `log`, then HAND_OVER_MARKER."""
+    folder = _resolved_directory(folder, "package copy")
+    launcher = folder / LAUNCHER.program
+    launcher.unlink(missing_ok=True)  # a hard link to the package's own launcher, never written through
+    with tempfile.TemporaryDirectory(prefix="ome hand-over ") as temporary:
         scratch = Path(temporary)
-        copy = scratch / "OME package"
-        shutil.copytree(package_root, copy, symlinks=True, copy_function=_link_or_copy,
-                        ignore=lambda folder, names: [LAUNCHER.program] if Path(folder) == package_root else [])
         record = scratch / "launcher-runs.txt"
-        write_launcher_stub(copy / LAUNCHER.program, record)
+        write_launcher_stub(launcher, record)
         elsewhere = scratch / "no game here"
         elsewhere.mkdir()
         # Godot can change the directory before the engine starts; the engine reads the caller's from PWD.
         environment = dict(smoke_environment(scratch), PWD=str(elsewhere))
-        engine = str(copy / "OME")
+        engine = str(folder / "OME")
         with_argument = _run_step([engine, "--headless", "--", "--game-root", str(elsewhere)], elsewhere,
                                   environment, timeout)
         # The engine starts the launcher and exits without waiting, so the run with none waits for its record.
@@ -525,8 +542,10 @@ def main() -> int:
         package_root = args.package_root.resolve()  # the launcher's steps run from scratch folders
         try:
             run_smoke(smoke_command(package_root), SMOKE_MARKER, args.log)
-            run_launcher_check([str(package_root / LAUNCHER.program)], args.log)
-            run_hand_over(package_root, args.log)
+            # The launcher's steps run on the package as a player has it: outside the repository.
+            with released_copy(package_root) as copy:
+                run_launcher_check([str(copy / LAUNCHER.program)], args.log)
+                run_hand_over(copy, args.log)
         except SmokeError as error:
             print(f"package smoke: {error}", flush=True)
             return 1

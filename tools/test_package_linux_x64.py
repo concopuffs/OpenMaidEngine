@@ -240,11 +240,12 @@ class HandOverSmokeTests(unittest.TestCase):
             package = fake_package(root, mode)
             log = root / "package-smoke.log"
             try:
-                package_linux_x64.run_hand_over(package, log, timeout)
+                with package_linux_x64.released_copy(package) as copy:
+                    package_linux_x64.run_hand_over(copy, log, timeout)
                 error = None
             except package_linux_x64.SmokeError as failure:
                 error = str(failure)
-            # The package is left as it was, and the copy is gone.
+            # The package is left as it was (the copy's launcher, a hard link to it, is replaced, not written through).
             self.assertEqual("the real launcher\n", (package / "OME-Launcher").read_text(encoding="utf-8"))
             self.assertEqual(["OME-linux-x64", "package-smoke.log"], sorted(path.name for path in root.iterdir()))
             return error, log.read_text(encoding="utf-8")
@@ -296,7 +297,30 @@ class SmokeStepsTests(unittest.TestCase):
                     self.assertEqual(expected, package_linux_x64.main())
                 names = [name for name, _ in calls]
                 self.assertEqual(["engine", "check", "hand-over"] if failing is None else ["engine", "check"], names)
-            self.assertEqual([str(root.resolve() / "OME-Launcher")], calls[1][1])
+            # The engine's smoke runs where the package is; the launcher's steps on a released copy elsewhere.
+            self.assertEqual(root.resolve() / "OME", Path(calls[0][1][0]))
+            launcher = Path(calls[1][1][0])
+            self.assertEqual(("OME-Launcher", "OME package"), (launcher.name, launcher.parent.name))
+            self.assertNotIn(Path(directory).resolve(), launcher.parents)
+
+    def test_a_released_copy_is_outside_the_repository_and_removed_afterwards(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory) / "OME-linux-x64"
+            (package / "data").mkdir(parents=True)
+            (package / "data/OME.dll").write_bytes(b"managed")
+            with package_linux_x64.released_copy(package) as copy:
+                self.assertEqual("OME package", copy.name)
+                self.assertNotIn(package_linux_x64.REPO, copy.parents)
+                self.assertEqual(b"managed", (copy / "data/OME.dll").read_bytes())
+            self.assertFalse(copy.exists())
+            # A temporary folder inside the repository would put the copy back in its toolchain's reach.
+            inner = Path(directory) / "repository" / "tmp"
+            inner.mkdir(parents=True)
+            with patch.object(package_linux_x64, "REPO", inner.parent.resolve()), \
+                    patch.object(tempfile, "tempdir", str(inner)):
+                with self.assertRaisesRegex(package_linux_x64.SmokeError, "is inside the repository: set TMPDIR"):
+                    with package_linux_x64.released_copy(package):
+                        pass
 
 
 class PackageLinuxX64Tests(unittest.TestCase):

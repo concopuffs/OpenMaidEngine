@@ -607,17 +607,20 @@ debug builds). The launcher captures the engine's output live (launcher spec §8
 release engine's lines would wait in stdio's buffer and be lost when it is killed. `test_release_workflow.py`
 checks the setting.
 
-Two launcher steps follow, each adding to the log (launcher plan §9.4). Both run with `DISPLAY` and
-`WAYLAND_DISPLAY` removed, and with `HOME` and the XDG folders in a scratch folder, so neither reads nor writes the
-machine's own state.
+Two launcher steps follow, each adding to the log (launcher plan §9.4). Both run on the package as a player has it:
+a copy (hard links where it can) in `OME package`, a folder whose name has a space, in a temporary folder outside
+the repository. A program inside a checkout links with the repository's toolchain (`ModLinkBase.ForGame`), so the
+staged package would not show the release's behaviour; a `TMPDIR` inside the repository is refused. Both steps run
+with `DISPLAY` and `WAYLAND_DISPLAY` removed, and with `HOME` and the XDG folders in a scratch folder, so neither
+reads nor writes the machine's own state.
 - **The launcher's check (gate 11):** `OME-Launcher --check smoke --home HOME`. The temporary home holds
   `profiles/smoke/` in native mode on a synthetic Himegari install. Its `SYS4INI.BIN` is the smallest complete
   catalog: the header of the first catalog identity in `engine/Ome.Engine/Profiles/himegari.json`, and a directory
   of one archive and one placeholder entry. The launcher must exit 0, with each of its six checks (Install,
   Fingerprint, Root, Packages, Link, Lock) passed. Then the log gets `LAUNCHER CHECK OK: checks=6`.
-- **The hand-over (launcher spec §5.6):** the package is copied, hard-linked where it can be, to `OME package` under
-  a scratch folder whose name has a space, beside the package. The copy's `OME-Launcher` is a shell script that
-  records how it started. Both runs start from a folder with no game:
+- **The hand-over (launcher spec §5.6):** the copy's `OME-Launcher` is replaced by a shell script that records how
+  it started (the hard link is removed first, so the package's own file is untouched). Both runs start from a folder
+  with no game:
   - `OME --headless -- --game-root <that folder>` must keep the engine: it exits 2 with its own error, and the
     stand-in does not start;
   - `OME --headless` must start the stand-in once, with no arguments, and exit 0.
