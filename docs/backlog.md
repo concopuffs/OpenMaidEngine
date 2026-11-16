@@ -445,12 +445,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
-- **CI actions pinned to Node.js 20 releases.** Since 2026-11-06, CI's annotations warn that `actions/checkout`
-  v4.4.0, `actions/setup-dotnet` v4.3.1, `actions/upload-artifact` v4.6.2 and `actions/cache` v4.3.0 target
-  Node.js 20. The runners force them onto Node.js 24 for now. `actions/download-artifact` v4.3.0 is the same
-  generation; it runs only in tag publication, whose annotations were not read. Done when each action is SHA-pinned
-  to a release that targets Node.js 24, and the core, release-build and FFmpeg SDK workflows run green without the
-  warning.
 - **A package is an executable beside about 200 loose files.** Both export presets leave
   `dotnet/embed_build_outputs` and `binary_format/embed_pck` off (`godot/export_presets.cfg`). v0.6.0's Windows
   package therefore holds 220 files: `OME.exe`, `OME.pck`, the notices, and 208 files in `data_OME_windows_x86_64/`,
