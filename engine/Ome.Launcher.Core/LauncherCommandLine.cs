@@ -83,8 +83,13 @@ public sealed record LauncherArguments(LauncherCommand Command, string? Target, 
 public sealed record LauncherContext(string LauncherProgram, string WorkingDirectory, LauncherEnvironment Environment,
                                      TextWriter Out, TextWriter Error, CheckOptions? CheckOptions = null);
 
-/// <summary>A run's exit code, and where the window would open, if it would.</summary>
-public sealed record LauncherOutcome(int ExitCode, WindowReason Window);
+/// <summary>What the window opens with (launcher plan §6.1): OME home, the engine its Play starts (the one beside the
+/// launcher, or <c>--engine</c>'s), and for a launch that did not start or failed, the profile and what happened.</summary>
+public sealed record WindowStart(OmeHome Home, EngineProgram Engine, ProfileEntry? Profile = null,
+                                 LaunchResult? Launch = null);
+
+/// <summary>A run's exit code, and where the window opens, if it does, with what it opens with.</summary>
+public sealed record LauncherOutcome(int ExitCode, WindowReason Window, WindowStart? Start = null);
 
 /// <summary>
 /// The launcher's command line (spec ﾂｧ8.6), before any window: <c>--launch ID|DIR [-- ARGS]</c>, <c>--check</c>,
@@ -143,11 +148,13 @@ public static class LauncherCommandLine
 
     private static LauncherOutcome Execute(LauncherArguments parsed, LauncherContext context, TextWriter output)
     {
-        if (parsed.Command == LauncherCommand.Window)
-            return new LauncherOutcome(Failure, WindowReason.Requested);
-
         string launcherDirectory = Path.GetDirectoryName(Path.GetFullPath(context.LauncherProgram))!;
         OmeHome home = OmeHome.Resolve(parsed.Home, launcherDirectory, context.WorkingDirectory, context.Environment);
+        WindowStart Start(ProfileEntry? profile = null, LaunchResult? launch = null)
+            => new(home, Engine(parsed, context, launcherDirectory), profile, launch);
+        if (parsed.Command == LauncherCommand.Window)
+            return new LauncherOutcome(Success, WindowReason.Requested, Start());
+
         LauncherSettingsFile settingsFile = LauncherSettingsStore.Load(home);
         foreach (string warning in settingsFile.Warnings) context.Error.WriteLine($"warning: {warning}");
         string machineFolder = context.CheckOptions?.MachineFolder ?? MachineState.DefaultFolder();
@@ -165,7 +172,7 @@ public static class LauncherCommandLine
         {
             output.WriteLine($"{profile.Root} is a profile root the launcher did not create: nothing opens its paths "
                              + "before the player accepts its review in the launcher's window");
-            return new LauncherOutcome(Failure, WindowReason.Review);
+            return new LauncherOutcome(Failure, WindowReason.Review, Start(profile));
         }
         Usable(profile);
 
@@ -183,7 +190,7 @@ public static class LauncherCommandLine
         {
             output.WriteLine($"{profile.Id} is not started: {launched.Refusal}");
             if (launched.LogPath == null) Print(launched.Checks, output);
-            return new LauncherOutcome(Failure, WindowReason.CheckFailed);
+            return new LauncherOutcome(Failure, WindowReason.CheckFailed, Start(profile, launched));
         }
         if (launched.Failed)
         {
@@ -191,7 +198,7 @@ public static class LauncherCommandLine
             foreach (string line in launched.LogTail) output.WriteLine($"  {line}");
             output.WriteLine("the checks, run again:");
             Print(launched.Checks, output);
-            return new LauncherOutcome(Failure, WindowReason.StartFailed);
+            return new LauncherOutcome(Failure, WindowReason.StartFailed, Start(profile, launched));
         }
         return new LauncherOutcome(Success, WindowReason.None);
     }

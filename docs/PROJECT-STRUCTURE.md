@@ -384,10 +384,17 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                     (launcher plan §5.12); validate.py core restores and tests it
     │   ├── Ome.Launcher/                     OME-Launcher (net10.0, a windowed program): Main runs Core's
     │   │                                     LauncherCommandLine after attaching to the parent's console on
-    │   │                                     Windows; app.manifest as M0 measured it; the window comes with M3
+    │   │                                     Windows, then opens the Avalonia window where the outcome says
+    │   │                                     (launcher plan §6); app.manifest as M0 measured it; App.axaml,
+    │   │                                     LauncherSession (one window run), LauncherStrings + Strings/en.json,
+    │   │                                     ja.json (the launcher's text), Styles/ (Palette.axaml: the mock's
+    │   │                                     colours, light and dark; Launcher.axaml: its classes), ViewModels/
+    │   │                                     (the pages' decisions, over Core), Views/ (AXAML, compiled bindings)
     │   ├── Ome.Launcher.Tests/               gate 9: the program run as a child process with the stub engine on a
     │   │                                     synthetic install in a temporary OME home; compiles
-    │   │                                     engine/Ome.Engine.Tests/SyntheticCatalog.cs
+    │   │                                     engine/Ome.Engine.Tests/SyntheticCatalog.cs; the window's view
+    │   │                                     models, and its pages drawn headless (Headless.cs, TestHome.cs) to
+    │   │                                     disposable build/launcher-shots/
     │   └── Ome.Launcher.Spike/              milestone 0 of the launcher plan (superpowers/plans/2026-11-15-
     │                                       launcher.md §2): a bare Avalonia window plus --check-like, --capture
     │                                       and --lock modes; its own global.json picks the .NET 10 SDK; measure/

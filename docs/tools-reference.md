@@ -1075,13 +1075,13 @@ branching/state can shift page ordinals between runs. Resolve a reported page wi
 
 `launcher/Ome.Launcher` builds `OME-Launcher` (`OME-Launcher.exe` on Windows), a windowed net10.0 program over
 `engine/Ome.Launcher.Core` (launcher spec §8). Its command line (spec §8.6) runs before any window and needs no
-display. The window comes with launcher plan M3: until then, where the window would open, the program prints that
-it would and exits 1.
+display. Where the command line's outcome names the window, the program opens it (Avalonia 12, launcher plan §6).
+The window is being built in launcher plan M3, and so far it is the frame only.
 
 | Command | Effect | Exit code |
 |---|---|---|
-| `OME-Launcher` | the window (not built yet) | 1 |
-| `--launch ID\|DIR [-- ARGS]` | runs the checks and starts the profile, with `ARGS` after the profile's own engine arguments; returns when the engine exits. Both streams go to the profile's `diagnostics/engine.log`. A failed start prints the log's last 40 lines and the checks, run again. A folder no profile lists is a root the launcher did not create: nothing starts, and the window would open at its review (spec §12) | 0 started and exited 0; 1 a refused or failed start |
+| `OME-Launcher` | the window, at the last profile | 0 when it closes |
+| `--launch ID\|DIR [-- ARGS]` | runs the checks and starts the profile, with `ARGS` after the profile's own engine arguments; returns when the engine exits. Both streams go to the profile's `diagnostics/engine.log`. A refused start prints why, and a failed start prints the log's last 40 lines and the checks, run again; either then opens the window at the problem. A folder no profile lists is a root the launcher did not create: nothing starts, and the window opens at its review (spec §12) | 0 started and exited 0; 1 a refused or failed start, once the window closes |
 | `--check ID\|DIR` | runs the checks and prints one line per check (`passed`, `warning`, `FAILED` or `not run`, the check, its message), with the link report under a link check that did not pass. Writes nothing | 0 Play can start; 1 it cannot |
 | `--print-command ID\|DIR [-- ARGS]` | prints the command a launch would use as JSON: `program`, `arguments`, `working_directory`, `environment` | 0 |
 | `--home DIR` | uses `DIR` as OME home, instead of a portable `data/` beside the program or the per-user default | |
@@ -1101,12 +1101,13 @@ started from, but a shell does not always wait for a windowed program:
   prompt comes back before the lines.
 - **A script:** `--output FILE` is the dependable form. A process that captures the streams gets them in UTF-8.
 
-During development, run it with `dotnet run --project launcher/Ome.Launcher -- --check ID --home DIR`. Pass
-`--engine <godot console> --engine-arg --path --engine-arg godot` to start the port from the repository.
+During development, run it with `dotnet run --project launcher/Ome.Launcher -- --check ID --home DIR`, or with no
+command for the window. Pass `--engine <godot console> --engine-arg --path --engine-arg godot` to start the port from
+the repository, from the command line or from the window's Play.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `launcher/Ome.Launcher.Tests` | Gate 9 (launcher plan §5.12): `OME-Launcher` run as a child process with its own `APPDATA`, on a synthetic Kamidori install in a temporary `--home`, with `engine/Ome.Launcher.StubEngine` as the engine. It covers `--print-command`'s JSON and `--output`, `--check`'s lines and exit codes, the usage errors, a launch and a failed start, and `--launch DIR` on an unreviewed root. | `dotnet test launcher/OmeLauncher.sln` (the core level's `launcher-tests` gate) | temporary files only |
+| `launcher/Ome.Launcher.Tests` | Gate 9 (launcher plan §5.12): `OME-Launcher` run as a child process with its own `APPDATA`, on a synthetic Kamidori install in a temporary `--home`, with `engine/Ome.Launcher.StubEngine` as the engine. It covers `--print-command`'s JSON and `--output`, `--check`'s lines and exit codes, the usage errors, and a launch. The outcomes that open the window (no command, a failed start, `--launch DIR` on an unreviewed root) run in the test's process through `LauncherCommandLine.Run`. The window's tests (launcher plan §6): its string tables, and its pages drawn headless (`Avalonia.Headless`, test-only) on Skia, which fail on any warning Avalonia logs and click nothing. | `dotnet test launcher/OmeLauncher.sln` (the core level's `launcher-tests` gate) | temporary files; the drawn pages to disposable `build/launcher-shots/<task>-<page>-<state>.png`, to be looked at against the mock |
 
 ## Asset resolution / graphics
 

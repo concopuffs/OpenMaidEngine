@@ -1,0 +1,60 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- The mock's palette (docs/superpowers/specs/2026-11-15-launcher-design-mock.html, :root and body.dark), one
+       brush per variable, and the Fluent keys the launcher's controls take from it (launcher plan §6.1). -->
+
+  <FontFamily x:Key="ContentControlThemeFontFamily">avares://OME-Launcher/Assets/Fonts#Noto Sans JP</FontFamily>
+  <FontFamily x:Key="OmeMonoFontFamily">Cascadia Mono, Consolas, DejaVu Sans Mono, monospace</FontFamily>
+  <x:Double x:Key="ControlContentThemeFontSize">13</x:Double>
+  <x:Double x:Key="TabItemHeaderFontSize">13</x:Double>
+  <x:Double x:Key="TabItemMinHeight">34</x:Double>
+
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="OmePageBrush" Color="#d6d6d1" />
+      <SolidColorBrush x:Key="OmeWinBrush" Color="#f7f7f5" />
+      <SolidColorBrush x:Key="OmeSideBrush" Color="#eeeeeb" />
+      <SolidColorBrush x:Key="OmeCardBrush" Color="#ffffff" />
+      <SolidColorBrush x:Key="OmeLineBrush" Color="#dcdcd7" />
+      <SolidColorBrush x:Key="OmeTextBrush" Color="#1b1b19" />
+      <SolidColorBrush x:Key="OmeMutedBrush" Color="#6b6b66" />
+      <SolidColorBrush x:Key="OmeInkBrush" Color="#1b1b19" />
+      <SolidColorBrush x:Key="OmeInkTextBrush" Color="#ffffff" />
+      <SolidColorBrush x:Key="OmeHoverBrush" Color="#e4e4df" />
+      <SolidColorBrush x:Key="OmeSelBrush" Color="#ffffff" />
+      <SolidColorBrush x:Key="OmeFieldBrush" Color="#ffffff" />
+      <SolidColorBrush x:Key="OmeOkBrush" Color="#2e8b57" />
+      <SolidColorBrush x:Key="OmeWarnBrush" Color="#a86a12" />
+      <SolidColorBrush x:Key="OmeBadBrush" Color="#c0392b" />
+      <SolidColorBrush x:Key="OmeRunBrush" Color="#2f6fde" />
+      <SolidColorBrush x:Key="OmeOkBgBrush" Color="#e3f3ea" />
+      <SolidColorBrush x:Key="OmeWarnBgBrush" Color="#fbf0d9" />
+      <SolidColorBrush x:Key="OmeBadBgBrush" Color="#fbe6e3" />
+      <SolidColorBrush x:Key="OmeRunBgBrush" Color="#e2ecfc" />
+      <SolidColorBrush x:Key="OmeScrimBrush" Color="#6b000000" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="OmePageBrush" Color="#0c0d0e" />
+      <SolidColorBrush x:Key="OmeWinBrush" Color="#18191b" />
+      <SolidColorBrush x:Key="OmeSideBrush" Color="#1f2023" />
+      <SolidColorBrush x:Key="OmeCardBrush" Color="#232428" />
+      <SolidColorBrush x:Key="OmeLineBrush" Color="#34363b" />
+      <SolidColorBrush x:Key="OmeTextBrush" Color="#ececea" />
+      <SolidColorBrush x:Key="OmeMutedBrush" Color="#9b9c99" />
+      <SolidColorBrush x:Key="OmeInkBrush" Color="#ececea" />
+      <SolidColorBrush x:Key="OmeInkTextBrush" Color="#18191b" />
+      <SolidColorBrush x:Key="OmeHoverBrush" Color="#2a2c30" />
+      <SolidColorBrush x:Key="OmeSelBrush" Color="#2d2f34" />
+      <SolidColorBrush x:Key="OmeFieldBrush" Color="#1b1c1f" />
+      <SolidColorBrush x:Key="OmeOkBrush" Color="#58c08a" />
+      <SolidColorBrush x:Key="OmeWarnBrush" Color="#e0a84a" />
+      <SolidColorBrush x:Key="OmeBadBrush" Color="#ef7a6d" />
+      <SolidColorBrush x:Key="OmeRunBrush" Color="#7aa7f5" />
+      <SolidColorBrush x:Key="OmeOkBgBrush" Color="#1d3329" />
+      <SolidColorBrush x:Key="OmeWarnBgBrush" Color="#3a2f18" />
+      <SolidColorBrush x:Key="OmeBadBgBrush" Color="#3d211e" />
+      <SolidColorBrush x:Key="OmeRunBgBrush" Color="#1c2a44" />
+      <SolidColorBrush x:Key="OmeScrimBrush" Color="#6b000000" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

@@ -1,0 +1,20 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Ome.Launcher.ViewModels"
+        xmlns:v="using:Ome.Launcher.Views"
+        x:Class="Ome.Launcher.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="{Binding S[app.title]}"
+        Width="1180" Height="760" MinWidth="900" MinHeight="580">
+  <!-- The mock's .window: the profile list (.side, 300 px) beside the main pane (.main). -->
+  <Grid ColumnDefinitions="300,*">
+    <Border Classes="side">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Classes="heading" Margin="16,14,16,6"
+                   Text="{Binding S[profiles.heading], Converter={x:Static v:Text.Upper}}" />
+        <Panel />
+      </DockPanel>
+    </Border>
+    <Panel Grid.Column="1" />
+  </Grid>
+</Window>

@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- OME-Launcher (launcher spec §8.1): the presentation over Ome.Launcher.Core. Launcher plan M2 gives it the command
-       line (§5.12, spec §8.6); the Avalonia window comes with M3. A windowed program, as the release is: on Windows it
-       attaches to its parent's console to print (plan §3.5). net10.0, the one project that is (plan §5). -->
+  <!-- OME-Launcher (launcher spec §8.1): the Avalonia window over Ome.Launcher.Core, and the command line that runs
+       before it (spec §8.6). A windowed program: on Windows it attaches to its parent's console to print (launcher
+       plan §3.5). net10.0, the one project that is (plan §5). -->
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -12,10 +12,28 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- A binding names a property of its x:DataType, so a missing one fails the build, not the page (plan §6). -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <!-- Avalonia's build-time telemetry (its README: a machine id, the hashed machine name, OS, CI detection) runs
+         from this package's build targets on every build. Excluding its assets removes the target, so no build of
+         this project sends it, whatever the environment holds (launcher plan §3.10, §3.12). -->
+    <PackageReference Include="Avalonia.BuildServices" Version="11.3.2" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\engine\Ome.Launcher.Core\Ome.Launcher.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The port's bundled font (shell §11), so Japanese titles read the same on every OS (spec §9). -->
+    <AvaloniaResource Include="..\..\godot\assets\NotoSansJP-Regular.otf" Link="Assets\Fonts\NotoSansJP-Regular.otf" />
+    <!-- The launcher's string tables (spec §8.8), one per language. -->
+    <EmbeddedResource Include="Strings\*.json" LogicalName="Ome.Launcher.Strings.%(Filename).json" />
   </ItemGroup>
 
 </Project>

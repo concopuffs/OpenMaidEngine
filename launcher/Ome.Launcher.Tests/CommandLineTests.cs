@@ -6,9 +6,11 @@ using Ome.Engine.Sys4;
 using Ome.Launcher.Core;
 
 /// <summary>
-/// Gate 9 (launcher spec §8.6, launcher plan §5.12): OME-Launcher's command line, run as a child process. A temporary
-/// OME home holds a profile on a synthetic Kamidori install, the stub engine stands in for the engine, and
-/// <c>APPDATA</c> points into the test's folder, so nothing outside it is read or written.
+/// Gate 9 (launcher spec §8.6, launcher plan §5.12): OME-Launcher's command line. A temporary OME home holds a profile
+/// on a synthetic Kamidori install, and the stub engine stands in for the engine. What runs with no window runs as a
+/// child process, with <c>APPDATA</c> in the test's folder, so nothing outside it is read or written. An outcome that
+/// opens the window (launcher plan §6.1) runs in this process through <see cref="LauncherCommandLine.Run"/>, which is
+/// all the program does before it opens the window with that outcome.
 /// </summary>
 public sealed class CommandLineTests : IDisposable
 {
@@ -89,6 +91,23 @@ public sealed class CommandLineTests : IDisposable
     private static string Show((int Exit, string Output, string Error) run)
         => $"exit {run.Exit}\n--- stdout\n{run.Output}\n--- stderr\n{run.Error}";
 
+    /// <summary>Runs the command line in this process, as the program's <c>Main</c> does before any window, with its
+    /// machine folder and application data in the test's folder.</summary>
+    private (LauncherOutcome Outcome, string Output, string Error) InProcess(params string[] arguments)
+    {
+        string appData = Path.Combine(_root, "appdata");
+        var environment = new LauncherEnvironment(LauncherEnvironment.Current.Platform,
+                                                  name => name == "APPDATA" ? appData : null, appData, _root);
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var context = new LauncherContext(Launcher, _root, environment, output, error,
+                                          new CheckOptions(MachineFolder: Path.Combine(appData, "machine")));
+        return (LauncherCommandLine.Run(arguments, context), output.ToString(), error.ToString());
+    }
+
+    private static string Show((LauncherOutcome Outcome, string Output, string Error) run)
+        => Show((run.Outcome.ExitCode, run.Output, run.Error)) + $"\n--- window {run.Outcome.Window}";
+
     [Fact]
     public void PrintCommandPrintsTheLaunchsCommandAsJsonAndOutputWritesItToAFileAsWell()
     {
@@ -152,9 +171,11 @@ public sealed class CommandLineTests : IDisposable
         Assert.True(stray.Exit == 2, Show(stray));
         Assert.Contains("-- ARGS goes with --launch or --print-command", stray.Error);
 
-        var window = Run("--home", _home.Root);
-        Assert.True(window.Exit == 1, Show(window));
-        Assert.Contains("the launcher's window is not built yet", window.Error);
+        var window = InProcess("--home", _home.Root, "--engine", Stub);
+        Assert.True(window.Outcome is { ExitCode: 0, Window: WindowReason.Requested }, Show(window));
+        Assert.Equal(_home, window.Outcome.Start!.Home);
+        Assert.Equal(Stub, window.Outcome.Start.Engine.Program);
+        Assert.Null(window.Outcome.Start.Profile);
     }
 
     [Fact]
@@ -170,13 +191,14 @@ public sealed class CommandLineTests : IDisposable
         Assert.Contains("stub err: --locator-hud", text);
         Assert.Contains("[launcher] the engine exited with 0", text);
 
-        var failed = Run("--launch", "gate", "--home", _home.Root, "--engine", Stub, "--engine-arg", "--exit-code",
-                         "--engine-arg", "3");
-        Assert.True(failed.Exit == 1, Show(failed));
+        var failed = InProcess("--launch", "gate", "--home", _home.Root, "--engine", Stub, "--engine-arg", "--exit-code",
+                               "--engine-arg", "3");
+        Assert.True(failed.Outcome is { ExitCode: 1, Window: WindowReason.StartFailed }, Show(failed));
         Assert.Contains($"the engine exited with 3; the end of {log}:", failed.Output);
         Assert.Contains("stub out: --exit-code", failed.Output);
         Assert.Contains("the checks, run again:", failed.Output);
-        Assert.Contains("the window would open at the failed start", failed.Error);
+        Assert.Equal(profile.Root, failed.Outcome.Start!.Profile!.Root);
+        Assert.Equal(3, failed.Outcome.Start.Launch!.ExitCode);
     }
 
     [Fact]
@@ -185,11 +207,11 @@ public sealed class CommandLineTests : IDisposable
         ProfileEntry elsewhere = Profile("shared", new OmeHome(Path.Combine(_root, "other-home"), OmeHomeKind.Explicit));
         string log = Path.Combine(elsewhere.Root, EngineLaunch.DiagnosticsFolder, EngineLaunch.LogFile);
 
-        var run = Run("--launch", elsewhere.Root, "--home", _home.Root, "--engine", Stub);
+        var run = InProcess("--launch", elsewhere.Root, "--home", _home.Root, "--engine", Stub);
 
-        Assert.True(run.Exit == 1, Show(run));
+        Assert.True(run.Outcome is { ExitCode: 1, Window: WindowReason.Review }, Show(run));
         Assert.Contains($"{elsewhere.Root} is a profile root the launcher did not create", run.Output);
-        Assert.Contains("the window would open at the root's review", run.Error);
+        Assert.Equal(elsewhere.Root, run.Outcome.Start!.Profile!.Root);
         Assert.False(File.Exists(log), "the engine started");
     }
 }

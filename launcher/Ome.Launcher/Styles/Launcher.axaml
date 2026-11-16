@@ -1,0 +1,187 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- The mock's classes as Avalonia styles (launcher plan §6.1), over Fluent. Each selector names the mock's class it
+       stands for; the colours are Palette.axaml's brushes, so one style serves both themes. -->
+
+  <!-- body: the window's ground, text colour and type. -->
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource OmeWinBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource ContentControlThemeFontFamily}" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <!-- .muted, .mono, and the headings: .side-head h2, .card h3, .form h3 (uppercased by the view), .head h1. -->
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.small">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource OmeMonoFontFamily}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="TextBox.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource OmeMonoFontFamily}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="TextBlock.heading">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="LetterSpacing" Value="0.9" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+  </Style>
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="23" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="LineHeight" Value="28" />
+  </Style>
+  <Style Selector="TextBlock.dialog-title">
+    <Setter Property="FontSize" Value="18" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="TextBlock.strong">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.ok"><Setter Property="Foreground" Value="{DynamicResource OmeOkBrush}" /></Style>
+  <Style Selector="TextBlock.warn"><Setter Property="Foreground" Value="{DynamicResource OmeWarnBrush}" /></Style>
+  <Style Selector="TextBlock.bad"><Setter Property="Foreground" Value="{DynamicResource OmeBadBrush}" /></Style>
+  <Style Selector="TextBlock.run"><Setter Property="Foreground" Value="{DynamicResource OmeRunBrush}" /></Style>
+
+  <!-- .btn and its kinds: .primary, .play, .wide, .running, .link. -->
+  <Style Selector="Button">
+    <Setter Property="Background" Value="{DynamicResource OmeCardBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="11,5" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+  </Style>
+  <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+  </Style>
+  <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeCardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource OmeInkBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeInkTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeInkBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeInkBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeInkBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeInkTextBrush}" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Opacity" Value="0.88" />
+  </Style>
+  <Style Selector="Button.play">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="Padding" Value="30,10" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="Button.running">
+    <Setter Property="Background" Value="{DynamicResource OmeRunBgBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeRunBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.running:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeRunBgBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeRunBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Button.wide">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="7" />
+  </Style>
+  <Style Selector="Button.link">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.link:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+  </Style>
+
+  <!-- .chip and its states. -->
+  <Style Selector="Border.chip">
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="9,1" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="Background" Value="{DynamicResource OmeCardBrush}" />
+  </Style>
+  <Style Selector="Border.chip > TextBlock">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Border.chip.ok"><Setter Property="Background" Value="{DynamicResource OmeOkBgBrush}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+  <Style Selector="Border.chip.ok > TextBlock"><Setter Property="Foreground" Value="{DynamicResource OmeOkBrush}" /></Style>
+  <Style Selector="Border.chip.warn"><Setter Property="Background" Value="{DynamicResource OmeWarnBgBrush}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+  <Style Selector="Border.chip.warn > TextBlock"><Setter Property="Foreground" Value="{DynamicResource OmeWarnBrush}" /></Style>
+  <Style Selector="Border.chip.bad"><Setter Property="Background" Value="{DynamicResource OmeBadBgBrush}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+  <Style Selector="Border.chip.bad > TextBlock"><Setter Property="Foreground" Value="{DynamicResource OmeBadBrush}" /></Style>
+  <Style Selector="Border.chip.run"><Setter Property="Background" Value="{DynamicResource OmeRunBgBrush}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+  <Style Selector="Border.chip.run > TextBlock"><Setter Property="Foreground" Value="{DynamicResource OmeRunBrush}" /></Style>
+
+  <!-- .dot, the state beside a profile's name. -->
+  <Style Selector="Ellipse.dot">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="Fill" Value="{DynamicResource OmeOkBrush}" />
+  </Style>
+  <Style Selector="Ellipse.dot.warn"><Setter Property="Fill" Value="{DynamicResource OmeWarnBrush}" /></Style>
+  <Style Selector="Ellipse.dot.bad"><Setter Property="Fill" Value="{DynamicResource OmeBadBrush}" /></Style>
+  <Style Selector="Ellipse.dot.run"><Setter Property="Fill" Value="{DynamicResource OmeRunBrush}" /></Style>
+
+  <!-- .side, .card, .notice, and the rules between rows. -->
+  <Style Selector="Border.side">
+    <Setter Property="Background" Value="{DynamicResource OmeSideBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+  </Style>
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource OmeCardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="15,13" />
+  </Style>
+  <Style Selector="Border.notice">
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="12,9" />
+  </Style>
+  <Style Selector="Border.notice.bad"><Setter Property="Background" Value="{DynamicResource OmeBadBgBrush}" /></Style>
+  <Style Selector="Border.notice.bad TextBlock.notice-text"><Setter Property="Foreground" Value="{DynamicResource OmeBadBrush}" /></Style>
+  <Style Selector="Border.notice.warn"><Setter Property="Background" Value="{DynamicResource OmeWarnBgBrush}" /></Style>
+  <Style Selector="Border.notice.warn TextBlock.notice-text"><Setter Property="Foreground" Value="{DynamicResource OmeWarnBrush}" /></Style>
+  <Style Selector="Border.notice.run"><Setter Property="Background" Value="{DynamicResource OmeRunBgBrush}" /></Style>
+  <Style Selector="Border.notice.run TextBlock.notice-text"><Setter Property="Foreground" Value="{DynamicResource OmeRunBrush}" /></Style>
+  <Style Selector="Border.rule-top">
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+  </Style>
+  <Style Selector="Border.rule-bottom">
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+</Styles>

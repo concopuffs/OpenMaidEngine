@@ -1,0 +1,17 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Ome.Launcher.App"
+             RequestedThemeVariant="Default">
+  <!-- The launcher's application (launcher plan §6.1): Fluent, then the mock's palette and classes over it. -->
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://OME-Launcher/Styles/Palette.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://OME-Launcher/Styles/Launcher.axaml" />
+  </Application.Styles>
+</Application>

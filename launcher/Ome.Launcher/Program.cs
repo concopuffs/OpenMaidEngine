@@ -1,12 +1,14 @@
 using System.Runtime.InteropServices;
+using Avalonia;
 using Ome.Launcher.Core;
 
 namespace Ome.Launcher;
 
 /// <summary>
 /// OME-Launcher's entry point. The command line (spec §8.6) runs before any window: <see cref="LauncherCommandLine"/>
-/// does the work, and where its outcome says the window would open, M2's program says that the window is not built yet
-/// (launcher plan M3) and exits non-zero.
+/// does the work. Where its outcome names a window (no command, a failed check or start, a root to review), Avalonia
+/// starts with that outcome (launcher plan §6.1). A run that opened the window for a failed launch still exits
+/// non-zero.
 /// </summary>
 internal static class Program
 {
@@ -18,23 +20,12 @@ internal static class Program
         var context = new LauncherContext(program, Environment.CurrentDirectory, LauncherEnvironment.Current, Console.Out,
                                           Console.Error);
         LauncherOutcome outcome = LauncherCommandLine.Run(args, context);
-        if (outcome.Window != WindowReason.None)
-        {
-            Console.Error.WriteLine($"OME-Launcher: {Reason(outcome.Window)}, but the launcher's window is not built yet "
-                                    + "(launcher plan M3)");
-            if (outcome.Window == WindowReason.Requested) Console.Error.WriteLine(LauncherCommandLine.Usage);
-            return outcome.ExitCode == LauncherCommandLine.Success ? LauncherCommandLine.Failure : outcome.ExitCode;
-        }
+        if (outcome.Window == WindowReason.None || outcome.Start is not { } start) return outcome.ExitCode;
+
+        var session = new LauncherSession(start, outcome.Window, program, context.Environment);
+        App.Build(() => new App(session)).StartWithClassicDesktopLifetime(args);
         return outcome.ExitCode;
     }
-
-    private static string Reason(WindowReason reason) => reason switch
-    {
-        WindowReason.CheckFailed => "the window would open at the failed check",
-        WindowReason.StartFailed => "the window would open at the failed start",
-        WindowReason.Review => "the window would open at the root's review",
-        _ => "the window would open",
-    };
 }
 
 /// <summary>

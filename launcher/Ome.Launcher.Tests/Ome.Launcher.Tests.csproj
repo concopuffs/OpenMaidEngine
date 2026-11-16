@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Gate 9 (launcher plan §5.12): OME-Launcher's command line, run as a child process on a synthetic install in a
-       temporary OME home. Ome.Launcher.Core builds the fixtures; the program and the stub engine are built, not
-       loaded. -->
+       temporary OME home; and the window's view models and headless render (plan §6). Ome.Launcher.Core builds the
+       fixtures; the stub engine is built, not loaded. -->
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -11,6 +11,8 @@
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Headless.Pixel reads a frame's pixels in place. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +20,9 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <!-- Test-only, never shipped: draws the window's pages with no display (launcher plan §6). -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.6" />
+    <PackageReference Include="Avalonia.BuildServices" Version="11.3.2" ExcludeAssets="all" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,7 +36,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\engine\Ome.Launcher.Core\Ome.Launcher.Core.csproj" />
-    <ProjectReference Include="..\Ome.Launcher\Ome.Launcher.csproj" ReferenceOutputAssembly="false" />
+    <!-- Loaded by the view-model tests and the headless render; run as a child process by the command-line tests. -->
+    <ProjectReference Include="..\Ome.Launcher\Ome.Launcher.csproj" />
     <ProjectReference Include="..\..\engine\Ome.Launcher.StubEngine\Ome.Launcher.StubEngine.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
