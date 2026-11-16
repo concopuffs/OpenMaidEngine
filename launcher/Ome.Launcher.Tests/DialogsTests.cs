@@ -289,7 +289,7 @@ public sealed class DialogsTests : IDisposable
     });
 
     [Fact]
-    public void ANetworkPathNeedsApprovalAndALinkStopsTheReview() => Headless.Run(async () =>
+    public void ANetworkPathNeedsApprovalAndALinkDoesNotStopTheReview() => Headless.Run(async () =>
     {
         string linked = Foreign("linked", Path.Combine(_home.Root, "m"));
         string target = Path.Combine(_home.Root, "elsewhere");
@@ -304,9 +304,9 @@ public sealed class DialogsTests : IDisposable
             model.AddExisting.Execute(null);
             await Headless.Until(() => model.Dialog is ReviewViewModel { Loaded: true }, "the review");
             var review = (ReviewViewModel)model.Dialog!;
-            Assert.True(review.HasStop);
-            Assert.Contains("is a symbolic link or junction", review.Stop);
-            Assert.False(review.Accept.CanExecute(null));
+            // A link inside the root is allowed (the user's decision, 2026-11-16, launcher plan §9.7).
+            Assert.False(review.HasStop);
+            Assert.True(review.Accept.CanExecute(null));
             review.Later.Execute(null);
 
             if (!OperatingSystem.IsWindows()) return;   // network paths are a Windows notion (spec §12)

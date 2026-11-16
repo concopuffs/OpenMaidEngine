@@ -102,10 +102,15 @@ profile this engine made.
 **"… : unknown key".** The file holds a key this engine does not know. `profile.toml` is strict, as `manifest.toml`
 is: a mistyped key would otherwise be dropped silently.
 
-**"… is a symbolic link or junction; a profile root may hold none".** Something inside the profile root (a
-folder or a file, hidden or not) is a link. The port writes into the root, so a link could send a write somewhere
-else. Replace the link with the real folder, or move the profile root. A cloud folder's placeholders (OneDrive and
-the like) are not links.
+**Links inside a profile root are allowed.** A package folder in the root's `mods/` (or in a folder its `[mods]`
+table names) may itself be a link to your working copy, and `SAVE/` may be a link too. Only a link *inside* a
+package folder is refused ("'…' is a link or junction"), so a package cannot reach outside its folder. Removing a
+profile in the launcher removes a link itself, never what it names.
+
+**"… is a link, which a copy neither follows nor recreates".** The launcher's Duplicate copies a profile's folder,
+and a link in it stops the copy: following one could copy a whole install, and recreating one needs a privilege on
+Windows. Nothing is left behind. Links in the folders a copy leaves out (`diagnostics/`, `mods/.cache/`, and the
+saves when you leave them out) do not stop it. Remove the link, duplicate, then link it again in both profiles.
 
 **"… names the network path `\\host\share\…`, which this machine's player has not approved".** The profile names a
 folder on another computer. Opening it would contact that computer and offer it your Windows sign-in, so a profile

@@ -147,7 +147,7 @@ public static class ProfileStore
     /// engine's link cache and the logs, with the profile's paths that point inside the source moved onto the copy.
     /// The saves and <c>mods/selectors.toml</c> go together or not at all: <paramref name="leaveOutSaves"/> is the
     /// source's save folder (<see cref="SaveDirectory"/>) to leave out, or null to copy both. Refused while the source
-    /// runs, and when it holds a link (spec §12).</summary>
+    /// runs, and when something it would copy is a link, which a copy neither follows nor recreates.</summary>
     public static ProfileChange Duplicate(OmeHome home, LauncherSettings settings, ProfileEntry source, string id,
                                           string? name, string? leaveOutSaves, string? elsewhere = null)
     {
@@ -161,8 +161,6 @@ public static class ProfileStore
         string? cleanName = CleanName(name);
 
         using RunLock sourceLock = Lock(from);
-        if (RootSafety.FindLink(from) is { } link)
-            throw new IOException($"{link} is a link, which a profile root never holds (spec §12); the profile is not copied");
         LoadedProfile current = ProfileDocuments.Read(from)
                                 ?? throw new IOException($"{Path.Combine(from, ProfileFile.FileName)} is gone");
         var leftOut = new List<string>

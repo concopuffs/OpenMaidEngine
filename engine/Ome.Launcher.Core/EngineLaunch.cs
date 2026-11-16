@@ -127,7 +127,7 @@ public static class EngineCommands
     }
 }
 
-/// <summary>A launch's outcome. <see cref="Started"/> is false when a check or the link walk refused it
+/// <summary>A launch's outcome. <see cref="Started"/> is false when a check refused it
 /// (<see cref="Refusal"/>); a start failed when the engine exited with anything but 0, and then
 /// <see cref="LogTail"/> is the log's end and <see cref="Checks"/> the checks run again.</summary>
 public sealed record LaunchResult(bool Started, int? ExitCode, string? Refusal, string? LogPath,
@@ -143,7 +143,7 @@ public static class EngineLaunch
     public const string LogFile = "engine.log";
     public const int TailLines = 40;
 
-    /// <summary>Runs the checks and the link walk, then starts <paramref name="command"/> with its standard output and
+    /// <summary>Runs the checks, then starts <paramref name="command"/> with its standard output and
     /// error written to <c>diagnostics/engine.log</c> line by line, and returns when the engine exits. A refused start
     /// opens no log, so a running session's log is never cut off. <paramref name="started"/> is told of the process
     /// once it runs.</summary>
@@ -157,8 +157,6 @@ public static class EngineLaunch
                 : "a check failed: " + string.Join("; ", checks.Checks.Where(check => check.Status == CheckStatus.Failed)
                                                          .Select(check => $"{check.Kind}: {check.Message}")),
                 null, [], checks);
-        if (ProfileTrust.BeforeStart(profile.Root) is { } link)
-            return new LaunchResult(false, null, link, null, [], checks);
 
         string logPath = Path.Combine(profile.Root, DiagnosticsFolder, LogFile);
         Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);

@@ -478,14 +478,19 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   Done when the layouts are measured on both platforms (file count, archive size, start time, and what is written
   outside the package), the user has chosen one and the data that stays beside it, and the release builds and their
   package gates produce it. If the loose layout has to stay, done when `platform-portability.md` records why.
-- **No test shows that a cloud folder's placeholder passes the profile-root link check.** Launcher spec §12 says
-  "a cloud folder's placeholders are not links". `RootSafety.FindLink` (`engine/Ome.Mods/Launch/`) counts an entry as
-  a link only when .NET reports a `LinkTarget` for it, which it does for symbolic links and junctions (mount points)
-  and not for other reparse tags. That is .NET's documented behaviour, not a measurement. A real placeholder (OneDrive's
-  `IO_REPARSE_TAG_CLOUD_*`) needs a sync root registered through the Cloud Filter API (`CfRegisterSyncRoot`,
-  `CfCreatePlaceholders`), which changes the machine's state, so launcher plan §4.3 left it out. Done when a test or
-  a measurement on a real OneDrive folder, dehydrated files included, shows a placeholder-holding root passing the
-  check without hydrating anything.
+- **A package folder in a cloud folder may be refused.**
+  - `FolderPackageContainer` (`engine/Ome.Mods/Packages/`) refuses every entry with the `ReparsePoint` attribute, to
+    keep a package inside its folder (mod loader spec §3.1). A cloud folder's placeholder (OneDrive's
+    `IO_REPARSE_TAG_CLOUD_*`) is a reparse point too, so a working copy kept in OneDrive may not open.
+  - Whether a process sees the attribute depends on Windows' placeholder compatibility mode. That is not measured,
+    and making a placeholder needs a sync root registered through the Cloud Filter API, which changes the machine's
+    state.
+  - The launcher's copy refuses only what .NET reports a `LinkTarget` for (symbolic links and junctions), which
+    would keep the rule and let placeholders through.
+  - This is older than the launcher. It came to light on 2026-11-16, when the user dropped launcher spec §12's rule
+    that a profile root holds no link (launcher plan §9.7); that rule's own placeholder question went with it.
+  - Done when the package walk refuses only links, or a measurement on a real OneDrive folder (dehydrated files
+    included) shows the attribute is not seen.
 - **Keep the game installs in one folder.** The workspace root holds each install under its own name:
   `Himegari_Game/`, `Kamidori/`, `Kamidori_Translated/` and `Arterial/創刻のアテリアル/` (added 2026-11-09 for
   native-engine comparison only). Every tool that finds them has its own table of those names:

@@ -80,8 +80,8 @@ public sealed class ReviewViewModel : ViewModel
         { } review => string.Join(", ", review.EnabledMods),
     };
 
-    /// <summary>A link in the root, or a root that cannot be checked: the profile cannot be accepted, and why.</summary>
-    public string? Stop => _review?.Link ?? _review?.Problem;
+    /// <summary>A root whose profile file does not read: the profile cannot be accepted, and why.</summary>
+    public string? Stop => _review?.Problem;
     public bool HasStop => Stop != null;
 
     public string? Error

@@ -1,7 +1,8 @@
 namespace Ome.Launcher.Core;
 
-/// <summary>Copying and removing folders of a profile root without following a link (launcher spec §12: a profile
-/// root holds none, and a link there would send a write, or a delete, to another file).</summary>
+/// <summary>Copying and removing folders without following a link. A copy refuses a link it meets, since it neither
+/// follows nor recreates one; a removal removes the link itself, never what it names, so deleting a profile whose
+/// mod folder is a link to a mod's working copy leaves the working copy alone.</summary>
 internal static class Folders
 {
     /// <summary>One level, hidden and system entries too, failing on an entry it cannot read.</summary>
@@ -16,7 +17,7 @@ internal static class Folders
     private static OmePlatform Platform => LauncherEnvironment.Current.Platform;
 
     /// <summary>Copies <paramref name="from"/> into <paramref name="to"/>, keeping each file's time. A link stops the
-    /// copy: it is never followed.</summary>
+    /// copy: it is neither followed nor recreated.</summary>
     /// <param name="leftOut">Entries not copied, by full path.</param>
     /// <param name="overwrite">Whether a file already in <paramref name="to"/> is replaced.</param>
     public static void Copy(string from, string to, Func<string, bool> leftOut, bool overwrite = false)
@@ -25,7 +26,7 @@ internal static class Folders
         foreach (FileSystemInfo entry in new DirectoryInfo(from).EnumerateFileSystemInfos("*", Entries))
         {
             if (leftOut(entry.FullName)) continue;
-            if (entry.LinkTarget != null) throw new IOException($"{entry.FullName} is a link, which is not copied");
+            if (entry.LinkTarget != null) throw new IOException($"{entry.FullName} is a link, which a copy neither follows nor recreates");
             string target = Path.Combine(to, entry.Name);
             if (entry is DirectoryInfo folder) Copy(folder.FullName, target, leftOut, overwrite);
             else CopyFile(entry.FullName, target, overwrite);

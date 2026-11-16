@@ -100,25 +100,6 @@ public static class RunResolver
         if (dataRoot == null)
             return new ResolvedRun(normalized, null, null, []);
 
-        // Launcher spec §12: with a profile file, nothing in the root may be a link, and the walk runs before the
-        // file itself is opened. A link named profile.toml counts as a profile file, so the walk finds it.
-        var profileInfo = new FileInfo(Path.Combine(dataRoot, ProfileFile.FileName));
-        if (!profileInfo.Exists && profileInfo.LinkTarget == null)
-            return new ResolvedRun(normalized, null, dataRoot, []);
-        string? link;
-        try
-        {
-            link = RootSafety.FindLink(dataRoot);
-        }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            throw new RunResolutionException($"{dataRoot}: the profile root cannot be checked: {error.Message}", error);
-        }
-        if (link != null)
-            throw new RunResolutionException(
-                $"{dataRoot}: {link} is a symbolic link or junction; a profile root may hold none, since the engine "
-                + "writes into it and a link would send a write elsewhere");
-
         ProfileFile? file;
         try
         {

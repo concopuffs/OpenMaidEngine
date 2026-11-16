@@ -3,9 +3,10 @@ using System.Text;
 using Ome.Engine.Profiles;
 using Ome.Mods.Launch;
 
-/// <summary>Launcher spec §5.2 and §12 (part of gate 14): a profile root holds no link, and a network path its file
-/// names is opened only once this machine's player approved it. Links are junctions on Windows (no privilege needed)
-/// and symbolic links elsewhere. No test opens a network path.</summary>
+/// <summary>Launcher spec §5.2 and §12 (part of gate 14): a network path a profile file names is opened only once this
+/// machine's player approved it, and a link inside the root is allowed (the user's decision, 2026-11-16, launcher plan
+/// §9.7). Links are junctions on Windows (no privilege needed) and symbolic links elsewhere. No test opens a network
+/// path.</summary>
 public sealed class RootSafetyTests : IDisposable
 {
     private const string Host = @"\\ome-test-host.invalid\share";
@@ -107,73 +108,23 @@ public sealed class RootSafetyTests : IDisposable
         => Assert.Equal(network, RootSafety.IsNetworkPath(path, windows));
 
     [Fact]
-    public void ALinkAnywhereInsideTheRootIsFound()
+    public void AProfileRootWithLinksRuns()
     {
-        string root = Path.Combine(_root, "walk");
-        Directory.CreateDirectory(Path.Combine(root, "SAVE", "deep"));
-        File.WriteAllText(Path.Combine(root, "SAVE", "deep", "SAVE01.DAT"), "x");
-        Assert.Null(RootSafety.FindLink(root));
-
+        Install(new GameCatalogIdentity("S4IC422", "姫狩りダンジョンマイスター"));
+        string profile = Profile(Local);
         string target = Path.Combine(_root, "elsewhere");
         Directory.CreateDirectory(target);
-        string link = Path.Combine(root, "SAVE", "deep", "redirect");
-        DirectoryLink(link, target);
-        Assert.Equal(link, RootSafety.FindLink(root));
-    }
-
-    [Fact]
-    public void AHiddenLinkIsFoundToo()
-    {
-        string root = Path.Combine(_root, "hidden");
-        Directory.CreateDirectory(root);
-        string target = Path.Combine(_root, "elsewhere");
-        Directory.CreateDirectory(target);
-        string link = Path.Combine(root, OperatingSystem.IsWindows() ? "mods" : ".mods");
-        DirectoryLink(link, target);
-        if (OperatingSystem.IsWindows())
-            new DirectoryInfo(link).Attributes |= FileAttributes.Hidden | FileAttributes.System;
-
-        Assert.Equal(link, RootSafety.FindLink(root));
-    }
-
-    [Fact]
-    public void AFileLinkIsFoundOnLinux()
-    {
-        if (OperatingSystem.IsWindows()) return;   // a file link needs a privilege on Windows; junctions cover it there
-        string root = Path.Combine(_root, "file-link");
-        Directory.CreateDirectory(root);
-        string link = Path.Combine(root, "OME.INI");
-        File.CreateSymbolicLink(link, Path.Combine(_root, "victim.txt"));
-
-        Assert.Equal(link, RootSafety.FindLink(root));
-    }
-
-    [Fact]
-    public void AProfileRootWithALinkStopsBeforeItsFileIsRead()
-    {
-        string profile = Profile("this is [not TOML");
-        string target = Path.Combine(_root, "elsewhere");
-        Directory.CreateDirectory(target);
+        // A linked save folder, and a mod folder linked to a mod's working copy, hidden on Windows as a system entry.
         DirectoryLink(Path.Combine(profile, "SAVE"), target);
+        Directory.CreateDirectory(Path.Combine(profile, "mods"));
+        string mod = Path.Combine(profile, "mods", "example.working-copy");
+        DirectoryLink(mod, target);
+        if (OperatingSystem.IsWindows())
+            new DirectoryInfo(mod).Attributes |= FileAttributes.Hidden | FileAttributes.System;
 
-        var error = Assert.Throws<RunResolutionException>(
-            () => RunResolver.Resolve(["--data-root", profile], _root, machineFolder: MachineFolder()));
+        ResolvedRun run = RunResolver.Resolve(["--data-root", profile], _root, machineFolder: MachineFolder());
 
-        Assert.Contains($"{Path.Combine(profile, "SAVE")} is a symbolic link or junction", error.Message);
-    }
-
-    [Fact]
-    public void ARootWithoutAProfileFileIsNotChecked()
-    {
-        string root = Path.Combine(_root, "sandbox");
-        Directory.CreateDirectory(root);
-        string target = Path.Combine(_root, "elsewhere");
-        Directory.CreateDirectory(target);
-        DirectoryLink(Path.Combine(root, "SAVE"), target);
-
-        ResolvedRun run = RunResolver.Resolve(["--data-root", root], _root, machineFolder: MachineFolder());
-
-        Assert.Null(run.ProfileFile);
+        Assert.NotNull(run.ProfileFile);
     }
 
     [Fact]

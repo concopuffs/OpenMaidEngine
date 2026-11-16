@@ -874,10 +874,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   package stops the start, or with `--skip-failed-mods` is dropped. `extended` admits everything, as a run without a
   profile file does. `omp check` and the other `omp` commands apply the same mode.
 
-  Before anything in the root is opened, the resolver checks it (`RootSafety`, launcher spec §12). The checks apply
-  only to a root with a profile file:
-  - A symbolic link or junction anywhere inside the root (hidden ones included) stops startup and names it. This
-    check runs before `profile.toml` is read.
+  Before anything the file names is opened, the resolver checks it (`RootSafety`, launcher spec §12). The check
+  applies only to a root with a profile file. A link inside the root is allowed: the user dropped spec §12's link
+  rule on 2026-11-16 (launcher plan §9.7).
   - A Windows network path (`\\host\share\…`, `//host/…`, `\\?\UNC\…`) that the file names for `install.root`,
     `install.overlays` or `mods.folders` stops startup with each key and path, unless this machine's player approved
     the location. A path inside the profile root needs no approval. This check runs before the install is read, so

@@ -1,14 +1,10 @@
 namespace Ome.Mods.Launch;
 
 /// <summary>
-/// The checks a profile root passes before anything in it is opened (launcher spec §5.2, §12). A profile folder is
-/// data that may come from someone else, so it must be harmless by what it can hold:
-/// <list type="bullet">
-/// <item>no symbolic link or junction anywhere inside it, since the engine writes into the root and a link would send a
-/// write to another file;</item>
-/// <item>no network path the player of this machine has not approved, since opening a Windows network path contacts
-/// the host it names and offers it the player's sign-in.</item>
-/// </list>
+/// The check a profile root passes before anything in it is opened (launcher spec §5.2, §12): no network path the
+/// player of this machine has not approved, since opening a Windows network path contacts the host it names and
+/// offers it the player's sign-in. A link inside the root is allowed (the user's decision, 2026-11-16, launcher plan
+/// §9.7): a write through it is the risk any program that writes into a folder has.
 /// </summary>
 public static class RootSafety
 {
@@ -56,30 +52,6 @@ public static class RootSafety
 
     public static bool ContainsPath(IEnumerable<string> paths, string candidate)
         => paths.Any(path => string.Equals(path, candidate, PathComparison));
-
-    /// <summary>The first symbolic link or junction inside <paramref name="root"/>, or null. The walk does not follow
-    /// links, and it sees hidden and system entries too. An entry counts as a link when the system reports a link
-    /// target for it, which a cloud folder's placeholder does not have.</summary>
-    public static string? FindLink(string root)
-    {
-        var options = new EnumerationOptions
-        {
-            AttributesToSkip = 0,
-            IgnoreInaccessible = false,
-            RecurseSubdirectories = false,
-            ReturnSpecialDirectories = false,
-        };
-        var pending = new Stack<DirectoryInfo>();
-        pending.Push(new DirectoryInfo(root));
-        while (pending.TryPop(out DirectoryInfo? directory))
-            foreach (FileSystemInfo entry in directory.EnumerateFileSystemInfos("*", options))
-            {
-                if ((entry.Attributes & FileAttributes.ReparsePoint) != 0 && entry.LinkTarget != null)
-                    return entry.FullName;
-                if (entry is DirectoryInfo child) pending.Push(child);
-            }
-        return null;
-    }
 
     /// <summary>Stops the run when <paramref name="file"/> names a network path this machine's player has not approved,
     /// unless the command line approves the file's paths for this run (<c>--allow-network-paths</c>).</summary>

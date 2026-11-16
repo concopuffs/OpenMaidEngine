@@ -149,8 +149,9 @@ public sealed class ProfileTrustTests : IDisposable
     }
 
     [Fact]
-    public void ARootThatHoldsALinkIsRefusedAtTheReviewAndBeforeAStart()
+    public void ARootThatHoldsALinkIsReviewedAndAcceptedLikeAnyOther()
     {
+        // The user's decision, 2026-11-16 (launcher plan §9.7): a link inside a root is allowed.
         string root = Foreign("linked", Path.Combine(_root, "i"), Path.Combine(_root, "m"));
         string target = Path.Combine(_root, "elsewhere");
         Directory.CreateDirectory(target);
@@ -158,11 +159,9 @@ public sealed class ProfileTrustTests : IDisposable
         LauncherSettings settings = ProfileTrust.AddExisting(_home, LauncherSettings.Defaults, root, "linked", Machine,
                                                              picked: true);
         RootReview review = ProfileTrust.Review(ProfileStore.Find(List(settings), "linked")!, Machine);
-        Assert.Contains("is a symbolic link or junction", review.Link);
-        Assert.False(review.CanAccept);
-        Assert.Throws<InvalidOperationException>(() => ProfileTrust.Accept(settings, review, Machine));
-        Assert.Contains("is a symbolic link or junction", ProfileTrust.BeforeStart(root));
-        Assert.Null(ProfileTrust.BeforeStart(Foreign("plain", "i", "m")));
+        Assert.Null(review.Problem);
+        Assert.True(review.CanAccept);
+        Assert.True(ProfileTrust.IsReviewed(ProfileTrust.Accept(settings, review, Machine), root));
         Directory.Delete(Path.Combine(root, "SAVE"));   // the link itself, so the cleanup never walks through it
     }
 

@@ -200,6 +200,28 @@ public sealed class ProfileStoreTests : IDisposable
     }
 
     [Fact]
+    public void DuplicateRefusesALinkItWouldCopyButNotOneItLeavesOut()
+    {
+        // A root may hold links (the user's decision, 2026-11-16, launcher plan §9.7). A copy neither follows one, which
+        // could copy a whole install or loop, nor recreates one, which needs a privilege on Windows.
+        ProfileEntry source = Played("kami");
+        string target = Path.Combine(_root, "linked");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "keep.txt"), "keep");
+        Junction(Path.Combine(source.Root, "diagnostics", "older"), target);
+        string copied = ProfileStore.Duplicate(_home, LauncherSettings.Defaults, source, "left-out", null, null).Profile.Root;
+        Assert.False(Directory.Exists(Path.Combine(copied, "diagnostics")));
+
+        string link = Path.Combine(source.Root, "packages", "example.working-copy");
+        Junction(link, target);
+        var error = Assert.Throws<IOException>(() => ProfileStore.Duplicate(_home, LauncherSettings.Defaults, source,
+                                                                            "linked", null, null));
+        Assert.Equal($"{link} is a link, which a copy neither follows nor recreates", error.Message);
+        Assert.False(Directory.Exists(Path.Combine(_home.ProfilesDirectory, "linked")));
+        Assert.True(File.Exists(Path.Combine(target, "keep.txt")));
+    }
+
+    [Fact]
     public void NothingIsWrittenWhileTheGameRuns()
     {
         ProfileEntry source = Played("kami");

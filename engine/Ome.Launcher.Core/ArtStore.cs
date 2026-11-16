@@ -102,11 +102,11 @@ public sealed class ArtStore : IDisposable
         if (kind == ArtKind.Cover && profile is { Usable: true, NeedsReview: false }
             && profile.Loaded!.Document.Launcher.Cover is { } cover)
         {
-            if (Local(cover, profile.Root) is { } own) return new ArtImage(kind, ArtOrigin.Profile, cover, own.Data, own.Size, card);
+            if (Local(cover) is { } own) return new ArtImage(kind, ArtOrigin.Profile, cover, own.Data, own.Size, card);
         }
         foreach (string file in PlayerFiles(game, kind))
         {
-            if (Local(file, null) is { } mine) return new ArtImage(kind, ArtOrigin.Player, file, mine.Data, mine.Size, card);
+            if (Local(file) is { } mine) return new ArtImage(kind, ArtOrigin.Player, file, mine.Data, mine.Size, card);
         }
         if (Downloaded(game, kind) is { } stored)
             return new ArtImage(kind, ArtOrigin.Downloaded, stored.Path, stored.Data, stored.Size, card);
@@ -135,7 +135,7 @@ public sealed class ArtStore : IDisposable
     /// <summary>Whether a download would be the image shown: the manifest names an address, and neither the player's
     /// image nor a stored download is there.</summary>
     public bool IsMissing(string game, ArtKind kind)
-        => Source(game, kind) != null && !PlayerFiles(game, kind).Any(file => Local(file, null) != null)
+        => Source(game, kind) != null && !PlayerFiles(game, kind).Any(file => Local(file) != null)
            && Downloaded(game, kind) == null;
 
     /// <summary>The hosts downloads for <paramref name="games"/>' missing images would contact; with <c>ask</c>, the
@@ -273,16 +273,12 @@ public sealed class ArtStore : IDisposable
             .Order(StringComparer.Ordinal).ToList();
     }
 
-    /// <summary>A local image within the limits that decodes; under <paramref name="root"/>, one reached through no
-    /// link.</summary>
-    private (byte[] Data, ImageSize Size)? Local(string path, string? root)
+    /// <summary>A local image within the limits that decodes. A profile's cover lies inside its root by its path
+    /// (<c>profile.toml</c>'s reader refuses one that does not); a link on the way is allowed, as anywhere in a root
+    /// (the user's decision of 2026-11-16, launcher plan §9.7).</summary>
+    private (byte[] Data, ImageSize Size)? Local(string path)
     {
         if (!File.Exists(path)) return null;
-        if (root != null && LinkBetween(root, path) is { } link)
-        {
-            _log($"art: {path} is not read: {link} is a link");
-            return null;
-        }
         byte[]? data = ReadFile(path, _limits.LocalBytes);
         if (data == null)
         {
@@ -327,18 +323,6 @@ public sealed class ArtStore : IDisposable
             body.Write(buffer, 0, read);
         }
         return body.ToArray();
-    }
-
-    /// <summary>The first file or folder from <paramref name="path"/> up to <paramref name="root"/> that is a link.</summary>
-    private static string? LinkBetween(string root, string path)
-    {
-        string top = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
-        for (string? at = Path.GetFullPath(path); at != null && at.Length > top.Length; at = Path.GetDirectoryName(at))
-        {
-            FileSystemInfo entry = File.Exists(at) ? new FileInfo(at) : new DirectoryInfo(at);
-            if (entry.LinkTarget != null || entry.Attributes.HasFlag(FileAttributes.ReparsePoint)) return at;
-        }
-        return null;
     }
 
     private static string Name(ArtKind kind) => kind == ArtKind.Banner ? "banner" : "cover";

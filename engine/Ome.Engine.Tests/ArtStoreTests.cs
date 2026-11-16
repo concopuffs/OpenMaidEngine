@@ -250,15 +250,15 @@ public sealed class ArtStoreTests : IDisposable
         Assert.Equal(ArtOrigin.Profile, cover.Origin);
         Assert.Equal(new ImageSize(16, 22), cover.Size);
 
-        // A cover reached through a link inside the root is not read.
+        // A cover reached through a link inside the root is read: a root may hold links (the user's decision of
+        // 2026-11-16, launcher plan §9.7).
         string outside = Path.Combine(_root, "outside"), linked = Path.Combine(profileRoot, "linked");
         Directory.CreateDirectory(outside);
         File.WriteAllBytes(Path.Combine(outside, "far.png"), Png(16, 22));
         Ome.Engine.Tests.ProfileStoreTests.Junction(linked, outside);
         try
         {
-            Assert.Equal(ArtOrigin.Player, store.Load(Game, ArtKind.Cover, Profile(profileRoot, Path.Combine(linked, "far.png"))).Origin);
-            Assert.Contains(_log, line => line.EndsWith($"{linked} is a link"));
+            Assert.Equal(ArtOrigin.Profile, store.Load(Game, ArtKind.Cover, Profile(profileRoot, Path.Combine(linked, "far.png"))).Origin);
         }
         finally
         {
