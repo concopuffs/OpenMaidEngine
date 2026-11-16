@@ -52,23 +52,25 @@ internal sealed class TestHome : IDisposable
 
     /// <summary>A synthetic install of <paramref name="game"/>: a catalog with the game's revision and title and the
     /// scripts its OMS modules run.</summary>
-    public string Install(string game, string? folder = null)
+    public string Install(string game, string? folder = null, (string Key, string Value)[]? settings = null)
     {
         string root = Path.Combine(Root, "installs", folder ?? game);
         Directory.CreateDirectory(root);
-        Catalog(root, game);
+        Catalog(root, game, settings: settings);
         return root;
     }
 
     /// <summary>Writes <paramref name="install"/>'s catalog for <paramref name="game"/>; with <paramref name="extra"/>
-    /// a file more, so the same game's catalog has another fingerprint.</summary>
-    public static void Catalog(string install, string game, string? extra = null)
+    /// a file more, so the same game's catalog has another fingerprint. <paramref name="settings"/> are its startup
+    /// settings (<c>SAVEPATH</c>…); none by default.</summary>
+    public static void Catalog(string install, string game, string? extra = null,
+                               (string Key, string Value)[]? settings = null)
     {
         GameCatalogIdentity identity = GameProfileRegistry.BuiltIn.Find(game)!.CatalogIdentities[0];
         string[] files = SyntheticCatalog.ScriptsTheModulesRun(game);
         if (extra != null) files = [.. files, extra];
         File.WriteAllBytes(Path.Combine(install, Installs.CatalogFile), SyntheticCatalog.Build(
-            files, identity.CatalogRevision.PadRight(8), identity.Title));
+            files, settings ?? [], identity.CatalogRevision.PadRight(8), identity.Title));
     }
 
     /// <summary>A package of <paramref name="game"/> in the shared library, whose one new script runs one the game's

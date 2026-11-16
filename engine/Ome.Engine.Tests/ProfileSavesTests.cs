@@ -200,6 +200,33 @@ public sealed class ProfileSavesTests : IDisposable
     }
 
     [Fact]
+    public void OnlyTheSaveFilesMoveWhenTheSavesSitInTheRoot()
+    {
+        // A game with no SAVEPATH saves into the profile's root, and native AGE into the install: only the numbered
+        // saves with their files and the shared SAVE.DAT and RT.DAT are saves there.
+        Sys4StartupSettings bare = Sys4StartupSettings.FromPairs([]);
+        string source = Profile("source", ("SAVE01.DAT", "one"), ("SAVE01.STH", "thumb"), ("SAVE01.modstate.json", "{}"),
+                                ("SAVE.DAT", "shared"), ("$$RT.DAT", "temporary"), ("RT.BAK", "backup"),
+                                ("notes.txt", "mine"), ("SAVE/inside.txt", "a folder"));
+        string target = Profile("target", ("SAVE.DAT", "old shared"), ("notes.txt", "theirs"));
+        File.WriteAllText(Path.Combine(source, ProfileFile.FileName),
+                          File.ReadAllText(Path.Combine(source, ProfileFile.FileName)).Replace("Kamidori", "Source"));
+        string document = File.ReadAllText(Path.Combine(target, ProfileFile.FileName));
+        SaveSource from = SaveSource.FromProfile(source, bare);
+        Assert.Equal(Path.GetFullPath(source), Path.GetFullPath(from.SaveDirectory));
+        Assert.Equal(["SAVE.DAT"], ProfileSaves.WouldReplace(from, target));
+
+        SaveCopyResult result = ProfileSaves.CopyIn(target, bare, from, withSettings: false, replace: true);
+        Assert.Equal(["RT.DAT", "SAVE.DAT", "SAVE01"], result.Copied);
+        Assert.Equal("shared", File.ReadAllText(Path.Combine(target, "SAVE.DAT")));
+        foreach (string file in new[] { "SAVE01.DAT", "SAVE01.STH", "SAVE01.modstate.json", "$$RT.DAT", "RT.BAK" })
+            Assert.True(File.Exists(Path.Combine(target, file)), file);
+        Assert.Equal("theirs", File.ReadAllText(Path.Combine(target, "notes.txt")));
+        Assert.False(Directory.Exists(Path.Combine(target, "SAVE")));
+        Assert.Equal(document, File.ReadAllText(Path.Combine(target, ProfileFile.FileName)));
+    }
+
+    [Fact]
     public void SavesAreNotCopiedIntoOrOutOfARunningProfile()
     {
         string source = Profile("source", ("SAVE/SAVE01.DAT", "one"));

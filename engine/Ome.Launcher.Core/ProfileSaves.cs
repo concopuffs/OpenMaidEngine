@@ -48,7 +48,10 @@ public sealed class SaveCopyRefusedException(string message, IReadOnlyList<strin
 /// mod's script holds that mod's selector (mod loader §6.2). Copying into a profile that has selectors of its own
 /// merges the two files when they agree and is refused, with the ids named, when they clash. A numbered save moves as
 /// a whole: <c>SAVEnn.DAT</c> with its thumbnail and its sidecars (the stack stamp and the mods' state), so a replaced
-/// slot keeps none of the old one's files. The launcher copies nothing out of a profile.
+/// slot keeps none of the old one's files. Only the files a save folder holds move: the numbered saves and the
+/// game's shared <c>SAVE.DAT</c> and <c>RT.DAT</c>. A game with an empty <c>SAVEPATH</c> saves into the profile's root
+/// (and native AGE into the install), and nothing else there is a save. The launcher copies nothing out of a
+/// profile.
 /// </summary>
 public static partial class ProfileSaves
 {
@@ -112,19 +115,18 @@ public static partial class ProfileSaves
         if (replaced.Count > 0 && !replace)
             throw new SaveCopyRefusedException(
                 $"the saves are not copied: the profile already has {string.Join(", ", replaced)}", replaced);
-        if (System.IO.Directory.Exists(source.SaveDirectory) && RootSafety.FindLink(source.SaveDirectory) is { } link)
-            throw new IOException($"{link} is a link, which is not copied");
+        if (from.Values.SelectMany(files => files)
+                .FirstOrDefault(file => (file.Attributes & FileAttributes.ReparsePoint) != 0 && file.LinkTarget != null)
+            is { } link)
+            throw new IOException($"{link.FullName} is a link, which is not copied");
 
+        if (from.Count > 0) System.IO.Directory.CreateDirectory(targetSaves);
         foreach (var (unit, files) in from)
         {
             if (into.TryGetValue(unit, out var old))
-                foreach (FileSystemInfo file in old) Folders.Delete(file);
-            foreach (FileSystemInfo file in files)
-            {
-                string target = Path.Combine(targetSaves, file.Name);
-                if (file is DirectoryInfo folder) Folders.Copy(folder.FullName, target, _ => false);
-                else Folders.CopyFile(file.FullName, target, overwrite: false);
-            }
+                foreach (FileInfo file in old) Folders.Delete(file);
+            foreach (FileInfo file in files)
+                Folders.CopyFile(file.FullName, Path.Combine(targetSaves, file.Name), overwrite: false);
         }
         merged?.Save(selectorsPath);
         if (withSettings && source.Sys4RegIni is { } settings && File.Exists(settings))
@@ -132,23 +134,24 @@ public static partial class ProfileSaves
         return new SaveCopyResult(from.Keys.ToList(), replaced);
     }
 
-    /// <summary>A save folder's entries by the unit they move in, sorted by unit.</summary>
-    private static SortedDictionary<string, List<FileSystemInfo>> Units(string saveDirectory)
+    /// <summary>A save folder's saves by the unit they move in, sorted by unit; its other entries are not saves.</summary>
+    private static SortedDictionary<string, List<FileInfo>> Units(string saveDirectory)
     {
-        var units = new SortedDictionary<string, List<FileSystemInfo>>(StringComparer.Ordinal);
+        var units = new SortedDictionary<string, List<FileInfo>>(StringComparer.Ordinal);
         if (!System.IO.Directory.Exists(saveDirectory)) return units;
-        foreach (FileSystemInfo entry in new DirectoryInfo(saveDirectory).EnumerateFileSystemInfos("*", Folders.Entries))
+        foreach (FileInfo entry in new DirectoryInfo(saveDirectory).EnumerateFiles("*", Folders.Entries))
         {
-            string unit = UnitOf(entry.Name);
+            if (UnitOf(entry.Name) is not { } unit) continue;
             if (!units.TryGetValue(unit, out var files)) units[unit] = files = [];
             files.Add(entry);
         }
         return units;
     }
 
-    /// <summary><c>SAVEnn</c> for a numbered save's files; <c>SAVE.DAT</c> and <c>RT.DAT</c> with their backups and
-    /// temporaries (<c>DirectoryNativeDatStore</c>); any other entry by its own name.</summary>
-    private static string UnitOf(string name)
+    /// <summary><c>SAVEnn</c> for a numbered save's files (its thumbnail, its sidecars, their temporaries);
+    /// <c>SAVE.DAT</c> and <c>RT.DAT</c> with their backups and temporaries (<c>DirectoryNativeDatStore</c>); null for
+    /// a file that is none of them.</summary>
+    private static string? UnitOf(string name)
     {
         string upper = name.ToUpperInvariant();
         Match numbered = SlotPrefix().Match(upper);
@@ -159,7 +162,7 @@ public static partial class ProfileSaves
         if (upper is DirectoryNativeDatStore.ReadTextFileName or DirectoryNativeDatStore.ReadTextBackupFileName
                   or DirectoryNativeDatStore.ReadTextTemporaryFileName)
             return DirectoryNativeDatStore.ReadTextFileName;
-        return upper;
+        return null;
     }
 
     [GeneratedRegex(@"^SAVE([0-9]+)\.", RegexOptions.CultureInvariant)]

@@ -354,7 +354,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       its [launcher] table) and ProfileStore (the profile list; create,
     │                                       duplicate, rename, delete under the profile's RunLock), Installs
     │                                       (recognizing an install, overlay candidates, known installs),
-    │                                       ProfileSaves (save counts, copying saves in with their selectors),
+    │                                       ProfileSaves (save counts, copying the save files in with their selectors),
     │                                       ProfileSettings (a profile's OME.INI options and SYS4REG.INI
     │                                       start mode, read and written as the engine reads and writes
     │                                       them, and the window sizes the port offers),

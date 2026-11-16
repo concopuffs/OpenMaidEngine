@@ -43,9 +43,11 @@ public sealed class WindowTests : IDisposable
     }
 
     /// <summary>The mock's list: two Kamidori profiles and one Himegari profile.</summary>
-    private Dictionary<string, ProfileEntry> Three()
+    /// <summary>Three profiles over two installs; <paramref name="kamidoriSettings"/> are the Kamidori install's startup
+    /// settings.</summary>
+    private Dictionary<string, ProfileEntry> Three((string Key, string Value)[]? kamidoriSettings = null)
     {
-        string kamidori = _home.Install("kamidori");
+        string kamidori = _home.Install("kamidori", settings: kamidoriSettings);
         string himegari = _home.Install("himegari");
         return new[]
         {
@@ -222,6 +224,34 @@ public sealed class WindowTests : IDisposable
                  Assert.Equal("en", settings.SelectedLanguage!.Tag);
              });
         Draw("settings-ja", "ja", task: "6.6", before: Settings, themes: ThemeVariant.Dark);
+    }
+
+    [Fact]
+    public void TheSavesTabDraws()
+    {
+        Dictionary<string, ProfileEntry> profiles = Three([("SAVEPATH", "SAVE"), ("REGFILEPATH", "")]);
+        Select("kamidori-english");
+        string saves = Path.Combine(profiles["kamidori-english"].Root, "SAVE");
+        Directory.CreateDirectory(saves);
+        foreach (string file in new[] { "SAVE01.DAT", "SAVE01.STH", "SAVE02.DAT", "SAVE02.STH", "SAVE.DAT" })
+            File.WriteAllText(Path.Combine(saves, file), file);
+        string native = Path.Combine(_home.Root, "installs", "kamidori", "SAVE");
+        Directory.CreateDirectory(native);
+        File.WriteAllText(Path.Combine(native, "SAVE01.DAT"), "native");
+        Task Saves(MainViewModel model)
+        {
+            model.Page!.ShowTab.Execute(ProfileTab.Saves);
+            return Task.CompletedTask;
+        }
+        Draw("saves", task: "6.7", before: Saves,
+             check: model =>
+             {
+                 SavesViewModel page = model.Page!.Saves;
+                 Assert.StartsWith("2 saves · last ", page.Contents);
+                 Assert.Equal(["神採り (日本語)"], page.Sources.Select(choice => choice.Label));
+                 Assert.True(page.CopyFromNative.CanExecute(null));
+             });
+        Draw("saves-ja", "ja", task: "6.7", before: Saves, themes: ThemeVariant.Dark);
     }
 
     [Fact]

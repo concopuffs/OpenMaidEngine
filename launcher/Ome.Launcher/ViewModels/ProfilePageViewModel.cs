@@ -43,6 +43,7 @@ public sealed class ProfilePageViewModel : ViewModel
         Overview = new OverviewViewModel(this);
         Mods = new ModsViewModel(this);
         Settings = new SettingsViewModel(this);
+        Saves = new SavesViewModel(this);
         OpenLog = new Command(() => { if (Row.Failure?.LogPath is { } log) _main.Host?.Open(log); },
                               () => Row.Failure?.LogPath != null);
         DismissFailure = new Command(() => Row.Failure = null);
@@ -55,6 +56,7 @@ public sealed class ProfilePageViewModel : ViewModel
     public OverviewViewModel Overview { get; }
     public ModsViewModel Mods { get; }
     public SettingsViewModel Settings { get; }
+    public SavesViewModel Saves { get; }
     public ProfileEntry Entry => Row.Entry;
     private ProfileDocument? Document => Entry.Loaded?.Document;
     public ArtViewModel? Cover { get; private set; }
@@ -80,6 +82,7 @@ public sealed class ProfilePageViewModel : ViewModel
             Overview.Refresh();
             Mods.Refresh();
             Settings.Refresh();
+            Saves.Refresh();
         }
     }
 
@@ -158,6 +161,7 @@ public sealed class ProfilePageViewModel : ViewModel
         Overview.Refresh();
         Mods.Refresh();
         Settings.Refresh();
+        Saves.Refresh();
         Play.Refresh();
         OpenLog.Refresh();
     }

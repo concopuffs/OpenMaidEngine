@@ -108,6 +108,9 @@
         <Panel IsVisible="{Binding OnSettings}">
           <v:SettingsView DataContext="{Binding Settings}" />
         </Panel>
+        <Panel IsVisible="{Binding OnSaves}">
+          <v:SavesView DataContext="{Binding Saves}" />
+        </Panel>
       </Panel>
     </ScrollViewer>
   </DockPanel>

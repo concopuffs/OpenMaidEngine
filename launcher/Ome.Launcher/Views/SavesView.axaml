@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             xmlns:v="using:Ome.Launcher.Views"
+             x:Class="Ome.Launcher.Views.SavesView"
+             x:DataType="vm:SavesViewModel">
+  <!-- The mock's saves(): the profile's save folder and contents, then bringing saves in. -->
+  <StackPanel Classes="form">
+    <Border Classes="notice run" Margin="0,0,0,12" IsVisible="{Binding IsLocked}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding S[saves.locked]}" />
+    </Border>
+    <Border Classes="notice" Classes.bad="{Binding ResultBad}" Classes.run="{Binding !ResultBad}" Margin="0,0,0,12"
+            IsVisible="{Binding HasResult}">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Result}" />
+        <ItemsControl ItemsSource="{Binding Details}" IsVisible="{Binding HasDetails}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <TextBlock Classes="mono small" TextWrapping="Wrap" Text="{Binding}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+
+    <TextBlock Classes="heading form-heading first" Text="{Binding S[saves.heading], Converter={x:Static v:Text.Upper}}" />
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <TextBlock VerticalAlignment="Center" Text="{Binding S[saves.folder]}" />
+        <DockPanel Grid.Column="1">
+          <Button DockPanel.Dock="Right" Margin="8,0,0,0" Content="{Binding S[saves.open]}" Command="{Binding OpenFolder}" />
+          <Border Classes="field">
+            <TextBlock Classes="mono small" TextTrimming="LeadingCharacterEllipsis" Text="{Binding FolderText}"
+                       ToolTip.Tip="{Binding Folder}" />
+          </Border>
+        </DockPanel>
+      </Grid>
+    </Border>
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <TextBlock VerticalAlignment="Center" Text="{Binding S[saves.contents]}" />
+        <TextBlock Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Contents}" />
+      </Grid>
+    </Border>
+
+    <TextBlock Classes="heading form-heading" Text="{Binding S[saves.bring-in], Converter={x:Static v:Text.Upper}}" />
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="{Binding S[saves.from-profile]}" />
+          <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[saves.from-profile-help]}" />
+        </StackPanel>
+        <Panel Grid.Column="1" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasSources}">
+            <ComboBox Classes="field" ItemsSource="{Binding Sources}" SelectedItem="{Binding Source}"
+                      IsEnabled="{Binding CanWrite}" AutomationProperties.Name="{Binding S[saves.from-profile]}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:SaveProfileChoice">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button Content="{Binding S[saves.copy-in]}" Command="{Binding CopyFromProfile}" />
+          </StackPanel>
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding S[saves.no-profiles]}"
+                     IsVisible="{Binding HasNoSources}" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding S[saves.unknown]}" IsVisible="{Binding Unknown}" />
+        </Panel>
+      </Grid>
+    </Border>
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="{Binding S[saves.from-original]}" />
+          <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[saves.from-original-help]}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+              <Button Content="{Binding S[saves.copy-in]}" Command="{Binding CopyFromNative}" />
+              <Button Content="{Binding S[saves.open]}" Command="{Binding OpenNative}" />
+            </StackPanel>
+            <Border Classes="field">
+              <TextBlock Classes="mono small" TextTrimming="LeadingCharacterEllipsis" Text="{Binding NativeFolderText}"
+                         ToolTip.Tip="{Binding NativeFolder}" />
+            </Border>
+          </DockPanel>
+          <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[saves.native-none]}" IsVisible="{Binding HasNoNativeSaves}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+    <Border Classes="frow">
+      <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+        <TextBlock Grid.Column="1" Classes="muted" TextWrapping="Wrap" Text="{Binding S[saves.out]}" />
+      </Grid>
+    </Border>
+  </StackPanel>
+</UserControl>
