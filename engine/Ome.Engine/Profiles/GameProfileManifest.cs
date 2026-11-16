@@ -78,7 +78,8 @@ public sealed record GameProfileManifest
         IReadOnlyDictionary<string, string>? metadataReferences,
         GamePersistencePolicy persistence,
         DirectSceneDiagnosticPolicy? directSceneDiagnostics = null,
-        DebugSceneLaunchPolicy? debugSceneLaunch = null)
+        DebugSceneLaunchPolicy? debugSceneLaunch = null,
+        GameLauncherArt? launcher = null)
     {
         RequireStableId(id, nameof(id));
         ArgumentException.ThrowIfNullOrWhiteSpace(displayTitle);
@@ -113,6 +114,7 @@ public sealed record GameProfileManifest
         Persistence = persistence;
         DirectSceneDiagnostics = directSceneDiagnostics;
         DebugSceneLaunch = debugSceneLaunch;
+        Launcher = launcher;
     }
 
     public string Id { get; }
@@ -130,6 +132,8 @@ public sealed record GameProfileManifest
     public GamePersistencePolicy Persistence { get; }
     public DirectSceneDiagnosticPolicy? DirectSceneDiagnostics { get; }
     public DebugSceneLaunchPolicy? DebugSceneLaunch { get; }
+    /// <summary>The <c>launcher</c> entry, which only the launcher reads (launcher spec §8.7).</summary>
+    public GameLauncherArt? Launcher { get; }
     public string PersistenceNamespace => Persistence.StorageNamespace;
     public bool PersistenceWritesEnabled => Persistence.WritesEnabled;
 

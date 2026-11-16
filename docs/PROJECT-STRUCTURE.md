@@ -232,7 +232,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │
     ├── engine/                              DELIVERABLE — the .NET VM/runtime projects and tests (OmeEngine.sln)
     │   ├── Ome.Engine/Profiles/             embedded content-free game manifests plus immutable catalog-
-    │                                       identity selection, persistence, runtime seeds, and diagnostic policy
+    │                                       identity selection, persistence, runtime seeds, and diagnostic policy;
+    │                                       each manifest's launcher entry (GameLauncherArt: the publisher's page
+    │                                       and the banner's and cover's https addresses with their SHA-256), which
+    │                                       only the launcher reads
     │   ├── Ome.Engine/Model/                composable ABI-layer/opcode definitions plus retained graphics state and
     │                                       separately navigable render, transition, diagnostic, and persistence contracts
     │   ├── Ome.Engine/Sys4/                 runtime game-root selection, catalog/parser and structured opcode-
@@ -360,8 +363,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       nothing), ProfileTrust (the review of a root from elsewhere,
     │                                       network approvals, the link check before a start), EngineLaunch
     │                                       (the one engine-command builder, the Shortcut dialog's forms, the
-    │                                       launch with diagnostics/engine.log) and LauncherCommandLine (spec
-    │                                       §8.6: --launch, --check, --print-command and their outcomes); no
+    │                                       launch with diagnostics/engine.log), LauncherCommandLine (spec
+    │                                       §8.6: --launch, --check, --print-command and their outcomes) and
+    │                                       ArtStore (spec §8.7: each image's order, the generated card, the
+    │                                       download on consent into cache/art/<game>/, ArtProbe's PNG and JPEG
+    │                                       header read); no
     │                                       Avalonia type; net8.0 like the libraries it references, tested in
     │                                       Ome.Engine.Tests
     │   ├── Ome.Launcher.StubEngine/         the engine's stand-in in the launch tests: prints what it was given

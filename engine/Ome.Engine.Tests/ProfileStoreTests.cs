@@ -283,7 +283,8 @@ public sealed class ProfileStoreTests : IDisposable
         }
     }
 
-    private static void Junction(string link, string target)
+    /// <summary>A junction on Windows, a symbolic link elsewhere; the art tests use it too.</summary>
+    internal static void Junction(string link, string target)
     {
         if (!OperatingSystem.IsWindows())
         {

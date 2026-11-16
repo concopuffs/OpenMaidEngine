@@ -27,6 +27,7 @@ Use the game id wherever a guide writes `<game>`.
 | Speakers | 274 in `himegari.adv`'s `enum speaker` |
 | Tables | `unit[1000]` (49 fields), `item[1000]` (19 fields), `skill[300]` (15 fields) ([reference](../../global-reference.md)) |
 | Named patch points | `himegari.experience.after_calculation`, `himegari.boot.data_ready`, `himegari.stage.after_loader`, `himegari.stage.after_ready_handlers`, `himegari.stage.after_round_handlers`, `himegari.stage.after_close_handlers_won`, `himegari.stage.after_close_handlers_lost` ([reference](../../patch-point-reference.md)) |
+| Publisher's page | <https://www.eukleia.co.jp/eushully/> |
 | Guide | [himegari.md](himegari.md) |
 
 ## Kamidori Alchemy Meister
@@ -45,6 +46,7 @@ Use the game id wherever a guide writes `<game>`.
 | Speakers | 114 in `kamidori.adv`'s `enum speaker` |
 | Tables | `unit[1000]` (44 fields), `item[2000]` (53 fields), `skill[1000]` (27 fields), `stage_enemy[30]` (11 fields) ([reference](../../global-reference-kamidori.md)) |
 | Named patch points | `kamidori.experience.after_calculation`, `kamidori.boot.data_ready`, `kamidori.stage.after_loader`, `kamidori.stage.after_ready_handlers`, `kamidori.stage.after_round_handlers`, `kamidori.stage.after_close_handlers` ([reference](../../patch-point-reference-kamidori.md)) |
+| Publisher's page | <https://www.eukleia.co.jp/eushully/> |
 | Guide | [kamidori.md](kamidori.md) |
 
 ## Adding a game

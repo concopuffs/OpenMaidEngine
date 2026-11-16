@@ -47,5 +47,10 @@
       "pointerStrings": 1,
       "localPointerScratch": 1
     }
+  },
+  "launcher": {
+    "site": "https://www.eukleia.co.jp/eushully/",
+    "banner": { "url": "https://www.eukleia.co.jp/eushully/eu10/banner_eu10a.jpg", "sha256": "7c9707b361b449cc5eda2bd7f9cc91ed61229cb502f3368b77c1390748f9757e" },
+    "cover": { "url": "https://www.eukleia.co.jp/eushully/eu10/package.jpg", "sha256": "3fea5a5c47077be9ed49c46d4a77cd9512c44f32f6279dc5d412e589a342daef" }
   }
 }

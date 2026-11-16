@@ -111,6 +111,7 @@ def identity(profile_id: str) -> list[str]:
         ("Speakers", "; ".join(speakers) if speakers else "no dialogue prelude yet"),
         ("Tables", f"{table_cell} ([reference](../../{global_reference(profile_id)}))" if tables else "none yet"),
         ("Named patch points", points_cell),
+        ("Publisher's page", f"<{data['launcher']['site']}>" if data.get("launcher") else "none"),
         ("Guide", f"[{profile_id}.md]({profile_id}.md)" if guide.exists() else "none yet"),
     ]
     lines = [f"## {data['displayTitle']}", "", "| Fact | Value |", "|---|---|"]

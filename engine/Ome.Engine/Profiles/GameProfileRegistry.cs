@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Ome.Engine.Persistence;
 
 namespace Ome.Engine.Profiles;
@@ -43,29 +44,39 @@ public sealed class GameProfileRegistry
         if (names.Length == 0)
             throw new InvalidOperationException("no embedded game profile manifests were found");
 
-        var options = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            ReadCommentHandling = JsonCommentHandling.Skip,
-        };
         var profiles = new List<GameProfileManifest>(names.Length);
         foreach (string name in names)
         {
             using Stream stream = assembly.GetManifestResourceStream(name)
                 ?? throw new InvalidOperationException($"embedded profile resource is missing: {name}");
-            ProfileDocument document = JsonSerializer.Deserialize<ProfileDocument>(stream, options)
-                ?? throw new InvalidDataException($"{name}: empty profile manifest");
-            try
-            {
-                profiles.Add(document.ToManifest());
-            }
-            catch (Exception error) when (
-                error is ArgumentException or InvalidOperationException or FormatException or OverflowException)
-            {
-                throw new InvalidDataException($"{name}: invalid profile manifest: {error.Message}", error);
-            }
+            profiles.Add(Parse(stream, name));
         }
         return new GameProfileRegistry(profiles);
+    }
+
+    /// <summary>One manifest's JSON, as the built-in ones are read; the tests read their own through it.</summary>
+    internal static GameProfileManifest Parse(Stream stream, string name)
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            ReadCommentHandling = JsonCommentHandling.Skip,
+        };
+        try
+        {
+            ProfileDocument document = JsonSerializer.Deserialize<ProfileDocument>(stream, options)
+                ?? throw new InvalidDataException($"{name}: empty profile manifest");
+            return document.ToManifest();
+        }
+        catch (JsonException error)
+        {
+            throw new InvalidDataException($"{name}: invalid profile manifest: {error.Message}", error);
+        }
+        catch (Exception error) when (
+            error is ArgumentException or InvalidOperationException or FormatException or OverflowException)
+        {
+            throw new InvalidDataException($"{name}: invalid profile manifest: {error.Message}", error);
+        }
     }
 
     private sealed class ProfileDocument
@@ -82,6 +93,7 @@ public sealed class GameProfileRegistry
         public PersistenceDocument? Persistence { get; init; }
         public DirectSceneDiagnosticDocument? DirectSceneDiagnostics { get; init; }
         public DebugSceneLaunchDocument? DebugSceneLaunch { get; init; }
+        public LauncherDocument? Launcher { get; init; }
 
         public GameProfileManifest ToManifest()
         {
@@ -98,8 +110,31 @@ public sealed class GameProfileRegistry
                 (Persistence ?? throw new InvalidOperationException("persistence is required"))
                     .ToPolicy(),
                 DirectSceneDiagnostics?.ToPolicy(),
-                DebugSceneLaunch?.ToPolicy());
+                DebugSceneLaunch?.ToPolicy(),
+                Launcher?.ToArt());
         }
+    }
+
+    /// <summary>The <c>launcher</c> entry, read strictly (launcher plan §5.13): an unknown key is an error, and
+    /// <see cref="GameLauncherArt"/> refuses an address that is not <c>https</c> and a hash that is not 64 hex
+    /// digits.</summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class LauncherDocument
+    {
+        public string? Site { get; init; }
+        public ArtSourceDocument? Banner { get; init; }
+        public ArtSourceDocument? Cover { get; init; }
+
+        public GameLauncherArt ToArt() => new(Site ?? "", Banner?.ToSource(), Cover?.ToSource());
+    }
+
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class ArtSourceDocument
+    {
+        public string? Url { get; init; }
+        public string? Sha256 { get; init; }
+
+        public GameArtSource ToSource() => new(Url ?? "", Sha256 ?? "");
     }
 
     private sealed class DirectSceneDiagnosticDocument
