@@ -545,6 +545,12 @@ method) measured these facts about the platforms. The launcher's packaging decis
   (2026-11-16), `global.json` pins 10.0.404, and the core level, the Godot build and the host self-test of both
   games pass under it. The net8.0 tests run on the .NET 8 runtime beside SDK 10, which CI's `setup-dotnet` steps
   install with SDK 8.0.
+- **The launcher's program** (`launcher/Ome.Launcher`, launcher plan §5.12) is the one net10.0 project. SDK 10 brings
+  the .NET 10 runtime it and its tests run on, so the core level's launcher gates need nothing beyond `global.json`'s
+  SDK. Its tests start the net8.0 stub engine too, which runs on the .NET 8 runtime.
+  - **Printing:** on Windows it attaches to its parent's console; elsewhere it prints on the handles it inherits.
+  - **Not yet run on Linux:** the tests use no Windows-only path, but have run only on Windows. CI's core job runs
+    them on Linux at the first push.
 
 ## Cross-platform validation gates
 

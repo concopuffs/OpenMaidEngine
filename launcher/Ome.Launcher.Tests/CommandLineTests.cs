@@ -105,6 +105,13 @@ public sealed class CommandLineTests : IDisposable
         Assert.Equal(["--headless", "--", "--data-root", profile.Root, "--locator-hud"],
                      json.RootElement.GetProperty("arguments").EnumerateArray().Select(item => item.GetString()!));
         Assert.Equal(Path.GetDirectoryName(Stub), json.RootElement.GetProperty("working_directory").GetString());
+
+        // The Shortcut dialog's second form is what --print-command prints; its first names this home, not the default.
+        ShortcutForms forms = EngineCommands.Shortcut(Launcher, _home, profile, EngineProgram.Development(Stub, [], _root));
+        var plain = Run("--print-command", "gate", "--home", _home.Root, "--engine", Stub);
+        Assert.True(plain.Exit == 0, Show(plain));
+        Assert.Equal(forms.Direct.ToJson(), plain.Output.TrimEnd('\r', '\n'));
+        Assert.Equal(["--launch", "gate", "--home", _home.Root], forms.ThroughLauncher.Arguments);
     }
 
     [Fact]
@@ -136,6 +143,10 @@ public sealed class CommandLineTests : IDisposable
         Assert.True(malformed.Exit == 2, Show(malformed));
         Assert.Contains("--check needs a value", malformed.Error);
         Assert.Contains(LauncherCommandLine.Usage, malformed.Error);
+
+        var separator = Run("--print-command", "gate", "--engine", Stub, "--engine-arg", "--");
+        Assert.True(separator.Exit == 2, Show(separator));
+        Assert.Contains("an --engine-arg of -- is refused", separator.Error);
 
         var stray = Run("--check", "gate", "--", "--locator-hud");
         Assert.True(stray.Exit == 2, Show(stray));
