@@ -253,6 +253,35 @@ def build_gate_plan(
             low_memory_profile_environment,
         )
     )
+    # The launcher's solution (launcher plan §5.12): OME-Launcher (net10.0), its tests and the engine projects they
+    # build, with the engine tests' build properties so the shared projects stay incremental.
+    gates.append(
+        Gate(
+            "launcher-restore",
+            ".NET launcher restore",
+            (
+                "dotnet", "restore", "launcher/OmeLauncher.sln", "--nologo",
+                "--verbosity", "minimal", "--disable-parallel",
+                "-p:RestoreDisableParallel=true",
+            ),
+            300,
+            low_memory_profile_environment,
+        )
+    )
+    gates.append(
+        Gate(
+            "launcher-tests",
+            ".NET launcher tests",
+            (
+                "dotnet", "test", "launcher/OmeLauncher.sln",
+                "--no-restore", "--nologo", "--verbosity", "minimal", "-m:1",
+                "-p:UseSharedCompilation=false", "-p:BuildInParallel=false",
+                "-p:DebugType=None", "-p:DebugSymbols=false",
+            ),
+            300,
+            low_memory_profile_environment,
+        )
+    )
 
     if "workspace" in phases:
         workspace_filter = (

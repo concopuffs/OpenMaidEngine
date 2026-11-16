@@ -358,9 +358,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       profile holds, released under its lock), ProfileChecks (the
     │                                       checks before Play, the link check among them, which write
     │                                       nothing), ProfileTrust (the review of a root from elsewhere,
-    │                                       network approvals, the link check before a start) and
-    │                                       EngineLaunch (the one engine-command builder, the Shortcut
-    │                                       dialog's forms, the launch with diagnostics/engine.log); no
+    │                                       network approvals, the link check before a start), EngineLaunch
+    │                                       (the one engine-command builder, the Shortcut dialog's forms, the
+    │                                       launch with diagnostics/engine.log) and LauncherCommandLine (spec
+    │                                       §8.6: --launch, --check, --print-command and their outcomes); no
     │                                       Avalonia type; net8.0 like the libraries it references, tested in
     │                                       Ome.Engine.Tests
     │   ├── Ome.Launcher.StubEngine/         the engine's stand-in in the launch tests: prints what it was given
@@ -373,6 +374,14 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       the official Lua 5.2 test suite and a probe, results to disposable
     │                                       build/lua-conformance/; not in OmeEngine.sln
     ├── launcher/                            the launcher (superpowers/specs/2026-11-15-launcher-design.md)
+    │   ├── OmeLauncher.sln                   the two projects below and the engine projects they build
+    │   │                                     (launcher plan §5.12); validate.py core restores and tests it
+    │   ├── Ome.Launcher/                     OME-Launcher (net10.0, a windowed program): Main runs Core's
+    │   │                                     LauncherCommandLine after attaching to the parent's console on
+    │   │                                     Windows; app.manifest as M0 measured it; the window comes with M3
+    │   ├── Ome.Launcher.Tests/               gate 9: the program run as a child process with the stub engine on a
+    │   │                                     synthetic install in a temporary OME home; compiles
+    │   │                                     engine/Ome.Engine.Tests/SyntheticCatalog.cs
     │   └── Ome.Launcher.Spike/              milestone 0 of the launcher plan (superpowers/plans/2026-11-15-
     │                                       launcher.md §2): a bare Avalonia window plus --check-like, --capture
     │                                       and --lock modes; its own global.json picks the .NET 10 SDK; measure/

@@ -124,6 +124,23 @@ class GatePlanTests(unittest.TestCase):
             restore.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
         )
 
+    def test_core_builds_and_tests_the_launcher_solution(self) -> None:
+        by_key = {gate.key: gate for gate in validate.build_gate_plan("core")}
+        restore = by_key["launcher-restore"]
+        self.assertIn("launcher/OmeLauncher.sln", restore.command)
+        self.assertIn("--disable-parallel", restore.command)
+        tests = by_key["launcher-tests"]
+        self.assertEqual(("dotnet", "test", "launcher/OmeLauncher.sln"), tests.command[:3])
+        self.assertIn("--no-restore", tests.command)
+        self.assertIn("-m:1", tests.command)
+        for gate in (restore, tests):
+            self.assertEqual(
+                validate.LOW_MEMORY_DOTNET_ENVIRONMENT,
+                gate.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
+            )
+        keys = [gate.key for gate in validate.build_gate_plan("core")]
+        self.assertLess(keys.index("launcher-restore"), keys.index("launcher-tests"))
+
     def test_core_lints_every_profiles_registries_and_checks_generated_references(self) -> None:
         plan = validate.build_gate_plan("core")
         by_key = {gate.key: gate for gate in plan}

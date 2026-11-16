@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- OME-Launcher (launcher spec §8.1): the presentation over Ome.Launcher.Core. Launcher plan M2 gives it the command
+       line (§5.12, spec §8.6); the Avalonia window comes with M3. A windowed program, as the release is: on Windows it
+       attaches to its parent's console to print (plan §3.5). net10.0, the one project that is (plan §5). -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>OME-Launcher</AssemblyName>
+    <RootNamespace>Ome.Launcher</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\engine\Ome.Launcher.Core\Ome.Launcher.Core.csproj" />
+  </ItemGroup>
+
+</Project>

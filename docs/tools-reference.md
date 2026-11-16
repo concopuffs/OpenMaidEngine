@@ -33,7 +33,8 @@ whenever a tool's inputs/outputs change.**
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `validate.py` | Layered project validation front door. `core` remains content-free; besides the Python tests and the .NET build and tests it checks every profile's registries whichever profile is selected (each global registry linted, each patch-point registry and its reference by `--check-reference`), and the generated opcode files, engine-ctx reference, modding games page and base mod layouts (`base_mod_build.py --check`) against their sources. `workspace` selects one installed profile, checks its generated global reference against its auto shape map (`globals_build.py --check`, which needs `build/games/<game>/global-var-map.json`), runs only its traited .NET gate, the Open Maid Script canonical-rebuild gate (`Ome.Cli oms-rebuild`, plus `--level idiomatic` when the profile has source modules in `oms/<game>/`), and decodes its complete production catalog through `Sys4AssetStore`; Himegari additionally runs its current extracted-data globals/Python/RECOVER gates. `runtime` adds Godot. `full` combines all phases with the selected profile's proven terminal gate: Himegari's faithful-wait direct-scene sweep or Kamidori's natural SYSTEM4/title/New Game/first-ADV-page acceptance. The selected game writes only its own coverage and logs. The game root is the one `paths.py` resolves (`--game-root`, then `OME_GAME_ROOT`, then the conventional install); prerequisites, gates and their child tools all use it. | `validate.py` (defaults to `--level full`) · `--level core|workspace|runtime|full` · `--game <id>` · `--game-root <install>` · `--extracted-root <root>` · `--godot <console>` · `--verbose` · `--fail-fast` | sources + selected prerequisites → console summary + ⚙ `build/games/<game>/validation/validate-*/<gate>.log` + ⚙ `catalog-opcode-coverage.json` |
+| `validate.py` | Layered project validation front door. `core` remains content-free; besides the Python tests, the .NET build and tests and the launcher solution's
+(`launcher/OmeLauncher.sln`, restored and tested by gates of their own) it checks every profile's registries whichever profile is selected (each global registry linted, each patch-point registry and its reference by `--check-reference`), and the generated opcode files, engine-ctx reference, modding games page and base mod layouts (`base_mod_build.py --check`) against their sources. `workspace` selects one installed profile, checks its generated global reference against its auto shape map (`globals_build.py --check`, which needs `build/games/<game>/global-var-map.json`), runs only its traited .NET gate, the Open Maid Script canonical-rebuild gate (`Ome.Cli oms-rebuild`, plus `--level idiomatic` when the profile has source modules in `oms/<game>/`), and decodes its complete production catalog through `Sys4AssetStore`; Himegari additionally runs its current extracted-data globals/Python/RECOVER gates. `runtime` adds Godot. `full` combines all phases with the selected profile's proven terminal gate: Himegari's faithful-wait direct-scene sweep or Kamidori's natural SYSTEM4/title/New Game/first-ADV-page acceptance. The selected game writes only its own coverage and logs. The game root is the one `paths.py` resolves (`--game-root`, then `OME_GAME_ROOT`, then the conventional install); prerequisites, gates and their child tools all use it. | `validate.py` (defaults to `--level full`) · `--level core|workspace|runtime|full` · `--game <id>` · `--game-root <install>` · `--extracted-root <root>` · `--godot <console>` · `--verbose` · `--fail-fast` | sources + selected prerequisites → console summary + ⚙ `build/games/<game>/validation/validate-*/<gate>.log` + ⚙ `catalog-opcode-coverage.json` |
 | `test_validate.py` | Pure tests for Godot explicit/environment/PATH resolution precedence, invalid-explicit hard failure, the game root taken from the tool context even when `OME_GAME_ROOT` names another install, level composition (every profile's registry gates in core, the global-reference check before the rebuild), and final gate ordering. | `test_validate.py` | temporary files only |
 
 Levels are cumulative around `core`: `workspace` means core+workspace-corpus, `runtime` means core+Godot,
@@ -1068,6 +1069,43 @@ to `locate_page.py --map` when resolving a map copied from an export profile. `-
 toggles it and **F3** copies the current locator to the clipboard. The offset remains authoritative because
 branching/state can shift page ordinals between runs. Resolve a reported page with
 `py -3.11 -X utf8 tools/locate_page.py SC0000 14`, adding `--game <game>` for a game other than Himegari.
+
+## Launcher (`OME-Launcher`)
+
+`launcher/Ome.Launcher` builds `OME-Launcher` (`OME-Launcher.exe` on Windows), a windowed net10.0 program over
+`engine/Ome.Launcher.Core` (launcher spec §8). Its command line (spec §8.6) runs before any window and needs no
+display. The window comes with launcher plan M3: until then, where the window would open, the program prints that
+it would and exits 1.
+
+| Command | Effect | Exit code |
+|---|---|---|
+| `OME-Launcher` | the window (not built yet) | 1 |
+| `--launch ID\|DIR [-- ARGS]` | runs the checks and starts the profile, with `ARGS` after the profile's own engine arguments; returns when the engine exits. Both streams go to the profile's `diagnostics/engine.log`. A failed start prints the log's last 40 lines and the checks, run again. A folder no profile lists is a root the launcher did not create: nothing starts, and the window would open at its review (spec §12) | 0 started and exited 0; 1 a refused or failed start |
+| `--check ID\|DIR` | runs the checks and prints one line per check (`passed`, `warning`, `FAILED` or `not run`, the check, its message), with the link report under a link check that did not pass. Writes nothing | 0 Play can start; 1 it cannot |
+| `--print-command ID\|DIR [-- ARGS]` | prints the command a launch would use as JSON: `program`, `arguments`, `working_directory`, `environment` | 0 |
+| `--home DIR` | uses `DIR` as OME home, instead of a portable `data/` beside the program or the per-user default | |
+| `--output FILE` | writes what is printed to standard output to `FILE` as well, in UTF-8 | |
+| `--engine PROGRAM`, `--engine-arg ARG` | starts `PROGRAM` with these arguments before the `--`, instead of the engine beside the launcher (spec §8.5). An `--engine-arg` of `--` is refused | |
+
+A malformed command line, an unknown profile id or folder, and a `--data-root` among a launch's arguments exit 2,
+with the reason and the usage on standard error. `ID` is a profile's id, `DIR` its root folder.
+
+**Printing on Windows** (spec §8.6, measured in launcher plan §3.5). The program attaches to the console it was
+started from, but a shell does not always wait for a windowed program:
+
+- **PowerShell:** `Start-Process -Wait -PassThru OME-Launcher.exe -ArgumentList '--check','ID'`, and read
+  `ExitCode` from its result. Plain `.\OME-Launcher.exe --check ID` does not wait, and `$LASTEXITCODE` stays empty.
+  A pipe waits, but loses standard error and garbles non-ASCII text.
+- **cmd:** inside a batch file, which waits and sets `%ERRORLEVEL%`, or with `start "" /wait`. At cmd's prompt, the
+  prompt comes back before the lines.
+- **A script:** `--output FILE` is the dependable form. A process that captures the streams gets them in UTF-8.
+
+During development, run it with `dotnet run --project launcher/Ome.Launcher -- --check ID --home DIR`. Pass
+`--engine <godot console> --engine-arg --path --engine-arg godot` to start the port from the repository.
+
+| Tool | Purpose | Run | Reads → Writes |
+|---|---|---|---|
+| `launcher/Ome.Launcher.Tests` | Gate 9 (launcher plan §5.12): `OME-Launcher` run as a child process with its own `APPDATA`, on a synthetic Kamidori install in a temporary `--home`, with `engine/Ome.Launcher.StubEngine` as the engine. It covers `--print-command`'s JSON and `--output`, `--check`'s lines and exit codes, the usage errors, a launch and a failed start, and `--launch DIR` on an unreviewed root. | `dotnet test launcher/OmeLauncher.sln` (the core level's `launcher-tests` gate) | temporary files only |
 
 ## Asset resolution / graphics
 

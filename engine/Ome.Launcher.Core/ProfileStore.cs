@@ -72,19 +72,25 @@ public static class ProfileStore
                 entries.Add(new ProfileEntry(root.Id, root.Path, true, null,
                                              $"its id '{root.Id}' is also the name of a folder in profiles/; add it again "
                                              + "with another id"));
-            else if (RootSafety.IsNetworkPath(root.Path) && !(state ??= machine()).IsApproved(root.Path))
-                entries.Add(new ProfileEntry(root.Id, root.Path, true, null,
-                                             $"{root.Path} is on another computer, and this machine's player has not "
-                                             + "approved that location")
-                {
-                    NeedsReview = !ProfileTrust.IsReviewed(settings, root.Path),
-                });
-            else entries.Add(Load(root.Id, root.Path, elsewhere: true) with
-            {
-                NeedsReview = !ProfileTrust.IsReviewed(settings, root.Path),
-            });
+            else entries.Add(Open(root.Id, root.Path, settings, () => state ??= machine()));
         }
         return entries;
+    }
+
+    /// <summary>A root elsewhere as the list shows it, also one no setting lists (<c>--launch DIR</c>): not read when it
+    /// is on another computer this machine's player has not approved, and marked for review unless the player
+    /// accepted it (spec §12).</summary>
+    public static ProfileEntry Open(string id, string root, LauncherSettings settings, Func<MachineState> machine)
+    {
+        bool reviewed = ProfileTrust.IsReviewed(settings, root);
+        if (RootSafety.IsNetworkPath(root) && !machine().IsApproved(root))
+            return new ProfileEntry(id, root, true, null,
+                                    $"{root} is on another computer, and this machine's player has not approved that "
+                                    + "location")
+            {
+                NeedsReview = !reviewed,
+            };
+        return Load(id, root, elsewhere: true) with { NeedsReview = !reviewed };
     }
 
     /// <summary>The listed profile with <paramref name="id"/> (a folder of <c>profiles/</c> before a root elsewhere),

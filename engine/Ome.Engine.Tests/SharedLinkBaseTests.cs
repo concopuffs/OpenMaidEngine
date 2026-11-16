@@ -27,10 +27,7 @@ public sealed class SharedLinkBaseTests : IDisposable
 
     /// <summary>The scripts a profile's OMS modules run (<c>run NAME</c>), as catalog names: a synthetic install
     /// lists them so the modules' idioms build.</summary>
-    internal static string[] ScriptsTheModulesRun(string profile)
-        => Directory.EnumerateFiles(Paths.OmsModules(profile), "*.oms", SearchOption.AllDirectories)
-            .SelectMany(file => Regex.Matches(File.ReadAllText(file), @"\brun ([A-Z][A-Z0-9_]*)\b"))
-            .Select(match => match.Groups[1].Value + ".BIN").Distinct().Order(StringComparer.Ordinal).ToArray();
+    internal static string[] ScriptsTheModulesRun(string profile) => SyntheticCatalog.ScriptsTheModulesRun(profile);
 
     [Theory]
     [InlineData("himegari", "SYS4422")]
