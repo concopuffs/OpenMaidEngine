@@ -68,8 +68,9 @@ public sealed class ProfileModsTests : IDisposable
 
     private string ProfileRoot(string name) => Path.Combine(_root, name);
 
-    private static ModLaunchResult Link(string profileRoot, ProfileMods table, bool skipFailed = false)
-        => ModLaunch.Run(SyntheticBase(), profileRoot, Path.Combine(profileRoot, "diagnostics"),
+    private static ModLaunchResult Link(string profileRoot, ProfileMods table, bool skipFailed = false,
+                                        ModLinkBase? linkBase = null)
+        => ModLaunch.Run(linkBase ?? SyntheticBase(), profileRoot, Path.Combine(profileRoot, "diagnostics"),
                          new ModLaunchOptions([], false, skipFailed, []), table);
 
     private static ModDiscovery Discover(ProfileMods table, ModLinkReport report, params string[] extra)
@@ -286,6 +287,68 @@ public sealed class ProfileModsTests : IDisposable
         Assert.Equal(("app", "1.0.0", "himegari", "native", false), (entry.Id, entry.Version.ToString(), entry.Game, entry.Target, entry.ShipsLua));
         Assert.Equal(["lib"], entry.Requires.Select(requirement => requirement.Id));
         Assert.Throws<ModPackageException>(() => ModPackage.Open(package).Dispose());
+    }
+
+    [Fact]
+    public void AnEntryAnotherMachineWroteIsNotUsed()
+    {
+        // Launcher spec §5.3 (gate 14): opening an entry checks only that its files exist, and the rest of the key can
+        // be computed by anyone, so the machine value is what keeps a root from elsewhere from mounting its own entry.
+        Package(Library, "alpha");
+        Package(Library, "needy", requires: "[[requires]]\nid = \"ghost\"\n");
+        string profile = ProfileRoot("one");
+        ModLinkBase here = SyntheticBase() with { MachineValue = new string('a', 64) };
+        ModLinkBase elsewhere = SyntheticBase() with { MachineValue = new string('b', 64) };
+
+        foreach (bool skip in new[] { false, true })
+        {
+            ProfileMods table = skip ? Mods("alpha", "needy") : Mods("alpha");
+            ModLaunchResult written = Link(profile, table, skip, elsewhere);
+            Assert.False(written.Failed, written.Report.Render());
+            Assert.False(Link(profile, table, skip, here).FromCache, "an entry another machine wrote is linked again");
+            Assert.True(Link(profile, table, skip, here).FromCache);
+            Assert.True(Link(profile, table, skip, elsewhere).FromCache, "each machine's entry stays its own");
+        }
+    }
+
+    [Fact]
+    public void AStackLinkedAsExtendedWithFailedModsDroppedIsNotReusedAsNative()
+    {
+        // Gate 3's cache part: the mode decides which mods fail, so it joins the key of a link that dropped some.
+        Package(Library, "alpha");
+        Package(Library, "needy", requires: "[[requires]]\nid = \"ghost\"\n");
+        string profile = ProfileRoot("one");
+        ProfileMods table = Mods("alpha", "needy");
+        ModLinkBase extended = SyntheticBase() with { ProfileMode = "extended" };
+        ModLinkBase native = SyntheticBase() with { ProfileMode = "native" };
+
+        ModLaunchResult dropped = Link(profile, table, skipFailed: true, extended);
+        Assert.Equal(["needy"], dropped.Report.Dropped);
+        Assert.True(Link(profile, table, skipFailed: true, extended).FromCache);
+        Assert.False(Link(profile, table, skipFailed: true, native).FromCache);
+        Assert.True(Link(profile, table, skipFailed: true, native).FromCache);
+    }
+
+    [Fact]
+    public void TheMachineValueIsMadeOnceAndKeptWithTheApprovals()
+    {
+        string folder = Path.Combine(_root, "machine");
+        string value = MachineState.CacheValueFor(folder, out string? warning);
+        Assert.Null(warning);
+        Assert.Matches("^[0-9a-f]{64}$", value);
+        Assert.Equal(value, MachineState.CacheValueFor(folder, out _));
+
+        MachineState.Load(folder).Approve(Path.Combine(_root, "share"));
+        Assert.Equal(value, MachineState.Load(folder).CacheValue);
+        Assert.Equal([Path.Combine(_root, "share")], MachineState.Load(folder).ApprovedNetworkLocations);
+
+        string other = Path.Combine(_root, "other-machine");
+        Assert.NotEqual(value, MachineState.CacheValueFor(other, out _));
+
+        File.WriteAllText(Path.Combine(folder, MachineState.FileName), "ome_machine = 1\ncache_value = \"short\"\n");
+        string fallback = MachineState.CacheValueFor(folder, out warning);
+        Assert.Contains("cache_value: expected 64 lowercase hexadecimal digits", warning);
+        Assert.NotEqual(fallback, MachineState.CacheValueFor(folder, out _));
     }
 
     [Fact]

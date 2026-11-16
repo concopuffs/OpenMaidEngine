@@ -426,6 +426,8 @@ public static class ModLinkCache
         foreach (var (id, selector) in selectors.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             text.Append("selector ").Append(id).Append(' ').Append(selector).Append('\n');
         text.Append("toolchain\n").Append(linkBase.ToolchainStamp).Append('\n');
+        // Launcher spec §5.3: an entry is used only on the machine that wrote it.
+        text.Append("machine ").Append(linkBase.MachineValue ?? "none").Append('\n');
         // The runtime that checks the Lua files, only for a stack with Lua: other keys stay as they were.
         if (order.Any(ModLuaLinker.ShipsLua))
         {

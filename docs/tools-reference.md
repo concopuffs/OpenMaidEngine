@@ -795,7 +795,13 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
     nothing on the share is opened.
   - The approved locations live in `machine.toml` in Godot's user folder for this project (`%APPDATA%\Godot\app_userdata\Open Maid Engine\`;
     on Linux `$XDG_DATA_HOME/godot/app_userdata/Open Maid Engine/`). That is outside OME home and every profile, so
-    a root from elsewhere brings no approval. The launcher writes it; the engine only reads it.
+    a root from elsewhere brings no approval. The launcher writes the approvals; the engine only reads them.
+  - The same file holds `cache_value`, a random value the first engine (or launcher) that links mods makes once
+    (`MachineState.CacheValueFor`). It joins every link cache key (`ModLinkBase.MachineValue`), so a cache entry
+    that another machine wrote is linked again rather than mounted (launcher spec §5.3). A `machine.toml` that cannot
+    be read or written gives a value for that run only, with a `[mods]` warning, and the next start links again.
+  - A profile file's `mode` joins the key of a link that dropped failed mods (`--skip-failed-mods`), since the mode
+    decides which mods fail.
   - `--allow-network-paths` approves the file's network paths for one run. A share reached through a drive letter
     and a network mount on Linux are ordinary paths.
   - The host passes Godot's own user folder. `Ome.Cli` computes it by Godot's rule (`MachineState.DefaultFolder`),

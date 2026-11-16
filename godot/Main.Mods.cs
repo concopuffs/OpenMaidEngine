@@ -20,11 +20,12 @@ public partial class Main
     /// Links the profile's mods and the <c>--mod</c> packages. Returns false when the link fails (startup stops with the
     /// report); on success <paramref name="layer"/> is the layer to mount, or null when no mods are enabled, and
     /// <paramref name="unpackedLua"/> the unpacked mods that ship Lua, by id with their folders (for --lua-reload).
-    /// <paramref name="modsTable"/> is the profile file's <c>[mods]</c> table, which names the packages in place of the
-    /// root's <c>mods/</c> folder (launcher spec §5.3).
+    /// <paramref name="run"/> is the resolver's: a profile file's <c>[mods]</c> table names the packages in place of
+    /// the root's <c>mods/</c> folder (launcher spec §5.3), and its mode joins the cache key of a link that drops
+    /// failed mods (§5.4).
     /// </summary>
     private static bool LinkMods(IReadOnlyList<string> userArgs, string workingDirectory, SelectedGameProfile selected,
-                                 ResolvedGamePersistence persistence, ProfileMods? modsTable, string sys4IniPath,
+                                 ResolvedGamePersistence persistence, ResolvedRun run, string sys4IniPath,
                                  Sys4AssetCatalog catalog,
                                  IAssetStore baseStore, Ome.Engine.Modding.LazyModRuntime luaRuntime,
                                  out MountedModLayer? layer, out IReadOnlyDictionary<string, string> unpackedLua)
@@ -32,6 +33,7 @@ public partial class Main
         layer = null;
         unpackedLua = new Dictionary<string, string>();
         ModLaunchOptions options = ModLaunchOptions.Resolve(userArgs, workingDirectory);
+        ProfileMods? modsTable = run.Mods;
         string modsDirectory = Path.Combine(persistence.ProfileRoot, ModLaunch.ModsFolder);
         if (options.NoMods && options.ForgetMods.Count == 0)
         {
@@ -52,8 +54,16 @@ public partial class Main
             GD.PushWarning("[mods] no repository toolchain: fragments compile without the profile's OMS modules, "
                            + "globals and patch points");
         // The Lua runtime checks each lua/ file; it is created only when a mod ships Lua (Lua scripting spec §14.2).
+        // Launcher spec §5.3: this machine's value joins every cache key, so an entry another machine wrote is not used.
+        string machineValue = MachineState.CacheValueFor(ProjectSettings.GlobalizePath("user://"), out string? machineWarning);
+        if (machineWarning != null) GD.PushWarning($"[mods] {machineWarning}");
         ModLinkBase linkBase = ModLinkBase.ForInstall(profile, sys4IniPath, catalog, baseStore, table,
-            OmeRuntimeMetadata.LoadOpcodeContracts(), globals, modules, points) with { Lua = luaRuntime };
+            OmeRuntimeMetadata.LoadOpcodeContracts(), globals, modules, points) with
+        {
+            Lua = luaRuntime,
+            MachineValue = machineValue,
+            ProfileMode = run.ProfileFile?.ModeName,
+        };
         ModLaunchResult result = ModLaunch.Run(linkBase, persistence.ProfileRoot, persistence.DiagnosticsDirectory, options,
                                                modsTable);
         foreach (ModReportLine line in result.Report.Lines.Where(line => line.Class == ModReportClass.Note

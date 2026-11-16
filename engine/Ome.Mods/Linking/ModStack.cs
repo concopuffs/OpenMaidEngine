@@ -64,14 +64,16 @@ public static class ModStack
         return new ModStackResult(layer, result.Report, false);
     }
 
-    /// <summary>The cache key of a link that dropped its failed mods: every installed mod by id, the user's order and
-    /// the saved selectors, which together decide the order, the allocation and which mods fail.</summary>
+    /// <summary>The cache key of a link that dropped its failed mods: every discovered mod by id (with a profile's
+    /// <c>[mods]</c> table, the enabled ones), the user's order, the saved selectors and a profile's mode, which together
+    /// decide the order, the allocation and which mods fail.</summary>
     private static string SkipFailedKey(ModLinkBase linkBase, IReadOnlyList<ModPackage> mods, IReadOnlyList<string> userOrder,
                                         SelectorStore selectors)
     {
         var installed = mods.OrderBy(mod => mod.Id, StringComparer.Ordinal).ToList();
         string text = "skip-failed-mods\n" + ModLinkCache.ComputeKey(linkBase, installed, selectors.Selectors) + "\n"
-                      + string.Concat(userOrder.Select(line => "order " + line + "\n"));
+                      + string.Concat(userOrder.Select(line => "order " + line + "\n"))
+                      + (linkBase.ProfileMode is { } mode ? "mode " + mode + "\n" : "");
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
     }

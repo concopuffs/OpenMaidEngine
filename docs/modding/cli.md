@@ -102,7 +102,7 @@ Each game has a **profile root**:
 | `mods/` | Installed mods: each `.omp` file and each folder with a `manifest.toml`. |
 | `mods/load-order.txt` | Optional. One mod id per line, in your preferred order. A line `-ID` disables an installed mod without removing it. Mods not listed load after the listed ones, by id. |
 | `mods/selectors.toml` | Written by the port: the selector each mod with new scripts or assets was given. Do not edit it. |
-| `mods/.cache/` | The linked results, each reused while nothing changes. A link keeps the 8 most recent and removes older ones, but none younger than an hour. Safe to delete at any time. |
+| `mods/.cache/` | The linked results, each reused while nothing changes, and only on the machine that linked it: a copied profile links once again. A link keeps the 8 most recent and removes older ones, but none younger than an hour. Safe to delete at any time. |
 | `SAVE/` | Saves. With mods loaded, each `SAVEnn.DAT` gets a `SAVEnn.mods.toml` stamp beside it. A save made while a mod ships Lua, or after loading a save that had one, gets `SAVEnn.modstate.json`, the mods' `maid.state` ([lua.md](lua.md), "State"). Copy a save with every `SAVEnn.*` file. |
 | `diagnostics/` | `mod-link.txt` (the last link report), `mod-save-stamps.txt` (save-stamp warnings) and, with `--text-log`, `text-misses.jsonl`. |
 

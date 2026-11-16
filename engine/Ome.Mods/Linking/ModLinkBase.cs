@@ -50,6 +50,12 @@ public sealed record ModLinkBase
     /// when a mod ships Lua; null in a build without one, where a mod that ships Lua fails the link. Its identity
     /// joins the cache key of a stack with Lua.</summary>
     public LazyModRuntime? Lua { get; init; }
+    /// <summary>This machine's link cache value (launcher spec §5.3; <c>MachineState.CacheValueFor</c>), which joins
+    /// every cache key, so an entry another machine wrote is never mounted. Null in a link that writes no cache.</summary>
+    public string? MachineValue { get; init; }
+    /// <summary>A profile file's mode (<c>native</c> or <c>extended</c>, launcher spec §5.4), which joins the key of a
+    /// link that dropped its failed mods; null without a profile file.</summary>
+    public string? ProfileMode { get; init; }
 
     /// <summary>The opcode table's content (each opcode's label, operand count and semantic name), for the stamp.</summary>
     private static string TableFingerprint(OpcodeTable table)
