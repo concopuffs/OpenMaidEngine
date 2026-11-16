@@ -119,6 +119,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertIn("manifest_value size", bootstrap_text)
             self.assertIn("--remove-on-error", bootstrap_text)
 
+    def test_an_exported_engine_flushes_its_output(self) -> None:
+        # Launcher plan §4.12: Godot flushes standard output after a print only in debug builds unless the project
+        # says so; without it a Linux release engine's lines reach a pipe late, and a killed engine loses them.
+        application = self.godot_project.split("[application]", 1)[1].split("\n[", 1)[0]
+        self.assertIn("run/flush_stdout_on_print=true", application.splitlines())
+        self.assertIn('package_linux_x64.py" smoke "$package_root"', self.linux_build)
+
     def test_public_build_outputs_use_ome_branding(self) -> None:
         self.assertIn('export_path="../build/export/linux-x64/OME"', self.export_presets)
         self.assertIn('export_path="../build/export/windows-x64/OME.exe"', self.export_presets)

@@ -3,6 +3,7 @@ config_version=5
 [application]
 config/name="Open Maid Engine"
 run/main_scene="res://Main.tscn"
+run/flush_stdout_on_print=true
 
 [display]
 window/size/viewport_width=640

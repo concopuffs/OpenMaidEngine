@@ -579,12 +579,21 @@ the bundled native movie shim plus its local FFmpeg dependencies at ABI version 
 archives, fonts, rendering, audio output, or a desktop window; retain the installed-game self-test below as a
 separate trusted/runtime gate.
 
+The smoke runs through `package_linux_x64.py smoke PACKAGE_ROOT --log FILE` with `--hold`, which keeps the engine
+running after its line until its standard input closes. The line must reach the pipe while the engine runs, and
+the engine must then exit 0. That proves an exported engine flushes its output after each print, which
+`godot/project.godot` asks for with `application/run/flush_stdout_on_print=true` (Godot does it unasked only in
+debug builds). The launcher captures the engine's output live (launcher spec §8.5), and without the flush a Linux
+release engine's lines would wait in stdio's buffer and be lost when it is killed. `test_release_workflow.py`
+checks the setting.
+
 The focused component commands are:
 
 ```bash
 ./tools/bootstrap-godot-linux-x64.sh
 python3 -X utf8 tools/package_linux_x64.py verify build/export/linux-x64
 python3 -X utf8 tools/package_linux_x64.py package build/export/linux-x64
+python3 -X utf8 tools/package_linux_x64.py smoke build/package/staging/OME-linux-x64 --log build/package/package-smoke.log
 ```
 
 The bootstrap prints the pinned editor path. The verifier prints the accepted export directory; the packager

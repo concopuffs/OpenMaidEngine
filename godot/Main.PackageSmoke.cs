@@ -22,6 +22,9 @@ public partial class Main
                 throw new InvalidOperationException(
                     $"native FFmpeg shim ABI is {ffmpegAbi}; expected 3");
             GD.Print($"PACKAGE SMOKE OK: opcodes={table.Count} ffmpeg-abi={ffmpegAbi}");
+            // --hold keeps the engine running until its standard input closes, so the release smoke can check that the
+            // line reached its pipe while the engine ran (launcher plan §4.12: project.godot's flush_stdout_on_print).
+            if (Array.IndexOf(OS.GetCmdlineUserArgs(), "--hold") >= 0) Console.In.ReadToEnd();
             GetTree().Quit(0);
         }
         catch (Exception error)

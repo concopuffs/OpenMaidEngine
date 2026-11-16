@@ -131,7 +131,8 @@ package_root="${package_outputs[0]}"
 archive_path="${package_outputs[1]}"
 smoke_log="$package_directory/package-smoke.log"
 set +e
-"$package_root/OME" --headless -- --package-smoke >"$smoke_log" 2>&1
+# The smoke holds until its standard input closes; its line must reach the pipe while it runs (launcher plan §4.12).
+python3 -X utf8 "$script_dir/package_linux_x64.py" smoke "$package_root" --log "$smoke_log"
 smoke_status=$?
 set -e
 cat "$smoke_log"

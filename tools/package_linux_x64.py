@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify and package the Linux x64 Godot export."""
+"""Verify and package the Linux x64 Godot export, and run its package smoke."""
 from __future__ import annotations
 
 import argparse
@@ -7,10 +7,13 @@ import gzip
 import hashlib
 import json
 import os
+import queue
 import shutil
 import stat
 import subprocess
 import tarfile
+import threading
+import time
 from pathlib import Path
 
 import package_notices
@@ -46,6 +49,8 @@ FORBIDDEN_FILES = (
 )
 LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
+SMOKE_MARKER = "PACKAGE SMOKE OK: opcodes=548 ffmpeg-abi=3"
+SMOKE_TIMEOUT_S = 120.0
 # Godot's notices and the license of the font OME.dll embeds.
 PINNED_NOTICES = package_notices.pinned_notices() + package_notices.pinned_notices(package_notices.NOTO_NOTICES)
 
@@ -207,6 +212,69 @@ def create_package(
     return package_root, archive_path
 
 
+class SmokeError(RuntimeError):
+    pass
+
+
+def run_smoke(command: list[str], marker: str, log: Path, timeout: float = SMOKE_TIMEOUT_S) -> None:
+    """Run a package smoke that holds until its standard input closes (`--package-smoke --hold`). Its marker must reach
+    the pipe while it still runs: the launcher captures an engine's output live, and an engine that flushes only at
+    exit loses its lines when it is killed (launcher plan §4.12: project.godot's flush_stdout_on_print). Then its
+    standard input is closed and it must exit 0. Everything it printed goes to `log`."""
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    lines: queue.Queue[str | None] = queue.Queue()
+
+    def read() -> None:
+        assert process.stdout is not None
+        for raw in process.stdout:
+            lines.put(raw.decode("utf-8", errors="replace").replace("\r\n", "\n"))
+        lines.put(None)
+
+    reader = threading.Thread(target=read, daemon=True)
+    reader.start()
+    output: list[str] = []
+    try:
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                line = lines.get(timeout=max(0.0, deadline - time.monotonic()))
+            except queue.Empty:
+                raise SmokeError(f"no '{marker}' line reached the pipe within {timeout:.0f} s while the engine ran: "
+                                 "its output is not flushed") from None
+            if line is None:
+                raise SmokeError(f"the engine's output ended ({process.wait()}) before '{marker}'")
+            output.append(line)
+            if marker in line:
+                if process.poll() is not None:
+                    raise SmokeError(f"'{marker}' arrived only as the engine exited ({process.returncode})")
+                break
+        assert process.stdin is not None
+        process.stdin.close()
+        try:
+            returncode = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            raise SmokeError(f"the engine did not exit within {timeout:.0f} s of its standard input closing") from None
+        if returncode != 0:
+            raise SmokeError(f"the engine exited with {returncode}")
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        reader.join(timeout)
+        # Whatever reached the pipe goes to the log, on every path.
+        while not lines.empty():
+            if (line := lines.get_nowait()) is not None:
+                output.append(line)
+        for stream in (process.stdin, process.stdout):
+            if stream is not None and not stream.closed:
+                stream.close()
+        log.write_text("".join(output), encoding="utf-8", newline="\n")
+
+
+def smoke_command(package_root: Path) -> list[str]:
+    return [str(package_root / "OME"), "--headless", "--", "--package-smoke", "--hold"]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -215,10 +283,20 @@ def main() -> int:
     package = subparsers.add_parser("package")
     package.add_argument("export_directory", type=Path)
     package.add_argument("--output-directory", type=Path, default=REPO / "build/package")
+    smoke = subparsers.add_parser("smoke")
+    smoke.add_argument("package_root", type=Path)
+    smoke.add_argument("--log", type=Path, required=True)
     args = parser.parse_args()
 
     if args.command == "verify":
         print(verify_export(args.export_directory))
+        return 0
+    if args.command == "smoke":
+        try:
+            run_smoke(smoke_command(args.package_root), SMOKE_MARKER, args.log)
+        except SmokeError as error:
+            print(f"package smoke: {error}", flush=True)
+            return 1
         return 0
     epoch = source_date_epoch()
     package_root, archive_path = create_package(

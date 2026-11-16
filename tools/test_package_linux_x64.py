@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,6 +22,54 @@ def make_export(root: Path) -> Path:
     (export / "OME").chmod(0o755)
     write_deps(export / package_linux_x64.MANAGED_DIRECTORY, "linux-x64")
     return export
+
+
+def fake_engine(body: str) -> list[str]:
+    """A stand-in for `OME --headless -- --package-smoke --hold`: a Python program running `body`."""
+    return [sys.executable, "-c", "import sys\n" + body]
+
+
+class PackageSmokeTests(unittest.TestCase):
+    """Launcher plan §4.12: the marker must reach the pipe while the engine runs."""
+
+    MARKER = package_linux_x64.SMOKE_MARKER
+
+    def run_smoke(self, body: str, timeout: float = 30.0) -> tuple[str | None, str]:
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "package-smoke.log"
+            try:
+                package_linux_x64.run_smoke(fake_engine(body), self.MARKER, log, timeout)
+                error = None
+            except package_linux_x64.SmokeError as failure:
+                error = str(failure)
+            return error, log.read_text(encoding="utf-8")
+
+    def test_a_flushed_line_while_the_engine_holds_passes(self) -> None:
+        error, log = self.run_smoke(f"print('banner', flush=True)\nprint({self.MARKER!r}, flush=True)\n"
+                                    "sys.stdin.read()\nprint('after', flush=True)")
+        self.assertIsNone(error)
+        self.assertEqual(["banner", self.MARKER, "after"], log.splitlines())  # every line, the last too
+
+    def test_a_line_held_in_the_engines_buffer_fails(self) -> None:
+        # Into a pipe, Python's print is block-buffered, as a release Godot's was before flush_stdout_on_print: the
+        # line waits while the engine holds, so it never arrives in time.
+        error, _ = self.run_smoke(f"print({self.MARKER!r})\nsys.stdin.read()", timeout=2.0)
+        self.assertIn("is not flushed", error)
+
+    def test_a_failed_exit_fails(self) -> None:
+        error, log = self.run_smoke(f"print({self.MARKER!r}, flush=True)\nsys.stdin.read()\nsys.exit(3)")
+        self.assertEqual("the engine exited with 3", error)
+        self.assertIn(self.MARKER, log)
+
+    def test_output_without_the_marker_fails(self) -> None:
+        error, log = self.run_smoke("print('PACKAGE SMOKE FAILED', flush=True)\nsys.exit(1)")
+        self.assertIn("ended (1) before", error)
+        self.assertIn("PACKAGE SMOKE FAILED", log)
+
+    def test_the_smoke_holds_the_packaged_engine(self) -> None:
+        command = package_linux_x64.smoke_command(Path("/opt/OME-linux-x64"))
+        self.assertEqual(["--headless", "--", "--package-smoke", "--hold"], command[1:])
+        self.assertEqual(Path("/opt/OME-linux-x64/OME"), Path(command[0]))
 
 
 class PackageLinuxX64Tests(unittest.TestCase):
