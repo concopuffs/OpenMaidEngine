@@ -99,11 +99,12 @@ public static class ModLaunch
         => table == null ? Candidates(modsDirectory).Count > 0 : table.Enabled.Any();
 
     /// <summary>Discovery for <paramref name="table"/> when there is one, else for the profile's <c>mods/</c> folder and
-    /// its <c>load-order.txt</c>.</summary>
+    /// its <c>load-order.txt</c>. <paramref name="mode"/> is a profile file's mode (<see cref="ModeCheck"/>), null
+    /// without one.</summary>
     public static ModDiscovery Discover(string modsDirectory, IReadOnlyList<string> extraPackages, ModLinkReport report,
-                                        ProfileMods? table, string game)
-        => table == null ? Discover(modsDirectory, extraPackages, report)
-            : DiscoverTable(table, modsDirectory, game, extraPackages, report);
+                                        ProfileMods? table, string game, string? mode)
+        => table == null ? Discover(modsDirectory, extraPackages, report, mode)
+            : DiscoverTable(table, modsDirectory, game, extraPackages, report, mode);
 
     /// <summary>
     /// Discovery for a profile's <c>[mods]</c> table (launcher spec §5.3). Every candidate of every folder is indexed
@@ -116,7 +117,7 @@ public static class ModLaunch
     /// engine's own joins when an enabled mod requires it. <c>mods/load-order.txt</c> is not read.
     /// </summary>
     public static ModDiscovery DiscoverTable(ProfileMods table, string modsDirectory, string game,
-                                             IReadOnlyList<string> extraPackages, ModLinkReport report)
+                                             IReadOnlyList<string> extraPackages, ModLinkReport report, string? mode = null)
     {
         string loadOrder = Path.Combine(modsDirectory, LoadOrderFile);
         if (File.Exists(loadOrder))
@@ -238,8 +239,11 @@ public static class ModLaunch
                 report.Add(ModReportClass.Error, Path.GetFileName(entry.Path), null, $"{entry.Path}: {error.Message}");
                 failed = true;
             }
+        // Launcher spec §5.4: before a base mod mounts, so a refusal names the package the player enabled.
+        failed |= ModeCheck.Apply(packages, mode, report);
         packages.AddRange(ShippedPackages.Required(packages, report));
-        var userOrder = opened.Concat(extraIds.Where(id => !opened.Contains(id))).Distinct().ToList();
+        var present = packages.Select(package => package.Id).ToHashSet(StringComparer.Ordinal);
+        var userOrder = opened.Concat(extraIds.Where(id => !opened.Contains(id))).Where(present.Contains).Distinct().ToList();
         return new ModDiscovery(packages, userOrder, failed);
     }
 
@@ -250,7 +254,8 @@ public static class ModLaunch
     /// user order is the listed ids, then the folder's other mods by id, then the extra packages in argument order. The
     /// caller disposes the packages.
     /// </summary>
-    public static ModDiscovery Discover(string modsDirectory, IReadOnlyList<string> extraPackages, ModLinkReport report)
+    public static ModDiscovery Discover(string modsDirectory, IReadOnlyList<string> extraPackages, ModLinkReport report,
+                                        string? mode = null)
     {
         var (listed, disabled) = ReadLoadOrder(modsDirectory);
         var packages = new List<ModPackage>();
@@ -280,6 +285,8 @@ public static class ModLaunch
                 failedToOpen = true;
             }
         }
+        // Launcher spec §5.4: a profile file without a [mods] table still has a mode.
+        failedToOpen |= ModeCheck.Apply(packages, mode, report);
         packages.AddRange(ShippedPackages.Required(packages, report));
         var userOrder = listed
             .Concat(folderIds.Where(id => !listed.Contains(id)).Order(StringComparer.Ordinal))
@@ -307,7 +314,8 @@ public static class ModLaunch
         if (options.NoMods) return ModLaunchResult.None(report);
         linkBase = linkBase with { LuaDev = options.LuaDev };
 
-        ModDiscovery discovery = Discover(modsDirectory, options.ExtraPackages, report, table, linkBase.Profile);
+        ModDiscovery discovery = Discover(modsDirectory, options.ExtraPackages, report, table, linkBase.Profile,
+                                          linkBase.ProfileMode);
         var packages = discovery.Packages;
         bool failedToOpen = discovery.FailedToOpen;
         try

@@ -129,6 +129,11 @@ such as two versions of one mod. Keep one.
 **"requires ID, which is in … but not enabled in profile.toml".** An enabled mod needs another mod that is in a
 folder but switched off. Enable that one too. The launcher does this when you enable a mod.
 
+**"the profile's mode is native, which runs only what native AGE runs, and it …".** The profile is in
+Compatibility mode (`mode = "native"` in its `profile.toml`), and the mod targets `extended`, ships Lua, or requires
+such a mod, such as the game's base mod. Switch the profile to Extended mode in the launcher (`mode = "extended"`),
+or leave the mod off.
+
 **A note that a file "is left out".** A package in a shared folder could not be read, and the profile does not
 enable it. Nothing else happens. If you meant to use it, replace the file.
 

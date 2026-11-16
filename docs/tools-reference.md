@@ -785,6 +785,13 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   one that exists is a note. `selectors.toml` and `.cache/` stay in the profile root's `mods/`. The host's early "no
   mods" test and `omp check`, `export`, `explain`, `lua-stubs` and `text` follow the table.
 
+  The profile's `mode` is checked on the discovered packages, with or without a `[mods]` table (`ModeCheck`,
+  launcher spec §5.4). `native` refuses an enabled or `--mod` package that targets `extended`, ships Lua (a Lua
+  library has no target), or requires a package the mode refuses, the engine's base mods included, since they target
+  `extended`. The check runs before a base mod mounts, so the refusal names the package that was enabled. Such a
+  package stops the start, or with `--skip-failed-mods` is dropped. `extended` admits everything, as a run without a
+  profile file does. `omp check` and the other `omp` commands apply the same mode.
+
   Before anything in the root is opened, the resolver checks it (`RootSafety`, launcher spec §12). The checks apply
   only to a root with a profile file:
   - A symbolic link or junction anywhere inside the root (hidden ones included) stops startup and names it. This

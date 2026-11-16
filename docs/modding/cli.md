@@ -120,6 +120,8 @@ table instead. Then the port reads neither the root's own packages nor its `load
 - **The engine's base mods** are not listed. A game's base mod joins when an enabled mod requires it.
 - **`selectors.toml` and `.cache/`** stay in this root's `mods/`, so profiles that share a folder keep their own
   selectors.
+- **The profile's `mode`**, with or without a `[mods]` table: `native` (Compatibility) refuses a mod that targets
+  `extended`, ships Lua, or requires such a mod, the base mod included. `extended` takes every mod.
 
 `omp check`, `export`, `explain`, `lua-stubs` and `text` with `--data-root` read the same table. The errors it can
 raise are in [troubleshooting.md](troubleshooting.md), "Startup refusals".

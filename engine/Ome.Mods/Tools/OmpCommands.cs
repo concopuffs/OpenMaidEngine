@@ -310,7 +310,8 @@ public static class OmpCommands
         var report = new ModLinkReport();
         string modsDirectory = profileRoot == null ? "" : Path.Combine(profileRoot, ModLaunch.ModsFolder);
         ModDiscovery discovery = ModLaunch.Discover(profileRoot == null ? Path.Combine(Path.GetTempPath(), "omp-none-" + Guid.NewGuid().ToString("N")) : modsDirectory,
-                                                    extraPackages, report, profileRoot == null ? null : table, linkBase.Profile);
+                                                    extraPackages, report, profileRoot == null ? null : table, linkBase.Profile,
+                                                    linkBase.ProfileMode);
         foreach (ModReportLine line in report.Lines) console.WriteLine(line);
         if (discovery.FailedToOpen && !skipFailed) return (null, discovery.Packages);
         SelectorStore selectors = profileRoot == null ? new SelectorStore()

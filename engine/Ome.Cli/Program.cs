@@ -118,7 +118,7 @@ if (command == "omp")
     using Ome.Engine.Modding.LazyModRuntime luaRuntime = Ome.Scripting.Lua.LuaModRuntime.Lazy();
     var linkBase = Ome.Mods.Linking.ModLinkBase.ForInstall(profileId, sys4Ini, catalog, assetStore, table,
         Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), Paths.GlobalsJson(profileId), Paths.OmsModules(profileId),
-        Paths.PatchPointsJson(profileId)) with { Lua = luaRuntime };
+        Paths.PatchPointsJson(profileId)) with { Lua = luaRuntime, ProfileMode = run.ProfileFile?.ModeName };
     string? dataRoot = run.DataRoot;
     Ome.Mods.Launch.ProfileMods? modsTable = run.Mods;
     string verb = args.Length > 1 ? args[1] : "";
