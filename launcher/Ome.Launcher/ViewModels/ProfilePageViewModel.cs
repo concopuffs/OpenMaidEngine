@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Profiles;
 using Ome.Launcher.Core;
@@ -35,12 +36,16 @@ public sealed class ProfilePageViewModel : ViewModel
         Port = row.Entry.Usable && !row.Entry.NeedsReview
             ? new OmeIniStore(Path.Combine(row.Entry.Root, PortOptions.FileName)).Load()
             : null;
-        Play = new Command(() => { }, () => false);
+        Play = new Command(() => _ = _main.PlayAsync(Row), () => CanPlay);
         Duplicate = new Command(() => { }, () => false);
         Shortcut = new Command(() => { }, () => false);
         More = new Command(() => { }, () => false);
         NoticeCommand = new Command(RunNoticeAction, () => NoticeTarget != null);
-        ShowTab = new Command(tab => Tab = (ProfileTab)tab!);
+        ShowTab = new Command(tab => Tab = (ProfileTab)tab!, tab => (ProfileTab)tab! == ProfileTab.Overview || !IsLocked);
+        OpenLog = new Command(() => { if (Row.Failure?.LogPath is { } log) _main.Host?.Open(log); },
+                              () => Row.Failure?.LogPath != null);
+        DismissFailure = new Command(() => Row.Failure = null);
+        row.PropertyChanged += RowChanged;
     }
 
     public LauncherStrings S => _main.S;
@@ -117,6 +122,54 @@ public sealed class ProfilePageViewModel : ViewModel
     public bool IsRunning => State == ProfileState.Running;
     public bool IsNotRunning => !IsRunning;
 
+    /// <summary>Play starts the profile when its checks passed and nothing runs it (spec §8.5).</summary>
+    public bool CanPlay => _checks is { CanPlay: true } && !Row.Launching && !IsRunning && !Entry.NeedsReview;
+
+    /// <summary>"Play", or "Starting…" while the checks run again before the engine starts.</summary>
+    public string PlayText => Row.Launching ? S["header.starting"] : S["header.play"];
+
+    /// <summary>While the game runs (or starts) the profile is not changed: only the Overview stays usable
+    /// (spec §8.4).</summary>
+    public bool IsLocked => IsRunning || Row.Launching;
+    public bool IsUnlocked => !IsLocked;
+
+    private void RowChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (IsLocked && _tab != ProfileTab.Overview) Tab = ProfileTab.Overview;
+        ChangedAll();
+        Play.Refresh();
+        ShowTab.Refresh();
+        OpenLog.Refresh();
+    }
+
+    /// <summary>Stops listening to the row: the page is no longer shown.</summary>
+    public void Detach() => Row.PropertyChanged -= RowChanged;
+
+    // ---- a failed start (spec §8.5) ----
+
+    public bool HasFailure => Row.Failure != null;
+
+    /// <summary>What happened: the start was refused, the engine refused (exit code 2), or the game stopped with an
+    /// exit code other than 0.</summary>
+    public string FailureText => Row.Failure switch
+    {
+        null => "",
+        { Started: false } => S["failure.not-started"],
+        { ExitCode: 2 } => S["failure.refused"],
+        { ExitCode: var code } => S.Format("failure.exit", code),
+    };
+
+    /// <summary>Why a start was refused, in Core's words.</summary>
+    public string? FailureReason => Row.Failure is { Started: false, Refusal: { } refusal } ? refusal : null;
+    public bool HasFailureReason => FailureReason != null;
+
+    /// <summary>The end of <c>diagnostics/engine.log</c>.</summary>
+    public string FailureLog => string.Join(Environment.NewLine, Row.Failure?.LogTail ?? []);
+    public bool HasFailureLog => Row.Failure is { LogTail.Count: > 0 };
+    public string FailureLogHeading => S.Format("failure.log", Row.Failure?.LogPath ?? "");
+    public Command OpenLog { get; }
+    public Command DismissFailure { get; }
+
     public string LastPlayed => RunLock.LastStart(Entry.Root) is { } start
         ? S.Format("header.last-played", start.ToLocalTime().ToString(S["date.short"], S.Culture))
         : S["header.never-played"];
@@ -132,14 +185,17 @@ public sealed class ProfilePageViewModel : ViewModel
             if (Entry.NeedsReview) return (S["notice.review"], null, "warn", null);
             if (!Entry.Usable) return (S["notice.unreadable"], Entry.Problem, "bad", null);
             if (_checkFailure != null) return (S["notice.checks-failed"], _checkFailure, "bad", null);
-            if (_checks is not { } checks) return null;
-            if (checks.Running)
+            if (Row.RunningHere || _checks is { Running: true })
             {
-                string text = RunLock.LastStart(Entry.Root) is { } start
-                    ? S.Format("notice.running", start.ToLocalTime().ToString(S["time.short"], S.Culture))
+                // An engine this launcher started runs from when the launcher saw it start; one started elsewhere
+                // from the time it marked on run.lock.
+                DateTime? start = Row.RunningHere ? Row.StartedAt : RunLock.LastStart(Entry.Root);
+                string text = start is { } since
+                    ? S.Format("notice.running", since.ToLocalTime().ToString(S["time.short"], S.Culture))
                     : S["notice.running-unknown"];
                 return (text, null, "run", null);
             }
+            if (_checks is not { } checks) return null;
             ProfileCheck? check = checks.Checks.FirstOrDefault(check => check.Status == CheckStatus.Failed)
                                   ?? checks.Checks.FirstOrDefault(check => check.Status == CheckStatus.Warning);
             if (check == null) return null;
@@ -221,9 +277,7 @@ public sealed class ProfilePageViewModel : ViewModel
         try
         {
             ProfileCheckResult result = await Task.Run(() => ProfileChecks.Run(entry, options));
-            _checkFailure = null;
-            Row.State = ProfileRowViewModel.StateOf(result);
-            Checks = result;
+            Show(result);
         }
         catch (Exception error) when (IsCheckFailure(error))
         {
@@ -231,6 +285,16 @@ public sealed class ProfilePageViewModel : ViewModel
             Row.State = ProfileState.Problem;
             Checks = null;
         }
+    }
+
+    /// <summary>Shows a check run's result: the row's state (running while an engine this launcher started runs it) and
+    /// the header.</summary>
+    public void Show(ProfileCheckResult result)
+    {
+        _checkFailure = null;
+        Row.State = Row.RunningHere ? ProfileState.Running : ProfileRowViewModel.StateOf(result);
+        Checks = result;
+        Play.Refresh();
     }
 
     /// <summary>The failures a check run reports rather than throws: a file that cannot be read.</summary>

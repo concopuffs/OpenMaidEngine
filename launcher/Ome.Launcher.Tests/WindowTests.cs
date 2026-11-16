@@ -2,12 +2,13 @@ using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Ome.Launcher;
 using Ome.Launcher.Core;
 using Ome.Launcher.ViewModels;
 using Ome.Launcher.Views;
 using Ome.Mods.Launch;
 
-/// <summary>The window drawn headless (launcher plan §6.1, §6.2): both themes take the mock's palette, the text is set in
+/// <summary>The window drawn headless (launcher plan §6.1-§6.3): both themes take the mock's palette, the text is set in
 /// the bundled Noto Sans JP, and each state of the frame draws with no warning. The frames are written to
 /// <c>build/launcher-shots/</c>.</summary>
 public sealed class WindowTests : IDisposable
@@ -42,30 +43,40 @@ public sealed class WindowTests : IDisposable
     }
 
     /// <summary>The mock's list: two Kamidori profiles and one Himegari profile.</summary>
-    private void Three()
+    private Dictionary<string, ProfileEntry> Three()
     {
         string kamidori = _home.Install("kamidori");
         string himegari = _home.Install("himegari");
-        _home.Profile("kamidori-english", "kamidori", kamidori, "Kamidori (English)");
-        _home.Profile("kamidori-ja", "kamidori", kamidori, "神採り (日本語)");
-        _home.Profile("himegari", "himegari", himegari, "Himegari");
+        return new[]
+        {
+            _home.Profile("kamidori-english", "kamidori", kamidori, "Kamidori (English)"),
+            _home.Profile("kamidori-ja", "kamidori", kamidori, "神採り (日本語)"),
+            _home.Profile("himegari", "himegari", himegari, "Himegari"),
+        }.ToDictionary(profile => profile.Id);
     }
 
     private void Select(string id)
         => _home.Session().Save(LauncherSettingsStore.Load(_home.Home).Settings with { LastProfile = id, Art = ArtConsent.Never });
 
-    /// <summary>Draws the window over a model whose first work is done, in each theme.</summary>
-    private void Draw(string name, string language = "en", Action<MainViewModel>? check = null, params ThemeVariant[] themes)
+    /// <summary>Draws the window over a model whose first work is done, in each theme, as <c>&lt;task&gt;-&lt;name&gt;-&lt;theme&gt;</c>.
+    /// <paramref name="session"/> makes the model's session (by default a requested window in
+    /// <paramref name="language"/>); <paramref name="before"/> runs once the window shows, before it is drawn.</summary>
+    private void Draw(string name, string language = "en", Action<MainViewModel>? check = null, string task = "6.2",
+                      Func<LauncherSession>? session = null, Func<MainViewModel, Task>? before = null,
+                      Func<MainViewModel, Task>? after = null, params ThemeVariant[] themes)
     {
         Headless.Run(async () =>
         {
             foreach (ThemeVariant theme in themes.Length == 0 ? [ThemeVariant.Light, ThemeVariant.Dark] : themes)
             {
-                var model = new MainViewModel(_home.Session(language: language), new ArtOptions(Handler: new Refuse()));
+                var model = new MainViewModel(session?.Invoke() ?? _home.Session(language: language),
+                                              new ArtOptions(Handler: new Refuse()));
                 await model.StartAsync();
                 var window = new MainWindow { DataContext = model };
-                Headless.Render(window, theme, $"6.2-{name}-{(theme == ThemeVariant.Dark ? "dark" : "light")}");
+                if (before != null) await before(model);
+                Headless.Render(window, theme, $"{task}-{name}-{(theme == ThemeVariant.Dark ? "dark" : "light")}");
                 check?.Invoke(model);
+                if (after != null) await after(model);
                 window.Close();
             }
         });
@@ -93,6 +104,56 @@ public sealed class WindowTests : IDisposable
                                        out RunLock? engine, out _));
         using (engine) Draw("running", check: model => Assert.True(model.Page!.IsRunning));
     }
+
+    [Fact]
+    public void AFailedStartAndAProfileThisLauncherRunsDraw()
+    {
+        ProfileEntry english = Three()["kamidori-english"];
+        Select("kamidori-english");
+        string log = Path.Combine(english.Root, EngineLaunch.DiagnosticsFolder, EngineLaunch.LogFile);
+        string[] tail =
+        [
+            "[launcher] OME --rendering-driver d3d12 -- --data-root " + english.Root,
+            "OME: game kamidori, profile root " + english.Root,
+            "OME: the mods link (2 packages)",
+            "ERROR: the scene cannot be loaded: res://synthetic/missing.tscn",
+            "   at: load (core/io/resource_loader.cpp:290)",
+            "[launcher] the engine exited with 3",
+        ];
+        Headless.Run(() => Assert.Equal(ProfileState.Ready, ProfilePageStateOf(english)));
+        Draw("failed-start", task: "6.3",
+             session: () => _home.Session(WindowReason.StartFailed, profile: english,
+                                          launch: new LaunchResult(true, 3, null, log, tail,
+                                                                   ProfileChecks.Run(english, _home.CheckOptions))),
+             check: model =>
+             {
+                 Assert.True(model.Page!.HasFailure);
+                 Assert.Equal("kamidori-english", model.Selected!.Id);
+             });
+
+        string signal = Path.Combine(_home.Root, "let-the-engine-exit");
+        Task<LaunchFailure?>? play = null;
+        Draw("running-here", task: "6.3", session: () => _home.Session(engine: TestHome.StubEngine("--wait-for", signal)),
+             before: async model =>
+             {
+                 if (File.Exists(signal)) File.Delete(signal);
+                 play = model.PlayAsync(model.Selected!);
+                 await Headless.Until(() => model.Selected!.RunningHere, "the engine to start");
+             },
+             check: model =>
+             {
+                 Assert.True(model.Page!.IsRunning);
+                 Assert.True(model.Page.IsLocked);
+             },
+             after: async _ =>
+             {
+                 File.WriteAllText(signal, "");
+                 Assert.Null(await play!);
+             });
+    }
+
+    private ProfileState ProfilePageStateOf(ProfileEntry profile)
+        => ProfileRowViewModel.StateOf(ProfileChecks.Run(profile, _home.CheckOptions));
 
     [Fact]
     public void TheFirstRunCardAndTheArtQuestionDraw()

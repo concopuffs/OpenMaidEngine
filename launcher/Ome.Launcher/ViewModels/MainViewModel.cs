@@ -1,5 +1,6 @@
 using Ome.Engine.Profiles;
 using Ome.Launcher.Core;
+using Ome.Mods.Launch;
 
 namespace Ome.Launcher.ViewModels;
 
@@ -33,7 +34,9 @@ public sealed class GameGroupViewModel(string? game, string title, IReadOnlyList
 /// profile's page. The selection is kept as <c>launcher.toml</c>'s <c>last_profile</c>. When the window starts
 /// (<see cref="StartAsync"/>) every profile is checked off the UI thread, so each dot shows its state, and the art is
 /// downloaded when the player said <c>always</c>; with <c>ask</c> and an image missing, the window asks once, naming the
-/// hosts (spec §8.7).
+/// hosts (spec §8.7). Play (<see cref="PlayAsync"/>) starts the engine on a worker thread; the launcher's process stays
+/// while any engine it started runs, and the window stays, minimizes or hides meanwhile by <c>while_running</c>
+/// (spec §8.5).
 /// </summary>
 public sealed class MainViewModel : ViewModel, IDisposable
 {
@@ -43,6 +46,8 @@ public sealed class MainViewModel : ViewModel, IDisposable
     private ProfilePageViewModel? _page;
     private IReadOnlyList<string> _artHosts = [];
     private bool _askArt;
+    private int _running;
+    private bool _quitWhenIdle;
 
     public MainViewModel(LauncherSession session, ArtOptions? artOptions = null)
     {
@@ -60,6 +65,9 @@ public sealed class MainViewModel : ViewModel, IDisposable
     }
 
     public LauncherSession Session { get; }
+
+    /// <summary>The window and the desktop, as the view models need them; null until the window shows.</summary>
+    public IWindowHost? Host { get; set; }
 
     /// <summary>The launcher's strings, bound as <c>S[key]</c>; a new language tells every binding at once.</summary>
     public LauncherStrings S => Session.Strings;
@@ -112,6 +120,11 @@ public sealed class MainViewModel : ViewModel, IDisposable
             entries.Add(opened);
 
         var rows = entries.Select(entry => new ProfileRowViewModel(entry, S, row => _ = SelectAsync(row))).ToList();
+        // The launch that opened the window (spec §8.6): its failure is shown on its profile's page.
+        if (Session.Launch is { } launch && LaunchFailure.Of(launch) is { } failed && Session.Profile is { } launched)
+            foreach (ProfileRowViewModel launchedRow in rows.Where(row => OmeHome.PathsEqual(
+                         row.Entry.Root, launched.Root, Session.Environment.Platform)))
+                launchedRow.Failure = failed;
         var groups = rows.GroupBy(row => row.Game)
             .Select(group => new GameGroupViewModel(group.Key, GameTitle(group.Key),
                                                     [.. group.OrderBy(row => row.Name, StringComparer.CurrentCulture)]))
@@ -143,6 +156,7 @@ public sealed class MainViewModel : ViewModel, IDisposable
         foreach (ProfileRowViewModel each in Rows) each.IsSelected = each == row;
         _selected = row;
         Changed(nameof(Selected));
+        _page?.Detach();
         Page = row == null ? null : new ProfilePageViewModel(this, row);
         if (save && row != null && Session.Settings.LastProfile != row.Id)
             Session.Save(Session.Settings with { LastProfile = row.Id });
@@ -169,6 +183,135 @@ public sealed class MainViewModel : ViewModel, IDisposable
             }
         }
         await DownloadArtAsync(Session.Settings.Art);
+    }
+
+    // ---- Play (spec §8.5) ----
+
+    /// <summary>Whether an engine this launcher started still runs: the launcher's process stays until none does.</summary>
+    public bool HasRunningEngine => _running > 0;
+
+    /// <summary>Starts <paramref name="row"/>'s profile: the checks run again and the engine starts, on a worker thread,
+    /// with the engine of this launcher run (<see cref="LauncherSession.Engine"/>). Once it runs, the window follows
+    /// <c>while_running</c>. When it exits the checks run again; a failed start brings the window forward with the end
+    /// of the log, and the last engine's normal exit ends a launcher whose window closed.</summary>
+    public async Task<LaunchFailure?> PlayAsync(ProfileRowViewModel row, IReadOnlyList<string>? runArguments = null)
+    {
+        row.Launching = true;
+        row.Failure = null;
+        SynchronizationContext? ui = SynchronizationContext.Current;
+        ProfileEntry entry = row.Entry;
+        CheckOptions options = Session.CheckOptions;
+        LaunchFailure? failure;
+        ProfileCheckResult? checks = null;
+        bool refused = true;
+        try
+        {
+            EngineCommand command = EngineCommands.For(Session.Engine, entry, runArguments ?? [],
+                                                       Session.Environment.Platform);
+            LaunchResult result = await Task.Run(() => EngineLaunch.Run(entry, command, options, _ =>
+            {
+                // Posted to the UI thread before the exit's continuation, so it runs first.
+                if (ui == null) Started(row);
+                else ui.Post(_ => Started(row), null);
+            }));
+            failure = LaunchFailure.Of(result);
+            checks = result.Checks;
+            refused = !result.Started;
+        }
+        catch (Exception error) when (ProfilePageViewModel.IsCheckFailure(error))
+        {
+            failure = new LaunchFailure(false, null, error.Message, null, []);
+        }
+        finally
+        {
+            row.Launching = false;
+        }
+
+        if (row.RunningHere)
+        {
+            row.RunningHere = false;
+            _running--;
+        }
+        if (failure != null)
+        {
+            // A failed start comes forward with the end of the log and the checks run again (spec §8.5).
+            row.Failure = failure;
+            _quitWhenIdle = false;
+            Host?.Restore();
+            if (row != _selected) Show(row, save: true);
+        }
+        // A failed or refused start's checks ran again (spec §8.5): shown as they are, each where it is fixed.
+        if (checks != null && (failure != null || refused))
+        {
+            if (row == _selected) _page!.Show(checks);
+            else row.State = ProfileRowViewModel.StateOf(checks);
+            return failure;
+        }
+        await Recheck(row);
+        if (failure == null && _quitWhenIdle && _running == 0) Host?.Quit();
+        return failure;
+    }
+
+    private void Started(ProfileRowViewModel row)
+    {
+        row.Launching = false;
+        row.StartedAt = DateTime.UtcNow;
+        row.RunningHere = true;
+        row.State = ProfileState.Running;
+        _running++;
+        switch (Session.Settings.WhileRunning)
+        {
+            case WhileRunning.Minimize:
+                Host?.Minimize();
+                break;
+            case WhileRunning.Close:
+                _quitWhenIdle = true;
+                Host?.Hide();
+                break;
+        }
+    }
+
+    /// <summary>The window asks to close: it may, unless an engine this launcher started runs. Then it hides, and the
+    /// launcher ends once the last engine exits (spec §8.5: the process stays while an engine it started runs).</summary>
+    public bool CloseRequested()
+    {
+        if (!HasRunningEngine) return true;
+        _quitWhenIdle = true;
+        Host?.Hide();
+        return false;
+    }
+
+    /// <summary>The window came forward: a profile an engine started elsewhere holds shows as running, and one whose
+    /// engine has gone is checked again (spec §8.5).</summary>
+    public async Task RefreshRunningAsync()
+    {
+        foreach (ProfileRowViewModel row in Rows.ToList())
+        {
+            if (!row.Entry.Usable || row.Entry.NeedsReview || row.RunningHere || row.Launching) continue;
+            bool held = RunLock.IsHeld(row.Entry.Root, out _);
+            if (held != (row.State == ProfileState.Running)) await Recheck(row);
+        }
+    }
+
+    private async Task Recheck(ProfileRowViewModel row)
+    {
+        if (row == _selected && _page != null)
+        {
+            await _page.CheckAsync();
+            return;
+        }
+        if (!row.Entry.Usable || row.Entry.NeedsReview) return;
+        ProfileEntry entry = row.Entry;
+        CheckOptions options = Session.CheckOptions;
+        try
+        {
+            ProfileCheckResult checks = await Task.Run(() => ProfileChecks.Run(entry, options));
+            row.State = row.RunningHere ? ProfileState.Running : ProfileRowViewModel.StateOf(checks);
+        }
+        catch (Exception error) when (ProfilePageViewModel.IsCheckFailure(error))
+        {
+            row.State = ProfileState.Problem;
+        }
     }
 
     // ---- art ----

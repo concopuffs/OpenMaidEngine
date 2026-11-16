@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Controls;
 using Ome.Launcher.Core;
 
 namespace Ome.Launcher;
@@ -23,7 +24,9 @@ internal static class Program
         if (outcome.Window == WindowReason.None || outcome.Start is not { } start) return outcome.ExitCode;
 
         var session = new LauncherSession(start, outcome.Window, program, context.Environment);
-        App.Build(() => new App(session)).StartWithClassicDesktopLifetime(args);
+        // The window's close does not end the launcher while an engine it started runs (spec §8.5): it shuts down
+        // explicitly (MainWindow.Quit).
+        App.Build(() => new App(session)).StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown);
         return outcome.ExitCode;
     }
 }

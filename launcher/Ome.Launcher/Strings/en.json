@@ -60,5 +60,12 @@
   "art.always": "Download",
   "art.never": "Don't download",
   "language.en": "English",
-  "language.ja": "日本語"
+  "language.ja": "日本語",
+  "header.starting": "Starting…",
+  "failure.not-started": "The game was not started.",
+  "failure.refused": "The engine refused to start (exit code 2).",
+  "failure.exit": "The game stopped with exit code {0}.",
+  "failure.log": "The end of {0}:",
+  "failure.open-log": "Open the log",
+  "failure.dismiss": "Dismiss"
 }

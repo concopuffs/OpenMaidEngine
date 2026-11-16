@@ -53,6 +53,17 @@ internal static class Headless
     }
 
     /// <summary>The colour of one pixel of a frame, as 0xRRGGBB.</summary>
+    /// <summary>Waits until <paramref name="condition"/> holds, failing after a minute.</summary>
+    public static async Task Until(Func<bool> condition, string what)
+    {
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!condition())
+        {
+            Assert.True(waited.Elapsed < TimeSpan.FromSeconds(60), $"timed out waiting for {what}");
+            await Task.Delay(20);
+        }
+    }
+
     public static uint Pixel(Avalonia.Media.Imaging.WriteableBitmap frame, int x, int y)
     {
         using var locked = frame.Lock();

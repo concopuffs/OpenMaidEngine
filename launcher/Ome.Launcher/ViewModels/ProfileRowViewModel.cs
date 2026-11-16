@@ -3,6 +3,20 @@ using Ome.Mods.Launch;
 
 namespace Ome.Launcher.ViewModels;
 
+/// <summary>A launch that did not start, or whose engine exited with a code other than 0 (launcher spec §8.5), as the
+/// failed-start view shows it: why it was refused, or the exit code with the end of the log.</summary>
+public sealed record LaunchFailure(bool Started, int? ExitCode, string? Refusal, string? LogPath,
+                                   IReadOnlyList<string> LogTail)
+{
+    /// <summary>The failure in <paramref name="result"/> that the failed-start view shows, or null: when the engine
+    /// started and exited with 0, and when a check refused the start, since the page's notice shows that check where it
+    /// is fixed (plan §6.3). A refusal the checks do not explain (a link found just before the start, an engine that
+    /// cannot be started) is shown.</summary>
+    public static LaunchFailure? Of(LaunchResult result)
+        => !result.Failed || result is { Started: false, Checks.CanPlay: false } ? null
+            : new(result.Started, result.ExitCode, result.Refusal, result.LogPath, result.LogTail);
+}
+
 /// <summary>A profile's state as the list's dot and the header's chip show it (launcher spec §9).</summary>
 public enum ProfileState
 {
@@ -22,6 +36,9 @@ public sealed class ProfileRowViewModel : ViewModel
     private readonly Action<ProfileRowViewModel> _select;
     private ProfileState _state;
     private bool _isSelected;
+    private bool _launching;
+    private bool _runningHere;
+    private LaunchFailure? _failure;
 
     public ProfileRowViewModel(ProfileEntry entry, LauncherStrings strings, Action<ProfileRowViewModel> select)
     {
@@ -72,6 +89,31 @@ public sealed class ProfileRowViewModel : ViewModel
     {
         get => _isSelected;
         set => Set(ref _isSelected, value);
+    }
+
+    /// <summary>Play was pressed and the engine has not started yet: the checks run again first.</summary>
+    public bool Launching
+    {
+        get => _launching;
+        set => Set(ref _launching, value);
+    }
+
+    /// <summary>An engine this launcher started runs the profile, since <see cref="StartedAt"/>.</summary>
+    public bool RunningHere
+    {
+        get => _runningHere;
+        set => Set(ref _runningHere, value);
+    }
+
+    /// <summary>When this launcher saw the engine it started begin to run (UTC).</summary>
+    public DateTime? StartedAt { get; set; }
+
+    /// <summary>The last launch that did not start or that failed (spec §8.5), until the player dismisses it or starts
+    /// the profile again.</summary>
+    public LaunchFailure? Failure
+    {
+        get => _failure;
+        set => Set(ref _failure, value);
     }
 
     /// <summary>The state the checks give: running, a failed check, a warning, or ready.</summary>

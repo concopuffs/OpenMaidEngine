@@ -23,7 +23,7 @@
         <TextBlock Classes="mono muted" Text="{Binding InstallPath}" TextTrimming="CharacterEllipsis" />
       </StackPanel>
       <StackPanel Grid.Column="2" HorizontalAlignment="Right">
-        <Button Classes="primary play" HorizontalAlignment="Right" Content="{Binding S[header.play]}"
+        <Button Classes="primary play" HorizontalAlignment="Right" Content="{Binding PlayText}"
                 Command="{Binding Play}" IsVisible="{Binding IsNotRunning}" />
         <Button Classes="play running" HorizontalAlignment="Right" Content="{Binding S[header.running]}"
                 IsEnabled="False" IsVisible="{Binding IsRunning}" />
@@ -37,6 +37,30 @@
         </StackPanel>
       </StackPanel>
     </Grid>
+
+    <!-- A failed start (spec §8.5): what happened, and the end of the log. -->
+    <Border DockPanel.Dock="Top" Classes="notice bad" IsVisible="{Binding HasFailure}" Margin="22,0,22,12">
+      <StackPanel Spacing="6">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="notice-text strong" VerticalAlignment="Center" TextWrapping="Wrap"
+                     Text="{Binding FailureText}" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
+            <Button Content="{Binding S[failure.open-log]}" Command="{Binding OpenLog}"
+                    IsVisible="{Binding HasFailureLog}" />
+            <Button Content="{Binding S[failure.dismiss]}" Command="{Binding DismissFailure}" />
+          </StackPanel>
+        </Grid>
+        <TextBlock Classes="muted small mono" TextWrapping="Wrap" Text="{Binding FailureReason}"
+                   IsVisible="{Binding HasFailureReason}" />
+        <TextBlock Classes="muted small" TextWrapping="Wrap" Text="{Binding FailureLogHeading}"
+                   IsVisible="{Binding HasFailureLog}" />
+        <Border Classes="log" MaxHeight="170" IsVisible="{Binding HasFailureLog}">
+          <ScrollViewer>
+            <SelectableTextBlock Classes="mono" TextWrapping="Wrap" Text="{Binding FailureLog}" />
+          </ScrollViewer>
+        </Border>
+      </StackPanel>
+    </Border>
 
     <Border DockPanel.Dock="Top" Classes="notice" Classes.bad="{Binding NoticeBad}" Classes.warn="{Binding NoticeWarn}"
             Classes.run="{Binding NoticeRun}" IsVisible="{Binding HasNotice}" Margin="22,0,22,12">

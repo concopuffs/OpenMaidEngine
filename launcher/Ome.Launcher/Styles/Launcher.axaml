@@ -199,6 +199,14 @@
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
   </Style>
+  <Style Selector="Button.tab:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+  </Style>
+  <Style Selector="Button.tab:disabled">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
   <Style Selector="Button.tab.on">
     <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource OmeInkBrush}" />
@@ -251,6 +259,17 @@
   <Style Selector="Border.notice.warn TextBlock.notice-text"><Setter Property="Foreground" Value="{DynamicResource OmeWarnBrush}" /></Style>
   <Style Selector="Border.notice.run"><Setter Property="Background" Value="{DynamicResource OmeRunBgBrush}" /></Style>
   <Style Selector="Border.notice.run TextBlock.notice-text"><Setter Property="Foreground" Value="{DynamicResource OmeRunBrush}" /></Style>
+  <Style Selector="Border.log">
+    <Setter Property="Background" Value="{DynamicResource OmeCardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="8,6" />
+  </Style>
+  <Style Selector="SelectableTextBlock.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource OmeMonoFontFamily}" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
   <Style Selector="Border.rule-top">
     <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
     <Setter Property="BorderThickness" Value="0,1,0,0" />

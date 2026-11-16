@@ -1,5 +1,6 @@
 using System.Globalization;
 using Ome.Engine.Profiles;
+using Ome.Engine.Sys4;
 using Ome.Launcher;
 using Ome.Launcher.Core;
 
@@ -29,6 +30,26 @@ internal sealed class TestHome : IDisposable
         if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true);
     }
 
+    /// <summary>A program built beside this assembly in the same configuration: <c>launcher/Ome.Launcher</c>'s, or the
+    /// stub engine's (net8.0).</summary>
+    public static string Built(string project, string program, string? framework = null)
+    {
+        string output = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
+        string configuration = Path.GetFileName(Path.GetDirectoryName(output))!;
+        string folder = project == "Ome.Launcher"
+            ? Path.Combine(Paths.Repo, "launcher", project, "bin", configuration, Path.GetFileName(output))
+            : Path.Combine(Paths.Repo, "engine", project, "bin", configuration, framework!);
+        string path = Path.Combine(folder, program + (OperatingSystem.IsWindows() ? ".exe" : ""));
+        Assert.True(File.Exists(path), $"{program} is not built at {path}");
+        return path;
+    }
+
+    public static string Launcher => Built("Ome.Launcher", "OME-Launcher");
+    public static string Stub => Built("Ome.Launcher.StubEngine", "Ome.Launcher.StubEngine", "net8.0");
+
+    /// <summary>The stub engine with <paramref name="arguments"/> before the <c>--</c>.</summary>
+    public static EngineProgram StubEngine(params string[] arguments) => new(Stub, arguments);
+
     /// <summary>A synthetic install of <paramref name="game"/>: a catalog with the game's revision and title and the
     /// scripts its OMS modules run.</summary>
     public string Install(string game, string? folder = null)
@@ -41,19 +62,23 @@ internal sealed class TestHome : IDisposable
         return root;
     }
 
-    /// <summary>A profile on <paramref name="install"/>, made as the wizard makes one.</summary>
-    public ProfileEntry Profile(string id, string game, string install, string? name = null)
+    /// <summary>A profile on <paramref name="install"/>, made as the wizard makes one, in this home or in
+    /// <paramref name="home"/>.</summary>
+    public ProfileEntry Profile(string id, string game, string install, string? name = null, OmeHome? home = null)
     {
+        home ??= Home;
         string fingerprint = Installs.Recognize(install, GameProfileRegistry.BuiltIn).Fingerprint!;
-        ProfileDocument document = ProfileDocument.New(name, game, install, fingerprint, Home);
-        return ProfileStore.Create(Home, LauncherSettingsStore.Load(Home).Settings, id, document).Profile;
+        ProfileDocument document = ProfileDocument.New(name, game, install, fingerprint, home);
+        return ProfileStore.Create(home, LauncherSettingsStore.Load(home).Settings, id, document).Profile;
     }
 
-    /// <summary>The window's session on this home, with the stub's path as its engine.</summary>
+    /// <summary>The window's session on this home. Its engine is <paramref name="engine"/>, else a program that is not
+    /// there.</summary>
     public LauncherSession Session(WindowReason reason = WindowReason.Requested, string language = "en",
-                                   ProfileEntry? profile = null, LaunchResult? launch = null)
+                                   ProfileEntry? profile = null, LaunchResult? launch = null, EngineProgram? engine = null)
     {
-        var start = new WindowStart(Home, new EngineProgram(Path.Combine(Root, "engine", "OME"), []), profile, launch);
+        var start = new WindowStart(Home, engine ?? new EngineProgram(Path.Combine(Root, "engine", "OME"), []), profile,
+                                    launch);
         return new LauncherSession(start, reason, Path.Combine(Root, "launcher", "OME-Launcher"), Environment,
                                    CheckOptions, CultureInfo.GetCultureInfo(language));
     }

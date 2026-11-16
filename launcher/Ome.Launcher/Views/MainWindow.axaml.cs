@@ -1,13 +1,17 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Ome.Launcher.Core;
 using Ome.Launcher.ViewModels;
 
 namespace Ome.Launcher.Views;
 
 /// <summary>The main window. It opens where it was (<c>launcher.toml</c>'s <c>window</c>, when that is still on a
-/// screen), starts the view model's first work once shown, and keeps its place when it closes.</summary>
-public sealed partial class MainWindow : Window
+/// screen), starts the view model's first work once shown, and keeps its place when it closes. It is the view models'
+/// <see cref="IWindowHost"/>: while an engine the launcher started runs, closing it only hides it, and the launcher
+/// ends once the last engine exits (spec §8.5).</summary>
+public sealed partial class MainWindow : Window, IWindowHost
 {
     private PixelRect? _normal;
 
@@ -16,6 +20,13 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         PositionChanged += (_, _) => Remember();
         SizeChanged += (_, _) => Remember();
+        Activated += (_, _) => { if (Model is { } model) _ = model.RefreshRunningAsync(); };
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (Model is { } model) model.Host = this;
     }
 
     private MainViewModel? Model => DataContext as MainViewModel;
@@ -51,6 +62,7 @@ public sealed partial class MainWindow : Window
         if (Model is { } model && _normal is { } normal)
             model.SavePlacement(new WindowPlacement(normal.X, normal.Y, normal.Width, normal.Height,
                                                     WindowState == WindowState.Maximized));
+        if (Model is { } running && !running.CloseRequested()) e.Cancel = true;
         base.OnClosing(e);
     }
 
@@ -58,5 +70,38 @@ public sealed partial class MainWindow : Window
     {
         base.OnClosed(e);
         Model?.Dispose();
+        Quit();
+    }
+
+    // ---- IWindowHost ----
+
+    public void Minimize() => WindowState = WindowState.Minimized;
+
+    void IWindowHost.Hide() => Hide();
+
+    public void Restore()
+    {
+        if (!IsVisible) Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    public void Quit()
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
+    }
+
+    public void Open(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+        }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException
+                                          or FileNotFoundException)
+        {
+            Trace.WriteLine($"OME-Launcher: {path} cannot be opened: {error.Message}");
+        }
     }
 }

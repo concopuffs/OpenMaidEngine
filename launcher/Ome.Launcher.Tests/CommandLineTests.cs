@@ -34,22 +34,8 @@ public sealed class CommandLineTests : IDisposable
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 
-    /// <summary>A program built beside this assembly in the same configuration: <c>launcher/Ome.Launcher</c>'s, or the
-    /// stub engine's (net8.0).</summary>
-    private static string Built(string project, string program, string? framework = null)
-    {
-        string output = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
-        string configuration = Path.GetFileName(Path.GetDirectoryName(output))!;
-        string folder = project == "Ome.Launcher"
-            ? Path.Combine(Paths.Repo, "launcher", project, "bin", configuration, Path.GetFileName(output))
-            : Path.Combine(Paths.Repo, "engine", project, "bin", configuration, framework!);
-        string path = Path.Combine(folder, program + (OperatingSystem.IsWindows() ? ".exe" : ""));
-        Assert.True(File.Exists(path), $"{program} is not built at {path}");
-        return path;
-    }
-
-    private static string Launcher => Built("Ome.Launcher", "OME-Launcher");
-    private static string Stub => Built("Ome.Launcher.StubEngine", "Ome.Launcher.StubEngine", "net8.0");
+    private static string Launcher => TestHome.Launcher;
+    private static string Stub => TestHome.Stub;
 
     private ProfileEntry Profile(string id, OmeHome? home = null)
     {

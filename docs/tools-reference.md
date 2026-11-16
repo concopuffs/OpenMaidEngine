@@ -1078,7 +1078,11 @@ branching/state can shift page ordinals between runs. Resolve a reported page wi
 `launcher/Ome.Launcher` builds `OME-Launcher` (`OME-Launcher.exe` on Windows), a windowed net10.0 program over
 `engine/Ome.Launcher.Core` (launcher spec §8). Its command line (spec §8.6) runs before any window and needs no
 display. Where the command line's outcome names the window, the program opens it (Avalonia 12, launcher plan §6).
-The window is being built in launcher plan M3, and so far it is the frame only.
+The window is being built in launcher plan M3. So far it has the profile list, the header and Play: Play starts the
+engine of that run of the launcher (`--engine` names another) as `--launch` does. While an engine it started runs, the
+launcher's process stays, the window stays, minimizes or hides by `launcher.toml`'s `while_running`, and closing it
+only hides it; the launcher ends once that engine exits. A failed start brings the window forward with the end of the
+log.
 
 | Command | Effect | Exit code |
 |---|---|---|
@@ -1109,7 +1113,7 @@ the repository, from the command line or from the window's Play.
 
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
-| `launcher/Ome.Launcher.Tests` | Gate 9 (launcher plan §5.12): `OME-Launcher` run as a child process with its own `APPDATA`, on a synthetic Kamidori install in a temporary `--home`, with `engine/Ome.Launcher.StubEngine` as the engine. It covers `--print-command`'s JSON and `--output`, `--check`'s lines and exit codes, the usage errors, and a launch. The outcomes that open the window (no command, a failed start, `--launch DIR` on an unreviewed root) run in the test's process through `LauncherCommandLine.Run`. The window's tests (launcher plan §6): its string tables, and its pages drawn headless (`Avalonia.Headless`, test-only) on Skia, which fail on any warning Avalonia logs and click nothing. | `dotnet test launcher/OmeLauncher.sln` (the core level's `launcher-tests` gate) | temporary files; the drawn pages to disposable `build/launcher-shots/<task>-<state>-<theme>.png`, to be looked at against the mock |
+| `launcher/Ome.Launcher.Tests` | Gate 9 (launcher plan §5.12): `OME-Launcher` run as a child process with its own `APPDATA`, on a synthetic Kamidori install in a temporary `--home`, with `engine/Ome.Launcher.StubEngine` as the engine (its `--wait-for PATH` keeps it running until `PATH` exists, `--delete-file PATH` deletes a file before it exits, and `--exit-code N` is its exit code). It covers `--print-command`'s JSON and `--output`, `--check`'s lines and exit codes, the usage errors, and a launch. The outcomes that open the window (no command, a failed start, `--launch DIR` on an unreviewed root) run in the test's process through `LauncherCommandLine.Run`. The window's tests (launcher plan §6): its string tables; its view models, with Play on the stub engine and a recording stand-in for the window; and its pages drawn headless (`Avalonia.Headless`, test-only) on Skia, which fail on any warning Avalonia logs and click nothing. | `dotnet test launcher/OmeLauncher.sln` (the core level's `launcher-tests` gate) | temporary files; the drawn pages to disposable `build/launcher-shots/<task>-<state>-<theme>.png`, to be looked at against the mock |
 
 ## Asset resolution / graphics
 

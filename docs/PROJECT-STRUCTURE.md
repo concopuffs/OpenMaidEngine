@@ -371,8 +371,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       Avalonia type; net8.0 like the libraries it references, tested in
     │                                       Ome.Engine.Tests
     │   ├── Ome.Launcher.StubEngine/         the engine's stand-in in the launch tests: prints what it was given
-    │                                       on both streams and exits with the code it is told; built, never
-    │                                       loaded
+    │                                       on both streams, waits for a file or deletes one when told, and
+    │                                       exits with the code it is told; built, never loaded
     │   └── Ome.Scripting.Lua.Spike/         milestone 0 of the Lua design (superpowers/plans/2026-11-14-lua-
     │                                       scripting.md §1): a console program that checks LuaCSharp and
     │                                       MoonSharp against spec §5.1's criteria, one child process per case;

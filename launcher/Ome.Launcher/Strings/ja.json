@@ -60,5 +60,12 @@
   "art.always": "ダウンロードする",
   "art.never": "ダウンロードしない",
   "language.en": "English",
-  "language.ja": "日本語"
+  "language.ja": "日本語",
+  "header.starting": "起動中…",
+  "failure.not-started": "ゲームは起動されませんでした。",
+  "failure.refused": "エンジンが起動を拒否しました（終了コード 2）。",
+  "failure.exit": "ゲームが終了コード {0} で終了しました。",
+  "failure.log": "{0} の末尾：",
+  "failure.open-log": "ログを開く",
+  "failure.dismiss": "閉じる"
 }
