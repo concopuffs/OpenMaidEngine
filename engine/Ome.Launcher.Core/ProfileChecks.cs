@@ -58,20 +58,47 @@ public static class ProfileChecks
     public static ProfileCheckResult Run(ProfileEntry profile, CheckOptions? options = null)
     {
         options ??= new CheckOptions();
+        if (profile.NeedsReview)
+            throw new ProfileNeedsReviewException(
+                $"{profile.Root} is not checked before the player accepts its review: nothing opens its paths until then");
         GameProfileRegistry registry = options.Registry ?? GameProfileRegistry.BuiltIn;
-        ProfileDocument document = (profile.Loaded ?? throw new ArgumentException(
-            $"{profile.Id} cannot be checked: {profile.Problem ?? "its profile.toml is not read"}")).Document;
+        LoadedProfile loaded = profile.Loaded ?? throw new ArgumentException(
+            $"{profile.Id} cannot be checked: {profile.Problem ?? "its profile.toml is not read"}");
+        ProfileDocument document = loaded.Document;
         var checks = new List<ProfileCheck>();
         void Add(ProfileCheckKind kind, CheckStatus status, string message) => checks.Add(new(kind, status, message));
 
-        InstallRecognition install = Installs.Recognize(document.Install.Root, registry, options.MachineRegistry);
+        // Spec §12: a network path this machine's player has not approved is not opened, so the checks that would
+        // open one fail and name it instead.
+        IReadOnlyList<(string Key, string Path)> unapproved;
+        try
+        {
+            unapproved = RootSafety.UnapprovedNetworkPaths(
+                loaded.File, () => MachineState.Load(options.MachineFolder ?? MachineState.DefaultFolder()),
+                OperatingSystem.IsWindows());
+        }
+        catch (Exception error) when (error is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            throw new IOException($"this machine's state cannot be read: {error.Message}", error);
+        }
+        string Unapproved(IEnumerable<(string Key, string Path)> entries)
+            => string.Join("; ", entries.Select(entry => $"{entry.Key} names the network path {entry.Path}"))
+               + ", which this machine's player has not approved; approve the location";
+        var installUnapproved = unapproved.Where(entry => entry.Key.StartsWith("install.", StringComparison.Ordinal)).ToList();
+        var foldersUnapproved = unapproved.Where(entry => entry.Key == "mods.folders").ToList();
+
+        InstallRecognition install = installUnapproved.Count > 0
+            ? new InstallRecognition(document.Install.Root, InstallKind.NotAnInstall, Unapproved(installUnapproved))
+            : Installs.Recognize(document.Install.Root, registry, options.MachineRegistry);
         bool installed = install is { Kind: InstallKind.Supported, Problem: null }
                          && install.Game!.Id == document.Game;
         Add(ProfileCheckKind.Install, installed ? CheckStatus.Passed : CheckStatus.Failed, installed
             ? $"{install.Root} holds {install.Game!.DisplayTitle}"
-            : (install.Kind == InstallKind.Supported && install.Problem == null
-                ? $"{install.Root} holds {install.Game!.DisplayTitle}, not the profile's game ({document.Game})"
-                : install.Problem!) + "; locate the install");
+            : installUnapproved.Count > 0
+                ? install.Problem!
+                : (install.Kind == InstallKind.Supported && install.Problem == null
+                    ? $"{install.Root} holds {install.Game!.DisplayTitle}, not the profile's game ({document.Game})"
+                    : install.Problem!) + "; locate the install");
 
         string? recorded = document.Install.Fingerprint;
         if (!installed)
@@ -92,7 +119,9 @@ public static class ProfileChecks
             rootProblem ?? $"{profile.Root} can be written");
 
         LibraryView? view = null;
-        if (document.Mods == null)
+        if (foldersUnapproved.Count > 0)
+            Add(ProfileCheckKind.Packages, CheckStatus.Failed, Unapproved(foldersUnapproved));
+        else if (document.Mods == null)
             Add(ProfileCheckKind.Packages, CheckStatus.Passed,
                 "the profile has no [mods] table: the engine reads the packages of its own mods/ folder");
         else
@@ -109,6 +138,8 @@ public static class ProfileChecks
         LinkCheck? link = null;
         if (!installed)
             Add(ProfileCheckKind.Link, CheckStatus.NotRun, "needs the install");
+        else if (unapproved.Count > 0)
+            Add(ProfileCheckKind.Link, CheckStatus.NotRun, "needs the network locations approved");
         else
         {
             try

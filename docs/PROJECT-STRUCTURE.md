@@ -355,10 +355,12 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       BareEngineData/Adoption (a profile from the bare engine's data) and
     │                                       Library (package states, add, remove, enable with dependencies,
     │                                       the switch to Compatibility), ProfileSelectors (the selectors a
-    │                                       profile holds, released under its lock) and ProfileChecks (the
+    │                                       profile holds, released under its lock), ProfileChecks (the
     │                                       checks before Play, the link check among them, which write
-    │                                       nothing); no Avalonia type; net8.0 like the libraries it
-    │                                       references, tested in Ome.Engine.Tests
+    │                                       nothing) and ProfileTrust (the review of a root from elsewhere,
+    │                                       network approvals, the link check before a start); no Avalonia
+    │                                       type; net8.0 like the libraries it references, tested in
+    │                                       Ome.Engine.Tests
     │   └── Ome.Scripting.Lua.Spike/         milestone 0 of the Lua design (superpowers/plans/2026-11-14-lua-
     │                                       scripting.md §1): a console program that checks LuaCSharp and
     │                                       MoonSharp against spec §5.1's criteria, one child process per case;

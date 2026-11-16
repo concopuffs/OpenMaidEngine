@@ -11,6 +11,10 @@ namespace Ome.Launcher.Core;
 public sealed record ProfileEntry(string Id, string Root, bool Elsewhere, LoadedProfile? Loaded, string? Problem)
 {
     public bool Usable => Loaded != null && Problem == null;
+
+    /// <summary>A root elsewhere the player has not accepted (spec §12): only its review may use it, and nothing opens
+    /// the paths its file names.</summary>
+    public bool NeedsReview { get; init; }
     public string DisplayName => Loaded?.Document.Name ?? Id;
 }
 
@@ -71,8 +75,14 @@ public static class ProfileStore
             else if (RootSafety.IsNetworkPath(root.Path) && !(state ??= machine()).IsApproved(root.Path))
                 entries.Add(new ProfileEntry(root.Id, root.Path, true, null,
                                              $"{root.Path} is on another computer, and this machine's player has not "
-                                             + "approved that location"));
-            else entries.Add(Load(root.Id, root.Path, elsewhere: true));
+                                             + "approved that location")
+                {
+                    NeedsReview = !ProfileTrust.IsReviewed(settings, root.Path),
+                });
+            else entries.Add(Load(root.Id, root.Path, elsewhere: true) with
+            {
+                NeedsReview = !ProfileTrust.IsReviewed(settings, root.Path),
+            });
         }
         return entries;
     }
