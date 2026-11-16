@@ -83,15 +83,7 @@ public static class ModLaunch
 
     /// <summary>The candidates of a mods folder: each <c>.omp</c> file and each folder with a <c>manifest.toml</c>,
     /// skipping dot-entries such as <c>.cache</c>.</summary>
-    public static IReadOnlyList<string> Candidates(string modsDirectory)
-    {
-        if (!Directory.Exists(modsDirectory)) return [];
-        var files = Directory.EnumerateFiles(modsDirectory, "*" + ModPackage.PackageExtension)
-            .Where(path => !Path.GetFileName(path).StartsWith('.'));
-        var folders = Directory.EnumerateDirectories(modsDirectory)
-            .Where(path => !Path.GetFileName(path).StartsWith('.') && File.Exists(Path.Combine(path, ManifestReader.FileName)));
-        return files.Concat(folders).Order(StringComparer.OrdinalIgnoreCase).ToList();
-    }
+    public static IReadOnlyList<string> Candidates(string modsDirectory) => PackageIndex.Candidates(modsDirectory);
 
     /// <summary>Whether discovery could find any package: a <c>[mods]</c> table that enables one, or without a table a
     /// candidate in the profile's <c>mods/</c> folder. The host's early "no mods" test.</summary>
@@ -127,32 +119,9 @@ public static class ModLaunch
         var index = new List<PackageIndexEntry>();
         foreach (string folder in table.Folders)
         {
-            IReadOnlyList<string> candidates;
-            try
-            {
-                if (!Directory.Exists(folder))
-                {
-                    report.Add(ModReportClass.Note, Path.GetFileName(folder), null, $"the mod folder {folder} does not exist");
-                    continue;
-                }
-                candidates = Candidates(folder);
-            }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-            {
-                report.Add(ModReportClass.Note, Path.GetFileName(folder), null, $"the mod folder {folder} cannot be read: {error.Message}");
-                continue;
-            }
-            foreach (string candidate in candidates)
-                try
-                {
-                    index.Add(PackageIndex.Read(candidate));
-                }
-                catch (Exception error) when (error is ModPackageException or ModManifestException or IOException
-                                                  or InvalidDataException or UnauthorizedAccessException)
-                {
-                    report.Add(ModReportClass.Note, Path.GetFileName(candidate), null,
-                        $"{candidate} is left out: {error.Message}");
-                }
+            PackageFolderIndex read = PackageIndex.ReadFolder(folder);
+            index.AddRange(read.Entries);
+            foreach (PackageIndexNote note in read.Notes) report.Add(ModReportClass.Note, note.Name, null, note.Message);
         }
 
         bool failed = false;

@@ -178,10 +178,19 @@ public static class ProfileStore
     public static void Rename(ProfileEntry profile, string? name, OmeHome home)
     {
         string? cleanName = CleanName(name);
+        Update(profile, document => document with { Name = cleanName }, home);
+    }
+
+    /// <summary>Changes a profile's <c>profile.toml</c>: re-reads it under the profile's lock, so a change made
+    /// meanwhile is not lost, applies <paramref name="change"/> and writes it. Refused while the game runs it (spec
+    /// §8.4). Returns the profile as written.</summary>
+    public static LoadedProfile Update(ProfileEntry profile, Func<ProfileDocument, ProfileDocument> change, OmeHome home)
+    {
         using RunLock held = Lock(profile.Root);
         LoadedProfile current = ProfileDocuments.Read(profile.Root)
                                 ?? throw new IOException($"{Path.Combine(profile.Root, ProfileFile.FileName)} is gone");
-        ProfileDocuments.Write(current.Document with { Name = cleanName }, profile.Root, home);
+        ProfileDocuments.Write(change(current.Document), profile.Root, home);
+        return ProfileDocuments.Read(profile.Root)!;
     }
 
     /// <summary>Deletes a profile's folder (spec §4.2: a profile is the unit of removal) and forgets it. Refused while
