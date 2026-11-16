@@ -251,6 +251,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertEqual({"ubuntu-24.04"}, set(runners), workflow.name)
             self.assertNotIn("pull_request_target", text)
 
+    def test_dotnet_setup_installs_net8_beside_the_pinned_sdk(self) -> None:
+        # global.json pins SDK 10 (launcher plan §5.1); the net8.0 projects' tests need the .NET 8 runtime beside it.
+        sdk = json.loads((REPO / "global.json").read_text(encoding="utf-8"))["sdk"]
+        self.assertRegex(sdk["version"], r"^10\.0\.4\d\d$")
+        self.assertEqual("latestPatch", sdk["rollForward"])
+        steps = 0
+        for workflow in sorted(WORKFLOW_DIRECTORY.glob("*.yml")):
+            text = workflow.read_text(encoding="utf-8")
+            for match in re.finditer(r"(?m)^\s*uses: actions/setup-dotnet@\S+.*\n\s*with:\n((?:\s+(?:#.*|[\w-]+:.*)\n)+)", text):
+                steps += 1
+                inputs = match.group(1)
+                self.assertIn("global-json-file: global.json", inputs, workflow.name)
+                self.assertRegex(inputs, r'dotnet-version: "8\.0\.x"', workflow.name)
+        self.assertEqual(3, steps)
+
 
 if __name__ == "__main__":
     unittest.main()

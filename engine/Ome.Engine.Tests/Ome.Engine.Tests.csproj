@@ -37,6 +37,7 @@
     <ProjectReference Include="..\Ome.Scripting.Lua\Ome.Scripting.Lua.csproj" />
     <!-- Built, not loaded: the run lock tests (launcher spec §5.5, gate 4) start Ome.Cli as a second process. -->
     <ProjectReference Include="..\Ome.Cli\Ome.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Ome.Launcher.Core\Ome.Launcher.Core.csproj" />
   </ItemGroup>
 
 </Project>

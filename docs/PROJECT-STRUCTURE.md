@@ -60,7 +60,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                         notices.json pins it (Windows packages ship MinGW-w64-runtime-COPYING.txt)
     ├── notices/noto-sans-jp/                 noto-cjk's OFL LICENSE (Sans2.004) as LICENSE.txt, unmodified; notices.json
     │                                         pins it (packages ship NotoSansJP-LICENSE.txt for the embedded panel font)
-    ├── global.json                           pins the validated .NET 8 SDK feature band
+    ├── global.json                           pins the .NET SDK 10.0.4xx feature band (launcher plan §5.1); the engine
+    │                                         projects target net8.0, whose tests run on the .NET 8 runtime
     ├── Directory.Build.targets               makes a Debug build recompile when Optimize changes
     │                                         (drive.py port start --optimize)
     ├── .editorconfig / .gitattributes        UTF-8, indentation, text/EOL, and binary-file policy;
@@ -340,6 +341,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       (superpowers/plans/2026-11-14-lua-scripting.md §3.1), LuaStateCodec
     │                                       (maid.state to the state file's JSON and back), and LuaSource, the
     │                                       library's hexadecimal-numeral workaround; references Ome.Engine only
+    │   ├── Ome.Launcher.Core/               the launcher's model (superpowers/specs/2026-11-15-launcher-design.md
+    │                                       §8.1, plan §5): OmeHome (where OME home is and its layout); no
+    │                                       Avalonia type; net8.0 like the libraries it references, tested in
+    │                                       Ome.Engine.Tests
     │   └── Ome.Scripting.Lua.Spike/         milestone 0 of the Lua design (superpowers/plans/2026-11-14-lua-
     │                                       scripting.md §1): a console program that checks LuaCSharp and
     │                                       MoonSharp against spec §5.1's criteria, one child process per case;

@@ -441,14 +441,16 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   generation; it runs only in tag publication, whose annotations were not read. Done when each action is SHA-pinned
   to a release that targets Node.js 24, and the core, release-build and FFmpeg SDK workflows run green without the
   warning.
-- **The engine targets a .NET version that is out of support.** Every project targets `net8.0` (the engine
-  projects, `godot/OME.csproj`, the SDK pin). Microsoft ended support for .NET 8 on 2026-11-10: it gets no more
+- **The engine targets a .NET version that is out of support.** Every engine project targets `net8.0` (the
+  engine projects, `godot/OME.csproj`). Microsoft ended support for .NET 8 on 2026-11-10: it gets no more
   security fixes (.NET blog, ".NET 8 and .NET 9 will reach End of Support on November 10, 2026"). The exports
   bundle that runtime. Noticed during the launcher spec's review (2026-11-15), which leaves the launcher's own
   target to its first milestone. That milestone measured that `engine/OmeEngine.sln` and `godot/OME.csproj` build
-  under SDK 10.0.404 with their net8.0 targets unchanged and the same warnings (launcher plan §3.10); the tests
-  were not run under it. Done when the projects, the SDK pin, CI and the exports target a supported version that
-  the Godot release in use accepts, and the core and package gates pass.
+  under SDK 10.0.404 with their net8.0 targets unchanged and the same warnings (launcher plan §3.10). The SDK pin
+  moved to 10.0.404 on 2026-11-16 (launcher plan §5.1), and the core level, the Godot build and the self-test pass
+  under it, with the tests on the .NET 8 runtime; the exports still bundle the .NET 8 runtime. Done when the
+  projects, CI and the exports target a supported version that the Godot release in use accepts, and the core and
+  package gates pass.
 - **No test shows that a cloud folder's placeholder passes the profile-root link check.** Launcher spec §12 says
   "a cloud folder's placeholders are not links". `RootSafety.FindLink` (`engine/Ome.Mods/Launch/`) counts an entry as
   a link only when .NET reports a `LinkTarget` for it, which it does for symbolic links and junctions (mount points)

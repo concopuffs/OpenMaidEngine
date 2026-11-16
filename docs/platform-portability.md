@@ -541,7 +541,10 @@ method) measured these facts about the platforms. The launcher's packaging decis
   maps at run time the X11 client libraries with `libICE`/`libSM`, fontconfig and FreeType, GL, and ICU unless it
   runs with invariant globalization. Its command line runs with no display.
 - **The repository under SDK 10:** `engine/OmeEngine.sln` and `godot/OME.csproj` build under SDK 10.0.404 with
-  their net8.0 targets unchanged and the same warnings as under SDK 8.0.408.
+  their net8.0 targets unchanged and the same warnings as under SDK 8.0.408. Since launcher plan §5.1
+  (2026-11-16), `global.json` pins 10.0.404, and the core level, the Godot build and the host self-test of both
+  games pass under it. The net8.0 tests run on the .NET 8 runtime beside SDK 10, which CI's `setup-dotnet` steps
+  install with SDK 8.0.
 
 ## Cross-platform validation gates
 
