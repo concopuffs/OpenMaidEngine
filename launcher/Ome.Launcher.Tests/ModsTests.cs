@@ -184,6 +184,9 @@ public sealed class ModsTests : IDisposable
             Assert.True(Row(mods, "test.a").DropBefore);
             window.DragDrop(point, RawDragEventType.Drop, data, DragDropEffects.Move, RawInputModifiers.None);
             await Headless.Until(() => Document.Mods!.Order[1].Id == "test.b", "the drop");
+            // The move checks the page again once its write is done, in the same turn: wait for the turn to end, or
+            // the checks outlive the test (on CI they finished after the window closed, launcher plan §9.7).
+            await model.OneAtATime(() => Task.FromResult(true));
             Assert.Equal(["test.c", "test.b", "test.a"], Document.Mods!.Order.Select(entry => entry.Id));
             Assert.All(mods.Rows, row => Assert.False(row.DropBefore));
 
@@ -194,6 +197,9 @@ public sealed class ModsTests : IDisposable
             window.DragDrop(point, RawDragEventType.Drop, stranger, DragDropEffects.Move, RawInputModifiers.None);
             Assert.Equal(["test.c", "test.b", "test.a"], Document.Mods!.Order.Select(entry => entry.Id));
             window.Close();
+            // Work that ends after the close still refreshes the page, which asks for the screen: a closed window has
+            // none, and Avalonia threw for it.
+            Assert.Null(window.UsableArea());
         }
     });
 

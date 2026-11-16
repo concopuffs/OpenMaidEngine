@@ -16,6 +16,7 @@ namespace Ome.Launcher.Views;
 public sealed partial class MainWindow : Window, IWindowHost
 {
     private PixelRect? _normal;
+    private bool _closed;
 
     public MainWindow()
     {
@@ -70,6 +71,7 @@ public sealed partial class MainWindow : Window, IWindowHost
 
     protected override void OnClosed(EventArgs e)
     {
+        _closed = true;
         base.OnClosed(e);
         Model?.Dispose();
         Quit();
@@ -101,8 +103,12 @@ public sealed partial class MainWindow : Window, IWindowHost
         return folders.Count == 0 ? null : folders[0].TryGetLocalPath();
     }
 
+    /// <summary>The screen's working area less the window frame, or null when it is not known. A closed window has no
+    /// screen: Avalonia throws for one. Work under way when it closed (a mod move's checks) still refreshes the page,
+    /// which asks.</summary>
     public (int Width, int Height)? UsableArea()
     {
+        if (_closed) return null;
         if ((Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen) return null;
         // The launcher's own frame stands for the game window's: both are ordinary decorated windows.
         double scaling = screen.Scaling;
