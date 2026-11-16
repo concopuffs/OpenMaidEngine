@@ -1143,8 +1143,9 @@ the command that starts the profile through the launcher (`--launch`, the defaul
 target, arguments, working folder and whole command line, each with Copy, and writes a `.lnk` (Windows) or `.desktop`
 file (Linux) on the desktop or in a picked folder; Duplicate copies the profile with or without its saves; Rename and
 Delete are under More. "Add an existing profile" adds a folder holding a `profile.toml` under an id made from the
-folder's name and opens its review (spec §12): the paths its file names, each network location marked, its enabled
-mods, and a link, which stops it; Accept, Decline (the root is forgotten, its folder kept) or Later. Under the list,
+folder's name and opens its review (spec §12): the paths its file names, each network location marked, and its
+enabled mods (a link inside the root is allowed, launcher plan §9.7); Accept, Decline (the root is forgotten, its
+folder kept) or Later. Under the list,
 Games shows each supported game with the installs its profiles use, its art (downloaded or removed when the player
 asks, the host named first) and the publisher's page; Launcher settings writes `launcher.toml` at once (the
 launcher's language and theme, shown at once, `while_running`, the art consent, and the language, FPS counter and
