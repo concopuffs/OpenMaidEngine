@@ -52,11 +52,7 @@ public sealed class ModPackage : IDisposable
     /// <summary>Opens a <c>.omp</c> file or a folder holding <c>manifest.toml</c>.</summary>
     public static ModPackage Open(string path, PackageLimits? limits = null)
     {
-        string full = Path.GetFullPath(path);
-        IPackageContainer container = Directory.Exists(full) ? FolderPackageContainer.Open(full, limits)
-            : File.Exists(full) && full.EndsWith(PackageExtension, StringComparison.OrdinalIgnoreCase)
-                ? ZipPackageContainer.Open(full, limits)
-                : throw new ModPackageException(full, $"not a {PackageExtension} file or a package folder");
+        IPackageContainer container = OpenContainer(path, limits);
         try
         {
             return Load(container);
@@ -68,7 +64,19 @@ public sealed class ModPackage : IDisposable
         }
     }
 
-    public static ModPackage Load(IPackageContainer container)
+    /// <summary>A <c>.omp</c> file's or a package folder's listing, under the reader's path and size limits. Opening
+    /// reads no file's content: a folder is walked, an <c>.omp</c>'s central directory read.</summary>
+    internal static IPackageContainer OpenContainer(string path, PackageLimits? limits)
+    {
+        string full = Path.GetFullPath(path);
+        return Directory.Exists(full) ? FolderPackageContainer.Open(full, limits)
+            : File.Exists(full) && full.EndsWith(PackageExtension, StringComparison.OrdinalIgnoreCase)
+                ? ZipPackageContainer.Open(full, limits)
+                : throw new ModPackageException(full, $"not a {PackageExtension} file or a package folder");
+    }
+
+    /// <summary>The container's <c>manifest.toml</c>, parsed; a problem is the package's.</summary>
+    internal static ModManifest ReadManifest(IPackageContainer container)
     {
         PackageEntry manifestEntry = container.Find(ManifestReader.FileName) is { } found
                                      && found.Path == ManifestReader.FileName
@@ -77,16 +85,20 @@ public sealed class ModPackage : IDisposable
         if (manifestEntry.Length > ManifestReader.MaxBytes)
             throw new ModPackageException(container.Location,
                 $"{ManifestReader.FileName} is over the {ManifestReader.MaxBytes}-byte limit");
-        ModManifest manifest;
         try
         {
-            manifest = ManifestReader.Parse(ReadText(container, manifestEntry), ManifestReader.FileName);
+            return ManifestReader.Parse(ReadText(container, manifestEntry), ManifestReader.FileName);
         }
         catch (ModManifestException error)
         {
             throw new ModPackageException(container.Location,
                 error.Problems.Select(problem => $"{ManifestReader.FileName}: {problem}").ToList());
         }
+    }
+
+    public static ModPackage Load(IPackageContainer container)
+    {
+        ModManifest manifest = ReadManifest(container);
         var problems = new List<string>();
         ModLayout layout = ModLayout.Classify(manifest, container.Entries, problems);
         if (problems.Count > 0) throw new ModPackageException(container.Location, problems);

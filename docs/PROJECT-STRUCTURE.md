@@ -653,7 +653,8 @@ the user's packages, `selectors.toml` (mod id → append-catalog selector, kept 
 the disposable link result: `loose/` (patched and replaced scripts, asset overrides; first loose root),
 `catalogs/APPENDnn.AAI`/`.ALF` (one per mod with new scripts or assets, mounted after the install's own), `link.json`
 (order, selectors, which mod supplied each file and record) and `mod-link.txt` (the report). See the mod loader
-spec §6.2–§6.5.
+spec §6.2–§6.5. With a profile file's `[mods]` table the packages come from the table's folders instead, and
+`selectors.toml` and `.cache/` stay in the root's `mods/` (launcher spec §5.3).
 
 ## Conventions
 

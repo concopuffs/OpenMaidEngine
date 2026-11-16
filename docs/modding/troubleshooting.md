@@ -82,7 +82,8 @@ most emoji and many accented letters are not in CP932, while straight quotes and
 
 A data root that holds a `profile.toml` is a player profile: the file names the game, the install and the mods
 (`../tools-reference.md`, `--data-root`). The port stops at startup (exit code 2) when the profile and the command
-line disagree:
+line disagree, when the profile or its root is unsafe or wrong, and, for any data root, when another engine runs
+on it:
 
 **"`--game-root` is refused with a profile file".** The same goes for `--game`, `--profile`, `--overlay-root` and
 `--allow-bmp-as-agf`. The profile's saves and selectors belong to its game and install, so a flag cannot swap them
@@ -117,6 +118,19 @@ holds for every data root, not only a profile: each run holds its root's `run.lo
 one root would overwrite each other's saves and settings, so the second stops having changed nothing. Close the
 other game, or wait for the launcher to finish. A game that crashed leaves `run.lock` behind; that is harmless, and
 the next start takes it.
+
+**"profile.toml enables ID, which none of its mod folders holds".** The profile's `[mods] order` names a mod
+that is in none of its `folders`. Put the mod in one of them, or take it out of `order`. With
+`--skip-failed-mods` the port starts without it.
+
+**"profile.toml enables ID, which is found 2 times".** Two folders, or one folder, hold two packages with that id,
+such as two versions of one mod. Keep one.
+
+**"requires ID, which is in … but not enabled in profile.toml".** An enabled mod needs another mod that is in a
+folder but switched off. Enable that one too. The launcher does this when you enable a mod.
+
+**A note that a file "is left out".** A package in a shared folder could not be read, and the profile does not
+enable it. Nothing else happens. If you meant to use it, replace the file.
 
 **A warning that `install.fingerprint` differs.** The install's `SYS4INI.BIN` changed since the profile accepted it,
 for example after an official update. The port continues; check that your mods still name the right revision.

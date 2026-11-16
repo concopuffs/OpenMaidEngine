@@ -20,9 +20,12 @@ public partial class Main
     /// Links the profile's mods and the <c>--mod</c> packages. Returns false when the link fails (startup stops with the
     /// report); on success <paramref name="layer"/> is the layer to mount, or null when no mods are enabled, and
     /// <paramref name="unpackedLua"/> the unpacked mods that ship Lua, by id with their folders (for --lua-reload).
+    /// <paramref name="modsTable"/> is the profile file's <c>[mods]</c> table, which names the packages in place of the
+    /// root's <c>mods/</c> folder (launcher spec §5.3).
     /// </summary>
     private static bool LinkMods(IReadOnlyList<string> userArgs, string workingDirectory, SelectedGameProfile selected,
-                                 ResolvedGamePersistence persistence, string sys4IniPath, Sys4AssetCatalog catalog,
+                                 ResolvedGamePersistence persistence, ProfileMods? modsTable, string sys4IniPath,
+                                 Sys4AssetCatalog catalog,
                                  IAssetStore baseStore, Ome.Engine.Modding.LazyModRuntime luaRuntime,
                                  out MountedModLayer? layer, out IReadOnlyDictionary<string, string> unpackedLua)
     {
@@ -35,10 +38,10 @@ public partial class Main
             GD.Print("[mods] --no-mods: base only");
             return true;
         }
-        if (!options.NoMods && options.ExtraPackages.Count == 0 && ModLaunch.Candidates(modsDirectory).Count == 0
+        if (!options.NoMods && options.ExtraPackages.Count == 0 && !ModLaunch.MayHavePackages(modsDirectory, modsTable)
             && options.ForgetMods.Count == 0)
         {
-            GD.Print($"[mods] none ({modsDirectory})");
+            GD.Print(modsTable == null ? $"[mods] none ({modsDirectory})" : "[mods] none: profile.toml enables no mod");
             return true;
         }
 
@@ -51,7 +54,8 @@ public partial class Main
         // The Lua runtime checks each lua/ file; it is created only when a mod ships Lua (Lua scripting spec §14.2).
         ModLinkBase linkBase = ModLinkBase.ForInstall(profile, sys4IniPath, catalog, baseStore, table,
             OmeRuntimeMetadata.LoadOpcodeContracts(), globals, modules, points) with { Lua = luaRuntime };
-        ModLaunchResult result = ModLaunch.Run(linkBase, persistence.ProfileRoot, persistence.DiagnosticsDirectory, options);
+        ModLaunchResult result = ModLaunch.Run(linkBase, persistence.ProfileRoot, persistence.DiagnosticsDirectory, options,
+                                               modsTable);
         foreach (ModReportLine line in result.Report.Lines.Where(line => line.Class == ModReportClass.Note
                                                                           && line.Message.Contains("--forget-mod")))
             GD.Print($"[mods] {line}");

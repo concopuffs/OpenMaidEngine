@@ -126,7 +126,7 @@ public static class TextCommands
     /// </summary>
     public static int Run(bool stats, ModLinkBase linkBase, string? dataRoot, IReadOnlyList<string> packages,
                           string? textRoot, ScriptTextCorpus? corpus, string? only, bool perScript, TextWriter console,
-                          EngineTextKeys? engine = null)
+                          EngineTextKeys? engine = null, Launch.ProfileMods? table = null)
     {
         var set = new TextSet();
         bool linked = true;
@@ -135,7 +135,8 @@ public static class TextCommands
         {
             if (dataRoot != null || packages.Count > 0)
             {
-                (ModLinkResult? result, opened) = OmpCommands.LinkForInspection(linkBase, dataRoot, packages, false, console);
+                (ModLinkResult? result, opened) = OmpCommands.LinkForInspection(linkBase, dataRoot, packages, false, console,
+                                                                                table);
                 if (result == null) return 1;
                 if (!stats) console.Write(result.Report.Render());
                 linked = result.Succeeded;

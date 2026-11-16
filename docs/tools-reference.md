@@ -772,7 +772,18 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   option (`--game`, `--game-root`, `--data-root`, `--render-backend`, `--text-backend`, `--lua-errors`) keeps one
   occurrence, the last given, so the port and `Ome.Cli` read the same value. The startup log adds a
   `[profile-file]` line with the file and the values in effect. A root without the file: the driver's sandboxes.
-  The `[mods]` table is parsed; the discovery that follows it is launcher plan §4.5.
+  With a `[mods]` table, discovery (`ModLaunch.DiscoverTable`; launcher spec §5.3) works in three steps:
+  - It indexes every candidate of every folder by its manifest alone (`PackageIndex`, `engine/Ome.Mods/Packages/`),
+    and opens and hashes only the ids `order` enables and the `--mod` packages.
+  - An unreadable candidate is a note. A candidate for another game is left out unless no candidate for this game
+    has an enabled id.
+  - These stop the start before the link, or with `--skip-failed-mods` drop the mod: an enabled id in no folder, an
+    id found twice, and an enabled package whose hard dependency is in a folder but not enabled.
+
+  A base mod joins when an enabled package requires it. A folder's copy of it replaces the engine's only when
+  `order` enables it, and an enabled base id with no such package is a note. `mods/load-order.txt` is not read, and
+  one that exists is a note. `selectors.toml` and `.cache/` stay in the profile root's `mods/`. The host's early "no
+  mods" test and `omp check`, `export`, `explain`, `lua-stubs` and `text` follow the table.
 
   Before anything in the root is opened, the resolver checks it (`RootSafety`, launcher spec §12). The checks apply
   only to a root with a profile file:

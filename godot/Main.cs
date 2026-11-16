@@ -192,8 +192,8 @@ public partial class Main : Godot.Control
         IAssetStore baseStore = _assetStore;
         try
         {
-            if (!LinkMods(userArgs, workingDirectory, selectedProfile, profilePersistence, gameRoot.Sys4IniPath, catalog,
-                          _assetStore, _luaRuntime, out _modLayer, out _unpackedLua))
+            if (!LinkMods(userArgs, workingDirectory, selectedProfile, profilePersistence, run.Mods, gameRoot.Sys4IniPath,
+                          catalog, _assetStore, _luaRuntime, out _modLayer, out _unpackedLua))
             {
                 GetTree().Quit(2);
                 return;

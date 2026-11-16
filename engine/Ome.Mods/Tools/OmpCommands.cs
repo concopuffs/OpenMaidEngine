@@ -110,9 +110,9 @@ public static class OmpCommands
     /// <summary><c>omp check</c>: links the data root's mods (when given) and the extra packages, without writing a
     /// cache or saving selectors, and prints the report. The data root's kept selectors are used.</summary>
     public static int Check(ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages, bool skipFailed,
-                            TextWriter console)
+                            TextWriter console, ProfileMods? table = null)
     {
-        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, skipFailed, console);
+        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, skipFailed, console, table);
         try
         {
             if (result == null) return 1;
@@ -132,9 +132,10 @@ public static class OmpCommands
     /// <summary><c>omp explain NAME</c>: which layer and mod supplies a script or asset, and every plan applied to a
     /// script.</summary>
     public static int Explain(ModLinkBase linkBase, Sys4AssetCatalog catalog, Sys4AssetStore store, string? profileRoot,
-                              IReadOnlyList<string> extraPackages, string name, TextWriter console)
+                              IReadOnlyList<string> extraPackages, string name, TextWriter console,
+                              ProfileMods? table = null)
     {
-        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console);
+        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console, table);
         try
         {
             if (result == null) return 1;
@@ -200,9 +201,9 @@ public static class OmpCommands
     /// root's kept selectors are used, so an export matches the port's saves; installing the files is the user's step.
     /// </summary>
     public static int Export(ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages,
-                             string outputDirectory, TextWriter console)
+                             string outputDirectory, TextWriter console, ProfileMods? table = null)
     {
-        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console);
+        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console, table);
         try
         {
             if (result == null) return 1;
@@ -267,9 +268,9 @@ public static class OmpCommands
     /// mounts it. A stack that does not link writes nothing.
     /// </summary>
     public static int LuaStubs(ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages,
-                               string outputDirectory, TextWriter console)
+                               string outputDirectory, TextWriter console, ProfileMods? table = null)
     {
-        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console);
+        var (result, opened) = LinkForInspection(linkBase, profileRoot, extraPackages, false, console, table);
         try
         {
             if (result == null) return 1;
@@ -300,13 +301,16 @@ public static class OmpCommands
         }
     }
 
+    /// <param name="table">The profile file's <c>[mods]</c> table when the profile root has one (launcher spec §5.3):
+    /// it names the packages in place of the root's <c>mods/</c> folder.</param>
     internal static (ModLinkResult? Result, IReadOnlyList<ModPackage> Opened) LinkForInspection(
-        ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages, bool skipFailed, TextWriter console)
+        ModLinkBase linkBase, string? profileRoot, IReadOnlyList<string> extraPackages, bool skipFailed, TextWriter console,
+        ProfileMods? table = null)
     {
         var report = new ModLinkReport();
         string modsDirectory = profileRoot == null ? "" : Path.Combine(profileRoot, ModLaunch.ModsFolder);
         ModDiscovery discovery = ModLaunch.Discover(profileRoot == null ? Path.Combine(Path.GetTempPath(), "omp-none-" + Guid.NewGuid().ToString("N")) : modsDirectory,
-                                                    extraPackages, report);
+                                                    extraPackages, report, profileRoot == null ? null : table, linkBase.Profile);
         foreach (ModReportLine line in report.Lines) console.WriteLine(line);
         if (discovery.FailedToOpen && !skipFailed) return (null, discovery.Packages);
         SelectorStore selectors = profileRoot == null ? new SelectorStore()

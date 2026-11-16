@@ -18,14 +18,16 @@ internal static partial class OmpTextCommand
     [GeneratedRegex(@"^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$")]
     private static partial Regex LanguageTag();
 
-    public static int Run(string[] args, string baseRoot, Sys4AssetCatalog baseCatalog, OpcodeTable table, string profileId)
+    /// <param name="run">The resolver's run (launcher spec §5.2): its data root, and a profile file's [mods] table.</param>
+    public static int Run(string[] args, string baseRoot, Sys4AssetCatalog baseCatalog, OpcodeTable table, string profileId,
+                          Ome.Mods.Launch.ResolvedRun run)
     {
         string verb = args.Length > 2 ? args[2] : "";
         return verb switch
         {
             "import-scripts" => ImportScripts(args, baseRoot, baseCatalog, table, profileId),
             "extract" => Extract(args, baseRoot, baseCatalog, table, profileId),
-            "check" or "stats" => CheckOrStats(verb == "stats", args, baseRoot, baseCatalog, table, profileId),
+            "check" or "stats" => CheckOrStats(verb == "stats", args, baseRoot, baseCatalog, table, profileId, run),
             "po-export" or "po-import" => Po(verb == "po-export", args),
             _ => Usage(),
         };
@@ -101,10 +103,10 @@ internal static partial class OmpTextCommand
     }
 
     private static int CheckOrStats(bool stats, string[] args, string baseRoot, Sys4AssetCatalog baseCatalog,
-                                    OpcodeTable table, string profileId)
+                                    OpcodeTable table, string profileId, Ome.Mods.Launch.ResolvedRun run)
     {
         List<string> packages = Options(args, "--mod");
-        string? dataRoot = Option(args, "--data-root") is { } root ? Path.GetFullPath(root) : null;
+        string? dataRoot = run.DataRoot;
         string? textRoot = Option(args, "--text-root") is { } text ? Path.GetFullPath(text) : null;
         if (packages.Count == 0 && dataRoot == null && textRoot == null)
         {
@@ -122,7 +124,7 @@ internal static partial class OmpTextCommand
             store, table, contracts, Paths.GlobalsJson(profileId), Paths.OmsModules(profileId), Paths.PatchPointsJson(profileId));
         ScriptTextCorpus? corpus = stats || !args.Contains("--no-scripts") ? Corpus(baseRoot, baseCatalog, table) : null;
         return Ome.Mods.Tools.TextCommands.Run(stats, linkBase, dataRoot, packages, textRoot, corpus,
-            Option(args, "--language"), args.Contains("--scripts"), Console.Out, EngineKeys);
+            Option(args, "--language"), args.Contains("--scripts"), Console.Out, EngineKeys, table: run.Mods);
     }
 
     private static string? Option(string[] args, string name)

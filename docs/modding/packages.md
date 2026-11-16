@@ -125,7 +125,8 @@ The loader orders the enabled mods in three steps:
 
 1. Dependencies come before the mods that require them.
 2. `[order]` hints are applied.
-3. Remaining ties follow the player's `mods/load-order.txt`, then mod id.
+3. Remaining ties follow the player's `mods/load-order.txt`, then mod id. In a player profile with a `[mods]` table,
+   they follow that table's `order` instead, then the `--mod` packages in the order given ([cli.md](cli.md)).
 
 A cycle stops the load and lists it. Load order decides which mod wins an override and in what order insertions at
 one site appear (`patching.md`).

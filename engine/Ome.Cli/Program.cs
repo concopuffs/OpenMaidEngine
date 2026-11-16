@@ -68,7 +68,7 @@ var table = OpcodeTableJson.Load(Paths.OpcodesJson, engineBuild.AbiId);
 var catalog = Sys4AssetCatalog.Load(sys4Ini);
 // omp text resolves its own asset roots: there --overlay-root belongs to the translated install (--from).
 if (command == "omp" && args.Length > 1 && args[1] == "text")
-    return OmpTextCommand.Run(args, gameRoot, catalog, table, selectedProfile.Profile.Id);
+    return OmpTextCommand.Run(args, gameRoot, catalog, table, selectedProfile.Profile.Id, run);
 AssetLaunchOptions assetOptions = AssetLaunchOptions.Resolve(args, gameRoot);
 var assetStore = new Sys4AssetStore(catalog, gameRoot, assetOptions.LooseRoots.ToArray());
 var provider = new Sys4ScriptProvider(
@@ -109,7 +109,8 @@ if (command == "omp")
 {
     // Mod loader spec §10: omp build DIR [--output FILE.omp] [--mod DEP …] | omp check [--data-root DIR] [--mod PATH …]
     // [--skip-failed-mods] | omp explain NAME [--data-root DIR] [--mod PATH …]. --data-root is a port profile root
-    // (its mods/ folder, load-order.txt and selectors.toml); without it only --mod packages are linked.
+    // (its mods/ folder, load-order.txt and selectors.toml, or its profile.toml's [mods] table, launcher spec §5.3);
+    // without it only --mod packages are linked.
     List<string> Paths_(string flag) => args.Select((arg, k) => (arg, k))
         .Where(pair => pair.arg == flag && pair.k + 1 < args.Length).Select(pair => Path.GetFullPath(args[pair.k + 1])).ToList();
     string profileId = selectedProfile.Profile.Id;
@@ -118,20 +119,21 @@ if (command == "omp")
     var linkBase = Ome.Mods.Linking.ModLinkBase.ForInstall(profileId, sys4Ini, catalog, assetStore, table,
         Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), Paths.GlobalsJson(profileId), Paths.OmsModules(profileId),
         Paths.PatchPointsJson(profileId)) with { Lua = luaRuntime };
-    string? dataRoot = OptionValue("--data-root") is { } root ? Path.GetFullPath(root) : null;
+    string? dataRoot = run.DataRoot;
+    Ome.Mods.Launch.ProfileMods? modsTable = run.Mods;
     string verb = args.Length > 1 ? args[1] : "";
     return verb switch
     {
         "build" when args.Length > 2 => Ome.Mods.Tools.OmpCommands.Build(linkBase, args[2], OptionValue("--output"),
             Paths_("--mod"), Console.Out),
         "check" => Ome.Mods.Tools.OmpCommands.Check(linkBase, dataRoot, Paths_("--mod"), args.Contains("--skip-failed-mods"),
-            Console.Out),
+            Console.Out, modsTable),
         "export" when OptionValue("--output-dir") is { } exportDirectory => Ome.Mods.Tools.OmpCommands.Export(linkBase,
-            dataRoot, Paths_("--mod"), exportDirectory, Console.Out),
+            dataRoot, Paths_("--mod"), exportDirectory, Console.Out, modsTable),
         "explain" when args.Length > 2 => Ome.Mods.Tools.OmpCommands.Explain(linkBase, catalog, assetStore, dataRoot,
-            Paths_("--mod"), args[2], Console.Out),
+            Paths_("--mod"), args[2], Console.Out, modsTable),
         "lua-stubs" when OptionValue("--output") is { } stubsDirectory => Ome.Mods.Tools.OmpCommands.LuaStubs(linkBase,
-            dataRoot, Paths_("--mod"), stubsDirectory, Console.Out),
+            dataRoot, Paths_("--mod"), stubsDirectory, Console.Out, modsTable),
         _ => Usage(),
     };
     static int Usage()

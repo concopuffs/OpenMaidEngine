@@ -36,7 +36,8 @@ public sealed record ModLaunchOptions(IReadOnlyList<string> ExtraPackages, bool 
     }
 }
 
-/// <summary>The packages a discovery opened, the user order, and whether any candidate failed to open.</summary>
+/// <summary>The packages a discovery opened, the user order, and whether discovery failed: a candidate that did not
+/// open, or one of a <c>[mods]</c> table's errors (launcher spec §5.3).</summary>
 public sealed record ModDiscovery(IReadOnlyList<ModPackage> Packages, IReadOnlyList<string> UserOrder, bool FailedToOpen);
 
 /// <summary>The outcome of startup linking: the layer to mount (null without mods or on failure), the report, and
@@ -55,7 +56,8 @@ public sealed record ModLaunchResult(MountedModLayer? Layer, ModLinkReport Repor
 /// <summary>
 /// Startup linking (spec §6.1 and §9): discovers the profile's <c>mods/</c> folder and the <c>--mod</c> packages, applies
 /// <c>mods/load-order.txt</c>, releases <c>--forget-mod</c> selectors, links or reuses the cache, and writes the report
-/// to <c>diagnostics/mod-link.txt</c>.
+/// to <c>diagnostics/mod-link.txt</c>. A profile file's <c>[mods]</c> table replaces the folder and its order (launcher
+/// spec §5.3); the selectors and the cache stay in the profile root's <c>mods/</c> either way.
 /// </summary>
 public static class ModLaunch
 {
@@ -89,6 +91,156 @@ public static class ModLaunch
         var folders = Directory.EnumerateDirectories(modsDirectory)
             .Where(path => !Path.GetFileName(path).StartsWith('.') && File.Exists(Path.Combine(path, ManifestReader.FileName)));
         return files.Concat(folders).Order(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Whether discovery could find any package: a <c>[mods]</c> table that enables one, or without a table a
+    /// candidate in the profile's <c>mods/</c> folder. The host's early "no mods" test.</summary>
+    public static bool MayHavePackages(string modsDirectory, ProfileMods? table)
+        => table == null ? Candidates(modsDirectory).Count > 0 : table.Enabled.Any();
+
+    /// <summary>Discovery for <paramref name="table"/> when there is one, else for the profile's <c>mods/</c> folder and
+    /// its <c>load-order.txt</c>.</summary>
+    public static ModDiscovery Discover(string modsDirectory, IReadOnlyList<string> extraPackages, ModLinkReport report,
+                                        ProfileMods? table, string game)
+        => table == null ? Discover(modsDirectory, extraPackages, report)
+            : DiscoverTable(table, modsDirectory, game, extraPackages, report);
+
+    /// <summary>
+    /// Discovery for a profile's <c>[mods]</c> table (launcher spec §5.3). Every candidate of every folder is indexed
+    /// by its manifest alone; only the packages <c>order</c> enables, and the <c>--mod</c> packages, are opened and
+    /// hashed. A candidate whose manifest cannot be read is a note, so a broken file in a shared folder stops no
+    /// profile that leaves it off; a candidate for another game is left out unless no candidate for this game has an
+    /// id <c>order</c> enables. These stop the start before the link (or, with <c>--skip-failed-mods</c>, drop the mod):
+    /// an enabled id in no folder, an enabled id found twice, and an enabled package whose hard dependency is in a
+    /// folder but not enabled. A base mod's id in <c>order</c> with no such package is a note and changes nothing: the
+    /// engine's own joins when an enabled mod requires it. <c>mods/load-order.txt</c> is not read.
+    /// </summary>
+    public static ModDiscovery DiscoverTable(ProfileMods table, string modsDirectory, string game,
+                                             IReadOnlyList<string> extraPackages, ModLinkReport report)
+    {
+        string loadOrder = Path.Combine(modsDirectory, LoadOrderFile);
+        if (File.Exists(loadOrder))
+            report.Add(ModReportClass.Note, LoadOrderFile, null,
+                $"{loadOrder} is not read: the profile's profile.toml [mods] table names the enabled mods");
+
+        var index = new List<PackageIndexEntry>();
+        foreach (string folder in table.Folders)
+        {
+            IReadOnlyList<string> candidates;
+            try
+            {
+                if (!Directory.Exists(folder))
+                {
+                    report.Add(ModReportClass.Note, Path.GetFileName(folder), null, $"the mod folder {folder} does not exist");
+                    continue;
+                }
+                candidates = Candidates(folder);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                report.Add(ModReportClass.Note, Path.GetFileName(folder), null, $"the mod folder {folder} cannot be read: {error.Message}");
+                continue;
+            }
+            foreach (string candidate in candidates)
+                try
+                {
+                    index.Add(PackageIndex.Read(candidate));
+                }
+                catch (Exception error) when (error is ModPackageException or ModManifestException or IOException
+                                                  or InvalidDataException or UnauthorizedAccessException)
+                {
+                    report.Add(ModReportClass.Note, Path.GetFileName(candidate), null,
+                        $"{candidate} is left out: {error.Message}");
+                }
+        }
+
+        bool failed = false;
+        var packages = new List<ModPackage>();
+        var extraIds = new List<string>();
+        foreach (string path in extraPackages)
+        {
+            try
+            {
+                ModPackage package = ModPackage.Open(path);
+                packages.Add(package);
+                extraIds.Add(package.Id);
+            }
+            catch (Exception error) when (error is ModPackageException or ModManifestException or IOException
+                                              or InvalidDataException or UnauthorizedAccessException)
+            {
+                report.Add(ModReportClass.Error, Path.GetFileName(path), null, $"{path}: {error.Message}");
+                failed = true;
+            }
+        }
+
+        var shipped = ShippedPackages.Ids.ToHashSet(StringComparer.Ordinal);
+        var chosen = new List<PackageIndexEntry>();
+        foreach (string id in table.Enabled)
+        {
+            var found = index.Where(entry => entry.Id == id).ToList();
+            if (found.Any(entry => entry.IsFor(game))) found = found.Where(entry => entry.IsFor(game)).ToList();
+            if (found.Count == 0)
+            {
+                if (shipped.Contains(id))
+                    report.Add(ModReportClass.Note, id, null,
+                        $"profile.toml enables {id}, which no mod folder holds: this changes nothing, since the engine's "
+                        + $"own {id} joins when an enabled mod requires it");
+                else if (!extraIds.Contains(id))
+                {
+                    report.Add(ModReportClass.Error, id, null, $"profile.toml enables {id}, which none of its mod folders "
+                                                               + $"holds ({string.Join(", ", table.Folders)})");
+                    failed = true;
+                }
+                continue;
+            }
+            if (found.Count > 1)
+            {
+                report.Add(ModReportClass.Error, id, null, $"profile.toml enables {id}, which is found {found.Count} "
+                                                           + $"times: {string.Join(", ", found.Select(entry => entry.Path))}");
+                failed = true;
+                continue;
+            }
+            chosen.Add(found[0]);
+        }
+        foreach (ProfileModEntry disabled in table.Order.Where(entry => !entry.Enabled))
+            if (index.Any(entry => entry.Id == disabled.Id && entry.IsFor(game)))
+                report.Add(ModReportClass.Note, disabled.Id, null, "disabled by profile.toml");
+
+        // A hard dependency in a folder must be enabled too: the launcher enables it with the mod (spec §8.4), so the
+        // engine stays strict. The engine's own base mods satisfy a requirement whatever the folders hold.
+        var enabled = chosen.Select(entry => entry.Id).Concat(extraIds).ToHashSet(StringComparer.Ordinal);
+        var dependents = chosen.Select(entry => (entry.Id, entry.Requires, Chosen: (PackageIndexEntry?)entry))
+            .Concat(packages.Select(package => (package.Id, package.Manifest.Requires, Chosen: (PackageIndexEntry?)null)));
+        var blocked = new HashSet<PackageIndexEntry>();
+        foreach (var (id, requires, entry) in dependents)
+            foreach (ModRequirement requirement in requires)
+            {
+                if (enabled.Contains(requirement.Id) || shipped.Contains(requirement.Id)) continue;
+                if (index.FirstOrDefault(candidate => candidate.Id == requirement.Id && candidate.IsFor(game)) is not { } held)
+                    continue;   // in no folder: the link reports it as not installed
+                report.Add(ModReportClass.Error, id, null,
+                    $"requires {requirement.Id}, which is in {held.Path} but not enabled in profile.toml: enable it too");
+                failed = true;
+                if (entry != null) blocked.Add(entry);
+            }
+
+        var opened = new List<string>();
+        foreach (PackageIndexEntry entry in chosen.Where(entry => !blocked.Contains(entry)))
+            try
+            {
+                ModPackage package = ModPackage.Open(entry.Path);
+                packages.Add(package);
+                opened.Add(package.Id);
+            }
+            catch (Exception error) when (error is ModPackageException or ModManifestException or IOException
+                                              or InvalidDataException or UnauthorizedAccessException)
+            {
+                report.Add(ModReportClass.Error, Path.GetFileName(entry.Path), null, $"{entry.Path}: {error.Message}");
+                failed = true;
+            }
+        packages.AddRange(ShippedPackages.Required(packages, report));
+        var userOrder = opened.Concat(extraIds.Where(id => !opened.Contains(id))).Distinct().ToList();
+        return new ModDiscovery(packages, userOrder, failed);
     }
 
     /// <summary>
@@ -136,8 +288,10 @@ public static class ModLaunch
         return new ModDiscovery(packages, userOrder, failedToOpen);
     }
 
+    /// <param name="table">A profile file's <c>[mods]</c> table, which replaces the <c>mods/</c> folder's packages and
+    /// its <c>load-order.txt</c> (launcher spec §5.3); null without a profile file.</param>
     public static ModLaunchResult Run(ModLinkBase linkBase, string profileRoot, string diagnosticsDirectory,
-                                      ModLaunchOptions options)
+                                      ModLaunchOptions options, ProfileMods? table = null)
     {
         string modsDirectory = Path.Combine(profileRoot, ModsFolder);
         var report = new ModLinkReport();
@@ -153,7 +307,7 @@ public static class ModLaunch
         if (options.NoMods) return ModLaunchResult.None(report);
         linkBase = linkBase with { LuaDev = options.LuaDev };
 
-        ModDiscovery discovery = Discover(modsDirectory, options.ExtraPackages, report);
+        ModDiscovery discovery = Discover(modsDirectory, options.ExtraPackages, report, table, linkBase.Profile);
         var packages = discovery.Packages;
         bool failedToOpen = discovery.FailedToOpen;
         try

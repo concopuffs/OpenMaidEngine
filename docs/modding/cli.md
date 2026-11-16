@@ -110,6 +110,20 @@ To install a mod, copy its `.omp` (or folder) into `mods/`. To remove it, delete
 so reinstalling it later restores saves made inside its scripts. When you are sure it is gone for good, start once
 with `--forget-mod ID` to release the selector.
 
+A profile root with a `profile.toml` (a player profile, which the launcher makes) can name its mods in a `[mods]`
+table instead. Then the port reads neither the root's own packages nor its `load-order.txt`:
+
+- **`folders`** lists the folders the packages come from. Several profiles may share one, such as a library of
+  voice packs.
+- **`order`** lists the mods that load: an id loads, `-ID` keeps a place without loading. A mod in a folder that
+  `order` does not enable is never opened, so a broken file in a shared folder stops no profile that leaves it off.
+- **The engine's base mods** are not listed. A game's base mod joins when an enabled mod requires it.
+- **`selectors.toml` and `.cache/`** stay in this root's `mods/`, so profiles that share a folder keep their own
+  selectors.
+
+`omp check`, `export`, `explain`, `lua-stubs` and `text` with `--data-root` read the same table. The errors it can
+raise are in [troubleshooting.md](troubleshooting.md), "Startup refusals".
+
 **Save stamps.** When you load a save, the port compares the save's stamp with the current mods. It reports added,
 removed, reordered and re-versioned mods and changed selectors, on the console and in
 `diagnostics/mod-save-stamps.txt`. It warns and never blocks. A save without a stamp was made without mods, or by
