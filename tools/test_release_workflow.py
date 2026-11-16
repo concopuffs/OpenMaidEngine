@@ -156,6 +156,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_public_build_outputs_use_ome_branding(self) -> None:
         self.assertIn('export_path="../build/export/linux-x64/OME"', self.export_presets)
         self.assertIn('export_path="../build/export/windows-x64/OME.exe"', self.export_presets)
+        # OME.exe carries the OME icon: Godot draws the SVG into the program's icon at export.
+        self.assertIn('application/icon="res://assets/ome-icon.svg"', self.export_presets)
         self.assertIn('project/assembly_name="OME"', self.godot_project)
         self.assertIn('LogicalName="Ome.Engine.Runtime.opcodes.json"', self.engine_project)
         self.assertNotIn("opcodes.json", self.managed_project)

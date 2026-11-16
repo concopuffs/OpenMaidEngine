@@ -3,7 +3,8 @@
     py -3.11 -X utf8 tools/launcher_icon_build.py --build   # -> launcher/Ome.Launcher/Assets/ome-icon.ico (+ .source.json)
     py -3.11 -X utf8 tools/launcher_icon_build.py --check   # fail if the icon was built from another SVG
 
-The port draws the SVG itself (godot/ShellAssets.cs). The launcher needs a bitmap icon: Avalonia's window icon, and
+The port draws the SVG itself (godot/ShellAssets.cs), and Godot's Windows export draws it into OME.exe
+(`application/icon` in godot/export_presets.cfg). The launcher needs a bitmap icon: Avalonia's window icon, and
 the `.ico` the build embeds in OME-Launcher.exe (`ApplicationIcon`). One multi-size `.ico` serves both.
 
 The SVG is drawn here with Pillow, at 8 times each size and then reduced, so only what the icon uses is understood:

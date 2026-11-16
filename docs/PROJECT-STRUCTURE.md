@@ -450,7 +450,8 @@ authored, like `vm-map/`, not derived: the compiler links them, and `--level idi
 and templates.
 
 The Godot deliverable includes `OME.sln` because Godot's .NET exporter requires a solution,
-`export_presets.cfg` for Linux and Windows x86_64, and `build/.gdignore` so disposable capture frames below
+`export_presets.cfg` for Linux and Windows x86_64 (the Windows preset names `assets/ome-icon.svg` as the
+program's icon), and `build/.gdignore` so disposable capture frames below
 the project do not enter its import or export scan. Every `godot/*.cs` has a tracked `.cs.uid` sidecar (Godot's
 script id): add, move or delete it with its source, since `tools/test_release_workflow.py` checks that the two sets
 match. A headless editor scan (`<Godot console> --headless --editor --quit --path godot`) writes a missing one.
