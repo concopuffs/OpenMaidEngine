@@ -692,7 +692,13 @@ neither `--scene` nor seeds. Examples below focus on their
 feature-specific arguments and assume the game root is already selected this way. `--headless` can't
 render texture ops (no GPU context) — run windowed for real scenes.
 On VM termination the console prints the exact halt reason and step count before the generic on-screen
-`-end-` marker. User args (after `--`):
+`-end-` marker.
+
+Every engine command has the shape `OME [Godot's flags] -- [the engine's flags]` (launcher spec §5.1). The engine
+reads only the arguments after Godot's `--` (`OS.GetCmdlineUserArgs`), so `OME --data-root R` passes it nothing,
+and the form is `OME -- --data-root R`. Godot's own flags, such as `--headless` or `--rendering-driver`, go before
+the `--`: Godot reads them before managed code runs, so no file the engine reads can carry them. User args (after
+`--`):
 
 The local launchers also accept **`-StartupDiagnostics`** for a native-faithful cold boot through TITLE,
 Game Start, and SC0000. The switch overrides `run-godot.cmd`'s usual `-NativeDebugMenu` convenience for

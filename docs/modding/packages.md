@@ -105,6 +105,9 @@ version 3 loader still reads versions 1 and 2. A package with Lua and an earlier
   alone, and `fonts/` ([languages.md](languages.md), "A shell language for every game").
 - **`target`:** `native`: the mod uses only what the original engine supports, so it can be exported for
   `AGE.EXE`. `extended` (format version 3): the mod has Lua, which only the port runs, so `omp export` refuses it.
+  A player profile in Compatibility mode (`mode = "native"` in its `profile.toml`) refuses a package that targets
+  `extended`, ships Lua (a Lua library too, though it has no `[game]` table), or requires such a package, the
+  game's base mod among them. Extended mode takes every package ([cli.md](cli.md)).
 - **`revisions`:** optional SHA-256 fingerprints of `SYS4INI.BIN`. When present, any other installed catalog stops
   the load and prints the installed fingerprint (`omp check` prints it too). Patches do not need it, because each
   fragment carries its own script fingerprint. Declare it when the mod has replacements, new scripts or data edits

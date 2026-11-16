@@ -100,12 +100,19 @@ state, host hooks and new services without changing the interpretation of unmodi
 - **Compatibility mode** runs original content with the selected game/version profile's historical
   semantics. A mod limited to replacement AGE scripts and original-format assets may also remain usable
   with the proprietary engine, although that is not a product requirement.
-- **Extended mode** layers engine-owned services on top: mod manifests and load order, virtual asset and
-  script identities, runtime callbacks, semantic events, extra saved state, modern UI and optional new
-  script facilities. These mods target Open Maid Engine and are not expected to run under `AGE.EXE`.
+- **Extended mode** layers engine-owned services on top: virtual asset and script identities, runtime
+  callbacks, semantic events, extra saved state, modern UI and optional new script facilities. These mods
+  target Open Maid Engine and are not expected to run under `AGE.EXE`.
 
 The modes share one VM. Extended mode is an additive dispatcher and content layer, not a forked
 interpreter or a second implementation of the game rules.
+
+A player profile names its mode in `profile.toml` (launcher spec §6): `native` is Compatibility mode and
+`extended` is Extended mode, the words a package's `target` already uses. Both modes use package manifests and
+a load order. A Compatibility profile admits only the packages that stay within what AGE loads: those that target
+`native`, and packages with no game that ship no Lua. Its stack is one `omp export` accepts, and its saves carry
+no mod state. The mode describes what the profile holds. It does not promise that `AGE.EXE` runs it, which stays
+the non-requirement above.
 
 ### 3.2 Modding surfaces and realistic boundaries
 
