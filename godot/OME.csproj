@@ -18,8 +18,6 @@
     <ProjectReference Include="..\engine\Ome.Engine.Frontend\Ome.Engine.Frontend.csproj" />
     <ProjectReference Include="..\engine\Ome.Mods\Ome.Mods.csproj" />
     <ProjectReference Include="..\engine\Ome.Scripting.Lua\Ome.Scripting.Lua.csproj" />
-    <EmbeddedResource Include="..\build\opcodes.json"
-                      LogicalName="OME.Runtime.opcodes.json" />
     <!-- The engine shell's own assets (godot/assets/, which Godot ignores): the options panel's font and the OME icon. -->
     <EmbeddedResource Include="assets\NotoSansJP-Regular.otf" LogicalName="OME.Assets.NotoSansJP-Regular.otf" />
     <EmbeddedResource Include="assets\ome-icon.svg" LogicalName="OME.Assets.ome-icon.svg" />
@@ -101,9 +99,5 @@
                              RelativePath="%(_OmePackageNotice.PackageId)-%(_OmePackageNotice.Filename)%(_OmePackageNotice.Extension)"
                              CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
-  </Target>
-  <Target Name="RequireGeneratedRuntimeMetadata" BeforeTargets="PrepareForBuild"
-          Condition="!Exists('..\build\opcodes.json')">
-    <Error Text="Missing generated runtime metadata '..\build\opcodes.json'. Run 'py -3.11 -X utf8 tools\opcodes_build.py --build' from age-reimpl before building Godot." />
   </Target>
 </Project>

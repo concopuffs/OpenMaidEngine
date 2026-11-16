@@ -23,7 +23,8 @@ The VM and content pipeline are already mostly platform-neutral:
   identity/layout policy and Godot places native files below `user://games/<game>/`, retaining native
   filenames and formats. Himegari and Kamidori both support read/write persistence with profile-selected
   numbered-save graphics layouts. Probes and identity/version mismatches remain read-only.
-- The Himegari Godot assembly embeds generated `build/opcodes.json` as profile runtime metadata. Exported
+- `Ome.Engine` embeds generated `build/opcodes.json` as profile runtime metadata, the copy the Godot host, the
+  `omp` commands and the launcher link with (launcher spec §5.9). Exported
   builds never search for an `age-reimpl` repository ancestor; their automatic page-map diagnostics live
   under `user://games/<game>/diagnostics/page-maps`, while editor/development runs write them to the
   workspace's `build/games/<game>/`.

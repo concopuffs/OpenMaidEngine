@@ -13,6 +13,8 @@ WORKFLOW_DIRECTORY = REPO / ".github/workflows"
 EXPORT_PRESETS = REPO / "godot/export_presets.cfg"
 GODOT_PROJECT = REPO / "godot/project.godot"
 MANAGED_PROJECT = REPO / "godot/OME.csproj"
+# The opcode metadata every linker reads is embedded in Ome.Engine (launcher spec §5.9).
+ENGINE_PROJECT = REPO / "engine/Ome.Engine/Ome.Engine.csproj"
 MANAGED_SOLUTION = REPO / "godot/OME.sln"
 LINUX_BUILD = REPO / "tools/build-linux-x64.sh"
 WINDOWS_BUILD = REPO / "tools/build-windows-x64.sh"
@@ -62,6 +64,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         cls.export_presets = EXPORT_PRESETS.read_text(encoding="utf-8")
         cls.godot_project = GODOT_PROJECT.read_text(encoding="utf-8")
         cls.managed_project = MANAGED_PROJECT.read_text(encoding="utf-8")
+        cls.engine_project = ENGINE_PROJECT.read_text(encoding="utf-8")
         cls.managed_solution = MANAGED_SOLUTION.read_text(encoding="utf-8")
         cls.linux_build = LINUX_BUILD.read_text(encoding="utf-8")
         cls.windows_build = WINDOWS_BUILD.read_text(encoding="utf-8")
@@ -120,7 +123,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('export_path="../build/export/linux-x64/OME"', self.export_presets)
         self.assertIn('export_path="../build/export/windows-x64/OME.exe"', self.export_presets)
         self.assertIn('project/assembly_name="OME"', self.godot_project)
-        self.assertIn('LogicalName="OME.Runtime.opcodes.json"', self.managed_project)
+        self.assertIn('LogicalName="Ome.Engine.Runtime.opcodes.json"', self.engine_project)
+        self.assertNotIn("opcodes.json", self.managed_project)
         self.assertIn('= "OME", "OME.csproj"', self.managed_solution)
         self.assertIn("'OME.sln'", self.windows_hosted_export)
         self.assertFalse((REPO / "godot/Himegari.csproj").exists())

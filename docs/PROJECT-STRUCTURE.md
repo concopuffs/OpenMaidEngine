@@ -237,7 +237,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── Ome.Engine/Sys4/                 runtime game-root selection, catalog/parser and structured opcode-
     │                                       decode failures, loose-first bounded ALF asset store, script provider,
     │                                       explicit overlay/codec launch policy, AGF/LZSS/BMP/PNG and Windows CUR
-    │                                       decoders, the language-asset store, and resource facade
+    │                                       decoders, the language-asset store, and resource facade; the opcode
+    │                                       table loader, including the embedded build/opcodes.json every linker
+    │                                       reads (OpcodeTableJson.LoadEmbedded; launcher spec §5.9)
     │   ├── Ome.Engine/Text/                 deterministic AGE compositor/layout, retained live/History glyph
     │                                       and wait-atlas publication, bounded font/glyph cache primitives (the
     │                                       cache narrows masks), and presented text's line breaking, alignment
@@ -359,8 +361,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       (outputs stay under disposable build/)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Ome.Engine
-                                            plus the optional exact Windows text adapter). Its assembly embeds
-                                            generated build/opcodes.json through OmeRuntimeMetadata, so
+                                            plus the optional exact Windows text adapter). It reads the
+                                            build/opcodes.json that Ome.Engine embeds (OmeRuntimeMetadata), so
                                             exports do not need repository discovery. Also contains the portable
                                             TextServer glyph adapter, profile-selected Japanese font policy,
                                             and TITLE-only F4 debug scene launcher

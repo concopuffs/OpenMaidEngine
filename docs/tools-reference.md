@@ -400,6 +400,14 @@ The `engine/` .NET solution (`OmeEngine.sln`) is the runtime VM; `godot/` is the
 Python, but listed here as the things you *run*. Build: `dotnet build engine/OmeEngine.sln`; test:
 `dotnet test engine/OmeEngine.sln`. Run a CLI command: `dotnet run --project engine/Ome.Cli -- <cmd>`.
 
+`Ome.Engine` embeds the generated `build/opcodes.json` (`OpcodeTableJson.LoadEmbedded`,
+`OpcodeContracts.LoadEmbedded`), so every engine build needs it: run `opcodes_build.py --build` first, as
+`validate.py` and the release scripts do. Every linker of an install builds its link base from that copy through
+`ModLinkBase.ForGame` (launcher spec §5.9): the Godot host, the `omp` commands and the launcher. They therefore
+share one toolchain stamp, with the profile's globals, OMS modules and patch points taken from the repository
+when there is one. After `opcodes_build.py --build`, rebuild before `omp` sees the change. The other CLI commands
+are development tools and read `build/opcodes.json` live.
+
 Every CLI command resolves `--game ID` and `--game-root PATH` before opening scripts or assets; without
 those options the established Himegari workspace layout remains the default. Asset diagnostics use that
 selected catalog/store. They also accept repeatable `--overlay-root PATH` and the explicit

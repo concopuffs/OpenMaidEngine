@@ -43,6 +43,14 @@ public sealed class OpcodeContracts
         return Load(stream);
     }
 
+    /// <summary>The contracts of the opcode metadata embedded in <c>Ome.Engine</c>
+    /// (<see cref="Ome.Engine.Sys4.OpcodeTableJson.OpenEmbedded"/>).</summary>
+    public static OpcodeContracts LoadEmbedded()
+    {
+        using Stream stream = Ome.Engine.Sys4.OpcodeTableJson.OpenEmbedded();
+        return Load(stream);
+    }
+
     public static OpcodeContracts Load(Stream stream)
     {
         using JsonDocument doc = JsonDocument.Parse(stream);

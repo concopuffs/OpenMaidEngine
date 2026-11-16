@@ -118,11 +118,10 @@ internal static partial class OmpTextCommand
             Console.Error.WriteLine($"error: --text-root {textRoot}: no such folder");
             return 2;
         }
-        var contracts = Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson);
         var store = new Sys4AssetStore(baseCatalog, baseRoot, baseRoot);
-        var linkBase = Ome.Mods.Linking.ModLinkBase.ForInstall(profileId, Path.Combine(baseRoot, "SYS4INI.BIN"), baseCatalog,
-            store, table, contracts, Paths.GlobalsJson(profileId), Paths.OmsModules(profileId), Paths.PatchPointsJson(profileId))
-            with { ProfileMode = run.ProfileFile?.ModeName };
+        // Launcher spec §5.9: the engine's link base (the embedded opcode metadata).
+        var linkBase = Ome.Mods.Linking.ModLinkBase.ForGame(profileId, table.AbiId, Path.Combine(baseRoot, "SYS4INI.BIN"),
+            baseCatalog, store, out _) with { ProfileMode = run.ProfileFile?.ModeName };
         ScriptTextCorpus? corpus = stats || !args.Contains("--no-scripts") ? Corpus(baseRoot, baseCatalog, table) : null;
         return Ome.Mods.Tools.TextCommands.Run(stats, linkBase, dataRoot, packages, textRoot, corpus,
             Option(args, "--language"), args.Contains("--scripts"), Console.Out, EngineKeys, table: run.Mods);

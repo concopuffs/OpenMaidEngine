@@ -72,6 +72,30 @@ public sealed record ModLinkBase
     /// profile's generated globals, its OMS source modules (which also give the idioms that name base labels) and its
     /// patch points, each when present.
     /// </summary>
+    /// <summary>
+    /// The link base every linker of an install uses: the engine, <c>Ome.Cli</c>'s <c>omp</c> commands and the launcher
+    /// (launcher spec §5.9), so they link alike and share a toolchain stamp. The opcode table and contracts are the
+    /// copy embedded in <c>Ome.Engine</c>; the profile's generated globals, OMS modules and patch points come from the
+    /// repository when this build runs inside one (<paramref name="repositoryToolchain"/>), and otherwise fragments
+    /// compile without them (backlog, "Toolchain packaging for exported ports").
+    /// </summary>
+    public static ModLinkBase ForGame(string profile, string abiId, string sys4IniPath, Sys4AssetCatalog catalog,
+                                      IAssetStore store, out bool repositoryToolchain)
+    {
+        string? globals = null, modules = null, points = null;
+        try
+        {
+            (globals, modules, points) = (Paths.GlobalsJson(profile), Paths.OmsModules(profile), Paths.PatchPointsJson(profile));
+        }
+        catch (Exception error) when (error is TypeInitializationException or DirectoryNotFoundException)
+        {
+            // No repository above this build: Paths cannot find its root.
+        }
+        repositoryToolchain = modules != null;
+        return ForInstall(profile, sys4IniPath, catalog, store, OpcodeTableJson.LoadEmbedded(abiId),
+                          OpcodeContracts.LoadEmbedded(), globals, modules, points);
+    }
+
     public static ModLinkBase ForInstall(string profile, string sys4IniPath, Sys4AssetCatalog catalog, IAssetStore store,
                                          OpcodeTable table, OpcodeContracts contracts, string? globalsJson = null,
                                          string? omsModulesDirectory = null, string? patchPointsJson = null)

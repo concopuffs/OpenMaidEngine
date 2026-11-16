@@ -47,18 +47,17 @@ public partial class Main
             return true;
         }
 
-        string profile = selected.Profile.Id;
-        OpcodeTable table = OmeRuntimeMetadata.LoadOpcodeTable(selected.Profile.EngineAbiId);
-        var (globals, modules, points) = ModToolchainFiles(profile);
-        if (modules == null)
+        // Launcher spec §5.9: the link base Ome.Cli's omp commands and the launcher build too.
+        ModLinkBase shared = ModLinkBase.ForGame(selected.Profile.Id, selected.Profile.EngineAbiId, sys4IniPath, catalog,
+                                                 baseStore, out bool repositoryToolchain);
+        if (!repositoryToolchain)
             GD.PushWarning("[mods] no repository toolchain: fragments compile without the profile's OMS modules, "
                            + "globals and patch points");
         // The Lua runtime checks each lua/ file; it is created only when a mod ships Lua (Lua scripting spec §14.2).
         // Launcher spec §5.3: this machine's value joins every cache key, so an entry another machine wrote is not used.
         string machineValue = MachineState.CacheValueFor(ProjectSettings.GlobalizePath("user://"), out string? machineWarning);
         if (machineWarning != null) GD.PushWarning($"[mods] {machineWarning}");
-        ModLinkBase linkBase = ModLinkBase.ForInstall(profile, sys4IniPath, catalog, baseStore, table,
-            OmeRuntimeMetadata.LoadOpcodeContracts(), globals, modules, points) with
+        ModLinkBase linkBase = shared with
         {
             Lua = luaRuntime,
             MachineValue = machineValue,
@@ -91,20 +90,6 @@ public partial class Main
         foreach (var (name, source) in layer.Manifest.Files)
             GD.Print($"[mods] layer {name}: {source.Kind} from {string.Join(", ", source.Mods)} ({source.Detail})");
         return true;
-    }
-
-    /// <summary>The profile's generated globals, OMS modules and patch points from the repository, when this build runs
-    /// inside one; exports have none yet (a packaging follow-up).</summary>
-    private static (string? Globals, string? Modules, string? Points) ModToolchainFiles(string profile)
-    {
-        try
-        {
-            return (Paths.GlobalsJson(profile), Paths.OmsModules(profile), Paths.PatchPointsJson(profile));
-        }
-        catch (Exception error) when (error is TypeInitializationException or DirectoryNotFoundException)
-        {
-            return (null, null, null);
-        }
     }
 
     /// <summary>Wraps the numbered-save store so each save carries the stack stamp, which each load compares, and the

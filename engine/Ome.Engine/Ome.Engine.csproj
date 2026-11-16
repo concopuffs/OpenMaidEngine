@@ -22,6 +22,14 @@
   <ItemGroup>
     <EmbeddedResource Include="Profiles\*.json"
                       LogicalName="Ome.Engine.Profiles.%(Filename)%(Extension)" />
+    <!-- The opcode table and contracts every linker of an install uses (launcher spec §5.9): the engine, Ome.Cli's omp
+         commands and the launcher all read this copy (OpcodeTableJson.LoadEmbedded). -->
+    <EmbeddedResource Include="..\..\build\opcodes.json" LogicalName="Ome.Engine.Runtime.opcodes.json" />
   </ItemGroup>
+
+  <Target Name="RequireGeneratedRuntimeMetadata" BeforeTargets="PrepareForBuild"
+          Condition="!Exists('..\..\build\opcodes.json')">
+    <Error Text="Missing generated runtime metadata '..\..\build\opcodes.json'. Run 'py -3.11 -X utf8 tools\opcodes_build.py --build' from age-reimpl before building the engine." />
+  </Target>
 
 </Project>

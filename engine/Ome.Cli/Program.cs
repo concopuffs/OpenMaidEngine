@@ -116,9 +116,10 @@ if (command == "omp")
     string profileId = selectedProfile.Profile.Id;
     // The Lua runtime checks each lua/ file (Lua scripting spec §13); it is created only when a mod ships Lua.
     using Ome.Engine.Modding.LazyModRuntime luaRuntime = Ome.Scripting.Lua.LuaModRuntime.Lazy();
-    var linkBase = Ome.Mods.Linking.ModLinkBase.ForInstall(profileId, sys4Ini, catalog, assetStore, table,
-        Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson), Paths.GlobalsJson(profileId), Paths.OmsModules(profileId),
-        Paths.PatchPointsJson(profileId)) with { Lua = luaRuntime, ProfileMode = run.ProfileFile?.ModeName };
+    // Launcher spec §5.9: the engine's link base, from the opcode metadata embedded in Ome.Engine (rebuild after
+    // opcodes_build.py --build); the other commands read build/opcodes.json live.
+    var linkBase = Ome.Mods.Linking.ModLinkBase.ForGame(profileId, engineBuild.AbiId, sys4Ini, catalog, assetStore, out _)
+        with { Lua = luaRuntime, ProfileMode = run.ProfileFile?.ModeName };
     string? dataRoot = run.DataRoot;
     Ome.Mods.Launch.ProfileMods? modsTable = run.Mods;
     string verb = args.Length > 1 ? args[1] : "";

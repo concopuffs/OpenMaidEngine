@@ -179,22 +179,30 @@ public class Sys4StartupSettingsTests
         => WrapCatalog(BuildExpanded(pairs));
 
     internal static byte[] BuildCatalog(bool includeTrailer, string fileName = "@")
-        => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer, fileName));
+        => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer, [fileName]));
+
+    /// <summary>A catalog listing <paramref name="fileNames"/>, each an empty entry of DATA.ALF.</summary>
+    internal static byte[] BuildCatalog(IReadOnlyList<string> fileNames)
+        => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer: true, fileNames));
 
     private static byte[] BuildExpanded(
-        (string Key, string Value)[] pairs, bool includeTrailer = true, string fileName = "@")
+        (string Key, string Value)[] pairs, bool includeTrailer = true, IReadOnlyList<string>? fileNames = null)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         Encoding cp932 = Encoding.GetEncoding(932);
+        fileNames ??= ["@"];
         var blob = new List<byte>();
         AddU32(blob, 1);
         AddFixedString(blob, "DATA.ALF", 256, cp932);
-        AddU32(blob, 1);
-        AddFixedString(blob, fileName, 64, cp932);
-        AddU32(blob, 0);
-        AddU32(blob, 0);
-        AddU32(blob, 0);
-        AddU32(blob, 0);
+        AddU32(blob, checked((uint)fileNames.Count));
+        foreach (string fileName in fileNames)
+        {
+            AddFixedString(blob, fileName, 64, cp932);
+            AddU32(blob, 0);
+            AddU32(blob, 0);
+            AddU32(blob, 0);
+            AddU32(blob, 0);
+        }
         if (!includeTrailer) return blob.ToArray();
 
         AddU32(blob, 0); // VM metadata bytes

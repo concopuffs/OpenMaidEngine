@@ -1,8 +1,32 @@
+using System.Reflection;
 using System.Text.Json;
 using Ome.Engine.Model;
 namespace Ome.Engine.Sys4;
 public static class OpcodeTableJson
 {
+    /// <summary>The name of <c>build/opcodes.json</c> as this assembly embeds it at build time.</summary>
+    public const string EmbeddedResourceName = "Ome.Engine.Runtime.opcodes.json";
+
+    /// <summary>
+    /// The generated <c>build/opcodes.json</c> as embedded when this assembly was built: the copy the engine, the
+    /// <c>omp</c> commands and the launcher link with, so they agree (launcher spec §5.9). After
+    /// <c>opcodes_build.py --build</c>, a rebuild makes the change visible.
+    /// </summary>
+    public static Stream OpenEmbedded()
+    {
+        Assembly assembly = typeof(OpcodeTableJson).Assembly;
+        return assembly.GetManifestResourceStream(EmbeddedResourceName)
+            ?? throw new InvalidDataException(
+                $"Embedded runtime metadata '{EmbeddedResourceName}' is missing from {assembly.GetName().Name}.");
+    }
+
+    /// <summary>The embedded opcode table (<see cref="OpenEmbedded"/>) for <paramref name="abiId"/>.</summary>
+    public static OpcodeTable LoadEmbedded(string abiId = "AGE-catalog")
+    {
+        using Stream stream = OpenEmbedded();
+        return Load(stream, abiId);
+    }
+
     public static OpcodeTable Load(string path, string abiId = "AGE-catalog")
     {
         using FileStream stream = File.OpenRead(path);
