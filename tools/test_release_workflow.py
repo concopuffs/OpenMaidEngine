@@ -6,6 +6,8 @@ import re
 import unittest
 from pathlib import Path
 
+import package_linux_x64
+
 
 REPO = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO / ".github/workflows/release-build.yml"
@@ -125,6 +127,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
         application = self.godot_project.split("[application]", 1)[1].split("\n[", 1)[0]
         self.assertIn("run/flush_stdout_on_print=true", application.splitlines())
         self.assertIn('package_linux_x64.py" smoke "$package_root"', self.linux_build)
+
+    def test_the_linux_build_requires_every_smoke_marker(self) -> None:
+        # Launcher plan §9.4: the build checks the smoke log for the lines the publisher later requires.
+        loop = re.search(r'^for marker in (.+); do$', self.linux_build, re.MULTILINE)
+        self.assertIsNotNone(loop)
+        self.assertEqual(list(package_linux_x64.SMOKE_MARKERS), re.findall(r'"([^"]+)"', loop.group(1)))
 
     def test_the_launcher_is_published_after_the_export_never_inside_it(self) -> None:
         # Launcher plan §3.7, §9.2: the launcher's publish fits the runner on its own, not beside Godot's export, so

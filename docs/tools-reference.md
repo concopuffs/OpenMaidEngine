@@ -81,7 +81,8 @@ tool, and is the only job granted `contents: write` (which covers releases on Gi
 skip it and never receive write authority. It passes the run's built-in `github.token` as `GITHUB_TOKEN`, so no
 personal token or third-party release action is required. `publish_github_release.py` validates the
 version-like tag, both exact clean-build commit/target records, both external archive hashes, matching
-metadata/ledgers inside each archive, the accepted Linux package smoke, and the Windows AMD64/ABI/import
+metadata/ledgers inside each archive, the accepted Linux package smoke (its three lines: the engine's, the
+launcher's check and the hand-over), and the Windows AMD64/ABI/import
 verification. It also requires each ledger to list the launcher, and the Windows report's `launcher` section to
 record an AMD64 windowed program with AMD64 natives (launcher plan §9.3). Then it generates one `RELEASE-SHA256SUMS`. Before touching any release it resolves the tag through
 GitHub's git-ref API (dereferencing annotated tags) and requires that commit to equal `--target`; GitHub's
@@ -100,9 +101,9 @@ acceptance) until the 2026-10 move to GitHub; that history is recorded in
 | Tool | Purpose | Run | Reads → Writes |
 |---|---|---|---|
 | `publish_github_release.py` | Tag-only, retry-safe promotion of paired verified Linux/Windows workflow artifacts to a GitHub release. Every release description ends with the FFmpeg credit, license, and exact source link, read from `dependency-linux-x64.json`. Revalidates both archives/evidence sets, checks the tag's commit via the git-ref API, writes combined release checksums, and publishes exactly three assets through a draft → upload → verify → publish flow. A resumed draft keeps an existing asset only when GitHub's `digest` (`sha256:…`) matches the verified file; an asset with no digest is replaced rather than trusted by size, and one of another size or digest is refused. The final check also compares each digest GitHub reports. Requires `GITHUB_TOKEN` (`contents: write`); the token is passed to the upload `curl` through standard input rather than its argument list. | `publish_github_release.py --repository <owner/name> --tag <v...> --target <sha> --linux-artifact-directory <dir> --windows-artifact-directory <dir> --output-directory <dir>` | two verified downloaded workflow artifacts + tag context → published GitHub release with Linux archive, Windows archive, and `RELEASE-SHA256SUMS` |
-| `test_publish_github_release.py` | Pure synthetic paired-artifact/archive validation plus a GitHub-faithful fake API: draft creation then publish-after-verify, draft resume uploading only missing assets, replacement of a resumed asset with no digest, refusal of a resumed asset with equal size and another digest and of a published release whose digest differs, interrupted-upload placeholder replacement, idempotent completed release, refusal of incomplete published releases, tag/target mismatch, multiple drafts, metadata/collision/unexpected-asset refusals, annotated-tag dereferencing, the token never appearing in the upload command line, and archives whose ledgers or Windows report leave out the launcher. | `test_publish_github_release.py` | temporary files only |
+| `test_publish_github_release.py` | Pure synthetic paired-artifact/archive validation plus a GitHub-faithful fake API: draft creation then publish-after-verify, draft resume uploading only missing assets, replacement of a resumed asset with no digest, refusal of a resumed asset with equal size and another digest and of a published release whose digest differs, interrupted-upload placeholder replacement, idempotent completed release, refusal of incomplete published releases, tag/target mismatch, multiple drafts, metadata/collision/unexpected-asset refusals, annotated-tag dereferencing, the token never appearing in the upload command line, and archives whose ledgers or Windows report leave out the launcher, or whose smoke log lacks one of its three lines. | `test_publish_github_release.py` | temporary files only |
 | `test_write_ffmpeg_source_notice.py` | Source-only checks that both real manifests yield a complete FFmpeg source offer (version, LGPL 2.1, hosted URL and SHA-256, upstream, configure line, correct spelling), and that missing fields, another license, or a missing `BUILD-CONFIG.txt` are refused. | `test_write_ffmpeg_source_notice.py` | dependency manifests, temporary files → assertions only |
-| `test_release_workflow.py` | Source-only policy regression for the independent read-only Linux/Windows jobs, target-specific MinGW/cache/artifact boundary, no-Wine/no-Windows-smoke rule, promotion's tag gate, sole `contents: write` grant, `github.token` use, and dependency/download of both successful artifacts; the FFmpeg manifests' exact GitHub release URLs; and, across every `.github/workflows/*.yml`, full-SHA action pins with version comments, the pinned `ubuntu-24.04` runner, no `pull_request_target`, and no `.gitea/` directory. | `test_release_workflow.py` | `.github/workflows/*.yml`, FFmpeg manifests, Godot project files → assertions only |
+| `test_release_workflow.py` | Source-only policy regression for the independent read-only Linux/Windows jobs, target-specific MinGW/cache/artifact boundary, no-Wine/no-Windows-smoke rule, the Linux build's check of every smoke line, promotion's tag gate, sole `contents: write` grant, `github.token` use, and dependency/download of both successful artifacts; the FFmpeg manifests' exact GitHub release URLs; and, across every `.github/workflows/*.yml`, full-SHA action pins with version comments, the pinned `ubuntu-24.04` runner, no `pull_request_target`, and no `.gitea/` directory. | `test_release_workflow.py` | `.github/workflows/*.yml`, FFmpeg manifests, Godot project files → assertions only |
 
 ## Optional local binary tools
 
@@ -605,6 +606,25 @@ the engine must then exit 0. That proves an exported engine flushes its output a
 debug builds). The launcher captures the engine's output live (launcher spec §8.5), and without the flush a Linux
 release engine's lines would wait in stdio's buffer and be lost when it is killed. `test_release_workflow.py`
 checks the setting.
+
+Two launcher steps follow, each adding to the log (launcher plan §9.4). Both run with `DISPLAY` and
+`WAYLAND_DISPLAY` removed, and with `HOME` and the XDG folders in a scratch folder, so neither reads nor writes the
+machine's own state.
+- **The launcher's check (gate 11):** `OME-Launcher --check smoke --home HOME`. The temporary home holds
+  `profiles/smoke/` in native mode on a synthetic Himegari install. Its `SYS4INI.BIN` is the smallest complete
+  catalog: the header of the first catalog identity in `engine/Ome.Engine/Profiles/himegari.json`, and a directory
+  of one archive and one placeholder entry. The launcher must exit 0, with each of its six checks (Install,
+  Fingerprint, Root, Packages, Link, Lock) passed. Then the log gets `LAUNCHER CHECK OK: checks=6`.
+- **The hand-over (launcher spec §5.6):** the package is copied, hard-linked where it can be, to `OME package` under
+  a scratch folder whose name has a space, beside the package. The copy's `OME-Launcher` is a shell script that
+  records how it started. Both runs start from a folder with no game:
+  - `OME --headless -- --game-root <that folder>` must keep the engine: it exits 2 with its own error, and the
+    stand-in does not start;
+  - `OME --headless` must start the stand-in once, with no arguments, and exit 0.
+
+  Then the log gets `HAND-OVER OK`, and the copy is removed.
+
+`build-linux-x64.sh` and the release publisher both require all three lines (`package_linux_x64.SMOKE_MARKERS`).
 
 The focused component commands are:
 

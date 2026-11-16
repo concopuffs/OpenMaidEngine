@@ -167,9 +167,10 @@ def create_artifacts(
     linux_ledger: bytes | None = None,
     windows_ledger: bytes | None = None,
     verification: bytes | None = None,
+    smoke_log: str | None = None,
 ) -> tuple[Path, Path, Path]:
     """Both platforms' verified artifacts; a ledger or the Windows report given replaces the accepted one, inside the
-    archive and beside it alike."""
+    archive and beside it alike, and a smoke log given replaces the accepted one."""
     linux = root / "linux"
     windows = root / "windows"
     prepared = root / "prepared"
@@ -193,7 +194,8 @@ def create_artifacts(
     (linux / "BUILD-INFO.json").write_bytes(linux_info)
     (linux / "SHA256SUMS").write_bytes(linux_ledger)
     (linux / "package-smoke.log").write_text(
-        publish_github_release.SMOKE_MARKER + "\n", encoding="utf-8"
+        smoke_log if smoke_log is not None else "".join(f"{marker}\n" for marker in publish_github_release.SMOKE_MARKERS),
+        encoding="utf-8",
     )
     write_checksum(linux, linux_archive)
 
@@ -436,6 +438,22 @@ class PublishGithubReleaseTests(unittest.TestCase):
             with self.subTest(message), tempfile.TemporaryDirectory() as temporary:
                 directories = create_artifacts(Path(temporary), **overrides)
                 with self.assertRaisesRegex(ValueError, message):
+                    publish_github_release.prepare_release_assets(TAG, TARGET, *directories)
+
+    def test_refuses_a_smoke_log_without_the_launchers_steps(self) -> None:
+        # Launcher plan §9.4: the engine's smoke, the launcher's check and the hand-over each leave their line.
+        self.assertEqual(("PACKAGE SMOKE OK: opcodes=548 ffmpeg-abi=3", "LAUNCHER CHECK OK: checks=6", "HAND-OVER OK"),
+                         publish_github_release.SMOKE_MARKERS)
+        engine, check, hand_over = publish_github_release.SMOKE_MARKERS
+        cases = (
+            (f"{engine}\n", f"{check}, {hand_over}"),
+            (f"{engine}\n{check}\nthe hand-over failed: with no argument the engine exited with 2\n", hand_over),
+            (f"{check}\n{hand_over}\n", engine),
+        )
+        for log, missing in cases:
+            with self.subTest(missing), tempfile.TemporaryDirectory() as temporary:
+                directories = create_artifacts(Path(temporary), smoke_log=log)
+                with self.assertRaisesRegex(ValueError, f"accepted Linux package smoke result: {missing}$"):
                     publish_github_release.prepare_release_assets(TAG, TARGET, *directories)
 
 

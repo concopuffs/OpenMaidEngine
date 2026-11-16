@@ -144,10 +144,13 @@ if [[ $smoke_status -ne 0 ]]; then
     echo "packaged Linux runtime smoke failed with exit code $smoke_status" >&2
     exit "$smoke_status"
 fi
-if ! grep -Fq "PACKAGE SMOKE OK: opcodes=548 ffmpeg-abi=3" "$smoke_log"; then
-    echo "packaged Linux runtime did not report its success marker" >&2
-    exit 1
-fi
+# The engine's smoke, the launcher's check with no display, and the hand-over (launcher plan §9.4).
+for marker in "PACKAGE SMOKE OK: opcodes=548 ffmpeg-abi=3" "LAUNCHER CHECK OK: checks=6" "HAND-OVER OK"; do
+    if ! grep -Fq "$marker" "$smoke_log"; then
+        echo "packaged Linux runtime did not report its success marker: $marker" >&2
+        exit 1
+    fi
+done
 
 archive_hash="$(sha256sum "$archive_path" | awk '{ print $1 }')"
 printf 'Linux x64 package: %s\nSHA-256: %s\n' "$archive_path" "$archive_hash"

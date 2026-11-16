@@ -8,12 +8,17 @@ import hashlib
 import json
 import os
 import queue
+import re
+import shlex
 import shutil
 import stat
+import struct
 import subprocess
 import tarfile
+import tempfile
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import package_notices
@@ -290,6 +295,213 @@ def smoke_command(package_root: Path) -> list[str]:
     return [str(package_root / "OME"), "--headless", "--", "--package-smoke", "--hold"]
 
 
+# The smoke's launcher steps (launcher plan §9.4): the launcher's command-line check with no display (gate 11), and the
+# engine's hand-over to the launcher beside it (launcher spec §5.6).
+LAUNCHER_CHECK_KINDS = ("Install", "Fingerprint", "Root", "Packages", "Link", "Lock")
+LAUNCHER_CHECK_MARKER = f"LAUNCHER CHECK OK: checks={len(LAUNCHER_CHECK_KINDS)}"
+HAND_OVER_MARKER = "HAND-OVER OK"
+# Every line an accepted smoke log holds; the release publisher requires them all.
+SMOKE_MARKERS = (SMOKE_MARKER, LAUNCHER_CHECK_MARKER, HAND_OVER_MARKER)
+SMOKE_PROFILE = "smoke"
+SMOKE_GAME = "himegari"
+# One line of `OME-Launcher --check`: the status padded to eight, then `Kind: message`.
+CHECK_LINE = re.compile(r"^(passed|warning|FAILED|not run)\s+([A-Za-z]+): ")
+# What the engine reports when an argument keeps it and names a folder with no game (GameRootSelection).
+NO_GAME_ERROR = "does not contain SYS4INI.BIN"
+
+
+@dataclass(frozen=True)
+class SmokeRun:
+    """One program a smoke step ran: what it printed (standard error merged), and its exit code, None on a timeout."""
+
+    command: tuple[str, ...]
+    returncode: int | None
+    output: str
+
+    def exit(self) -> str:
+        return "past its timeout" if self.returncode is None else f"with {self.returncode}"
+
+
+def _cp932_field(text: str, size: int) -> bytes:
+    raw = text.encode("cp932")
+    if len(raw) > size:
+        raise ValueError(f"{text!r} does not fit in {size} bytes")
+    return raw + bytes(size - len(raw))
+
+
+def write_smoke_home(home: Path, game: str = SMOKE_GAME) -> Path:
+    """An OME home for `OME-Launcher --check smoke --home HOME`: `profiles/smoke/` in native mode on
+    `installs/<game>/`. Its SYS4INI.BIN is the smallest complete catalog:
+    - the header of the game's first catalog identity (`engine/Ome.Engine/Profiles/<game>.json`);
+    - a directory of one archive and one placeholder entry, then an empty trailer as the engine reads one (no
+      metadata, a zero-length settings block, nothing after it), packed as LZSS literals.
+    A header alone is refused, since its expanded size 0 fails (launcher plan §9). Returns the home."""
+    identity = json.loads((REPO / f"engine/Ome.Engine/Profiles/{game}.json").read_text(encoding="utf-8"))
+    identity = identity["catalogIdentities"][0]
+    directory = (struct.pack("<I", 1) + _cp932_field("DATA.ALF", 256) + struct.pack("<I", 1)
+                 + _cp932_field("@", 64) + bytes(16) + struct.pack("<II", 0, 0))
+    packed = bytearray()
+    for offset in range(0, len(directory), 8):
+        chunk = directory[offset:offset + 8]
+        packed.append((1 << len(chunk)) - 1)  # every flag bit set: eight literal bytes follow
+        packed += chunk
+    header = bytearray(0x138)
+    header[0:8] = identity["catalogRevision"].ljust(8).encode("ascii")
+    header[8:0x12C] = _cp932_field(identity["title"], 0x12C - 8)
+    struct.pack_into("<I", header, 0x12C, len(directory))
+    struct.pack_into("<I", header, 0x134, len(packed))
+    install = home / "installs" / game
+    install.mkdir(parents=True)
+    (install / "SYS4INI.BIN").write_bytes(bytes(header) + bytes(packed))
+    profile = home / "profiles" / SMOKE_PROFILE
+    profile.mkdir(parents=True)
+    (profile / "profile.toml").write_text(
+        f'ome_profile = 1\ngame = "{game}"\nmode = "native"\n\n[install]\nroot = "../../installs/{game}"\n',
+        encoding="utf-8", newline="\n")
+    return home
+
+
+def smoke_environment(scratch: Path) -> dict[str, str]:
+    """The environment of the launcher steps: the job's, with no display, and HOME and the XDG folders inside
+    `scratch`. So a step neither reads nor writes this machine's own state: the launcher's machine folder and the
+    engine's logs live in Godot's user folder, under XDG_DATA_HOME."""
+    user = scratch / "user"
+    environment = {key: value for key, value in os.environ.items() if key not in ("DISPLAY", "WAYLAND_DISPLAY")}
+    environment.update(HOME=str(user), XDG_DATA_HOME=str(user / ".local/share"),
+                       XDG_CONFIG_HOME=str(user / ".config"), XDG_CACHE_HOME=str(user / ".cache"))
+    for name in ("HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+        Path(environment[name]).mkdir(parents=True, exist_ok=True)
+    return environment
+
+
+def _run_step(command: list[str], cwd: Path, environment: dict[str, str], timeout: float) -> SmokeRun:
+    try:
+        completed = subprocess.run(command, cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout, check=False)
+        returncode, output = completed.returncode, completed.stdout
+    except subprocess.TimeoutExpired as error:
+        returncode, output = None, error.output or b""
+    return SmokeRun(tuple(command), returncode,
+                    output.decode("utf-8", errors="replace").replace("\r\n", "\n"))
+
+
+def _append(log: Path, *parts: str) -> None:
+    with log.open("a", encoding="utf-8", newline="\n") as stream:
+        for part in parts:
+            stream.write(part if part.endswith("\n") or not part else part + "\n")
+
+
+def launcher_check_problems(run: SmokeRun) -> list[str]:
+    """What is wrong with a `--check` run: it must exit 0 with each of the six checks passed, once."""
+    problems = []
+    if run.returncode != 0:
+        problems.append(f"it exited {run.exit()}")
+    checks = sorted((match.group(2), match.group(1)) for line in run.output.splitlines()
+                    if (match := CHECK_LINE.match(line)))
+    if checks != sorted((kind, "passed") for kind in LAUNCHER_CHECK_KINDS):
+        found = ", ".join(f"{kind} {status}" for kind, status in checks) or "none"
+        problems.append(f"its checks are not {', '.join(LAUNCHER_CHECK_KINDS)}, each passed; it printed: {found}")
+    return problems
+
+
+def run_launcher_check(launcher: list[str], log: Path, timeout: float = SMOKE_TIMEOUT_S) -> None:
+    """The smoke's second step (gate 11): `launcher --check smoke --home HOME` on write_smoke_home's home, with no
+    display. Appends what it printed to `log`, then LAUNCHER_CHECK_MARKER."""
+    with tempfile.TemporaryDirectory(prefix="ome-launcher-check-") as temporary:
+        scratch = Path(temporary)
+        home = write_smoke_home(scratch / "home")
+        run = _run_step([*launcher, "--check", SMOKE_PROFILE, "--home", str(home)], scratch,
+                        smoke_environment(scratch), timeout)
+    _append(log, f"== the launcher's check, with no display: {' '.join(run.command)}", run.output)
+    if problems := launcher_check_problems(run):
+        _append(log, "the launcher's check failed: " + "; ".join(problems))
+        raise SmokeError("the launcher's check failed: " + "; ".join(problems))
+    _append(log, LAUNCHER_CHECK_MARKER)
+
+
+def write_launcher_stub(path: Path, record: Path) -> None:
+    """The hand-over's stand-in for the launcher: it appends a line to `record` each time it runs, its argument count
+    and its arguments, tab-separated."""
+    path.write_text(
+        "#!/bin/sh\n# The package smoke's stand-in for OME-Launcher (launcher plan §9.4): it records how it started.\n"
+        f"printf '%s\\t%s\\n' \"$#\" \"$*\" >> {shlex.quote(str(record))}\n", encoding="utf-8", newline="\n")
+    path.chmod(0o755)
+
+
+def _link_or_copy(source: str, destination: str) -> None:
+    try:
+        os.link(source, destination)
+    except OSError:
+        shutil.copy2(source, destination)
+
+
+def hand_over_problems(with_argument: SmokeRun, without: SmokeRun, started_with_argument: list[str],
+                       started_without: list[str]) -> list[str]:
+    """What is wrong with the hand-over: an argument keeps the engine, which reports its own error and exits 2; with
+    none the engine starts the launcher once, with no arguments, and exits 0. The `started_*` lists are the stub's
+    records each run added."""
+    problems = []
+    if with_argument.returncode != 2 or NO_GAME_ERROR not in with_argument.output:
+        problems.append(f"with an argument the engine must report its own error and exit with 2; it exited "
+                        f"{with_argument.exit()}")
+    if started_with_argument:
+        problems.append("with an argument the engine started the launcher: an argument must keep the engine")
+    if without.returncode != 0:
+        problems.append(f"with no argument the engine exited {without.exit()}")
+    if not started_without:
+        problems.append("with no argument the engine did not start the launcher beside it")
+    elif len(started_without) > 1:
+        problems.append(f"with no argument the engine started the launcher {len(started_without)} times")
+    elif started_without[0].split("\t", 1)[0] != "0":
+        problems.append(f"the launcher started with arguments: {started_without[0].split(chr(9), 1)[-1]}")
+    return problems
+
+
+def _launcher_runs(record: Path, deadline: float) -> list[str]:
+    """The stub's records, waiting until `deadline` for a first one."""
+    while not record.is_file() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    return record.read_text(encoding="utf-8").splitlines() if record.is_file() else []
+
+
+def run_hand_over(package_root: Path, log: Path, timeout: float = SMOKE_TIMEOUT_S) -> None:
+    """The smoke's third step (launcher spec §5.6): the package, copied under a folder whose name has a space, with
+    write_launcher_stub's stub for its launcher, run from a folder with no game.
+    - `OME --headless -- --game-root <that folder>` must keep the engine: it reports its error and exits 2.
+    - `OME --headless` must start the launcher once, with no arguments, and exit 0.
+    Appends both runs and the stub's records to `log`, then HAND_OVER_MARKER. The copy hard-links the package's
+    files where it can and is removed afterwards; the package itself is not changed."""
+    package_root = _resolved_directory(package_root, "package")
+    with tempfile.TemporaryDirectory(prefix="ome hand-over ", dir=package_root.parent) as temporary:
+        scratch = Path(temporary)
+        copy = scratch / "OME package"
+        shutil.copytree(package_root, copy, symlinks=True, copy_function=_link_or_copy,
+                        ignore=lambda folder, names: [LAUNCHER.program] if Path(folder) == package_root else [])
+        record = scratch / "launcher-runs.txt"
+        write_launcher_stub(copy / LAUNCHER.program, record)
+        elsewhere = scratch / "no game here"
+        elsewhere.mkdir()
+        # Godot can change the directory before the engine starts; the engine reads the caller's from PWD.
+        environment = dict(smoke_environment(scratch), PWD=str(elsewhere))
+        engine = str(copy / "OME")
+        with_argument = _run_step([engine, "--headless", "--", "--game-root", str(elsewhere)], elsewhere,
+                                  environment, timeout)
+        # The engine starts the launcher and exits without waiting, so the run with none waits for its record.
+        started_with_argument = record.read_text(encoding="utf-8").splitlines() if record.is_file() else []
+        without = _run_step([engine, "--headless"], elsewhere, environment, timeout)
+        started_without = _launcher_runs(record, time.monotonic() + timeout)[len(started_with_argument):]
+    _append(log, f"== the hand-over, with an argument: {' '.join(with_argument.command)} (exited "
+            f"{with_argument.exit()})", with_argument.output,
+            f"== the hand-over, with none: {' '.join(without.command)} (exited {without.exit()})", without.output,
+            "the launcher's stand-in started: " + "; ".join(
+                f"{len(runs)} times {label}" + "".join(f" (argc {run})" for run in runs)
+                for label, runs in (("with an argument", started_with_argument), ("with none", started_without))))
+    if problems := hand_over_problems(with_argument, without, started_with_argument, started_without):
+        _append(log, "the hand-over failed: " + "; ".join(problems))
+        raise SmokeError("the hand-over failed: " + "; ".join(problems))
+    _append(log, HAND_OVER_MARKER)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -309,8 +521,12 @@ def main() -> int:
         print(verify_export(args.export_directory, args.launcher_deps))
         return 0
     if args.command == "smoke":
+        # Three steps, each adding to the log (launcher plan §9.4): the engine, the launcher's check, the hand-over.
+        package_root = args.package_root.resolve()  # the launcher's steps run from scratch folders
         try:
-            run_smoke(smoke_command(args.package_root), SMOKE_MARKER, args.log)
+            run_smoke(smoke_command(package_root), SMOKE_MARKER, args.log)
+            run_launcher_check([str(package_root / LAUNCHER.program)], args.log)
+            run_hand_over(package_root, args.log)
         except SmokeError as error:
             print(f"package smoke: {error}", flush=True)
             return 1

@@ -17,6 +17,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+import package_linux_x64
 import publish_launcher
 import verify_windows_native
 
@@ -44,7 +45,8 @@ WINDOWS_ARTIFACT_FILES = frozenset({
 EXPECTED_RELEASE_ASSETS = frozenset({LINUX_ARCHIVE, WINDOWS_ARCHIVE, RELEASE_CHECKSUMS})
 LINUX_PACKAGE_ROOT = "OME-linux-x64"
 WINDOWS_PACKAGE_ROOT = "OME-windows-x64"
-SMOKE_MARKER = "PACKAGE SMOKE OK: opcodes=548 ffmpeg-abi=3"
+# The lines an accepted Linux smoke log holds: the engine's, the launcher's check and the hand-over (plan §9.4).
+SMOKE_MARKERS = package_linux_x64.SMOKE_MARKERS
 TAG_PATTERN = re.compile(r"v[0-9][0-9A-Za-z.+-]*\Z")
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -412,8 +414,11 @@ def prepare_release_assets(
     windows_verification = windows["WINDOWS-VERIFICATION.json"].read_bytes()
     _validate_build_info(linux_build_info, target, "linux-x64", "Linux BUILD-INFO.json")
     _validate_build_info(windows_build_info, target, "win-x64", "Windows BUILD-INFO.json")
-    if SMOKE_MARKER not in linux["package-smoke.log"].read_text(encoding="utf-8"):
-        raise ValueError("package-smoke.log does not contain the accepted Linux package smoke result")
+    smoke_log = linux["package-smoke.log"].read_text(encoding="utf-8")
+    missing_markers = [marker for marker in SMOKE_MARKERS if marker not in smoke_log]
+    if missing_markers:
+        raise ValueError("package-smoke.log does not contain the accepted Linux package smoke result: "
+                         + ", ".join(missing_markers))
     _validate_windows_verification(windows_verification)
 
     internal_linux_build = _tar_member(
@@ -581,7 +586,8 @@ def promote_release(
             "name": title,
             "body": (
                 "Automated Linux and Windows x64 release built from `" + target + "`.\n\n"
-                "The Linux archive passed the dynamic opcode/FFmpeg package smoke. The Windows archive "
+                "The Linux archive passed the dynamic opcode/FFmpeg package smoke, the launcher's check with "
+                "no display, and the engine's hand-over to the launcher. The Windows archive "
                 "passed structural AMD64 PE, payload, ABI export, and FFmpeg import verification without "
                 "executing the EXE. Each archive contains its detailed build metadata and payload ledger.\n\n"
                 + ffmpeg_release_notice()
