@@ -19,6 +19,7 @@ using Ome.Engine.Text;
 using Ome.Engine.Text.Windows;
 #endif
 using Ome.Engine.Vm;
+using Ome.Mods.Launch;
 using Ome.Scripting.Lua;
 using Script = Ome.Engine.Model.Script;   // disambiguate from Godot.Script
 
@@ -91,6 +92,8 @@ public partial class Main : Godot.Control
     private Scripting? _scripting;
     private int _luaNoticesSeen;
     private bool _selftest;
+    // The resolver's normalized arguments (launcher spec §5.2): the command line with a profile file's equivalents.
+    private string[] _launchArguments = [];
     private string? _shotPath;                 // --shot <png>: capture a page then quit (dev tool)
     private int _shotPage = 1;                  // --shot-page <n>: which page to capture (default 1)
     private int _pageNoticesSeen, _pagesSeen;   // the waits native's page notices the status line and HUD took
@@ -109,13 +112,17 @@ public partial class Main : Godot.Control
 
     public override void _Ready()
     {
-        var userArgs = OS.GetCmdlineUserArgs();
-        if (Array.IndexOf(userArgs, "--package-smoke") >= 0)
+        string[] commandLine = OS.GetCmdlineUserArgs();
+        if (Array.IndexOf(commandLine, "--package-smoke") >= 0)
         {
             RunPackageSmoke();
             return;
         }
         InitializeExitPolicy();
+        // Every reader below takes the resolver's list: the command line, and a data root's profile.toml mapped to the
+        // flags it stands for (launcher spec §5.2).
+        string[] userArgs;
+        ResolvedRun run;
         GameRootSelection gameRoot;
         SelectedGameProfile selectedProfile;
         EngineBuild engineBuild;
@@ -135,6 +142,9 @@ public partial class Main : Godot.Control
                     && System.IO.Directory.Exists(inheritedWorkingDirectory))
                     workingDirectory = inheritedWorkingDirectory;
             }
+            run = RunResolver.Resolve(commandLine, workingDirectory);
+            userArgs = run.Arguments.ToArray();
+            _launchArguments = userArgs;
             gameRoot = GameRootSelection.Resolve(
                 userArgs, OS.GetExecutablePath(), workingDirectory);
             assetOptions = AssetLaunchOptions.Resolve(userArgs, gameRoot.Root);
@@ -151,7 +161,8 @@ public partial class Main : Godot.Control
                 ArgumentValue(userArgs, "--data-root"));   // --data-root <dir>: driver sandboxes
         }
         catch (System.Exception error) when (
-            error is System.ArgumentException or System.IO.IOException or System.UnauthorizedAccessException)
+            error is RunResolutionException or System.ArgumentException or System.IO.IOException
+                or System.UnauthorizedAccessException)
         {
             GD.PushError($"[startup] {error.Message}");
             GetTree().Quit(2);
@@ -225,6 +236,10 @@ public partial class Main : Godot.Control
             GD.PushWarning($"[profile] persistence is read-only: {profilePersistence.ReadOnlyReason}");
         GD.Print($"[profile] data-root={profilePersistence.ProfileRoot} " +
                  $"persistence={(profilePersistence.WritesEnabled ? "read-write" : "read-only")}");
+        if (run.Describe() is { } profileFileLine)
+            GD.Print($"[profile-file] {profileFileLine}");
+        foreach (string warning in run.Warnings)
+            GD.PushWarning($"[profile-file] {warning}");
 
         // Resolve the selected game's logical canvas before any presentation allocation. The same catalog
         // instance is reused for scripts and assets later in startup.

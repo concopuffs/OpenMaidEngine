@@ -733,6 +733,41 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
 - `--probe` — require an explicit `--game` and run it read-only for diagnostic inspection of an unknown or
   incomplete install. It disables save and `SYS4REG.INI` stores. Both built-in profiles write saves (Kamidori since `ce4eb1c`,
   2026-09-23), each in its own `games/<game>/` namespace.
+- `--data-root <directory>` — the profile root (`SAVE/`, `SYS4REG.INI`, `OME.INI`, `mods/`, `diagnostics/`)
+  instead of `user://games/<game>/`. A relative path resolves against the launch directory, as `--game-root` and
+  `--mod` do. When the root holds a `profile.toml` (launcher spec §4.3), the run is that profile: one resolver
+  (`RunResolver`, `engine/Ome.Mods/Launch/`), shared by the port and `Ome.Cli`, maps its typed keys to the flags they
+  stand for, so the existing selections read them. The file:
+
+  ```toml
+  ome_profile = 1                  # format version; another stops startup with the version this engine reads
+  name = "Kamidori (English)"      # optional
+  game = "kamidori"                # required: the game, which must match the install's SYS4INI.BIN header
+  mode = "native"                  # required: "native" or "extended"
+  [install]                        # required
+  root = "D:/Games/Kamidori"       # --game-root; absolute or relative to the profile root
+  fingerprint = "sha256:…"         # optional: a different SYS4INI.BIN prints a warning and continues
+  overlays = ["patch"]             # --overlay-root, in order, relative to the install root
+  allow_bmp_as_agf = true          # --allow-bmp-as-agf
+  [mods]                           # optional; without it the root's mods/ folder works as before
+  folders = ["../../mods/kamidori"]
+  order = ["example.one", "-example.two"]   # -ID: disabled, place kept
+  on_failure = "stop"              # "skip": --skip-failed-mods
+  [launch]                         # each optional: --render-backend gpu|software, --text-backend auto|gdi|portable,
+  renderer = "gpu"                 # --lua-errors continue|halt; a flag on the command line wins for that run
+  text_backend = "auto"
+  lua_errors = "continue"
+  [launcher]                       # the launcher's own; the engine reads none of it
+  ```
+
+  Every key is typed, and outside `[launcher]` an unknown key or table is an error, as in a package manifest; the
+  file holds no engine arguments and no environment. With a profile file, `--game`/`--profile`, `--game-root`,
+  `--overlay-root`, `--allow-bmp-as-agf` and `--probe` on the command line stop startup with the reason (exit 2),
+  and so does a game the install does not match; without one, a data root behaves as before. Every single-valued
+  option (`--game`, `--game-root`, `--data-root`, `--render-backend`, `--text-backend`, `--lua-errors`) keeps one
+  occurrence, the last given, so the port and `Ome.Cli` read the same value. The startup log adds a
+  `[profile-file]` line with the file and the values in effect. A root without the file: the driver's sandboxes.
+  The `[mods]` table is parsed; the discovery that follows it is launcher plan §4.5.
 - `--scene <NAME>` — start in one script instead of the natural boot, e.g. `--scene SC0240`. When the profile
   declares the F4 launcher's coordinator (Himegari), the scene is entered as that launcher enters it
   (`VirtualMachine.HostScene`; `engine-re.md`, "Native ADV hosting and Himegari's developer entry"):
@@ -1386,7 +1421,9 @@ these flags; you need them directly only to drive the port from another client.
   timed operations do (`DriveDispatcher`). `shot` needs an **absolute** path, because the port's working
   directory is `godot/`. It captures the 800×600 viewport, without the menu bar above it, so the window must not be
   minimized. Points and cursor positions are canvas pixels on both targets, below the bar.
-- Give `--data-root` and `--control-file` as absolute paths; relative ones resolve against `godot/`.
+- Give `--data-root` and `--control-file` as absolute paths. A relative `--control-file` resolves against `godot/`;
+  a relative `--data-root` against the launch directory, as `--game-root` does (`godot/` for an editor run on
+  Windows, the caller's directory on Linux).
 
 ## Runtime capture (Frida)
 

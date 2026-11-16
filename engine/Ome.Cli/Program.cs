@@ -23,6 +23,22 @@ string command = args[0];
 // save-diff reads only the two save files, so it runs before the game catalog loads.
 if (command == "save-diff") return SaveDiffCommand.Run(args);
 
+// Every option below reads the resolver's list (launcher spec §5.2): one occurrence of each single-valued option, the
+// last given, and a --data-root's profile.toml mapped to the flags it stands for. The command keeps its place.
+Ome.Mods.Launch.ResolvedRun run;
+try
+{
+    run = Ome.Mods.Launch.RunResolver.Resolve(args, Directory.GetCurrentDirectory());
+}
+catch (Ome.Mods.Launch.RunResolutionException error)
+{
+    Console.Error.WriteLine($"error: {error.Message}");
+    return 2;
+}
+args = run.Arguments.ToArray();
+if (run.Describe() is { } profileFileLine) Console.Error.WriteLine($"[profile-file] {profileFileLine}");
+foreach (string warning in run.Warnings) Console.Error.WriteLine($"warning: {warning}");
+
 string? OptionValue(string name)
 {
     int index = Array.IndexOf(args, name);

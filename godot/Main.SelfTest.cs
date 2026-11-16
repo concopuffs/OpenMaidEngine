@@ -321,7 +321,7 @@ public partial class Main
                                && rootWindow.ContentScaleSize
                                   == new Vector2I(_screenWidth, _screenHeight + _menuBarHeight)
                                && _windowOptions == WindowLaunchOptions.Resolve(
-                                      OS.GetCmdlineUserArgs(),
+                                      _launchArguments,
                                       new Sys4LogicalCanvas(_screenWidth, _screenHeight), _portOptions.Effective);
         var backbufferSnapshot = new List<RenderObject>();
         _waits.PresentFrame();

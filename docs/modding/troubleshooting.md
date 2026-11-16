@@ -78,6 +78,32 @@ most emoji and many accented letters are not in CP932, while straight quotes and
   ([packages.md](packages.md)). Otherwise turn your replacement into patches.
 - **No free selector:** every selector up to `0x7f` is allocated. Release removed mods with `--forget-mod ID`.
 
+## Startup refusals
+
+A data root that holds a `profile.toml` is a player profile: the file names the game, the install and the mods
+(`../tools-reference.md`, `--data-root`). The port stops at startup (exit code 2) when the profile and the command
+line disagree:
+
+**"`--game-root` is refused with a profile file".** The same goes for `--game`, `--profile`, `--overlay-root` and
+`--allow-bmp-as-agf`. The profile's saves and selectors belong to its game and install, so a flag cannot swap them
+for one run. Change the profile, or test with a data root that has no `profile.toml` (the driver's sandboxes have
+none). `--mod`, `--no-mods`, `--skip-failed-mods` and the run options still work with a profile.
+
+**"`--probe` is refused with a profile file".** Probing needs a game named on the command line. Probe with a data
+root that has no `profile.toml`.
+
+**"the install at … is …, not the game '…'".** The profile's `[install] root` holds another game's `SYS4INI.BIN`.
+Point it at the game's own install.
+
+**"`ome_profile`: format version N is not supported".** A newer engine wrote the profile. Use that engine, or a
+profile this engine made.
+
+**"… : unknown key".** The file holds a key this engine does not know. `profile.toml` is strict, as `manifest.toml`
+is: a mistyped key would otherwise be dropped silently.
+
+**A warning that `install.fingerprint` differs.** The install's `SYS4INI.BIN` changed since the profile accepted it,
+for example after an official update. The port continues; check that your mods still name the right revision.
+
 ## In-game problems
 
 **Native AGE hangs at boot, before the title.** Your record 0, the first `[scripts].names` entry, shows text or waits

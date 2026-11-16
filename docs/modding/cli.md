@@ -63,7 +63,7 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 | `--no-mods` | Load no mods at all, not even installed ones. |
 | `--skip-failed-mods` | If the stack does not link, drop the mods involved, say so, and start with the rest. Without it a failed link stops startup (exit code 2). |
 | `--forget-mod ID` | Release a removed mod's selector (see below). Repeatable. |
-| `--data-root DIR` | Use `DIR` as the profile root instead of the default, for a separate set of mods and saves. |
+| `--data-root DIR` | Use `DIR` as the profile root instead of the default, for a separate set of mods and saves. When `DIR` holds a `profile.toml`, that file names the game and the install, and the game options are refused ([troubleshooting.md](troubleshooting.md), "Startup refusals"). |
 | `--language TAG` | Present the game's text in `TAG` for this run, whatever `OME.INI` says: the catalogs the mods (and `--text-root`) hold for it. `ja` draws the scripts' text as written; `x-pseudo` brackets and lengthens every string, with no catalog. The menus and dialogs take the mods' `[[engine]]` entries for `TAG`, then the engine's own table for it, along its fallback chain, then Japanese ([languages.md](languages.md), "Engine text"). |
 | `--text-root DIR` | Also load a loose folder of catalogs laid out as a package's `text/`, after the mods' (languages.md, "Testing without a package"). |
 | `--lua-errors continue\|halt` | What a Lua handler's error does: `continue` (the default) logs it to `diagnostics/lua.log`, shows a notice and switches the handler off after its third failure in a row; `halt` ends the run at that instruction ([lua.md](lua.md), "Errors and budgets"). |
