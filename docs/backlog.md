@@ -327,7 +327,7 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   relocates each plan's unpinned locals above the previous plan's, or the linker reports overlapping live ranges)
   and a two-mod test shows it.
 - **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12):
-  - a launcher;
+  - a launcher (designed, not built: `superpowers/specs/2026-11-15-launcher-design.md`);
   - mod-owned sites (patching another mod's inserted code);
   - declarative data patches;
   - mod merging;
@@ -431,6 +431,12 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   generation; it runs only in tag publication, whose annotations were not read. Done when each action is SHA-pinned
   to a release that targets Node.js 24, and the core, release-build and FFmpeg SDK workflows run green without the
   warning.
+- **The engine targets a .NET version that is out of support.** Every project targets `net8.0` (the engine
+  projects, `godot/OME.csproj`, the SDK pin). Microsoft ended support for .NET 8 on 2026-11-10: it gets no more
+  security fixes (.NET blog, ".NET 8 and .NET 9 will reach End of Support on November 10, 2026"). The exports
+  bundle that runtime. Noticed during the launcher spec's review (2026-11-15), which leaves the launcher's own
+  target to its first milestone. Done when the projects, the SDK pin, CI and the exports target a supported
+  version that the Godot release in use accepts, and the core and package gates pass.
 - **Keep the game installs in one folder.** The workspace root holds each install under its own name:
   `Himegari_Game/`, `Kamidori/`, `Kamidori_Translated/` and `Arterial/創刻のアテリアル/` (added 2026-11-09 for
   native-engine comparison only). Every tool that finds them has its own table of those names:

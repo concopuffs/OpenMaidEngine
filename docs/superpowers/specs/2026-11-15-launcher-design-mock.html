@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OME Launcher: layout mock</title>
+<!-- The layout reference for docs/superpowers/specs/2026-11-15-launcher-design.md (§9). Hand-written, not generated. -->
+
+<style>
+:root {
+  --page: #d6d6d1; --win: #f7f7f5; --side: #eeeeeb; --card: #ffffff; --line: #dcdcd7;
+  --text: #1b1b19; --muted: #6b6b66; --ink: #1b1b19; --ink-text: #ffffff;
+  --hover: #e4e4df; --sel: #ffffff; --field: #ffffff;
+  --ok: #2e8b57; --warn: #a86a12; --bad: #c0392b; --run: #2f6fde;
+  --ok-bg: #e3f3ea; --warn-bg: #fbf0d9; --bad-bg: #fbe6e3; --run-bg: #e2ecfc;
+}
+body.dark {
+  --page: #0c0d0e; --win: #18191b; --side: #1f2023; --card: #232428; --line: #34363b;
+  --text: #ececea; --muted: #9b9c99; --ink: #ececea; --ink-text: #18191b;
+  --hover: #2a2c30; --sel: #2d2f34; --field: #1b1c1f;
+  --ok: #58c08a; --warn: #e0a84a; --bad: #ef7a6d; --run: #7aa7f5;
+  --ok-bg: #1d3329; --warn-bg: #3a2f18; --bad-bg: #3d211e; --run-bg: #1c2a44;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--text);
+  font: 13px/1.45 "Noto Sans JP", "Yu Gothic UI", "Segoe UI", system-ui, sans-serif; }
+button { font: inherit; color: inherit; }
+
+/* ---- mock controls: not part of the launcher ---- */
+.controls { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; justify-content: center;
+  padding: 10px 16px; font-size: 12px; color: var(--muted); }
+.controls b { color: var(--text); font-weight: 600; margin-right: 4px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--win); }
+.seg button { border: 0; background: none; padding: 3px 9px; cursor: pointer; color: var(--muted); }
+.seg button.on { background: var(--ink); color: var(--ink-text); }
+.foot { text-align: center; color: var(--muted); font-size: 12px; margin: 10px 0 24px; }
+
+/* ---- the window ---- */
+.window { position: relative; width: 1180px; height: 760px; margin: 0 auto; background: var(--win);
+  border-radius: 9px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.18);
+  display: grid; grid-template-rows: 34px 1fr; }
+.titlebar { display: flex; align-items: center; padding: 0 12px; font-size: 12px; color: var(--muted);
+  border-bottom: 1px solid var(--line); background: var(--side); }
+.titlebar .wb { margin-left: auto; letter-spacing: 14px; font-size: 13px; }
+.body { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+
+/* ---- profile list ---- */
+.side { background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.side-head { display: flex; align-items: center; padding: 14px 16px 6px; }
+.side-head h2 { margin: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.list { flex: 1; overflow: auto; padding: 4px 10px 10px; }
+.group { margin-bottom: 14px; }
+.art { display: block; width: 100%; border-radius: 5px; overflow: hidden; position: relative;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.18); }
+.art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.art.banner { aspect-ratio: 5 / 1; }
+.art.cover { aspect-ratio: 32 / 45; }
+.art.ph { display: flex; align-items: center; justify-content: center; text-align: center; color: #fff;
+  font-weight: 600; padding: 6px 10px; line-height: 1.25; }
+.art.ph.banner { justify-content: flex-end; text-align: right; font-size: 13px; }
+.art.ph.cover { font-size: 12px; }
+.prow { display: grid; grid-template-columns: 14px 1fr; gap: 0 8px; align-items: center; width: 100%; text-align: left;
+  border: 0; background: none; border-radius: 6px; padding: 7px 8px; margin-top: 3px; cursor: pointer; }
+.prow:hover { background: var(--hover); }
+.prow.sel { background: var(--sel); box-shadow: 0 0 0 1px var(--line), inset 3px 0 0 var(--ink); }
+.prow .pname { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .psub { grid-column: 2; color: var(--muted); font-size: 12px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); justify-self: center; }
+.dot.bad { background: var(--bad); } .dot.run { background: var(--run); } .dot.warn { background: var(--warn); }
+.side-foot { border-top: 1px solid var(--line); padding: 10px; }
+.side-foot .add { text-align: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.side-foot .links { display: flex; gap: 14px; justify-content: center; margin-top: 9px; color: var(--muted); font-size: 12px; }
+
+/* ---- buttons, chips, fields ---- */
+.btn { border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 5px 11px; cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--hover); }
+.btn.wide { width: 100%; padding: 7px; }
+.btn.primary { background: var(--ink); color: var(--ink-text); border-color: var(--ink); font-weight: 600; }
+.btn.play { font-size: 16px; padding: 10px 30px; border-radius: 8px; }
+.btn[disabled] { opacity: .45; cursor: default; }
+.btn.running { background: var(--run-bg); color: var(--run); border-color: transparent; opacity: 1; }
+.link { color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; background: none; border: 0; padding: 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 9px; font-size: 12px; background: var(--card); white-space: nowrap; }
+.chip.ok { color: var(--ok); background: var(--ok-bg); border-color: transparent; }
+.chip.bad { color: var(--bad); background: var(--bad-bg); border-color: transparent; }
+.chip.warn { color: var(--warn); background: var(--warn-bg); border-color: transparent; }
+.chip.run { color: var(--run); background: var(--run-bg); border-color: transparent; }
+.switch { width: 30px; height: 17px; border-radius: 999px; background: var(--line); border: 0; position: relative; cursor: pointer; flex: none; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: left .12s; }
+.switch.on { background: var(--ok); } .switch.on::after { left: 15px; }
+.input { border: 1px solid var(--line); background: var(--field); border-radius: 6px; padding: 5px 9px; min-width: 190px; display: inline-block; }
+.input.sel::after { content: "▾"; float: right; margin-left: 14px; color: var(--muted); }
+.mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+.muted { color: var(--muted); }
+
+/* ---- profile page ---- */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.head { display: flex; gap: 18px; padding: 18px 22px 14px; align-items: flex-start; }
+.head .art.cover { width: 96px; flex: none; }
+.head .who { flex: 1; min-width: 0; padding-top: 2px; }
+.head h1 { margin: 0 0 2px; font-size: 23px; line-height: 1.2; font-weight: 700; }
+.head .game { color: var(--muted); margin-bottom: 10px; }
+.head .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.head .path { color: var(--muted); font-size: 12px; }
+.head .go { text-align: right; flex: none; }
+.head .go .last { color: var(--muted); font-size: 12px; margin-top: 7px; }
+.notice { margin: 0 22px 12px; border-radius: 7px; padding: 9px 12px; display: flex; gap: 12px; align-items: center; }
+.notice.bad { background: var(--bad-bg); color: var(--bad); } .notice.run { background: var(--run-bg); color: var(--run); }
+.notice span { flex: 1; }
+.notice .btn { color: var(--text); }
+.tabs { display: flex; gap: 2px; padding: 0 22px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; background: none; padding: 8px 13px 9px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--ink); font-weight: 600; }
+.tabs .count { font-size: 11px; background: var(--bad); color: #fff; border-radius: 999px; padding: 0 6px; margin-left: 5px; }
+.content { flex: 1; overflow: auto; padding: 16px 22px 22px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 13px 15px; }
+.card h3 { margin: 0 0 9px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.kv { display: grid; grid-template-columns: 104px 1fr; gap: 5px 12px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.checks { list-style: none; margin: 0; padding: 0; }
+.checks li { display: grid; grid-template-columns: 18px 1fr; padding: 2px 0; }
+.checks .y { color: var(--ok); } .checks .n { color: var(--bad); } .checks .r { color: var(--run); }
+.form { max-width: 720px; }
+.form h3 { margin: 18px 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.form h3:first-child { margin-top: 0; }
+.frow { display: grid; grid-template-columns: 190px 1fr; gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.frow .help { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.frow .ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.radio { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; }
+.radio i { width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--muted); display: inline-block; }
+.radio.on i { border: 4px solid var(--ink); }
+
+/* ---- mods page ---- */
+.modbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.modbar .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+.mods { display: grid; grid-template-columns: 1fr 270px; gap: 14px; align-items: start; }
+.mlist { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.mrow { display: grid; grid-template-columns: 16px 30px 1fr auto; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); cursor: pointer; }
+.mrow:first-child { border-top: 0; }
+.mrow.sel { background: var(--hover); }
+.mrow.off .mname, .mrow.off .mid { opacity: .55; }
+.mrow .grip { color: var(--muted); cursor: grab; }
+.mrow .mname { font-weight: 600; }
+.mrow .mid { color: var(--muted); font-size: 12px; }
+.mrow.engine { grid-template-columns: 16px 30px 1fr auto; cursor: default; background: transparent; }
+.report { margin-top: 14px; }
+.report ul { list-style: none; margin: 0; padding: 0; }
+.report li { display: grid; grid-template-columns: 82px 1fr; gap: 10px; padding: 3px 0; }
+.report .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding-top: 2px; }
+.report .tag.bad { color: var(--bad); font-weight: 700; }
+
+/* ---- wizard ---- */
+.scrim { position: absolute; inset: 34px 0 0 0; background: rgba(0,0,0,.42); display: flex; align-items: center; justify-content: center; }
+.wizard { width: 640px; background: var(--win); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.4); padding: 20px 24px; }
+.wizard h2 { margin: 0 0 4px; font-size: 18px; }
+.steps { display: flex; gap: 16px; color: var(--muted); margin-bottom: 14px; font-size: 12px; }
+.steps .on { color: var(--text); font-weight: 600; }
+.drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 16px; text-align: center; color: var(--muted); margin-bottom: 12px; }
+.found { display: grid; grid-template-columns: 250px 1fr; gap: 14px; align-items: start; margin-bottom: 12px; }
+.wizard .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.opt { display: flex; gap: 9px; padding: 5px 0; align-items: flex-start; }
+.opt .radio { margin: 2px 0 0; }
+.opt.pick { cursor: pointer; }
+.frow.narrow { grid-template-columns: 110px minmax(0, 1fr); }
+.frow.narrow .ctl { flex-wrap: nowrap; min-width: 0; }
+.input.clip { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <span><b>Mock controls</b>(not part of the launcher)</span>
+  <span>Art files <span class="seg" data-key="art"><button data-v="yes">Downloaded</button><button data-v="no">Placeholders</button></span></span>
+  <span>State <span class="seg" data-key="state"><button data-v="ready">Ready</button><button data-v="missing">Install missing</button><button data-v="link">Link problem</button><button data-v="running">Running</button></span></span>
+  <span>Theme <span class="seg" data-key="theme"><button data-v="light">Light</button><button data-v="dark">Dark</button></span></span>
+  <span class="seg" data-key="wizard"><button data-v="0">Window</button><button data-v="1">New-profile wizard</button></span>
+</div>
+
+<div class="window">
+  <div class="titlebar">Open Maid Engine<span class="wb">─☐✕</span></div>
+  <div class="body">
+    <aside class="side">
+      <div class="side-head"><h2>Profiles</h2></div>
+      <div class="list" id="list"></div>
+      <div class="side-foot">
+        <button class="btn wide" data-set="wizard=1">+ New profile</button>
+        <div class="add"><button class="link">Add an existing profile…</button></div>
+        <div class="links"><span>Games</span><span>Launcher settings</span><span>About</span></div>
+      </div>
+    </aside>
+    <main class="main" id="main"></main>
+  </div>
+  <div id="overlay"></div>
+</div>
+<p class="foot">Layout mock for the launcher design (2026-11-15-launcher-design.md, §9). Names, paths, versions and report lines are illustrative.<br>
+Art is read from build/launcher-mock-art/ as &lt;game&gt;-banner.jpg and &lt;game&gt;-cover.jpg, from the addresses in §8.7. Without those files the placeholders show.</p>
+
+<script>
+// The art is not in the repository. It is read from build/launcher-mock-art/ (ignored by git), and a missing file
+// leaves the placeholder that the launcher itself would draw.
+const artFolder = '../../../build/launcher-mock-art/';
+// `clash` is the pair the "Link problem" state enables together: the second declares a conflict with the first.
+const games = {
+  kamidori: { jp: '神採りアルケミーマイスター', en: 'Kamidori Alchemy Meister', version: '1.00', catalog: 'sha256:9c41…e07b', hue: 188,
+              banner: artFolder + 'kamidori-banner.jpg', cover: artFolder + 'kamidori-cover.jpg',
+              clash: ['example.kamidori-prologue-line', 'example.kamidori-prologue-rewrite'] },
+  himegari: { jp: '姫狩りダンジョンマイスター', en: 'Himegari Dungeon Meister', version: '1.00', catalog: 'sha256:41d7…b2c0', hue: 318,
+              banner: artFolder + 'himegari-banner.jpg', cover: artFolder + 'himegari-cover.jpg',
+              clash: ['example.prologue', 'example.prologue-rewrite'] },
+};
+// The two "rewrite" packages are invented, to show a hard conflict. The others are the repository's examples.
+const library = {
+  'example.kamidori-double-exp-event': { name: 'Double EXP (Kamidori event)', version: '1.0.0', target: 'extended', game: 'kamidori',
+    text: 'Doubles every experience award, through the experience event of the base mod.', requires: ['kamidori-base'],
+    does: ['Listens to kamidori.experience.award', 'Writes the amount of the award'] },
+  'example.kamidori-prologue-line': { name: 'Kamidori prologue line', version: '1.0.0', target: 'native', game: 'kamidori',
+    text: 'Adds one line to the prologue.', requires: [],
+    does: ['Patches the prologue script'] },
+  'example.kamidori-prologue-rewrite': { name: 'Kamidori prologue rewrite', version: '0.3.0', target: 'native', game: 'kamidori',
+    text: 'Replaces the prologue script.', requires: [],
+    does: ['Replaces the prologue script', 'Declares a conflict with example.kamidori-prologue-line'] },
+  'example.prologue': { name: 'Prologue scene', version: '1.0.0', target: 'native', game: 'himegari',
+    text: 'Adds a new scene before the first chapter.', requires: [],
+    does: ['Supplies a new scene script'] },
+  'example.prologue-rewrite': { name: 'Prologue rewrite', version: '0.3.0', target: 'native', game: 'himegari',
+    text: 'Replaces the first scene.', requires: [],
+    does: ['Replaces the first scene script', 'Declares a conflict with example.prologue'] },
+  'example.random-enemies': { name: 'Random enemies', version: '1.0.0', target: 'extended', game: 'himegari',
+    text: 'Draws the enemies of each stage from a pool when the stage loads.', requires: ['himegari-base'],
+    does: ['Listens to the stage events'] },
+};
+// `order` is the profile file's list: a leading "-" is a disabled package, which keeps its place.
+const profiles = [
+  { id: 'kamidori-english', game: 'kamidori', name: 'Kamidori (English)', mode: 'native', lang: 'English',
+    install: 'D:\\Games\\Kamidori_Translated', overlays: 'patch (1,204 loose files) · BMP files under AGF names allowed',
+    order: ['example.kamidori-prologue-line', '-example.kamidori-prologue-rewrite'], saves: 14, last: '12 Nov, 21:40' },
+  { id: 'kamidori-modded', game: 'kamidori', name: 'Kamidori, modded', mode: 'extended', lang: 'English',
+    install: 'D:\\Games\\Kamidori_Translated', overlays: 'patch (1,204 loose files) · BMP files under AGF names allowed',
+    order: ['example.kamidori-double-exp-event', '-example.kamidori-prologue-rewrite', 'example.kamidori-prologue-line'],
+    saves: 3, last: '9 Nov, 18:02' },
+  { id: 'kamidori-ja', game: 'kamidori', name: '神採り (日本語)', mode: 'native', lang: '日本語',
+    install: 'D:\\Games\\Kamidori', overlays: 'none', order: [], saves: 41, last: '2 Nov, 23:15' },
+  { id: 'himegari', game: 'himegari', name: 'Himegari', mode: 'native', lang: '日本語',
+    install: 'D:\\Games\\Himegari', overlays: 'none',
+    order: ['example.prologue', '-example.prologue-rewrite'], saves: 22, last: '30 Oct, 20:11' },
+];
+
+const ui = { profile: 'kamidori-modded', tab: 'overview', art: 'yes', state: 'ready',
+             theme: 'light', wizard: '0', step: '1', mod: null, dialog: '', form: 'launcher' };
+for (const part of location.hash.slice(1).split('&')) {
+  const [key, value] = part.split('=');
+  if (key in ui && value) ui[key] = decodeURIComponent(value);
+}
+
+const modeName = mode => mode === 'native' ? 'Compatibility' : 'Extended';
+const modeText = mode => mode === 'native'
+  ? 'Admits mods marked native that ship no Lua. Saves carry no mod state.'
+  : 'Admits every mod. Saves carry mod state beside them.';
+const esc = text => String(text).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const current = () => profiles.find(p => p.id === ui.profile);
+
+function art(gameId, kind) {
+  const game = games[gameId];
+  const fill = `background: linear-gradient(105deg, hsl(${game.hue} 34% 34%), hsl(${game.hue + 28} 38% 22%))`;
+  const image = ui.art === 'yes' ? `<img src="${game[kind]}" alt="" onerror="this.remove()">` : '';
+  return `<span class="art ph ${kind}" style="${fill}">${game.jp}${image}</span>`;
+}
+// The state toggle shows a problem on the selected profile only.
+function stateOf(profile) { return profile.id === ui.profile ? ui.state : 'ready'; }
+// The rows of the Mods page: the profile's list in its order, then the library's packages it has never listed.
+function rowsOf(profile) {
+  const rows = profile.order.map(entry => ({ id: entry.replace(/^-/, ''), on: !entry.startsWith('-') }));
+  for (const id of Object.keys(library))
+    if (library[id].game === profile.game && !rows.some(row => row.id === id)) rows.push({ id, on: false });
+  if (stateOf(profile) === 'link')
+    for (const row of rows) if (games[profile.game].clash.includes(row.id)) row.on = true;
+  return rows;
+}
+const enabledOf = profile => rowsOf(profile).filter(row => row.on).map(row => row.id);
+function dot(profile) {
+  const state = stateOf(profile);
+  return `<span class="dot ${state === 'ready' ? '' : state === 'running' ? 'run' : 'bad'}"></span>`;
+}
+function sub(profile) {
+  const count = enabledOf(profile).length;
+  return `${modeName(profile.mode)} · ${count === 0 ? 'no mods' : count === 1 ? '1 mod' : count + ' mods'}`;
+}
+
+function renderList() {
+  let html = '';
+  for (const gameId of Object.keys(games)) {
+    const own = profiles.filter(p => p.game === gameId);
+    html += `<section class="group">${art(gameId, 'banner')}` + own.map(p => `
+      <button class="prow ${p.id === ui.profile ? 'sel' : ''}" data-set="profile=${p.id}">
+        ${dot(p)}<span class="pname">${esc(p.name)}</span><span class="psub">${sub(p)}</span>
+      </button>`).join('') + '</section>';
+  }
+  document.getElementById('list').innerHTML = html;
+}
+
+function header(profile) {
+  const game = games[profile.game], state = stateOf(profile), count = enabledOf(profile).length;
+  const status = { ready: '<span class="chip ok">● Ready</span>', missing: '<span class="chip bad">● Install missing</span>',
+                   link: '<span class="chip bad">● 1 problem</span>', running: '<span class="chip run">● Running</span>' }[state];
+  const play = state === 'running' ? '<button class="btn play running" disabled>Running</button>'
+    : `<button class="btn primary play" ${state === 'ready' ? '' : 'disabled'}>▶&nbsp; Play</button>`;
+  const notice = {
+    ready: '',
+    missing: `<div class="notice bad"><span>The install folder was not found: <span class="mono">${esc(profile.install)}</span></span><button class="btn">Locate the install…</button></div>`,
+    link: `<div class="notice bad"><span>The enabled mods do not link: one of them declares a conflict with another.</span><button class="btn" data-set="tab=mods">Show on the Mods page</button></div>`,
+    running: `<div class="notice run"><span>The game is running since 21:04. This profile can be changed once it closes.</span></div>`,
+  }[state];
+  return `
+    <div class="head">
+      ${art(profile.game, 'cover')}
+      <div class="who">
+        <h1>${esc(profile.name)}</h1>
+        <div class="game">${game.jp} · ${game.en}</div>
+        <div class="chips">${status}<span class="chip">${modeName(profile.mode)}</span>
+          <span class="chip">${count === 1 ? '1 mod' : count + ' mods'}</span><span class="chip">${profile.lang}</span></div>
+        <div class="path mono">${esc(profile.install)}</div>
+      </div>
+      <div class="go">${play}<div class="last">Last played ${profile.last}</div>
+        <div class="last"><button class="link">Duplicate</button> · <button class="link" data-set="dialog=shortcut">Shortcut</button> · <button class="link">More</button></div></div>
+    </div>${notice}
+    <div class="tabs">${['overview', 'mods', 'settings', 'saves', 'advanced'].map(tab => `
+      <button class="${ui.tab === tab ? 'on' : ''}" data-set="tab=${tab}">${tab[0].toUpperCase() + tab.slice(1)}${
+        tab === 'mods' && state === 'link' ? '<span class="count">1</span>' : ''}</button>`).join('')}</div>`;
+}
+
+function overview(profile) {
+  const game = games[profile.game], state = stateOf(profile), enabled = enabledOf(profile);
+  // ok: true passes, false fails, null was not checked.
+  const check = (ok, text, mark) => ok === null
+    ? `<li><span class="muted">–</span><span class="muted">${text}</span></li>`
+    : `<li><span class="${ok ? 'y' : mark || 'n'}">${ok ? '✓' : mark === 'r' ? '●' : '✕'}</span><span>${text}</span></li>`;
+  const missing = state === 'missing';
+  const modeSwitch = state === 'running' ? '<span class="muted">The mode can be switched once the game closes.</span>'
+    : `<button class="link">Switch to ${profile.mode === 'native' ? 'Extended' : 'Compatibility'}…</button>`;
+  return `<div class="grid2">
+    <div class="card"><h3>Game</h3><dl class="kv">
+      <dt>Title</dt><dd>${game.jp}<br><span class="muted">${game.en}</span></dd>
+      <dt>Version</dt><dd>${game.version} <span class="muted mono">· catalog ${game.catalog}</span></dd>
+      <dt>Install</dt><dd class="mono">${esc(profile.install)}<br><button class="link">Open folder</button></dd>
+      <dt>Overlays</dt><dd>${profile.overlays}</dd>
+      <dt>Publisher</dt><dd><button class="link">eukleia.co.jp/eushully ↗</button></dd>
+    </dl></div>
+    <div class="card"><h3>Profile</h3><dl class="kv">
+      <dt>Mode</dt><dd>${modeName(profile.mode)}<br><span class="muted">${modeText(profile.mode)}</span><br>${modeSwitch}</dd>
+      <dt>Language</dt><dd>${profile.lang}</dd>
+      <dt>Display</dt><dd>Windowed, 1280 × 720</dd>
+      <dt>Saves</dt><dd>${profile.saves} saves · last ${profile.last}</dd>
+      <dt>Folder</dt><dd class="mono">%APPDATA%\\OpenMaidEngine\\profiles\\${profile.id}</dd>
+    </dl></div>
+    <div class="card"><h3>Mods, in load order</h3>${enabled.length === 0 ? '<span class="muted">No mods enabled.</span>'
+      : '<ol style="margin:0;padding-left:18px">' + enabled.map(id => `<li>${library[id].name} <span class="muted">${library[id].version}</span></li>`).join('') + '</ol>'}
+      <div style="margin-top:8px"><button class="link" data-set="tab=mods">Manage mods</button></div></div>
+    <div class="card"><h3>Checks</h3><ul class="checks">
+      ${check(!missing, 'The install folder holds ' + game.en)}
+      ${check(missing ? null : true, missing ? 'The catalog was not compared: there is no install' : 'The catalog is the one this profile accepted')}
+      ${check(true, 'The profile folder can be written')}
+      ${check(true, 'Every enabled mod is found, and the mode admits it')}
+      ${check(missing ? null : state !== 'link', missing ? 'The mods were not linked: there is no install' : 'The mods link')}
+      ${check(state !== 'running', state === 'running' ? 'The game is running' : 'No game is running on this profile', 'r')}
+    </ul></div>
+  </div>`;
+}
+
+function mods(profile) {
+  const state = stateOf(profile), rows = rowsOf(profile), enabled = enabledOf(profile);
+  const pair = games[profile.game].clash;
+  const clash = state === 'link';
+  const selected = ui.mod && library[ui.mod] && library[ui.mod].game === profile.game ? ui.mod : (enabled[0] || (rows[0] && rows[0].id));
+  const chipOf = (id, on) => {
+    if (clash && on && pair.includes(id)) return '<span class="chip bad">Conflict</span>';
+    if (!on && library[id].target === 'extended' && profile.mode === 'native') return '<span class="chip warn">Needs Extended</span>';
+    return on ? '<span class="chip ok">Ready</span>' : '<span class="chip">Off</span>';
+  };
+  const row = ({ id, on }) => `
+    <div class="mrow ${on ? '' : 'off'} ${id === selected ? 'sel' : ''}" data-set="mod=${id}">
+      <span class="grip">⠿</span><button class="switch ${on ? 'on' : ''}"></button>
+      <span><span class="mname">${library[id].name}</span> <span class="muted">${library[id].version}</span><br><span class="mid mono">${id}</span></span>
+      ${chipOf(id, on)}</div>`;
+  const needsBase = enabled.find(id => library[id].requires.length);
+  // A mounted base mod loads first, so its row is first.
+  const base = needsBase ? `
+    <div class="mrow engine"><span></span><span class="muted" style="text-align:center">◆</span>
+      <span><span class="mname">${profile.game}-base</span> <span class="muted">1.0.0</span><br><span class="mid">Part of the engine. Mounted because ${library[needsBase].name} requires it.</span></span>
+      <span class="chip">Engine</span></div>` : '';
+  const mod = selected ? library[selected] : null;
+  const detail = mod ? `<div class="card"><h3>${mod.name}</h3>
+      <p style="margin:0 0 9px">${mod.text}</p>
+      <dl class="kv" style="grid-template-columns:70px 1fr">
+        <dt>Id</dt><dd class="mono">${selected}</dd><dt>Version</dt><dd>${mod.version}</dd>
+        <dt>Needs</dt><dd>${mod.target === 'extended' ? 'Extended mode' : 'Works in both modes'}${mod.requires.length ? '; ' + mod.requires.join(', ') : ''}</dd>
+        <dt>Does</dt><dd>${mod.does.join('<br>')}</dd></dl>
+      <div style="margin-top:10px"><button class="link">Read me</button> · <button class="link">Show file</button> · <button class="link">Remove</button></div></div>`
+    : '<div class="card muted">The library holds no package for this game yet.</div>';
+  const lines = [];
+  if (clash) lines.push(['bad', 'Conflict', `${library[pair[1]].name} declares a conflict with ${library[pair[0]].name}. Turn one off.`]);
+  if (base) lines.push(['', 'Note', `the engine's own ${profile.game}-base 1.0.0 is mounted: ${needsBase} requires it`]);
+  if (!clash && enabled.length > 1) lines.push(['', 'Order', `${library[enabled[0]].name} loads before ${library[enabled[1]].name}, as listed.`]);
+  if (!lines.length) lines.push(['', 'Note', enabled.length ? 'No interactions between the enabled mods.' : 'Nothing to link: the game runs unmodded.']);
+  return `
+    <div class="modbar"><button class="btn">Add a mod…</button><button class="btn">Open the library folders</button>
+      <span class="hint">Drag to set the order. A dependency can override it.</span></div>
+    <div class="mods">
+      <div class="mlist">${base}${rows.map(row).join('')
+        || '<div class="mrow engine"><span></span><span></span><span class="muted">No mods in the library for this game.</span><span></span></div>'}</div>
+      ${detail}
+    </div>
+    <div class="card report"><h3>Link report · ${clash ? '1 conflict' : enabled.length + ' linked, no conflicts'}</h3>
+      <ul>${lines.map(([cls, tag, text]) => `<li><span class="tag ${cls}">${tag}</span><span>${text}</span></li>`).join('')}</ul></div>`;
+}
+
+function settings(profile) {
+  return `<div class="form">
+    <h3>Language</h3>
+    <div class="frow"><div>Game and menu language</div><div class="ctl"><span class="input sel">${profile.lang}</span></div></div>
+    <h3>Display</h3>
+    <div class="frow"><div>Start</div><div class="ctl"><span class="radio"><i></i>Fullscreen</span><span class="radio on"><i></i>Windowed</span></div></div>
+    <div class="frow"><div>Window size</div><div class="ctl"><span class="input sel">1280 × 720 (2×)</span></div></div>
+    <h3>Port options</h3>
+    <div class="frow"><div>FPS counter</div><div class="ctl"><button class="switch"></button></div></div>
+    <div class="frow"><div>Page locator<div class="help">Shows where the current page is in the script (F2 in the game).</div></div><div class="ctl"><button class="switch"></button></div></div>
+    <div class="frow" style="border-top:1px solid var(--line)"><div></div><div class="muted">Volumes, message speed and the game's other settings are changed in the game's own options.</div></div>
+  </div>`;
+}
+
+function saves(profile) {
+  return `<div class="form">
+    <h3>The saves of this profile</h3>
+    <div class="frow"><div>Folder</div><div class="ctl"><span class="input mono" style="flex:1">%APPDATA%\\OpenMaidEngine\\profiles\\${profile.id}\\SAVE</span><button class="btn">Open</button></div></div>
+    <div class="frow"><div>Contents</div><div>${profile.saves} saves · last written ${profile.last}</div></div>
+    <h3>Bring saves in</h3>
+    <div class="frow"><div>From another profile<div class="help">Of this game. Its mod records come with the saves.</div></div><div class="ctl"><button class="btn">Copy saves from a profile…</button></div></div>
+    <div class="frow"><div>From the original game<div class="help">Where the original game keeps its saves.</div></div><div class="ctl"><span class="input mono clip">%LOCALAPPDATA%\\Eushully\\${games[profile.game].jp}\\SAVE</span><button class="btn">Copy in</button><button class="btn">Open</button></div></div>
+  </div>`;
+}
+
+function advanced(profile) {
+  return `<div class="form">
+    <h3>Install</h3>
+    <div class="frow"><div>Overlay folders</div><div class="ctl"><span class="input mono">${profile.overlays === 'none' ? '(none)' : 'patch'}</span><button class="btn">Edit…</button></div></div>
+    <div class="frow"><div>BMP files under AGF names</div><div class="ctl"><button class="switch ${profile.overlays === 'none' ? '' : 'on'}"></button></div></div>
+    <h3>Engine</h3>
+    <div class="frow"><div>Renderer</div><div class="ctl"><span class="input sel">GPU</span><span class="muted">The reference renderer is a diagnostic.</span></div></div>
+    <div class="frow"><div>Text drawing</div><div class="ctl"><span class="input sel">Automatic</span></div></div>
+    <div class="frow"><div>When a Lua mod fails</div><div class="ctl"><span class="input sel">Report and continue</span></div></div>
+    <div class="frow"><div>When a mod does not link</div><div class="ctl"><span class="input sel">Do not start</span></div></div>
+    <div class="frow"><div>Start with Direct3D 12<div class="help">Windows. For a crash at startup that an overlay tool causes.</div></div><div class="ctl"><button class="switch"></button></div></div>
+    <h3>Diagnostics</h3>
+    <div class="frow"><div>Logs and reports</div><div class="ctl"><button class="btn">Open the diagnostics folder</button><button class="btn">Copy a summary</button></div></div>
+  </div>`;
+}
+
+function renderMain() {
+  const profile = current();
+  let page = { overview, mods, settings, saves, advanced }[ui.tab](profile);
+  // While the game runs, nothing that writes one of the profile's files can be used.
+  if (stateOf(profile) === 'running' && ui.tab !== 'overview') page = `<div style="opacity:.5;pointer-events:none">${page}</div>`;
+  document.getElementById('main').innerHTML = header(profile) + `<div class="content">${page}</div>`;
+}
+
+function shortcutDialog(profile) {
+  const folder = 'C:\\Games\\OME', home = 'C:\\Users\\you\\AppData\\Roaming\\OpenMaidEngine';
+  const forms = {
+    launcher: { target: folder + '\\OME-Launcher.exe', args: `--launch ${profile.id}` },
+    engine: { target: folder + '\\OME.exe', args: `-- --data-root "${home}\\profiles\\${profile.id}"` },
+  };
+  const form = forms[ui.form];
+  const choice = (key, title, text) => `
+    <div class="opt pick" data-set="form=${key}"><span class="radio ${ui.form === key ? 'on' : ''}"><i></i></span>
+      <div><b>${title}</b><div class="muted">${text}</div></div></div>`;
+  const field = (label, value) => `
+    <div class="frow narrow"><div>${label}</div><div class="ctl"><span class="input mono clip">${esc(value)}</span><button class="btn">Copy</button></div></div>`;
+  return `<div class="scrim"><div class="wizard"><h2>Shortcut</h2>
+    <div class="muted" style="margin-bottom:10px">The command that starts “${esc(profile.name)}” without this window.</div>
+    ${choice('launcher', 'Through the launcher <span class="muted" style="font-weight:400">(recommended)</span>',
+             'Runs the checks first and shows a start that failed. No window opens when all is well.')}
+    ${choice('engine', 'The engine directly', 'Needs no launcher, and runs no check. Its log is not kept with the profile.')}
+    <div style="margin-top:10px">${field('Target', form.target)}${field('Arguments', form.args)}${field('Start in', folder)}
+      ${field('Whole command', `"${form.target}" ${form.args}`)}</div>
+    <div class="actions"><button class="btn" data-set="dialog=">Close</button><button class="btn primary">Create a shortcut…</button></div>
+  </div></div>`;
+}
+
+function renderWizard() {
+  const overlay = document.getElementById('overlay');
+  if (ui.wizard !== '1') { overlay.innerHTML = ui.dialog === 'shortcut' ? shortcutDialog(current()) : ''; return; }
+  const game = games.kamidori;
+  const steps = `<div class="steps"><span class="${ui.step === '1' ? 'on' : ''}">1 · Game</span><span class="${ui.step === '2' ? 'on' : ''}">2 · Profile</span></div>`;
+  const one = `
+    <div class="drop">Drop the game's folder here, or <button class="btn">Browse…</button></div>
+    <div class="found">
+      <div>${art('kamidori', 'banner')}</div>
+      <div><b>${game.jp}</b><br><span class="muted">${game.en} · version ${game.version} · supported</span><br>
+        <span class="mono muted">D:\\Games\\Kamidori_Translated · catalog ${game.catalog}</span></div>
+    </div>
+    <div class="card"><h3>Found in this folder</h3>
+      <div class="opt"><button class="switch on"></button><div>Use the folder <span class="mono">patch</span> as an overlay<div class="muted">1,204 loose files under names the game's catalog lists.</div></div></div>
+      <div class="opt"><button class="switch on"></button><div>Allow BMP files under AGF names<div class="muted">37 of those files are BMP images.</div></div></div>
+    </div>
+    <div class="actions"><button class="btn" data-set="wizard=0">Cancel</button><button class="btn primary" data-set="step=2">Next</button></div>`;
+  const two = `
+    <div class="frow" style="border-top:0"><div>Name</div><div class="ctl"><span class="input" style="flex:1">Kamidori Alchemy Meister</span></div></div>
+    <div class="frow"><div>Mode</div><div>
+      <div class="opt"><span class="radio on"><i></i></span><div><b>Compatibility</b><div class="muted">Admits mods marked native that ship no Lua. You can switch later.</div></div></div>
+      <div class="opt"><span class="radio"><i></i></span><div><b>Extended</b><div class="muted">Admits every mod, Lua mods included.</div></div></div></div></div>
+    <div class="frow"><div>Start from</div><div>
+      <div class="opt"><span class="radio on"><i></i></span><div>Nothing</div></div>
+      <div class="opt"><span class="radio"><i></i></span><div>A copy of another profile of this game <span class="muted">(with or without its saves)</span></div></div>
+      <div class="opt"><span class="radio"><i></i></span><div>The data the engine already has for this game <span class="muted">(14 saves, 2 mods)</span></div></div>
+      <div class="opt"><span class="radio"><i></i></span><div>The original game's saves</div></div></div></div>
+    <div class="frow"><div><button class="link">Advanced ▸</button></div><div class="muted">Profile location, mod folders</div></div>
+    <div class="actions"><button class="btn" data-set="step=1">Back</button><button class="btn primary" data-set="wizard=0">Create profile</button></div>`;
+  overlay.innerHTML = `<div class="scrim"><div class="wizard"><h2>New profile</h2>${steps}${ui.step === '1' ? one : two}</div></div>`;
+}
+
+function render() {
+  document.body.classList.toggle('dark', ui.theme === 'dark');
+  for (const seg of document.querySelectorAll('.seg'))
+    for (const button of seg.querySelectorAll('button')) button.classList.toggle('on', ui[seg.dataset.key] === button.dataset.v);
+  renderList(); renderMain(); renderWizard();
+}
+
+document.addEventListener('click', event => {
+  const seg = event.target.closest('.seg button');
+  if (seg) {
+    ui[seg.parentElement.dataset.key] = seg.dataset.v;
+    ui.dialog = '';
+    if (seg.parentElement.dataset.key === 'wizard') ui.step = '1';
+    render();
+    return;
+  }
+  const toggle = event.target.closest('.switch');
+  if (toggle) { toggle.classList.toggle('on'); event.stopPropagation(); return; }
+  const target = event.target.closest('[data-set]');
+  if (!target) return;
+  const [key, value] = target.dataset.set.split('=');
+  ui[key] = value;
+  if (key === 'wizard') { ui.step = '1'; ui.dialog = ''; }
+  if (key === 'profile') ui.mod = null;
+  render();
+});
+render();
+</script>
+</body>
+</html>
