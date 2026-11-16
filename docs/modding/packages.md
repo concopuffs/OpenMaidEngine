@@ -235,6 +235,28 @@ project's `tools/base_mod_build.py`; a mod has no reason to carry `layout/`, and
 its own game's `[game]` and `[lua] capabilities = ["vm"]`. How a Lua mod reads and writes names through a base mod
 is in [lua.md](lua.md), "Game names".
 
+## Installing through the launcher
+
+The launcher keeps a library in its home, shared by the profiles: `mods/<game>/` for each game, and `mods/common/`
+for packages with no `[game]` table. A profile it makes reads both, through its `[mods]` table
+([cli.md](cli.md), "Installing mods in the port"). On a profile's Mods tab, "Add a mod" takes an `.omp` file or a
+folder and copies it into the library:
+
+- **Where it goes:** `mods/<game>/` by the manifest's `[game] profile`, else `mods/common/`.
+- **Its name there:** the package's id, as `<id>.omp` or a folder `<id>`. The name you ship it under does not
+  matter.
+- **What is checked first:** the manifest, with the engine's reader. A package that does not read is refused with
+  the reader's reason, and nothing is copied.
+- **A second copy of an id:** when the library already holds the id, the launcher asks before it replaces that
+  copy.
+- **Adding enables nothing.** The switch on the package's row enables it, with the hard dependencies the library
+  holds, each before what needs it. A base mod is never listed: it joins when an enabled package requires it. In a
+  Compatibility profile, switching on a package that needs Extended mode asks to switch the profile to Extended
+  first.
+- **Removing** deletes the copy from the library, after naming the profiles that enable it or hold its selector.
+  Its selector stays reserved, so saves made inside its scripts still load if it comes back. Once the package is
+  gone, its row's "Release" frees the selector.
+
 ## Limits
 
 Packages are treated as untrusted input:
