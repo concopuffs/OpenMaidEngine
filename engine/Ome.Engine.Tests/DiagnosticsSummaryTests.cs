@@ -1,9 +1,13 @@
 using Ome.Launcher.Core;
 using Ome.Mods.Launch;
+using Ome.Mods.Linking;
+using Ome.Mods.Localization;
+using Ome.Mods.Manifest;
+using Ome.Mods.Packages;
 
 /// <summary>
-/// The Advanced page's diagnostics summary (launcher spec §8.4, plan §6.8): what it holds of the profile, its checks
-/// and its log's end, and that its paths name only the profile's and the install's roots, with OME home and the
+/// The Advanced page's diagnostics summary (launcher spec §8.4, plan §6.8): what it holds of the profile, its checks,
+/// its packages and link report (plan §10, item 8) and its log's end, and that its paths name only the profile's and the install's roots, with OME home and the
 /// player's home folder written by name.
 /// </summary>
 public sealed class DiagnosticsSummaryTests : IDisposable
@@ -98,11 +102,73 @@ public sealed class DiagnosticsSummaryTests : IDisposable
     }
 
     [Fact]
+    public void TheSummaryListsEachPackageWithWhatItDoesAndTheLinkReport()
+    {
+        ProfileEntry profile = Profile();
+        string mods = Path.Combine(_home.Root, "mods", "kamidori");
+        string folder = Path.Combine(mods, "example.alpha");
+        Assert.True(SemanticVersion.TryParse("1.2.0", out SemanticVersion version));
+        Assert.True(VersionRange.TryParse(">=1.0", out VersionRange range, out _));
+        List<string> assets = Enumerable.Range(0, DiagnosticsSummary.NamesShown + 5).Select(n => $"A{n:D3}.AGF").ToList();
+        var manifest = new ModManifest
+        {
+            Id = "example.alpha", Name = "Alpha", Version = version, Target = ModManifest.ExtendedTarget,
+            ScriptNames = ["SALPHA"], AssetNames = assets, Languages = [new LanguageSettings("en")],
+            Lua = new ModLuaSettings(1, [], [], []),
+        };
+        var alpha = new PackageIndexEntry(folder, "example.alpha", version, "kamidori", ModManifest.ExtendedTarget,
+                                          [new ModRequirement("kamidori-base", range)], true, manifest);
+        var library = new LibraryView(
+            [
+                new LibraryPackage("example.alpha", alpha, true, true, PackageState.NeedsExtended,
+                                   ["Compatibility mode refuses it: it targets extended"], []),
+                new LibraryPackage("example.bravo", null, false, true, PackageState.Missing, ["no folder holds it"], []),
+            ],
+            [new PackageIndexNote("broken.omp", $"{Path.Combine(mods, "broken.omp")} does not read")]);
+        var report = new ModLinkReport();
+        report.Add(ModReportClass.Note, "example.alpha", "TITLE.BIN", $"compiled {Path.Combine(folder, "patches", "a.oms")}");
+        report.Add(ModReportClass.HardConflict, ["example.alpha", "example.charlie"], "SC0001.BIN", "both replace it");
+        var checks = new ProfileCheckResult([], new InstallRecognition(_install, InstallKind.Supported, null, Fingerprint: Recorded),
+                                            library, new LinkCheck("", new ModLinkReport(), report, [], [], []));
+        string summary = DiagnosticsSummary.Build(profile, checks, "dev", _home, _user);
+
+        // Each package, as its "What it does" card says of it, with the folder written from OME home.
+        Assert.Contains("Packages (the profile's order, then those it does not list):\n", summary);
+        Assert.Contains("  example.alpha 1.2.0 \"Alpha\" - on, NeedsExtended\n", summary);
+        Assert.Contains($"    at {Path.Combine("<OME home>", "mods", "kamidori", "example.alpha")}\n", summary);
+        Assert.Contains("    target extended; requires kamidori-base >=1.0\n", summary);
+        Assert.Contains("    supplies the scripts SALPHA\n", summary);
+        Assert.Contains("    supplies the assets " + string.Join(", ", assets.Take(DiagnosticsSummary.NamesShown))
+                        + $", ... ({assets.Count} in all)\n", summary);
+        Assert.Contains("    defines the languages en\n", summary);
+        Assert.Contains("    runs Lua\n", summary);
+        Assert.Contains("    reason: Compatibility mode refuses it: it targets extended\n", summary);
+        Assert.Contains("  example.bravo - off, Missing\n    reason: no folder holds it\n", summary);
+        Assert.Contains($"  not read: broken.omp: {Path.Combine("<OME home>", "mods", "kamidori", "broken.omp")} does not read\n",
+                        summary);
+
+        // The link report in mod-link.txt's form: its classes from errors down, paths written from their roots.
+        Assert.Contains("Link report (the checks' link, as diagnostics/mod-link.txt holds a start's):\n  load order: (no mods)\n",
+                        summary);
+        int conflict = summary.IndexOf("  conflict: [example.alpha, example.charlie] SC0001.BIN: both replace it\n",
+                                       StringComparison.Ordinal);
+        int note = summary.IndexOf("  note: [example.alpha] TITLE.BIN: compiled "
+                                   + Path.Combine("<OME home>", "mods", "kamidori", "example.alpha", "patches", "a.oms") + "\n",
+                                   StringComparison.Ordinal);
+        Assert.True(conflict >= 0 && note > conflict, summary);
+        Assert.True(summary.IndexOf("Packages (", StringComparison.Ordinal) < conflict
+                    && note < summary.IndexOf("engine.log", StringComparison.Ordinal), summary);
+        Assert.DoesNotContain(_user + Path.DirectorySeparatorChar, summary);
+    }
+
+    [Fact]
     public void AProfileThatHasNotRunSaysSo()
     {
         ProfileEntry profile = Profile();
         string summary = DiagnosticsSummary.Build(profile, null, "dev", _home, _user);
         Assert.Contains("Checks: not run", summary);
+        Assert.Contains("Packages: not listed (the checks have not run on a usable profile)", summary);
+        Assert.Contains("Link report: none (the link did not run; the checks say why)", summary);
         Assert.Contains("engine.log: none yet", summary);
         Assert.Null(DiagnosticsSummary.LogTail(profile.Root));
     }

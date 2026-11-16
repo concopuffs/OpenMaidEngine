@@ -305,7 +305,7 @@
   "advanced.logs": "ログとレポート",
   "advanced.open-diagnostics": "診断フォルダーを開く",
   "advanced.copy-summary": "概要をコピー",
-  "advanced.summary-help": "プロファイル、チェック結果、ゲームのログの末尾です。報告に使えます。アカウントのフォルダーは ~ と書かれます。",
+  "advanced.summary-help": "プロファイル、チェック結果、各 MOD とその内容、リンクレポート、ゲームのログの末尾です。報告に使えます。アカウントのフォルダーは ~ と書かれます。",
   "advanced.summary-copied": "概要をクリップボードにコピーしました。",
   "advanced.write-failed": "変更は保存されませんでした。",
   "advanced.locked": "ゲームを閉じるとこの設定を変更できます。",

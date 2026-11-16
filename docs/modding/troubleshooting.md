@@ -8,6 +8,12 @@ Ome.Cli omp check --mod path\to\my.mod [--mod other …]
 
 In the port, the last report is `diagnostics/mod-link.txt` in the profile root ([cli.md](cli.md)).
 
+When a player reports a problem, ask for the launcher's summary: on the profile's Advanced tab, "Copy a summary" puts
+it on the clipboard. It holds the profile's game, install and mode, its checks, the mod order as the profile lists it
+and as it resolves, each package with its version, state, target, requirements and what it supplies, the whole link
+report as `mod-link.txt` has it, and the end of the game's log. Folders are written by name (`<profile>`,
+`<install>`, `<OME home>`, and `~` for the account's), so the player can paste it as it is.
+
 ## Reading the link report
 
 Each line starts with its class and the mods involved:

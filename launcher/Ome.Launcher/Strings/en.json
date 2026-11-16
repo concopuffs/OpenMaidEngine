@@ -305,7 +305,7 @@
   "advanced.logs": "Logs and reports",
   "advanced.open-diagnostics": "Open the diagnostics folder",
   "advanced.copy-summary": "Copy a summary",
-  "advanced.summary-help": "The profile, its checks and the end of the game's log, for a report. Your account's folder is written as ~.",
+  "advanced.summary-help": "The profile, its checks, its mods with what each does, the link report and the end of the game's log, for a report. Your account's folder is written as ~.",
   "advanced.summary-copied": "The summary is on the clipboard.",
   "advanced.write-failed": "The change was not saved.",
   "advanced.locked": "These settings can be changed once the game closes.",

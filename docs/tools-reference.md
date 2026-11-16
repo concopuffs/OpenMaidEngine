@@ -1145,7 +1145,7 @@ windowed start, the window size, the FPS counter and the page locator, each writ
 the original game keeps them, the saves it would replace asked first) and the Advanced tab (the overlays, chosen from
 the install's folders of files the catalog names, and the BMP switch; the renderer, text drawing, the Lua error policy,
 what a failed link does and Direct3D 12, each written to `profile.toml` at once; the diagnostics folder, and a summary
-of the profile, its checks and the log's end copied for a report, with the account's folder written as `~`). Each
+of the profile, its checks, each package the Mods tab lists with what it does (names past 20 counted), the link report in `mod-link.txt`'s form and the log's end copied for a report, with the profile's, the install's and OME home's folders written by name and the account's folder as `~`). Each
 change is followed by a check run that links the mod stack again, which a large package makes take seconds; until it
 ends, the page shows what it is working on under the tabs, and the Mods tab's changes wait. "New
 profile" opens the wizard: the install (browsed, dropped on the window, or one a profile already uses) with its

@@ -419,6 +419,12 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   `NumberFormat = Lua` and formats `print`'s numbers the same way (`LuaModSession.Show`), drops `LuaSource.Prepare`
   once its test passes raw, passes the conformance run of plan §5 again, and `modding/lua.md` and
   `modding/troubleshooting.md` describe numbers as the new build writes them.
+- **The link report repeats a patch's replaced-region notes.** On Kamidori with `example.kamidori-title-hover`
+  enabled, the report holds each `TITLE.BIN: the region replaced at 0x182 removes local-call site 0x18x; its T3 slot
+  N now points at the replacement` note twice, with the same slot both times (the engine's `diagnostics/mod-link.txt`
+  and the launcher's check, 2026-11-16). `OmsPatchApplier` adds the note once for each base table entry, so the
+  patch's notes are gathered twice in one link rather than the table holding the sites twice. Done when a link
+  reports each note once, with a test of a patch that replaces a call site.
 
 ## Localization
 

@@ -3,20 +3,27 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Ome.Mods.Launch;
 using Ome.Mods.Linking;
+using Ome.Mods.Manifest;
+using Ome.Mods.Packages;
 
 namespace Ome.Launcher.Core;
 
 /// <summary>
 /// The text the Advanced page's "Copy a summary" puts on the clipboard (launcher spec §8.4, plan §6.8), for a player to
 /// paste into a report: the launcher's version, the system, the profile's game, install, mode, mods and startup
-/// options, its checks, and the end of <c>diagnostics/engine.log</c>. It reads nothing beyond the profile and its
-/// install. Paths are written from known roots: the profile's as <c>&lt;profile&gt;</c>, the install's as
+/// options, its checks, each package the Mods page lists with what it does, the link report, and the end of
+/// <c>diagnostics/engine.log</c> (the packages and the report: launcher plan §10, item 8). It reads nothing beyond the
+/// profile, its install and the checks' result. Paths are written from known roots: the profile's as <c>&lt;profile&gt;</c>, the install's as
 /// <c>&lt;install&gt;</c>, OME home's as <c>&lt;OME home&gt;</c>, and the player's home folder as <c>~</c>, so the
 /// summary does not carry the account name; the two roots are given once at the top with the home folder as <c>~</c>.
 /// It is in English, as the engine's own reports are, and is made only when the player asks (spec §12).
 /// </summary>
 public static class DiagnosticsSummary
 {
+    /// <summary>The most script or asset names written for a package; a longer list gives its first names and how many
+    /// it holds (a translation's assets run to hundreds).</summary>
+    public const int NamesShown = 20;
+
     /// <summary>The summary of <paramref name="profile"/> with its <paramref name="checks"/> (none when they have not
     /// run). <paramref name="userHome"/> is the player's home folder; the system's when null.</summary>
     public static string Build(ProfileEntry profile, ProfileCheckResult? checks, string launcherVersion, OmeHome home,
@@ -105,6 +112,11 @@ public static class DiagnosticsSummary
         }
 
         Line();
+        Packages(checks?.Library, Line, Masked);
+        Line();
+        LinkReport(checks?.Link, Line, Masked);
+
+        Line();
         IReadOnlyList<string>? tail = LogTail(profile.Root);
         if (tail == null)
         {
@@ -116,6 +128,67 @@ public static class DiagnosticsSummary
             foreach (string line in tail) Line("  " + Masked(line));
         }
         return text.ToString();
+    }
+
+    /// <summary>Each package the Mods page lists, in the profile's order: its version, name, state and folder, and what
+    /// its "What it does" card says of it but the link report's lines, which the next section holds.</summary>
+    private static void Packages(LibraryView? library, Action<string> line, Func<string, string> masked)
+    {
+        if (library == null)
+        {
+            line("Packages: not listed (the checks have not run on a usable profile)");
+            return;
+        }
+        line(library.Packages.Count == 0
+            ? "Packages: none for this game in the profile's folders"
+            : "Packages (the profile's order, then those it does not list):");
+        foreach (LibraryPackage package in library.Packages)
+        {
+            PackageIndexEntry? entry = package.Entry;
+            string state = package.State is PackageState.Off or PackageState.Enabled ? "" : ", " + package.State;
+            line($"  {package.Id}" + (entry == null ? "" : $" {entry.Version} \"{entry.Manifest.Name}\"")
+                 + $" - {(package.Enabled ? "on" : "off")}{state}");
+            if (entry != null)
+            {
+                ModManifest manifest = entry.Manifest;
+                line($"    at {masked(entry.Path)}");
+                line($"    target {entry.Target ?? ModManifest.NativeTarget}"
+                     + (entry.Requires.Count == 0
+                         ? ""
+                         : "; requires " + string.Join(", ", entry.Requires.Select(requirement =>
+                               $"{requirement.Id} {requirement.Version.Text}"))));
+                if (manifest.ScriptNames.Count > 0) line("    supplies the scripts " + Names(manifest.ScriptNames));
+                if (manifest.AssetNames.Count > 0) line("    supplies the assets " + Names(manifest.AssetNames));
+                if (manifest.Languages.Count > 0)
+                    line("    defines the languages " + string.Join(", ", manifest.Languages.Select(language => language.Tag)));
+                if (manifest.Lua != null) line("    runs Lua");
+            }
+            foreach (string reason in package.Reasons) line($"    reason: {masked(reason)}");
+            foreach (string problem in package.Problems) line($"    problem: {masked(problem)}");
+        }
+        foreach (PackageIndexNote note in library.Notes) line($"  not read: {masked(note.Name)}: {masked(note.Message)}");
+    }
+
+    /// <summary>Up to <see cref="NamesShown"/> names, then how many the list holds.</summary>
+    private static string Names(IReadOnlyList<string> names)
+        => names.Count <= NamesShown
+            ? string.Join(", ", names)
+            : string.Join(", ", names.Take(NamesShown)) + $", ... ({names.Count} in all)";
+
+    /// <summary>The checks' link report in <c>diagnostics/mod-link.txt</c>'s form (<see cref="ModLinkReport.Render"/>):
+    /// the load order, each line by class, and the Lua section. A stack that did not link has only its discovery's.</summary>
+    private static void LinkReport(LinkCheck? link, Action<string> line, Func<string, string> masked)
+    {
+        if (link == null)
+        {
+            line("Link report: none (the link did not run; the checks say why)");
+            return;
+        }
+        line(link.Report != null
+            ? "Link report (the checks' link, as diagnostics/mod-link.txt holds a start's):"
+            : "Link report (the packages' discovery only: the stack did not link):");
+        foreach (string text in (link.Report ?? link.Discovery).Render().Split('\n'))
+            if (text.TrimEnd('\r') is { Length: > 0 } trimmed) line("  " + masked(trimmed));
     }
 
     /// <summary>The last <see cref="EngineLaunch.TailLines"/> lines of the profile's <c>diagnostics/engine.log</c>, or
