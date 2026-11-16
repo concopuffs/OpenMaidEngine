@@ -75,6 +75,15 @@ public sealed class MainViewModel : ViewModel, IDisposable
 
     public LauncherSession Session { get; }
 
+    /// <summary>Whether the Mods page's "What it does" card is open: null until the player opens or closes one, so a
+    /// long list starts closed (<see cref="ModsViewModel.DoesOpenLines"/>); the player's choice after that, for every
+    /// package and profile until the window closes (launcher plan §10, item 7). A page is made anew for each profile,
+    /// so the window keeps it.</summary>
+    public bool? ModsDoesOpen { get; set; }
+
+    /// <summary>Whether the Mods page's link report is open: open until the player closes it, for the window's run.</summary>
+    public bool ModsReportOpen { get; set; } = true;
+
     /// <summary>The window and the desktop, as the view models need them; null until the window shows.</summary>
     public IWindowHost? Host { get; set; }
 

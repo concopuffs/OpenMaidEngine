@@ -164,6 +164,8 @@
   "mods.authors": "Authors",
   "mods.needs": "Needs",
   "mods.does-title": "What {0} does",
+  "mods.does-title-closed": "What {0} does · {1} lines",
+  "mods.does-title-closed-one": "What {0} does · 1 line",
   "mods.needs-extended": "Extended mode",
   "mods.needs-both": "Works in both modes",
   "mods.supplies-scripts": "Supplies the scripts {0}",

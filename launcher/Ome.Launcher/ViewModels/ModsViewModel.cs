@@ -117,6 +117,18 @@ public sealed class ModsViewModel : ViewModel
             _showAdvanced = !_showAdvanced;
             Changed(nameof(ShowAdvanced));
         });
+        ToggleDoes = new Command(() =>
+        {
+            _page.Main.ModsDoesOpen = !DoesOpen;
+            Changed(nameof(DoesOpen));
+            Changed(nameof(DoesHeading));
+        });
+        ToggleReport = new Command(() =>
+        {
+            _page.Main.ModsReportOpen = !ReportOpen;
+            Changed(nameof(ReportOpen));
+            Changed(nameof(ReportHeading));
+        });
     }
 
     public LauncherStrings S => _page.S;
@@ -330,6 +342,29 @@ public sealed class ModsViewModel : ViewModel
     /// <summary>The heading of the card that lists <see cref="DetailDoes"/>, under the list (plan §10, item 3).</summary>
     public string DoesTitle => S.Format("mods.does-title", DetailName);
 
+    // ---- the cards that open and close (launcher plan §10, item 7) ----
+
+    /// <summary>The longest "What it does" list that opens by itself. A longer one (a translation's notes, one for each
+    /// text file with entries that match nothing) starts closed, so the link report stays near the list.</summary>
+    public const int DoesOpenLines = 8;
+
+    /// <summary>Whether the "What it does" card shows its list: the player's choice, else whether the list is short.</summary>
+    public bool DoesOpen => _page.Main.ModsDoesOpen ?? DetailDoes.Count <= DoesOpenLines;
+
+    /// <summary>The card's heading, which opens and closes it: a closed one says how many lines it holds.</summary>
+    public string DoesHeading => DoesOpen
+        ? DoesTitle + " ▾"
+        : (DetailDoes.Count == 1
+              ? S.Format("mods.does-title-closed-one", DetailName)
+              : S.Format("mods.does-title-closed", DetailName, DetailDoes.Count)) + " ▸";
+
+    public Command ToggleDoes { get; }
+
+    /// <summary>Whether the link report shows its lines; its heading keeps the summary either way.</summary>
+    public bool ReportOpen => _page.Main.ModsReportOpen;
+    public string ReportHeading => ReportTitle + (ReportOpen ? " ▾" : " ▸");
+    public Command ToggleReport { get; }
+
     public string? Readme
     {
         get => _readme;
@@ -354,7 +389,8 @@ public sealed class ModsViewModel : ViewModel
                  {
                      nameof(DetailName), nameof(DetailDescription), nameof(HasDetailDescription), nameof(DetailId),
                      nameof(DetailVersion), nameof(DetailAuthors), nameof(HasDetailAuthors), nameof(DetailNeeds),
-                     nameof(DetailDoes), nameof(HasDetailDoes), nameof(DoesTitle), nameof(Readme), nameof(HasReadme), nameof(ShowReadmeLink),
+                     nameof(DetailDoes), nameof(HasDetailDoes), nameof(DoesTitle), nameof(DoesOpen), nameof(DoesHeading),
+                     nameof(Readme), nameof(HasReadme), nameof(ShowReadmeLink),
                  })
             Changed(name);
         ShowReadme.Refresh();

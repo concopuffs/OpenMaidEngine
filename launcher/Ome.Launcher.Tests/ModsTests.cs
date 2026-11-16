@@ -101,6 +101,65 @@ public sealed class ModsTests : IDisposable
     });
 
     [Fact]
+    public void WhatItDoesAndTheLinkReportOpenAndCloseFromTheirHeadings() => Headless.Run(async () =>
+    {
+        _home.Package("kamidori", "test.short");
+        // A long list: one note for each file outside the package layout, as a translation has one for each text file
+        // with entries that match nothing (plan §10, item 7).
+        string noisy = _home.Package("kamidori", "test.noisy");
+        for (int at = 0; at <= ModsViewModel.DoesOpenLines; at++)
+            File.WriteAllText(Path.Combine(noisy, $"stray-{at}.dat"), "");
+        Enable("test.short", "test.noisy");
+        _home.Profile("kamidori-other", "kamidori", _install, "Kamidori (other)");
+        var (model, _) = await Open();
+        using (model)
+        {
+            ModsViewModel mods = model.Page!.Mods;
+            mods.Select("test.noisy");
+            Assert.True(mods.DetailDoes.Count > ModsViewModel.DoesOpenLines, string.Join("\n", mods.DetailDoes));
+            Assert.False(mods.DoesOpen);
+            Assert.Equal($"What test.noisy does · {mods.DetailDoes.Count} lines ▸", mods.DoesHeading);
+            mods.Select("test.short");
+            Assert.True(mods.DoesOpen);
+            Assert.Equal("What test.short does ▾", mods.DoesHeading);
+            Assert.True(mods.ReportOpen);
+            Assert.Equal(mods.ReportTitle + " ▾", mods.ReportHeading);
+
+            var window = new MainWindow { DataContext = model };
+            Headless.Render(window, ThemeVariant.Light, "10.7-mods-cards-open-light");
+            ModsView view = window.GetVisualDescendants().OfType<ModsView>().Single();
+            Assert.True(view.FindControl<ItemsControl>("DoesList")!.IsVisible);
+            Assert.True(view.FindControl<ItemsControl>("ReportList")!.IsVisible);
+
+            // Closed from their headings: the choice holds for every package.
+            view.FindControl<Button>("DoesHead")!.Command!.Execute(null);
+            view.FindControl<Button>("ReportHead")!.Command!.Execute(null);
+            Assert.False(mods.DoesOpen);
+            Assert.False(mods.ReportOpen);
+            Assert.Equal(mods.ReportTitle + " ▸", mods.ReportHeading);
+            Headless.Render(window, ThemeVariant.Light, "10.7-mods-cards-closed-light");
+            Assert.False(view.FindControl<ItemsControl>("DoesList")!.IsVisible);
+            Assert.False(view.FindControl<ItemsControl>("ReportList")!.IsVisible);
+            mods.Select("test.short");
+            Assert.False(mods.DoesOpen);
+            Assert.Equal("What test.short does · 1 line ▸", mods.DoesHeading);
+
+            // A long list opens when asked, and the choice outlives the page: the window makes one for each profile.
+            mods.Select("test.noisy");
+            mods.ToggleDoes.Execute(null);
+            Assert.True(mods.DoesOpen);
+            await model.SelectAsync(model.Rows.Single(row => row.Entry.Id == "kamidori-other"));
+            await model.SelectAsync(model.Rows.Single(row => row.Entry.Id == "kamidori"));
+            ModsViewModel again = model.Page!.Mods;
+            Assert.NotSame(mods, again);
+            again.Select("test.noisy");
+            Assert.True(again.DoesOpen);
+            Assert.False(again.ReportOpen);
+            window.Close();
+        }
+    });
+
+    [Fact]
     public void TurningOnEnablesWhatItRequiresAndTurningOffSaysWhatStillNeedsIt() => Headless.Run(async () =>
     {
         _home.Package("kamidori", "test.lib");

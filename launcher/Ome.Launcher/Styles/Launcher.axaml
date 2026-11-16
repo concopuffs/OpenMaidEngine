@@ -125,6 +125,22 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
   </Style>
+  <!-- A card's heading that opens and closes the card (plan §10, item 7): the heading's look, its whole width a target,
+       darkening under the pointer as a link does. -->
+  <Style Selector="Button.card-head">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.card-head:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.card-head:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.card-head:pointerover TextBlock.heading">
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+  </Style>
 
   <!-- .chip and its states. -->
   <Style Selector="Border.chip">

@@ -164,6 +164,8 @@
   "mods.authors": "作者",
   "mods.needs": "必要なもの",
   "mods.does-title": "{0} の内容",
+  "mods.does-title-closed": "{0} の内容 · {1} 行",
+  "mods.does-title-closed-one": "{0} の内容 · 1 行",
   "mods.needs-extended": "拡張モード",
   "mods.needs-both": "どちらのモードでも使えます",
   "mods.supplies-scripts": "スクリプトを提供：{0}",

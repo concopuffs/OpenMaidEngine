@@ -134,11 +134,14 @@
     </Grid>
 
     <!-- What the selected package does (launcher plan §10, item 3): its own card, as wide as the page, since a package
-         with many patch points has many lines, which the 270 px detail column stretched far down. -->
+         with many patch points has many lines, which the 270 px detail column stretched far down. Its heading opens and
+         closes it (item 7); a long list starts closed. -->
     <Border Name="DoesCard" Classes="card" Margin="0,4,0,0" IsVisible="{Binding HasDetailDoes}">
       <StackPanel>
-        <TextBlock Classes="heading card-title" Text="{Binding DoesTitle, Converter={x:Static v:Text.Upper}}" />
-        <ItemsControl ItemsSource="{Binding DetailDoes}">
+        <Button Name="DoesHead" Classes="card-head" Command="{Binding ToggleDoes}">
+          <TextBlock Classes="heading" TextWrapping="Wrap" Text="{Binding DoesHeading, Converter={x:Static v:Text.Upper}}" />
+        </Button>
+        <ItemsControl Name="DoesList" Margin="0,9,0,0" ItemsSource="{Binding DetailDoes}" IsVisible="{Binding DoesOpen}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="x:String">
               <TextBlock TextWrapping="Wrap" Text="{Binding}" Margin="0,3" />
@@ -148,11 +151,14 @@
       </StackPanel>
     </Border>
 
-    <!-- The link report (the mock's .report: an 82px tag column). -->
+    <!-- The link report (the mock's .report: an 82px tag column). Its heading, which keeps the summary, opens and closes
+         it (plan §10, item 7). -->
     <Border Classes="card" Margin="0,4,0,0">
       <StackPanel>
-        <TextBlock Classes="heading card-title" Text="{Binding ReportTitle, Converter={x:Static v:Text.Upper}}" />
-        <ItemsControl ItemsSource="{Binding Report}">
+        <Button Name="ReportHead" Classes="card-head" Command="{Binding ToggleReport}">
+          <TextBlock Classes="heading" TextWrapping="Wrap" Text="{Binding ReportHeading, Converter={x:Static v:Text.Upper}}" />
+        </Button>
+        <ItemsControl Name="ReportList" Margin="0,9,0,0" ItemsSource="{Binding Report}" IsVisible="{Binding ReportOpen}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:ReportLine">
               <Grid ColumnDefinitions="82,*" ColumnSpacing="10" Margin="0,3">

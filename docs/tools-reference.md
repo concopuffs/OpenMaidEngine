@@ -1137,7 +1137,7 @@ The window (launcher plan M3) has the profile list, the header, Play, the Overvi
 (the game, the profile with its mode switch, the mods in load order, the checks, and locating or accepting the
 install) and the Mods tab (the library's packages for the game in the order the stack loads, each with a switch and
 its state; dragging to set the order; the detail with the README; what the selected package does, in a card as wide
-as the page under the list; the link report; adding a package from a folder or an `.omp`, removing one, and releasing a
+as the page under the list; the link report; each of those two cards opening and closing from its heading, a list of more than 8 lines starting closed, the choice kept until the window closes; adding a package from a folder or an `.omp`, removing one, and releasing a
 gone package's selector) and the Settings tab (the language, fullscreen or
 windowed start, the window size, the FPS counter and the page locator, each written to the profile's `OME.INI` or
 `SYS4REG.INI` at once, as the engine writes them; the start mode waits until the install is found) and the Saves tab
