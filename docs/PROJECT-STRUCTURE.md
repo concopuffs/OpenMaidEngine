@@ -344,8 +344,11 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── Ome.Launcher.Core/               the launcher's model (superpowers/specs/2026-11-15-launcher-design.md
     │                                       §8.1, plan §5): OmeHome (where OME home is and its layout),
     │                                       LauncherSettings (launcher.toml), HomePaths (paths relative inside
-    │                                       OME home) and ProfileId; no Avalonia type; net8.0 like the libraries
-    │                                       it references, tested in Ome.Engine.Tests
+    │                                       OME home), ProfileId, ProfileDocuments (the profile.toml writer and
+    │                                       its [launcher] table) and ProfileStore (the profile list; create,
+    │                                       duplicate, rename, delete under the profile's RunLock); no Avalonia
+    │                                       type; net8.0 like the libraries it references, tested in
+    │                                       Ome.Engine.Tests
     │   └── Ome.Scripting.Lua.Spike/         milestone 0 of the Lua design (superpowers/plans/2026-11-14-lua-
     │                                       scripting.md §1): a console program that checks LuaCSharp and
     │                                       MoonSharp against spec §5.1's criteria, one child process per case;
