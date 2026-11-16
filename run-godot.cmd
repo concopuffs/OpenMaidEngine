@@ -2,7 +2,7 @@
 REM Default windowed launch follows SYSTEM4, exposes TITLE's shipped developer menu,
 REM and uses the accepted GPU retained renderer. Performance logging is opt-in again.
 REM -StartupDiagnostics overrides the developer-menu flag for a native-faithful capture.
-REM Pass -Kamidori to select the conventional Kamidori install and profile.
+REM Pass -Kamidori to select the conventional Kamidori install and game.
 REM Add -TranslationPatch for the translated Kamidori_Translated install: its patch\ English overlay and
 REM BMP-under-AGF graphics.
 REM Add -FpsCounter to show live rendered FPS and frame time.

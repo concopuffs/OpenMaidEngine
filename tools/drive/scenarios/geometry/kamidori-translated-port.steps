@@ -5,9 +5,9 @@
 # setting (SAVE.DAT's shared profile, which AGE writes when it quits), and the translated install's INITCONFIG and
 # CHECKCONFIG settle on ＭＳ ゴシック where the clean ones choose メイリオ, so the port starts with the settings native
 # played with and both draw the same face:
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start --sandbox <new name> --seed native:fresh
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox <new name> --seed native:fresh
 #       --mod <imported package> --port-arg=--language --port-arg=en
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori port run
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port run
 #       tools/drive/scenarios/geometry/kamidori-translated-port.steps
 # then compare with run A: tools/text_geometry_compare.py (docs/tools-reference.md).
 

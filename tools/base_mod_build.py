@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Generate each game's base mod layout (Lua scripting spec §9.1): mods/<profile>-base/layout/.
+"""Generate each game's base mod layout (Lua scripting spec §9.1): mods/<game>-base/layout/.
 
 A base mod is the per-game package that names the game's cells for Lua mods. Its layout comes from the repository
 alone, so no game content is read:
 
-  vm-map/globals[-<profile>].toml      every named global: its bank, address, shape, columns and aliases
-  vm-map/patch-points-<profile>.toml   the named patch points, copied so an exported build carries them
-  mods/<profile>-base/manifest.toml    the base mod's version; its major version is the version of its API
+  vm-map/globals[-<game>].toml      every named global: its bank, address, shape, columns and aliases
+  vm-map/patch-points-<game>.toml   the named patch points, copied so an exported build carries them
+  mods/<game>-base/manifest.toml    the base mod's version; its major version is the version of its API
 
-For each profile with a base mod (a hand-written mods/<profile>-base/manifest.toml) it writes:
+For each profile with a base mod (a hand-written mods/<game>-base/manifest.toml) it writes:
 
   layout/globals.json   the layout the engine builds a mod's accessors from (game.g, game.table)
-  layout/points.json    the patch points, in the form of build/games/<profile>/patch-points.json
+  layout/points.json    the patch points, in the form of build/games/<game>/patch-points.json
   layout/exports.txt    the names the base mod exports: its API, checked in, so a review sees a name change
 
 The rename rule (spec §9.1): a name the checked-in exports.txt lists stays exported, as a global's name or as one of

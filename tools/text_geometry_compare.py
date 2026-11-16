@@ -1,7 +1,7 @@
 """Compare where text lands in two runs' screenshots: the localization geometry comparison (gate 12).
 
 Usage:
-  py -3.11 -X utf8 tools/text_geometry_compare.py A_SHOTS B_SHOTS [NAME ...] [--profile ID] [--tolerance PX]
+  py -3.11 -X utf8 tools/text_geometry_compare.py A_SHOTS B_SHOTS [NAME ...] [--game ID] [--tolerance PX]
                                                   [--report OUT.json]
 
 Run A is native AGE on an install translated in place, run B the port on the clean install with the package imported
@@ -88,11 +88,12 @@ def compare(a: dict, b: dict, tolerance: int) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0], allow_abbrev=False)
     parser.add_argument("a", type=Path, help="run A's shots: native AGE on the translated install")
     parser.add_argument("b", type=Path, help="run B's shots: the port on the clean install with the package")
     parser.add_argument("names", nargs="*", help="shot names (default: every geometry-*.png in both)")
-    parser.add_argument("--profile", default="kamidori", choices=sorted(GEOMETRY))
+    parser.add_argument("--game", "--profile", dest="game", default="kamidori", choices=sorted(GEOMETRY),
+                        help="the game whose text geometry to compare (--profile is the same option)")
     parser.add_argument("--tolerance", type=int, default=1, help="pixels a column may differ by (default 1)")
     parser.add_argument("--report", type=Path, help="write every shot's measures and result as JSON")
     args = parser.parse_args(argv)
@@ -102,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     if not names:
         print("text_geometry_compare: no shots to compare", file=sys.stderr)
         return 1
-    geometry = GEOMETRY[args.profile]
+    geometry = GEOMETRY[args.game]
     results, failed = [], 0
     for name in names:
         shot_a, shot_b = args.a / f"{name}.png", args.b / f"{name}.png"

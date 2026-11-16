@@ -19,8 +19,8 @@ pre-scene boundary.
     py -3.11 -u -X utf8 tools/frida/capture_global_writes.py --attach [seconds]   # partial (from now)
 
 --spawn launches AGE.EXE under Frida so hooks are live before instruction 0 (captures TITLE etc.);
---attach hooks the running game (misses everything before attach). Writes build/games/<profile>/global-writes.jsonl
-(raw, ordered) + build/games/<profile>/scene-entry-state.json (last-write-wins GameSession snapshot, loadable via
+--attach hooks the running game (misses everything before attach). Writes build/games/<game>/global-writes.jsonl
+(raw, ordered) + build/games/<game>/scene-entry-state.json (last-write-wins GameSession snapshot, loadable via
 `Ome.Cli ... --state`).
 """
 import json

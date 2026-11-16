@@ -2,10 +2,10 @@
 #
 # A point gives fragments a stable site name: `before site kamidori.experience.after_calculation { ... }`.
 # Each [[point.at]] entry is one revision of the script: the SHA-256 of its bytes as the catalog serves them
-# (`Ome.Cli oms-patch --fingerprint NAME.BIN --profile kamidori`) and the original dword offset of the instruction the
+# (`Ome.Cli oms-patch --fingerprint NAME.BIN --game kamidori`) and the original dword offset of the instruction the
 # point names. The point's description says what holds when control reaches that instruction.
 #
-# Source data. Run `py -3.11 -X utf8 tools/patch_points_build.py --profile kamidori --build` after editing; it
+# Source data. Run `py -3.11 -X utf8 tools/patch_points_build.py --game kamidori --build` after editing; it
 # validates every entry against the installed base and generates build/games/kamidori/patch-points.json and
 # docs/patch-point-reference-kamidori.md.
 

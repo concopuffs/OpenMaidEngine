@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Phase 2 batch extraction: disassembly + text corpora from every SYS4 script.
 
-Outputs live under the selected ``build/games/<profile-id>/`` root: disassembly,
+Outputs live under the selected ``build/games/<game>/`` root: disassembly,
 text/dialogue corpora, and the per-script manifest.
 
 Authoritative copies: a game-dir override shadows its extracted/DATA1 copy. Run:

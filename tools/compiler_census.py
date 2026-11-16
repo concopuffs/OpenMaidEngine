@@ -15,8 +15,8 @@ Sections:
   helpers    local subroutine bodies shared verbatim across scripts (statically linked library)
 
 Usage:
-  py -3.11 -X utf8 tools/compiler_census.py [--profile ID] [--output PATH]
-Output: build/games/<profile>/compiler-census.json (+ a printed summary)
+  py -3.11 -X utf8 tools/compiler_census.py [--game ID] [--output PATH]
+Output: build/games/<game>/compiler-census.json (+ a printed summary)
 """
 from __future__ import annotations
 

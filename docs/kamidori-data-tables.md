@@ -45,7 +45,7 @@ scripts and adds 75 more, all in English ([`asset-resolution-re.md`](asset-resol
 
 ## Tooling workflow
 
-All commands run from `age-reimpl/` with `py -3.11 -X utf8` and `--profile kamidori`
+All commands run from `age-reimpl/` with `py -3.11 -X utf8` and `--game kamidori`
 (details in [`tools-reference.md`](tools-reference.md)):
 
 1. Extract archives once: `bin/BinExtractALF.exe` over `SYS4INI.BIN` and each `APPENDnn.AAI` into
@@ -61,7 +61,7 @@ All commands run from `age-reimpl/` with `py -3.11 -X utf8` and `--profile kamid
 7. `global_map.py` then `globals_build.py --build` → auto shape map merged under `globals-kamidori.toml`.
 8. The registry's `[[table]]` entries (`unit`, `item`, `skill`, `stage_enemy`) group these parallel arrays as
    Open Maid Script tables ([design spec](superpowers/specs/2026-10-06-open-maid-script-design.md) §5.3).
-   `Ome.Cli oms-decompile --profile kamidori --script EBINIT.BIN` then prints one
+   `Ome.Cli oms-decompile --game kamidori --script EBINIT.BIN` then prints one
    `with unit[0x2f9] { .stats.max_hp = 0xc … }` block per unit, and a mod edits a unit the same way
    (`oms/examples/kamidori-gate6/OMSAUTO.oms`).
 

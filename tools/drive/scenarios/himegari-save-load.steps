@@ -1,5 +1,5 @@
 # Save/load round trip on a fresh sandbox, unchanged on both targets (driver smoke test, template for save gates).
-#   py -3.11 -X utf8 tools/drive.py --profile himegari native|port start
+#   py -3.11 -X utf8 tools/drive.py --game himegari native|port start
 #   py -3.11 -X utf8 tools/drive.py native|port run tools/drive/scenarios/himegari-save-load.steps
 #   py -3.11 -X utf8 tools/drive.py native|port stop
 # Locations are native frame positions, which the port reports too: at a text wait the pc is already past the wait

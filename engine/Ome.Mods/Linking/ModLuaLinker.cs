@@ -628,7 +628,7 @@ public static class ModLuaLinker
         if (bases.Count == 0)
         {
             report.Add(ModReportClass.Error, mod.Id, null,
-                "lua.writes names cells of a base mod, and the mod requires none ([[requires]] id = \"<profile>-base\")");
+                "lua.writes names cells of a base mod, and the mod requires none ([[requires]] id = \"<game>-base\")");
             return [];
         }
         var writes = new List<string>();
@@ -675,7 +675,7 @@ public static class ModLuaLinker
         if (layouts.Count == 0)
         {
             Error("a watch on a name resolves through a base mod, and the mod requires none ([[requires]] id = "
-                  + "\"<profile>-base\")");
+                  + "\"<game>-base\")");
             return null;
         }
         LayoutGlobal? found = null;

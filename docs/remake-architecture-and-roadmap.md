@@ -534,7 +534,7 @@ base mod.
 Constraints that keep this compatible with §3.4–3.5:
 
 - **Generate layout and write behaviour by hand.** The per-game global registries
-  (`vm-map/globals.toml`, `vm-map/globals-<profile>.toml`) already hold names, types, shapes and row
+  (`vm-map/globals.toml`, `vm-map/globals-<game>.toml`) already hold names, types, shapes and row
   columns. The base mod's address/layout tables should be generated from them like other derived
   artifacts, not restated by hand. Only behaviour is hand-written.
 - **Keep definitions declarative.** Field mappings, named patch points and selectors stay declarative
@@ -1543,7 +1543,7 @@ the first game did not use.
 **data-table layouts** (each game's `*INIT` differs), assets, and any game-specific effectful behavior.
 The **call-script registry is no longer a per-game long pole** — it's a raw index into that game's
 SYS4INI file table, parsed directly by the runtime catalog (and exported by `parse_sys4ini.py` as
-`build/games/<profile>/callscript-names.json` for tooling); the resolver is generic. So the remaining long pole is really just the **global-var map**. Process: point
+`build/games/<game>/callscript-names.json` for tooling); the resolver is generic. So the remaining long pole is really just the **global-var map**. Process: point
 the toolchain at the new game's archives, re-run extraction, rebuild its global map, author a profile.
 **This is the core payoff of the VM approach:** the *engine* cost amortizes across all AGE games; only
 content-mapping recurs — far less than re-coding each game's logic bespoke.
@@ -1632,9 +1632,9 @@ than leaving it only as roadmap prose.
   ASCII id, display title, supported catalog/script revisions, SYS frontend id, engine-ABI selection (initially
   a resolved `SYS4422` or `SYS4433` snapshot, with ancestry only where evidence supports it), natural boot script,
   game-owned metadata references, and persistence namespace.
-- [x] Define selection precedence: explicit `--profile <id>` is authoritative; OME still compares the selected
+- [x] Define selection precedence: explicit `--game <id>` is authoritative; OME still compares the selected
   root's catalog title/revision with that profile and emits a prominent mismatch diagnostic, but continues with
-  the profile the user requested. Without `--profile`, require a unique auto-detection match; ambiguous or
+  the profile the user requested. Without `--game`, require a unique auto-detection match; ambiguous or
   unknown installs fail before VM or persistence construction and may be reopened in explicit probe mode.
 - [x] Keep `--game-root` as the content-location argument. Profiles must never commit machine-specific install
   paths; a future launcher may discover roots and pass the same `(profile, game-root)` pair.
@@ -1656,7 +1656,7 @@ read-only under the K1 persistence contract.
 - [x] Move the hardcoded Himegari `NativeSaveIdentity`, save-layout versions, numbered-save compatibility id,
   serialized VM-bank dimensions, and related persistence policy behind the selected profile. Prefer values
   decoded from SYS4INI VM metadata/settings where proven; keep only irreducible values in the manifest.
-- [x] Namespace Godot-owned state per game (`user://games/<profile-id>/`) so `SAVE.DAT`, `RT.DAT`,
+- [x] Namespace Godot-owned state per game (`user://games/<game>/`) so `SAVE.DAT`, `RT.DAT`,
   numbered saves, thumbnails, `SYS4REG.INI`, and diagnostics cannot collide across profiles.
 - [x] Determine and validate Kamidori's native save identity and bank dimensions before enabling its writes.
   Until then, Kamidori remains read-only even when its profile is recognized.
@@ -1696,9 +1696,9 @@ This does not claim that the shared 548-entry catalog has already been partition
 ##### Phase K3 — make tools and derived data profile-aware
 
 - [x] Replace mutable module-level Himegari path selection with one shared tool context selected through
-  `--profile`, `--game-root`, and, where needed, an extracted-data override. Preserve convenient Himegari
+  `--game`, `--game-root`, and, where needed, an extracted-data override. Preserve convenient Himegari
   defaults for existing commands without requiring edits to `tools/paths.py`.
-- [x] Split game-derived outputs beneath `build/games/<profile-id>/` (catalog indexes, call-script names,
+- [x] Split game-derived outputs beneath `build/games/<game>/` (catalog indexes, call-script names,
   disassembly/text corpora, global maps, init tables, progression maps, traces, page maps, and coverage).
   Keep engine-wide generated ABI/reference artifacts in their shared location.
 - [x] Teach catalog/corpus coverage to scan scripts through `Sys4AssetStore` directly, including append packs
@@ -1707,7 +1707,7 @@ This does not claim that the shared 548-entry catalog has already been partition
   either profile independently and cannot consume the other game's derived artifacts.
 
 **K3 gate (complete 2026-08-19):** one immutable Python tool context consumes common profile/game/extracted
-selection and places content-derived output under `build/games/<profile-id>/`, while engine ABI artifacts stay
+selection and places content-derived output under `build/games/<game>/`, while engine ABI artifacts stay
 shared. Installed validation can select either game independently. Its corpus gate uses the production catalog,
 `Sys4AssetStore`, and script provider, so archive, append, and loose-override behavior is exercised without an
 extracted tree. In the current installs, Himegari decodes 520 catalog scripts (481 base + 39 append), 1,522,942

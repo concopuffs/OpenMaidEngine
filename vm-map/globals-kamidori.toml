@@ -3,7 +3,7 @@
 # separate from Himegari's vm-map/globals.toml; the schema is identical (the type implies the bank:
 # `string...` entries are string-bank cells, everything else integer cells).
 # Generated artifacts (build/games/kamidori/globals.json, docs/global-reference-kamidori.md) come from
-# this file via `tools/globals_build.py --profile kamidori --build`. Do not edit those.
+# this file via `tools/globals_build.py --game kamidori --build`. Do not edit those.
 # A renamed global keeps its old names in `aliases = ["old_name"]`: tools/base_mod_build.py exports
 # them from mods/kamidori-base/ beside the new name, and refuses a rename that drops an exported name
 # unless the base mod's major version is raised.

@@ -29,7 +29,7 @@ This version supports:
 The design behind this guide is `../superpowers/specs/2026-11-10-lua-scripting-design.md`.
 
 Game-specific values (point names, which local holds what, the events and their fields) are in your game guide,
-`games/<profile>.md`.
+`games/<game>.md`.
 
 ## A first Lua mod
 
@@ -50,18 +50,18 @@ name = "Double EXP"
 version = "1.0.0"
 
 [game]
-profile = "<profile>"
+profile = "<game>"
 target = "extended"
 
 [lua]
 api = 1
 
 [[requires]]
-id = "<profile>-base"
+id = "<game>-base"
 version = ">=1, <2"
 
 [[hooks]]
-event = "<profile>.experience.award"
+event = "<game>.experience.award"
 handler = "double_exp.lua:on_award"
 ```
 
@@ -81,7 +81,7 @@ end
 3. **Get completion** in your editor with `omp lua-stubs --mod my.double-exp --output DIR` ("Editor definitions").
 4. **Pack it** with `omp build my.double-exp`, which writes `my.double-exp-1.0.0.omp` beside the folder.
 
-Your game guide (`games/<profile>.md`) lists its events and their fields, and ships this mod finished.
+Your game guide (`games/<game>.md`) lists its events and their fields, and ships this mod finished.
 
 When no event covers what you need, hook the instruction itself. The same mod as a point hook reads the frame's
 local by number, so it needs `vm` and depends on what your game guide says the local holds ("Point hooks"):
@@ -92,7 +92,7 @@ api = 1
 capabilities = ["vm"]
 
 [[hooks]]
-point = "<profile>.experience.after_calculation"
+point = "<game>.experience.after_calculation"
 handler = "double_exp.lua:on_award"
 ```
 
@@ -277,7 +277,7 @@ The link refuses a script hook on a script the game does not have, and on one an
 
 ## Game names
 
-The engine ships one base mod per game, `<profile>-base`. It exports every global the project has named, with its
+The engine ships one base mod per game, `<game>-base`. It exports every global the project has named, with its
 shape. A mod that requires it reads any of those names, and writes the ones its manifest lists, with no capability:
 
 ```toml
@@ -286,12 +286,12 @@ api = 1
 writes = ["<a scalar global>", "<a table global>"]
 
 [[requires]]
-id = "<profile>-base"
+id = "<game>-base"
 version = ">=1, <2"
 ```
 
 ```lua
-local game = require("<profile>-base")
+local game = require("<game>-base")
 
 local unit = game.g.<scalar global>             -- read a named global
 game.g.<scalar global> = 30                     -- write one the list names
@@ -380,7 +380,7 @@ their handlers in one list by `priority` and then load order; the link report na
 
 ## Game events
 
-A game event is a named occurrence with typed fields: `<profile>.experience.award` is one award of experience, with
+A game event is a named occurrence with typed fields: `<game>.experience.award` is one award of experience, with
 the amount as a field you may change. Your game guide lists the events its base mod declares. A mod subscribes in
 its manifest and requires the mod that declares the event:
 
@@ -389,11 +389,11 @@ its manifest and requires the mod that declares the event:
 api = 1
 
 [[requires]]
-id = "<profile>-base"
+id = "<game>-base"
 version = ">=1, <2"
 
 [[hooks]]
-event = "<profile>.experience.award"
+event = "<game>.experience.award"
 handler = "double_exp.lua:on_award"
 ```
 
@@ -424,7 +424,7 @@ A mod declares events in `events/*.toml`. The base mods declare their game's; a 
 ```toml
 # events/experience.toml
 [[event]]
-name = "<profile>.experience.award"
+name = "<game>.experience.award"
 point = "<a patch point of your game>"
 description = "One experience award, after the multipliers and before it is applied."
 
@@ -461,7 +461,7 @@ type = "int"                           # access defaults to "r"
   field's type matches its cell, and no two mods declare one event (that is a hard conflict naming both). `type` is
   `int`, `float`, `string` or `bool`, and `bool` needs an integer cell.
 - **An event the install cannot raise.** When a point of an event does not bind in this install (its script is
-  another revision, as a translation's can be, or the profile does not name the point), the event is not raised. The
+  another revision, as a translation's can be, or the game does not name the point), the event is not raised. The
   report notes it with the reason, and only a mod that subscribes to it fails to link, so a base mod's other events
   and helpers still work. A mistake in the declaration itself, such as a field that does not resolve, stops the
   declaring mod as before.
@@ -725,8 +725,8 @@ Two mods whose `[lua] writes` lists name one global give an `interaction` line, 
 starts the file anew. Two mods on one award, one dividing the amount and one doubling it, read:
 
 ```json
-{"mod":"mod.gap","handler":"gap.lua:on_award","hook":"<profile>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.041,"result":"ok","fields":[{"name":"amount","before":50,"after":25}]}
-{"mod":"mod.double","handler":"double.lua:on_award","hook":"<profile>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.012,"result":"ok","fields":[{"name":"amount","before":25,"after":50}]}
+{"mod":"mod.gap","handler":"gap.lua:on_award","hook":"<game>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.041,"result":"ok","fields":[{"name":"amount","before":50,"after":25}]}
+{"mod":"mod.double","handler":"double.lua:on_award","hook":"<game>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.012,"result":"ok","fields":[{"name":"amount","before":25,"after":50}]}
 ```
 
 - `hook` is the point, the script, the engine event, the game event or the watch, and for a site hook not at a
@@ -762,7 +762,7 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
   writable;
 - `<base mod id>.lua`: what `require("<base mod id>")` gives, with every scalar's name in `g` and every table's in
   `table(name)`, aliases too, and its helpers with the annotations its `lua/init.lua` gives them. One is written for
-  the profile's base mod even when no mod mounts it.
+  the game's base mod even when no mod mounts it.
 
 Point the editor at the folder in your mod's `.luarc.json`; the command prints the line to add:
 
@@ -776,7 +776,7 @@ Point the editor at the folder in your mod's `.luarc.json`; the command prints t
 Then annotate a handler with its context's class, and the editor completes the fields and checks their types:
 
 ```lua
----@param e <profile>.experience.award
+---@param e <game>.experience.award
 function on_award(e)
   e.amount = e.amount * 2
 end
@@ -830,7 +830,7 @@ lua mod=my.double-exp return some_global
 
 It runs at the next instruction boundary, or inside the wait the game sits in, so it also runs at a text wait.
 Without `mod=` it runs in the console's own environment, which has `maid.vm`, and `maid.names` over the game's base
-mod with no write list (`require("<profile>-base")` gives the same, and works even when no mod mounts the base mod).
+mod with no write list (`require("<game>-base")` gives the same, and works even when no mod mounts the base mod).
 The environment lasts for the session, so a later chunk sees what an earlier one defined. With `mod=ID` it runs in that mod's environment, with its globals: that is
 how to inspect a mod. A chunk cannot call a script. The console works with no Lua mod enabled too: its first use
 starts the Lua runtime.

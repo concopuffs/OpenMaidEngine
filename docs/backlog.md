@@ -163,7 +163,7 @@ it; git history keeps the record.
   differences (`tools-reference.md`).
 - **Sweep for ops that are still stubbed.** An op counts as implemented once the handler table binds its name
   (`VirtualMachine.Implements`), and both games' catalog reports list no unsupported op
-  (`build/games/<profile>/catalog-opcode-coverage.json`). So a handler that only stores its operand, or models one
+  (`build/games/<game>/catalog-opcode-coverage.json`). So a handler that only stores its operand, or models one
   path of several, counts the same as a complete one, and nothing lists the gaps. Known cases:
   - op `0x21b` stores its value, and op `0x247` reads it back, but there is no draw-mode-1 tick render gate
     (`engine-re.md`, "Statement blocks"); both games use `0x21b`;
@@ -309,7 +309,7 @@ still handled on their own. Each change should be behaviour-neutral and pass the
 ## Mod loader and modding
 
 - **Toolchain packaging for exported ports.** Fragments compile against the repository's OMS modules
-  (`oms/<profile>/`), globals and patch points (`build/games/<profile>/`). An exported port without the repository
+  (`oms/<game>/`), globals and patch points (`build/games/<game>/`). An exported port without the repository
   links only mods that need none of them (`tools-reference.md`, port `--mod`). Done when an export carries or
   embeds these files and a fragment mod links in an exported build.
 - **Mod-owned globals.** `global` declarations must pin a cell (`@ address`). The linker-allocated and `saved`
@@ -358,7 +358,7 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   open a game script (`.BIN`) as its `oms-decompile` text. Done when a design spec settles the form (an application,
   an extension or both), its scope and its toolkit, and a first version covers check, build and a port run with the
   authoring flags.
-- **A hook point survey for each game.** Each base mod raises six events: the experience award, `<profile>.data.ready`
+- **A hook point survey for each game.** Each base mod raises six events: the experience award, `<game>.data.ready`
   at boot, and the four stage events around FIELD's walks of the stage chains
   (`superpowers/plans/2026-11-14-lua-scripting.md` §11). The appends register handlers in many more chains, each a
   place Eushully's own extensions hook: Himegari's class change, SCJUMP and information messages; Kamidori's 18 32-slot
@@ -366,7 +366,7 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   stage flags. Done for a game when a session has surveyed its chains and other natural extension points, and the
   base mod raises an event at each that has a use, with its fields named in the registry and a test that it binds on
   every install the game guide lists. Repeat for each game the engine adds.
-- **More base mod helpers.** Each base mod has one helper, `give_item` over ADDITEM (`mods/<profile>-base/lua/`;
+- **More base mod helpers.** Each base mod has one helper, `give_item` over ADDITEM (`mods/<game>-base/lua/`;
   plan §9.3). The check ahead found more wait-free scripts in both games (plan §9.2: 22 of 27 probed in Himegari, 30
   of 44 in Kamidori), most of them battle arithmetic (`CALC*`) or map and unit edits (`SET*`, `DEL*`) that read
   their arguments from cells nobody has named yet. Done for a script when its argument and scratch cells are in the

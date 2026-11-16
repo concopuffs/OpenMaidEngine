@@ -9,7 +9,7 @@ fragment is a file `patches/NAME.oms` in your mod ([packages.md](packages.md)).
 ```text
 oms 1
 patch "SCRIPT.BIN" fingerprint "sha256:<the base script's fingerprint>"
-use <profile>.globals
+use <game>.globals
 
 local int amount @ 0x1                    // name an existing local of the base script
 
@@ -35,7 +35,7 @@ A site names one instruction of the original script. Write it in one of three wa
 |---|---|---|
 | offset | `site 0x877` | The dword offset shown by the page locator, `locate_page.py` and the decompiler. It must be the start of an instruction. |
 | label or sub | `site label_877`, `site adv_wait_page` | `label_<hex>` always names the instruction at that offset, even where the decompiled source prints no label. |
-| named patch point | `site <profile>.area.point_name` | A stable name from the game's patch-point registry. It resolves to the right offset for the installed script revision. |
+| named patch point | `site <game>.area.point_name` | A stable name from the game's patch-point registry. It resolves to the right offset for the installed script revision. |
 
 Named patch points are the most robust choice, because a future revision of the game can move the offset while the
 name stays the same. Each game's identity block lists its points and links its patch-point reference. The

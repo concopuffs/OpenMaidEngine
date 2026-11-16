@@ -96,37 +96,55 @@ public sealed class GameProfileSelectionTests
     public void ExplicitCrossPairContinuesWithRequestedProfileAndRecordsMismatch()
     {
         SelectedGameProfile selected = GameProfileSelection.Resolve(
-            ["--profile", "kamidori"], HimegariIdentity);
+            ["--game", "kamidori"], HimegariIdentity);
 
         Assert.Equal("kamidori", selected.Profile.Id);
         Assert.Equal(GameProfileSelectionSource.Explicit, selected.Source);
         Assert.False(selected.IdentityMatched);
         Assert.False(selected.ProbeMode);
         Assert.True(selected.IsReadOnly);
-        Assert.Contains("requested=kamidori", selected.MismatchDiagnostic);
+        Assert.Equal("catalog/game identity mismatch", selected.ReadOnlyReason);
+        Assert.StartsWith("explicit game mismatch: requested=kamidori", selected.MismatchDiagnostic);
         Assert.Contains("detected=S4IC422 / 姫狩りダンジョンマイスター", selected.MismatchDiagnostic);
+        Assert.EndsWith("continuing with the requested game read-only", selected.MismatchDiagnostic);
     }
 
     [Fact]
-    public void ExplicitProfileUsesLastValueAndMatchesIdsCaseInsensitively()
+    public void ExplicitGameUsesLastValueAndMatchesIdsCaseInsensitively()
     {
         SelectedGameProfile selected = GameProfileSelection.Resolve(
-            ["--profile", "himegari", "--profile", "KAMIDORI"], KamidoriIdentity);
+            ["--game", "himegari", "--game", "KAMIDORI"], KamidoriIdentity);
 
         Assert.Equal("kamidori", selected.Profile.Id);
         Assert.True(selected.IdentityMatched);
         Assert.Equal(GameProfileSelectionSource.Explicit, selected.Source);
     }
 
+    /// <summary>Launcher spec §5.8: <c>--profile</c> is the same option as <c>--game</c>, so the last of either wins.</summary>
+    [Theory]
+    [InlineData(new[] { "--profile", "kamidori" }, "kamidori")]
+    [InlineData(new[] { "--game", "himegari", "--profile", "kamidori" }, "kamidori")]
+    [InlineData(new[] { "--profile", "himegari", "--game", "kamidori" }, "kamidori")]
+    [InlineData(new[] { "--game", "kamidori", "--mod", "x", "--profile", "himegari" }, "himegari")]
+    public void ProfileIsAnAliasOfGameAndTheLastOfEitherWins(string[] arguments, string expected)
+    {
+        Assert.Equal(expected, GameProfileSelection.RequestedGameId(arguments));
+        Assert.Equal(expected, GameProfileSelection.Resolve(arguments, KamidoriIdentity).Profile.Id);
+    }
+
+    [Fact]
+    public void NoGameOptionRequestsNothing()
+        => Assert.Null(GameProfileSelection.RequestedGameId(["--data-root", "x", "--probe"]));
+
     [Fact]
     public void ProbeModeRequiresAnExplicitAbiAndSuppressesWrites()
     {
         var missingProfile = Assert.Throws<ArgumentException>(
             () => GameProfileSelection.Resolve(["--probe"], HimegariIdentity));
-        Assert.Contains("--probe requires --profile <id>", missingProfile.Message);
+        Assert.Contains("--probe requires --game <id>", missingProfile.Message);
 
         SelectedGameProfile selected = GameProfileSelection.Resolve(
-            ["--profile", "himegari", "--probe"], HimegariIdentity);
+            ["--game", "himegari", "--probe"], HimegariIdentity);
         Assert.True(selected.IdentityMatched);
         Assert.True(selected.ProbeMode);
         Assert.True(selected.IsReadOnly);
@@ -139,8 +157,8 @@ public sealed class GameProfileSelectionTests
         var error = Assert.Throws<ArgumentException>(() => GameProfileSelection.Resolve(
             [], new GameCatalogIdentity("S4IC999", "Unknown Game")));
 
-        Assert.Contains("no profile matches S4IC999 / Unknown Game", error.Message);
-        Assert.Contains("--profile <id>", error.Message);
+        Assert.Contains("no game matches S4IC999 / Unknown Game", error.Message);
+        Assert.Contains("pass --game <id> to choose a game explicitly", error.Message);
     }
 
     [Fact]
@@ -154,29 +172,31 @@ public sealed class GameProfileSelectionTests
         var error = Assert.Throws<ArgumentException>(
             () => GameProfileSelection.Resolve([], HimegariIdentity, registry));
 
-        Assert.Contains("multiple profiles match", error.Message);
+        Assert.Contains("multiple games match", error.Message);
         Assert.Contains("first, second", error.Message);
+        Assert.EndsWith("pass --game <id>", error.Message);
     }
 
     [Theory]
-    [InlineData("--profile")]
-    [InlineData("--profile", "--probe")]
-    public void MissingExplicitProfileIdIsRejected(params string[] arguments)
+    [InlineData("--game", "--game")]
+    [InlineData("--game", "--game", "--probe")]
+    [InlineData("--profile", "--profile")]
+    [InlineData("--profile", "--game", "himegari", "--profile")]
+    public void MissingExplicitGameIdIsRejected(string option, params string[] arguments)
     {
         var error = Assert.Throws<ArgumentException>(
             () => GameProfileSelection.Resolve(arguments, HimegariIdentity));
 
-        Assert.Contains("--profile requires a profile id", error.Message);
+        Assert.Equal($"{option} requires a game id", error.Message);
     }
 
     [Fact]
     public void UnknownExplicitProfileIdIsRejectedWithoutChangingTheRequest()
     {
         var error = Assert.Throws<ArgumentException>(() => GameProfileSelection.Resolve(
-            ["--profile", "not-a-profile"], HimegariIdentity));
+            ["--game", "not-a-game"], HimegariIdentity));
 
-        Assert.Contains("unknown profile 'not-a-profile'", error.Message);
-        Assert.Contains("himegari, kamidori", error.Message);
+        Assert.Contains("unknown game 'not-a-game'; available games: himegari, kamidori", error.Message);
     }
 
     [Fact]

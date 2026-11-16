@@ -34,7 +34,7 @@ patterns for strings it builds, and `_global.toml`, holding every literal the sc
 counts the files and templates it wrote. Each entry is a template, with a `source` and no `text`:
 
 ```toml
-# Catalog template written by omp text extract from the <profile> install at …
+# Catalog template written by omp text extract from the <game> install at …
 script = "SC0000"
 
 [[text]]
@@ -57,7 +57,7 @@ text = "――Once, there was a war."
 ```
 
 When the screen alone does not tell you which line is which,
-`py -3.11 -X utf8 tools/locate_page.py SC0000 1 --profile <profile>` prints the page's text and instructions.
+`py -3.11 -X utf8 tools/locate_page.py SC0000 1 --game <game>` prints the page's text and instructions.
 
 - Each sentence is one entry, even when the script draws it in pieces (a word with furigana). Its `source` is the
   pieces joined, without ruby or the script's line breaks (languages.md, "Messages").
@@ -72,12 +72,12 @@ When the screen alone does not tell you which line is which,
 
 ```toml
 omp = 2
-id = "my.<profile>-en"
+id = "my.<game>-en"
 name = "English text"
 version = "0.1.0"
 
 [game]
-profile = "<profile>"
+profile = "<game>"
 target = "native"
 
 [[language]]
@@ -198,7 +198,7 @@ Ome.Cli omp explain NAME.AGF --mod my.lang <game options>
 ```
 
 `explain` shows which version of the asset wins, for example
-`en: language asset from my.<profile>-en (PNG), while en or a language that falls back to it is selected`
+`en: language asset from my.<game>-en (PNG), while en or a language that falls back to it is selected`
 (languages.md, "Images and other assets").
 
 No command yet names the pictures on screen or exports one as PNG (`../backlog.md`). Until one does, the port's
@@ -247,9 +247,9 @@ catalogs stay the source: after an `extract`, export again (languages.md, "Worki
 language:
 
 ```text
-py -3.11 -X utf8 tools/drive.py --profile <profile> port start --mod my.lang --port-arg=--language --port-arg=en
-py -3.11 -X utf8 tools/drive.py --profile <profile> port run my-lang.steps
-py -3.11 -X utf8 tools/drive.py --profile <profile> port stop
+py -3.11 -X utf8 tools/drive.py --game <game> port start --mod my.lang --port-arg=--language --port-arg=en
+py -3.11 -X utf8 tools/drive.py --game <game> port run my-lang.steps
+py -3.11 -X utf8 tools/drive.py --game <game> port stop
 ```
 
 The `language TAG` step switches the language as the settings panel does, so one scenario can compare a page in
@@ -280,7 +280,7 @@ entries, and `omp text check` warns about each one; take the new fingerprint and
 Ome.Cli omp build my.lang <game options>
 ```
 
-`omp build` validates the package and writes `my.<profile>-en-0.1.0.omp` beside the folder, named after its `id`
+`omp build` validates the package and writes `my.<game>-en-0.1.0.omp` beside the folder, named after its `id`
 and `version`. Players copy that file into their profile's `mods/` folder and choose the language.
 
 - A language package runs in the port only. Native AGE draws the text its scripts hold, and `omp export` leaves the

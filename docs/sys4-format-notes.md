@@ -836,7 +836,7 @@ memory-cookie transform.
 
 Eushully's original compiler left a consistent fingerprint. These facts constrain any tool that reassembles or
 compiles scripts. Every count below is reproduced by `tools/compiler_census.py`
-(`build/games/<profile>/compiler-census.json`). The counts cover the 481 Himegari base scripts and the 732
+(`build/games/<game>/compiler-census.json`). The counts cover the 481 Himegari base scripts and the 732
 Kamidori catalog scripts (base + appends). Pairs are written Himegari / Kamidori.
 
 **Tables.** T1, T2 and T3 can always be derived from the code: every `0x71`, `0x03` and `0x8f` instruction, in

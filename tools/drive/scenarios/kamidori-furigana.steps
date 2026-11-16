@@ -3,8 +3,8 @@
 # "Furigana"). History redraws the ruby over the same word. Compare the kamidori-furigana-* shots between targets.
 # The English fan translation blanks every ruby, so run on the clean install (Kamidori/), as both targets do by
 # default. On a fresh sandbox, on both targets:
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori port run tools/drive/scenarios/kamidori-furigana.steps
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port start
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/kamidori-furigana.steps
 
 wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
 wait 4

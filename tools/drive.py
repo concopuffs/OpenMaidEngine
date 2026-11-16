@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Drive native AGE or the Godot port with one step language: input, screenshots, VM position, sandboxed saves.
 
-    py -3.11 -X utf8 tools/drive.py [--profile ID] native|port start [options]
+    py -3.11 -X utf8 tools/drive.py [--game ID] native|port start [options]
     py -3.11 -X utf8 tools/drive.py native|port do "click title.start" settle "shot title"
     py -3.11 -X utf8 tools/drive.py native|port run tools/drive/scenarios/himegari-save-load.steps
     py -3.11 -X utf8 tools/drive.py native|port status
@@ -11,7 +11,7 @@
 
 Sessions belong to the game side (the native daemon or the port process), so separate ``do``/``run`` calls drive the
 same running game. Steps run in this process over the shared protocol (tools/drive_core.py); a step the target
-cannot run fails before the first one starts. Output lives in ``build/games/<profile>/drive/<target>/``.
+cannot run fails before the first one starts. Output lives in ``build/games/<game>/drive/<target>/``.
 
 Full usage: docs/tools-reference.md ("Game driver"). Design: docs/superpowers/specs/2026-11-03-game-driving-design.md.
 """

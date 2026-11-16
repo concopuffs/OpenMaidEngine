@@ -131,10 +131,10 @@ class GatePlanTests(unittest.TestCase):
             registry = validate.paths.ToolContext.resolve(profile_id, environ={}).globals_toml
             if registry.is_file():
                 lint = by_key[f"globals-lint-{profile_id}"]
-                self.assertEqual(("--profile", profile_id, "--lint"), lint.command[-3:])
+                self.assertEqual(("--game", profile_id, "--lint"), lint.command[-3:])
             if (validate.paths.VM_MAP / f"patch-points-{profile_id}.toml").is_file():
                 points = by_key[f"patch-points-reference-{profile_id}"]
-                self.assertEqual(("--profile", profile_id, "--check-reference"), points.command[-3:])
+                self.assertEqual(("--game", profile_id, "--check-reference"), points.command[-3:])
         self.assertIn("globals-lint-kamidori", by_key)          # vm-map/globals-kamidori.toml
         self.assertIn("patch-points-reference-himegari", by_key)
         self.assertEqual("--check", by_key["engine-ctx-check"].command[-1])

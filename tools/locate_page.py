@@ -2,10 +2,10 @@
 
 Usage:
   py -3.11 -X utf8 tools/locate_page.py SC0000 14
-  py -3.11 -X utf8 tools/locate_page.py --profile kamidori SC0000 14
+  py -3.11 -X utf8 tools/locate_page.py --game kamidori SC0000 14
   py -3.11 -X utf8 tools/locate_page.py SC0000 14 --map path/to/page-map.jsonl --context 10
 
-The Godot editor runtime writes build/games/<profile>/page-map-<SCENE>.jsonl at each wait-for-input.
+The Godot editor runtime writes build/games/<game>/page-map-<SCENE>.jsonl at each wait-for-input.
 Page numbers are run-relative conveniences; wait_script + wait_offset is the stable bytecode coordinate.
 """
 from __future__ import annotations

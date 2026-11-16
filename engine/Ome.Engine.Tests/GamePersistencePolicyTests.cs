@@ -72,7 +72,7 @@ public sealed class GamePersistencePolicyTests
     public void ExplicitMismatchContinuesReadOnlyWithoutTreatingDetectedVersionAsRequestedProfileData()
     {
         SelectedGameProfile selected = GameProfileSelection.Resolve(
-            ["--profile", "himegari"], KamidoriIdentity);
+            ["--game", "himegari"], KamidoriIdentity);
 
         ResolvedGamePersistence resolved = Resolve(
             selected,
@@ -83,7 +83,7 @@ public sealed class GamePersistencePolicyTests
         Assert.Null(resolved.CreateNativeDatStore());
         Assert.Equal(3, resolved.NativeIdentity.SaveVersion1);
         Assert.Equal(10, resolved.NativeIdentity.SaveVersion2);
-        Assert.Equal("catalog/profile identity mismatch", resolved.ReadOnlyReason);
+        Assert.Equal("catalog/game identity mismatch", resolved.ReadOnlyReason);
     }
 
     [Fact]

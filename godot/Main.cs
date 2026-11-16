@@ -334,7 +334,7 @@ public partial class Main : Godot.Control
         bool holdMessageSkip = false;                    // --hold-message-skip: hold native logical action 6 from boot
         string textBackend = "auto";                     // --text-backend auto|gdi|portable
         string? histFile = null;                         // --trace-histogram <file>: op/call-site execution counts of the REAL run
-        string? pageMapPath = null;                      // --page-map <jsonl>: override default build/games/<profile>/page-map-SCxxxx.jsonl
+        string? pageMapPath = null;                      // --page-map <jsonl>: override default build/games/<game>/page-map-SCxxxx.jsonl
         for (int i = 0; i < userArgs.Length; i++)
         {
             if (userArgs[i] == "--scene" && i + 1 < userArgs.Length) scene = userArgs[i + 1];

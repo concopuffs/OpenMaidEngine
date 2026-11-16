@@ -560,7 +560,7 @@ from the trailer instead of AGE's compiled defaults. Auto/Skip coexistence, the 
 (`CONTROLDISIBLECURSOR`) and the text-redraw policy (`REDRAWTEXTONKEY`) are inert or already matched for both games
 (rows above). Kamidori's six extra keys (eight pairs) are applied or shown inert (rows above, 2026-11-07). The port
 deliberately redirects each native profile beneath
-Godot `user://games/<profile-id>/`: save payloads remain under its `SAVE` child, while engine options retain
+Godot `user://games/<game>/`: save payloads remain under its `SAVE` child, while engine options retain
 AGE's native `SYS4REG.INI` filename and format at the profile root.
 It should not reproduce legacy DirectDraw selection or native registration/key validation.
 
@@ -5723,7 +5723,7 @@ silently normalized to `1`. Writes use a sibling temporary file followed by repl
 AGE resolves save and settings locations independently, but Himegari makes `SAVEPATH` the `SAVE`
 descendant of `REGFILEPATH`. `Sys4PersistencePaths` models both native resolutions together. Godot's
 current profile override replaces the resolved `REGFILEPATH` directory with
-`user://games/<profile-id>/`, preserving the relative `SAVE` tail and yielding
+`user://games/<game>/`, preserving the relative `SAVE` tail and yielding
 `user://games/himegari/SYS4REG.INI` plus `user://games/himegari/SAVE` for Himegari. If a future profile
 supplies unrelated paths, a single-root override is rejected instead of guessing; native resolution remains
 available as the exact `USEAPPDATAFOLDER` plus independent-path policy.

@@ -29,8 +29,9 @@ string? OptionValue(string name)
     return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
 }
 
-string? requestedProfile = OptionValue("--profile");
-string conventionalGameRoot = requestedProfile switch
+// The conventional game root follows the game GameProfileSelection.Resolve picks below: the last --game/--profile.
+string? requestedGame = GameProfileSelection.RequestedGameId(args);
+string conventionalGameRoot = requestedGame?.ToLowerInvariant() switch
 {
     "kamidori" => Path.Combine(Paths.Workspace, "Kamidori"),
     _ => Paths.GameDir,
@@ -70,8 +71,8 @@ if (command == "oms-residue")
     return 0;
 }
 
-// The profile's OMS modules: generated <profile>.globals (globals_build.py --build; absent until generated) and
-// <profile>.scripts (the mounted catalog), then the hand-written source modules in oms/<profile>/*.oms (spec §3.2),
+// The profile's OMS modules: generated <game>.globals (globals_build.py --build; absent until generated) and
+// <game>.scripts (the mounted catalog), then the hand-written source modules in oms/<game>/*.oms (spec §3.2),
 // whose library subs and templates the idiomatic level lifts. --no-names decompiles without any of them.
 List<Ome.Script.Modules.GameModule> OmsModules()
 {

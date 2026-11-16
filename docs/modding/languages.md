@@ -100,7 +100,7 @@ name = "English text"
 version = "1.0.0"
 
 [game]
-profile = "<profile>"
+profile = "<game>"
 target = "native"
 
 [[language]]
@@ -377,7 +377,7 @@ text = "Ü&berspringen"
 
 ### A shell language for every game
 
-A version 2 package may leave out `[game]`. It then targets every profile:
+A version 2 package may leave out `[game]`. It then targets every game:
 
 ```toml
 omp = 2

@@ -15,7 +15,7 @@ Inside the driven AGE only:
 - MessageBoxA follows the profile's dialog policy (the registration box on copied installs is answered Yes);
   other boxes are shown and reported, and ``answer`` presses one.
 - SHGetFolderPathA (save root, SYS4REG.INI, F1 screenshots, debug report) points into a sandbox below
-  ``build/games/<profile>/drive/native/sandbox/``. ``--live-saves`` uses the real folders after a backup.
+  ``build/games/<game>/drive/native/sandbox/``. ``--live-saves`` uses the real folders after a backup.
 - After the first ``rand-seed``, op 0x60 draws from the seeded per-call-site streams the port computes.
 
 Usage, steps and the port target: docs/tools-reference.md ("Game driver").

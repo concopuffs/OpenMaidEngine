@@ -1,6 +1,6 @@
 # Modding Himegari
 
-Himegari-specific facts for the generic guides. The identity block (profile id, engine ABI, modules, tables,
+Himegari-specific facts for the generic guides. The identity block (game id, engine ABI, modules, tables,
 patch points) is generated in [README.md](README.md#himegari-dungeon-meister).
 
 ## Install and options

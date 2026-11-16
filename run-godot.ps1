@@ -9,7 +9,7 @@
 #   .\run-godot.ps1 -PerfLog   write a timestamped frame/compositor CSV under build/perf
 #   .\run-godot.ps1 -FpsCounter  show live rendered FPS and frame time in the top-right corner
 #   .\run-godot.ps1 -SoftwareRenderer  use the retained software correctness oracle
-#   .\run-godot.ps1 -Kamidori  launch the conventional ../Kamidori install with its profile
+#   .\run-godot.ps1 -Kamidori  launch the conventional ../Kamidori install as the kamidori game
 #   .\run-godot.ps1 -Kamidori -TranslationPatch  launch the translated ../Kamidori_Translated install with its
 #                                               patch/ English overlay and BMP assets
 #   .\run-godot.ps1 -OverlayRoot <dir> [-OverlayRoot ...] -AllowBmpAsAgf  select generic asset compatibility options
@@ -22,8 +22,8 @@
 #   .\run-godot.ps1 -LuaDev    let a mod folder write base-mod names its [lua] writes list lacks
 #   .\run-godot.ps1 -LuaTrace  log every Lua handler call to the profile's diagnostics/lua-trace.jsonl
 #   .\run-godot.ps1 -LuaReload rebuild the Lua session when a mod folder's lua/ files change, keeping maid.state
-#   .\run-godot.ps1 -Profile kamidori -GameRoot <install>  explicitly select a game profile
-#   .\run-godot.ps1 -Profile himegari -Probe -GameRoot <install>  force a read-only diagnostic run
+#   .\run-godot.ps1 -Game kamidori -GameRoot <install>  explicitly select the game (-Profile is its alias)
+#   .\run-godot.ps1 -Game himegari -Probe -GameRoot <install>  force a read-only diagnostic run
 #   .\run-godot.ps1 -Doctor     resolve and print prerequisites without building or launching
 #
 # Uses the *console* Godot build so GD.Print / DRAW logs / the selftest result show in the terminal.
@@ -31,7 +31,8 @@
 param(
     [string]$GodotConsole,
     [string]$GameRoot,
-    [string]$Profile,
+    [Alias('Profile')]
+    [string]$Game,
     [switch]$Kamidori,
     [switch]$AllowBmpAsAgf,
     [switch]$NoMods,
@@ -130,17 +131,17 @@ $godotArguments = @{
 }
 $godot = Resolve-ConfiguredFile @godotArguments
 if ($Kamidori) {
-    if ($Profile -and $Profile -ne 'kamidori') {
-        throw "-Kamidori conflicts with -Profile $Profile."
+    if ($Game -and $Game -ne 'kamidori') {
+        throw "-Kamidori conflicts with -Game $Game."
     }
-    $Profile = 'kamidori'
+    $Game = 'kamidori'
     if (-not $PSBoundParameters.ContainsKey('GameRoot')) {
         # The workspace keeps the clean install in Kamidori/ and the English fan translation's in Kamidori_Translated/.
         $installName = if ($TranslationPatch) { 'Kamidori_Translated' } else { 'Kamidori' }
         $GameRoot = Join-Path (Split-Path $repo -Parent) $installName
     }
 }
-$conventionalInstallName = if ($Profile -eq 'kamidori') { 'Kamidori' } else { 'Himegari_Game' }
+$conventionalInstallName = if ($Game -eq 'kamidori') { 'Kamidori' } else { 'Himegari_Game' }
 $gameRootArguments = @{
     ExplicitValue = $GameRoot
     EnvironmentValue = $env:OME_GAME_ROOT
@@ -173,12 +174,12 @@ foreach ($resolvedOverlayRoot in $resolvedOverlayRoots) {
     $assetArguments += @('--overlay-root', $resolvedOverlayRoot)
 }
 if ($AllowBmpAsAgf) { $assetArguments += '--allow-bmp-as-agf' }
-if ($Probe -and -not $Profile) {
-    throw '-Probe requires -Profile so the runtime knows which engine ABI to use.'
+if ($Probe -and -not $Game) {
+    throw '-Probe requires -Game so the runtime knows which engine ABI to use.'
 }
-$profileArguments = @()
-if ($Profile) { $profileArguments += @('--profile', $Profile) }
-if ($Probe) { $profileArguments += '--probe' }
+$gameArguments = @()
+if ($Game) { $gameArguments += @('--game', $Game) }
+if ($Probe) { $gameArguments += '--probe' }
 
 if ($Doctor) {
     $dotnet = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue |
@@ -190,7 +191,7 @@ if ($Doctor) {
     Write-Host "Repository : $repo"
     Write-Host "Godot      : $godot"
     Write-Host "Game root  : $resolvedGameRoot"
-    Write-Host "Profile    : $(if ($Profile) { $Profile } else { '<automatic>' })"
+    Write-Host "Game       : $(if ($Game) { $Game } else { '<automatic>' })"
     Write-Host "Probe      : $Probe"
     Write-Host "Overlays   : $(if ($resolvedOverlayRoots.Count) { $resolvedOverlayRoots -join ' -> ' } else { '<none>' })"
     Write-Host "BMP as AGF : $AllowBmpAsAgf"
@@ -235,13 +236,13 @@ if ($Import) {
 
 if ($SelfTest) {
     Write-Host "==> headless self-test" -ForegroundColor Cyan
-    $userArgs = @('--selftest', '--game-root', $resolvedGameRoot) + $profileArguments + $assetArguments
+    $userArgs = @('--selftest', '--game-root', $resolvedGameRoot) + $gameArguments + $assetArguments
     & $godot --headless --path $project -- @userArgs
 } else {
-    # The selected profile owns its natural boot script (currently SYSTEM4 for both built-ins).
+    # The selected game owns its natural boot script (currently SYSTEM4 for both built-ins).
     # Do not add --scene or seeds here: a direct-scene run (SYSTEM4 hosting one scene) is an explicit diagnostic.
     Write-Host "==> launching windowed from SYSTEM4" -ForegroundColor Cyan
-    $userArgs = @('--game-root', $resolvedGameRoot) + $profileArguments + $assetArguments
+    $userArgs = @('--game-root', $resolvedGameRoot) + $gameArguments + $assetArguments
     # Mod paths resolve against the caller's directory; Godot itself runs from godot/.
     foreach ($modPath in $Mod) {
         if (-not (Test-Path -LiteralPath $modPath)) { throw "mod not found: $modPath" }

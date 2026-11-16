@@ -62,8 +62,8 @@ patches/page3.oms:7:13: 0x878 is not an instruction start in SC0000.BIN
 The offset points into the middle of an instruction. Take offsets from `locate_page.py`, the decompiler or
 `oms-decompile --level raw`, which print instruction starts only.
 
-**Names that do not resolve** usually mean a missing `use` line. Registry names need `use <profile>.globals`, and
-dialogue lines and speakers need `use <profile>.adv`. If the registries were never generated, build them as described
+**Names that do not resolve** usually mean a missing `use` line. Registry names need `use <game>.globals`, and
+dialogue lines and speakers need `use <game>.adv`. If the registries were never generated, build them as described
 in [first-mod.md](first-mod.md), step 0.
 
 **A character outside CP932** cannot be shown by the game. Replace it with an equivalent character: curly quotes,
@@ -195,7 +195,7 @@ function`, or inside a block ([lua.md](lua.md), "Handlers and the session").
 **"a point hook hands its handler the frame and operands, which needs the vm capability".** Add
 `capabilities = ["vm"]` to `[lua]`.
 
-**"'NAME' is not a named patch point of <profile>".** Point names are in your game guide and its patch-point
+**"'NAME' is not a named patch point of <game>".** Point names are in your game guide and its patch-point
 reference ([games/README.md](games/README.md)).
 
 **"X replaces SCRIPT, and a hook names the original's instruction" or "a patch of X replaced the instruction".**
@@ -251,7 +251,7 @@ ome.session.start)"**: call it from a hook, a watch or a game event's handler ([
 
 **"a watch on an address names a cell by number, which needs the vm capability".** Add `capabilities = ["vm"]` to
 `[lua]`, or watch the cell's name through the base mod, which needs none. **"a watch on a name resolves through a
-base mod, and the mod requires none"**: add `[[requires]] id = "<profile>-base"` ([lua.md](lua.md), "Watches").
+base mod, and the mod requires none"**: add `[[requires]] id = "<game>-base"` ([lua.md](lua.md), "Watches").
 
 **"X is a table; watch "X[*]" for its cells", "X is no table", "X is a float global", "X's row count is not
 known".** A table's name takes `[*]` and a scalar's does not; version 1 watches integer and string cells only; and a
@@ -275,7 +275,7 @@ event's fields.
 
 **"X declares NAME, which is not raised in this install: …".** The event's point does not bind in the install you
 play: its script is another revision than the one the point was written for (a translation or an update that replaces
-it), or the profile has no such point. The message gives the reason, as the note `… not raised in this install, so a
+it), or the game has no such point. The message gives the reason, as the note `… not raised in this install, so a
 mod that subscribes to it does not link` in the report does. Mods that do not subscribe to the event still link. Play
 on the install your game guide lists for the event, or ask for the point to be added for yours.
 
@@ -298,11 +298,11 @@ misspelled or not in your game's global reference; the write fails when it runs.
 apply"**: `--lua-dev` loosens the list only for a mod loaded from a folder; run the folder, or list the name and
 rebuild.
 
-**"lua.writes: 'NAME' is not a name <profile>-base exports".** Check the name against your game's global reference
+**"lua.writes: 'NAME' is not a name <game>-base exports".** Check the name against your game's global reference
 ([games/README.md](games/README.md)). **"lua.writes names cells of a base mod, and the mod requires none"**: add
-`[[requires]] id = "<profile>-base"`.
+`[[requires]] id = "<game>-base"`.
 
-**"<profile>-base exports no global named 'NAME'", "NAME is a table: use .table(…)", "NAME[i]: an index is a whole
+**"<game>-base exports no global named 'NAME'", "NAME is a table: use .table(…)", "NAME[i]: an index is a whole
 number from 0 to N".** The name is not exported, or it was used with the wrong accessor or index. Indices start at 0,
 and a table ends at its last row ([lua.md](lua.md), "Game names").
 

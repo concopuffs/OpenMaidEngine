@@ -38,7 +38,7 @@ authors = ["you"]
 description = "Doubles experience awards."
 
 [game]                               # required (a version 2 package without it is for every game)
-profile = "<profile>"                # a profile id from games/README.md (required)
+profile = "<game>"                # a game id from games/README.md (required)
 target = "native"                    # "native", or "extended" for a mod with Lua (required)
 revisions = ["sha256:…"]             # SYS4INI.BIN fingerprints this mod supports
 
@@ -221,11 +221,11 @@ events the mod declares (`*.toml`, no subfolders), and takes a `[lua]` table and
 
 ### Base mods: `layout/`
 
-The engine ships one base mod per game, `<profile>-base`, which names the game's cells for Lua mods. Its
+The engine ships one base mod per game, `<game>-base`, which names the game's cells for Lua mods. Its
 `layout/globals.json` gives each named global its bank, address and shape; `layout/points.json` copies the game's
-patch points, which the link uses when the profile has none of its own; `layout/exports.txt` lists the names it
+patch points, which the link uses when the game has none of its own; `layout/exports.txt` lists the names it
 exports, which stay exported until its major version is raised. Its `events/` declares the game's events, and its
-`lua/init.lua` returns its helpers, with the game scripts they call under `[lua] calls`. A mod that names cells requires the base mod (`[[requires]] id = "<profile>-base"`). The engine mounts it
+`lua/init.lua` returns its helpers, with the game scripts they call under `[lua] calls`. A mod that names cells requires the base mod (`[[requires]] id = "<game>-base"`). The engine mounts it
 only then, and uses an installed package of the same id instead when there is one. The files are written by the
 project's `tools/base_mod_build.py`; a mod has no reason to carry `layout/`, and a package that does needs omp 3,
 its own game's `[game]` and `[lua] capabilities = ["vm"]`. How a Lua mod reads and writes names through a base mod

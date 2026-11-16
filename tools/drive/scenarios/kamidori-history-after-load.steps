@@ -5,8 +5,8 @@
 # page's group because the resumed page records it again (text_history_deserialize; engine-re.md, "Retained History
 # record model and lifetime").
 # On a fresh sandbox, on both targets:
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori native start
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori native run tools/drive/scenarios/kamidori-history-after-load.steps
+#   py -3.11 -X utf8 tools/drive.py --game kamidori native start
+#   py -3.11 -X utf8 tools/drive.py --game kamidori native run tools/drive/scenarios/kamidori-history-after-load.steps
 
 wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
 wait 4

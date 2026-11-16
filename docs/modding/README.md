@@ -3,11 +3,11 @@
 This directory is the modder's documentation for Open Maid Engine. It covers writing mods in Open Maid Script (OMS),
 packaging them as Open Maid Packs (OMP), and running them in the Godot port and in the original `AGE.EXE`.
 
-The guides are the same for every supported game. Where a guide writes `<profile>`, use your game's profile id.
+The guides are the same for every supported game. Where a guide writes `<game>`, use your game's id.
 Game-specific facts (install options, fingerprints, worked-example values, quirks) live only in the game guides:
 
 - [games/README.md](games/README.md): the supported games, each with a generated identity block;
-- `games/<profile>.md`: one guide per game.
+- `games/<game>.md`: one guide per game.
 
 ## What a mod can do
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Validator and generator for a profile's named patch points (mod loader spec §5).
 
-Source: vm-map/patch-points-<profile>.toml (hand-edited). Generates
-  build/games/<profile>/patch-points.json      read by the OMS fragment compiler (`site a.b.c`)
-  docs/patch-point-reference[-<profile>].md    the human reference (Himegari's has no suffix)
+Source: vm-map/patch-points-<game>.toml (hand-edited). Generates
+  build/games/<game>/patch-points.json      read by the OMS fragment compiler (`site a.b.c`)
+  docs/patch-point-reference[-<game>].md    the human reference (Himegari's has no suffix)
 
   --build            validate, then write both outputs; exit nonzero on errors
   --check            validate only
@@ -15,7 +15,7 @@ catalog; every [[point.at]] fingerprint is well formed and listed once; for the 
 script (the bytes the catalog serves), the site is an instruction start. A point with no site for the
 installed revision is a warning: it may describe another game revision.
 
-Common flags: --profile, --game-root, --extracted-root (tools/paths.py)."""
+Common flags: --game, --game-root, --extracted-root (tools/paths.py)."""
 from __future__ import annotations
 
 import argparse
@@ -173,7 +173,7 @@ def check_reference(registry: list[dict], source: str, reference_doc: Path = REF
     current = reference_doc.read_text(encoding="utf-8") if reference_doc.is_file() else None
     if current != render_reference(points, source):
         print(f"stale: {_shown(reference_doc)}; run patch_points_build.py "
-              f"--profile {PROFILE} --build")
+              f"--game {PROFILE} --build")
         return 1
     print(f"check: {_shown(reference_doc)} is current ({len(points)} points)")
     return 0

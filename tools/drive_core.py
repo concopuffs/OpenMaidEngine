@@ -5,8 +5,8 @@ Both targets serve one protocol (docs/superpowers/specs/2026-11-03-game-driving-
 loopback TCP, a token in the first ``hello``, then primitive operations (``state``, ``pointer``, ``click``,
 ``key``, ``wheel``, ``wait``, ``settle``, ``shot``, ``close`` and each target's extras). This module parses and
 validates steps, checks them against the target's capabilities, and runs them as those primitives
-(:class:`Executor`). It also holds the profile files (``tools/drive/<profile>.toml``), the save-sandbox and seed
-helpers, and the session files under ``build/games/<profile>/drive/<target>/``.
+(:class:`Executor`). It also holds the profile files (``tools/drive/<game>.toml``), the save-sandbox and seed
+helpers, and the session files under ``build/games/<game>/drive/<target>/``.
 
 Nothing here needs the game, Frida, Godot or Pillow; ``tools/test_drive_core.py`` runs it against a fake server.
 The CLI is ``tools/drive.py``; the servers are ``tools/drive_native.py`` and the port's ``--control`` channel.
@@ -48,7 +48,7 @@ def now_text() -> str:
 # --------------------------------------------------------------------------------------------- layout
 
 def drive_root(target: str, context: paths.ToolContext = paths.CONTEXT) -> Path:
-    """build/games/<profile>/drive/<target>/: session.json, logs, events, shots/, sandbox/, backups/."""
+    """build/games/<game>/drive/<target>/: session.json, logs, events, shots/, sandbox/, backups/."""
     if target not in TARGETS:
         raise DriveError(f"unknown target {target!r} (native or port)")
     return context.game_build / "drive" / target
@@ -294,7 +294,7 @@ class NativeBuild:
 
 @dataclass(frozen=True)
 class Profile:
-    """tools/drive/<profile>.toml. [points], [advance] and [sandbox.*] serve both targets; [native.*] only the
+    """tools/drive/<game>.toml. [points], [advance] and [sandbox.*] serve both targets; [native.*] only the
     native daemon."""
     points: dict[str, tuple[int, int]] = field(default_factory=dict)
     advance_point: str = "adv.next"

@@ -101,12 +101,12 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── opcodes_build.py                    generator/linter: vm-map/opcodes.toml -> derived runtime/reference views
     │   ├── opcodes_model.py                    load + lint (dangling-ref, confidence-ceiling, vocab) + dependents
     │   ├── age_opcode_semantics.py             GENERATED investigated semantic-name view (do not hand-edit)
-    │   ├── globals_build.py                    generator/linter: vm-map/globals[-<profile>].toml (+auto map) -> build/games/<profile>/globals.json, docs/global-reference[-<profile>].md
-    │   ├── modding_games_build.py              generator: profile manifests + registries + oms/<profile>/ -> docs/modding/games/README.md
-    │   ├── patch_points_build.py               validator/generator: vm-map/patch-points-<profile>.toml -> build/games/<profile>/patch-points.json, docs/patch-point-reference[-<profile>].md
-    │   ├── base_mod_build.py                   generator: global and patch-point registries -> mods/<profile>-base/layout/ (rename rule against exports.txt)
-    │   ├── story_flags.py                      static story-flag miner (branch-condition) -> build/games/<profile>/story-flags-candidates.json; --bootstrap
-    │   ├── scjump_decode.py                    decode SCJUMP progression logic -> build/games/<profile>/scjump-decisions.* ; --verify (VM cross-check)
+    │   ├── globals_build.py                    generator/linter: vm-map/globals[-<game>].toml (+auto map) -> build/games/<game>/globals.json, docs/global-reference[-<game>].md
+    │   ├── modding_games_build.py              generator: profile manifests + registries + oms/<game>/ -> docs/modding/games/README.md
+    │   ├── patch_points_build.py               validator/generator: vm-map/patch-points-<game>.toml -> build/games/<game>/patch-points.json, docs/patch-point-reference[-<game>].md
+    │   ├── base_mod_build.py                   generator: global and patch-point registries -> mods/<game>-base/layout/ (rename rule against exports.txt)
+    │   ├── story_flags.py                      static story-flag miner (branch-condition) -> build/games/<game>/story-flags-candidates.json; --bootstrap
+    │   ├── scjump_decode.py                    decode SCJUMP progression logic -> build/games/<game>/scjump-decisions.* ; --verify (VM cross-check)
     │   ├── test_globals.py, test_opcodes.py    unit tests for the globals / opcode tooling
     │   ├── vm0.py                              headless Python VM (Phase A0); `--test` = RECOVER unit test
     │   ├── extract_phase2.py                   batch: disasm + text + data extraction
@@ -123,7 +123,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── frida_runtime.py                    `frida` with shutdown at exit (removes its %TEMP% folder);
     │   │                                       every Frida tool imports Frida through it
     │   ├── drive_mcp.py (+ test_drive_mcp.py)  MCP server: the driver's operations as five agent tools
-    │   ├── drive/                              the driver's data: <profile>.toml (points, sandbox settings,
+    │   ├── drive/                              the driver's data: <game>.toml (points, sandbox settings,
     │   │                                       native engine pointer / polling / dialog policy, hook values
     │   │                                       per AGE.EXE build), native-agent.js (Frida agent),
     │   │                                       scenarios/*.steps (replayable runs on both targets),
@@ -143,12 +143,12 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── globals.toml                        ★ CANONICAL Himegari global-variable registry (hand-edited: name + category
     │   │                                        + value_domain + provenance). Single source of truth for globals/story-flags.
     │   ├── globals-kamidori.toml               ★ CANONICAL Kamidori global registry (same schema; addresses are per game)
-    │   ├── patch-points-<profile>.toml         ★ CANONICAL named patch points (stable fragment site names, one site per
+    │   ├── patch-points-<game>.toml         ★ CANONICAL named patch points (stable fragment site names, one site per
     │   │                                        script revision; mod loader spec §5); patch_points_build.py generates the rest
     │   └── opcode-leads.json, small-script-listings.md
     │
-    ├── oms/<profile>/*.oms                   hand-written Open Maid Script source modules (preludes): `module
-    │   │                                       <profile>.<name>` units of declarations, templates and library
+    ├── oms/<game>/*.oms                   hand-written Open Maid Script source modules (preludes): `module
+    │   │                                       <game>.<name>` units of declarations, templates and library
     │   │                                       subs that the compiler links and the idiomatic decompiler lifts
     │   ├── himegari/adv.oms                    Himegari ADV prelude: scene library, `@dialogue line`, speaker enum
     │   ├── kamidori/adv.oms                    Kamidori ADV prelude (same parts, plus the name_form enum)
@@ -156,7 +156,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                           kamidori-gate6/; gate 7 fragment: himegari-patch/; mod loader
     │                                           gate 2 packages: mods/)
     │
-    ├── mods/<profile>-base/                  the base mods the engine ships (Lua scripting spec §9; embedded in
+    ├── mods/<game>-base/                  the base mods the engine ships (Lua scripting spec §9; embedded in
     │   │                                       Ome.Mods, mounted when an enabled mod requires one): manifest.toml,
     │   │                                       README.md, events/ and lua/ hand-written; layout/ generated by base_mod_build.py
     │   ├── events/                             the game events the base mod declares (*.toml: name, point, typed
@@ -174,7 +174,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                         patching, new-scenes, translating, languages, cli, troubleshooting);
     │   │                                         English, plain Markdown;
     │   │                                         generic only: game facts live in modding/games/
-    │   │   └── games/                          README.md GENERATED (supported games + identity blocks); <profile>.md per game
+    │   │   └── games/                          README.md GENERATED (supported games + identity blocks); <game>.md per game
     │   ├── backlog.md                          open work items (fidelity gaps, deferred follow-ups, accepted ideas)
     │   ├── asset-resolution-re.md              resId→file RE (graphics/audio); asset-index steering
     │   ├── global-memory-re.md                 runtime global observation RE (SHELVED; future starting point)
@@ -202,23 +202,23 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── native/linux-x64/                   validated Linux FFmpeg shim/shared-library bundle
     │   ├── native/win-x64/                     validated Windows FFmpeg shim/DLL bundle
     │   ├── package/                            Linux staged tree/smoke/`.tar.gz` plus Windows x64 staged tree/ZIP
-    │   ├── games/<profile-id>/disasm/         <NAME>.asm — human-readable disassembly, one per script
-    │   ├── games/<profile-id>/text/           extracted text:
+    │   ├── games/<game>/disasm/         <NAME>.asm — human-readable disassembly, one per script
+    │   ├── games/<game>/text/           extracted text:
     │   │   ├── <NAME>.strings.txt               all inline strings in a script
     │   │   ├── dialogue.jsonl                   show-text lines only (the translation corpus)
     │   │   └── strings.jsonl                    every string, tagged by source opcode
-    │   ├── games/<profile-id>/data/           parsed data tables (*INIT → JSON)
-    │   ├── games/<profile-id>/scripts-json/   machine-readable full dumps (on demand via --json)
-    │   ├── games/<profile-id>/manifest.json   extract_phase2.py's per-script manifest
-    │   ├── games/<profile-id>/engine-dump/    profile-scoped UNPACKED engine dump: hashed ranges + provenance manifest
+    │   ├── games/<game>/data/           parsed data tables (*INIT → JSON)
+    │   ├── games/<game>/scripts-json/   machine-readable full dumps (on demand via --json)
+    │   ├── games/<game>/manifest.json   extract_phase2.py's per-script manifest
+    │   ├── games/<game>/engine-dump/    profile-scoped UNPACKED engine dump: hashed ranges + provenance manifest
     │   │                                       (Kamidori also keeps engine-dump-translated/, the translation's 4.33F
     │   │                                       dump that Ghidra's /kamidori image came from)
-    │   ├── games/<profile-id>/asset-index.json, asset-sections.json   asset diagnostics (parse_sys4ini / resolve_asset)
-    │   ├── games/<profile-id>/textures/       AGF-to-BMP stills (convert_agf.py) - diagnostic pixel oracle only
-    │   ├── games/<profile-id>/global-var-map.{json,md}   partial global-variable name map (auto shape inference; feeds the globals merge)
-    │   ├── games/<profile-id>/globals.json    GENERATED from the profile's globals registry merged over global-var-map (sys4load labels + C# VM)
-    │   ├── games/<profile-id>/story-flags-candidates.json   GENERATED by story_flags.py (ranked story-flag review surface)
-    │   ├── games/<profile-id>/scjump-decisions.{json,md}    GENERATED by scjump_decode.py (progression decision table)
+    │   ├── games/<game>/asset-index.json, asset-sections.json   asset diagnostics (parse_sys4ini / resolve_asset)
+    │   ├── games/<game>/textures/       AGF-to-BMP stills (convert_agf.py) - diagnostic pixel oracle only
+    │   ├── games/<game>/global-var-map.{json,md}   partial global-variable name map (auto shape inference; feeds the globals merge)
+    │   ├── games/<game>/globals.json    GENERATED from the profile's globals registry merged over global-var-map (sys4load labels + C# VM)
+    │   ├── games/<game>/story-flags-candidates.json   GENERATED by story_flags.py (ranked story-flag review surface)
+    │   ├── games/<game>/scjump-decisions.{json,md}    GENERATED by scjump_decode.py (progression decision table)
     │   ├── games/himegari/captures-2026-07/   July 2026 Frida/VM traces (optrace pair, global writes, scene-entry
     │   │                                       state) kept after newer runs overwrote the per-profile copies
     │   ├── engines/<reference-id>/            a reference-only install's outputs: native-scratch/ (native_scratch.py
@@ -368,7 +368,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
 
 Within disposable `build/`, engine-wide generated ABI/reference artifacts (`opcodes.json`, opcode
 coverage, and `engine-ctx.json`) remain shared. Every content-derived artifact belongs under
-`build/games/<profile-id>/`: catalog indexes, call-script names, disassembly/text corpora, parsed data,
+`build/games/<game>/`: catalog indexes, call-script names, disassembly/text corpora, parsed data,
 global/progression maps, native engine dumps, traces, page maps, coverage reports, and validation logs. This is an ownership
 boundary, not just a naming convention; tools resolve it from the selected immutable profile context.
 Native runs live there too: `native-scratch/` (the copied install), and `drive/<native|port>/`. Each target's
@@ -378,7 +378,7 @@ LocalAppData/Desktop with the game's saves and `SYS4REG.INI`; port: the `--data-
 `engine/Ome.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
 `engine/Ome.Cli` exposes it as `catalog-scan` for validation and diagnostic reports, and exposes the
 `Ome.Script` round trips as `oms-roundtrip` (with `oms-residue` for its literal leftovers and `oms-temps` for its
-temporary-allocator residue), decompiled source as `oms-decompile`, and fragments (spec §10) as `oms-patch`. The source modules in `oms/<profile>/` are
+temporary-allocator residue), decompiled source as `oms-decompile`, and fragments (spec §10) as `oms-patch`. The source modules in `oms/<game>/` are
 authored, like `vm-map/`, not derived: the compiler links them, and `--level idiomatic` lifts their library subs
 and templates.
 
@@ -638,13 +638,13 @@ show-and-clear opcode dispatch; shared diagnostic state and native-context forma
 `engine/Ome.Engine.Vm/VirtualMachine.RuntimeSettings.cs` owns message-window alpha and system-menu enable/show
 delay opcode dispatch; reset/default initialization, public menu-state accessors, and host state remain centralized.
 
-The disposable `build/games/<profile>/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs
+The disposable `build/games/<game>/page-map-<SCENE>.jsonl` files are produced by editor/development Godot runs
 and map runtime ADV page ordinals to their authoritative script offsets for `tools/locate_page.py`, and hold each
 page's text for `tools/page_map_compare.py` (localization gate 11). Packaged exports
 have no repository output tree and write their automatic maps below
-`user://games/<profile-id>/diagnostics/page-maps` instead.
+`user://games/<game>/diagnostics/page-maps` instead.
 
-A profile's `mods/` folder in its data root (`user://games/<profile-id>/mods/`, or the `--data-root` sandbox) holds
+A profile's `mods/` folder in its data root (`user://games/<game>/mods/`, or the `--data-root` sandbox) holds
 the user's packages, `selectors.toml` (mod id → append-catalog selector, kept until `--forget-mod`), and `.cache/<key>/`,
 the disposable link result: `loose/` (patched and replaced scripts, asset overrides; first loose root),
 `catalogs/APPENDnn.AAI`/`.ALF` (one per mod with new scripts or assets, mounted after the install's own), `link.json`
@@ -657,7 +657,7 @@ spec §6.2–§6.5.
   game-derived data (regenerable, game-side); `age-reimpl/` = everything we authored. The first two
   are consumed, never modified.
 - **Tools never hard-code paths.** `tools/paths.py` resolves an immutable context from common
-  `--profile`, `--game-root`, and `--extracted-root` options (or matching `OME_*` variables), with
+  `--game`, `--game-root`, and `--extracted-root` options (or matching `OME_*` variables), with
   conventional Himegari defaults. Switching profiles or relocating the tree requires no source edits.
 - **Path references in docs** are `age-reimpl/`-relative (e.g. `tools/sys4load.py`,
   `build/games/himegari/text/dialogue.jsonl`) unless they name a game/extracted path explicitly.
@@ -665,7 +665,7 @@ spec §6.2–§6.5.
   and under `extracted/DATA1/`, the game-folder copy (patch v1.03) wins. `paths.scripts()` resolves
   this automatically (overrides win).
 - **`build/` and extracted roots are disposable.** Shared engine ABI artifacts live directly under
-  `build/`; selected game outputs regenerate under `build/games/<profile-id>/` without colliding.
+  `build/`; selected game outputs regenerate under `build/games/<game>/` without colliding.
   Extracted roots regenerate from the `.ALF` files with a separately obtained local extractor.
   `bin/README.md` records the optional local convention; no extractor binary is tracked. Safe to delete
   and rebuild; do not hand-edit.
@@ -679,13 +679,13 @@ spec §6.2–§6.5.
   references, dangling deps, confidence ceilings, and vocabulary.
   Both Python modules are generated and must not be hand-edited.
 - **Global-variable knowledge is edited ONLY in the profile's registry** — `vm-map/globals.toml` for
-  Himegari, `vm-map/globals-<profile>.toml` for any other game (name + category + value_domain +
-  provenance). Run `tools/globals_build.py [--profile ID] --build` to regenerate that profile's
-  `build/games/<profile>/globals.json` (sys4load labels) and `docs/global-reference[-<profile>].md`; `--lint` checks vocabulary / auto-shape≠high / dangling deps. Curated entries
-  override the auto shape map (`build/games/<profile>/global-var-map.json`). Discover story-flag candidates with `tools/story_flags.py`.
-- **Named patch points are edited ONLY in `vm-map/patch-points-<profile>.toml`.** Run
-  `tools/patch_points_build.py [--profile ID] --build` to validate them against the installed base and regenerate
-  `build/games/<profile>/patch-points.json` (read by `Ome.Cli oms-patch`) and `docs/patch-point-reference[-<profile>].md`.
+  Himegari, `vm-map/globals-<game>.toml` for any other game (name + category + value_domain +
+  provenance). Run `tools/globals_build.py [--game ID] --build` to regenerate that profile's
+  `build/games/<game>/globals.json` (sys4load labels) and `docs/global-reference[-<game>].md`; `--lint` checks vocabulary / auto-shape≠high / dangling deps. Curated entries
+  override the auto shape map (`build/games/<game>/global-var-map.json`). Discover story-flag candidates with `tools/story_flags.py`.
+- **Named patch points are edited ONLY in `vm-map/patch-points-<game>.toml`.** Run
+  `tools/patch_points_build.py [--game ID] --build` to validate them against the installed base and regenerate
+  `build/games/<game>/patch-points.json` (read by `Ome.Cli oms-patch`) and `docs/patch-point-reference[-<game>].md`.
 - **Encoding:** all generated text is UTF-8 (source strings are cp932/Shift-JIS, decoded on
   extraction). Run Python as `py -3.11 -X utf8`.
 - **The game install is a runnable unit** — do not relocate `AGE.EXE`/`*.ALF`/DLLs relative to each

@@ -27,7 +27,7 @@ can overwrite table entries:
 ```text
 oms 1
 script "AUTO"
-use <profile>.globals
+use <game>.globals
 
     with unit[761] {
         .stats.max_hp = 150

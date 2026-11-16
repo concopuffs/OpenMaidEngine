@@ -1,6 +1,6 @@
 # Modding Kamidori
 
-Kamidori-specific facts for the generic guides. The identity block (profile id, engine ABI, modules, tables,
+Kamidori-specific facts for the generic guides. The identity block (game id, engine ABI, modules, tables,
 patch points) is generated in [README.md](README.md#kamidori-alchemy-meister).
 
 ## Install and options
@@ -11,18 +11,18 @@ command needs the game options:
 
 | Install | Options |
 |---|---|
-| untranslated | `--profile kamidori --game-root ../Kamidori` |
-| translated | `--profile kamidori --game-root ../Kamidori_Translated --overlay-root patch` |
+| untranslated | `--game kamidori --game-root ../Kamidori` |
+| translated | `--game kamidori --game-root ../Kamidori_Translated --overlay-root patch` |
 
 - Port: `.\run-godot.cmd -Kamidori`, or `.\run-godot.cmd -Kamidori -TranslationPatch` for the translated install.
   Add `-Mod PATH` for a mod.
 - Driver, translated:
 
   ```text
-  py -3.11 -X utf8 tools/drive.py --profile kamidori --game-root ../Kamidori_Translated port start --mod PATH --port-arg=--overlay-root --port-arg=<absolute path to Kamidori_Translated\patch> --port-arg=--allow-bmp-as-agf
+  py -3.11 -X utf8 tools/drive.py --game kamidori --game-root ../Kamidori_Translated port start --mod PATH --port-arg=--overlay-root --port-arg=<absolute path to Kamidori_Translated\patch> --port-arg=--allow-bmp-as-agf
   ```
 
-  The profile's points include `title.start` (Game Start on the title screen) and `newgame.begin` (Begin Game on
+  The game's points include `title.start` (Game Start on the title screen) and `newgame.begin` (Begin Game on
   the next screen); define others with `point NAME X Y`.
 - Native AGE on the untranslated install shows Japanese dialogs, so `dialogs` and `answer` use Japanese labels:
   the close dialog is 終了, with `プログラムを終了する(&E)`, `タイトルに戻る(&T)`, `OK` and `ｷｬﾝｾﾙ`.
@@ -35,7 +35,7 @@ command needs the game options:
   `ui:Language` or `--language en` picks English; native AGE on the translated install shows its `agerc.dll`'s
   English. The driver's `option` and `options` steps set and list them on both targets without labels, and
   `tools/drive/scenarios/kamidori-shell.steps` checks 終了 and three options on the clean install.
-- Registries for fragments: `py -3.11 -X utf8 tools/globals_build.py --profile kamidori --build`.
+- Registries for fragments: `py -3.11 -X utf8 tools/globals_build.py --game kamidori --build`.
 
 ## The translation is a different base
 
@@ -61,7 +61,7 @@ One command turns the translated install into a package that shows the untransla
 ([languages.md](../languages.md), "From a translation made in place"):
 
 ```text
-Ome.Cli omp text import-scripts --profile kamidori --game-root ../Kamidori --from ../Kamidori_Translated --overlay-root patch --allow-bmp-as-agf --output build/games/kamidori/import-en --package --verify
+Ome.Cli omp text import-scripts --game kamidori --game-root ../Kamidori --from ../Kamidori_Translated --overlay-root patch --allow-bmp-as-agf --output build/games/kamidori/import-en --package --verify
 ```
 
 - The package holds 48,586 entries in 217 catalog files and 232 images: 207 from `patch/`, and the 25 `$n$`

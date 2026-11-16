@@ -18,7 +18,7 @@ The translated text belongs to its translators. The catalog and the report are l
 ## How it runs
 
 ```
-dotnet run --project engine/Ome.Cli -- omp text import-scripts --profile kamidori ^
+dotnet run --project engine/Ome.Cli -- omp text import-scripts --game kamidori ^
     --from ../Kamidori_Translated --overlay-root patch --allow-bmp-as-agf ^
     --output build/games/kamidori/import-en --verify
 ```
@@ -267,7 +267,7 @@ text server antialias the same outlines differently.
 **How it runs.** The commands are in the scenario files' headers (`tools/drive/scenarios/geometry/kamidori-translated-
 {native,port}.steps`; usage in `tools-reference.md`, "Geometry pairs").
 
-1. `native_scratch.py --profile kamidori --game-root ../Kamidori_Translated --name translated` copies the translated
+1. `native_scratch.py --game kamidori --game-root ../Kamidori_Translated --name translated` copies the translated
    install. The driver recognises its 4.33F AGE.EXE by its hash and takes that build's hook addresses
    (`tools/drive/kamidori.toml`, `[native.build."4.33F"]`).
 2. Native runs its half on the fresh sandbox, then stops: AGE writes `SAVE.DAT`, which keeps the face, only when it

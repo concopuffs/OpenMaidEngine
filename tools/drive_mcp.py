@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MCP server for the game driver: drive.py's operations as five tools for agents (Claude Code, Codex).
 
-    py -3.11 -X utf8 tools/drive_mcp.py [--profile ID]
+    py -3.11 -X utf8 tools/drive_mcp.py [--game ID]
 
 Register it once per agent; a newly added server loads at the agent's next session:
 

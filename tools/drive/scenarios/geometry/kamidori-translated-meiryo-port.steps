@@ -3,9 +3,9 @@
 # config screen as kamidori-translated-meiryo-native.steps chooses it on native AGE. It waits for the same pages at the
 # clean install's offsets and shoots the same names. Run it after run A, on a new sandbox seeded from run A's once
 # native has stopped (its SAVE.DAT then keeps the font native chose):
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori port start --sandbox <new name> --seed native:fresh
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox <new name> --seed native:fresh
 #       --mod <imported package> --port-arg=--language --port-arg=en
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori port run
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port run
 #       tools/drive/scenarios/geometry/kamidori-translated-meiryo-port.steps
 # then compare with run A: tools/text_geometry_compare.py A B geometry-meiryo-p26 geometry-meiryo-p37
 #   geometry-meiryo-p55 geometry-meiryo-p56 (docs/tools-reference.md).

@@ -1,11 +1,12 @@
 using Ome.Engine.Persistence;
+using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
 using Ome.Script.Modules;
 
-/// <summary><c>save-diff A B [--profile ID] [--section NAME]... [--limit N]</c>: compare two native save containers
-/// (numbered SAVEnn.DAT, or any S3SD/S4SD file) by their decoded payloads (NativeSaveDiff). With --profile, global
-/// differences carry the names of that profile's registry. Exit code 0 when the saves match, 1 when they differ,
-/// 2 on a usage or decode error.</summary>
+/// <summary><c>save-diff A B [--game ID] [--section NAME]... [--limit N]</c>: compare two native save containers
+/// (numbered SAVEnn.DAT, or any S3SD/S4SD file) by their decoded payloads (NativeSaveDiff). With --game (or its alias
+/// --profile, the last of either winning), global differences carry the names of that game's registry. Exit code 0
+/// when the saves match, 1 when they differ, 2 on a usage or decode error.</summary>
 internal static class SaveDiffCommand
 {
     private const int DefaultLimit = 40;
@@ -19,11 +20,11 @@ internal static class SaveDiffCommand
         for (int i = 1; i < args.Length; i++)
         {
             string arg = args[i];
-            if (arg is "--profile" or "--section" or "--limit")
+            if (GameProfileSelection.IsGameOption(arg) || arg is "--section" or "--limit")
             {
                 if (i + 1 >= args.Length) return Usage();
                 string value = args[++i];
-                if (arg == "--profile") profileId = value;
+                if (GameProfileSelection.IsGameOption(arg)) profileId = value;
                 else if (arg == "--section") sections.Add(value);
                 else if (!int.TryParse(value, out limit) || limit < 0) return Usage();
             }
@@ -123,7 +124,7 @@ internal static class SaveDiffCommand
 
     private static int Usage()
     {
-        Console.Error.WriteLine("usage: save-diff A.DAT B.DAT [--profile ID] [--section NAME]... [--limit N (0 = all)]");
+        Console.Error.WriteLine("usage: save-diff A.DAT B.DAT [--game ID] [--section NAME]... [--limit N (0 = all)]");
         Console.Error.WriteLine("sections: " + string.Join(", ", NativeSaveDiff.Sections));
         return 2;
     }

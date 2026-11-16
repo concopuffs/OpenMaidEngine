@@ -1,12 +1,13 @@
-"""Shared profile-aware path context for repository tools.
+"""Shared game-aware path context for repository tools.
 
 Every path is derived from this file. Tools may be invoked with the common options
-``--profile``, ``--game-root``, and ``--extracted-root``; this module consumes those
-options once and exposes one immutable :class:`ToolContext`. With no options or
-environment variables, the historical Himegari workspace remains the default.
+``--game`` (``--profile`` is its old spelling, the same option), ``--game-root``, and
+``--extracted-root``; this module consumes those options once, by their exact names, and
+exposes one immutable :class:`ToolContext`. With no options or environment variables, the
+historical Himegari workspace remains the default.
 
 Engine-wide generated ABI artifacts live directly in ``build/``. Game-derived
-catalogs, corpora, maps, traces, and reports live in ``build/games/<profile-id>/``.
+catalogs, corpora, maps, traces, and reports live in ``build/games/<game>/``.
 """
 from __future__ import annotations
 
@@ -128,7 +129,7 @@ class ToolContext:
         profiles = available_profiles()
         if selected not in profiles:
             raise ValueError(
-                f"unknown profile '{selected}'; available profiles: {', '.join(profiles)}"
+                f"unknown game '{selected}'; available games: {', '.join(profiles)}"
             )
 
         selected_game_root = (
@@ -150,16 +151,22 @@ class ToolContext:
         )
 
 
-def _context_from_process(argv: Sequence[str]) -> tuple[ToolContext, list[str]]:
-    """Consume common context flags while leaving every tool-specific argument untouched."""
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--profile")
+def _context_from_process(
+    argv: Sequence[str], environ: Mapping[str, str] | None = None
+) -> tuple[ToolContext, list[str]]:
+    """Consume common context flags while leaving every tool-specific argument untouched.
+
+    Names match exactly (``allow_abbrev=False``): argparse's default reads an unambiguous
+    prefix, which once read ``--game kamidori`` as ``--game-root kamidori``. ``--game`` and
+    ``--profile`` are one option, so the last of either wins."""
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("--game", "--profile", dest="game")
     parser.add_argument("--game-root")
     parser.add_argument("--extracted-root")
     arguments, remaining = parser.parse_known_args(list(argv))
     try:
         context = ToolContext.resolve(
-            arguments.profile, arguments.game_root, arguments.extracted_root
+            arguments.game, arguments.game_root, arguments.extracted_root, environ
         )
     except ValueError as error:
         parser.error(str(error))

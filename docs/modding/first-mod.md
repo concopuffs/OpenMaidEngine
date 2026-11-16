@@ -19,11 +19,11 @@ lists (empty for the default game).
 - .NET 8 SDK, Python 3.11 and Godot 4.7 .NET, as for the port itself (`../../README.md`).
 - The game install in its expected place (your game guide says where), or `--game-root DIR`.
 - One build: `dotnet build engine/OmeEngine.sln`.
-- The generated registries, which fragments that `use <profile>.globals` need. Run
-  `py -3.11 -X utf8 tools/globals_build.py --profile <profile> --build`, and
-  `py -3.11 -X utf8 tools/patch_points_build.py --profile <profile> --build` if the game has patch points.
+- The generated registries, which fragments that `use <game>.globals` need. Run
+  `py -3.11 -X utf8 tools/globals_build.py --game <game> --build`, and
+  `py -3.11 -X utf8 tools/patch_points_build.py --game <game> --build` if the game has patch points.
 
-Every `Ome.Cli` command selects the game with its game options: `--profile`, `--game-root`, and `--overlay-root`
+Every `Ome.Cli` command selects the game with its game options: `--game`, `--game-root`, and `--overlay-root`
 for an install with a translation layer. A translation that replaces scripts changes the base your fragment edits,
 so use the same options for every step.
 
@@ -84,7 +84,7 @@ version = "1.0.0"
 description = "Adds a line of narration to the opening."
 
 [game]
-profile = "<profile>"
+profile = "<game>"
 target = "native"
 ```
 
@@ -93,15 +93,15 @@ target = "native"
 ```text
 oms 1
 patch "SC0000.BIN" fingerprint "sha256:<the fingerprint from step 2>"
-use <profile>.globals
-use <profile>.adv
+use <game>.globals
+use <game>.adv
 
 before site <the site from step 1> {
     "[MOD] Hello from my first mod."
 }
 ```
 
-The quoted line is a *dialogue statement* from the game's ADV prelude (`oms/<profile>/adv.oms`). It expands to the
+The quoted line is a *dialogue statement* from the game's ADV prelude (`oms/<game>/adv.oms`). It expands to the
 same instructions as the game's own narration pages: show the text, wait for a click, reset the text layout. Add a
 speaker and voice the same way the decompiled scenes do (`oms-language.md`, "Dialogue lines").
 
@@ -142,10 +142,10 @@ For this mod that writes one file, the patched `SC0000.BIN`. Native AGE reads lo
 before its archives, so the file overrides the original. Install it into a *copy* of the game, never the original:
 
 ```text
-py -3.11 -X utf8 tools/native_scratch.py --profile <profile> --replace --overlay build/my-export/SC0000.BIN
+py -3.11 -X utf8 tools/native_scratch.py --game <game> --replace --overlay build/my-export/SC0000.BIN
 ```
 
-That builds `build/games/<profile>/native-scratch/` with your files added. Run its `AGE.EXE`, or drive it with
+That builds `build/games/<game>/native-scratch/` with your files added. Run its `AGE.EXE`, or drive it with
 `tools/drive.py native` (`../tools-reference.md`, "Game driver").
 
 ## 7. Package it

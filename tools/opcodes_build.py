@@ -563,7 +563,7 @@ def main(argv=None):
             (game_build / "opcode-coverage.md").write_text(
                 emit_coverage_md(model, profile_id), encoding="utf-8", newline="\n"
             )
-        print("build: wrote shared opcode views plus build/games/<profile-id>/opcode-coverage.md")
+        print("build: wrote shared opcode views plus build/games/<game>/opcode-coverage.md")
         return 0
     if args.lint:
         model = M.load(tp)

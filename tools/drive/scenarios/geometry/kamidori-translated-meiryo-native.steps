@@ -5,12 +5,12 @@
 # GDI's order, the same on both targets: on the machine this was written on, three wheel notches from the top put
 # メイリオ on the list's eighth row; elsewhere, look at the list and change the row. Run it first, on the fresh
 # sandbox, then stop native (AGE writes SAVE.DAT, which keeps the font, when it quits) and seed run B from it:
-#   py -3.11 -X utf8 tools/native_scratch.py --profile kamidori --game-root ../Kamidori_Translated --name translated
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori native start
+#   py -3.11 -X utf8 tools/native_scratch.py --game kamidori --game-root ../Kamidori_Translated --name translated
+#   py -3.11 -X utf8 tools/drive.py --game kamidori native start
 #       --exe build/games/kamidori/native-scratch-translated/AGE.EXE
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori native run
+#   py -3.11 -X utf8 tools/drive.py --game kamidori native run
 #       tools/drive/scenarios/geometry/kamidori-translated-meiryo-native.steps
-#   py -3.11 -X utf8 tools/drive.py --profile kamidori native stop
+#   py -3.11 -X utf8 tools/drive.py --game kamidori native stop
 # then compare with run B: tools/text_geometry_compare.py A B geometry-meiryo-p26 geometry-meiryo-p37
 #   geometry-meiryo-p55 geometry-meiryo-p56 (docs/tools-reference.md).
 

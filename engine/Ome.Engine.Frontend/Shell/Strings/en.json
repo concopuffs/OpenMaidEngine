@@ -145,7 +145,7 @@
   "diag.gpu": "Graphics",
   "diag.audio": "Audio output",
   "diag.engine": "Engine",
-  "diag.profile": "Profile",
+  "diag.profile": "Game",
   "diag.game-root": "Game folder",
   "diag.data-root": "Data folder",
   "diag.copy": "Copy to clipboard",

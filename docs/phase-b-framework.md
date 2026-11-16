@@ -1121,7 +1121,7 @@ cannot distinguish an SC0600 cleanup loop from resumed FIELD processing.
 Godot now retains the deepest frame chain before a halted frame unwinds and automatically emits a bounded
 STEP-LIMIT report: exact script/offset/opcode, nested frame chain, hottest sites in the final 128 instructions,
 and the final 16-instruction sequence. It also writes the ordinary full stall snapshot as
-`user://games/<profile-id>/diagnostics/step-limit-<timestamp>.json` and copies its coordinate/path. Focused
+`user://games/<game>/diagnostics/step-limit-<timestamp>.json` and copies its coordinate/path. Focused
 formatter/stack
 regressions made the next reproduction decisive: the cap fired at `DRAWMINIMAP@0xc4` under
 `SYSTEM4 > TITLE > SAVE > SYSTEM4 > FIELD > DRAWMINIMAP`, 127.452 seconds into the run. Its final trace is

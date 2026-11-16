@@ -156,13 +156,13 @@ def registry_gates() -> list[Gate]:
             gates.append(Gate(
                 f"globals-lint-{profile_id}",
                 f"Global registry lint ({profile_id})",
-                _python_tool("globals_build.py", "--profile", profile_id, "--lint"),
+                _python_tool("globals_build.py", "--game", profile_id, "--lint"),
             ))
         if (paths.VM_MAP / f"patch-points-{profile_id}.toml").is_file():
             gates.append(Gate(
                 f"patch-points-reference-{profile_id}",
                 f"Patch-point registry and generated reference ({profile_id})",
-                _python_tool("patch_points_build.py", "--profile", profile_id, "--check-reference"),
+                _python_tool("patch_points_build.py", "--game", profile_id, "--check-reference"),
             ))
     return gates
 
@@ -277,7 +277,7 @@ def build_gate_plan(
             f"Open Maid Script canonical rebuild, VM-trace-equivalent scenes ({context.profile_id})",
             (
                 "dotnet", "run", "--project", "engine/Ome.Cli/Ome.Cli.csproj",
-                "--no-build", "--", "oms-rebuild", "--profile", context.profile_id,
+                "--no-build", "--", "oms-rebuild", "--game", context.profile_id,
                 "--game-root", str(game_root or context.game_root),
             ),
             900,
@@ -291,7 +291,7 @@ def build_gate_plan(
                 f"Open Maid Script idiomatic rebuild, VM-trace-equivalent scenes ({context.profile_id})",
                 (
                     "dotnet", "run", "--project", "engine/Ome.Cli/Ome.Cli.csproj",
-                    "--no-build", "--", "oms-rebuild", "--profile", context.profile_id, "--level", "idiomatic",
+                    "--no-build", "--", "oms-rebuild", "--game", context.profile_id, "--level", "idiomatic",
                     "--game-root", str(game_root or context.game_root),
                 ),
                 900,
@@ -302,7 +302,7 @@ def build_gate_plan(
             f"Catalog/store corpus decode ({context.profile_id})",
             (
                 "dotnet", "run", "--project", "engine/Ome.Cli/Ome.Cli.csproj",
-                "--no-build", "--", "catalog-scan", "--profile", context.profile_id,
+                "--no-build", "--", "catalog-scan", "--game", context.profile_id,
                 "--game-root", str(game_root or context.game_root), "--output",
                 str(context.game_build / "catalog-opcode-coverage.json"),
             ),
@@ -376,7 +376,7 @@ def build_gate_plan(
                     (
                         "dotnet", "run", "--project", "engine/Ome.Cli", "--configuration", "Debug",
                         "--", "sweep", "--boot", "--halt-at-wait",
-                        "--profile", context.profile_id,
+                        "--game", context.profile_id,
                         "--game-root", str(game_root or context.game_root),
                     ),
                     600,
@@ -565,13 +565,13 @@ def print_summary(results: list[GateResult], log_dir: Path) -> None:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--level", choices=LEVELS, default="full")
     parser.add_argument("--godot", help="Godot 4.7 .NET console executable")
-    # paths.py consumes --profile, --game-root and --extracted-root at import (paths.CONTEXT); they are listed here
-    # for --help only, and validation reads the context, never these values.
-    parser.add_argument("--profile", default=paths.CONTEXT.profile_id,
-                        help="game profile id (common tool-context option)")
+    # paths.py consumes --game (alias --profile), --game-root and --extracted-root at import (paths.CONTEXT); they are
+    # listed here for --help only, and validation reads the context, never these values.
+    parser.add_argument("--game", "--profile", dest="game", default=paths.CONTEXT.profile_id,
+                        help="game id (common tool-context option; --profile is the same option)")
     parser.add_argument("--game-root", help="AGE install containing SYS4INI.BIN (common tool-context option)")
     parser.add_argument("--extracted-root", help="optional extracted DATA1..DATA5 root")
     parser.add_argument("--verbose", action="store_true", help="stream successful gate output")

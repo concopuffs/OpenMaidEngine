@@ -3,14 +3,14 @@
 
 The installed executable is packed; native opcode handlers become readable only after AGE has
 unpacked itself in memory. Launch the selected game to its title screen, then attach by PID. Common
-``--profile``/``--game-root`` options are consumed by ``tools/paths.py`` before this parser runs.
+``--game``/``--game-root`` options are consumed by ``tools/paths.py`` before this parser runs.
 
 Output is profile-scoped and provenance-bearing:
-``build/games/<profile>/engine-dump/{manifest.json,range_<base>.bin}``. A reference-only install (no port profile;
+``build/games/<game>/engine-dump/{manifest.json,range_<base>.bin}``. A reference-only install (no port profile;
 ``paths.REFERENCE_INSTALLS``) is dumped with ``--reference ID`` into ``build/engines/<id>/engine-dump/``.
 
 Usage:
-  py -3.11 -u -X utf8 tools/frida/dump_engine.py --profile kamidori --game-root PATH PID
+  py -3.11 -u -X utf8 tools/frida/dump_engine.py --game kamidori --game-root PATH PID
   py -3.11 -u -X utf8 tools/frida/dump_engine.py --reference arterial PID
   py -3.11 -u -X utf8 tools/frida/dump_engine.py --reference arterial --spawn
 

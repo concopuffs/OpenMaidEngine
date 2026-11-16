@@ -7,10 +7,10 @@ boot order -- INIT2's base initializer calls, then each mounted append catalog's
 calls in ascending selector order (docs/asset-resolution-re.md) -- through one session and records
 each script's global-bank delta (new or changed int/string cells).
 
-  py -3.11 -X utf8 tools/init_image.py --profile kamidori            # build the image
-  py -3.11 -X utf8 tools/init_image.py --profile kamidori --summary  # per-script cell counts
+  py -3.11 -X utf8 tools/init_image.py --game kamidori            # build the image
+  py -3.11 -X utf8 tools/init_image.py --game kamidori --summary  # per-script cell counts
 
-Writes build/games/<profile>/init-image.json:
+Writes build/games/<game>/init-image.json:
   {profile, game_root, scripts: [{script, packed_id, halt, steps, ints:{addr: v}, strings:{addr: s}}]}
 Deltas omit writes that store a cell's existing value.
 """
@@ -70,7 +70,7 @@ def build() -> int:
     command = [
         "dotnet", "run", "--project", str(paths.REPO / "engine" / "Ome.Cli"), "-c", "Release", "--",
         "init-image", str(OUTPUT), *sequence,
-        "--profile", paths.CONTEXT.profile_id, "--game-root", str(root),
+        "--game", paths.CONTEXT.profile_id, "--game-root", str(root),
     ]
     completed = subprocess.run(command, cwd=paths.REPO)
     return completed.returncode
@@ -108,7 +108,7 @@ def merged(table: str) -> tuple[dict[int, int], dict[int, str]]:
 def project(table: str) -> dict:
     """Project a name-mode table's executed image through its static base-table layout.
 
-    The base extraction (`build/<profile>/data/<TABLE>.json`) supplies the geometry: name array base,
+    The base extraction (`build/<game>/data/<TABLE>.json`) supplies the geometry: name array base,
     record span, description bases, parallel field bases, and row-table columns. Every id whose name
     cell holds a string after all layers ran becomes a record; `origin` names the layer that first
     wrote that name and `layers` every layer that wrote any of the record's cells.

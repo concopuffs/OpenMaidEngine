@@ -7,7 +7,7 @@ from `age-reimpl/`.
 
 | Option | Meaning |
 |---|---|
-| `--profile <profile>` | the game; without it, `himegari` |
+| `--game <game>` | the game; without it, `himegari`. `--profile <game>` is the same option under its old name, and the last of either wins |
 | `--game-root DIR` | the install; without it, the game's expected install beside the repository |
 | `--overlay-root DIR` | a loose-file layer over the install, such as a translation, relative to the game root (repeatable) |
 
@@ -21,7 +21,7 @@ Your game guide lists the options its installs need ([games/README.md](games/REA
 | `omp build DIR [--output FILE.omp] [--mod DEP …]` | Validates and links the mod folder `DIR`, compiles every fragment, and writes a reproducible `.omp` with the plans stored inside (default `<id>-<version>.omp` beside the folder; the output's folder is made if it is missing). The folder is not changed. Pass the mod's dependencies with `--mod`. It refuses a Lua mod whose source writes a base mod's name its `[lua] writes` list lacks ([lua.md](lua.md), "Game names"). |
 | `omp export --output-dir DIR [--mod PATH …] [--data-root DIR]` | Links the mods and writes what native AGE loads: patched and replaced scripts and asset overrides as loose files, and one `APPENDnn.AAI`/`.ALF` pair per mod catalog. It refuses a stack that does not link, and a mod whose target is not `native` (a Lua mod targets `extended`). It leaves out `text/`, `fonts/`, language assets (`assets/<language>/`) and `[[language]]`, and a Lua library's `lua/`, with a note, since native AGE cannot use them. |
 | `omp explain NAME [--mod PATH …] [--data-root DIR]` | Says which layer and mod supplies a script or asset, such as `SC0000.BIN`, `$2$SCENE.BIN` or `my.mod:NAME`, and lists every plan applied to a script. A base entry shows its loose file or its range in the ALF archive. An asset with language versions (`assets/<language>/`) also lists each one, the language it shows in, and whether a later package's plain asset hides it. |
-| `omp lua-stubs --output DIR [--mod PATH …] [--data-root DIR]` | Links the mods as `omp check` does and writes lua-language-server definitions into `DIR`: `maid.lua`, `events.lua` and one `<base mod id>.lua` per base mod, with its helpers, the profile's included when no mod mounts it. It prints the `.luarc.json` line that points an editor at them. It writes nothing if the stack does not link ([lua.md](lua.md), "Editor definitions"). |
+| `omp lua-stubs --output DIR [--mod PATH …] [--data-root DIR]` | Links the mods as `omp check` does and writes lua-language-server definitions into `DIR`: `maid.lua`, `events.lua` and one `<base mod id>.lua` per base mod, with its helpers, the game's included when no mod mounts it. It prints the `.luarc.json` line that points an editor at them. It writes nothing if the stack does not link ([lua.md](lua.md), "Editor definitions"). |
 
 `--mod` takes a folder or an `.omp` file and repeats. `--data-root DIR` also links the mods installed in a port
 profile root (see below), with its load order and kept selectors. Without it only the `--mod` packages link, and
@@ -80,7 +80,7 @@ switches:
 .\run-godot.cmd <game switches> -Mod path\to\my.mod
 ```
 
-The game switches (such as `-Profile`, `-GameRoot`, `-OverlayRoot`, or a game's shortcut) are in your game guide.
+The game switches (such as `-Game`, `-GameRoot`, `-OverlayRoot`, or a game's shortcut) are in your game guide.
 
 At startup the console prints `[mods]` lines with the load order and every file the mods supplied, and a `[lua]`
 line when a mod ships Lua. The full report is `diagnostics/mod-link.txt` in the profile root, and Lua's log
@@ -91,10 +91,10 @@ line when a mod ships Lua. The full report is `diagnostics/mod-link.txt` in the 
 Each game has a **profile root**:
 
 ```text
-%APPDATA%\Godot\app_userdata\Open Maid Engine\games\<profile>\
+%APPDATA%\Godot\app_userdata\Open Maid Engine\games\<game>\
 ```
 
-`<profile>` is the game's profile id. `--data-root` replaces this folder. Inside it:
+`<game>` is the game's id. `--data-root` replaces this folder. Inside it:
 
 | Path | Contents |
 |---|---|
@@ -120,10 +120,10 @@ Native AGE has no mod loader. Export the stack and install the files into a **co
 
 ```text
 Ome.Cli omp export --output-dir build/my-export --mod path\to\my.mod <game options>
-py -3.11 -X utf8 tools/native_scratch.py --profile <profile> --replace --overlay build/my-export/SC0000.BIN --overlay build/my-export/APPENDnn.AAI --overlay build/my-export/APPENDnn.ALF
+py -3.11 -X utf8 tools/native_scratch.py --game <game> --replace --overlay build/my-export/SC0000.BIN --overlay build/my-export/APPENDnn.AAI --overlay build/my-export/APPENDnn.ALF
 ```
 
-`native_scratch.py` builds a copy at `build/games/<profile>/native-scratch/` with the listed files added. Pass one
+`native_scratch.py` builds a copy at `build/games/<game>/native-scratch/` with the listed files added. Pass one
 `--overlay` per file the export wrote; `nn` is the mod catalog's selector. Run its
 `AGE.EXE` directly. Native AGE reads loose `.BIN` files before its archives, and mounts every `APPENDnn` catalog
 beside it. Native AGE does not check versions, conflicts or save stamps; the export already resolved those.
@@ -133,7 +133,7 @@ beside it. Native AGE does not check versions, conflicts or save stamps; the exp
 `tools/drive.py` drives the port and native AGE with one step language, and takes the mod in its `start` command:
 
 ```text
-py -3.11 -X utf8 tools/drive.py --profile <profile> port start --mod path\to\my.mod
+py -3.11 -X utf8 tools/drive.py --game <game> port start --mod path\to\my.mod
 ```
 
 Extra port options go through `--port-arg=…`, one per argument; your game guide has the full command for its
@@ -154,8 +154,8 @@ the port only; `tools/drive/scenarios/port/` holds those.
 
 ## Outside the repository
 
-Fragments and new scripts compile against the repository's OMS modules (`oms/<profile>/`) and generated registries
-(`build/games/<profile>/`). An exported port build without the repository has none of them. It can still load:
+Fragments and new scripts compile against the repository's OMS modules (`oms/<game>/`) and generated registries
+(`build/games/<game>/`). An exported port build without the repository has none of them. It can still load:
 
 - asset-only mods;
 - whole-script replacements;

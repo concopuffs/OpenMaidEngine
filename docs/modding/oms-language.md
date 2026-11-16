@@ -29,22 +29,22 @@ with an operator. `;` also separates statements.
 
 ## Modules: `use`
 
-`use` imports names. Each game has these modules, where `<profile>` is its profile id (your game's identity block in
+`use` imports names. Each game has these modules, where `<game>` is its id (your game's identity block in
 [games/README.md](games/README.md) lists them):
 
-- **`<profile>.globals`:** every named global variable and table, from the game's global registry. The game's
+- **`<game>.globals`:** every named global variable and table, from the game's global registry. The game's
   generated global reference lists them.
-- **`<profile>.scripts`:** every catalog script by its file stem, for `run`. A stem that is not an identifier is
+- **`<game>.scripts`:** every catalog script by its file stem, for `run`. A stem that is not an identifier is
   quoted: `run RECOVER`, `run "$1$SC2600"`.
-- **`<profile>.adv`:** the ADV prelude, which holds the scene library, the dialogue line template and the speaker
-  names. Its source is `oms/<profile>/adv.oms`, and it is worth reading. A game without a prelude yet has no
+- **`<game>.adv`:** the ADV prelude, which holds the scene library, the dialogue line template and the speaker
+  names. Its source is `oms/<game>/adv.oms`, and it is worth reading. A game without a prelude yet has no
   dialogue statements; its identity block says so.
 
-`<profile>.adv` itself uses the other two. Most fragments that touch a scene start with:
+`<game>.adv` itself uses the other two. Most fragments that touch a scene start with:
 
 ```text
-use <profile>.globals
-use <profile>.adv
+use <game>.globals
+use <game>.adv
 ```
 
 ## Storage
@@ -178,7 +178,7 @@ decompiler prints it at `--level raw`.
 
 ## Dialogue lines
 
-Inside a scene, a line on its own is a dialogue statement. The `<profile>.adv` prelude expands it into the same
+Inside a scene, a line on its own is a dialogue statement. The `<game>.adv` prelude expands it into the same
 instructions as the game's own pages: voice reset, nameplate, voice, text, wait for a click, end of page.
 
 A line is an optional speaker, a string, and optional named arguments:
@@ -193,7 +193,7 @@ The prelude marks one template `@dialogue`. The string binds to its `text` param
 named arguments to the parameters of the same name. A game's template can take more arguments, such as a nameplate
 form. Your game guide shows its template and real examples.
 
-**Speakers** are the names in the prelude's `enum speaker` (`oms/<profile>/adv.oms`). They are the game's own
+**Speakers** are the names in the prelude's `enum speaker` (`oms/<game>/adv.oms`). They are the game's own
 character names, which may not be English. Names that repeat, or that are not identifiers (such as `？？？？`), carry
 their id instead: `speaker_0x10`. Copy a speaker name from the decompiled scene you are editing, or look up the id
 in the enum. **Voice ids** come from the decompiled scene as well: a voiced line prints its

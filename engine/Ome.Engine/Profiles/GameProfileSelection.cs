@@ -23,8 +23,8 @@ public sealed record SelectedGameProfile(
 
     public string? ReadOnlyReason => !IsReadOnly ? null
         : ProbeMode ? "probe mode"
-        : !IdentityMatched ? "catalog/profile identity mismatch"
-        : Profile.Persistence.ReadOnlyReason ?? "profile persistence contract is not validated";
+        : !IdentityMatched ? "catalog/game identity mismatch"
+        : Profile.Persistence.ReadOnlyReason ?? "the game's persistence contract is not validated";
 
     public string SourceName => Source switch
     {
@@ -34,15 +34,39 @@ public sealed record SelectedGameProfile(
     };
 
     public string? MismatchDiagnostic => IdentityMatched ? null
-        : $"explicit profile mismatch: requested={Profile.Id}; "
+        : $"explicit game mismatch: requested={Profile.Id}; "
           + $"expected={string.Join(" or ", Profile.CatalogIdentities.Select(value => value.Display))}; "
-          + $"detected={DetectedIdentity.Display}; continuing with requested profile read-only";
+          + $"detected={DetectedIdentity.Display}; continuing with the requested game read-only";
 }
 
 public static class GameProfileSelection
 {
+    /// <summary>The option that names the game (launcher spec §5.8).</summary>
+    public const string GameOptionName = "--game";
+    /// <summary>The old spelling of <see cref="GameOptionName"/>: the same option, accepted without a warning.</summary>
     public const string ProfileOptionName = "--profile";
     public const string ProbeOptionName = "--probe";
+
+    public static bool IsGameOption(string argument)
+        => argument is GameOptionName or ProfileOptionName;
+
+    /// <summary>The game id the arguments ask for: the value of the last <c>--game</c> or <c>--profile</c>, which
+    /// are one option, or null when neither is given. Every reader of the option goes through this, so the host and
+    /// <c>Ome.Cli</c> cannot disagree about which value wins.</summary>
+    public static string? RequestedGameId(IReadOnlyList<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        string? requested = null;
+        for (int index = 0; index < arguments.Count; index++)
+        {
+            if (!IsGameOption(arguments[index])) continue;
+            if (index + 1 >= arguments.Count
+                || arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
+                throw new ArgumentException($"{arguments[index]} requires a game id");
+            requested = arguments[++index];
+        }
+        return requested;
+    }
 
     public static SelectedGameProfile Resolve(
         IReadOnlyList<string> arguments,
@@ -53,27 +77,14 @@ public static class GameProfileSelection
         ArgumentNullException.ThrowIfNull(detectedIdentity);
         registry ??= GameProfileRegistry.BuiltIn;
 
-        string? explicitId = null;
-        bool probeMode = false;
-        for (int index = 0; index < arguments.Count; index++)
-        {
-            if (arguments[index] == ProbeOptionName)
-            {
-                probeMode = true;
-                continue;
-            }
-            if (arguments[index] != ProfileOptionName) continue;
-            if (index + 1 >= arguments.Count
-                || arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
-                throw new ArgumentException($"{ProfileOptionName} requires a profile id");
-            explicitId = arguments[++index];
-        }
+        string? explicitId = RequestedGameId(arguments);
+        bool probeMode = arguments.Contains(ProbeOptionName);
 
         if (explicitId != null)
         {
             GameProfileManifest profile = registry.Find(explicitId)
                 ?? throw new ArgumentException(
-                    $"unknown profile '{explicitId}'; available profiles: "
+                    $"unknown game '{explicitId}'; available games: "
                     + string.Join(", ", registry.Profiles.Select(value => value.Id)));
             bool matched = profile.Matches(detectedIdentity);
             return new SelectedGameProfile(
@@ -82,7 +93,7 @@ public static class GameProfileSelection
 
         if (probeMode)
             throw new ArgumentException(
-                $"{ProbeOptionName} requires {ProfileOptionName} <id> so the runtime knows which ABI to probe");
+                $"{ProbeOptionName} requires {GameOptionName} <id> so the runtime knows which ABI to probe");
 
         ImmutableArray<GameProfileManifest> matches = registry.Profiles
             .Where(profile => profile.Matches(detectedIdentity)).ToImmutableArray();
@@ -92,12 +103,12 @@ public static class GameProfileSelection
                 IdentityMatched: true, ProbeMode: false);
         if (matches.Length == 0)
             throw new ArgumentException(
-                $"no profile matches {detectedIdentity.Display}; "
-                + $"pass {ProfileOptionName} <id> to choose a profile explicitly"
+                $"no game matches {detectedIdentity.Display}; "
+                + $"pass {GameOptionName} <id> to choose a game explicitly"
                 + $" (add {ProbeOptionName} for a read-only diagnostic run)");
         throw new ArgumentException(
-            $"multiple profiles match {detectedIdentity.Display}: "
+            $"multiple games match {detectedIdentity.Display}: "
             + string.Join(", ", matches.Select(profile => profile.Id))
-            + $"; pass {ProfileOptionName} <id>");
+            + $"; pass {GameOptionName} <id>");
     }
 }

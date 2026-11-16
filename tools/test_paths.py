@@ -36,9 +36,33 @@ class ToolContextTests(unittest.TestCase):
             self.assertEqual((root / "extract").resolve(), context.extracted_root)
             self.assertEqual(paths.REPO / "build/games/kamidori", context.game_build)
 
-    def test_unknown_profile_is_rejected_before_path_use(self) -> None:
-        with self.assertRaisesRegex(ValueError, "unknown profile"):
+    def test_unknown_game_is_rejected_before_path_use(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown game 'not-a-game'; available games: "):
             paths.ToolContext.resolve("not-a-game", environ={})
+
+    def test_game_option_selects_the_game_and_leaves_the_game_root_unset(self) -> None:
+        # argparse's prefix matching once read `--game kamidori` as `--game-root kamidori` (launcher spec §5.8).
+        context, remaining = paths._context_from_process(["--game", "kamidori", "--tool-flag"], {})
+        self.assertEqual("kamidori", context.profile_id)
+        self.assertEqual(paths.WORKSPACE / "Kamidori", context.game_root)
+        self.assertEqual(["--tool-flag"], remaining)
+
+    def test_profile_is_the_same_option_as_game_and_the_last_wins(self) -> None:
+        for argv, expected in (
+            (["--profile", "kamidori"], "kamidori"),
+            (["--game", "himegari", "--profile", "kamidori"], "kamidori"),
+            (["--profile", "kamidori", "--game=himegari"], "himegari"),
+        ):
+            with self.subTest(argv=argv):
+                context, remaining = paths._context_from_process(argv, {})
+                self.assertEqual(expected, context.profile_id)
+                self.assertEqual([], remaining)
+
+    def test_common_options_match_only_their_exact_names(self) -> None:
+        context, remaining = paths._context_from_process(["--gam", "kamidori", "--extracted", "x"], {})
+        self.assertEqual("himegari", context.profile_id)
+        self.assertEqual(paths.WORKSPACE / "extracted", context.extracted_root)
+        self.assertEqual(["--gam", "kamidori", "--extracted", "x"], remaining)
 
     def test_child_environment_round_trips_identity(self) -> None:
         context = paths.ToolContext.resolve("kamidori", environ={})

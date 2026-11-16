@@ -5,9 +5,9 @@ asset-resolution scope selector (docs/asset-resolution-re.md step 2, scope-selec
 Inputs:
   build/settex-<SCENE>.json          our VM's ordered set-texture(resId) trace + bytecode offsets
                                      (produce with: py -3.11 -X utf8 tools/vm0.py --settex <SCENE>)
-  build/games/<profile>/frida-load-order-result.json the game's ordered (name, file_number=resId) loads
+  build/games/<game>/frida-load-order-result.json the game's ordered (name, file_number=resId) loads
                                      (produce with tools/frida/capture_load_order.py --analyze)
-  build/games/<profile>/asset-index.json             for segmenting DATA2 into packages
+  build/games/<game>/asset-index.json             for segmenting DATA2 into packages
 
 Method: `resId == file_number`, and each loaded file belongs to exactly one DATA2 "package"
 (a monotonic-file_number run). So the game's load order is a readout of the active package over
@@ -15,7 +15,7 @@ time. We greedily align each Frida load to the next same-resId set-texture in th
 pins it to a bytecode offset. Where the active package CHANGES between consecutive loads, some
 instruction in the bytecode span between their offsets flipped the scope -- the scope selector.
 This report lists the aligned loads, flags package transitions, and points at the byte spans to
-inspect (dump them with the disassembly in build/games/<profile>/disasm/<SCENE>.asm).
+inspect (dump them with the disassembly in build/games/<game>/disasm/<SCENE>.asm).
 
 Usage: py -3.11 -X utf8 tools/correlate_scope.py <SCENE>   (e.g. SC0000)
 """
@@ -54,7 +54,7 @@ NOISE = {"mov", "add", "sub", "mul", "div", "mod", "and", "or", "sar", "shl", "x
 
 
 def disasm_map(scene):
-    """offset(int) -> stripped disasm line, from build/games/<profile>/disasm/<SCENE>.asm."""
+    """offset(int) -> stripped disasm line, from build/games/<game>/disasm/<SCENE>.asm."""
     path = paths.BUILD / "disasm" / f"{scene}.asm"
     out = {}
     if not path.exists():

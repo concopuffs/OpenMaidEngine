@@ -20,11 +20,11 @@ aligning same-opcode handlers against the reference image. No Ghidra session is 
 translation's 4.33F build of Kamidori, or a reference-only install from ``paths.REFERENCE_INSTALLS``.
 
 Usage:
-  py -3.11 -X utf8 tools/operand_access.py [--profile ID] [--check-corpus]
-  py -3.11 -X utf8 tools/operand_access.py --profile kamidori --align-accessors
+  py -3.11 -X utf8 tools/operand_access.py [--game ID] [--check-corpus]
+  py -3.11 -X utf8 tools/operand_access.py --game kamidori --align-accessors
   py -3.11 -X utf8 tools/operand_access.py --engine arterial --align-accessors --align-to kamidori
 
-Output: build/games/<profile>/operand-access.json
+Output: build/games/<game>/operand-access.json
 See docs/tools-reference.md ("Native operand access") and docs/engine-re.md.
 """
 from __future__ import annotations
@@ -604,7 +604,7 @@ def apply_main() -> int:
     for profile_id in model.observations:
         report_path = paths.SHARED_BUILD / "games" / profile_id / "operand-access.json"
         if not report_path.is_file():
-            raise SystemExit(f"{report_path}: missing; run operand_access.py --profile {profile_id}")
+            raise SystemExit(f"{report_path}: missing; run operand_access.py --game {profile_id}")
         reports[profile_id] = json.loads(report_path.read_text(encoding="utf-8"))
         for op, positions in corpus_census(profile_id).items():
             for index, types in enumerate(positions, start=1):

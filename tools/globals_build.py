@@ -2,8 +2,8 @@
 """Generator + linter for the living per-game global-variable registries.
 Each profile owns its own registry because global addresses are per game: Himegari uses
 vm-map/globals.toml -> docs/global-reference.md; any other profile uses
-vm-map/globals-<profile>.toml -> docs/global-reference-<profile>.md.
-  --build   merge curated over build/games/<profile>/global-var-map.json -> build/games/<profile>/globals.json
+vm-map/globals-<game>.toml -> docs/global-reference-<game>.md.
+  --build   merge curated over build/games/<game>/global-var-map.json -> build/games/<game>/globals.json
             + the profile's generated reference doc
   --lint    run the linter, print errors/warnings, exit nonzero on errors
   --check   lint, then exit nonzero if the reference doc differs from what --build would write (needs the auto map)
@@ -394,7 +394,7 @@ def check(tp: Path, auto_map: Path = AUTO_MAP, reference_doc: Path = REFERENCE_D
     current = reference_doc.read_text(encoding="utf-8") if reference_doc.is_file() else None
     if current != expected:
         print(f"stale: {_shown(reference_doc)}; run globals_build.py "
-              f"--profile {paths.CONTEXT.profile_id} --build")
+              f"--game {paths.CONTEXT.profile_id} --build")
         return 1
     print(f"check: {_shown(reference_doc)} is current ({len(merged)} globals)")
     return 0
