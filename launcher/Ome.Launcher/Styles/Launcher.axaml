@@ -259,6 +259,22 @@
   <Style Selector="Border.notice.warn TextBlock.notice-text"><Setter Property="Foreground" Value="{DynamicResource OmeWarnBrush}" /></Style>
   <Style Selector="Border.notice.run"><Setter Property="Background" Value="{DynamicResource OmeRunBgBrush}" /></Style>
   <Style Selector="Border.notice.run TextBlock.notice-text"><Setter Property="Foreground" Value="{DynamicResource OmeRunBrush}" /></Style>
+  <Style Selector="TextBlock.card-title">
+    <Setter Property="Margin" Value="0,0,0,9" />
+  </Style>
+  <Style Selector="TextBlock.mark">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.strong-link">
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.primary.danger">
+    <Setter Property="Background" Value="{DynamicResource OmeBadBrush}" />
+  </Style>
+  <Style Selector="Button.primary.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeBadBrush}" />
+  </Style>
   <Style Selector="Border.log">
     <Setter Property="Background" Value="{DynamicResource OmeCardBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />

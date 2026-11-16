@@ -54,12 +54,36 @@ internal sealed class TestHome : IDisposable
     /// scripts its OMS modules run.</summary>
     public string Install(string game, string? folder = null)
     {
-        GameCatalogIdentity identity = GameProfileRegistry.BuiltIn.Find(game)!.CatalogIdentities[0];
         string root = Path.Combine(Root, "installs", folder ?? game);
         Directory.CreateDirectory(root);
-        File.WriteAllBytes(Path.Combine(root, Installs.CatalogFile), SyntheticCatalog.Build(
-            SyntheticCatalog.ScriptsTheModulesRun(game), identity.CatalogRevision.PadRight(8), identity.Title));
+        Catalog(root, game);
         return root;
+    }
+
+    /// <summary>Writes <paramref name="install"/>'s catalog for <paramref name="game"/>; with <paramref name="extra"/>
+    /// a file more, so the same game's catalog has another fingerprint.</summary>
+    public static void Catalog(string install, string game, string? extra = null)
+    {
+        GameCatalogIdentity identity = GameProfileRegistry.BuiltIn.Find(game)!.CatalogIdentities[0];
+        string[] files = SyntheticCatalog.ScriptsTheModulesRun(game);
+        if (extra != null) files = [.. files, extra];
+        File.WriteAllBytes(Path.Combine(install, Installs.CatalogFile), SyntheticCatalog.Build(
+            files, identity.CatalogRevision.PadRight(8), identity.Title));
+    }
+
+    /// <summary>A package of <paramref name="game"/> in the shared library, whose one new script runs one the game's
+    /// catalog holds; <paramref name="target"/> <c>extended</c> needs Extended mode.</summary>
+    public void Package(string game, string id, string target = "native")
+    {
+        string folder = Path.Combine(Home.ModsDirectory(game), id);
+        string script = "S" + new string(id.Where(char.IsAsciiLetterOrDigit).ToArray()).ToUpperInvariant();
+        string runs = Path.GetFileNameWithoutExtension(SyntheticCatalog.ScriptsTheModulesRun(game)[0]);
+        Directory.CreateDirectory(Path.Combine(folder, "scripts"));
+        File.WriteAllText(Path.Combine(folder, "manifest.toml"),
+            $"omp = {(target == "native" ? 1 : 3)}\nid = \"{id}\"\nname = \"{id}\"\nversion = \"1.2.0\"\n"
+            + $"[scripts]\nnames = [\"{script}\"]\n[game]\nprofile = \"{game}\"\ntarget = \"{target}\"\n");
+        File.WriteAllText(Path.Combine(folder, "scripts", script + ".oms"),
+            $"oms 1\nscript \"{script}\"\nuse {game}.scripts\n\n    run {runs}\n    exit\n");
     }
 
     /// <summary>A profile on <paramref name="install"/>, made as the wizard makes one, in this home or in

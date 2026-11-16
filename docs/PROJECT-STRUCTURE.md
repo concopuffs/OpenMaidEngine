@@ -355,6 +355,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       duplicate, rename, delete under the profile's RunLock), Installs
     │                                       (recognizing an install, overlay candidates, known installs),
     │                                       ProfileSaves (save counts, copying saves in with their selectors),
+    │                                       ProfileSettings (a profile's OME.INI options and SYS4REG.INI
+    │                                       start mode, read as the engine reads them),
     │                                       BareEngineData/Adoption (a profile from the bare engine's data) and
     │                                       Library (package states, add, remove, enable with dependencies,
     │                                       the switch to Compatibility), ProfileSelectors (the selectors a

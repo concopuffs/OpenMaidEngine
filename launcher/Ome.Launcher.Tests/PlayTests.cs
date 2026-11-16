@@ -26,12 +26,12 @@ public sealed class PlayTests : IDisposable
     private void While(WhileRunning mode)
         => _home.Session().Save(LauncherSettingsStore.Load(_home.Home).Settings with { WhileRunning = mode, Art = ArtConsent.Never });
 
-    private (MainViewModel Model, Host Host) Model(EngineProgram engine, WindowReason reason = WindowReason.Requested,
+    private (MainViewModel Model, RecordingHost Host) Model(EngineProgram engine, WindowReason reason = WindowReason.Requested,
                                                    LaunchResult? launch = null)
     {
         var model = new MainViewModel(_home.Session(reason, profile: launch == null ? null : _profile, launch: launch,
                                                     engine: engine), new ArtOptions(Handler: new HttpClientHandler()));
-        var host = new Host();
+        var host = new RecordingHost();
         model.Host = host;
         return (model, host);
     }
@@ -50,7 +50,7 @@ public sealed class PlayTests : IDisposable
             ProfilePageViewModel page = model.Page!;
             Assert.True(page.CanPlay);
             Assert.True(page.Play.CanExecute(null));
-            page.Tab = ProfileTab.Mods;
+            Assert.True(page.Overview.SwitchMode.CanExecute(null));
 
             Task<LaunchFailure?> play = model.PlayAsync(page.Row);
             await Headless.Until(() => page.Row.RunningHere, "the engine to start");
@@ -58,9 +58,10 @@ public sealed class PlayTests : IDisposable
             Assert.True(page.IsLocked);
             Assert.StartsWith("The game is running this profile since ", page.NoticeText);
             Assert.True(page.NoticeRun);
-            Assert.Equal(ProfileTab.Overview, page.Tab);
-            Assert.False(page.ShowTab.CanExecute(ProfileTab.Mods));
-            Assert.True(page.ShowTab.CanExecute(ProfileTab.Overview));
+            // Every tab can be looked at (spec §8.4, the mock); what writes the profile's files is locked.
+            Assert.True(page.ShowTab.CanExecute(ProfileTab.Mods));
+            Assert.False(page.Overview.SwitchMode.CanExecute(null));
+            Assert.True(page.Overview.ShowSwitchLocked);
             Assert.False(page.Play.CanExecute(null));
             Assert.True(model.HasRunningEngine);
             Assert.False(model.CloseRequested(), "the window does not close while the engine it started runs");
@@ -71,6 +72,7 @@ public sealed class PlayTests : IDisposable
             Assert.False(model.HasRunningEngine);
             Assert.Equal(ProfileState.Ready, page.Row.State);
             Assert.True(page.IsUnlocked);
+            Assert.True(page.Overview.SwitchMode.CanExecute(null));
             Assert.Equal(["Hide", "Quit"], host.Calls);
             Assert.Contains($"stub out: {_profile.Root}", Log);
         }
@@ -253,15 +255,4 @@ public sealed class PlayTests : IDisposable
             Assert.Equal(ProfileState.Ready, row.State);
         }
     });
-
-    /// <summary>Records what the view models asked of the window.</summary>
-    private sealed class Host : IWindowHost
-    {
-        public List<string> Calls { get; } = [];
-        public void Minimize() => Calls.Add("Minimize");
-        public void Hide() => Calls.Add("Hide");
-        public void Restore() => Calls.Add("Restore");
-        public void Quit() => Calls.Add("Quit");
-        public void Open(string path) => Calls.Add($"Open {path}");
-    }
 }

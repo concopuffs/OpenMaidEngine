@@ -98,7 +98,11 @@
     </Border>
 
     <ScrollViewer Padding="22,16,22,22">
-      <Panel />
+      <Panel>
+        <Panel IsVisible="{Binding OnOverview}">
+          <v:OverviewView DataContext="{Binding Overview}" />
+        </Panel>
+      </Panel>
     </ScrollViewer>
   </DockPanel>
 </UserControl>

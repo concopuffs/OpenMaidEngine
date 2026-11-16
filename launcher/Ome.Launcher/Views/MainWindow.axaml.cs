@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform.Storage;
 using Ome.Launcher.Core;
 using Ome.Launcher.ViewModels;
 
@@ -90,6 +91,13 @@ public sealed partial class MainWindow : Window, IWindowHost
     {
         if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             desktop.Shutdown();
+    }
+
+    public async Task<string?> PickFolderAsync(string title)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions { Title = title, AllowMultiple = false });
+        return folders.Count == 0 ? null : folders[0].TryGetLocalPath();
     }
 
     public void Open(string path)

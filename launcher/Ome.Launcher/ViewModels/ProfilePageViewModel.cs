@@ -41,7 +41,8 @@ public sealed class ProfilePageViewModel : ViewModel
         Shortcut = new Command(() => { }, () => false);
         More = new Command(() => { }, () => false);
         NoticeCommand = new Command(RunNoticeAction, () => NoticeTarget != null);
-        ShowTab = new Command(tab => Tab = (ProfileTab)tab!, tab => (ProfileTab)tab! == ProfileTab.Overview || !IsLocked);
+        ShowTab = new Command(tab => Tab = (ProfileTab)tab!);
+        Overview = new OverviewViewModel(this);
         OpenLog = new Command(() => { if (Row.Failure?.LogPath is { } log) _main.Host?.Open(log); },
                               () => Row.Failure?.LogPath != null);
         DismissFailure = new Command(() => Row.Failure = null);
@@ -49,7 +50,9 @@ public sealed class ProfilePageViewModel : ViewModel
     }
 
     public LauncherStrings S => _main.S;
+    public MainViewModel Main => _main;
     public ProfileRowViewModel Row { get; }
+    public OverviewViewModel Overview { get; }
     public ProfileEntry Entry => Row.Entry;
     private ProfileDocument? Document => Entry.Loaded?.Document;
     public ArtViewModel? Cover { get; private set; }
@@ -62,6 +65,7 @@ public sealed class ProfilePageViewModel : ViewModel
         {
             _checks = value;
             ChangedAll();
+            Overview.Refresh();
         }
     }
 
@@ -128,18 +132,38 @@ public sealed class ProfilePageViewModel : ViewModel
     /// <summary>"Play", or "Starting…" while the checks run again before the engine starts.</summary>
     public string PlayText => Row.Launching ? S["header.starting"] : S["header.play"];
 
-    /// <summary>While the game runs (or starts) the profile is not changed: only the Overview stays usable
-    /// (spec §8.4).</summary>
+    /// <summary>While the game runs (or starts), nothing that writes one of the profile's files can be used: the Mods
+    /// page, the mode's switch, Settings, Advanced and copying saves in (spec §8.4). Every tab can still be looked at,
+    /// as in the mock.</summary>
     public bool IsLocked => IsRunning || Row.Launching;
     public bool IsUnlocked => !IsLocked;
 
     private void RowChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (IsLocked && _tab != ProfileTab.Overview) Tab = ProfileTab.Overview;
         ChangedAll();
+        Overview.Refresh();
         Play.Refresh();
-        ShowTab.Refresh();
         OpenLog.Refresh();
+    }
+
+    /// <summary>Writes a change to the profile's files off the UI thread (<paramref name="write"/> holds the profile's
+    /// lock), keeps the profile as written, and checks it again. A refused write (the game holds the lock, a file
+    /// cannot be written) is reported on the Overview and changes nothing.</summary>
+    public async Task<bool> WriteAsync(Func<ProfileEntry, LoadedProfile> write)
+    {
+        ProfileEntry entry = Entry;
+        try
+        {
+            LoadedProfile loaded = await Task.Run(() => write(entry));
+            Row.Entry = entry with { Loaded = loaded };
+        }
+        catch (Exception error) when (error is ProfileBusyException or ProfileFileException || IsCheckFailure(error))
+        {
+            Overview.WriteFailed(error.Message);
+            return false;
+        }
+        await CheckAsync();
+        return true;
     }
 
     /// <summary>Stops listening to the row: the page is no longer shown.</summary>

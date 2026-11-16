@@ -48,6 +48,7 @@ public sealed class MainViewModel : ViewModel, IDisposable
     private bool _askArt;
     private int _running;
     private bool _quitWhenIdle;
+    private ConfirmViewModel? _confirm;
 
     public MainViewModel(LauncherSession session, ArtOptions? artOptions = null)
     {
@@ -184,6 +185,37 @@ public sealed class MainViewModel : ViewModel, IDisposable
         }
         await DownloadArtAsync(Session.Settings.Art);
     }
+
+    // ---- questions ----
+
+    /// <summary>The question the window asks over its scrim, or null.</summary>
+    public ConfirmViewModel? Confirm
+    {
+        get => _confirm;
+        private set
+        {
+            Set(ref _confirm, value);
+            Changed(nameof(HasConfirm));
+        }
+    }
+    public bool HasConfirm => _confirm != null;
+
+    /// <summary>Asks <paramref name="question"/> and returns the player's answer.</summary>
+    public async Task<bool> ConfirmAsync(ConfirmViewModel question)
+    {
+        Confirm = question;
+        try
+        {
+            return await question.Answer;
+        }
+        finally
+        {
+            if (Confirm == question) Confirm = null;
+        }
+    }
+
+    /// <summary>The publisher's page of <paramref name="game"/> (spec §8.4 Overview), from the game's manifest.</summary>
+    public Uri? Site(string game) => _art.Site(game);
 
     // ---- Play (spec §8.5) ----
 

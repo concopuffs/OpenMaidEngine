@@ -1,0 +1,126 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             xmlns:v="using:Ome.Launcher.Views"
+             x:Class="Ome.Launcher.Views.OverviewView"
+             x:DataType="vm:OverviewViewModel">
+  <!-- The mock's overview(): four cards in two columns (.grid2), each a list of keys and values (.kv). -->
+  <StackPanel Spacing="14">
+    <Border Classes="notice" Classes.bad="{Binding ResultBad}" Classes.run="{Binding !ResultBad}"
+            IsVisible="{Binding HasResult}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Result}" />
+    </Border>
+
+    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="14" RowSpacing="14">
+      <!-- The game. -->
+      <Border Classes="card">
+        <StackPanel>
+          <TextBlock Classes="heading card-title" Text="{Binding S[overview.game], Converter={x:Static v:Text.Upper}}" />
+          <Grid ColumnDefinitions="104,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="5">
+            <TextBlock Classes="muted" Text="{Binding S[overview.title]}" />
+            <StackPanel Grid.Column="1">
+              <TextBlock TextWrapping="Wrap" Text="{Binding OriginalTitle}" />
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding OtherTitle}" IsVisible="{Binding HasOtherTitle}" />
+            </StackPanel>
+            <TextBlock Grid.Row="1" Classes="muted" Text="{Binding S[overview.version]}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap" Text="{Binding Version}" />
+            <TextBlock Grid.Row="2" Classes="muted" Text="{Binding S[overview.catalog]}" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="mono small" TextWrapping="Wrap" Text="{Binding Catalog}"
+                       ToolTip.Tip="{Binding Fingerprint}" />
+            <TextBlock Grid.Row="3" Classes="muted" Text="{Binding S[overview.install]}" />
+            <StackPanel Grid.Row="3" Grid.Column="1" Spacing="2">
+              <TextBlock Classes="mono small" TextWrapping="Wrap" Text="{Binding InstallPath}" />
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Classes="link" Content="{Binding S[overview.open-folder]}" Command="{Binding OpenInstall}" />
+                <Button Classes="link strong-link" Content="{Binding S[overview.locate]}" Command="{Binding Locate}"
+                        IsVisible="{Binding ShowLocate}" />
+              </StackPanel>
+            </StackPanel>
+            <TextBlock Grid.Row="4" Classes="muted" Text="{Binding S[overview.overlays]}" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Classes="small" TextWrapping="Wrap" Text="{Binding Overlays}" />
+            <TextBlock Grid.Row="5" Classes="muted" Text="{Binding S[overview.publisher]}" />
+            <Button Grid.Row="5" Grid.Column="1" Classes="link" HorizontalAlignment="Left"
+                    Content="{Binding Publisher}" Command="{Binding OpenPublisher}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- The profile. -->
+      <Border Grid.Column="1" Classes="card">
+        <StackPanel>
+          <TextBlock Classes="heading card-title" Text="{Binding S[overview.profile], Converter={x:Static v:Text.Upper}}" />
+          <Grid ColumnDefinitions="104,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="5">
+            <TextBlock Classes="muted" Text="{Binding S[overview.mode]}" />
+            <StackPanel Grid.Column="1" Spacing="2">
+              <TextBlock Text="{Binding ModeName}" />
+              <TextBlock Classes="muted small" TextWrapping="Wrap" Text="{Binding ModeDescription}" />
+              <Button Classes="link strong-link" HorizontalAlignment="Left" Content="{Binding SwitchText}"
+                      Command="{Binding SwitchMode}" IsVisible="{Binding ShowSwitch}" />
+              <TextBlock Classes="muted small" TextWrapping="Wrap" Text="{Binding S[overview.switch-locked]}"
+                         IsVisible="{Binding ShowSwitchLocked}" />
+            </StackPanel>
+            <TextBlock Grid.Row="1" Classes="muted" Text="{Binding S[overview.language]}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Language}" />
+            <TextBlock Grid.Row="2" Classes="muted" Text="{Binding S[overview.display]}" />
+            <TextBlock Grid.Row="2" Grid.Column="1" TextWrapping="Wrap" Text="{Binding Display}" />
+            <TextBlock Grid.Row="3" Classes="muted" Text="{Binding S[overview.saves]}" />
+            <TextBlock Grid.Row="3" Grid.Column="1" TextWrapping="Wrap" Text="{Binding Saves}" />
+            <TextBlock Grid.Row="4" Classes="muted" Text="{Binding S[overview.folder]}" />
+            <StackPanel Grid.Row="4" Grid.Column="1" Spacing="2">
+              <TextBlock Classes="mono small" TextWrapping="Wrap" Text="{Binding Folder}" />
+              <Button Classes="link" HorizontalAlignment="Left" Content="{Binding S[overview.open-folder]}"
+                      Command="{Binding OpenFolder}" />
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- The mods, in load order. -->
+      <Border Grid.Row="1" Classes="card">
+        <StackPanel>
+          <TextBlock Classes="heading card-title" Text="{Binding S[overview.mods], Converter={x:Static v:Text.Upper}}" />
+          <TextBlock Classes="muted" Text="{Binding S[overview.no-mods]}" IsVisible="{Binding HasNoMods}" />
+          <ItemsControl ItemsSource="{Binding Mods}" IsVisible="{Binding HasMods}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ModLine">
+                <Grid ColumnDefinitions="22,Auto,*" Margin="0,1">
+                  <TextBlock Classes="muted" Text="{Binding Number, StringFormat='{}{0}.'}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" />
+                  <TextBlock Grid.Column="2" Classes="muted" Margin="6,0,0,0" Text="{Binding Version}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Classes="link" HorizontalAlignment="Left" Margin="0,8,0,0" Content="{Binding S[overview.manage-mods]}"
+                  Command="{Binding ManageMods}" />
+        </StackPanel>
+      </Border>
+
+      <!-- The checks (spec §8.5), and what fixes them. -->
+      <Border Grid.Row="1" Grid.Column="1" Classes="card">
+        <StackPanel>
+          <TextBlock Classes="heading card-title" Text="{Binding S[overview.checks], Converter={x:Static v:Text.Upper}}" />
+          <TextBlock Classes="muted" Text="{Binding S[status.checking]}" IsVisible="{Binding !HasChecks}" />
+          <ItemsControl ItemsSource="{Binding CheckLines}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CheckLine">
+                <Grid ColumnDefinitions="18,*" Margin="0,2">
+                  <TextBlock Classes="mark" Classes.ok="{Binding IsOk}" Classes.bad="{Binding IsBad}"
+                             Classes.warn="{Binding IsWarn}" Classes.run="{Binding IsRun}"
+                             Classes.muted="{Binding IsNotRun}" Text="{Binding Mark}" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock TextWrapping="Wrap" Classes.muted="{Binding IsNotRun}" Text="{Binding Text}" />
+                    <TextBlock Classes="muted small" TextWrapping="Wrap" Text="{Binding Detail}"
+                               IsVisible="{Binding HasDetail}" />
+                  </StackPanel>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Classes="primary" HorizontalAlignment="Left" Margin="0,10,0,0" Content="{Binding S[overview.accept]}"
+                  Command="{Binding Accept}" IsVisible="{Binding ShowAccept}" />
+        </StackPanel>
+      </Border>
+    </Grid>
+  </StackPanel>
+</UserControl>

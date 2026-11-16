@@ -17,6 +17,10 @@ public interface IWindowHost
     /// <summary>Ends the launcher.</summary>
     void Quit();
 
-    /// <summary>Opens <paramref name="path"/> with the OS: a folder in the file manager, a file in its program.</summary>
+    /// <summary>Opens <paramref name="path"/> with the OS: a folder in the file manager, a file in its program, a
+    /// web address in the browser.</summary>
     void Open(string path);
+
+    /// <summary>Asks the player for a folder; null when they cancel.</summary>
+    Task<string?> PickFolderAsync(string title);
 }

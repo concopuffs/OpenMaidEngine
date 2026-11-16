@@ -83,6 +83,32 @@
       </Panel>
     </Grid>
 
+    <!-- A question before a change (plan §6.4, §6.10), over a scrim. -->
+    <Border Background="{DynamicResource OmeScrimBrush}" IsVisible="{Binding HasConfirm}">
+      <Border Classes="dialog" Width="520" HorizontalAlignment="Center" VerticalAlignment="Center"
+              DataContext="{Binding Confirm}">
+        <StackPanel Spacing="10" x:DataType="vm:ConfirmViewModel">
+          <TextBlock Classes="dialog-title" Text="{Binding Title}" />
+          <TextBlock TextWrapping="Wrap" Text="{Binding Text}" />
+          <StackPanel Spacing="4" IsVisible="{Binding HasItems}">
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ItemsHeading}" />
+            <ItemsControl ItemsSource="{Binding Items}" Margin="12,0,0,0">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <TextBlock Classes="mono small" Text="{Binding}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+            <Button Content="{Binding CancelText}" Command="{Binding No}" />
+            <Button Classes="primary" Classes.danger="{Binding Danger}" Content="{Binding ConfirmText}"
+                    Command="{Binding Yes}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Border>
+
     <!-- The art question (spec §8.7), over a scrim, as the mock's dialogs. -->
     <Border Background="{DynamicResource OmeScrimBrush}" IsVisible="{Binding AskArt}">
       <Border Classes="dialog" Width="520" HorizontalAlignment="Center" VerticalAlignment="Center">

@@ -152,6 +152,46 @@ public sealed class WindowTests : IDisposable
              });
     }
 
+    [Fact]
+    public void TheOverviewDraws()
+    {
+        Dictionary<string, ProfileEntry> profiles = Three();
+        Select("kamidori-english");
+        _home.Package("kamidori", "community.font-fix");
+        _home.Package("kamidori", "community.random-enemies", target: "extended");
+        ProfileStore.Update(profiles["kamidori-english"], document =>
+        {
+            var folders = Library.Index(document);
+            document = Library.Enable(document with { Mode = Ome.Mods.Launch.ProfileMode.Extended }, "community.font-fix",
+                                      folders).Document;
+            return Library.Enable(document, "community.random-enemies", folders).Document;
+        }, _home.Home);
+        Draw("overview", task: "6.4", check: model => Assert.Equal(2, model.Page!.Overview.Mods.Count));
+        Draw("overview-ja", "ja", task: "6.4", themes: ThemeVariant.Dark);
+
+        Task? asked = null;
+        Draw("switch-question", task: "6.4", themes: ThemeVariant.Light,
+             before: async model =>
+             {
+                 asked = model.Page!.Overview.SwitchModeAsync();
+                 await Headless.Until(() => model.HasConfirm, "the question");
+             },
+             check: model => Assert.Equal(["community.random-enemies"], model.Confirm!.Items),
+             after: async model =>
+             {
+                 model.Confirm!.No.Execute(null);
+                 await asked!;
+             });
+
+        string install = profiles["kamidori-english"].Loaded!.Document.Install.Root;
+        TestHome.Catalog(install, "kamidori", extra: "EXTRA.BIN");
+        Draw("fingerprint", task: "6.4", themes: ThemeVariant.Light,
+             check: model => Assert.True(model.Page!.Overview.ShowAccept));
+        File.Delete(Path.Combine(install, Ome.Launcher.Core.Installs.CatalogFile));
+        Draw("install-missing", task: "6.4", themes: ThemeVariant.Dark,
+             check: model => Assert.True(model.Page!.Overview.ShowLocate));
+    }
+
     private ProfileState ProfilePageStateOf(ProfileEntry profile)
         => ProfileRowViewModel.StateOf(ProfileChecks.Run(profile, _home.CheckOptions));
 

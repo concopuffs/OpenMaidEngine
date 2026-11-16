@@ -39,10 +39,11 @@ public sealed class ProfileRowViewModel : ViewModel
     private bool _launching;
     private bool _runningHere;
     private LaunchFailure? _failure;
+    private ProfileEntry _entry;
 
     public ProfileRowViewModel(ProfileEntry entry, LauncherStrings strings, Action<ProfileRowViewModel> select)
     {
-        Entry = entry;
+        _entry = entry;
         S = strings;
         _select = select;
         _state = entry.NeedsReview ? ProfileState.Review
@@ -51,7 +52,16 @@ public sealed class ProfileRowViewModel : ViewModel
         Select = new Command(() => _select(this));
     }
 
-    public ProfileEntry Entry { get; }
+    /// <summary>The profile as last read or written: a page's change replaces it.</summary>
+    public ProfileEntry Entry
+    {
+        get => _entry;
+        set
+        {
+            _entry = value;
+            ChangedAll();
+        }
+    }
     public LauncherStrings S { get; }
     public string Id => Entry.Id;
     public string Name => Entry.DisplayName;
