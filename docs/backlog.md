@@ -449,6 +449,14 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   under SDK 10.0.404 with their net8.0 targets unchanged and the same warnings (launcher plan §3.10); the tests
   were not run under it. Done when the projects, the SDK pin, CI and the exports target a supported version that
   the Godot release in use accepts, and the core and package gates pass.
+- **No test shows that a cloud folder's placeholder passes the profile-root link check.** Launcher spec §12 says
+  "a cloud folder's placeholders are not links". `RootSafety.FindLink` (`engine/Ome.Mods/Launch/`) counts an entry as
+  a link only when .NET reports a `LinkTarget` for it, which it does for symbolic links and junctions (mount points)
+  and not for other reparse tags. That is .NET's documented behaviour, not a measurement. A real placeholder (OneDrive's
+  `IO_REPARSE_TAG_CLOUD_*`) needs a sync root registered through the Cloud Filter API (`CfRegisterSyncRoot`,
+  `CfCreatePlaceholders`), which changes the machine's state, so launcher plan §4.3 left it out. Done when a test or
+  a measurement on a real OneDrive folder, dehydrated files included, shows a placeholder-holding root passing the
+  check without hydrating anything.
 - **Keep the game installs in one folder.** The workspace root holds each install under its own name:
   `Himegari_Game/`, `Kamidori/`, `Kamidori_Translated/` and `Arterial/創刻のアテリアル/` (added 2026-11-09 for
   native-engine comparison only). Every tool that finds them has its own table of those names:

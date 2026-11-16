@@ -768,6 +768,22 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   occurrence, the last given, so the port and `Ome.Cli` read the same value. The startup log adds a
   `[profile-file]` line with the file and the values in effect. A root without the file: the driver's sandboxes.
   The `[mods]` table is parsed; the discovery that follows it is launcher plan §4.5.
+
+  Before anything in the root is opened, the resolver checks it (`RootSafety`, launcher spec §12). The checks apply
+  only to a root with a profile file:
+  - A symbolic link or junction anywhere inside the root (hidden ones included) stops startup and names it. This
+    check runs before `profile.toml` is read.
+  - A Windows network path (`\\host\share\…`, `//host/…`, `\\?\UNC\…`) that the file names for `install.root`,
+    `install.overlays` or `mods.folders` stops startup with each key and path, unless this machine's player approved
+    the location. A path inside the profile root needs no approval. This check runs before the install is read, so
+    nothing on the share is opened.
+  - The approved locations live in `machine.toml` in Godot's user folder for this project (`%APPDATA%\Godot\app_userdata\Open Maid Engine\`;
+    on Linux `$XDG_DATA_HOME/godot/app_userdata/Open Maid Engine/`). That is outside OME home and every profile, so
+    a root from elsewhere brings no approval. The launcher writes it; the engine only reads it.
+  - `--allow-network-paths` approves the file's network paths for one run. A share reached through a drive letter
+    and a network mount on Linux are ordinary paths.
+  - The host passes Godot's own user folder. `Ome.Cli` computes it by Godot's rule (`MachineState.DefaultFolder`),
+    and the host's `--selftest` checks that the two agree (`machine-folder=ok`).
 - `--scene <NAME>` — start in one script instead of the natural boot, e.g. `--scene SC0240`. When the profile
   declares the F4 launcher's coordinator (Himegari), the scene is entered as that launcher enters it
   (`VirtualMachine.HostScene`; `engine-re.md`, "Native ADV hosting and Himegari's developer entry"):

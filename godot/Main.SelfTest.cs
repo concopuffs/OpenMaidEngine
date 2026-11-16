@@ -344,6 +344,14 @@ public partial class Main
             _graphics.SnapshotBackbufferObjects(_clock.NowMs, backbufferSnapshot);
         backbufferPreservationOk &=
             clearedPolicy == new BackbufferPublicationPolicy(false, false);
+        // Launcher spec §12: Ome.Cli and the launcher compute Godot's user folder by its rule; it must be Godot's own.
+        bool machineFolderOk = string.Equals(
+            Ome.Mods.Launch.RootSafety.Normalize(Ome.Mods.Launch.MachineState.DefaultFolder()),
+            Ome.Mods.Launch.RootSafety.Normalize(ProjectSettings.GlobalizePath("user://")),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        if (!machineFolderOk)
+            GD.PushError($"[selftest] MachineState.DefaultFolder()={Ome.Mods.Launch.MachineState.DefaultFolder()} "
+                         + $"but Godot's user folder is {ProjectSettings.GlobalizePath("user://")}");
         ok &= launcherOk && sleepMinimumOk && sleepPresentationOk && inputTranslationOk && cp932WavMetadataOk
               && firstRiffBoundaryOk
               && bgmOneShotModeOk && bgmLoopModeOk && audioVolumeOk
@@ -351,7 +359,7 @@ public partial class Main
               && immediateSurfaceTextOk
               && liveRetainedTextOk
               && historyRetainedTextOk
-              && logicalCanvasOk && backbufferPreservationOk;
+              && logicalCanvasOk && backbufferPreservationOk && machineFolderOk;
         if (ok) GD.Print($"SELFTEST OK: threaded host matches headless ({actual.Count} lines, full handling); " +
                          $"debug launcher catalog/UI smoke ({debugEntries.Count} packed scripts); " +
                          $"sleep-min=1ms; native-key-translation=ok; cp932-wav-info=ok; " +
@@ -363,7 +371,8 @@ public partial class Main
                          $"history-text={historyRetainedTextMode}; " +
                          $"backbuffer-preservation=ok; " +
                          $"logical-canvas={_screenWidth}x{_screenHeight}; " +
-                         $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
+                         $"window-request={_windowOptions.Width}x{_windowOptions.Height}; " +
+                         $"machine-folder=ok");
         else GD.Print($"SELFTEST FAIL: threaded={actual.Count} vs headless={expected.Count}; " +
                       $"debug-launcher={launcherOk}; sleep-min={sleepMinimumOk}; " +
                       $"sleep-presentation={sleepPresentationOk}; " +
@@ -378,7 +387,8 @@ public partial class Main
                       $"history-text={historyRetainedTextOk}({historyRetainedTextMode}); " +
                       $"backbuffer-preservation={backbufferPreservationOk}; " +
                       $"logical-canvas={logicalCanvasOk}({_screenWidth}x{_screenHeight}); " +
-                      $"window-request={_windowOptions.Width}x{_windowOptions.Height}");
+                      $"window-request={_windowOptions.Width}x{_windowOptions.Height}; " +
+                      $"machine-folder={machineFolderOk}");
         GetTree().Quit(ok ? 0 : 1);
     }
 

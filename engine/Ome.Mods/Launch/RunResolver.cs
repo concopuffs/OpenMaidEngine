@@ -86,8 +86,10 @@ public static class RunResolver
         GameProfileSelection.ProbeOptionName,
     ];
 
+    /// <param name="machineFolder">Where this machine's own state is kept (<see cref="MachineState"/>): Godot's user
+    /// folder, which the host passes; null computes it by Godot's rule (<see cref="MachineState.DefaultFolder"/>).</param>
     public static ResolvedRun Resolve(IReadOnlyList<string> arguments, string workingDirectory,
-                                      GameProfileRegistry? registry = null)
+                                      GameProfileRegistry? registry = null, string? machineFolder = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
@@ -97,6 +99,25 @@ public static class RunResolver
         string? dataRoot = LastValue(normalized, DataRootOption);
         if (dataRoot == null)
             return new ResolvedRun(normalized, null, null, []);
+
+        // Launcher spec §12: with a profile file, nothing in the root may be a link, and the walk runs before the
+        // file itself is opened. A link named profile.toml counts as a profile file, so the walk finds it.
+        var profileInfo = new FileInfo(Path.Combine(dataRoot, ProfileFile.FileName));
+        if (!profileInfo.Exists && profileInfo.LinkTarget == null)
+            return new ResolvedRun(normalized, null, dataRoot, []);
+        string? link;
+        try
+        {
+            link = RootSafety.FindLink(dataRoot);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new RunResolutionException($"{dataRoot}: the profile root cannot be checked: {error.Message}", error);
+        }
+        if (link != null)
+            throw new RunResolutionException(
+                $"{dataRoot}: {link} is a symbolic link or junction; a profile root may hold none, since the engine "
+                + "writes into it and a link would send a write elsewhere");
 
         ProfileFile? file;
         try
@@ -118,6 +139,10 @@ public static class RunResolver
         foreach (string argument in arguments)
             if (Array.IndexOf(RefusedWithProfileFile, argument) >= 0)
                 throw new RunResolutionException(RefusalReason(argument, file.Path));
+
+        // Launcher spec §12: the network paths the file names, checked before the install is read.
+        RootSafety.RequireApproved(file, arguments, () => MachineState.Load(machineFolder ?? MachineState.DefaultFolder()),
+                                   OperatingSystem.IsWindows());
 
         var warnings = new List<string>();
         CheckInstall(file, registry, warnings);

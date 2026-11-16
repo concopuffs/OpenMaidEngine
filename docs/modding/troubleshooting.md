@@ -101,6 +101,17 @@ profile this engine made.
 **"… : unknown key".** The file holds a key this engine does not know. `profile.toml` is strict, as `manifest.toml`
 is: a mistyped key would otherwise be dropped silently.
 
+**"… is a symbolic link or junction; a profile root may hold none".** Something inside the profile root (a
+folder or a file, hidden or not) is a link. The port writes into the root, so a link could send a write somewhere
+else. Replace the link with the real folder, or move the profile root. A cloud folder's placeholders (OneDrive and
+the like) are not links.
+
+**"… names the network path `\\host\share\…`, which this machine's player has not approved".** The profile names a
+folder on another computer. Opening it would contact that computer and offer it your Windows sign-in, so a profile
+from someone else must not be able to pick the computer. Approve the location in the launcher. To approve it for one
+run only, pass `--allow-network-paths`. A share mapped to a drive letter (`Z:\…`) needs no approval, and neither does
+a network path inside the profile root.
+
 **A warning that `install.fingerprint` differs.** The install's `SYS4INI.BIN` changed since the profile accepted it,
 for example after an official update. The port continues; check that your mods still name the right revision.
 

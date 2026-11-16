@@ -61,6 +61,7 @@ The full list, including the validation tools, is in `../tools-reference.md`.
 |---|---|
 | `--mod PATH` | Also load this mod (folder or `.omp`). Repeatable. Loaded after the installed mods, unless its manifest orders it otherwise. |
 | `--no-mods` | Load no mods at all, not even installed ones. |
+| `--allow-network-paths` | With a profile file, open the network paths (`\\host\share\…`) it names for this run without the launcher's approval ([troubleshooting.md](troubleshooting.md), "Startup refusals"). |
 | `--skip-failed-mods` | If the stack does not link, drop the mods involved, say so, and start with the rest. Without it a failed link stops startup (exit code 2). |
 | `--forget-mod ID` | Release a removed mod's selector (see below). Repeatable. |
 | `--data-root DIR` | Use `DIR` as the profile root instead of the default, for a separate set of mods and saves. When `DIR` holds a `profile.toml`, that file names the game and the install, and the game options are refused ([troubleshooting.md](troubleshooting.md), "Startup refusals"). |

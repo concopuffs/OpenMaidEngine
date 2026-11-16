@@ -142,7 +142,9 @@ public partial class Main : Godot.Control
                     && System.IO.Directory.Exists(inheritedWorkingDirectory))
                     workingDirectory = inheritedWorkingDirectory;
             }
-            run = RunResolver.Resolve(commandLine, workingDirectory);
+            // This machine's own state (approved network locations) lives in Godot's user folder.
+            run = RunResolver.Resolve(commandLine, workingDirectory,
+                                      machineFolder: ProjectSettings.GlobalizePath("user://"));
             userArgs = run.Arguments.ToArray();
             _launchArguments = userArgs;
             gameRoot = GameRootSelection.Resolve(
