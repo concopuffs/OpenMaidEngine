@@ -451,6 +451,32 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   under it, with the tests on the .NET 8 runtime; the exports still bundle the .NET 8 runtime. Done when the
   projects, CI and the exports target a supported version that the Godot release in use accepts, and the core and
   package gates pass.
+- **A package is an executable beside about 200 loose files.** Both export presets leave
+  `dotnet/embed_build_outputs` and `binary_format/embed_pck` off (`godot/export_presets.cfg`). v0.6.0's Windows
+  package therefore holds 220 files: `OME.exe`, `OME.pck`, the notices, and 208 files in `data_OME_windows_x86_64/`,
+  200 of them DLLs (the engine's assemblies, the .NET runtime, the movie shim and FFmpeg). The Linux package holds
+  217, with 180 DLLs and 19 shared objects in its folder. The user asked (2026-11-16) to investigate the opposite
+  layout: a "fat" executable, with only chosen data kept as files beside it. They named the game manifests as data
+  to separate out eventually. What an investigation starts from:
+  - Godot's executable hosts the .NET runtime from that folder: both packagers require `hostfxr.dll`, `coreclr.dll`
+    and `hostpolicy.dll` in it. Whether .NET's single-file publish, which the launcher will use (launcher plan
+    §3.1), can apply to the engine is not known. Neither is what the two export switches do when the engine starts.
+    If embedded assemblies are unpacked to a folder outside the package before they load, that is a second copy of
+    the program on the player's disk, outside what a portable install covers (launcher spec §4.1).
+  - FFmpeg's libraries stay separate files. The license walk-through depends on dynamic linking
+    (`platform-portability.md`, "FFmpeg license checklist walk-through", item 2).
+  - The packagers and their checks name loose files: `REQUIRED_FILES` in `tools/package_windows_x64.py` and
+    `tools/package_linux_x64.py`, `tools/verify_windows_native.py`, and the notices check that reads the
+    `deps.json`.
+  - Data that is inside an assembly today: the game manifests (`engine/Ome.Engine/Profiles/*.json`, which
+    `GameProfileRegistry` reads from `Ome.Engine`'s resources), the opcode table, the base mods (`Ome.Mods`), the
+    shell's and the launcher's strings, the panel font and the icon. A manifest holds the art addresses and their
+    hashes (launcher spec §8.7), so where a separate manifest is read from decides whether it is trusted as the
+    program is. "Toolchain packaging for exported ports" above asks the same question for the OMS modules.
+
+  Done when the layouts are measured on both platforms (file count, archive size, start time, and what is written
+  outside the package), the user has chosen one and the data that stays beside it, and the release builds and their
+  package gates produce it. If the loose layout has to stay, done when `platform-portability.md` records why.
 - **No test shows that a cloud folder's placeholder passes the profile-root link check.** Launcher spec §12 says
   "a cloud folder's placeholders are not links". `RootSafety.FindLink` (`engine/Ome.Mods/Launch/`) counts an entry as
   a link only when .NET reports a `LinkTarget` for it, which it does for symbolic links and junctions (mount points)
