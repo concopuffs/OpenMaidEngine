@@ -122,9 +122,9 @@ public sealed class InstallsTests : IDisposable
         string install = Path.Combine(_root, "games", "kamidori");
         LauncherSettings settings = LauncherSettings.Defaults;
         foreach (string id in new[] { "first", "second" })
-            settings = ProfileStore.Create(home, settings, id, ProfileDocument.New(null, "kamidori", install, null)).Settings;
+            settings = ProfileStore.Create(home, settings, id, ProfileDocument.New(null, "kamidori", install, null, home)).Settings;
         settings = ProfileStore.Create(home, settings, "hime",
-                                       ProfileDocument.New(null, "himegari", Path.Combine(_root, "games", "hime"), null)).Settings;
+                                       ProfileDocument.New(null, "himegari", Path.Combine(_root, "games", "hime"), null, home)).Settings;
         IReadOnlyList<ProfileEntry> profiles = ProfileStore.List(home, settings, () => throw new InvalidOperationException());
         IReadOnlyList<KnownInstall> known = Installs.Known(profiles);
         Assert.Equal(2, known.Count);

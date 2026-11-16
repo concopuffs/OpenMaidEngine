@@ -21,28 +21,8 @@ public static class ModeCheck
     public static bool Apply(List<ModPackage> packages, string? mode, ModLinkReport report)
     {
         if (mode != Native) return false;
-        var held = packages.Select(package => package.Id).ToHashSet(StringComparer.Ordinal);
-        var reasons = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (ModPackage package in packages)
-            if (OwnReason(package.Manifest, ModLuaLinker.ShipsLua(package)) is { } reason)
-                reasons.TryAdd(package.Id, reason);
-
-        // A requirement the mode refuses: a refused package of the stack, or an engine base mod the stack does not hold.
-        bool changed = true;
-        while (changed)
-        {
-            changed = false;
-            foreach (ModPackage package in packages.Where(package => !reasons.ContainsKey(package.Id)))
-                foreach (ModRequirement requirement in package.Manifest.Requires)
-                {
-                    bool refused = reasons.ContainsKey(requirement.Id)
-                                   || (!held.Contains(requirement.Id) && ShippedRefused(requirement.Id));
-                    if (!refused) continue;
-                    reasons[package.Id] = $"it requires {requirement.Id}, which the {Native} mode refuses";
-                    changed = true;
-                    break;
-                }
-        }
+        IReadOnlyDictionary<string, string> reasons = Refusals(packages.Select(package =>
+            new StackMember(package.Id, package.Manifest.Target, ModLuaLinker.ShipsLua(package), package.Manifest.Requires)).ToList());
         if (reasons.Count == 0) return false;
         foreach (ModPackage package in packages.Where(package => reasons.ContainsKey(package.Id)).ToList())
         {
@@ -55,15 +35,50 @@ public static class ModeCheck
         return true;
     }
 
+    /// <summary>Why the <c>native</c> mode would refuse each package of a stack known by its manifests alone (the
+    /// launcher's index, launcher spec §5.9), by the rule <see cref="Apply"/> applies: empty when the stack runs in
+    /// <c>native</c>.</summary>
+    public static IReadOnlyDictionary<string, string> NativeRefusals(IEnumerable<PackageIndexEntry> stack)
+        => Refusals(stack.Select(entry => new StackMember(entry.Id, entry.Target, entry.ShipsLua, entry.Requires)).ToList());
+
+    private sealed record StackMember(string Id, string? Target, bool ShipsLua, IReadOnlyList<ModRequirement> Requires);
+
+    /// <summary>The refused packages of a stack, each with why: by itself, or for a requirement the mode refuses (a
+    /// refused package of the stack, or an engine base mod the stack does not hold).</summary>
+    private static IReadOnlyDictionary<string, string> Refusals(IReadOnlyList<StackMember> stack)
+    {
+        var held = stack.Select(member => member.Id).ToHashSet(StringComparer.Ordinal);
+        var reasons = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (StackMember member in stack)
+            if (OwnReason(member.Target, member.ShipsLua) is { } reason)
+                reasons.TryAdd(member.Id, reason);
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (StackMember member in stack.Where(member => !reasons.ContainsKey(member.Id)))
+                foreach (ModRequirement requirement in member.Requires)
+                {
+                    bool refused = reasons.ContainsKey(requirement.Id)
+                                   || (!held.Contains(requirement.Id) && ShippedRefused(requirement.Id));
+                    if (!refused) continue;
+                    reasons[member.Id] = $"it requires {requirement.Id}, which the {Native} mode refuses";
+                    changed = true;
+                    break;
+                }
+        }
+        return reasons;
+    }
+
     /// <summary>Why the <c>native</c> mode refuses a package by itself, or null.</summary>
-    private static string? OwnReason(ModManifest manifest, bool shipsLua)
-        => manifest.Target == ModManifest.ExtendedTarget ? $"it targets {Extended}"
+    private static string? OwnReason(string? target, bool shipsLua)
+        => target == ModManifest.ExtendedTarget ? $"it targets {Extended}"
             : shipsLua ? "it ships Lua"
             : null;
 
     private static bool ShippedRefused(string id)
     {
         using ModPackage? shipped = ShippedPackages.Open(id);
-        return shipped != null && OwnReason(shipped.Manifest, ModLuaLinker.ShipsLua(shipped)) != null;
+        return shipped != null && OwnReason(shipped.Manifest.Target, ModLuaLinker.ShipsLua(shipped)) != null;
     }
 }

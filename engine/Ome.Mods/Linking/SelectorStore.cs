@@ -63,6 +63,33 @@ public sealed class SelectorStore
     public bool TryGet(string modId, out int selector) => _selectors.TryGetValue(modId, out selector);
 
     /// <summary>
+    /// Two allocations as one, for saves copied from one data root into another (launcher spec §8.4): every mod of
+    /// either keeps its selector. Null when they clash, each clash in <paramref name="clashes"/> with the ids named:
+    /// one mod with two selectors, or one selector given to two mods.
+    /// </summary>
+    public static SelectorStore? Merge(SelectorStore first, SelectorStore second, List<string> clashes)
+    {
+        var merged = first.Clone();
+        var owners = first._selectors.ToDictionary(pair => pair.Value, pair => pair.Key);
+        foreach (var (id, selector) in second._selectors)
+        {
+            if (first._selectors.TryGetValue(id, out int kept))
+            {
+                if (kept != selector) clashes.Add($"{id} has selector {kept} in one and {selector} in the other");
+                continue;
+            }
+            if (owners.TryGetValue(selector, out string? other))
+            {
+                clashes.Add($"selector {selector} is {other}'s in one and {id}'s in the other");
+                continue;
+            }
+            owners[selector] = id;
+            merged._selectors[id] = selector;
+        }
+        return clashes.Count == 0 ? merged : null;
+    }
+
+    /// <summary>
     /// Gives each mod of <paramref name="modIds"/> (in that order) its kept selector, or the lowest free one. Errors
     /// go to <paramref name="report"/>: no selector free, or a kept selector the install now mounts itself.
     /// </summary>

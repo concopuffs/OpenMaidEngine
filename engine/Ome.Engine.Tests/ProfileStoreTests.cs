@@ -35,7 +35,7 @@ public sealed class ProfileStoreTests : IDisposable
     private static Func<MachineState> NoMachine => () => throw new InvalidOperationException("the machine's state was read");
 
     private ProfileDocument Document(string? name = "Kamidori")
-        => ProfileDocument.New(name, "kamidori", _install, "sha256:" + new string('a', 64));
+        => ProfileDocument.New(name, "kamidori", _install, "sha256:" + new string('a', 64), _home);
 
     [Fact]
     public void TheWriterWritesWhatTheEngineReadsBack()

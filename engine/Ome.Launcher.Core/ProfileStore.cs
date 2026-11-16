@@ -33,14 +33,6 @@ public static class ProfileStore
     /// (spec §5.3), and the source's own logs.</summary>
     private static readonly string[] NeverCopied = [Path.Combine("mods", ".cache"), "diagnostics"];
 
-    private static readonly EnumerationOptions Entries = new()
-    {
-        AttributesToSkip = 0,
-        IgnoreInaccessible = false,
-        RecurseSubdirectories = false,
-        ReturnSpecialDirectories = false,
-    };
-
     private static OmePlatform Platform => LauncherEnvironment.Current.Platform;
 
     /// <summary>Takes <paramref name="root"/>'s lock for a write. Throws <see cref="ProfileBusyException"/> while the
@@ -61,7 +53,7 @@ public static class ProfileStore
     {
         var entries = new List<ProfileEntry>();
         if (Directory.Exists(home.ProfilesDirectory))
-            foreach (DirectoryInfo folder in new DirectoryInfo(home.ProfilesDirectory).EnumerateDirectories("*", Entries)
+            foreach (DirectoryInfo folder in new DirectoryInfo(home.ProfilesDirectory).EnumerateDirectories("*", Folders.Entries)
                          .OrderBy(folder => folder.Name, StringComparer.Ordinal))
                 entries.Add(ProfileId.IsValid(folder.Name)
                     ? Load(folder.Name, folder.FullName, elsewhere: false)
@@ -112,8 +104,11 @@ public static class ProfileStore
     /// <summary>Makes a profile: its <c>profile.toml</c> and an <c>OME.INI</c> from the launcher's defaults for a new
     /// profile (spec §4.4). It goes in <c>profiles/&lt;id&gt;</c>, or in <paramref name="elsewhere"/>, which must be
     /// new or empty and is then listed in <c>launcher.toml</c> as a root the launcher made (no review, spec §12).</summary>
+    /// <param name="fill">What the new profile starts from (spec §8.3), given the root and run while the launcher
+    /// still holds its lock: saves copied in, the bare engine's <c>OME.INI</c>. A failure removes the whole
+    /// profile.</param>
     public static ProfileChange Create(OmeHome home, LauncherSettings settings, string id, ProfileDocument document,
-                                       string? elsewhere = null)
+                                       string? elsewhere = null, Action<string>? fill = null)
     {
         string root = NewRoot(home, settings, id, elsewhere);
         bool created = !Directory.Exists(root);
@@ -122,6 +117,7 @@ public static class ProfileStore
             using RunLock held = Lock(root);
             ProfileDocuments.Write(document, root, home);
             new OmeIniStore(Path.Combine(root, PortOptions.FileName)).Save(settings.NewProfile);
+            fill?.Invoke(root);
         }
         catch
         {
@@ -165,7 +161,7 @@ public static class ProfileStore
         try
         {
             using RunLock held = Lock(root);
-            Copy(from, root, path => leftOut.Any(skip => OmeHome.PathsEqual(skip, path, Platform)));
+            Folders.Copy(from, root, path => leftOut.Any(skip => OmeHome.PathsEqual(skip, path, Platform)));
             ProfileDocument document = Rebase(current.Document, from, root) with { Name = cleanName ?? current.Document.Name };
             ProfileDocuments.Write(document, root, home);
         }
@@ -196,14 +192,14 @@ public static class ProfileStore
         string root = profile.Root;
         var info = new DirectoryInfo(root);
         if (info.LinkTarget != null)
-            RemoveLink(info);
+            Folders.RemoveLink(info);
         else if (Directory.Exists(root))
         {
             using (RunLock held = Lock(root))
             {
                 string file = Path.Combine(root, ProfileFile.FileName);
                 if (File.Exists(file)) File.Delete(file);
-                DeleteContents(root, keep: held.Path);
+                Folders.DeleteContents(root, keep: held.Path);
             }
             File.Delete(Path.Combine(root, RunLock.FileName));
             Directory.Delete(root);
@@ -257,7 +253,7 @@ public static class ProfileStore
                     throw new ArgumentException($"{root} is in or around the profile '{other.Id}' ({other.Path})");
         }
         if (File.Exists(root)) throw new IOException($"{root} is a file");
-        if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root, "*", Entries).Any())
+        if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root, "*", Folders.Entries).Any())
             throw new IOException($"{root} is not empty; a new profile needs a new or empty folder");
         return root;
     }
@@ -318,57 +314,6 @@ public static class ProfileStore
         };
     }
 
-    /// <summary>Copies a folder that holds no link (checked by the caller), hidden files too, keeping each file's
-    /// times.</summary>
-    private static void Copy(string from, string to, Func<string, bool> leftOut)
-    {
-        Directory.CreateDirectory(to);
-        foreach (FileSystemInfo entry in new DirectoryInfo(from).EnumerateFileSystemInfos("*", Entries))
-        {
-            if (leftOut(entry.FullName)) continue;
-            string target = Path.Combine(to, entry.Name);
-            if (entry is DirectoryInfo folder) Copy(folder.FullName, target, leftOut);
-            else
-            {
-                File.Copy(entry.FullName, target, overwrite: false);
-                File.SetLastWriteTimeUtc(target, entry.LastWriteTimeUtc);
-            }
-        }
-    }
-
-    /// <summary>Removes everything in <paramref name="folder"/> but <paramref name="keep"/>, without following a link.</summary>
-    private static void DeleteContents(string folder, string? keep)
-    {
-        foreach (FileSystemInfo entry in new DirectoryInfo(folder).EnumerateFileSystemInfos("*", Entries).ToList())
-        {
-            if (keep != null && OmeHome.PathsEqual(entry.FullName, keep, Platform)) continue;
-            if (entry.LinkTarget != null)
-            {
-                RemoveLink(entry);
-                continue;
-            }
-            if (entry is DirectoryInfo child)
-            {
-                DeleteContents(child.FullName, null);
-                child.Attributes &= ~FileAttributes.ReadOnly;
-                child.Delete();
-            }
-            else
-            {
-                entry.Attributes &= ~FileAttributes.ReadOnly;
-                entry.Delete();
-            }
-        }
-    }
-
-    /// <summary>Removes a link itself. A junction or a link to a folder is removed as a folder on Windows; elsewhere
-    /// unlink removes any link.</summary>
-    private static void RemoveLink(FileSystemInfo link)
-    {
-        if (OperatingSystem.IsWindows() && (link.Attributes & FileAttributes.Directory) != 0) Directory.Delete(link.FullName);
-        else File.Delete(link.FullName);
-    }
-
     /// <summary>Removes a root a failed create or duplicate left: the whole folder when it made it, else what it
     /// put in it.</summary>
     private static void Discard(string root, bool created)
@@ -376,7 +321,7 @@ public static class ProfileStore
         try
         {
             if (!Directory.Exists(root)) return;
-            DeleteContents(root, null);
+            Folders.DeleteContents(root, null);
             if (created) Directory.Delete(root);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)

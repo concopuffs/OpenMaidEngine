@@ -27,13 +27,20 @@ public sealed record ProfileDocument(string? Name, string Game, ProfileMode Mode
         => new(file.Name, file.Game, file.Mode, file.Install, file.Mods, file.Launch, launcher);
 
     /// <summary>A new profile of <paramref name="game"/> on <paramref name="installRoot"/>: Compatibility mode
-    /// (spec §6), no mod list and the default startup options.</summary>
-    public static ProfileDocument New(string? name, string game, string installRoot, string? fingerprint,
+    /// (spec §6), the shared library's folders for the game and for every game (spec §7) with nothing enabled, and
+    /// the default startup options.</summary>
+    public static ProfileDocument New(string? name, string game, string installRoot, string? fingerprint, OmeHome home,
                                       IReadOnlyList<string>? overlays = null, bool allowBmpAsAgf = false)
         => new(name, game, ProfileMode.Native,
                new ProfileInstall(Path.TrimEndingDirectorySeparator(Path.GetFullPath(installRoot)), fingerprint,
                                   overlays ?? [], allowBmpAsAgf),
-               null, new ProfileLaunch(null, null, null), ProfileLauncherTable.Defaults);
+               new ProfileMods(LibraryFolders(home, game), [], SkipFailed: false),
+               new ProfileLaunch(null, null, null), ProfileLauncherTable.Defaults);
+
+    /// <summary>The shared library a new profile points at (spec §7): <c>mods/&lt;game&gt;/</c> and
+    /// <c>mods/common/</c>.</summary>
+    public static IReadOnlyList<string> LibraryFolders(OmeHome home, string game)
+        => [home.ModsDirectory(game), home.CommonModsDirectory];
 }
 
 /// <summary>A profile root's <c>profile.toml</c> as the launcher read it: the engine's reading, the whole document,
