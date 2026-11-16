@@ -14,7 +14,9 @@ public sealed record RunLockRefusal(bool HeldElsewhere, string Message);
 /// <item>The engine takes it before it writes any other file in the root, and marks the start ("last played" is the
 /// file's last-write time, set through the held handle).</item>
 /// <item>The launcher takes the same lock without marking a start, while it writes a profile's files, so a shortcut
-/// cannot start the engine in the middle of a write.</item>
+/// cannot start the engine in the middle of a write. When its open creates the file, it sets the time to
+/// <see cref="NeverStarted"/>, so a profile the launcher made reads as never played until the engine first starts it
+/// (launcher plan §6.2).</item>
 /// </list>
 /// On Windows the open is a sharing violation for any other open; on Linux and macOS .NET emulates it with an advisory
 /// <c>flock</c>, which every .NET open honours (launcher plan §3.8).
@@ -22,6 +24,9 @@ public sealed record RunLockRefusal(bool HeldElsewhere, string Message);
 public sealed class RunLock : IDisposable
 {
     public const string FileName = "run.lock";
+
+    /// <summary>The last-write time of a lock file no engine start has marked: the launcher's own lock created it.</summary>
+    public static readonly DateTime NeverStarted = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     private readonly FileStream _stream;
 
@@ -40,7 +45,8 @@ public sealed class RunLock : IDisposable
 
     /// <summary>Takes <paramref name="dataRoot"/>'s lock, creating the root when it does not exist.</summary>
     /// <param name="markStart">Sets the file's last-write time once the lock is held: the engine's start, which a
-    /// refused start never reaches. The launcher's own writes leave it alone.</param>
+    /// refused start never reaches. The launcher's own writes leave it alone, but set <see cref="NeverStarted"/> on a
+    /// file their open created.</param>
     /// <param name="refusal">Why the lock was not taken: another holder, or a root that cannot hold the file.</param>
     public static bool TryAcquire(string dataRoot, bool markStart,
                                   [NotNullWhen(true)] out RunLock? held, [NotNullWhen(false)] out RunLockRefusal? refusal)
@@ -49,6 +55,7 @@ public sealed class RunLock : IDisposable
         string root = System.IO.Path.GetFullPath(dataRoot);
         string path = System.IO.Path.Combine(root, FileName);
         FileStream stream;
+        bool existed = File.Exists(path);
         try
         {
             Directory.CreateDirectory(root);
@@ -70,11 +77,11 @@ public sealed class RunLock : IDisposable
         }
 
         string? warning = null;
-        if (markStart)
+        if (markStart || !existed)
         {
             try
             {
-                File.SetLastWriteTimeUtc(stream.SafeFileHandle, DateTime.UtcNow);
+                File.SetLastWriteTimeUtc(stream.SafeFileHandle, markStart ? DateTime.UtcNow : NeverStarted);
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
@@ -114,6 +121,22 @@ public sealed class RunLock : IDisposable
         {
             problem = $"{path}: {error.Message}";
             return false;
+        }
+    }
+
+    /// <summary>When an engine last started on <paramref name="dataRoot"/> ("last played", spec §8.4), in UTC: the lock
+    /// file's last-write time, or null when no engine start has marked it.</summary>
+    public static DateTime? LastStart(string dataRoot)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(dataRoot);
+        var file = new FileInfo(System.IO.Path.Combine(System.IO.Path.GetFullPath(dataRoot), FileName));
+        try
+        {
+            return file.Exists && file.LastWriteTimeUtc > NeverStarted ? file.LastWriteTimeUtc : null;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return null;
         }
     }
 

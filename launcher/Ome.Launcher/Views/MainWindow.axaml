@@ -6,15 +6,96 @@
         x:DataType="vm:MainViewModel"
         Title="{Binding S[app.title]}"
         Width="1180" Height="760" MinWidth="900" MinHeight="580">
-  <!-- The mock's .window: the profile list (.side, 300 px) beside the main pane (.main). -->
-  <Grid ColumnDefinitions="300,*">
-    <Border Classes="side">
-      <DockPanel>
-        <TextBlock DockPanel.Dock="Top" Classes="heading" Margin="16,14,16,6"
-                   Text="{Binding S[profiles.heading], Converter={x:Static v:Text.Upper}}" />
-        <Panel />
-      </DockPanel>
+  <Panel>
+    <!-- The mock's .window: the profile list (.side, 300 px) beside the main pane (.main). -->
+    <Grid ColumnDefinitions="300,*">
+      <Border Classes="side">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Classes="heading" Margin="16,14,16,6"
+                     Text="{Binding S[profiles.heading], Converter={x:Static v:Text.Upper}}" />
+
+          <!-- .side-foot -->
+          <Border DockPanel.Dock="Bottom" Classes="rule-top" Padding="10">
+            <StackPanel>
+              <Button Classes="wide" Content="{Binding S[profiles.new]}" Command="{Binding NewProfile}" />
+              <Button Classes="link" HorizontalAlignment="Center" Margin="0,8,0,0"
+                      Content="{Binding S[profiles.add-existing]}" Command="{Binding AddExisting}" />
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,9,0,0" Spacing="14">
+                <Button Classes="link" Content="{Binding S[profiles.games]}" Command="{Binding Games}" />
+                <Button Classes="link" Content="{Binding S[profiles.settings]}" Command="{Binding LauncherSettings}" />
+                <Button Classes="link" Content="{Binding S[profiles.about]}" Command="{Binding About}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- .list: each game's banner once, then its profiles (.group, .prow). -->
+          <ScrollViewer Padding="10,4,10,10">
+            <ItemsControl ItemsSource="{Binding Groups}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:GameGroupViewModel">
+                  <StackPanel Margin="0,0,0,14">
+                    <Panel IsVisible="{Binding HasBanner}">
+                      <v:ArtView Height="56" DataContext="{Binding Banner}" />
+                    </Panel>
+                    <TextBlock Classes="heading" Margin="8,4,0,0" IsVisible="{Binding HasNoBanner}"
+                               Text="{Binding $parent[Window].((vm:MainViewModel)DataContext).S[profiles.other], Converter={x:Static v:Text.Upper}}" />
+                    <ItemsControl ItemsSource="{Binding Profiles}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProfileRowViewModel">
+                          <Button Classes="prow" Classes.sel="{Binding IsSelected}" Command="{Binding Select}">
+                            <Grid ColumnDefinitions="3,14,*" RowDefinitions="Auto,Auto">
+                              <Rectangle Grid.RowSpan="2" Classes="selbar" IsVisible="{Binding IsSelected}" />
+                              <Ellipse Grid.Column="1" Classes="dot" Classes.warn="{Binding IsWarn}"
+                                       Classes.bad="{Binding IsBad}" Classes.run="{Binding IsRun}"
+                                       Classes.checking="{Binding IsChecking}" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" Margin="0,7,0,0" />
+                              <TextBlock Grid.Column="2" Classes="strong" Margin="8,7,8,0" Text="{Binding Name}"
+                                         TextTrimming="CharacterEllipsis" />
+                              <TextBlock Grid.Column="2" Grid.Row="1" Classes="muted small" Margin="8,0,8,7"
+                                         Text="{Binding Sub}" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+
+      <!-- The selected profile's page, or the first-run card when there is no profile. -->
+      <Panel Grid.Column="1">
+        <Panel IsVisible="{Binding HasPage}">
+          <v:ProfilePageView DataContext="{Binding Page}" />
+        </Panel>
+        <Border Classes="card" Width="460" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24,20"
+                IsVisible="{Binding HasNoProfiles}">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="dialog-title" Text="{Binding S[empty.title]}" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding S[empty.text]}" />
+            <Button Classes="primary" HorizontalAlignment="Left" Margin="0,6,0,0" Content="{Binding S[profiles.new]}"
+                    Command="{Binding NewProfile}" />
+          </StackPanel>
+        </Border>
+      </Panel>
+    </Grid>
+
+    <!-- The art question (spec §8.7), over a scrim, as the mock's dialogs. -->
+    <Border Background="{DynamicResource OmeScrimBrush}" IsVisible="{Binding AskArt}">
+      <Border Classes="dialog" Width="520" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="dialog-title" Text="{Binding S[art.title]}" />
+          <TextBlock TextWrapping="Wrap" Text="{Binding ArtQuestion}" />
+          <TextBlock Classes="muted small" TextWrapping="Wrap" Text="{Binding S[art.note]}" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+            <Button Content="{Binding S[art.never]}" Command="{Binding ArtNever}" />
+            <Button Classes="primary" Content="{Binding S[art.always]}" Command="{Binding ArtAlways}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
     </Border>
-    <Panel Grid.Column="1" />
-  </Grid>
+  </Panel>
 </Window>

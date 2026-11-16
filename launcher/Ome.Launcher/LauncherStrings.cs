@@ -36,6 +36,9 @@ public sealed partial class LauncherStrings
     public string this[string key]
         => _table.TryGetValue(key, out string? text) ? text : _fallback is { } fallback ? fallback[key] : key;
 
+    /// <summary>Whether this table or English has <paramref name="key"/>.</summary>
+    public bool Has(string key) => _table.ContainsKey(key) || (_fallback?.Has(key) ?? false);
+
     /// <summary><paramref name="key"/>'s text with its arguments filled in.</summary>
     public string Format(string key, params object?[] values) => string.Format(Culture, this[key], values);
 

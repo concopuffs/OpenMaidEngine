@@ -29,6 +29,10 @@ internal static class Headless
 
     public static void Run(Action action) => Run(() => { action(); return 0; });
 
+    /// <summary>Runs <paramref name="action"/> on the session's UI thread, awaiting it there.</summary>
+    public static void Run(Func<Task> action)
+        => Session.Value.Dispatch(async () => { await action(); return 0; }, CancellationToken.None).GetAwaiter().GetResult();
+
     /// <summary>Shows <paramref name="window"/> in <paramref name="theme"/>, lays it out, and returns its frame, which is
     /// written to <c>build/launcher-shots/&lt;name&gt;.png</c>. Fails on a warning Avalonia logged while it drew. Call on
     /// the UI thread.</summary>

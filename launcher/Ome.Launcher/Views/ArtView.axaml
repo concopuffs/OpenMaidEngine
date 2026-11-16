@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             x:Class="Ome.Launcher.Views.ArtView"
+             x:DataType="vm:ArtViewModel">
+  <!-- The mock's .art: the image, never stretched (UniformToFill crops), else the generated card (.art.ph). -->
+  <Border CornerRadius="5" ClipToBounds="True" BoxShadow="0 0 0 1 #2E000000">
+    <Panel>
+      <Border Background="{Binding Fill}" IsVisible="{Binding IsCard}" Padding="10,6">
+        <Panel>
+          <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" FontSize="13" TextWrapping="Wrap"
+                     LineHeight="16" TextAlignment="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
+                     IsVisible="{Binding IsBanner}" />
+          <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap"
+                     LineHeight="15" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"
+                     IsVisible="{Binding !IsBanner}" />
+        </Panel>
+      </Border>
+      <Image Source="{Binding Image}" Stretch="UniformToFill" IsVisible="{Binding !IsCard}"
+             RenderOptions.BitmapInterpolationMode="HighQuality" />
+    </Panel>
+  </Border>
+</UserControl>

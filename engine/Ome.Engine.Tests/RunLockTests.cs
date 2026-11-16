@@ -116,6 +116,29 @@ public sealed class RunLockTests : IDisposable
     }
 
     [Fact]
+    public void TheLaunchersLockOnANewRootReadsAsNeverStartedUntilTheEngineMarksAStart()
+    {
+        string root = Path.Combine(_root, "made-by-the-launcher");
+        Assert.True(RunLock.TryAcquire(root, markStart: false, out RunLock? launcher, out _));
+        using (launcher)
+        {
+            Assert.Null(RunLock.LastStart(root));
+        }
+        Assert.Equal(RunLock.NeverStarted, File.GetLastWriteTimeUtc(Path.Combine(root, RunLock.FileName)));
+        Assert.Null(RunLock.LastStart(root));
+
+        DateTime before = DateTime.UtcNow.AddSeconds(-2);
+        Assert.True(RunLock.TryAcquire(root, markStart: true, out RunLock? engine, out _));
+        engine!.Dispose();
+        Assert.True(RunLock.LastStart(root) > before, "the engine's start is the last played time");
+
+        DateTime started = RunLock.LastStart(root)!.Value;
+        Assert.True(RunLock.TryAcquire(root, markStart: false, out RunLock? again, out _));
+        again!.Dispose();
+        Assert.Equal(started, RunLock.LastStart(root));
+    }
+
+    [Fact]
     public void AStartOnANewRootCreatesItAndItsLock()
     {
         string root = Path.Combine(_root, "games", "himegari");

@@ -35,7 +35,6 @@
   <Style Selector="TextBlock.title">
     <Setter Property="FontSize" Value="23" />
     <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="LineHeight" Value="28" />
   </Style>
   <Style Selector="TextBlock.dialog-title">
     <Setter Property="FontSize" Value="18" />
@@ -122,6 +121,10 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
   </Style>
+  <Style Selector="Button.link:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+  </Style>
 
   <!-- .chip and its states. -->
   <Style Selector="Border.chip">
@@ -152,6 +155,78 @@
   <Style Selector="Ellipse.dot.warn"><Setter Property="Fill" Value="{DynamicResource OmeWarnBrush}" /></Style>
   <Style Selector="Ellipse.dot.bad"><Setter Property="Fill" Value="{DynamicResource OmeBadBrush}" /></Style>
   <Style Selector="Ellipse.dot.run"><Setter Property="Fill" Value="{DynamicResource OmeRunBrush}" /></Style>
+  <Style Selector="Ellipse.dot.checking"><Setter Property="Fill" Value="{DynamicResource OmeLineBrush}" /></Style>
+
+  <!-- .prow, a profile in the list, and .prow.sel with its ink bar. -->
+  <Style Selector="Button.prow">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0,3,0,0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.prow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeHoverBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.prow.sel">
+    <Setter Property="Background" Value="{DynamicResource OmeSelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+  </Style>
+  <Style Selector="Button.prow.sel:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource OmeSelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+  </Style>
+  <Style Selector="Rectangle.selbar">
+    <Setter Property="Fill" Value="{DynamicResource OmeInkBrush}" />
+    <Setter Property="Width" Value="3" />
+  </Style>
+
+  <!-- .tabs button and .tabs button.on, with .count. -->
+  <Style Selector="Button.tab">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="13,8,13,9" />
+    <Setter Property="Margin" Value="0,0,0,-1" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+  </Style>
+  <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tab:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+  </Style>
+  <Style Selector="Button.tab.on">
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeInkBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.tab.on:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tab.on:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeInkBrush}" />
+  </Style>
+  <Style Selector="Border.count">
+    <Setter Property="Background" Value="{DynamicResource OmeBadBrush}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="Margin" Value="5,0,0,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.count > TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="Normal" />
+  </Style>
+
+  <!-- .wizard: a dialog over the scrim. -->
+  <Style Selector="Border.dialog">
+    <Setter Property="Background" Value="{DynamicResource OmeWinBrush}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="24,20" />
+    <Setter Property="BoxShadow" Value="0 20 60 0 #66000000" />
+  </Style>
 
   <!-- .side, .card, .notice, and the rules between rows. -->
   <Style Selector="Border.side">

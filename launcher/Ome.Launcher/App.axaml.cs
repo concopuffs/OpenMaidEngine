@@ -30,7 +30,9 @@ public sealed partial class App : Application
         if (_session != null && ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             RequestedThemeVariant = Variant(_session.Settings.Theme);
-            desktop.MainWindow = new MainWindow { DataContext = new MainViewModel(_session) };
+            var window = new MainWindow { DataContext = new MainViewModel(_session) };
+            window.Place(_session.Settings.Window);
+            desktop.MainWindow = window;
         }
         base.OnFrameworkInitializationCompleted();
     }

@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             xmlns:v="using:Ome.Launcher.Views"
+             x:Class="Ome.Launcher.Views.ProfilePageView"
+             x:DataType="vm:ProfilePageViewModel">
+  <!-- The mock's .main: the header (.head), the notice, the tabs, and the page under them. -->
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="96,*,Auto" Margin="22,18,22,14">
+      <v:ArtView Width="96" Height="135" VerticalAlignment="Top" DataContext="{Binding Cover}" />
+      <StackPanel Grid.Column="1" Margin="18,2,18,0">
+        <TextBlock Classes="title" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+        <TextBlock Classes="muted" Text="{Binding Titles}" Margin="0,2,0,10" TextTrimming="CharacterEllipsis" />
+        <WrapPanel Margin="0,0,0,10" ItemSpacing="6" LineSpacing="6">
+          <Border Classes="chip" Classes.ok="{Binding StatusOk}" Classes.warn="{Binding StatusWarn}"
+                  Classes.bad="{Binding StatusBad}" Classes.run="{Binding StatusRun}">
+            <TextBlock Text="{Binding StatusText, StringFormat='● {0}'}" />
+          </Border>
+          <Border Classes="chip" IsVisible="{Binding HasDocument}"><TextBlock Text="{Binding ModeText}" /></Border>
+          <Border Classes="chip" IsVisible="{Binding HasDocument}"><TextBlock Text="{Binding ModsText}" /></Border>
+          <Border Classes="chip" IsVisible="{Binding HasDocument}"><TextBlock Text="{Binding LanguageText}" /></Border>
+        </WrapPanel>
+        <TextBlock Classes="mono muted" Text="{Binding InstallPath}" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+        <Button Classes="primary play" HorizontalAlignment="Right" Content="{Binding S[header.play]}"
+                Command="{Binding Play}" IsVisible="{Binding IsNotRunning}" />
+        <Button Classes="play running" HorizontalAlignment="Right" Content="{Binding S[header.running]}"
+                IsEnabled="False" IsVisible="{Binding IsRunning}" />
+        <TextBlock Classes="muted small" HorizontalAlignment="Right" Margin="0,7,0,0" Text="{Binding LastPlayed}" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,7,0,0" Spacing="5">
+          <Button Classes="link" Content="{Binding S[header.duplicate]}" Command="{Binding Duplicate}" />
+          <TextBlock Classes="muted small" Text="·" />
+          <Button Classes="link" Content="{Binding S[header.shortcut]}" Command="{Binding Shortcut}" />
+          <TextBlock Classes="muted small" Text="·" />
+          <Button Classes="link" Content="{Binding S[header.more]}" Command="{Binding More}" />
+        </StackPanel>
+      </StackPanel>
+    </Grid>
+
+    <Border DockPanel.Dock="Top" Classes="notice" Classes.bad="{Binding NoticeBad}" Classes.warn="{Binding NoticeWarn}"
+            Classes.run="{Binding NoticeRun}" IsVisible="{Binding HasNotice}" Margin="22,0,22,12">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Classes="notice-text" Text="{Binding NoticeText}" TextWrapping="Wrap" />
+          <TextBlock Classes="muted small mono" Text="{Binding NoticeDetail}" TextWrapping="Wrap" Margin="0,3,0,0"
+                     IsVisible="{Binding HasNoticeDetail}" />
+        </StackPanel>
+        <Button Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Content="{Binding NoticeAction}"
+                Command="{Binding NoticeCommand}" IsVisible="{Binding HasNoticeAction}" />
+      </Grid>
+    </Border>
+
+    <Border DockPanel.Dock="Top" Classes="rule-bottom" Padding="22,0">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+        <Button Classes="tab" Classes.on="{Binding OnOverview}" Command="{Binding ShowTab}"
+                CommandParameter="{x:Static vm:ProfileTab.Overview}" Content="{Binding S[tab.overview]}" />
+        <Button Classes="tab" Classes.on="{Binding OnMods}" Command="{Binding ShowTab}"
+                CommandParameter="{x:Static vm:ProfileTab.Mods}">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="{Binding S[tab.mods]}" />
+            <Border Classes="count" IsVisible="{Binding HasModsProblems}">
+              <TextBlock Text="{Binding ModsProblems}" />
+            </Border>
+          </StackPanel>
+        </Button>
+        <Button Classes="tab" Classes.on="{Binding OnSettings}" Command="{Binding ShowTab}"
+                CommandParameter="{x:Static vm:ProfileTab.Settings}" Content="{Binding S[tab.settings]}" />
+        <Button Classes="tab" Classes.on="{Binding OnSaves}" Command="{Binding ShowTab}"
+                CommandParameter="{x:Static vm:ProfileTab.Saves}" Content="{Binding S[tab.saves]}" />
+        <Button Classes="tab" Classes.on="{Binding OnAdvanced}" Command="{Binding ShowTab}"
+                CommandParameter="{x:Static vm:ProfileTab.Advanced}" Content="{Binding S[tab.advanced]}" />
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer Padding="22,16,22,22">
+      <Panel />
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>
