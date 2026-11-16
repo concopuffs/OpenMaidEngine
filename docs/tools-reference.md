@@ -757,7 +757,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   (exit 2), having written nothing. Only a held lock means running: a crash leaves the file, and the next start
   takes it. When the root holds a `profile.toml` (launcher spec §4.3), the run is that profile: one resolver
   (`RunResolver`, `engine/Ome.Mods/Launch/`), shared by the port and `Ome.Cli`, maps its typed keys to the flags they
-  stand for, so the existing selections read them. The file:
+  stand for, so the existing selections read them. Every `Ome.Cli` command that takes `--data-root` goes through
+  it, so `omp check --data-root <profile root>` needs no game option (launcher spec §5.7; gate 6 is
+  `OmeCliProfileTests`). The file:
 
   ```toml
   ome_profile = 1                  # format version; another stops startup with the version this engine reads

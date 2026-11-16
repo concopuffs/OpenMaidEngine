@@ -7,7 +7,7 @@ using Ome.Mods.Launch;
 /// standard output, so no test sleeps or polls.</summary>
 public sealed class RunLockTests : IDisposable
 {
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan Patience = OmeCliProcess.Patience;
     private static readonly DateTime LongAgo = new(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc);
     private readonly string _root = Path.Combine(Path.GetTempPath(), "ome-run-lock-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _helpers = [];
@@ -25,29 +25,9 @@ public sealed class RunLockTests : IDisposable
 
     private string LockFile => Path.Combine(_root, RunLock.FileName);
 
-    /// <summary>Ome.Cli's build output beside this assembly's: the same configuration and framework.</summary>
-    private static string CliAssembly()
-    {
-        string relative = Path.GetRelativePath(Path.Combine(Paths.Repo, "engine", "Ome.Engine.Tests"), AppContext.BaseDirectory);
-        string path = Path.GetFullPath(Path.Combine(Paths.Repo, "engine", "Ome.Cli", relative, "Ome.Cli.dll"));
-        Assert.True(File.Exists(path), $"Ome.Cli is not built at {path}");
-        return path;
-    }
-
     private Process Start(params string[] arguments)
     {
-        var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
-        {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        start.ArgumentList.Add(CliAssembly());
-        start.ArgumentList.Add("run-lock");
-        foreach (string argument in arguments) start.ArgumentList.Add(argument);
-        Process process = Process.Start(start)!;
+        Process process = Process.Start(OmeCliProcess.StartInfo(null, ["run-lock", .. arguments]))!;
         _helpers.Add(process);
         return process;
     }

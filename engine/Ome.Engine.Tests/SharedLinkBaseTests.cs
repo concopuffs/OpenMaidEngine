@@ -25,6 +25,13 @@ public sealed class SharedLinkBaseTests : IDisposable
         Assert.Equal(File.ReadAllBytes(Paths.OpcodesJson), copy.ToArray());
     }
 
+    /// <summary>The scripts a profile's OMS modules run (<c>run NAME</c>), as catalog names: a synthetic install
+    /// lists them so the modules' idioms build.</summary>
+    internal static string[] ScriptsTheModulesRun(string profile)
+        => Directory.EnumerateFiles(Paths.OmsModules(profile), "*.oms", SearchOption.AllDirectories)
+            .SelectMany(file => Regex.Matches(File.ReadAllText(file), @"\brun ([A-Z][A-Z0-9_]*)\b"))
+            .Select(match => match.Groups[1].Value + ".BIN").Distinct().Order(StringComparer.Ordinal).ToArray();
+
     [Theory]
     [InlineData("himegari", "SYS4422")]
     [InlineData("kamidori", "SYS4433")]
@@ -32,10 +39,7 @@ public sealed class SharedLinkBaseTests : IDisposable
     {
         // The host linked from its embedded copy and Ome.Cli from the repository's files; both now use ForGame, and
         // it stamps a link as the repository's files do, so neither mounts an entry the other would not.
-        // A synthetic install that lists the scripts the profile's OMS modules run, so their idioms build.
-        string[] scripts = Directory.EnumerateFiles(Paths.OmsModules(profile), "*.oms", SearchOption.AllDirectories)
-            .SelectMany(file => Regex.Matches(File.ReadAllText(file), @"\brun ([A-Z][A-Z0-9_]*)\b"))
-            .Select(match => match.Groups[1].Value + ".BIN").Distinct().Order(StringComparer.Ordinal).ToArray();
+        string[] scripts = ScriptsTheModulesRun(profile);
         Assert.NotEmpty(scripts);
         string sys4Ini = Path.Combine(_root, "SYS4INI.BIN");
         File.WriteAllBytes(sys4Ini, Sys4StartupSettingsTests.BuildCatalog(scripts));

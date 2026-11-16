@@ -27,6 +27,10 @@ Your game guide lists the options its installs need ([games/README.md](games/REA
 profile root (see below), with its load order and kept selectors. Without it only the `--mod` packages link, and
 selectors are allocated fresh.
 
+A profile root with a `profile.toml` (a player profile, which the launcher makes) needs nothing else.
+`omp check --data-root DIR` takes the game, the install and the mods from the file, and links what the profile
+would run. The same holds for `omp export`, `explain`, `lua-stubs` and `omp text check`/`stats`.
+
 **Exports and saves.** A mod catalog's selector is part of every packed id in a save. To export a stack whose
 native saves must match saves made in the port, pass the port's profile root as `--data-root`, so the export uses
 the same selectors.

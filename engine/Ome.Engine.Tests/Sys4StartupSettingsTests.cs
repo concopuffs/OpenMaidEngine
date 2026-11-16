@@ -181,9 +181,10 @@ public class Sys4StartupSettingsTests
     internal static byte[] BuildCatalog(bool includeTrailer, string fileName = "@")
         => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer, [fileName]));
 
-    /// <summary>A catalog listing <paramref name="fileNames"/>, each an empty entry of DATA.ALF.</summary>
-    internal static byte[] BuildCatalog(IReadOnlyList<string> fileNames)
-        => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer: true, fileNames));
+    /// <summary>A catalog listing <paramref name="fileNames"/>, each an empty entry of DATA.ALF, under the catalog
+    /// revision <paramref name="magic"/> and <paramref name="title"/> (a game's identity).</summary>
+    internal static byte[] BuildCatalog(IReadOnlyList<string> fileNames, string magic = "S4IC422 ", string title = "Synthetic")
+        => WrapCatalog(BuildExpanded(Array.Empty<(string, string)>(), includeTrailer: true, fileNames), magic, title);
 
     private static byte[] BuildExpanded(
         (string Key, string Value)[] pairs, bool includeTrailer = true, IReadOnlyList<string>? fileNames = null)
@@ -219,12 +220,12 @@ public class Sys4StartupSettingsTests
         return blob.ToArray();
     }
 
-    private static byte[] WrapCatalog(byte[] expanded)
+    private static byte[] WrapCatalog(byte[] expanded, string magic = "S4IC422 ", string title = "Synthetic")
     {
         byte[] packed = LiteralLzss(expanded);
         var catalog = new byte[0x138 + packed.Length];
-        Encoding.ASCII.GetBytes("S4IC422 ").CopyTo(catalog, 0);
-        Encoding.ASCII.GetBytes("Synthetic").CopyTo(catalog, 8);
+        Encoding.ASCII.GetBytes(magic).CopyTo(catalog, 0);
+        Encoding.GetEncoding(932).GetBytes(title).CopyTo(catalog, 8);
         BinaryPrimitives.WriteUInt32LittleEndian(catalog.AsSpan(0x12c, 4),
                                                   checked((uint)expanded.Length));
         BinaryPrimitives.WriteUInt32LittleEndian(catalog.AsSpan(0x134, 4),
