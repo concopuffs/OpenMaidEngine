@@ -527,7 +527,10 @@ method) measured these facts about the platforms. The launcher's packaging decis
   its standard output and error every line as it is printed. The Linux release program does not flush standard
   output after a print (Godot's `application/run/flush_stdout_on_print` defaults to false outside debug builds),
   so into a pipe its lines arrive when stdio's buffer fills or it exits normally, and a kill loses them. Godot's
-  own `user://logs/godot.log` is not flushed on a kill either.
+  own `user://logs/godot.log` is not flushed on a kill either. Since launcher M1 (plan §4.12), `godot/project.godot`
+  sets `flush_stdout_on_print=true`, and the Linux release smoke (`package_linux_x64.py smoke` with
+  `--package-smoke --hold`) requires the engine's line to reach the pipe while the engine still runs
+  (`tools-reference.md`, "Linux x64 export").
 - **What an exported engine writes outside its `--data-root`:** Godot's `logs/` and `shader_cache/` under
   `user://` (`%APPDATA%\Godot\app_userdata\Open Maid Engine\`), nothing else.
 - **Godot's own flags in a Windows shortcut:** a `.lnk` whose arguments put `--rendering-driver d3d12` before the
