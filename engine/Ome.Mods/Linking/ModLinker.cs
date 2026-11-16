@@ -286,13 +286,13 @@ public static class ModLinker
         try
         {
             var warnings = new List<OmsWarning>();
-            var notes = new List<string>();
+            // The compiler applies the plan once to check it; its notes are left out, since ApplyAll applies the plan
+            // again and reports the same notes.
             OmsPatchPlan plan = OmsPatchCompiler.Compile(unit, bytes, linkBase.Table, linkBase.Contracts, linkBase.Intrinsics,
-                linkBase.Modules, linkBase.Idioms, warnings, notes, linkBase.PatchPoints, scope);
+                linkBase.Modules, linkBase.Idioms, warnings, notes: null, linkBase.PatchPoints, scope);
             report.Add(ModReportClass.Note, mod.Id, target, $"compiled patches/{patch.Stem}.oms at load time ("
                 + (stored == null ? "no stored plan" : $"its stored plan targets {stored.Fingerprint}") + ")");
             foreach (OmsWarning warning in warnings) report.Add(ModReportClass.Note, mod.Id, target, warning.ToString());
-            foreach (string note in notes) report.Add(ModReportClass.Note, mod.Id, target, note);
             return new PatchUse(mod, patch.Stem, plan);
         }
         catch (Exception error) when (error is OmsCompileException or OmsPatchException or InvalidDataException)

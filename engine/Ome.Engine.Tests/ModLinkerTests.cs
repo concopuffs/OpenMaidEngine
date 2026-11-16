@@ -184,6 +184,44 @@ public sealed class ModLinkerTests : IDisposable
         Assert.Contains(result.Report.Lines, line => line.Stops && line.Message.Contains("new scripts go in scripts/"));
     }
 
+    // A patch compiled at load time is applied once to check it and again by the link; the report holds the link's
+    // notes only, so a replaced table site is reported once.
+    [Fact]
+    public void APatchCompiledAtLoadTimeReportsEachNoteOnce()
+    {
+        var intrinsics = new IntrinsicCatalog(HimegariTable, Contracts);
+        Ome.Script.Ir.IrScript compiled = Ome.Script.Compile.OmsCompiler.Compile(Ome.Script.Syntax.Parser.ParseScript("""
+            script "T.BIN"
+                @op(0x71, 1)
+                @op(0x6e, 0, "one")
+                @op(0x71, 1)
+                @op(0x6e, 0, "two")
+                exit
+            """, "base.oms"), HimegariTable.AbiId, HimegariTable, null, intrinsics, _ => null);
+        byte[] bytes = Ome.Script.Ir.IrEncoder.Encode(compiled);
+        int[] offsets = OmsPatchBase.From(Ome.Script.Ir.IrDecoder.Decode(bytes, HimegariTable, Contracts, "T.BIN"))
+            .Offsets.ToArray();
+        ModLinkBase linkBase = SyntheticBase() with
+        {
+            ReadScript = name => name.Equals("T.BIN", StringComparison.OrdinalIgnoreCase) ? bytes : null,
+            Table = HimegariTable,
+            Intrinsics = intrinsics,
+        };
+        ModPackage mod = ModWithTables("replaces.line", "", new Dictionary<string, string>
+        {
+            ["patches/line.oms"] = $"patch \"T.BIN\" fingerprint \"{OmsPatchPlan.FingerprintOf(bytes)}\"\n"
+                + $"replace site label_{offsets[2]:x} {{\n    G[9] = 1\n}}\n",
+        });
+
+        ModLinkResult result = ModLinker.Link(linkBase, [mod], []);
+
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.Contains(result.Report.Lines, line => line.Message.Contains("at load time (no stored plan)"));
+        ModReportLine note = Assert.Single(result.Report.Lines, line => line.Message.Contains("removes read-message site"));
+        Assert.Equal(["replaces.line"], note.Mods);
+        Assert.Contains($"site 0x{offsets[2]:x}; its T1 slot 1", note.Message);
+    }
+
     [Fact]
     public void SkipFailedModsDropsTheFailingModAndLinksTheRest()
     {
