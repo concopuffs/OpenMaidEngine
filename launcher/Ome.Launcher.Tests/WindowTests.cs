@@ -264,7 +264,7 @@ public sealed class WindowTests : IDisposable
         string install = Path.Combine(_home.Root, "installs", "kamidori");
         Directory.CreateDirectory(Path.Combine(install, "patch"));
         TestHome.Catalog(install, "kamidori", extra: "TITLE.AGF");
-        File.WriteAllBytes(Path.Combine(install, "patch", "TITLE.AGF"), "BM  "u8.ToArray());
+        File.WriteAllBytes(Path.Combine(install, "patch", "TITLE.AGF"), "BM\0\0"u8.ToArray());
         File.WriteAllText(Path.Combine(install, "patch", "MENU.BIN"), "");
         Directory.CreateDirectory(Path.Combine(install, "extras"));
         File.WriteAllText(Path.Combine(install, "extras", "HISTORY.BIN"), "");
