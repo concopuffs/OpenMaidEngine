@@ -52,6 +52,19 @@ public sealed class ProfileRowViewModel : ViewModel
         Select = new Command(() => _select(this));
     }
 
+    /// <summary>The list was read again and still holds this root: the row takes the profile as read now and the
+    /// launcher's strings, and keeps what the checks and a running game gave it. A profile that became usable (a review
+    /// accepted) is checked again, and one that needs review or cannot be read says so.</summary>
+    public void Renew(ProfileEntry entry, LauncherStrings strings)
+    {
+        _entry = entry;
+        S = strings;
+        if (entry.NeedsReview) _state = ProfileState.Review;
+        else if (!entry.Usable) _state = ProfileState.Unreadable;
+        else if (_state is ProfileState.Review or ProfileState.Unreadable) _state = ProfileState.Checking;
+        ChangedAll();
+    }
+
     /// <summary>The profile as last read or written: a page's change replaces it.</summary>
     public ProfileEntry Entry
     {
@@ -62,7 +75,7 @@ public sealed class ProfileRowViewModel : ViewModel
             ChangedAll();
         }
     }
-    public LauncherStrings S { get; }
+    public LauncherStrings S { get; private set; }
     public string Id => Entry.Id;
     public string Name => Entry.DisplayName;
     public string? Game => Entry.Loaded?.Document.Game;

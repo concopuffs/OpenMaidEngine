@@ -39,8 +39,10 @@
             <TextBlock Grid.Row="4" Classes="muted" Text="{Binding S[overview.overlays]}" />
             <TextBlock Grid.Row="4" Grid.Column="1" Classes="small" TextWrapping="Wrap" Text="{Binding Overlays}" />
             <TextBlock Grid.Row="5" Classes="muted" Text="{Binding S[overview.publisher]}" />
-            <Button Grid.Row="5" Grid.Column="1" Classes="link" HorizontalAlignment="Left"
-                    Content="{Binding Publisher}" Command="{Binding OpenPublisher}" />
+            <!-- Data goes in a TextBlock: a button's string content would take an underscore as an access key. -->
+            <Button Grid.Row="5" Grid.Column="1" Classes="link" HorizontalAlignment="Left" Command="{Binding OpenPublisher}">
+              <TextBlock Text="{Binding Publisher}" />
+            </Button>
           </Grid>
         </StackPanel>
       </Border>

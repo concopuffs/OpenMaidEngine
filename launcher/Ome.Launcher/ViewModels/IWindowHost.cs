@@ -30,6 +30,9 @@ public interface IWindowHost
     /// <summary>Puts <paramref name="text"/> on the clipboard.</summary>
     Task CopyTextAsync(string text);
 
+    /// <summary>Shows the launcher in <paramref name="theme"/> at once (spec §8.8).</summary>
+    void ApplyTheme(Ome.Launcher.Core.LauncherTheme theme);
+
     /// <summary>The screen area a game window can take, in pixels: the usable area of the screen the launcher is on,
     /// less a window's frame. Null when the screen cannot be measured.</summary>
     (int Width, int Height)? UsableArea();

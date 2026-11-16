@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             xmlns:v="using:Ome.Launcher.Views"
+             x:Class="Ome.Launcher.Views.GamesView"
+             x:DataType="vm:GamesViewModel"
+             Width="700">
+  <!-- The Games page (spec §8.2, §8.7): each supported game, its art, the installs its profiles use. -->
+  <StackPanel Spacing="12">
+    <TextBlock Classes="dialog-title" Text="{Binding S[games.title]}" />
+    <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding S[games.intro]}" />
+    <ItemsControl ItemsSource="{Binding Games}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Spacing="10" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:GameEntryViewModel">
+          <Border Classes="card" Padding="14,12">
+            <Grid ColumnDefinitions="220,*" ColumnSpacing="14">
+              <Panel Height="52" VerticalAlignment="Top">
+                <v:ArtView DataContext="{Binding Banner}" />
+              </Panel>
+              <StackPanel Grid.Column="1" Spacing="3">
+                <TextBlock Classes="strong" TextWrapping="Wrap" Text="{Binding Title}" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding Subtitle}" IsVisible="{Binding HasSubtitle}" />
+                <TextBlock Classes="heading" Margin="0,6,0,0" Text="{Binding S[games.installs]}" />
+                <ItemsControl ItemsSource="{Binding Installs}" IsVisible="{Binding HasInstalls}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <TextBlock Classes="mono small" TextWrapping="Wrap" Text="{Binding}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Classes="muted" Text="{Binding S[games.no-installs]}" IsVisible="{Binding !HasInstalls}" />
+                <TextBlock Classes="heading" Margin="0,6,0,0" Text="{Binding S[games.art]}" />
+                <TextBlock TextWrapping="Wrap" Text="{Binding ArtText}" />
+                <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding DownloadText}" />
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                  <Button Content="{Binding S[games.download]}" Command="{Binding Download}" />
+                  <Button Content="{Binding S[games.remove]}" Command="{Binding Remove}" />
+                </StackPanel>
+                <TextBlock Classes="help" Classes.bad="{Binding StatusBad}" TextWrapping="Wrap" Text="{Binding Status}"
+                           IsVisible="{Binding HasStatus}" />
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,6,0,0" IsVisible="{Binding HasSite}">
+                  <TextBlock Classes="muted" VerticalAlignment="Center" Text="{Binding S[games.site]}" />
+                  <!-- Data goes in a TextBlock: a button's string content would take an underscore as an access key. -->
+                  <Button Classes="link" VerticalAlignment="Center" Command="{Binding OpenSite}">
+                    <TextBlock Text="{Binding SiteText}" />
+                  </Button>
+                </StackPanel>
+              </StackPanel>
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <Button HorizontalAlignment="Right" Content="{Binding S[dialog.close]}" Command="{Binding Close}" />
+  </StackPanel>
+</UserControl>

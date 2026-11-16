@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             x:Class="Ome.Launcher.Views.AboutView"
+             x:DataType="vm:AboutViewModel"
+             Width="560">
+  <!-- About: the version, the engine Play starts, the licences, the repository. -->
+  <StackPanel Spacing="10">
+    <TextBlock Classes="dialog-title" Text="{Binding S[about.title]}" />
+    <TextBlock Text="{Binding VersionText}" />
+    <StackPanel Spacing="2">
+      <TextBlock Classes="heading" Text="{Binding S[about.engine]}" />
+      <SelectableTextBlock Classes="mono" TextWrapping="Wrap" Text="{Binding EngineText}" />
+      <TextBlock Classes="help bad" TextWrapping="Wrap" Text="{Binding S[about.engine-missing]}"
+                 IsVisible="{Binding EngineMissing}" />
+    </StackPanel>
+    <StackPanel Spacing="4">
+      <TextBlock Classes="heading" Text="{Binding S[about.licences]}" />
+      <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[about.licences-text]}" />
+      <ItemsControl ItemsSource="{Binding Licences}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:LicenceFile">
+            <!-- Data goes in a TextBlock: a button's string content would take an underscore as an access key. -->
+            <Button Classes="link" HorizontalAlignment="Left" Command="{Binding Open}" ToolTip.Tip="{Binding Path}">
+              <TextBlock Text="{Binding Name}" />
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Classes="help bad" TextWrapping="Wrap" Text="{Binding S[about.licences-missing]}"
+                 IsVisible="{Binding LicencesMissing}" />
+    </StackPanel>
+    <StackPanel Spacing="2">
+      <TextBlock Classes="heading" Text="{Binding S[about.repository]}" />
+      <Button Classes="link" HorizontalAlignment="Left" Command="{Binding OpenRepository}">
+        <TextBlock Text="{Binding RepositoryText}" />
+      </Button>
+    </StackPanel>
+    <Button HorizontalAlignment="Right" Content="{Binding S[dialog.close]}" Command="{Binding Close}" />
+  </StackPanel>
+</UserControl>

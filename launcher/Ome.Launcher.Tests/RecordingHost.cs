@@ -35,6 +35,8 @@ internal sealed class RecordingHost : IWindowHost
         return Task.CompletedTask;
     }
 
+    public void ApplyTheme(Ome.Launcher.Core.LauncherTheme theme) => Calls.Add($"Theme {theme}");
+
     /// <summary>The file the next file pick returns; null is a cancelled pick.</summary>
     public string? File { get; set; }
 

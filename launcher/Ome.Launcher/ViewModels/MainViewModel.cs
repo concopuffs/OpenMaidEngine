@@ -65,9 +65,9 @@ public sealed class MainViewModel : ViewModel, IDisposable
         _art = new ArtStore(session.Home, artOptions with { Decoder = artOptions.Decoder ?? ArtViewModel.Probe });
         NewProfile = new Command(OpenWizard, () => _wizard == null);
         AddExisting = new Command(() => _ = AddExistingAsync());
-        Games = new Command(() => { }, () => false);
-        LauncherSettings = new Command(() => { }, () => false);
-        About = new Command(() => { }, () => false);
+        Games = new Command(() => ShowDialog(new GamesViewModel(this)));
+        LauncherSettings = new Command(() => ShowDialog(new LauncherSettingsViewModel(this)));
+        About = new Command(() => ShowDialog(new AboutViewModel(this)));
         ArtAlways = new Command(() => _ = AnswerArtAsync(ArtConsent.Always));
         ArtNever = new Command(() => _ = AnswerArtAsync(ArtConsent.Never));
         Reload();
@@ -222,10 +222,27 @@ public sealed class MainViewModel : ViewModel, IDisposable
             && !entries.Any(entry => OmeHome.PathsEqual(entry.Root, opened.Root, Session.Environment.Platform)))
             entries.Add(opened);
 
-        var rows = entries.Select(entry => new ProfileRowViewModel(entry, S, row => _ = SelectAsync(row))).ToList();
+        // A root listed before keeps its row: its dot, a game it runs and a failure the player has not dismissed stay,
+        // and a launch in progress still reaches the row the list shows.
+        List<ProfileRowViewModel> before = Rows.ToList();
+        var made = new List<ProfileRowViewModel>();
+        var rows = entries.Select(entry =>
+        {
+            ProfileRowViewModel? kept = before.FirstOrDefault(old => OmeHome.PathsEqual(
+                old.Entry.Root, entry.Root, Session.Environment.Platform));
+            if (kept != null)
+            {
+                before.Remove(kept);
+                kept.Renew(entry, S);
+                return kept;
+            }
+            var fresh = new ProfileRowViewModel(entry, S, chosen => _ = SelectAsync(chosen));
+            made.Add(fresh);
+            return fresh;
+        }).ToList();
         // The launch that opened the window (spec §8.6): its failure is shown on its profile's page.
         if (Session.Launch is { } launch && LaunchFailure.Of(launch) is { } failed && Session.Profile is { } launched)
-            foreach (ProfileRowViewModel launchedRow in rows.Where(row => OmeHome.PathsEqual(
+            foreach (ProfileRowViewModel launchedRow in made.Where(row => OmeHome.PathsEqual(
                          row.Entry.Root, launched.Root, Session.Environment.Platform)))
                 launchedRow.Failure = failed;
         var groups = rows.GroupBy(row => row.Game)
@@ -513,10 +530,26 @@ public sealed class MainViewModel : ViewModel, IDisposable
     private async Task DownloadArtAsync(ArtConsent consent)
     {
         IReadOnlyList<ArtDownload> downloads = await _art.DownloadMissingAsync(GamesListed, consent);
-        if (!downloads.Any(download => download.Status == ArtDownloadStatus.Stored)) return;
+        if (downloads.Any(download => download.Status == ArtDownloadStatus.Stored)) RefreshArt();
+    }
+
+    /// <summary>The art store, which the Games page downloads into and removes from (spec §8.7).</summary>
+    public ArtStore Art => _art;
+
+    /// <summary>Shows the images as they are now: each game's banner over its profiles and the page's cover.</summary>
+    public void RefreshArt()
+    {
         foreach (GameGroupViewModel group in _groups.Where(group => group.Game != null))
             group.Banner = ArtFor(group.Game, ArtKind.Banner);
         _page?.RefreshArt();
+    }
+
+    /// <summary>The launcher's language changed: every binding reads the new strings, and the list and the page are
+    /// made again in it.</summary>
+    public void ApplyLanguage()
+    {
+        ChangedAll();
+        Reload(select: _selected?.Id);
     }
 
     // ---- the window ----

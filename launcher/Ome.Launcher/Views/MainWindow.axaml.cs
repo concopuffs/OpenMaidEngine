@@ -127,6 +127,11 @@ public sealed partial class MainWindow : Window, IWindowHost
         return files.Count == 0 ? null : files[0].TryGetLocalPath();
     }
 
+    public void ApplyTheme(LauncherTheme theme)
+    {
+        if (Application.Current is { } application) application.RequestedThemeVariant = App.Variant(theme);
+    }
+
     public void Open(string path)
     {
         try

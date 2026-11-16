@@ -292,6 +292,33 @@ public sealed class WindowTests : IDisposable
     }
 
     [Fact]
+    public void TheLinksDraw()
+    {
+        Three();
+        Select("kamidori-english");
+        Task Open(MainViewModel model, Command link)
+        {
+            link.Execute(null);
+            return Task.CompletedTask;
+        }
+        Draw("games", task: "6.11", before: model => Open(model, model.Games),
+             check: model => Assert.Equal(Ome.Engine.Profiles.GameProfileRegistry.BuiltIn.Profiles.Length,
+                                          ((GamesViewModel)model.Dialog!).Games.Count));
+        Draw("games-ja", "ja", task: "6.11", themes: ThemeVariant.Light, before: model => Open(model, model.Games));
+        Draw("launcher-settings", task: "6.11", before: model => Open(model, model.LauncherSettings),
+             check: model => Assert.IsType<LauncherSettingsViewModel>(model.Dialog));
+        Draw("launcher-settings-ja", "ja", task: "6.11", themes: ThemeVariant.Dark,
+             before: model => Open(model, model.LauncherSettings));
+        // About as a release has it: the licences beside the launcher.
+        string folder = Path.Combine(_home.Root, "launcher");
+        Directory.CreateDirectory(folder);
+        foreach (string licence in new[] { "LICENSE", "THIRD_PARTY_NOTICES.md" })
+            File.WriteAllText(Path.Combine(folder, licence), licence);
+        Draw("about", task: "6.11", before: model => Open(model, model.About),
+             check: model => Assert.False(((AboutViewModel)model.Dialog!).LicencesMissing));
+    }
+
+    [Fact]
     public void TheDialogsDraw()
     {
         Three([("SAVEPATH", "SAVE"), ("REGFILEPATH", "")]);

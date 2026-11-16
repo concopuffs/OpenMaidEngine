@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             x:Class="Ome.Launcher.Views.LauncherSettingsView"
+             x:DataType="vm:LauncherSettingsViewModel"
+             Width="600">
+  <UserControl.Styles>
+    <Style Selector="ComboBox.field">
+      <Setter Property="MinWidth" Value="260" />
+    </Style>
+  </UserControl.Styles>
+  <!-- The launcher's own settings (spec §8.8), each written to launcher.toml at once. -->
+  <StackPanel Spacing="8">
+    <TextBlock Classes="dialog-title" Text="{Binding S[lsettings.title]}" />
+    <Grid ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+      <TextBlock VerticalAlignment="Center" Text="{Binding S[lsettings.language]}" />
+      <ComboBox Grid.Column="1" Classes="field" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}"
+                AutomationProperties.Name="{Binding S[lsettings.language]}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:OptionChoice"><TextBlock Text="{Binding Label}" /></DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+
+      <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{Binding S[lsettings.theme]}" />
+      <ComboBox Grid.Row="1" Grid.Column="1" Classes="field" ItemsSource="{Binding Themes}"
+                SelectedItem="{Binding SelectedTheme}" AutomationProperties.Name="{Binding S[lsettings.theme]}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:OptionChoice"><TextBlock Text="{Binding Label}" /></DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+
+      <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{Binding S[lsettings.running]}" />
+      <ComboBox Grid.Row="2" Grid.Column="1" Classes="field" ItemsSource="{Binding WhileRunningChoices}"
+                SelectedItem="{Binding SelectedWhileRunning}" AutomationProperties.Name="{Binding S[lsettings.running]}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:OptionChoice"><TextBlock Text="{Binding Label}" /></DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+
+      <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="{Binding S[lsettings.art]}" />
+      <ComboBox Grid.Row="3" Grid.Column="1" Classes="field" ItemsSource="{Binding ArtChoices}"
+                SelectedItem="{Binding SelectedArt}" AutomationProperties.Name="{Binding S[lsettings.art]}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:OptionChoice"><TextBlock Text="{Binding Label}" /></DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+    </Grid>
+
+    <TextBlock Classes="heading" Margin="0,10,0,0" Text="{Binding S[lsettings.new-profile]}" />
+    <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[lsettings.new-profile-text]}" />
+    <Grid ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+      <TextBlock VerticalAlignment="Center" Text="{Binding S[settings.language-label]}" />
+      <ComboBox Grid.Column="1" Classes="field" ItemsSource="{Binding NewLanguages}"
+                SelectedItem="{Binding SelectedNewLanguage}" AutomationProperties.Name="{Binding S[settings.language-label]}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:OptionChoice"><TextBlock Text="{Binding Label}" /></DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+
+      <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="{Binding S[settings.fps]}" />
+      <Button Grid.Row="1" Grid.Column="1" Classes="switch" Classes.on="{Binding NewFps}" Command="{Binding ToggleNewFps}"
+              HorizontalAlignment="Left" AutomationProperties.Name="{Binding S[settings.fps]}">
+        <Ellipse Classes="knob" />
+      </Button>
+
+      <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="{Binding S[settings.locator]}" />
+      <Button Grid.Row="2" Grid.Column="1" Classes="switch" Classes.on="{Binding NewLocator}"
+              Command="{Binding ToggleNewLocator}" HorizontalAlignment="Left"
+              AutomationProperties.Name="{Binding S[settings.locator]}">
+        <Ellipse Classes="knob" />
+      </Button>
+    </Grid>
+    <Border Classes="notice bad" IsVisible="{Binding HasError}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Error}" />
+    </Border>
+    <Button HorizontalAlignment="Right" Margin="0,6,0,0" Content="{Binding S[dialog.close]}" Command="{Binding Close}" />
+  </StackPanel>
+</UserControl>

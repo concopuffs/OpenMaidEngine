@@ -398,7 +398,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                     LauncherSession (one window run), LauncherStrings + Strings/en.json,
     │   │                                     ja.json (the launcher's text), Styles/ (Palette.axaml: the mock's
     │   │                                     colours, light and dark; Launcher.axaml: its classes), ViewModels/
-    │   │                                     (the pages' decisions, over Core), Views/ (AXAML, compiled bindings)
+    │   │                                     (the pages' decisions, over Core), Views/ (AXAML, compiled bindings);
+    │   │                                     the build output carries LICENSE and THIRD_PARTY_NOTICES.md, which
+    │   │                                     About opens
     │   ├── Ome.Launcher.Tests/               gate 9: the program run as a child process with the stub engine on a
     │   │                                     synthetic install in a temporary OME home; compiles
     │   │                                     engine/Ome.Engine.Tests/SyntheticCatalog.cs; the window's view

@@ -98,6 +98,9 @@
               <DataTemplate DataType="vm:DuplicateViewModel"><v:DuplicateView /></DataTemplate>
               <DataTemplate DataType="vm:RenameViewModel"><v:RenameView /></DataTemplate>
               <DataTemplate DataType="vm:ReviewViewModel"><v:ReviewView /></DataTemplate>
+              <DataTemplate DataType="vm:GamesViewModel"><v:GamesView /></DataTemplate>
+              <DataTemplate DataType="vm:LauncherSettingsViewModel"><v:LauncherSettingsView /></DataTemplate>
+              <DataTemplate DataType="vm:AboutViewModel"><v:AboutView /></DataTemplate>
             </ContentControl.DataTemplates>
           </ContentControl>
         </ScrollViewer>
