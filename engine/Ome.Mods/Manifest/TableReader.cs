@@ -3,9 +3,9 @@ using Tomlyn.Model;
 namespace Ome.Mods.Manifest;
 
 /// <summary>Typed access to one TOML table that records each problem and every key it read: the strict reading
-/// of <c>manifest.toml</c> (<see cref="ManifestReader"/>) and of <c>profile.toml</c>
-/// (<see cref="Ome.Mods.Launch.ProfileFile"/>), so the two report a problem alike.</summary>
-internal sealed class TableReader
+/// of <c>manifest.toml</c> (<see cref="ManifestReader"/>), of <c>profile.toml</c>
+/// (<see cref="Ome.Mods.Launch.ProfileFile"/>) and of the launcher's own files, so they report a problem alike.</summary>
+public sealed class TableReader
 {
     private readonly TomlTable _table;
     private readonly HashSet<string> _read = new(StringComparer.Ordinal);
