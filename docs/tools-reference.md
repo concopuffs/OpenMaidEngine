@@ -1064,9 +1064,16 @@ without enabling a high-volume trace. The
 `gpu_draw_items`, `gpu_texture_uploads`, and `gpu_texture_upload_ms` distinguish cheap retained-item updates
 from new/static or changed/dynamic texture publication. Existing layer/transform/pixel workload columns are
 populated for either backend, while `raster_ms`, `set_data_ms`, and `texture_update_ms` remain zero on a native
-GPU presentation. GPU rendering is the normal backend; select the reference renderer for every frame
+GPU presentation. GPU rendering is the normal backend; select the software renderer for every frame
 with `--render-backend software` or the local launcher's `-SoftwareRenderer` switch. An explicit
 `--render-backend gpu` is accepted but normally unnecessary.
+
+The software renderer is what players see named (the launcher's Advanced tab, `renderer = "software"` in
+`profile.toml`). In the engine it is the reference renderer (`engine/Ome.Engine/Hosting/ReferenceRenderer.cs`):
+it defines what each frame shows, the GPU renderer draws the same frame or hands it back, and `reference-diff`
+compares the two. It is slow on full-screen blended effects: when it was measured, the opening scene's exit
+(SC0000) took 65 ms a frame at the median even after the CPU work of `phase-a-slice-plan.md` P2, which is why GPU
+became the normal backend (P3, P4).
 
 Since engine layering milestone 11 the frame is lowered on the engine thread, in the frame turn the front end asks
 for each display frame (`docs/superpowers/specs/2026-11-12-engine-layering-design.md` §5.3). `pulse_ms` is the whole
