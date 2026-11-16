@@ -53,4 +53,25 @@ public sealed class SharedLinkBaseTests : IDisposable
         Assert.Equal(fromFiles.ToolchainStamp, shared.ToolchainStamp);
         Assert.Equal(fromFiles.Modules.Count, shared.Modules.Count);
     }
+
+    [Fact]
+    public void ModulesWithoutTheirGeneratedGlobalsAreAnInvalidBaseThatSaysWhatToBuild()
+    {
+        // Launcher plan §9.5: a program inside a fresh checkout links with the repository's modules, and build/ has no
+        // globals until they are built. Every linker reports an InvalidDataException; the compile error was a crash.
+        string sys4Ini = Path.Combine(_root, "SYS4INI.BIN");
+        File.WriteAllBytes(sys4Ini, Sys4StartupSettingsTests.BuildCatalog(ScriptsTheModulesRun("himegari")));
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        string missing = Path.Combine(_root, "build", "games", "himegari", "globals.json");
+
+        var error = Assert.Throws<InvalidDataException>(() => ModLinkBase.ForInstall(
+            "himegari", sys4Ini, catalog, new Sys4AssetStore(catalog, _root, _root),
+            OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4422"), OpcodeContracts.Load(Paths.OpcodesJson),
+            missing, Paths.OmsModules("himegari"), Paths.PatchPointsJson("himegari")));
+
+        Assert.StartsWith($"the OMS modules in {Paths.OmsModules("himegari")} do not build: ", error.Message);
+        Assert.Contains("unknown module 'himegari.globals'", error.Message);
+        Assert.EndsWith($"they use the generated {missing}, which is missing: run tools/globals_build.py --game himegari "
+                        + "--build", error.Message);
+    }
 }

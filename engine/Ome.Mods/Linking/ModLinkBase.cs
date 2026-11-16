@@ -2,8 +2,10 @@ using Ome.Engine.Model;
 using Ome.Engine.Modding;
 using Ome.Engine.Sys4;
 using Ome.Script.Abi;
+using Ome.Script.Compile;
 using Ome.Script.Modules;
 using Ome.Script.Patch;
+using Ome.Script.Syntax;
 using Ome.Script.Text;
 
 namespace Ome.Mods.Linking;
@@ -123,6 +125,25 @@ public sealed record ModLinkBase
         modules.Add(GameModule.Scripts(profile, catalog.EnumerateScripts().Select(packed => (packed.Asset.Name, packed.PackedId))));
         if (omsModulesDirectory != null && Directory.Exists(omsModulesDirectory))
             modules.AddRange(GameModule.LoadSources(omsModulesDirectory, profile));
+        OmsIdioms? idioms = null;
+        if (modules.Any(module => module.Source != null))
+        {
+            try
+            {
+                idioms = OmsIdioms.Build(modules, table.AbiId, intrinsics);
+            }
+            catch (Exception error) when (error is OmsCompileException or OmsSyntaxException)
+            {
+                // The modules use the generated globals, which a fresh checkout has none of until they are built (its
+                // build/ is regenerable): said as the base's failure, which every linker reports, not as a crash.
+                string missing = globalsJson != null && !File.Exists(globalsJson)
+                    ? $"; they use the generated {globalsJson}, which is missing: run tools/globals_build.py --game "
+                      + $"{profile} --build"
+                    : "";
+                throw new InvalidDataException(
+                    $"the OMS modules in {omsModulesDirectory} do not build: {error.Message}{missing}", error);
+            }
+        }
         return new ModLinkBase
         {
             Profile = profile,
@@ -136,7 +157,7 @@ public sealed record ModLinkBase
             Contracts = contracts,
             Intrinsics = intrinsics,
             Modules = modules,
-            Idioms = modules.Any(module => module.Source != null) ? OmsIdioms.Build(modules, table.AbiId, intrinsics) : null,
+            Idioms = idioms,
             PatchPoints = patchPointsJson != null && File.Exists(patchPointsJson) ? OmsPatchPoints.Load(patchPointsJson) : null,
             CatalogTitle = catalog.Title,
             AppendMagic = ("S4AC" + catalog.Magic[4..]).PadRight(8)[..8],
