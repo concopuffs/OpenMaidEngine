@@ -147,7 +147,7 @@ public sealed class DuplicateViewModel : ViewModel
                 () => ProfileStore.Duplicate(Home, settings, source, id, name, leaveOut, elsewhere)));
             Close();
             _main.Session.Save(change.Settings with { LastProfile = change.Profile.Id });
-            _main.Reload(select: change.Profile.Id);
+            await _main.Reload(select: change.Profile.Id);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException
                                           or ProfileBusyException or ProfileFileException)
@@ -223,6 +223,6 @@ public sealed class RenameViewModel : ViewModel
         if (!saved) return;
         _main.CloseDialog(this);
         // The list is ordered by name within each game.
-        _main.Reload(select: _page.Entry.Id);
+        await _main.Reload(select: _page.Entry.Id);
     }
 }

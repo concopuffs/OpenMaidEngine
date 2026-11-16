@@ -157,6 +157,7 @@ public sealed class LinksTests : IDisposable
         settings.SelectedLanguage = settings.Languages[0];
         Assert.Null(Saved.Language);
         Assert.Equal("en", model.S.Language);
+        await model.Checking;   // each language change checks the page again: done before the home is deleted
 
         // The theme is applied as it is written.
         settings.SelectedTheme = settings.Themes.Single(choice => choice.Value == "Dark");
@@ -274,7 +275,7 @@ public sealed class LinksTests : IDisposable
         ProfileRowViewModel row = model.Rows.Single();
         Assert.NotNull(row.Failure);
         model.Page!.DismissFailure.Execute(null);
-        model.Reload();
+        await model.Reload();   // its checks read the install: done before the home is deleted
         Assert.Same(row, model.Rows.Single());
         Assert.Null(row.Failure);
         model.Dispose();

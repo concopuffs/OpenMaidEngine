@@ -118,7 +118,7 @@ public sealed class ReviewViewModel : ViewModel
             LauncherSettings settings = ProfileTrust.Accept(_main.Session.Settings, review, _main.Session.Machine);
             _main.Session.Save(settings with { LastProfile = _profile.Id });
             _main.CloseDialog(this);
-            _main.Reload(select: _profile.Id);
+            await _main.Reload(select: _profile.Id);
             if (_main.Selected is { Entry.NeedsReview: true } again && again.Id == _profile.Id)
                 await _main.OpenReviewAsync(again.Entry);
         }
@@ -145,7 +145,6 @@ public sealed class ReviewViewModel : ViewModel
             return Task.CompletedTask;
         }
         _main.CloseDialog(this);
-        _main.Dropped(_profile.Root);
-        return Task.CompletedTask;
+        return _main.Dropped(_profile.Root);
     }
 }

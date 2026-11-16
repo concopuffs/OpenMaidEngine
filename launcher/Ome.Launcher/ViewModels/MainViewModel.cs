@@ -70,7 +70,7 @@ public sealed class MainViewModel : ViewModel, IDisposable
         About = new Command(() => ShowDialog(new AboutViewModel(this)));
         ArtAlways = new Command(() => _ = AnswerArtAsync(ArtConsent.Always));
         ArtNever = new Command(() => _ = AnswerArtAsync(ArtConsent.Never));
-        Reload();
+        _ = Reload();   // its checks are StartAsync's first work
     }
 
     public LauncherSession Session { get; }
@@ -157,11 +157,11 @@ public sealed class MainViewModel : ViewModel, IDisposable
     }
 
     /// <summary>A root deleted or declined in this run: the list forgets it, the profile that opened the window
-    /// included, and shows another.</summary>
-    public void Dropped(string root)
+    /// included, and shows another. Returns the shown page's checks (<see cref="Reload"/>).</summary>
+    public Task Dropped(string root)
     {
         _dropped.Add(Full(root));
-        Reload();
+        return Reload();
     }
 
     private static string Full(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
@@ -191,7 +191,7 @@ public sealed class MainViewModel : ViewModel, IDisposable
             return;
         }
         _dropped.Remove(folder);
-        Reload(select: id);
+        await Reload(select: id);
         if (Selected is { Entry.NeedsReview: true } row && row.Id == id) await OpenReviewAsync(row.Entry);
     }
 
@@ -212,8 +212,10 @@ public sealed class MainViewModel : ViewModel, IDisposable
     public Command About { get; }
 
     /// <summary>Reads the profile list again and selects <paramref name="select"/>, else the profile the window opened
-    /// for, else the last one, else the first.</summary>
-    public void Reload(string? select = null)
+    /// for, else the last one, else the first. Returns the selected page's checks, which it starts (also
+    /// <see cref="Checking"/>): an action that reloads awaits them, so it ends once its page shows them, and nothing
+    /// the action's caller does next races a check still reading the profile's files.</summary>
+    public Task Reload(string? select = null)
     {
         List<ProfileEntry> entries = [.. ProfileStore.List(Session.Home, Session.Settings, Session.Machine)];
         // The profile that opened the window is listed even when OME home does not know it, until it is deleted or
@@ -261,6 +263,7 @@ public sealed class MainViewModel : ViewModel, IDisposable
 
         _artHosts = Session.Settings.Art == ArtConsent.Ask ? _art.MissingHosts(GamesListed) : [];
         AskArt = _artHosts.Count > 0;
+        return Checking;
     }
 
     /// <summary>Selects <paramref name="row"/>, keeps it as the last profile, and checks it.</summary>
@@ -549,7 +552,7 @@ public sealed class MainViewModel : ViewModel, IDisposable
     public void ApplyLanguage()
     {
         ChangedAll();
-        Reload(select: _selected?.Id);
+        _ = Reload(select: _selected?.Id);   // a language change from a setter: Checking holds its checks
     }
 
     // ---- the window ----

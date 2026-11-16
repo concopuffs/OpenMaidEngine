@@ -195,7 +195,7 @@ public sealed class ProfilePageViewModel : ViewModel
             await _main.TellAsync(S["delete.failed"], error.Message);
             return;
         }
-        _main.Dropped(entry.Root);
+        await _main.Dropped(entry.Root);
     }
     public bool IsRunning => State == ProfileState.Running;
     public bool IsNotRunning => !IsRunning;

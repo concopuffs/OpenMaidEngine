@@ -605,8 +605,9 @@ public sealed class WizardViewModel : ViewModel
             });
             if (!ReferenceEquals(change.Settings, settings)) _main.Session.Save(change.Settings);
             _main.CloseWizard(this);
-            _main.Reload(select: change.Profile.Id);
+            Task checking = _main.Reload(select: change.Profile.Id);
             _main.Session.Save(_main.Session.Settings with { LastProfile = change.Profile.Id });
+            await checking;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException
                                           or ProfileBusyException or ProfileFileException or SaveCopyRefusedException
