@@ -326,6 +326,16 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   and no conflict is reported. Spec §10.2 does not cover it. Done when the design picks a rule (the applier
   relocates each plan's unpinned locals above the previous plan's, or the linker reports overlapping live ranges)
   and a two-mod test shows it.
+- **A dev mod that stops the title's idle opening movie.** Kamidori's title leaves for `OP.BIN` once its idle
+  count `L[0x29]` passes 100 while sound channel `0xb` is silent (`TITLE@0xd7`..`0xf1`). Callback slot `0xa`
+  (`label_254`), the slot `dispatch-joy-callbacks` runs when no action is held, adds one every other 50 ms mouse
+  tick, and a hover change resets it. So the title gives way to the movie after about 10 s without a hover change.
+  Himegari's title has the same exit at 460 counts (`TITLE@0xd7`, `L[0x29] > 0x1cc`), about 46 s. A driven session
+  or a person looking at the title that long finds the movie playing, and the next click skips the movie instead of
+  pressing a button. That happened during the title-hover measurements (`../oms/examples/mods/README.md`,
+  `example.kamidori-title-hover`). Done when a committed native-target mod removes that exit on each base it
+  supports, so it runs in the port (`--mod`) and through `omp export` on native AGE. It is for development, so it
+  goes outside `mods/`, which `Ome.Mods` embeds whole.
 - **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12):
   - a launcher (designed, not built: `superpowers/specs/2026-11-15-launcher-design.md`);
   - mod-owned sites (patching another mod's inserted code);

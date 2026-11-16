@@ -48,4 +48,12 @@ ran the same scenarios on native AGE.
   `tools/drive/scenarios/port/himegari-random-enemies.steps` plays a new game to stage 1 under `rand-seed 7` and fails
   unless the draw is the one every seeded run gives.
 
+- `example.kamidori-title-hover` makes Kamidori's title draw the hovered button in the same tick that finds it. The
+  title's 50 ms mouse callback (`TITLE@0x182`) draws the highlight first and reads the cursor second, so a hover
+  shows one tick late, 50 to 100 ms after the cursor arrives, on native AGE and the port alike. Himegari's title and
+  every other Kamidori menu read the cursor first. The fragment swaps the two calls and skips the draw on a tick
+  that started an action, which draws its own. Measured on native AGE on 2026-11-15, the hover showed within
+  50 ms (the original took up to about 100 ms), and Load Data and Option still opened and returned. It targets the untranslated
+  `TITLE.BIN`; the translated one has the same code at the same offsets, and the fragment names its fingerprint.
+
 Each folder is an unpacked Open Maid Pack; `Ome.Cli omp build DIR` packs one into a `.omp` with stored plans.

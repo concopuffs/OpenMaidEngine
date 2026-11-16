@@ -1,0 +1,9 @@
+omp = 1
+id = "example.kamidori-title-hover"
+name = "Kamidori title hover"
+version = "0.1.0"
+description = "Draws the title screen's button highlight in the same mouse tick that finds the hovered button, as every other Kamidori menu does, against the untranslated TITLE.BIN."
+
+[game]
+profile = "kamidori"
+target = "native"

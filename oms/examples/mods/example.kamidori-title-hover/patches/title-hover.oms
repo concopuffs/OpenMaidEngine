@@ -1,0 +1,18 @@
+oms 1
+// Kamidori's title draws the button highlight at the start of its 50 ms mouse callback and reads the cursor after
+// it (label_182: label_9a7, then label_189), so a hover shows one tick late, 50-100 ms after the cursor arrives.
+// Himegari's title and every other Kamidori menu read the cursor first and redraw in the same tick. This swaps the
+// two calls. The draw is skipped when the tick started an action (Game Start, Load Data, Option...), because each
+// action draws its final highlight itself and the original never drew again after one returned.
+// The translated install's TITLE.bin has the same code at the same offsets (only its debug-menu strings differ);
+// its fingerprint is sha256:d50d2a6b0de63f53ae350a41494009e1e0ad0dafb2cd39121a7f7f459546c899.
+patch "TITLE.BIN" fingerprint "sha256:e842611f9c346f624aba85cb702848b355137a3043160aea717fcf5be64c8033"
+
+local int action @ 0x36                   // 0 until a click or key starts an action; the main loop acts on it
+
+replace site 0x182 through 0x185 {
+    label_189()                           // read the cursor and buttons, hit-test, update the selection
+    if action == 0 {
+        label_9a7()                       // draw the selection and present the frame
+    }
+}
