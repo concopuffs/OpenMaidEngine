@@ -755,6 +755,51 @@ def test_port_build():
           "Directory.Build.targets makes an Optimize change recompile")
 
 
+def test_port_profile_root():
+    # Launcher spec §5.10: `start --data-root DIR` runs a player profile root as it is.
+    import argparse
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory) / "profile"
+        root.mkdir()
+        check(raises(port.check_profile_root, root, "himegari", [], contains="holds no profile.toml"),
+              "a root without profile.toml is refused (a sandbox start needs no --data-root)")
+        (root / "profile.toml").write_text('ome_profile = 1\ngame = "kamidori"\n', encoding="utf-8")
+        check(raises(port.check_profile_root, root, "himegari", [], contains="pass --game kamidori"),
+              "a profile of another game is refused, naming the --game to pass")
+        check(port.check_profile_root(root, "kamidori", []) == root.absolute(), "the root is used as given, absolute")
+        relative = Path(".") / root.relative_to(Path(directory))
+        current = Path.cwd()
+        try:
+            import os
+            os.chdir(directory)
+            check(port.check_profile_root(relative, "kamidori", []) == root, "a relative root resolves here")
+        finally:
+            os.chdir(current)
+        (root / "profile.toml").write_text("ome_profile = 1\n", encoding="utf-8")
+        check(raises(port.check_profile_root, root, "kamidori", [], contains="names no game"),
+              "a profile file without a game is refused")
+        (root / "profile.toml").write_text("game = \n", encoding="utf-8")
+        check(raises(port.check_profile_root, root, "kamidori", [], contains="profile.toml"),
+              "a profile file that does not parse is refused with its path")
+        parser = argparse.ArgumentParser()
+        port.add_launch_options(parser)
+        given = port.sandbox_options_given(parser.parse_args(
+            ["--data-root", str(root), "--sandbox", "keep", "--seed", "live", "--set", "a.b=1", "--sound"]))
+        check(given == ["--sandbox", "--seed", "--set", "--sound"], "every sandbox option is noticed")
+        check(port.sandbox_options_given(parser.parse_args(["--data-root", str(root), "--mod", "x"])) == [],
+              "--mod is not a sandbox option")
+        check(raises(port.check_profile_root, root, "kamidori", ["--seed"], contains="--seed cannot be combined"),
+              "a sandbox option is refused with a profile root")
+        session, desktop = Path(directory) / "session.json", Path(directory) / "desktop"
+        profile_run = port.engine_arguments(root, desktop, session, [], ["--locator-hud"])
+        check(profile_run[:2] == ["--data-root", str(root)] and "--game-root" not in profile_run,
+              "a profile root's start passes no --game-root")
+        check(profile_run[-1] == "--locator-hud" and profile_run[profile_run.index("--desktop-dir") + 1] == str(desktop),
+              "the Desktop and the extra port arguments stay")
+        sandbox_run = port.engine_arguments(root, desktop, session, [], [], game_root=Path(directory))
+        check(sandbox_run[:2] == ["--game-root", directory], "a sandbox start names the game root first")
+
+
 def test_port_terminates_only_the_recorded_process():
     calls = []
 
@@ -788,6 +833,7 @@ def main():
     test_restore_target_outside_the_install()
     test_session_identity()
     test_port_terminates_only_the_recorded_process()
+    test_port_profile_root()
     test_port_sandboxes()
     test_profiles()
     test_client_and_executor()

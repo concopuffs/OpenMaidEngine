@@ -145,6 +145,16 @@ def test_refusals():
               "optimize is refused for native")
         check(refused("drive_start", "needs build=true", target="port", optimize=True, build=False),
               "optimize needs the build")
+        check(refused("drive_start", "port only", target="native", data_root="profile"),
+              "data_root is refused for native")
+        passed = []
+        saved, drive_mcp.run_cli = drive_mcp.run_cli, lambda *arguments, timeout: passed.extend(arguments) or "started"
+        try:
+            call("drive_start", target="port", data_root="C:/profiles/one", build=False)
+        finally:
+            drive_mcp.run_cli = saved
+        check(passed == ["port", "start", "--no-build", "--data-root", "C:/profiles/one"],
+              "data_root becomes drive.py's --data-root")
 
 
 def main():

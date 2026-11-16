@@ -376,6 +376,7 @@ boundary, not just a naming convention; tools resolve it from the selected immut
 Native runs live there too: `native-scratch/` (the copied install), and `drive/<native|port>/`. Each target's
 `drive/` folder holds the driver session, its logs and screenshots, and `sandbox/<name>/` (native: redirected
 LocalAppData/Desktop with the game's saves and `SYS4REG.INI`; port: the `--data-root` profile in the same layout).
+`drive/port/desktop/` is the Desktop of a run on a player profile root (`start --data-root`), which makes no sandbox.
 `drive/native/backups/` holds copies of the live save folder.
 `engine/Ome.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
 `engine/Ome.Cli` exposes it as `catalog-scan` for validation and diagnostic reports, and exposes the

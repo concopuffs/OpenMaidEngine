@@ -10,7 +10,9 @@ or PATH) with
 
 ``--data-root`` is the sandbox itself, in the native profile layout (SYS4REG.INI, SAVE\\), so a port sandbox and a
 native one can seed each other. Its SYS4REG.INI gets the profile's ``[sandbox.settings]`` and, unless ``--sound``,
-``[sandbox.quiet]``. The token travels in ``OME_DRIVE_TOKEN``. The window goes to the bottom of the z-order without
+``[sandbox.quiet]``. ``start --data-root DIR`` runs an existing player profile root instead (launcher spec §5.10):
+``--data-root DIR`` and no ``--game-root``, since its ``profile.toml`` names the install; no sandbox, and nothing
+written into the root. The token travels in ``OME_DRIVE_TOKEN``. The window goes to the bottom of the z-order without
 being activated unless ``--foreground``; injected input does not need focus, and the port drops real input for the
 whole run.
 
@@ -25,6 +27,7 @@ import secrets
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
 from typing import Callable
 
@@ -63,6 +66,49 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
                          help="load this mod package (.omp or folder) in addition to the sandbox's mods/ (repeatable)")
     command.add_argument("--port-arg", action="append", default=[], metavar="ARG",
                          help="extra argument for the port after --, e.g. --port-arg=--locator-hud (repeatable)")
+    command.add_argument("--data-root", metavar="DIR",
+                         help="run this player profile root (it holds profile.toml) as it is: no sandbox, no "
+                              "--game-root, nothing written into it, and its own settings and volume; refuses "
+                              "--sandbox, --seed, --set and --sound")
+
+
+def sandbox_options_given(arguments: argparse.Namespace) -> list[str]:
+    """The sandbox options given, which a profile root refuses."""
+    return [name for name, given in (("--sandbox", arguments.sandbox), ("--seed", arguments.seed),
+                                     ("--set", arguments.set), ("--sound", arguments.sound)) if given]
+
+
+def check_profile_root(data_root: Path, game: str, refused: list[str]) -> Path:
+    """The absolute profile root `start --data-root` runs. It must hold a profile.toml naming this driver's game, whose
+    drive folder and named points the session uses; the engine checks the rest of the file at its start."""
+    if refused:
+        raise DriveError(f"--data-root runs the profile root as it is, with its own settings: "
+                         f"{', '.join(refused)} cannot be combined with it")
+    root = Path(os.path.abspath(data_root))
+    profile_file = root / "profile.toml"
+    if not profile_file.is_file():
+        raise DriveError(f"{root} holds no profile.toml: --data-root takes a player profile root "
+                         "(a start without it makes a sandbox)")
+    try:
+        game_of_root = tomllib.loads(profile_file.read_text(encoding="utf-8")).get("game")
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as error:
+        raise DriveError(f"{profile_file}: {error}") from None
+    if not isinstance(game_of_root, str):
+        raise DriveError(f"{profile_file} names no game")
+    if game_of_root != game:
+        raise DriveError(f"{profile_file} runs {game_of_root}, and this driver is on {game}: pass --game {game_of_root} "
+                         "to drive.py, so the session uses that game's drive folder and named points")
+    return root
+
+
+def engine_arguments(data_root: Path, desktop: Path, session: Path, mods: list[str], port_args: list[str],
+                     game_root: Path | None = None) -> list[str]:
+    """The port's arguments after `--`. A profile root's start passes no game root: its profile.toml names the
+    install, and the engine refuses --game-root beside it."""
+    return [*(["--game-root", str(game_root)] if game_root is not None else []),
+            "--data-root", str(data_root), "--desktop-dir", str(desktop),
+            "--control", "--control-file", str(session),
+            *[part for mod in mods for part in ("--mod", str(Path(mod).resolve()))], *port_args]
 
 
 def build_command(optimize: bool = False) -> list[str]:
@@ -92,30 +138,38 @@ def start(arguments: argparse.Namespace) -> int:
     if core.read_session("port") is not None:
         raise DriveError("a port session is already running; `drive.py port stop` first")
     session.unlink(missing_ok=True)
+    data_root = (check_profile_root(Path(arguments.data_root), paths.CONTEXT.profile_id, sandbox_options_given(arguments))
+                 if arguments.data_root else None)
     settings = core.parse_settings(arguments.set)
     if arguments.optimize and arguments.no_build:
         raise DriveError("--optimize is a build option; it cannot be combined with --no-build")
     godot = resolve_godot(arguments.godot)
     if not arguments.no_build:
         build(arguments.optimize)
-    profile = core.load_profile()
-    sandbox, profile_root = core.prepare_sandbox(
-        "port", arguments.sandbox or "fresh", arguments.seed, arguments.sound, profile,
-        log=lambda message: print(f"drive port: {message}", flush=True), settings=settings)
+    sandbox: Path | None
+    if data_root is not None:
+        # Launcher spec §5.10: the root as it is. Only the Desktop (F1 screenshots, debug reports) is the driver's.
+        sandbox, profile_root, desktop = None, data_root, root / "desktop"
+        desktop.mkdir(parents=True, exist_ok=True)
+        engine = engine_arguments(profile_root, desktop.resolve(), session.resolve(), arguments.mod, arguments.port_arg)
+    else:
+        profile = core.load_profile()
+        sandbox, profile_root = core.prepare_sandbox(
+            "port", arguments.sandbox or "fresh", arguments.seed, arguments.sound, profile,
+            log=lambda message: print(f"drive port: {message}", flush=True), settings=settings)
+        engine = engine_arguments(profile_root.resolve(), (sandbox / core.SANDBOX_FOLDERS[0x10]).resolve(),
+                                  session.resolve(), arguments.mod, arguments.port_arg, game_root=paths.CONTEXT.game_root)
     token = secrets.token_hex(16)
     environment = {**os.environ, core.TOKEN_ENVIRONMENT: token}
-    command = [str(godot), "--path", str(GODOT_PROJECT), "--",
-               "--game-root", str(paths.CONTEXT.game_root), "--data-root", str(profile_root.resolve()),
-               "--desktop-dir", str((sandbox / core.SANDBOX_FOLDERS[0x10]).resolve()),
-               "--control", "--control-file", str(session.resolve()),
-               *[part for mod in arguments.mod for part in ("--mod", str(Path(mod).resolve()))], *arguments.port_arg]
+    command = [str(godot), "--path", str(GODOT_PROJECT), "--", *engine]
     log_path = root / "godot.log"
     log = log_path.open("wb")
     flags = 0x00000008 | 0x00000200            # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
     process = subprocess.Popen(command, cwd=paths.REPO, stdout=log, stderr=subprocess.STDOUT,
                                stdin=subprocess.DEVNULL, env=environment, creationflags=flags)
     core.write_json_atomic(root / "launch.json", {
-        "launcher_pid": process.pid, "launcher_created": core.pid_created(process.pid), "command": command, "sandbox": str(sandbox), "profile_root": str(profile_root),
+        "launcher_pid": process.pid, "launcher_created": core.pid_created(process.pid), "command": command,
+        "sandbox": str(sandbox) if sandbox is not None else None, "profile_root": str(profile_root),
         "log": str(log_path), "started": core.now_text(), "foreground": bool(arguments.foreground),
         "optimize": bool(arguments.optimize),
     })
@@ -129,7 +183,8 @@ def start(arguments: argparse.Namespace) -> int:
                 hello = client.hello
             print(f"drive port: pid {info['pid']} on 127.0.0.1:{info['port']}, profile {hello.get('profile')}, "
                   f"capabilities {', '.join(hello.get('capabilities', []))}{jit_note(hello)}")
-            print(f"drive port: saves sandbox {profile_root}; log {log_path}")
+            where = "saves sandbox" if sandbox is not None else "profile root"
+            print(f"drive port: {where} {profile_root}; log {log_path}")
             return 0
         if process.poll() is not None and core.read_session("port") is None:
             print(log_path.read_bytes().decode("utf-8", errors="replace")[-3000:], file=sys.stderr)
