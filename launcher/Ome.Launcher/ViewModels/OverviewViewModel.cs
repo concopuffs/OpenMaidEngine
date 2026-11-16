@@ -125,8 +125,9 @@ public sealed class OverviewViewModel : ViewModel
     {
         get
         {
+            // The start mode is the install's SYS4INI value when the profile's SYS4REG.INI lacks it: unknown without it.
             ProfileSettings? settings = SettingsOrNull();
-            if (settings == null) return S["overview.unknown"];
+            if (settings == null || Startup == null) return S["overview.unknown"];
             if (!settings.Windowed) return S["display.fullscreen"];
             return settings.Port.CanvasWindowSize
                 ? S["display.window-canvas"]

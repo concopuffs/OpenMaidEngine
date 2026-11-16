@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Ome.Launcher.ViewModels"
+             xmlns:v="using:Ome.Launcher.Views"
+             x:Class="Ome.Launcher.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+  <!-- The mock's settings(): a .form of headed groups, each row (.frow) a label column of 190 and its control. -->
+  <StackPanel Classes="form">
+    <Border Classes="notice run" Margin="0,0,0,12" IsVisible="{Binding IsLocked}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding S[settings.locked]}" />
+    </Border>
+    <Border Classes="notice bad" Margin="0,0,0,12" IsVisible="{Binding HasResult}">
+      <TextBlock Classes="notice-text" TextWrapping="Wrap" Text="{Binding Result}" />
+    </Border>
+    <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding S[settings.unreadable]}" IsVisible="{Binding HasNoSettings}" />
+
+    <StackPanel IsVisible="{Binding HasSettings}">
+      <TextBlock Classes="heading form-heading first" Text="{Binding S[settings.language], Converter={x:Static v:Text.Upper}}" />
+      <Border Classes="frow">
+        <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+          <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding S[settings.language-label]}" />
+          <ComboBox Grid.Column="1" Classes="field" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}"
+                    IsEnabled="{Binding CanWrite}" AutomationProperties.Name="{Binding S[settings.language-label]}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:LanguageChoice">
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </Grid>
+      </Border>
+
+      <TextBlock Classes="heading form-heading" Text="{Binding S[settings.display], Converter={x:Static v:Text.Upper}}" />
+      <Border Classes="frow">
+        <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+          <TextBlock VerticalAlignment="Center" Text="{Binding S[settings.start]}" />
+          <StackPanel Grid.Column="1" Spacing="4">
+            <StackPanel Orientation="Horizontal">
+              <Button Classes="radio" Classes.on="{Binding Fullscreen}" Command="{Binding StartFullscreen}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Ellipse Classes="radio-dot" />
+                  <TextBlock Text="{Binding S[settings.fullscreen]}" />
+                </StackPanel>
+              </Button>
+              <Button Classes="radio" Classes.on="{Binding Windowed}" Command="{Binding StartWindowed}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Ellipse Classes="radio-dot" />
+                  <TextBlock Text="{Binding S[settings.windowed]}" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+            <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[settings.force-screen]}"
+                       IsVisible="{Binding ForceScreen}" />
+            <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[settings.display-waits]}"
+                       IsVisible="{Binding DisplayWaitsForInstall}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+      <Border Classes="frow">
+        <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="{Binding S[settings.size-label]}" />
+            <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[settings.size-help]}" />
+          </StackPanel>
+          <ComboBox Grid.Column="1" Classes="field" ItemsSource="{Binding Sizes}" SelectedItem="{Binding SelectedSize}"
+                    IsEnabled="{Binding CanWrite}" AutomationProperties.Name="{Binding S[settings.size-label]}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:SizeChoice">
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </Grid>
+      </Border>
+
+      <TextBlock Classes="heading form-heading" Text="{Binding S[settings.port], Converter={x:Static v:Text.Upper}}" />
+      <Border Classes="frow">
+        <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+          <TextBlock VerticalAlignment="Center" Text="{Binding S[settings.fps]}" />
+          <Button Grid.Column="1" Classes="switch" Classes.on="{Binding FpsCounter}" Command="{Binding ToggleFps}"
+                  HorizontalAlignment="Left" AutomationProperties.Name="{Binding S[settings.fps]}">
+            <Ellipse Classes="knob" />
+          </Button>
+        </Grid>
+      </Border>
+      <Border Classes="frow">
+        <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="{Binding S[settings.locator]}" />
+            <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding S[settings.locator-help]}" />
+          </StackPanel>
+          <Button Grid.Column="1" Classes="switch" Classes.on="{Binding LocatorHud}" Command="{Binding ToggleLocator}"
+                  HorizontalAlignment="Left" VerticalAlignment="Center" AutomationProperties.Name="{Binding S[settings.locator]}">
+            <Ellipse Classes="knob" />
+          </Button>
+        </Grid>
+      </Border>
+      <Border Classes="frow">
+        <Grid ColumnDefinitions="190,*" ColumnSpacing="12">
+          <TextBlock Grid.Column="1" Classes="muted" TextWrapping="Wrap" Text="{Binding S[settings.game-settings]}" />
+        </Grid>
+      </Border>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

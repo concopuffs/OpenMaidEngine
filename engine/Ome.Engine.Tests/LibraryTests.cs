@@ -193,6 +193,18 @@ public sealed class LibraryTests : IDisposable
     }
 
     [Fact]
+    public void TheLanguagesAreTheEnabledPackagesWithTheEnginesMergedNames()
+    {
+        Package(Shared, "example.fr", target: "extended",
+                extra: "[[language]]\ntag = \"fr\"\nname = \"Français\"\n[[language]]\ntag = \"de\"\n");
+        Package(Shared, "example.de", target: "extended", extra: "[[language]]\ntag = \"de\"\nname = \"Deutsch\"\n");
+        Package(Shared, "example.off", target: "extended", extra: "[[language]]\ntag = \"it\"\n");
+        ProfileDocument document = Document(On("example.fr"), On("example.de"), Off("example.off"));
+        LibraryView view = Library.View(document, Library.Index(document), null);
+        Assert.Equal([("fr", "Français"), ("de", "Deutsch")], Library.Languages(view));
+    }
+
+    [Fact]
     public void AReadmeIsReadAsPlainTextUpToItsLimit()
     {
         string plain = Package(Shared, "example.plain");

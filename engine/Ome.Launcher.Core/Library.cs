@@ -233,6 +233,25 @@ public static class Library
         return document with { Mods = mods with { Order = order } };
     }
 
+    /// <summary>
+    /// The languages <paramref name="view"/>'s enabled packages define, read from their manifests (spec §8.4: the
+    /// Settings page offers them beside the shell's), in the order the packages are listed, each with its
+    /// <c>name</c> as the engine merges it: a later package's name wins, and one that gives none keeps the earlier
+    /// (<c>LanguageLaunch.Languages</c>).
+    /// </summary>
+    public static IReadOnlyList<(string Tag, string? Name)> Languages(LibraryView view)
+    {
+        var names = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var order = new List<string>();
+        foreach (LibraryPackage package in view.Packages.Where(package => package.Enabled && package.Entry != null))
+            foreach (var language in package.Entry!.Manifest.Languages)
+            {
+                if (!names.ContainsKey(language.Tag)) order.Add(language.Tag);
+                names[language.Tag] = language.Name ?? names.GetValueOrDefault(language.Tag);
+            }
+        return order.Select(tag => (tag, names[tag])).ToList();
+    }
+
     public const int ReadmeLimit = 64 * 1024;
     private static readonly string[] ReadmeNames = ["README.md", "README.txt", "README"];
 

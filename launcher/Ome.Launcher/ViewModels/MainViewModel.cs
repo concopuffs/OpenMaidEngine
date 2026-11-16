@@ -49,6 +49,7 @@ public sealed class MainViewModel : ViewModel, IDisposable
     private int _running;
     private bool _quitWhenIdle;
     private ConfirmViewModel? _confirm;
+    private readonly SemaphoreSlim _lockGate = new(1, 1);
 
     public MainViewModel(LauncherSession session, ArtOptions? artOptions = null)
     {
@@ -230,6 +231,9 @@ public sealed class MainViewModel : ViewModel, IDisposable
     {
         row.Launching = true;
         row.Failure = null;
+        // Launching locks the page, so nothing new is written; a write already under way finishes first, and the start
+        // runs on the profile as written.
+        await OneAtATime(() => Task.FromResult(true));
         SynchronizationContext? ui = SynchronizationContext.Current;
         ProfileEntry entry = row.Entry;
         CheckOptions options = Session.CheckOptions;
@@ -320,8 +324,27 @@ public sealed class MainViewModel : ViewModel, IDisposable
         foreach (ProfileRowViewModel row in Rows.ToList())
         {
             if (!row.Entry.Usable || row.Entry.NeedsReview || row.RunningHere || row.Launching) continue;
-            bool held = RunLock.IsHeld(row.Entry.Root, out _);
+            bool held = await OneAtATime(() => Task.FromResult(RunLock.IsHeld(row.Entry.Root, out _)));
             if (held != (row.State == ProfileState.Running)) await Recheck(row);
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> when no other work that opens a profile's <c>run.lock</c> runs: a write under the
+    /// lock and its check run, a page's check run, the running probe. They exclude each other because the probe
+    /// (<see cref="RunLock.IsHeld"/>) opens the lock file: a write taking the lock during a probe is refused as if the
+    /// game ran, and a probe during a write sees a game that is not there.
+    /// </summary>
+    public async Task<T> OneAtATime<T>(Func<Task<T>> work)
+    {
+        await _lockGate.WaitAsync();
+        try
+        {
+            return await work();
+        }
+        finally
+        {
+            _lockGate.Release();
         }
     }
 

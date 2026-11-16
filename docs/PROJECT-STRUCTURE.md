@@ -356,11 +356,13 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       (recognizing an install, overlay candidates, known installs),
     │                                       ProfileSaves (save counts, copying saves in with their selectors),
     │                                       ProfileSettings (a profile's OME.INI options and SYS4REG.INI
-    │                                       start mode, read as the engine reads them),
+    │                                       start mode, read and written as the engine reads and writes
+    │                                       them, and the window sizes the port offers),
     │                                       BareEngineData/Adoption (a profile from the bare engine's data) and
     │                                       Library (package states, add, remove, enable with dependencies,
-    │                                       the order a drag sets, a package's README, the switch to
-    │                                       Compatibility), ProfileSelectors (the selectors a
+    │                                       the order a drag sets, a package's README, the languages the
+    │                                       enabled packages define, the switch to Compatibility),
+    │                                       ProfileSelectors (the selectors a
     │                                       profile holds, released under its lock), ProfileChecks (the
     │                                       checks before Play, the link check among them, which write
     │                                       nothing), ProfileTrust (the review of a root from elsewhere,

@@ -100,6 +100,16 @@ public sealed partial class MainWindow : Window, IWindowHost
         return folders.Count == 0 ? null : folders[0].TryGetLocalPath();
     }
 
+    public (int Width, int Height)? UsableArea()
+    {
+        if ((Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen) return null;
+        // The launcher's own frame stands for the game window's: both are ordinary decorated windows.
+        double scaling = screen.Scaling;
+        int frameWidth = FrameSize is { } frame ? (int)Math.Ceiling((frame.Width - ClientSize.Width) * scaling) : 0;
+        int frameHeight = FrameSize is { } framed ? (int)Math.Ceiling((framed.Height - ClientSize.Height) * scaling) : 0;
+        return (screen.WorkingArea.Width - frameWidth, screen.WorkingArea.Height - frameHeight);
+    }
+
     public async Task<string?> PickFileAsync(string title, string extension)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions

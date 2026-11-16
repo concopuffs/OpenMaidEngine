@@ -21,6 +21,11 @@ internal sealed class RecordingHost : IWindowHost
         return Task.FromResult(Folder);
     }
 
+    /// <summary>The screen area the host reports; null is a screen it cannot measure.</summary>
+    public (int Width, int Height)? Usable { get; set; }
+
+    public (int Width, int Height)? UsableArea() => Usable;
+
     /// <summary>The file the next file pick returns; null is a cancelled pick.</summary>
     public string? File { get; set; }
 

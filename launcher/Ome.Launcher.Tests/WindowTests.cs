@@ -201,6 +201,30 @@ public sealed class WindowTests : IDisposable
     }
 
     [Fact]
+    public void TheSettingsTabDraws()
+    {
+        Dictionary<string, ProfileEntry> profiles = Three();
+        Select("kamidori-english");
+        string root = profiles["kamidori-english"].Root;
+        File.WriteAllText(Path.Combine(root, "SYS4REG.INI"), "[display]\r\nScreenMode=1\r\nForceScreen=1\r\n");
+        File.WriteAllText(Path.Combine(root, "OME.INI"), "[ui]\nLanguage=en\n[display]\nWindowWidth=800\nWindowHeight=600\n[debug]\nLocatorHud=1\n");
+        Task Settings(MainViewModel model)
+        {
+            model.Page!.ShowTab.Execute(ProfileTab.Settings);
+            return Task.CompletedTask;
+        }
+        Draw("settings", task: "6.6", before: Settings,
+             check: model =>
+             {
+                 SettingsViewModel settings = model.Page!.Settings;
+                 Assert.True(settings.Windowed && settings.ForceScreen && settings.LocatorHud);
+                 Assert.Equal("800 × 600 (125 %)", settings.SelectedSize!.Label);
+                 Assert.Equal("en", settings.SelectedLanguage!.Tag);
+             });
+        Draw("settings-ja", "ja", task: "6.6", before: Settings, themes: ThemeVariant.Dark);
+    }
+
+    [Fact]
     public void TheOverviewDraws()
     {
         Dictionary<string, ProfileEntry> profiles = Three();

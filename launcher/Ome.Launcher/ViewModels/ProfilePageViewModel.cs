@@ -33,9 +33,7 @@ public sealed class ProfilePageViewModel : ViewModel
         _main = main;
         Row = row;
         Cover = main.ArtFor(row.Game, Core.ArtKind.Cover, row.Entry);
-        Port = row.Entry.Usable && !row.Entry.NeedsReview
-            ? new OmeIniStore(Path.Combine(row.Entry.Root, PortOptions.FileName)).Load()
-            : null;
+        ReloadPort();
         Play = new Command(() => _ = _main.PlayAsync(Row), () => CanPlay);
         Duplicate = new Command(() => { }, () => false);
         Shortcut = new Command(() => { }, () => false);
@@ -44,6 +42,7 @@ public sealed class ProfilePageViewModel : ViewModel
         ShowTab = new Command(tab => Tab = (ProfileTab)tab!);
         Overview = new OverviewViewModel(this);
         Mods = new ModsViewModel(this);
+        Settings = new SettingsViewModel(this);
         OpenLog = new Command(() => { if (Row.Failure?.LogPath is { } log) _main.Host?.Open(log); },
                               () => Row.Failure?.LogPath != null);
         DismissFailure = new Command(() => Row.Failure = null);
@@ -55,10 +54,21 @@ public sealed class ProfilePageViewModel : ViewModel
     public ProfileRowViewModel Row { get; }
     public OverviewViewModel Overview { get; }
     public ModsViewModel Mods { get; }
+    public SettingsViewModel Settings { get; }
     public ProfileEntry Entry => Row.Entry;
     private ProfileDocument? Document => Entry.Loaded?.Document;
     public ArtViewModel? Cover { get; private set; }
-    public PortOptions? Port { get; }
+    public PortOptions? Port { get; private set; }
+
+    /// <summary>Reads the profile's <c>OME.INI</c> again, after the Settings page wrote it.</summary>
+    public void ReloadPort()
+    {
+        Port = Row.Entry.Usable && !Row.Entry.NeedsReview
+            ? new OmeIniStore(Path.Combine(Row.Entry.Root, PortOptions.FileName)).Load()
+            : null;
+        Changed(nameof(Port));
+        Changed(nameof(LanguageText));
+    }
 
     public ProfileCheckResult? Checks
     {
@@ -69,6 +79,7 @@ public sealed class ProfilePageViewModel : ViewModel
             ChangedAll();
             Overview.Refresh();
             Mods.Refresh();
+            Settings.Refresh();
         }
     }
 
@@ -146,29 +157,33 @@ public sealed class ProfilePageViewModel : ViewModel
         ChangedAll();
         Overview.Refresh();
         Mods.Refresh();
+        Settings.Refresh();
         Play.Refresh();
         OpenLog.Refresh();
     }
 
     /// <summary>Writes a change to the profile's files off the UI thread (<paramref name="write"/> holds the profile's
-    /// lock), keeps the profile as written (a write that returns null left <c>profile.toml</c> as it was), and checks it
-    /// again. A refused write (the game holds the lock, a file cannot be written) changes nothing and is reported to
-    /// <paramref name="failed"/>, by default on the Overview.</summary>
-    public async Task<bool> WriteAsync(Func<ProfileEntry, LoadedProfile?> write, Action<string>? failed = null)
-    {
-        ProfileEntry entry = Entry;
-        try
+    /// lock), keeps the profile as written (a write that returns null left <c>profile.toml</c> as it was), reads its
+    /// <c>OME.INI</c> again, and checks it again. A refused write (the game holds the lock, a file cannot be written)
+    /// changes nothing and is reported to <paramref name="failed"/>, by default on the Overview. The write and its
+    /// check run take their turn with the window's other uses of the lock (<see cref="MainViewModel.OneAtATime"/>).</summary>
+    public Task<bool> WriteAsync(Func<ProfileEntry, LoadedProfile?> write, Action<string>? failed = null)
+        => _main.OneAtATime(async () =>
         {
-            if (await Task.Run(() => write(entry)) is { } loaded) Row.Entry = entry with { Loaded = loaded };
-        }
-        catch (Exception error) when (error is ProfileBusyException or ProfileFileException || IsCheckFailure(error))
-        {
-            (failed ?? Overview.WriteFailed)(error.Message);
-            return false;
-        }
-        await CheckAsync();
-        return true;
-    }
+            ProfileEntry entry = Entry;
+            try
+            {
+                if (await Task.Run(() => write(entry)) is { } loaded) Row.Entry = entry with { Loaded = loaded };
+                ReloadPort();
+            }
+            catch (Exception error) when (error is ProfileBusyException or ProfileFileException || IsCheckFailure(error))
+            {
+                (failed ?? Overview.WriteFailed)(error.Message);
+                return false;
+            }
+            await CheckNowAsync();
+            return true;
+        });
 
     /// <summary>Stops listening to the row: the page is no longer shown.</summary>
     public void Detach() => Row.PropertyChanged -= RowChanged;
@@ -297,7 +312,14 @@ public sealed class ProfilePageViewModel : ViewModel
 
     /// <summary>Runs the checks off the UI thread and shows their result (launcher spec §8.5). A profile under review or
     /// one that is not usable is not checked. Checks that cannot run (this machine's state is unreadable) show why.</summary>
-    public async Task CheckAsync()
+    public Task CheckAsync() => _main.OneAtATime(async () =>
+    {
+        await CheckNowAsync();
+        return true;
+    });
+
+    /// <summary>The check run itself, for a caller that already has its turn.</summary>
+    private async Task CheckNowAsync()
     {
         if (!Entry.Usable || Entry.NeedsReview) return;
         ProfileEntry entry = Entry;

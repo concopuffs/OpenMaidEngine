@@ -392,6 +392,63 @@
     <Setter Property="Opacity" Value="1" />
   </Style>
 
+  <!-- The profile tabs' forms (Settings, Saves, Advanced): the mock's .form, .frow, .help, .radio and .input.sel. -->
+  <Style Selector="StackPanel.form">
+    <Setter Property="MaxWidth" Value="720" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="TextBlock.form-heading"><Setter Property="Margin" Value="0,18,0,8" /></Style>
+  <Style Selector="TextBlock.form-heading.first"><Setter Property="Margin" Value="0,0,0,8" /></Style>
+  <Style Selector="Border.frow">
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Padding" Value="0,6" />
+    <Setter Property="MinHeight" Value="40" />
+  </Style>
+  <Style Selector="Border.frow > Grid"><Setter Property="VerticalAlignment" Value="Center" /></Style>
+  <Style Selector="TextBlock.help">
+    <Setter Property="Foreground" Value="{DynamicResource OmeMutedBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Margin" Value="0,2,0,0" />
+  </Style>
+  <Style Selector="ComboBox.field">
+    <Setter Property="Background" Value="{DynamicResource OmeFieldBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OmeTextBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="MinWidth" Value="190" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="9,4" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="ComboBox.field:pointerover /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource OmeFieldBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OmeMutedBrush}" />
+  </Style>
+  <Style Selector="Button.radio">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0,3" />
+    <Setter Property="Margin" Value="0,0,14,0" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.radio:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.radio:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.radio:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Ellipse.radio-dot">
+    <Setter Property="Width" Value="13" />
+    <Setter Property="Height" Value="13" />
+    <Setter Property="Stroke" Value="{DynamicResource OmeMutedBrush}" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="Fill" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.radio.on Ellipse.radio-dot">
+    <Setter Property="Stroke" Value="{DynamicResource OmeInkBrush}" />
+    <Setter Property="StrokeThickness" Value="4" />
+  </Style>
+
   <Style Selector="Border.rule-top">
     <Setter Property="BorderBrush" Value="{DynamicResource OmeLineBrush}" />
     <Setter Property="BorderThickness" Value="0,1,0,0" />
