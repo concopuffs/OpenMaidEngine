@@ -112,6 +112,12 @@ from someone else must not be able to pick the computer. Approve the location in
 run only, pass `--allow-network-paths`. A share mapped to a drive letter (`Z:\…`) needs no approval, and neither does
 a network path inside the profile root.
 
+**"… is in use: another engine is running this profile, or the launcher is changing its settings".** This one
+holds for every data root, not only a profile: each run holds its root's `run.lock` while it runs. Two engines on
+one root would overwrite each other's saves and settings, so the second stops having changed nothing. Close the
+other game, or wait for the launcher to finish. A game that crashed leaves `run.lock` behind; that is harmless, and
+the next start takes it.
+
 **A warning that `install.fingerprint` differs.** The install's `SYS4INI.BIN` changed since the profile accepted it,
 for example after an official update. The port continues; check that your mods still name the right revision.
 

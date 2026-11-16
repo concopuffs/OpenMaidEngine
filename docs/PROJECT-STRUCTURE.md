@@ -644,6 +644,10 @@ page's text for `tools/page_map_compare.py` (localization gate 11). Packaged exp
 have no repository output tree and write their automatic maps below
 `user://games/<game>/diagnostics/page-maps` instead.
 
+A data root's top folder also holds `run.lock`, the run lock a running engine holds (launcher spec §5.5; only
+a held lock means running, and the file stays after a crash), and, for a player profile, `profile.toml` (spec §4.3).
+A copy of a data root leaves `run.lock` out, as the driver's seed does.
+
 A profile's `mods/` folder in its data root (`user://games/<game>/mods/`, or the `--data-root` sandbox) holds
 the user's packages, `selectors.toml` (mod id → append-catalog selector, kept until `--forget-mod`), and `.cache/<key>/`,
 the disposable link result: `loose/` (patched and replaced scripts, asset overrides; first loose root),

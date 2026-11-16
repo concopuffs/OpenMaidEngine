@@ -153,6 +153,22 @@ def resolve_seed(spec: str, context: paths.ToolContext = paths.CONTEXT) -> Path:
     return backup_contents(Path(spec))
 
 
+# Launcher spec §5.5: a copy of a data root leaves these out of its top folder. run.lock is the source's run lock
+# (held, it cannot even be read on Windows); profile.toml would make the sandbox a player profile, which refuses the
+# --game-root a sandbox is started with.
+SEED_LEFT_OUT = frozenset({"run.lock", "profile.toml"})
+
+
+def _seed_ignore(source: Path) -> Callable[[str, list[str]], list[str]]:
+    top = os.path.normcase(os.path.abspath(source))
+
+    def ignore(directory: str, names: list[str]) -> list[str]:
+        if os.path.normcase(os.path.abspath(directory)) != top:
+            return []
+        return [name for name in names if name.lower() in SEED_LEFT_OUT]
+    return ignore
+
+
 def parse_settings(items: Iterable[str]) -> dict[str, str]:
     """`start --set` values: SECTION.KEY=VALUE each, later ones winning."""
     settings: dict[str, str] = {}
@@ -188,7 +204,7 @@ def prepare_sandbox(target: str, name: str, seed: str | None, sound: bool, profi
                 raise DriveError(f"seed {source} is not a folder")
             if source.resolve() == profile_root.resolve():
                 raise DriveError(f"seed {source} is this sandbox")
-            shutil.copytree(source, profile_root, dirs_exist_ok=True)
+            shutil.copytree(source, profile_root, dirs_exist_ok=True, ignore=_seed_ignore(source))
             log(f"seeded {profile_root} from {source}")
         else:
             log(f"sandbox {name} exists; --seed applies only to a new sandbox")

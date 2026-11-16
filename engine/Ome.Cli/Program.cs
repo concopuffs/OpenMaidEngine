@@ -9,7 +9,7 @@ using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 
-const string CommandList = "save-diff, omp, oms-compile, oms-append, oms-patch, oms-rebuild, oms-temps, oms-roundtrip, "
+const string CommandList = "save-diff, run-lock, omp, oms-compile, oms-append, oms-patch, oms-rebuild, oms-temps, oms-roundtrip, "
                           + "oms-decompile, oms-residue, catalog-scan, run, audio, gfx, init-image, play, sweep, trace";
 if (args.Length == 0)
 {
@@ -22,6 +22,8 @@ string command = args[0];
 
 // save-diff reads only the two save files, so it runs before the game catalog loads.
 if (command == "save-diff") return SaveDiffCommand.Run(args);
+// run-lock takes only a data root's lock (launcher spec §5.5): the run lock tests start it as a second process.
+if (command == "run-lock") return RunLockCommand.Run(args);
 
 // Every option below reads the resolver's list (launcher spec §5.2): one occurrence of each single-valued option, the
 // last given, and a --data-root's profile.toml mapped to the flags it stands for. The command keeps its place.

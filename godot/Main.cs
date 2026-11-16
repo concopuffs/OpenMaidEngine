@@ -94,6 +94,8 @@ public partial class Main : Godot.Control
     private bool _selftest;
     // The resolver's normalized arguments (launcher spec §5.2): the command line with a profile file's equivalents.
     private string[] _launchArguments = [];
+    // The data root's run lock (launcher spec §5.5), held for the process's life: only a held lock means "running".
+    private RunLock? _runLock;
     private string? _shotPath;                 // --shot <png>: capture a page then quit (dev tool)
     private int _shotPage = 1;                  // --shot-page <n>: which page to capture (default 1)
     private int _pageNoticesSeen, _pagesSeen;   // the waits native's page notices the status line and HUD took
@@ -170,6 +172,16 @@ public partial class Main : Godot.Control
             GetTree().Quit(2);
             return;
         }
+        // Launcher spec §5.5: the root's run lock, before anything writes into it (LinkMods is the first writer), on
+        // every data root, the default one included. A refused start stops having written nothing.
+        if (!RunLock.TryAcquire(profilePersistence.ProfileRoot, markStart: true, out _runLock,
+                                out RunLockRefusal? lockRefusal))
+        {
+            GD.PushError($"[startup] {lockRefusal.Message}");
+            GetTree().Quit(2);
+            return;
+        }
+        if (_runLock.Warning != null) GD.PushWarning($"[startup] {_runLock.Warning}");
         _catalog = catalog;
         _selectedProfile = selectedProfile;
         _engineBuild = engineBuild;
