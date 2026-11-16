@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Milestone 0 of docs/superpowers/plans/2026-11-15-launcher.md: a bare Avalonia program that measures what the
+       launcher spec (docs/superpowers/specs/2026-11-15-launcher-design.md, §10 and §14) leaves to M0. Not in any
+       solution, references no engine project, never shipped. Its own global.json picks the .NET 10 SDK; build it
+       from this folder. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework Condition="'$(SpikeTfm)' == ''">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(SpikeTfm)' != ''">$(SpikeTfm)</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Ome.Launcher.Spike</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.6.0</Version>
+    <Product>Open Maid Engine launcher spike</Product>
+    <Company>Open Maid Engine</Company>
+    <Description>M0 measurement program for the Open Maid Engine launcher</Description>
+    <Copyright>Open Maid Engine contributors</Copyright>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+  <!-- Question 2 passes a synthetic icon: -p:SpikeIcon=<path to .ico>. -->
+  <PropertyGroup Condition="'$(SpikeIcon)' != ''">
+    <ApplicationIcon>$(SpikeIcon)</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <!-- Avalonia's build-time telemetry (its README: a machine id, the hashed machine name, OS, CI detection) runs
+         from this package's build targets on every build. Excluding its assets removes the target, so no build of
+         this project sends it, whatever the environment holds. -->
+    <PackageReference Include="Avalonia.BuildServices" Version="11.3.2" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+  <!-- SkiaSharp's and HarfBuzzSharp's native packages publish their native libraries' symbols (about 100 MiB on
+       win-x64). A release would not ship them, so the measurement does not either. -->
+  <Target Name="DropNativeSymbols" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
+  <ItemGroup>
+    <!-- The port's bundled font (shell §11), embedded as the launcher would embed it. -->
+    <AvaloniaResource Include="..\..\godot\assets\NotoSansJP-Regular.otf" Link="Assets\Fonts\NotoSansJP-Regular.otf" />
+  </ItemGroup>
+</Project>

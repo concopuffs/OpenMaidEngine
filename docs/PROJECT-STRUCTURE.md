@@ -344,6 +344,13 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       results to disposable build/lua-spike/; and the conformance run (§5):
     │                                       the official Lua 5.2 test suite and a probe, results to disposable
     │                                       build/lua-conformance/; not in OmeEngine.sln
+    ├── launcher/                            the launcher (superpowers/specs/2026-11-15-launcher-design.md)
+    │   └── Ome.Launcher.Spike/              milestone 0 of the launcher plan (superpowers/plans/2026-11-15-
+    │                                       launcher.md §2): a bare Avalonia window plus --check-like, --capture
+    │                                       and --lock modes; its own global.json picks the .NET 10 SDK; measure/
+    │                                       holds the scripts that publish and time it on Windows and in WSL and
+    │                                       probe the release engine, results to disposable build/launcher-m0/;
+    │                                       in no solution, never shipped
     ├── native/                              authored native runtime boundaries
     │   └── ome_movie_ffmpeg/                project-owned FFmpeg C ABI, immutable Windows/Linux dependency manifests,
     │                                       and native/MSVC plus Linux-hosted MinGW target bootstrap/build scripts;

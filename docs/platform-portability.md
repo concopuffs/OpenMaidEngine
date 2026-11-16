@@ -512,6 +512,33 @@ slowest decode at 4.4 seconds in the deliberately unpaced gate, so its prior 30-
 whole-frame hashing overhead rather than a decoder incompatibility. The disposable machine report is
 `build/movie-corpus-ffmpeg.json`; invocation and report semantics are canonical in `docs/tools-reference.md`.
 
+## Launcher platform facts (measured 2026-11-15)
+
+Milestone 0 of the launcher (`docs/superpowers/plans/2026-11-15-launcher.md` §3, which keeps the numbers and the
+method) measured these facts about the platforms. The launcher's packaging decisions land here with milestone 4.
+
+- **An exclusive open** (`FileShare.None`, the run lock of the launcher spec §5.5). Windows refuses a second open
+  with a sharing violation; while it is held the file cannot be read or copied, but its time can be read. On Linux,
+  .NET emulates it with an advisory `flock` (ext4 and a WSL `/mnt` drive alike): every .NET open honours it, a plain
+  read succeeds, and `DOTNET_SYSTEM_IO_DISABLEFILELOCKING=1` turns it off. On both, a killed holder releases it,
+  and the last-write time can be set through the held handle (to the whole second on `/mnt`).
+- **An exported engine's output.** The Windows release program, though windowed, gives a parent that redirects
+  its standard output and error every line as it is printed. The Linux release program does not flush standard
+  output after a print (Godot's `application/run/flush_stdout_on_print` defaults to false outside debug builds),
+  so into a pipe its lines arrive when stdio's buffer fills or it exits normally, and a kill loses them. Godot's
+  own `user://logs/godot.log` is not flushed on a kill either.
+- **What an exported engine writes outside its `--data-root`:** Godot's `logs/` and `shader_cache/` under
+  `user://` (`%APPDATA%\Godot\app_userdata\Open Maid Engine\`), nothing else.
+- **Godot's own flags in a Windows shortcut:** a `.lnk` whose arguments put `--rendering-driver d3d12` before the
+  `--` starts the engine on Direct3D 12 (it loads `D3D12.dll` and no `vulkan-1.dll`).
+- **A Windows .NET program published on Linux** with SDK 10.0.404 carries its icon, version and manifest
+  resources, as one published on Windows does; no `NETSDK1074`.
+- **An Avalonia 12 program on Linux** needs glibc 2.27 (SkiaSharp and CoreCLR; the engine's floor is 2.28) and
+  maps at run time the X11 client libraries with `libICE`/`libSM`, fontconfig and FreeType, GL, and ICU unless it
+  runs with invariant globalization. Its command line runs with no display.
+- **The repository under SDK 10:** `engine/OmeEngine.sln` and `godot/OME.csproj` build under SDK 10.0.404 with
+  their net8.0 targets unchanged and the same warnings as under SDK 8.0.408.
+
 ## Cross-platform validation gates
 
 Before advertising a platform as supported:

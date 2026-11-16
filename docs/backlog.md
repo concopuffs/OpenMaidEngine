@@ -445,8 +445,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   projects, `godot/OME.csproj`, the SDK pin). Microsoft ended support for .NET 8 on 2026-11-10: it gets no more
   security fixes (.NET blog, ".NET 8 and .NET 9 will reach End of Support on November 10, 2026"). The exports
   bundle that runtime. Noticed during the launcher spec's review (2026-11-15), which leaves the launcher's own
-  target to its first milestone. Done when the projects, the SDK pin, CI and the exports target a supported
-  version that the Godot release in use accepts, and the core and package gates pass.
+  target to its first milestone. That milestone measured that `engine/OmeEngine.sln` and `godot/OME.csproj` build
+  under SDK 10.0.404 with their net8.0 targets unchanged and the same warnings (launcher plan §3.10); the tests
+  were not run under it. Done when the projects, the SDK pin, CI and the exports target a supported version that
+  the Godot release in use accepts, and the core and package gates pass.
 - **Keep the game installs in one folder.** The workspace root holds each install under its own name:
   `Himegari_Game/`, `Kamidori/`, `Kamidori_Translated/` and `Arterial/創刻のアテリアル/` (added 2026-11-09 for
   native-engine comparison only). Every tool that finds them has its own table of those names:
