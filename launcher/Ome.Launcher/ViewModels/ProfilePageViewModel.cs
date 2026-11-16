@@ -233,9 +233,12 @@ public sealed class ProfilePageViewModel : ViewModel
     /// lock), keeps the profile as written (a write that returns null left <c>profile.toml</c> as it was), reads its
     /// <c>OME.INI</c> again, and checks it again. A refused write (the game holds the lock, a file cannot be written)
     /// changes nothing and is reported to <paramref name="failed"/>, by default on the Overview. The write and its
-    /// check run take their turn with the window's other uses of the lock (<see cref="MainViewModel.OneAtATime"/>).</summary>
-    public Task<bool> WriteAsync(Func<ProfileEntry, LoadedProfile?> write, Action<string>? failed = null)
-        => _main.OneAtATime(async () =>
+    /// check run take their turn with the window's other uses of the lock (<see cref="MainViewModel.OneAtATime"/>).
+    /// While it waits and runs, the page shows <paramref name="working"/> (by default "Saving the change…") as its work
+    /// in progress (<see cref="WorkAsync{T}"/>).</summary>
+    public Task<bool> WriteAsync(Func<ProfileEntry, LoadedProfile?> write, Action<string>? failed = null,
+                                 string? working = null)
+        => WorkAsync(working ?? S["working.saving"], () => _main.OneAtATime(async () =>
         {
             ProfileEntry entry = Entry;
             try
@@ -250,7 +253,44 @@ public sealed class ProfilePageViewModel : ViewModel
             }
             await CheckNowAsync();
             return true;
-        });
+        }));
+
+    // ---- work in progress (launcher plan §10, item 2) ----
+
+    private int _working;
+    private string? _workingText;
+
+    /// <summary>What the page is doing, or null: a change being written and the profile checked again. The check run
+    /// links the mod stack, which a large package makes slow (Kamidori's <c>import-en</c> takes seconds), so the page
+    /// says it is working rather than seem to ignore the click.</summary>
+    public string? Working => _working > 0 ? _workingText : null;
+    public bool IsWorking => _working > 0;
+
+    /// <summary>Runs <paramref name="work"/> with <paramref name="text"/> shown as the page's work in progress. Work
+    /// that waits for its turn counts too, so the indicator stays until the last of them ends; the text is the latest
+    /// one's. The Mods page's changes wait while the page works (<see cref="ModsViewModel"/>).</summary>
+    public async Task<T> WorkAsync<T>(string text, Func<Task<T>> work)
+    {
+        _working++;
+        _workingText = text;
+        WorkingChanged();
+        try
+        {
+            return await work();
+        }
+        finally
+        {
+            if (--_working == 0) _workingText = null;
+            WorkingChanged();
+        }
+    }
+
+    private void WorkingChanged()
+    {
+        Changed(nameof(Working));
+        Changed(nameof(IsWorking));
+        Mods.RefreshCommands();
+    }
 
     /// <summary>Stops listening to the row: the page is no longer shown.</summary>
     public void Detach() => Row.PropertyChanged -= RowChanged;

@@ -123,7 +123,9 @@ public sealed class ModsViewModel : ViewModel
     private ProfileCheckResult? Checks => _page.Checks;
     private ProfileDocument? Document => _page.Entry.Loaded?.Document;
     private OmeHome Home => _page.Main.Session.Home;
-    private bool CanWrite => Document?.Mods != null && !_page.Entry.NeedsReview && _page.IsUnlocked;
+    /// <summary>Whether the page's changes can be used: not while the game runs, and not while the page works on a
+    /// change, so a second click does not queue the same change again (launcher plan §10, item 2).</summary>
+    private bool CanWrite => Document?.Mods != null && !_page.Entry.NeedsReview && _page.IsUnlocked && !_page.IsWorking;
 
     /// <summary>While the game runs the page can be looked at, and nothing on it changes the profile (spec §8.4).</summary>
     public bool IsUnlocked => _page.IsUnlocked;
@@ -153,10 +155,18 @@ public sealed class ModsViewModel : ViewModel
                                     ?? _rows.FirstOrDefault(row => row.IsPackage);
         Select(selected, keepReadme: selected?.Id == _selectedId);
         ChangedAll();
+        OpenLibrary.Refresh();
+        RefreshCommands();
+    }
+
+    /// <summary>Asks again whether each change can be used: the page started or ended its work.</summary>
+    public void RefreshCommands()
+    {
         AddFolder.Refresh();
         AddFile.Refresh();
-        OpenLibrary.Refresh();
         Remove.Refresh();
+        foreach (ModRowViewModel row in _rows) row.Toggle?.Refresh();
+        foreach (SelectorLine line in Selectors) line.Release.Refresh();
     }
 
     private IReadOnlyList<ModRowViewModel> BuildRows()
@@ -462,8 +472,10 @@ public sealed class ModsViewModel : ViewModel
         LibraryChange? change = null;
         if (row.Enabled)
         {
+            Result = null;
             if (!await _page.WriteAsync(entry => ProfileStore.Update(entry, current =>
-                    (change = Library.Disable(current, row.Id, Library.Index(current))).Document, Home), Failed))
+                    (change = Library.Disable(current, row.Id, Library.Index(current))).Document, Home), Failed,
+                    S.Format("mods.disabling", name)))
                 return;
             Say(change!.Unmet.Count == 0
                 ? S.Format("mods.disabled", name)
@@ -476,12 +488,13 @@ public sealed class ModsViewModel : ViewModel
                 S.Format("confirm.extended-for.title", name), S.Format("confirm.extended-for.text", name),
                 S["confirm.extended-for.yes"], S["confirm.cancel"])))
             return;
+        Result = null;
         if (!await _page.WriteAsync(entry => ProfileStore.Update(entry, current =>
             {
                 if (toExtended) current = current with { Mode = ProfileMode.Extended };
                 change = Library.Enable(current, row.Id, Library.Index(current));
                 return change.Document;
-            }, Home), Failed))
+            }, Home), Failed, S.Format("mods.enabling", name)))
             return;
         string said = change!.Changed.Count == 0
             ? S.Format("mods.enabled", name)
@@ -524,8 +537,9 @@ public sealed class ModsViewModel : ViewModel
     {
         if (!CanWrite || id == before) return;
         _selectedId = id;
+        string name = _rows.FirstOrDefault(row => row.Id == id)?.Name ?? id;
         if (await _page.WriteAsync(entry => ProfileStore.Update(entry, current => Library.Move(current, id, before), Home),
-                                   Failed))
+                                   Failed, S.Format("mods.moving", name)))
             Result = null;
     }
 
@@ -539,10 +553,11 @@ public sealed class ModsViewModel : ViewModel
             : await host.PickFileAsync(S["mods.add-file-title"], ModPackage.PackageExtension);
         if (picked == null) return;
         OmeHome home = Home;
+        string adding = S.Format("mods.adding", Path.GetFileName(Path.TrimEndingDirectorySeparator(picked)));
         LibraryAddResult added;
         try
         {
-            added = await Task.Run(() => Library.Add(home, picked, replace: false));
+            added = await _page.WorkAsync(adding, () => Task.Run(() => Library.Add(home, picked, replace: false)));
             if (!added.Copied)
             {
                 PackageIndexEntry old = added.Replaced[0];
@@ -551,7 +566,7 @@ public sealed class ModsViewModel : ViewModel
                         S.Format("confirm.replace.text", $"{old.Id} {old.Version}", old.Path, added.Package.Version),
                         S["confirm.replace.yes"], S["confirm.cancel"], danger: true)))
                     return;
-                added = await Task.Run(() => Library.Add(home, picked, replace: true));
+                added = await _page.WorkAsync(adding, () => Task.Run(() => Library.Add(home, picked, replace: true)));
             }
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException
@@ -561,7 +576,11 @@ public sealed class ModsViewModel : ViewModel
             return;
         }
         _selectedId = added.Package.Id;
-        await _page.CheckAsync();
+        await _page.WorkAsync(adding, async () =>
+        {
+            await _page.CheckAsync();
+            return true;
+        });
         Say(S.Format("mods.added", added.Package.Manifest.Name, added.Package.Version, Path.GetDirectoryName(added.Destination)!));
     }
 
@@ -581,9 +600,14 @@ public sealed class ModsViewModel : ViewModel
                 S.Format("confirm.remove.title", entry.Manifest.Name), S.Format("confirm.remove.text", entry.Path),
                 S["confirm.remove.yes"], S["confirm.cancel"], used, S["confirm.remove.used"], danger: true)))
             return;
+        string removing = S.Format("mods.removing", entry.Manifest.Name);
         try
         {
-            await Task.Run(() => Library.Remove(entry));
+            await _page.WorkAsync(removing, () => Task.Run(() =>
+            {
+                Library.Remove(entry);
+                return true;
+            }));
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
@@ -591,7 +615,11 @@ public sealed class ModsViewModel : ViewModel
             return;
         }
         _selectedId = null;
-        await _page.CheckAsync();
+        await _page.WorkAsync(removing, async () =>
+        {
+            await _page.CheckAsync();
+            return true;
+        });
         Say(S.Format("mods.removed", entry.Manifest.Name));
     }
 

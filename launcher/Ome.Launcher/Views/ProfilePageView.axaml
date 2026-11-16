@@ -104,6 +104,20 @@
       </StackPanel>
     </Border>
 
+    <!-- Work in progress (launcher plan §10, item 2): a change is written and the profile checked again, which links the
+         mod stack; a large package makes that take seconds. Under the tabs, so every tab shows it. -->
+    <Border Name="WorkingNotice" DockPanel.Dock="Top" Classes="notice run" IsVisible="{Binding IsWorking}"
+            Margin="22,14,22,0">
+      <DockPanel>
+        <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="80" MinWidth="80" VerticalAlignment="Center"
+                     Margin="0,0,12,0" />
+        <StackPanel Spacing="2">
+          <TextBlock Classes="notice-text strong" TextWrapping="Wrap" Text="{Binding Working}" />
+          <TextBlock Classes="notice-text small" TextWrapping="Wrap" Text="{Binding S[working.note]}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
     <ScrollViewer Padding="22,16,22,22">
       <Panel>
         <Panel IsVisible="{Binding OnOverview}">

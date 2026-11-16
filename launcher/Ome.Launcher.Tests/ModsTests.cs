@@ -143,6 +143,60 @@ public sealed class ModsTests : IDisposable
     });
 
     [Fact]
+    public void WhileAChangeIsWorkedOnThePageSaysSoAndItsChangesWait() => Headless.Run(async () =>
+    {
+        _home.Package("kamidori", "test.a");
+        _home.Package("kamidori", "test.b");
+        var (model, _) = await Open();
+        using (model)
+        {
+            ProfilePageViewModel page = model.Page!;
+            ModsViewModel mods = page.Mods;
+            Assert.False(page.IsWorking);
+            Assert.Null(page.Working);
+            var window = new MainWindow { DataContext = model };
+            Headless.Render(window, ThemeVariant.Light, "10.2-mods-idle-light");
+            Border notice = window.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "WorkingNotice");
+            Assert.False(notice.IsVisible);
+
+            // The lock's turn is held, as a slow check run holds it (plan §10, item 2): the switch waits, the page says
+            // what it is doing, and no other change of the page can be started meanwhile.
+            var held = new TaskCompletionSource<bool>();
+            Task<bool> turn = model.OneAtATime(() => held.Task);
+            Task on = mods.ToggleAsync(Row(mods, "test.a"));
+            Assert.True(page.IsWorking);
+            Assert.Equal("Turning on test.a…", page.Working);
+            Assert.All(mods.Rows, row => Assert.False(row.Toggle!.CanExecute(null)));
+            Assert.False(mods.AddFolder.CanExecute(null));
+            Headless.Render(window, ThemeVariant.Light, "10.2-mods-working-light");
+            Assert.True(notice.IsVisible);
+
+            held.SetResult(true);
+            await turn;
+            await on;
+            Assert.False(page.IsWorking);
+            Assert.Null(page.Working);
+            Assert.Equal("test.a is on.", mods.Result);
+            Assert.Equal(["test.a"], Document.Mods!.Enabled);
+            Assert.All(mods.Rows, row => Assert.True(row.Toggle!.CanExecute(null)));
+            Assert.True(mods.AddFolder.CanExecute(null));
+            Headless.Render(window, ThemeVariant.Light, "10.2-mods-done-light");
+            Assert.False(notice.IsVisible);
+
+            // Another tab's change says it too, in the page's general words.
+            held = new TaskCompletionSource<bool>();
+            turn = model.OneAtATime(() => held.Task);
+            Task<bool> write = page.WriteAsync(_ => null);
+            Assert.Equal("Saving the change…", page.Working);
+            held.SetResult(true);
+            await turn;
+            Assert.True(await write);
+            Assert.False(page.IsWorking);
+            window.Close();
+        }
+    });
+
+    [Fact]
     public void DraggingSetsThePreferredOrderAndAMoveTheResolverMadeSaysWhy() => Headless.Run(async () =>
     {
         _home.Package("kamidori", "test.a");
