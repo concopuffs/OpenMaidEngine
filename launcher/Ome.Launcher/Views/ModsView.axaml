@@ -102,7 +102,7 @@
           <StackPanel Spacing="9">
             <TextBlock Classes="strong" TextWrapping="Wrap" Text="{Binding DetailName}" />
             <TextBlock TextWrapping="Wrap" Text="{Binding DetailDescription}" IsVisible="{Binding HasDetailDescription}" />
-            <Grid ColumnDefinitions="70,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="5">
+            <Grid ColumnDefinitions="70,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="5">
               <TextBlock Classes="muted" Text="{Binding S[mods.id]}" />
               <TextBlock Grid.Column="1" Classes="mono small" TextWrapping="Wrap" Text="{Binding DetailId}" />
               <TextBlock Grid.Row="1" Classes="muted" Text="{Binding S[mods.version]}" />
@@ -112,14 +112,6 @@
                          IsVisible="{Binding HasDetailAuthors}" />
               <TextBlock Grid.Row="3" Classes="muted" Text="{Binding S[mods.needs]}" />
               <TextBlock Grid.Row="3" Grid.Column="1" TextWrapping="Wrap" Text="{Binding DetailNeeds}" />
-              <TextBlock Grid.Row="4" Classes="muted" Text="{Binding S[mods.does]}" IsVisible="{Binding HasDetailDoes}" />
-              <ItemsControl Grid.Row="4" Grid.Column="1" ItemsSource="{Binding DetailDoes}" IsVisible="{Binding HasDetailDoes}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="x:String">
-                    <TextBlock Classes="small" TextWrapping="Wrap" Text="{Binding}" Margin="0,0,0,2" />
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
             </Grid>
             <WrapPanel>
               <Button Classes="link" Content="{Binding S[mods.read-me]}" Command="{Binding ShowReadme}"
@@ -140,6 +132,21 @@
         </Border>
       </Panel>
     </Grid>
+
+    <!-- What the selected package does (launcher plan §10, item 3): its own card, as wide as the page, since a package
+         with many patch points has many lines, which the 270 px detail column stretched far down. -->
+    <Border Name="DoesCard" Classes="card" Margin="0,4,0,0" IsVisible="{Binding HasDetailDoes}">
+      <StackPanel>
+        <TextBlock Classes="heading card-title" Text="{Binding DoesTitle, Converter={x:Static v:Text.Upper}}" />
+        <ItemsControl ItemsSource="{Binding DetailDoes}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <TextBlock TextWrapping="Wrap" Text="{Binding}" Margin="0,3" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
 
     <!-- The link report (the mock's .report: an 82px tag column). -->
     <Border Classes="card" Margin="0,4,0,0">

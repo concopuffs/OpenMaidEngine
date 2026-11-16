@@ -1135,15 +1135,18 @@ display. Where the command line's outcome names the window, the program opens it
 The window (launcher plan M3) has the profile list, the header, Play, the Overview tab
 (the game, the profile with its mode switch, the mods in load order, the checks, and locating or accepting the
 install) and the Mods tab (the library's packages for the game in the order the stack loads, each with a switch and
-its state; dragging to set the order; the detail with the README; the link report; adding a package from a folder or
-an `.omp`, removing one, and releasing a gone package's selector) and the Settings tab (the language, fullscreen or
+its state; dragging to set the order; the detail with the README; what the selected package does, in a card as wide
+as the page under the list; the link report; adding a package from a folder or an `.omp`, removing one, and releasing a
+gone package's selector) and the Settings tab (the language, fullscreen or
 windowed start, the window size, the FPS counter and the page locator, each written to the profile's `OME.INI` or
 `SYS4REG.INI` at once, as the engine writes them; the start mode waits until the install is found) and the Saves tab
 (the save folder and its count; copying saves in from another profile of the game, with its selectors, or from where
 the original game keeps them, the saves it would replace asked first) and the Advanced tab (the overlays, chosen from
 the install's folders of files the catalog names, and the BMP switch; the renderer, text drawing, the Lua error policy,
 what a failed link does and Direct3D 12, each written to `profile.toml` at once; the diagnostics folder, and a summary
-of the profile, its checks and the log's end copied for a report, with the account's folder written as `~`). "New
+of the profile, its checks and the log's end copied for a report, with the account's folder written as `~`). Each
+change is followed by a check run that links the mod stack again, which a large package makes take seconds; until it
+ends, the page shows what it is working on under the tabs, and the Mods tab's changes wait. "New
 profile" opens the wizard: the install (browsed, dropped on the window, or one a profile already uses) with its
 overlays, then the name, the mode, and what the profile starts from (nothing, a copy of another profile of the game
 with or without its saves, the data the bare engine has for the game, or the original game's saves), and under

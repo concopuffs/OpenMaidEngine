@@ -77,6 +77,20 @@ public sealed class ModsTests : IDisposable
             Assert.Equal("1.2.0", mods.DetailVersion);
             Assert.Equal("Extended mode", mods.DetailNeeds);
             Assert.Contains("Supplies the scripts STESTLUA", mods.DetailDoes);
+            Assert.Equal("What test.lua does", mods.DoesTitle);
+
+            // The list has a card of its own under the list, as wide as the page, not the narrow detail column
+            // (plan §10, item 3).
+            var window = new MainWindow { DataContext = model };
+            Headless.Render(window, ThemeVariant.Light, "10.3-mods-does-light");
+            ModsView view = window.GetVisualDescendants().OfType<ModsView>().Single();
+            Border does = view.FindControl<Border>("DoesCard")!;
+            Border list = view.FindControl<Border>("List")!;
+            Assert.True(does.IsVisible);
+            Assert.True(does.Bounds.Width > list.Bounds.Width, $"{does.Bounds.Width} <= {list.Bounds.Width}");
+            Assert.True(does.Bounds.Top >= list.Bounds.Bottom, $"{does.Bounds.Top} < {list.Bounds.Bottom}");
+            window.Close();
+
             mods.Select("test.plain");
             Assert.Equal("Works in both modes", mods.DetailNeeds);
 

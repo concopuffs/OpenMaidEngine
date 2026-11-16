@@ -327,6 +327,8 @@ public sealed class ModsViewModel : ViewModel
         }
     }
     public bool HasDetailDoes => DetailDoes.Count > 0;
+    /// <summary>The heading of the card that lists <see cref="DetailDoes"/>, under the list (plan §10, item 3).</summary>
+    public string DoesTitle => S.Format("mods.does-title", DetailName);
 
     public string? Readme
     {
@@ -352,7 +354,7 @@ public sealed class ModsViewModel : ViewModel
                  {
                      nameof(DetailName), nameof(DetailDescription), nameof(HasDetailDescription), nameof(DetailId),
                      nameof(DetailVersion), nameof(DetailAuthors), nameof(HasDetailAuthors), nameof(DetailNeeds),
-                     nameof(DetailDoes), nameof(HasDetailDoes), nameof(Readme), nameof(HasReadme), nameof(ShowReadmeLink),
+                     nameof(DetailDoes), nameof(HasDetailDoes), nameof(DoesTitle), nameof(Readme), nameof(HasReadme), nameof(ShowReadmeLink),
                  })
             Changed(name);
         ShowReadme.Refresh();

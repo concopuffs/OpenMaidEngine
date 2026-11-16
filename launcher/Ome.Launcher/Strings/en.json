@@ -163,7 +163,7 @@
   "mods.version": "Version",
   "mods.authors": "Authors",
   "mods.needs": "Needs",
-  "mods.does": "Does",
+  "mods.does-title": "What {0} does",
   "mods.needs-extended": "Extended mode",
   "mods.needs-both": "Works in both modes",
   "mods.supplies-scripts": "Supplies the scripts {0}",

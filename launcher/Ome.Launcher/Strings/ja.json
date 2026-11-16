@@ -163,7 +163,7 @@
   "mods.version": "バージョン",
   "mods.authors": "作者",
   "mods.needs": "必要なもの",
-  "mods.does": "内容",
+  "mods.does-title": "{0} の内容",
   "mods.needs-extended": "拡張モード",
   "mods.needs-both": "どちらのモードでも使えます",
   "mods.supplies-scripts": "スクリプトを提供：{0}",
