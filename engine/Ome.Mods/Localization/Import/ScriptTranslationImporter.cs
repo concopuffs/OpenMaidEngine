@@ -282,9 +282,6 @@ public sealed class ScriptTranslationImporter
             {
                 report.Messages.Literal++;
                 string text = span.IsTranslation ? Unescape(translation) : span.ReadableKey;
-                if (span.Lenient)
-                    report.Damage.Undecodable.Add(new ReportedLiteral(script, message.Offset, "message",
-                        span.ReadableKey, Unescape(span.Joined)));
                 var shortened = new ReportedLiteral(script, message.Offset, "message", span.ReadableKey,
                     Unescape(span.Joined));
                 ReviewShortened(report, shortened, span.Shortening);
@@ -300,9 +297,6 @@ public sealed class ScriptTranslationImporter
             else
             {
                 report.Messages.WithVariables++;
-                if (span.Lenient)
-                    report.Damage.Undecodable.Add(new ReportedLiteral(script, message.Offset, "message",
-                        span.Key, span.Joined));
                 if (translation == span.Key) report.Messages.Untranslated++;
                 else report.Messages.Translated++;
                 occurrences.Add(new TextOccurrence(script, message.Offset, OccurrenceKind.Pattern, span.Key,
@@ -340,19 +334,13 @@ public sealed class ScriptTranslationImporter
             for (int a = 0; a < source.Args.Count; a++)
             {
                 if (!MessageSegmenter.TryGetLiteral(code, source.Args[a], out string original)) continue;
-                bool lenient = false;
                 if (!MessageSegmenter.TryGetLiteral(translated, target.Args[a], out string changed))
                 {
-                    if (!MessageSegmenter.IsDamagedLiteral(translated, target.Args[a])) continue;
-                    if (!TryDecodeLenient(translated, target.Args[a], out changed))
-                    {
+                    if (MessageSegmenter.IsDamagedLiteral(translated, target.Args[a]))
                         report.Unjoined.DamagedStrings.Add(new ReportedText(script, source.Offset, original, ""));
-                        continue;
-                    }
-                    lenient = true;
+                    continue;
                 }
                 var literal = new ReportedLiteral(script, source.Offset, label, original, changed);
-                if (lenient) report.Damage.Undecodable.Add(literal);
                 if (original != changed)
                 {
                     if (CompareLabels.Contains(label))
@@ -425,7 +413,6 @@ public sealed class ScriptTranslationImporter
         public string ReadableKey { get; init; } = "";
         public bool LiteralOnly { get; init; }
         public bool Damaged { get; set; }
-        public bool Lenient { get; set; }
         public bool InsertedVariable { get; set; }
         public List<SpanLine> Lines { get; } = [new()];
 
@@ -509,13 +496,8 @@ public sealed class ScriptTranslationImporter
             }
             else if (MessageSegmenter.IsDamagedLiteral(translated, instruction.Args[1]))
             {
-                if (!TryDecodeLenient(translated, instruction.Args[1], out string recovered))
-                {
-                    span.Damaged = true;
-                    continue;
-                }
-                (written, plain) = (TextTemplate.Escape(recovered), recovered);
-                span.Lenient = true;
+                span.Damaged = true;
+                continue;
             }
             else if (translatedToBase[k] >= 0 && placeholders.TryGetValue(translatedToBase[k], out string? name))
             {
@@ -813,44 +795,6 @@ public sealed class ScriptTranslationImporter
         report.Damage.LostSeveral.Add(new ReportedShortening(literal.Script, literal.Offset, literal.Opcode,
             literal.Base, literal.Translated, shortening == Shortening.Damage ? "damage" : "translation"));
         if (shortening == Shortening.Translation) report.Damage.ShortenedTranslations++;
-    }
-
-    /// <summary>A string the strict decoder rejected, read as plain CP932 up to its NUL with each control character
-    /// as a space. False when the operand points outside the body or holds no NUL within 4096 dwords.</summary>
-    internal static bool TryDecodeLenient(Ome.Engine.Model.Script script, Operand operand, out string text)
-    {
-        text = "";
-        if (operand.Type != TextOpcodes.LiteralOperandType || operand.Value < 0
-            || operand.Value >= script.BodyDwords.Count)
-            return false;
-        var bytes = new List<byte>();
-        int end = (int)Math.Min(operand.Value + 4096, script.BodyDwords.Count);
-        for (int j = (int)operand.Value; j < end; j++)
-        {
-            uint x = script.BodyDwords[j] ^ 0xFFFFFFFFu;
-            for (int shift = 0; shift < 32; shift += 8)
-            {
-                byte value = (byte)(x >> shift);
-                if (value == 0)
-                {
-                    char[] chars = Cp932.GetString(bytes.ToArray()).ToCharArray();
-                    for (int c = 0; c < chars.Length; c++)
-                        if (char.IsControl(chars[c])) chars[c] = ' ';
-                    text = new string(chars);
-                    return true;
-                }
-                bytes.Add(value);
-            }
-        }
-        return false;
-    }
-
-    private static readonly Encoding Cp932 = CreateCp932();
-
-    private static Encoding CreateCp932()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        return Encoding.GetEncoding(932);
     }
 
     private static string Unescape(string written) => TextTemplate.Parse(written, allowKinds: false).Literal;

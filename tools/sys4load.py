@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import struct
@@ -179,10 +180,94 @@ class Sys4Script:
 # --------------------------------------------------------------------------- #
 # parsing
 # --------------------------------------------------------------------------- #
-def _decode_string(dwords, start, limit=4096):
-    """Decode a XOR-0xFF cp932 string beginning at dword `start`.
+# The first raw scalar (Sys4TextEncoding.RawBase in the runtime): a character unit CP932 does not decode to one
+# character that encodes back to the same bytes decodes to chr(RAW_BASE + code), code being the byte or lead << 8 | trail.
+RAW_BASE = 0xF0000
 
-    Returns (text, ndwords) or (None, 0) if it isn't a clean string.
+
+def is_single_byte_unit(value: int) -> bool:
+    """Whether native lays a byte out as a character by itself: below 0x80, or from 0xA0 to 0xDF."""
+    return value < 0x80 or 0xA0 <= value <= 0xDF
+
+
+@functools.lru_cache(maxsize=None)
+def _decode_unit(unit: bytes) -> str:
+    # Python's cp932 encodes a character that has both a NEC-selected IBM code (lead 0xED, 0xEE) and an IBM code (lead
+    # 0xFA-0xFC) to the former; Windows' code page, which the runtime uses, encodes it to the latter. So a NEC-selected
+    # unit never round-trips, and an IBM unit does when Python sends it back to a NEC-selected code.
+    if unit[0] in (0xED, 0xEE):
+        return chr(RAW_BASE + (unit[0] << 8 | unit[1]))
+    try:
+        text = unit.decode("cp932")
+        if len(text) == 1:
+            back = text.encode("cp932")
+            if back == unit or (back[0] in (0xED, 0xEE) and 0xFA <= unit[0] <= 0xFC):
+                return text
+    except UnicodeError:
+        pass
+    return chr(RAW_BASE + (unit[0] if len(unit) == 1 else unit[0] << 8 | unit[1]))
+
+
+def decode_text(data: bytes) -> str:
+    """A script string's bytes as text, every byte kept (the twin of Sys4TextEncoding in the runtime).
+
+    Native lays each byte below 0x80, and 0xA0-0xDF, out as a character by itself and any other byte as the lead of a
+    two-byte character with the byte after it. A unit decodes through CP932 when that gives one character that encodes
+    back to the same bytes, else to its raw scalar; a lead with nothing after it stays raw. encode_text reverses it.
+    """
+    out = []
+    i = 0
+    while i < len(data):
+        b = data[i]
+        if is_single_byte_unit(b):
+            out.append(_decode_unit(data[i:i + 1]))
+            i += 1
+        elif i + 1 >= len(data):
+            out.append(chr(RAW_BASE + b))
+            i += 1
+        else:
+            out.append(_decode_unit(data[i:i + 2]))
+            i += 2
+    return "".join(out)
+
+
+@functools.lru_cache(maxsize=None)
+def _encode_char(char: str) -> bytes:
+    code = ord(char) - RAW_BASE
+    if 0 <= code <= 0xFFFF:
+        return bytes([code >> 8, code & 0xFF]) if code > 0xFF else bytes([code])
+    data = char.encode("cp932")
+    if data[0] in (0xED, 0xEE):   # Windows' choice: the IBM code (see _decode_unit)
+        ibm = _ibm_codes().get(char)
+        if ibm is not None:
+            return ibm
+    return data
+
+
+@functools.lru_cache(maxsize=None)
+def _ibm_codes() -> dict[str, bytes]:
+    codes = {}
+    for lead in (0xFA, 0xFB, 0xFC):
+        for trail in range(0x40, 0xFD):
+            try:
+                char = bytes([lead, trail]).decode("cp932")
+            except UnicodeError:
+                continue
+            if len(char) == 1 and char.encode("cp932")[0] in (0xED, 0xEE):
+                codes.setdefault(char, bytes([lead, trail]))
+    return codes
+
+
+def encode_text(text: str) -> bytes:
+    """The bytes decode_text read: a raw scalar its own code, everything else through Windows' CP932."""
+    return b"".join(_encode_char(char) for char in text)
+
+
+def _decode_string(dwords, start, limit=4096):
+    """Decode a XOR-0xFF string beginning at dword `start` (Sys4StringCodec.cs, the runtime's twin).
+
+    Returns (text, ndwords), or (None, 0) when no NUL ends it within `limit` dwords. Native reads every byte before the
+    NUL and checks none, so every such string decodes, byte for byte (decode_text).
     """
     raw = bytearray()
     n = len(dwords)
@@ -196,30 +281,7 @@ def _decode_string(dwords, start, limit=4096):
     s = bytes(raw).split(b"\0")[0]
     if len(s) < 1:
         return "", 1
-    # cp932 shape: ASCII (control characters included, as native lays them out), half-width katakana, or a valid
-    # 2-byte lead+trail (Sys4StringCodec.cs, the runtime's twin)
-    i, chars = 0, 0
-    while i < len(s):
-        b = s[i]
-        if b < 0x80 or 0xA1 <= b <= 0xDF:   # ASCII and control, half-width katakana
-            i += 1
-            chars += 1
-        elif 0x81 <= b <= 0x9F or 0xE0 <= b <= 0xEA:
-            if i + 1 < len(s) and 0x40 <= s[i + 1] <= 0xFC and s[i + 1] != 0x7F:
-                i += 2
-                chars += 1
-            else:
-                return None, 0
-        else:
-            return None, 0
-    if chars < 1:
-        return None, 0
-    try:
-        text = s.decode("cp932")
-    except UnicodeDecodeError:
-        return None, 0
-    ndwords = (len(bytes(raw).split(b"\0")[0]) // 4) + 1  # include the NUL dword
-    return text, ndwords
+    return decode_text(s), (len(s) // 4) + 1  # include the NUL dword
 
 
 def load_bytes(data: bytes, name: str | Path = "<memory>.BIN") -> Sys4Script:

@@ -137,9 +137,10 @@ both and reports them on their own, in `damage` in the report.
 
 One translated string also holds a control character: `SC2310@0x1232`'s `show-text` begins with a tab. Native reads
 every byte before the NUL and lays the tab out as a single-byte glyph. Since 2026-11-11 `Sys4StringCodec` decodes such
-a string too (`engine-re.md`, "Strings with control characters"). The catalog keeps the tab, after the line break
-before it (`\n\t ―The cliff…`), and the report's `undecodable` count is 0. Presented text draws no glyph for a control
-character, so run B leaves out the small glyph that run A draws for the tab.
+a string too (`engine-re.md`, "Strings with control characters"), and since 2026-11-16 it decodes every string that
+has a NUL, so the report no longer counts strings it refuses. The catalog keeps the tab, after the line break before
+it (`\n\t ―The cliff…`). Presented text draws no glyph for a control character, so run B leaves out the small glyph
+that run A draws for the tab.
 
 ## Rules the importer applies
 

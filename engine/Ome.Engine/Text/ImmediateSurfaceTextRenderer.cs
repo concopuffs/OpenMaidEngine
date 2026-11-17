@@ -234,10 +234,6 @@ public sealed class ImmediateSurfaceTextRenderer
         return (requestedHeight & 1) != 0 ? requestedHeight - 1 : requestedHeight;
     }
 
-    private static Encoding CreateCp932()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        return Encoding.GetEncoding(
-            932, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
-    }
+    // A raw unit of a script string (Sys4TextEncoding) asks GDI for its own code, as native does.
+    private static Encoding CreateCp932() => Sys4.Sys4TextEncoding.Strict;
 }

@@ -210,9 +210,5 @@ public static class RubyTextLayout
         return total;
     }
 
-    private static Encoding CreateCp932()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        return Encoding.GetEncoding(932);
-    }
+    private static Encoding CreateCp932() => Sys4.Sys4TextEncoding.Replacing;
 }

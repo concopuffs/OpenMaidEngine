@@ -52,11 +52,8 @@ public sealed record IrDataItem(IrDataKind Kind, IReadOnlyList<uint> Dwords, str
 {
     private static readonly Encoding Cp932 = CreateCp932();
 
-    private static Encoding CreateCp932()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        return Encoding.GetEncoding(932, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
-    }
+    // Encodes a decoded string back to its bytes, raw units included (Sys4TextEncoding).
+    private static Encoding CreateCp932() => Ome.Engine.Sys4.Sys4TextEncoding.Strict;
 
     /// <summary>A string item in canonical layout: CP932 bytes, NUL, zero padding to a dword, each dword XOR 0xFFFFFFFF.</summary>
     public static IrDataItem FromText(string text)

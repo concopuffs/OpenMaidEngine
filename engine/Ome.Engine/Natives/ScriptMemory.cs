@@ -66,7 +66,8 @@ public sealed partial class ScriptMemory
     public ScriptMemory(int codePage = 932)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        _encoding = Encoding.GetEncoding(codePage);
+        // Code page 932 keeps every byte of a script string (Sys4TextEncoding).
+        _encoding = codePage == 932 ? Sys4.Sys4TextEncoding.Replacing : Encoding.GetEncoding(codePage);
     }
 
     /// <summary>The integer bank (operand type 3), each cell in its one form (<see cref="IntegerCell"/>).</summary>

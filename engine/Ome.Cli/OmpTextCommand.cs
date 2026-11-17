@@ -310,8 +310,7 @@ internal static partial class OmpTextCommand
         Console.WriteLine($"  not translations, kept as source: {d.LostCharacters.Count} strings missing characters "
                           + $"({d.LostSeveral.Count} lost several, {d.ShortenedTranslations} of them kept as "
                           + $"translations), "
-                          + $"{d.EmptyWrittenAsSpace.Count} empty strings written as spaces; "
-                          + $"{d.Undecodable.Count} strings the runtime's decoder refuses, read leniently");
+                          + $"{d.EmptyWrittenAsSpace.Count} empty strings written as spaces");
         Console.WriteLine($"  furigana: {report.Furigana.BaseRuns} base runs, {report.Furigana.TranslatedEmptied} emptied, "
                           + $"{report.Furigana.TranslatedKeptReading} keep a reading");
         if (report.Assets is { } a)

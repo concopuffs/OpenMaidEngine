@@ -178,12 +178,15 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
         // and any system fallback RID before we inspect the TextServer cache directly.
         _ = font.GetCharSize(request.UnicodeScalar, request.PixelHeight);
         // A control character no face draws (a tab in a script's string) takes a space's room and draws nothing,
-        // as the layout counts it.
-        if (request.UnicodeScalar is < 0x20 or 0x7f && !HasGlyph(font, request.UnicodeScalar))
+        // as the layout counts it. So does a script string's raw unit (Sys4TextEncoding), a code with no Unicode
+        // character: a single byte a space's room, two bytes an ideographic space's.
+        bool raw = Ome.Engine.Sys4.Sys4TextEncoding.TryGetRawCode(request.UnicodeScalar, out int rawCode);
+        if (raw || request.UnicodeScalar is < 0x20 or 0x7f && !HasGlyph(font, request.UnicodeScalar))
         {
+            (int scalar, ushort code) = raw && rawCode > 0xff ? ('\u3000', (ushort)0x8140) : (' ', (ushort)0x20);
             (GlyphMask space, bool spaceDrawnRegular, OpenTypeFace? spaceFace) = RasterizeNatural(
                 new GlyphRasterRequest(request.FontFace, request.PixelHeight, request.RequestedWidth, request.Weight,
-                                       ' ', 0x20, request.Policy, request.Antialias),
+                                       scalar, code, request.Policy, request.Antialias),
                 languageFonts);
             return (Blank(space), spaceDrawnRegular, spaceFace);
         }
@@ -284,11 +287,8 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
         => new(0, 0, 0, space.OriginX, space.OriginY, space.CellAdvanceX, space.CellAdvanceY, space.CellWidth,
                space.CellHeight, [], space.Ascent, space.Monochrome);
 
-    private static System.Text.Encoding CreateCp932()
-    {
-        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-        return System.Text.Encoding.GetEncoding(932);
-    }
+    // A code with no Unicode character decodes to its raw scalar (Sys4TextEncoding), which draws blank.
+    private static System.Text.Encoding CreateCp932() => Ome.Engine.Sys4.Sys4TextEncoding.Replacing;
 
     /// <summary>
     /// The fonts a requested face draws with, first to last: the language's bundled files for it; then the first of

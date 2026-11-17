@@ -277,12 +277,7 @@ public static class SharedProfilePayloadCodec
     /// <summary>CP932 that rejects bytes it cannot decode (a damaged file) but writes an unencodable character as the
     /// other save codecs do, by the code page's standard fallback, rather than failing the save (a name typed into the
     /// port can hold one).</summary>
-    private static Encoding CreateShiftJis()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        return Encoding.GetEncoding(
-            932, Encoding.GetEncoding(932).EncoderFallback, DecoderFallback.ExceptionFallback);
-    }
+    private static Encoding CreateShiftJis() => Sys4.Sys4TextEncoding.Replacing;
 
     private ref struct PayloadReader
     {

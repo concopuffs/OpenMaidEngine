@@ -66,11 +66,8 @@ public static class CharacterCells
         return false;
     }
 
-    private static Encoding CreateCp932()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        return Encoding.GetEncoding(932, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
-    }
+    // A raw unit of a script string (Sys4TextEncoding) takes the cells of its bytes.
+    private static Encoding CreateCp932() => Sys4.Sys4TextEncoding.Strict;
 
     /// <summary>Inclusive ranges of East Asian Width W and F, in pairs. Taken from the Unicode 14.0 character
     /// database (Python 3.11's <c>unicodedata</c>) for assigned characters, plus the two ideograph planes, which

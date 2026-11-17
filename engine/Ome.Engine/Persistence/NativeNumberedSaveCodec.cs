@@ -353,9 +353,6 @@ public static class NativeNumberedSaveCodec
             throw new InvalidDataException($"{name} is truncated.");
     }
 
-    private static Encoding CreateNativeEncoding()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        return Encoding.GetEncoding(932);
-    }
+    // A saved string keeps every byte a script string can hold (Sys4TextEncoding).
+    private static Encoding CreateNativeEncoding() => Sys4.Sys4TextEncoding.Replacing;
 }

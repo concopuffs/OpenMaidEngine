@@ -245,7 +245,8 @@ public static class CellRules
     private static readonly Dictionary<int, Encoding> Strict = new();
 
     /// <summary>A string must be encodable in the save's code page: a numbered save would store any other character
-    /// as '?'.</summary>
+    /// as '?'. Code page 932 is the scripts' own text form, which also keeps a raw unit a script string holds
+    /// (<see cref="Sys4.Sys4TextEncoding"/>).</summary>
     public static string Text(string value, int codePage)
     {
         Encoding encoding;
@@ -254,8 +255,9 @@ public static class CellRules
             if (!Strict.TryGetValue(codePage, out encoding!))
             {
                 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-                Strict[codePage] = encoding = Encoding.GetEncoding(codePage, EncoderFallback.ExceptionFallback,
-                                                                   DecoderFallback.ExceptionFallback);
+                Strict[codePage] = encoding = codePage == 932
+                    ? Sys4.Sys4TextEncoding.Strict
+                    : Encoding.GetEncoding(codePage, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
             }
         }
         try

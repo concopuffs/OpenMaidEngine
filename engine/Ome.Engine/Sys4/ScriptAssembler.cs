@@ -14,12 +14,7 @@ public static class ScriptAssembler
 {
     private const int HeaderSize = 0x3C, NumFields = 13, StringArgType = 2;
     private const string Family = "SYS4";
-    private static readonly Encoding Cp932;
-    static ScriptAssembler()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        Cp932 = Encoding.GetEncoding(932);
-    }
+    private static readonly Encoding Cp932 = Sys4TextEncoding.Replacing;
 
     /// <summary>A script of <paramref name="table"/>'s ABI, parsed with that table.</summary>
     public static Script Assemble(OpcodeTable table, string name,

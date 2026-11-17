@@ -201,7 +201,9 @@ in the enum. **Voice ids** come from the decompiled scene as well: a voiced line
 `voice:`.
 
 Text may be in any language, provided every character is in CP932, the games' text encoding. A character outside CP932 is a
-compile error that names it. Pages that interpolate a string cell, carry furigana, or span rows in an unusual way
+compile error that names it. A decompiled string can also hold a private-use character from U+F0000 to U+FFFFF: bytes
+the script holds that CP932 has no character for, kept as U+F0000 plus their code (U+FED40 for the bytes `ED 40`).
+They compile back to the same bytes, so leave them as they are. Pages that interpolate a string cell, carry furigana, or span rows in an unusual way
 decompile as plain statements rather than dialogue lines. Copy those as they are.
 
 ## Calling scripts and naming resources

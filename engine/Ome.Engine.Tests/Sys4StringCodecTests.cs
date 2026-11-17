@@ -41,12 +41,26 @@ public class Sys4StringCodecTests
     }
 
     [Fact]
-    public void RejectsBytesCp932DoesNotRoundTrip()
+    public void KeepsBytesOutsideJisX0208ByteForByte()
     {
-        // 0xFD is no CP932 lead byte: refused rather than decoded to a character that encodes back otherwise.
-        byte[] raw = [0x41, 0xFD, 0x42, 0x00];
-        uint[] dw = [BitConverter.ToUInt32(raw, 0) ^ 0xFFFFFFFFu];
-        Assert.Null(Sys4StringCodec.Decode(dw, 0).Text);
+        // Native reads every byte before the NUL and checks none. Each character unit below decodes to one character
+        // and the string encodes back to the same bytes: NEC row 13, IBM, NEC-selected IBM, user-defined, an unused
+        // lead, a 0x80 lead, the single byte 0xA0, a 0xFD lead and a bad trail.
+        byte[] raw =
+        [
+            0x87, 0x40, 0xFA, 0x40, 0xED, 0x40, 0xF0, 0x40, 0xEB, 0x40, 0x80, 0x41, 0xA0, 0x42, 0xFD, 0x43,
+            0x81, 0x20, 0x00,
+        ];
+        byte[] padded = [.. raw, .. new byte[(4 - raw.Length % 4) % 4]];
+        uint[] dw = Enumerable.Range(0, padded.Length / 4)
+            .Select(k => BitConverter.ToUInt32(padded, k * 4) ^ 0xFFFFFFFFu).ToArray();
+        var (text, nd) = Sys4StringCodec.Decode(dw, 0);
+        int R(int code) => Sys4TextEncoding.RawBase + code;
+        Assert.Equal(
+            [0x2460, 0x2170, R(0xED40), 0xE000, R(0xEB40), R(0x8041), 0xF8F0, 0x42, R(0xFD43), R(0x8120)],
+            text!.EnumerateRunes().Select(rune => rune.Value));
+        Assert.Equal(5, nd);
+        Assert.Equal(raw[..^1], Sys4TextEncoding.Strict.GetBytes(text));
     }
 
     [Fact]

@@ -115,15 +115,6 @@ it; git history keeps the record.
   holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
   (one differing opcode).
 
-- **Strings with bytes outside JIS X 0208 decode to nothing.** `Sys4StringCodec.Decode` (and its twin in
-  `tools/sys4load.py`) accepts single bytes below `0x80` and `0xA1`-`0xDF`, and double-byte characters whose lead byte
-  is `0x81`-`0x9F` or `0xE0`-`0xEA`. It refuses any other byte: lead bytes `0xEB`-`0xFC` (CP932's NEC and IBM
-  extensions and user-defined characters, and two unused), `0x80`, `0xA0`, `0xFD`-`0xFF`, and a bad trail byte. The
-  whole string then decodes to nothing and its run draws empty. Native reads every byte before the NUL and hands it
-  to GDI (`engine-re.md`, "Strings with control characters"). No script in Himegari or Kamidori (clean and
-  translated) holds such a byte, so nothing shows it yet; a mod or another game could. Done when the codec keeps
-  these strings byte for byte (CP932's extensions decoded, other bytes kept so they encode back) and the port draws
-  them as native does.
 - **Strip reveals and mask wipes are drawn as crossfades.** The port keeps each transition's mode, thickness,
   timing and blocking, but both render paths blend the whole target in at one alpha.
   - The legacy strip reveals `0x27`/`0x28` (Kamidori: one `0x27` call and 192 `0x28` calls across 47 scripts;

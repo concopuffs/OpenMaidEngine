@@ -7935,9 +7935,34 @@ A scan of every type-2 operand in Himegari and Kamidori (the clean and the trans
 in the translated Kamidori: `SC2310@0x1232`'s `show-text` begins with a tab.
 
 **Port:** `Sys4StringCodec` (and its twin in `tools/sys4load.py`) decodes bytes below `0x80` as single-byte
-characters, so the string decodes whole and encodes back to the same bytes. It still refuses a byte that CP932 does
-not decode and encode back unchanged (`backlog.md`). The as-written text path encodes the tab back to `0x09` and
-draws GDI's glyph, as native does. Presented text (a language package) draws no glyph for a control character.
+characters, so the string decodes whole and encodes back to the same bytes. The as-written text path encodes the tab
+back to `0x09` and draws GDI's glyph, as native does. Presented text (a language package) draws no glyph for a control
+character.
+
+**Bytes outside JIS X 0208 (2026-11-16).** The layout loop splits a string into character units by its first byte
+alone (4.33G `0x45b710`): a byte below `0x80` or from `0xA0` to `0xDF` is a unit by itself, and any other byte leads
+a two-byte unit with the byte after it, whatever that byte is. Each unit is measured with `GetTextExtentPoint32A`
+and drawn from its bytes. A unit CP932 has no character for still draws whatever GDI gives that code. A line of
+`SC0000@0x2661` was patched in a loose, same-length copy of `SC0000.BIN` (scratch install and port overlay; disposable)
+with ten units: `87 40`, `FA 40`, `ED 40`, `F0 40`, `EB 40`, `80 41`, `A0`, `42`, `FD 43` and `81 20`. Native drew
+①, ⅰ, 纊, the user-defined area's glyph, ・ for `EB 40`, `A` within the cell of `80 41`, ・ for `A0`, `B`, `C` within
+the cell of `FD 43`, and ・ for `81 20`.
+
+**Port:** `Sys4TextEncoding` is the one text form of a script's strings: the string codec, the assembler, the OMS
+toolchain's string items, script memory, the numbered-save and history codecs, the shared profile, the ruby layout,
+the glyph requests, the half-cell rule and the check on a Lua mod's string writes all use it. It splits units as native does. A unit keeps its CP932
+character when CP932 decodes it to one character that encodes back to the same bytes: ASCII and control characters,
+half-width katakana, JIS X 0208, NEC row 13, the IBM extensions, the user-defined area (to U+E000-U+E757), and the
+single byte `0xA0` (to U+F8F0). Any other unit decodes to one private-use scalar, U+F0000 plus its code (U+FED40 for
+`ED 40`): the NEC-selected IBM extensions, whose characters CP932 encodes to their IBM codes; the 15 IBM codes whose
+characters it encodes to NEC row 13 or JIS X 0208 (`FA 4A`-`FA 54` and `FA 58`-`FA 5B`: Ⅰ-Ⅹ, ￢, ㈱, №, ℡, ∵); the
+unused leads; a unit led by `0x80` or `0xFD`-`0xFF`, which CP932 reads as two characters; a bad trail byte; and a lead
+with nothing after it. That scalar encodes back to its bytes. A glyph
+request carries its code, so GDI draws the same glyph, and it takes the half cells of its bytes. Over the patched line
+the port's frame matched native's except in the animated wait cursor. Godot's portable rasterizer draws a raw unit
+blank, with a space's or an ideographic space's room. Python's `cp932` codec encodes a character with both a
+NEC-selected IBM and an IBM code to the former, Windows' to the latter, so the twin in `tools/sys4load.py` follows
+Windows; `tools/test_sys4load.py` checks all 16,575 units against that rule.
 
 ### SYS4433 live ADV aspect-mode layout metrics (2026-09-21)
 

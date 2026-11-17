@@ -258,9 +258,7 @@ internal sealed class ComposedStringFinder
     }
 
     private static bool TryLiteral(Ome.Engine.Model.Script script, Operand operand, out string literal)
-        => MessageSegmenter.TryGetLiteral(script, operand, out literal)
-           || (MessageSegmenter.IsDamagedLiteral(script, operand)
-               && ScriptTranslationImporter.TryDecodeLenient(script, operand, out literal));
+        => MessageSegmenter.TryGetLiteral(script, operand, out literal);
 
     private static bool HasLiteral(string template)
         => TextTemplate.Parse(template, allowKinds: true).Parts.Any(part => part is LiteralPart);
