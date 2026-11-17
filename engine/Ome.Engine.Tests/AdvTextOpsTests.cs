@@ -220,6 +220,8 @@ public class AdvTextOpsTests
         var script = ScriptAssembler.Assemble(table, "UI_RETAINED_TEXT",
             new List<(int, Operand[])>
             {
+                // As STUDY and ALCHEMY do: layout 7 is current (op 0x80), so slot 0 draws there.
+                (0x80, new[] { I(7) }),
                 (0x1bb, new[] { I(0) }),
                 (0x70, new[] { I(7), I(500), I(180), I(0), I(0) }),
                 (0x79, new[] { I(7), I(53), I(10) }),
@@ -320,6 +322,7 @@ public class AdvTextOpsTests
         var caller = ScriptAssembler.Assemble(table, "MAMES_RESEARCH_CALLER",
             new List<(int, Operand[])>
             {
+                (0x80, new[] { I(7) }),   // STUDY.BIN@0x12 selects layout 7 before MAMES draws with slot 0
                 (0x1bb, new[] { I(0) }),
                 (0x70, new[] { I(7), I(500), I(180), I(0), I(0) }),
                 (0x79, new[] { I(7), I(53), I(10) }),
@@ -595,6 +598,94 @@ public class AdvTextOpsTests
         Assert.Equal(
             new AdvTextLayoutSnapshot(1, 800, 160, 0, 430, 0, 0, 800, 160),
             retained.Layout);
+    }
+
+    [Fact]
+    public void SlotZeroSelectsOpEightysLayoutNotTheLastOneDefinedOrReset()
+    {
+        // Native's current layout (text_manager+0x4c8) is 1 at construction, and only op 0x80 selects it: defining
+        // or resetting a layout does not.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        static Operand I(long value) => new(0, value);
+        var script = ScriptAssembler.Assemble(table, "CURRENT_LAYOUT",
+            new List<(int, Operand[])>
+            {
+                (0x70, new[] { I(1), I(800), I(160), I(0), I(430) }),
+                (0x70, new[] { I(7), I(400), I(100), I(0), I(0) }),
+                (0x71, new[] { I(9) }),
+                (0x198, new[] { I(0), I(11), I(22) }),
+                (0x80, new[] { I(7) }),
+                (0x198, new[] { I(0), I(33), I(44) }),
+                (0x71, new[] { I(1) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(7, vm.TextHistory.CurrentLayoutSlot);
+        Assert.Equal((11, 22), (vm.TextHistory.GetLayoutObjectSnapshot(1).OriginX,
+                                vm.TextHistory.GetLayoutObjectSnapshot(1).OriginY));
+        Assert.Equal((33, 44), (vm.TextHistory.GetLayoutObjectSnapshot(7).OriginX,
+                                vm.TextHistory.GetLayoutObjectSnapshot(7).OriginY));
+        Assert.Equal((0, 0), (vm.TextHistory.GetLayoutObjectSnapshot(9).OriginX,
+                              vm.TextHistory.GetLayoutObjectSnapshot(9).OriginY));
+    }
+
+    [Fact]
+    public void OpNinesResetMakesLayoutOneCurrentAgain()
+    {
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        static Operand I(long value) => new(0, value);
+        Script reloaded = ScriptAssembler.Assemble(table, "SYSTEM4.BIN",
+            new List<(int, Operand[])>
+            {
+                (0x198, new[] { I(0), I(33), I(44) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        Script initial = ScriptAssembler.Assemble(table, "INITIAL",
+            new List<(int, Operand[])>
+            {
+                (0x80, new[] { I(7) }),
+                (0x9, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var provider = new MapProvider(new Dictionary<long, Script> { [0] = reloaded });
+        var vm = new VirtualMachine(initial, table, new RecordingWaits(), provider: provider);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(1, vm.TextHistory.CurrentLayoutSlot);
+        Assert.Equal(33, vm.TextHistory.GetLayoutObjectSnapshot(1).OriginX);
+        Assert.Equal(0, vm.TextHistory.GetLayoutObjectSnapshot(7).OriginX);
+    }
+
+    [Fact]
+    public void OpsThatIndexTheLayoutTableThemselvesTakeSlotZeroAsLayoutObjectZero()
+    {
+        // Ops 0x212 and 0x213 index text_manager+0x414 with the operand as it is: slot 0 is layout object 0, which
+        // the other layout ops reach only while it is the current layout.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        static Operand I(long value) => new(0, value);
+        var script = ScriptAssembler.Assemble(table, "LAYOUT_OBJECT_ZERO",
+            new List<(int, Operand[])>
+            {
+                (0x213, new[] { I(0), I(0x5000), I(10) }),
+                (0x212, new[] { I(0), I(0x5100) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
+
+        vm.Run();
+
+        AdvTextLayoutPresentationBinding zero = vm.TextHistory.GetLayoutObjectBinding(0);
+        Assert.Equal((0, 0x14, 0x5000L, 10L, 0x5100L),
+                     (zero.LayoutSlot, zero.SourceSurfaceSlot, zero.FirstObjectHandle, zero.ObjectCapacity,
+                      zero.WaitIndicatorObjectHandle));
+        AdvTextLayoutPresentationBinding current = vm.TextHistory.GetPresentationBinding(0);
+        Assert.Equal(1, current.LayoutSlot);
+        Assert.Equal((-1L, -1L), (current.FirstObjectHandle, current.WaitIndicatorObjectHandle));
     }
 
     [Fact]

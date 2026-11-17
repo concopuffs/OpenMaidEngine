@@ -178,7 +178,7 @@ public sealed partial class VirtualMachine
         _text.History.ResetLayout(requestedSlot);
         var layout = _text.History.GetLayoutSnapshot(requestedSlot);
         AdvTextLayoutPresentationBinding binding =
-            _text.History.GetPresentationBinding(layout.Slot);
+            _text.History.GetLayoutObjectBinding(layout.Slot);
         if (binding.FirstObjectHandle >= 0 && binding.ObjectCapacity > 0)
             Gfx.EraseRange(binding.FirstObjectHandle, binding.ObjectCapacity);
         _text.SetAdvTextCursor(layout.Slot, layout.CursorX, layout.CursorY);
@@ -480,11 +480,12 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         int requestedSlot = (int)Read(a[0]);
+        // Ops 0x212 and 0x213 index the layout table themselves: slot 0 is layout object 0, not the current layout.
         _text.History.SetWaitIndicatorObjectHandle(requestedSlot, Read(a[1]));
         AdvTextLayoutSnapshot layout =
-            _text.History.GetLayoutSnapshot(requestedSlot);
+            _text.History.GetLayoutObjectSnapshot(requestedSlot);
         _text.BindAdvWaitIndicator(
-            _text.History.GetPresentationBinding(layout.Slot),
+            _text.History.GetLayoutObjectBinding(layout.Slot),
             layout);
         return StepResult.Next;
     }

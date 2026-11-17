@@ -138,7 +138,7 @@ public sealed partial class TextManager
     /// from its first frame, and the page's later reveals animate again (op_0x72_handler clears ctx+0x55108).</summary>
     public void BeginPageWait(int layoutSlot)
     {
-        _scene.ActiveWaitLayout = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
+        _scene.ActiveWaitLayout = layoutSlot == 0 ? History.CurrentLayoutSlot : layoutSlot;
         _waitIndicatorStartedMs = _clock.NowMs;
         _scene.WaitIndicatorEnabled = true;
         _scene.RevealsFinishedUntilWait = false;
@@ -181,14 +181,14 @@ public sealed partial class TextManager
     }
 
     /// <summary>The page's glyphs and indicator are unbound while a callback hides the window, and bound again after:
-    /// the waiting layout's, else the current one's.</summary>
+    /// the waiting layout's, else the layout the last run was shown in.</summary>
     public void SetAdvPagePresentationSuspended(GfxState gfx, bool suspended)
     {
         if (suspended)
         {
             int slot = InputWaiting && _scene.ActiveWaitLayout != 0
                 ? _scene.ActiveWaitLayout
-                : _currentAdvLayout;
+                : _lastRunLayout;
             if (_scene.RetainedTextLayouts.TryGetValue(
                     slot, out RetainedAdvTextLayoutPresentation? presentation))
                 presentation.ErasePublished(gfx);

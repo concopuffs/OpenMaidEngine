@@ -60,7 +60,7 @@ public sealed partial class TextManager
         IsRevealing = delay > 0 && !_skip.FastForwardActive && !TextRevealsFinishedUntilWait;
         foreach (ITextListener listener in _listeners) listener.RunShown(run, delay);
         AdvRetainedTextRunResult? retained = _sourceText != null
-            ? DrawRun(gfx, History.GetPresentationBinding(run.Layout.Slot), run, delay)
+            ? DrawRun(gfx, History.GetLayoutObjectBinding(run.Layout.Slot), run, delay)
             : null;
         if (retained == null) IsRevealing = false;
 
@@ -90,7 +90,7 @@ public sealed partial class TextManager
     {
         Emitted.Add((run.SourceOffset, run.Text, script));
         foreach (ITextListener listener in _listeners) listener.HiddenRunShown(run);
-        AdvTextSourceLayout? source = LayoutHiddenTextRun(History.GetPresentationBinding(run.Layout.Slot), run);
+        AdvTextSourceLayout? source = LayoutHiddenTextRun(History.GetLayoutObjectBinding(run.Layout.Slot), run);
         History.AppendText(layoutSlot, run.SourceOffset, run.Text, Style, rows: source?.Rows, ruby: source?.Ruby);
         if (source != null) History.SetSourceCursor(layoutSlot, source.CursorX, source.CursorY);
         if (endsLookupSpan) History.EndLookupSpan();   // the message's last run
@@ -125,7 +125,7 @@ public sealed partial class TextManager
         // A tick publishes one record, or a chained group after a ruby (adv_text_publish_next_glyph@0x451220).
         int revealTicks = presentation.PublicationTicks(result.FirstGlyphIndex, revealGlyphCount);
         _scene.ActiveRunLayout = run.Layout.Slot;
-        _currentAdvLayout = run.Layout.Slot;
+        _lastRunLayout = run.Layout.Slot;
         // Read skip takes the blocking builder (no timer); a finished-until-wait reveal still arms it.
         bool incremental = revealGlyphCount > 0 && delay > 0 && !_skip.FastForwardActive;
         if (incremental && run.ArmsGlyphTimer) _glyphTimer.Arm(_clock.NowMs, delay);

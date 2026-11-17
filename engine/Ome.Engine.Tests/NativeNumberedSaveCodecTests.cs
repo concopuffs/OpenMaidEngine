@@ -195,6 +195,7 @@ public class NativeNumberedSaveCodecTests
         savedHistory.AppendText(1, 0x123, "保存履歴", AdvTextStyle.Default);
 
         var liveHistory = new AdvTextHistory();
+        liveHistory.SelectCurrentLayout(3);
         liveHistory.DefineLayout(3, 320, 90, 20, 400);
         liveHistory.SetResetCursor(3, 45, 42);
         liveHistory.SetBounds(3, 300, 80);

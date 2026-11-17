@@ -12,7 +12,9 @@ namespace Ome.Engine.Natives;
 // strings, op 0x1d1's History groups and op 0x82's redraws. Without devices nothing is drawn.
 public sealed partial class TextManager
 {
-    private int _currentAdvLayout = 1; // SYSTEM4's ordinary SC0000 ADV layout
+    // The layout the last run was shown in: the page a hide-window callback suspends outside an input wait. Not
+    // native's current layout, which slot 0 selects (AdvTextHistory.CurrentLayoutSlot, op 0x80's).
+    private int _lastRunLayout = AdvTextHistory.InitialCurrentLayoutSlot;
 
     /// <summary>The page map's view of the run being shown (<see cref="PageLocatorState"/>): its source layout's
     /// geometry, set by the pass that laid the source text out, and whether the drawn run stopped at its layout's
@@ -330,12 +332,11 @@ public sealed partial class TextManager
         gfx.CreateSurface(binding.SourceSurfaceSlot);
     }
 
-    /// <summary>Ops 0x7a, 0x6f and 0x71 move a layout's pending record; slot 0 is the current layout, and a nonzero
-    /// slot becomes current. The follow-last-glyph wait indicator anchors there.</summary>
+    /// <summary>Ops 0x7a, 0x6f and 0x71 move a layout's pending record; slot 0 is the current layout. The
+    /// follow-last-glyph wait indicator anchors there.</summary>
     public void SetAdvTextCursor(int layoutSlot, int x, int y)
     {
-        if (layoutSlot != 0) _currentAdvLayout = layoutSlot;
-        int slot = layoutSlot != 0 ? layoutSlot : _currentAdvLayout;
+        int slot = layoutSlot != 0 ? layoutSlot : History.CurrentLayoutSlot;
         _scene.LayoutCursors[slot] = (x, y);
         RebuildRetainedWaitIndicator(slot);
         _timeline?.Event("text-cursor", new() { ["slot"] = layoutSlot, ["x"] = x, ["y"] = y });
@@ -432,24 +433,11 @@ public sealed partial class TextManager
         return placed;
     }
 
-    /// <summary>
-    /// Layout that owns the ordinary retained ADV page. Nested callback scripts such as HISTORY can select
-    /// and mutate other layouts while the parent wait remains parked; those transient selections must not
-    /// move the parent page when its retained range is restored.
-    /// </summary>
-    public int AdvPageLayoutSlot
-    {
-        get
-        {
-            return InputWaiting && _scene.ActiveWaitLayout != 0 ? _scene.ActiveWaitLayout : _currentAdvLayout;
-        }
-    }
-
     /// <summary>Op 0x1fb's release of a layout's live text (no retained presentation): the run being revealed there
     /// stops.</summary>
     public void ClearRenderedAdvTextLayout(int layoutSlot)
     {
-        int slot = layoutSlot == 0 ? _currentAdvLayout : layoutSlot;
+        int slot = layoutSlot == 0 ? History.CurrentLayoutSlot : layoutSlot;
         if (!_scene.RetainedTextLayouts.ContainsKey(slot) && _scene.ActiveRunLayout == slot)
         {
             _scene.ActiveRunLayout = 0;

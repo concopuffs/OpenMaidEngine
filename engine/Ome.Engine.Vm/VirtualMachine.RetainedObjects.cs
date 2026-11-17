@@ -66,12 +66,13 @@ public sealed partial class VirtualMachine
         Gfx.SetObjectPosition(Read(a[0]), (ReadNumber(ins, 1), ReadNumber(ins, 2), ReadNumber(ins, 3))); return StepResult.Next;
     }
 
-    // 0x80: default object slot substituted by native op 0x1d9
+    // 0x80: select the text manager's current layout (text_manager+0x4c8, EngineCtx+0x14e08), which slot 0 selects in
+    // the layout ops and op 0x1d9's object slot 0 substitutes
     private StepResult OpSetDefaultGfxObjectSlot(Instruction ins, int pc)
     {
         var a = ins.Args;
         if (UnclassifiedLayoutSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
-        Gfx.SetDefaultObjectSlot((int)Read(a[0])); return StepResult.Next;
+        _text.History.SelectCurrentLayout((int)Read(a[0])); return StepResult.Next;
     }
 
     // 0x214 (first handle)(second handle)

@@ -45,9 +45,13 @@ public sealed class IndexBoundsTests
     {
         var cases = new TheoryData<int, int, long, Past, string>();
         // ADV text layouts, 0 to 9: no test in native.
-        foreach (int op in new[] { 0x6e, 0x6f, 0x70, 0x71, 0x73, 0x79, 0x7a, 0x82, 0x196, 0x198, 0x1c1, 0x1d1, 0x20a,
-                                   0x212, 0x213 })
+        foreach (int op in new[] { 0x6e, 0x6f, 0x70, 0x71, 0x73, 0x79, 0x7a, 0x196, 0x198, 0x1c1, 0x20a, 0x212,
+                                   0x213 })
             cases.Add(op, 1, 10, Past.Halts, "layout slot 10 is outside 0..9");
+        // Ops 0x82 and 0x1d1 test their record first: with no record, the op is skipped before the layout is read
+        // (ARecordsGroupDrawnPastLayoutNineHalts drives one that has a record).
+        cases.Add(0x82, 1, 10, Past.Continues, "");
+        cases.Add(0x1d1, 1, 10, Past.Continues, "");
         // Surfaces, 0 to 999: no test in native.
         foreach ((int op, int argument) in new[] { (0x1f8, 1), (0x1f9, 2), (0x1fa, 1), (0x207, 1), (0x207, 2),
                                                    (0x20b, 1), (0x223, 2), (0x249, 2), (0x24d, 2), (0x24f, 2),
@@ -188,6 +192,29 @@ public sealed class IndexBoundsTests
             : new VirtualMachine(script, table, host, build: EngineBuilds.Age433G);
         vm.Run();
         return (vm, host);
+    }
+
+    [Fact]
+    public void ARecordsGroupDrawnPastLayoutNineHalts()
+    {
+        foreach (int op in new[] { 0x82, 0x1d1 })
+        {
+            OpcodeTable table = Himegari.Value;
+            var script = ScriptAssembler.Assemble(table, "PAST", new List<(int, Operand[])>
+            {
+                (op, new[] { I(10), I(0), I(0), I(0), I(0) }),
+                (0x55, new[] { G(Marker), I(1) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+            var vm = new VirtualMachine(script, table, new RecordingWaits());
+            vm.TextHistory.AppendText(1, 0, "記録", AdvTextStyle.Default);
+
+            vm.Run();
+
+            Assert.StartsWith("index-out-of-range: PAST@0x0 ", vm.HaltReason);
+            Assert.Contains("layout slot 10 is outside 0..9", vm.HaltReason);
+            Assert.Equal(0, vm.Globals.GetValueOrDefault(Marker));
+        }
     }
 
     [Fact]

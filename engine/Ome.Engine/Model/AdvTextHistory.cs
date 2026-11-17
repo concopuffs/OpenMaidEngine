@@ -212,7 +212,9 @@ public sealed class AdvTextHistory
     }
 
     /// <summary>Native's ADV text layouts, slots 0 to 9 (text_manager+0x414, adv_text_layouts_allocate@0x44f6d0; 4.33G
-    /// @0x44ed60). Slot 0 selects the current layout for most ops.</summary>
+    /// @0x44ed60). Slot 0 selects the current layout (<see cref="CurrentLayoutSlot"/>), except for ops 0x212, 0x213,
+    /// 0x82 and 0x1d1, which index the table themselves: their slot 0 is layout object 0, which this class's
+    /// LayoutObject methods and the batch builders address.</summary>
     public const int LayoutCount = 10;
 
     private readonly List<AdvTextHistoryRecord> _records = new();
@@ -226,13 +228,23 @@ public sealed class AdvTextHistory
     public IReadOnlyList<AdvTextHistoryRecord> Records => _records;
     public IReadOnlyList<AdvTextHistoryEntry> Entries => _entries;
     public bool RecordingSuppressed { get; private set; }
-    public int CurrentLayoutSlot { get; private set; }
+    /// <summary>The current layout, which slot 0 selects: text_manager+0x4c8 (EngineCtx+0x14e08; 4.33G +0x4cc). Only op
+    /// 0x80 selects it (<see cref="SelectCurrentLayout"/>); adv_text_manager_initialize@0x456800 makes it 1, at
+    /// construction and at op 0x9's reset. Defining, resetting or writing a layout does not select it.</summary>
+    public int CurrentLayoutSlot { get; private set; } = InitialCurrentLayoutSlot;
+
+    /// <summary>The current layout at construction and after op 0x9.</summary>
+    public const int InitialCurrentLayoutSlot = 1;
+
+    /// <summary>Op 0x80 (op_0x80_set_default_gfx_object_slot@0x41ed40): select the current layout. Native stores the
+    /// operand as it is.</summary>
+    public void SelectCurrentLayout(int slot) => CurrentLayoutSlot = slot;
 
     public void SetRecordingEnabled(bool enabled) => RecordingSuppressed = !enabled;
 
     public void DefineLayout(int requestedSlot, int width, int height, int originX, int originY)
     {
-        int slot = SelectLayout(requestedSlot);
+        int slot = ResolveLayout(requestedSlot);
         var layout = GetOrCreateLayout(slot);
         layout.Width = width;
         layout.Height = height;
@@ -245,7 +257,7 @@ public sealed class AdvTextHistory
 
     public void ResetLayout(int requestedSlot)
     {
-        int slot = SelectLayout(requestedSlot);
+        int slot = ResolveLayout(requestedSlot);
         var layout = GetOrCreateLayout(slot);
         layout.CursorX = layout.ResetCursorX;
         layout.CursorY = layout.ResetCursorY;
@@ -326,23 +338,27 @@ public sealed class AdvTextHistory
         layout.OriginY = y;
     }
 
-    public void SetWaitIndicatorObjectHandle(int requestedSlot, long handle)
-    {
-        int slot = ResolveLayout(requestedSlot);
-        GetOrCreateLayout(slot).WaitIndicatorObjectHandle = handle;
-    }
+    /// <summary>Op 0x212: layout object <paramref name="slot"/>'s wait-indicator handle (layout+0x64). The op indexes the
+    /// table itself, so slot 0 is layout object 0, not the current layout.</summary>
+    public void SetWaitIndicatorObjectHandle(int slot, long handle)
+        => GetOrCreateLayout(slot).WaitIndicatorObjectHandle = handle;
 
-    public void SetTextObjectRange(int requestedSlot, long firstHandle, long count)
+    /// <summary>Op 0x213: layout object <paramref name="slot"/>'s retained glyph handles (layout+0x68, +0x6c). Slot 0
+    /// is layout object 0, as for op 0x212.</summary>
+    public void SetTextObjectRange(int slot, long firstHandle, long count)
     {
-        int slot = ResolveLayout(requestedSlot);
         var layout = GetOrCreateLayout(slot);
         layout.TextObjectRangeFirst = firstHandle;
         layout.TextObjectRangeCount = count;
     }
 
     public AdvTextLayoutPresentationBinding GetPresentationBinding(int requestedSlot)
+        => GetLayoutObjectBinding(ResolveLayout(requestedSlot));
+
+    /// <summary>Layout object <paramref name="slot"/>'s presentation binding, with no current-layout selection (slot 0
+    /// is layout object 0): for a slot already resolved, and for the ops that index the table themselves.</summary>
+    public AdvTextLayoutPresentationBinding GetLayoutObjectBinding(int slot)
     {
-        int slot = ResolveLayout(requestedSlot);
         var layout = GetOrCreateLayout(slot);
         return new AdvTextLayoutPresentationBinding(
             slot, checked(slot + 0x14), layout.TextObjectRangeFirst,
@@ -437,6 +453,10 @@ public sealed class AdvTextHistory
 
     public AdvTextLayoutSnapshot GetLayoutSnapshot(int requestedSlot)
         => SnapshotLayout(ResolveLayout(requestedSlot));
+
+    /// <summary>Layout object <paramref name="slot"/>'s snapshot, with no current-layout selection (slot 0 is layout
+    /// object 0).</summary>
+    public AdvTextLayoutSnapshot GetLayoutObjectSnapshot(int slot) => SnapshotLayout(slot);
 
     /// <summary>
     /// Record one show-text run the way adv_text_build_glyph_records@0x4576c0 does: one record per drawn
@@ -645,15 +665,16 @@ public sealed class AdvTextHistory
     /// call. Rows start at the target layout's cursor and break only at retained line-break records.
     /// Metadata and voice records are skipped; HISTORY passes flags and colors as zero. A run of ruby (flag 4)
     /// records becomes an annotation over the text record drawn before it, which the host draws with the ruby font.
+    /// The op indexes the layout table itself: <paramref name="layoutSlot"/> 0 is layout object 0.
     /// </summary>
-    public bool TryBuildHistoryRenderBatch(int requestedLayoutSlot, int firstRecordIndex, int flags,
+    public bool TryBuildHistoryRenderBatch(int layoutSlot, int firstRecordIndex, int flags,
                                            long overrideTextColor, long overrideEffectColor,
                                            AdvTextStyle currentStyle, out AdvTextHistoryRenderBatch batch)
     {
         batch = null!;
         if ((uint)firstRecordIndex >= (uint)_records.Count) return false;
 
-        int slot = ResolveLayout(requestedLayoutSlot);
+        int slot = layoutSlot;
         var text = new System.Text.StringBuilder();
         var lineBreaks = new List<int>();
         var ruby = new List<AdvTextRubyAnnotation>();
@@ -705,16 +726,17 @@ public sealed class AdvTextHistory
     /// place) and its pixel height. Face, weight, effect offsets and render mode are the text manager's current
     /// (<paramref name="currentStyle"/>), so the redraw a CONFIG setting change runs restyles the page in place. A ruby
     /// record draws with the current ruby font in render mode 0. Line-break, metadata and voice records draw nothing;
-    /// flag 8's voice replay is not modelled.
+    /// flag 8's voice replay is not modelled. The op indexes the layout table itself: <paramref name="layoutSlot"/> 0
+    /// is layout object 0.
     /// </summary>
-    public bool TryBuildRedrawBatch(int requestedLayoutSlot, int firstRecordIndex, int flags,
+    public bool TryBuildRedrawBatch(int layoutSlot, int firstRecordIndex, int flags,
                                     long overrideTextColor, long overrideEffectColor, AdvTextStyle currentStyle,
                                     out AdvTextRedrawBatch batch)
     {
         batch = null!;
         if ((uint)firstRecordIndex >= (uint)_records.Count) return false;
 
-        int slot = ResolveLayout(requestedLayoutSlot);
+        int slot = layoutSlot;
         var records = new List<AdvTextRedrawRecord>();
         foreach (var record in EnumerateGroup(firstRecordIndex))
         {
@@ -733,13 +755,6 @@ public sealed class AdvTextHistory
         }
         batch = new AdvTextRedrawBatch(slot, firstRecordIndex, flags, SnapshotLayout(slot), records);
         return true;
-    }
-
-    private int SelectLayout(int requestedSlot)
-    {
-        int slot = requestedSlot == 0 ? CurrentLayoutSlot : requestedSlot;
-        CurrentLayoutSlot = slot;
-        return slot;
     }
 
     private int ResolveLayout(int requestedSlot) => requestedSlot == 0 ? CurrentLayoutSlot : requestedSlot;

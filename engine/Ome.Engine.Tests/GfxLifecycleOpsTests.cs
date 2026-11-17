@@ -62,20 +62,20 @@ public class GfxLifecycleOpsTests
     }
 
     [Fact]
-    public void DefaultGraphicsObjectSlotOpcodeRetainsLatestSelection()
+    public void OpEightyRetainsItsLatestSelectionAsTheCurrentLayout()
     {
         var table = T();
         var scene = ScriptAssembler.Assemble(table, "GFX-DEFAULT-SLOT", new List<(int, Operand[])>
         {
             (0x80, new[] { I(7) }),
-            (0x80, new[] { I(1) }),
+            (0x80, new[] { I(8) }),
             Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, table, new RecordingWaits());
 
         vm.Run();
 
-        Assert.Equal(1, vm.Gfx.DefaultObjectSlot);
+        Assert.Equal(8, vm.TextHistory.CurrentLayoutSlot);
         Assert.Equal("exit", vm.HaltReason);
     }
 

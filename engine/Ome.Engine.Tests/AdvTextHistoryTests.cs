@@ -74,6 +74,7 @@ public class AdvTextHistoryTests
         var script = ScriptAssembler.Assemble(Table, "HISTORY_SUPPRESS",
             new List<(int, Operand[])>
             {
+                (0x80, new[] { I(2) }),
                 (0x1bb, new[] { I(0) }),
                 (0x70, new[] { I(2), I(500), I(100), I(10), I(20) }),
                 (0x1d2, new[] { I(2), I(9) }),
@@ -99,6 +100,7 @@ public class AdvTextHistoryTests
     public void ClearDropsRecordsIndexAndPendingGroupStartButRetainsLayoutDefinition()
     {
         var history = new AdvTextHistory();
+        history.SelectCurrentLayout(3);
         history.DefineLayout(3, 320, 90, 20, 400);
         history.AppendText(0, 10, "old", AdvTextStyle.Default);
 

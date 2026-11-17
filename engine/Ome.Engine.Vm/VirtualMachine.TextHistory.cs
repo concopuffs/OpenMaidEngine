@@ -67,7 +67,9 @@ public sealed partial class VirtualMachine
     private StepResult OpRenderTextHistory(Instruction ins, int pc)
     {
         var a = ins.Args;
-        // The record index is tested (an index outside the records skips the op); the layout slot is not.
+        // The record index is tested first (an index outside the records skips the op); the layout slot is not, and slot
+        // 0 is layout object 0 (text_history_render_records@0x4526c0 indexes the table itself).
+        if (!HistoryRecordExists(Read(a[1]))) return StepResult.Next;
         if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         // Native History draws every record in the text manager's current style.
         _text.RenderHistoryGroup(Gfx, (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), Read(a[3]), Read(a[4]));
@@ -78,11 +80,15 @@ public sealed partial class VirtualMachine
     private StepResult OpRedrawRetainedTextGroup(Instruction ins, int pc)
     {
         var a = ins.Args;
-        // The record index is tested (an index outside the records skips the op); the layout slot is not.
+        // As op 0x1d1: the record index is tested first, and slot 0 is layout object 0
+        // (text_redraw_retained_group@0x451530).
+        if (!HistoryRecordExists(Read(a[1]))) return StepResult.Next;
         if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _text.RedrawGroup(Gfx, (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), Read(a[3]), Read(a[4]));
         return StepResult.Next;
     }
+
+    private bool HistoryRecordExists(long record) => record >= 0 && record < _text.History.Records.Count;
 
     /// <summary>Ops 0x1d3 and 0x1d4 find nothing for a record index past the last record. A negative one is refused
     /// the same way, or, where the build does not test its sign (<see cref="Text.TextRules.HistoryLookupTestsSign"/>),

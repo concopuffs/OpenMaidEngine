@@ -160,8 +160,8 @@ public class SceneReloadTests
         ],
         [typeof(TextManager)] =
         [
-            // The settings, the current layout, the fonts and the language's presenter stay.
-            "_messageGlyphDelayMilliseconds", "_messageWindowAlphaSetting", "_textAntialias", "_currentAdvLayout",
+            // The settings, the last run's layout, the fonts and the language's presenter stay.
+            "_messageGlyphDelayMilliseconds", "_messageWindowAlphaSetting", "_textAntialias", "_lastRunLayout",
             "_presenter", "_presentedFonts", "_presentedTextRasterizer", "_presentsText", "_recordsStringStores",
             // One run's geometry and cut, set and read around the run.
             "_runGeometry", "_runCut",

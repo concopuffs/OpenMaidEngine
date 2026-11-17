@@ -7926,9 +7926,24 @@ The script-error box is an error's path, not the op's: `tools/opcode_flow.py` gi
 The tables, by what native does:
 
 - **ADV text layouts, 0 to 9** (`text_manager+0x414`, `adv_text_layouts_allocate@0x44f6d0`). No op tests a layout
-  slot; slot 0 selects the current layout. Ops `0x6e`, `0x6f`, `0x70`, `0x71`, `0x73`, `0x79`, `0x7a`, `0x196`,
-  `0x198`, `0x1c1`, `0x20a`, `0x212`, `0x213` and the layout operands of `0x82` and `0x1d1` halt past 9. Ops `0x82`
-  and `0x1d1` test their record index, which skips the op.
+  slot. Ops `0x6e`, `0x6f`, `0x70`, `0x71`, `0x73`, `0x79`, `0x7a`, `0x196`, `0x198`, `0x1c1`, `0x20a`, `0x212`,
+  `0x213` and the layout operands of `0x82` and `0x1d1` halt past 9. Ops `0x82` and `0x1d1` test their record index
+  first, and an index outside the records skips the op before the layout is read. Slot 0 is the current layout, or
+  layout object 0 for the ops that index the table themselves ("The current layout", below).
+  - **The current layout** (`text_manager+0x4c8`, `EngineCtx+0x14e08` `adv_current_layout_slot`; 4.33G `+0x4cc`).
+    Every layout worker that takes slot 0 resolves it through this field. Only op `0x80`
+    (`op_0x80_select_adv_current_layout@0x41ed40`) and `adv_text_manager_initialize@0x456800` write it: it is 1 at
+    construction and after op `0x9`, and defining or resetting a layout (ops `0x70`, `0x71`) does not select it (a
+    scan of every write in both images, 2026-11-17). Op `0x1d9` writes `layout+0x70` of it for object slot 0. The
+    port kept three current layouts until then: the text history's, selected by ops `0x70` and `0x71` and 0 at
+    construction; the text manager's, selected by a run and by the cursor ops; and op `0x80`'s, which only op `0x1d9`
+    read. It now keeps native's one (`AdvTextHistory.CurrentLayoutSlot`). In retail the old model went wrong only
+    across scripts: Kamidori `CONFIG2` and `CONFIG4` end with `0x71 7` after `0x80 7`, so the port's slot-0 ops
+    aimed at layout 7 until the next page reset.
+  - **Layout object 0.** Ops `0x212`, `0x213`, `0x82` and `0x1d1` index the table with the operand as it is: slot 0
+    is layout object 0 (surface 20), which the other layout ops reach only while it is the current layout. No retail
+    script passes them an immediate 0 (`HISTORY.BIN`'s op `0x1d1` and Kamidori `CONFIG1.BIN`'s op `0x82` pass a
+    cell).
 - **Surfaces, 0 to 999** (the retained graphics records and the surface pointers beside them). No surface op tests
   its slot: `0x1f8`, `0x1f9`, `0x1fa`, `0x207`, `0x20b`, `0x223`, `0x249`, `0x24d`, `0x24f`, `0x258` and `0x32`
   halt. Ops `0x20b` and `0x32` mark the destination's record dirty before they look for its surface. Op `0x216` reads

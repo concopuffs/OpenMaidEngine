@@ -999,7 +999,7 @@ public class HotspotInputTests
         Assert.True(host.MenuActionConsumed);
         Assert.True(sink.MenuEntered);
         Assert.True(sink.MenuReturnRequested);
-        Assert.Equal(8, vm.Gfx.DefaultObjectSlot); // CHMENU's entry selector ran before the controlled returns.
+        Assert.Equal(8, vm.TextHistory.CurrentLayoutSlot); // CHMENU's entry selector ran before the controlled returns.
         Assert.True(host.ParentHotspotsRearmed);
     }
 

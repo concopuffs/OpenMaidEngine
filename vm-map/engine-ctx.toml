@@ -138,9 +138,9 @@ type = "void*"
 note = "text_manager at ctx+0x14940 plus layout pointer table +0x414; ops 0x212/0x213 configure each layout's wait-indicator handle and retained glyph-object range at layout+0x64/+0x68/+0x6c"
 [[field]]
 offset = 0x14e08
-name = "gfx_default_object_slot"
+name = "adv_current_layout_slot"
 type = "int"
-note = "text-manager+0x4c8; op 0x80 selected slot; op 0x1d9 substitutes it when its explicit object-slot operand is zero; adv_text_manager_initialize@0x456800 sets it to 1, so it is 1 at construction and after op 0x9's scene_context_init_reset"
+note = "text-manager+0x4c8, the current ADV layout: every layout worker resolves slot 0 through it, and op 0x1d9 substitutes it for object slot 0; only op 0x80 and adv_text_manager_initialize@0x456800 write it (=1, so it is 1 at construction and after op 0x9's scene_context_init_reset); formerly named gfx_default_object_slot (2026-11-17)"
 [[field]]
 offset = 0x14e0c
 name = "text_primary_font_height"

@@ -110,7 +110,7 @@ public sealed partial class TextManager
             return;
         if (PresentHistoryGroup(batch.FirstRecordIndex, flags) is { } presented)
             batch = batch with { Presented = presented };
-        RenderTextHistory(gfx, History.GetPresentationBinding(batch.LayoutSlot), batch);
+        RenderTextHistory(gfx, History.GetLayoutObjectBinding(batch.LayoutSlot), batch);
     }
 
     /// <summary>Op 0x82: an ordinary ADV group drawn again at its records' rectangles, presented again in the selected
@@ -125,7 +125,7 @@ public sealed partial class TextManager
         if (redraw.Records.Any(record => !record.IsRuby)
             && PresentHistoryGroup(redraw.FirstRecordIndex, flags) is { } presented)
             redraw = redraw with { Presented = presented };
-        RedrawRetainedTextGroup(gfx, History.GetPresentationBinding(redraw.LayoutSlot), redraw);
+        RedrawRetainedTextGroup(gfx, History.GetLayoutObjectBinding(redraw.LayoutSlot), redraw);
     }
 
     /// <summary>

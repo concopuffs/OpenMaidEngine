@@ -99,9 +99,6 @@ public sealed partial class GfxState
     }
 
     public long CurrentObject { get => _scene.CurrentObject; private set => _scene.CurrentObject = value; }
-    /// <summary>EngineCtx+0x14e08, selected by op 0x80 and used by op 0x1d9 when its slot is zero; 1 after a
-    /// reset.</summary>
-    public int DefaultObjectSlot { get => _scene.DefaultObjectSlot; private set => _scene.DefaultObjectSlot = value; }
 
     /// <summary>Live geometry objects and the surface slot they draw from — for the CLI gfx oracle.</summary>
     public IEnumerable<(long Handle, int Slot)> Objects
@@ -120,11 +117,6 @@ public sealed partial class GfxState
         CurrentObject = handle;
         MarkRetainedMutation();
         return o;
-    }
-
-    public void SetDefaultObjectSlot(int slot)
-    {
-        DefaultObjectSlot = slot;
     }
 
 

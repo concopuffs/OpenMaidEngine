@@ -50,7 +50,6 @@ public sealed partial class GfxState
         public readonly int[] SurfaceRecords = surfaceRecords;
         public readonly int[] SurfaceRecordSnapshot = NewSurfaceRecordTable();
         // EngineCtx+0x14e08 (SYS4433 +0x14e04), op 0x80's: the reset's text_manager_initialize sets it to 1.
-        public int DefaultObjectSlot = 1;
         // Ops 0x13a and 0x2da's records. The reset zeroes all ten.
         public readonly NumericGlyphStyle[] NumericGlyphStyles = new NumericGlyphStyle[NumericGlyphStyleCount];
     }

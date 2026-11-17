@@ -378,13 +378,15 @@ public sealed partial class TextManager : ISurfaceListener
     // ---- op 0x9 ----
 
     /// <summary>Op 0x9 (scene_context_init_reset): every layout's retained glyphs, cursors and wait indicator, the
-    /// reveal, the page's suspension and the string stores go (op 0x9 zeroes the string bank), the style starts over and
-    /// History records again. The backlog, the settings, the current layout, the glyph timer and the fonts stay.
+    /// reveal, the page's suspension and the string stores go (op 0x9 zeroes the string bank), the style starts over,
+    /// History records again and the current layout is 1 again (adv_text_manager_initialize@0x456800). The backlog, the
+    /// settings, the glyph timer and the fonts stay.
     /// </summary>
     public void ResetScene()
     {
         _scene = new();
         History.SetRecordingEnabled(true);
+        History.SelectCurrentLayout(AdvTextHistory.InitialCurrentLayoutSlot);
     }
 
     // ---- a numbered save's records (spec §5.1, rule 6) ----
