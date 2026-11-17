@@ -181,6 +181,22 @@ public class CallScriptTests
     }
 
     [Fact]
+    public void TheProviderSaysWhatAgesResourceOpenSaysForAnIdOfASyntheticCatalog()
+    {
+        // Record 0 a script, 1 a placeholder (no file), 2 not a script; no append catalog is mounted.
+        var catalog = Sys4AssetCatalog.Parse(SyntheticCatalog.Build(["A.BIN", "@", "B.CG"]));
+        var provider = new Sys4ScriptProvider(Table(), catalog, new Sys4AssetStore(catalog, "."));
+        string Text(long id) => provider.LoadFailure(id)?.Text(AgeBoxText.JapaneseText) ?? "(none)";
+
+        Assert.Equal("ファイル番号 3 は不正な値です．", Text(3));
+        Assert.Equal("@ を開くことが出来ません．\nERROR CODE = 2", Text(1));
+        Assert.Equal("(none)", Text(2));            // the loader's header check, not the open
+        Assert.Equal("拡張ファイル情報ファイル 1 は読み込まれていません．", Text(0x01000000));
+        Assert.Equal("(none)", Text(0x80000000));   // below native's table of catalogs
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
     public void TheProviderSaysWhatAgesResourceOpenSaysForAnIdItFindsNothingFor()
     {
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
